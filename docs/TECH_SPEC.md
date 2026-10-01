@@ -122,6 +122,11 @@ Add anything else only with a one-line justification in the PR.
 - **Input:** Pointer Events; gestures for pan, pinch, tap, long-press, stroke. Minimum 44×44 pt tap targets. Respect `env(safe-area-inset-*)`.
 - **Offline:** the PWA caches the app shell; gameplay needs a connection, and the UI shows a friendly "reconnecting" state.
 
+### Cinematics and tutorial (client)
+- **Cinematic player** (`src/cinematics/`): plays a timeline described in data (`packages/shared/src/data/cinematics/*.ts`): shots with duration, camera path keyframes, scene setup, actor animations, caption text and audio cues. Built on Babylon `Animation`/`AnimationGroup`; no video files.
+- Preload each shot's assets during the previous shot; target 60 fps, acceptable floor 30. Captions are DOM overlay text. Support skip (after first view or long-press), tap-to-advance captions, and `prefers-reduced-motion` (gentler camera moves).
+- **Tutorial UI layer** (`src/tutorial/`): highlights a target (spotlight mask over the canvas or DOM element), shows Sprout's speech bubble and an arrow, and blocks unrelated input during each step.
+
 ## 7. Server architecture
 
 - Single Node process serving REST + WebSocket + scheduled jobs (enough for a handful of families). Code is modular so jobs can move to a separate worker later.
@@ -134,6 +139,8 @@ Add anything else only with a one-line justification in the PR.
   - `boutique-rotate` daily per map
   - `invite-expiry`, `session-cleanup`, `chat-retention` daily
   - Jobs are idempotent and keyed by `(job, mapId, date)` so a restart never runs nightfall twice.
+- **Tutorial maps:** a tutorial is a normal map row with `kind = 'tutorial'` and one member, created from a hand-authored layout in `data/tutorial/`. It runs the **same** modules (gathering, battles, capture, care, buildings, nightfall) with a `tutorialOverrides` config (fast timers, guaranteed capture, scripted opponent AI, Hollow Man can't take anything). No separate code path for tutorial gameplay.
+- **Tutorial step engine:** steps are data (`id, goal, sproutLines, highlightTarget, completeOn: game event type + predicate`). The server advances `users.tutorial_step` when a matching `game_events` row is written, and the client renders the current step. Account-level rewards (Partner species, Seedling Scarf, First Patch milestone) are granted idempotently on completion.
 - **Dev time override:** env `HP_DEV_NOW` and an admin endpoint (dev only) to set the game clock for testing seasons and nightfall.
 
 ## 8. Determinism and RNG

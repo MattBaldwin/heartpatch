@@ -28,6 +28,8 @@
 22. [Phased roadmap](#22-phased-roadmap)
 23. [Keepers and wardrobe](#23-keepers-and-wardrobe)
 24. [Keeper milestones](#24-keeper-milestones)
+25. [Opening cinematic](#25-opening-cinematic-the-great-scatter)
+26. [Single-player tutorial](#26-single-player-tutorial-the-first-patch)
 
 ---
 
@@ -58,6 +60,8 @@ Players pick and dress up their own **Keeper** character, collect adorable **squ
 **Juniper's Gap** sits at the center of every map: the richest land, the hardest guardians, and the shadowy entrance to the Hollow Man's Hollow.
 
 Tone: whimsical, warm, lightly spooky. Never gory or cruel.
+
+New players experience this story in the opening cinematic (§25) and the tutorial (§26).
 
 ## 3. Players, maps and invites
 
@@ -290,7 +294,7 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 
 ## 22. Phased roadmap
 
-**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture; 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and simple evolution; the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
+**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts; **opening cinematic and single-player tutorial (§25–26)**; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture; 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and simple evolution; the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
 
 **Phase 2 — Thanksgiving:** live real-time battles (Colyseus rooms); trading and gifting (squishies and clothing); free text chat with filtering and parent controls; branching evolution; outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
 
@@ -354,3 +358,59 @@ Milestones are long-term goals that reward signature clothing, Patch Coins and t
 - Each tier also grants a **title** shown on the profile card (e.g. "Keeper of the Gap", "Hollow Rescuer").
 - A **Milestones screen** shows progress bars for visible tracks. Secret milestones show as "???" until earned.
 - **Implementation:** milestone definitions are data. Progress counters update server-side from game events (the same event stream used for Easter-egg triggers in §16). Rewards are granted exactly once, idempotently.
+
+## 25. Opening cinematic: "The Great Scatter"
+
+A short, skippable cinematic that every new player sees once, right after choosing their Keeper (§23) and before the tutorial (§26). It explains what happened to the world and **why** each core mechanic matters, so the tutorial feels like a story and not a manual.
+
+**Format [DEFAULT]**
+- **Length:** about 90–120 seconds, seven shots.
+- **In-engine, not video:** rendered live in Babylon.js using the same procedural squishies, terrain and the player's own Keeper. That keeps the download small and lets the final shot show *your* character.
+- **Narration as captions** (large, rounded, readable for a 10-year-old) over music and sound effects. Each caption stays up long enough to read, and a tap advances early. Recorded voice-over can come later.
+- **Skippable** after the first viewing (and by a long-press for impatient siblings), **replayable** from Settings.
+- **Tone:** wonder first, a flash of spooky, then hope. The Hollow Man is a tall, flickering silhouette with glowing eyes; never gory or jump-scary.
+
+**Shot list [DEFAULT script — edit freely]**
+
+| # | Shot | What we see | Caption (narration) | Why it matters |
+|---|---|---|---|---|
+| 1 | **The Heartpatch** | Sweeping golden-hour flight over a glowing valley. Squishies bloom out of the ground like flowers when nearby squishies laugh. | "Long ago, every squishy was born in the Heartpatch — a glowing field where the world's joy took shape." | Establishes the world before the fall. |
+| 2 | **Seasons of joy** | Quick dissolves: pumpkins glowing and spooky squishies popping up; leaf piles with cozy squishies; snowfall and frosty squishies. | "When the world celebrated, the magic surged — and new squishies bloomed with every season." | Sets up seasonal squishies. |
+| 3 | **The Keepers of old** | Keepers tending Hearthfires; squishies playing, napping and growing into bigger, sparklier forms in cared-for meadows. | "Keepers tended the fires and cared for the squishies. Loved squishies grew… and changed into something wonderful." | Hearthfires, care, habitats and evolution. |
+| 4 | **The Hollow Man** | Color drains from the edges of the frame. A tall flickering silhouette steps out of the trees, eyes glowing. The music drops out. | "But one night, something hollow came. He had no joy of his own… so he wanted ours." | Introduces the threat. |
+| 5 | **The Great Scatter** | He reaches for the Heartpatch; it cracks with light and shatters into glowing Heart Seeds that streak across the sky. Squishies tumble into the wild lands; a few turn grey and drift into the shadows. | "The Heartpatch shattered. Its Heart Seeds scattered. And the squishies were lost across the land." | Why squishies are wild, why some are Hollowed. |
+| 6 | **The land today** | The map from above: patchy, washed-out, wild. One by one, old Hearthfires flicker out. Far away, a few other Heart Seeds glow. | "Now the land is wild, and the fires are going out. He still walks at night — and he only needs one." | Territory to reclaim; nightfall; other Keepers. |
+| 7 | **Your Heart Seed** | A Heart Seed lands at the feet of **the player's own Keeper** and glows. Camera pushes in. | "But a Heart Seed has found you, Keeper. Plant it. Light a fire. Bring the squishies home… and bring the color back, one patch at a time." | The player's goal. Cut to title card: **HEARTPATCH**. |
+
+**Lore consistency:** reclaiming a tile visibly restores its color and brings squishies back to it. This is the in-world reason territory matters, and the map's art should show it (neutral and stranded tiles look a little washed-out; owned tiles are vivid).
+
+## 26. Single-player tutorial: "The First Patch"
+
+Every new player plays a short solo tutorial before joining or creating a multiplayer map. It teaches every Phase 1 mechanic hands-on, in story order, with nothing to lose.
+
+**Where:** a small private map, **the Tutorial Glade** [DEFAULT: hex radius 3, 37 tiles], hand-authored (not random) so every player gets the same, well-paced experience.
+
+**Guide [DEFAULT]:** **Sprout**, the tiny glowing spirit of your Heart Seed. Sprout talks in short speech bubbles, points at things, and cheers you on. (The forest chihuahuas stay lore-only, §16.) Sprout appears again later for occasional tips.
+
+**Steps [DEFAULT]** — each is a short goal with a highlighted target and one or two lines from Sprout:
+
+1. **Plant your Heart Seed.** Tap the glowing spot → your home base grows from the ground with color spreading outward. *Teaches: home base can never be taken.*
+2. **Gather.** Collect Timber and Emberwood from nearby nodes (tutorial timers take seconds, not minutes). *Teaches: resources and timers.*
+3. **Light your first Hearthfire.** Build it, fuel it, see the warm safe radius on the map. *Teaches: fires keep squishies safe.*
+4. **Meet a wild squishy.** A friendly wild squishy wanders up. **First battle** (scripted to be winnable) introduces moves and one clear example of element and feeling effectiveness ("Super cozy!").
+5. **Capture it.** Use a Heart Charm (capture is guaranteed here). The player names their first squishy — it becomes their **Partner**.
+6. **Care for it.** The camera swoops into the **close-up view**: pet, boop and feed it. Sprout explains, simply, that happy squishies learn faster.
+7. **Give it a home.** Build a habitat that matches its element or feeling and move it in. *Teaches: the right home helps it grow.*
+8. **Claim your first territory.** Attack a neighboring tile, beat its guardian, and watch color return to the land. Sprout explains you can only claim land next to land you already hold, and that land brings resources and new squishies.
+9. **Defend.** A shadowy "echo" (not a real player) raids your new tile. Pick a **defense stance** and win. *Teaches: rivals can attack your tiles, but never your home base.*
+10. **Nightfall.** The sky dims and the Hollow Man appears at the edge of the Glade. One squishy is outside the firelight; move it inside (or stretch the fire). He hesitates at the light and fades away. Sprout explains the rules: keep the fire lit, he only needs one — and if he ever takes a squishy, you can always rescue it.
+11. **Evolve.** One more battle gives your Partner enough XP to evolve. Big celebration moment. *Teaches: battles plus care plus a good home = growth.*
+12. **Your first milestone.** Earn the **"First Patch"** milestone and the account-bound **Seedling Scarf**; open the Wardrobe and put it on.
+13. **Graduation.** Sprout: "Other Keepers have Heart Seeds too…" The player chooses **Create a map** or **Enter an invite code**.
+
+**Rules**
+- Target length **[DEFAULT: 12–18 minutes]**. Progress is saved after every step; quitting resumes where you left off.
+- Nothing can be lost in the tutorial. The Hollow Man can't take anything here.
+- **Carry-over:** the player's Partner species, the Seedling Scarf and the "First Patch" milestone are account-level rewards. Every new map the player joins starts them with their Partner (a fresh level-1 copy) alongside the normal starting kit.
+- Players can skip the tutorial only after finishing it once (e.g. on a new device), and can replay it any time from Settings.
+- Every step is reachable with one hand on an iPhone; text is short and large.
