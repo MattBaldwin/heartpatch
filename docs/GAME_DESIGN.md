@@ -26,6 +26,8 @@
 20. [Camera and views](#20-camera-and-views)
 21. [Retention loops](#21-retention-loops)
 22. [Phased roadmap](#22-phased-roadmap)
+23. [Keepers and wardrobe](#23-keepers-and-wardrobe)
+24. [Keeper milestones](#24-keeper-milestones)
 
 ---
 
@@ -33,7 +35,7 @@
 
 A bright, playful, invite-only multiplayer game for ages 10–17, played mainly on **iPhone and iPad** as an installable web app (PWA) at `play.pumpkinpatchgames.com`.
 
-Players collect adorable **squishies**, raise and train them, evolve them into rarer and more powerful forms, build a home base where they thrive, capture territory on a shared map, and defend it from 1–3 rival players and from the **Hollow Man**.
+Players pick and dress up their own **Keeper** character, collect adorable **squishies**, raise and train them, evolve them into rarer and more powerful forms, build a home base where they thrive, capture territory on a shared map, and defend it from 1–3 rival players and from the **Hollow Man**.
 
 **Long-term goal:** collect every type of squishy, defend your territory, and build the most wonderful home base in the land.
 
@@ -49,7 +51,7 @@ Players collect adorable **squishies**, raise and train them, evolve them into r
 
 **The Great Scatter.** The **Hollow Man** — a being with no joy of his own — was drawn to the Heartpatch and tried to swallow it. The Heartpatch shattered into **Heart Seeds**, and squishies tumbled across the wild lands.
 
-**Keepers.** Each player is a young Keeper who plants a Heart Seed. It grows into their **home base**, rooted in Heartpatch magic, which is why a home base can never be taken.
+**Keepers.** Each player is a young Keeper (see §23 for how Keepers look and dress) who plants a Heart Seed. It grows into their **home base**, rooted in Heartpatch magic, which is why a home base can never be taken.
 
 **Seasons.** When the world celebrates, Heartpatch magic surges and new squishies bloom: spooky ones at Halloween, cozy ones at Thanksgiving, frosty ones in winter. New seasonal content is the world growing, not something bolted on.
 
@@ -76,7 +78,7 @@ Each squishy is an instance of a **species**. Species are data, not code.
 
 **Species fields (minimum):** `id`, `name`, `element`, `feeling` (default/base), `rarity` (common, uncommon, rare, epic, legendary, secret), `season` (optional), `baseStats` (hp, attack, defense, speed), `moves`, `evolutions` (see §8), `visual` (procedural parameters, see §19), `habitatPreferences`, `spawnRules`.
 
-**Instance fields:** `id`, `speciesId`, `ownerId`, `nickname`, `level`, `xp`, `element`, `feeling` (can shift with care), `contentment`, `lastCaredAt`, `careHistoryScore`, `habitatId`, `state` (active, hollowed, in-trade…), `accessories`, `stats` (with small individual variance).
+**Instance fields:** `id`, `speciesId`, `ownerId`, `nickname`, `level`, `xp`, `element`, `feeling` (can shift with care), `contentment`, `lastCaredAt`, `careHistoryScore`, `habitatId`, `state` (active, hollowed, in-trade…), `accessories` (items from the shared Wardrobe catalog, §23), `stats` (with small individual variance).
 
 **Launch roster (Phase 1):** 12–15 base species across elements and feelings, plus 3–4 Halloween species.
 
@@ -156,6 +158,7 @@ Phase 1 ships simple level-based single-form evolution; branching arrives in Pha
 - **Fair trade bonus:** each squishy has a server-computed value (rarity, level, synergy, evolution stage). If both sides are within **[DEFAULT: ±15%]**, both players get a bonus (XP, resources or Harmony).
 - **Generosity:** gifting builds **warmth** with that player. Warmth strengthens the "family love" defense against the Hollow Man (§14) when territories are near each other.
 - **Anti-farming:** diminishing returns and a per-pair daily cap on bonuses.
+- **Clothing** trades and gifts use the same flow, bonuses and caps (see §23). Milestone items are account-bound.
 - **Regret window:** lopsided trades show a gentle "Are you sure?" with a value comparison. Traded squishies have a **24h take-back window**.
 
 ## 11. Territory
@@ -224,7 +227,9 @@ Seasons are date windows in config (with time zone). Resource nodes, recipes, sp
 
 **Rules:** presents are **earned only, never bought**, and each shows its possible contents. Leftover seasonal resources carry over as **keepsakes**; their special recipes only unlock during their season.
 
-There are **no real-money purchases** in Heartpatch.
+Each season also brings **seasonal clothing** (§23), obtainable only during that season and wearable forever.
+
+There are **no real-money purchases** in Heartpatch. The only currency, **Patch Coins**, is earned in play (§23).
 
 ## 16. Lorebook and Easter eggs
 
@@ -273,20 +278,79 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 - **Close-up interaction view:** tap a squishy and the camera swoops in face-to-face; background blurs (depth of field, only in this view); high-detail model swapped in. **The squishy is the star.**
   - Gestures: tap to boop, stroke to pet, drag a treat to feed, pinch to tickle → reactions (happy wiggle, blush, giggle, yawn) and care credit.
   - Idle personality animations reflect feeling (Silly spins, Sleepy nods off, Brave puffs up).
-  - Dress-up accessories and photo mode (Phase 2+).
+  - Dress-up accessories (shared Wardrobe, §23) and photo mode (Phase 2+).
 
 ## 21. Retention loops
 
 - **Daily:** tend and feed squishies, refuel Hearthfires before nightfall, check the morning Hollow Man report, collect gathered resources.
 - **Session:** capture tiles, battle, capture wild squishies, build and upgrade.
-- **Long-term:** complete the catalog (including seasonal and secret squishies), rare evolutions, hybrids, Lorebook pages.
+- **Long-term:** Keeper milestones and signature clothing (§24); complete the catalog (including seasonal and secret squishies), rare evolutions, hybrids, Lorebook pages.
 - **Seasonal:** new squishies, resources and events every holiday; keepsakes build anticipation.
-- **Social:** rivalry over territory; trades, gifts, feasts and joint defense against the Hollow Man.
+- **Social:** rivalry over territory; showing off outfits and titles; trades, gifts (squishies and clothing), feasts and joint defense against the Hollow Man.
 
 ## 22. Phased roadmap
 
-**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture; 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and simple evolution; the Hollow Man's nightly visit and simple rescue; quick messages and emoji; installable PWA deployed to AWS Lightsail.
+**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture; 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and simple evolution; the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
 
-**Phase 2 — Thanksgiving:** live real-time battles (Colyseus rooms); trading and gifting; free text chat with filtering and parent controls; branching evolution; outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
+**Phase 2 — Thanksgiving:** live real-time battles (Colyseus rooms); trading and gifting (squishies and clothing); free text chat with filtering and parent controls; branching evolution; outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
 
 **Phase 3 — Christmas:** breeding and hybrids; presents; Home Base Harmony; full Lorebook and chihuahua Easter eggs; web push notifications; New Year fireworks; passkeys.
+
+## 23. Keepers and wardrobe
+
+Every player is represented by a **Keeper**, a character drawn in the same soft vinyl-toy style as the squishies (§19): rounded, chibi-proportioned, glossy and playful. Squishies are still the stars, but your Keeper is how *you* show up in the world.
+
+### Choosing a Keeper
+- At signup, players **select a Keeper** from a roster of preset base characters **[DEFAULT: 8]** that vary in body shape, skin tone, face and hairstyle.
+- Each base can then be tweaked: hair color, eye color, and a **[DEFAULT: 6]**-color palette for the starter outfit.
+- Players can change their Keeper at any time from the Wardrobe, for free. Progress and clothing stay with the account, not the base character.
+- No clothing is locked to any body type or presentation. Everything fits every Keeper.
+
+### Where your Keeper appears
+- **Home base:** your Keeper wanders and idles among your squishies; tap them to open the Wardrobe.
+- **Map:** a small Keeper figure marks your home base and the tile you're currently battling on, so rivals can see who's who.
+- **Battles:** your Keeper stands behind your squishies, cheering and reacting (a happy jump on a super-effective hit).
+- **Profile card:** shown on invites, join requests, trades, chat and the raid log.
+- **Close-up view:** your Keeper appears at the edge of the frame when feeding or petting, but the squishy stays the focus (§20).
+
+### Wardrobe and clothing
+- **Slots:** hat, hair accessory, top, bottom, shoes, back (capes, backpacks, wings), held item (lantern, wand, net), and a full-body **costume** slot that overrides the others.
+- **Rarity:** common, uncommon, rare, epic, legendary, matching squishy rarity colors.
+- **Outfits:** players can save **[DEFAULT: 3]** outfit presets and swap between them.
+- **Squishy accessories** (tiny hats, bows, scarves) live in the same Wardrobe and inventory system, so one item catalog and one trading flow cover both.
+- Clothing is **cosmetic only**. It never affects battle stats, so no one can buy or trade their way to power.
+
+### Getting clothing
+1. **Found:** small chance from capturing tiles, opening resource nodes, rescuing Hollowed squishies, and (Phase 3) presents. Some items only drop in specific terrain or seasons.
+2. **Awarded through milestones:** see §24. Milestone items are signature pieces you can't get any other way, so wearing them shows what you've achieved.
+3. **Purchased** in the **Boutique** using **Patch Coins**, an in-game currency earned from battles, captures, daily care and milestones. Patch Coins can **never be bought with real money** (§15). The Boutique stock rotates **[DEFAULT: daily]**, with seasonal racks during each season.
+4. **Traded and gifted** between players, using the same escrow, fair-trade bonus, generosity/warmth and regret-window rules as squishy trades (§10). Milestone items are **account-bound** and can't be traded, so they stay meaningful.
+
+### Seasonal clothing
+Each season brings its own items: Halloween costumes (pumpkin hoods, ghost capes, witch hats, squishy onesies), Thanksgiving scarves and leaf crowns, Christmas sweaters and elf hats, New Year party hats. Like seasonal resources, seasonal clothing stays wearable year-round as keepsakes; it's just only *obtainable* during its season.
+
+### Implementation notes
+- **Procedural Keepers:** a parametric base body (a few preset meshes) with attachment bones/sockets per slot, so clothing is modular meshes plus material/palette swaps driven from data, the same approach as squishy parts.
+- **Data:** `clothing` items are data in `packages/shared/data` (`id, name, slot, rarity, season?, sources[], tradable, boutiquePrice?, visual`). `keeper` config is stored per player.
+- **Server-authoritative:** ownership, Boutique purchases and Patch Coin balances are validated server-side; purchases run in a single DB transaction (CLAUDE.md rule 7).
+- **Names and nicknames** players type (outfit names) pass the same text filter as usernames.
+
+## 24. Keeper milestones
+
+Milestones are long-term goals that reward signature clothing, Patch Coins and titles. They give players something to work toward across every system.
+
+| Track | Example tiers [DEFAULT] | Example rewards |
+|---|---|---|
+| Territory | Capture 10 / 50 / 150 tiles; hold Juniper's Gap tile for 7 days | Explorer's Hat → Cartographer Cape → Crown of the Gap |
+| Collector | Catch 10 / 25 / 50 species; complete an element | Squishy Net → Collector's Satchel → Rainbow Jacket |
+| Evolution | Evolve 5 / 20 squishies; get a rare branch | Evolver's Goggles → Prism Boots |
+| Caretaker | Pet/feed 100 / 500 / 2,000 times; keep 5 squishies at max contentment | Cozy Apron → Heart Mittens |
+| Defender | Win 10 / 50 defenses; protect every squishy for 7 nights | Hearthkeeper Lantern → Ember Cloak |
+| Rescuer | Rescue 1 / 10 Hollowed squishies | Brave Scarf → Lightbringer Wings |
+| Friendship | (Phase 2) Gift 10 items; complete 10 fair trades | Friendship Bracelet → Matching outfit sets for both players |
+| Seasonal | Complete each season's event goals | That season's legendary costume |
+| Secret | Hidden conditions tied to the Lorebook (§16) | Secret items, never listed until found |
+
+- Each tier also grants a **title** shown on the profile card (e.g. "Keeper of the Gap", "Hollow Rescuer").
+- A **Milestones screen** shows progress bars for visible tracks. Secret milestones show as "???" until earned.
+- **Implementation:** milestone definitions are data. Progress counters update server-side from game events (the same event stream used for Easter-egg triggers in §16). Rewards are granted exactly once, idempotently.
