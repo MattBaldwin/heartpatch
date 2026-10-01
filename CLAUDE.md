@@ -2,7 +2,7 @@
 
 Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting game for ages 10–17, played mainly on iPhone and iPad as an installable web app (PWA) at `play.pumpkinpatchgames.com`.
 
-**Read `docs/GAME_DESIGN.md` before starting any issue.** It is the source of truth for game rules. If an issue and the design doc disagree, flag it in the PR rather than guessing.
+**Read `docs/GAME_DESIGN.md` and `docs/TECH_SPEC.md` before starting any issue.** The design doc is the source of truth for game rules; the tech spec is the source of truth for repo layout, libraries, API/WebSocket conventions, data model, infrastructure (AWS Lightsail) and CI/CD. If an issue and the design doc disagree, flag it in the PR rather than guessing.
 
 ## Tech stack (decided — don't swap without asking)
 

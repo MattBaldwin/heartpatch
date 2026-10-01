@@ -5,6 +5,7 @@ A cozy, lightly spooky, invite-only multiplayer game about collecting, raising a
 Made by **Pumpkin Patch Games**. Play (soon) at `play.pumpkinpatchgames.com`.
 
 - Game design: [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md)
+- Technical spec: [`docs/TECH_SPEC.md`](docs/TECH_SPEC.md)
 - Agent/contributor guide: [`CLAUDE.md`](CLAUDE.md)
 - Roadmap: see the GitHub milestones (Phase 1: Halloween → Phase 2: Thanksgiving → Phase 3: Christmas)
 
