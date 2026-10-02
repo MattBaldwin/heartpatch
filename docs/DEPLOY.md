@@ -52,7 +52,7 @@ Check current prices before you start; these change.
 | Lightsail instance, 2 GB plan | The main cost. See the [Lightsail pricing page](https://aws.amazon.com/lightsail/pricing/) for the Linux 2 GB plan in Ohio. It includes a monthly data-transfer allowance far beyond what a few families use. New accounts sometimes get a free trial period on some plans. |
 | Static IP | Free while attached to a running instance. AWS charges for one that's left unattached, so release it if you ever delete the instance. |
 | Automatic snapshots | Billed per GB stored per month; a few dollars at most for a 7-day rotation of a small server. |
-| GitHub Container Registry | The images are private. Old versions are pruned automatically (newest 10 kept). Check GitHub's billing page if you're ever warned about package storage. |
+| GitHub Container Registry | The images are private. Old versions are pruned automatically (newest 5 kept). Check GitHub's billing page if you're ever warned about package storage. |
 | Domain | You already pay GoDaddy for `pumpkinpatchgames.com`; the new `play` record is free. |
 | Let's Encrypt (HTTPS) | Free. |
 
@@ -342,7 +342,7 @@ docker compose up -d server
 
 ### Operator password reset
 
-For a player with no map owner to reset them (tech spec §9), once accounts (#3) have shipped:
+For a player with no map owner to reset them (tech spec §9):
 
 ```sh
 docker compose exec server node dist/ops/reset-password.js <username>
@@ -366,6 +366,7 @@ docker compose exec server node dist/ops/reset-password.js <username>
 | Server keeps restarting | `docker compose logs --tail 100 server`. `Invalid configuration:` lists the bad `.env` setting. |
 | Need to change the database password | Postgres stored the first one. Run `docker compose exec db psql -U heartpatch -c "ALTER USER heartpatch PASSWORD 'NEW'"` with a new hex value, put the same value in `.env` as `POSTGRES_PASSWORD`, then `docker compose up -d server`. |
 | Disk filling up | `df -h /`, then `docker system df`. Old images are removed by each deploy; `docker image prune` clears dangling ones. |
+| A deploy run was cancelled or lost its connection mid-deploy | The containers may be on the new version while `.env` still names the old one. Re-run the same deploy so they agree again: `bin/deploy.sh <sha>` with the commit from the run's title (or Actions → Deploy → **Re-run jobs**). |
 | A whole-server problem | Restore a Lightsail snapshot (see "Backups and restore"). |
 
 ## Testing the deploy setup locally

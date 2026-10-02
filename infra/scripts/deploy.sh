@@ -33,7 +33,7 @@ HP_DIR=$(pwd -P)
 
 # One deploy at a time (a push and a manual rollback could otherwise overlap).
 exec 9>"$HP_DIR/.deploy.lock"
-flock -n 9 || fail "another deploy is running"
+flock -n 9 || fail "another deploy or a restore is running; try again when it finishes"
 
 # Reads KEY=value from .env without sourcing it (values may hold shell characters).
 env_value() { sed -n "s/^$1=//p" .env | tail -n 1; }

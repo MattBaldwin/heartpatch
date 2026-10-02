@@ -177,10 +177,14 @@ pass "dumps older than 14 days are deleted"
 psql_value 'truncate users, maps cascade' >/dev/null
 [[ $(psql_value 'select count(*) from users') == 0 ]] || fail "wipe"
 pass "wiped users and maps"
+# Someone left a psql session open: the swap must still work.
+compose exec -T db psql -U heartpatch -d heartpatch -c 'select pg_sleep(600)' >/dev/null 2>&1 &
+sleep 2
 RESTORE_CONFIRM=yes "$HP_DIR/bin/restore.sh" "$dump"
+wait || true
 [[ $(psql_value 'select count(*) from users') == "$users_before" ]] || fail "users not restored"
 [[ $(psql_value 'select count(*) from tiles') == "$tiles_before" ]] || fail "tiles not restored"
-pass "restored $users_before users and $tiles_before tiles"
+pass "restored $users_before users and $tiles_before tiles, with another session connected"
 https https://localhost/api/v1/ready | grep -q '"status":"ready"' || fail "not ready after restore"
 pass "server is ready after the restore"
 leftover=$(compose exec -T db psql -U heartpatch -d postgres -tAc \

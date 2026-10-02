@@ -83,6 +83,8 @@ _Proposed in PR #55; the project owner confirms on merge._
 
 ## 2026-10-02 — Production deploy (#27)
 
+_Proposed in PR #59; the project owner confirms on merge._
+
 - **`TRUST_PROXY=true` trusts exactly one private-network hop** (the direct peer, only if it's a private or loopback address, i.e. Caddy on the Docker network), not every `X-Forwarded-For` entry. *Why:* trusting every hop lets a client pick its own IP and dodge per-IP rate limits. A numeric hop count (`trustProxy: 1`) can't be used: Fastify 5 deliberately treats it as "trust nothing".
 - **The deploy pins the server's SSH host key** in a fourth secret, `LIGHTSAIL_KNOWN_HOSTS`, instead of trusting whatever answers on first connect.
 - **SSH stays open to all IPs** in the Lightsail firewall, because GitHub-hosted runners deploy from a large, changing IP pool. It's protected by key-only auth, a separate deploy user with one restricted key, and fail2ban.
