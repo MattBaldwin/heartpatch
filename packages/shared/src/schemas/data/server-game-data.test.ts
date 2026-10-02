@@ -8,7 +8,12 @@ import { GAME_DATA } from '../../data/index.js';
 import { SERVER_GAME_DATA } from '../../data/server/index.js';
 import { checkServerGameData, type ServerGameData } from './server-game-data.js';
 
-const gameData = { ...GAME_DATA, species: FIXTURE_SPECIES, moves: FIXTURE_MOVES };
+/** Shipped public data plus the test-only species and moves the cases below edit. */
+const gameData = {
+  ...GAME_DATA,
+  species: [...GAME_DATA.species, ...FIXTURE_SPECIES],
+  moves: [...GAME_DATA.moves, ...FIXTURE_MOVES],
+};
 
 const noSecrets = { secretSpecies: [], secretMoves: [], secretEvolutions: [] };
 
@@ -146,16 +151,18 @@ describe('checkServerGameData', () => {
   });
 
   it('reports evolution chains that loop through secret forms', () => {
+    let back = -1;
     const problems = problemsAfter((d) => {
-      d.secretEvolutions.push({
-        from: 'placeholder-moonmallow',
-        into: 'placeholder-moonpuff',
-        level: 40,
-      });
+      back =
+        d.secretEvolutions.push({
+          from: 'placeholder-moonmallow',
+          into: 'placeholder-moonpuff',
+          level: 40,
+        }) - 1;
     });
     expect(problems).toEqual([
       'secretEvolutions[0]: evolution chain loops back to this species',
-      'secretEvolutions[1]: evolution chain loops back to this species',
+      `secretEvolutions[${String(back)}]: evolution chain loops back to this species`,
     ]);
   });
 });
