@@ -1,5 +1,4 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
-import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import type { Scene } from '@babylonjs/core/scene';
 import { hexKey, worldToHex, type MapView, type PublicTile } from '@heartpatch/shared';
@@ -35,6 +34,8 @@ export class HollowLayer implements MapLayer {
   private tiles = new Map<string, PublicTile>();
   private night = false;
   private visits = 0;
+  /** The playing visit's `done`, so a scene torn down mid-visit (GPU loss) still ends it. */
+  private pendingDone: (() => void) | null = null;
   private readonly invalidate: () => void;
 
   constructor(options: { invalidate: () => void }) {
@@ -43,7 +44,7 @@ export class HollowLayer implements MapLayer {
 
   attach(scene: Scene, view: MapView): void {
     this.scene = scene;
-    const sun = scene.getLightByName('sun') as DirectionalLight | null;
+    const sun = scene.getLightByName('sun');
     this.day = {
       clear: scene.clearColor.clone(),
       environment: scene.environmentIntensity,
@@ -54,6 +55,9 @@ export class HollowLayer implements MapLayer {
     this.man = man;
     scene.onDisposeObservable.addOnce(() => {
       if (this.scene !== scene) return;
+      const done = this.pendingDone;
+      this.pendingDone = null;
+      done?.();
       this.scene = null;
       this.man = null;
       this.day = null;
@@ -80,7 +84,9 @@ export class HollowLayer implements MapLayer {
     if (!man || !scene) return false;
     if (man.isVisiting) return true;
     this.visits += 1;
+    this.pendingDone = done ?? null;
     man.visit(this.spotNear(scene), () => {
+      this.pendingDone = null;
       this.invalidate();
       done?.();
     });
@@ -106,7 +112,7 @@ export class HollowLayer implements MapLayer {
   private apply(): void {
     const { scene, day } = this;
     if (!scene || !day) return;
-    const sun = scene.getLightByName('sun') as DirectionalLight | null;
+    const sun = scene.getLightByName('sun');
     if (this.night) {
       scene.clearColor = Color4.FromHexString(`${NIGHT_LOOK.clear}ff`);
       scene.environmentIntensity = day.environment * NIGHT_LOOK.environment;

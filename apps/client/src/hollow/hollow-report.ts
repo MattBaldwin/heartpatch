@@ -25,6 +25,7 @@ export const HOLLOW_TEXT = {
   devNight: (night: string, taken: number) =>
     taken === 0 ? `Night fell (${night}). Nobody was taken.` : `Night fell (${night}).`,
   mystery: 'a squishy friend',
+  inHollow: (name: string) => `${name}, waiting in the Hollow`,
 } as const;
 
 /** Reports worth telling (someone taken, or someone kept safe) newer than `seenNight`, newest first. */

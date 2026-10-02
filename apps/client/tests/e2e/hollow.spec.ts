@@ -102,6 +102,8 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   const sheet = page.getByTestId('hollow-sheet');
   await expect(sheet).toBeVisible();
   await expect(sheet).toContainText('bring them home');
+  // Taken to the Hollow, they're shown greyed (design doc §14).
+  await expect(sheet.getByTestId('hollow-token-grey')).toHaveCount(1);
   expect(findAvoidedWords((await sheet.textContent()) ?? '')).toEqual([]);
   await page.getByTestId('hollow-rescue').first().tap();
 

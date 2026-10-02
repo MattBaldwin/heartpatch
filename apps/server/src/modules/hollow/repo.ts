@@ -6,6 +6,7 @@ import {
 } from '@heartpatch/shared';
 import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, max, min, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
@@ -20,13 +21,15 @@ import {
   tiles,
 } from '../../db/schema.js';
 
-/** One player's result for a night, as stored in `hollow_events.outcomes`. */
-export interface StoredOutcome {
-  userId: string;
-  taken: string | null;
-  exposed: number;
-  sheltered: number;
-}
+/** One player's result for a night, as stored in `hollow_events.outcomes` (checked on read). */
+const StoredOutcomeSchema = z.strictObject({
+  userId: z.uuid(),
+  taken: z.uuid().nullable(),
+  exposed: z.number().int().min(0),
+  sheltered: z.number().int().min(0),
+});
+export type StoredOutcome = z.infer<typeof StoredOutcomeSchema>;
+const StoredOutcomesSchema = z.array(StoredOutcomeSchema);
 
 export interface NightRow {
   id: string;
@@ -94,7 +97,7 @@ export interface HollowRepo {
   activeMembers: (mapId: string) => Promise<string[]>;
   /** Every home tile with an owner (the Heart Seeds and their rings). */
   homeTiles: (mapId: string) => Promise<{ ownerUserId: string; q: number; r: number }[]>;
-  /** Every squishy of an active member, any state. */
+  /** Every squishy of an active member, any state, row-locked until commit. */
   nightSquishies: (mapId: string) => Promise<NightSquishyRow[]>;
   /** Moves a squishy to the Hollow if it's still active; false if it wasn't. */
   hollow: (squishyId: string) => Promise<boolean>;
@@ -242,8 +245,8 @@ function queries(db: Executor): HollowRepo {
         .where(and(eq(hollowEvents.mapId, mapId), gte(hollowEvents.night, since)))
         .orderBy(desc(hollowEvents.night))
         .limit(limit);
-      // Written only by this module (`setOutcomes`), as `StoredOutcome[]`.
-      return rows.map((r) => ({ ...r, outcomes: r.outcomes as StoredOutcome[] }));
+      // jsonb is checked on the way out, so a hand-edited row fails loudly.
+      return rows.map((r) => ({ ...r, outcomes: StoredOutcomesSchema.parse(r.outcomes) }));
     },
 
     activeMembers: async (mapId) => {
@@ -284,7 +287,10 @@ function queries(db: Executor): HollowRepo {
         .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))
         .leftJoin(postTile, eq(postTile.id, tileDefenders.tileId))
         .where(eq(squishies.mapId, mapId))
-        .orderBy(asc(squishies.id));
+        .orderBy(asc(squishies.id))
+        // Locked until commit, so a squishy can't be housed or posted between
+        // this read and being taken (lock order: the night's row, then squishies).
+        .for('update', { of: squishies });
       return rows.map((r) => ({
         id: r.id,
         ownerUserId: r.ownerUserId,

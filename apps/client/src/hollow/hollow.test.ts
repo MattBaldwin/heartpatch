@@ -129,6 +129,14 @@ describe('the Hollow Man on the map', () => {
     expect(man.isEnabled()).toBe(false);
   });
 
+  it('still ends a visit whose scene is torn down mid-way (GPU loss)', () => {
+    const { scene, layer } = stage();
+    let ended = 0;
+    expect(layer.visit(() => (ended += 1))).toBe(true);
+    scene.dispose();
+    expect(ended).toBe(1);
+  });
+
   it('fades fully in and fully out', () => {
     for (const keys of [VISIT_KEYS.bodyAlpha, VISIT_KEYS.eyeAlpha]) {
       expect(keys[0][1]).toBe(0);

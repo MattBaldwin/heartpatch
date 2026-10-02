@@ -282,7 +282,6 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
           { userId: friend.id, taken, exposed: 2, sheltered: 1 },
         ]),
       );
-      // The habitat bed is kept while it's away (#18).
       const events = (await eventsOf(mapId)).slice(-2);
       expect(events.map((e) => e.type)).toEqual(['squishy.hollowed', 'hollow.nightfall']);
       const [hollowed, fell] = events;
@@ -333,12 +332,16 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const mapId = await patch(server, kid);
       // Fuelled through tonight: tonight is safe, tomorrow it has gone out.
       await build(mapId, kid, 'hearthfire', { fuelledThrough: TONIGHT });
-      const id = await squishy(mapId, kid);
+      const meadow = await build(mapId, kid, 'cozy-meadow', { spot: 2 });
+      const id = await squishy(mapId, kid, { habitat: meadow });
       const hollow = hollowService();
       expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
       expect(await stateOf(id)).toBe('active');
       expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 1 });
       expect(await stateOf(id)).toBe('hollowed');
+      // Its habitat bed is kept while it's away (#18).
+      const away = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, id) });
+      expect(away!.habitatBuildingId).toBe(meadow);
     });
 
     it('takes nothing on a tutorial map (nothing can be lost in the tutorial)', async () => {

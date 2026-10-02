@@ -77,6 +77,8 @@ function safeStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
 export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   const api = options.api ?? hollowApi;
   const storage = options.storage === undefined ? safeStorage() : options.storage;
+  // Wall-clock time, like `event.at` (the event's database time). Not the
+  // game clock: a dev override (`HP_DEV_NOW`) moves that one but not `at`.
   const now = options.now ?? (() => Date.now());
 
   let user: PublicUser | null = null;
@@ -134,6 +136,22 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       status?.speciesDefs.find((s) => s.id === speciesId);
     return species?.name;
   };
+  /**
+   * A little round squishy in its own colour, greyed while it's in the
+   * Hollow (design doc §14 "Hollowed squishies turn grey").
+   */
+  const token = (speciesId: string, greyed: boolean): HTMLElement => {
+    const species =
+      GAME_DATA.species.find((s) => s.id === speciesId) ??
+      status?.speciesDefs.find((s) => s.id === speciesId);
+    const node = el('span', {
+      class: `hollow-token${greyed ? ' hollow-token-grey' : ''}`,
+      'aria-hidden': 'true',
+      'data-testid': greyed ? 'hollow-token-grey' : 'hollow-token',
+    });
+    node.style.setProperty('--squishy-color', species?.visual.palette[0] ?? '#b9a8d9');
+    return node;
+  };
   const nameOf = (squishy: { nickname: string | null; speciesId: string }): string =>
     squishy.nickname ?? speciesName(squishy.speciesId) ?? HOLLOW_TEXT.mystery;
 
@@ -180,6 +198,17 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       const rescueFirst = waiting[0];
       reportBox.replaceChildren(
         el('h2', { class: 'hollow-title', id: 'hollow-report-title' }, title),
+        ...(report.some((r) => r.taken)
+          ? [
+              el(
+                'div',
+                { class: 'hollow-tokens' },
+                ...report.flatMap((r) =>
+                  r.taken ? [token(r.taken.speciesId, r.taken.inHollow)] : [],
+                ),
+              ),
+            ]
+          : []),
         ...lines.map((line) => el('p', { class: 'hollow-line' }, line)),
         el(
           'div',
@@ -225,7 +254,12 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
             el(
               'li',
               { class: 'hollow-list-row' },
-              el('span', { class: 'hollow-list-name' }, nameOf(s)),
+              token(s.speciesId, true),
+              el(
+                'span',
+                { class: 'hollow-list-name', 'aria-label': HOLLOW_TEXT.inHollow(nameOf(s)) },
+                nameOf(s),
+              ),
               button(HOLLOW_TEXT.rescue, () => void rescue(s.id), {
                 'data-squishy': s.id,
                 'data-testid': 'hollow-rescue',

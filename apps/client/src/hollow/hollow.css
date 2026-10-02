@@ -127,7 +127,6 @@
 .hollow-list-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 6px 0;
 }
@@ -141,4 +140,47 @@
 
 .hollow-list-row .hollow-button {
   flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* A squishy as a little round token in its own colour; greyed while it's in
+   the Hollow (design doc §14), with sleepy eyes. */
+.hollow-token {
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 34px;
+  border-radius: 50% 50% 44% 44%;
+  background: var(--squishy-color, #b9a8d9);
+  box-shadow: inset 0 -5px 0 rgb(0 0 0 / 12%);
+}
+
+.hollow-token::before,
+.hollow-token::after {
+  content: '';
+  position: absolute;
+  top: 13px;
+  width: 7px;
+  height: 3px;
+  border-radius: 3px;
+  background: #fff6dc;
+}
+
+.hollow-token::before {
+  left: 10px;
+}
+
+.hollow-token::after {
+  right: 10px;
+}
+
+.hollow-token-grey {
+  filter: grayscale(1) brightness(1.4);
+  opacity: 0.75;
+}
+
+.hollow-tokens {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
 }
