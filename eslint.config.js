@@ -23,6 +23,7 @@ const sharedForbiddenGlobals = [
   'window',
   'document',
   'localStorage',
+  'Intl', // locale-dependent results differ between engines
 ];
 
 const clockMessage = 'Shared logic takes time as an input; never read the clock.';
@@ -201,6 +202,13 @@ export default defineConfig(
     rules: {
       ...determinismRules,
       'no-console': 'error', // use the pino logger (request.log / app.log)
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'ImportExpression[source.value=/db\\/(schema|client)/]',
+          message: 'Only repos and src/db/** use the DB schema or client (tech spec §7).',
+        },
+      ],
       'no-restricted-imports': ['error', { patterns: [serverNoClient, serverDbOnlyInRepos] }],
       '@typescript-eslint/no-restricted-imports': [
         'error',
