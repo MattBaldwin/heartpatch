@@ -1,6 +1,10 @@
 import type { MapGenSettings } from '../schemas/data/map-gen.js';
 
-/** Map generator settings (design doc §3, §11). */
+/**
+ * Map generator settings (design doc §3, §11). When retuning a layout, keep
+ * the mapgen "equal share of the map" test green: with 4 players only some
+ * home distances (e.g. 4 and 8 at radius 12) split the land exactly evenly.
+ */
 export const MAP_GEN: MapGenSettings = {
   layouts: [
     { players: 2, radius: 9, homeDistance: 6 }, // TUNE: design doc §3 (271 tiles)

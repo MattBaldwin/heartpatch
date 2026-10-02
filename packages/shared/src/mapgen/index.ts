@@ -1,6 +1,5 @@
 import {
   hex,
-  hexBfs,
   hexDistance,
   hexKey,
   hexRing,
@@ -66,17 +65,6 @@ export function mapLayout(data: MapGenData, playerCount: number): MapLayout {
     throw new RangeError(`no map layout for ${playerCount} players`);
   }
   return layout;
-}
-
-/** A weighted pick over integer weights; at least one weight must be positive. */
-function pickTerrain(rng: Rng, terrains: readonly Terrain[]): Terrain {
-  const total = terrains.reduce((sum, t) => sum + t.weight, 0);
-  let roll = rng.int(0, total - 1);
-  for (const terrain of terrains) {
-    if (roll < terrain.weight) return terrain;
-    roll -= terrain.weight;
-  }
-  throw new RangeError('pickTerrain() needs a positive total weight');
 }
 
 /** Removes and returns a uniformly random item (swap-remove: order isn't kept). */
@@ -189,7 +177,7 @@ export function generateMap(data: MapGenData, options: GenerateMapOptions): Gene
   const frontier: Hex[] = [];
   for (let i = 0; i < patchCount && unseeded.length > 0; i++) {
     const patchStart = takeRandom(rng, unseeded);
-    terrain.set(hexKey(patchStart), pickTerrain(rng, scatterable));
+    terrain.set(hexKey(patchStart), rng.weighted(scatterable));
     frontier.push(patchStart);
   }
   while (frontier.length > 0) {
@@ -215,9 +203,9 @@ export function generateMap(data: MapGenData, options: GenerateMapOptions): Gene
     }
   }
 
-  // Guardians get tougher further from the nearest Heart Seed.
-  const inMap = (h: Hex) => hexDistance(h, center) <= layout.radius;
-  const homeSteps = hexBfs(homes, inMap);
+  // Guardians get tougher further from the nearest Heart Seed. The map is a
+  // solid hex, so straight-line steps are walking steps.
+  const stepsToHome = (h: Hex) => Math.min(...homes.map((home) => hexDistance(home, h)));
   const { guardianStrength: strength } = mapGen;
 
   const result = tiles.map((h): MapTile => {
@@ -231,16 +219,14 @@ export function generateMap(data: MapGenData, options: GenerateMapOptions): Gene
     if (slot !== null) {
       nodeResource = homeNodes.get(key) ?? null;
     } else {
-      if (tileTerrain.nodeChance > 0 && rng.int(1, 100) <= tileTerrain.nodeChance) {
-        const options = tileTerrain.nodeResources;
-        nodeResource = options[rng.int(0, options.length - 1)] ?? null;
+      if (tileTerrain.nodeChance > 0 && rng.chance(tileTerrain.nodeChance)) {
+        nodeResource = rng.pick(tileTerrain.nodeResources);
       }
       if (isGap(h)) {
         guardianStrength = strength.gap;
       } else {
         // Neutral tiles are at least 2 steps from a Heart Seed.
-        const steps = homeSteps.get(key) ?? 2;
-        const level = strength.min + Math.floor((steps - 2) / strength.stepsPerLevel);
+        const level = strength.min + Math.floor((stepsToHome(h) - 2) / strength.stepsPerLevel);
         guardianStrength = Math.min(strength.max, level);
       }
     }
