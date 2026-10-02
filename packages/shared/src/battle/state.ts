@@ -32,7 +32,7 @@ export interface BattleSide {
   readonly active: number;
 }
 
-export type BattleEndReason = 'tuckered-out' | 'forfeit' | 'turn-limit';
+export type BattleEndReason = 'tuckered-out' | 'forfeit' | 'turn-limit' | 'captured';
 
 export interface BattleXpAward {
   readonly side: BattleSideId;
@@ -98,6 +98,11 @@ export type BattleEvent =
   | (At & { readonly type: 'status-skip'; readonly status: BattleStatusId })
   | (At & { readonly type: 'status-end'; readonly status: BattleStatusId })
   | (At & { readonly type: 'tuckered-out' })
+  /**
+   * A Heart Charm was offered to the squishy at `side`/`slot` (the other side
+   * offered it). `caught`: it said yes, and the battle ends.
+   */
+  | (At & { readonly type: 'capture'; readonly caught: boolean })
   | { readonly turn: number; readonly type: 'forfeit'; readonly side: BattleSideId }
   | {
       readonly turn: number;

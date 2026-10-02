@@ -36,6 +36,13 @@
       "when": 1790941814312,
       "tag": "0004_battles",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790952316724,
+      "tag": "0005_wild_capture",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
+import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
@@ -101,9 +102,12 @@ const maps = createMapScreen({
   invalidate: () => stage?.invalidate(),
   onClosed: (message) => {
     void battles.setMap(null);
+    catalog.close();
     lobby.showMessage(message);
   },
 });
+// The squishy catalog (#14) opens from the button by the battle entry.
+const catalog = createCatalogScreen({ root: document.body });
 // The tutorial (#47) draws its Tutorial Glade with the map screen and sits
 // over it; it never blocks the lobby unless the server requires it first
 // (decision A).
@@ -114,6 +118,7 @@ const tutorial = createTutorialScreen({
       // The Glade is Sprout's: no battle button over it (battles come to the
       // tutorial with its later steps).
       await battles.setMap(null);
+      catalog.close();
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
       if (stillWanted()) lobby.hide();
@@ -142,18 +147,27 @@ const battles = createBattleScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onOpen: () => {
     maps.close();
+    catalog.close();
     lobby.stepOut();
   },
   onClosed: (mapId) => {
     maps.open(mapId).catch((err: unknown) => {
+      // No map to go back to: no battle button over the lobby either.
+      void battles.setMap(null);
       lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
     });
     lobby.hide();
   },
+  onCatalog: (mapId) => {
+    catalog.show(mapId);
+  },
+  // A reply landing while the lobby or catalog is up must not open a battle over it.
+  canOpen: () => !lobby.isOpen && !catalog.isOpen,
   devTools: import.meta.env.DEV,
 });
 const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
+    catalog.close();
     await maps.open(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
     // battle resumed here (after a refresh) must step it out again after that.
@@ -165,6 +179,7 @@ const lobby = mountLobby(document.body, {
 mountAuth(document.body, {
   onChange: (user) => {
     battles.setUser(user);
+    catalog.setUser(user);
     maps.setUser(user);
     lobby.setUser(user);
     tutorial.setUser(user);
@@ -212,5 +227,6 @@ if (import.meta.env.DEV) {
     tutorial: () => tutorial.debug,
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,
+    catalog: () => catalog.debug,
   };
 }

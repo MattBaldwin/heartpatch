@@ -46,3 +46,5 @@ export * from './schemas/tutorial.js';
 export * from './schemas/squishies.js';
 export * from './schemas/events.js';
 export * from './schemas/time.js';
+export * from './spawns/window.js';
+export * from './schemas/spawns.js';

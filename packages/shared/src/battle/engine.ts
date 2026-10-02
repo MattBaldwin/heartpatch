@@ -11,6 +11,7 @@ import type { BattleStat, Move } from '../schemas/data/moves.js';
 import { chooseAiChoice, chooseAiReplacement } from './ai.js';
 import { BattleRuleError, getMove, getSpecies, type BattleContent } from './content.js';
 import {
+  captureChance,
   effectiveStat,
   effectivenessTier,
   matchupMultiplier,
@@ -175,6 +176,15 @@ class Step {
       if (choice.type === 'swap') this.swap(side, choice.slot);
     }
 
+    // Heart Charms next; a squishy that says yes ends the battle. Also the
+    // side's whole turn.
+    for (const side of SIDES) {
+      const choice = picked[side];
+      if (choice.type !== 'capture') continue;
+      this.capture(side, choice.sure === true);
+      if (this.over) return;
+    }
+
     const movers = SIDES.filter((side) => picked[side].type === 'move');
     for (const side of this.speedOrder(movers)) {
       const choice = picked[side];
@@ -194,7 +204,11 @@ class Step {
       return chooseAiChoice(this.content, this.state, side, controller.policy, this.rng);
     }
     if (!given) throw new BattleRuleError(`side ${side} needs a choice this turn`);
-    if (given.type === 'move') {
+    if (given.type === 'capture') {
+      if (this.state.sides[otherSide(side)].controller.type !== 'ai') {
+        throw new BattleRuleError(`side ${side} can only befriend an AI side's squishy`);
+      }
+    } else if (given.type === 'move') {
       if (!this.active(side).moves.includes(given.move)) {
         throw new BattleRuleError(`side ${side}'s squishy doesn't know "${given.move}"`);
       }
@@ -235,6 +249,21 @@ class Step {
   private sendOut(side: BattleSideId, slot: number): void {
     this.state.sides[side].active = slot;
     this.active(side).joined = true;
+  }
+
+  /**
+   * `side` offers a Heart Charm to the other side's squishy: one seeded roll
+   * against `captureChance` (none when `sure`). Caught ends the battle with
+   * `side` the winner.
+   */
+  private capture(side: BattleSideId, sure: boolean): void {
+    const foeSide = otherSide(side);
+    const target = this.active(foeSide);
+    const species = getSpecies(this.content, target.speciesId);
+    const caught =
+      sure || this.rng.chance(captureChance(target, species.rarity, this.content.rules));
+    this.emit({ ...this.at(foeSide), type: 'capture', caught });
+    if (caught) this.end(side, 'captured');
   }
 
   // ── Moves ────────────────────────────────────────────────────────────
@@ -564,5 +593,9 @@ export function legalChoices(state: BattleState, side: BattleSideId): BattleChoi
   return [
     ...activeSquishy(state, side).moves.map((move): BattleChoice => ({ type: 'move', move })),
     ...benchOf(state, side).map(({ slot }): BattleChoice => ({ type: 'swap', slot })),
+    ...(state.sides[side].controller.type === 'player' &&
+    state.sides[otherSide(side)].controller.type === 'ai'
+      ? [{ type: 'capture' } as const]
+      : []),
   ];
 }

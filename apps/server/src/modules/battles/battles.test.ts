@@ -255,7 +255,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
   });
 
   describe('starting', () => {
-    it('needs a squishy, and finds no wild squishies before spawns (#14) exist', async () => {
+    it('needs a squishy', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
@@ -268,11 +268,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const noTeam = await call(server, 'POST', `/maps/${mapId}/dev/battles`, kid, {});
       expect(noTeam.statusCode).toBe(409);
       expect(errorOf(noTeam).message).toBe('You need a squishy friend first!');
-
-      await grant(server, kid, mapId);
-      const nobody = await call(server, 'POST', `/maps/${mapId}/battles`, kid);
-      expect(nobody.statusCode).toBe(404);
-      expect(errorOf(nobody).message).toMatch(/No wild squishies around/);
+      // Wild spawns (#14) are covered in modules/spawns/spawns.test.ts.
     });
 
     it('hands out a squishy (dev) and starts a battle the client can draw', async () => {

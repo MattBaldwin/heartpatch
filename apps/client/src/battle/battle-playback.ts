@@ -18,7 +18,16 @@ import {
 
 export interface PlaybackStep {
   readonly kind:
-    'move' | 'hit' | 'miss' | 'heal' | 'effect' | 'tuckered' | 'swap' | 'forfeit' | 'end';
+    | 'move'
+    | 'hit'
+    | 'miss'
+    | 'heal'
+    | 'effect'
+    | 'tuckered'
+    | 'swap'
+    | 'forfeit'
+    | 'capture'
+    | 'end';
   /** Whose squishy the step is about. */
   readonly side: BattleSideId;
   /** Team slot of that squishy (sides swap in and out). */
@@ -207,6 +216,23 @@ export function playbackSteps(
           PLAYBACK.swapMs,
           { to: event.slot, squish: 'bounce' },
         );
+      case 'capture': {
+        // The Heart Charm lands on the wild squishy: it bounces with joy and
+        // comes along, or wiggles free (style guide §9: "befriend").
+        const species = content.speciesName(
+          battle.view.sides[event.side].squishies[event.slot]?.speciesId ?? '',
+        );
+        return step(
+          'capture',
+          event.side,
+          event.slot,
+          event.caught
+            ? `Heart Charm! ${species} wants to be friends!`
+            : `Heart Charm! ${name(event.side, event.slot)} wiggled free.`,
+          PLAYBACK.captureMs,
+          { squish: event.caught ? 'bounce' : 'wobble' },
+        );
+      }
       case 'forfeit': {
         const slot = battle.view.sides[event.side].active;
         return step(
@@ -223,7 +249,9 @@ export function playbackSteps(
           event.winner === 'draw'
             ? "It's a tie! Everyone's sleepy."
             : event.winner === side
-              ? 'You won! Hooray!'
+              ? event.reason === 'captured'
+                ? 'A new friend! Hooray!'
+                : 'You won! Hooray!'
               : event.reason === 'forfeit'
                 ? 'You scooted home. Maybe next time!'
                 : 'Aw, tuckered out. Next time!';

@@ -1,11 +1,13 @@
 import {
   applyBattleAction,
   BattleRuleError,
+  CAPTURABLE_BATTLE_KINDS,
   ClientBattleViewSchema,
   clientBattleView,
   createBattleContent,
   GAME_DATA,
   gameplayOverrides,
+  otherSide,
   startBattle,
   type BattleAction,
   type BattleActionRequest,
@@ -14,11 +16,13 @@ import {
   type BattleSideId,
   type BattleSquishySetup,
   type BattleState,
+  type Hex,
   type Move,
   type OwnedSquishy,
   type PlayerBattle,
   type PublicUser,
   type Species,
+  type StartWildBattleRequest,
 } from '@heartpatch/shared';
 import { SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
@@ -27,6 +31,7 @@ import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
 import type { Clock } from '../../lib/time.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
+import { createSpawnsRepo } from '../spawns/repo.js';
 import { DEV_WILD_LEVEL } from './limits.js';
 import { createBattlesRepo, type BattleRow, type BattlesTxRepo } from './repo.js';
 
@@ -46,6 +51,12 @@ export const PLAYER_SIDE = 'a' satisfies BattleSideId;
 export interface WildEncounter {
   /** The wild side's team; ids must be unique within the battle (`wild-1`, …). */
   squishies: BattleSquishySetup[];
+  /**
+   * The tile and spawn window it came from, stored on the battle so a
+   * befriended squishy is gone for that player for the rest of the window.
+   * Absent for squishies that aren't a tile's spawn (the dev route).
+   */
+  spawn?: { q: number; r: number; window: string };
 }
 
 export interface WildEncounterContext {
@@ -53,7 +64,25 @@ export interface WildEncounterContext {
   userId: string;
   mapKind: MapRow['kind'];
   now: Date;
+  /** The tile the player picked, or null for the nearest wild squishy. */
+  tile: Hex | null;
 }
+
+/**
+ * Inventory (#17's module): `consumeItems` on the caller's transaction. It
+ * locks the rows and throws `CONFLICT` with a kid-readable line, changing
+ * nothing, if any item is short.
+ */
+export interface ItemsPort {
+  consume: (
+    tx: Executor,
+    owner: { mapId: string; userId: string },
+    items: Record<string, number>,
+  ) => Promise<void>;
+}
+
+/** What a capture try costs (design doc §6): one Heart Charm. */
+export const HEART_CHARM = 'heart-charm';
 
 export interface BattlesService {
   /** The player's battle to resume on this map, or null. */
@@ -63,7 +92,11 @@ export interface BattlesService {
    * Picks a fight with whatever wild squishy is around (`findWildEncounter`),
    * or resumes the battle already going (`created: false`).
    */
-  startWild: (user: PublicUser, mapId: string) => Promise<StartResult>;
+  startWild: (
+    user: PublicUser,
+    mapId: string,
+    request?: StartWildBattleRequest,
+  ) => Promise<StartResult>;
   /** Starts a wild battle against a given team (spawns, and the dev route). */
   startAgainst: (user: PublicUser, mapId: string, encounter: WildEncounter) => Promise<StartResult>;
   /** Applies one player action; the AI side answers inside the same step. */
@@ -96,6 +129,8 @@ export interface BattlesServiceOptions {
   content?: BattleContent;
   /** What's around to fight (#14). Without one, there are no wild squishies. */
   findWildEncounter?: (context: WildEncounterContext) => Promise<WildEncounter | null>;
+  /** Heart Charms for capture (#17's inventory). Without one, capture is refused. */
+  items?: ItemsPort;
 }
 
 // Kid-readable messages (style guide §6).
@@ -108,6 +143,8 @@ const MESSAGES = {
   movedOn: 'The battle moved on. Take another look!',
   badChoice: "That's not a move you can make right now. Try another!",
   unknownSpecies: "We don't know that squishy.",
+  noCapture: "You can't use a Heart Charm here.",
+  noCharms: "Heart Charms aren't ready yet. Check back soon!",
 } as const;
 
 export function defaultBattleContent(): BattleContent {
@@ -181,17 +218,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     tx: Executor,
     row: BattleRow | null,
     user: PublicUser,
-  ): Promise<BattleRow> => {
+  ): Promise<{ row: BattleRow; map: MapRow }> => {
     if (!row || row.playerUserId !== user.id) throw new AppError('NOT_FOUND', MESSAGES.notFound);
-    await requireMember(tx, user, row.mapId);
-    return row;
+    const map = await requireMember(tx, user, row.mapId);
+    return { row, map };
   };
 
   /**
    * The content was re-tuned while this battle ran: its stored state can't be
    * stepped with today's rules, so it ends as no contest (COORDINATOR §9).
    * Nothing is won or lost. Wild battles cost no attempt; a kind that does
-   * (tile guardians, #14) refunds it here.
+   * (tile guardians, #15) refunds it here.
    */
   const endNoContest = async (repo: BattlesTxRepo, row: BattleRow, at: Date): Promise<void> => {
     await repo.finish(row.id, {
@@ -233,8 +270,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     return ended;
   };
 
-  /** The engine's `BattleAction` for the player's intent; the client never names a side. */
-  const toEngineAction = (action: BattleActionRequest['action']): BattleAction => {
+  /**
+   * The engine's `BattleAction` for the player's intent; the client never
+   * names a side. `sureCapture`: a Heart Charm always works here (tutorial).
+   */
+  const toEngineAction = (
+    action: BattleActionRequest['action'],
+    sureCapture: boolean,
+  ): BattleAction => {
     switch (action.type) {
       case 'move':
         return { type: 'turn', choices: { [PLAYER_SIDE]: { type: 'move', move: action.move } } };
@@ -244,12 +287,20 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         return { type: 'replace', side: PLAYER_SIDE, slot: action.slot };
       case 'forfeit':
         return { type: 'forfeit', side: PLAYER_SIDE };
+      case 'capture':
+        return {
+          type: 'turn',
+          choices: {
+            [PLAYER_SIDE]: sureCapture ? { type: 'capture', sure: true } : { type: 'capture' },
+          },
+        };
     }
   };
 
   /** The battle is over: XP for the player's squishies, then the event. */
   const finish = async (
     repo: BattlesTxRepo,
+    tx: Executor,
     row: BattleRow,
     actions: BattleAction[],
     state: BattleState,
@@ -263,6 +314,23 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // then `maps` via appendEvent.
     await repo.lockSquishies(awards.map((a) => a.squishyId));
     for (const award of awards) await repo.addXp(award.squishyId, award.xp);
+    // Befriended (design doc §6): the wild squishy joins the player as it was
+    // in the battle, and the catalog marks the species caught.
+    let captured: OwnedSquishy | null = null;
+    if (result.reason === 'captured' && result.winner === PLAYER_SIDE) {
+      const wild = state.sides[otherSide(PLAYER_SIDE)];
+      const friend = wild.squishies[wild.active];
+      if (!friend) throw new Error('finish: no wild squishy to befriend');
+      captured = await repo.insertSquishy({
+        mapId: row.mapId,
+        ownerUserId: row.playerUserId,
+        speciesId: friend.speciesId,
+        element: friend.element,
+        feeling: friend.feeling,
+        level: friend.level,
+      });
+      await createSpawnsRepo(tx).markCaught(row.mapId, row.playerUserId, friend.speciesId, at);
+    }
     await repo.finish(row.id, {
       status: 'finished',
       actions,
@@ -286,6 +354,20 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         xp: awards.map(({ squishyId, xp }) => ({ squishyId, xp })),
       },
     });
+    if (captured) {
+      await repo.appendEvent({
+        mapId: row.mapId,
+        type: 'squishy.captured',
+        actorUserId: row.playerUserId,
+        payload: {
+          battleId: row.id,
+          userId: row.playerUserId,
+          squishyId: captured.id,
+          speciesId: captured.speciesId,
+          level: captured.level,
+        },
+      });
+    }
   };
 
   const startAgainst: BattlesService['startAgainst'] = async (user, mapId, encounter) => {
@@ -321,7 +403,15 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           setup: setup.sides,
           state,
           startedAt: now(),
+          spawn: encounter.spawn ?? null,
         });
+        // Meeting a squishy fills in its catalog page (design doc §21).
+        await createSpawnsRepo(tx).markSeen(
+          mapId,
+          user.id,
+          wild.map((s) => s.speciesId),
+          row.startedAt,
+        );
         await repo.appendEvent({
           mapId,
           type: 'battle.started',
@@ -356,11 +446,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     },
 
     get: async (user, battleId) => {
-      const row = await requireOwn(db, await store.findBattle(battleId), user);
+      const { row } = await requireOwn(db, await store.findBattle(battleId), user);
       return toPlayerBattle(await resolved(row));
     },
 
-    startWild: async (user, mapId) => {
+    startWild: async (user, mapId, request = {}) => {
       const map = await requireMember(db, user, mapId);
       const active = await store.findActive(mapId, user.id);
       if (active) return { battle: toPlayerBattle(await resolved(active)), created: false };
@@ -369,6 +459,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         userId: user.id,
         mapKind: map.kind,
         now: now(),
+        tile: request.tile ?? null,
       });
       if (!encounter) throw new AppError('NOT_FOUND', MESSAGES.nobodyAround);
       return startAgainst(user, mapId, encounter);
@@ -378,7 +469,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
 
     act: async (user, battleId, request) => {
       const { row: next, mapId } = await store.transaction(async (repo, tx) => {
-        const row = await requireOwn(tx, await repo.lockBattle(battleId), user);
+        const { row, map } = await requireOwn(tx, await repo.lockBattle(battleId), user);
         if (row.status !== 'active') throw new AppError('CONFLICT', MESSAGES.over);
         const at = now();
         if (row.contentHash !== content.contentHash) {
@@ -390,7 +481,20 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         // submit are covered by the Idempotency-Key header.
         if (request.turn !== row.state.turn) throw new AppError('CONFLICT', MESSAGES.movedOn);
 
-        const action = toEngineAction(request.action);
+        if (request.action.type === 'capture') {
+          // Only wild squishies can be befriended. Each try uses a Heart Charm,
+          // in this transaction: a refused step gives it back.
+          if (!CAPTURABLE_BATTLE_KINDS.has(row.kind))
+            throw new AppError('CONFLICT', MESSAGES.noCapture);
+          if (!options.items) throw new AppError('CONFLICT', MESSAGES.noCharms);
+          await options.items.consume(
+            tx,
+            { mapId: row.mapId, userId: row.playerUserId },
+            { [HEART_CHARM]: 1 },
+          );
+        }
+        const sureCapture = gameplayOverrides(map.kind)?.captureAlwaysSucceeds === true;
+        const action = toEngineAction(request.action, sureCapture);
         let state: BattleState;
         try {
           state = applyBattleAction(content, row.state, action);
@@ -399,7 +503,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           throw err;
         }
         const actions = [...row.actions, action];
-        if (state.phase.type === 'over') await finish(repo, row, actions, state, at);
+        if (state.phase.type === 'over') await finish(repo, tx, row, actions, state, at);
         else await repo.saveProgress(row.id, { actions, state });
         return { row: await repo.findBattle(row.id), mapId: row.mapId };
       });

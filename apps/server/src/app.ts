@@ -13,6 +13,8 @@ import { createIdempotencyStore } from './db/idempotency-keys.js';
 import { registerIdempotency } from './lib/idempotency.js';
 import { battlesRoutes } from './modules/battles/routes.js';
 import { createBattlesService } from './modules/battles/service.js';
+import { spawnsRoutes } from './modules/spawns/routes.js';
+import { createSpawnsService } from './modules/spawns/service.js';
 import { createAuthRepo } from './modules/auth/repo.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { hashSessionToken } from './modules/auth/secrets.js';
@@ -137,9 +139,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         });
         await api.register(tutorialRoutes(tutorial, { hooks: authHooks }));
 
+        // Wild squishies (#14) plug into battles through `findWildEncounter`.
+        const spawns = createSpawnsService({ db, clock });
+        await api.register(spawnsRoutes(spawns, { hooks: authHooks }));
         const battles = createBattlesService({
           db,
           clock,
+          findWildEncounter: spawns.findWildEncounter,
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         const idempotencyStore = createIdempotencyStore(db);

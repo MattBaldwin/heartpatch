@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ContentIdSchema, DisplayNameSchema } from './common.js';
+import { ContentIdSchema, DisplayNameSchema, RaritySchema } from './common.js';
 import { formatDataIssues } from './issues.js';
 
 /**
@@ -157,6 +157,22 @@ export const BattleRulesSchema = z.strictObject({
     winMultiplier: z.number().min(1),
     minimum: z.number().int().min(0),
   }),
+  /**
+   * Befriending a wild squishy with a Heart Charm (design doc §6): the chance
+   * rises as its energy drops. At full energy it is `atFull`%; with 1 energy
+   * left it is `nearlyOut`%, in a straight line between (rounded down). Then
+   * × `rarity[rarity]`/100 (rarer squishies are shyer), never below 1%.
+   */
+  capture: z
+    .strictObject({
+      atFull: percent,
+      nearlyOut: percent,
+      rarity: z.record(RaritySchema, percent),
+    })
+    .refine((c) => c.atFull <= c.nearlyOut, {
+      message: 'atFull must not be more than nearlyOut',
+      path: ['nearlyOut'],
+    }),
   ai: z.record(BattleAiPolicySchema, BattleAiPolicyRulesSchema),
 });
 export type BattleRules = z.infer<typeof BattleRulesSchema>;

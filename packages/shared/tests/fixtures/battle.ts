@@ -87,6 +87,11 @@ export const FIXTURE_BATTLE_RULES: BattleRules = {
     { id: 'normal', atLeast: 0.85 },
     { id: 'weak', atLeast: 0, line: 'Just a little boop.' },
   ],
+  capture: {
+    atFull: 15,
+    nearlyOut: 90,
+    rarity: { common: 100, uncommon: 85, rare: 70, epic: 55, legendary: 40, secret: 40 },
+  },
   xp: { perOpponentLevel: 4, winMultiplier: 1.5, minimum: 5 },
   ai: {
     wild: {

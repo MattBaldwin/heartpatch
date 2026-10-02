@@ -2,6 +2,7 @@ import {
   BattleResponseSchema,
   CurrentBattleResponseSchema,
   SquishyResponseSchema,
+  WildHintsResponseSchema,
   type DevGrantSquishyRequest,
   type DevStartBattleRequest,
   type OwnedSquishy,
@@ -21,7 +22,13 @@ export const battleApi = {
       schema: CurrentBattleResponseSchema,
     }).then((res) => res.battle),
 
-  /** Picks a fight with whatever wild squishy is around (or resumes the one going). */
+  /** How many tiles in reach have a wild squishy right now (no species: a hint). */
+  wildNearby: (mapId: string): Promise<number> =>
+    apiCallFor(`/maps/${mapId}/wild`, { method: 'GET', schema: WildHintsResponseSchema }).then(
+      (res) => res.wild.tiles.length,
+    ),
+
+  /** Picks a fight with the nearest wild squishy (or resumes the one going). */
   startWild: (mapId: string): Promise<PlayerBattle> =>
     apiCallFor(`/maps/${mapId}/battles`, { method: 'POST', schema: BattleResponseSchema }).then(
       battleOf,

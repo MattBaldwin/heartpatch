@@ -10,6 +10,7 @@ import { Rng } from '../rng/index.js';
 import { getMove } from './content.js';
 import { startBattle } from './engine.js';
 import {
+  captureChance,
   damageBeforeVariance,
   effectivenessTier,
   expectedDamage,
@@ -137,5 +138,40 @@ describe('effectivenessTier', () => {
   it('throws if the rules leave a gap at the bottom', () => {
     const rules = { ...FIXTURE_BATTLE_RULES, effectiveness: [{ id: 'super', atLeast: 1.5 }] };
     expect(() => effectivenessTier(1, rules)).toThrow(/starts at 0/);
+  });
+});
+
+describe('captureChance (design doc §6: rises as energy drops)', () => {
+  const rules = FIXTURE_BATTLE_RULES;
+  const at = (energy: number, hp = 41) => ({ energy, stats: { hp } });
+
+  it('runs from atFull at full energy to nearlyOut with 1 energy left', () => {
+    expect(captureChance(at(41), 'common', rules)).toBe(rules.capture.atFull);
+    expect(captureChance(at(1), 'common', rules)).toBe(rules.capture.nearlyOut);
+    // Halfway down: halfway between, rounded down (15 + floor(75 × 20 / 40)).
+    expect(captureChance(at(21), 'common', rules)).toBe(52);
+  });
+
+  it('never goes down as energy drops', () => {
+    let last = 0;
+    for (let energy = 41; energy >= 1; energy--) {
+      const chance = captureChance(at(energy), 'common', rules);
+      expect(chance).toBeGreaterThanOrEqual(last);
+      last = chance;
+    }
+  });
+
+  it('makes rarer squishies shyer, but never impossible', () => {
+    expect(captureChance(at(1), 'rare', rules)).toBe(Math.floor((90 * 70) / 100));
+    expect(captureChance(at(41), 'secret', rules)).toBe(Math.floor((15 * 40) / 100));
+    const shy = { ...rules, capture: { ...rules.capture, atFull: 0 } };
+    expect(captureChance(at(41), 'legendary', shy)).toBe(1);
+  });
+
+  it('copes with a one-energy squishy and out-of-range energy', () => {
+    // A one-energy squishy is at full energy: full counts first.
+    expect(captureChance(at(1, 1), 'common', rules)).toBe(rules.capture.atFull);
+    expect(captureChance(at(0), 'common', rules)).toBe(rules.capture.nearlyOut);
+    expect(captureChance(at(99), 'common', rules)).toBe(rules.capture.atFull);
   });
 });

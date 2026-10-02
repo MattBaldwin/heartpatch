@@ -125,6 +125,21 @@ export const GAME_EVENTS = {
    * server (`no-contest`, when the content was re-tuned mid-battle).
    */
   'battle.ended': { internal: BattleEndedSchema, public: z.object(BattleEndedSchema.shape) },
+  /**
+   * A player befriended a wild squishy with a Heart Charm (#14). The species
+   * stays internal, like `battle.started`'s: a secret one would otherwise
+   * reach members who never met it (CLAUDE.md rule 6).
+   */
+  'squishy.captured': {
+    internal: z.strictObject({
+      battleId: z.uuid(),
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      speciesId: z.string(),
+      level: z.number().int().min(1),
+    }),
+    public: z.object({ userId: z.uuid(), squishyId: z.uuid() }),
+  },
 } satisfies Record<string, GameEventSchemas>;
 
 export type GameEventType = keyof typeof GAME_EVENTS;

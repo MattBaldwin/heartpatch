@@ -21,6 +21,8 @@ export type ControlMode =
       type: 'choose';
       moves: { id: string; name: string }[];
       bench: { slot: number; name: string }[];
+      /** A wild squishy: offer the "Use Heart Charm" button (befriend, style guide §9). */
+      capture: boolean;
     }
   /** Their squishy is tuckered out: pick who comes out. */
   | { type: 'replace'; bench: { slot: number; name: string }[] }
@@ -176,6 +178,17 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
                 act({ type: 'swap', slot });
               },
               { soft: true, small: true, testId: 'battle-swap' },
+            ),
+          );
+        }
+        if (mode.capture) {
+          row.append(
+            button(
+              'Use Heart Charm',
+              () => {
+                act({ type: 'capture' });
+              },
+              { small: true, testId: 'battle-capture' },
             ),
           );
         }
