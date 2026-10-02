@@ -133,37 +133,40 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **Before #10 (roster):** secret species and forms need a server-only home. Add `secretSpecies`/`secretEvolutions` to `ServerGameDataSchema`; check references against public + secret data; ban `rarity: 'secret'` in the public table; add a `serverBattleData` merge; extend the boundary test.
-- **#9 (squishy generator):**
-  - a `BODIES`/`PARTS` id registry with `checkGameData` references (before #10 writes content);
-  - the renderer takes `(species, instanceId)`, with variation seeded by `instanceId`;
-  - `Math.random` is banned in `apps/client/src/procedural/`;
-  - e2e tests assert on signals, not pixels.
-- **#7 (hex map render):**
-  - add `hexToWorld(hex, size) → {x, z}` (north = +z) in shared `hex/`;
-  - render from `PublicTileSchema`/`MapViewSchema` (#4);
-  - the client REST client is `apps/client/src/net/api.ts`; live updates come from `apps/client/src/net/ws-client.ts` (#22);
-  - handle the stale-cursor resync case noted in PR #61's verdict;
-  - `tiles.home_slot` tiles can never be captured (#4).
-- **#13/#14 (battles, spawns):**
-  - the #13 build session runs on Fable; its reviewers stay on Opus. Flag its cost above about $30;
-  - add a zod `ClientBattleViewSchema`;
-  - map `BattleRuleError` → `AppError`;
-  - a content-hash mismatch mid-battle ends it as "no contest" and refunds the attempt;
-  - add an `idempotency_keys` table plus a preHandler in `lib/`;
-  - a `speciesDefs` field for species the client hasn't been sent;
-  - battle seeds from `newSeed()` (revealable); spawn seeds from `deriveSeed(mapSeed, 'spawn', q, r, windowId)` (never revealed);
-  - add a shared `spawnWindowId` helper with DST tests.
+- **In flight:** #13 battles (PR #72) runs on Fable; its reviewers run on Opus. After it merges:
+  - start #14 (wild squishies and capture);
+  - add a shared `spawnWindowId` helper with DST tests;
+  - spawn seeds come from `deriveSeed(mapSeed, 'spawn', q, r, windowId)` and are never revealed.
+- **Briefs from now on:**
+  - Build sessions schedule a `send_later` check of their own CI about 15 minutes after each push, because a CI-failure event once failed to wake a session (#7 sat idle for 3 hours).
+  - Signup-heavy e2e relies on `HP_DEV_SIGNUP_LIMIT_PER_IP`, which `playwright.config` sets.
+  - WebKit e2e can't do offline service-worker navigation. Check offline behaviour by reading Cache Storage on WebKit, and run it end-to-end on Chromium only (#26).
+- **Merge-conflict churn:** every PR appends to the end of `docs/DECISIONS.md`, so every merge conflicts. The proposed Chore is a `.gitattributes` `merge=union` entry for that file, or a per-PR decision file folded in after merge. It is waiting on the owner's OK.
+- **#10 (roster):** write species against the #9 `bodies`/`parts` registry. Every species needs an `eyes` part. Secret species go in `data/server/secret-species.ts`.
 - **#19 (care):**
   - put `careRules` (`fullActionsPerDay`, falloff, `dailyCoinCap`) in data;
   - shorten the anti-spam cooldowns, or justify the long ones;
   - the day boundary is the account time zone.
-- **#47 (tutorial framework):**
-  - a `HighlightTargetSchema` enum;
-  - `event_consumers` + pg-boss, with the consumer wake-up enqueued inside the command's transaction via `appendGameEvent`.
-- **Client polish** (small `Fix:` PR or with the next client lane): `.renderer-error` z-index above the auth overlay; mount auth before `boot()` (#6/#3).
+- **Test robustness:** #9's `squishy-gallery.spec.ts:168` (jiggle to idle) failed once under load. Make it wait on a signal, not on timing. The auth login rate-limit test runs about 2.6 s against a 5 s timeout: raise its timeout or lower the Argon2 cost in tests.
+- **#9 follow-ups:**
+  - count real draw calls in the "flat draw calls" e2e;
+  - NullEngine tests for `SquishyField.move` and `remove`;
+  - partial buffer updates;
+  - a 30 fps cap for breathing-only frames;
+  - rebase `squishTime`;
+  - forward part taps to the body;
+  - the crypto ban misses `globalThis.crypto`.
+- **#7 follow-ups:**
+  - a FORBIDDEN resync for map A while the player opens map B lands them in the lobby;
+  - a doc comment on `generation`;
+  - whether to show guardian strength in the tile panel is an owner question (it isn't sent to the client today).
+- **#47 follow-ups:**
+  - start, replay and skip each have their own limiter;
+  - add a live wake-up delivery check;
+  - the client-half follow-ups are listed in PR #71's Coordinator notes.
+- **#26 follow-ups:** two test nits from PR #70's round 4.
 - **Deploy follow-ups** (#27): `restore.sh` should re-allow connections on a leftover `heartpatch_restore` after a failed restore; add a `/ws` check to `local-smoke.sh`.
-- **Maps follow-ups** (#4): an end-to-end `/ws` test of a real maps command with the default views; move the PvP hint copy ("1 tile a day", "up to 3 tiles a day") into data with the territory/PvP issue.
+- **Maps follow-ups** (#4): an end-to-end `/ws` test of a real maps command; move the PvP hint copy into data with the territory/PvP issue.
 - **Server hardening** (small PR):
   - shared `lib/rate-limit.ts`;
   - a loose global per-IP limit;
@@ -172,6 +175,12 @@ The supervisor keeps this list current. Remove items as they land.
 - **Docs drift:**
   - TECH_SPEC §2 layout (module `schemas.ts`, `lib/time`, `formulas/` home);
   - §10 `SESSION_SECRET` (unused);
-  - TECH_SPEC §6 "short benchmark" vs the continuous quality governor from #6;
-  - TECH_SPEC `battles` table wording, versus RNG-in-state (DECISIONS "Battle engine (#11)"); CLAUDE.md and GAME_DESIGN were fixed in PR #63.
-- **Owner FYI:** #11 resolved a design ambiguity: synergy multiplies damage once, for the attacker, not stats too.
+  - §6 "short benchmark" versus the continuous quality governor (#6);
+  - the `battles` table wording versus RNG-in-state (check against #13).
+- **Owner questions queued:**
+  - confirm the four #4 decisions;
+  - confirm or revert the 4-round review cap;
+  - how players get their first squishy (#13 uses a dev-only grant);
+  - guardians in the tile panel;
+  - OK for the DECISIONS merge Chore;
+  - the AWS walkthrough waits at Step 1 (account, MFA, budget alarm).
