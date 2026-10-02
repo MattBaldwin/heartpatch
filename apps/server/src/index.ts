@@ -1,16 +1,32 @@
 import { buildApp } from './app.js';
 import { loadServerConfig } from './config.js';
 import { createDbClient, dbReadinessCheck } from './db/client.js';
+import { startJobs } from './jobs/boss.js';
+import { createClock } from './lib/time.js';
+import { createTutorialConsumer } from './modules/tutorial/consumer.js';
 
 const config = loadServerConfig();
 const db = createDbClient(config.DATABASE_URL);
+const clock = createClock(config);
 const app = await buildApp({
   config,
   readinessChecks: [dbReadinessCheck(db)],
   db: db.db,
+  clock,
 });
-// Closing the app (shutdown or failed start) also drains the DB pool.
-app.addHook('onClose', () => db.close());
+// Scheduled jobs and event consumers (tech spec §7), in this process.
+const jobs = await startJobs({
+  connectionString: config.DATABASE_URL,
+  db: db.db,
+  consumers: [createTutorialConsumer({ clock })],
+  logger: app.log,
+  ...(app.wsHub ? { publish: app.wsHub.publish } : {}),
+});
+// Closing the app (shutdown or failed start) stops the jobs, then drains the DB pool.
+app.addHook('onClose', async () => {
+  await jobs.stop();
+  await db.close();
+});
 
 const shutdown = async (signal: string): Promise<void> => {
   app.log.info({ signal }, 'shutting down');
