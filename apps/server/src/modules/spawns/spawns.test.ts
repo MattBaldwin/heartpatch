@@ -95,8 +95,9 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
 
   /** `consumeItems` per the inventory contract: locks, refuses when short, changes nothing then. */
   const items: ItemsPort = {
-    consume: async (tx: Executor, owner, wanted) => {
+    consume: async (tx: Executor, owner, wanted, reason) => {
       expect(wanted).toEqual({ 'heart-charm': 1 });
+      expect(reason).toBe('capture');
       const rows = await tx.execute(`
         update test_heart_charms set quantity = quantity - 1
         where map_id = ${id(owner.mapId)} and user_id = ${id(owner.userId)} and quantity >= 1

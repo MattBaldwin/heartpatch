@@ -69,15 +69,16 @@ export interface WildEncounterContext {
 }
 
 /**
- * Inventory (#17's module): `consumeItems` on the caller's transaction. It
- * locks the rows and throws `CONFLICT` with a kid-readable line, changing
- * nothing, if any item is short.
+ * Inventory (#17's module): `consumeItems` on the caller's transaction, with
+ * the ledger reason. It locks the rows and throws `CONFLICT` with a
+ * kid-readable line, changing nothing, if any item is short.
  */
 export interface ItemsPort {
   consume: (
     tx: Executor,
     owner: { mapId: string; userId: string },
     items: Record<string, number>,
+    reason: 'capture',
   ) => Promise<void>;
 }
 
@@ -491,6 +492,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             tx,
             { mapId: row.mapId, userId: row.playerUserId },
             { [HEART_CHARM]: 1 },
+            'capture',
           );
         }
         const sureCapture = gameplayOverrides(map.kind)?.captureAlwaysSucceeds === true;
