@@ -52,6 +52,8 @@ export interface HomeScreenOptions {
   tier: () => QualityTier;
   /** The player's Keeper, idling by the Heart Seed. */
   keeper: () => KeeperConfig | null;
+  /** What the Keeper wears (#43), clothing ids. */
+  keeperWearing?: () => readonly string[];
   /** The home opened: the map, the bag and the lobby step out. */
   onOpen: (mapId: string) => void;
   /** Back to the map. */
@@ -647,6 +649,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       registry,
       lod: lodFor('closeUp', lastTier),
       keeper: options.keeper(),
+      keeperWearing: options.keeperWearing?.() ?? [],
     });
     scene3d = built;
     syncScene();

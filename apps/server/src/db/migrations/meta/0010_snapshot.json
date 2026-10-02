@@ -1,5 +1,5 @@
 {
-  "id": "cdd8a778-923b-4040-9d26-23735356b6b1",
+  "id": "d7845d1d-c009-43ec-b830-4105650ed3b5",
   "prevId": "169ea164-8326-4107-891e-e362598c5c00",
   "version": "7",
   "dialect": "postgresql",
@@ -366,8 +366,8 @@
       },
       "isRLSEnabled": false
     },
-    "public.care_log": {
-      "name": "care_log",
+    "public.clothing_owned": {
+      "name": "clothing_owned",
       "schema": "",
       "columns": {
         "id": {
@@ -376,106 +376,47 @@
           "primaryKey": true,
           "notNull": true
         },
-        "map_id": {
-          "name": "map_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
         "user_id": {
           "name": "user_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "squishy_id": {
-          "name": "squishy_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "action": {
-          "name": "action",
+        "item_id": {
+          "name": "item_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "day": {
-          "name": "day",
-          "type": "date",
+        "source": {
+          "name": "source",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "gained": {
-          "name": "gained",
-          "type": "integer",
+        "ref_id": {
+          "name": "ref_id",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "full": {
-          "name": "full",
-          "type": "boolean",
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "coins": {
-          "name": "coins",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cared_at": {
-          "name": "cared_at",
+        "acquired_at": {
+          "name": "acquired_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
-        "care_log_squishy_id_day_idx": {
-          "name": "care_log_squishy_id_day_idx",
-          "columns": [
-            {
-              "expression": "squishy_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "day",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "care_log_squishy_id_cared_at_idx": {
-          "name": "care_log_squishy_id_cared_at_idx",
-          "columns": [
-            {
-              "expression": "squishy_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "cared_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "care_log_user_id_day_idx": {
-          "name": "care_log_user_id_day_idx",
+        "clothing_owned_user_id_item_id_idx": {
+          "name": "clothing_owned_user_id_item_id_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -484,7 +425,7 @@
               "nulls": "last"
             },
             {
-              "expression": "day",
+              "expression": "item_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -494,50 +435,54 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "clothing_owned_source_ref_id_key": {
+          "name": "clothing_owned_source_ref_id_key",
+          "columns": [
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ref_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"clothing_owned\".\"ref_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
-        "care_log_map_id_maps_id_fk": {
-          "name": "care_log_map_id_maps_id_fk",
-          "tableFrom": "care_log",
-          "tableTo": "maps",
-          "columnsFrom": ["map_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "care_log_user_id_users_id_fk": {
-          "name": "care_log_user_id_users_id_fk",
-          "tableFrom": "care_log",
+        "clothing_owned_user_id_users_id_fk": {
+          "name": "clothing_owned_user_id_users_id_fk",
+          "tableFrom": "clothing_owned",
           "tableTo": "users",
           "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "care_log_squishy_id_squishies_id_fk": {
-          "name": "care_log_squishy_id_squishies_id_fk",
-          "tableFrom": "care_log",
-          "tableTo": "squishies",
-          "columnsFrom": ["squishy_id"],
+        "clothing_owned_map_id_maps_id_fk": {
+          "name": "clothing_owned_map_id_maps_id_fk",
+          "tableFrom": "clothing_owned",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
           "columnsTo": ["id"],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "care_log_gained_nonnegative": {
-          "name": "care_log_gained_nonnegative",
-          "value": "\"care_log\".\"gained\" >= 0"
-        },
-        "care_log_coins_nonnegative": {
-          "name": "care_log_coins_nonnegative",
-          "value": "\"care_log\".\"coins\" >= 0"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.crafts": {
@@ -1600,6 +1545,70 @@
       },
       "isRLSEnabled": false
     },
+    "public.outfits": {
+      "name": "outfits",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "preset": {
+          "name": "preset",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "wearing": {
+          "name": "wearing",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "outfits_user_id_users_id_fk": {
+          "name": "outfits_user_id_users_id_fk",
+          "tableFrom": "outfits",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "outfits_user_id_preset_pk": {
+          "name": "outfits_user_id_preset_pk",
+          "columns": ["user_id", "preset"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "outfits_preset_range": {
+          "name": "outfits_preset_range",
+          "value": "\"outfits\".\"preset\" between 0 and 3"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.recovery_codes": {
       "name": "recovery_codes",
       "schema": "",
@@ -2026,19 +2035,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "contentment_at_last_care": {
-          "name": "contentment_at_last_care",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "last_cared_at": {
-          "name": "last_cared_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2125,100 +2121,56 @@
         "squishies_xp_nonnegative": {
           "name": "squishies_xp_nonnegative",
           "value": "\"squishies\".\"xp\" >= 0"
-        },
-        "squishies_contentment_range": {
-          "name": "squishies_contentment_range",
-          "value": "\"squishies\".\"contentment_at_last_care\" between 0 and 100"
         }
       },
       "isRLSEnabled": false
     },
-    "public.squishy_evolutions": {
-      "name": "squishy_evolutions",
+    "public.squishy_accessories": {
+      "name": "squishy_accessories",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
+        "squishy_id": {
+          "name": "squishy_id",
           "type": "uuid",
           "primaryKey": true,
           "notNull": true
         },
-        "map_id": {
-          "name": "map_id",
+        "user_id": {
+          "name": "user_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "squishy_id": {
-          "name": "squishy_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "from_species_id": {
-          "name": "from_species_id",
+        "item_id": {
+          "name": "item_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "into_species_id": {
-          "name": "into_species_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "level": {
-          "name": "level",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "evolved_at": {
-          "name": "evolved_at",
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true
-        },
-        "seen_at": {
-          "name": "seen_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "now()"
         }
       },
-      "indexes": {
-        "squishy_evolutions_unseen_idx": {
-          "name": "squishy_evolutions_unseen_idx",
-          "columns": [
-            {
-              "expression": "squishy_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"squishy_evolutions\".\"seen_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
-        "squishy_evolutions_map_id_maps_id_fk": {
-          "name": "squishy_evolutions_map_id_maps_id_fk",
-          "tableFrom": "squishy_evolutions",
-          "tableTo": "maps",
-          "columnsFrom": ["map_id"],
+        "squishy_accessories_squishy_id_squishies_id_fk": {
+          "name": "squishy_accessories_squishy_id_squishies_id_fk",
+          "tableFrom": "squishy_accessories",
+          "tableTo": "squishies",
+          "columnsFrom": ["squishy_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "squishy_evolutions_squishy_id_squishies_id_fk": {
-          "name": "squishy_evolutions_squishy_id_squishies_id_fk",
-          "tableFrom": "squishy_evolutions",
-          "tableTo": "squishies",
-          "columnsFrom": ["squishy_id"],
+        "squishy_accessories_user_id_users_id_fk": {
+          "name": "squishy_accessories_user_id_users_id_fk",
+          "tableFrom": "squishy_accessories",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"

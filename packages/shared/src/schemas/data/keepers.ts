@@ -135,7 +135,7 @@ export type KeeperData = z.infer<typeof KeeperDataObjectSchema>;
  * A player's Keeper (design doc §23): a base plus their colour picks.
  * Account-level (tech spec §4) and stored server-side (`keepers`); the server
  * also checks every id against `KEEPER_DATA` (`keeperConfigProblem`).
- * Clothing joins it with the wardrobe (#43).
+ * Clothing is the wardrobe's (#43): see `PublicKeeperSchema`.
  */
 export const KeeperConfigSchema = z.strictObject({
   base: ContentIdSchema,
@@ -144,6 +144,17 @@ export const KeeperConfigSchema = z.strictObject({
   outfit: ContentIdSchema,
 });
 export type KeeperConfig = z.infer<typeof KeeperConfigSchema>;
+
+/**
+ * A Keeper as other players see it (`MapMember.keeper`): the config plus the
+ * clothing it wears (#43), as clothing ids in slot order. Unknown ids (from a
+ * newer server) are skipped when drawing.
+ */
+export const PublicKeeperSchema = z.object({
+  ...KeeperConfigSchema.shape,
+  wearing: z.array(ContentIdSchema).max(WARDROBE_SLOTS.length),
+});
+export type PublicKeeper = z.infer<typeof PublicKeeperSchema>;
 
 const ids = (rows: readonly { id: string }[]) => new Set(rows.map((r) => r.id));
 

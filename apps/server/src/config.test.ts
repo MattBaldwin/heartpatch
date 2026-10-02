@@ -136,6 +136,20 @@ describe('loadServerConfig', () => {
     ).toBe(false);
   });
 
+  it('accepts HP_DEV_DROP_CHANCE outside production only', () => {
+    expect(
+      loadServerConfig({ DATABASE_URL, NODE_ENV: 'test', HP_DEV_DROP_CHANCE: '100' })
+        .HP_DEV_DROP_CHANCE,
+    ).toBe(100);
+    expect(loadServerConfig({ DATABASE_URL, NODE_ENV: 'test' }).HP_DEV_DROP_CHANCE).toBeUndefined();
+    expect(() =>
+      loadServerConfig({ DATABASE_URL, HP_SIGNUP_CODE: 'family-code', HP_DEV_DROP_CHANCE: '5' }),
+    ).toThrow(/HP_DEV_DROP_CHANCE/);
+    expect(() => loadConfig({ DATABASE_URL, HP_DEV_DROP_CHANCE: '101' })).toThrow(
+      /HP_DEV_DROP_CHANCE/,
+    );
+  });
+
   it('accepts HP_DEV_NOW outside production only', () => {
     const at = '2026-12-20T20:59:00-05:00';
     expect(

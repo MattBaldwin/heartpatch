@@ -19,6 +19,11 @@ export const OwnedSquishySchema = z.object({
   level: z.number().int().min(1),
   xp: z.number().int().min(0),
   state: SquishyStateSchema,
+  /**
+   * The wardrobe accessory it wears (#43), or null. Left out by views that
+   * don't load it yet.
+   */
+  accessory: ContentIdSchema.nullable().optional(),
 });
 export type OwnedSquishy = z.infer<typeof OwnedSquishySchema>;
 

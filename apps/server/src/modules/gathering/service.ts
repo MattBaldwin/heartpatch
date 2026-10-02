@@ -15,6 +15,7 @@ import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { grantItems, requireMember, seasonsOn, toGather } from '../inventory/service.js';
+import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createGatheringRepo } from './repo.js';
 
 /*
@@ -142,6 +143,15 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
         // Lock order: gather, inventory rows, then `maps` via appendEvent.
         await grantItems(tx, owner, gather.items, 'gather', gather.id);
         await repo.endGather(gather.id, { status: 'collected', at });
+        // A little luck: maybe a piece of clothing turned up too (#43).
+        await rollFoundDrop(tx, {
+          source: 'gather',
+          refId: gather.id,
+          userId: user.id,
+          mapId,
+          tileId: gather.tileId,
+          at,
+        });
         await repo.appendEvent({
           mapId,
           type: 'resource.gathered',

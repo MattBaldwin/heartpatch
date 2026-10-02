@@ -201,7 +201,8 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
     await saveKeeper(server, owner, PIP_KEEPER);
     const made = await newMap(server, owner);
     const { map } = MapResponseSchema.parse(made.json());
-    expect(map.members.map((m) => m.keeper)).toEqual([PIP_KEEPER]);
+    // Nothing worn yet (#43: the wardrobe adds what it wears).
+    expect(map.members.map((m) => m.keeper)).toEqual([{ ...PIP_KEEPER, wearing: [] }]);
 
     // A member who never picked one (gate off) shows as null, not a guess.
     const other = await player();
@@ -213,7 +214,7 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
     const res = await call(server, 'GET', `/maps/${map.id}/view`, other);
     const view = MapViewSchema.parse(res.json());
     expect(view.members.map((m) => [m.user.id, m.keeper])).toEqual([
-      [owner.id, CLOVER_KEEPER],
+      [owner.id, { ...CLOVER_KEEPER, wearing: [] }],
       [other.id, null],
     ]);
   });
