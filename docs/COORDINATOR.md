@@ -133,54 +133,53 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **In flight:** #13 battles (PR #72) runs on Fable; its reviewers run on Opus. After it merges:
-  - start #14 (wild squishies and capture);
-  - add a shared `spawnWindowId` helper with DST tests;
-  - spawn seeds come from `deriveSeed(mapSeed, 'spawn', q, r, windowId)` and are never revealed.
-- **Briefs from now on:**
-  - Build sessions schedule a `send_later` check of their own CI about 15 minutes after each push, because a CI-failure event once failed to wake a session (#7 sat idle for 3 hours).
-  - Signup-heavy e2e relies on `HP_DEV_SIGNUP_LIMIT_PER_IP`, which `playwright.config` sets.
-  - WebKit e2e can't do offline service-worker navigation. Check offline behaviour by reading Cache Storage on WebKit, and run it end-to-end on Chromium only (#26).
-- **Merge-conflict churn:** every PR appends to the end of `docs/DECISIONS.md`, so every merge conflicts. The proposed Chore is a `.gitattributes` `merge=union` entry for that file, or a per-PR decision file folded in after merge. It is waiting on the owner's OK.
-- **#10 (roster):** write species against the #9 `bodies`/`parts` registry. Every species needs an `eyes` part. Secret species go in `data/server/secret-species.ts`.
-- **#19 (care):**
-  - put `careRules` (`fullActionsPerDay`, falloff, `dailyCoinCap`) in data;
-  - shorten the anti-spam cooldowns, or justify the long ones;
-  - the day boundary is the account time zone.
-- **Test robustness:** #9's `squishy-gallery.spec.ts:168` (jiggle to idle) failed once under load. Make it wait on a signal, not on timing. The auth login rate-limit test runs about 2.6 s against a 5 s timeout: raise its timeout or lower the Argon2 cost in tests.
-- **#9 follow-ups:**
-  - count real draw calls in the "flat draw calls" e2e;
-  - NullEngine tests for `SquishyField.move` and `remove`;
-  - partial buffer updates;
-  - a 30 fps cap for breathing-only frames;
-  - rebase `squishTime`;
-  - forward part taps to the body;
-  - the crypto ban misses `globalThis.crypto`.
-- **#7 follow-ups:**
-  - a FORBIDDEN resync for map A while the player opens map B lands them in the lobby;
-  - a doc comment on `generation`;
-  - whether to show guardian strength in the tile panel is an owner question (it isn't sent to the client today).
-- **#47 follow-ups:**
-  - start, replay and skip each have their own limiter;
-  - add a live wake-up delivery check;
-  - the client-half follow-ups are listed in PR #71's Coordinator notes.
-- **#26 follow-ups:** two test nits from PR #70's round 4.
-- **Deploy follow-ups** (#27): `restore.sh` should re-allow connections on a leftover `heartpatch_restore` after a failed restore; add a `/ws` check to `local-smoke.sh`.
-- **Maps follow-ups** (#4): an end-to-end `/ws` test of a real maps command; move the PvP hint copy into data with the territory/PvP issue.
-- **Server hardening** (small PR):
-  - shared `lib/rate-limit.ts`;
-  - a loose global per-IP limit;
-  - helmet/CSP, or note that Caddy sets the headers.
-- **Tests:** run the avoided-words scan over error messages, auth/filter messages and client UI strings.
+- **In flight (batch 7, all Opus):**
+  - #43 wardrobe, PR #78 (session_0128FWWezZzy46QQHXWn3YgT): must merge main (#18 + #15) and regenerate its migration after 0009.
+  - #19 care/XP, PR #81 (session_01N3QHczH14p3onN2fbzG4Ww): owns a shared `applyXp` that every battle kind calls; care coins go only in the `squishy.cared` payload (`coin_ledger` is #45's).
+  - #21 Hollow Man (session_0153wdmXfxfmoWPzjjKoAZfB): uses `litSafeTiles`/`protectsNight` (#18) and `isOnWatch` (#15); `hollow_events` keeps nightfall idempotent.
+- **Next, by dependency:**
+  - #10 roster: after #43 merges, because content issues run one at a time. Adds spawn rows to #14's tables.
+  - #16 raid AI: replaces #15's `defendingSide` choice and adds the raid log.
+  - #20 close-up view: after #19.
+  - #12 sim: after #10.
+  - Fillers: #25 audio and #23 quick messages (check #22 is really done).
+- **Briefs:** follow §7, plus:
+  - reporting with the fallback trigger;
+  - neither sessions nor the supervisor can re-run CI (403), so a flaky test gets a robustness fix in the PR, never a skip;
+  - e2e players must pick a Keeper (`HP_KEEPER_REQUIRED`).
+  - Name tables exactly as TECH_SPEC §4's core table list. #17 cost a mid-flight rename because a brief invented names.
+- **Merge order and churn:**
+  - Every PR adds a migration, so later PRs regenerate theirs after each merge.
+  - Hold lanes that edit the same files (battles module, spawn tables) rather than run them in parallel. Lanes that started on a current main and never re-merged were the cheapest (#18 $25.77, #15 $23.11, #42 $23.57).
+- **Lock order** on main: member row, seats, player, tiles, buildings, then maps. New code must follow it.
+- **Test robustness:**
+  - `keeper-gallery.spec.ts` ignores Babylon's shader-fallback console noise (headless WebKit has no GPU). Check a real iPad for the fallback during #28.
+  - `keeper.spec` timed out once under a full local run.
+  - #9's `squishy-gallery.spec.ts:168` (jiggle to idle) should wait on a signal, not on timing.
+  - The auth login rate-limit test runs about 2.6 s against a 5 s timeout: raise the timeout, or lower the Argon2 cost in tests.
 - **Docs drift:**
-  - TECH_SPEC §2 layout (module `schemas.ts`, `lib/time`, `formulas/` home);
-  - §10 `SESSION_SECRET` (unused);
-  - §6 "short benchmark" versus the continuous quality governor (#6);
-  - the `battles` table wording versus RNG-in-state (check against #13).
+  - TECH_SPEC §8 asks for a shared `spawnWindowId`; #14 put `spawnWindowFor` in server `lib/time.ts`.
+  - TECH_SPEC §2 layout; §10 `SESSION_SECRET` (unused); §6 "short benchmark" versus the continuous quality governor (#6).
+  - Possibly closed but still open on GitHub: #5 and #22. Confirm and close.
+- **Earlier follow-ups still open:**
+  - #9: count real draw calls in the "flat draw calls" e2e; NullEngine tests for `SquishyField.move` and `remove`; partial buffer updates; rebase `squishTime`; forward part taps to the body; the crypto ban misses `globalThis.crypto`.
+  - #7: a FORBIDDEN resync for map A while the player opens map B lands them in the lobby; a doc comment on `generation`.
+  - #47: start, replay and skip each have their own limiter; add a live wake-up delivery check.
+  - #27 deploy: `restore.sh` should re-allow connections on a leftover `heartpatch_restore`; add a `/ws` check to `local-smoke.sh`.
+  - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
+  - The avoided-words scan over error messages.
+  - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Cost so far (USD):**
+  - Batch 6: #13 48.88, #42 23.57, #17 36.72, #14 43.98.
+  - Batch 7 so far: #18 25.77, #15 23.11.
+  - Supervisor 3: about 28.
+  - Big lanes run $25–50; flag above about $35.
 - **Owner questions queued:**
-  - confirm the four #4 decisions;
-  - confirm or revert the 4-round review cap;
-  - how players get their first squishy (#13 uses a dev-only grant);
-  - guardians in the tile panel;
-  - OK for the DECISIONS merge Chore;
-  - the AWS walkthrough waits at Step 1 (account, MFA, budget alarm).
+  - How a player gets their first squishy (recommended: a free starter in each new patch, replaced by the tutorial's Partner later).
+  - Wild-battle XP farming: a beaten-but-not-captured squishy can be fought again all window. Recommended: it leaves after a win, or repeat wins give no XP.
+  - Whether a squishy can live in a habitat and stand watch at the same time.
+  - Jack-o'-Lantern questions in PR #79.
+  - Guardians in the tile panel.
+  - Confirm the four #4 decisions; confirm or revert the 4-round review cap.
+  - OK for the DECISIONS merge Chore.
+  - AWS: Matt chose the new AWS experience ("project"), Region us-east-2, profile `heartpatch`. The CLI is installed in supervisor 3's container only. Remote `aws login` was started but the code never arrived. Restart with `aws login --remote --region us-east-2 --profile heartpatch` when he's ready. Agent Toolkit rules go in an uncommitted `CLAUDE.local.md` (his choice). Check Lightsail is available on the new experience, and update DEPLOY.md step 1 for projects (spend limits in AWS Settings rather than root MFA and budgets).
