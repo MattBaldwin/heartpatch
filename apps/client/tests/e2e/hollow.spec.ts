@@ -110,4 +110,6 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await expect(page.getByTestId('battle-caption')).toContainText('Shadows from the Hollow');
   await expect(sheet).toBeHidden();
   expect(errors).toEqual([]);
+  // Close this player's page so its battle doesn't keep drawing under later tests.
+  await page.context().close();
 });
