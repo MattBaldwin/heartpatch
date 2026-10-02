@@ -42,6 +42,8 @@ export function testView(players = 1, seed = 'map-render-test'): MapView {
       nodeResource: t.nodeResource,
       homeSlot: t.homeSlot,
       gathering: null,
+      cooldownUntil: null,
+      defenders: 0,
       buildings: [],
     }))
     .sort((a, b) => a.q - b.q || a.r - b.r);

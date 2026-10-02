@@ -33,6 +33,8 @@ describe('findHomeBases', () => {
       nodeResource: null,
       homeSlot: 0,
       gathering: null,
+      cooldownUntil: null,
+      defenders: 0,
       buildings: [],
     });
     // Five of the six neighbours: no tile is surrounded, so no Heart Seed.
@@ -51,6 +53,8 @@ describe('tintSlot', () => {
     nodeResource: null,
     homeSlot: null,
     gathering: null,
+    cooldownUntil: null,
+    defenders: 0,
     buildings: [],
   });
 
@@ -95,6 +99,8 @@ describe('propPlacements', () => {
     nodeResource: 'timber',
     homeSlot: null,
     gathering: null,
+    cooldownUntil: null,
+    defenders: 0,
     buildings: [],
   };
   const look = TERRAIN_LOOKS['forest']!;

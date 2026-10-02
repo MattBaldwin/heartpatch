@@ -76,6 +76,53 @@ describe('MapState', () => {
     expect(state.apply(event('resource.gathered', { q: 'here' }))).toBe('resync');
   });
 
+  it('follows battles for land live: cooldown, capture and guards (#15)', () => {
+    const view = testView(2);
+    // A wild tile next to player 1's home ring.
+    const mine = new Set(view.tiles.filter((t) => t.ownerUserId === userId(1)).map(hexKey));
+    const wild = view.tiles.find(
+      (t) =>
+        t.ownerUserId === null &&
+        t.homeSlot === null &&
+        [
+          [1, 0],
+          [-1, 0],
+          [0, 1],
+          [0, -1],
+          [1, -1],
+          [-1, 1],
+        ].some(([dq, dr]) => mine.has(hexKey({ q: t.q + dq!, r: t.r + dr! }))),
+    )!;
+    const key = hexKey(wild);
+    const state = new MapState({
+      ...view,
+      tiles: view.tiles.map((t) => (t === wild ? { ...t, gathering: { readyAt: 'x' } } : t)),
+    });
+    const cooldownUntil = '2026-10-02T16:00:00.000Z';
+    const at = { q: wild.q, r: wild.r };
+    const attacked = { attackerUserId: userId(1), defenderUserId: null, ...at, cooldownUntil };
+    expect(state.apply(event('tile.attacked', attacked))).toBe('redraw');
+    expect(state.tileAt(key)?.cooldownUntil).toBe(cooldownUntil);
+
+    expect(state.apply(event('defenders.changed', { userId: userId(2), ...at, count: 2 }))).toBe(
+      'redraw',
+    );
+    expect(state.tileAt(key)?.defenders).toBe(2);
+
+    const captured = { userId: userId(1), fromUserId: null, ...at };
+    expect(state.apply(event('tile.captured', captured))).toBe('redraw');
+    expect(state.tileAt(key)).toMatchObject({
+      ownerUserId: userId(1),
+      defenders: 0,
+      gathering: null,
+    });
+    expect(state.view.tiles.find((t) => hexKey(t) === key)?.ownerUserId).toBe(userId(1));
+
+    // A tile this map doesn't have changes nothing; a garbled event refetches.
+    expect(state.apply(event('tile.captured', { ...captured, q: 999 }))).toBe('none');
+    expect(state.apply(event('tile.captured', { q: 'here' }))).toBe('resync');
+  });
+
   it('swaps in a fresh view and re-indexes it', () => {
     const state = new MapState(testView(1));
     state.replace(testView(2));

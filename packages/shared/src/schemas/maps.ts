@@ -214,6 +214,13 @@ export const PublicTileSchema = z.object({
    */
   gathering: z.object({ readyAt: z.iso.datetime() }).nullable(),
   /**
+   * When the latest battle for this tile stops blocking another (#15, the
+   * raid cooldown); null if there's never been one. May be in the past.
+   */
+  cooldownUntil: z.iso.datetime().nullable(),
+  /** How many of the owner's squishies stand watch here (#15). Never which ones. */
+  defenders: z.number().int().min(0),
+  /**
    * Buildings on a home tile (#18), in spot order: everyone sees fires and
    * habitats. `lit` is as of the view (or the event that carried it).
    */
