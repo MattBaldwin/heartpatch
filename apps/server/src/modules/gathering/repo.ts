@@ -45,8 +45,8 @@ export interface GatheringRepo {
    * can't change while a gather starts on it.
    */
   lockTileAt: (mapId: string, q: number, r: number) => Promise<NodeTileRow | null>;
-  /** Who owns the tile now. */
-  tileOwner: (tileId: string) => Promise<string | null>;
+  /** Who owns the tile now, share-locked until commit (as `lockTileAt`). */
+  lockTileOwner: (tileId: string) => Promise<string | null>;
   /** The node's gather that is still going, whoever started it. */
   findActiveOnTile: (tileId: string) => Promise<GatherRow | null>;
   insertGather: (gather: NewGather) => Promise<GatherRow>;
@@ -57,10 +57,11 @@ export interface GatheringRepo {
    * gather left on land they've lost isn't theirs to collect.
    */
   listActive: (mapId: string, userId: string) => Promise<GatherRow[]>;
+  /** Ends an active gather; false if it had already ended. */
   endGather: (
     gatherId: string,
     end: { status: Exclude<GatherStatus, 'active'>; at: Date },
-  ) => Promise<void>;
+  ) => Promise<boolean>;
 }
 
 /** The repo inside `transaction`: the only place it can write game events. */
@@ -120,11 +121,12 @@ function queries(db: Executor): GatheringRepo {
       return row ?? null;
     },
 
-    tileOwner: async (tileId) => {
+    lockTileOwner: async (tileId) => {
       const [row] = await db
         .select({ ownerUserId: tiles.ownerUserId })
         .from(tiles)
-        .where(eq(tiles.id, tileId));
+        .where(eq(tiles.id, tileId))
+        .for('share');
       return row?.ownerUserId ?? null;
     },
 
@@ -168,10 +170,13 @@ function queries(db: Executor): GatheringRepo {
       ).map(toGather),
 
     endGather: async (gatherId, end) => {
-      await db
+      // Only an active gather ends: one collected meanwhile stays collected.
+      const ended = await db
         .update(gatherJobs)
         .set({ status: end.status, endedAt: end.at })
-        .where(eq(gatherJobs.id, gatherId));
+        .where(and(eq(gatherJobs.id, gatherId), eq(gatherJobs.status, 'active')))
+        .returning({ id: gatherJobs.id });
+      return ended.length > 0;
     },
   };
 }

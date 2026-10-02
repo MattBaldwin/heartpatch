@@ -2,6 +2,7 @@ import {
   activeSeasons,
   GAME_DATA,
   inSeason,
+  needMoreText,
   shortfall,
   type Craft,
   type Gather,
@@ -40,19 +41,8 @@ const MESSAGES = {
   busy: "You're already making something! Collect it first.",
   collected: 'Already collected!',
   notReady: 'Not ready yet. Check back soon!',
-  needMore: (missing: string) => `You need ${missing} first!`,
   outOfSeason: (season: string) => `That recipe only works around ${season}!`,
 } as const;
-
-/** "2 more Timber and 1 more Treats" for a shortfall. */
-function describeShortfall(short: ItemCounts): string {
-  const parts = Object.entries(short).map(
-    ([id, n]) => `${String(n)} more ${ITEMS.get(id)?.name ?? id}`,
-  );
-  return parts.length <= 1
-    ? (parts[0] ?? '')
-    : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1] ?? ''}`;
-}
 
 /** Checks ids against the shared resource table and amounts are whole and positive. */
 function checkItems(items: ItemCounts): void {
@@ -99,7 +89,7 @@ export async function consumeItems(
   const have = await repo.lockItems(owner, Object.keys(items));
   const short = shortfall(have, items);
   if (Object.keys(short).length > 0) {
-    throw new AppError('CONFLICT', MESSAGES.needMore(describeShortfall(short)));
+    throw new AppError('CONFLICT', needMoreText(short, GAME_DATA.resources));
   }
   await repo.subtract(owner, items, { reason, refId });
 }

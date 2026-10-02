@@ -1,6 +1,7 @@
 import {
   GAME_DATA,
   inSeason,
+  needMoreText,
   shortfall,
   type Craft,
   type ItemCounts,
@@ -78,10 +79,7 @@ export function bagRecipes(
     } else if (crafts.length > 0) {
       state = { kind: 'busy' };
     } else if (Object.keys(missing).length > 0) {
-      const need = Object.entries(missing)
-        .map(([id, n]) => `${String(n)} more ${itemName(id)}`)
-        .join(', ');
-      state = { kind: 'short', note: `Need ${need}.` };
+      state = { kind: 'short', note: needMoreText(missing, GAME_DATA.resources) };
     } else {
       state = { kind: 'ready' };
     }

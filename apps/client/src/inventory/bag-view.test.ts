@@ -38,7 +38,7 @@ describe('bag', () => {
     expect(stateOf(rows, 'jack-o-lantern-hearthfire')).toMatchObject({ kind: 'short' });
     expect(stateOf(bagRecipes({ timber: 1 }, [], []), 'heart-charm')).toEqual({
       kind: 'short',
-      note: 'Need 1 more Timber, 1 more Treats.',
+      note: 'You need 1 more Timber and 1 more Treats first!',
     });
     expect(stateOf(bagRecipes({ timber: 9, treats: 9 }, [craft], []), 'heart-charm')).toEqual({
       kind: 'busy',

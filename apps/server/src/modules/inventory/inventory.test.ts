@@ -357,6 +357,28 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       });
     });
 
+    it('makes one thing on a double tap, and spends its inputs once', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(server, kid, mapId, { timber: 10, treats: 10 });
+      const [a, b] = await Promise.all([
+        craft(server, kid, mapId, 'heart-charm'),
+        craft(server, kid, mapId, 'heart-charm'),
+      ]);
+      expect([a.statusCode, b.statusCode].sort()).toEqual([201, 409]);
+      const refused = a.statusCode === 409 ? a : b;
+      expect(errorOf(refused).message).toBe("You're already making something! Collect it first.");
+      const after = await inventory(server, kid, mapId);
+      expect(after.crafts).toHaveLength(1);
+      expect(after.items).toEqual({
+        timber: 10 - HEART_CHARM.inputs['timber']!,
+        treats: 10 - HEART_CHARM.inputs['treats']!,
+      });
+      // The loser's spend rolled back with it: the ledger still adds up.
+      await reconciled(mapId, kid.id);
+    });
+
     it("only unlocks the Jack-o'-Lantern Hearthfire around Halloween", async () => {
       const server = await start();
       const kid = await player();

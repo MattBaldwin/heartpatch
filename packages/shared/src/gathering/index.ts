@@ -60,3 +60,16 @@ export function shortfall(have: ItemCounts, cost: ItemCounts): ItemCounts {
   }
   return short;
 }
+
+/**
+ * The kid-readable line for a shortfall, the same on the server's CONFLICT
+ * and the bag's recipe card: "You need 2 more Timber and 1 more Treats first!".
+ */
+export function needMoreText(short: ItemCounts, resources: readonly Resource[]): string {
+  const parts = Object.entries(short).map(
+    ([id, n]) => `${String(n)} more ${resources.find((r) => r.id === id)?.name ?? id}`,
+  );
+  const last = parts.pop() ?? '';
+  const list = parts.length === 0 ? last : `${parts.join(', ')} and ${last}`;
+  return `You need ${list} first!`;
+}

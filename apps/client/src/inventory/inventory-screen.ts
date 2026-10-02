@@ -1,11 +1,13 @@
 import type { InventoryResponse, ItemCounts, PublicTile, PublicUser } from '@heartpatch/shared';
 import { ApiRequestError } from '../net/api.js';
+import type { TileActions } from '../map/map-screen.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { bagItems, bagRecipes, describeItems, itemName } from './bag-view.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemIcon } from './item-icons.js';
+import { COMMAND_RETRY_MS, sendCommand } from './send-command.js';
 import { tileAction, type TileAction } from './tile-action.js';
 import './inventory.css';
 
@@ -24,14 +26,6 @@ export interface InventoryScreenOptions {
   devTools?: boolean;
 }
 
-/** What the map screen's tile panel calls (map-screen.ts `TileActions`). */
-export interface TileActionsSlot {
-  /** The panel shows `tile`: draw its actions into `container`. */
-  show: (container: HTMLElement, tile: PublicTile) => void;
-  /** The panel closed. */
-  hide: () => void;
-}
-
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
 export interface InventoryDebug {
   readonly mapId: string;
@@ -48,7 +42,7 @@ export interface InventoryScreen {
   /** The map on screen (null: none): shows the Bag button and loads the bag. */
   setMap: (mapId: string | null) => Promise<void>;
   setUser: (user: PublicUser | null) => void;
-  readonly tileActions: TileActionsSlot;
+  readonly tileActions: TileActions;
   readonly debug: InventoryDebug | null;
 }
 
@@ -149,13 +143,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
 
   open.addEventListener('click', () => {
     sheet.hidden = false;
-    renderBag();
+    render();
     void refresh();
   });
   close.addEventListener('click', () => {
     sheet.hidden = true;
     say('');
-    syncTicker();
+    render();
   });
 
   const say = (text: string) => {
@@ -187,19 +181,31 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     }
   }
 
+  const sendDeps = {
+    newKey: newIdempotencyKey,
+    wait: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+    retryAfterMs: COMMAND_RETRY_MS,
+  };
+
   /**
    * Runs one command for the map on screen, one at a time. A `CONFLICT`
    * (already collected, not ready, something changed) refetches, so the
    * buttons match the server again.
    */
-  async function act(run: (mapId: string, at: number) => Promise<void>): Promise<void> {
+  async function act(
+    run: (
+      mapId: string,
+      at: number,
+      send: <T>(command: (key: string) => Promise<T>) => Promise<T | null>,
+    ) => Promise<void>,
+  ): Promise<void> {
     const id = mapId;
     if (!id || working) return;
     const at = generation;
     working = true;
     render();
     try {
-      await run(id, at);
+      await run(id, at, (command) => sendCommand(sendDeps, command, () => at === generation));
     } catch (err) {
       if (at === generation) {
         say(messageOf(err));
@@ -212,33 +218,33 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   }
 
   const startGather = (tile: PublicTile) =>
-    act(async (id, at) => {
-      const res = await api.gather(id, { q: tile.q, r: tile.r }, newIdempotencyKey());
-      if (!apply(at, { now: res.now })) return;
+    act(async (id, at, send) => {
+      const res = await send((key) => api.gather(id, { q: tile.q, r: tile.r }, key));
+      if (!res || !apply(at, { now: res.now })) return;
       state = state && { ...state, gathers: [...state.gathers, res.gather] };
       say(TEXT.started);
     });
 
   const collectGather = (gatherId: string) =>
-    act(async (id, at) => {
-      const res = await api.collectGather(id, gatherId, newIdempotencyKey());
-      if (!state || !apply(at, { now: res.now, items: res.items })) return;
+    act(async (id, at, send) => {
+      const res = await send((key) => api.collectGather(id, gatherId, key));
+      if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
       state = { ...state, gathers: state.gathers.filter((g) => g.id !== gatherId) };
       say(TEXT.got(describeItems(res.granted)));
     });
 
   const startCraft = (recipeId: string) =>
-    act(async (id, at) => {
-      const res = await api.craft(id, recipeId, newIdempotencyKey());
-      if (!state || !apply(at, { now: res.now, items: res.items })) return;
+    act(async (id, at, send) => {
+      const res = await send((key) => api.craft(id, recipeId, key));
+      if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
       state = { ...state, crafts: [...state.crafts, res.craft] };
       say('');
     });
 
   const collectCraft = (craftId: string) =>
-    act(async (id, at) => {
-      const res = await api.collectCraft(id, craftId, newIdempotencyKey());
-      if (!state || !apply(at, { now: res.now, items: res.items })) return;
+    act(async (id, at, send) => {
+      const res = await send((key) => api.collectCraft(id, craftId, key));
+      if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
       state = { ...state, crafts: state.crafts.filter((c) => c.id !== craftId) };
       say(TEXT.got(describeItems(res.granted)));
     });
@@ -252,9 +258,35 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     return b;
   };
 
+  /**
+   * A countdown on screen. Rows and buttons are built only when the data
+   * changes; the once-a-second tick only rewrites these texts, so a finger
+   * resting on a button never has it swapped out from under it. When one
+   * reaches zero, the screen redraws once (its button appears).
+   */
+  interface Countdown {
+    node: HTMLElement;
+    readyAt: string;
+    text: (left: string) => string;
+  }
+  let bagCountdowns: Countdown[] = [];
+  let tileCountdowns: Countdown[] = [];
+
+  const countdown = (
+    list: Countdown[],
+    tag: 'span' | 'p',
+    cls: string,
+    readyAt: string,
+    text: (left: string) => string,
+  ): HTMLElement => {
+    const node = el(tag, { class: cls }, text(formatTimeLeft(clock.msUntil(readyAt))));
+    list.push({ node, readyAt, text });
+    return node;
+  };
+
   function renderBag(): void {
+    bagCountdowns = [];
     if (sheet.hidden || !state) return;
-    const now = clock.now();
 
     const items = bagItems(state.items);
     itemsBox.replaceChildren(
@@ -274,14 +306,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     gathersTitle.hidden = state.gathers.length === 0;
     gathersBox.replaceChildren(
       ...state.gathers.map((g) => {
-        const left = clock.msUntil(g.readyAt);
         const label = `${itemIcon(g.resource)} ${itemName(g.resource)}`;
         return el(
           'li',
           { class: 'bag-row' },
           el('span', { class: 'bag-row-name' }, label),
-          left > 0
-            ? el('span', { class: 'bag-row-wait' }, formatTimeLeft(left))
+          clock.msUntil(g.readyAt) > 0
+            ? countdown(bagCountdowns, 'span', 'bag-row-wait', g.readyAt, (left) => left)
             : button(TEXT.collect, () => void collectGather(g.id)),
         );
       }),
@@ -293,13 +324,10 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
           const craft = state?.crafts.find((c) => c.recipeId === recipe.id);
           let action: Node;
           if (craft) {
-            const left = Date.parse(craft.readyAt) - now;
             action =
-              left > 0
-                ? el(
-                    'span',
-                    { class: 'bag-row-wait' },
-                    TEXT.making(recipe.name, formatTimeLeft(left)),
+              clock.msUntil(craft.readyAt) > 0
+                ? countdown(bagCountdowns, 'span', 'bag-row-wait', craft.readyAt, (left) =>
+                    TEXT.making(recipe.name, left),
                   )
                 : button(TEXT.collect, () => void collectCraft(craft.id));
           } else if (s.kind === 'ready') {
@@ -331,6 +359,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
 
   function renderTile(): void {
     shownAction = null;
+    tileCountdowns = [];
     if (!panel) return;
     const { container, tile } = panel;
     if (!state) {
@@ -352,7 +381,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         break;
       case 'waiting':
         container.replaceChildren(
-          line(TEXT.waiting(formatTimeLeft(clock.msUntil(action.gather.readyAt)))),
+          countdown(tileCountdowns, 'p', 'tile-action-note', action.gather.readyAt, TEXT.waiting),
         );
         break;
       case 'collect':
@@ -366,11 +395,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       case 'sleeping':
         container.replaceChildren(line(action.note));
         break;
-      case 'busy': {
-        const left = clock.msUntil(action.readyAt);
-        container.replaceChildren(line(left > 0 ? TEXT.busy(formatTimeLeft(left)) : TEXT.busyDone));
+      case 'busy':
+        container.replaceChildren(
+          clock.msUntil(action.readyAt) > 0
+            ? countdown(tileCountdowns, 'p', 'tile-action-note', action.readyAt, TEXT.busy)
+            : line(TEXT.busyDone),
+        );
         break;
-      }
     }
   }
 
@@ -382,18 +413,22 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     syncTicker();
   }
 
+  /** One tick: rewrite countdown texts; redraw only when one has finished. */
+  function tick(): void {
+    let finished = false;
+    for (const c of [...bagCountdowns, ...tileCountdowns]) {
+      const left = clock.msUntil(c.readyAt);
+      if (left <= 0) finished = true;
+      else c.node.textContent = c.text(formatTimeLeft(left));
+    }
+    if (finished) render();
+  }
+
   /** Ticks once a second only while a countdown is on screen. */
   function syncTicker(): void {
-    const counting =
-      shownAction?.kind === 'waiting' ||
-      shownAction?.kind === 'busy' ||
-      (!sheet.hidden && state !== null && (state.gathers.length > 0 || state.crafts.length > 0));
+    const counting = bagCountdowns.length + tileCountdowns.length > 0;
     if (counting && ticker === undefined) {
-      ticker = window.setInterval(() => {
-        renderBag();
-        renderTile();
-        syncTicker();
-      }, 1000);
+      ticker = window.setInterval(tick, 1000);
     } else if (!counting && ticker !== undefined) {
       window.clearInterval(ticker);
       ticker = undefined;

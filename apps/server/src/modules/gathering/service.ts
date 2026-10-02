@@ -133,7 +133,8 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
         }
         if (gather.status === 'collected') throw new AppError('CONFLICT', MESSAGES.collected);
         if (gather.status === 'lost') throw new AppError('CONFLICT', MESSAGES.lost);
-        if ((await repo.tileOwner(gather.tileId)) !== user.id) {
+        // Share-locked like `start`, so a capture can't land mid-collect.
+        if ((await repo.lockTileOwner(gather.tileId)) !== user.id) {
           throw new AppError('CONFLICT', MESSAGES.notYoursNow);
         }
         if (gather.readyAt > at) throw new AppError('CONFLICT', MESSAGES.notReady);
