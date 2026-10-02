@@ -73,6 +73,7 @@ function drag(from: Point, to: Point, steps: number): Record<number, Point>[] {
 }
 
 test('renders the Babylon scene and reaches the server', async ({ page }) => {
+  test.setTimeout(90_000); // first load compiles shaders; CI renders in software
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => {

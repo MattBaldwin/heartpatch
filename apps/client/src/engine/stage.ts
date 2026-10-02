@@ -31,9 +31,10 @@ export function mountStage(
 ): Stage {
   const { engine } = renderer;
   const scene = new Scene(engine);
-  // The map camera handles gestures itself; don't raycast the scene on every
-  // pointer move (taps still pick when in-world taps arrive).
-  scene.skipPointerMovePicking = true;
+  // MapCamera owns all gestures. Babylon's own scene input would raycast on
+  // every pointer move and warns on multi-touch, so it stays off; in-world
+  // taps can call scene.pick() directly when they arrive.
+  scene.detachControl();
   setupLighting(scene);
   const { bounds } = build(scene);
   const camera = new MapCamera(scene, canvas, CAMERA, bounds);

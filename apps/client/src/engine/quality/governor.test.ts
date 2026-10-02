@@ -19,6 +19,7 @@ const config: ScalerConfig = {
   cutGain: 1.04,
   capTolerance: 0.08,
   capHoldMs: 20_000,
+  maxCapHoldMs: 80_000,
   tierRaiseAfterMs: 10_000,
   maxTierRaiseAfterMs: 40_000,
   tierFlapWindowMs: 10_000,
@@ -114,6 +115,31 @@ describe('stepGovernor on simulated devices', () => {
     expect(state.renderScale).toBe(1);
   });
 
+  it('keeps the tier under Low Power Mode even when the GPU is also busy', () => {
+    // Too slow at full res, capped at 30 once trimmed: the trim helps, dropping
+    // MSAA/bloom wouldn't, so the tier stays.
+    for (const gpuMs of [36, 40]) {
+      const { state } = simulate(start(), { capFps: 30, gpuMs }, 120_000);
+      expect(state.tier).toBe('high');
+      expect(state.renderScale).toBeGreaterThanOrEqual(0.75);
+    }
+  });
+
+  it('keeps the tier on a capped 1x screen (nothing to probe with but the tier)', () => {
+    let s = start();
+    const ctx1 = { config, devicePixelRatio: 1 };
+    for (let i = 0; i < 3600; i++) s = stepGovernor(s, 1000 / 30, ctx1);
+    expect(s.tier).toBe('high');
+  });
+
+  it('re-tests a held cap less and less often', () => {
+    const { state, scales } = simulate(start(), { capFps: 30, gpuMs: 10 }, 300_000);
+    expect(state.capHoldMs).toBe(config.maxCapHoldMs);
+    const dips = scales.filter((x, i) => x < 1 && (scales[i - 1] ?? 1) === 1).length;
+    // 20 s, 40 s, 80 s, 80 s… → a handful of re-tests in 5 minutes, not 15.
+    expect(dips).toBeLessThanOrEqual(6);
+  });
+
   it('notices new load while holding at a cap', () => {
     const capped = simulate(start(), { capFps: 30, gpuMs: 10 }, 10_000).state;
     expect(capped.cap).not.toBeNull();
@@ -172,7 +198,7 @@ describe('stepGovernor details', () => {
   });
 
   it('backs off resolution raises that immediately cause a drop', () => {
-    let s: GovernorState = { ...ready(), renderScale: 0.9, gpuBound: true };
+    let s: GovernorState = { ...ready(), renderScale: 0.9 };
     s = windows(s, 12.5, 6); // 3 s of headroom → raise
     expect(s.renderScale).toBeCloseTo(0.95, 5);
     s = windows(s, 12.5, 1); // settle

@@ -75,6 +75,8 @@ export interface ScalerConfig {
   capTolerance: number;
   /** Re-test a held cap after this long, in case it was a misreading. */
   capHoldMs: number;
+  /** Each confirmed re-test doubles the hold, up to this. */
+  maxCapHoldMs: number;
   /** Continuous full-resolution headroom before trying the next tier up. */
   tierRaiseAfterMs: number;
   /** Cap for the tier-raise delay after raise-then-drop flapping. */
@@ -99,6 +101,7 @@ export const SCALER: Readonly<ScalerConfig> = {
   cutGain: 1.04, // TUNE: one 5% scale step frees ~10% of pixels
   capTolerance: 0.08, // TUNE
   capHoldMs: 20_000, // TUNE
+  maxCapHoldMs: 160_000, // TUNE
   tierRaiseAfterMs: 10_000, // TUNE
   maxTierRaiseAfterMs: 120_000, // TUNE
   tierFlapWindowMs: 10_000, // TUNE
