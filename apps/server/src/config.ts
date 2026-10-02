@@ -10,6 +10,7 @@ const ConfigSchema = z.object({
   // Required, so a missing value stops the server rather than failing on first query.
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   // Behind Caddy, trust one proxy hop so request.ip is the player's IP (per-IP rate limits).
+  // `buildApp` turns `true` into "trust one private-network hop", never "trust every hop".
   TRUST_PROXY: z
     .enum(['true', 'false'])
     .default('false')
