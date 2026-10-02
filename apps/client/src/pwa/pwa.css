@@ -1,0 +1,99 @@
+/* Installed-app polish (issue #26): orientation, safe areas, the update pill
+   and the Add to Home Screen guide. Touch-first, 44pt+ targets. */
+
+html {
+  /* iOS enlarges text when the device turns sideways; keep the layout steady. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+.pwa-update,
+.pwa-guide {
+  position: fixed;
+  box-sizing: border-box;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+  background: #fffafc;
+  box-shadow: 0 12px 40px rgb(107 75 110 / 18%);
+}
+
+.pwa-update[hidden] {
+  display: none;
+}
+
+/* Top centre, clear of the notch or Dynamic Island. */
+.pwa-update {
+  z-index: 30;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 32px);
+  padding: 6px 6px 6px 18px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* Bottom card, above the home indicator. Over the game, lobby and name chip
+   (z-index 4–5), under the login card (10) so a new player signs up first. */
+.pwa-guide {
+  z-index: 8;
+  right: calc(env(safe-area-inset-right) + 16px);
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 18px 20px;
+  border-radius: 28px;
+}
+
+.pwa-guide-title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.pwa-guide-steps {
+  margin: 0 0 14px;
+  padding-left: 1.4em;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+.pwa-guide-icon {
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: -0.2em;
+  fill: none;
+  stroke: #2f7cf6;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pwa-guide-close {
+  width: 100%;
+}
+
+/* Landscape phones are short: tuck the guide into the corner. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .pwa-guide {
+    left: auto;
+    width: 340px;
+    padding: 12px 16px;
+  }
+
+  .pwa-guide-title {
+    font-size: 19px;
+  }
+
+  .pwa-guide-steps {
+    margin-bottom: 10px;
+    font-size: 16px;
+    line-height: 1.4;
+  }
+}

@@ -140,6 +140,23 @@ _Proposed in the secret-species Chore PR; the project owner confirms on merge._
 - **One home for each evolution.** An evolution into a secret form goes only in `secretEvolutions` (`from` a public or secret species, `into` a secret one); `Species.evolutions` only points at public forms. Ids are unique across public and secret rows, and `checkServerGameData` checks every reference against both together. Branch weights and rare conditions join `SecretEvolution` when branching arrives (Phase 2).
 - **Server battles use `serverBattleData(GAME_DATA, SERVER_GAME_DATA)`** (`@heartpatch/shared/server`), so the content hash covers secret rows. A client can't recompute that hash from public data, and doesn't need to: the server checks it.
 
+## 2026-10-02 — Installable app (#26)
+
+_Proposed in the #26 PR; the project owner confirms on merge._
+
+- **`vite-plugin-pwa` in injectManifest mode** (tech spec §3): Workbox writes the build's precache list into our own worker (`apps/client/src/pwa/sw.ts`), which owns the caching and update rules below. No Workbox runtime ships to players. Icons, launch screens and the manifest are drawn by `apps/client/tooling/pwa/` at build time (signed distance fields, no third-party art), not kept in `public/`; launch screens aren't precached, because iOS reads them once, at install.
+- **The shell version is a content hash, not `APP_VERSION`.** The cache is `heartpatch-shell-<12 hex>`, hashed from every precached URL and Workbox revision. A deploy that only changes the server keeps the phones' cache, so kids don't re-download the 1 MB+ engine on cellular for nothing. Any shell change makes a new cache, and old ones are deleted on activate. index.html is cached as `/`, the URL players open, and redirected responses are never cached (browsers refuse them for page loads).
+- **No stale shells.** Page loads are network-first, so every launch or reload gets the newest `index.html` and bundles; the cached shell is only for offline, error or slow (4 s, `// TUNE`) loads. A new worker never swaps code under a running game. It takes over:
+  - at launch, if it installed while the app was closed;
+  - silently, if the page already runs its version;
+  - when the player taps "Update" on "Ooh, a new Heartpatch is ready!";
+  - otherwise, automatically when the player returns after 5+ minutes away (`// TUNE`), so an app left in memory for days can't keep running an old shell against a new server.
+
+  Checks run on launch, on return to the app, and every 30 minutes. `/api` and `/ws` are never handled by the worker (CLAUDE.md rule 1).
+- **Production builds only.** The dev server never registers the worker (it would serve stale modules); e2e checks it against `vite preview` of a real build.
+- **Status bar `default`:** dark status text on the theme colour, readable over the pastel game. `black-translucent` would draw the game under white status text.
+- **The Add to Home Screen guide sits under the login card**, so a new player signs up first and then sees it. It shows until "Got it!" is tapped.
+
 ## 2026-10-02 — Map rendering (#7)
 
 _Proposed in the #7 PR; the project owner confirms on merge._
