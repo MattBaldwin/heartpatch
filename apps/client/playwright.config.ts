@@ -9,6 +9,10 @@ const isCI = Boolean(process.env['CI']);
  */
 const chromiumPath = process.env['PW_CHROMIUM_EXECUTABLE'];
 
+// The family signup code the dev server starts with, so e2e can sign up. The
+// server inherits it; a reused local server reads the same default from .env.
+process.env['HP_SIGNUP_CODE'] ??= 'heartpatch-dev-family';
+
 const projects = chromiumPath
   ? [
       {

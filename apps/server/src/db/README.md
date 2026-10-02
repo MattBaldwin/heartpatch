@@ -47,15 +47,16 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`). Feature tables (`join_requests`, `invite_codes`, `recovery_codes`, `keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`). Feature tables (`join_requests`, `invite_codes`, `keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid PK | |
 | `username` | text | Unique **case-insensitively** (`lower(username)` index). Filtered by the server text filter before insert |
-| `password_hash` | text | Argon2id (#3). Seed users get a placeholder that can never verify |
+| `password_hash` | text | Argon2id (#3). Seed users get a placeholder that can never verify (login treats it as a wrong password) |
 | `birth_year` | smallint | The only personal detail kept (design doc §18). Checked 1900–2100 |
+| `time_zone` | text, default `'UTC'` | IANA zone from the device at signup, canonicalized by the auth service; account-level daily caps reset at its midnight (design doc §3). The default only covers rows from before #3 |
 | `tutorial_step` | text, null | Current tutorial step id from the tutorial data; null = not started |
 | `tutorial_completed_at` | timestamptz, null | Set on first completion and kept when replaying (unlocks skip, design doc §26) |
 | `created_at` | timestamptz | |
@@ -68,6 +69,17 @@ Only the spine that other tables reference is designed here (tech spec §4, `doc
 | `token_hash` | text, unique | Hash of the `hp_session` cookie token; the raw token is never stored |
 | `created_at` | timestamptz | |
 | `expires_at` | timestamptz | Rolling 30-day expiry. Indexed for the `session-cleanup` job |
+
+### `recovery_codes`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → users | Cascade delete. Indexed |
+| `code_hash` | text | Argon2id hash; the code is shown once and never stored |
+| `created_at` | timestamptz | |
+| `used_at` | timestamptz, null | Set when the code is redeemed or replaced by a reset. Used rows stay for audit |
+
+One active code per user: a partial unique index on `user_id` where `used_at is null` (tech spec §9).
 
 ### `maps`
 | Column | Type | Notes |

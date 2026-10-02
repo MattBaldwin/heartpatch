@@ -44,6 +44,9 @@ export const users = pgTable(
     passwordHash: text('password_hash').notNull(),
     // The only personal detail we keep (design doc §18).
     birthYear: smallint('birth_year').notNull(),
+    // IANA zone from the device at signup; account-level daily caps reset at
+    // its midnight (design doc §3). Validated by the auth service.
+    timeZone: text('time_zone').notNull().default('UTC'),
     // Id of the current tutorial step (tutorial step data); null = not started.
     tutorialStep: text('tutorial_step'),
     // Set once the tutorial is finished; replaying it doesn't clear this.
@@ -73,6 +76,28 @@ export const sessions = pgTable(
   (t) => [
     index('sessions_user_id_idx').on(t.userId),
     index('sessions_expires_at_idx').on(t.expiresAt),
+  ],
+);
+
+export const recoveryCodes = pgTable(
+  'recovery_codes',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Argon2id hash of the code; the code itself is shown once and never stored.
+    codeHash: text('code_hash').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    // Set when the code is used or replaced by a reset. Used rows stay for audit.
+    usedAt: timestamptz('used_at'),
+  },
+  (t) => [
+    // One active code per user (tech spec §9).
+    uniqueIndex('recovery_codes_one_active_key')
+      .on(t.userId)
+      .where(sql`${t.usedAt} is null`),
+    index('recovery_codes_user_id_idx').on(t.userId),
   ],
 );
 
