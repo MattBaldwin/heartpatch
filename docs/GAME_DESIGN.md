@@ -175,7 +175,7 @@ Phase 1 ships simple level-based single-form evolution; branching arrives in Pha
 - **Home base:** the Heart Seed tile and its surrounding ring are permanently owned and can never be captured. You can lose territory right up to your home base.
 - **Guaranteed home resources:** every home ring contains a Timber node, a Stone node, an **Emberwood** node and a farm plot (Treats), regardless of the ring's terrain, so a player can always fuel their Hearthfire and feed their squishies, however much land they lose.
 - **Connected supply (Phase 2):** owned tiles must connect to the home base. After each capture, run BFS from the home base; unreached tiles become **stranded** and fade to neutral over **[DEFAULT: 36h]** unless reconnected.
-- **Raid rules [DEFAULT]:** a tile can't be re-attacked for 4h after a battle on it; new players get a 48h protection shield; each player gets 10 attack attempts per day (refills daily). Starting a tile battle (neutral or rival) uses an attempt and starts the tile cooldown; wild encounters and rescues don't use attempts. **Leaving** a battle means an explicit forfeit or no action for **[DEFAULT: 10 minutes]**, and counts as a loss. A dropped connection (app backgrounded, a phone call) resumes where it left off, because battle state lives on the server.
+- **Raid rules [DEFAULT]:** a tile can't be re-attacked for 4h after a battle on it; new players get a 48h protection shield; each player gets 10 attack attempts per map-local day (refills daily). Starting a tile battle (neutral or rival) uses an attempt and starts the tile cooldown; wild encounters and rescues don't use attempts. **Leaving** a battle means an explicit forfeit or no action for **[DEFAULT: 10 minutes]**, and counts as a loss. A dropped connection (app backgrounded, a phone call) resumes where it left off, because battle state lives on the server.
 - **PvP mode (map owner setting) [DEFAULT: Gentle]:** families have kids of very different ages and schedules, so rivalry must never turn into one player farming another.
   - **On:** rival tiles can be challenged; a defender can lose at most **[DEFAULT: 3]** tiles per map-local day. Once a defender reaches the cap, challenges against them are blocked for the day (they don't use up attempts).
   - **Gentle (default):** as On, but a defender can lose at most **[DEFAULT: 1]** tile per map-local day, and challenging a player with far less territory (under **[DEFAULT: half]** of yours, home rings not counted) earns **[DEFAULT: 50%]** rewards.
@@ -290,7 +290,7 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 - **Materials:** PBR with a clearcoat layer for vinyl sheen; image-based lighting from an environment map; rim lighting so squishies pop.
 - **Squish:** squash-and-stretch via vertex shader — wobble on landing, jiggle on tap, bounce when happy.
 - **World:** rounded terrain, pastel-bright palettes, baked soft shadows for static scenery, gentle bloom. The world is lightweight so squishies are the stars.
-- **Sharpness on iOS:** render at device pixel ratio capped around 2; FXAA/SMAA; dynamic resolution scaling to hold frame rate instead of going blurry; KTX2 compressed textures; LODs; instancing.
+- **Sharpness on iOS:** render at device pixel ratio capped around 2; FXAA; dynamic resolution scaling to hold frame rate instead of going blurry; KTX2 compressed textures; LODs; instancing.
 - **UI:** vector icons (SVG) and SDF/vector fonts; touch-first, large tap targets, iOS safe areas.
 
 ## 20. Camera and views
