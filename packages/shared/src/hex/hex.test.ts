@@ -13,6 +13,8 @@ import {
   hexRing,
   hexScale,
   hexSpiral,
+  hexToWorld,
+  worldToHex,
   type Hex,
 } from './index.js';
 
@@ -168,5 +170,81 @@ describe('hexBfs', () => {
 
   it('returns nothing for no starts', () => {
     expect(hexBfs([], () => true).size).toBe(0);
+  });
+});
+
+describe('hexToWorld', () => {
+  const size = 2;
+  const sqrt3 = Math.sqrt(3);
+
+  it('puts the origin hex at the world origin', () => {
+    expect(hexToWorld(origin, size)).toEqual({ x: 0, z: 0 });
+    expect(Object.is(hexToWorld(origin, size).z, 0)).toBe(true);
+  });
+
+  it('lays neighbours out east, north-east, north-west, west, south-west, south-east', () => {
+    const at = HEX_DIRECTIONS.map((d) => hexToWorld(d, size));
+    const close = (p: { x: number; z: number }, x: number, z: number) => {
+      expect(p.x).toBeCloseTo(x, 12);
+      expect(p.z).toBeCloseTo(z, 12);
+    };
+    close(at[0]!, size * sqrt3, 0);
+    close(at[1]!, (size * sqrt3) / 2, size * 1.5);
+    close(at[2]!, (-size * sqrt3) / 2, size * 1.5);
+    close(at[3]!, -size * sqrt3, 0);
+    close(at[4]!, (-size * sqrt3) / 2, -size * 1.5);
+    close(at[5]!, (size * sqrt3) / 2, -size * 1.5);
+  });
+
+  it('keeps every neighbour the same distance apart (√3 × size)', () => {
+    for (const h of hexSpiral(hex(3, -5), 2)) {
+      const a = hexToWorld(h, size);
+      for (const n of hexNeighbors(h)) {
+        const b = hexToWorld(n, size);
+        expect(Math.sqrt((a.x - b.x) ** 2 + (a.z - b.z) ** 2)).toBeCloseTo(size * sqrt3, 12);
+      }
+    }
+  });
+});
+
+describe('worldToHex', () => {
+  const size = 0.65;
+
+  it('inverts hexToWorld across a whole map', () => {
+    for (const h of hexSpiral(origin, 12)) {
+      expect(worldToHex(hexToWorld(h, size), size)).toEqual(h);
+    }
+  });
+
+  it('finds the hex for any point inside it, near corners too', () => {
+    for (const h of hexSpiral(origin, 3)) {
+      const c = hexToWorld(h, size);
+      // 0.95 × the way to each corner (pointy-top: 30° + 60° × i).
+      const half = Math.sqrt(3) / 2;
+      const corners = [
+        [half, 0.5],
+        [0, 1],
+        [-half, 0.5],
+        [-half, -0.5],
+        [0, -1],
+        [half, -0.5],
+      ] as const;
+      for (const [cx, cz] of corners) {
+        const p = { x: c.x + 0.95 * size * cx, z: c.z + 0.95 * size * cz };
+        expect(worldToHex(p, size)).toEqual(h);
+      }
+    }
+  });
+
+  it('gives the nearer hex for a point between two centres', () => {
+    const a = hexToWorld(origin, size);
+    const b = hexToWorld(hex(1, 0), size);
+    expect(worldToHex({ x: a.x + (b.x - a.x) * 0.4, z: 0 }, size)).toEqual(origin);
+    expect(worldToHex({ x: a.x + (b.x - a.x) * 0.6, z: 0 }, size)).toEqual(hex(1, 0));
+  });
+
+  it('never returns -0', () => {
+    const h = worldToHex({ x: -0.01, z: 0.01 }, size);
+    expect(Object.is(h.q, 0) && Object.is(h.r, 0)).toBe(true);
   });
 });

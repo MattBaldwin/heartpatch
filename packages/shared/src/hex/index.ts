@@ -130,3 +130,48 @@ export function hexBfs(starts: readonly Hex[], canEnter: (h: Hex) => boolean): M
   }
   return distances;
 }
+
+/** A point on the ground plane in world units: `x` is east, `z` is north. */
+export interface WorldPoint {
+  readonly x: number;
+  readonly z: number;
+}
+
+const SQRT3 = Math.sqrt(3);
+
+/**
+ * The centre of a hex on the ground plane, for hexes `size` world units from
+ * centre to corner. Pointy-top, `(0, 0)` at the origin, north is +z: `r`
+ * grows southwards, so `HEX_DIRECTIONS` go east, north-east, north-west and
+ * so on, anticlockwise seen from above. The client lays the map out with it
+ * (and the server can, for distances in world units).
+ */
+export function hexToWorld(h: Hex, size: number): WorldPoint {
+  return { x: size * SQRT3 * (h.q + h.r / 2) + 0, z: size * -1.5 * h.r + 0 };
+}
+
+/**
+ * The hex containing a ground point: the inverse of `hexToWorld` (a tap on
+ * the map → the tile under it). Points exactly on an edge go to one side,
+ * the same one every time.
+ */
+export function worldToHex(p: WorldPoint, size: number): Hex {
+  const r = -p.z / (1.5 * size);
+  const q = p.x / (SQRT3 * size) - r / 2;
+  return hexRound(q, r);
+}
+
+/** The nearest hex to fractional axial coordinates (rounding in cube space). */
+function hexRound(q: number, r: number): Hex {
+  const s = -q - r;
+  let rq = Math.round(q);
+  let rr = Math.round(r);
+  const rs = Math.round(s);
+  const dq = Math.abs(rq - q);
+  const dr = Math.abs(rr - r);
+  const ds = Math.abs(rs - s);
+  // Rounding each coordinate can break q + r + s = 0; fix the one that moved most.
+  if (dq > dr && dq > ds) rq = -rr - rs;
+  else if (dr > ds) rr = -rq - rs;
+  return hex(rq, rr);
+}
