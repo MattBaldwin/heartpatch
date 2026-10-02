@@ -54,9 +54,12 @@ export function createAuthHooks(
   options: { secureCookies: boolean },
 ): AuthHooks {
   const load = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const result = await service.authenticate(request.cookies[SESSION_COOKIE]);
+    const token = request.cookies[SESSION_COOKIE];
+    const result = await service.authenticate(token);
     request.user = result?.user ?? null;
     if (result?.renewed) setSessionCookie(reply, result.renewed, options.secureCookies);
+    // Drop an expired or revoked token so the browser stops sending it.
+    if (token && !result) clearSessionCookie(reply, options.secureCookies);
   };
   return {
     loadUser: load,

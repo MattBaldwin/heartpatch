@@ -353,9 +353,11 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
       expect((await me(server, token)).user).toBeNull();
     });
 
-    it('ignores unknown tokens', async () => {
+    it('ignores unknown tokens and clears the dead cookie', async () => {
       const server = await start();
-      expect((await me(server, 'made-up-token')).user).toBeNull();
+      const dead = await me(server, 'made-up-token');
+      expect(dead.user).toBeNull();
+      expect(sessionCookie(dead.res)?.value).toBe('');
       expect((await me(server, undefined)).user).toBeNull();
     });
   });

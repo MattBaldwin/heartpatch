@@ -50,6 +50,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       registerRequestGuards(api);
       await api.register(healthRoutes(health));
 
+      // Modules that need a logged-in player (they all need the database too)
+      // register inside this block and take `authHooks.requireAuth`.
       if (options.authRepo) {
         const secureCookies = config.NODE_ENV === 'production';
         const auth = createAuthService({
@@ -57,7 +59,6 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           signupCode: config.HP_SIGNUP_CODE,
           ...(options.now ? { now: options.now } : {}),
         });
-        // Pass `authHooks.requireAuth` to modules that need a logged-in player.
         const authHooks = createAuthHooks(auth, { secureCookies });
         await api.register(authRoutes(auth, { hooks: authHooks, secureCookies }));
       }

@@ -3,9 +3,9 @@ import { z } from 'zod';
 // Account API schemas (design doc §18, tech spec §5 and §9). Messages are
 // kid-readable (style guide §6): the client shows them next to the field.
 
-export const USERNAME_MIN_LENGTH = 3; // TUNE
+export const USERNAME_MIN_LENGTH = 3; // TUNE: guess
 export const USERNAME_MAX_LENGTH = 16; // TUNE: fits a name tag on a phone screen
-export const PASSWORD_MIN_LENGTH = 8; // TUNE
+export const PASSWORD_MIN_LENGTH = 8; // TUNE: guess
 /** Upper bound so a huge body can't make Argon2 hash megabytes. */
 export const PASSWORD_MAX_LENGTH = 128;
 

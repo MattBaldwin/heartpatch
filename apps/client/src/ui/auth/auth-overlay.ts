@@ -98,7 +98,12 @@ export interface AuthOverlayOptions {
 export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): void {
   const overlay = el('div', { class: 'auth-overlay', 'data-testid': 'auth-overlay' });
   overlay.hidden = true;
-  const card = el('div', { class: 'auth-card', role: 'dialog', 'aria-modal': 'true' });
+  const card = el('div', {
+    class: 'auth-card',
+    role: 'dialog',
+    'aria-modal': 'true',
+    'aria-labelledby': 'auth-title',
+  });
   overlay.append(card);
 
   const chipName = el('span', { class: 'auth-chip-name', 'data-testid': 'auth-user' });
@@ -153,7 +158,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     const form = el(
       'form',
       { class: 'auth-form', id: spec.id, novalidate: '' },
-      el('h1', { class: 'auth-title' }, spec.title),
+      el('h1', { class: 'auth-title', id: 'auth-title' }, spec.title),
       el('p', { class: 'auth-subtitle' }, spec.subtitle),
     );
     const controls = new Map<string, HTMLInputElement | HTMLSelectElement>();
@@ -225,7 +230,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     login.addEventListener('click', showLogin);
     signup.addEventListener('click', showSignup);
     showCard(
-      el('h1', { class: 'auth-title' }, 'Welcome to Heartpatch!'),
+      el('h1', { class: 'auth-title', id: 'auth-title' }, 'Welcome to Heartpatch!'),
       el('p', { class: 'auth-subtitle' }, 'The squishies have missed you.'),
       ...(notice ? [el('p', { class: 'auth-error', role: 'alert' }, notice)] : []),
       el('div', { class: 'auth-actions' }, login, signup),
@@ -358,7 +363,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
         });
     });
     showCard(
-      el('h1', { class: 'auth-title' }, title),
+      el('h1', { class: 'auth-title', id: 'auth-title' }, title),
       el('p', { class: 'auth-subtitle' }, "Here's your secret recovery code:"),
       el('p', { class: 'auth-code', 'data-testid': 'auth-recovery-code' }, code),
       el(
