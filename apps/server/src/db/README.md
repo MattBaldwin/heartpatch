@@ -29,7 +29,7 @@ Already have Postgres 16 locally? Skip `db:up` and point `DATABASE_URL` at it.
 | `migrations/` | Generated SQL + drizzle-kit journal. Committed; never edit a merged one. `pnpm build` copies it into `dist/` |
 | `client.ts` | `createDbClient(url)` → `{ db, ping, close }`, the `Database` / `Transaction` / `Executor` types, `withTransaction(db, fn)`, and `dbReadinessCheck` for `/api/v1/ready` |
 | `migrator.ts` | `runMigrations(db)` |
-| `game-events.ts` | `appendGameEvent(tx, event)`: the only way to write `game_events`, typed by the shared registry |
+| `game-events.ts` | `appendGameEvent(tx, event)`: the only way to write `game_events`, typed by the shared registry. Also enqueues event-consumer wake-ups in the same transaction (`setEventWakeup`) |
 | `seed.ts` | Local test data |
 | `cli.ts` | `migrate` / `seed` entrypoint |
 
@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4. Feature tables (`keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4 and `event_consumers` (#47). Feature tables (`keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -167,6 +167,17 @@ Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessor
 | `payload` | jsonb | |
 | `created_at` | timestamptz | |
 
+### `event_consumers`
+| Column | Type | Notes |
+|---|---|---|
+| `consumer` | text | PK part. Consumer name (`tutorial`) |
+| `map_id` | uuid → maps | PK part. Cascade delete |
+| `last_seq` | bigint, default 0 | Last `game_events.seq` the consumer applied on this map. ≥ 0 |
+
+Event consumers' positions (tech spec §7; apps/server/README.md, "Event consumers and jobs"). A worker holds its row `FOR UPDATE` and advances `last_seq` in the same transaction as its own writes. Rows are created on first use. Never prune `game_events` below a map's lowest `last_seq`.
+
+pg-boss keeps its own tables in the `pgboss` schema; it creates and migrates them itself when the server starts.
+
 ## Writing game events
 
 Every meaningful change writes a `game_events` row **in the same transaction** as the change, through `appendGameEvent`, called as the **last write**:
@@ -180,6 +191,8 @@ await withTransaction(db, async (tx) => {
 });
 // 3. After commit: wsHub.publish(mapId); live sync sends the type's public view (apps/server/README.md)
 ```
+
+When jobs are running, `appendGameEvent` also enqueues the event consumers' wake-up (pg-boss `send`) on the same transaction, so it commits or rolls back with the event.
 
 Event types and payloads come from the shared registry, `packages/shared/src/schemas/events.ts`: each type has an **internal** payload schema (what's stored; `appendGameEvent` is generic over the type, so payloads typecheck, and it validates them at runtime too) and a **public** one (what live sync may broadcast: `PUBLIC_VIEWS` in `src/ws/public-views.ts` is built from these, one view per type). Add a type there before writing it. Tests of the event stream itself, which need made-up types, use `appendRawGameEvent`; modules never do.
 
