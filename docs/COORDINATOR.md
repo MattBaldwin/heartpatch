@@ -2,6 +2,8 @@
 
 > How the **supervisor (coordinator) session** runs the build: launching parallel build sessions, merging their PRs, and keeping the codebase consistent. Any supervisor session follows this file, so the process survives a handoff. Rules for build sessions live in `CLAUDE.md`; decisions and their reasons live in `docs/DECISIONS.md`.
 
+Session tools (`create_session`, `send_message`, `archive_session`, `list_triggers`, `delete_trigger`) are claude-code-remote MCP tools; GitHub actions use the `mcp__github__*` tools. Load either with ToolSearch if they are deferred.
+
 ## 1. Roles
 
 - **Project owner (Matt):** makes product and design calls, provides accounts (AWS, GoDaddy, GitHub secrets), and approves anything that changes a decision.
@@ -32,7 +34,7 @@
 
 Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict comment.
 
-**Don't wait for pings.** On every `check_suite.completed` event, check for a verdict on the current head yourself. The "ready" ping is a convenience, not a dependency.
+**Don't wait for pings.** On every `check_suite.completed` event, check for a verdict on the current head yourself: read the PR comments (`pull_request_read` → `get_comments`) for the build session's verdict comment naming that SHA. The "ready" ping is a convenience, not a dependency.
 
 ## 4. After a merge
 
@@ -73,7 +75,7 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
 
-Report usage to the owner when asked, and flag any lane above about $20.
+Report usage to the owner when asked, and flag any lane above about $20. A typical phase-1 lane cost $5–12; read per-session cost from `get_session`.
 
 ## 7. Brief template
 
@@ -116,14 +118,14 @@ Post the verdict comment summarizing each round. Don't merge.
 
 ## 8. Supervisor handoff
 
-1. Wait until the build sessions this supervisor started have merged, or hand them over explicitly. Their `@parent` reports and PR subscriptions belong to the session that started them.
+1. Wait until the build sessions this supervisor started have merged, or hand them over explicitly: send each one the new supervisor's session id to report to, and subscribe the new supervisor to their PRs. Their `@parent` reports and PR subscriptions belong to the session that started them.
 2. Make sure everything durable is in the repo: DECISIONS.md, this playbook, and the briefs' carry-over notes (§9).
 3. Start the new supervisor with a compact prompt:
    - read this playbook, CLAUDE.md and DECISIONS.md;
    - current `main` state, open PRs and sessions;
    - the queued follow-ups (§9);
    - the next batch to launch.
-4. Retire the old session (rename it "(retired)"). Don't archive it until the owner says so.
+4. Retire the old session (rename it "(retired)"). Don't archive it until the owner says so. (Build sessions are archived after merge, per §4; supervisor sessions are not.)
 
 ## 9. Open follow-ups for upcoming briefs
 
@@ -162,5 +164,5 @@ The supervisor keeps this list current. Remove items as they land.
 - **Docs drift:**
   - TECH_SPEC §2 layout (module `schemas.ts`, `lib/time`, `formulas/` home);
   - §10 `SESSION_SECRET` (unused);
-  - the `(state, action, seed)` wording in CLAUDE.md/GAME_DESIGN, versus RNG-in-state (DECISIONS "Battle engine (#11)").
+  - TECH_SPEC `battles` table wording, versus RNG-in-state (DECISIONS "Battle engine (#11)"); CLAUDE.md and GAME_DESIGN were fixed in PR #63.
 - **Owner FYI:** #11 resolved a design ambiguity: synergy multiplies damage once, for the attacker, not stats too.

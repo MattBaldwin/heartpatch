@@ -11,7 +11,7 @@
 
 ### PR workflow
 - **Every PR is reviewed by the `reviewer` subagent** (`.claude/agents/reviewer.md`): a senior engineer persona with deep TypeScript and game-development experience. It runs the checks itself and returns APPROVE or REQUEST CHANGES.
-- The author fixes or answers each finding with evidence; a **fresh** reviewer instance re-reviews with the prior findings and responses. If the same point is still contested after 3 rounds, escalate to the project owner.
+- The author fixes or answers each finding with evidence; a **fresh** reviewer instance re-reviews with the prior findings and responses. If the same point is still contested after 3 rounds, escalate to the project owner. *(Superseded by "Usage, models and supervisor handoff", 2026-10-02: 4-round cap, escalate to the coordinator.)*
 - **Once the reviewer approves and CI is green, the coordinating agent merges.** The final verdict is posted as a PR comment for the record.
 
 ### Parallel sessions and drift
@@ -85,4 +85,4 @@ _Proposed in PR #55; the project owner confirms on merge._
 
 - **Models (owner decision):** build sessions that write code and reviewers on code PRs use the strongest model (Opus). Docs-only reviews, drift audits and simple content/docs work use **Sonnet 5.5**. *Why:* code reviews have caught real bugs every round; the rest is cheaper without losing much.
 - **Fresh supervisor (owner decision):** when the supervisor's context gets large, a new supervisor session takes over with a compact handoff. *Why:* every wake re-reads the whole context, so a long-running supervisor becomes the biggest cost. The process lives in `docs/COORDINATOR.md` so it survives the handoff.
-- **Review loops are capped at 4 rounds** before escalating to the supervisor, and the supervisor avoids mid-flight scope changes unless they're blocking contracts.
+- **Review loops are capped at 4 rounds** (owner-approved with this playbook) before the build session reports `blocked` to the supervisor, who escalates to the owner if needed; and the supervisor avoids mid-flight scope changes unless they're blocking contracts.
