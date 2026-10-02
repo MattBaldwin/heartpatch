@@ -17,6 +17,8 @@ import { healthRoutes } from './modules/health/routes.js';
 import { mapsRoutes } from './modules/maps/routes.js';
 import { createMapsService } from './modules/maps/service.js';
 import { createHealthService, type ReadinessCheck } from './modules/health/service.js';
+import { tutorialRoutes } from './modules/tutorial/routes.js';
+import { createTutorialService } from './modules/tutorial/service.js';
 import { createWsHub, type WsHubOptions } from './ws/hub.js';
 import { MAX_CLIENT_MESSAGE_BYTES } from './ws/limits.js';
 import { PUBLIC_VIEWS } from './ws/public-views.js';
@@ -114,6 +116,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         await api.register(mapsRoutes(maps, { hooks: authHooks }));
+
+        const tutorial = createTutorialService({
+          db,
+          tutorialRequired: config.HP_TUTORIAL_REQUIRED,
+          clock,
+          ...(wsHub ? { publish: wsHub.publish } : {}),
+        });
+        await api.register(tutorialRoutes(tutorial, { hooks: authHooks }));
       }
     },
     { prefix: '/api/v1' },
