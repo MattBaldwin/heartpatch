@@ -29,7 +29,7 @@ export const HomeBaseRulesSchema = z.strictObject({
 });
 export type HomeBaseRules = z.infer<typeof HomeBaseRulesSchema>;
 
-/** Kinds a player can build now, as a type guard. */
+/** Can a player build this one now? (Its kind is in `buildableKinds`.) */
 export function isBuildable(rules: HomeBaseRules, building: Building): boolean {
   return (rules.buildableKinds as readonly string[]).includes(building.kind);
 }

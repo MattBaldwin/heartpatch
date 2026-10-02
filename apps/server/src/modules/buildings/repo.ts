@@ -1,3 +1,11 @@
+import {
+  BuildingKindSchema,
+  ElementIdSchema,
+  FeelingIdSchema,
+  type BuildingKind,
+  type ElementId,
+  type FeelingId,
+} from '@heartpatch/shared';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -19,7 +27,7 @@ export interface BuildingRow {
   q: number;
   r: number;
   buildingId: string;
-  kind: string;
+  kind: BuildingKind;
   level: number;
   spot: number;
   /** Last map-local night the fuel covers (`YYYY-MM-DD`); null: never fuelled. */
@@ -37,8 +45,8 @@ export interface HomeSquishyRow {
   id: string;
   ownerUserId: string;
   speciesId: string;
-  element: string;
-  feeling: string;
+  element: ElementId;
+  feeling: FeelingId;
   nickname: string | null;
   level: number;
   state: 'active' | 'hollowed';
@@ -120,6 +128,17 @@ const squishyColumns = {
   habitatBuildingId: squishies.habitatBuildingId,
 };
 
+// Text columns are checked on read, so a hand-edited row fails loudly.
+const toBuilding = <T extends { kind: string }>(row: T) => ({
+  ...row,
+  kind: BuildingKindSchema.parse(row.kind),
+});
+const toSquishy = <T extends { element: string; feeling: string }>(row: T) => ({
+  ...row,
+  element: ElementIdSchema.parse(row.element),
+  feeling: FeelingIdSchema.parse(row.feeling),
+});
+
 export function createBuildingsRepo(db: Executor): BuildingsRepo {
   return queries(db);
 }
@@ -145,21 +164,25 @@ function queries(db: Executor): BuildingsRepo {
 
     lockHomeTiles: (mapId, userId) => homeTiles(mapId, userId).for('no key update'),
 
-    listOwned: (mapId, userId) =>
-      selectBuildings()
-        .where(and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, userId)))
-        .orderBy(asc(tiles.q), asc(tiles.r), asc(buildings.spot)),
+    listOwned: async (mapId, userId) =>
+      (
+        await selectBuildings()
+          .where(and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, userId)))
+          .orderBy(asc(tiles.q), asc(tiles.r), asc(buildings.spot))
+      ).map(toBuilding),
 
-    listOnMap: (mapId) =>
-      selectBuildings()
-        .where(and(eq(buildings.mapId, mapId), eq(tiles.ownerUserId, buildings.ownerUserId)))
-        .orderBy(asc(tiles.q), asc(tiles.r), asc(buildings.spot)),
+    listOnMap: async (mapId) =>
+      (
+        await selectBuildings()
+          .where(and(eq(buildings.mapId, mapId), eq(tiles.ownerUserId, buildings.ownerUserId)))
+          .orderBy(asc(tiles.q), asc(tiles.r), asc(buildings.spot))
+      ).map(toBuilding),
 
     lockBuilding: async (buildingRowId) => {
       const [row] = await selectBuildings()
         .where(eq(buildings.id, buildingRowId))
         .for('update', { of: buildings });
-      return row ?? null;
+      return row ? toBuilding(row) : null;
     },
 
     insertBuilding: async (building) => {
@@ -167,7 +190,7 @@ function queries(db: Executor): BuildingsRepo {
       if (!row) throw new Error('insertBuilding: insert returned no row');
       const [inserted] = await selectBuildings().where(eq(buildings.id, row.id));
       if (!inserted) throw new Error('insertBuilding: building vanished');
-      return inserted;
+      return toBuilding(inserted);
     },
 
     moveBuilding: async (buildingRowId, to) => {
@@ -196,12 +219,14 @@ function queries(db: Executor): BuildingsRepo {
       return deleted.length;
     },
 
-    listSquishies: (mapId, userId) =>
-      db
-        .select(squishyColumns)
-        .from(squishies)
-        .where(and(eq(squishies.mapId, mapId), eq(squishies.ownerUserId, userId)))
-        .orderBy(asc(squishies.createdAt), asc(squishies.id)),
+    listSquishies: async (mapId, userId) =>
+      (
+        await db
+          .select(squishyColumns)
+          .from(squishies)
+          .where(and(eq(squishies.mapId, mapId), eq(squishies.ownerUserId, userId)))
+          .orderBy(asc(squishies.createdAt), asc(squishies.id))
+      ).map(toSquishy),
 
     lockSquishy: async (squishyId) => {
       const [row] = await db
@@ -209,7 +234,7 @@ function queries(db: Executor): BuildingsRepo {
         .from(squishies)
         .where(eq(squishies.id, squishyId))
         .for('no key update');
-      return row ?? null;
+      return row ? toSquishy(row) : null;
     },
 
     countResidents: async (buildingRowId) => {

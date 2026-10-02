@@ -107,6 +107,9 @@ const inventory = createInventoryScreen({ root: document.body, devTools: import.
 // squishies. Like battles, it owns the screen while open.
 const home = createHomeScreen({
   root: document.body,
+  onProblem: (message) => {
+    lobby.showMessage(message);
+  },
   showScene,
   invalidate: () => stage?.invalidate(),
   tier: () => stage?.quality.snapshot.tier ?? tier,

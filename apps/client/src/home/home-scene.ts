@@ -206,14 +206,20 @@ export class HomeScene {
       const kind = species.get(squishy.speciesId);
       if (!kind) continue; // a species this client can't draw: it still shows in the list
       const anchor = squishy.habitatId ? (habitats.get(squishy.habitatId) ?? null) : null;
+      // Every squishy without a habitat gets its own place by the Heart Seed, in list order.
+      const waitAt = anchor ? null : this.#waitingPoint(waiting++);
       const existing = this.#residents.get(squishy.id);
       keep.add(squishy.id);
       if (anchor) housed++;
-      if (existing && sameAnchor(existing.home, anchor)) continue;
+      if (
+        existing &&
+        sameAnchor(existing.home, anchor) &&
+        (anchor || sameAnchor(existing.at, waitAt))
+      ) {
+        continue;
+      }
       if (existing) this.#squishies.remove(existing.handle);
-      const at = anchor
-        ? this.#wanderPoint(anchor, squishy.id, 0)
-        : this.#waitingPoint((waiting += 1));
+      const at = anchor ? this.#wanderPoint(anchor, squishy.id, 0) : (waitAt ?? { x: 0, z: 0 });
       const handle = this.#squishies.add(kind, squishy.id, this.#placement(at, 0));
       this.#residents.set(squishy.id, { handle, home: anchor, at, hop: null, hops: 0 });
     }
@@ -345,10 +351,14 @@ export class HomeScene {
     return { x: anchor.x + Math.cos(angle) * distance, z: anchor.z + Math.sin(angle) * distance };
   }
 
-  /** Where the n-th squishy without a habitat waits, around the Heart Seed. */
+  /**
+   * Where the n-th squishy without a habitat waits (0-based): around the
+   * Heart Seed between the building spots, in widening rings of six.
+   */
   #waitingPoint(n: number): WorldPoint {
-    const angle = ((30 + 60 * n) * Math.PI) / 180;
-    const d = HOME_VIEW.hexSize * 0.32;
+    const ring = Math.floor(n / 6);
+    const angle = ((30 + 60 * (n % 6) + 30 * (ring % 2)) * Math.PI) / 180;
+    const d = HOME_VIEW.hexSize * (0.32 + 0.16 * ring);
     return { x: Math.cos(angle) * d, z: Math.sin(angle) * d };
   }
 

@@ -3,9 +3,9 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
+import { setInstances } from '../../map/map-scene.js';
 import { GLOW } from './building-config.js';
 import {
   buildBuildingModel,
@@ -73,34 +73,35 @@ export class BuildingField {
 
   /** Replaces every building drawn with these. */
   set(placements: readonly BuildingPlacement[]): void {
-    const byKey = new Map<string, Matrix[]>();
+    const byKey = new Map<string, { buildingId: string; look: BuildingLook; matrices: Matrix[] }>();
     const turn = new Quaternion();
     let lit = 0;
     for (const p of placements) {
-      const key = modelKey(p.buildingId, lookOf(p));
+      const look = lookOf(p);
+      const key = modelKey(p.buildingId, look);
       if (p.lit === true) lit++;
-      let list = byKey.get(key);
-      if (!list) byKey.set(key, (list = []));
+      let group = byKey.get(key);
+      if (!group) byKey.set(key, (group = { buildingId: p.buildingId, look, matrices: [] }));
+      const list = group.matrices;
       Quaternion.RotationYawPitchRollToRef(p.yaw ?? 0, 0, 0, turn);
       const s = p.scale ?? 1;
       list.push(
         Matrix.Compose(new Vector3(s, s, s), turn.clone(), new Vector3(p.x, p.y ?? 0, p.z)),
       );
     }
-    for (const key of byKey.keys()) {
+    for (const [key, { buildingId, look }] of byKey) {
       if (this.#models.has(key)) continue;
-      const [buildingId = '', look = 'plain'] = key.split(':');
-      const model = buildBuildingModel(this.#scene, buildingId, look as BuildingLook);
+      const model = buildBuildingModel(this.#scene, buildingId, look);
       model.body.material = this.#body;
       if (model.glow) model.glow.material = this.#glow;
       this.#models.set(key, model);
     }
     let meshes = 0;
     for (const [key, model] of this.#models) {
-      const matrices = byKey.get(key) ?? [];
+      const matrices = byKey.get(key)?.matrices ?? [];
       for (const mesh of [model.body, model.glow]) {
         if (!mesh) continue;
-        setInstances(mesh, matrices);
+        setInstances(mesh, matrices, true);
         if (matrices.length > 0) meshes++;
       }
     }
@@ -120,19 +121,4 @@ export class BuildingField {
     this.#body.dispose();
     this.#glow.dispose();
   }
-}
-
-/** Writes instance matrices; a mesh with none is switched off (it would draw at the origin). */
-function setInstances(mesh: Mesh, matrices: readonly Matrix[]): void {
-  if (matrices.length === 0) {
-    mesh.thinInstanceSetBuffer('matrix', null);
-    mesh.setEnabled(false);
-    return;
-  }
-  const data = new Float32Array(matrices.length * 16);
-  matrices.forEach((m, i) => {
-    m.copyToArray(data, i * 16);
-  });
-  mesh.thinInstanceSetBuffer('matrix', data, 16, false);
-  mesh.setEnabled(true);
 }

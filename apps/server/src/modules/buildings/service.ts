@@ -65,7 +65,7 @@ const MESSAGES = {
   full: "It's full! Come back after a night or two.",
   notAHabitat: 'Squishies can only move into a habitat.',
   noSquishy: "We couldn't find that squishy.",
-  inHollow: "That squishy is in the Hollow. Rescue them first, then they'll move in!",
+  inHollow: 'That squishy is in the Hollow right now. Rescue them first!',
   habitatFull: (name: string) => `The ${name} is full! Try another home.`,
 } as const;
 
@@ -189,8 +189,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       squishies: active.map((s) => ({
         id: s.id,
         speciesId: s.speciesId,
-        element: s.element as HomeResponse['squishies'][number]['element'],
-        feeling: s.feeling as HomeResponse['squishies'][number]['feeling'],
+        element: s.element,
+        feeling: s.feeling,
         nickname: s.nickname,
         level: s.level,
         habitatId: s.habitatBuildingId,

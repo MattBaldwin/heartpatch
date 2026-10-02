@@ -11,7 +11,6 @@ import {
   type Building,
   type HomeResponse,
   type HomeSquishy,
-  type HomeTile,
   type MyBuilding,
   type Species,
 } from '@heartpatch/shared';
@@ -126,11 +125,6 @@ export function freeHomeSpots(home: HomeResponse, except: string | null = null):
     }
   }
   return spots;
-}
-
-/** The tile a building stands on. */
-export function tileOf(home: HomeResponse, b: { q: number; r: number }): HomeTile | undefined {
-  return home.tiles.find((t) => t.q === b.q && t.r === b.r);
 }
 
 /** Species the client can draw: the public table plus what the server sent along. */

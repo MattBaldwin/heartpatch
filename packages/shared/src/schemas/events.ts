@@ -3,7 +3,8 @@ import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
-import { PlacedBuildingSchema } from './buildings.js';
+import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
+import { LocalDateSchema } from './time.js';
 
 /**
  * The game-event type registry (tech spec §5, §7): every `game_events.type`,
@@ -211,12 +212,12 @@ export const GAME_EVENTS = {
   'building.moved': {
     internal: z.strictObject({
       userId: z.uuid(),
-      from: z.strictObject({ q: z.number().int(), r: z.number().int(), spot: z.number().int() }),
+      from: z.strictObject({ q: z.number().int(), r: z.number().int(), spot: BuildingSpotSchema }),
       building: PlacedBuildingStrictSchema,
     }),
     public: z.object({
       userId: z.uuid(),
-      from: z.object({ q: z.number().int(), r: z.number().int(), spot: z.number().int() }),
+      from: z.object({ q: z.number().int(), r: z.number().int(), spot: BuildingSpotSchema }),
       building: PlacedBuildingSchema,
     }),
   },
@@ -248,7 +249,7 @@ export const GAME_EVENTS = {
       userId: z.uuid(),
       building: PlacedBuildingStrictSchema,
       nights: z.number().int().min(1),
-      fuelledThrough: z.string(),
+      fuelledThrough: LocalDateSchema,
     }),
     public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
   },

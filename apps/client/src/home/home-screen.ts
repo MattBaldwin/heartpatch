@@ -56,6 +56,8 @@ export interface HomeScreenOptions {
   onOpen: () => void;
   /** Back to the map. */
   onClosed: (mapId: string) => void;
+  /** The home couldn't open (offline): say why where the player is looking. */
+  onProblem: (message: string) => void;
   api?: HomeApi;
 }
 
@@ -708,7 +710,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       if (at !== generation) return;
       home = fresh;
     } catch (err) {
-      say(messageOf(err));
+      // The home isn't on screen yet, so its own note can't show this.
+      if (at === generation) options.onProblem(messageOf(err));
       return;
     }
     isOpen = true;

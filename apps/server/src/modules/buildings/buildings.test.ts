@@ -20,7 +20,8 @@ import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
-import { mapLocalTime } from './hearthfire.js';
+import { fireStateAt, litSafeTiles, mapLocalTime } from './hearthfire.js';
+import { createBuildingsRepo } from './repo.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -658,6 +659,94 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect((await view(server, kid, mapId)).tiles.every((t) => t.buildings.length === 0)).toBe(
         true,
       );
+    });
+  });
+
+  describe('races (one command per player at a time)', () => {
+    it('never builds two Hearthfires when two builds race', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const { plain } = await homeTiles(server, kid, mapId);
+      const results = await Promise.allSettled(
+        [1, 2].map((spot) =>
+          place(server, kid, mapId, { buildingId: 'hearthfire', ...plain, spot }),
+        ),
+      );
+      const codes = results.map((r) => (r.status === 'fulfilled' ? r.value.statusCode : 0));
+      expect(codes.sort()).toEqual([201, 409]);
+      const fires = await db.query.buildings.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.buildingId, 'hearthfire')),
+      });
+      expect(fires).toHaveLength(1);
+      // Paid once.
+      expect((await home(server, kid, mapId)).items).toMatchObject({ timber: 45, stone: 45 });
+      await reconciled(mapId, kid.id);
+    });
+
+    it('never overfills a habitat when two squishies race for the last bed', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const { plain } = await homeTiles(server, kid, mapId);
+      const den = await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 1 });
+      const house = (squishyId: string) =>
+        call(server, 'POST', `/maps/${mapId}/squishies/${squishyId}/habitat`, kid, {
+          habitatId: den.id,
+        });
+      for (const pal of [await squishy(mapId, kid), await squishy(mapId, kid)]) {
+        expect((await house(pal)).statusCode).toBe(200);
+      }
+      const racers = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      const results = await Promise.allSettled(racers.map(house));
+      const codes = results.map((r) => (r.status === 'fulfilled' ? r.value.statusCode : 0));
+      expect(codes.sort()).toEqual([200, 409]);
+      const living = await db.query.squishies.findMany({
+        where: (t, { eq }) => eq(t.habitatBuildingId, den.id),
+      });
+      expect(living).toHaveLength(3);
+    });
+  });
+
+  describe('safe tiles for nightfall (#21)', () => {
+    it("protects each lit fire's own home base plus its radius, across players", async () => {
+      const server = await start();
+      const [kid, friend] = [await player(), await player()];
+      const mapId = await newMap(server, kid);
+      await join(server, kid, friend, mapId);
+      await give(mapId, kid, PLENTY);
+      await give(mapId, friend, PLENTY);
+      const mine = await homeTiles(server, kid, mapId);
+      const theirs = await homeTiles(server, friend, mapId);
+      const fire = await placed(server, kid, mapId, {
+        buildingId: 'hearthfire',
+        ...mine.seed,
+        spot: 1,
+      });
+      await placed(server, friend, mapId, { buildingId: 'hearthfire', ...theirs.seed, spot: 1 });
+      await fuel(server, kid, mapId, fire.id, 1); // only the kid's fire is lit
+
+      const repo = createBuildingsRepo(db);
+      const fires = (await repo.listOnMap(mapId)).filter((b) => b.kind === 'hearthfire');
+      expect(fires).toHaveLength(2);
+      const homes = new Map([
+        [kid.id, mine.tiles],
+        [friend.id, theirs.tiles],
+      ]);
+      const local = mapLocalTime(clock, ZONE);
+      const safe = litSafeTiles(fires, (owner) => homes.get(owner) ?? [], local);
+      expect([...safe].sort()).toEqual(
+        mine.tiles.map((t) => `${String(t.q)},${String(t.r)}`).sort(),
+      );
+      // After tonight's nightfall the fire is out: nothing is protected.
+      const later = mapLocalTime(new Date('2026-10-03T12:00:00Z'), ZONE);
+      expect(litSafeTiles(fires, (owner) => homes.get(owner) ?? [], later).size).toBe(0);
+      expect(fireStateAt('2026-10-02', clock, ZONE)).toMatchObject({
+        lit: true,
+        nightsLeft: 1,
+      });
     });
   });
 

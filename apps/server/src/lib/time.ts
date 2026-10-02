@@ -37,12 +37,25 @@ export function localDate(at: Date, timeZone: string): LocalDate {
 
 /** The calendar date and wall-clock hour (0–23) at `at` in `timeZone`. */
 export function localDateHour(at: Date, timeZone: string): { date: LocalDate; hour: number } {
+  const { date, hour } = localDateTime(at, timeZone);
+  return { date, hour };
+}
+
+/**
+ * The calendar date, hour (0–23) and minute at `at` in `timeZone`
+ * (Hearthfires, #18: nightfall is a time of day, not just an hour).
+ */
+export function localDateTime(
+  at: Date,
+  timeZone: string,
+): { date: LocalDate; hour: number; minute: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
+    minute: '2-digit',
     hourCycle: 'h23',
   }).formatToParts(at);
   const part = (type: Intl.DateTimeFormatPartTypes) =>
@@ -50,6 +63,7 @@ export function localDateHour(at: Date, timeZone: string): { date: LocalDate; ho
   return {
     date: `${part('year').padStart(4, '0')}-${part('month')}-${part('day')}`,
     hour: Number(part('hour')),
+    minute: Number(part('minute')),
   };
 }
 
