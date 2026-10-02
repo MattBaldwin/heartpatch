@@ -30,6 +30,16 @@ export class FrameScheduler {
   }
 
   /**
+   * Draw exactly one more frame, no settle frames: for a slow idle animation
+   * (breathing squishies) that paces itself below the display rate. Calling
+   * it every 33 ms draws about 30 fps on any display; `invalidate` would
+   * draw `settleFrames` per call and so nearly every frame.
+   */
+  requestFrame(): void {
+    this.pending = Math.max(this.pending, 1);
+  }
+
+  /**
    * One render-loop iteration at time `now` (ms). `busy` is true while
    * something animates: camera motion, a fling, Babylon animations, or the
    * scene still loading.

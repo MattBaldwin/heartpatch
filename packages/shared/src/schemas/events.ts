@@ -111,8 +111,15 @@ export const GAME_EVENTS = {
     internal: TutorialAdvancedSchema,
     public: z.object(TutorialAdvancedSchema.shape),
   },
-  /** A player started a PvE battle on this map (#13). */
-  'battle.started': { internal: BattleStartedSchema, public: z.object(BattleStartedSchema.shape) },
+  /**
+   * A player started a PvE battle on this map (#13). The species stay in the
+   * internal payload: a secret one would otherwise reach members who never
+   * met it (CLAUDE.md rule 6).
+   */
+  'battle.started': {
+    internal: BattleStartedSchema,
+    public: z.object({ battleId: z.uuid(), kind: BattleKindSchema, userId: z.uuid() }),
+  },
   /**
    * A battle ended: won, lost, drawn, run away from, or called off by the
    * server (`no-contest`, when the content was re-tuned mid-battle).

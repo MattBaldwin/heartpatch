@@ -143,6 +143,14 @@ describe('playbackSteps', () => {
     expect(steps.every((s) => s.ms > 0)).toBe(true);
   });
 
+  it('says scooted home after running away, tuckered out otherwise', () => {
+    const line = (reason: 'forfeit' | 'tuckered-out') =>
+      playbackSteps(battle([{ turn: 1, type: 'battle-end', winner: 'b', reason }]), content, 0)[0]!
+        .text;
+    expect(line('forfeit')).toBe('You scooted home. Maybe next time!');
+    expect(line('tuckered-out')).toBe('Aw, tuckered out. Next time!');
+  });
+
   it('plays only what the client has not shown yet', () => {
     expect(playbackSteps(b, content, log.length - 1)).toHaveLength(1);
     expect(playbackSteps(b, content, log.length)).toEqual([]);
@@ -159,6 +167,11 @@ describe('playbackSteps', () => {
       ...playbackSteps(all, content, 0),
       ...playbackSteps(
         battle([{ turn: 1, type: 'battle-end', winner: 'b', reason: 'forfeit' }]),
+        content,
+        0,
+      ),
+      ...playbackSteps(
+        battle([{ turn: 1, type: 'battle-end', winner: 'b', reason: 'tuckered-out' }]),
         content,
         0,
       ),

@@ -1,4 +1,4 @@
-import { and, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import type { Executor } from './client.js';
 import { idempotencyKeys } from './schema.js';
 
@@ -32,6 +32,8 @@ export interface IdempotencyStore {
     now: Date;
     /** A claim this old with no reply is treated as abandoned and taken over. */
     pendingTtlMs: number;
+    /** A stored reply this old is expired: the key is taken over and the request runs again. */
+    keyTtlMs: number;
   }) => Promise<IdempotencyClaim>;
   /** Stores the reply the first request produced. */
   complete: (input: {
@@ -46,7 +48,7 @@ export interface IdempotencyStore {
 
 export function createIdempotencyStore(db: Executor): IdempotencyStore {
   return {
-    claim: async ({ userId, key, scope, requestHash, now, pendingTtlMs }) => {
+    claim: async ({ userId, key, scope, requestHash, now, pendingTtlMs, keyTtlMs }) => {
       const inserted = await db
         .insert(idempotencyKeys)
         .values({ userId, key, scope, requestHash, createdAt: now })
@@ -60,12 +62,38 @@ export function createIdempotencyStore(db: Executor): IdempotencyStore {
           requestHash: idempotencyKeys.requestHash,
           statusCode: idempotencyKeys.statusCode,
           response: idempotencyKeys.response,
+          createdAt: idempotencyKeys.createdAt,
         })
         .from(idempotencyKeys)
         .where(and(eq(idempotencyKeys.userId, userId), eq(idempotencyKeys.key, key)));
-      // Deleted between the insert and the select (a release): try once more.
+      // Released between the insert and the select (the first request failed
+      // on our side): reported as still running, so this retry gets CONFLICT
+      // and the client's next retry runs it.
       if (!row) return { kind: 'pending', scope, requestHash };
+
+      /** Takes the row over if it's still in the state we saw and old enough. */
+      const takeOver = async (olderThanMs: number, state: SQL): Promise<boolean> => {
+        const before = new Date(now.getTime() - olderThanMs);
+        const taken = await db
+          .update(idempotencyKeys)
+          .set({ scope, requestHash, statusCode: null, response: null, createdAt: now })
+          .where(
+            and(
+              eq(idempotencyKeys.userId, userId),
+              eq(idempotencyKeys.key, key),
+              state,
+              lt(idempotencyKeys.createdAt, before),
+            ),
+          )
+          .returning({ key: idempotencyKeys.key });
+        return taken.length > 0;
+      };
+
       if (row.statusCode !== null) {
+        // An expired reply: the key is new again.
+        if (await takeOver(keyTtlMs, isNotNull(idempotencyKeys.statusCode))) {
+          return { kind: 'claimed' };
+        }
         return {
           kind: 'done',
           scope: row.scope,
@@ -75,20 +103,9 @@ export function createIdempotencyStore(db: Executor): IdempotencyStore {
         };
       }
       // Abandoned claim (the process died mid-request): take it over.
-      const abandonedBefore = new Date(now.getTime() - pendingTtlMs);
-      const taken = await db
-        .update(idempotencyKeys)
-        .set({ scope, requestHash, createdAt: now })
-        .where(
-          and(
-            eq(idempotencyKeys.userId, userId),
-            eq(idempotencyKeys.key, key),
-            isNull(idempotencyKeys.statusCode),
-            lt(idempotencyKeys.createdAt, abandonedBefore),
-          ),
-        )
-        .returning({ key: idempotencyKeys.key });
-      if (taken.length > 0) return { kind: 'claimed' };
+      if (await takeOver(pendingTtlMs, isNull(idempotencyKeys.statusCode))) {
+        return { kind: 'claimed' };
+      }
       return { kind: 'pending', scope: row.scope, requestHash: row.requestHash };
     },
 

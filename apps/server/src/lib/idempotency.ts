@@ -22,8 +22,11 @@ import type { Clock } from './time.js';
  *   unless that claim is older than `PENDING_TTL_MS` (the process died), in
  *   which case this request takes it over.
  *
- * Keys are per player, so one player can't replay another's reply. Rows are
- * kept `KEY_TTL_MS`; a cleanup job is a follow-up.
+ * Keys are per player, so one player can't replay another's reply. A stored
+ * reply older than `KEY_TTL_MS` is treated as a new key (the request runs
+ * again); deleting old rows is a follow-up cleanup job. Times come from the
+ * game clock, which ticks (with `HP_DEV_NOW` it starts elsewhere but keeps
+ * moving), so tests can move it.
  */
 
 export const IDEMPOTENCY_HEADER = 'idempotency-key';
@@ -97,6 +100,7 @@ export function registerIdempotency(
         requestHash,
         now: clock(),
         pendingTtlMs: PENDING_TTL_MS,
+        keyTtlMs: KEY_TTL_MS,
       });
       switch (claim.kind) {
         case 'claimed':

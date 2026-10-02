@@ -39,10 +39,16 @@ export const PLAYBACK = {
 } as const;
 
 /**
- * Render-on-demand pacing (tech spec §6): while only breathing animates,
- * draw at this rate; while a move plays, every frame.
+ * Render-on-demand pacing (tech spec §6): while only breathing animates, a
+ * frame is asked for at most this often; while a move plays, every frame.
+ * Asks land on display ticks, so this is a 30 fps interval less half a 60 Hz
+ * tick: every 2nd tick at 60 Hz and every 4th at 120 Hz, both 30 fps. A full
+ * 33.3 ms would round to every 3rd tick (20 fps) at 60 Hz.
  */
-export const BREATHING_FRAME_MS = 1000 / 30; // TUNE: 30 fps is plenty for a slow breath
+export const BREATHING_FRAME_MS = 25; // TUNE: 30 fps is plenty for a slow breath
+
+/** A submit that never reached the server is sent once more, with the same key, after this long. */
+export const RETRY_AFTER_MS = 1200; // TUNE: a phone's radio often comes back within a second
 
 /** How a tuckered-out squishy lies: sunk a little and turned on its side. */
 export const TUCKERED_POSE = {

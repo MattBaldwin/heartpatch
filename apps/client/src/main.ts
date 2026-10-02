@@ -99,6 +99,7 @@ const battles = createBattleScreen({
   root: document.body,
   showScene,
   invalidate: () => stage?.invalidate(),
+  requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onOpen: () => {
     maps.close();

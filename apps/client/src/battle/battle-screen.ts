@@ -10,10 +10,11 @@ import {
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import { ApiRequestError } from '../net/api.js';
+import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
-import { BREATHING_FRAME_MS, PLAYBACK } from './battle-config.js';
+import { BREATHING_FRAME_MS, PLAYBACK, RETRY_AFTER_MS } from './battle-config.js';
 import { mountBattleHud, plateSideOf, type BattleHud, type ControlMode } from './battle-hud.js';
 import {
   applyStep,
@@ -43,6 +44,8 @@ export interface BattleScreenOptions {
   showScene: (build: SceneBuilder | null) => void;
   /** Draws a few frames after a change (`Stage.invalidate`). */
   invalidate: () => void;
+  /** Draws one frame (`Stage.requestFrame`): breathing paces itself with this. */
+  requestFrame: () => void;
   /** The quality tier now (the squishies' detail level follows it). */
   tier: () => QualityTier;
   /** A battle is about to take the screen: the caller hides the map. */
@@ -84,6 +87,8 @@ export interface BattleScreen {
 const MESSAGES = {
   resultWon: 'You won! Hooray!',
   resultLost: 'Aw, tuckered out.',
+  resultScooted: 'You scooted home.',
+  scootedSub: 'Maybe next time!',
   resultDraw: "It's a tie!",
   resultNoContest: 'No contest!',
   wonSub: 'Everyone had a great time.',
@@ -271,7 +276,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           ? { title: MESSAGES.resultDraw, subtitle: MESSAGES.drawSub }
           : result.winner === b.mySide
             ? { title: MESSAGES.resultWon, subtitle: MESSAGES.wonSub }
-            : { title: MESSAGES.resultLost, subtitle: MESSAGES.lostSub };
+            : result.reason === 'forfeit'
+              ? { title: MESSAGES.resultScooted, subtitle: MESSAGES.scootedSub }
+              : { title: MESSAGES.resultLost, subtitle: MESSAGES.lostSub };
     hud.setCaption(null);
     hud.showResult({ ...outcome, xp: xp.length > 0 ? xp : [MESSAGES.noXp], done: MESSAGES.done });
   };
@@ -340,13 +347,29 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     else playNext();
   };
 
+  /**
+   * Sends the action; if it never reached the server (the radio dropped), it
+   * is sent once more with the same `Idempotency-Key`, so a submit that did
+   * land is replayed rather than applied twice (tech spec §5).
+   */
+  const send = async (current: PlayerBattle, action: PlayerBattleAction): Promise<PlayerBattle> => {
+    const key = newIdempotencyKey();
+    try {
+      return await api.act(current.id, action, current.view.turn, key);
+    } catch (err) {
+      if (!(err instanceof ApiRequestError) || err.code !== 'OFFLINE') throw err;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_AFTER_MS));
+      return api.act(current.id, action, current.view.turn, key);
+    }
+  };
+
   async function submit(action: PlayerBattleAction): Promise<void> {
     const current = battle;
     if (!current || waiting || queue.length > 0) return;
     waiting = true;
     hud.setControls({ type: 'waiting' });
     try {
-      receive(await api.act(current.id, action, current.view.turn, crypto.randomUUID()));
+      receive(await send(current, action));
     } catch (err) {
       hud.setProblem(messageOf(err));
       // The battle moved on without us (another tab, a retry): show where it is.
@@ -406,9 +429,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     const t = now();
     if (s.update(t)) {
-      if (s.isPlaying(t) || t - lastBreathDraw >= BREATHING_FRAME_MS) {
-        lastBreathDraw = t;
+      if (s.isPlaying(t)) {
         options.invalidate();
+      } else if (t - lastBreathDraw >= BREATHING_FRAME_MS) {
+        // Breathing only: one frame per ask, about 30 a second.
+        lastBreathDraw = t;
+        options.requestFrame();
       }
     }
     frame = requestAnimationFrame(tick);

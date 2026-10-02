@@ -6,7 +6,6 @@ import {
   createBattleContent,
   GAME_DATA,
   gameplayOverrides,
-  getSpecies,
   startBattle,
   type BattleAction,
   type BattleActionRequest,
@@ -149,9 +148,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const moveDefs = new Map<string, Move>();
     for (const side of [state.sides.a, state.sides.b]) {
       for (const squishy of side.squishies) {
-        if (!PUBLIC_SPECIES.has(squishy.speciesId)) {
-          speciesDefs.set(squishy.speciesId, getSpecies(content, squishy.speciesId));
-        }
+        // A species dropped from the data since (an old battle) is left out;
+        // the client names it "Mystery squishy" rather than the read failing.
+        const species = content.species.get(squishy.speciesId);
+        if (species && !PUBLIC_SPECIES.has(species.id)) speciesDefs.set(species.id, species);
         for (const id of squishy.moves) {
           const move = content.moves.get(id);
           if (move && !PUBLIC_MOVES.has(id)) moveDefs.set(id, move);
@@ -176,9 +176,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     endedAt: row.endedAt?.toISOString() ?? null,
   });
 
-  /** The battle, if it's this player's. */
-  const requireOwn = (row: BattleRow | null, user: PublicUser): BattleRow => {
+  /** The battle, if it's this player's and they're still on its map. */
+  const requireOwn = async (
+    tx: Executor,
+    row: BattleRow | null,
+    user: PublicUser,
+  ): Promise<BattleRow> => {
     if (!row || row.playerUserId !== user.id) throw new AppError('NOT_FOUND', MESSAGES.notFound);
+    await requireMember(tx, user, row.mapId);
     return row;
   };
 
@@ -351,7 +356,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     },
 
     get: async (user, battleId) => {
-      const row = requireOwn(await store.findBattle(battleId), user);
+      const row = await requireOwn(db, await store.findBattle(battleId), user);
       return toPlayerBattle(await resolved(row));
     },
 
@@ -372,8 +377,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     startAgainst,
 
     act: async (user, battleId, request) => {
-      const { row: next, mapId } = await store.transaction(async (repo) => {
-        const row = requireOwn(await repo.lockBattle(battleId), user);
+      const { row: next, mapId } = await store.transaction(async (repo, tx) => {
+        const row = await requireOwn(tx, await repo.lockBattle(battleId), user);
         if (row.status !== 'active') throw new AppError('CONFLICT', MESSAGES.over);
         const at = now();
         if (row.contentHash !== content.contentHash) {

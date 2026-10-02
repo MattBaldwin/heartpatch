@@ -224,7 +224,9 @@ export function playbackSteps(
             ? "It's a tie! Everyone's sleepy."
             : event.winner === side
               ? 'You won! Hooray!'
-              : 'Aw, tuckered out. Next time!';
+              : event.reason === 'forfeit'
+                ? 'You scooted home. Maybe next time!'
+                : 'Aw, tuckered out. Next time!';
         return step('end', side, battle.view.sides[side].active, text, PLAYBACK.endMs, {
           squish: event.winner === side ? 'bounce' : null,
         });

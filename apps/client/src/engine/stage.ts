@@ -32,6 +32,8 @@ export interface Stage {
    * every frame while they run.
    */
   invalidate(): void;
+  /** Draw one more frame, without settle frames (see `FrameScheduler.requestFrame`). */
+  requestFrame(): void;
   /** True while nothing is being drawn. */
   readonly idle: boolean;
   /** Frames drawn so far (dev overlay and tests). */
@@ -111,6 +113,9 @@ export function mountStage(
     quality,
     invalidate: () => {
       frames.invalidate();
+    },
+    requestFrame: () => {
+      frames.requestFrame();
     },
     get idle() {
       return frames.idle;

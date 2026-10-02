@@ -124,7 +124,8 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   const over = await settled(page);
   expect(over).toMatchObject({ id: battleId, status: 'finished', phase: 'over' });
   expect(over.winner).not.toBeNull();
-  expect(over.shown.mine === 0 || over.shown.theirs === 0).toBe(true);
+  // Someone is tuckered out, unless the battle ran out of turns (a tie).
+  if (over.winner !== 'draw') expect(over.shown.mine === 0 || over.shown.theirs === 0).toBe(true);
 
   const result = page.getByTestId('battle-result');
   await expect(result).toBeVisible();

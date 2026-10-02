@@ -20,6 +20,8 @@ import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import { sessions, users } from '../../db/schema.js';
+import { KEY_TTL_MS } from '../../lib/idempotency.js';
+import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService } from './service.js';
@@ -52,6 +54,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
   afterEach(async () => {
     await app?.close();
     app = undefined;
+    clock.setTime(Date.parse('2026-10-02T12:00:00Z'));
   });
 
   async function start(env: Record<string, string> = {}): Promise<FastifyInstance> {
@@ -219,6 +222,29 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       }
     });
 
+    it('stops a player who left the patch from playing on', async () => {
+      const server = await start();
+      const [owner, friend] = [await player(), await player()];
+      const mapId = await newMap(server, owner);
+      // The friend joins through the real flow, so the owner can remove them.
+      const detail = () =>
+        call(server, 'GET', `/maps/${mapId}`, owner).then(
+          (res) => MapResponseSchema.parse(res.json()).map,
+        );
+      const code = (await detail()).admin!.invite!.code;
+      expect((await call(server, 'POST', '/maps/join', friend, { code })).statusCode).toBe(201);
+      const requestId = (await detail()).admin!.requests[0]!.id;
+      const approve = `/maps/${mapId}/requests/${requestId}/approve`;
+      expect((await call(server, 'POST', approve, owner)).statusCode).toBe(204);
+      await grant(server, friend, mapId);
+      const battle = await pickFight(server, friend, mapId);
+
+      const remove = `/maps/${mapId}/members/${friend.id}/remove`;
+      expect((await call(server, 'POST', remove, owner)).statusCode).toBe(204);
+      expect((await call(server, 'GET', `/battles/${battle.id}`, friend)).statusCode).toBe(404);
+      expect((await act(server, friend, battle, { type: 'forfeit' })).statusCode).toBe(404);
+    });
+
     it('registers the dev routes only with HP_DEV_SQUISHY_GRANTS', async () => {
       const server = await start({ HP_DEV_SQUISHY_GRANTS: 'false' });
       const kid = await player();
@@ -315,6 +341,12 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
         log: null,
       });
       expect(row!.seed).toMatch(/^[A-Za-z0-9_-]{22}$/);
+
+      // Live sync tells the other members only who's battling, never the
+      // species: a secret squishy stays secret until they meet it (rule 6).
+      const view = publicViewFor(PUBLIC_VIEWS, events.at(-1)!, { userId: 'someone-else' });
+      expect(view).toEqual({ battleId: battle.id, kind: 'wild', userId: kid.id });
+      for (const id of SECRET_IDS) expect(JSON.stringify(view)).not.toContain(id);
     });
 
     it('resumes the battle already going instead of starting another', async () => {
@@ -432,6 +464,12 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       );
       expect(staleAgain.statusCode).toBe(409);
       expect(staleAgain.headers['idempotent-replayed']).toBe('true');
+      // A stored reply expires after KEY_TTL_MS: the key is new again.
+      clock.setTime(clock.getTime() + KEY_TTL_MS + 1);
+      const expired = await act(server, kid, battle, { type: 'move', move }, key);
+      expect(expired.statusCode).toBe(409); // ran again: that turn is stale now
+      expect(expired.headers['idempotent-replayed']).toBeUndefined();
+      clock.setTime(Date.parse('2026-10-02T12:00:00Z'));
       // Keys are per player: another player's key doesn't collide.
       const other = await player();
       const otherMap = await newMap(server, other);
