@@ -52,7 +52,14 @@ export function mountStage(
   // taps can call scene.pick() directly when they arrive.
   scene.detachControl();
   setupLighting(scene);
-  const { bounds, start } = build(scene);
+  let content: SceneContent;
+  try {
+    content = build(scene);
+  } catch (err) {
+    scene.dispose(); // don't leave a half-built scene on the engine
+    throw err;
+  }
+  const { bounds, start } = content;
   const camera = new MapCamera(scene, canvas, CAMERA, bounds, start);
   scene.activeCamera = camera.camera;
   const quality = new RenderQuality(scene, camera.camera, tier);

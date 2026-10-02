@@ -484,8 +484,9 @@ export class MapScene {
         if (!list) byKind.set(prop.kind, (list = []));
         list.push(placeAt(prop.at.x, look.height + DOME * 0.5, prop.at.z, s, turn.clone()));
         const d = built.shadow * prop.scale;
+        // Props stand off-centre, where the dome is lower: sit the shadow on it.
         shadows.push(
-          placeAt(prop.at.x, look.height + DOME + 0.004, prop.at.z, new Vector3(d, 1, d)),
+          placeAt(prop.at.x, look.height + DOME * 0.8 + 0.004, prop.at.z, new Vector3(d, 1, d)),
         );
       }
     }

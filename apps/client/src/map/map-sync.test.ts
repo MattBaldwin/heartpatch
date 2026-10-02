@@ -183,6 +183,37 @@ describe('MapSync', () => {
     expect(sync.state).toBeNull();
   });
 
+  it('restarts a resync that a failed open cut short, so the map stays live', async () => {
+    const { sync, fetches, calls, redraws, answer } = await opened(5);
+    sync.event(joined(6)); // resync in flight: unsubscribed, fetch 2 pending
+    const reopening = sync.open(MAP_ID); // e.g. "Visit patch" again, while offline
+    fetches[2]!.reject(new ApiRequestError('OFFLINE', 'offline'));
+    await expect(reopening).rejects.toThrow('offline');
+
+    // The cut-short resync's answer is ignored; a fresh one is already fetching.
+    expect(fetches).toHaveLength(4);
+    fetches[1]!.resolve(at(6, testView(2)));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(redraws).toEqual([]);
+
+    await answer(at(7, testView(2)));
+    expect(calls.at(-1)).toBe(`subscribe ${MAP_ID} 7`);
+    expect(sync.state?.view.seq).toBe(7);
+    sync.event(event('map.updated', { pvpMode: 'off' }, 8));
+    expect(sync.state?.view.map.pvpMode).toBe('off');
+  });
+
+  it('keeps a live map live when a failed open came in between', async () => {
+    const { sync, fetches, calls } = await opened(5);
+    const reopening = sync.open(MAP_ID);
+    fetches[1]!.reject(new ApiRequestError('NOT_FOUND', 'Gone!'));
+    await expect(reopening).rejects.toThrow('Gone!');
+    expect(fetches).toHaveLength(2); // nothing to restart
+    expect(calls).toEqual([]);
+    sync.event(event('map.updated', { pvpMode: 'on' }, 6));
+    expect(sync.state?.view.map.pvpMode).toBe('on');
+  });
+
   it('drops a fetch that finishes after the map was closed or swapped', async () => {
     const { sync, fetches, calls, redraws } = await opened(5);
     sync.serverResync(MAP_ID);

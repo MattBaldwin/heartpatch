@@ -2,7 +2,8 @@ import { RESOURCES, TERRAINS, type MapMember, type PublicTile } from '@heartpatc
 
 // What the tile info panel says about a tile (copy follows docs/STYLE_GUIDE.md).
 // Pure, so every case is unit-tested. Home bases can never be claimed (design
-// doc §11), so nothing here ever offers it.
+// doc §11), so nothing here ever offers it. (The land is never taken; squishies
+// still need a lit Hearthfire at night, §14, so don't promise they're safe.)
 
 export interface TileInfo {
   /** The terrain's name, e.g. "Old Forest". */
@@ -30,8 +31,8 @@ export function describeTile(
 
   let owner: string;
   if (home) {
-    if (mine) owner = "Your home base. It's always safe here!";
-    else if (ownerName !== null) owner = `${ownerName}'s home base. It's always safe here!`;
+    if (mine) owner = 'Your home base. Nobody can ever take it!';
+    else if (ownerName !== null) owner = `${ownerName}'s home base. Nobody can ever take it!`;
     else owner = 'A cozy home spot, waiting for a new Keeper.';
   } else if (mine) {
     owner = 'Your land.';

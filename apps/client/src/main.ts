@@ -22,14 +22,17 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
 
 const params = new URLSearchParams(window.location.search);
 // `?quality=` and `?renderer=webgpu` (opt-in, tech spec §6) stand in for the settings screen.
-const tier = pickInitialTier(params.get('quality'));
+/** The quality tier, carried from stage to stage so the governor's last step down isn't lost. */
+let tier = pickInitialTier(params.get('quality'));
 let stage: Stage | null = null;
 /** What the stage draws: the open map, or the test scene. */
 let sceneBuilder: SceneBuilder = buildTestScene;
 /** What boot() holds on to: always whichever stage is on screen now (showScene swaps it). */
 const currentStage = {
   dispose: () => {
-    stage?.dispose();
+    if (!stage) return;
+    tier = stage.quality.snapshot.tier;
+    stage.dispose();
     stage = null;
   },
 };
@@ -70,8 +73,7 @@ function showScene(build: SceneBuilder | null): void {
   if (!stage) return;
   const { renderer } = stage;
   const target = renderer.engine.getRenderingCanvas();
-  stage.dispose();
-  stage = null;
+  currentStage.dispose();
   if (!target) return;
   try {
     stage = mountStage(renderer, target, sceneBuilder, tier);

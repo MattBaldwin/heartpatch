@@ -42,12 +42,12 @@ describe('describeTile', () => {
     );
   });
 
-  it('marks home bases as always safe, and never offers to claim them', () => {
+  it('says home bases can never be taken, and never offers to claim them', () => {
     const mine = describeTile(tile({ homeSlot: 0, ownerUserId: userId(1) }), lookup, userId(1));
     expect(mine.home).toBe(true);
-    expect(mine.owner).toBe("Your home base. It's always safe here!");
+    expect(mine.owner).toBe('Your home base. Nobody can ever take it!');
     const theirs = describeTile(tile({ homeSlot: 1, ownerUserId: userId(2) }), lookup, userId(1));
-    expect(theirs.owner).toBe("keeper2's home base. It's always safe here!");
+    expect(theirs.owner).toBe("keeper2's home base. Nobody can ever take it!");
     const free = describeTile(tile({ homeSlot: 3 }), lookup, userId(1));
     expect(free.owner).toBe('A cozy home spot, waiting for a new Keeper.');
     for (const info of [mine, theirs, free]) expect(allText(info)).not.toMatch(/claim|challenge/i);

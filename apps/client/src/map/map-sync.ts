@@ -32,6 +32,8 @@ export class MapSync {
   /** Bumped by every open and close, so a slow fetch can't bring back a map the player left. */
   private generation = 0;
   private resyncing = false;
+  /** Live events are off (unsubscribed for a resync) until a fresh view is in. */
+  private unsynced = false;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private retryDelay = RESYNC_RETRY_MS;
   private readonly options: MapSyncOptions;
@@ -52,7 +54,17 @@ export class MapSync {
    */
   async open(mapId: string): Promise<MapState | null> {
     const at = ++this.generation;
-    const view = await this.options.fetchView(mapId);
+    let view: MapView;
+    try {
+      view = await this.options.fetchView(mapId);
+    } catch (err) {
+      // The map on screen stays; a resync this open cut short is started again.
+      if (at === this.generation && this.current) {
+        this.resyncing = false;
+        if (this.unsynced) this.resync();
+      }
+      throw err;
+    }
     if (at !== this.generation) return null;
     this.reset();
     this.current = new MapState(view);
@@ -96,6 +108,7 @@ export class MapSync {
     if (!state || this.resyncing) return;
     const at = this.generation;
     this.resyncing = true;
+    this.unsynced = true;
     clearTimeout(this.retryTimer);
     // Live events stop until the fresh view is in (the server may have already dropped them).
     this.options.socket().unsubscribe();
@@ -103,6 +116,7 @@ export class MapSync {
       (view) => {
         if (at !== this.generation) return;
         this.resyncing = false;
+        this.unsynced = false;
         this.retryDelay = RESYNC_RETRY_MS;
         state.replace(view);
         this.options.onRedraw(state);
@@ -135,6 +149,7 @@ export class MapSync {
     clearTimeout(this.retryTimer);
     this.retryTimer = undefined;
     this.resyncing = false;
+    this.unsynced = false;
     this.retryDelay = RESYNC_RETRY_MS;
   }
 }

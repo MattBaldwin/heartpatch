@@ -94,7 +94,7 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
   const panel = owner.getByTestId('tile-panel');
   await expect(panel).toBeVisible();
   await expect(owner.getByTestId('tile-panel-owner')).toHaveText(
-    "Your home base. It's always safe here!",
+    'Your home base. Nobody can ever take it!',
   );
   await expect(panel).not.toContainText(/claim|challenge/i);
   expect((await mapState(owner))?.selected).not.toBeNull();
