@@ -242,6 +242,26 @@ describe('createWsClient', () => {
     expect(sockets).toHaveLength(count);
   });
 
+  it('a late "logged out" answer does not end a newer live connection', async () => {
+    let answer: (loggedIn: boolean) => void = () => undefined;
+    start({
+      checkSession: () =>
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        }),
+    });
+    for (let i = 0; i < FAILURES_BEFORE_SESSION_CHECK; i += 1) {
+      last().drop();
+      vi.runOnlyPendingTimers();
+    }
+    last().ready();
+    answer(false);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(statuses.at(-1)).toBe('live');
+    expect(last().closedWith).toBeUndefined();
+  });
+
   it('a socket that was live does not count as a failed connect', () => {
     let checks = 0;
     start({

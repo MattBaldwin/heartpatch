@@ -72,7 +72,9 @@ class FakeSocket {
     this.handlers.get('message')?.(Buffer.from(JSON.stringify(message)), false);
   }
   ping(): void {}
-  close(): void {
+  closedWith: number | undefined;
+  close(code?: number): void {
+    this.closedWith = code;
     this.readyState = 3;
   }
   terminate(): void {
@@ -170,6 +172,15 @@ describe('WsHub catch-up races', () => {
     pending[0]!.release();
     await closing;
     expect(closed).toBe(true);
+  });
+
+  it('turns away a socket that arrives during shutdown with "going away"', async () => {
+    const { hub } = setup(0);
+    await hub.close();
+    const late = new FakeSocket();
+    hub.accept(late as unknown as WebSocket, USER, 'token');
+    expect(late.closedWith).toBe(1001);
+    expect(late.sent).toEqual([]);
   });
 
   it('refuses a public view for an event type clients cannot parse', () => {
