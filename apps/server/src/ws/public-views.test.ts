@@ -49,6 +49,38 @@ describe('public views', () => {
     ).toEqual({ name: 'Pumpkin Hollow', pvpMode: 'gentle' });
   });
 
+  it('tells only the owner which squishy went to the Hollow or came home (#21)', () => {
+    const owner = '0190a8c4-0000-7000-8000-000000000002';
+    const squishyId = '0190a8c4-0000-7000-8000-000000000003';
+    const hollowed = event('squishy.hollowed', { userId: owner, squishyId, night: '2026-10-31' });
+    expect(publicViewFor(PUBLIC_VIEWS, hollowed, { userId: owner })).toEqual({
+      userId: owner,
+      squishyId,
+      night: '2026-10-31',
+    });
+    expect(publicViewFor(PUBLIC_VIEWS, hollowed, me)).toBeNull();
+    const rescued = event('squishy.rescued', {
+      userId: owner,
+      squishyId,
+      battleId: '0190a8c4-0000-7000-8000-000000000004',
+      heartdust: 1,
+    });
+    expect(publicViewFor(PUBLIC_VIEWS, rescued, { userId: owner })).toEqual({
+      userId: owner,
+      squishyId,
+      heartdust: 1,
+    });
+    expect(publicViewFor(PUBLIC_VIEWS, rescued, me)).toBeNull();
+    // Everyone hears that night fell, and who lost someone, never which squishy.
+    expect(
+      publicViewFor(
+        PUBLIC_VIEWS,
+        event('hollow.nightfall', { night: '2026-10-31', taken: [{ userId: owner, squishyId }] }),
+        me,
+      ),
+    ).toEqual({ night: '2026-10-31', taken: [{ userId: owner }] });
+  });
+
   it('refuses a stored payload that breaks its internal schema', () => {
     expect(() =>
       publicViewFor(PUBLIC_VIEWS, event('member.left', { userId: 'nope', secret: 1 }), me),

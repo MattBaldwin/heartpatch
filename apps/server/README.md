@@ -110,6 +110,7 @@ PvE battles (design doc §6; tech spec §8; DECISIONS "Battle engine (#11)") liv
 - The team is the player's active squishies on the map, strongest first, up to `rules.teamSize` (team picking is a later feature). No squishy → `CONFLICT` "You need a squishy friend first!".
 - `BattleRuleError` from the engine (an unknown move, a swap to an empty slot, acting in the wrong phase) becomes `CONFLICT` with a kid-readable message; the client refetches the battle on `CONFLICT`.
 - **Content re-tuned mid-battle:** if the stored `content_hash` isn't today's, the battle ends as `no-contest` on the next read or action: nothing is won or lost, no XP, `battle.ended` with `reason: 'no-contest'`. Wild battles cost no attempt; tile battles (#15) refund theirs in `endNoContest`.
+- **Rescues (#21)** start through `startRescue(user, mapId, { opponent, soloTeam })` (kind `rescue`, no attempt); the hollow module settles them from `battle.ended` (see "The Hollow Man").
 - **Tile battles (#15)** start through `startTile(user, mapId, prepare)`: `prepare` (the territory module) checks the raid rules and builds the other side inside the start transaction, so a refused start uses nothing. The `tileBattles` port (`createTileBattlePort`) is called on the battle's own transactions: `acted` restarts the abandon timer, `ended` settles the attempt and moves the tile on a win (its events follow `battle.ended`), `noContest` refunds the attempt. A tile battle with no action for `abandonMinutes` has been left: it ends as a forfeit (a loss) on the next read, action or start (`settle`), so a player is never stuck behind one.
 - **Capture (#14):** `{ type: 'capture' }` offers a Heart Charm to the wild squishy (wild battles only, `CAPTURABLE_BATTLE_KINDS`). In one transaction: one `heart-charm` through #17's `consumeItems` (reason `capture`, ledgered against the battle; `CONFLICT` when out, nothing changes), the engine's capture turn (one roll on the battle RNG; `sure` on tutorial maps), and on a catch the new `squishies` row, `species_seen.first_caught_at`, `battle.ended` (`reason: 'captured'`) and `squishy.captured`. Starting a battle records the opponent's species as seen.
 - **Tutorial maps:** `gameplayOverrides(map.kind)` scripts the opponent's AI policy and level (tech spec §7).
@@ -218,6 +219,28 @@ Building on a home base (design doc §11, §13–14; issue #18) lives in `src/mo
 Mutating routes take an `Idempotency-Key`. Every command locks the player's home tiles first (`lockHomeTiles`), so one player's building commands run one at a time ("one Hearthfire per home" and habitat capacity can't race), then the building, squishy and inventory rows, then `maps` (the event).
 
 **For nightfall (#21):** `mapLocalTime(at, zone)` gives the map-local date and minute; shared `tonightOf`, `protectsNight(fuelledThrough, night)` and `hearthfireState` answer "is this fire lit for this night"; `litSafeTiles(fires, homeTiles, local)` (or shared `safeTiles`) gives the protected tiles: a lit fire's whole home base plus every tile within its radius. `BuildingsRepo.listOnMap` returns every building with its tile. **Leaving:** `removeMemberBuildings` runs inside the maps module's leave/remove transaction. **Map view:** `listPublicBuildings` fills `PublicTile.buildings` from the view's own snapshot.
+
+## The Hollow Man
+
+`src/modules/hollow` (issue #21; design doc §2, §14; decision C; DECISIONS "The Hollow Man (#21)"). Night falls on every map at 21:00 map time (`HOME_BASE_RULES.nightfallMinute`); for each player with squishies left in the dark he takes **one** to the Hollow. They're never lost: a rescue (a `rescue` battle against shadow guardians) brings them home.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/hollow` | → `{ hollow }`: `night` (is it night on the map, minutes until that changes), my `reports` for the last `HOLLOW_RULES.reportNights` nights, my squishies in the Hollow (`hollowed`, plus `speciesDefs` for secret ones I own), today's rescue reward and the server's clock |
+| `POST /api/v1/maps/:mapId/rescues` | `{ squishyId }` → 201 `{ battle }` (a `rescue` battle), or 200 with the battle already going. My own squishy, in the Hollow (`NOT_FOUND` / `CONFLICT` otherwise), from anywhere on the map; no attempt used. Takes an `Idempotency-Key` |
+| `POST /api/v1/maps/:mapId/dev/nightfall` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): the next night that hasn't come yet falls now → `{ night, taken }`. Pressing it again moves on a night |
+
+**Nightfall** (`service.ts` `runNightfall`, one transaction): claims the night's `hollow_events` row first (`insert … on conflict do nothing`), so a retry, a second job or a restart finds it and does nothing (rule 4); then every active member's squishies are sorted with shared `nightfall()`:
+- where a squishy sleeps is its habitat's tile, or its owner's Heart Seed;
+- it's **safe** inside the tiles lit fires protect that night (`litSafeTiles`, every player's fires, `protectsNight` through the night's date), **on watch** if `isOnWatch` (decision C), else **exposed**;
+- one exposed squishy per player is taken (`state = 'hollowed'`, habitat bed kept), picked with `deriveSeed(mapSeed, 'hollow', night, userId)` (never revealed); none on tutorial maps (`gameplayOverrides(kind).hollowManCanTake`).
+Lock order: the night's row, squishies, then `maps` (events).
+
+**The job** (`jobs/nightfall.ts`): a `nightfall.sweep` every minute (and at boot) asks `dueNightfalls()` which maps' latest nightfall hasn't run (maps with an active member who joined before it; map-local time, DST included), and enqueues one `nightfall` job per map and night (`singletonKey: mapId/night`). After downtime only the latest missed night runs.
+
+**Rescues** start through the battles service's `startRescue` (shadows from the secret `RESCUE_GUARDIANS`, fixed per squishy per map-local day, at the player's strongest level plus an offset; if every squishy is in the Hollow, the one being rescued fights). The `hollow` event consumer settles them from `battle.ended` (kind `rescue`): a win brings the squishy home (`state = 'active'`) and grants `HOLLOW_RULES.rescue.heartdust` through `grantItems(…, 'rescue')` if the player has rescues left today (counted by the battle's end, map-local day), and rolls #43's `rescue` clothing drop (`rollFoundDrop`) for those rewarded rescues only; a loss or no contest leaves it waiting. TODO(#19): reset its contentment once care exposes a call.
+
+**Events:** `hollow.nightfall` (everyone: the night and who lost someone, never which squishy), `squishy.hollowed` and `squishy.rescued` (only the owner gets them live; `PUBLIC_VIEWS` overrides).
 
 ## Care, levels and evolution
 

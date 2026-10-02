@@ -129,6 +129,9 @@ const MESSAGES = {
   wildStart: 'A wild squishy wants to play!',
   guardiansStart: 'The guardians want to play!',
   rivalStart: 'Squishies on watch want to play!',
+  shadowsStart: 'Shadows from the Hollow want to play!',
+  resultRescued: 'Welcome home!',
+  rescuedSub: 'Your friend is back from the Hollow!',
   done: 'Back to patch',
   replayStart: 'Replay! Someone challenged your patch.',
   replayHeld: 'Your squishies held on!',
@@ -390,10 +393,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           : result.winner === b.mySide
             ? result.reason === 'captured'
               ? { title: MESSAGES.resultFriend, subtitle: friendLine(b, names) }
-              : {
-                  title: TILE_BATTLE_KINDS.has(b.kind) ? MESSAGES.resultLand : MESSAGES.resultWon,
-                  subtitle: MESSAGES.wonSub,
-                }
+              : b.kind === 'rescue'
+                ? { title: MESSAGES.resultRescued, subtitle: MESSAGES.rescuedSub }
+                : {
+                    title: TILE_BATTLE_KINDS.has(b.kind) ? MESSAGES.resultLand : MESSAGES.resultWon,
+                    subtitle: MESSAGES.wonSub,
+                  }
             : result.reason === 'forfeit'
               ? { title: MESSAGES.resultScooted, subtitle: MESSAGES.scootedSub }
               : { title: MESSAGES.resultLost, subtitle: MESSAGES.lostSub };
@@ -422,7 +427,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
             ? MESSAGES.guardiansStart
             : battle.kind === 'rival-tile'
               ? MESSAGES.rivalStart
-              : MESSAGES.wildStart,
+              : battle.kind === 'rescue'
+                ? MESSAGES.shadowsStart
+                : MESSAGES.wildStart,
         );
       }
     } else {

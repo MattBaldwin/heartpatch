@@ -240,10 +240,11 @@ export type BattleStatus = z.infer<typeof BattleStatusSchema>;
 
 /**
  * Kinds of battle: a wild squishy (#14), a neutral tile's guardians (`tile`,
- * #15) and another player's defenders (`rival-tile`, #15). Tile battles use
- * one of the player's daily attempts.
+ * #15), another player's defenders (`rival-tile`, #15) and the Hollow's
+ * shadow guardians (`rescue`, #21). Tile battles use one of the player's
+ * daily attempts; rescues never cost one (decision C).
  */
-export const BattleKindSchema = z.enum(['wild', 'tile', 'rival-tile']);
+export const BattleKindSchema = z.enum(['wild', 'tile', 'rival-tile', 'rescue']);
 export type BattleKind = z.infer<typeof BattleKindSchema>;
 
 /** Kinds that battle for a tile (#15): they use an attempt, and leaving counts as a loss. */

@@ -21,3 +21,13 @@ export const CONSUMER_RETRY_DELAY_SECONDS = 5; // TUNE: guess, doubles each time
 
 /** How long `stop()` waits for running jobs on shutdown. */
 export const JOBS_STOP_TIMEOUT_MS = 10_000; // TUNE:
+
+/** How often the nightfall sweep looks for maps whose night has fallen (cron). */
+export const NIGHTFALL_SWEEP_CRON = '* * * * *'; // TUNE: every minute, so night falls within one
+
+/** Maps nightfall runs on at once in this process. */
+export const NIGHTFALL_CONCURRENCY = 2; // TUNE: guess; fits pg-boss's and the app's pools
+
+/** Retries for a nightfall that throws (its `hollow_events` row makes them safe). */
+export const NIGHTFALL_RETRY_LIMIT = 5; // TUNE: guess
+export const NIGHTFALL_RETRY_DELAY_SECONDS = 30; // TUNE: guess, doubles each time

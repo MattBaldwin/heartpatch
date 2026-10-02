@@ -190,7 +190,7 @@ Tiles are written once, from `generateMap`, when the map is created.
 |---|---|---|
 | `id` | uuid PK | |
 | `map_id` | uuid → maps | Cascade delete. Indexed with `player_user_id` |
-| `kind` | enum `battle_kind` | `wild`, `tile` (a neutral tile's guardians, #15) or `rival-tile` (another player's tile, #15). Tile battles have a `tile_attacks` row |
+| `kind` | enum `battle_kind` | `wild`, `tile` (a neutral tile's guardians, #15), `rival-tile` (another player's tile, #15) or `rescue` (the Hollow's shadow guardians, #21). Tile battles have a `tile_attacks` row; rescues a `hollow_rescues` row |
 | `status` | enum `battle_status` | `active` \| `finished` \| `no-contest` (the server called it off: content re-tuned mid-battle). One `active` per player per map (partial unique index) |
 | `player_user_id` | uuid | The player on side `a`. FK `(map_id, player_user_id)` → `map_members` |
 | `seed` | text | From `newSeed()`. **Server-only while active**; revealed by the API after the end (tech spec §8) |
@@ -250,6 +250,32 @@ The raid log (#16): one row per finished challenge on a player's land (a `rival-
 | `stance` | enum `defense_stance`, null | The style the defenders played with; null when the land's guardians stood in |
 | `resolved_at` | timestamptz | When the battle ended |
 | `seen_at` | timestamptz, null | When the defender saw it in their report |
+
+### `hollow_events`
+One row per map per night the Hollow Man came by (#21, design doc §14): the guard that makes nightfall idempotent, and what the morning report reads. Server-only.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `night` | date | The map-local date the nightfall fell on. Unique with `map_id` |
+| `ran_at` | timestamptz | |
+| `outcomes` | jsonb | Every active member's result: `{ userId, taken (squishy id or null), exposed, sheltered }` |
+
+### `hollow_rescues`
+Rescue expeditions (#21, decision C): which squishy a `rescue` battle is for, and how it went.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `user_id` | uuid | FK `(map_id, user_id)` → `map_members` |
+| `squishy_id` | uuid → squishies | Cascade delete. Indexed |
+| `battle_id` | uuid → battles | Unique. Cascade delete |
+| `outcome` | enum | `active`, `rescued`, `lost`, `no-contest` |
+| `heartdust` | smallint | Heartdust it earned (0 past the daily cap). The cap counts rows with `heartdust > 0` by map-local day (`(map_id, user_id, ended_at)` index) |
+| `started_at` | timestamptz | |
+| `ended_at` | timestamptz, null | The battle's end (game clock) |
 
 ### `species_seen`
 | Column | Type | Notes |

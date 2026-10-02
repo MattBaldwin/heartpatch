@@ -20,7 +20,7 @@ import { createWardrobeRepo } from './repo.js';
  * using the map's local date and the game clock (so `HP_DEV_NOW` tests it).
  */
 
-/** What found something. Gathering calls this today; tile captures and Hollow rescues (#21) later. */
+/** What found something. Gathering and Hollow rescues (#21) call this today; tile captures later. */
 export interface FoundDropEvent {
   source: ClothingDropSource;
   /** The gather, capture or rescue: at most one piece per event, ever. */

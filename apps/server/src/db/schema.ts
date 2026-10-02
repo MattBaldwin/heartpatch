@@ -44,9 +44,10 @@ export const defenseStance = pgEnum('defense_stance', ['aggressive', 'defensive'
 export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'approved', 'denied']);
 /**
  * Battle kinds (design doc §6): a wild squishy, a neutral tile's guardians
- * (`tile`, #15) and another player's tile defenders (`rival-tile`, #15).
+ * (`tile`, #15), another player's tile defenders (`rival-tile`, #15) and the
+ * Hollow's shadow guardians (`rescue`, #21).
  */
-export const battleKind = pgEnum('battle_kind', ['wild', 'tile', 'rival-tile']);
+export const battleKind = pgEnum('battle_kind', ['wild', 'tile', 'rival-tile', 'rescue']);
 /** `no-contest`: the server called it off (content re-tuned mid-battle). */
 export const battleStatus = pgEnum('battle_status', ['active', 'finished', 'no-contest']);
 
@@ -773,6 +774,74 @@ export const tileDefenders = pgTable(
     unique('tile_defenders_squishy_id_key').on(t.squishyId),
     index('tile_defenders_map_id_idx').on(t.mapId),
     check('tile_defenders_slot_range', sql`${t.slot} between 0 and 5`),
+  ],
+);
+
+/**
+ * One row per map per night the Hollow Man came by (#21, design doc §14):
+ * the guard that makes nightfall idempotent (a retry, a second job or a
+ * restart finds the row and takes nothing more), and the record the morning
+ * report reads. `night` is the map-local date the nightfall fell on.
+ * `outcomes` holds every active member's result: `{ userId, taken (squishy id
+ * or null), exposed, sheltered }`. Server-only.
+ */
+export const hollowEvents = pgTable(
+  'hollow_events',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    night: date('night', { mode: 'string' }).notNull(),
+    ranAt: timestamptz('ran_at').notNull(),
+    outcomes: jsonb('outcomes').notNull().default([]),
+  },
+  (t) => [unique('hollow_events_map_id_night_key').on(t.mapId, t.night)],
+);
+
+export const hollowRescueOutcome = pgEnum('hollow_rescue_outcome', [
+  'active',
+  'rescued',
+  'lost',
+  'no-contest',
+]);
+
+/**
+ * Rescue expeditions (#21, design doc §14, decision C): which squishy a
+ * `rescue` battle is for, how it went, and the Heartdust it earned (the daily
+ * reward cap counts these by map-local day). Settled by the `hollow` event
+ * consumer when the battle ends.
+ */
+export const hollowRescues = pgTable(
+  'hollow_rescues',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    squishyId: uuid('squishy_id')
+      .notNull()
+      .references(() => squishies.id, { onDelete: 'cascade' }),
+    battleId: uuid('battle_id')
+      .notNull()
+      .references(() => battles.id, { onDelete: 'cascade' }),
+    outcome: hollowRescueOutcome('outcome').notNull().default('active'),
+    heartdust: smallint('heartdust').notNull().default(0),
+    startedAt: timestamptz('started_at').notNull(),
+    endedAt: timestamptz('ended_at'),
+  },
+  (t) => [
+    unique('hollow_rescues_battle_id_key').on(t.battleId),
+    foreignKey({
+      name: 'hollow_rescues_user_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // Rewarded rescues today (the daily Heartdust cap).
+    index('hollow_rescues_map_id_user_id_idx').on(t.mapId, t.userId, t.endedAt),
+    index('hollow_rescues_squishy_id_idx').on(t.squishyId),
+    check('hollow_rescues_heartdust_nonnegative', sql`${t.heartdust} >= 0`),
   ],
 );
 
