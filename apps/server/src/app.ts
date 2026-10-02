@@ -17,6 +17,8 @@ import { gatheringRoutes } from './modules/gathering/routes.js';
 import { createGatheringService } from './modules/gathering/service.js';
 import { inventoryRoutes } from './modules/inventory/routes.js';
 import { createInventoryService } from './modules/inventory/service.js';
+import { spawnsRoutes } from './modules/spawns/routes.js';
+import { createSpawnsService } from './modules/spawns/service.js';
 import { createAuthRepo } from './modules/auth/repo.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { hashSessionToken } from './modules/auth/secrets.js';
@@ -147,9 +149,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         });
         await api.register(tutorialRoutes(tutorial, { hooks: authHooks }));
 
+        // Wild squishies (#14) plug into battles through `findWildEncounter`.
+        const spawns = createSpawnsService({ db, clock });
+        await api.register(spawnsRoutes(spawns, { hooks: authHooks }));
         const battles = createBattlesService({
           db,
           clock,
+          findWildEncounter: spawns.findWildEncounter,
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         const idempotencyStore = createIdempotencyStore(db);

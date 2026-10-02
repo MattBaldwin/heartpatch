@@ -51,3 +51,5 @@ export * from './schemas/inventory.js';
 export * from './gathering/index.js';
 export * from './schemas/events.js';
 export * from './schemas/time.js';
+export * from './spawns/window.js';
+export * from './schemas/spawns.js';

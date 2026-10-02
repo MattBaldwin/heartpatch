@@ -258,7 +258,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
   });
 
   describe('starting', () => {
-    it('needs a squishy, and finds no wild squishies before spawns (#14) exist', async () => {
+    it('needs a squishy', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
@@ -271,11 +271,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const noTeam = await call(server, 'POST', `/maps/${mapId}/dev/battles`, kid, {});
       expect(noTeam.statusCode).toBe(409);
       expect(errorOf(noTeam).message).toBe('You need a squishy friend first!');
-
-      await grant(server, kid, mapId);
-      const nobody = await call(server, 'POST', `/maps/${mapId}/battles`, kid);
-      expect(nobody.statusCode).toBe(404);
-      expect(errorOf(nobody).message).toMatch(/No wild squishies around/);
+      // Wild spawns (#14) are covered in modules/spawns/spawns.test.ts.
     });
 
     it('hands out a squishy (dev) and starts a battle the client can draw', async () => {
@@ -408,6 +404,13 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       });
       expect(forged.statusCode).toBe(400);
       expect(errorOf(forged).code).toBe('VALIDATION_FAILED');
+      // A sure capture is the server's call (tutorial maps), never the client's.
+      const sure = await call(server, 'POST', `/battles/${battle.id}/actions`, kid, {
+        action: { type: 'capture', sure: true },
+        turn: 0,
+      });
+      expect(sure.statusCode).toBe(400);
+      expect(errorOf(sure).code).toBe('VALIDATION_FAILED');
 
       const move = myActive(battle).moves[0]!;
       const first = await act(server, kid, battle, { type: 'move', move });

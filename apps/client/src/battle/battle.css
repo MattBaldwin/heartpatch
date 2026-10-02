@@ -254,10 +254,12 @@
   text-align: center;
 }
 
-/* The entry button over the map, bottom right (the lobby button is bottom left). */
+/* The entry buttons over the map, bottom right (the lobby button is bottom
+   left). Under the tile panel (3), which can reach down over this corner and
+   must stay tappable; above the canvas. */
 .battle-entry-box {
   position: fixed;
-  z-index: 4;
+  z-index: 2;
   right: calc(env(safe-area-inset-right) + 16px);
   bottom: calc(env(safe-area-inset-bottom) + 16px);
   display: flex;

@@ -7,6 +7,7 @@ import {
   DevStartBattleRequestSchema,
   MapIdParamsSchema,
   SquishyResponseSchema,
+  StartWildBattleRequestSchema,
 } from '@heartpatch/shared';
 import { normalizeIP } from '@fastify/rate-limit';
 import type { FastifyPluginCallback, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
@@ -75,12 +76,18 @@ export const battlesRoutes =
       {
         schema: {
           params: MapIdParamsSchema,
+          // Optional: with no body, the nearest wild squishy.
+          body: StartWildBattleRequestSchema.nullish(),
           response: { 200: BattleResponseSchema, 201: BattleResponseSchema },
         },
         preHandler: [requireAuth, rateLimit('start')],
       },
       async (request, reply) => {
-        const result = await service.startWild(requireUser(request), request.params.mapId);
+        const result = await service.startWild(
+          requireUser(request),
+          request.params.mapId,
+          request.body ?? {},
+        );
         return reply.code(result.created ? 201 : 200).send({ battle: result.battle });
       },
     );

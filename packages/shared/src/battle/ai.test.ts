@@ -30,7 +30,12 @@ function tally(state: BattleState, policy: BattleAiPolicy, n = 300): Map<string,
       policy,
       Rng.fromSeed(`pick-${i}`),
     );
-    const key = choice.type === 'move' ? choice.move : `swap-${choice.slot}`;
+    const key =
+      choice.type === 'move'
+        ? choice.move
+        : choice.type === 'swap'
+          ? `swap-${String(choice.slot)}`
+          : choice.type;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;

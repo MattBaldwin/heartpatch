@@ -1,0 +1,89 @@
+/* The squishy catalog (#14). Cards and buttons come from ../ui/auth/auth.css;
+   this file lays out the grid. Over the map, like the lobby (z 4); 44pt+
+   targets, safe areas. */
+
+.catalog {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 16px)
+    calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 16px);
+  background: rgb(253 232 240 / 70%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.catalog[hidden] {
+  display: none;
+}
+
+.catalog-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.catalog-progress {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #7a2d55;
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.catalog-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 120px;
+  padding: 12px 6px 10px;
+  border-radius: 18px;
+  background: rgb(255 255 255 / 80%);
+  text-align: center;
+}
+
+.catalog-entry-caught {
+  box-shadow: inset 0 0 0 2px #f29bc0;
+}
+
+/* A soft vinyl blob in the species' colour; unseen ones are a silhouette. */
+.catalog-blob {
+  width: 52px;
+  height: 46px;
+  border-radius: 50% 50% 46% 46% / 58% 58% 42% 42%;
+  background: #c9b8ff;
+  box-shadow:
+    inset -6px -8px 0 rgb(0 0 0 / 12%),
+    inset 6px 6px 0 rgb(255 255 255 / 35%);
+}
+
+.catalog-blob-unseen {
+  background: #6b5a78;
+  box-shadow: none;
+  opacity: 0.45;
+}
+
+.catalog-name {
+  font-size: 15px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.catalog-badge {
+  min-height: 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b0467a;
+}

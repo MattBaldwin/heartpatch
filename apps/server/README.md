@@ -96,9 +96,9 @@ PvE battles (design doc §6; tech spec §8; DECISIONS "Battle engine (#11)") liv
 | Endpoint | Does |
 |---|---|
 | `GET /api/v1/maps/:mapId/battles/current` | → `{ battle }`: the player's active battle on this map to resume, or null |
-| `POST /api/v1/maps/:mapId/battles` | Picks a fight with whatever wild squishy is around (`findWildEncounter`, provided by spawns #14; until then `NOT_FOUND`) → 201 `{ battle }`, or 200 with the battle already going |
+| `POST /api/v1/maps/:mapId/battles` | Optional `{ tile: { q, r } }`. Picks a fight with the wild squishy on that tile, or the nearest one in reach (`findWildEncounter`, from `modules/spawns`; `NOT_FOUND` when nobody's around) → 201 `{ battle }`, or 200 with the battle already going |
 | `GET /api/v1/battles/:battleId` | → `{ battle }` (the player's own, else `NOT_FOUND`) |
-| `POST /api/v1/battles/:battleId/actions` | `{ action: move \| swap \| replace \| forfeit, turn }` → `{ battle }` after the whole step (the AI's answer included). `turn` must be the view's turn, so a stale submit is refused (`CONFLICT`) instead of landing on the next turn. Send an `Idempotency-Key` (see below) so a retry replays the reply |
+| `POST /api/v1/battles/:battleId/actions` | `{ action: move \| swap \| replace \| forfeit \| capture, turn }` → `{ battle }` after the whole step (the AI's answer included). `turn` must be the view's turn, so a stale submit is refused (`CONFLICT`) instead of landing on the next turn. Send an `Idempotency-Key` (see below) so a retry replays the reply |
 | `POST /api/v1/maps/:mapId/dev/squishies` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): `{ speciesId?, level? }` → 201 `{ squishy }`. Any species the server knows, secret ones included |
 | `POST /api/v1/maps/:mapId/dev/battles` | **Dev/test only**: `{ opponent?: { speciesId?, level? } }` → a wild battle against that squishy, through the same `startAgainst` spawns will call |
 
@@ -109,7 +109,8 @@ PvE battles (design doc §6; tech spec §8; DECISIONS "Battle engine (#11)") liv
 **Rules of the service:**
 - The team is the player's active squishies on the map, strongest first, up to `rules.teamSize` (team picking is a later feature). No squishy → `CONFLICT` "You need a squishy friend first!".
 - `BattleRuleError` from the engine (an unknown move, a swap to an empty slot, acting in the wrong phase) becomes `CONFLICT` with a kid-readable message; the client refetches the battle on `CONFLICT`.
-- **Content re-tuned mid-battle:** if the stored `content_hash` isn't today's, the battle ends as `no-contest` on the next read or action: nothing is won or lost, no XP, `battle.ended` with `reason: 'no-contest'`. Wild battles cost no attempt; a kind that does (tile guardians, #14) refunds it in `endNoContest`.
+- **Content re-tuned mid-battle:** if the stored `content_hash` isn't today's, the battle ends as `no-contest` on the next read or action: nothing is won or lost, no XP, `battle.ended` with `reason: 'no-contest'`. Wild battles cost no attempt; a kind that does (tile guardians, #15) refunds it in `endNoContest`.
+- **Capture (#14):** `{ type: 'capture' }` offers a Heart Charm to the wild squishy (wild battles only, `CAPTURABLE_BATTLE_KINDS`). In one transaction: one `heart-charm` through #17's `consumeItems` (reason `capture`, ledgered against the battle; `CONFLICT` when out, nothing changes), the engine's capture turn (one roll on the battle RNG; `sure` on tutorial maps), and on a catch the new `squishies` row, `species_seen.first_caught_at`, `battle.ended` (`reason: 'captured'`) and `squishy.captured`. Starting a battle records the opponent's species as seen.
 - **Tutorial maps:** `gameplayOverrides(map.kind)` scripts the opponent's AI policy and level (tech spec §7).
 - **XP:** on a finished battle the player's squishies get the engine's base battle XP (`squishies.xp`), under a row lock, in the same transaction as the result and the `battle.ended` event. Care and habitat multipliers (#19) and levelling (the XP curve) come with their issues.
 - Events: `battle.started` and `battle.ended` (shared registry); `wsHub.publish` after commit.
@@ -153,6 +154,19 @@ await repo.transaction(async (repo, tx) => {
 ### Idempotency keys
 
 `lib/idempotency.ts` implements the `Idempotency-Key` header (tech spec §5) for any mutating route; battle actions use it. A route opts in with `preHandler: [requireAuth, idempotency.preHandler]` and `onSend: idempotency.onSend`, where `idempotency = registerIdempotency(plugin, { store, clock })` is built once per routes plugin (it decorates the plugin's requests). Keys are per player (`idempotency_keys (user_id, key)`): the first request claims the key and `onSend` stores its status and body (errors too, except 5xx, which release the key); the same key, route and body again gets the stored reply with `Idempotent-Replayed: true`; the same key with another route or body gets `CONFLICT`; a key whose first request is still running gets `CONFLICT`, unless that claim is older than `PENDING_TTL_MS` (the process died), which this request takes over. Rows are meant to live `KEY_TTL_MS`; the cleanup job is a follow-up.
+
+## Wild squishies and the catalog
+
+`src/modules/spawns` (issue #14; design doc §4, §15; tech spec §8; DECISIONS "Wild squishies and capture (#14)").
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/wild` | → `{ wild: { tiles } }`: tiles in the player's reach with a wild squishy they haven't befriended, this spawn window only. No species |
+| `GET /api/v1/maps/:mapId/catalog` | → `{ catalog: { entries, speciesDefs } }`: `species_seen` for the player, plus the rows of secret species they've met |
+
+**No rerolls.** A tile's squishy for a window is `resolveWildSpawn` (shared, pure) over the secret `SPAWN_TABLES` and `SPAWN_RULES` with the seed `deriveSeed(mapSeed, 'spawn', q, r, windowId)`; nothing is stored until someone battles it, and the seed is never sent anywhere. Battle seeds still come from `newSeed()`. The window is `spawnWindowFor(now, maps.time_zone, SPAWN_RULES.windowHours)` (`lib/time.ts`), so it follows `HP_DEV_NOW`. Season-tagged tables and seasonal species only spawn while their season is on, by the window's map-local date.
+
+**Reach** is the player's land and the tiles next to it; `findWildEncounter` (the battles port) takes a picked tile or the nearest spawn, skipping any the player befriended this window (`battles.spawn_window`). `species_seen` rows are written by the battles service on its own transactions (`createSpawnsRepo(tx)`).
 
 ## Live sync (`/ws`)
 

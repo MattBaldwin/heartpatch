@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), and `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), and `species_seen` plus the `battles.spawn_*` columns (#14). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -172,6 +172,18 @@ Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessor
 | `result` | jsonb, null | `BattleResult` once finished |
 | `log` | jsonb, null | The resolved `BattleEvent[]` once over, kept so a battle stays explainable after re-tuning |
 | `started_at`, `ended_at` | timestamptz | |
+| `spawn_q`, `spawn_r`, `spawn_window` | smallint, smallint, text, null | The tile and spawn window (`2026-10-31/5`) a wild squishy came from (#14). All set or all null (`battles_spawn_all_or_none`). Indexed `(map_id, player_user_id, spawn_window)` where set, so a befriended spawn is skipped for the rest of its window |
+
+### `species_seen`
+| Column | Type | Notes |
+|---|---|---|
+| `map_id` | uuid → maps | PK part. Cascade delete |
+| `user_id` | uuid | PK part. FK `(map_id, user_id)` → `map_members` |
+| `species_id` | text | PK part. Species id from shared data (public or secret) |
+| `first_seen_at` | timestamptz | When the player first met it (started a battle with it); never moves |
+| `first_caught_at` | timestamptz, null | When they first befriended one; never moves once set |
+
+The catalog (#14). A secret species' row is only ever sent to a player who has a row here for it.
 
 ### `idempotency_keys`
 | Column | Type | Notes |

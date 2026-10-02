@@ -33,6 +33,10 @@ export function keeperReaction(step: PlaybackStep, mySide: BattleSideId): Keeper
     case 'swap':
       // "Come on out!": a little wiggle of encouragement.
       return mine ? { move: 'jiggle', strength: 0.8 } : null;
+    case 'capture':
+      // The Heart Charm lands on the wild squishy: the Keeper watches, and
+      // cheers on the 'end' step if it says yes.
+      return null;
     case 'end':
       // `squish` is set when the player won (see battle-playback.ts).
       return step.squish === 'bounce'

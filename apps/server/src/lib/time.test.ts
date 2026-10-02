@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalTimeZone, createClock, localDate } from './time.js';
+import { canonicalTimeZone, createClock, localDate, localDateHour, spawnWindowId } from './time.js';
 
 describe('createClock', () => {
   it('is the real time without HP_DEV_NOW', () => {
@@ -38,5 +38,84 @@ describe('canonicalTimeZone', () => {
     expect(canonicalTimeZone('UTC')).toBe('UTC');
     expect(canonicalTimeZone('America/Chicago')).toBe('America/Chicago');
     expect(canonicalTimeZone('Not/AZone')).toBeNull();
+  });
+});
+
+describe('spawnWindowId (tech spec §8)', () => {
+  const HOUR_MS = 60 * 60 * 1000;
+  const zone = 'America/Denver';
+  /** Every window id over a map-local day, sampled every 15 minutes from `startUtc`. */
+  const windowsOver = (startUtc: string, hours = 4, span = 30) => {
+    const ids: string[] = [];
+    for (
+      let t = Date.parse(startUtc);
+      t < Date.parse(startUtc) + span * HOUR_MS;
+      t += HOUR_MS / 4
+    ) {
+      ids.push(spawnWindowId(new Date(t), zone, hours));
+    }
+    return ids;
+  };
+  /** Real hours each window lasted, by id. */
+  const lengths = (ids: string[]) => {
+    const quarters = new Map<string, number>();
+    for (const id of ids) quarters.set(id, (quarters.get(id) ?? 0) + 1);
+    return new Map([...quarters].map(([id, q]) => [id, q / 4]));
+  };
+  const ordered = (ids: string[]) => {
+    const key = (id: string) => {
+      const [date, block] = id.split('/');
+      return `${date ?? ''}/${(block ?? '').padStart(2, '0')}`;
+    };
+    for (let i = 1; i < ids.length; i++) expect(key(ids[i]!) >= key(ids[i - 1]!)).toBe(true);
+  };
+
+  it('is the map-local date and block', () => {
+    // 2026-10-31 20:30 in Denver (MDT, UTC-6).
+    expect(spawnWindowId(new Date('2026-11-01T02:30:00Z'), zone, 4)).toBe('2026-10-31/5');
+    expect(spawnWindowId(new Date('2026-11-01T02:30:00Z'), 'UTC', 4)).toBe('2026-11-01/0');
+    expect(localDateHour(new Date('2026-11-01T06:00:00Z'), zone)).toEqual({
+      date: '2026-11-01',
+      hour: 0,
+    });
+  });
+
+  it('has six even 4-hour windows on a normal day', () => {
+    const ids = windowsOver('2026-10-02T06:00:00Z', 4, 24);
+    expect([...lengths(ids).values()]).toEqual([4, 4, 4, 4, 4, 4]);
+    ordered(ids);
+  });
+
+  it('has one 3-hour window on the spring-forward day', () => {
+    // 2027-03-14: 02:00 MST jumps to 03:00 MDT.
+    const ids = windowsOver('2027-03-14T07:00:00Z', 4, 23);
+    const day = lengths(ids);
+    expect(day.get('2027-03-14/0')).toBe(3);
+    expect([...day.values()].slice(1)).toEqual([4, 4, 4, 4, 4]);
+    ordered(ids);
+  });
+
+  it('has one 5-hour window on the fall-back day, the repeated hour staying in it', () => {
+    // 2026-11-01: 02:00 MDT falls back to 01:00 MST.
+    const ids = windowsOver('2026-11-01T06:00:00Z', 4, 25);
+    const day = lengths(ids);
+    expect(day.get('2026-11-01/0')).toBe(5);
+    expect([...day.values()].slice(1)).toEqual([4, 4, 4, 4, 4]);
+    ordered(ids);
+    expect(new Set(ids).size).toBe(6);
+  });
+
+  it('gives unique, ordered ids across days for any window length', () => {
+    for (const hours of [1, 2, 3, 6, 8, 12, 24]) {
+      const ids = windowsOver('2026-10-30T06:00:00Z', hours, 72);
+      ordered(ids);
+      // A window id never comes back once the next has started.
+      const runs = ids.filter((id, i) => id !== ids[i - 1]);
+      expect(new Set(runs).size).toBe(runs.length);
+    }
+  });
+
+  it('refuses window lengths that don’t divide a day', () => {
+    expect(() => spawnWindowId(new Date(), zone, 5)).toThrow(/divide a day/);
   });
 });
