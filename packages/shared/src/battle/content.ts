@@ -23,6 +23,11 @@ export interface BattleContent {
   readonly rules: BattleRules;
 }
 
+/**
+ * The tables a battle reads. Public `GAME_DATA` has no secret species or
+ * moves, so server battles pass `serverBattleData(GAME_DATA, SERVER_GAME_DATA)`
+ * from `@heartpatch/shared/server`; its content hash then covers secret rows too.
+ */
 export type BattleData = Pick<
   GameData,
   'species' | 'moves' | 'elementMatrix' | 'feelingMatrix' | 'synergy'

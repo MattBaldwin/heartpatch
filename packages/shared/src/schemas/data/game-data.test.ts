@@ -49,8 +49,17 @@ describe('checkGameData', () => {
       ];
     });
     expect(problems).toEqual([
-      'species["fixture-puddlepuff"].evolutions[0].into: unknown species "fixture-nope"',
+      'species["fixture-puddlepuff"].evolutions[0].into: unknown species "fixture-nope" (evolutions into secret forms go in SECRET_EVOLUTIONS)',
       'species["fixture-puddlepuff"].evolutions[1].into: a species cannot evolve into itself',
+    ]);
+  });
+
+  it('keeps secret species out of the public table', () => {
+    const problems = problemsAfter((d) => {
+      d.species[0]!.rarity = 'secret';
+    });
+    expect(problems).toEqual([
+      'species["fixture-puddlepuff"].rarity: secret species are server-only: add them to SECRET_SPECIES in packages/shared/src/data/server/secret-species.ts',
     ]);
   });
 

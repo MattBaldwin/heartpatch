@@ -131,6 +131,15 @@ _Proposed in the #47 PR; the project owner confirms on merge._
 - **Start, replay and skip.** `start` begins the first run or returns the one going; once finished, a new run is an explicit `replay` (from Settings, any time). `skip` needs a first completion (design doc §26). `tutorial_completed_at` is the first completion and replaying never moves it, so rewards are granted once.
 - **`tutorialOverrides` is shared data read through `gameplayOverrides(map.kind)`.** Gameplay modules call it instead of branching on the map kind. Rules the design doc fixes (sure capture, the Hollow Man takes nothing) are literals in the schema; timers and opponent levels are tunables.
 
+## 2026-10-02 — Secret species are server-only data
+
+_Proposed in the secret-species Chore PR; the project owner confirms on merge._
+
+- **Secret content lives in `packages/shared/src/data/server/secret-species.ts`.** `ServerGameData` holds `secretSpecies`, `secretMoves` and `secretEvolutions`. Secret species and moves use the public row shapes (visual included), so a species can be sent to a player once they meet it. A row there needn't be `rarity: 'secret'`: a hidden evolution form can be `epic` or `legendary` and still be secret. `checkGameData` refuses `rarity: 'secret'` in the public table. *Why:* the public table ships to every client (CLAUDE.md rule 6).
+- **`secretMoves` too.** A move only a secret squishy knows would name it in the public move list. Moves any public species uses stay public.
+- **One home for each evolution.** An evolution into a secret form goes only in `secretEvolutions` (`from` a public or secret species, `into` a secret one); `Species.evolutions` only points at public forms. Ids are unique across public and secret rows, and `checkServerGameData` checks every reference against both together. Branch weights and rare conditions join `SecretEvolution` when branching arrives (Phase 2).
+- **Server battles use `serverBattleData(GAME_DATA, SERVER_GAME_DATA)`** (`@heartpatch/shared/server`), so the content hash covers secret rows. A client can't recompute that hash from public data, and doesn't need to: the server checks it.
+
 ## 2026-10-02 — Map rendering (#7)
 
 _Proposed in the #7 PR; the project owner confirms on merge._
