@@ -2,9 +2,16 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
 import type { Scene } from '@babylonjs/core/scene';
-import type { BattleSideId, VisualRegistry } from '@heartpatch/shared';
+import {
+  KEEPER_DATA,
+  type BattleSideId,
+  type KeeperConfig,
+  type VisualRegistry,
+} from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
 import type { SquishMove, SquishyLod } from '../procedural/config.js';
+import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
+import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
 import {
   SquishyField,
   type SquishyHandle,
@@ -17,12 +24,16 @@ import type { BattleContent } from './battle-view.js';
 // squishies that are out, drawn with #9's squishy field at close-up detail.
 // Every squishy is a `(species, instanceId)` look, so the wild squishy is the
 // same squishy on every refresh and the player's is the one from their map.
+// The player's Keeper (#42) stands behind their squishy and reacts to what
+// happens (keeper-reaction.ts).
 
 export interface BattleSceneStats {
   readonly squishies: number;
   readonly meshes: number;
   readonly instances: number;
   readonly lod: SquishyLod;
+  /** The player's Keeper is in the arena. */
+  readonly keeper: boolean;
 }
 
 interface Fighter {
@@ -38,6 +49,8 @@ export interface BattleSceneOptions {
   readonly content: BattleContent;
   /** The player's side stands at the front. */
   readonly mySide: BattleSideId;
+  /** The player's Keeper, standing behind their squishy; null if not known. */
+  readonly keeper: KeeperConfig | null;
 }
 
 export class BattleScene {
@@ -46,11 +59,25 @@ export class BattleScene {
   readonly #options: BattleSceneOptions;
   readonly #fighters = new Map<BattleSideId, Fighter>();
   readonly #floor: ReturnType<typeof CreateCylinder>;
+  readonly #keepers: KeeperField;
+  readonly #keeper: KeeperHandle | null;
 
   constructor(scene: Scene, options: BattleSceneOptions) {
     this.#options = options;
     scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
     this.#field = new SquishyField(scene, { registry: options.registry, lod: options.lod });
+    this.#keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: options.lod });
+    const mine = this.#placement(options.mySide);
+    const place = KEEPER_PLACES.battle;
+    this.#keeper = options.keeper
+      ? this.#keepers.add(options.keeper, {
+          x: mine.x + place.offset.x,
+          z: mine.z + place.offset.z,
+          yaw: place.yaw,
+          lean: place.lean,
+          scale: place.scale,
+        })
+      : null;
 
     this.#floor = CreateCylinder(
       'battle-floor',
@@ -100,6 +127,11 @@ export class BattleScene {
     this.#fighters.set(side, { handle, placement, down: false });
   }
 
+  /** The Keeper cheers or reacts (`keeperReaction`); a no-op without one. */
+  cheer(move: SquishMove, now: number, strength = 1): void {
+    if (this.#keeper) this.#keepers.play(this.#keeper, move, now, strength);
+  }
+
   /** Plays a squish move on the squishy that's out for `side`. */
   play(side: BattleSideId, move: SquishMove, now: number, strength = 1): void {
     const fighter = this.#fighters.get(side);
@@ -141,24 +173,31 @@ export class BattleScene {
 
   /** Advances the squishy clock; true while anything moves (keep drawing). */
   update(now: number): boolean {
-    return this.#field.update(now);
+    const keeper = this.#keepers.update(now);
+    return this.#field.update(now) || keeper;
   }
 
   /** True while a squish move plays on either squishy (not just breathing). */
   isPlaying(now: number): boolean {
     for (const f of this.#fighters.values()) if (this.#field.isPlaying(f.handle, now)) return true;
-    return false;
+    return this.#keeper !== null && this.#keepers.isPlaying(this.#keeper, now);
   }
 
   setLod(lod: SquishyLod): void {
     this.#field.setLod(lod);
+    this.#keepers.setLod(lod);
   }
 
   get stats(): BattleSceneStats {
-    return this.#field.stats;
+    return { ...this.#field.stats, keeper: this.#keeper !== null };
+  }
+
+  get hasKeeper(): boolean {
+    return this.#keeper !== null;
   }
 
   dispose(): void {
+    this.#keepers.dispose();
     this.#field.dispose();
     this.#floor.material?.dispose(true, true);
     this.#floor.dispose();

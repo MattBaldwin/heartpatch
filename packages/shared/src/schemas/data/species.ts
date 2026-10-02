@@ -22,7 +22,9 @@ export const EvolutionSchema = z.strictObject({
 });
 export type Evolution = z.infer<typeof EvolutionSchema>;
 
-const HexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, 'Expected a colour like "#ffaa00"');
+export const HexColorSchema = z
+  .string()
+  .regex(/^#[0-9a-f]{6}$/, 'Expected a colour like "#ffaa00"');
 
 /**
  * Procedural vinyl-toy parameters (design doc §19). `body` and `parts` are

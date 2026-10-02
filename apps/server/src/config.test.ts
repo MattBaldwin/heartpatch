@@ -41,6 +41,16 @@ describe('loadConfig', () => {
     );
   });
 
+  it('keeps the Keeper gate on unless set to false', () => {
+    expect(loadConfig({ DATABASE_URL }).HP_KEEPER_REQUIRED).toBe(true);
+    expect(loadConfig({ DATABASE_URL, HP_KEEPER_REQUIRED: 'false' }).HP_KEEPER_REQUIRED).toBe(
+      false,
+    );
+    expect(() => loadConfig({ DATABASE_URL, HP_KEEPER_REQUIRED: 'no' })).toThrow(
+      /HP_KEEPER_REQUIRED/,
+    );
+  });
+
   it('keeps the signup code optional for tools like db/cli.ts', () => {
     expect(loadConfig({ DATABASE_URL }).HP_SIGNUP_CODE).toBeUndefined();
   });

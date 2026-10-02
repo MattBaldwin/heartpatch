@@ -13,6 +13,8 @@ const updatesHeld = (page: Page) =>
 test('owner makes a patch, a friend joins with the code, owner approves and resets', async ({
   browser,
 }, testInfo) => {
+  // Two signups, each through the Keeper picker's 3D preview (#42); CI renders in software.
+  test.setTimeout(90_000);
   const suffix = `${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
   const ownerName = `own_${suffix}`;
   const friendName = `pal_${suffix}`;
