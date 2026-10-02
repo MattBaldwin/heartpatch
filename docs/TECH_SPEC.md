@@ -64,21 +64,21 @@ heartpatch/
 
 ## 3. Libraries (pinned choices)
 
-| Concern | Choice |
-|---|---|
-| 3D engine | `@babylonjs/core`, `@babylonjs/loaders`, `@babylonjs/gui` |
-| Build | Vite, `vite-plugin-pwa` (Workbox) |
-| Server | Fastify 5, `@fastify/websocket`, `@fastify/cookie`, `@fastify/rate-limit`, `@fastify/helmet`, `@fastify/static` (dev only) |
-| DB | Postgres 16, `drizzle-orm`, `drizzle-kit`, `postgres` (driver) |
-| Jobs / scheduling | `pg-boss` (Postgres-backed; no Redis needed) |
-| Validation | `zod` (shared between client and server) |
-| Auth | `argon2` (Argon2id) |
-| Text filter | `obscenity` + custom regex for personal info (phone, email, address, URLs) |
-| Time zones | `luxon` |
-| Logging | `pino` (Fastify built-in) |
-| Tests | `vitest`, `@playwright/test` |
-| Assets | `@gltf-transform/cli` for glTF optimization and KTX2 textures |
-| Live battles (Phase 2) | `colyseus` |
+| Concern                | Choice                                                                                                                     |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 3D engine              | `@babylonjs/core`, `@babylonjs/loaders`, `@babylonjs/gui`                                                                  |
+| Build                  | Vite, `vite-plugin-pwa` (Workbox)                                                                                          |
+| Server                 | Fastify 5, `@fastify/websocket`, `@fastify/cookie`, `@fastify/rate-limit`, `@fastify/helmet`, `@fastify/static` (dev only) |
+| DB                     | Postgres 16, `drizzle-orm`, `drizzle-kit`, `postgres` (driver)                                                             |
+| Jobs / scheduling      | `pg-boss` (Postgres-backed; no Redis needed)                                                                               |
+| Validation             | `zod` (shared between client and server)                                                                                   |
+| Auth                   | `argon2` (Argon2id)                                                                                                        |
+| Text filter            | `obscenity` + custom regex for personal info (phone, email, address, URLs)                                                 |
+| Time zones             | `luxon`                                                                                                                    |
+| Logging                | `pino` (Fastify built-in)                                                                                                  |
+| Tests                  | `vitest`, `@playwright/test`                                                                                               |
+| Assets                 | `@gltf-transform/cli` for glTF optimization and KTX2 textures                                                              |
+| Live battles (Phase 2) | `colyseus`                                                                                                                 |
 
 Add anything else only with a one-line justification in the PR.
 
@@ -92,17 +92,19 @@ Add anything else only with a one-line justification in the PR.
 - Migrations: `drizzle-kit generate`, committed, applied on deploy. Never edit a merged migration.
 
 **Core spine (designed up front in issue #2):** `users`, `sessions`, `maps` (including `event_seq`), `map_members`, `tiles`, `squishies`, `game_events`. These are the tables most others reference, so they are designed once rather than piecemeal by parallel branches. **Feature tables** (wardrobe, ledgers, milestones, battles, etc.) arrive in their own issue's migration. **Migration workflow for parallel branches:**
-  1. Generate migrations freely while developing (integration tests need a schema).
-  2. Before merging, delete the branch's generated migration SQL and its `meta/` journal and snapshot entries, merge the latest `main`, and regenerate once.
-  3. If `main` gains a migration between hand-off and merge, the coordinator regenerates again.
-  4. CI fails if `drizzle-kit generate` would produce a diff, and runs `drizzle-kit check`.
-  5. Migrations must be safe while the previous release is still running (expand, then contract in a later release), because a rollback runs the previous image against the already-migrated schema.
+
+1. Generate migrations freely while developing (integration tests need a schema).
+2. Before merging, delete the branch's generated migration SQL and its `meta/` journal and snapshot entries, merge the latest `main`, and regenerate once.
+3. If `main` gains a migration between hand-off and merge, the coordinator regenerates again.
+4. CI fails if `drizzle-kit generate` would produce a diff, and runs `drizzle-kit check`.
+5. Migrations must be safe while the previous release is still running (expand, then contract in a later release), because a rollback runs the previous image against the already-migrated schema.
 
 **Core tables (Phase 1):** `users`, `sessions`, `recovery_codes`, `keepers`, `maps`, `map_members`, `invite_codes`, `join_requests`, `tiles`, `species_seen`, `squishies`, `buildings`, `inventories`, `resource_ledger`, `gather_jobs`, `battles` (seed, action log, result), `raids`, `hollow_events`, `clothing_owned`, `outfits`, `milestone_progress`, `milestone_rewards`, `coin_ledger`, `boutique_stock`, `quick_messages`, `game_events`.
 
 ## 5. API
 
 ### REST
+
 - Base path `/api/v1`. JSON only. All bodies and responses validated with zod schemas from `packages/shared/src/schemas`.
 - Auth: session cookie `hp_session` (HttpOnly, Secure, SameSite=Lax, 30-day rolling). CSRF: require header `X-Requested-With: heartpatch` on mutating requests (simple and sufficient with SameSite cookies).
 - **Commands, not state writes:** e.g. `POST /maps/:mapId/tiles/:tileId/attack`, `POST /maps/:mapId/squishies/:id/care` with `{ action: "pet" }`. The server computes outcomes.
@@ -111,6 +113,7 @@ Add anything else only with a one-line justification in the PR.
 - Idempotency: mutating endpoints accept an optional `Idempotency-Key` header; the client sends one for purchases, trades and battle actions so a retry on a flaky phone connection can't double-apply.
 
 ### WebSocket
+
 - Endpoint `/ws`, authenticated by the session cookie. One connection per client; the client subscribes to a map channel.
 - Message envelope (zod-validated both ways):
   ```ts
@@ -133,6 +136,7 @@ Add anything else only with a one-line justification in the PR.
 - **Offline:** the PWA caches the app shell; gameplay needs a connection, and the UI shows a friendly "reconnecting" state.
 
 ### Cinematics and tutorial (client)
+
 - **Cinematic player** (`src/cinematics/`): plays a timeline described in data (`packages/shared/src/data/cinematics/*.ts`): shots with duration, camera path keyframes, scene setup, actor animations, caption text and audio cues. Built on Babylon `Animation`/`AnimationGroup`; no video files.
 - Preload each shot's assets during the previous shot; target 60 fps, acceptable floor 30. Captions are DOM overlay text. Support skip (after first view or long-press), tap-to-advance captions, and `prefers-reduced-motion` (gentler camera moves).
 - **Tutorial UI layer** (`src/tutorial/`): highlights a target (spotlight mask over the canvas or DOM element), shows Sprout's speech bubble and an arrow, and blocks unrelated input during each step.
@@ -150,7 +154,7 @@ Add anything else only with a one-line justification in the PR.
   - Index `(map_id, seq)` unique. Pruning old `game_events` only limits **WS replay** (older gaps refetch full state). Consumers that need history (raid log, milestone progress, Easter-egg state) keep their own tables and don't rely on old `game_events` rows.
 - **Scheduled jobs (pg-boss):**
   - `nightfall` per map at 21:00 map time (Hollow Man, §14 of the design doc)
-    - **Hearthfire fuel is a date, not a counter:** each Hearthfire stores `fuelled_through` (the last map-local night its fuel covers). `tonight` means the **next nightfall that hasn't run yet** for that map (after 21:00, that's tomorrow's). Adding *n* nights of Emberwood sets `fuelled_through = max(fuelled_through, tonight − 1) + n`, capped at `tonight − 1 + max_nights`. At nightfall the fire protects tonight if `fuelled_through ≥ tonight`. "Nights left" is shown as `fuelled_through − tonight + 1` (minimum 0). Nothing is decremented, so a retried or duplicate nightfall run can't burn fuel twice.
+    - **Hearthfire fuel is a date, not a counter:** each Hearthfire stores `fuelled_through` (the last map-local night its fuel covers). `tonight` means the **next nightfall that hasn't run yet** for that map (after 21:00, that's tomorrow's). Adding _n_ nights of Emberwood sets `fuelled_through = max(fuelled_through, tonight − 1) + n`, capped at `tonight − 1 + max_nights`. At nightfall the fire protects tonight if `fuelled_through ≥ tonight`. "Nights left" is shown as `fuelled_through − tonight + 1` (minimum 0). Nothing is decremented, so a retried or duplicate nightfall run can't burn fuel twice.
   - `stranded-decay` (Phase 2)
   - `boutique-rotate` daily per map
   - `invite-expiry`, `session-cleanup`, `chat-retention` daily
@@ -176,15 +180,15 @@ Add anything else only with a one-line justification in the PR.
 
 ## 10. Configuration (env vars)
 
-| Var | Example | Notes |
-|---|---|---|
-| `NODE_ENV` | `production` | |
-| `PORT` | `3000` | server listens here behind Caddy |
-| `DATABASE_URL` | `postgres://heartpatch:…@db:5432/heartpatch` | |
-| `SESSION_SECRET` | 64 random bytes, base64 | cookie signing |
-| `PUBLIC_ORIGIN` | `https://play.pumpkinpatchgames.com` | CORS, cookies |
-| `LOG_LEVEL` | `info` | |
-| `HP_DEV_NOW` | `2026-12-20T20:59:00-05:00` | dev/test only |
+| Var              | Example                                      | Notes                            |
+| ---------------- | -------------------------------------------- | -------------------------------- |
+| `NODE_ENV`       | `production`                                 |                                  |
+| `PORT`           | `3000`                                       | server listens here behind Caddy |
+| `DATABASE_URL`   | `postgres://heartpatch:…@db:5432/heartpatch` |                                  |
+| `SESSION_SECRET` | 64 random bytes, base64                      | cookie signing                   |
+| `PUBLIC_ORIGIN`  | `https://play.pumpkinpatchgames.com`         | CORS, cookies                    |
+| `LOG_LEVEL`      | `info`                                       |                                  |
+| `HP_DEV_NOW`     | `2026-12-20T20:59:00-05:00`                  | dev/test only                    |
 
 Parsed and validated by `apps/server/src/config.ts` (zod); the server refuses to start on invalid config. Keep `.env.example` current.
 
@@ -238,4 +242,3 @@ Small and cheap on purpose: one server for a few families.
 - **iOS:** unlock the `AudioContext` on the first user gesture; resume it on `visibilitychange` and when `statechange` reports `interrupted` (phone calls, Siri). Set `navigator.audioSession.type = "ambient"` where supported (iOS 16.4+) so game audio mixes with other apps and respects the silent switch.
 - **Sound gallery:** a dev-only page that plays every sound and loop, so a human can judge quality by ear.
 - **Budget:** audio counts toward the 15 MB first load; lazy-load music per scene.
-

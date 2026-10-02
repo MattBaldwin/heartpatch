@@ -35,57 +35,68 @@ Applies to every client PR.
 ## 4. Naming
 
 ### Squishies
+
 - Squishy, cute and **pun-friendly**; easy for a kid to say out loud and remember (2–3 syllables is ideal).
-- Name hints at element or feeling: *Puddlepuff* (Water/Silly), *Pebblesnooze* (Stone/Sleepy).
-- Evolutions sound like a bigger, sparklier version of the same name: *Puddlepuff → Splashmallow*.
+- Name hints at element or feeling: _Puddlepuff_ (Water/Silly), _Pebblesnooze_ (Stone/Sleepy).
+- Evolutions sound like a bigger, sparklier version of the same name: _Puddlepuff → Splashmallow_.
 - No existing franchise names or near-copies (no "-mon", no recognisable characters).
 
 ### Seasonal squishies
+
 - Each one has a **seasonal reason to exist** and a **seasonal activity that draws it**: found in pumpkin fields while gathering Pumpkins, drawn to Jack-o'-Lantern Hearthfires, appearing near Witch Dust nodes at dusk.
-- Halloween ones are *sweet-spooky*: a ghost who's afraid of the dark, a pumpkin with a lopsided grin, a bat that hangs the wrong way up.
+- Halloween ones are _sweet-spooky_: a ghost who's afraid of the dark, a pumpkin with a lopsided grin, a bat that hangs the wrong way up.
 
 ### Moves
-- Silly or sweet verbs, never violent: *Tickle Tackle*, *Belly Flop*, *Giggle Drizzle*, *Rock-a-Bye*, *Peekaboo!* (Avoided words: §9.)
+
+- Silly or sweet verbs, never violent: _Tickle Tackle_, _Belly Flop_, _Giggle Drizzle_, _Rock-a-Bye_, _Peekaboo!_ (Avoided words: §9.)
 
 ### Clothing, titles and items
-- Descriptive and fun: *Pumpkin Hood*, *Ghost Cape*, *Cozy Apron*, *Heart Mittens*.
+
+- Descriptive and fun: _Pumpkin Hood_, _Ghost Cape_, _Cozy Apron_, _Heart Mittens_.
 - Titles feel earned and kind: "Keeper of the Gap", "Hollow Rescuer", "Friend to All Squishies".
 
 ### Places
+
 - Use the established names: **Juniper's Gap**, **the Hollow**, **the Heartpatch**, **Heart Seed**, **Hearthfire**, **Tutorial Glade**. Don't invent alternates.
 
 ## 5. Characters
 
 ### Sprout (tutorial guide)
+
 The tiny glowing spirit of your Heart Seed. Upbeat, curious, easily delighted, a little dramatic, always encouraging.
+
 - Speaks in short bursts with the occasional "Ooh!" or "Ta-da!"
-- Notices funny details: *"Ooh, a wild squishy! It looks friendly… and a little bit sticky."*
-- Gentle urgency, never panic: *"Brrr, it's getting dark. Quick, let's get everyone near the fire!"*
+- Notices funny details: _"Ooh, a wild squishy! It looks friendly… and a little bit sticky."_
+- Gentle urgency, never panic: _"Brrr, it's getting dark. Quick, let's get everyone near the fire!"_
 - Celebrates the player, not itself.
 
 ### The Hollow Man
+
 Tall, flickering silhouette, glowing eyes. Spooky, never gory.
+
 - He **never speaks**, never threatens, never chases on screen.
 - Present it through what changes around him: colour drains, music drops out, firelight flickers, squishies huddle.
 - He hesitates at light and noise, and fades away. Players should feel "I can protect them," not fear.
 - Taken squishies turn grey and drift away gently; text always reminds the player they can be rescued.
 
 ### The forest chihuahuas
+
 Lore only (see design doc §16). Never NPCs, never explained outright. Glimpses, paw prints, distant barking.
 
 ### Squishies
+
 Sincere, expressive, never mean. Feelings drive personality: Joy bounces, Cozy snuggles, Brave puffs up, Silly spins, Sleepy nods off, Spooky goes "boo!" and then giggles.
 
 ## 6. Writing for each surface
 
-| Surface | Guidance |
-|---|---|
-| Buttons | 1–2 words, verb first: "Feed", "Capture", "Light fire" |
-| Toasts | One short line, upbeat: "Gourdon joined your patch!" |
-| Errors | Friendly, say what to do next. Shared error codes map to kid-readable messages. |
-| Sprout bubbles | ≤ 2 short sentences per bubble; tap to continue |
-| Captions (cinematic) | Large, rounded type; stay up long enough to read; tap to advance |
-| Morning report | Calm and reassuring: "The Hollow Man came by last night, but your fire kept everyone safe!" |
+| Surface              | Guidance                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| Buttons              | 1–2 words, verb first: "Feed", "Capture", "Light fire"                                      |
+| Toasts               | One short line, upbeat: "Gourdon joined your patch!"                                        |
+| Errors               | Friendly, say what to do next. Shared error codes map to kid-readable messages.             |
+| Sprout bubbles       | ≤ 2 short sentences per bubble; tap to continue                                             |
+| Captions (cinematic) | Large, rounded type; stay up long enough to read; tap to advance                            |
+| Morning report       | Calm and reassuring: "The Hollow Man came by last night, but your fire kept everyone safe!" |
 
 ## 7. Visual and audio feel
 
@@ -102,21 +113,22 @@ Visuals follow design doc §19 (soft vinyl toy, glossy, rounded, never pixelated
 ## 9. Words to use and avoid
 
 ### Glossary
+
 Player-facing words for game actions. The code can use technical names; the UI uses these.
 
-| Mechanic (code) | Say in the UI |
-|---|---|
-| attack a tile | **Claim** (neutral tile), **Challenge** (rival tile) |
-| raid on your tile | **"Someone challenged your patch!"** |
-| battle | **Battle** or **Squishy showdown** |
-| squishy at 0 HP | **Tuckered out** |
-| damage / HP | **Energy** (the bar), "lost some energy" |
-| capture | **Befriend** (button: "Use Heart Charm") |
-| hollowed | **Taken to the Hollow** (always followed by "you can rescue them!") |
-| defense stance | **Defense style** (Bold, Careful, Balanced) |
+| Mechanic (code)   | Say in the UI                                                       |
+| ----------------- | ------------------------------------------------------------------- |
+| attack a tile     | **Claim** (neutral tile), **Challenge** (rival tile)                |
+| raid on your tile | **"Someone challenged your patch!"**                                |
+| battle            | **Battle** or **Squishy showdown**                                  |
+| squishy at 0 HP   | **Tuckered out**                                                    |
+| damage / HP       | **Energy** (the bar), "lost some energy"                            |
+| capture           | **Befriend** (button: "Use Heart Charm")                            |
+| hollowed          | **Taken to the Hollow** (always followed by "you can rescue them!") |
+| defense stance    | **Defense style** (Bold, Careful, Balanced)                         |
 
 ### Avoided words
+
 One list, so tests can scan the **player-facing string fields** in data files (names, descriptions, lines, captions; not keys like `baseStats.attack`). Don't use these in player-facing text:
 
 `die`, `dead`, `death`, `kill`, `faint`, `hurt`, `injure`, `wound`, `bleed`, `blood`, `damage`, `destroy`, `crush`, `slash`, `stab`, `bite`, `attack` (in UI; fine in code), `weapon`, `enemy`, `hate`, `stupid`, `loser`.
-
