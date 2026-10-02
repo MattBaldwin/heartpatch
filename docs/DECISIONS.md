@@ -119,6 +119,18 @@ _Proposed in the #9 PR; the project owner confirms on merge._
 - **Detail levels:** the map always uses low detail; close-ups use high detail unless the quality governor has dropped to the low tier (`lodFor`).
 - **The squishy gallery is a separate dev page** (`/gallery.html`), never in the production build, so it doesn't touch `main.ts`.
 
+## 2026-10-02 — Tutorial framework (#47, server and shared)
+
+_Proposed in the #47 PR; the project owner confirms on merge._
+
+- **The event consumer wake-up is a hook in `appendGameEvent`.** `startJobs` installs it (`setEventWakeup`); it runs pg-boss `send` on the command's own transaction for every consumer that reads that map kind. With no jobs running (tests, ops tools) nothing is enqueued and the periodic catch-up finds the events later. *Why:* the wake-up must commit with the event (tech spec §7), and `appendGameEvent` is the one place every event is written.
+- **Consumers are woken per map kind.** Each consumer lists the map kinds it reads (the tutorial reads `tutorial` maps only), so multiplayer commands don't enqueue tutorial jobs.
+- **Talk-only steps complete on `tutorial.acknowledged`.** The player's "got it" tap on Sprout's welcome or graduation is an intent the server records as a game event, but only for the current step and only if that step's `completeOn` is `tutorial.acknowledged`; gameplay steps complete on the real module's events. *Why:* steps stay data with one completion path, and the client can't tap past a gameplay step.
+- **The step engine writes `tutorial.advanced`** (a system event on the tutorial map) when it moves a player on, so the client hears it over live sync instead of polling. Steps can never complete on it.
+- **A run is the player's active membership on a tutorial map.** Replay and skip archive the old membership (decision: archive, don't delete), so late events on an old run change nothing. Finishing keeps the finished Glade's membership, so its last `tutorial.advanced` still reaches the player.
+- **Start, replay and skip.** `start` begins the first run or returns the one going; once finished, a new run is an explicit `replay` (from Settings, any time). `skip` needs a first completion (design doc §26). `tutorial_completed_at` is the first completion and replaying never moves it, so rewards are granted once.
+- **`tutorialOverrides` is shared data read through `gameplayOverrides(map.kind)`.** Gameplay modules call it instead of branching on the map kind. Rules the design doc fixes (sure capture, the Hollow Man takes nothing) are literals in the schema; timers and opponent levels are tunables.
+
 ## 2026-10-02 — Installable app (#26)
 
 _Proposed in the #26 PR; the project owner confirms on merge._

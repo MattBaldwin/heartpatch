@@ -302,3 +302,28 @@ export const joinRequests = pgTable(
     index('join_requests_user_id_idx').on(t.userId),
   ],
 );
+
+/**
+ * How far each event consumer (tutorial steps; later milestones, Easter eggs,
+ * the raid log) has read each map's `game_events` (tech spec §7). A consumer's
+ * worker holds this row `FOR UPDATE` while it works, and advances `last_seq`
+ * in the same transaction as its own writes, so every event is applied once,
+ * in seq order. Rows are created on first use. `game_events` are never pruned
+ * below a map's lowest `last_seq`.
+ */
+export const eventConsumers = pgTable(
+  'event_consumers',
+  {
+    // Consumer name (`tutorial`); see apps/server/README.md, "Event consumers".
+    consumer: text('consumer').notNull(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    // Last game_events.seq applied for this map; 0 = none yet.
+    lastSeq: bigint('last_seq', { mode: 'number' }).notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ columns: [t.consumer, t.mapId] }),
+    check('event_consumers_last_seq_nonnegative', sql`${t.lastSeq} >= 0`),
+  ],
+);

@@ -18,6 +18,30 @@ export interface NewGameEvent<T extends GameEventType = GameEventType> {
 
 export type GameEvent = typeof gameEvents.$inferSelect;
 
+/** What an event consumer's wake-up needs to know about a new event. */
+export interface AppendedEvent {
+  mapId: string;
+  mapKind: (typeof maps.$inferSelect)['kind'];
+  seq: number;
+}
+
+/**
+ * Enqueues event-consumer wake-ups for a new event **inside its transaction**
+ * (tech spec §7), so the wake-up commits or rolls back with the event.
+ */
+export type EventWakeup = (tx: Transaction, event: AppendedEvent) => Promise<void>;
+
+let eventWakeup: EventWakeup | null = null;
+
+/**
+ * Installed by `startJobs` (src/jobs/boss.ts) and cleared when it stops. With
+ * no jobs running (tests, ops tools) events are appended without a wake-up;
+ * the periodic catch-up job finds them once jobs run.
+ */
+export function setEventWakeup(wakeup: EventWakeup | null): void {
+  eventWakeup = wakeup;
+}
+
 /**
  * Appends a `game_events` row inside the caller's transaction (tech spec §7).
  * The payload is checked against the type's internal schema first, so a bad
@@ -30,6 +54,9 @@ export type GameEvent = typeof gameEvents.$inferSelect;
  *   waits for the lock;
  * - locks are always taken entity rows first, `maps` last, which avoids
  *   deadlocks and keeps the busy `maps` row locked only briefly.
+ *
+ * It also enqueues the event consumers' wake-up (pg-boss `send`) in the same
+ * transaction (see `setEventWakeup`), so a rolled-back command wakes nobody.
  *
  * After commit, call `wsHub.publish(mapId)` (apps/server/README.md, "Live
  * sync"); the hub sends each type's public view, never the raw payload.
@@ -62,7 +89,7 @@ export async function appendRawGameEvent(
     .update(maps)
     .set({ eventSeq: sql`${maps.eventSeq} + 1` })
     .where(eq(maps.id, event.mapId))
-    .returning({ seq: maps.eventSeq });
+    .returning({ seq: maps.eventSeq, kind: maps.kind });
   if (!allocated) throw new Error(`appendGameEvent: map ${event.mapId} does not exist`);
 
   const [row] = await tx
@@ -70,5 +97,6 @@ export async function appendRawGameEvent(
     .values({ ...event, seq: allocated.seq })
     .returning();
   if (!row) throw new Error('appendGameEvent: insert returned no row');
+  await eventWakeup?.(tx, { mapId: event.mapId, mapKind: allocated.kind, seq: allocated.seq });
   return row;
 }
