@@ -27,6 +27,8 @@ const RATE_LIMITED_MESSAGE = 'Too many tries! Take a little break and try again 
 
 export interface MapsRoutesOptions {
   hooks: AuthHooks;
+  /** Dev and e2e only (`HP_DEV_MAP_CREATE_LIMIT_PER_IP`): replaces the per-IP patch-making max. */
+  createPerIpMax?: number;
 }
 
 export const mapsRoutes =
@@ -40,8 +42,12 @@ export const mapsRoutes =
       const limiter = (limit: RateLimit, keyGenerator: (request: FastifyRequest) => string) =>
         fastify.createRateLimit({ max: limit.max, timeWindow: limit.windowMs, keyGenerator });
       const limits = MAP_RATE_LIMITS[action];
+      const perIp =
+        action === 'create' && options.createPerIpMax !== undefined
+          ? { ...limits.perIp, max: options.createPerIpMax }
+          : limits.perIp;
       const checks = [
-        limiter(limits.perIp, (request) => `maps:${action}:ip:${normalizeIP(request.ip)}`),
+        limiter(perIp, (request) => `maps:${action}:ip:${normalizeIP(request.ip)}`),
         limiter(limits.perUser, (request) => `maps:${action}:user:${requireUser(request).id}`),
       ];
       return async (request, reply) => {

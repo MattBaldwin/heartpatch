@@ -5,6 +5,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   date,
   foreignKey,
@@ -279,6 +280,11 @@ export const squishies = pgTable(
     habitatBuildingId: uuid('habitat_building_id').references(() => buildings.id, {
       onDelete: 'set null',
     }),
+    // Contentment right after the last care action, and when that was (#19).
+    // Today's contentment is worked out from these on read (shared
+    // `contentmentAt`; CLAUDE.md rule 4), so nothing ticks.
+    contentmentAtLastCare: integer('contentment_at_last_care').notNull().default(0),
+    lastCaredAt: timestamptz('last_cared_at'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -291,6 +297,7 @@ export const squishies = pgTable(
     index('squishies_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
     check('squishies_level_positive', sql`${t.level} >= 1`),
     check('squishies_xp_nonnegative', sql`${t.xp} >= 0`),
+    check('squishies_contentment_range', sql`${t.contentmentAtLastCare} between 0 and 100`),
   ],
 );
 
@@ -837,6 +844,74 @@ export const squishyAccessories = pgTable('squishy_accessories', {
   itemId: text('item_id').notNull(),
   updatedAt: timestamptz('updated_at').notNull().defaultNow(),
 });
+
+/**
+ * Every care action (#19, design doc §7). Counts a squishy's actions per
+ * account-local day (diminishing returns, decision G) and the Patch Coins
+ * care earned an account that day (the daily cap, across every patch; #45
+ * pays them out). `day` is the owner's `users.time_zone` date at the time.
+ */
+export const careLog = pgTable(
+  'care_log',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    squishyId: uuid('squishy_id')
+      .notNull()
+      .references(() => squishies.id, { onDelete: 'cascade' }),
+    // Care action id from the shared care-action data.
+    action: text('action').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    // Contentment it added, and whether it was one of the day's full ones.
+    gained: integer('gained').notNull(),
+    full: boolean('full').notNull(),
+    coins: integer('coins').notNull(),
+    caredAt: timestamptz('cared_at').notNull(),
+  },
+  (t) => [
+    index('care_log_squishy_id_day_idx').on(t.squishyId, t.day),
+    // The debounce reads only the last few seconds of a squishy's care.
+    index('care_log_squishy_id_cared_at_idx').on(t.squishyId, t.caredAt),
+    index('care_log_user_id_day_idx').on(t.userId, t.day),
+    check('care_log_gained_nonnegative', sql`${t.gained} >= 0`),
+    check('care_log_coins_nonnegative', sql`${t.coins} >= 0`),
+  ],
+);
+
+/**
+ * Evolutions (#19, design doc §8): what each squishy became and when, so a
+ * result can be explained later. `seen_at` is null until its owner has seen
+ * the celebration.
+ */
+export const squishyEvolutions = pgTable(
+  'squishy_evolutions',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    squishyId: uuid('squishy_id')
+      .notNull()
+      .references(() => squishies.id, { onDelete: 'cascade' }),
+    // Species ids from the shared (or server-only) species data.
+    fromSpeciesId: text('from_species_id').notNull(),
+    intoSpeciesId: text('into_species_id').notNull(),
+    level: integer('level').notNull(),
+    evolvedAt: timestamptz('evolved_at').notNull(),
+    seenAt: timestamptz('seen_at'),
+  },
+  (t) => [
+    index('squishy_evolutions_unseen_idx')
+      .on(t.squishyId)
+      .where(sql`${t.seenAt} is null`),
+  ],
+);
+
 /** How a challenge ended for the defender (#16). Mirrors `RaidOutcomeSchema`. */
 export const raidOutcome = pgEnum('raid_outcome', ['held', 'tie', 'lost', 'taken', 'no-contest']);
 

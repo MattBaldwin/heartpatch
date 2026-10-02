@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), and `raids` plus `map_members.defense_stance` (#16). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), `care_log`, `squishy_evolutions` plus the squishies' care columns (#19), and `raids` plus `map_members.defense_stance` (#16). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -153,9 +153,37 @@ Tiles are written once, from `generateMap`, when the map is created.
 | `level` | integer, default 1 | ≥ 1 |
 | `xp` | integer, default 0 | ≥ 0 |
 | `state` | enum `squishy_state` | `active` \| `hollowed` |
+| `habitat_building_id` | uuid → buildings, null | The habitat it lives in (#18); `ON DELETE SET NULL` |
+| `contentment_at_last_care` | integer, default 0 | 0–100 (check): contentment right after the last care action (#19) |
+| `last_cared_at` | timestamptz, null | When. Today's contentment is worked out from these two on read (shared `contentmentAt`), so nothing ticks |
 | `created_at` | timestamptz | |
 
-Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessories columns are added by their feature issues.
+`level` and `xp` change only through care's `applyXp` (#19): `xp` is the total, and a squishy that joined above level 1 counts from its level's XP. Stats come from the species and level (`statsAtLevel`); individual variance, care history and accessories columns are added by their feature issues.
+
+### `care_log`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | The `ref_id` of a feed's `resource_ledger` row |
+| `map_id` | uuid → maps | Cascade delete |
+| `user_id` | uuid → users | Cascade delete. Indexed with `day`: Patch Coins from care per account per day, across every patch (the cap) |
+| `squishy_id` | uuid → squishies | Cascade delete. Indexed with `day` (care actions per squishy per day: diminishing returns) and with `cared_at` (the debounce) |
+| `action` | text | Care action id (`feed`, `pet`, `play`) |
+| `day` | date | The owner's account-local date (`users.time_zone`) when it happened |
+| `gained` | integer | Contentment it added, ≥ 0 |
+| `full` | boolean | One of the day's full-value actions |
+| `coins` | integer | Patch Coins it earned, ≥ 0. #45 pays them out into `coin_ledger` |
+| `cared_at` | timestamptz | Append-only |
+
+### `squishy_evolutions`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `squishy_id` | uuid → squishies | Cascade delete |
+| `from_species_id`, `into_species_id` | text | Species ids (the target may be a secret form) |
+| `level` | integer | The level it evolved at |
+| `evolved_at` | timestamptz | |
+| `seen_at` | timestamptz, null | Null until its owner has seen the celebration (partial index on `squishy_id` where null) |
 
 ### `battles`
 | Column | Type | Notes |
@@ -305,7 +333,7 @@ Starter items are never stored: every account owns them (DECISIONS "Wardrobe (#4
 | `user_id` | uuid | FK `(map_id, user_id)` → `map_members` |
 | `item_id` | text | |
 | `delta` | integer | `+` granted, `−` spent; never 0 (check). Per item, the sum equals `inventories.quantity` (tests reconcile it) |
-| `reason` | text | `ItemChangeReason` from shared (`gather`, `craft`, `capture`, `dev-grant`; later issues add more) |
+| `reason` | text | `ItemChangeReason` from shared (`gather`, `craft`, `capture`, `dev-grant`, `build`, `fuel`, `build-refund`, `care`; later issues add more) |
 | `ref_id` | uuid, null | What caused it: the gather or craft id |
 | `created_at` | timestamptz | Append-only |
 

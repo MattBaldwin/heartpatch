@@ -5,11 +5,13 @@ import {
   createBattleContent,
   CurrentBattleResponseSchema,
   GAME_DATA,
+  GROWTH_RULES,
   MapResponseSchema,
   replayBattle,
   SquishyResponseSchema,
   TUTORIAL_OVERRIDES,
   TutorialResponseSchema,
+  xpForLevel,
   type PlayerBattle,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
@@ -535,7 +537,9 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
 
       const award = result.xp.find((x) => x.squishyId === squishy.id)!;
       expect(award.xp).toBeGreaterThan(0);
-      expect((await squishyOf(squishy.id))!.xp).toBe(award.xp);
+      // Never cared for, no habitat: exactly the base XP (design doc §7), counted
+      // from the start of its level (#19 `applyXp`).
+      expect((await squishyOf(squishy.id))!.xp).toBe(xpForLevel(20, GROWTH_RULES) + award.xp);
       expect((await eventsOf(mapId)).at(-1)).toMatchObject({
         type: 'battle.ended',
         actorUserId: kid.id,
@@ -612,7 +616,9 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       // Both took part, so both earn the minimum XP (design doc §7).
       const xp = over.view.phase.result.xp.filter((x) => x.side === 'a');
       expect(xp.map((x) => x.squishyId).sort()).toEqual([first.id, second.id].sort());
-      expect((await squishyOf(first.id))!.xp).toBe(BATTLE_RULES.xp.minimum);
+      expect((await squishyOf(first.id))!.xp).toBe(
+        xpForLevel(2, GROWTH_RULES) + BATTLE_RULES.xp.minimum,
+      );
       expect((await squishyOf(second.id))!.xp).toBe(BATTLE_RULES.xp.minimum);
     });
   });

@@ -2,6 +2,7 @@ import type { BattleDebug } from '../battle/battle-screen.js';
 import type { HomeDebug } from '../home/home-screen.js';
 import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
+import type { CareDebug } from '../care/care-sheet.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
@@ -45,6 +46,8 @@ declare global {
       raids?(): RaidReportDebug | null;
       /** The home base (#18): open or not, its buildings, squishies and wander hops, or null. */
       home?(): HomeDebug | null;
+      /** The care sheet (#19): the squishy shown, its mood and level, celebrations, or null. */
+      care?(): CareDebug | null;
       /** The open squishy catalog (seen, friends, names on the cards), or null. */
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */

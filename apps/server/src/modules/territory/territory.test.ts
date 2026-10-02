@@ -286,7 +286,9 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await attacksOf(mapId))[0]).toMatchObject({ outcome: 'captured', endedAt: clock });
 
       // Events: started, attacked … ended, captured — in the battle's transaction.
-      const events = (await eventsOf(mapId)).map((e) => e.type);
+      // (A high-level Moonpuff also grows up here; #19's growth events sit in between.)
+      const growth = new Set(['squishy.leveled', 'squishy.evolved']);
+      const events = (await eventsOf(mapId)).map((e) => e.type).filter((t) => !growth.has(t));
       expect(events.slice(-2)).toEqual(['battle.ended', 'tile.captured']);
       expect(events).toContain('tile.attacked');
       const captured = (await eventsOf(mapId)).at(-1)!;

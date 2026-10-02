@@ -339,11 +339,10 @@ describe.skipIf(!url)('raids (needs DATABASE_URL)', () => {
       const events = await eventsOf(mapId);
       const resolved = events.at(-1)!;
       expect(resolved.type).toBe('raid.resolved');
-      expect(events.map((e) => e.type).slice(-3)).toEqual([
-        'battle.ended',
-        'tile.captured',
-        'raid.resolved',
-      ]);
+      // After the battle's own events (other modules may append theirs in between).
+      const types = events.map((e) => e.type);
+      expect(types.lastIndexOf('battle.ended')).toBeLessThan(types.lastIndexOf('tile.captured'));
+      expect(types.lastIndexOf('tile.captured')).toBe(types.length - 2);
       expect(parseGameEventPayload('raid.resolved', resolved.payload)).toEqual({
         raidId: row!.id,
         battleId: done.id,

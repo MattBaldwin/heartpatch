@@ -1,6 +1,6 @@
 {
-  "id": "ed81056c-769c-4eeb-865d-92b2d1a3a961",
-  "prevId": "d7845d1d-c009-43ec-b830-4105650ed3b5",
+  "id": "e43d24f5-511d-41dc-96fc-b0fdfacc2946",
+  "prevId": "ed81056c-769c-4eeb-865d-92b2d1a3a961",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1544,6 +1544,14 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "defense_stance": {
+          "name": "defense_stance",
+          "type": "defense_stance",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'balanced'"
         }
       },
       "indexes": {
@@ -1781,6 +1789,158 @@
           "value": "\"outfits\".\"preset\" between 0 and 3"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.raids": {
+      "name": "raids",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "battle_id": {
+          "name": "battle_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tile_id": {
+          "name": "tile_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attacker_user_id": {
+          "name": "attacker_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "defender_user_id": {
+          "name": "defender_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "raid_outcome",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stance": {
+          "name": "stance",
+          "type": "defense_stance",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seen_at": {
+          "name": "seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "raids_map_id_defender_idx": {
+          "name": "raids_map_id_defender_idx",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "defender_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "resolved_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "raids_map_id_maps_id_fk": {
+          "name": "raids_map_id_maps_id_fk",
+          "tableFrom": "raids",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "raids_battle_id_battles_id_fk": {
+          "name": "raids_battle_id_battles_id_fk",
+          "tableFrom": "raids",
+          "tableTo": "battles",
+          "columnsFrom": ["battle_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "raids_tile_id_tiles_id_fk": {
+          "name": "raids_tile_id_tiles_id_fk",
+          "tableFrom": "raids",
+          "tableTo": "tiles",
+          "columnsFrom": ["tile_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "raids_defender_member_fk": {
+          "name": "raids_defender_member_fk",
+          "tableFrom": "raids",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "defender_user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "raids_battle_id_key": {
+          "name": "raids_battle_id_key",
+          "nullsNotDistinct": false,
+          "columns": ["battle_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.recovery_codes": {
@@ -3000,6 +3160,11 @@
       "schema": "public",
       "values": ["active", "finished", "no-contest"]
     },
+    "public.defense_stance": {
+      "name": "defense_stance",
+      "schema": "public",
+      "values": ["aggressive", "defensive", "balanced"]
+    },
     "public.gather_status": {
       "name": "gather_status",
       "schema": "public",
@@ -3029,6 +3194,11 @@
       "name": "pvp_mode",
       "schema": "public",
       "values": ["on", "gentle", "off"]
+    },
+    "public.raid_outcome": {
+      "name": "raid_outcome",
+      "schema": "public",
+      "values": ["held", "tie", "lost", "taken", "no-contest"]
     },
     "public.squishy_state": {
       "name": "squishy_state",
