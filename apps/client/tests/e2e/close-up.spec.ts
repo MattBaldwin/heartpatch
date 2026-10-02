@@ -129,6 +129,20 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   await playerWithFriend(page);
+  // Each care reply keeps its action resting for a minute (the server's own
+  // debounce is 10 s, covered by its tests), so "still resting" below doesn't
+  // depend on how fast this runner is.
+  await page.route('**/api/v1/maps/*/squishies/*/care', async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      result?: { action: string; squishyId: string };
+      squishies: { id: string; nextCareAt: Record<string, string> }[];
+    };
+    const done = body.result;
+    const cared = done ? body.squishies.find((s) => s.id === done.squishyId) : undefined;
+    if (done && cared) cared.nextCareAt[done.action] = new Date(Date.now() + 60_000).toISOString();
+    await route.fulfill({ response, json: body });
+  });
   const opened = await openFromHome(page);
   expect(opened).toMatchObject({ from: 'home', sent: 0, contentment: 0 });
   expect(opened.scene?.squishies).toBe(1);
@@ -141,8 +155,8 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
   await sentAndSettled(page, 1, 10);
   await slowExpect(page.getByTestId('close-up-note')).toContainText('Boop!');
 
-  // Another boop straight away: the squishy still reacts, but play is resting,
-  // so nothing is sent (the server would only say "a tiny moment").
+  // Another boop: the squishy still reacts, but play is resting, so nothing
+  // is sent (the server would only say "a tiny moment").
   const before = (await state(page))!;
   await gesture(page, 'close-up-touch', tap(t.x, t.y));
   await expect.poll(async () => (await state(page))?.held, slow).toBe(before.held + 1);
