@@ -1,3 +1,4 @@
+import { SPECIES } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -58,6 +59,8 @@ const GOLDEN_LOOK: Look = {
   },
 };
 const GOLDEN_HASH = '10014ec48d2aaefec62a4d8e84c4cb12';
+/** A roster species to repeat across the scene (any species works). */
+const GOLDEN_SPECIES = SPECIES[0]!.id;
 
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];
@@ -109,6 +112,8 @@ test('shows every body and part in the registry, with no errors', async ({ page 
     const hook = (window as Hooks).__heartpatchGallery!;
     return { coverage: hook.coverage(), shown: hook.shown(), missing: hook.missing() };
   });
+  // Every species in the roster (#10) is on screen, ahead of the showcase looks.
+  expect(info.shown.slice(0, SPECIES.length)).toEqual(SPECIES.map((s) => s.id));
   expect(info.coverage.bodies.toSorted()).toEqual(info.coverage.registryBodies.toSorted());
   expect(info.coverage.parts.toSorted()).toEqual(info.coverage.registryParts.toSorted());
   expect(info.missing).toEqual([]);
@@ -120,7 +125,9 @@ test('shows every body and part in the registry, with no errors', async ({ page 
 
 test('the same species and instance id always build the same squishy', async ({ page }) => {
   test.setTimeout(90_000);
-  await openGallery(page, '?still&count=12');
+  // One look repeated, so squishies differ only by instance id.
+  const query = `?still&count=12&look=${GOLDEN_SPECIES}`;
+  await openGallery(page, query);
   const first = await page.evaluate(
     ({ look }) => {
       const hook = (window as Hooks).__heartpatchGallery!;
@@ -135,17 +142,12 @@ test('the same species and instance id always build the same squishy', async ({ 
   );
   expect(first.golden).toBe(GOLDEN_HASH);
   expect(first.other).not.toBe(GOLDEN_HASH);
-  // Squishies 0 and 9 are the same look with different instance ids: alike, not identical.
-  const repeat = first.shown.indexOf(first.shown[0]!, 1);
-  expect(repeat).toBeGreaterThan(0);
-  const hashes = await page.evaluate(
-    (i) => [0, i].map((n) => (window as Hooks).__heartpatchGallery!.squishyHash(n)),
-    repeat,
-  );
-  expect(hashes[0]).not.toBe(hashes[1]);
+  // Every squishy is the same look with a different instance id: alike, not identical.
+  expect(new Set(first.shown)).toEqual(new Set([GOLDEN_SPECIES]));
+  expect(new Set(first.squishies).size).toBe(first.squishies.length);
 
   await page.reload();
-  await openGallery(page, '?still&count=12');
+  await openGallery(page, query);
   const again = await page.evaluate(() =>
     [0, 1, 11].map((i) => (window as Hooks).__heartpatchGallery!.squishyHash(i)),
   );
@@ -156,13 +158,13 @@ test('draw calls stay flat as squishies multiply (shared geometry, thin instance
   page,
 }) => {
   test.setTimeout(120_000);
-  const ten = await openGallery(page, '?still&count=10');
-  const fifty = await openGallery(page, '?still&count=50');
-  expect(ten.squishies).toBe(10);
-  expect(fifty.squishies).toBe(50);
-  expect(fifty.meshes).toBe(ten.meshes);
-  expect(fifty.meshes).toBeLessThanOrEqual(16);
-  expect(fifty.instances).toBeGreaterThan(ten.instances * 3);
+  // Every look once, then every look twice: the same shapes, twice the squishies.
+  const once = await openGallery(page, '?still');
+  const twice = await openGallery(page, `?still&count=${String(once.squishies * 2)}`);
+  expect(twice.squishies).toBe(once.squishies * 2);
+  expect(twice.meshes).toBe(once.meshes);
+  expect(twice.meshes).toBeLessThanOrEqual(16);
+  expect(twice.instances).toBe(once.instances * 2);
 });
 
 test('tapping a squishy jiggles it, then the still scene goes idle again', async ({ page }) => {
