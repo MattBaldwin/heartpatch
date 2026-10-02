@@ -150,7 +150,10 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
     .toBeGreaterThan(0);
   await expect
     .poll(() => page.evaluate(() => (window as unknown as Hook).__heartpatch?.idle() ?? false), {
-      timeout: 10_000,
+      // Sample often: the idle gap between hops is a couple of seconds, and
+      // expect.poll's default back-off (up to 1 s) can step over it on a slow runner.
+      intervals: [100],
+      timeout: 20_000,
     })
     .toBe(true);
 
