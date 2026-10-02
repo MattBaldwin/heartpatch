@@ -6,6 +6,7 @@ import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
+import { startPwa } from './pwa/pwa.js';
 import './styles.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -63,6 +64,8 @@ await boot(canvas, {
 
 const lobby = mountLobby(document.body);
 mountAuth(document.body, { onChange: lobby.setUser });
+// Offline shell, update prompt, Add to Home Screen guide (issue #26).
+if (import.meta.env.PROD) startPwa(document.body);
 
 if (import.meta.env.DEV) {
   const badge = document.createElement('div');

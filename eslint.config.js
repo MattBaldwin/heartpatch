@@ -289,8 +289,12 @@ export default defineConfig(
     },
   },
   {
-    files: ['apps/client/*.config.ts', 'apps/client/tests/**/*.ts'],
+    files: ['apps/client/*.config.ts', 'apps/client/tests/**/*.ts', 'apps/client/tooling/**/*.ts'],
     languageOptions: { globals: globals.node },
+  },
+  {
+    files: ['apps/client/src/pwa/sw.ts'],
+    languageOptions: { globals: globals.serviceworker },
   },
 
   prettier,
