@@ -3,7 +3,10 @@
 /** Events applied per consumer transaction. */
 export const CONSUMER_BATCH_SIZE = 50; // TUNE: guess; keeps each transaction short
 
-/** How often an idle consumer worker polls; LISTEN/NOTIFY usually wakes it first. */
+/**
+ * How often a consumer worker polls, also as the backstop when LISTEN/NOTIFY
+ * is on (a backlog drains at this pace, not only on new notifies).
+ */
 export const CONSUMER_POLL_SECONDS = 1; // TUNE: pg-boss minimum is 0.5
 
 /** Maps a consumer works on at once in this process. */

@@ -80,7 +80,13 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
     // Several maps at once; one map's jobs never overlap (stately key + row lock).
     await boss.work<WakeUp>(
       queue,
-      { pollingIntervalSeconds: CONSUMER_POLL_SECONDS, localConcurrency: CONSUMER_CONCURRENCY },
+      {
+        pollingIntervalSeconds: CONSUMER_POLL_SECONDS,
+        // With NOTIFY on, pg-boss polls this slowly between notifies (default
+        // 30 s); a backlog (boot catch-up, retries) must still drain fast.
+        notifyPollingIntervalSeconds: CONSUMER_POLL_SECONDS,
+        localConcurrency: CONSUMER_CONCURRENCY,
+      },
       async ([job]) => {
         if (!job) return;
         const { mapId } = job.data;

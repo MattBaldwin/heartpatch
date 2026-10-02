@@ -73,7 +73,10 @@ export const tutorialRoutes =
 
     app.post(
       '/tutorial/skip',
-      { schema: { response: { 200: TutorialResponseSchema } }, preHandler: requireAuth },
+      {
+        schema: { response: { 200: TutorialResponseSchema } },
+        preHandler: [requireAuth, rateLimit('newRun')],
+      },
       async (request) => ({ tutorial: await service.skip(requireUser(request)) }),
     );
 
