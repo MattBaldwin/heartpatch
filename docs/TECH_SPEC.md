@@ -60,7 +60,7 @@ heartpatch/
 └─ .github/workflows/         ci.yml, deploy.yml
 ```
 
-**Secret data split:** data that must stay hidden (Easter-egg conditions, rare spawn rules, evolution weights, drop tables, secret milestones) lives in `packages/shared/src/data/server/` and is **only imported by the server**. A lint rule or test must fail if the client bundle imports anything from `data/server/`.
+**Secret data split:** data that must stay hidden (Easter-egg conditions, rare spawn rules, evolution weights, drop tables, secret milestones, **secret species and secret evolution forms**, including their names and visuals) lives in `packages/shared/src/data/server/` and is **only imported by the server**. A lint rule or test must fail if the client bundle imports anything from `data/server/`.
 
 ## 3. Libraries (pinned choices)
 
@@ -86,7 +86,7 @@ Add anything else only with a one-line justification in the PR.
 
 - IDs: `uuid` (v7 preferred, via `uuidv7` package) for all entities.
 - Timestamps: `timestamptz`, stored in UTC. Map-local time computed with the map's IANA `time_zone`.
-- Almost everything is **scoped by `map_id`** (progress is per map). Accounts, Keeper config and account-bound milestone items are per user.
+- Almost everything is **scoped by `map_id`** (progress is per map). **Per user (account-level):** accounts, Keeper config, the wardrobe and clothing, **Patch Coins** (`coin_ledger` is keyed by user), milestones and titles, and tutorial progress. Daily earning caps are enforced per account.
 - Money-like values (Patch Coins, resource counts) are integers. Every change goes through a **ledger table** (`coin_ledger`, `resource_ledger`) with a reason; balances are derived or cached and reconciled in tests.
 - Soft-delete is not used; removed players' data is archived by status flags.
 - Migrations: `drizzle-kit generate`, committed, applied on deploy. Never edit a merged migration.
@@ -122,9 +122,10 @@ Add anything else only with a one-line justification in the PR.
 
 ## 6. Client architecture
 
-- **Rendering:** one Babylon `Engine`; scenes swapped (map, home base, battle, close-up, wardrobe). WebGPU is the primary renderer (`navigator.gpu` present and the adapter initialises); fall back to WebGL2 automatically, including on WebGPU device loss. Scene code must work on both. Devices on the iOS 17 minimum run WebGL2.
+- **Rendering:** one Babylon `Engine`; scenes swapped (map, home base, battle, close-up, wardrobe). **WebGL2 is the default renderer for Phase 1** (owner decision, docs/DECISIONS.md). WebGPU is opt-in behind a setting until it's proven on real devices; when enabled, it falls back to WebGL2 automatically, including on device loss. Scene code must work on both.
   - **Testing caveat:** Playwright WebKit in CI runs without WebGPU, so CI exercises the WebGL2 path; the WebGPU path is verified on real devices.
-  - **Shaders:** write custom shaders in **WGSL** (or provide both WGSL and GLSL) so Babylon doesn't have to load its glslang/twgsl WASM converters, which would count against the 15 MB first-load budget.
+  - **Shaders:** write Phase 1 custom shaders for WebGL2 (GLSL ES 3.0, or Babylon node materials). Add WGSL versions only when the WebGPU path is enabled, so Babylon never has to load its glslang/twgsl WASM converters, which would count against the 15 MB first-load budget.
+  - **Memory and heat:** no MSAA on any tier (FXAA/SMAA only), and no half-float HDR pipeline unless a feature needs it. A 4× MSAA RGBA16F pipeline at DPR 2 costs about 250 MB of GPU memory on a 10th-gen iPad before any content. Render only when something changes (camera motion, animation, state updates), or cap at 30 fps while idle, so a static map doesn't drain battery or throttle.
 - **Quality settings:** `engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio, 2))`; FXAA or SMAA post-process; dynamic resolution scaler targeting 60 fps; quality tiers (high/medium/low) auto-picked from a short benchmark and adjustable in settings. **Default tier is high** on the playtest devices; spend the headroom on squishy quality (clearcoat, bloom, close-up depth of field) first.
 - **UI:** HTML/CSS overlay on top of the canvas for menus, inventory, wardrobe lists and text input (sharper text, native accessibility, iOS keyboard works properly). Babylon GUI only for in-world labels and bubbles.
 - **State:** a small typed store (no heavy framework needed); server is the source of truth. Optimistic UI only for cosmetic actions (e.g. equipping clothing), rolled back on server error.
@@ -148,6 +149,8 @@ Add anything else only with a one-line justification in the PR.
   - **Ordering on the wire:** post-commit broadcasts can still leave Node out of order. The client buffers briefly and applies events in `seq` order. Only a gap that persists past a short timeout triggers a replay request.
   - **Delivery guarantee:** if the process crashes between commit and broadcast, live delivery of that event is lost, but the row is committed, so clients pick it up on reconnect or `visibilitychange` resync. That is acceptable for this game; there is no separate outbox relay.
   - Index `(map_id, seq)` unique. Pruning old `game_events` only limits **WS replay** (older gaps refetch full state). Consumers that need history (raid log, milestone progress, Easter-egg state) keep their own tables and don't rely on old `game_events` rows.
+  - **Event consumers (milestones, tutorial steps, Easter eggs, raid log):** these never run inside the command's transaction and never depend on live broadcast. Each consumer records its position in `event_consumers (consumer, map_id, last_seq)` and processes events **in `seq` order** from `game_events` via a pg-boss job after commit. Handlers are idempotent, so a crash or deploy only delays processing and never loses it. Because `seq` is gap-free, "everything after `last_seq`" is exact.
+  - **Public vs internal payloads:** a `game_events` row's `payload` is internal and may hold server-only detail. WebSocket broadcast sends a **public view** built per event type (and per recipient where needed), never the raw payload.
 - **Scheduled jobs (pg-boss):**
   - `nightfall` per map at 21:00 map time (Hollow Man, §14 of the design doc)
     - **Hearthfire fuel is a date, not a counter:** each Hearthfire stores `fuelled_through` (the last map-local night its fuel covers). `tonight` means the **next nightfall that hasn't run yet** for that map (after 21:00, that's tomorrow's). Adding *n* nights of Emberwood sets `fuelled_through = max(fuelled_through, tonight − 1) + n`, capped at `tonight − 1 + max_nights`. At nightfall the fire protects tonight if `fuelled_through ≥ tonight`. "Nights left" is shown as `fuelled_through − tonight + 1` (minimum 0). Nothing is decremented, so a retried or duplicate nightfall run can't burn fuel twice.
@@ -156,13 +159,17 @@ Add anything else only with a one-line justification in the PR.
   - `invite-expiry`, `session-cleanup`, `chat-retention` daily
   - Jobs are idempotent and keyed by `(job, mapId, date)` so a restart never runs nightfall twice.
 - **Tutorial maps:** a tutorial is a normal map row with `kind = 'tutorial'` and one member, created from a hand-authored layout in `data/tutorial/`. It runs the **same** modules (gathering, battles, capture, care, buildings, nightfall) with a `tutorialOverrides` config (fast timers, guaranteed capture, scripted opponent AI, Hollow Man can't take anything). No separate code path for tutorial gameplay.
-- **Tutorial step engine:** steps are data (`id, goal, sproutLines, highlightTarget, completeOn: game event type + predicate`). The server advances `users.tutorial_step` when a matching `game_events` row is written, and the client renders the current step. Account-level rewards (Partner species, Seedling Scarf, First Patch milestone) are granted idempotently on completion.
+- **Tutorial step engine:** steps are data (`id, goal, sproutLines, highlightTarget, completeOn: game event type + predicate`). The tutorial event consumer (see event consumers above) advances `users.tutorial_step` when it processes a matching `game_events` row, and the client renders the current step. Account-level rewards (Partner species, Seedling Scarf, First Patch milestone) are granted idempotently on completion.
 - **Dev time override:** env `HP_DEV_NOW` and an admin endpoint (dev only) to set the game clock for testing seasons and nightfall.
 
 ## 8. Determinism and RNG
 
 - `packages/shared/src/rng`: a small seeded PRNG (e.g. `sfc32` or `mulberry32`) with `next()`, `int(min, max)`, `pick()`, `weighted()`.
 - Never use `Math.random()` in game logic (lint rule). Seeds are generated server-side with `crypto.randomBytes` and stored with the battle/roll.
+- **Server-side secrecy:** RNG state and seeds stay on the server while a battle is in progress. The client gets a **public view** of battle state that can't be used to predict misses, damage variance or capture rolls. The seed may be revealed after the battle ends (for replays).
+- **No rerolls:** wild spawns and guardians are fixed per tile and time window (seeded server-side from the map seed, tile and window, or stored), so restarting a battle can't reroll what appears. Starting a battle consumes an attempt and starts the tile cooldown, and abandoning counts as a loss.
+- **Cross-engine determinism:** outcome maths uses integer or fixed-step arithmetic with explicit rounding at each step, and no `Math.pow`/`exp`/trig, so results are bit-identical on V8 (Node) and JavaScriptCore (Safari).
+- **Content versioning:** every battle records a content version (a hash of the data tables it used) and its resolved turn log alongside the seed and actions, so replays and explanations survive re-tuning.
 
 ## 9. Security and safety
 
@@ -187,6 +194,8 @@ Add anything else only with a one-line justification in the PR.
 | `APP_VERSION` | `2026.10.02-abc123` | set by deploy (image tag); reported by `/api/v1/health` |
 | `TRUST_PROXY` | `true` | `true` behind Caddy so `request.ip` is the player's IP (per-IP rate limits) |
 | `HP_DEV_NOW` | `2026-12-20T20:59:00-05:00` | dev/test only |
+| `HP_SIGNUP_CODE` | random string | required to create an account (family-only signup, Phase 1) |
+| `HP_TUTORIAL_REQUIRED` | `false` | when `false`, new accounts can create/join maps without finishing the tutorial |
 
 Parsed and validated by `apps/server/src/config.ts` (zod); the server refuses to start on invalid config. Keep `.env.example` current.
 

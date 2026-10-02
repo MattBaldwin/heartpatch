@@ -21,11 +21,11 @@
 - Content issues most at risk of story drift (#10, #24, #43, #46) don't run at the same time.
 
 ### Deployment
-- **Build towards a workable version before deploying.** Client work is verified with Playwright (WebKit, iPhone/iPad viewports) and PR screenshots.
-- When gameplay and visuals are ready to test on a real device (after #6, #7, #9), the coordinator walks the owner step by step through AWS account creation, Lightsail setup and the GoDaddy DNS change, then lands #27.
+- **Build towards a workable version before deploying.** Client work is verified with Playwright (WebKit, iPhone/iPad viewports) and PR screenshots. *(Superseded by the 2026-10-02 audit entry, decision E.)*
+- When gameplay and visuals are ready to test on a real device (after #6, #7, #9), the coordinator walks the owner step by step through AWS account creation, Lightsail setup and the GoDaddy DNS change, then lands #27. *(Superseded by the 2026-10-02 audit entry, decision E.)*
 
 ### Devices and playtesting
-- Playtest devices: **iPhone 14+** and **iPads from the last ~4 years**. Default quality tier high; WebGPU primary with WebGL2 fallback. The spec's lower performance floor stays as a safety margin.
+- Playtest devices: **iPhone 14+** and **iPads from the last ~4 years**. Default quality tier high; WebGPU primary with WebGL2 fallback. The spec's lower performance floor stays as a safety margin. *(Superseded by the 2026-10-02 audit entry, decision E.)*
 - The owner playtests with their kids. **Gameplay must be easy to pick up** (style guide §3).
 
 ### Content
@@ -51,3 +51,21 @@
 - **Sessions report; the coordinator doesn't poll.** Build sessions report milestones to the coordinator themselves (PR opened, ready to merge, blocked, CI red), as required in `CLAUDE.md` → Workflow and repeated in every session brief. No scheduled check-ins.
 - **Why it's in CLAUDE.md:** sessions rightly treat messages relayed from another session as information, not authority, and declined reporting requests sent that way. Reporting therefore lives in the instructions each session starts with.
 - **Backstop:** the coordinator subscribes to every PR, so CI results, comments and merges arrive as GitHub events, and it is notified if a session's turn fails. Both are event-driven, not polling.
+
+## 2026-10-02 — Architecture and product audit
+
+An adversarial audit (top game-architect / game-PM persona) reviewed the docs, code and roadmap. The owner approved these changes; the design doc and tech spec carry the rules.
+
+- **A. The multiplayer game never waits on the tutorial.** The server setting `HP_TUTORIAL_REQUIRED` lets new accounts create or join maps before the tutorial exists. The tutorial (#24) no longer depends on the cinematic (#46), wardrobe (#43) or milestones (#44); its final steps arrive once those exist. Issues that bundled client and server work (#5, #17, #22) shed their false dependencies on client rendering, so the server parts can start earlier. *Why:* #24 sat at the end of an 11-issue chain and gated all play.
+- **B. Family-safe PvP.** A map-owner **PvP mode**: On / **Gentle (default)** / Off, with a per-defender daily tile-loss cap and reduced rewards for challenging much smaller players. Every home ring is guaranteed Timber, Stone, Emberwood and a farm plot. *Why:* an older sibling could strip a younger one's land, then their fuel, then their squishies.
+- **C. The Hollow Man is a planning challenge, not a nightly tax.** Tile defenders stand watch and aren't exposed. Rescue can start from anywhere, and Heartdust from rescues is capped per day. *Why:* holding territory would otherwise cost a squishy every night, and exposure could be farmed.
+- **D. Family-only signup.** Account creation requires an operator-issued signup code (`HP_SIGNUP_CODE`). A map owner can reset only members whose maps are all theirs; other resets go to the operator, and resets revoke sessions. *Why:* "invite-only" covered maps, not signups, and owner resets could take over accounts across maps.
+- **E. WebGL2 default, earlier device testing.** WebGL2 is the Phase 1 renderer and WebGPU is opt-in. This **supersedes** "WebGPU primary" in the kickoff entry. Deploy (#27) happens **right after #6 merges**, so the test scene reaches real iPhones and iPads within days. This **supersedes** "deploy after #6, #7, #9". No MSAA, and render only on change, to protect memory and battery. *Why:* CI can only exercise WebGL2, and the riskiest unknowns (Safari GPU memory, heat, home-screen app behaviour) must surface early.
+- **F. Account-level economy.** Patch Coins, wardrobe, milestones and titles belong to the account, with daily earning caps. Map-play milestone progress counts only on maps with 2+ active members. *Why:* per-map coins feeding an account wardrobe, plus unlimited maps and accounts, made a farm.
+- **G. Care without chores.** Diminishing returns after the first few care actions per squishy per day, and a daily cap on coins from care. *Why:* per-squishy cooldowns made care a screen-time contest.
+- **Technical fixes (no owner decision needed):** RNG state stays server-side while battles run, and the client gets a public view. Wild spawns are fixed per tile and time window, starting a battle consumes the attempt, and leaving counts as a loss. Outcome maths is cross-engine deterministic, and battles record a content version and turn log. Event consumers track their position in `event_consumers` and process `game_events` in order after commit, and WebSocket sends public views only. Secret species and forms live in server-only data.
+- **Not adopted:** lighter review rounds. The owner chose full review rounds; parallelism is already being increased where dependencies allow.
+
+## 2026-10-02 — Session lifecycle
+
+- The coordinator **archives a build session** once its PR is merged, or once its remaining work has been handed to the coordinator (owner-approved). Archived sessions are read-only and can be reopened.

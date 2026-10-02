@@ -68,7 +68,7 @@ New players experience this story in the opening cinematic (§25) and the tutori
 - 2–4 players per map. One player creates the map and is its **owner** (admin).
 - Creating a map produces an **invite code**. Entering a code creates a **join request** that the owner must approve.
 - Codes expire **[DEFAULT: 7 days]** and can be regenerated or revoked.
-- Owner admin powers: approve/deny joins, remove a player, reset a player's password. Mute a player and toggle free chat arrive with free chat in Phase 2 (Phase 1 has only preset messages and emoji, which rate limits cover).
+- Owner admin powers: approve/deny joins, remove a player, set the map's **PvP mode** (§11), and reset the password of a member whose maps are **all** owned by this owner (otherwise the operator resets it, §18). Mute a player and toggle free chat arrive with free chat in Phase 2 (Phase 1 has only preset messages and emoji, which rate limits cover).
 - A player can be in several maps; progress is per map.
 - **Multiplayer model: hybrid.**
   - The world is **persistent and asynchronous**: state lives in Postgres; timers (mining, training, care decay) resolve from timestamps.
@@ -80,7 +80,7 @@ New players experience this story in the opening cinematic (§25) and the tutori
 
 Each squishy is an instance of a **species**. Species are data, not code.
 
-**Species fields (minimum):** `id`, `name`, `element`, `feeling` (default/base), `rarity` (common, uncommon, rare, epic, legendary, secret), `season` (optional), `baseStats` (hp, attack, defense, speed), `moves`, `evolutions` (see §8), `visual` (procedural parameters, see §19), `habitatPreferences`, `spawnRules`.
+**Species fields (minimum):** `id`, `name`, `element`, `feeling` (default/base), `rarity` (common, uncommon, rare, epic, legendary, secret), `season` (optional), `baseStats` (hp, attack, defense, speed), `moves`, `evolutions` (see §8), `visual` (procedural parameters, see §19), `habitatPreferences`. Spawn rules live in server-only spawn tables, not on the species, so they can't be datamined (tech spec §2). **Secret species** (rarity `secret`) and secret evolution forms are server-only too: the client receives a species definition only when the player meets it.
 
 **Instance fields:** `id`, `speciesId`, `ownerId`, `nickname`, `level`, `xp`, `element`, `feeling` (can shift with care), `contentment`, `lastCaredAt`, `careHistoryScore`, `habitatId`, `state` (active, hollowed, in-trade…), `accessories` (items from the shared Wardrobe catalog, §23), `stats` (with small individual variance).
 
@@ -125,6 +125,7 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 - **Floor of 1.0×.** Neglect never weakens or sickens a squishy; it only means no bonus. Combat alone always advances a squishy, just more slowly.
 - **Cap.** Combined multiplier capped at **[DEFAULT: 3×]**.
 - **Implementation:** no ticking simulation. Store `contentment` and `lastCaredAt`; compute current contentment lazily from elapsed time on read. Care actions have server-side cooldowns so tap-spamming can't max care.
+- **Diminishing returns:** the first **[DEFAULT: 3]** care actions per squishy per day give full contentment; later ones give less. Patch Coins from care are capped per account per day **[DEFAULT]**. Attentive play is rewarded without turning care into a chore that favours whoever has the most screen time.
 - **Why three actions:** each maps to close-up gestures (§20): drag a treat → **feed**, stroke → **pet**, tap to boop or pinch to tickle → **play**. Each also has a visible button. This keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
 - Care history (a rolling score over the squishy's life) feeds evolution odds (§8).
 
@@ -172,8 +173,13 @@ Phase 1 ships simple level-based single-form evolution; branching arrives in Pha
 - **Capture:** defeat the tile's wild guardians or the rival squishies defending it.
 - **Expansion rule:** you may attack tiles **adjacent to your territory** or **within an outpost's reach** (outposts: Phase 2).
 - **Home base:** the Heart Seed tile and its surrounding ring are permanently owned and can never be captured. You can lose territory right up to your home base.
+- **Guaranteed home resources:** every home ring contains a Timber node, a Stone node, an **Emberwood** node and a farm plot (Treats), so a player can always fuel their Hearthfire and feed their squishies, however much land they lose.
 - **Connected supply (Phase 2):** owned tiles must connect to the home base. After each capture, run BFS from the home base; unreached tiles become **stranded** and fade to neutral over **[DEFAULT: 36h]** unless reconnected.
-- **Raid rules [DEFAULT]:** a tile can't be re-attacked for 4h after a battle on it; new players get a 48h protection shield; each player gets 10 attack attempts per day (refills daily).
+- **Raid rules [DEFAULT]:** a tile can't be re-attacked for 4h after a battle on it; new players get a 48h protection shield; each player gets 10 attack attempts per day (refills daily). Starting a battle uses an attempt and starts the tile cooldown; leaving a battle counts as a loss.
+- **PvP mode (map owner setting) [DEFAULT: Gentle]:** families have kids of very different ages and schedules, so rivalry must never turn into one player farming another.
+  - **On:** rival tiles can be challenged; a defender can lose at most **[DEFAULT: 3]** tiles per day.
+  - **Gentle (default):** as On, but a defender can lose at most **[DEFAULT: 1]** tile per day, and challenging a player with far less territory (under **[DEFAULT: half]** of yours) earns reduced rewards.
+  - **Off:** no player-vs-player challenges. Players race for neutral land and work together against the Hollow Man.
 - Hearthfire safe radii are measured in hex tiles (§14).
 
 ## 12. Resources
@@ -211,13 +217,14 @@ The shared threat and the heart of the lore. Tall, flickering silhouette with gl
 **His rules → mechanics**
 
 - **"He only needs one."** Each night at **nightfall [DEFAULT: 9:00 PM in the map's time zone]** a server job runs per map. For each player, if any squishies are **exposed**, he takes **one** of them.
-- **Exposure:** a squishy is exposed if it's housed or stationed outside all Hearthfire safe radii and noise coverage. Squishies inside the home base with a lit Hearthfire are safe.
+- **Exposure:** a squishy is exposed if it's housed outside all Hearthfire safe radii and noise coverage, or if it's at home when the fire has gone out. Squishies inside the home base with a lit Hearthfire are safe.
+- **Defenders stand watch:** squishies stationed to defend an owned tile are on watch and are **not** exposed. Holding territory never costs a squishy every night, so the Hollow Man stays a planning challenge (keep the fire lit, house squishies inside its light), not a daily loss.
 - **"Keep the fire lit."** Hearthfires store up to **[DEFAULT: 5 nights]** of Emberwood. At each nightfall: if the fire has fuel for tonight, it burns one night's worth and protects tonight; otherwise it goes out. Stocking up teaches planning ahead: an active player tops up in seconds, and a player who misses a few days comes back to a fire that's still lit. The fire shows its remaining nights clearly (e.g. "3 nights left").
-- **Absence is not punished (pillar 2).** While the fire is lit, squishies at home are always safe; only squishies the player chose to station outside the light (on map tiles) can be taken. If a player is away longer than their stored fuel lasts, the fire goes out and home squishies become exposed too. Taken squishies can always be rescued.
+- **Absence is not punished (pillar 2).** While the fire is lit, squishies at home are always safe; only squishies the player chose to house outside the light can be taken. If a player is away longer than their stored fuel lasts, the fire goes out and home squishies become exposed too. Taken squishies can always be rescued.
 - **Repelled by noise.** Noise buildings extend protection.
 - **Repelled by family love.** (Phase 2) Warmth between players with nearby territories reduces his reach.
 - **"Never look too long."** (Phase 2 polish) Keeping the camera locked on him when he appears makes nearby squishies start to drift toward him.
-- **Hollowed squishies** turn grey and are taken to **the Hollow** (entrance in Juniper's Gap). They are **never permanently lost**: a player rescues them via a rescue expedition (a special battle against shadow guardians). Rescue rewards Heartdust.
+- **Hollowed squishies** turn grey and are taken to **the Hollow** (entrance in Juniper's Gap). They are **never permanently lost**: a player rescues them via a rescue expedition (a special battle against shadow guardians), started from anywhere: the Hollow's entrance is in Juniper's Gap, but reaching it doesn't require owning nearby land. Rescue rewards Heartdust, capped at **[DEFAULT: 1]** rescue reward per player per day so exposing squishies on purpose isn't a farm.
 - Morning summary: "The Hollow Man visited last night…" shown on next login (push notification in Phase 3).
 
 ## 15. Seasons
@@ -266,8 +273,9 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 ## 18. Accounts and safety
 
 - Kids create their own accounts: **username + password**. **No email required.**
+- **Family signup code (Phase 1):** creating an account requires a signup code issued by the game operator (a server setting). The site is genuinely family-only even if someone finds the URL or an invite code leaks.
 - Passwords hashed with **Argon2id**. Sessions in secure, HttpOnly, SameSite cookies. Login rate-limited per username and IP.
-- At signup the player gets a **recovery code** to save (one active code, stored hashed; using it to reset the password shows a fresh code). The map owner can also reset a member's password.
+- At signup the player gets a **recovery code** to save (one active code, stored hashed; using it to reset the password shows a fresh code). The map owner can also reset the password of a member whose maps are all owned by that owner; any other reset goes to the operator. A reset revokes the member's sessions and tells them on next login.
 - **Operator reset:** a player who isn't in any map yet (e.g. still in the tutorial) has no owner to help, so the game operator can reset any password with a server-side command-line tool.
 - Usernames pass the same filter as chat (no inappropriate or identifying names).
 - **Birth year** prompt at signup; under-13 profiles need a lightweight parent-approval step before free chat unlocks. (COPPA consideration — verify before public launch.)
@@ -336,7 +344,7 @@ Every player is represented by a **Keeper**, a character drawn in the same soft 
 ### Getting clothing
 1. **Found:** small chance from capturing tiles, opening resource nodes, rescuing Hollowed squishies, and (Phase 3) presents. Some items only drop in specific terrain or seasons.
 2. **Awarded through milestones:** see §24. Milestone items are signature pieces you can't get any other way, so wearing them shows what you've achieved.
-3. **Purchased** in the **Boutique** using **Patch Coins**, an in-game currency earned from battles, captures, daily care and milestones. Patch Coins can **never be bought with real money** (§15). The Boutique stock rotates **[DEFAULT: daily]**, with seasonal racks during each season.
+3. **Purchased** in the **Boutique** using **Patch Coins**, an in-game currency earned from battles, captures, daily care and milestones. Patch Coins belong to the **account** (like the wardrobe), with daily earning caps **[DEFAULT]** so extra maps or accounts aren't a coin farm. Patch Coins can **never be bought with real money** (§15). The Boutique stock rotates **[DEFAULT: daily]**, with seasonal racks during each season.
 4. **Traded and gifted** between players, using the same escrow, fair-trade bonus, generosity/warmth and regret-window rules as squishy trades (§10). Milestone items are **account-bound** and can't be traded, so they stay meaningful.
 
 ### Seasonal clothing
@@ -366,6 +374,7 @@ Milestones are long-term goals that reward signature clothing, Patch Coins and t
 
 - Each tier also grants a **title** shown on the profile card (e.g. "Keeper of the Gap", "Hollow Rescuer").
 - A **Milestones screen** shows progress bars for visible tracks. Secret milestones show as "???" until earned.
+- **Scope:** milestones and titles belong to the **account**. Progress from map play (territory, defenses) only counts on maps with at least **[DEFAULT: 2]** active members, so a solo second account can't farm them.
 - **Implementation:** milestone definitions are data. Progress counters update server-side from game events (the same event stream used for Easter-egg triggers in §16). Rewards are granted exactly once, idempotently.
 
 ## 25. Opening cinematic: "The Great Scatter"
@@ -422,4 +431,5 @@ Every new player plays a short solo tutorial before joining or creating a multip
 - Nothing can be lost in the tutorial. The Hollow Man can't take anything here.
 - **Carry-over:** the player's Partner species, the Seedling Scarf and the "First Patch" milestone are account-level rewards. Every new map the player joins starts them with their Partner (a fresh level-1 copy) alongside the normal starting kit.
 - Players can skip the tutorial only after finishing it once (e.g. on a new device), and can replay it any time from Settings.
+- **Tutorial gate is a server setting:** while the tutorial is still being built (and for testing), the operator can let new accounts create or join maps without finishing it. The multiplayer game never waits on the tutorial to be playable. The tutorial's last steps (Seedling Scarf in the Wardrobe, First Patch milestone) can arrive once those systems exist.
 - Every step is reachable with one hand on an iPhone; text is short and large.
