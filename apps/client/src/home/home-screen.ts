@@ -650,9 +650,17 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     return built.content;
   };
 
-  /** Hops one housed squishy every few seconds while the home is open. */
+  /**
+   * Hops one housed squishy every few seconds while the home is open. With
+   * `prefers-reduced-motion` they stay put (and the home draws nothing).
+   */
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  reducedMotion.addEventListener('change', () => {
+    syncWander();
+  });
+
   function syncWander(): void {
-    const wanted = isOpen && (scene3d?.wanderers.length ?? 0) > 0;
+    const wanted = isOpen && !reducedMotion.matches && (scene3d?.wanderers.length ?? 0) > 0;
     if (wanted && wanderTimer === undefined) scheduleHop();
     if (!wanted && wanderTimer !== undefined) {
       window.clearTimeout(wanderTimer);

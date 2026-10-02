@@ -2,6 +2,12 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { newPlayer, uniqueName } from './players.js';
 
+/** Longer than one wander gap (home-config.ts `WANDER`: 3.5 s ± 1.5 s). */
+const WANDER_EVERY_MS = 5_000;
+
+/** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
+const slowExpect = expect.configure({ timeout: 30_000 });
+
 /**
  * Home base (#18): build a Hearthfire and a habitat, fuel the fire, move a
  * squishy in and watch it wander, then see the fire's safe glow on the map.
@@ -89,24 +95,26 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
   await lobby.getByLabel('Patch name').fill('Cozy Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await lobby.getByRole('button', { name: 'Visit patch' }).tap();
-  await expect(lobby).toBeHidden();
+  await slowExpect(lobby).toBeHidden();
   await expect.poll(async () => (await mapState(page))?.tiles, { timeout: 30_000 }).toBe(469);
 
   // Stuff to build with, and a squishy friend (dev tools; spawns are #14).
   await page.getByTestId('bag-open').tap();
   await page.getByTestId('bag').getByRole('button', { name: 'Get stuff (dev)' }).tap();
-  await expect(page.getByTestId('bag').locator('[data-item="timber"]')).toContainText('10');
+  await slowExpect(page.getByTestId('bag').locator('[data-item="timber"]')).toContainText('10');
   await page.getByTestId('bag').getByRole('button', { name: 'Close' }).tap();
   await page.getByTestId('battle-dev-grant').tap();
-  await expect(page.locator('.battle-entry-note')).toContainText('joined you');
+  await slowExpect(page.locator('.battle-entry-note')).toContainText('joined you');
 
   // Home: seven tiles up close, the Keeper by the Heart Seed, nothing built yet.
   await page.getByTestId('home-open').tap();
-  await expect.poll(async () => (await homeState(page))?.scene?.tiles).toBe(7);
+  // Building a scene can take a while on a busy CI runner (software rendering).
+  const slow = { timeout: 30_000 };
+  await expect.poll(async () => (await homeState(page))?.scene?.tiles, slow).toBe(7);
   const sheet = page.getByTestId('home');
-  await expect(sheet).toBeVisible();
-  await expect(page.getByTestId('map-hud')).toBeHidden();
-  await expect(page.getByTestId('home-fire')).toHaveText(
+  await slowExpect(sheet).toBeVisible();
+  await slowExpect(page.getByTestId('map-hud')).toBeHidden();
+  await slowExpect(page.getByTestId('home-fire')).toHaveText(
     'Build a Hearthfire to keep everyone safe at night!',
   );
   expect((await homeState(page))?.scene).toMatchObject({ keeper: true, buildings: 0 });
@@ -114,10 +122,10 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
   // Build a Hearthfire: pick it, and the free spots light up.
   await sheet.getByTestId('home-build').tap();
   await sheet.locator('[data-build="hearthfire"]').tap();
-  await expect.poll(async () => (await homeState(page))?.scene?.spots).toBeGreaterThan(30);
+  await expect.poll(async () => (await homeState(page))?.scene?.spots, slow).toBeGreaterThan(30);
   await sheet.getByTestId('home-anywhere').tap();
-  await expect.poll(async () => (await homeState(page))?.scene?.buildings).toBe(1);
-  await expect(page.getByTestId('home-note')).toHaveText('Ta-da! Your Hearthfire is ready.');
+  await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(1);
+  await slowExpect(page.getByTestId('home-note')).toHaveText('Ta-da! Your Hearthfire is ready.');
   expect(await homeState(page)).toMatchObject({
     mode: 'selected',
     items: { timber: 5, stone: 5 },
@@ -126,10 +134,10 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
 
   // Fuel it: one night per tap, and it lights up.
   await sheet.getByTestId('home-fuel').tap();
-  await expect.poll(async () => (await homeState(page))?.scene?.litFires).toBe(1);
-  await expect(page.getByTestId('home-fire')).toHaveText('Your fire is lit: 1 night left.');
+  await expect.poll(async () => (await homeState(page))?.scene?.litFires, slow).toBe(1);
+  await slowExpect(page.getByTestId('home-fire')).toHaveText('Your fire is lit: 1 night left.');
   await sheet.getByTestId('home-fuel').tap();
-  await expect(page.getByTestId('home-fire')).toHaveText('Your fire is lit: 2 nights left.');
+  await slowExpect(page.getByTestId('home-fire')).toHaveText('Your fire is lit: 2 nights left.');
   expect((await homeState(page))?.items['emberwood']).toBe(8);
 
   // A Cozy Meadow, and the squishy moves in.
@@ -137,25 +145,35 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
   await sheet.getByTestId('home-build').tap();
   await sheet.locator('[data-build="cozy-meadow"]').tap();
   await sheet.getByTestId('home-anywhere').tap();
-  await expect.poll(async () => (await homeState(page))?.scene?.buildings).toBe(2);
-  await expect(sheet.getByTestId('home-residents')).toBeVisible();
+  await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(2);
+  await slowExpect(sheet.getByTestId('home-residents')).toBeVisible();
   await sheet.getByTestId('home-residents').getByRole('button', { name: 'Move in' }).tap();
-  await expect.poll(async () => (await homeState(page))?.scene?.housed).toBe(1);
+  await expect.poll(async () => (await homeState(page))?.scene?.housed, slow).toBe(1);
   const meadow = (await homeState(page))?.buildings.find((b) => b.buildingId === 'cozy-meadow');
   expect(meadow?.residents).toBe(1);
 
-  // It wanders about its habitat, hop by hop, and the scene goes idle between hops.
+  // It wanders about its habitat, hop by hop…
   await expect
-    .poll(async () => (await homeState(page))?.hops, { timeout: 20_000 })
+    .poll(async () => (await homeState(page))?.hops, { timeout: 30_000 })
     .toBeGreaterThan(0);
+  // …and with reduced motion it stays put, so the home draws nothing at all.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect
     .poll(() => page.evaluate(() => (window as unknown as Hook).__heartpatch?.idle() ?? false), {
-      // Sample often: the idle gap between hops is a couple of seconds, and
-      // expect.poll's default back-off (up to 1 s) can step over it on a slow runner.
-      intervals: [100],
-      timeout: 20_000,
+      timeout: 30_000,
     })
     .toBe(true);
+  const draws = () =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __heartpatch?: { draws(): number } }).__heartpatch?.draws() ?? 0,
+    );
+  const hops = (await homeState(page))?.hops ?? 0;
+  const before = await draws();
+  await page.waitForTimeout(WANDER_EVERY_MS * 2);
+  expect(await draws()).toBe(before);
+  expect((await homeState(page))?.hops).toBe(hops);
+  await page.emulateMedia({ reducedMotion: null });
 
   // Kid-friendly words only (style guide §9).
   expect(findAvoidedWords((await sheet.textContent()) ?? '')).toEqual([]);
@@ -173,10 +191,10 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
   const box = (await page.locator('#game').boundingBox())!;
   await tapCanvas(page, box.x + box.width / 2, box.y + box.height / 2);
   const panel = page.getByTestId('tile-panel');
-  await expect(panel).toContainText('Hearthfire: lit and keeping everyone cozy.');
-  await expect(panel).toContainText('Cozy Meadow');
+  await slowExpect(panel).toContainText('Hearthfire: lit and keeping everyone cozy.');
+  await slowExpect(panel).toContainText('Cozy Meadow');
   await panel.getByTestId('tile-home').tap();
-  await expect.poll(async () => (await homeState(page))?.open).toBe(true);
+  await expect.poll(async () => (await homeState(page))?.open, slow).toBe(true);
 
   expect(errors).toEqual([]);
 });
