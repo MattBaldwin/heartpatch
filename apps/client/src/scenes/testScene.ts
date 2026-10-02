@@ -72,7 +72,13 @@ function vinyl(scene: Scene, name: string, hex: string): PBRMaterial {
   return m;
 }
 
-function buildShape(scene: Scene, p: Placement, mat: PBRMaterial, i: number): Mesh[] {
+function buildShape(
+  scene: Scene,
+  p: Placement,
+  mat: PBRMaterial,
+  stemMat: PBRMaterial,
+  i: number,
+): Mesh[] {
   const name = `${p.shape}-${i}`;
   const s = p.size;
   switch (p.shape) {
@@ -106,7 +112,7 @@ function buildShape(scene: Scene, p: Placement, mat: PBRMaterial, i: number): Me
         scene,
       );
       stem.position.set(p.x, s * 0.45, p.z);
-      stem.material = vinyl(scene, `${name}-stem-mat`, '#fff4ea');
+      stem.material = stemMat;
       const cap = CreateSphere(`${name}-cap`, { diameter: s, segments: 48, slice: 0.55 }, scene);
       cap.scaling.y = 0.75;
       cap.position.set(p.x, s * 0.72, p.z);
@@ -156,6 +162,7 @@ export function buildTestScene(scene: Scene): SceneContent {
   rim.material = grass;
 
   const materials = new Map<Pastel, PBRMaterial>();
+  const stemMat = vinyl(scene, 'vinyl-cream', '#fff4ea');
   const shadowMat = new PBRMaterial('blob-shadow-mat', scene);
   shadowMat.unlit = true;
   shadowMat.albedoColor = Color3.FromHexString('#6b4b6e').toLinearSpace();
@@ -173,7 +180,7 @@ export function buildTestScene(scene: Scene): SceneContent {
       mat = vinyl(scene, `vinyl-${p.color}`, PASTELS[p.color]);
       materials.set(p.color, mat);
     }
-    buildShape(scene, p, mat, i);
+    buildShape(scene, p, mat, stemMat, i);
     const d = p.size * 1.6;
     shadow.thinInstanceAdd(
       Matrix.Compose(new Vector3(d, 1, d), rot, new Vector3(p.x, 0.01, p.z)),

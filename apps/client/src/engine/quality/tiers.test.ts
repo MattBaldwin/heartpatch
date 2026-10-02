@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_QUALITY_TIER } from '../config.js';
-import { isQualityTier, lowerTier, pickInitialTier, renderScaleFloor } from './tiers.js';
+import {
+  higherTier,
+  isQualityTier,
+  lowerTier,
+  pickInitialTier,
+  renderScaleFloor,
+} from './tiers.js';
 
 describe('pickInitialTier', () => {
   it('defaults to high on the playtest devices', () => {
@@ -25,6 +31,16 @@ describe('lowerTier', () => {
     expect(lowerTier('high')).toBe('medium');
     expect(lowerTier('medium')).toBe('low');
     expect(lowerTier('low')).toBeNull();
+  });
+});
+
+describe('higherTier', () => {
+  it('steps back up, never above the ceiling', () => {
+    expect(higherTier('low', 'high')).toBe('medium');
+    expect(higherTier('medium', 'high')).toBe('high');
+    expect(higherTier('high', 'high')).toBeNull();
+    expect(higherTier('medium', 'medium')).toBeNull();
+    expect(higherTier('low', 'medium')).toBe('medium');
   });
 });
 

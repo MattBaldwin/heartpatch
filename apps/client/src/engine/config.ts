@@ -6,7 +6,7 @@
 
 export type QualityTier = 'high' | 'medium' | 'low';
 
-/** Ordered best to cheapest; the governor only ever steps down this list. */
+/** Ordered best to cheapest. The governor never goes above the tier it started on. */
 export const QUALITY_TIERS: readonly QualityTier[] = ['high', 'medium', 'low'];
 
 /** Tier used when the player hasn't picked one (tech spec §6). */
@@ -63,6 +63,24 @@ export interface ScalerConfig {
   tierDropAfterMs: number;
   /** "Still slow" for the tier governor. */
   tierDropBelowFps: number;
+  /** Ignore the first frames after start (shader compiles, uploads). */
+  graceMs: number;
+  /**
+   * A resolution cut must raise the frame rate by this factor to prove the
+   * GPU is the bottleneck. If it doesn't, the frame rate is capped (iOS Low
+   * Power Mode runs at 30 fps) or CPU-bound, and lower resolution won't help.
+   */
+  cutGain: number;
+  /** While holding at a cap, a drop below cap × (1 − this) is new load. */
+  capTolerance: number;
+  /** Re-test a held cap after this long, in case it was a misreading. */
+  capHoldMs: number;
+  /** Continuous full-resolution headroom before trying the next tier up. */
+  tierRaiseAfterMs: number;
+  /** Cap for the tier-raise delay after raise-then-drop flapping. */
+  maxTierRaiseAfterMs: number;
+  /** A tier drop within this long after a tier raise counts as flapping. */
+  tierFlapWindowMs: number;
 }
 
 export const SCALER: Readonly<ScalerConfig> = {
@@ -77,6 +95,13 @@ export const SCALER: Readonly<ScalerConfig> = {
   maxFrameMs: 250, // TUNE
   tierDropAfterMs: 3000, // TUNE
   tierDropBelowFps: 50, // TUNE
+  graceMs: 2000, // TUNE
+  cutGain: 1.04, // TUNE: one 5% scale step frees ~10% of pixels
+  capTolerance: 0.08, // TUNE
+  capHoldMs: 20_000, // TUNE
+  tierRaiseAfterMs: 10_000, // TUNE
+  maxTierRaiseAfterMs: 120_000, // TUNE
+  tierFlapWindowMs: 10_000, // TUNE
 };
 
 export const LIGHTING = {

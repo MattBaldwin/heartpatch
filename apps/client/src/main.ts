@@ -33,6 +33,21 @@ function freshCanvas(): HTMLCanvasElement {
   return next;
 }
 
+/**
+ * Shown if no renderer can start at all (no WebGL2, or a restart after GPU
+ * loss failed). Plain DOM, since there's nothing to draw the game with.
+ */
+function showRendererError(err: unknown): void {
+  console.error('Could not start the renderer', err);
+  if (document.querySelector('.renderer-error')) return;
+  const box = document.createElement('div');
+  box.className = 'renderer-error';
+  box.setAttribute('role', 'alert');
+  box.textContent =
+    "Oh no, the squishies can't come out to play! Try updating Safari, then open Heartpatch again.";
+  document.body.append(box);
+}
+
 await boot(canvas, {
   preference: parseRendererPreference(params.get('renderer')),
   createRenderer,
@@ -41,10 +56,8 @@ await boot(canvas, {
   onStart: (s) => {
     stage = s;
   },
-  onError: (err) => {
-    console.error('Could not restart the renderer', err);
-  },
-});
+  onError: showRendererError,
+}).catch(showRendererError);
 
 if (import.meta.env.DEV) {
   const badge = document.createElement('div');

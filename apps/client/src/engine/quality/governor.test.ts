@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SCALER, type ScalerConfig } from '../config.js';
+import { SCALER, type QualityTier, type ScalerConfig } from '../config.js';
 import { initialGovernor, stepGovernor, type GovernorState } from './governor.js';
 
 const config: ScalerConfig = {
@@ -15,117 +15,175 @@ const config: ScalerConfig = {
   maxFrameMs: 250,
   tierDropAfterMs: 3000,
   tierDropBelowFps: 50,
+  graceMs: 2000,
+  cutGain: 1.04,
+  capTolerance: 0.08,
+  capHoldMs: 20_000,
+  tierRaiseAfterMs: 10_000,
+  maxTierRaiseAfterMs: 40_000,
+  tierFlapWindowMs: 10_000,
 };
 const ctx = { config, devicePixelRatio: 2 };
 
-/** Feeds `ms` worth of frames at a steady frame rate. */
-function run(state: GovernorState, fps: number, ms: number): GovernorState {
-  const frameMs = 1000 / fps;
-  let s = state;
-  for (let t = 0; t < ms; t += frameMs) s = stepGovernor(s, frameMs, ctx);
-  return s;
+/** Relative GPU cost of each tier (MSAA and bloom cost on high). */
+const TIER_COST: Record<QualityTier, number> = { high: 1, medium: 0.75, low: 0.6 };
+
+/**
+ * A simulated device: each frame takes the longest of the refresh cap, the
+ * CPU time, and the GPU time (which scales with pixel count and tier cost).
+ */
+interface Device {
+  /** Refresh-rate cap: 60 normally, 30 in iOS Low Power Mode. */
+  capFps?: number;
+  cpuMs?: number;
+  /** GPU time per frame at full resolution on the high tier. */
+  gpuMs?: number;
+  tierCost?: Record<QualityTier, number>;
 }
 
-describe('stepGovernor', () => {
-  it('leaves a device holding 60 fps at full resolution', () => {
-    const s = run(initialGovernor('high', config), 60, 20_000);
+function frameMs(s: GovernorState, d: Device): number {
+  const cap = 1000 / (d.capFps ?? 60);
+  const gpu = (d.gpuMs ?? 0) * s.renderScale ** 2 * (d.tierCost ?? TIER_COST)[s.tier];
+  return Math.max(cap, d.cpuMs ?? 0, gpu);
+}
+
+/** Runs `ms` of frames on a device and returns the final state and the scales seen. */
+function simulate(state: GovernorState, d: Device, ms: number) {
+  let s = state;
+  const scales: number[] = [];
+  for (let t = 0; t < ms;) {
+    const f = frameMs(s, d);
+    s = stepGovernor(s, f, ctx);
+    scales.push(s.renderScale);
+    t += f;
+  }
+  return { state: s, scales, fps: 1000 / frameMs(s, d) };
+}
+
+const start = (tier: QualityTier = 'high') => initialGovernor(tier, config);
+const share = (xs: number[], pred: (x: number) => boolean) => xs.filter(pred).length / xs.length;
+
+describe('stepGovernor on simulated devices', () => {
+  it('leaves a device holding 60 fps alone', () => {
+    const { state } = simulate(start(), { gpuMs: 12 }, 60_000);
+    expect(state.renderScale).toBe(1);
+    expect(state.tier).toBe('high');
+  });
+
+  it('ignores slow frames during the start-up grace window', () => {
+    let s = start();
+    for (let i = 0; i < 60; i++) s = stepGovernor(s, 30, ctx); // 1.8 s at 33 fps
     expect(s.renderScale).toBe(1);
-    expect(s.tier).toBe('high');
+    expect(s.windowFrames).toBe(0);
   });
 
-  it('lowers resolution within one window when the frame rate dips', () => {
-    const s = run(initialGovernor('high', config), 50, 520);
-    expect(s.renderScale).toBeLessThan(1);
-    // ~sqrt(50/60) ≈ 0.913: a proportional cut, not a crawl.
-    expect(s.renderScale).toBeCloseTo(0.913, 2);
+  it('trades a little resolution for 60 fps on a lightly GPU-bound device', () => {
+    const { state, fps } = simulate(start(), { gpuMs: 20 }, 20_000); // 50 fps at full res
+    expect(state.tier).toBe('high');
+    expect(state.renderScale).toBeLessThan(1);
+    expect(state.renderScale).toBeGreaterThanOrEqual(0.75);
+    expect(fps).toBeGreaterThanOrEqual(55);
   });
 
-  it('steps at least `step` even for a small dip', () => {
-    const s = run(initialGovernor('high', config), 54.9, 520);
-    expect(s.renderScale).toBe(0.95);
+  it('steps the tier down only when the floor still is not enough', () => {
+    // 28 fps at full res; still ~45 fps at the high floor; fine on medium.
+    const { state, fps } = simulate(start(), { gpuMs: 36 }, 30_000);
+    expect(state.tier).not.toBe('high');
+    expect(fps).toBeGreaterThanOrEqual(50);
   });
 
-  it('never goes below the tier floor', () => {
-    const s = run(initialGovernor('high', config), 20, 2000);
-    expect(s.renderScale).toBe(0.75);
+  it('keeps full quality under a 30 fps cap (iOS Low Power Mode)', () => {
+    const { state, scales } = simulate(start(), { capFps: 30, gpuMs: 10 }, 120_000);
+    expect(state.tier).toBe('high');
+    expect(state.renderScale).toBe(1);
+    // It may re-test the cap briefly now and then, but stays sharp nearly always.
+    expect(share(scales, (x) => x === 1)).toBeGreaterThan(0.9);
   });
 
-  it('steps the tier down when stuck at the floor and still slow', () => {
-    let s = run(initialGovernor('high', config), 30, 1000);
-    expect(s.renderScale).toBe(0.75);
-    expect(s.tier).toBe('high');
-    s = run(s, 30, 3100);
+  it('keeps full quality when the CPU, not the GPU, is the bottleneck', () => {
+    const { state, scales } = simulate(start(), { cpuMs: 24, gpuMs: 8 }, 120_000);
+    expect(state.tier).toBe('high');
+    expect(share(scales, (x) => x === 1)).toBeGreaterThan(0.9);
+  });
+
+  it('recovers resolution and tier after a heavy spell (e.g. thermal dip)', () => {
+    const heavy = simulate(start(), { gpuMs: 40 }, 15_000).state;
+    expect(heavy.tier).not.toBe('high');
+    const { state } = simulate(heavy, { gpuMs: 10 }, 120_000);
+    expect(state.tier).toBe('high');
+    expect(state.renderScale).toBe(1);
+  });
+
+  it('notices new load while holding at a cap', () => {
+    const capped = simulate(start(), { capFps: 30, gpuMs: 10 }, 10_000).state;
+    expect(capped.cap).not.toBeNull();
+    // GPU load now dominates (≈20 fps at full res): it must start cutting again.
+    const { state } = simulate(capped, { capFps: 30, gpuMs: 50 }, 3000);
+    expect(state.renderScale).toBeLessThan(1);
+  });
+
+  it('never recovers above the tier the player chose', () => {
+    const { state } = simulate(start('medium'), { gpuMs: 5 }, 120_000);
+    expect(state.tier).toBe('medium');
+  });
+
+  it('backs off tier raises when the better tier keeps failing', () => {
+    // Fine on medium at full res, too slow on high even at the floor.
+    const d = { gpuMs: 15, tierCost: { high: 3, medium: 1, low: 0.8 } };
+    let s = simulate(start(), d, 20_000).state;
     expect(s.tier).toBe('medium');
-    s = run(s, 30, 3100);
-    expect(s.tier).toBe('low');
-    expect(s.renderScale).toBe(0.75);
-    s = run(s, 30, 10_000);
-    expect(s.tier).toBe('low');
-    expect(s.renderScale).toBe(0.7);
-  });
-
-  it('does not drop a tier for frame rates that are only a little low', () => {
-    const s = run(initialGovernor('high', config), 52, 20_000);
-    expect(s.renderScale).toBe(0.75);
-    expect(s.tier).toBe('high');
-  });
-
-  it('raises resolution again after sustained headroom', () => {
-    let s = run(initialGovernor('high', config), 45, 520);
-    const lowered = s.renderScale;
-    s = run(s, 60, 2900);
-    expect(s.renderScale).toBe(lowered);
-    s = run(s, 60, 600);
-    expect(s.renderScale).toBeCloseTo(lowered + 0.05, 5);
-    s = run(s, 60, 20_000);
-    expect(s.renderScale).toBe(1);
-  });
-
-  it('backs off when a raise immediately causes a drop (no flapping)', () => {
-    // Frame times that fill each 500 ms window exactly, so no window mixes rates.
-    const windows = (state: GovernorState, frameMs: 12.5 | 20, count: number) => {
-      let st = state;
-      for (let i = 0; i < (count * 500) / frameMs; i++) st = stepGovernor(st, frameMs, ctx);
-      return st;
-    };
-    const fast = 12.5;
-    const slow = 20;
-
-    let s = windows(initialGovernor('high', config), slow, 1);
-    const lowered = s.renderScale;
-    s = windows(s, fast, 6); // 3 s of headroom → raise
-    expect(s.renderScale).toBeCloseTo(lowered + 0.05, 5);
-    s = windows(s, slow, 1); // dropped straight after the raise
-    expect(s.raiseAfterMs).toBe(6000);
-    s = windows(s, fast, 6);
-    expect(s.sinceRaiseMs).toBeNull(); // waits longer this time
-    s = windows(s, fast, 6);
-    expect(s.sinceRaiseMs).toBe(0);
-    s = windows(s, slow, 1);
-    expect(s.raiseAfterMs).toBe(12_000);
-    s = windows(s, fast, 24);
-    s = windows(s, slow, 1);
-    expect(s.raiseAfterMs).toBe(12_000); // capped
-
-    // A drop long after a raise is just load, not flapping.
-    let t = windows(initialGovernor('high', config), slow, 1);
-    t = windows(t, fast, 6); // raise
-    t = windows(t, fast, 5); // 2.5 s later
-    t = windows(t, slow, 1);
-    expect(t.renderScale).toBeLessThan(1);
-    expect(t.raiseAfterMs).toBe(3000);
-  });
-
-  it('ignores long gaps such as a hidden tab', () => {
-    const s0 = initialGovernor('high', config);
-    expect(stepGovernor(s0, 5000, ctx)).toBe(s0);
-    expect(stepGovernor(s0, 0, ctx)).toBe(s0);
-    expect(stepGovernor(s0, Number.NaN, ctx)).toBe(s0);
+    const first = s.tierRaiseAfterMs;
+    s = simulate(s, d, 60_000).state;
+    expect(s.tierRaiseAfterMs).toBeGreaterThan(first);
+    expect(s.tierRaiseAfterMs).toBeLessThanOrEqual(config.maxTierRaiseAfterMs);
   });
 
   it('never scales a 1x screen', () => {
-    let s = initialGovernor('high', config);
-    for (let i = 0; i < 300; i++) s = stepGovernor(s, 1000 / 20, { config, devicePixelRatio: 1 });
+    let s = start();
+    for (let i = 0; i < 600; i++) s = stepGovernor(s, 1000 / 20, { config, devicePixelRatio: 1 });
     expect(s.renderScale).toBe(1);
+  });
+});
+
+describe('stepGovernor details', () => {
+  /** Skips the grace period so a test starts measuring at once. */
+  const ready = (tier: QualityTier = 'high') => ({ ...start(tier), elapsedMs: config.graceMs });
+  /** Whole 500 ms windows at an exact frame time, so no window mixes rates. */
+  const windows = (s: GovernorState, frame: 12.5 | 20 | 25, count: number) => {
+    let st = s;
+    for (let i = 0; i < (count * 500) / frame; i++) st = stepGovernor(st, frame, ctx);
+    return st;
+  };
+
+  it('cuts in proportion to the shortfall, at least one step, never below the floor', () => {
+    expect(windows(ready(), 20, 1).renderScale).toBeCloseTo(Math.sqrt(50 / 60), 2);
+    expect(windows(ready(), 25, 1).renderScale).toBeCloseTo(Math.sqrt(40 / 60), 2);
+    expect(windows({ ...ready(), renderScale: 0.78 }, 25, 1).renderScale).toBe(0.75);
+  });
+
+  it('discards the window after a change, then judges the cut', () => {
+    let s = windows(ready(), 20, 1); // cut, probe set
+    expect(s.settleWindows).toBe(1);
+    s = windows(s, 20, 1); // settle window: no decision
+    expect(s.probe).not.toBeNull();
+    s = windows(s, 20, 1); // still 50 fps: the cut didn't help
+    expect(s.renderScale).toBe(1);
+    expect(s.cap?.fps).toBeCloseTo(50);
+  });
+
+  it('backs off resolution raises that immediately cause a drop', () => {
+    let s: GovernorState = { ...ready(), renderScale: 0.9, gpuBound: true };
+    s = windows(s, 12.5, 6); // 3 s of headroom → raise
+    expect(s.renderScale).toBeCloseTo(0.95, 5);
+    s = windows(s, 12.5, 1); // settle
+    s = windows(s, 20, 1); // dropped right after the raise
+    expect(s.raiseAfterMs).toBe(6000);
+  });
+
+  it('ignores long gaps such as a hidden tab', () => {
+    const s0 = ready();
+    expect(stepGovernor(s0, 5000, ctx)).toBe(s0);
+    expect(stepGovernor(s0, 0, ctx)).toBe(s0);
+    expect(stepGovernor(s0, Number.NaN, ctx)).toBe(s0);
   });
 });

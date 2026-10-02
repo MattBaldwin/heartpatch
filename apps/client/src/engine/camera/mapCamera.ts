@@ -20,6 +20,14 @@ import {
   type MotionSample,
 } from './cameraMath.js';
 
+/** Read-only snapshot for the dev overlay and Playwright hook. */
+export interface MapCameraState {
+  readonly target: GroundPoint;
+  readonly distance: number;
+  readonly flinging: boolean;
+  readonly bounds: Bounds;
+}
+
 interface PointerPos {
   x: number;
   y: number;
@@ -84,12 +92,12 @@ export class MapCamera {
     });
   }
 
-  /** Current pan target and zoom distance (read by the dev test hook). */
-  get state(): { target: GroundPoint; distance: number; flinging: boolean } {
+  get state(): MapCameraState {
     return {
       target: this.target,
       distance: this.distance,
       flinging: this.velocity.x !== 0 || this.velocity.z !== 0,
+      bounds: this.bounds,
     };
   }
 

@@ -54,7 +54,12 @@ async function createWebGPU(canvas: HTMLCanvasElement): Promise<Renderer> {
     // Babylon re-create the WebGPU device (see onLost below).
     doNotHandleContextLost: true,
   });
-  await engine.initAsync();
+  try {
+    await engine.initAsync();
+  } catch (err) {
+    engine.dispose();
+    throw err;
+  }
   if (import.meta.env.DEV) warnOnGlslFallback(engine);
 
   return {

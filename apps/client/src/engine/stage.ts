@@ -31,6 +31,9 @@ export function mountStage(
 ): Stage {
   const { engine } = renderer;
   const scene = new Scene(engine);
+  // The map camera handles gestures itself; don't raycast the scene on every
+  // pointer move (taps still pick when in-world taps arrive).
+  scene.skipPointerMovePicking = true;
   setupLighting(scene);
   const { bounds } = build(scene);
   const camera = new MapCamera(scene, canvas, CAMERA, bounds);

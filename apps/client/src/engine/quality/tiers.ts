@@ -25,6 +25,12 @@ export function lowerTier(tier: QualityTier): QualityTier | null {
   return QUALITY_TIERS[QUALITY_TIERS.indexOf(tier) + 1] ?? null;
 }
 
+/** The next better tier, never above `ceiling`; null when already there. */
+export function higherTier(tier: QualityTier, ceiling: QualityTier): QualityTier | null {
+  const i = QUALITY_TIERS.indexOf(tier);
+  return i > QUALITY_TIERS.indexOf(ceiling) ? (QUALITY_TIERS[i - 1] ?? null) : null;
+}
+
 /**
  * Lowest render scale (fraction of the DPR-capped resolution) for a tier on a
  * screen. Never below one render pixel per CSS pixel, so a 1x desktop screen

@@ -39,6 +39,21 @@ body {
   pointer-events: none;
 }
 
+.renderer-error {
+  position: fixed;
+  inset: auto calc(env(safe-area-inset-right) + 24px) auto calc(env(safe-area-inset-left) + 24px);
+  top: 40%;
+  padding: 20px 24px;
+  border-radius: 24px;
+  background: #fff;
+  font:
+    600 18px/1.4 system-ui,
+    sans-serif;
+  color: #6b4b6e;
+  text-align: center;
+  box-shadow: 0 8px 24px rgb(107 75 110 / 15%);
+}
+
 .dev-stats {
   top: calc(env(safe-area-inset-top) + 36px);
   font-variant-numeric: tabular-nums;

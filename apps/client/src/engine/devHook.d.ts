@@ -1,4 +1,4 @@
-import type { GroundPoint } from './camera/cameraMath.js';
+import type { MapCameraState } from './camera/mapCamera.js';
 import type { QualitySnapshot } from './quality/renderQuality.js';
 
 declare global {
@@ -7,7 +7,7 @@ declare global {
     __heartpatch?: {
       renderer(): string | null;
       quality(): QualitySnapshot | null;
-      camera(): { target: GroundPoint; distance: number; flinging: boolean } | null;
+      camera(): MapCameraState | null;
     };
   }
 }

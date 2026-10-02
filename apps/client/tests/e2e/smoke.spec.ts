@@ -9,6 +9,7 @@ interface CameraState {
   target: { x: number; z: number };
   distance: number;
   flinging: boolean;
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
 
 /** The dev-only hook from src/main.ts (typed in src/engine/devHook.d.ts, which this project can't see). */
@@ -94,6 +95,7 @@ test('renders the Babylon scene and reaches the server', async ({ page }) => {
   await expect(page.locator('[data-testid="dev-status"]')).toHaveText(/server: ok/);
   await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(
     /^\d+ fps · (WebGPU|WebGL2) · high · \d\.\d\dx$/,
+    { timeout: 15_000 },
   );
   expect(errors).toEqual([]);
 });
@@ -105,70 +107,72 @@ test('falls back to WebGL2 when asked', async ({ page }) => {
 });
 
 test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }) => {
+  test.setTimeout(180_000); // software rendering at iPad resolution is slow in CI
   await page.goto('/');
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   const vp = page.viewportSize()!;
   const mid = { x: vp.width / 2, y: vp.height / 2 };
+  // Gestures scale with the screen so iPhone and iPad move the map by similar amounts.
+  const unit = Math.min(vp.width, vp.height) / 4;
+
+  /** A drag that rests at the end before lifting, so it never flings. */
+  const slowDrag = (to: Point) => [
+    ...drag(mid, to, 8),
+    ...Array.from({ length: 8 }, () => ({ 1: to })),
+  ];
 
   // Slow drag left and up: the map follows the finger, so the view moves east and south.
   const start = await cameraState(page);
-  await touch(page, [
-    ...drag(mid, { x: mid.x - 80, y: mid.y - 60 }, 8),
-    { 1: { x: mid.x - 80, y: mid.y - 60 } },
-    { 1: { x: mid.x - 80, y: mid.y - 60 } },
-    { 1: { x: mid.x - 80, y: mid.y - 60 } },
-    { 1: { x: mid.x - 80, y: mid.y - 60 } },
-    { 1: { x: mid.x - 80, y: mid.y - 60 } },
-    { 1: { x: mid.x - 80, y: mid.y - 60 } },
-    { 1: { x: mid.x - 80, y: mid.y - 60 } },
-  ]);
+  await touch(page, slowDrag({ x: mid.x - unit, y: mid.y - unit }));
   const panned = await cameraState(page);
   expect(panned.target.x).toBeGreaterThan(start.target.x + 1);
   expect(panned.target.z).toBeLessThan(start.target.z - 1);
   expect(panned.flinging).toBe(false); // finger rested before lifting: no fling
 
   // Quick flick right: the map keeps gliding after release, then settles.
-  await touch(page, drag(mid, { x: mid.x + 120, y: mid.y }, 4));
+  await touch(page, drag(mid, { x: mid.x + unit, y: mid.y }, 4));
   const released = await cameraState(page);
   expect(released.flinging).toBe(true);
-  await expect.poll(async () => (await cameraState(page)).flinging, { timeout: 5000 }).toBe(false);
+  // Generous: the glide integrates at most 100 ms per frame, and CI renders in software.
+  await expect
+    .poll(async () => (await cameraState(page)).flinging, { timeout: 20_000 })
+    .toBe(false);
   const settled = await cameraState(page);
   expect(settled.target.x).toBeLessThan(released.target.x);
 
   // Pinch out zooms in; pinch in zooms out.
-  const before = settled.distance;
-  await touch(
-    page,
-    Array.from({ length: 9 }, (_, i) => ({
-      1: { x: mid.x - 30 - i * 10, y: mid.y },
-      2: { x: mid.x + 30 + i * 10, y: mid.y },
-    })),
-  );
+  const spread = (from: number, to: number) =>
+    Array.from({ length: 9 }, (_, i) => {
+      const half = from + ((to - from) * i) / 8;
+      return { 1: { x: mid.x - half, y: mid.y }, 2: { x: mid.x + half, y: mid.y } };
+    });
+  await touch(page, spread(unit * 0.3, unit * 1.2));
   const zoomedIn = await cameraState(page);
-  expect(zoomedIn.distance).toBeLessThan(before * 0.8);
-  await touch(
-    page,
-    Array.from({ length: 9 }, (_, i) => ({
-      1: { x: mid.x - 110 + i * 10, y: mid.y },
-      2: { x: mid.x + 110 - i * 10, y: mid.y },
-    })),
-  );
+  expect(zoomedIn.distance).toBeLessThan(settled.distance * 0.8);
+  await touch(page, spread(unit * 1.2, unit * 0.3));
   expect((await cameraState(page)).distance).toBeGreaterThan(zoomedIn.distance);
 
-  // Dragging far past the edge stops at the map bounds.
-  for (let i = 0; i < 6; i++) {
-    await touch(page, [
-      ...drag(mid, { x: mid.x - 150, y: mid.y }, 4),
-      { 1: { x: mid.x - 150, y: mid.y } },
-    ]);
-  }
+  // One huge drag (the finger may leave the screen) pins the view at the east bound,
+  // and dragging further doesn't move it.
+  const farLeft = { x: mid.x - vp.width * 4, y: mid.y };
+  await touch(page, slowDrag(farLeft));
   const edge = await cameraState(page);
-  await touch(page, [
-    ...drag(mid, { x: mid.x - 150, y: mid.y }, 4),
-    { 1: { x: mid.x - 150, y: mid.y } },
-  ]);
-  expect((await cameraState(page)).target.x).toBeCloseTo(edge.target.x, 5);
+  expect(edge.target.x).toBe(edge.bounds.maxX);
+  await touch(page, slowDrag(farLeft));
+  expect((await cameraState(page)).target.x).toBe(edge.bounds.maxX);
 
-  // The page itself never scrolls or zooms.
-  expect(await page.evaluate(() => [window.scrollX, window.scrollY])).toEqual([0, 0]);
+  // Synthetic events can't trigger native scroll or zoom, so check the guards
+  // that stop them on a real device (and the page stayed put meanwhile).
+  const guards = await page.evaluate(() => ({
+    canvasTouchAction: getComputedStyle(document.querySelector('#game')!).touchAction,
+    overflow: getComputedStyle(document.body).overflow,
+    overscroll: getComputedStyle(document.body).overscrollBehaviorY,
+    scroll: [window.scrollX, window.scrollY],
+  }));
+  expect(guards).toEqual({
+    canvasTouchAction: 'none',
+    overflow: 'hidden',
+    overscroll: 'none',
+    scroll: [0, 0],
+  });
 });
