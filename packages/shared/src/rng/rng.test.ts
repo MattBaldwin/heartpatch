@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Rng, type RngState } from './index.js';
+import { deriveSeed, SeedSchema, Rng, type RngState } from './index.js';
 
 const rolls = (rng: Rng, n: number) => Array.from({ length: n }, () => rng.nextUint32());
 
@@ -119,5 +119,33 @@ describe('Rng', () => {
     const rng = Rng.fromSeed('tiny');
     const items = [{ weight: 1e-12 }, { weight: 1 }, { weight: 0 }];
     for (let i = 0; i < 1000; i++) expect(items).toContain(rng.weighted(items));
+  });
+});
+
+describe('deriveSeed', () => {
+  it('is stable for the same parent and labels', () => {
+    expect(deriveSeed('map-seed', 'spawn', 2, -1, '2026-10-02T1')).toBe(
+      deriveSeed('map-seed', 'spawn', 2, -1, '2026-10-02T1'),
+    );
+  });
+
+  it('changes when any input changes', () => {
+    const base = deriveSeed('map-seed', 'spawn', 2, -1, 'w');
+    expect(deriveSeed('other-seed', 'spawn', 2, -1, 'w')).not.toBe(base);
+    expect(deriveSeed('map-seed', 'spawn', 2, -2, 'w')).not.toBe(base);
+    expect(deriveSeed('map-seed', 'spawn', 2, -1, 'x')).not.toBe(base);
+  });
+
+  it('joins labels unambiguously', () => {
+    expect(deriveSeed('s', 'a', 'bc')).not.toBe(deriveSeed('s', 'ab', 'c'));
+    expect(deriveSeed('s', 1, 2)).not.toBe(deriveSeed('s', '1', '2'));
+  });
+
+  it('returns a valid seed for Rng', () => {
+    expect(SeedSchema.parse(deriveSeed('s', 'x'))).toHaveLength(32);
+  });
+
+  it('rejects non-integer numeric labels', () => {
+    expect(() => deriveSeed('s', 1.5)).toThrow(RangeError);
   });
 });
