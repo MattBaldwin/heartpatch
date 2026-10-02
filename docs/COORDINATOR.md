@@ -77,7 +77,7 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
 
-Report usage to the owner when asked, and flag any lane above about $20. A typical phase-1 lane cost $5–12; read per-session cost from `get_session`.
+Report usage to the owner when asked, and flag any lane above about $20 (except #13: about $30, see §9). A typical phase-1 lane cost $5–12; read per-session cost from `get_session`.
 
 ## 7. Brief template
 
