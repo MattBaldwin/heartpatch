@@ -9,8 +9,10 @@ export interface Renderer {
   readonly engine: AbstractEngine;
   readonly kind: RendererKind;
   /**
-   * Subscribes to unrecoverable GPU loss (WebGPU device loss). WebGL context
-   * loss is restored by Babylon itself, so this never fires for WebGL.
+   * Subscribes to GPU loss that needs a full rebuild on a fresh canvas:
+   * WebGPU device loss, or a lost WebGL context once the browser says the GPU
+   * is back (`webglcontextrestored`). iOS drops WebGL contexts under memory
+   * pressure and when a home-screen app is backgrounded.
    */
   onLost(callback: () => void): void;
 }
@@ -86,14 +88,33 @@ async function createWebGL(canvas: HTMLCanvasElement): Promise<Renderer> {
   const engine = new Engine(
     canvas,
     false, // no MSAA on the default framebuffer; FXAA runs as a post-process
-    { stencil: true, powerPreference: 'high-performance', preserveDrawingBuffer: false },
+    {
+      stencil: true,
+      powerPreference: 'high-performance',
+      preserveDrawingBuffer: false,
+      // Babylon's in-place restore leaves procedural textures pointing at the
+      // dead context and reports shaders ready before they recompile. We
+      // rebuild the whole stage instead (boot.ts), which also spares the CPU
+      // copies of buffers and textures Babylon keeps for restoring.
+      doNotHandleContextLost: true,
+    },
     false, // we manage the pixel ratio ourselves (dpr.ts)
   );
+  // Without preventDefault the browser never restores the context.
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+  });
   return {
     engine,
     kind: engine.webGLVersion >= 2 ? 'webgl2' : 'webgl1',
-    onLost() {
-      // Babylon restores lost WebGL contexts itself.
+    onLost(callback) {
+      canvas.addEventListener(
+        'webglcontextrestored',
+        () => {
+          if (!engine.isDisposed) callback();
+        },
+        { once: true },
+      );
     },
   };
 }

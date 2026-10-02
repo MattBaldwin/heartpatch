@@ -84,6 +84,19 @@ describe('boot', () => {
     expect(t.onStart).toHaveBeenLastCalledWith(second, second.renderer);
   });
 
+  it('rebuilds on a fresh canvas when a WebGL context is lost and restored', async () => {
+    const t = setup(() => 'webgl2');
+    await boot(t.first, { preference: 'webgl2', ...t });
+    t.renderers[0]!.loseDevice();
+    await vi.waitFor(() => {
+      expect(t.stages).toHaveLength(2);
+    });
+    expect(t.stages[0]!.dispose).toHaveBeenCalledOnce();
+    expect(t.renderers[0]!.engine.dispose).toHaveBeenCalledOnce();
+    expect(t.stages[1]!.canvas).not.toBe(t.first);
+    expect(t.stages[1]!.renderer.kind).toBe('webgl2');
+  });
+
   it('reports a failed restart instead of throwing into the void', async () => {
     const t = setup((pref) => (pref === 'webgpu' ? 'webgpu' : new Error('no webgl')));
     await boot(t.first, { preference: 'webgpu', ...t });

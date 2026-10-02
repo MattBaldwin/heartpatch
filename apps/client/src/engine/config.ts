@@ -123,11 +123,10 @@ export const LIGHTING = {
   exposure: 1.05, // TUNE
   contrast: 1.05, // TUNE
   /**
-   * Only near-white highlights glow, so bloom stays gentle. The pipeline is
-   * 8-bit (tone-mapped in the materials), so the pastel ground sits just
-   * below this and must not cross it.
+   * Only the brightest (tone-mapped, 8-bit) highlights glow, so bloom stays
+   * gentle; the pastel ground stays below it.
    */
-  bloomThreshold: 0.95, // TUNE
+  bloomThreshold: 0.85, // TUNE
   bloomWeight: 0.25, // TUNE
   bloomScale: 0.5, // TUNE: bloom renders at half resolution
 } as const;

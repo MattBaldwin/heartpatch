@@ -6,6 +6,30 @@ import { LIGHTING, SCALER, TIER_SETTINGS, type QualityTier } from '../config.js'
 import { hardwareScalingFor } from '../dpr.js';
 import { initialGovernor, stepGovernor, type GovernorState } from './governor.js';
 
+/**
+ * Tone mapping, FXAA and bloom with 8-bit targets and no MSAA (tech spec §6
+ * "Memory and heat"). With `hdr = false` Babylon applies image processing
+ * (tone mapping, exposure, contrast) inside the materials, before the 8-bit
+ * write, instead of as a post-process. Don't set the pipeline's
+ * `imageProcessingEnabled` to false: that switches it off for the whole scene.
+ */
+export function createPostProcessing(scene: Scene, camera: Camera): DefaultRenderingPipeline {
+  const ip = scene.imageProcessingConfiguration;
+  ip.toneMappingEnabled = true;
+  // Khronos PBR Neutral keeps pastel colours true instead of ACES' contrasty look.
+  ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_KHR_PBR_NEUTRAL;
+  ip.exposure = LIGHTING.exposure;
+  ip.contrast = LIGHTING.contrast;
+
+  const pipeline = new DefaultRenderingPipeline('quality', false, scene, [camera]);
+  pipeline.samples = 1;
+  pipeline.fxaaEnabled = true;
+  pipeline.bloomThreshold = LIGHTING.bloomThreshold;
+  pipeline.bloomWeight = LIGHTING.bloomWeight;
+  pipeline.bloomScale = LIGHTING.bloomScale;
+  return pipeline;
+}
+
 export interface QualitySnapshot {
   readonly tier: QualityTier;
   readonly renderScale: number;
@@ -31,25 +55,7 @@ export class RenderQuality {
     this.scene = scene;
     this.camera = camera;
     this.state = initialGovernor(tier, SCALER);
-
-    // Tone mapping runs inside the materials, before the 8-bit write, so the
-    // post chain needs no half-float targets (tech spec §6 "Memory and heat").
-    const ip = scene.imageProcessingConfiguration;
-    ip.toneMappingEnabled = true;
-    // Khronos PBR Neutral keeps pastel colours true instead of ACES' contrasty look.
-    ip.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_KHR_PBR_NEUTRAL;
-    ip.exposure = LIGHTING.exposure;
-    ip.contrast = LIGHTING.contrast;
-
-    // 8-bit targets, no MSAA: FXAA is the only anti-aliasing on every tier.
-    this.pipeline = new DefaultRenderingPipeline('quality', false, scene, [camera]);
-    this.pipeline.samples = 1;
-    this.pipeline.imageProcessingEnabled = false;
-    this.pipeline.fxaaEnabled = true;
-    this.pipeline.bloomThreshold = LIGHTING.bloomThreshold;
-    this.pipeline.bloomWeight = LIGHTING.bloomWeight;
-    this.pipeline.bloomScale = LIGHTING.bloomScale;
-
+    this.pipeline = createPostProcessing(scene, camera);
     this.apply();
   }
 

@@ -162,6 +162,51 @@ test('renders only when something changes', async ({ page }) => {
   });
 });
 
+test('redraws after the WebGL context is lost and restored', async ({ page }) => {
+  // iOS drops WebGL contexts under memory pressure and when the home-screen
+  // app is backgrounded. Once the browser restores it, the scene must come
+  // back exactly as it was, not as a blank or half-restored canvas.
+  test.setTimeout(90_000);
+  await page.goto('/');
+  const stats = page.locator('[data-testid="dev-stats"]');
+  await expect(stats).toHaveText(/^idle · /, { timeout: 30_000 });
+  const canvas = page.locator('#game');
+  const before = await canvas.screenshot();
+
+  const rebuilt = await page.evaluateHandle(async () => {
+    const old = document.querySelector<HTMLCanvasElement>('#game')!;
+    const ext = old.getContext('webgl2')!.getExtension('WEBGL_lose_context')!;
+    ext.loseContext();
+    await new Promise((r) => setTimeout(r, 500));
+    ext.restoreContext();
+    return old;
+  });
+
+  // The stage is rebuilt on a fresh canvas (boot.ts), which draws and settles.
+  await expect
+    .poll(
+      () =>
+        rebuilt.evaluate((old) => {
+          const now = document.querySelector<HTMLCanvasElement>('#game');
+          return now !== old && now?.dataset['ready'] === 'true';
+        }),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  await expect(stats).toHaveText(/^idle · /, { timeout: 30_000 });
+  const after = await canvas.screenshot();
+  (await import('node:fs')).writeFileSync(
+    '/tmp/claude-0/-home-user-heartpatch/4c571cd1-5048-5414-bb73-623833fab74c/scratchpad/ctx-before.png',
+    before,
+  );
+  (await import('node:fs')).writeFileSync(
+    '/tmp/claude-0/-home-user-heartpatch/4c571cd1-5048-5414-bb73-623833fab74c/scratchpad/ctx-after.png',
+    after,
+  );
+  expect(after.length).toBeGreaterThan(20_000);
+  expect(after.equals(before)).toBe(true);
+});
+
 test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }) => {
   test.setTimeout(180_000); // software rendering at iPad resolution is slow in CI
   await page.goto('/');
