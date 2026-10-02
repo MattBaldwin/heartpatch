@@ -4,7 +4,6 @@
 > Items marked **[DEFAULT]** are sensible starting values chosen during design; tune them in playtesting and keep them in data config, not code.
 
 ## Contents
-
 1. [Vision](#1-vision)
 2. [Lore](#2-lore)
 3. [Players, maps and invites](#3-players-maps-and-invites)
@@ -43,7 +42,6 @@ Players pick and dress up their own **Keeper** character, collect adorable **squ
 **Long-term goal:** collect every type of squishy, defend your territory, and build the most wonderful home base in the land.
 
 **Design pillars**
-
 - **The squishy is the star.** Every system should make squishies feel alive, loved and worth collecting.
 - **Effort is rewarded, absence is not punished.** Attentive players progress faster; no one loses what they love by missing a day.
 - **Rivals, but family.** Competition drives the map; cooperation and generosity are rewarded mechanically.
@@ -142,7 +140,6 @@ When a squishy is ready, the server rolls a **weighted table** of possible forms
 - **Rare conditions** unlock secret branches: season, time of day, nearby buildings, battle feats, Easter-egg triggers.
 
 **Guardrails**
-
 - **Hints, not a slot machine.** In-game "whispers" and Lorebook pages hint at conditions ("this squishy seems to love moonlight…").
 - **Pity protection.** Each common result for a well-cared-for squishy slightly raises that player's next rare roll odds.
 - Rolls are server-side with a seeded RNG; inputs are logged so any result can be explained and replayed.
@@ -183,14 +180,14 @@ Phase 1 ships simple level-based single-form evolution; branching arrives in Pha
 
 Resources vary by terrain, making certain tiles worth fighting over.
 
-| Resource  | Source                              | Use                                  |
-| --------- | ----------------------------------- | ------------------------------------ |
-| Timber    | Forest                              | Basic building                       |
-| Stone     | Hills, mountains                    | Basic building                       |
-| Emberwood | Old forest                          | Hearthfire fuel (nightly upkeep)     |
-| Glimmer   | Mountains, caves                    | Advanced habitats, decorations       |
+| Resource | Source | Use |
+|---|---|---|
+| Timber | Forest | Basic building |
+| Stone | Hills, mountains | Basic building |
+| Emberwood | Old forest | Hearthfire fuel (nightly upkeep) |
+| Glimmer | Mountains, caves | Advanced habitats, decorations |
 | Heartdust | Rescuing Hollowed squishies, events | Nurseries, evolution boosters (rare) |
-| Treats    | Grown on farm plots                 | Feeding squishies, raising care      |
+| Treats | Grown on farm plots | Feeding squishies, raising care |
 
 **Seasonal resources** (special uses, see §15): Pumpkins, Witch Dust, Magic Fallen Leaves, Turkey Feathers, Presents, Fireworks.
 
@@ -233,12 +230,12 @@ Seasons are date windows in config (with time zone). Resource nodes, recipes, sp
 
 **2026 launch:** the Halloween window is extended to **[DEFAULT: Nov 9, 2026]** via a 2026 override so the first playable gets a full Halloween run.
 
-| Season             | Window [DEFAULT]            | Resources                                             | Specials                                                                                                                       |
-| ------------------ | --------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Halloween          | Oct 1 – Nov 2 (2026: Nov 9) | Pumpkins, Witch Dust                                  | Jack-o'-Lantern Hearthfires (extra-bright, scare the Hollow Man); spooky squishies and evolutions; Hollow Man at full strength |
-| Thanksgiving       | Nov 3 – Nov 30              | Magic Fallen Leaves (tap leaf piles), Turkey Feathers | Cozy habitats; Harvest Feast tables (hosting another player = big warmth bonus)                                                |
-| Christmas / Winter | Dec 1 – Dec 31              | Presents                                              | Presents open for random drops; gifting an unopened present doubles warmth; frosty squishies                                   |
-| New Year           | Dec 31 – Jan 2              | Fireworks                                             | Fireworks are noise (Hollow Man repellent); midnight countdown event                                                           |
+| Season | Window [DEFAULT] | Resources | Specials |
+|---|---|---|---|
+| Halloween | Oct 1 – Nov 2 (2026: Nov 9) | Pumpkins, Witch Dust | Jack-o'-Lantern Hearthfires (extra-bright, scare the Hollow Man); spooky squishies and evolutions; Hollow Man at full strength |
+| Thanksgiving | Nov 3 – Nov 30 | Magic Fallen Leaves (tap leaf piles), Turkey Feathers | Cozy habitats; Harvest Feast tables (hosting another player = big warmth bonus) |
+| Christmas / Winter | Dec 1 – Dec 31 | Presents | Presents open for random drops; gifting an unopened present doubles warmth; frosty squishies |
+| New Year | Dec 31 – Jan 2 | Fireworks | Fireworks are noise (Hollow Man repellent); midnight countdown event |
 
 **Rules:** presents are **earned only, never bought**, and each shows its possible contents. Leftover seasonal resources carry over as **keepsakes**; their special recipes only unlock during their season.
 
@@ -314,17 +311,15 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 
 ## 23. Keepers and wardrobe
 
-Every player is represented by a **Keeper**, a character drawn in the same soft vinyl-toy style as the squishies (§19): rounded, chibi-proportioned, glossy and playful. Squishies are still the stars, but your Keeper is how _you_ show up in the world.
+Every player is represented by a **Keeper**, a character drawn in the same soft vinyl-toy style as the squishies (§19): rounded, chibi-proportioned, glossy and playful. Squishies are still the stars, but your Keeper is how *you* show up in the world.
 
 ### Choosing a Keeper
-
 - At signup, players **select a Keeper** from a roster of preset base characters **[DEFAULT: 8]** that vary in body shape, skin tone, face and hairstyle.
 - Each base can then be tweaked: hair color, eye color, and a **[DEFAULT: 6]**-color palette for the starter outfit.
 - Players can change their Keeper at any time from the Wardrobe, for free. Progress and clothing stay with the account, not the base character.
 - No clothing is locked to any body type or presentation. Everything fits every Keeper.
 
 ### Where your Keeper appears
-
 - **Home base:** your Keeper wanders and idles among your squishies; tap them to open the Wardrobe.
 - **Map:** a small Keeper figure marks your home base and the tile you're currently battling on, so rivals can see who's who.
 - **Battles:** your Keeper stands behind your squishies, cheering and reacting (a happy jump on a super-effective hit).
@@ -332,7 +327,6 @@ Every player is represented by a **Keeper**, a character drawn in the same soft 
 - **Close-up view:** your Keeper appears at the edge of the frame when feeding or petting, but the squishy stays the focus (§20).
 
 ### Wardrobe and clothing
-
 - **Slots:** hat, hair accessory, top, bottom, shoes, back (capes, backpacks, wings), held item (lantern, wand, net), and a full-body **costume** slot that overrides the others.
 - **Rarity:** common, uncommon, rare, epic, legendary, matching squishy rarity colors.
 - **Outfits:** players can save **[DEFAULT: 3]** outfit presets and swap between them.
@@ -340,18 +334,15 @@ Every player is represented by a **Keeper**, a character drawn in the same soft 
 - Clothing is **cosmetic only**. It never affects battle stats, so no one can buy or trade their way to power.
 
 ### Getting clothing
-
 1. **Found:** small chance from capturing tiles, opening resource nodes, rescuing Hollowed squishies, and (Phase 3) presents. Some items only drop in specific terrain or seasons.
 2. **Awarded through milestones:** see §24. Milestone items are signature pieces you can't get any other way, so wearing them shows what you've achieved.
 3. **Purchased** in the **Boutique** using **Patch Coins**, an in-game currency earned from battles, captures, daily care and milestones. Patch Coins can **never be bought with real money** (§15). The Boutique stock rotates **[DEFAULT: daily]**, with seasonal racks during each season.
 4. **Traded and gifted** between players, using the same escrow, fair-trade bonus, generosity/warmth and regret-window rules as squishy trades (§10). Milestone items are **account-bound** and can't be traded, so they stay meaningful.
 
 ### Seasonal clothing
-
-Each season brings its own items: Halloween costumes (pumpkin hoods, ghost capes, witch hats, squishy onesies), Thanksgiving scarves and leaf crowns, Christmas sweaters and elf hats, New Year party hats. Like seasonal resources, seasonal clothing stays wearable year-round as keepsakes; it's just only _obtainable_ during its season.
+Each season brings its own items: Halloween costumes (pumpkin hoods, ghost capes, witch hats, squishy onesies), Thanksgiving scarves and leaf crowns, Christmas sweaters and elf hats, New Year party hats. Like seasonal resources, seasonal clothing stays wearable year-round as keepsakes; it's just only *obtainable* during its season.
 
 ### Implementation notes
-
 - **Procedural Keepers:** a parametric base body (a few preset meshes) with attachment bones/sockets per slot, so clothing is modular meshes plus material/palette swaps driven from data, the same approach as squishy parts.
 - **Data:** `clothing` items are data in `packages/shared/data` (`id, name, slot, rarity, season?, sources[], tradable, boutiquePrice?, visual`). `keeper` config is stored per player.
 - **Server-authoritative:** ownership, Boutique purchases and Patch Coin balances are validated server-side; purchases run in a single DB transaction (CLAUDE.md rule 7).
@@ -361,17 +352,17 @@ Each season brings its own items: Halloween costumes (pumpkin hoods, ghost capes
 
 Milestones are long-term goals that reward signature clothing, Patch Coins and titles. They give players something to work toward across every system.
 
-| Track      | Example tiers [DEFAULT]                                               | Example rewards                                             |
-| ---------- | --------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Territory  | Capture 10 / 50 / 150 tiles; hold Juniper's Gap tile for 7 days       | Explorer's Hat → Cartographer Cape → Crown of the Gap       |
-| Collector  | Catch 10 / 25 / 50 species; complete an element                       | Squishy Net → Collector's Satchel → Rainbow Jacket          |
-| Evolution  | Evolve 5 / 20 squishies; get a rare branch                            | Evolver's Goggles → Prism Boots                             |
-| Caretaker  | Pet/feed 100 / 500 / 2,000 times; keep 5 squishies at max contentment | Cozy Apron → Heart Mittens                                  |
-| Defender   | Win 10 / 50 defenses; protect every squishy for 7 nights              | Hearthkeeper Lantern → Ember Cloak                          |
-| Rescuer    | Rescue 1 / 10 Hollowed squishies                                      | Brave Scarf → Lightbringer Wings                            |
-| Friendship | (Phase 2) Gift 10 items; complete 10 fair trades                      | Friendship Bracelet → Matching outfit sets for both players |
-| Seasonal   | Complete each season's event goals                                    | That season's legendary costume                             |
-| Secret     | Hidden conditions tied to the Lorebook (§16)                          | Secret items, never listed until found                      |
+| Track | Example tiers [DEFAULT] | Example rewards |
+|---|---|---|
+| Territory | Capture 10 / 50 / 150 tiles; hold Juniper's Gap tile for 7 days | Explorer's Hat → Cartographer Cape → Crown of the Gap |
+| Collector | Catch 10 / 25 / 50 species; complete an element | Squishy Net → Collector's Satchel → Rainbow Jacket |
+| Evolution | Evolve 5 / 20 squishies; get a rare branch | Evolver's Goggles → Prism Boots |
+| Caretaker | Pet/feed 100 / 500 / 2,000 times; keep 5 squishies at max contentment | Cozy Apron → Heart Mittens |
+| Defender | Win 10 / 50 defenses; protect every squishy for 7 nights | Hearthkeeper Lantern → Ember Cloak |
+| Rescuer | Rescue 1 / 10 Hollowed squishies | Brave Scarf → Lightbringer Wings |
+| Friendship | (Phase 2) Gift 10 items; complete 10 fair trades | Friendship Bracelet → Matching outfit sets for both players |
+| Seasonal | Complete each season's event goals | That season's legendary costume |
+| Secret | Hidden conditions tied to the Lorebook (§16) | Secret items, never listed until found |
 
 - Each tier also grants a **title** shown on the profile card (e.g. "Keeper of the Gap", "Hollow Rescuer").
 - A **Milestones screen** shows progress bars for visible tracks. Secret milestones show as "???" until earned.
@@ -382,24 +373,23 @@ Milestones are long-term goals that reward signature clothing, Patch Coins and t
 A short, skippable cinematic that every new player sees once, right after choosing their Keeper (§23) and before the tutorial (§26). It explains what happened to the world and **why** each core mechanic matters, so the tutorial feels like a story and not a manual.
 
 **Format [DEFAULT]**
-
 - **Length:** about 90–120 seconds, seven shots.
-- **In-engine, not video:** rendered live in Babylon.js using the same procedural squishies, terrain and the player's own Keeper. That keeps the download small and lets the final shot show _your_ character.
+- **In-engine, not video:** rendered live in Babylon.js using the same procedural squishies, terrain and the player's own Keeper. That keeps the download small and lets the final shot show *your* character.
 - **Narration as captions** (large, rounded, readable for a 10-year-old) over music and sound effects. Each caption stays up long enough to read, and a tap advances early. Recorded voice-over can come later.
 - **Skippable** after the first viewing (and by a long-press for impatient siblings), **replayable** from Settings.
 - **Tone:** wonder first, a flash of spooky, then hope. The Hollow Man is a tall, flickering silhouette with glowing eyes; never gory or jump-scary.
 
 **Shot list [DEFAULT script — edit freely]**
 
-| #   | Shot                   | What we see                                                                                                                                                                                             | Caption (narration)                                                                                                                        | Why it matters                                        |
-| --- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
-| 1   | **The Heartpatch**     | Sweeping golden-hour flight over a glowing valley. Squishies bloom out of the ground like flowers when nearby squishies laugh.                                                                          | "Long ago, every squishy was born in the Heartpatch — a glowing field where the world's joy took shape."                                   | Establishes the world before the fall.                |
-| 2   | **Seasons of joy**     | Quick dissolves: pumpkins glowing and spooky squishies popping up; leaf piles with cozy squishies; snowfall and frosty squishies.                                                                       | "When the world celebrated, the magic surged — and new squishies bloomed with every season."                                               | Sets up seasonal squishies.                           |
-| 3   | **The Keepers of old** | Keepers tending Hearthfires; squishies playing, napping and growing into bigger, sparklier forms in cared-for meadows.                                                                                  | "Keepers tended the fires and cared for the squishies. Loved squishies grew… and changed into something wonderful."                        | Hearthfires, care, habitats and evolution.            |
-| 4   | **The Hollow Man**     | Color drains from the edges of the frame. A tall flickering silhouette steps out of the trees, eyes glowing. The music drops out.                                                                       | "But one night, something hollow came. He had no joy of his own… so he wanted ours."                                                       | Introduces the threat.                                |
-| 5   | **The Great Scatter**  | He reaches for the Heartpatch; it cracks with light and shatters into glowing Heart Seeds that streak across the sky. Squishies tumble into the wild lands; a few turn grey and drift into the shadows. | "The Heartpatch shattered. Its Heart Seeds scattered. And the squishies were lost across the land."                                        | Why squishies are wild, why some are Hollowed.        |
-| 6   | **The land today**     | The map from above: patchy, washed-out, wild. One by one, old Hearthfires flicker out. Far away, a few other Heart Seeds glow.                                                                          | "Now the land is wild, and the fires are going out. He still walks at night — and he only needs one."                                      | Territory to reclaim; nightfall; other Keepers.       |
-| 7   | **Your Heart Seed**    | A Heart Seed lands at the feet of **the player's own Keeper** and glows. Camera pushes in.                                                                                                              | "But a Heart Seed has found you, Keeper. Plant it. Light a fire. Bring the squishies home… and bring the color back, one patch at a time." | The player's goal. Cut to title card: **HEARTPATCH**. |
+| # | Shot | What we see | Caption (narration) | Why it matters |
+|---|---|---|---|---|
+| 1 | **The Heartpatch** | Sweeping golden-hour flight over a glowing valley. Squishies bloom out of the ground like flowers when nearby squishies laugh. | "Long ago, every squishy was born in the Heartpatch — a glowing field where the world's joy took shape." | Establishes the world before the fall. |
+| 2 | **Seasons of joy** | Quick dissolves: pumpkins glowing and spooky squishies popping up; leaf piles with cozy squishies; snowfall and frosty squishies. | "When the world celebrated, the magic surged — and new squishies bloomed with every season." | Sets up seasonal squishies. |
+| 3 | **The Keepers of old** | Keepers tending Hearthfires; squishies playing, napping and growing into bigger, sparklier forms in cared-for meadows. | "Keepers tended the fires and cared for the squishies. Loved squishies grew… and changed into something wonderful." | Hearthfires, care, habitats and evolution. |
+| 4 | **The Hollow Man** | Color drains from the edges of the frame. A tall flickering silhouette steps out of the trees, eyes glowing. The music drops out. | "But one night, something hollow came. He had no joy of his own… so he wanted ours." | Introduces the threat. |
+| 5 | **The Great Scatter** | He reaches for the Heartpatch; it cracks with light and shatters into glowing Heart Seeds that streak across the sky. Squishies tumble into the wild lands; a few turn grey and drift into the shadows. | "The Heartpatch shattered. Its Heart Seeds scattered. And the squishies were lost across the land." | Why squishies are wild, why some are Hollowed. |
+| 6 | **The land today** | The map from above: patchy, washed-out, wild. One by one, old Hearthfires flicker out. Far away, a few other Heart Seeds glow. | "Now the land is wild, and the fires are going out. He still walks at night — and he only needs one." | Territory to reclaim; nightfall; other Keepers. |
+| 7 | **Your Heart Seed** | A Heart Seed lands at the feet of **the player's own Keeper** and glows. Camera pushes in. | "But a Heart Seed has found you, Keeper. Plant it. Light a fire. Bring the squishies home… and bring the color back, one patch at a time." | The player's goal. Cut to title card: **HEARTPATCH**. |
 
 **Lore consistency:** reclaiming a tile visibly restores its color and brings squishies back to it. This is the in-world reason territory matters, and the map's art should show it (neutral and stranded tiles look a little washed-out; owned tiles are vivid).
 
@@ -413,22 +403,21 @@ Every new player plays a short solo tutorial before joining or creating a multip
 
 **Steps [DEFAULT]** — each is a short goal with a highlighted target and one or two lines from Sprout:
 
-1. **Plant your Heart Seed.** Tap the glowing spot → your home base grows from the ground with color spreading outward. _Teaches: home base can never be taken._
-2. **Gather.** Collect Timber and Emberwood from nearby nodes (tutorial timers take seconds, not minutes). _Teaches: resources and timers._
-3. **Light your first Hearthfire.** Build it, fuel it, see the warm safe radius on the map. _Teaches: fires keep squishies safe._
+1. **Plant your Heart Seed.** Tap the glowing spot → your home base grows from the ground with color spreading outward. *Teaches: home base can never be taken.*
+2. **Gather.** Collect Timber and Emberwood from nearby nodes (tutorial timers take seconds, not minutes). *Teaches: resources and timers.*
+3. **Light your first Hearthfire.** Build it, fuel it, see the warm safe radius on the map. *Teaches: fires keep squishies safe.*
 4. **Meet a wild squishy.** A friendly wild squishy wanders up. **First battle** (scripted to be winnable) introduces moves and one clear example of element and feeling effectiveness ("Super cozy!").
 5. **Capture it.** Use a Heart Charm (capture is guaranteed here). The player names their first squishy — it becomes their **Partner**.
 6. **Care for it.** The camera swoops into the **close-up view**: pet, boop and feed it. Sprout explains, simply, that happy squishies learn faster.
-7. **Give it a home.** Build a habitat that matches its element or feeling and move it in. _Teaches: the right home helps it grow._
+7. **Give it a home.** Build a habitat that matches its element or feeling and move it in. *Teaches: the right home helps it grow.*
 8. **Claim your first territory.** Attack a neighboring tile, beat its guardian, and watch color return to the land. Sprout explains you can only claim land next to land you already hold, and that land brings resources and new squishies.
-9. **Defend.** A shadowy "echo" (not a real player) raids your new tile. Pick a **defense stance** and win. _Teaches: rivals can attack your tiles, but never your home base._
+9. **Defend.** A shadowy "echo" (not a real player) raids your new tile. Pick a **defense stance** and win. *Teaches: rivals can attack your tiles, but never your home base.*
 10. **Nightfall.** The sky dims and the Hollow Man appears at the edge of the Glade. One squishy is outside the firelight; move it inside (or stretch the fire). He hesitates at the light and fades away. Sprout explains the rules: keep the fire lit, he only needs one — and if he ever takes a squishy, you can always rescue it.
-11. **Evolve.** One more battle gives your Partner enough XP to evolve. Big celebration moment. _Teaches: battles plus care plus a good home = growth._
+11. **Evolve.** One more battle gives your Partner enough XP to evolve. Big celebration moment. *Teaches: battles plus care plus a good home = growth.*
 12. **Your first milestone.** Earn the **"First Patch"** milestone and the account-bound **Seedling Scarf**; open the Wardrobe and put it on.
 13. **Graduation.** Sprout: "Other Keepers have Heart Seeds too…" The player chooses **Create a map** or **Enter an invite code**.
 
 **Rules**
-
 - Target length **[DEFAULT: 12–18 minutes]**. Progress is saved after every step; quitting resumes where you left off.
 - Nothing can be lost in the tutorial. The Hollow Man can't take anything here.
 - **Carry-over:** the player's Partner species, the Seedling Scarf and the "First Patch" milestone are account-level rewards. Every new map the player joins starts them with their Partner (a fresh level-1 copy) alongside the normal starting kit.

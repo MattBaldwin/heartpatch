@@ -3,3 +3,6 @@ dist/
 coverage/
 playwright-report/
 test-results/
+# Prose docs are edited by many parallel sessions; Prettier's table re-alignment
+# turns one-row edits into whole-table diffs and merge conflicts.
+*.md
