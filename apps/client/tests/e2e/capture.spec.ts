@@ -134,9 +134,13 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
     // A new friend: the result card says so and the catalog marks it.
     await expect(page.getByTestId('battle-result')).toContainText('A new friend!');
     await page.getByTestId('battle-done').tap();
-  } else {
-    expect(tried.status).toBe('active');
+  } else if (tried.status === 'active') {
     await hud.getByRole('button', { name: 'Back to patch' }).tap();
+  } else {
+    // A miss costs the turn, and the wild squishy can tucker out our fresh
+    // level-1 friend before the next one.
+    expect(tried.reason).toBe('tuckered-out');
+    await page.getByTestId('battle-done').tap();
   }
   await expect(hud).toBeHidden();
 
@@ -145,10 +149,13 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await expect
     .poll(() => catalogState(page))
     .toMatchObject({ loading: false, seen: 1, caught: caught ? 1 : 0 });
-  await expect(page.getByTestId('catalog-grid')).toContainText('Moonpuff');
+  // Whoever spawned (the roster's, or a secret one) now has a name; the rest stay "???".
+  const met = (await catalogState(page))!.names.filter((n) => n !== '???');
+  expect(met).toHaveLength(1);
+  await expect(page.getByTestId('catalog-grid')).toContainText(met[0]!);
   await expect(page.getByTestId('catalog-grid')).toContainText(caught ? 'Friend' : 'Seen');
   await page.getByTestId('catalog-close').tap();
-  if (!caught) {
+  if (tried.status === 'active') {
     // The battle waited behind the catalog; the button resumes it.
     await page.getByTestId('battle-entry').tap();
     await expect(hud).toBeVisible();

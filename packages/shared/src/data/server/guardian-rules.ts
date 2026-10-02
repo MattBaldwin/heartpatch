@@ -29,7 +29,8 @@ export const GUARDIAN_RULES: GuardianRules = {
   ],
   // Launch roster (#10). Ordinary land (levels 2–13) is guarded by base
   // forms; Juniper's Gap (levels 14–18) by evolved ones, the toughest
-  // guardians on the map. TUNE: every weight.
+  // guardians on the map, even below their own evolution level (a guardian
+  // is the land's, not a squishy that grew up). TUNE: every weight.
   tables: [
     {
       id: 'meadow-guardians',

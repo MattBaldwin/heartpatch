@@ -22,7 +22,7 @@ const evolvedIds = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into
 const bases = SPECIES.filter((s) => !evolvedIds.has(s.id));
 const halloween = bases.filter((s) => s.season === 'halloween');
 const everyday = bases.filter((s) => s.season === undefined);
-const evolvedFrom = (s: Species): Species => byId.get(s.evolutions[0]!.into)!;
+const evolvedFormOf = (s: Species): Species => byId.get(s.evolutions[0]!.into)!;
 const statTotal = (s: Species) =>
   s.baseStats.hp + s.baseStats.attack + s.baseStats.defense + s.baseStats.speed;
 const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
@@ -38,7 +38,7 @@ describe('launch roster (issue #10)', () => {
   it('gives every line one simple evolution that keeps its element, feeling and season', () => {
     for (const base of bases) {
       expect(base.evolutions, base.id).toHaveLength(1);
-      const evolved = evolvedFrom(base);
+      const evolved = evolvedFormOf(base);
       expect(evolved.evolutions, evolved.id).toEqual([]);
       expect([evolved.element, evolved.feeling, evolved.season], evolved.id).toEqual([
         base.element,
@@ -153,14 +153,16 @@ describe('balance intent (design doc §5), played with the real engine', () => {
     ['fuzzbolt', 'dawndrop'],
     ['fuzzbolt', 'thunderpuff'],
     ['pebblesnooze', 'candlekit'],
-    ['pebblesnooze', 'emberbun'],
+    ['pebblesnooze', 'glowboo'],
     ['puddlepuff', 'glimmerock'],
     ['snoozicle', 'mossmuffin'],
   ])('plain %s is a great counter to %s', (counter, target) => {
     const plain = byId.get(counter)!;
     const fancy = byId.get(target)!;
+    // Plain: common, rarer target, smaller stat total (synergy aside: see species.ts).
     expect(plain.rarity).toBe('common');
-    expect(statTotal(plain)).toBeLessThanOrEqual(statTotal(fancy));
+    expect(RARITY_ORDER.indexOf(fancy.rarity)).toBeGreaterThan(RARITY_ORDER.indexOf('common'));
+    expect(statTotal(plain)).toBeLessThan(statTotal(fancy));
     expect(winRate(counter, target, 100)).toBeGreaterThanOrEqual(0.7); // TUNE:
   });
 

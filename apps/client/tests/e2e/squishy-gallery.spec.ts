@@ -158,13 +158,13 @@ test('draw calls stay flat as squishies multiply (shared geometry, thin instance
   page,
 }) => {
   test.setTimeout(120_000);
-  const ten = await openGallery(page, '?still&count=10');
-  const fifty = await openGallery(page, '?still&count=50');
-  expect(ten.squishies).toBe(10);
-  expect(fifty.squishies).toBe(50);
-  expect(fifty.meshes).toBe(ten.meshes);
-  expect(fifty.meshes).toBeLessThanOrEqual(16);
-  expect(fifty.instances).toBeGreaterThan(ten.instances * 3);
+  // Every look once, then every look twice: the same shapes, twice the squishies.
+  const once = await openGallery(page, '?still');
+  const twice = await openGallery(page, `?still&count=${String(once.squishies * 2)}`);
+  expect(twice.squishies).toBe(once.squishies * 2);
+  expect(twice.meshes).toBe(once.meshes);
+  expect(twice.meshes).toBeLessThanOrEqual(16);
+  expect(twice.instances).toBe(once.instances * 2);
 });
 
 test('tapping a squishy jiggles it, then the still scene goes idle again', async ({ page }) => {

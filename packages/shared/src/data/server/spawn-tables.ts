@@ -143,7 +143,8 @@ export const SPAWN_TABLES: SpawnTable[] = [
     entries: [{ species: 'gourdon', weight: 2 }], // TUNE:
   },
   {
-    // Witch Dust (from Pumpkins and Emberwood) draws Upsybats at dusk.
+    // Upsybats love Witch Dust: dusk where it's gathered (Pumpkins, Emberwood).
+    // Spawns can't see what players gather yet; terrain stands in for it.
     id: 'halloween-dusk',
     terrains: ['old-forest', 'pumpkin-fields'],
     season: 'halloween',
@@ -166,11 +167,13 @@ export const SPAWN_TABLES: SpawnTable[] = [
     ],
   },
   {
-    // Secret: a tiny piece of the Heartpatch, out on Gap nights.
+    // Secret: a tiny piece of the Heartpatch, out on Gap nights. Weights add
+    // up across matching tables, so this is 1 in 28 Gap night spawns (1 in
+    // 39 at Halloween): about one Heartlet in the Gap every 5–6 days.
     id: 'gap-nights',
     terrains: ['junipers-gap'],
     timeOfDay: 'night',
-    entries: [{ species: 'heartlet', weight: 1 }], // TUNE: a secret, so very rare
+    entries: [{ species: 'heartlet', weight: 1 }], // TUNE:
   },
 
   // Placeholders below stay until their tests move to the roster (follow-up).

@@ -8,11 +8,14 @@ import type { Species } from '../schemas/data/species.js';
  * guardian tables live in `data/server/` (CLAUDE.md rule 6).
  *
  * Balance intent (§5): no squishy is strictly best. Harmonious element ×
- * feeling combos (1.2× synergy) get a slightly smaller stat budget; the one
- * conflicted launch squishy (Glowboo, Light + Spooky, 0.85×) gets a bigger
- * one. A few plain commons are great counters to rarer squishies:
+ * feeling combos (1.2× synergy: Puddlepuff, Pebblesnooze, Emberbun,
+ * Fizzlepop, Flurrypup, Mossmuffin, Dawndrop) get a slightly smaller stat
+ * budget; the one conflicted launch squishy (Glowboo, Light + Spooky, 0.85×)
+ * gets a bigger one. A few plain commons (common rarity, small stat totals;
+ * Puddlepuff and Pebblesnooze lean on their synergy) are great counters to
+ * rarer squishies:
  *   Fuzzbolt     → Dawndrop, Thunderpuff  (Spark hits Light; Silly disarms Joy and Brave)
- *   Pebblesnooze → Candlekit, Emberbun    (Stone hits Fire; Sleepy calms Spooky and Cozy)
+ *   Pebblesnooze → Candlekit, Glowboo     (Stone hits Fire; Sleepy calms Spooky)
  *   Puddlepuff   → Glimmerock             (Water hits Stone; Silly disarms Joy)
  *   Snoozicle    → Mossmuffin             (Frost hits Leaf; Sleepy calms Cozy)
  * `species.test.ts` plays those matchups with the real engine.
@@ -878,7 +881,7 @@ export const SPECIES: Species[] = [
   {
     id: 'glowgourd',
     name: 'Glowgourd',
-    description: 'A grinning jack-o-lantern that glows from the inside. Still not spooky.',
+    description: "A grinning jack-o'-lantern that glows from the inside. Still not spooky.",
     element: 'leaf',
     feeling: 'silly',
     rarity: 'uncommon',
@@ -935,8 +938,9 @@ export const SPECIES: Species[] = [
     habitatPreferences: { elements: ['light'], feelings: ['spooky'] },
   },
 
-  // Shadow + Silly. A bat that hangs the wrong way up; flutters round Witch
-  // Dust (gathered from Pumpkins and Emberwood) at dusk.
+  // Shadow + Silly. A bat that hangs the wrong way up and loves Witch Dust.
+  // Spawns key on terrain, season and time only, so it comes out at dusk
+  // where Witch Dust is gathered (pumpkin fields, old woods).
   {
     id: 'upsybat',
     name: 'Upsybat',
@@ -975,8 +979,9 @@ export const SPECIES: Species[] = [
     habitatPreferences: { elements: ['shadow'], feelings: ['silly', 'spooky'] },
   },
 
-  // Fire + Spooky. A candle-kitten drawn to Jack-o'-Lantern Hearthfires and
-  // Emberwood at dusk.
+  // Fire + Spooky. A candle-kitten that loves Jack-o'-Lantern glow. Spawns
+  // can't see buildings yet, so it comes out at dusk and night in the
+  // pumpkin fields and old woods (where Emberwood grows) instead.
   {
     id: 'candlekit',
     name: 'Candlekit',
