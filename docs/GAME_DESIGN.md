@@ -125,7 +125,7 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 - **Floor of 1.0×.** Neglect never weakens or sickens a squishy; it only means no bonus. Combat alone always advances a squishy, just more slowly.
 - **Cap.** Combined multiplier capped at **[DEFAULT: 3×]**.
 - **Implementation:** no ticking simulation. Store `contentment` and `lastCaredAt`; compute current contentment lazily from elapsed time on read. Care actions have server-side cooldowns so tap-spamming can't max care.
-- **Why three actions:** they map one-to-one to the close-up gestures (drag a treat → feed, stroke → pet, tap/tickle → play), which keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
+- **Why three actions:** each maps to close-up gestures (§20): drag a treat → **feed**, stroke → **pet**, tap to boop or pinch to tickle → **play**. Each also has a visible button. This keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
 - Care history (a rolling score over the squishy's life) feeds evolution odds (§8).
 
 ## 8. Evolution
@@ -212,8 +212,8 @@ The shared threat and the heart of the lore. Tall, flickering silhouette with gl
 
 - **"He only needs one."** Each night at **nightfall [DEFAULT: 9:00 PM in the map's time zone]** a server job runs per map. For each player, if any squishies are **exposed**, he takes **one** of them.
 - **Exposure:** a squishy is exposed if it's housed or stationed outside all Hearthfire safe radii and noise coverage. Squishies inside the home base with a lit Hearthfire are safe.
-- **"Keep the fire lit."** Hearthfires burn **one night of fuel** at each nightfall and store up to **[DEFAULT: 5 nights]** of Emberwood. A fire with no fuel left goes out at nightfall. Stocking up teaches planning ahead: an active player tops up in seconds, and a player who misses a few days comes back to a fire that's still lit. The fire shows its remaining nights clearly (e.g. "3 nights left").
-- **Absence is not punished (pillar 2).** Squishies at home behind a lit fire are always safe. Only squishies the player chose to station outside the light (on map tiles) can be taken, and taken squishies can always be rescued.
+- **"Keep the fire lit."** Hearthfires store up to **[DEFAULT: 5 nights]** of Emberwood. At each nightfall: if the fire has fuel for tonight, it burns one night's worth and protects tonight; otherwise it goes out. Stocking up teaches planning ahead: an active player tops up in seconds, and a player who misses a few days comes back to a fire that's still lit. The fire shows its remaining nights clearly (e.g. "3 nights left").
+- **Absence is not punished (pillar 2).** While the fire is lit, squishies at home are always safe; only squishies the player chose to station outside the light (on map tiles) can be taken. If a player is away longer than their stored fuel lasts, the fire goes out and home squishies become exposed too. Taken squishies can always be rescued.
 - **Repelled by noise.** Noise buildings extend protection.
 - **Repelled by family love.** (Phase 2) Warmth between players with nearby territories reduces his reach.
 - **"Never look too long."** (Phase 2 polish) Keeping the camera locked on him when he appears makes nearby squishies start to drift toward him.
@@ -226,11 +226,13 @@ Seasons are date windows in config (with time zone). Resource nodes, recipes, sp
 
 **Windows may overlap** (New Year already overlaps Christmas). When two seasons are active, content tagged with either is available.
 
-**2026 launch:** the Halloween window is extended to **[DEFAULT: Nov 9, 2026]** so the first playable gets a full Halloween run. This is a data change, not code.
+**Window format:** each season has a **recurring month-day window** (e.g. `10-01` to `11-02`, in the map's time zone) plus optional **per-year overrides** (e.g. `2026: 10-01 to 11-09`). A one-year change is a data edit that doesn't affect future years.
+
+**2026 launch:** the Halloween window is extended to **[DEFAULT: Nov 9, 2026]** via a 2026 override so the first playable gets a full Halloween run.
 
 | Season | Window [DEFAULT] | Resources | Specials |
 |---|---|---|---|
-| Halloween | Oct 1 – Nov 2 | Pumpkins, Witch Dust | Jack-o'-Lantern Hearthfires (extra-bright, scare the Hollow Man); spooky squishies and evolutions; Hollow Man at full strength |
+| Halloween | Oct 1 – Nov 2 (2026: Nov 9) | Pumpkins, Witch Dust | Jack-o'-Lantern Hearthfires (extra-bright, scare the Hollow Man); spooky squishies and evolutions; Hollow Man at full strength |
 | Thanksgiving | Nov 3 – Nov 30 | Magic Fallen Leaves (tap leaf piles), Turkey Feathers | Cozy habitats; Harvest Feast tables (hosting another player = big warmth bonus) |
 | Christmas / Winter | Dec 1 – Dec 31 | Presents | Presents open for random drops; gifting an unopened present doubles warmth; frosty squishies |
 | New Year | Dec 31 – Jan 2 | Fireworks | Fireworks are noise (Hollow Man repellent); midnight countdown event |
@@ -287,7 +289,7 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 
 - **Map view:** third-person, top-down (slight tilt), pan with one finger, pinch to zoom, smooth inertia.
 - **Close-up interaction view:** tap a squishy and the camera swoops in face-to-face; background blurs (depth of field, only in this view); high-detail model swapped in. **The squishy is the star.**
-  - Gestures: tap to boop, stroke to pet, drag a treat to feed, pinch to tickle → reactions (happy wiggle, blush, giggle, yawn) and care credit.
+  - Gestures: tap to boop, stroke to pet, drag a treat to feed, pinch to tickle → reactions (happy wiggle, blush, giggle, yawn) and care credit. Boop and tickle both count as **play**; stroke is **pet**; the treat is **feed** (§7). Each care action also has a visible button.
   - Idle personality animations reflect feeling (Silly spins, Sleepy nods off, Brave puffs up).
   - Dress-up accessories (shared Wardrobe, §23) and photo mode (Phase 2+).
 

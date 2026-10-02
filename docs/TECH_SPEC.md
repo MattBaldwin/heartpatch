@@ -91,7 +91,12 @@ Add anything else only with a one-line justification in the PR.
 - Soft-delete is not used; removed players' data is archived by status flags.
 - Migrations: `drizzle-kit generate`, committed, applied on deploy. Never edit a merged migration.
 
-**Core spine (designed up front in issue #2):** `users`, `sessions`, `maps` (including `event_seq`), `map_members`, `tiles`, `squishies`, `game_events`. These are the tables most others reference, so they are designed once rather than piecemeal by parallel branches. **Feature tables** (wardrobe, ledgers, milestones, battles, etc.) arrive in their own issue's migration. Generate a migration right before merging, from the latest `main`, so parallel branches don't produce clashing migration numbers.
+**Core spine (designed up front in issue #2):** `users`, `sessions`, `maps` (including `event_seq`), `map_members`, `tiles`, `squishies`, `game_events`. These are the tables most others reference, so they are designed once rather than piecemeal by parallel branches. **Feature tables** (wardrobe, ledgers, milestones, battles, etc.) arrive in their own issue's migration. **Migration workflow for parallel branches:**
+  1. Generate migrations freely while developing (integration tests need a schema).
+  2. Before merging, delete the branch's generated migration SQL and its `meta/` journal and snapshot entries, merge the latest `main`, and regenerate once.
+  3. If `main` gains a migration between hand-off and merge, the coordinator regenerates again.
+  4. CI fails if `drizzle-kit generate` would produce a diff, and runs `drizzle-kit check`.
+  5. Migrations must be safe while the previous release is still running (expand, then contract in a later release), because deploy starts new containers before old ones stop.
 
 **Core tables (Phase 1):** `users`, `sessions`, `recovery_codes`, `keepers`, `maps`, `map_members`, `invite_codes`, `join_requests`, `tiles`, `species_seen`, `squishies`, `buildings`, `inventories`, `resource_ledger`, `gather_jobs`, `battles` (seed, action log, result), `raids`, `hollow_events`, `clothing_owned`, `outfits`, `milestone_progress`, `milestone_rewards`, `coin_ledger`, `boutique_stock`, `quick_messages`, `game_events`.
 
@@ -102,7 +107,7 @@ Add anything else only with a one-line justification in the PR.
 - Auth: session cookie `hp_session` (HttpOnly, Secure, SameSite=Lax, 30-day rolling). CSRF: require header `X-Requested-With: heartpatch` on mutating requests (simple and sufficient with SameSite cookies).
 - **Commands, not state writes:** e.g. `POST /maps/:mapId/tiles/:tileId/attack`, `POST /maps/:mapId/squishies/:id/care` with `{ action: "pet" }`. The server computes outcomes.
 - Errors: `{ error: { code: "TILE_NOT_ADJACENT", message: "Friendly text a kid can read" } }` with proper HTTP status. Codes are a shared enum.
-- Rate limits: global per-IP limit; tighter limits on auth, care actions, chat.
+- Rate limits: global per-IP limit; tighter limits on auth, care actions and chat, including Phase 1 quick messages and emoji (`chat.quick`). In Phase 1 these limits stand in for owner mute.
 - Idempotency: mutating endpoints accept an optional `Idempotency-Key` header; the client sends one for purchases, trades and battle actions so a retry on a flaky phone connection can't double-apply.
 
 ### WebSocket
@@ -117,7 +122,9 @@ Add anything else only with a one-line justification in the PR.
 
 ## 6. Client architecture
 
-- **Rendering:** one Babylon `Engine`; scenes swapped (map, home base, battle, close-up, wardrobe). WebGPU is the primary renderer (`navigator.gpu` present and the adapter initialises); fall back to WebGL2 automatically. Scene code must work on both.
+- **Rendering:** one Babylon `Engine`; scenes swapped (map, home base, battle, close-up, wardrobe). WebGPU is the primary renderer (`navigator.gpu` present and the adapter initialises); fall back to WebGL2 automatically, including on WebGPU device loss. Scene code must work on both. Devices on the iOS 17 minimum run WebGL2.
+  - **Testing caveat:** Playwright WebKit in CI runs without WebGPU, so CI exercises the WebGL2 path; the WebGPU path is verified on real devices.
+  - **Shaders:** write custom shaders in **WGSL** (or provide both WGSL and GLSL) so Babylon doesn't have to load its glslang/twgsl WASM converters, which would count against the 15 MB first-load budget.
 - **Quality settings:** `engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio, 2))`; FXAA or SMAA post-process; dynamic resolution scaler targeting 60 fps; quality tiers (high/medium/low) auto-picked from a short benchmark and adjustable in settings. **Default tier is high** on the playtest devices; spend the headroom on squishy quality (clearcoat, bloom, close-up depth of field) first.
 - **UI:** HTML/CSS overlay on top of the canvas for menus, inventory, wardrobe lists and text input (sharper text, native accessibility, iOS keyboard works properly). Babylon GUI only for in-world labels and bubbles.
 - **State:** a small typed store (no heavy framework needed); server is the source of truth. Optimistic UI only for cosmetic actions (e.g. equipping clothing), rolled back on server error.
@@ -136,11 +143,14 @@ Add anything else only with a one-line justification in the PR.
 - **Modules** follow `routes → service → repo`. Services contain game logic and call `packages/shared` formulas; repos are the only place that touches Drizzle.
 - **Transactions:** any command touching multiple rows (capture, trade, purchase, reward) runs in one DB transaction with row locks (`SELECT … FOR UPDATE`) on the affected entities.
 - **Game event stream:** every meaningful change writes a `game_events` row (type, mapId, actor, payload). This one stream feeds WebSocket broadcast, milestone progress, Easter-egg triggers and the raid log.
-  - **Same transaction (transactional outbox):** the event row is written in the **same DB transaction** as the state change it describes. If the change rolls back, so does the event. Broadcast to WebSocket clients only **after commit**.
-  - **Per-map `seq` without gaps:** allocate `seq` with `UPDATE maps SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq` inside that transaction. Don't use a Postgres sequence: sequences skip numbers on rollback, and a reconnecting client would think it missed an event. The row lock also orders concurrent writers on the same map.
-  - Index `(map_id, seq)` unique; retention for replay is a tunable window (older history is refetched as full state).
+  - **Same transaction:** the event row is written in the **same DB transaction** as the state change it describes. If the change rolls back, so does the event. Broadcast to WebSocket clients only **after commit**.
+  - **Per-map `seq` without gaps:** allocate `seq` with `UPDATE maps SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq` inside that transaction, as its **last write**. Don't use a Postgres sequence: sequences skip numbers on rollback, and a reconnecting client would think it missed an event. The row lock (held until commit) makes commit order match `seq` order. Taking it last keeps the busy `maps` row locked briefly and gives a fixed lock order (entity rows first, `maps` last), which avoids deadlocks.
+  - **Ordering on the wire:** post-commit broadcasts can still leave Node out of order. The client buffers briefly and applies events in `seq` order. Only a gap that persists past a short timeout triggers a replay request.
+  - **Delivery guarantee:** if the process crashes between commit and broadcast, live delivery of that event is lost, but the row is committed, so clients pick it up on reconnect or `visibilitychange` resync. That is acceptable for this game; there is no separate outbox relay.
+  - Index `(map_id, seq)` unique. Pruning old `game_events` only limits **WS replay** (older gaps refetch full state). Consumers that need history (raid log, milestone progress, Easter-egg state) keep their own tables and don't rely on old `game_events` rows.
 - **Scheduled jobs (pg-boss):**
   - `nightfall` per map at 21:00 map time (Hollow Man, §14 of the design doc)
+    - **Hearthfire fuel is a date, not a counter:** each Hearthfire stores `fuelled_through` (the last map-local night its fuel covers). Adding *n* nights of Emberwood sets `fuelled_through = max(fuelled_through, tonight − 1) + n`, capped at `tonight − 1 + max_nights`. At nightfall the fire protects tonight if `fuelled_through ≥ tonight`. "Nights left" is shown as `fuelled_through − tonight + 1` (minimum 0). Nothing is decremented, so a retried or duplicate nightfall run can't burn fuel twice.
   - `stranded-decay` (Phase 2)
   - `boutique-rotate` daily per map
   - `invite-expiry`, `session-cleanup`, `chat-retention` daily
@@ -158,7 +168,7 @@ Add anything else only with a one-line justification in the PR.
 
 - Argon2id with library defaults (or memory ≥ 19 MiB, iterations ≥ 2).
 - Recovery codes: 12 characters, shown once, stored hashed. **One active code per user**; resetting with it marks it used and shows a fresh one. The `recovery_codes` table keeps used codes for audit.
-- **Operator password reset:** a server CLI (`pnpm --filter @heartpatch/server ops:reset-password <username>`) for players with no map owner. It runs on the host via `docker compose exec`, never over HTTP.
+- **Operator password reset:** a built server script for players with no map owner, run on the host as `docker compose exec server node dist/ops/reset-password.js <username>` (the production image has no pnpm or dev tooling). Never exposed over HTTP. A reset also revokes the user's existing sessions and shows a new recovery code.
 - All user-entered text (usernames, nicknames, outfit names, chat in Phase 2) goes through `lib/filter` on the server.
 - Helmet security headers; Content-Security-Policy restricting scripts to self.
 - No third-party analytics or ads. No email collection. Birth year only.
@@ -201,7 +211,7 @@ Small and cheap on purpose: one server for a few families.
 - **`deploy.yml`** on push to `main`:
   1. Build Docker images for server and client (client is a static build copied into the Caddy image or a volume).
   2. Push to **GitHub Container Registry** (`ghcr.io/mattbaldwin/heartpatch-*`).
-  3. SSH to Lightsail, `docker compose pull && docker compose up -d`, run migrations, health-check `/api/v1/health`; roll back to the previous image tag on failure.
+  3. SSH to Lightsail, `docker compose pull && docker compose up -d`, run migrations, health-check `/api/v1/health`; roll back to the previous image tag on failure. After migrations, the deploy script also makes a **one-off** `/api/v1/ready` check so a broken `DATABASE_URL` or failed migration fails the deploy. Ongoing container health checks use `/health` only.
 - **Repository secrets:** `LIGHTSAIL_HOST`, `LIGHTSAIL_USER`, `LIGHTSAIL_SSH_KEY`, plus production env values stored in a `.env` file on the server (not in GitHub).
 
 ## 13. Testing and definition of done
@@ -220,12 +230,12 @@ Small and cheap on purpose: one server for a few families.
 ## 15. Audio
 
 - **Sources:** CC0 assets only (e.g. Kenney, Freesound filtered to CC0, OpenGameArt filtered to CC0), each logged in `ASSETS.md` with source URL and license, plus **procedural synthesis** (Web Audio API) for squishy voices.
-- **Formats:** AAC (`.m4a`) for music and longer SFX; play from decoded Web Audio buffers with exact loop points so loops are gapless (avoid MP3 because of its encoder padding).
-- **Loudness:** normalise music to about −16 LUFS integrated and match SFX loudness by category; no clipping.
+- **Formats:** AAC (`.m4a`) for music and SFX (short SFX as mono AAC, 44.1 kHz). Both MP3 and AAC add encoder padding at the start of a file (about 2112 samples for AAC). What makes loops gapless is playing from decoded Web Audio buffers with explicit `loopStart`/`loopEnd`, measured per file and verified in Safari and Chrome.
+- **Loudness:** normalise music to about −16 LUFS integrated and match SFX loudness by category; true-peak ceiling −1 dBTP.
 - **Mix:** buses for music, SFX, UI and ambience, each with its own volume setting; a limiter on the master bus; music ducks under key moments (capture, evolution, Hollow Man arrival).
 - **Variation:** each SFX has 2–4 variants plus small random pitch/volume variation per play, to avoid repetition fatigue.
 - **Procedural voices:** layered oscillators with envelopes, pitch bends and formant (vowel-like) filters; per-species voice parameters live in species data (size → pitch, feeling → contour).
-- **iOS:** unlock the `AudioContext` on the first user gesture; resume it on `visibilitychange`.
+- **iOS:** unlock the `AudioContext` on the first user gesture; resume it on `visibilitychange` and when `statechange` reports `interrupted` (phone calls, Siri). Set `navigator.audioSession.type = "ambient"` where supported (iOS 16.4+) so game audio mixes with other apps and respects the silent switch.
 - **Sound gallery:** a dev-only page that plays every sound and loop, so a human can judge quality by ear.
 - **Budget:** audio counts toward the 15 MB first load; lazy-load music per scene.
 

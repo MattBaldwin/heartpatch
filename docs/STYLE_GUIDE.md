@@ -9,7 +9,7 @@
 - Warm first. Every screen should feel like a hug from a friendly toy shop.
 - Funny through gentle silliness: squishies are a little clumsy, a little dramatic, very sincere.
 - Spooky through **atmosphere and absence** (dimming light, silence, a flicker at the edge of the screen), never through threats, gore, injury, jump scares or cruelty.
-- Nobody is ever hurt. Squishies get **tuckered out**, **sleepy**, **dizzy** or **Hollowed** (and always rescuable). Never "die", "faint", "kill", "destroy", "damage" in player-facing text.
+- Nobody is ever hurt. Squishies get **tuckered out**, **sleepy**, **dizzy** or **Hollowed** (and always rescuable). Words to avoid are listed in §9.
 
 ## 2. Reading level and length
 
@@ -24,19 +24,19 @@ Players are 10–17; write so a 10-year-old reads it at a glance.
 
 Applies to every client PR.
 
-1. **Teach one thing at a time.** A mechanic appears in the tutorial before it appears anywhere else.
+1. **Teach one thing at a time.** Every mechanic is introduced by the tutorial or a first-time Sprout tip before the player needs it.
 2. **Big, obvious controls.** Minimum 44×44 pt tap targets. All game controls reachable one-handed on iPhone.
 3. **No hidden essentials.** Every gesture (stroke to pet, pinch to tickle, long-press) has a visible button alternative.
 4. **Show, then tell.** Effectiveness callouts, colour, motion and sound before text. Detail is opt-in.
 5. **Always a next step.** Every screen makes the obvious next action obvious; no dead ends.
-6. **Forgiving.** Confirm anything you can't undo; most things should be undoable.
+6. **Forgiving.** Confirm anything you can't undo, with a clear, friendly summary of what will happen.
 7. **Calm feedback.** Errors read like a friend helping ("That tile's too far away — try one next to your land!"), never like a system error.
 
 ## 4. Naming
 
 ### Squishies
 - Squishy, cute and **pun-friendly**; easy for a kid to say out loud and remember (2–3 syllables is ideal).
-- Name hints at element or feeling: *Puddlepuff* (Water/Silly), *Snorlump* (Stone/Sleepy).
+- Name hints at element or feeling: *Puddlepuff* (Water/Silly), *Pebblesnooze* (Stone/Sleepy).
 - Evolutions sound like a bigger, sparklier version of the same name: *Puddlepuff → Splashmallow*.
 - No existing franchise names or near-copies (no "-mon", no recognisable characters).
 
@@ -45,8 +45,7 @@ Applies to every client PR.
 - Halloween ones are *sweet-spooky*: a ghost who's afraid of the dark, a pumpkin with a lopsided grin, a bat that hangs the wrong way up.
 
 ### Moves
-- Silly or sweet verbs, never violent: *Tickle Tackle*, *Belly Flop*, *Giggle Drizzle*, *Rock-a-Bye*, *Peekaboo!*
-- Avoid: crush, slash, bite, kill, destroy, wound, bleed.
+- Silly or sweet verbs, never violent: *Tickle Tackle*, *Belly Flop*, *Giggle Drizzle*, *Rock-a-Bye*, *Peekaboo!* (Avoided words: §9.)
 
 ### Clothing, titles and items
 - Descriptive and fun: *Pumpkin Hood*, *Ghost Cape*, *Cozy Apron*, *Heart Mittens*.
@@ -99,3 +98,25 @@ Visuals follow design doc §19 (soft vinyl toy, glossy, rounded, never pixelated
 - [ ] No real brands, franchises or copyrighted characters
 - [ ] No real-money prompts, ads or "buy now" language
 - [ ] All user-typed text (usernames, nicknames, outfit names) goes through the server filter
+
+## 9. Words to use and avoid
+
+### Glossary
+Player-facing words for game actions. The code can use technical names; the UI uses these.
+
+| Mechanic (code) | Say in the UI |
+|---|---|
+| attack a tile | **Claim** (neutral tile), **Challenge** (rival tile) |
+| raid on your tile | **"Someone challenged your patch!"** |
+| battle | **Battle** or **Squishy showdown** |
+| squishy at 0 HP | **Tuckered out** |
+| damage / HP | **Energy** (the bar), "lost some energy" |
+| capture | **Befriend** (button: "Use Heart Charm") |
+| hollowed | **Taken to the Hollow** (always followed by "you can rescue them!") |
+| defense stance | **Defense style** (Bold, Careful, Balanced) |
+
+### Avoided words
+One list, so tests can scan data files for it. Don't use these in player-facing text:
+
+`die`, `dead`, `death`, `kill`, `faint`, `hurt`, `injure`, `wound`, `bleed`, `blood`, `damage`, `destroy`, `crush`, `slash`, `stab`, `bite`, `attack` (in UI; fine in code), `weapon`, `enemy`, `hate`, `stupid`, `loser`.
+

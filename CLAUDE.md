@@ -8,7 +8,7 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 
 - **Language:** TypeScript everywhere, `strict: true`.
 - **Monorepo:** pnpm workspaces.
-  - `apps/client` — Vite + **Babylon.js** (WebGL2, WebGPU where available). Touch-first UI.
+  - `apps/client` — Vite + **Babylon.js** (WebGPU primary, automatic WebGL2 fallback). Touch-first UI.
   - `apps/server` — Node 22 LTS, **Fastify** (REST + WebSocket via `@fastify/websocket`). **Colyseus** is added in Phase 2 for live battle rooms.
   - `packages/shared` — game data tables, types, zod schemas, the battle engine, formulas. Pure and deterministic; no I/O.
 - **Database:** Postgres 16, **Drizzle ORM** with versioned migrations.
@@ -31,7 +31,7 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 
 ## Conventions
 
-- Small, focused PRs, one issue per PR, titled `#<issue>: <summary>`. Link the issue with `Closes #N`.
+- Small, focused PRs, one issue per PR, titled `#<issue>: <summary>`. Link the issue with `Closes #N`. PRs not tied to an issue (docs, process, drift fixes) use a `Docs:`, `Chore:` or `Fix:` prefix instead.
 - Include tests for all shared logic and server endpoints. Include a short "How to test on iPhone" note in PRs that touch the client.
 - Keep tunable numbers in data config, not code. Mark guesses with a `// TUNE:` comment.
 - Use `pnpm` scripts from the repo root: `pnpm dev`, `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm build`.
@@ -43,7 +43,7 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 - **Branch from the latest `main`.** Stay inside the folders your issue owns. If you need to change a shared contract (`game_events` types, error codes, WS envelope, hex coords, data schemas, the core DB tables), stop and flag it to the coordinator instead of changing it yourself.
 - **Follow the patterns already on `main`**, not just the docs. If something already has an established way (module shape, errors, logging, tests, naming), use it. A second way of doing the same thing is drift.
 - **Player-facing text** follows `docs/STYLE_GUIDE.md`: cozy, cute, playful, funny, short, kid-readable.
-- **Before handing off:** run `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` and make them pass. Generate DB migrations last, from the latest `main`.
+- **Before handing off:** run `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` and make them pass. Regenerate DB migrations on the latest `main` before merge (tech spec §4).
 - **Review:** every PR is reviewed by the `reviewer` subagent (`.claude/agents/reviewer.md`). Address each finding with a fix or evidence; a fresh reviewer re-reviews. Points still contested after 3 rounds go to the project owner. Once the reviewer approves and CI is green, the coordinator merges and posts the verdict as a PR comment.
 - Decisions already made are recorded in `docs/DECISIONS.md`. Don't re-open them; add new ones there.
 
