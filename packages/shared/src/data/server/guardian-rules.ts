@@ -27,8 +27,96 @@ export const GUARDIAN_RULES: GuardianRules = {
     { strength: 4, count: 2, levels: { min: 9, max: 13 } }, // TUNE:
     { strength: 5, count: 3, levels: { min: 14, max: 18 } }, // TUNE: Juniper's Gap, the hardest guardians
   ],
+  // Launch roster (#10). Ordinary land (levels 2–13) is guarded by base
+  // forms; Juniper's Gap (levels 14–18) by evolved ones, the toughest
+  // guardians on the map, even below their own evolution level (a guardian
+  // is the land's, not a squishy that grew up). TUNE: every weight.
   tables: [
-    // TUNE: placeholder until #10's roster; Moonpuff is the only species yet.
+    {
+      id: 'meadow-guardians',
+      terrains: ['meadow', 'pumpkin-fields'],
+      entries: [
+        { species: 'emberbun', weight: 3 },
+        { species: 'fuzzbolt', weight: 3 },
+        { species: 'fizzlepop', weight: 3 },
+        { species: 'thistlepip', weight: 3 },
+        { species: 'puddlepuff', weight: 2 },
+      ],
+    },
+    {
+      id: 'forest-guardians',
+      terrains: ['forest', 'old-forest'],
+      entries: [
+        { species: 'thistlepip', weight: 3 },
+        { species: 'nookling', weight: 3 },
+        { species: 'mossmuffin', weight: 2 },
+        { species: 'pebblesnooze', weight: 2 },
+        { species: 'emberbun', weight: 2 },
+      ],
+    },
+    {
+      id: 'highland-guardians',
+      terrains: ['hills', 'mountains'],
+      entries: [
+        { species: 'pebblesnooze', weight: 3 },
+        { species: 'glimmerock', weight: 3 },
+        { species: 'flurrypup', weight: 3 },
+        { species: 'snoozicle', weight: 3 },
+        { species: 'fuzzbolt', weight: 2 },
+      ],
+    },
+    {
+      id: 'lake-guardians',
+      terrains: ['lake'],
+      entries: [
+        { species: 'puddlepuff', weight: 3 },
+        { species: 'bubbletub', weight: 3 },
+        { species: 'snoozicle', weight: 2 },
+      ],
+    },
+    {
+      id: 'gap-guardians',
+      terrains: ['junipers-gap'],
+      entries: [
+        { species: 'splashmallow', weight: 2 },
+        { species: 'boulderdoze', weight: 2 },
+        { species: 'hearthbun', weight: 2 },
+        { species: 'drowsiberg', weight: 2 },
+        { species: 'frizzbolt', weight: 2 },
+        { species: 'zingaling', weight: 2 },
+        { species: 'bubbletide', weight: 2 },
+        { species: 'bristlebloom', weight: 2 },
+        { species: 'snugglenook', weight: 2 },
+        { species: 'blusterpup', weight: 1 },
+        { species: 'glittercrag', weight: 1 },
+        { species: 'mossquilt', weight: 1 },
+        { species: 'dazzledrop', weight: 1 },
+        { species: 'thunderplume', weight: 1 },
+      ],
+    },
+    {
+      id: 'halloween-guardians',
+      terrains: ['pumpkin-fields', 'old-forest'],
+      season: 'halloween',
+      entries: [
+        { species: 'gourdon', weight: 3 },
+        { species: 'candlekit', weight: 2 },
+        { species: 'upsybat', weight: 2 },
+        { species: 'glowboo', weight: 1 },
+      ],
+    },
+    {
+      id: 'halloween-gap-guardians',
+      terrains: ['junipers-gap'],
+      season: 'halloween',
+      entries: [
+        { species: 'glowgourd', weight: 2 },
+        { species: 'wickwhisker', weight: 2 },
+        { species: 'topsywing', weight: 2 },
+        { species: 'brightboo', weight: 1 },
+      ],
+    },
+    // TUNE: placeholder kept until its tests move to the roster (follow-up).
     {
       id: 'placeholder-guardians',
       terrains: EVERY_TERRAIN,

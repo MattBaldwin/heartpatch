@@ -28,9 +28,13 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
     expect(halloween?.overrides?.['2026']).toEqual({ start: '10-01', end: '11-09' });
   });
 
-  it('ships no species or moves yet: the roster is issue #10, fixtures stay in tests/', () => {
-    expect(SPECIES).toEqual([]);
-    expect(MOVES).toEqual([]);
+  it('ships the launch roster (#10); fixtures stay in tests/', () => {
+    expect(SPECIES.length).toBeGreaterThan(0);
+    expect(MOVES.length).toBeGreaterThan(0);
+    const ids = [...SPECIES, ...MOVES].map((row) => row.id);
+    expect(ids.filter((id) => id.startsWith('fixture-') || id.startsWith('placeholder-'))).toEqual(
+      [],
+    );
   });
 
   it('sizes maps 9 / 11 / 12 for 2 / 3 / 4 players (design doc §3)', () => {
