@@ -454,7 +454,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(res.statusCode).toBe(200);
       const lit = HomeResponseSchema.parse(res.json());
       expect(lit.buildings[0]).toMatchObject({ lit: true, nightsLeft: 3, fuelSpace: 2 });
-      expect(lit.items.emberwood).toBe(17);
+      expect(lit.items['emberwood']).toBe(17);
       expect(lit.tonight).toBe('2026-10-02');
       const row = await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, fire.id) });
       expect(row).toMatchObject({ fuelledThrough: '2026-10-04', fuelUpdatedAt: clock });
@@ -472,7 +472,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       // More than fits: it fills up and only charges for what went in.
       const topped = HomeResponseSchema.parse((await fuel(server, kid, mapId, fire.id, 9)).json());
       expect(topped.buildings[0]).toMatchObject({ nightsLeft: 5, fuelSpace: 0 });
-      expect(topped.items.emberwood).toBe(15);
+      expect(topped.items['emberwood']).toBe(15);
       const full = await fuel(server, kid, mapId, fire.id, 1);
       expect(full.statusCode).toBe(409);
       expect(errorOf(full).message).toBe("It's full! Come back after a night or two.");

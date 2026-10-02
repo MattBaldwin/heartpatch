@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
+import { SpeciesSchema } from './data/species.js';
 import { ItemCountsSchema } from './inventory.js';
 import { LocalDateSchema } from './time.js';
 
@@ -88,6 +89,11 @@ export const HomeResponseSchema = z.object({
   tiles: z.array(HomeTileSchema),
   buildings: z.array(MyBuildingSchema),
   squishies: z.array(HomeSquishySchema),
+  /**
+   * Species of my squishies that aren't in the public table (a secret one
+   * I befriended), so the client can draw them; as `PlayerBattle.speciesDefs`.
+   */
+  speciesDefs: z.array(SpeciesSchema),
   items: ItemCountsSchema,
   seasons: z.array(ContentIdSchema),
   /** The night the next nightfall belongs to (map-local date). */

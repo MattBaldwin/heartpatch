@@ -22,6 +22,7 @@ import {
   type PublicUser,
   type RemoveBuildingResponse,
 } from '@heartpatch/shared';
+import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
@@ -48,6 +49,8 @@ import {
  */
 
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
+const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
+const SECRET_SPECIES = new Map(SERVER_GAME_DATA.secretSpecies.map((s) => [s.id, s]));
 
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
@@ -167,6 +170,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       createInventoryRepo(tx).list({ mapId, userId }),
     ]);
     const seed = heartSeedOf(tiles);
+    const active = squishies.filter((s) => s.state === 'active');
+    // A secret species the player owns is one they've met (DECISIONS, secret species).
+    const speciesDefs = [...new Set(active.map((s) => s.speciesId))].flatMap((id) => {
+      const secret = PUBLIC_SPECIES.has(id) ? undefined : SECRET_SPECIES.get(id);
+      return secret ? [secret] : [];
+    });
     return {
       tiles: tiles.map((t) => ({
         q: t.q,
@@ -177,17 +186,16 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       buildings: buildings.map((b) =>
         toMyBuilding(b, local, squishies.filter((s) => s.habitatBuildingId === b.id).length),
       ),
-      squishies: squishies
-        .filter((s) => s.state === 'active')
-        .map((s) => ({
-          id: s.id,
-          speciesId: s.speciesId,
-          element: s.element as HomeResponse['squishies'][number]['element'],
-          feeling: s.feeling as HomeResponse['squishies'][number]['feeling'],
-          nickname: s.nickname,
-          level: s.level,
-          habitatId: s.habitatBuildingId,
-        })),
+      squishies: active.map((s) => ({
+        id: s.id,
+        speciesId: s.speciesId,
+        element: s.element as HomeResponse['squishies'][number]['element'],
+        feeling: s.feeling as HomeResponse['squishies'][number]['feeling'],
+        nickname: s.nickname,
+        level: s.level,
+        habitatId: s.habitatBuildingId,
+      })),
+      speciesDefs,
       items,
       seasons: seasonsOn(at, timeZone),
       tonight: hearthfireState(null, local, HOME_BASE_RULES).tonight,
