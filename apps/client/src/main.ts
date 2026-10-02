@@ -1,6 +1,7 @@
 import { createEngineAndScene } from './engine/create-scene.js';
 import { fetchHealth } from './net/api.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
+import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import './styles.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -18,7 +19,8 @@ window.addEventListener('resize', () => {
   engine.resize();
 });
 
-mountAuth(document.body);
+const lobby = mountLobby(document.body);
+mountAuth(document.body, { onChange: lobby.setUser });
 
 if (import.meta.env.DEV) {
   const badge = document.createElement('div');

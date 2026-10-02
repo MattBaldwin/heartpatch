@@ -24,6 +24,13 @@ export default defineConfig({
     // Use workspace package sources directly (see packages/shared/package.json).
     conditions: ['@heartpatch/source', ...defaultClientConditions],
   },
+  // Vitest runs unit tests through the SSR resolver; give it the same source condition.
+  ssr: {
+    resolve: {
+      conditions: ['@heartpatch/source', 'node', 'import', 'module', 'default'],
+      externalConditions: ['@heartpatch/source', 'node', 'import', 'module', 'default'],
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,
