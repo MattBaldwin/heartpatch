@@ -125,43 +125,54 @@ test('a new install deletes old shell caches', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => caches.keys())).toEqual([cache]);
 });
 
-test('serves the cached shell offline, but never answers the API from cache', async ({
+// Playwright WebKit's setOffline also blocks service-worker-handled requests,
+// so offline behaviour is verified end-to-end on Chromium and by cache
+// contents on every browser (WebKit included); real-device check in the PR's
+// "How to test on iPhone".
+test('keeps the shell for offline use, but never the API', async ({
   page,
   context,
   browserName,
 }) => {
   await page.goto('/');
-  await activeShell(page);
+  const info = await activeShell(page);
   await page.reload(); // now controlled by the worker
   expect(await page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+  expect(info.cache).toContain(info.version);
 
-  await context.setOffline(true);
-  // From inside the page, through the worker: the shell comes from its cache…
+  // Cache Storage reads use no network: the shell page is cached…
   const shell = await page.evaluate(async () => {
-    const response = await fetch('/');
-    return { status: response.status, html: await response.text() };
+    const response = await caches.match('/');
+    return response ? await response.text() : null;
   });
-  expect(shell.status).toBe(200);
-  expect(shell.html).toContain('<canvas id="game"');
-  // …and the API fails rather than coming from a cache.
-  const offlineApi = await page.evaluate(() =>
-    fetch('/api/v1/health').then(
-      () => 'answered',
-      () => 'failed',
-    ),
-  );
-  expect(offlineApi).toBe('failed');
+  expect(shell).toContain('<canvas id="game"');
+  // …and no cache holds anything from the server.
+  const serverUrls = await page.evaluate(async () => {
+    const found: string[] = [];
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) {
+        if (request.url.includes('/api/') || request.url.includes('/ws')) found.push(request.url);
+      }
+    }
+    return found;
+  });
+  expect(serverUrls).toEqual([]);
 
-  // A full offline page load too, where the harness supports it. Playwright's
-  // WebKit fails any offline top-level navigation with "WebKit encountered an
-  // internal error" before the worker can answer, so on WebKit the in-page
-  // fetch above is the check; offline launch is checked by hand on a real
-  // iPhone (PR #70, "How to test on iPhone").
+  // Chromium also proves it end-to-end: an offline reload opens the shell.
   if (browserName === 'chromium') {
+    await context.setOffline(true);
     await page.reload();
     await expect(page.locator('#game')).toBeAttached();
+    const offlineApi = await page.evaluate(() =>
+      fetch('/api/v1/health').then(
+        () => 'answered',
+        () => 'failed',
+      ),
+    );
+    expect(offlineApi).toBe('failed');
+    await context.setOffline(false);
   }
-  await context.setOffline(false);
 });
 
 test('shows the Add to Home Screen guide in Safari, after signing up, until dismissed', async ({
