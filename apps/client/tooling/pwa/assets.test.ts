@@ -16,11 +16,11 @@ describe('PWA assets', () => {
     expect(manifest.icons.some((icon) => icon.sizes === '512x512')).toBe(true);
   });
 
-  it('has one splash per size and orientation, never precached', () => {
+  it('has one splash per size and orientation, each served', () => {
     const splashes = splashImages();
     expect(new Set(splashes.map((s) => s.path)).size).toBe(splashes.length);
     expect(new Set(splashes.map((s) => s.media)).size).toBe(splashes.length);
-    const files = new Map(pwaFiles().map((file) => [file.path, file]));
-    for (const splash of splashes) expect(files.get(splash.path)?.precache).toBe(false);
+    const paths = new Set(pwaFiles().map((file) => file.path));
+    for (const splash of splashes) expect(paths.has(splash.path)).toBe(true);
   });
 });

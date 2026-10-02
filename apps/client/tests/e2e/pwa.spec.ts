@@ -5,25 +5,37 @@ import { expect, test, type Page } from '@playwright/test';
 // Assertions are on signals (manifest, worker state, cache contents), never pixels.
 test.use({ baseURL: 'http://localhost:4173' });
 
+// The family signup code the servers start with (playwright.config.ts).
+const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
+
 interface ShellInfo {
   version: string;
   cache: string;
 }
 
-/** Waits for the worker to activate and asks it for its shell version. */
-async function activeShell(page: Page): Promise<{ state: string; info: ShellInfo }> {
+/**
+ * Waits for the worker to reach `activated` (`ready` resolves while it may
+ * still be activating) and asks it for its shell version.
+ */
+async function activeShell(page: Page): Promise<ShellInfo> {
   return page.evaluate(async () => {
     const registration = await navigator.serviceWorker.ready;
     const worker = registration.active;
     if (!worker) throw new Error('no active service worker');
-    const info = await new Promise<ShellInfo>((resolve) => {
+    if (worker.state !== 'activated') {
+      await new Promise<void>((resolve) => {
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'activated') resolve();
+        });
+      });
+    }
+    return new Promise<ShellInfo>((resolve) => {
       const channel = new MessageChannel();
       channel.port1.onmessage = (event: MessageEvent<ShellInfo>) => {
         resolve(event.data);
       };
-      worker.postMessage({ type: 'version' }, [channel.port2]);
+      worker.postMessage({ type: 'describe', path: '/' }, [channel.port2]);
     });
-    return { state: worker.state, info };
   });
 }
 
@@ -77,13 +89,9 @@ test('links a valid web app manifest and home-screen icon', async ({ page, reque
   expect(splash.ok()).toBe(true);
 });
 
-test('installs the offline shell in a versioned cache, without the API', async ({
-  page,
-  context,
-}) => {
+test('installs the shell in a versioned cache, without the API', async ({ page }) => {
   await page.goto('/');
-  const { state, info } = await activeShell(page);
-  expect(state).toBe('activated');
+  const info = await activeShell(page);
   expect(info.version).toMatch(/^[0-9a-f]{12}$/);
   expect(info.cache).toBe(`heartpatch-shell-${info.version}`);
   expect(await page.evaluate(() => caches.keys())).toEqual([info.cache]);
@@ -95,12 +103,36 @@ test('installs the offline shell in a versioned cache, without the API', async (
 
   // …and none of it is cached: only the shell, no source maps or splash screens.
   const paths = await cachedPaths(page, info.cache);
-  expect(paths).toEqual(expect.arrayContaining(['/index.html', '/manifest.webmanifest']));
+  expect(paths).toEqual(expect.arrayContaining(['/', '/manifest.webmanifest']));
   expect(paths.some((path) => path.startsWith('/assets/') && path.endsWith('.js'))).toBe(true);
   const unwanted = paths.filter((path) => /^\/(api|ws)|\.map$|splash|gallery/.test(path));
   expect(unwanted).toEqual([]);
+});
 
-  // Offline, the shell still opens, but API calls fail rather than come from a cache.
+test('a new install deletes old shell caches', async ({ page }) => {
+  await page.goto('/');
+  const { cache } = await activeShell(page);
+  await page.evaluate(async () => {
+    await caches.open('heartpatch-shell-0123456789ab');
+    const registration = await navigator.serviceWorker.ready;
+    await registration.unregister();
+  });
+  expect(await page.evaluate(() => caches.keys())).toContain('heartpatch-shell-0123456789ab');
+
+  // Registering again installs and activates the shell, which clears the stale one.
+  await page.reload();
+  expect((await activeShell(page)).cache).toBe(cache);
+  await expect.poll(() => page.evaluate(() => caches.keys())).toEqual([cache]);
+});
+
+test('opens the cached shell offline, but never answers the API from cache', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/');
+  await activeShell(page);
+  await page.reload(); // now controlled by the worker
+
   await context.setOffline(true);
   await page.reload();
   await expect(page.locator('#game')).toBeAttached();
@@ -114,16 +146,31 @@ test('installs the offline shell in a versioned cache, without the API', async (
   await context.setOffline(false);
 });
 
-test('shows the Add to Home Screen guide once in Safari', async ({ page }) => {
+test('shows the Add to Home Screen guide in Safari, after signing up, until dismissed', async ({
+  page,
+}, testInfo) => {
   await page.goto('/');
   const guide = page.getByTestId('install-guide');
-  await expect(guide.getByRole('heading', { name: 'Make Heartpatch an app!' })).toBeVisible();
-  await expect(guide).toContainText('Add to Home Screen');
+  await expect(guide.getByRole('heading', { name: 'Make Heartpatch an app!' })).toBeAttached();
 
+  // A new player signs up first: the login card sits over the guide.
+  const overlay = page.getByTestId('auth-overlay');
+  await overlay.getByRole('button', { name: 'Sign up' }).tap();
+  await overlay.getByLabel('Family code').fill(signupCode);
+  await overlay
+    .getByLabel('Pick a name')
+    .fill(`pwa_${Date.now().toString(36)}${String(testInfo.workerIndex)}`);
+  await overlay.getByLabel('Pick a password').fill('squishy-secret');
+  await overlay.getByLabel('Year you were born').selectOption('2014');
+  await overlay.getByRole('button', { name: 'Sign up' }).tap();
+  await overlay.getByRole('button', { name: 'I saved it!' }).tap();
+  await expect(overlay).toBeHidden();
+
+  await expect(guide).toContainText('Add to Home Screen');
   await guide.getByRole('button', { name: 'Got it!' }).tap();
-  await expect(guide).toBeHidden();
+  await expect(guide).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByTestId('auth-overlay')).toBeVisible();
+  await expect(page.getByTestId('auth-user')).toBeVisible();
   await expect(page.getByTestId('install-guide')).toHaveCount(0);
 });

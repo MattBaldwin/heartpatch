@@ -80,8 +80,7 @@ export function webManifest(): string {
     description: 'Collect, cuddle and look after the cutest squishies with your family.',
     start_url: '/',
     scope: '/',
-    // iOS has no `fullscreen`; standalone hides Safari's bars and the status
-    // bar overlays the game (apple-mobile-web-app-status-bar-style).
+    // iOS has no `fullscreen`; standalone hides all of Safari's bars.
     display: 'standalone',
     orientation: 'any',
     background_color: THEME_COLOR,
@@ -97,12 +96,14 @@ export function webManifest(): string {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
-/** A file the plugin serves in dev and writes into the build. */
+/**
+ * A file the plugin serves in dev and writes into the build. The precache
+ * globs in vite.config.ts pick the manifest and icons but not the splash
+ * screens: iOS reads those once, at install.
+ */
 export interface PwaFile {
   path: string;
   contentType: string;
-  /** Part of the offline shell (splash screens aren't: iOS reads them once, at install). */
-  precache: boolean;
   render: () => Buffer;
 }
 
@@ -110,14 +111,12 @@ export function pwaFiles(): PwaFile[] {
   const icon = ({ path, size, fill }: { path: string; size: number; fill: number }): PwaFile => ({
     path,
     contentType: 'image/png',
-    precache: true,
     render: () => encodePng(renderIcon(size, fill)),
   });
   return [
     {
       path: MANIFEST_PATH,
       contentType: 'application/manifest+json',
-      precache: true,
       render: () => Buffer.from(webManifest()),
     },
     ...ICONS.map(icon),
@@ -125,7 +124,6 @@ export function pwaFiles(): PwaFile[] {
     ...splashImages().map(({ path, width, height }): PwaFile => ({
       path,
       contentType: 'image/png',
-      precache: false,
       render: () => encodePng(renderSplash(width, height)),
     })),
   ];

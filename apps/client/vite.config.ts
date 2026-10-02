@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defaultClientConditions, defineConfig, type Plugin } from 'vite';
-import { pwa } from './tooling/pwa/plugin.js';
+import { VitePWA } from 'vite-plugin-pwa';
+import { pwaAssets } from './tooling/pwa/plugin.js';
 
 /**
  * Fails the dev server and build if any server-only data module is loaded,
@@ -20,7 +21,37 @@ function forbidServerData(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [forbidServerData(), pwa()],
+  plugins: [
+    forbidServerData(),
+    pwaAssets(),
+    // The service worker (issue #26, tech spec §3): src/pwa/sw.ts, built to
+    // /sw.js with the build's precache list. Production builds only.
+    VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src/pwa',
+      filename: 'sw.ts',
+      injectRegister: false, // src/pwa/register.ts registers it
+      manifest: false, // tooling/pwa serves manifest.webmanifest
+      injectManifest: {
+        rollupFormat: 'iife',
+        // The offline shell: the page, its bundles and styles, the manifest
+        // and icons. Not source maps, splash screens or dev pages.
+        globPatterns: [
+          'index.html',
+          'assets/**/*.{js,css}',
+          'manifest.webmanifest',
+          'favicon.svg',
+          'pwa/icon-*.png',
+          'pwa/apple-touch-icon.png',
+        ],
+        // Hashed names already change with their content.
+        dontCacheBustURLsMatching: /^assets\//,
+        // TUNE: the engine bundle is ~1 MB; fail the build well before a
+        // bundle could silently drop out of the shell.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
+    }),
+  ],
   resolve: {
     // Use workspace package sources directly (see packages/shared/package.json).
     conditions: ['@heartpatch/source', ...defaultClientConditions],

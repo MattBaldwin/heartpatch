@@ -9,5 +9,5 @@
     "types": [],
     "noEmit": true
   },
-  "include": ["src/pwa/sw.ts"]
+  "include": ["src/pwa/sw.ts", "src/pwa/messages.ts", "src/pwa/shell-strategy.ts"]
 }

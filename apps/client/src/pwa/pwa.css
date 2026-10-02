@@ -38,9 +38,10 @@ html {
   font-weight: 700;
 }
 
-/* Bottom card, above the home indicator; doesn't block the game. */
+/* Bottom card, above the home indicator. Over the game, lobby and name chip
+   (z-index 4–5), under the login card (10) so a new player signs up first. */
 .pwa-guide {
-  z-index: 20;
+  z-index: 8;
   right: calc(env(safe-area-inset-right) + 16px);
   bottom: calc(env(safe-area-inset-bottom) + 16px);
   left: calc(env(safe-area-inset-left) + 16px);

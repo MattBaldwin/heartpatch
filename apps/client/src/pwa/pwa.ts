@@ -11,7 +11,7 @@ import './pwa.css';
 export function startPwa(root: HTMLElement): void {
   mountInstallGuide(root);
   const prompt = mountUpdatePrompt(root);
-  registerServiceWorker({ onUpdateReady: prompt.show }).catch((err: unknown) => {
+  registerServiceWorker(prompt.show).catch((err: unknown) => {
     // The game works without it, just not offline.
     console.warn('Service worker registration failed', err);
   });

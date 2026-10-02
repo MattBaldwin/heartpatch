@@ -28,7 +28,7 @@ export function isStandalone({ iosStandalone, standaloneDisplay }: DisplayInfo):
   return iosStandalone === true || standaloneDisplay;
 }
 
-/** The guide shows once, in Safari on iPhone or iPad, and never in the installed app. */
+/** The guide shows in Safari on iPhone or iPad until dismissed, and never in the installed app. */
 export function shouldShowInstallGuide(
   iosSafari: boolean,
   display: DisplayInfo,

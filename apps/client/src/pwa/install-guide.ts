@@ -4,14 +4,15 @@ import { isIosSafari, shouldShowInstallGuide } from './platform.js';
 import '../ui/auth/auth.css';
 
 // Add to Home Screen guide (issue #26). Safari on iPhone and iPad has no
-// install prompt, so we show the steps once, in a small card that doesn't
-// block play. Copy follows docs/STYLE_GUIDE.md.
+// install prompt, so we show the steps in a small card until the player taps
+// "Got it!". It sits under the login card (pwa.css), so a new player signs up
+// first and sees it after. Copy follows docs/STYLE_GUIDE.md.
 
 function readSeen(): boolean {
   try {
     return localStorage.getItem(INSTALL_GUIDE_SEEN_KEY) !== null;
   } catch {
-    return false; // storage blocked: show it, it's dismissible
+    return false; // storage blocked: show it; it's dismissible
   }
 }
 
@@ -52,7 +53,6 @@ export function mountInstallGuide(root: HTMLElement): void {
     readSeen(),
   );
   if (!show) return;
-  markSeen();
 
   const close = el(
     'button',
@@ -79,6 +79,7 @@ export function mountInstallGuide(root: HTMLElement): void {
     close,
   );
   close.addEventListener('click', () => {
+    markSeen();
     card.remove();
   });
   root.append(card);
