@@ -16,7 +16,8 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Room for a slow apt mirror during the WebKit install (once took 15 min).
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -70,8 +71,20 @@ jobs:
           pnpm db:migrate && pnpm db:migrate
           pnpm db:seed && pnpm db:seed
 
+      # Cache the browser download; the OS packages it needs still install each run.
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install Playwright WebKit
+        if: steps.pw-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @heartpatch/client exec playwright install --with-deps webkit
+
+      - name: Install Playwright WebKit system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @heartpatch/client exec playwright install-deps webkit
 
       - name: E2E smoke (iPhone + iPad, WebKit)
         run: pnpm test:e2e
