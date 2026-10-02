@@ -12,3 +12,6 @@ playwright-report/
 test-results/
 .turbo/
 .vite/
+
+# pnpm sim output (balance simulator, issue #12)
+reports/
