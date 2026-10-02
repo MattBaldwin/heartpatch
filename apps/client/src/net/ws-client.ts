@@ -7,6 +7,7 @@ import {
   type WsClientMessage,
   type WsEventMessage,
 } from '@heartpatch/shared';
+import { authApi } from '../ui/auth/auth-api.js';
 import { reconnectDelay } from './ws-backoff.js';
 import { ReorderBuffer } from './ws-reorder.js';
 
@@ -16,6 +17,13 @@ export const GAP_TIMEOUT_MS = 1_000; // TUNE: guess
 export const PING_INTERVAL_MS = 25_000;
 /** No reply this long after a ping means the socket is dead. */
 export const PONG_TIMEOUT_MS = 10_000; // TUNE: guess
+/** A socket not ready this long after opening is given up on (iOS network handovers). */
+export const CONNECT_TIMEOUT_MS = 10_000; // TUNE: guess
+/**
+ * Every this many failed connects in a row, check the session. A refused upgrade
+ * (expired session) looks like any other failure to a browser socket.
+ */
+export const FAILURES_BEFORE_SESSION_CHECK = 3; // TUNE: guess
 
 /**
  * - `connecting`: first connection.
@@ -65,6 +73,8 @@ export interface WsClientOptions {
   createSocket?: (url: string) => WsSocket;
   page?: WsPage;
   random?: () => number;
+  /** True while logged in; defaults to `GET /api/v1/me`. Errors count as "can't tell". */
+  checkSession?: () => Promise<boolean>;
 }
 
 export interface WsClient {
@@ -98,16 +108,20 @@ export function createWsClient(options: WsClientOptions): WsClient {
   const createSocket = options.createSocket ?? ((u: string): WsSocket => new WebSocket(u));
   const page = options.page ?? document;
   const random = options.random ?? Math.random;
+  const checkSession = options.checkSession ?? (async () => (await authApi.me()) !== null);
 
   let socket: WsSocket | null = null;
   /** `ws.ready` received on the current socket. */
   let ready = false;
   let status: WsStatus = 'connecting';
   let attempt = 0;
+  /** Connects in a row that never reached `ws.ready`. */
+  let failures = 0;
   let closedForGood = false;
   let sub: { mapId: string; buffer: ReorderBuffer } | null = null;
 
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let connectTimer: ReturnType<typeof setTimeout> | undefined;
   let pingTimer: ReturnType<typeof setInterval> | undefined;
   let pongTimer: ReturnType<typeof setTimeout> | undefined;
   let gapTimer: ReturnType<typeof setTimeout> | undefined;
@@ -182,6 +196,9 @@ export function createWsClient(options: WsClientOptions): WsClient {
       case 'ws.ready':
         ready = true;
         attempt = 0;
+        failures = 0;
+        clearTimeout(connectTimer);
+        connectTimer = undefined;
         setStatus('live');
         sendSubscribe();
         return;
@@ -213,11 +230,12 @@ export function createWsClient(options: WsClientOptions): WsClient {
   };
 
   const stopTimers = (): void => {
+    clearTimeout(connectTimer);
     clearInterval(pingTimer);
     clearTimeout(pongTimer);
     clearTimeout(gapTimer);
     clearTimeout(reconnectTimer);
-    pingTimer = pongTimer = gapTimer = reconnectTimer = undefined;
+    connectTimer = pingTimer = pongTimer = gapTimer = reconnectTimer = undefined;
   };
 
   const detach = (): void => {
@@ -236,19 +254,27 @@ export function createWsClient(options: WsClientOptions): WsClient {
     };
     current.onclose = (event) => {
       if (event.code === WS_CLOSE_CODES.UNAUTHENTICATED) {
-        detach();
-        stopTimers();
-        setStatus('logged-out');
+        loggedOut();
         return;
       }
       lose();
     };
     current.onerror = () => undefined; // `onclose` follows.
+    connectTimer = setTimeout(lose, CONNECT_TIMEOUT_MS);
     pingTimer = setInterval(ping, PING_INTERVAL_MS);
+  };
+
+  const loggedOut = (): void => {
+    const current = socket;
+    detach();
+    current?.close();
+    stopTimers();
+    setStatus('logged-out');
   };
 
   /** The connection is gone: try again after a backoff delay. */
   function lose(): void {
+    const wasReady = ready;
     const dead = socket;
     detach();
     dead?.close();
@@ -257,6 +283,15 @@ export function createWsClient(options: WsClientOptions): WsClient {
     setStatus('reconnecting');
     reconnectTimer = setTimeout(connect, reconnectDelay(attempt, random));
     attempt += 1;
+    if (!wasReady) failures += 1;
+    if (!wasReady && failures % FAILURES_BEFORE_SESSION_CHECK === 0) {
+      checkSession().then(
+        (loggedIn) => {
+          if (!loggedIn && !closedForGood) loggedOut();
+        },
+        () => undefined, // Offline or server down: keep retrying.
+      );
+    }
   }
 
   const onVisibility = (): void => {
@@ -264,6 +299,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
     if (!socket) {
       // Waiting to reconnect: don't make a returning player wait out the backoff.
       attempt = 0;
+      failures = 0;
       connect();
     } else if (ready) {
       // The socket may have died while suspended: catch up, and check it's alive.

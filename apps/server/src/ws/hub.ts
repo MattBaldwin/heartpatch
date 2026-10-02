@@ -4,6 +4,7 @@ import {
   WS_CLOSE_CODES,
   WS_PROTOCOL_VERSION,
   WsClientMessageSchema,
+  WsEventTypeSchema,
   type ErrorCode,
   type PublicUser,
   type WsClientMessage,
@@ -52,8 +53,8 @@ export interface WsHub {
   publish: (mapId: string) => Promise<void>;
   /** Serves an authenticated socket until it closes. */
   accept: (socket: WebSocket, user: PublicUser, sessionToken: string) => void;
-  /** Stops the heartbeat and closes every socket. */
-  close: () => void;
+  /** Stops the heartbeat, closes every socket and waits for in-flight reads. */
+  close: () => Promise<void>;
 }
 
 export interface WsHubOptions {
@@ -98,6 +99,13 @@ export function createWsHub(options: WsHubOptions): WsHub {
   const { repo, views, logger } = options;
   const replayWindow = options.replayWindow ?? REPLAY_WINDOW;
   const replayBatch = options.replayBatch ?? REPLAY_BATCH;
+  // A type the client can't parse would be ignored there, leave a gap and
+  // trigger replays forever, so refuse it up front.
+  for (const type of Object.keys(views)) {
+    if (!WsEventTypeSchema.safeParse(type).success) {
+      throw new Error(`public view for invalid event type: ${type}`);
+    }
+  }
 
   const connections = new Set<Connection>();
   const byUser = new Map<string, Set<Connection>>();
@@ -264,8 +272,9 @@ export function createWsHub(options: WsHubOptions): WsHub {
 
   const subscribe = async (conn: Connection, mapId: string, afterSeq: number): Promise<void> => {
     if (!(await repo.isActiveMember(mapId, conn.userId))) {
-      if (conn.subscription?.mapId === mapId) endSubscription(conn.subscription, 'forbidden');
-      else sendError(conn, 'FORBIDDEN', mapId);
+      // A new subscribe replaces the old one, even when it is refused.
+      unsubscribe(conn);
+      sendError(conn, 'FORBIDDEN', mapId);
       return;
     }
     if (!connections.has(conn)) return;
@@ -283,7 +292,8 @@ export function createWsHub(options: WsHubOptions): WsHub {
       channel.add(sub);
       channels.set(mapId, channel);
     }
-    await pump(mapId);
+    // Not awaited, so this socket's next message (a ping) doesn't wait on a long replay.
+    void pump(mapId);
   };
 
   const handle = async (conn: Connection, message: WsClientMessage): Promise<void> => {
@@ -300,7 +310,8 @@ export function createWsHub(options: WsHubOptions): WsHub {
     }
   };
 
-  const onMessage = (conn: Connection, raw: string): void => {
+  /** Counts a client message; false (and the socket closing) once over the limit. */
+  const withinLimit = (conn: Connection): boolean => {
     conn.alive = true;
     const now = Date.now();
     if (now - conn.windowStart >= CLIENT_MESSAGE_LIMIT.windowMs) {
@@ -308,12 +319,14 @@ export function createWsHub(options: WsHubOptions): WsHub {
       conn.windowCount = 0;
     }
     conn.windowCount += 1;
-    if (conn.windowCount > CLIENT_MESSAGE_LIMIT.max) {
-      sendError(conn, 'RATE_LIMITED');
-      conn.socket.close(1008, 'rate limited');
-      return;
-    }
+    if (conn.windowCount <= CLIENT_MESSAGE_LIMIT.max) return true;
+    sendError(conn, 'RATE_LIMITED');
+    drop(conn);
+    conn.socket.close(1008, 'rate limited');
+    return false;
+  };
 
+  const onMessage = (conn: Connection, raw: string): void => {
     let json: unknown;
     try {
       json = JSON.parse(raw);
@@ -399,6 +412,7 @@ export function createWsHub(options: WsHubOptions): WsHub {
         conn.alive = true;
       });
       socket.on('message', (data, isBinary) => {
+        if (!withinLimit(conn)) return;
         if (isBinary) {
           sendError(conn, 'BAD_REQUEST');
           return;
@@ -415,13 +429,16 @@ export function createWsHub(options: WsHubOptions): WsHub {
       send(conn, { v: WS_PROTOCOL_VERSION, type: 'ws.ready' });
     },
 
-    close: () => {
+    close: async () => {
       closed = true;
       clearInterval(heartbeat);
+      const queues = [...connections].map((conn) => conn.queue);
       for (const conn of [...connections]) {
         drop(conn);
         conn.socket.close(1001, 'server shutting down');
       }
+      // Let in-flight reads finish before the app closes the database pool.
+      await Promise.all([...queues, ...[...pumps.values()].map((p) => p.done)]);
     },
   };
 }

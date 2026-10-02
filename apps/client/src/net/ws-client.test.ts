@@ -2,7 +2,9 @@ import type { WsClientMessage, WsEventMessage } from '@heartpatch/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RECONNECT_BACKOFF } from './ws-backoff.js';
 import {
+  CONNECT_TIMEOUT_MS,
   createWsClient,
+  FAILURES_BEFORE_SESSION_CHECK,
   GAP_TIMEOUT_MS,
   PING_INTERVAL_MS,
   PONG_TIMEOUT_MS,
@@ -107,6 +109,7 @@ describe('createWsClient', () => {
       onEvent: (e) => applied.push(e.seq),
       onResync: (mapId) => resyncs.push(mapId),
       onStatus: (s) => statuses.push(s),
+      checkSession: () => Promise.resolve(true),
       ...extra,
     });
     return client;
@@ -199,6 +202,60 @@ describe('createWsClient', () => {
     vi.advanceTimersByTime(RECONNECT_BACKOFF.maxMs * 2);
     page.show();
     expect(sockets).toHaveLength(1);
+  });
+
+  it('gives up on a socket that never gets ready', () => {
+    start();
+    vi.advanceTimersByTime(CONNECT_TIMEOUT_MS);
+    expect(sockets[0]!.closedWith).toBeDefined();
+    expect(statuses.at(-1)).toBe('reconnecting');
+  });
+
+  it('checks the session after repeated failed connects, and stops if logged out', async () => {
+    let checks = 0;
+    let loggedIn = true;
+    start({
+      checkSession: () => {
+        checks += 1;
+        return Promise.resolve(loggedIn);
+      },
+    });
+    for (let i = 0; i < FAILURES_BEFORE_SESSION_CHECK; i += 1) {
+      last().drop();
+      vi.runOnlyPendingTimers();
+    }
+    await Promise.resolve();
+    expect(checks).toBe(1);
+    expect(statuses.at(-1)).not.toBe('logged-out');
+
+    loggedIn = false;
+    for (let i = 0; i < FAILURES_BEFORE_SESSION_CHECK; i += 1) {
+      last().drop();
+      if (i < FAILURES_BEFORE_SESSION_CHECK - 1) vi.runOnlyPendingTimers();
+    }
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(checks).toBe(2);
+    expect(statuses.at(-1)).toBe('logged-out');
+    const count = sockets.length;
+    vi.advanceTimersByTime(RECONNECT_BACKOFF.maxMs * 2);
+    expect(sockets).toHaveLength(count);
+  });
+
+  it('a socket that was live does not count as a failed connect', () => {
+    let checks = 0;
+    start({
+      checkSession: () => {
+        checks += 1;
+        return Promise.resolve(true);
+      },
+    });
+    for (let i = 0; i < FAILURES_BEFORE_SESSION_CHECK * 2; i += 1) {
+      last().ready();
+      last().drop();
+      vi.runOnlyPendingTimers();
+    }
+    expect(checks).toBe(0);
   });
 
   it('hands a resync to the app and stops applying until it resubscribes', () => {

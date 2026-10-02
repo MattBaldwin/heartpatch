@@ -25,6 +25,9 @@ export default defineConfig({
     conditions: ['@heartpatch/source', ...defaultClientConditions],
   },
   // Vitest runs tests as SSR, so its resolver needs the workspace condition too.
+  // Not Vite's `defaultServerConditions`: Vitest also passes these to Node as
+  // `--conditions`, where `module` can make `require()` load ESM entries.
+  // Only tests use this; `vite build` targets the browser.
   ssr: { resolve: { conditions: ['@heartpatch/source', 'node'] } },
   server: {
     port: 5173,

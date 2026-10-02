@@ -269,6 +269,36 @@ describe.skipIf(!url)('live sync over /ws (needs DATABASE_URL)', () => {
       await socket.next(ofType('ws.pong'));
     });
 
+    it('does not renew the session (the 101 cannot carry the new cookie)', async () => {
+      await start();
+      const { token, tokenHash } = newSessionToken();
+      const user = await authRepo.createAccount({
+        username: `wskid_${String((counter += 1))}`,
+        passwordHash: 'not-a-hash',
+        birthYear: 2014,
+        timeZone: 'UTC',
+        recoveryCodeHash: 'not-a-hash',
+        // Old enough that a REST request would renew it.
+        session: { tokenHash, expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) },
+      });
+      expect(user).not.toBeNull();
+      const before = await authRepo.findSession(tokenHash, new Date());
+      await connect(token);
+      const after = await authRepo.findSession(tokenHash, new Date());
+      expect(after!.expiresAt).toEqual(before!.expiresAt);
+    });
+
+    it('closes a socket that sends too many messages, binary ones included', async () => {
+      await start();
+      const { token } = await newPlayer();
+      const socket = await connect(token);
+      socket.socket.send(Buffer.from([1, 2, 3]));
+      await socket.next((m) => m.type === 'ws.error' && 'code' in m && m.code === 'BAD_REQUEST');
+      for (let i = 0; i < 30; i += 1) socket.send({ v: 1, type: 'ping' });
+      expect((await socket.closed).code).toBe(1008);
+      expect(socket.messages.some((m) => 'code' in m && m.code === 'RATE_LIMITED')).toBe(true);
+    });
+
     it('caps open sockets per player', async () => {
       await start();
       const { token } = await newPlayer();
@@ -294,6 +324,37 @@ describe.skipIf(!url)('live sync over /ws (needs DATABASE_URL)', () => {
       const missing = '0190a8c4-0000-7000-8000-000000000000';
       socket.subscribe(missing);
       await socket.next((m) => m.type === 'ws.error' && m.mapId === missing);
+    });
+
+    it('a refused subscribe still ends the old one', async () => {
+      await start();
+      const alice = await newPlayer();
+      const bob = await newPlayer();
+      const mine = await newMap([alice.id]);
+      const notMine = await newMap([bob.id]);
+      const socket = await connect(alice.token);
+      socket.subscribe(mine);
+      await socket.next(ofType('ws.subscribed'));
+      socket.subscribe(notMine);
+      await socket.next(ofType('ws.error'));
+      const from = socket.messages.length;
+      await commitEvent(mine, 'test.pinged');
+      expect(await socket.settle(from)).toEqual([]);
+    });
+
+    it('sends nothing more after unsubscribe', async () => {
+      await start();
+      const alice = await newPlayer();
+      const mapId = await newMap([alice.id]);
+      const socket = await connect(alice.token);
+      socket.subscribe(mapId);
+      await socket.next(ofType('ws.subscribed'));
+      socket.send({ v: 1, type: 'unsubscribe', mapId });
+      socket.send({ v: 1, type: 'ping' });
+      await socket.next(ofType('ws.pong'));
+      const from = socket.messages.length;
+      await commitEvent(mapId, 'test.pinged');
+      expect(await socket.settle(from)).toEqual([]);
     });
 
     it('acks with the current seq', async () => {

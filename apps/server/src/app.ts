@@ -77,26 +77,25 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   // Live sync (`/ws`, tech spec §5). Modules call `wsHub.publish(mapId)` after
   // a transaction that appended game events commits (README "Live sync").
   const { authRepo, wsRepo } = options;
+  // Looks a session up without renewing it (see `WsRoutesOptions.sessionUser`).
+  const sessionUser = async (token: string) =>
+    (await authRepo?.findSession(hashSessionToken(token), now()))?.user ?? null;
   const wsHub =
     authRepo && wsRepo
       ? createWsHub({
           repo: wsRepo,
           views: PUBLIC_VIEWS,
-          sessionIsValid: async (token) =>
-            (await authRepo.findSession(hashSessionToken(token), now())) !== null,
+          sessionIsValid: async (token) => (await sessionUser(token)) !== null,
           logger: app.log,
           ...options.wsHubOptions,
         })
       : null;
   app.decorate('wsHub', wsHub);
-  if (wsHub && authHooks) {
+  if (wsHub) {
     // Before @fastify/websocket's own preClose, so players get "going away" (1001).
-    app.addHook('preClose', (done) => {
-      wsHub.close();
-      done();
-    });
+    app.addHook('preClose', () => wsHub.close());
     await app.register(websocket, { options: { maxPayload: MAX_CLIENT_MESSAGE_BYTES } });
-    await app.register(wsRoutes(wsHub, { hooks: authHooks, publicOrigin: config.PUBLIC_ORIGIN }));
+    await app.register(wsRoutes(wsHub, { sessionUser, publicOrigin: config.PUBLIC_ORIGIN }));
   }
 
   await app.register(
