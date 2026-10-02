@@ -37,7 +37,8 @@ export const SECRET_MOVES: Move[] = [
   {
     id: 'heart-glow',
     name: 'Heart Glow',
-    description: 'A warm, pink glow from deep inside. Everyone feels a little better.',
+    description:
+      'A warm, pink glow from deep inside. It feels a little better, and a bit sturdier.',
     element: 'light',
     power: 0,
     accuracy: 100,

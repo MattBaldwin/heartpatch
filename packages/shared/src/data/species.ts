@@ -14,7 +14,8 @@ import type { Species } from '../schemas/data/species.js';
  * gets a bigger one. A few plain commons (common rarity, small stat totals;
  * Puddlepuff and Pebblesnooze lean on their synergy) are great counters to
  * rarer squishies:
- *   Fuzzbolt     → Dawndrop, Thunderpuff  (Spark hits Light; Silly disarms Joy and Brave)
+ *   Fuzzbolt     → Dawndrop, Thunderpuff  (Spark hits Light, Pebble Plop hits Spark;
+ *                                          Silly disarms Joy and Brave)
  *   Pebblesnooze → Candlekit, Glowboo     (Stone hits Fire; Sleepy calms Spooky)
  *   Puddlepuff   → Glimmerock             (Water hits Stone; Silly disarms Joy)
  *   Snoozicle    → Mossmuffin             (Frost hits Leaf; Sleepy calms Cozy)
@@ -846,7 +847,7 @@ export const SPECIES: Species[] = [
     feeling: 'brave',
     rarity: 'legendary',
     baseStats: { hp: 95, attack: 100, defense: 85, speed: 95 }, // TUNE:
-    moves: ['zip-zap', 'thunder-hug', 'zoomies', 'snowball-toss'],
+    moves: ['static-fluff', 'thunder-hug', 'zoomies', 'snowball-toss'],
     evolutions: [],
     visual: {
       body: 'blob',
