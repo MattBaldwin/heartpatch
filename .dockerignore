@@ -1,0 +1,19 @@
+# Keep the build context small and secret-free: images are built from source
+# and install their own dependencies (infra/docker/*.Dockerfile).
+**/node_modules
+**/dist
+**/coverage
+**/playwright-report
+**/test-results
+**/.vite
+**/.turbo
+.git
+.github
+.claude
+docs
+infra/compose
+infra/scripts
+**/.env
+**/.env.*
+**/*.log
+**/.DS_Store

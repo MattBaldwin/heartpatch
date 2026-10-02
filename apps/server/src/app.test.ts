@@ -13,11 +13,12 @@ import { loadConfig } from './config.js';
 import { AppError } from './lib/errors.js';
 import type { ZodTypeProvider } from './lib/zod.js';
 
-const config = loadConfig({
+const env = {
   NODE_ENV: 'test',
   APP_VERSION: '1.2.3',
   DATABASE_URL: 'postgres://localhost:5432/unused',
-});
+};
+const config = loadConfig(env);
 let app: FastifyInstance | undefined;
 
 async function start(options: Partial<BuildAppOptions> = {}): Promise<FastifyInstance> {
@@ -146,6 +147,45 @@ describe('error envelope', () => {
     expect(res.statusCode).toBe(500);
     expect(res.body).not.toContain('secret');
     expect(ApiErrorSchema.parse(res.json()).error.code).toBe('INTERNAL');
+  });
+});
+
+describe('TRUST_PROXY', () => {
+  async function ipFor(
+    trustProxy: string,
+    forwardedFor: string,
+    remoteAddress = '172.18.0.5',
+  ): Promise<unknown> {
+    const server = await start({
+      config: loadConfig({ ...env, TRUST_PROXY: trustProxy }),
+    });
+    server.get('/ip', (request) => ({ ip: request.ip }));
+    const res = await server.inject({
+      method: 'GET',
+      url: '/ip',
+      remoteAddress,
+      headers: { 'x-forwarded-for': forwardedFor },
+    });
+    return res.json();
+  }
+
+  it('trusts only the one hop Caddy adds, so a client cannot spoof its IP', async () => {
+    // A client sent its own X-Forwarded-For; Caddy appended the real peer.
+    expect(await ipFor('true', '6.6.6.6, 203.0.113.7')).toEqual({ ip: '203.0.113.7' });
+  });
+
+  it('never trusts a peer outside the private network', async () => {
+    // Someone reaching the server directly can't pick their own IP.
+    expect(await ipFor('true', '203.0.113.7', '198.51.100.9')).toEqual({ ip: '198.51.100.9' });
+  });
+
+  it('trusts an IPv4-mapped or IPv6 private peer', async () => {
+    expect(await ipFor('true', '203.0.113.7', '::ffff:172.18.0.5')).toEqual({ ip: '203.0.113.7' });
+    expect(await ipFor('true', '203.0.113.7', 'fd00::5')).toEqual({ ip: '203.0.113.7' });
+  });
+
+  it('ignores X-Forwarded-For when false', async () => {
+    expect(await ipFor('false', '203.0.113.7')).toEqual({ ip: '172.18.0.5' });
   });
 });
 

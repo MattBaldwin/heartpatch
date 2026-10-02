@@ -1,0 +1,103 @@
+# Production stack (tech spec §11). On the server this file lives at
+# /opt/heartpatch/compose.yaml next to the operator's .env, so plain
+# `docker compose …` commands work from that folder. The deploy workflow
+# copies it there on every deploy; docs/DEPLOY.md explains every part.
+#
+# HEARTPATCH_TAG (the image tag, a commit SHA) is written into .env by
+# infra/scripts/deploy.sh. Only Caddy publishes ports; the server and
+# Postgres are reachable on the private Docker network only.
+name: heartpatch
+
+x-logging: &logging # Rotate container logs so a chatty day can't fill the disk (tech spec §14).
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '5'
+
+services:
+  caddy:
+    image: ${HEARTPATCH_IMAGE_PREFIX:-ghcr.io/mattbaldwin/heartpatch}-caddy:${HEARTPATCH_TAG:?HEARTPATCH_TAG is not set; deploy.sh writes it into .env}
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      HP_SITE_ADDRESS: ${HP_SITE_ADDRESS:-play.pumpkinpatchgames.com}
+    volumes:
+      # Certificates and ACME account: keep across deploys so Let's Encrypt
+      # isn't asked for a new certificate each time.
+      - caddy-data:/data
+      - caddy-config:/config
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ['no-new-privileges:true']
+    healthcheck:
+      # The admin API answers once Caddy has loaded its config.
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:2019/config/']
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging: *logging
+
+  server:
+    image: ${HEARTPATCH_IMAGE_PREFIX:-ghcr.io/mattbaldwin/heartpatch}-server:${HEARTPATCH_TAG:?HEARTPATCH_TAG is not set; deploy.sh writes it into .env}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # Fixed by this stack, so .env can't get them wrong.
+      NODE_ENV: production
+      PORT: '3000'
+      TRUST_PROXY: 'true'
+      APP_VERSION: ${HEARTPATCH_TAG}
+      # Built from POSTGRES_PASSWORD unless .env sets DATABASE_URL explicitly.
+      DATABASE_URL: ${DATABASE_URL:-postgres://heartpatch:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set in .env}@db:5432/heartpatch}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    stop_grace_period: 20s
+    healthcheck:
+      # Liveness only (tech spec §14): a database blip must not restart a
+      # healthy server. deploy.sh checks /api/v1/ready once per deploy.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/v1/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *logging
+
+  db:
+    # Same major version as dev and CI. Never published to the host.
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: heartpatch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set in .env}
+      POSTGRES_DB: heartpatch
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    shm_size: 128m
+    security_opt: ['no-new-privileges:true']
+    stop_grace_period: 30s
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U heartpatch -d heartpatch']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging: *logging
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

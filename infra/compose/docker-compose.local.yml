@@ -1,0 +1,32 @@
+# LOCAL TESTING ONLY: runs the production stack on your machine with images
+# built from this checkout and a `localhost` certificate from Caddy's internal
+# CA (your browser will warn; that's expected). Never use this on the server.
+#
+#   infra/scripts/local-smoke.sh            # build, start, check, stop
+#
+# or by hand, from the repo root:
+#   cp infra/compose/.env.prod.example infra/compose/.env   # then fill it in
+#   HEARTPATCH_TAG=local docker compose -f infra/compose/docker-compose.prod.yml \
+#     -f infra/compose/docker-compose.local.yml up -d --build --wait
+#   curl -k https://localhost:8443/api/v1/health
+name: heartpatch-local
+
+services:
+  caddy:
+    image: heartpatch-caddy:${HEARTPATCH_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: infra/docker/caddy.Dockerfile
+    environment:
+      HP_SITE_ADDRESS: localhost
+    ports: !override
+      - '127.0.0.1:8080:80'
+      - '127.0.0.1:8443:443'
+
+  server:
+    image: heartpatch-server:${HEARTPATCH_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: infra/docker/server.Dockerfile
+      args:
+        APP_VERSION: ${HEARTPATCH_TAG:-local}

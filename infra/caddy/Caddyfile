@@ -1,0 +1,70 @@
+# Heartpatch edge (tech spec §9, §11): automatic HTTPS, the built client from
+# /srv, and /api + /ws proxied to the Node server on the Docker network.
+#
+# HP_SITE_ADDRESS defaults to the production host. Local testing sets it to
+# `localhost`, for which Caddy issues a certificate from its own internal CA
+# (infra/compose/docker-compose.local.yml).
+
+{
+	servers {
+		# HTTP/1.1 + HTTP/2 only: HTTP/3 needs UDP 443, which the firewall doesn't open.
+		protocols h1 h2
+	}
+}
+
+{$HP_SITE_ADDRESS:play.pumpkinpatchgames.com} {
+	encode zstd gzip
+
+	# Security headers on every response (tech spec §9). `defer` applies them
+	# after the proxied server responds, so they win over upstream values.
+	header {
+		defer
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		# Scripts from this origin only. 'wasm-unsafe-eval' lets the renderer
+		# compile WebAssembly (e.g. texture decoders) without allowing JS eval.
+		# blob: workers and images are how Babylon loads decoders and textures.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; connect-src 'self' wss://{host}; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy server:3000
+	}
+
+	# WebSocket upgrades are proxied transparently.
+	handle /ws* {
+		reverse_proxy server:3000
+	}
+
+	handle {
+		root * /srv
+
+		# Vite's hashed bundles never change, so phones can cache them forever.
+		@hashed path /assets/*
+		header @hashed Cache-Control "public, max-age=31536000, immutable"
+
+		# Everything else (index.html, the service worker, the manifest, icons)
+		# is revalidated on every load, so a deploy reaches players right away.
+		@unhashed not path /assets/*
+		header @unhashed Cache-Control "no-cache"
+
+		# Unknown paths get the app shell so client-side routes survive a reload.
+		# A missing hashed asset stays a real 404 rather than HTML.
+		@appRoute {
+			not path /assets/*
+			not file
+		}
+		rewrite @appRoute /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

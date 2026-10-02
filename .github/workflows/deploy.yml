@@ -1,0 +1,185 @@
+name: Deploy
+
+# Push to main: build both images, push them to GHCR tagged with the commit
+# SHA, then deploy over SSH with infra/scripts/deploy.sh (tech spec §12).
+# Until the Lightsail secrets exist, the deploy job is skipped with a notice
+# rather than failing (docs/DEPLOY.md step 5 turns it on).
+#
+# Pull requests that touch the deploy setup run infra/scripts/local-smoke.sh
+# instead: the whole production stack on the runner, nothing pushed.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - infra/**
+      - .github/workflows/deploy.yml
+      - .dockerignore
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - apps/*/package.json
+      - packages/*/package.json
+
+permissions:
+  contents: read
+
+concurrency:
+  # One production deploy at a time, never cancelled halfway; PR runs replace each other.
+  group: ${{ github.event_name == 'pull_request' && format('deploy-pr-{0}', github.ref) || 'deploy-production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE_PREFIX: ghcr.io/mattbaldwin/heartpatch
+
+jobs:
+  smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Production stack smoke test (deploy, Caddy, backup/restore, rollback)
+        run: infra/scripts/local-smoke.sh
+
+  preflight:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.secrets.outputs.ready }}
+    steps:
+      - name: Check the deploy secrets are set
+        id: secrets
+        env:
+          LIGHTSAIL_HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          LIGHTSAIL_USER: ${{ secrets.LIGHTSAIL_USER }}
+          LIGHTSAIL_SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          LIGHTSAIL_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_KNOWN_HOSTS }}
+        run: |
+          missing=()
+          for name in LIGHTSAIL_HOST LIGHTSAIL_USER LIGHTSAIL_SSH_KEY LIGHTSAIL_KNOWN_HOSTS; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            message="Deploy skipped: repository secrets not set yet: ${missing[*]}. Images are still built and pushed. See docs/DEPLOY.md step 5."
+            echo "::notice title=Deploy skipped::$message"
+            echo "$message" >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  images:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        image: [server, caddy]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/${{ matrix.image }}.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}:${{ github.sha }}
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+          # Links the package to this repo, so this repo's token can pull it.
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+          # One plain manifest per tag (no untagged attestation children), so
+          # pruning old versions below can't break a kept image.
+          provenance: false
+      # Private package storage has a quota: keep the newest 10 releases.
+      # Never fails the run; the server keeps its own copy of what it runs.
+      - name: Prune old image versions
+        uses: actions/delete-package-versions@v5
+        continue-on-error: true
+        with:
+          package-name: heartpatch-${{ matrix.image }}
+          package-type: container
+          min-versions-to-keep: 10
+
+  deploy:
+    needs: [preflight, images]
+    if: needs.preflight.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://play.pumpkinpatchgames.com
+    permissions:
+      contents: read
+      # The server pulls the private images with this run's short-lived token.
+      packages: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up SSH
+        env:
+          LIGHTSAIL_HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          LIGHTSAIL_USER: ${{ secrets.LIGHTSAIL_USER }}
+          LIGHTSAIL_SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          LIGHTSAIL_KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$LIGHTSAIL_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host key: refuse to connect if the server isn't the one we set up.
+          printf '%s\n' "$LIGHTSAIL_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host lightsail
+            HostName $LIGHTSAIL_HOST
+            User $LIGHTSAIL_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            ConnectTimeout 20
+            ServerAliveInterval 15
+          EOF
+
+      - name: Upload the compose file and scripts
+        run: |
+          ssh lightsail 'rm -rf /opt/heartpatch/incoming && mkdir -p /opt/heartpatch/incoming'
+          scp infra/compose/docker-compose.prod.yml \
+            infra/scripts/deploy.sh infra/scripts/backup.sh infra/scripts/restore.sh \
+            lightsail:/opt/heartpatch/incoming/
+
+      - name: Deploy ${{ github.sha }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          TAG: ${{ github.sha }}
+        run: |
+          # The tag and user expand here on purpose (a hex SHA and a GitHub login).
+          # shellcheck disable=SC2029
+          printf '%s' "$GHCR_TOKEN" | ssh lightsail "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
+          status=0
+          # shellcheck disable=SC2029
+          ssh lightsail "/opt/heartpatch/incoming/deploy.sh '$TAG'" || status=$?
+          # The token expires with this job anyway; don't leave it on disk.
+          ssh lightsail 'docker logout ghcr.io' || true
+          exit "$status"
+
+      - name: Remove the SSH key
+        if: always()
+        run: rm -rf ~/.ssh
