@@ -13,7 +13,7 @@ import { LocalDateSchema, type LocalDate } from '../schemas/time.js';
 export const SPAWN_WINDOW_HOURS = [1, 2, 3, 4, 6, 8, 12, 24] as const;
 
 export interface SpawnWindow {
-  /** `YYYY-MM-DD/<block>`: unique per map-local block, and sorts in time order within a year. */
+  /** `YYYY-MM-DD/<block>`: unique per map-local block. To order ids, compare the date, then the block as a number. */
   readonly id: string;
   /** The map-local date the block is on. */
   readonly date: LocalDate;

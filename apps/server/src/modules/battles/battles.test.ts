@@ -401,6 +401,13 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       });
       expect(forged.statusCode).toBe(400);
       expect(errorOf(forged).code).toBe('VALIDATION_FAILED');
+      // A sure capture is the server's call (tutorial maps), never the client's.
+      const sure = await call(server, 'POST', `/battles/${battle.id}/actions`, kid, {
+        action: { type: 'capture', sure: true },
+        turn: 0,
+      });
+      expect(sure.statusCode).toBe(400);
+      expect(errorOf(sure).code).toBe('VALIDATION_FAILED');
 
       const move = myActive(battle).moves[0]!;
       const first = await act(server, kid, battle, { type: 'move', move });

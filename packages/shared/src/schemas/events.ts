@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
+import { ContentIdSchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
 
@@ -135,7 +136,7 @@ export const GAME_EVENTS = {
       battleId: z.uuid(),
       userId: z.uuid(),
       squishyId: z.uuid(),
-      speciesId: z.string(),
+      speciesId: ContentIdSchema,
       level: z.number().int().min(1),
     }),
     public: z.object({ userId: z.uuid(), squishyId: z.uuid() }),
