@@ -20,10 +20,14 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
     };
     const species = new Set(gameData.species.map((s) => s.id));
     const seasons = new Set(gameData.seasons.map((s) => s.id));
+    const terrains = new Set(gameData.terrains.map((t) => t.id));
 
     checkUniqueIds('spawnTables', data.spawnTables, report);
     data.spawnTables.forEach((table, i) => {
       checkRef(seasons, 'season', table.season, ['spawnTables', i, 'season'], report);
+      table.terrains.forEach((terrain, j) => {
+        checkRef(terrains, 'terrain', terrain, ['spawnTables', i, 'terrains', j], report);
+      });
       table.entries.forEach((entry, j) => {
         checkRef(
           species,
