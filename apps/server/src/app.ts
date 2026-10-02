@@ -107,7 +107,15 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       // register inside this block and take `authHooks.requireAuth` (and
       // `wsHub`, if they write game events).
       if (db && auth && authHooks) {
-        await api.register(authRoutes(auth, { hooks: authHooks, secureCookies }));
+        await api.register(
+          authRoutes(auth, {
+            hooks: authHooks,
+            secureCookies,
+            ...(config.HP_DEV_SIGNUP_LIMIT_PER_IP !== undefined
+              ? { signupPerIpMax: config.HP_DEV_SIGNUP_LIMIT_PER_IP }
+              : {}),
+          }),
+        );
 
         const maps = createMapsService({
           db,

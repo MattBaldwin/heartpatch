@@ -38,9 +38,16 @@ function codeLifeLeft(iso: string): string {
 export interface Lobby {
   /** Shows the lobby for a logged-in player, or hides it (null). */
   setUser: (user: PublicUser | null) => void;
+  /** Opens the lobby's patch list with a message (e.g. after leaving a map). */
+  showMessage: (message: string) => void;
 }
 
-export function mountLobby(root: HTMLElement): Lobby {
+export interface LobbyOptions {
+  /** Shows a patch's map; rejects with a player-safe message if it can't. */
+  onOpen?: (mapId: string) => Promise<void>;
+}
+
+export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby {
   const panel = el('section', {
     class: 'lobby',
     'data-testid': 'lobby',
@@ -315,6 +322,18 @@ export function mountLobby(root: HTMLElement): Lobby {
     const isOwner = map.role === 'owner';
     const status = el('p', { class: 'auth-error', role: 'alert', 'data-testid': 'lobby-error' });
     const sections: Node[] = [];
+
+    const { onOpen } = options;
+    if (onOpen) {
+      const visit = button('Visit patch', () => {
+        act(status, visit, async () => {
+          await onOpen(map.id);
+          panel.hidden = true;
+          openButton.hidden = false;
+        });
+      });
+      sections.push(el('div', { class: 'auth-actions' }, visit));
+    }
 
     if (map.admin) {
       const { invite, requests } = map.admin;
@@ -607,6 +626,9 @@ export function mountLobby(root: HTMLElement): Lobby {
         openButton.hidden = true;
         card.replaceChildren();
       }
+    },
+    showMessage: (message) => {
+      if (user) void showList(message);
     },
   };
 }

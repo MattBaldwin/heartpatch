@@ -1,6 +1,6 @@
 import { Scene } from '@babylonjs/core/scene';
 import { MapCamera } from './camera/map-camera.js';
-import type { Bounds } from './camera/camera-math.js';
+import type { Bounds, GroundPoint } from './camera/camera-math.js';
 import { CAMERA, SETTLE_FRAMES, type QualityTier } from './config.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import { setupLighting } from './lighting/lighting.js';
@@ -10,6 +10,8 @@ import type { Renderer } from './renderer.js';
 export interface SceneContent {
   /** Where the camera target may roam. */
   readonly bounds: Bounds;
+  /** Where the camera starts looking (clamped to `bounds`); the origin by default. */
+  readonly start?: GroundPoint;
 }
 
 /** Fills a fresh scene with content; lighting and camera are set up for it. */
@@ -50,8 +52,15 @@ export function mountStage(
   // taps can call scene.pick() directly when they arrive.
   scene.detachControl();
   setupLighting(scene);
-  const { bounds } = build(scene);
-  const camera = new MapCamera(scene, canvas, CAMERA, bounds);
+  let content: SceneContent;
+  try {
+    content = build(scene);
+  } catch (err) {
+    scene.dispose(); // don't leave a half-built scene on the engine
+    throw err;
+  }
+  const { bounds, start } = content;
+  const camera = new MapCamera(scene, canvas, CAMERA, bounds, start);
   scene.activeCamera = camera.camera;
   const quality = new RenderQuality(scene, camera.camera, tier);
 

@@ -12,6 +12,9 @@ const chromiumPath = process.env['PW_CHROMIUM_EXECUTABLE'];
 // The family signup code the dev server starts with, so e2e can sign up. The
 // server inherits it; a reused local server reads the same default from .env.
 process.env['HP_SIGNUP_CODE'] ??= 'heartpatch-dev-family';
+// Every device project signs up fresh players from this one IP, which the
+// per-IP signup limit (10 an hour) can't cover; dev and tests only.
+process.env['HP_DEV_SIGNUP_LIMIT_PER_IP'] ??= '500';
 
 const projects = chromiumPath
   ? [

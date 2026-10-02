@@ -156,3 +156,13 @@ _Proposed in the #26 PR; the project owner confirms on merge._
 - **Production builds only.** The dev server never registers the worker (it would serve stale modules); e2e checks it against `vite preview` of a real build.
 - **Status bar `default`:** dark status text on the theme colour, readable over the pastel game. `black-translucent` would draw the game under white status text.
 - **The Add to Home Screen guide sits under the login card**, so a new player signs up first and then sees it. It shows until "Got it!" is tapped.
+
+## 2026-10-02 — Map rendering (#7)
+
+_Proposed in the #7 PR; the project owner confirms on merge._
+
+- **The map view says which event it's up to date with** (coordinator-approved shared contract change): `MapView.seq`, read with the map, members and tiles in one read-only `repeatable read` snapshot. The client subscribes from it and, on `ws.resync`, refetches and subscribes from the new view's seq. *Why:* without it the client can't follow the documented resync flow; subscribing from 0 replays everything and, past the replay window, gets `ws.resync` on every try.
+- **Member changes refetch the map view instead of being applied on the client.** A join, leave or removal changes a whole home ring (and releases land) in ways only the server knows, so the client stops live events, refetches, and follows on from the new seq. Small, self-describing events (settings now, tile events with #13) are applied directly. *Why:* the client never re-implements ownership rules (CLAUDE.md rule 1).
+- **Scenes are swapped on the running engine.** Opening a map disposes the current stage and mounts the map's on the same renderer; a GPU-loss rebuild mounts whatever is on screen.
+- **The tile panel doesn't show guardians yet.** `PublicTile` has no public guardian field (guardian strength hints at secret spawns, tech spec §8); the panel adds them once one exists.
+

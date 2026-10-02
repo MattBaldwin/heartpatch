@@ -41,6 +41,8 @@ body {
 
 .renderer-error {
   position: fixed;
+  /* Above the auth overlay (10), which would otherwise cover it. */
+  z-index: 20;
   inset: auto calc(env(safe-area-inset-right) + 24px) auto calc(env(safe-area-inset-left) + 24px);
   top: 40%;
   padding: 20px 24px;

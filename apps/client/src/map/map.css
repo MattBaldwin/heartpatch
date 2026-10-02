@@ -1,0 +1,118 @@
+/* Map screen overlays (tech spec §6): the patch name pill and the tile info
+   sheet. 44pt+ targets, safe areas; above the canvas, below the lobby (4). */
+
+.map-hud {
+  position: fixed;
+  z-index: 3;
+  /* Below the "Hi, name!" chip, which can span a phone's width. */
+  top: calc(env(safe-area-inset-top) + 64px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: calc(100vw - 64px);
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 85%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 12%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+  text-align: center;
+  pointer-events: none;
+}
+
+.map-hud[hidden],
+.map-hud-status[hidden],
+.map-hud-login[hidden],
+.tile-panel[hidden],
+.tile-panel-resource[hidden] {
+  display: none;
+}
+
+.map-hud-name {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-hud-status {
+  font-size: 13px;
+  font-weight: 600;
+  color: #8a5f86;
+}
+
+.map-hud-login {
+  margin-top: 6px;
+  pointer-events: auto;
+}
+
+.tile-panel {
+  position: fixed;
+  z-index: 3;
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  /* Sits above the "My patches" button in the bottom corner. */
+  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  box-sizing: border-box;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 14px 16px 16px 20px;
+  border-radius: 24px;
+  background: #fffafc;
+  box-shadow: 0 8px 24px rgb(107 75 110 / 18%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.tile-panel-home {
+  background: #fff6e6;
+}
+
+.tile-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tile-panel-title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.tile-panel-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  background: #f6e3ee;
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+  color: #8a5f86;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.tile-panel-owner {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.tile-panel-about,
+.tile-panel-resource {
+  margin: 6px 0 0;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.tile-panel-resource {
+  font-weight: 600;
+  color: #6b8a3a;
+}
