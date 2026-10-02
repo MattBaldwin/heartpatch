@@ -59,6 +59,11 @@ export interface MapsServiceOptions {
   /** `HP_TUTORIAL_REQUIRED`: creating or joining needs a finished tutorial. */
   tutorialRequired: boolean;
   clock?: Clock;
+  /**
+   * Live sync (`wsHub.publish`): called after a command that wrote game events
+   * commits, so members see it right away. Never rejects.
+   */
+  publish?: (mapId: string) => Promise<void>;
 }
 
 // Kid-readable messages (style guide §6). Players call maps "patches".
@@ -119,6 +124,10 @@ async function withFreshCode<T>(fn: (code: string) => Promise<T>): Promise<T> {
 export function createMapsService(options: MapsServiceOptions): MapsService {
   const { db, tutorialRequired } = options;
   const now = options.clock ?? (() => new Date());
+  /** After commit only (apps/server/README.md, "Live sync"). */
+  const published = (mapId: string) => {
+    void options.publish?.(mapId);
+  };
   const store = createMapsRepo(db);
 
   const assertTutorialDone = async (user: PublicUser) => {
@@ -270,6 +279,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           return map.id;
         }),
       );
+      published(mapId);
       return detail(user, mapId);
     },
 
@@ -406,6 +416,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           },
         });
       });
+      published(mapId);
     },
 
     deny: async (user, mapId, requestId) => {
@@ -419,12 +430,14 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       await requireOwner(store, user, mapId);
       if (memberId === user.id) throw new AppError('FORBIDDEN', MESSAGES.removeSelf);
       await depart(mapId, memberId, user, 'member.removed');
+      published(mapId);
     },
 
     leave: async (user, mapId) => {
       const { role } = await requireMember(store, user, mapId);
       if (role === 'owner') throw new AppError('FORBIDDEN', MESSAGES.ownerLeave);
       await depart(mapId, user.id, user, 'member.left');
+      published(mapId);
     },
 
     setPvpMode: async (user, mapId, pvpMode) => {
@@ -438,6 +451,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           payload: { pvpMode },
         });
       });
+      published(mapId);
       return pvpMode;
     },
 

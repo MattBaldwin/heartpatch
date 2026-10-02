@@ -119,6 +119,7 @@ Add anything else only with a one-line justification in the PR.
 - `seq` is a per-map monotonically increasing number. On reconnect the client sends its last `seq`; the server replays missed events from `game_events` or tells the client to refetch full state.
 - Server → client events (Phase 1): `tile.updated`, `raid.resolved`, `building.updated`, `squishy.updated`, `hollow.nightfall`, `member.joined`, `member.left`, `chat.quick`, `milestone.earned`.
 - Heartbeat ping every 25 s; iOS suspends background tabs, so always resync on `visibilitychange`.
+- Protocol messages use the reserved `ws.` type prefix: `ws.ready`, `ws.subscribed`, `ws.cursor` (seqs up to here that aren't for this player are skipped, so they're not a gap), `ws.resync` (refetch full state), `ws.error` (shared error codes) and `ws.pong`. Client → server: `subscribe { mapId, afterSeq }`, `unsubscribe`, `ping`. Details: `apps/server/README.md` → "Live sync".
 
 ## 6. Client architecture
 

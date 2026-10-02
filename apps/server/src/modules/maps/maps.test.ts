@@ -10,6 +10,7 @@ import {
   MeResponseSchema,
   MemberPasswordResetResponseSchema,
   MyMapsResponseSchema,
+  normalizeInviteCode,
   parseGameEventPayload,
   PvpModeResponseSchema,
   SessionResponseSchema,
@@ -17,7 +18,7 @@ import {
   type MapDetail,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
@@ -25,6 +26,7 @@ import { joinRequests, mapMembers, maps, sessions, users } from '../../db/schema
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS, MAP_RATE_LIMITS } from './limits.js';
+import { createMapsService } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -846,6 +848,31 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       await call(server, 'POST', `/maps/${map.id}/members/${b.id}/remove`, owner);
       expect((await reset(server, owner, map.id, b.id)).statusCode).toBe(404);
       expect(await me(server, a.token)).not.toBeNull();
+    });
+  });
+
+  describe('live sync', () => {
+    it('publishes each map after a command that wrote events commits', async () => {
+      const published: { mapId: string; seq: number }[] = [];
+      const service = createMapsService({
+        db,
+        tutorialRequired: false,
+        publish: async (mapId) => {
+          // Runs after commit, so the newest event is already visible.
+          const events = await eventsOf(mapId);
+          published.push({ mapId, seq: events.at(-1)?.seq ?? 0 });
+        },
+      });
+      const owner = await player();
+      const friend = await player();
+      const map = await service.create(owner, { name: 'Live Patch', timeZone: 'UTC' });
+      const { request } = await service.join(friend, normalizeInviteCode(map.admin!.invite!.code));
+      await service.approve(owner, map.id, request.id);
+      await service.setPvpMode(owner, map.id, 'off');
+      await service.leave(friend, map.id);
+      await vi.waitFor(() => {
+        expect(published).toEqual([1, 2, 3, 4].map((seq) => ({ mapId: map.id, seq })));
+      });
     });
   });
 

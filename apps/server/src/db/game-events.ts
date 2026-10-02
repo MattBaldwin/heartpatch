@@ -31,14 +31,33 @@ export type GameEvent = typeof gameEvents.$inferSelect;
  * - locks are always taken entity rows first, `maps` last, which avoids
  *   deadlocks and keeps the busy `maps` row locked only briefly.
  *
- * Broadcast the returned event to WebSocket clients only after commit, using
- * `publicGameEventPayload` (never the raw payload).
+ * After commit, call `wsHub.publish(mapId)` (apps/server/README.md, "Live
+ * sync"); the hub sends each type's public view, never the raw payload.
  */
 export async function appendGameEvent<T extends GameEventType>(
   tx: Transaction,
   event: NewGameEvent<T>,
 ): Promise<GameEvent> {
-  const payload = parseGameEventPayload(event.type, event.payload);
+  return await appendRawGameEvent(tx, {
+    ...event,
+    payload: parseGameEventPayload(event.type, event.payload),
+  });
+}
+
+/**
+ * The seq-allocating writer under `appendGameEvent`, with no registry check.
+ * **Only for tests of the event stream itself** (live sync, replay), which
+ * need made-up event types. Modules always use `appendGameEvent`.
+ */
+export async function appendRawGameEvent(
+  tx: Transaction,
+  event: {
+    mapId: string;
+    type: string;
+    actorUserId: string | null;
+    payload: Record<string, unknown>;
+  },
+): Promise<GameEvent> {
   const [allocated] = await tx
     .update(maps)
     .set({ eventSeq: sql`${maps.eventSeq} + 1` })
@@ -48,7 +67,7 @@ export async function appendGameEvent<T extends GameEventType>(
 
   const [row] = await tx
     .insert(gameEvents)
-    .values({ ...event, payload, seq: allocated.seq })
+    .values({ ...event, seq: allocated.seq })
     .returning();
   if (!row) throw new Error('appendGameEvent: insert returned no row');
   return row;

@@ -178,10 +178,10 @@ await withTransaction(db, async (tx) => {
   const event = await appendGameEvent(tx, { mapId, type: 'map.updated', actorUserId, payload });
   return event;
 });
-// 3. After commit: broadcast publicGameEventPayload(event.type, event.payload) to WebSocket clients
+// 3. After commit: wsHub.publish(mapId); live sync sends the type's public view (apps/server/README.md)
 ```
 
-Event types and payloads come from the shared registry, `packages/shared/src/schemas/events.ts`: each type has an **internal** payload schema (what's stored; `appendGameEvent` is generic over the type, so payloads typecheck, and it validates them at runtime too) and a **public** one (what the WebSocket hub may broadcast, via `publicGameEventPayload`). Add a type there before writing it.
+Event types and payloads come from the shared registry, `packages/shared/src/schemas/events.ts`: each type has an **internal** payload schema (what's stored; `appendGameEvent` is generic over the type, so payloads typecheck, and it validates them at runtime too) and a **public** one (what live sync may broadcast: `PUBLIC_VIEWS` in `src/ws/public-views.ts` is built from these, one view per type). Add a type there before writing it. Tests of the event stream itself, which need made-up types, use `appendRawGameEvent`; modules never do.
 
 `appendGameEvent` runs `UPDATE maps SET event_seq = event_seq + 1 … RETURNING event_seq` and inserts the event with that seq. The update row-locks the map until commit, so seqs never skip (a rollback undoes the bump too, unlike a Postgres sequence) and commit order matches seq order. Taking that lock last keeps a fixed lock order (entities, then `maps`), which avoids deadlocks. Integration tests in `game-events.test.ts` check concurrent appends, rollbacks and both mixed together.
 
