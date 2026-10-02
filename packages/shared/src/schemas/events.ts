@@ -4,6 +4,7 @@ import { ContentIdSchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
 import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
+import { MoodIdSchema } from './data/care.js';
 import { LocalDateSchema } from './time.js';
 
 /**
@@ -60,7 +61,10 @@ const BattleEndedSchema = z.strictObject({
   winner: z.union([BattleSideIdSchema, z.literal('draw')]).nullable(),
   reason: z.union([BattleEndReasonSchema, z.literal('no-contest')]),
   turns: z.number().int().min(0),
-  /** Base battle XP granted to the player's squishies (design doc §7). */
+  /**
+   * XP granted to the player's squishies: the battle's base XP × their care
+   * and habitat multiplier (design doc §7, #19).
+   */
   xp: z.array(z.strictObject({ squishyId: z.uuid(), xp: z.number().int().min(0) })),
 });
 
@@ -267,6 +271,59 @@ export const GAME_EVENTS = {
       squishyId: z.uuid(),
       habitatId: z.uuid().nullable(),
     }),
+  },
+  /**
+   * A player cared for one of their squishies (#19): feed, pet or play.
+   * Members see who, which action and the squishy's mood; the numbers stay
+   * internal. `coins` is what it earned toward the daily care cap (#45 pays
+   * Patch Coins out of these).
+   */
+  'squishy.cared': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      action: ContentIdSchema,
+      /** Contentment after the action, and what it added. */
+      contentment: z.number().int().min(0).max(100),
+      gained: z.number().int().min(0),
+      full: z.boolean(),
+      coins: z.number().int().min(0),
+      /** The account-local day it counted toward. */
+      day: LocalDateSchema,
+      mood: MoodIdSchema,
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      action: ContentIdSchema,
+      mood: MoodIdSchema,
+    }),
+  },
+  /** A squishy went up one or more levels (#19). */
+  'squishy.leveled': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      fromLevel: z.number().int().min(1),
+      level: z.number().int().min(1),
+      xp: z.number().int().min(0),
+    }),
+    public: z.object({ userId: z.uuid(), squishyId: z.uuid(), level: z.number().int().min(1) }),
+  },
+  /**
+   * A squishy evolved into its next form (#19, design doc §8). The forms stay
+   * internal: a secret form would otherwise reach members who never met it
+   * (CLAUDE.md rule 6), as with `squishy.captured`.
+   */
+  'squishy.evolved': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      fromSpeciesId: ContentIdSchema,
+      intoSpeciesId: ContentIdSchema,
+      level: z.number().int().min(1),
+    }),
+    public: z.object({ userId: z.uuid(), squishyId: z.uuid(), level: z.number().int().min(1) }),
   },
 } satisfies Record<string, GameEventSchemas>;
 

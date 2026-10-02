@@ -16,7 +16,11 @@ export const CareActionSchema = z.strictObject({
   description: DescriptionSchema,
   /** Contentment added, on the 0–100 scale. */
   contentment: z.number().int().min(1).max(100),
-  /** Server-side cooldown per squishy so tap-spamming can't max care. */
+  /**
+   * Seconds before the same action on the same squishy counts again: a
+   * debounce, so one gesture can't count twice. Diminishing returns
+   * (`CARE_RULES`) are what keep tap-spamming from maxing care.
+   */
   cooldownSeconds: z.number().int().positive(),
   cost: ResourceCostSchema.optional(),
 });
