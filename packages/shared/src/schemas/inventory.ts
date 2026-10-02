@@ -21,6 +21,7 @@ export const ItemChangeReasonSchema = z.enum([
   'build',
   'fuel',
   'build-refund',
+  'care',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

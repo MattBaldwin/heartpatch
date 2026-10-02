@@ -373,11 +373,19 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
         feeling: wild.feeling,
         state: 'active',
       });
-      expect(await seenOf(mapId, kid)).toEqual([
+      // (The level-40 Moonpuff's new form, below, is caught too: #19.)
+      expect(await seenOf(mapId, kid)).toContainEqual(
         expect.objectContaining({ speciesId: wild.speciesId, firstCaughtAt: clock }),
+      );
+      // The level-40 Moonpuff is past its evolution level, so its battle XP
+      // grows it up too (#19's `applyXp`).
+      const all = (await eventsOf(mapId)).slice(-3);
+      expect(all.map((e) => e.type)).toEqual([
+        'battle.ended',
+        'squishy.evolved',
+        'squishy.captured',
       ]);
-      const events = (await eventsOf(mapId)).slice(-2);
-      expect(events.map((e) => e.type)).toEqual(['battle.ended', 'squishy.captured']);
+      const events = [all[0]!, all[2]!];
       expect(events[1]!.payload).toEqual({
         battleId: battle.id,
         userId: kid.id,

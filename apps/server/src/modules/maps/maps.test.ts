@@ -301,6 +301,18 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(limited.statusCode).toBe(429);
       expect(errorOf(limited).code).toBe('RATE_LIMITED');
     });
+
+    it('takes a raised per-IP patch-making limit from dev config (e2e)', async () => {
+      const server = await start({ HP_DEV_MAP_CREATE_LIMIT_PER_IP: '50' });
+      const { perIp, perUser } = MAP_RATE_LIMITS.create;
+      // One IP (inject's), several players: past the usual per-IP max.
+      for (let made = 0; made <= perIp.max;) {
+        const owner = await player();
+        for (let i = 0; i < perUser.max && made <= perIp.max; i++, made++) {
+          await createMap(server, owner);
+        }
+      }
+    });
   });
 
   describe('tutorial gate', () => {
