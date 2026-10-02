@@ -24,6 +24,7 @@ import {
   type ShownState,
 } from './battle-playback.js';
 import { BattleScene, type BattleSceneStats } from './battle-scene.js';
+import { sendAction, type SubmitDeps } from './battle-submit.js';
 import {
   activeOf,
   BattleContent,
@@ -347,37 +348,34 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     else playNext();
   };
 
-  /**
-   * Sends the action; if it never reached the server (the radio dropped), it
-   * is sent once more with the same `Idempotency-Key`, so a submit that did
-   * land is replayed rather than applied twice (tech spec §5).
-   */
-  const send = async (current: PlayerBattle, action: PlayerBattleAction): Promise<PlayerBattle> => {
-    const key = newIdempotencyKey();
-    try {
-      return await api.act(current.id, action, current.view.turn, key);
-    } catch (err) {
-      if (!(err instanceof ApiRequestError) || err.code !== 'OFFLINE') throw err;
-      await new Promise((resolve) => setTimeout(resolve, RETRY_AFTER_MS));
-      return api.act(current.id, action, current.view.turn, key);
-    }
+  const submitDeps: SubmitDeps = {
+    act: api.act,
+    newKey: newIdempotencyKey,
+    wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    retryAfterMs: RETRY_AFTER_MS,
   };
 
   async function submit(action: PlayerBattleAction): Promise<void> {
     const current = battle;
     if (!current || waiting || queue.length > 0) return;
+    // Replies and errors are for this battle only: once the player has left
+    // it (Back, logout, the map closing), nothing here touches the screen.
+    const stillOpen = () => battle?.id === current.id;
     waiting = true;
     hud.setControls({ type: 'waiting' });
     try {
-      receive(await send(current, action));
+      const reply = await sendAction(submitDeps, current, action, stillOpen);
+      if (reply && stillOpen()) receive(reply);
     } catch (err) {
+      if (!stillOpen()) return;
       hud.setProblem(messageOf(err));
       // The battle moved on without us (another tab, a retry): show where it is.
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
         try {
-          receive(await api.get(current.id));
+          const fresh = await api.get(current.id);
+          if (stillOpen()) receive(fresh);
         } catch {
-          hud.setControls(controlsFor(current));
+          if (stillOpen()) hud.setControls(controlsFor(current));
         }
       } else {
         hud.setControls(controlsFor(current));
@@ -428,14 +426,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       options.invalidate();
     }
     const t = now();
-    if (s.update(t)) {
-      if (s.isPlaying(t)) {
-        options.invalidate();
-      } else if (t - lastBreathDraw >= BREATHING_FRAME_MS) {
-        // Breathing only: one frame per ask, about 30 a second.
-        lastBreathDraw = t;
-        options.requestFrame();
-      }
+    if (s.isPlaying(t)) {
+      s.update(t);
+      options.invalidate();
+    } else if (t - lastBreathDraw >= BREATHING_FRAME_MS) {
+      // Breathing only: move and draw once per ask, about 30 a second.
+      lastBreathDraw = t;
+      if (s.update(t)) options.requestFrame();
     }
     frame = requestAnimationFrame(tick);
   };

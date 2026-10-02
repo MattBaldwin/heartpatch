@@ -41,11 +41,12 @@ export const PLAYBACK = {
 /**
  * Render-on-demand pacing (tech spec §6): while only breathing animates, a
  * frame is asked for at most this often; while a move plays, every frame.
- * Asks land on display ticks, so this is a 30 fps interval less half a 60 Hz
- * tick: every 2nd tick at 60 Hz and every 4th at 120 Hz, both 30 fps. A full
- * 33.3 ms would round to every 3rd tick (20 fps) at 60 Hz.
+ * Asks land on display ticks, so this is a 30 fps interval less half a
+ * 120 Hz tick: every 2nd tick at 60 Hz and every 4th at 120 Hz, both 30 fps,
+ * with margin for timer jitter. A full 33.3 ms would round to every 3rd
+ * tick (20 fps) at 60 Hz; exactly 25 ms sits on the 120 Hz boundary.
  */
-export const BREATHING_FRAME_MS = 25; // TUNE: 30 fps is plenty for a slow breath
+export const BREATHING_FRAME_MS = 29; // TUNE: 30 fps is plenty for a slow breath
 
 /** A submit that never reached the server is sent once more, with the same key, after this long. */
 export const RETRY_AFTER_MS = 1200; // TUNE: a phone's radio often comes back within a second

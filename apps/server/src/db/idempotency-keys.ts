@@ -90,7 +90,10 @@ export function createIdempotencyStore(db: Executor): IdempotencyStore {
       };
 
       if (row.statusCode !== null) {
-        // An expired reply: the key is new again.
+        // An expired reply: the key is new again. Two requests reusing an
+        // expired key at the same moment: one wins the update and runs, the
+        // other is handed the old reply it read. Routes guard their own
+        // double-apply (battles check the turn), so this stays harmless.
         if (await takeOver(keyTtlMs, isNotNull(idempotencyKeys.statusCode))) {
           return { kind: 'claimed' };
         }
