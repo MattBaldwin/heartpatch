@@ -122,7 +122,7 @@ export function defaultGuardianData(): GuardianData {
  */
 export function defendingSide(
   defenders: readonly DefenderRow[],
-  guardians: () => BattleSquishySetup[],
+  guardians: readonly BattleSquishySetup[],
 ): BattleSideSetup {
   if (defenders.length > 0) {
     return {
@@ -136,7 +136,7 @@ export function defendingSide(
       })),
     };
   }
-  return { controller: { type: 'ai', policy: 'guardian' }, squishies: guardians() };
+  return { controller: { type: 'ai', policy: 'guardian' }, squishies: [...guardians] };
 }
 
 export function createTerritoryService(options: TerritoryServiceOptions): TerritoryService {
@@ -234,8 +234,10 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         defenders = await repo.listDefenders(tile.id, defenderId);
       }
 
-      const guardians = defenders.length === 0 ? await guardiansOf(tx, map, tile, at) : [];
-      const side = defendingSide(defenders, () => guardians);
+      const side = defendingSide(
+        defenders,
+        defenders.length === 0 ? await guardiansOf(tx, map, tile, at) : [],
+      );
       if (side.squishies.length === 0) throw new AppError('CONFLICT', MESSAGES.nobodyGuards);
       const kind = tileBattleKindFor(tile);
       const cooldownUntil = new Date(at.getTime() + rules.cooldownHours * HOUR_MS);
@@ -317,8 +319,15 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       const changed = await store.transaction(async (repo) => {
         const seen = await repo.findTile(map.id, request.q, request.r);
         if (!seen) throw new AppError('NOT_FOUND', MESSAGES.noTile);
-        // The tile lock: a capture can't land between the check and the write.
-        const tile = await repo.lockTile(seen.id);
+        // Squishies moving here leave their old posts, whose counts change too.
+        const leaving = (await repo.postsOf(request.squishyIds)).filter((t) => t.id !== seen.id);
+        // Tile locks (in id order): a capture can't land between the check and the write.
+        const locked = new Map<string, TerritoryTileRow>();
+        for (const id of [...new Set([seen.id, ...leaving.map((t) => t.id)])].sort()) {
+          const row = await repo.lockTile(id);
+          if (row) locked.set(id, row);
+        }
+        const tile = locked.get(seen.id);
         if (!tile || tile.ownerUserId !== user.id) {
           throw new AppError('FORBIDDEN', MESSAGES.notYours);
         }
@@ -335,18 +344,26 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           before.every((d, i) => d.id === request.squishyIds[i]);
         if (same) return false;
         await repo.replaceDefenders(map.id, tile.id, request.squishyIds, now());
-        await repo.appendEvent({
-          mapId: map.id,
-          type: 'defenders.changed',
-          actorUserId: user.id,
-          payload: {
-            userId: user.id,
-            q: tile.q,
-            r: tile.r,
-            count: request.squishyIds.length,
-            squishyIds: [...request.squishyIds],
-          },
-        });
+        // One event per tile whose guards changed: this one, and any they left.
+        const changedTiles = [tile, ...leaving.flatMap((t) => locked.get(t.id) ?? [])];
+        for (const changedTile of changedTiles) {
+          const ids =
+            changedTile.id === tile.id
+              ? [...request.squishyIds]
+              : (await repo.listDefenders(changedTile.id, user.id)).map((d) => d.id);
+          await repo.appendEvent({
+            mapId: map.id,
+            type: 'defenders.changed',
+            actorUserId: user.id,
+            payload: {
+              userId: user.id,
+              q: changedTile.q,
+              r: changedTile.r,
+              count: ids.length,
+              squishyIds: ids,
+            },
+          });
+        }
         return true;
       });
       if (changed) published(map.id);

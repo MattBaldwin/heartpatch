@@ -73,6 +73,7 @@ export const TERRITORY_TEXT = {
   noSquishies: 'No squishy friends yet. Befriend one first!',
   elsewhere: 'on watch elsewhere',
   saved: 'Your guards are in place!',
+  shielded: "You're new here, so nobody can challenge your land yet.",
   mystery: 'Mystery squishy',
 } as const;
 
@@ -305,6 +306,9 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
           children.push(...picker(tile, picking));
         } else {
           const ids = [...action.squishyIds];
+          if (status?.shieldUntil && clock.msUntil(status.shieldUntil) > 0) {
+            children.push(line(TERRITORY_TEXT.shielded));
+          }
           children.push(
             line(
               ids.length > 0

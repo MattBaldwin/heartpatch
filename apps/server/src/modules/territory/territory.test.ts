@@ -645,6 +645,55 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(errorOf(second).message).toMatch(/enough fun for today/);
     });
 
+    it('lets only one of two players claim the same tile at once (tile lock + cooldown)', async () => {
+      const server = await start();
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(server, kid, [friend]);
+      await grant(server, kid, mapId, 40);
+      await grant(server, friend, mapId, 40);
+      const [wild] = await edgeOf(mapId, kid);
+      const beside = (await tilesOf(mapId)).find(
+        (t) =>
+          t.ownerUserId === null &&
+          t.homeSlot === null &&
+          t.id !== wild!.id &&
+          hexNeighbors(t).some((n) => n.q === wild!.q && n.r === wild!.r),
+      )!;
+      await setOwner(beside.id, friend.id);
+      const results = await Promise.all([
+        attack(server, kid, mapId, wild!),
+        attack(server, friend, mapId, wild!),
+      ]);
+      expect(results.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+      expect(await attacksOf(mapId)).toHaveLength(1);
+    });
+
+    it('lets only one of two challenges at once through a Gentle defender’s cap', async () => {
+      const server = await start();
+      const { kid, mapId, near, near2 } = await rivals(server);
+      const other = await player();
+      const res = await call(server, 'GET', `/maps/${mapId}`, kid);
+      const code = MapResponseSchema.parse(res.json()).map.admin!.invite!.code;
+      const join = await call(server, 'POST', '/maps/join', other, { code });
+      const request = JoinMapResponseSchema.parse(join.json()).request;
+      await call(server, 'POST', `/maps/${mapId}/requests/${request.id}/approve`, kid);
+      await grant(server, other, mapId, 40);
+      const nextToNear2 = (await tilesOf(mapId)).find(
+        (t) =>
+          t.ownerUserId === null &&
+          t.homeSlot === null &&
+          hexNeighbors(t).some((n) => n.q === near2.q && n.r === near2.r),
+      )!;
+      await setOwner(nextToNear2.id, other.id);
+      const results = await Promise.all([
+        attack(server, kid, mapId, near),
+        attack(server, other, mapId, near2),
+      ]);
+      expect(results.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+      expect(await attacksOf(mapId)).toHaveLength(1);
+    });
+
     it('protects new players for the shield time, and blocks challenges when PvP is Off', async () => {
       const server = await start();
       const kid = await player();
@@ -738,13 +787,17 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(tileA.defenders).toBe(2);
 
       const changed = (await eventsOf(mapId)).filter((e) => e.type === 'defenders.changed');
-      expect(changed).toHaveLength(2);
-      expect(publicViewFor(PUBLIC_VIEWS, changed[0]!, { userId: friend.id })).toEqual({
-        userId: kid.id,
-        q: a!.q,
-        r: a!.r,
-        count: 3,
-      });
+      // Setting A, then the move: B's new guard, and A losing one (so live maps follow).
+      const seenBy = (e: (typeof changed)[number]) =>
+        publicViewFor(PUBLIC_VIEWS, e, { userId: friend.id });
+      expect(changed.map(seenBy)).toEqual([
+        { userId: kid.id, q: a!.q, r: a!.r, count: 3 },
+        { userId: kid.id, q: b!.q, r: b!.r, count: 1 },
+        { userId: kid.id, q: a!.q, r: a!.r, count: 2 },
+      ]);
+      expect(parseGameEventPayload('defenders.changed', changed[2]!.payload).squishyIds).toEqual(
+        ids.slice(1, 3),
+      );
 
       // The same again changes nothing and writes no event.
       await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
@@ -752,7 +805,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         r: b!.r,
         squishyIds: [ids[0]!],
       });
-      expect((await eventsOf(mapId)).filter((e) => e.type === 'defenders.changed')).toHaveLength(2);
+      expect((await eventsOf(mapId)).filter((e) => e.type === 'defenders.changed')).toHaveLength(3);
       // An empty list sends them home.
       const home = await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
         q: b!.q,

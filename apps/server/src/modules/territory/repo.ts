@@ -109,6 +109,8 @@ export interface TerritoryRepo {
     squishyIds: readonly string[],
     at: Date,
   ) => Promise<void>;
+  /** The tiles these squishies stand watch on now (each tile once). */
+  postsOf: (squishyIds: readonly string[]) => Promise<TerritoryTileRow[]>;
   /** The player's tiles with squishies on watch (still theirs, active squishies only). */
   myDefenders: (mapId: string, userId: string) => Promise<TileDefenders[]>;
   /** The player's squishies on the map, strongest first. */
@@ -344,6 +346,16 @@ function queries(db: Executor): TerritoryRepo {
         .values(
           squishyIds.map((squishyId, slot) => ({ mapId, tileId, slot, squishyId, assignedAt: at })),
         );
+    },
+
+    postsOf: async (squishyIds) => {
+      if (squishyIds.length === 0) return [];
+      return db
+        .selectDistinct(tileColumns)
+        .from(tileDefenders)
+        .innerJoin(tiles, eq(tiles.id, tileDefenders.tileId))
+        .where(inArray(tileDefenders.squishyId, [...squishyIds]))
+        .orderBy(asc(tiles.id));
     },
 
     myDefenders: async (mapId, userId) => {
