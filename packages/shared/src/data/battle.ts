@@ -37,6 +37,14 @@ export const BATTLE_RULES: BattleRules = {
     { id: 'weak', atLeast: 0, line: 'Just a little boop.' },
   ],
 
+  // TUNE: a fresh squishy is a long shot; a nearly tuckered-out one almost
+  // always says yes. Rarer squishies are shyer.
+  capture: {
+    atFull: 15,
+    nearlyOut: 90,
+    rarity: { common: 100, uncommon: 85, rare: 70, epic: 55, legendary: 40, secret: 40 },
+  },
+
   xp: { perOpponentLevel: 4, winMultiplier: 1.5, minimum: 5 }, // TUNE:
 
   // TUNE: every policy. Wild squishies play for fun; guardians and the

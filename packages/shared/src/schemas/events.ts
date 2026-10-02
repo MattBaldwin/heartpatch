@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
+import { ContentIdSchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
 import { PlacedBuildingSchema } from './buildings.js';
@@ -128,6 +129,21 @@ export const GAME_EVENTS = {
    * server (`no-contest`, when the content was re-tuned mid-battle).
    */
   'battle.ended': { internal: BattleEndedSchema, public: z.object(BattleEndedSchema.shape) },
+  /**
+   * A player befriended a wild squishy with a Heart Charm (#14). The species
+   * stays internal, like `battle.started`'s: a secret one would otherwise
+   * reach members who never met it (CLAUDE.md rule 6).
+   */
+  'squishy.captured': {
+    internal: z.strictObject({
+      battleId: z.uuid(),
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      speciesId: ContentIdSchema,
+      level: z.number().int().min(1),
+    }),
+    public: z.object({ userId: z.uuid(), squishyId: z.uuid() }),
+  },
   /**
    * A player started gathering a node they own (#17): members see "gathering
    * here, ready at …" on the tile. What it will yield stays internal.

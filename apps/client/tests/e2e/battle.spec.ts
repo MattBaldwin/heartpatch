@@ -57,7 +57,8 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(lobby).toBeHidden();
   await expect(page.getByTestId('map-hud')).toContainText('Showdown Patch');
 
-  // No wild squishies spawn yet (#14), so the real button says so kindly…
+  // With no squishy of their own yet, the real button says so kindly (or, if
+  // no wild squishy is about this window, that nobody's around)…
   const entry = page.getByTestId('battle-entry');
   await expect(entry).toBeVisible();
   await entry.tap();

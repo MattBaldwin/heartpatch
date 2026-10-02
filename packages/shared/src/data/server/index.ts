@@ -9,9 +9,12 @@ import { SPAWN_TABLES } from './spawn-tables.js';
 
 export * from '../../schemas/data/server-game-data.js';
 export * from '../../schemas/data/spawn-tables.js';
+export * from '../../schemas/data/spawn-rules.js';
+export * from '../../spawns/resolve.js';
 export { serverBattleData } from './battle-data.js';
 export { SECRET_EVOLUTIONS, SECRET_MOVES, SECRET_SPECIES } from './secret-species.js';
 export { SPAWN_TABLES } from './spawn-tables.js';
+export { SPAWN_RULES } from './spawn-rules.js';
 
 export const SERVER_GAME_DATA: ServerGameData = {
   spawnTables: SPAWN_TABLES,

@@ -34,6 +34,8 @@ export const PLAYBACK = {
   /** Flopping over when tuckered out. */
   tuckeredMs: 1100, // TUNE
   swapMs: 700, // TUNE
+  /** Offering a Heart Charm: a hopeful pause, then a bounce or a wiggle. */
+  captureMs: 1300, // TUNE
   /** Breather before the result screen. */
   endMs: 900, // TUNE
 } as const;

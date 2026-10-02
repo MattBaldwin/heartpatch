@@ -54,6 +54,15 @@ describe('keeperReaction', () => {
     }
   });
 
+  it('watches a Heart Charm land, and cheers at the end for a new friend', () => {
+    expect(keeperReaction(step('capture', 'b', { squish: 'bounce' }), 'a')).toBeNull();
+    expect(keeperReaction(step('capture', 'b', { squish: 'wobble' }), 'a')).toBeNull();
+    expect(keeperReaction(step('end', 'a', { squish: 'bounce' }), 'a')).toEqual({
+      move: 'bounce',
+      strength: 1.2,
+    });
+  });
+
   it('works from either side', () => {
     const big = step('hit', 'a', { callout: effectivenessLine('super') });
     expect(keeperReaction(big, 'b')?.move).toBe('bounce');

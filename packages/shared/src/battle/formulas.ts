@@ -2,6 +2,7 @@ import type { Rng } from '../rng/index.js';
 import type { BattleStats } from '../schemas/battle.js';
 import type { BattleRules } from '../schemas/data/battle.js';
 import type { BattleStat, Move } from '../schemas/data/moves.js';
+import type { Rarity } from '../schemas/data/common.js';
 import type { BaseStats } from '../schemas/data/species.js';
 import { BattleRuleError, type BattleContent } from './content.js';
 import type { BattleSquishy } from './state.js';
@@ -113,4 +114,25 @@ export function expectedDamage(
   const { varianceMin, varianceMax, minimum } = content.rules.damage;
   const amount = damageBeforeVariance(content, move, attacker, defender);
   return Math.max(minimum, (amount * (varianceMin + varianceMax)) / 2);
+}
+
+/**
+ * The chance (whole percent, 1–100) that a wild squishy accepts a Heart Charm
+ * (design doc §6, battle rules `capture`): `atFull` at full energy rising in
+ * a straight line to `nearlyOut` with 1 energy left, rounded down, then ×
+ * the rarity's share, rounded down, at least 1.
+ */
+export function captureChance(
+  target: { readonly energy: number; readonly stats: { readonly hp: number } },
+  rarity: Rarity,
+  rules: BattleRules,
+): number {
+  const { atFull, nearlyOut } = rules.capture;
+  const full = target.stats.hp;
+  const energy = Math.max(1, Math.min(full, target.energy));
+  // Energy lost so far, out of the most it can lose and still be awake.
+  const span = Math.max(1, full - 1);
+  const base = atFull + Math.floor(((nearlyOut - atFull) * (full - energy)) / span);
+  const chance = Math.floor((base * rules.capture.rarity[rarity]) / 100);
+  return Math.max(1, Math.min(100, chance));
 }

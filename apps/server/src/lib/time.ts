@@ -1,4 +1,4 @@
-import type { LocalDate } from '@heartpatch/shared';
+import { spawnWindowAt, type LocalDate, type SpawnWindow } from '@heartpatch/shared';
 import type { Config } from '../config.js';
 
 /** The game clock. Services take one instead of calling `new Date()`, so tests and dev can move time. */
@@ -32,13 +32,39 @@ export function canonicalTimeZone(timeZone: string): string | null {
 
 /** The calendar date at `at` in `timeZone` (e.g. a map's), as `YYYY-MM-DD`. */
 export function localDate(at: Date, timeZone: string): LocalDate {
+  return localDateHour(at, timeZone).date;
+}
+
+/** The calendar date and wall-clock hour (0–23) at `at` in `timeZone`. */
+export function localDateHour(at: Date, timeZone: string): { date: LocalDate; hour: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    hourCycle: 'h23',
   }).formatToParts(at);
   const part = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((p) => p.type === type)?.value ?? '';
-  return `${part('year').padStart(4, '0')}-${part('month')}-${part('day')}`;
+  return {
+    date: `${part('year').padStart(4, '0')}-${part('month')}-${part('day')}`,
+    hour: Number(part('hour')),
+  };
+}
+
+/**
+ * The spawn window at `at` on a map in `timeZone` (tech spec §8): map-local
+ * date plus block, e.g. `2026-10-31/5`. Here rather than in shared because
+ * time zones need `Intl`, which shared code doesn't use; the block maths is
+ * shared (`spawnWindowAt`). On daylight-saving days one block runs 3 or 5
+ * real hours; ids stay unique and in order.
+ */
+export function spawnWindowFor(at: Date, timeZone: string, hours: number): SpawnWindow {
+  return spawnWindowAt(localDateHour(at, timeZone), hours);
+}
+
+/** `spawnWindowFor(at, timeZone, hours).id`. */
+export function spawnWindowId(at: Date, timeZone: string, hours: number): string {
+  return spawnWindowFor(at, timeZone, hours).id;
 }
