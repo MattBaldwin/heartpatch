@@ -6,6 +6,20 @@ import * as schema from './schema.js';
 export type Database = PostgresJsDatabase<typeof schema>;
 /** The handle passed to `db.transaction(async (tx) => …)`. */
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+/**
+ * What repo factories take: the pool, or a transaction so several repos'
+ * writes commit together (`createMapsRepo(tx)` next to `createAuthRepo(tx)`).
+ */
+export type Executor = Database | Transaction;
+
+/**
+ * Runs `fn` in one transaction: everything it writes commits together or not
+ * at all. Build the repos it needs from `tx` inside `fn`. Called with a
+ * transaction, it nests as a savepoint.
+ */
+export function withTransaction<T>(db: Executor, fn: (tx: Transaction) => Promise<T>): Promise<T> {
+  return db.transaction(fn);
+}
 
 export interface DbClient {
   db: Database;

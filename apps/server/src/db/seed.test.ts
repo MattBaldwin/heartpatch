@@ -1,8 +1,9 @@
+import { GAME_DATA, generateMap, MAP_MAX_PLAYERS } from '@heartpatch/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from './client.js';
 import { mapMembers, maps, tiles, users } from './schema.js';
-import { SEED_PASSWORD_HASH, SEED_USERNAMES, seed } from './seed.js';
+import { SEED_MAP_SEED, SEED_PASSWORD_HASH, SEED_USERNAMES, seed } from './seed.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -33,13 +34,30 @@ describe.skipIf(!url)('seed (needs DATABASE_URL)', () => {
     expect(members.filter((m) => m.role === 'owner')).toHaveLength(1);
     expect(members.every((m) => m.hash === SEED_PASSWORD_HASH)).toBe(true);
 
+    expect(map?.seed).toBe(SEED_MAP_SEED);
+    expect(map?.maxPlayers).toBe(MAP_MAX_PLAYERS);
+
+    // Stored exactly as generateMap made it, with each member holding their home base.
+    const generated = generateMap(GAME_DATA, { seed: SEED_MAP_SEED, playerCount: MAP_MAX_PLAYERS });
     const seededTiles = await db.select().from(tiles).where(eq(tiles.mapId, first.mapId));
-    expect(seededTiles).toHaveLength(19); // hex radius 2
-    expect(
-      seededTiles.every(
-        (t) => Math.abs(t.q) <= 2 && Math.abs(t.r) <= 2 && Math.abs(t.q + t.r) <= 2,
-      ),
-    ).toBe(true);
+    expect(seededTiles).toHaveLength(generated.tiles.length);
+    const stored = new Map(seededTiles.map((t) => [`${t.q},${t.r}`, t]));
+    for (const t of generated.tiles) {
+      expect(stored.get(`${t.q},${t.r}`)).toMatchObject({
+        terrain: t.terrain,
+        nodeResource: t.nodeResource,
+        guardianStrength: t.guardianStrength,
+        homeSlot: t.homeSlot,
+        ownerUserId: t.homeSlot === null ? null : (first.userIds[t.homeSlot] ?? null),
+      });
+    }
+    const slots = await db
+      .select({ userId: mapMembers.userId, homeSlot: mapMembers.homeSlot })
+      .from(mapMembers)
+      .where(eq(mapMembers.mapId, first.mapId));
+    expect(slots).toEqual(
+      expect.arrayContaining(first.userIds.map((userId, i) => ({ userId, homeSlot: i }))),
+    );
 
     const again = await seed(db);
     // Same ids in the same order (owner first) as when it was created.

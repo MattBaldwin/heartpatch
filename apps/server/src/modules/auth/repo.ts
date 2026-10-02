@@ -1,5 +1,5 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
-import type { Database } from '../../db/client.js';
+import type { Executor } from '../../db/client.js';
 import { recoveryCodes, sessions, users } from '../../db/schema.js';
 
 export interface AccountUser {
@@ -75,7 +75,7 @@ function isUniqueViolation(err: unknown): boolean {
 
 class RollbackSignal extends Error {}
 
-export function createAuthRepo(db: Database): AuthRepo {
+export function createAuthRepo(db: Executor): AuthRepo {
   return {
     createAccount: async (input) => {
       try {

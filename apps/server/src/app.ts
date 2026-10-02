@@ -5,10 +5,14 @@ import type { Config } from './config.js';
 import { registerErrorHandling } from './lib/errors.js';
 import { serializerCompiler, validatorCompiler } from './lib/zod.js';
 import { createAuthHooks, registerRequestGuards } from './modules/auth/hooks.js';
-import type { AuthRepo } from './modules/auth/repo.js';
+import type { Database } from './db/client.js';
+import { createClock, type Clock } from './lib/time.js';
+import { createAuthRepo } from './modules/auth/repo.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { createAuthService } from './modules/auth/service.js';
 import { healthRoutes } from './modules/health/routes.js';
+import { mapsRoutes } from './modules/maps/routes.js';
+import { createMapsService } from './modules/maps/service.js';
 import { createHealthService, type ReadinessCheck } from './modules/health/service.js';
 
 export interface BuildAppOptions {
@@ -16,18 +20,20 @@ export interface BuildAppOptions {
   /** Dependencies `/ready` must confirm (e.g. `dbReadinessCheck` from `db/client.ts`). */
   readinessChecks?: readonly ReadinessCheck[];
   /**
-   * Account storage (`createAuthRepo` from `modules/auth/repo.ts`). Tests that
-   * don't touch accounts can omit it; the auth routes are then not registered.
+   * The database. Modules build their repos from it (or from a transaction,
+   * see `withTransaction`). Tests that don't need a database can omit it; the
+   * auth and game routes are then not registered.
    */
-  authRepo?: AuthRepo;
-  /** Clock for sessions; tests can move it. */
-  now?: () => Date;
+  db?: Database;
+  /** The game clock; defaults to `createClock(config)` (honours `HP_DEV_NOW`). Tests can move it. */
+  clock?: Clock;
   logger?: FastifyServerOptions['logger'];
 }
 
 /** Builds the Fastify app without listening, so tests can use `app.inject()`. */
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const { config } = options;
+  const clock = options.clock ?? createClock(config);
   const app = Fastify({
     logger: options.logger ?? defaultLogger(config),
     trustProxy: config.TRUST_PROXY,
@@ -52,15 +58,23 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
       // Modules that need a logged-in player (they all need the database too)
       // register inside this block and take `authHooks.requireAuth`.
-      if (options.authRepo) {
+      const { db } = options;
+      if (db) {
         const secureCookies = config.NODE_ENV === 'production';
         const auth = createAuthService({
-          repo: options.authRepo,
+          repo: createAuthRepo(db),
           signupCode: config.HP_SIGNUP_CODE,
-          ...(options.now ? { now: options.now } : {}),
+          now: clock,
         });
         const authHooks = createAuthHooks(auth, { secureCookies });
         await api.register(authRoutes(auth, { hooks: authHooks, secureCookies }));
+
+        const maps = createMapsService({
+          db,
+          tutorialRequired: config.HP_TUTORIAL_REQUIRED,
+          clock,
+        });
+        await api.register(mapsRoutes(maps, { hooks: authHooks }));
       }
     },
     { prefix: '/api/v1' },

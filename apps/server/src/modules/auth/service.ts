@@ -7,6 +7,7 @@ import {
 } from '@heartpatch/shared';
 import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
+import { canonicalTimeZone } from '../../lib/time.js';
 import { SESSION_RENEW_AFTER_MS, SESSION_TTL_MS } from './limits.js';
 import type { AuthRepo, NewSession } from './repo.js';
 import {
@@ -75,15 +76,6 @@ const MESSAGES = {
   wrongLogin: "That name and password don't match. Try again!",
   wrongRecoveryCode: "That recovery code doesn't match. Check it and try again!",
 } as const;
-
-/** The canonical IANA name, or null if the runtime doesn't know the zone. */
-function canonicalTimeZone(timeZone: string): string | null {
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone;
-  } catch {
-    return null;
-  }
-}
 
 export function createAuthService(options: AuthServiceOptions): AuthService {
   const { repo, signupCode } = options;

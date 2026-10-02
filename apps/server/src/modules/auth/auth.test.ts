@@ -46,8 +46,8 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
     });
     app = await buildApp({
       config,
-      authRepo: createAuthRepo(db),
-      now: () => clock,
+      db,
+      clock: () => clock,
       logger: false,
     });
     return app;
@@ -167,7 +167,7 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
 
     it('is closed when no signup code is configured', async () => {
       const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
-      app = await buildApp({ config, authRepo: createAuthRepo(db) });
+      app = await buildApp({ config, db });
       const res = await post(app, '/auth/signup', signupBody());
       expect(res.statusCode).toBe(403);
       expect(errorOf(res).message).toMatch(/closed/);

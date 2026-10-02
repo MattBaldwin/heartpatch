@@ -34,3 +34,6 @@ export * from './data/battle.js';
 export * from './battle/index.js';
 export * from './hex/index.js';
 export * from './mapgen/index.js';
+export * from './schemas/maps.js';
+export * from './schemas/events.js';
+export * from './schemas/time.js';
