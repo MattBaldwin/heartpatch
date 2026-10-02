@@ -1,0 +1,35 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #fde8f0;
+  overscroll-behavior: none;
+  /* No accidental text selection while playing; DOM-overlay inputs must opt back in
+     with user-select: text. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  touch-action: none;
+  outline: none;
+}
+
+.dev-status {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: calc(env(safe-area-inset-left) + 8px);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 75%);
+  font:
+    600 12px/1.4 system-ui,
+    sans-serif;
+  color: #6b4b6e;
+  pointer-events: none;
+}
