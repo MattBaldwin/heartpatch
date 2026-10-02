@@ -14,7 +14,16 @@ const ConfigSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  // Family-only signup (decision D): creating an account needs this code.
+  // Unset closes signups; the server refuses to start without it in production.
+  HP_SIGNUP_CODE: z.string().trim().min(8).max(128).optional(),
 });
+
+/** Settings only the HTTP server needs; tools like `db/cli.ts` skip these checks. */
+const ServerConfigSchema = ConfigSchema.refine(
+  (c) => c.NODE_ENV !== 'production' || c.HP_SIGNUP_CODE !== undefined,
+  { path: ['HP_SIGNUP_CODE'], message: 'required in production (family-only signup)' },
+);
 
 export type Config = z.infer<typeof ConfigSchema>;
 
@@ -23,7 +32,16 @@ export type Config = z.infer<typeof ConfigSchema>;
  * every problem listed, so the server refuses to start on bad config.
  */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const result = ConfigSchema.safeParse(env);
+  return parse(ConfigSchema, env);
+}
+
+/** `loadConfig` plus the checks the HTTP server needs to start (`src/index.ts`). */
+export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  return parse(ServerConfigSchema, env);
+}
+
+function parse(schema: z.ZodType<Config>, env: NodeJS.ProcessEnv): Config {
+  const result = schema.safeParse(env);
   if (!result.success) {
     const problems = result.error.issues
       .map((issue) => `  ${issue.path.join('.')}: ${issue.message}`)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from './config.js';
+import { loadConfig, loadServerConfig } from './config.js';
 
 const DATABASE_URL = 'postgres://heartpatch:heartpatch@localhost:5432/heartpatch';
 
@@ -26,5 +26,30 @@ describe('loadConfig', () => {
       'postgresql://localhost/heartpatch',
     );
     expect(loadConfig({ DATABASE_URL }).DATABASE_URL).toBe(DATABASE_URL);
+  });
+
+  it('keeps the signup code optional for tools like db/cli.ts', () => {
+    expect(loadConfig({ DATABASE_URL }).HP_SIGNUP_CODE).toBeUndefined();
+  });
+});
+
+describe('loadServerConfig', () => {
+  it('refuses to start in production without a signup code', () => {
+    expect(() => loadServerConfig({ DATABASE_URL })).toThrow(/HP_SIGNUP_CODE/);
+    expect(loadServerConfig({ DATABASE_URL, HP_SIGNUP_CODE: 'family-code' }).HP_SIGNUP_CODE).toBe(
+      'family-code',
+    );
+  });
+
+  it('allows a missing signup code outside production (signups are closed)', () => {
+    expect(loadServerConfig({ DATABASE_URL, NODE_ENV: 'development' }).HP_SIGNUP_CODE).toBe(
+      undefined,
+    );
+  });
+
+  it('rejects a signup code that is too short to be secret', () => {
+    expect(() => loadServerConfig({ DATABASE_URL, HP_SIGNUP_CODE: 'short' })).toThrow(
+      /HP_SIGNUP_CODE/,
+    );
   });
 });

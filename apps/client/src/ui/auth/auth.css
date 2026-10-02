@@ -1,0 +1,212 @@
+/* Sign up / log in overlay (tech spec §6): touch-first, 44pt+ targets, safe areas. */
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding: calc(env(safe-area-inset-top) + 16px) calc(env(safe-area-inset-right) + 16px)
+    calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 16px);
+  background: rgb(253 232 240 / 85%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.auth-overlay[hidden],
+.auth-chip[hidden] {
+  display: none;
+}
+
+.auth-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 420px;
+  /* Room to scroll above the iOS keyboard on short screens. */
+  margin: auto;
+  padding: 24px 20px;
+  border-radius: 28px;
+  background: #fffafc;
+  box-shadow: 0 12px 40px rgb(107 75 110 / 18%);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-title {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.auth-subtitle {
+  margin: 4px 0 8px;
+  font-size: 17px;
+  text-align: center;
+  color: #6b4b6e;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-field label {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.auth-input {
+  box-sizing: border-box;
+  min-height: 48px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #ecd3e2;
+  border-radius: 14px;
+  background: #fff;
+  /* 16px+ stops iOS Safari zooming in on focus. */
+  font: inherit;
+  font-size: 18px;
+  color: inherit;
+  /* The page turns selection off for play; text fields need it back. */
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: manipulation;
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: #b8487a;
+  box-shadow: 0 0 0 3px rgb(184 72 122 / 20%);
+}
+
+.auth-hint {
+  margin: 0;
+  font-size: 14px;
+  color: #7d6380;
+}
+
+.auth-error {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 16px;
+  font-weight: 600;
+  color: #b0305e;
+}
+
+.auth-error:empty {
+  min-height: 0;
+}
+
+.auth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.auth-button {
+  min-height: 52px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 999px;
+  background: #b8487a;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.auth-button:active {
+  transform: scale(0.97);
+}
+
+.auth-button:disabled {
+  opacity: 0.6;
+}
+
+.auth-button-soft {
+  background: #f6dceb;
+  color: #7a2d55;
+}
+
+.auth-button-small {
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 16px;
+}
+
+.auth-link {
+  min-height: 44px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: #8a3a66;
+  text-decoration: underline;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.auth-code {
+  margin: 16px 0;
+  padding: 16px;
+  border: 3px dashed #e3a6c6;
+  border-radius: 18px;
+  background: #fff;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+.auth-chip {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: calc(env(safe-area-inset-right) + 8px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 4px 4px 4px 14px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 85%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #4a3150;
+}
+
+.auth-chip-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.auth-chip-status:empty {
+  display: none;
+}
+
+.auth-chip-status {
+  font-size: 14px;
+  font-weight: 600;
+  color: #b0305e;
+}
