@@ -38,6 +38,10 @@ export const squishyState = pgEnum('squishy_state', ['active', 'hollowed']);
 /** Map owner's PvP setting (design doc §11, decision B). */
 export const pvpMode = pgEnum('pvp_mode', ['on', 'gentle', 'off']);
 export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'approved', 'denied']);
+/** PvE battle kinds (design doc §6). Tile guardians and raids add values with their issues. */
+export const battleKind = pgEnum('battle_kind', ['wild']);
+/** `no-contest`: the server called it off (content re-tuned mid-battle). */
+export const battleStatus = pgEnum('battle_status', ['active', 'finished', 'no-contest']);
 
 export const users = pgTable(
   'users',
@@ -325,5 +329,84 @@ export const eventConsumers = pgTable(
   (t) => [
     primaryKey({ columns: [t.consumer, t.mapId] }),
     check('event_consumers_last_seq_nonnegative', sql`${t.lastSeq} >= 0`),
+  ],
+);
+
+/**
+ * Battles (design doc §6, tech spec §8, DECISIONS "Battle engine (#11)"): the
+ * replay record (seed, setup, actions, content hash) plus the current engine
+ * state while a battle runs, and the result and resolved log once it ends.
+ * `seed` and `state.rng` are server-only while `status = 'active'`; the API
+ * sends `clientBattleView(state)` and reveals the seed only after the end.
+ */
+export const battles = pgTable(
+  'battles',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    kind: battleKind('kind').notNull(),
+    status: battleStatus('status').notNull().default('active'),
+    // The player on side `a`. Wild and guardian battles have one player.
+    playerUserId: uuid('player_user_id').notNull(),
+    // Battle seed from `newSeed()` (revealable after the battle, tech spec §8).
+    seed: text('seed').notNull(),
+    // `BattleContent.contentHash` the battle is played with.
+    contentHash: text('content_hash').notNull(),
+    // `BattleSetup.sides` (the seed is in `seed`); setup + actions replays the battle.
+    setup: jsonb('setup').notNull(),
+    // `BattleAction[]`, in order.
+    actions: jsonb('actions').notNull().default([]),
+    // The current `BattleState`, RNG state included. Server-only.
+    state: jsonb('state').notNull(),
+    // `BattleResult` once finished; null while active or after no contest.
+    result: jsonb('result'),
+    // The resolved `BattleEvent[]` once over, kept so a battle stays
+    // explainable after re-tuning (tech spec §8 "Content versioning").
+    log: jsonb('log'),
+    startedAt: timestamptz('started_at').notNull().defaultNow(),
+    endedAt: timestamptz('ended_at'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'battles_player_member_fk',
+      columns: [t.mapId, t.playerUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // One battle at a time per player per map; it's resumed, not restarted.
+    uniqueIndex('battles_one_active_key')
+      .on(t.mapId, t.playerUserId)
+      .where(sql`${t.status} = 'active'`),
+    index('battles_map_id_player_user_id_idx').on(t.mapId, t.playerUserId),
+  ],
+);
+
+/**
+ * Idempotency keys (tech spec §5): a mutating request that carries an
+ * `Idempotency-Key` header is run once per player and key; a retry gets the
+ * stored reply. Rows expire (`lib/idempotency.ts` says how long); the index
+ * on `created_at` is for the cleanup.
+ */
+export const idempotencyKeys = pgTable(
+  'idempotency_keys',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    // Which route the key was used on, so a key can't replay another route's reply.
+    scope: text('scope').notNull(),
+    // Hash of the request body, so the same key with a different body is refused.
+    requestHash: text('request_hash').notNull(),
+    // Null while the first request is still running.
+    statusCode: smallint('status_code'),
+    // The reply body as sent, replayed to retries.
+    response: jsonb('response'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.key] }),
+    index('idempotency_keys_created_at_idx').on(t.createdAt),
   ],
 );

@@ -1,3 +1,4 @@
+import type { BattleDebug } from '../battle/battle-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
@@ -25,6 +26,8 @@ declare global {
       tutorial?(): TutorialDebug | null;
       /** True while a screen holds automatic updates (pwa/update-hold.ts). */
       updatesHeld?(): boolean;
+      /** The open battle as shown (turn, phase, bar energies, pending steps), or null. */
+      battle?(): BattleDebug | null;
     };
   }
 }

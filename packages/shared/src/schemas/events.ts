@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PvpModeSchema } from './maps.js';
+import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
 
 /**
  * The game-event type registry (tech spec §5, §7): every `game_events.type`,
@@ -35,6 +36,27 @@ const DepartedPublicSchema = z.object(DepartedSchema.shape);
 const TutorialAdvancedSchema = z.strictObject({
   completedStepId: z.string(),
   stepId: z.string().nullable(),
+});
+const BattleStartedSchema = z.strictObject({
+  battleId: z.uuid(),
+  kind: BattleKindSchema,
+  userId: z.uuid(),
+  /** The player's team and the other side, by species. */
+  teamSpecies: z.array(z.string()),
+  opponentSpecies: z.array(z.string()),
+});
+const BattleEndedSchema = z.strictObject({
+  battleId: z.uuid(),
+  kind: BattleKindSchema,
+  userId: z.uuid(),
+  /** The side the player controlled. */
+  playerSide: BattleSideIdSchema,
+  /** Null when the server ended it as no contest. */
+  winner: z.union([BattleSideIdSchema, z.literal('draw')]).nullable(),
+  reason: z.union([BattleEndReasonSchema, z.literal('no-contest')]),
+  turns: z.number().int().min(0),
+  /** Base battle XP granted to the player's squishies (design doc §7). */
+  xp: z.array(z.strictObject({ squishyId: z.uuid(), xp: z.number().int().min(0) })),
 });
 
 export const GAME_EVENTS = {
@@ -89,6 +111,20 @@ export const GAME_EVENTS = {
     internal: TutorialAdvancedSchema,
     public: z.object(TutorialAdvancedSchema.shape),
   },
+  /**
+   * A player started a PvE battle on this map (#13). The species stay in the
+   * internal payload: a secret one would otherwise reach members who never
+   * met it (CLAUDE.md rule 6).
+   */
+  'battle.started': {
+    internal: BattleStartedSchema,
+    public: z.object({ battleId: z.uuid(), kind: BattleKindSchema, userId: z.uuid() }),
+  },
+  /**
+   * A battle ended: won, lost, drawn, run away from, or called off by the
+   * server (`no-contest`, when the content was re-tuned mid-battle).
+   */
+  'battle.ended': { internal: BattleEndedSchema, public: z.object(BattleEndedSchema.shape) },
 } satisfies Record<string, GameEventSchemas>;
 
 export type GameEventType = keyof typeof GAME_EVENTS;

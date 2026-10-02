@@ -36,6 +36,40 @@ describe('FrameScheduler', () => {
     expect(s.idle).toBe(false);
   });
 
+  it('draws one frame per requestFrame, so a 30 fps pacer gets about 30 fps', () => {
+    const s = new FrameScheduler(2);
+    run(s, 5, () => false);
+    // A 60 Hz loop for one second; breathing asks for a frame every other
+    // tick (a 30 fps interval less half a tick, see BREATHING_FRAME_MS).
+    const askEveryMs = 29; // BREATHING_FRAME_MS in src/battle/battle-config.ts
+    let lastAsk = -Infinity;
+    let draws = 0;
+    for (let i = 0; i < 60; i++) {
+      const t = 1000 + i * (1000 / 60);
+      if (t - lastAsk >= askEveryMs) {
+        lastAsk = t;
+        s.requestFrame();
+      }
+      if (s.next(t, false).draw) draws++;
+    }
+    expect(draws).toBeGreaterThanOrEqual(28);
+    expect(draws).toBeLessThanOrEqual(31);
+    // The same pacer with invalidate() draws two frames per ask: nearly every frame.
+    const i2 = new FrameScheduler(2);
+    run(i2, 5, () => false);
+    lastAsk = -Infinity;
+    let settleDraws = 0;
+    for (let i = 0; i < 60; i++) {
+      const t = 1000 + i * (1000 / 60);
+      if (t - lastAsk >= askEveryMs) {
+        lastAsk = t;
+        i2.invalidate();
+      }
+      if (i2.next(t, false).draw) settleDraws++;
+    }
+    expect(settleDraws).toBeGreaterThan(50);
+  });
+
   it('draws a few settle frames after an invalidation', () => {
     const s = new FrameScheduler(2);
     run(s, 5, () => false);

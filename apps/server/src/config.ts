@@ -29,6 +29,13 @@ const ConfigSchema = z.object({
   // Signups per IP per window (auth limits.ts), raised for e2e: every Playwright
   // device project signs up fresh players from one IP. Never in production.
   HP_DEV_SIGNUP_LIMIT_PER_IP: z.coerce.number().int().min(1).max(10_000).optional(),
+  // Dev/test only: registers routes that hand a player a squishy and start a
+  // battle against a chosen wild squishy (#13), until spawns (#14) and the
+  // tutorial's starter arrive. Never in production.
+  HP_DEV_SQUISHY_GRANTS: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 /** Settings only the HTTP server needs; tools like `db/cli.ts` skip these checks. */
@@ -42,6 +49,10 @@ const ServerConfigSchema = ConfigSchema.refine(
   })
   .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_SIGNUP_LIMIT_PER_IP === undefined, {
     path: ['HP_DEV_SIGNUP_LIMIT_PER_IP'],
+    message: 'development and tests only',
+  })
+  .refine((c) => c.NODE_ENV !== 'production' || !c.HP_DEV_SQUISHY_GRANTS, {
+    path: ['HP_DEV_SQUISHY_GRANTS'],
     message: 'development and tests only',
   });
 

@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { SeedSchema } from '../rng/index.js';
 import { BattleAiPolicySchema } from './data/battle.js';
 import { ContentIdSchema } from './data/common.js';
+import { BattleStatSchema, MoveSchema } from './data/moves.js';
+import { SpeciesSchema } from './data/species.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
 
 /**
@@ -104,3 +106,207 @@ export const BattleActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('forfeit'), side: BattleSideIdSchema }),
 ]);
 export type BattleAction = z.infer<typeof BattleActionSchema>;
+
+// ── What players see (#13) ─────────────────────────────────────────────────
+//
+// The server keeps `BattleState` (with the RNG state) and sends
+// `clientBattleView(state)`: everything but `rng` (DECISIONS "Battle engine
+// (#11)"). These schemas describe that view, so the API checks every reply
+// against them and a stray `rng` or `seed` can never slip out, and the client
+// validates what it draws. `packages/shared/src/schemas/battle.test.ts` pins
+// them to the engine's types.
+
+export const BattleStatusIdSchema = z.enum(['dizzy', 'sleepy']);
+
+const stage = z.number().int().min(-6).max(6);
+
+/** One squishy in a battle, as the engine tracks it (`BattleSquishy`). */
+export const BattleSquishyViewSchema = z.object({
+  id: z.string().min(1).max(64),
+  speciesId: ContentIdSchema,
+  level: z.number().int().min(1).max(100),
+  element: ElementIdSchema,
+  feeling: FeelingIdSchema,
+  stats: BattleStatsSchema,
+  moves: z.array(ContentIdSchema),
+  /** Current energy; 0 means tuckered out. */
+  energy: z.number().int().min(0),
+  stages: z.object({ attack: stage, defense: stage, speed: stage }),
+  status: z.object({ id: BattleStatusIdSchema, turnsLeft: z.number().int().min(0) }).nullable(),
+  joined: z.boolean(),
+});
+export type BattleSquishyView = z.infer<typeof BattleSquishyViewSchema>;
+
+export const BattleSideViewSchema = z.object({
+  controller: BattleControllerSchema,
+  squishies: z.array(BattleSquishyViewSchema).min(1),
+  active: z.number().int().min(0),
+});
+export type BattleSideView = z.infer<typeof BattleSideViewSchema>;
+
+/** `BattleEndReason` (battle/state.ts) as a schema. */
+export const BattleEndReasonSchema = z.enum(['tuckered-out', 'forfeit', 'turn-limit']);
+
+const WinnerSchema = z.union([BattleSideIdSchema, z.literal('draw')]);
+
+export const BattleXpAwardSchema = z.object({
+  side: BattleSideIdSchema,
+  squishyId: z.string(),
+  xp: z.number().int().min(0),
+});
+
+export const BattleResultSchema = z.object({
+  winner: WinnerSchema,
+  reason: BattleEndReasonSchema,
+  contentHash: z.string(),
+  turns: z.number().int().min(0),
+  xp: z.array(BattleXpAwardSchema),
+});
+export type BattleResultView = z.infer<typeof BattleResultSchema>;
+
+export const BattlePhaseSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('turn') }),
+  z.object({ type: z.literal('replace'), sides: z.array(BattleSideIdSchema) }),
+  z.object({ type: z.literal('over'), result: BattleResultSchema }),
+]);
+export type BattlePhaseView = z.infer<typeof BattlePhaseSchema>;
+
+const at = { turn: z.number().int().min(0), side: BattleSideIdSchema, slot: SlotSchema };
+
+/** The resolved log, one entry per thing that happened (`BattleEvent`). */
+export const BattleEventSchema = z.discriminatedUnion('type', [
+  z.object({ ...at, type: z.literal('swap'), to: SlotSchema }),
+  z.object({ ...at, type: z.literal('replace') }),
+  z.object({ ...at, type: z.literal('move'), move: ContentIdSchema }),
+  z.object({ ...at, type: z.literal('miss'), move: ContentIdSchema }),
+  z.object({
+    ...at,
+    type: z.literal('hit'),
+    amount: z.number().int().min(0),
+    energy: z.number().int().min(0),
+    effectiveness: ContentIdSchema,
+  }),
+  z.object({
+    ...at,
+    type: z.literal('heal'),
+    amount: z.number().int().min(0),
+    energy: z.number().int().min(0),
+  }),
+  z.object({
+    ...at,
+    type: z.literal('stat-change'),
+    stat: BattleStatSchema,
+    stages: z.number().int(),
+    total: stage,
+  }),
+  z.object({ ...at, type: z.literal('status-start'), status: BattleStatusIdSchema }),
+  z.object({ ...at, type: z.literal('status-skip'), status: BattleStatusIdSchema }),
+  z.object({ ...at, type: z.literal('status-end'), status: BattleStatusIdSchema }),
+  z.object({ ...at, type: z.literal('tuckered-out') }),
+  z.object({ turn: at.turn, type: z.literal('forfeit'), side: BattleSideIdSchema }),
+  z.object({
+    turn: at.turn,
+    type: z.literal('battle-end'),
+    winner: WinnerSchema,
+    reason: BattleEndReasonSchema,
+  }),
+]);
+export type BattleEventView = z.infer<typeof BattleEventSchema>;
+
+/**
+ * `clientBattleView(state)`: the battle without its RNG state. The seed isn't
+ * here either; it is only revealed once the battle is over (`PlayerBattle.seed`).
+ */
+export const ClientBattleViewSchema = z.object({
+  version: z.literal(1),
+  contentHash: z.string(),
+  turn: z.number().int().min(0),
+  sides: z.object({ a: BattleSideViewSchema, b: BattleSideViewSchema }),
+  phase: BattlePhaseSchema,
+  log: z.array(BattleEventSchema),
+});
+
+/** `active`: being played. `no-contest`: ended by the server (content re-tuned mid-battle). */
+export const BattleStatusSchema = z.enum(['active', 'finished', 'no-contest']);
+export type BattleStatus = z.infer<typeof BattleStatusSchema>;
+
+/** Kinds of PvE battle. Tile guardians and raids arrive with their issues. */
+export const BattleKindSchema = z.enum(['wild']);
+export type BattleKind = z.infer<typeof BattleKindSchema>;
+
+/**
+ * A battle as its player sees it (`GET /battles/:battleId`). `speciesDefs` and
+ * `moveDefs` carry rows the public data tables don't have (a secret species
+ * the player just met), so the client can draw and name every squishy here.
+ * `seed` is null while the battle is going (tech spec §8).
+ */
+export const PlayerBattleSchema = z.object({
+  id: z.uuid(),
+  mapId: z.uuid(),
+  kind: BattleKindSchema,
+  status: BattleStatusSchema,
+  /** The side the player controls. */
+  mySide: BattleSideIdSchema,
+  view: ClientBattleViewSchema,
+  speciesDefs: z.array(SpeciesSchema),
+  moveDefs: z.array(MoveSchema),
+  seed: SeedSchema.nullable(),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().nullable(),
+});
+export type PlayerBattle = z.infer<typeof PlayerBattleSchema>;
+
+export const BattleResponseSchema = z.object({ battle: PlayerBattleSchema });
+export type BattleResponse = z.infer<typeof BattleResponseSchema>;
+
+/** `GET /maps/:mapId/battles/current`: the battle to resume, or null. */
+export const CurrentBattleResponseSchema = z.object({ battle: PlayerBattleSchema.nullable() });
+export type CurrentBattleResponse = z.infer<typeof CurrentBattleResponseSchema>;
+
+export const BattleIdParamsSchema = z.object({ battleId: z.uuid() });
+
+/**
+ * What a player can do (`POST /battles/:battleId/actions`). The server turns
+ * it into the engine's `BattleAction` for the player's side, so a client can
+ * never act for the other side.
+ */
+export const PlayerBattleActionSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('move'), move: ContentIdSchema }),
+  z.strictObject({ type: z.literal('swap'), slot: SlotSchema }),
+  z.strictObject({ type: z.literal('replace'), slot: SlotSchema }),
+  z.strictObject({ type: z.literal('forfeit') }),
+]);
+export type PlayerBattleAction = z.infer<typeof PlayerBattleActionSchema>;
+
+export const BattleActionRequestSchema = z.strictObject({
+  action: PlayerBattleActionSchema,
+  /**
+   * The `view.turn` the client acted on. A stale or repeated submit (the
+   * battle has moved on) is refused instead of applied to the next turn; the
+   * `Idempotency-Key` header makes a retry of the same submit safe.
+   */
+  turn: z.number().int().min(0),
+});
+export type BattleActionRequest = z.infer<typeof BattleActionRequestSchema>;
+
+// ── Dev and test only ──────────────────────────────────────────────────────
+// Wild spawns and capture arrive with #14 and the starter squishy with the
+// tutorial, so until then a dev-only route (`HP_DEV_SQUISHY_GRANTS`) hands a
+// player a squishy and picks a fight. The production server never registers it.
+
+export const DevGrantSquishyRequestSchema = z.strictObject({
+  /** Any species the server knows (public or secret). Defaults to the first one. */
+  speciesId: ContentIdSchema.optional(),
+  level: z.number().int().min(1).max(100).optional(),
+});
+export type DevGrantSquishyRequest = z.infer<typeof DevGrantSquishyRequestSchema>;
+
+export const DevStartBattleRequestSchema = z.strictObject({
+  opponent: z
+    .strictObject({
+      speciesId: ContentIdSchema.optional(),
+      level: z.number().int().min(1).max(100).optional(),
+    })
+    .optional(),
+});
+export type DevStartBattleRequest = z.infer<typeof DevStartBattleRequestSchema>;

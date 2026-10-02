@@ -80,6 +80,29 @@ describe('loadServerConfig', () => {
     );
   });
 
+  it('accepts HP_DEV_SQUISHY_GRANTS outside production only', () => {
+    expect(
+      loadServerConfig({ DATABASE_URL, NODE_ENV: 'development', HP_DEV_SQUISHY_GRANTS: 'true' })
+        .HP_DEV_SQUISHY_GRANTS,
+    ).toBe(true);
+    expect(loadServerConfig({ DATABASE_URL, NODE_ENV: 'test' }).HP_DEV_SQUISHY_GRANTS).toBe(false);
+    expect(() =>
+      loadServerConfig({
+        DATABASE_URL,
+        HP_SIGNUP_CODE: 'family-code',
+        HP_DEV_SQUISHY_GRANTS: 'true',
+      }),
+    ).toThrow(/HP_DEV_SQUISHY_GRANTS/);
+    // Off is always fine, in production too.
+    expect(
+      loadServerConfig({
+        DATABASE_URL,
+        HP_SIGNUP_CODE: 'family-code',
+        HP_DEV_SQUISHY_GRANTS: 'false',
+      }).HP_DEV_SQUISHY_GRANTS,
+    ).toBe(false);
+  });
+
   it('accepts HP_DEV_NOW outside production only', () => {
     const at = '2026-12-20T20:59:00-05:00';
     expect(

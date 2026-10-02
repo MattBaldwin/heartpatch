@@ -50,6 +50,11 @@ export interface Lobby {
   show: () => void;
   /** Steps aside for a map, leaving the "My patches" button (as "Visit patch" does). */
   hide: () => void;
+  /**
+   * Steps all the way aside, button included, for a screen that owns the
+   * whole stage (a battle). `hide` brings the button back.
+   */
+  stepOut: () => void;
 }
 
 export interface LobbyOptions {
@@ -691,6 +696,12 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       releaseUpdates = null;
       panel.hidden = true;
       openButton.hidden = false;
+    },
+    stepOut: () => {
+      releaseUpdates?.();
+      releaseUpdates = null;
+      panel.hidden = true;
+      openButton.hidden = true;
     },
   };
 }
