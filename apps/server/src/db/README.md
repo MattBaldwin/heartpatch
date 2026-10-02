@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), and `battles` and `idempotency_keys` (#13). Feature tables (`keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), and `keepers` (#42). Feature tables (`buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -183,6 +183,19 @@ Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessor
 | `status_code` | smallint, null | Null while the first request runs |
 | `response` | jsonb, null | The reply body, replayed to retries |
 | `created_at` | timestamptz | Indexed, for the cleanup job (`lib/idempotency.ts`) |
+
+### `keepers`
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` | uuid PK → users | One row per player (account-level, tech spec §4). Cascade delete |
+| `base` | text | Keeper base id (`KEEPER_DATA.bases`) |
+| `hair_color` | text | Hair colour id (`KEEPER_DATA.hairColors`) |
+| `eye_color` | text | Eye colour id (`KEEPER_DATA.eyeColors`) |
+| `outfit` | text | Starter outfit palette id (`KEEPER_DATA.outfits`) |
+| `created_at` | timestamptz | First pick |
+| `updated_at` | timestamptz | Last change (changing is free, any time) |
+
+Written by the keepers service (#42), which checks every id against the shared Keeper data first. No row = the player hasn't picked yet; with `HP_KEEPER_REQUIRED` they can't make or join a map until they do. Clothing and outfits get their own tables with the wardrobe (#43).
 
 ### `game_events`
 | Column | Type | Notes |

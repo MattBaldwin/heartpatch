@@ -24,6 +24,12 @@ const ConfigSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  // Keeper gate (issue #42): creating or joining a map needs a Keeper, so
+  // other players always see who's who. On unless set to false (testing).
+  HP_KEEPER_REQUIRED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   // Dev time override (tech spec §7): the clock starts here. Never in production.
   HP_DEV_NOW: z.iso.datetime({ offset: true }).optional(),
   // Signups per IP per window (auth limits.ts), raised for e2e: every Playwright

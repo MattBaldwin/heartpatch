@@ -20,9 +20,12 @@ import {
   type Hex,
   type HexKey,
   type MapView,
+  KEEPER_DATA,
   type PublicTile,
 } from '@heartpatch/shared';
 import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
+import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
+import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { loftRoundedHex, type MeshArrays, type ProfileRing } from './hex-mesh.js';
 import {
   FALLBACK_LOOK,
@@ -77,6 +80,8 @@ export interface MapSceneStats {
   readonly claimedHomes: number;
   /** Meshes drawing tiles: one per terrain look in use, plus home tiles. */
   readonly tileMeshes: number;
+  /** Keepers standing at their home bases (#42). */
+  readonly keepers: number;
 }
 
 function linear(hex: string): Color3 {
@@ -244,6 +249,8 @@ export class MapScene {
   private readonly seedMesh: Mesh;
   private readonly plotMesh: Mesh;
   private readonly selection: Mesh;
+  /** Each member's Keeper by their Heart Seed (design doc §23). Low detail; never animates here. */
+  private readonly keepers: KeeperField;
   private tileMeshes = 0;
   private counts = { tinted: 0, homes: 0, claimedHomes: 0 };
 
@@ -297,11 +304,18 @@ export class MapScene {
     this.selection.alwaysSelectAsActiveMesh = false;
     this.selection.setEnabled(false);
 
+    // No contact shadows: map props have none either, and Keepers are tiny here.
+    this.keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: 'low', shadows: false });
     this.update(view);
   }
 
   get stats(): MapSceneStats {
-    return { tiles: this.tiles.size, tileMeshes: this.tileMeshes, ...this.counts };
+    return {
+      tiles: this.tiles.size,
+      tileMeshes: this.tileMeshes,
+      ...this.counts,
+      keepers: this.keepers.handles.length,
+    };
   }
 
   /** Where the camera starts: this player's Heart Seed, else the map centre. */
@@ -341,6 +355,23 @@ export class MapScene {
     }
     setInstances(this.seedMesh, seeds, true);
     setInstances(this.plotMesh, plots, true);
+
+    // A small Keeper beside each claimed Heart Seed, so rivals see who's who.
+    this.keepers.clear();
+    const place = KEEPER_PLACES.map;
+    for (const home of homes) {
+      const owner = home.seed.ownerUserId;
+      const keeper = view.members.find((m) => m.user.id === owner)?.keeper;
+      if (!keeper) continue;
+      const p = hexToWorld(home.seed, HEX_SIZE);
+      this.keepers.add(keeper, {
+        x: p.x + place.offset.x,
+        z: p.z + place.offset.z,
+        y: HOME_LOOK.height,
+        scale: place.scale,
+        lean: place.lean,
+      });
+    }
     this.counts = { tinted, homes: homes.length, claimedHomes: seeds.length };
   }
 

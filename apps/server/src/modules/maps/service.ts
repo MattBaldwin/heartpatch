@@ -25,6 +25,7 @@ import { assertAllowedText } from '../../lib/filter.js';
 import { newSeed } from '../../lib/rng.js';
 import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
+import { createKeepersRepo } from '../keepers/repo.js';
 import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
 import { createMapsRepo, type JoinRequestRow, type MapsRepo, type MemberRow } from './repo.js';
@@ -58,6 +59,8 @@ export interface MapsServiceOptions {
   db: Executor;
   /** `HP_TUTORIAL_REQUIRED`: creating or joining needs a finished tutorial. */
   tutorialRequired: boolean;
+  /** `HP_KEEPER_REQUIRED`: creating or joining needs a Keeper (#42). */
+  keeperRequired: boolean;
   clock?: Clock;
   /**
    * Live sync (`wsHub.publish`): called after a command that wrote game events
@@ -71,6 +74,7 @@ const MESSAGES = {
   notFound: "We couldn't find that patch.",
   ownerOnly: 'Only the patch owner can do that.',
   tutorialFirst: 'Finish your first adventure with Sprout, then come back!',
+  keeperFirst: 'Pick your Keeper first, then come back!',
   timeZone: "Hmm, we couldn't read your clock. Please try again!",
   badCode: "That code doesn't work. It may be too old. Ask for a new one!",
   alreadyMember: "You're already in this patch!",
@@ -122,18 +126,27 @@ async function withFreshCode<T>(fn: (code: string) => Promise<T>): Promise<T> {
 }
 
 export function createMapsService(options: MapsServiceOptions): MapsService {
-  const { db, tutorialRequired } = options;
+  const { db, tutorialRequired, keeperRequired } = options;
   const now = options.clock ?? (() => new Date());
   /** After commit only (apps/server/README.md, "Live sync"). */
   const published = (mapId: string) => {
     void options.publish?.(mapId);
   };
   const store = createMapsRepo(db);
+  const keepersRepo = createKeepersRepo(db);
 
   const assertTutorialDone = async (user: PublicUser) => {
     if (!tutorialRequired) return;
     if ((await store.tutorialCompletedAt(user.id)) === null) {
       throw new AppError('FORBIDDEN', MESSAGES.tutorialFirst);
+    }
+  };
+
+  /** Other players see each member's Keeper, so a new account picks one first (#42). */
+  const assertKeeperChosen = async (user: PublicUser) => {
+    if (!keeperRequired) return;
+    if ((await keepersRepo.find(user.id)) === null) {
+      throw new AppError('FORBIDDEN', MESSAGES.keeperFirst);
     }
   };
 
@@ -251,6 +264,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       assertAllowedText(input.name, 'name');
       const timeZone = canonicalTimeZone(input.timeZone);
       if (timeZone === null) throw new AppError('VALIDATION_FAILED', MESSAGES.timeZone);
+      await assertKeeperChosen(user);
       await assertTutorialDone(user);
 
       // Generate once and store it all (design doc §3): every seat's home base
@@ -345,6 +359,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     join: async (user, code) => {
+      await assertKeeperChosen(user);
       await assertTutorialDone(user);
       const attempt = () =>
         store.transaction(async (repo) => {
