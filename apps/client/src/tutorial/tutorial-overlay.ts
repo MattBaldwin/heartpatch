@@ -16,6 +16,8 @@ export interface TutorialOverlayActions {
   nextLine: () => void;
   acknowledge: (choice: GraduationChoice | null) => void;
   retry: () => void;
+  /** Asks the server where we are (a step this app doesn't know yet). */
+  recheck: () => void;
   skip: () => void;
   /** Puts the tutorial away for now (only offered when it isn't required). */
   leave: () => void;
@@ -150,7 +152,6 @@ export function mountTutorialOverlay(
     const viewport = { width: window.innerWidth, height: window.innerHeight };
     layout = layoutOverlay({
       target: found?.rect ?? null,
-      hasTarget: target !== 'none',
       // While loading or showing an error, only Sprout's bubble takes taps.
       talkOnly: step ? step.talkOnly : true,
       viewport,
@@ -216,9 +217,14 @@ export function mountTutorialOverlay(
         onMain = () => {
           actions.acknowledge(null);
         };
+      } else if (!step.known) {
+        // A newer step than this app knows: input stays open, and Sprout can
+        // check whether the server has moved on (an update is on its way).
+        mainButton.textContent = 'Check again';
+        onMain = actions.recheck;
       } else {
-        // Gameplay steps go on when the player does the thing; graduation
-        // goes on with one of its choices.
+        // Gameplay steps go on when the player does the thing (input stays
+        // open around the spotlight); graduation goes on with a choice.
         mainButton.hidden = true;
       }
     }

@@ -687,6 +687,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     },
     hide: () => {
       if (!user) return;
+      releaseUpdates?.();
+      releaseUpdates = null;
       panel.hidden = true;
       openButton.hidden = false;
     },

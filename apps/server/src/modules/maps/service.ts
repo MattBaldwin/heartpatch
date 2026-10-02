@@ -163,7 +163,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       repo.findMap(mapId),
       repo.membership(mapId, user.id),
     ]);
-    if (!map || membership?.status !== 'active') {
+    const viewable = map?.kind === 'multiplayer' || map?.kind === 'tutorial';
+    if (!map || !viewable || membership?.status !== 'active') {
       throw new AppError('NOT_FOUND', MESSAGES.notFound);
     }
     return map;

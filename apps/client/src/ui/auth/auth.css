@@ -179,7 +179,9 @@
 
 .auth-chip {
   position: fixed;
-  z-index: 5;
+  /* Above the tutorial layer (9), so "Log out" is always reachable (#47).
+     Never on screen with the login card (also 10). */
+  z-index: 10;
   top: calc(env(safe-area-inset-top) + 8px);
   right: calc(env(safe-area-inset-right) + 8px);
   display: flex;

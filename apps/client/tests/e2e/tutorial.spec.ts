@@ -45,6 +45,17 @@ function testIdAt(page: Page, x: number, y: number): Promise<string | null> {
   );
 }
 
+/** True if a tap at the centre of `target` reaches it. */
+async function takesTaps(page: Page, target: Locator): Promise<boolean> {
+  const box = await target.boundingBox();
+  if (!box) return false;
+  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+  return target.evaluate((node, [px, py]) => node.contains(document.elementFromPoint(px, py)), [
+    x,
+    y,
+  ] as const);
+}
+
 /** What takes a tap at the centre of `target`. */
 async function topAt(page: Page, target: Locator): Promise<string | null> {
   const box = await target.boundingBox();
@@ -55,6 +66,7 @@ async function topAt(page: Page, target: Locator): Promise<string | null> {
 test('the optional tutorial: start, resume after reload, graduate, replay and skip', async ({
   browser,
 }) => {
+  test.setTimeout(120_000); // draws the Glade three times; CI renders in software
   const page = await newPlayer(browser, uniqueName('sprout'));
   const lobby = page.getByTestId('lobby');
   const tutorial = page.getByTestId('tutorial');
@@ -73,6 +85,8 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   // Near the top of the screen, away from Sprout's bubble at the bottom.
   const width = page.viewportSize()?.width ?? 390;
   expect(await testIdAt(page, width / 2, 160)).toBe('tutorial-blocker');
+  // ...except "Log out": nobody is ever stuck in the tutorial.
+  expect(await takesTaps(page, page.getByRole('button', { name: 'Log out' }))).toBe(true);
   // Sprout joins the scene once the renderer is up.
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   await expect.poll(async () => (await debug(page))?.sprout).toMatch(/^[0-9a-f]{32}$/);

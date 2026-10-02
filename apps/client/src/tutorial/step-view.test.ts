@@ -30,5 +30,7 @@ describe('stepView', () => {
     expect(view.lines).toHaveLength(1);
     expect(view.target).toBe('none');
     expect(view.talkOnly).toBe(false);
+    expect(view.known).toBe(false);
+    expect(stepView('welcome').known).toBe(true);
   });
 });

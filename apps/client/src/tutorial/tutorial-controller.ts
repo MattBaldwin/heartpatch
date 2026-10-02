@@ -222,6 +222,12 @@ export class TutorialController {
     );
   }
 
+  /** Asks the server where the player is now (Sprout's "Check again"). */
+  recheckNow(): void {
+    if (this.phase === 'closed') return;
+    void this.recheck(this.generation);
+  }
+
   /** Tries the failed action again. */
   retry(): void {
     const action = this.retryAction;

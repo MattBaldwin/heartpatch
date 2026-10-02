@@ -5,8 +5,9 @@
 .tutorial {
   position: fixed;
   inset: 0;
-  /* Above the lobby (4–5), map HUD (3) and install guide (8); under the login
-     card (10) and the update pill (30). */
+  /* Above the lobby (4), map HUD (3) and install guide (8); under the login
+     card and the "Log out" chip (10), which stays reachable, and the update
+     pill (30). */
   z-index: 9;
   pointer-events: none;
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;

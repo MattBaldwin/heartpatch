@@ -254,6 +254,16 @@ describe('TutorialController', () => {
     expect(t.controller.view.message).toBe("We can't reach the patch right now.");
   });
 
+  it('checks again on request (a step this app does not know yet)', async () => {
+    const t = setup(state({ stepId: 'brand-new-step' }));
+    await t.controller.open();
+    expect(t.controller.view.step?.known).toBe(false);
+    t.setServer(state({ stepId: 'graduation' }));
+    t.controller.recheckNow();
+    await settle();
+    expect(t.controller.view.step?.id).toBe('graduation');
+  });
+
   it('rechecks on a live resync', async () => {
     const t = setup();
     await t.controller.open();

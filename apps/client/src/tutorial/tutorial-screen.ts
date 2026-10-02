@@ -31,7 +31,11 @@ export interface TutorialScreenOptions {
    * the tutorial is open. `open` rejects if it can't; the tutorial carries
    * on over whatever is on screen.
    */
-  glade?: { open: (mapId: string) => Promise<void>; close: () => void };
+  glade?: {
+    /** `stillWanted` turns false if the tutorial closed while the Glade loaded. */
+    open: (mapId: string, stillWanted: () => boolean) => Promise<void>;
+    close: () => void;
+  };
   api?: Pick<TutorialApi, 'state' | 'start' | 'replay' | 'skip' | 'acknowledge'>;
   createWs?: (options: WsClientOptions) => WsClient;
 }
@@ -53,6 +57,8 @@ export interface TutorialScreen {
   settings: () => Node[];
   /** Canvas targets register here (highlight-targets.ts). */
   readonly targets: HighlightTargets;
+  /** A target moved on screen: move the spotlight with it. */
+  relayout: () => void;
   readonly debug: TutorialDebug | null;
 }
 
@@ -91,13 +97,14 @@ export function createTutorialScreen(options: TutorialScreenOptions): TutorialSc
       return;
     }
     glade = want;
-    if (want) options.glade?.open(want).catch(() => undefined);
+    if (want) options.glade?.open(want, () => glade === want).catch(() => undefined);
   };
 
   const overlay = mountTutorialOverlay(options.root, targets, {
     nextLine: () => controller?.nextLine(),
     acknowledge: (choice) => controller?.acknowledge(choice),
     retry: () => controller?.retry(),
+    recheck: () => controller?.recheckNow(),
     skip: () => controller?.skip(),
     leave: () => {
       controller?.close();
@@ -200,26 +207,34 @@ export function createTutorialScreen(options: TutorialScreenOptions): TutorialSc
         return [entryButton('Meet Sprout', 'tutorial-start', () => current.open())];
       }
       if (state.status === 'in-progress') {
-        return [entryButton('Back to Sprout', 'tutorial-resume', () => current.open())];
+        return [entryButton('Visit Sprout', 'tutorial-resume', () => current.open())];
       }
       return [];
     },
     settings: () => {
       const state = controller?.known;
-      if (!controller || !state) return [];
+      if (!controller) return [];
+      if (!state) {
+        return [
+          el('p', { class: 'auth-subtitle' }, "Sprout can't be reached right now. Try again soon!"),
+        ];
+      }
       const current = controller;
       if (state.status === 'completed') {
         return [
-          el('p', { class: 'auth-subtitle' }, 'Want to see Sprout again?'),
-          entryButton('Play with Sprout again', 'tutorial-replay', () => current.replay()),
+          el('p', { class: 'auth-subtitle' }, 'Want to play with Sprout again?'),
+          entryButton('Play again', 'tutorial-replay', () => current.replay()),
         ];
       }
       return [
         el('p', { class: 'auth-subtitle' }, 'Sprout is waiting to show you around.'),
-        entryButton('Play with Sprout', 'tutorial-settings-start', () => current.open()),
+        entryButton('Meet Sprout', 'tutorial-settings-start', () => current.open()),
       ];
     },
     targets,
+    relayout: () => {
+      overlay.relayout();
+    },
     get debug() {
       if (!controller) return null;
       return {

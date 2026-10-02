@@ -81,11 +81,12 @@ export function blockersAround(hole: Rect, viewport: Size): Rect[] {
 /**
  * Lays the overlay out for one step. `target` is the target's on-screen rect,
  * or null when the step has no target (`none`) or it can't be found.
- * `talkOnly` steps block everything: the only way on is through Sprout.
+ * `talkOnly` steps (and loading, errors) block everything: the only way on is
+ * through Sprout's bubble, which always has a button. Any other step without
+ * a spotlight leaves input open, so the player can never be trapped.
  */
 export function layoutOverlay(spec: {
   target: Rect | null;
-  hasTarget: boolean;
   talkOnly: boolean;
   viewport: Size;
   insets: Insets;
@@ -95,8 +96,7 @@ export function layoutOverlay(spec: {
   const hole = spec.target ? holeFor(spec.target, viewport) : null;
 
   if (!hole) {
-    // A gameplay step whose target isn't on screen must not trap the player.
-    const gate: GateMode = spec.talkOnly || !spec.hasTarget ? 'blockAll' : 'open';
+    const gate: GateMode = spec.talkOnly ? 'blockAll' : 'open';
     return {
       gate,
       hole: null,

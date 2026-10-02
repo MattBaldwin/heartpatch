@@ -16,6 +16,11 @@ export interface StepView {
    * module's event instead, so they get no button.
    */
   readonly talkOnly: boolean;
+  /**
+   * False for a step this app doesn't know yet (the server has newer steps
+   * than this bundle). Input stays open and Sprout offers to check again.
+   */
+  readonly known: boolean;
 }
 
 /** Shown if the server is on a step this app doesn't know yet (an update is on its way). */
@@ -27,7 +32,14 @@ export function stepView(
 ): StepView {
   const step = steps.find((s) => s.id === stepId);
   if (!step) {
-    return { id: stepId, goal: '', lines: [UNKNOWN_STEP_LINE], target: 'none', talkOnly: false };
+    return {
+      id: stepId,
+      goal: '',
+      lines: [UNKNOWN_STEP_LINE],
+      target: 'none',
+      talkOnly: false,
+      known: false,
+    };
   }
   return {
     id: step.id,
@@ -35,5 +47,6 @@ export function stepView(
     lines: step.sproutLines,
     target: step.highlightTarget,
     talkOnly: step.completeOn.eventType === 'tutorial.acknowledged',
+    known: true,
   };
 }

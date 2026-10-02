@@ -108,9 +108,10 @@ const maps = createMapScreen({
 const tutorial = createTutorialScreen({
   root: document.body,
   glade: {
-    open: async (mapId) => {
+    open: async (mapId, stillWanted) => {
       await maps.open(mapId);
-      lobby.hide();
+      // Put away ("Later") while it loaded: the lobby stays.
+      if (stillWanted()) lobby.hide();
     },
     close: () => {
       maps.close();

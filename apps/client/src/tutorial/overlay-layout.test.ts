@@ -67,7 +67,6 @@ describe('layoutOverlay', () => {
   it('blocks everything while Sprout is just talking', () => {
     const layout = layoutOverlay({
       target: null,
-      hasTarget: false,
       talkOnly: true,
       viewport,
       insets,
@@ -77,10 +76,15 @@ describe('layoutOverlay', () => {
     expect(layout.arrow).toBeNull();
   });
 
+  it('never traps the player on a step that waits for them to play', () => {
+    const noTarget = layoutOverlay({ target: null, talkOnly: false, viewport, insets });
+    expect(noTarget.gate).toBe('open');
+    expect(noTarget.blockers).toHaveLength(0);
+  });
+
   it("never traps the player when a gameplay step's target isn't on screen", () => {
     const layout = layoutOverlay({
       target: null,
-      hasTarget: true,
       talkOnly: false,
       viewport,
       insets,
@@ -92,7 +96,6 @@ describe('layoutOverlay', () => {
   it('lets taps through only the spotlight, with the bubble away from it', () => {
     const low = layoutOverlay({
       target: { x: 150, y: 700, width: 90, height: 50 },
-      hasTarget: true,
       talkOnly: false,
       viewport,
       insets,
@@ -105,7 +108,6 @@ describe('layoutOverlay', () => {
 
     const high = layoutOverlay({
       target: { x: 150, y: 100, width: 90, height: 50 },
-      hasTarget: true,
       talkOnly: false,
       viewport,
       insets,
@@ -117,7 +119,6 @@ describe('layoutOverlay', () => {
   it('keeps the arrow off the screen corners', () => {
     const layout = layoutOverlay({
       target: { x: 0, y: 400, width: 20, height: 20 },
-      hasTarget: true,
       talkOnly: false,
       viewport,
       insets,

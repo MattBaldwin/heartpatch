@@ -230,6 +230,17 @@ describe('startUpdates', () => {
       expect(waiting.skipped).toBe(true);
     });
 
+    it('drops a held reload for a version replaced in the meantime', async () => {
+      const { t, worker } = await waitingUpdate();
+      const release = t.hold.hold();
+      t.away(10_000);
+      worker.state = 'redundant';
+      release();
+      expect(worker.skipped).toBe(false);
+      t.switchController();
+      expect(t.reloads()).toBe(0);
+    });
+
     it('still catches up silently to a version the page already runs (no reload)', async () => {
       const t = setup();
       await t.start();

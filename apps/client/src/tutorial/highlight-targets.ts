@@ -9,6 +9,10 @@ import type { Rect } from './overlay-layout.js';
 // - Canvas targets (the Heart Seed, a node, a wild squishy): the scene that
 //   draws them registers a locator that projects them to the screen. Until
 //   one does, the target can't be found and the step leaves input open.
+//
+// The overlay lays out again on each step, resize and scene mount. Anything
+// that moves a target on screen (a camera pan, a panel sliding in) calls
+// `TutorialScreen.relayout` so the spotlight follows it.
 
 /** The on-screen rect of a canvas target, or null if it isn't visible. */
 export type TargetLocator = () => Rect | null;

@@ -68,6 +68,8 @@ export async function startUpdates(env: UpdateEnv, timing: UpdateTiming): Promis
       return;
     }
     env.hold.whenReleased(() => {
+      // Replaced by a newer version while held: that one gets its own offer.
+      if (worker.state === 'redundant') return;
       reloadOnSwitch = true;
       worker.postMessage({ type: 'skip-waiting' });
     });
