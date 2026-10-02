@@ -189,7 +189,7 @@ Tiles are written once, from `generateMap`, when the map is created.
 |---|---|---|
 | `id` | uuid PK | |
 | `map_id` | uuid → maps | Cascade delete. Indexed with `player_user_id` |
-| `kind` | enum `battle_kind` | `wild` (tile guardians and raids add values with their issues) |
+| `kind` | enum `battle_kind` | `wild`, `tile` (a neutral tile's guardians, #15) or `rival-tile` (another player's tile, #15). Tile battles have a `tile_attacks` row |
 | `status` | enum `battle_status` | `active` \| `finished` \| `no-contest` (the server called it off: content re-tuned mid-battle). One `active` per player per map (partial unique index) |
 | `player_user_id` | uuid | The player on side `a`. FK `(map_id, player_user_id)` → `map_members` |
 | `seed` | text | From `newSeed()`. **Server-only while active**; revealed by the API after the end (tech spec §8) |
@@ -201,6 +201,37 @@ Tiles are written once, from `generateMap`, when the map is created.
 | `log` | jsonb, null | The resolved `BattleEvent[]` once over, kept so a battle stays explainable after re-tuning |
 | `started_at`, `ended_at` | timestamptz | |
 | `spawn_q`, `spawn_r`, `spawn_window` | smallint, smallint, text, null | The tile and spawn window (`2026-10-31/5`) a wild squishy came from (#14). All set or all null (`battles_spawn_all_or_none`). Indexed `(map_id, player_user_id, spawn_window)` where set, so a befriended spawn is skipped for the rest of its window |
+
+### `tile_attacks`
+Every tile battle (#15, design doc §11 raid rules): the attempt log the daily attempts, the tile cooldown and the per-defender daily loss cap count from. Timestamps, not counters; "today" is the map-local day (`at time zone maps.time_zone`). The raid log (#16) reads it too.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `tile_id` | uuid → tiles | Cascade delete. Indexed with `cooldown_until` |
+| `attacker_user_id` | uuid | FK `(map_id, attacker_user_id)` → `map_members`. Indexed `(map_id, attacker_user_id, started_at)` |
+| `defender_user_id` | uuid, null | The tile's owner when the battle started; null for neutral land. Indexed `(map_id, defender_user_id, ended_at)` where set |
+| `battle_id` | uuid → battles | Unique. Cascade delete |
+| `outcome` | enum `tile_attack_outcome` | `active` \| `captured` \| `won` (won, but the tile couldn't change hands) \| `lost` (lost or left) \| `no-contest` (refunded: not counted as an attempt) |
+| `reward_percent` | smallint | Gentle mode share of capture rewards (decision B); 100 otherwise |
+| `started_at` | timestamptz | |
+| `cooldown_until` | timestamptz | `started_at` + `TERRITORY_RULES.cooldownHours`; nobody battles for the tile again before it |
+| `last_action_at` | timestamptz | The player's last action; idle past `abandonMinutes` counts as a loss |
+| `ended_at` | timestamptz, null | |
+
+### `tile_defenders`
+Squishies standing watch on their owner's tiles (#15, decision C), up to `TERRITORY_RULES.maxDefenders` per tile.
+
+| Column | Type | Notes |
+|---|---|---|
+| `map_id` | uuid → maps | Cascade delete. Indexed |
+| `tile_id` | uuid → tiles | PK part, with `slot`. Cascade delete |
+| `slot` | smallint | 0-based order (0–5, checked) |
+| `squishy_id` | uuid → squishies | Unique: a squishy stands on one tile at most. Cascade delete |
+| `assigned_at` | timestamptz | |
+
+Rows only count while the squishy's owner still owns the tile and it isn't in the Hollow. A capture and `releaseTiles` (leaving or removal) delete the tile's rows: the squishies go home.
 
 ### `species_seen`
 | Column | Type | Notes |

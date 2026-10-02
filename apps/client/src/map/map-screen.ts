@@ -43,8 +43,11 @@ export interface MapScreenOptions {
 
 /** A feature's buttons in the tile panel. */
 export interface TileActions {
-  /** The panel shows `tile` (on tap, and again when the map redraws). */
-  show: (container: HTMLElement, tile: PublicTile) => void;
+  /**
+   * The panel shows `tile` (on tap, and again when the map redraws). `view`
+   * is the whole map as this player has it now (neighbours, owners, PvP mode).
+   */
+  show: (container: HTMLElement, tile: PublicTile, view: MapView) => void;
   /** The panel closed. */
   hide: () => void;
 }
@@ -120,7 +123,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = h;
     scene3d?.select(h);
     panel.show(describeTile(tile, (id) => state.member(id), user?.id ?? null));
-    options.tileActions?.show(panel.actions, tile);
+    options.tileActions?.show(panel.actions, tile, state.view);
     options.invalidate();
   };
 

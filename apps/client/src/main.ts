@@ -16,6 +16,7 @@ import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
+import { createTerritoryScreen } from './territory/territory-screen.js';
 import { createTutorialScreen } from './tutorial/tutorial-screen.js';
 import './styles.css';
 
@@ -107,6 +108,13 @@ const inventory = createInventoryScreen({ root: document.body, devTools: import.
 // from home base and the catalog; it celebrates an evolution the first time
 // the player is back from the battle that caused it, or opens their home.
 const care = createCareSheet({ root: document.body });
+// Territory (#15): Claim, Challenge and guards in the tile panel. A tile
+// battle opens the battle screen, unless another screen sits over the map.
+const territory = createTerritoryScreen({
+  openBattle: (battle) => {
+    if (!lobby.isOpen && !catalog.isOpen) battles.open(battle);
+  },
+});
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
@@ -124,6 +132,7 @@ const home = createHomeScreen({
     catalog.close();
     care.close();
     void inventory.setMap(null);
+    void territory.setMap(null);
     void battles.setMap(null);
     lobby.stepOut();
     void care.celebrateNews(mapId);
@@ -137,6 +146,7 @@ const home = createHomeScreen({
       .open(mapId)
       .then(() => {
         void inventory.setMap(mapId);
+        void territory.setMap(mapId);
         void battles.setMap(mapId);
         home.setMap(mapId);
       })
@@ -156,10 +166,11 @@ const maps = createMapScreen({
     catalog.close();
     care.close();
     void inventory.setMap(null);
+    void territory.setMap(null);
     home.setMap(null);
     lobby.showMessage(message);
   },
-  tileActions: combineTileActions(inventory.tileActions, home.tileActions),
+  tileActions: combineTileActions(inventory.tileActions, home.tileActions, territory.tileActions),
 });
 // The squishy catalog (#14) opens from the button by the battle entry.
 const catalog = createCatalogScreen({
@@ -181,6 +192,7 @@ const tutorial = createTutorialScreen({
       catalog.close();
       care.close();
       await inventory.setMap(null);
+      await territory.setMap(null);
       home.setMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
@@ -189,6 +201,7 @@ const tutorial = createTutorialScreen({
     close: () => {
       void battles.setMap(null);
       void inventory.setMap(null);
+      void territory.setMap(null);
       home.setMap(null);
       maps.close();
       lobby.show();
@@ -215,6 +228,7 @@ const battles = createBattleScreen({
     catalog.close();
     care.close();
     void inventory.setMap(null);
+    void territory.setMap(null);
     home.setMap(null);
     lobby.stepOut();
   },
@@ -224,7 +238,7 @@ const battles = createBattleScreen({
         home.setMap(mapId);
         // A battle can make a squishy evolve: celebrate it now (#19).
         void care.celebrateNews(mapId);
-        return inventory.setMap(mapId);
+        return Promise.all([inventory.setMap(mapId), territory.setMap(mapId)]);
       },
       (err: unknown) => {
         // No map to go back to: no battle button over the lobby either.
@@ -256,6 +270,7 @@ const keeper = createKeeperScreen({
   onEditOpen: () => {
     void battles.setMap(null);
     void inventory.setMap(null);
+    void territory.setMap(null);
     home.setMap(null);
     maps.close();
     catalog.close();
@@ -273,6 +288,7 @@ const lobby = mountLobby(document.body, {
     care.close();
     await maps.open(mapId);
     void inventory.setMap(mapId);
+    void territory.setMap(mapId);
     home.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
     // battle resumed here (after a refresh) must step it out again after that.
@@ -287,6 +303,7 @@ mountAuth(document.body, {
     catalog.setUser(user);
     care.setUser(user);
     inventory.setUser(user);
+    territory.setUser(user);
     home.setUser(user);
     maps.setUser(user);
     // The lobby and tutorial wait for a Keeper (`onReady` above).
@@ -342,6 +359,7 @@ if (import.meta.env.DEV) {
     keeper: () => keeper.debug,
     catalog: () => catalog.debug,
     inventory: () => inventory.debug,
+    territory: () => territory.debug,
     home: () => home.debug,
     care: () => care.debug,
   };

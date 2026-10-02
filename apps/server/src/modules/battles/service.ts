@@ -9,11 +9,14 @@ import {
   gameplayOverrides,
   otherSide,
   startBattle,
+  TILE_BATTLE_KINDS,
   type BattleAction,
   type BattleActionRequest,
   type BattleContent,
+  type BattleKind,
   type BattleSetup,
   type BattleSideId,
+  type BattleSideSetup,
   type BattleSquishySetup,
   type BattleState,
   type Hex,
@@ -27,6 +30,7 @@ import {
 import { SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
+import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
 import type { Clock } from '../../lib/time.js';
@@ -35,7 +39,7 @@ import { consumeItems } from '../inventory/service.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { DEV_WILD_LEVEL } from './limits.js';
-import { createBattlesRepo, type BattleRow, type BattlesTxRepo } from './repo.js';
+import { createBattlesRepo, type BattleRow, type BattleSpawn, type BattlesTxRepo } from './repo.js';
 
 /*
  * PvE battles (design doc §6, tech spec §8, DECISIONS "Battle engine (#11)").
@@ -70,6 +74,58 @@ export interface WildEncounterContext {
   tile: Hex | null;
 }
 
+/**
+ * The other side of a tile battle (#15), built by the territory module inside
+ * the start transaction, after its raid-rule checks.
+ */
+export interface TileOpponent {
+  kind: Extract<BattleKind, 'tile' | 'rival-tile'>;
+  /** Who plays the other side, and with which squishies. */
+  side: BattleSideSetup;
+  /**
+   * After the battle row, in the same transaction: the attempt log row. The
+   * events it returns are appended after `battle.started`.
+   */
+  started: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
+}
+
+/**
+ * Builds a tile battle's opponent in the start transaction: checks the raid
+ * rules under row locks first, and throws `AppError` to refuse (then nothing
+ * is used up). Runs only when there's no battle going to resume.
+ */
+export type PrepareTileBattle = (
+  tx: Executor,
+  context: { map: MapRow; at: Date },
+) => Promise<TileOpponent>;
+
+/**
+ * The territory module's side of tile battles (#15). The battles service
+ * calls it inside its own transactions, so the attempt log and the tile
+ * commit with the battle (CLAUDE.md rule 7).
+ */
+export interface TileBattlePort {
+  /** No action for this long and the player has left: it counts as a loss (design doc §11). */
+  readonly abandonAfterMs: number;
+  /** When the player last acted in this tile battle (its start, at first). */
+  lastActionAt: (tx: Executor, battleId: string) => Promise<Date | null>;
+  /** The player acted: the abandon timer starts again. */
+  acted: (tx: Executor, battleId: string, at: Date) => Promise<void>;
+  /**
+   * The battle is over (won, lost or left): records it, and on a win the tile
+   * changes hands. Lock order: battle (held), tile, then `maps` via events.
+   * Returns events to append after `battle.ended`.
+   */
+  ended: (
+    tx: Executor,
+    battle: BattleRow,
+    winner: BattleSideId | 'draw',
+    at: Date,
+  ) => Promise<NewGameEvent[]>;
+  /** Called off by the server (DECISIONS #13): the attempt is refunded. */
+  noContest: (tx: Executor, battleId: string, at: Date) => Promise<void>;
+}
+
 /** What a capture try costs (design doc §6): one Heart Charm. */
 export const HEART_CHARM = 'heart-charm';
 
@@ -88,6 +144,11 @@ export interface BattlesService {
   ) => Promise<StartResult>;
   /** Starts a wild battle against a given team (spawns, and the dev route). */
   startAgainst: (user: PublicUser, mapId: string, encounter: WildEncounter) => Promise<StartResult>;
+  /**
+   * Starts a battle for a tile (#15) against what `prepare` builds, or
+   * resumes the battle already going (`created: false`).
+   */
+  startTile: (user: PublicUser, mapId: string, prepare: PrepareTileBattle) => Promise<StartResult>;
   /** Applies one player action; the AI side answers inside the same step. */
   act: (user: PublicUser, battleId: string, request: BattleActionRequest) => Promise<PlayerBattle>;
   /** Dev/test only: a squishy for the player on this map. */
@@ -118,6 +179,16 @@ export interface BattlesServiceOptions {
   content?: BattleContent;
   /** What's around to fight (#14). Without one, there are no wild squishies. */
   findWildEncounter?: (context: WildEncounterContext) => Promise<WildEncounter | null>;
+  /** Tile battles' attempt log and captures (#15, `modules/territory`). */
+  tileBattles?: TileBattlePort;
+}
+
+/** The other side of a new battle, as `startWith` takes it. */
+interface Opponent {
+  kind: BattleKind;
+  side: BattleSideSetup;
+  spawn: BattleSpawn | null;
+  started?: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
 }
 
 // Kid-readable messages (style guide §6).
@@ -213,10 +284,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   /**
    * The content was re-tuned while this battle ran: its stored state can't be
    * stepped with today's rules, so it ends as no contest (COORDINATOR §9).
-   * Nothing is won or lost. Wild battles cost no attempt; a kind that does
-   * (tile guardians, #15) refunds it here.
+   * Nothing is won or lost. Wild battles cost no attempt; tile battles (#15)
+   * refund theirs here.
    */
-  const endNoContest = async (repo: BattlesTxRepo, row: BattleRow, at: Date): Promise<void> => {
+  const endNoContest = async (
+    repo: BattlesTxRepo,
+    tx: Executor,
+    row: BattleRow,
+    at: Date,
+  ): Promise<void> => {
+    if (TILE_BATTLE_KINDS.has(row.kind)) await options.tileBattles?.noContest(tx, row.id, at);
     await repo.finish(row.id, {
       status: 'no-contest',
       actions: row.actions,
@@ -242,13 +319,49 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     });
   };
 
-  /** An active battle whose content has moved on is ended before it's shown. */
+  /**
+   * A tile battle the player left: no action for the abandon time (design doc
+   * §11 "Leaving"). Timestamps, not a timer (CLAUDE.md rule 4): it's noticed
+   * on the next read or action, and counts as a loss then.
+   */
+  const abandoned = async (tx: Executor, row: BattleRow, at: Date): Promise<boolean> => {
+    const port = options.tileBattles;
+    if (!port || row.status !== 'active' || !TILE_BATTLE_KINDS.has(row.kind)) return false;
+    const last = await port.lastActionAt(tx, row.id);
+    return last !== null && at.getTime() - last.getTime() > port.abandonAfterMs;
+  };
+
+  /**
+   * Ends a locked active battle that can't go on: re-tuned content (no
+   * contest) or a tile battle left (a forfeit, so a loss). True if it ended.
+   */
+  const settle = async (
+    repo: BattlesTxRepo,
+    tx: Executor,
+    row: BattleRow,
+    at: Date,
+  ): Promise<boolean> => {
+    if (row.contentHash !== content.contentHash) {
+      await endNoContest(repo, tx, row, at);
+      return true;
+    }
+    if (await abandoned(tx, row, at)) {
+      const action: BattleAction = { type: 'forfeit', side: PLAYER_SIDE };
+      const state = applyBattleAction(content, row.state, action);
+      await finish(repo, tx, row, [...row.actions, action], state, at);
+      return true;
+    }
+    return false;
+  };
+
+  /** An active battle that can't go on (see `settle`) is ended before it's shown. */
   const resolved = async (row: BattleRow): Promise<BattleRow> => {
-    if (row.status !== 'active' || row.contentHash === content.contentHash) return row;
-    const ended = await store.transaction(async (repo) => {
+    if (row.status !== 'active') return row;
+    if (row.contentHash === content.contentHash && !(await abandoned(db, row, now()))) return row;
+    const ended = await store.transaction(async (repo, tx) => {
       const locked = await repo.lockBattle(row.id);
       if (!locked || locked.status !== 'active') return locked;
-      await endNoContest(repo, locked, now());
+      await settle(repo, tx, locked, now());
       return repo.findBattle(row.id);
     });
     published(row.mapId);
@@ -294,6 +407,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   ): Promise<void> => {
     if (state.phase.type !== 'over') throw new Error('finish: the battle is not over');
     const { result } = state.phase;
+    // A tile battle (#15): the attempt is settled and a win takes the tile,
+    // in this transaction. Lock order: battle, tile, squishies, then `maps`.
+    const tileEvents =
+      TILE_BATTLE_KINDS.has(row.kind) && options.tileBattles
+        ? await options.tileBattles.ended(tx, row, result.winner, at)
+        : [];
     const awards = result.xp.filter((award) => award.side === PLAYER_SIDE && award.xp > 0);
     // Base battle XP × care and habitat, levels and evolution (#19's
     // `applyXp`). Lock order: squishies, then `maps` via appendEvent.
@@ -358,9 +477,26 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         },
       });
     }
+    for (const event of tileEvents) await repo.appendEvent(event);
   };
 
-  const startAgainst: BattlesService['startAgainst'] = async (user, mapId, encounter) => {
+  /**
+   * Starts a battle against `opponentFor`'s side, or resumes the one going.
+   * A battle going that can't go on (see `settle`) is ended first, and a new
+   * one starts. The opponent is built inside the start transaction, after the
+   * team check, so a refused start uses nothing up.
+   */
+  const startWith = async (
+    user: PublicUser,
+    mapId: string,
+    opponentFor: (tx: Executor, map: MapRow, at: Date) => Promise<Opponent>,
+  ): Promise<StartResult> => {
+    await requireMember(db, user, mapId);
+    const going = await store.findActive(mapId, user.id);
+    if (going) {
+      const row = await resolved(going);
+      if (row.status === 'active') return { battle: toPlayerBattle(row), created: false };
+    }
     const begin = () =>
       store.transaction(async (repo, tx) => {
         const map = await requireMember(tx, user, mapId);
@@ -370,36 +506,30 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         const team = await repo.listTeam(mapId, user.id, content.rules.teamSize);
         if (team.length === 0) throw new AppError('CONFLICT', MESSAGES.noTeam);
 
-        // Tutorial maps script the opponent (tech spec §7 `tutorialOverrides`).
-        const overrides = gameplayOverrides(map.kind);
-        const policy = overrides?.opponent.ai ?? 'wild';
-        const wild = encounter.squishies.map((s) =>
-          overrides ? { ...s, level: overrides.opponent.level } : s,
-        );
+        const at = now();
+        const opponent = await opponentFor(tx, map, at);
         const setup: BattleSetup = {
           seed: newSeed(),
-          sides: {
-            a: { controller: { type: 'player' }, squishies: team },
-            b: { controller: { type: 'ai', policy }, squishies: wild },
-          },
+          sides: { a: { controller: { type: 'player' }, squishies: team }, b: opponent.side },
         };
         const state = startBattle(content, setup);
         const row = await repo.insertBattle({
           mapId,
-          kind: 'wild',
+          kind: opponent.kind,
           playerUserId: user.id,
           seed: setup.seed,
           contentHash: content.contentHash,
           setup: setup.sides,
           state,
-          startedAt: now(),
-          spawn: encounter.spawn ?? null,
+          startedAt: at,
+          spawn: opponent.spawn,
         });
+        const events = (await opponent.started?.(tx, row)) ?? [];
         // Meeting a squishy fills in its catalog page (design doc §21).
         await createSpawnsRepo(tx).markSeen(
           mapId,
           user.id,
-          wild.map((s) => s.speciesId),
+          opponent.side.squishies.map((s) => s.speciesId),
           row.startedAt,
         );
         await repo.appendEvent({
@@ -411,9 +541,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             kind: row.kind,
             userId: user.id,
             teamSpecies: team.map((s) => s.speciesId),
-            opponentSpecies: wild.map((s) => s.speciesId),
+            opponentSpecies: opponent.side.squishies.map((s) => s.speciesId),
           },
         });
+        for (const event of events) await repo.appendEvent(event);
         return { row, created: true };
       });
     let result: { row: BattleRow; created: boolean };
@@ -427,6 +558,21 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     if (result.created) published(mapId);
     return { battle: toPlayerBattle(result.row), created: result.created };
   };
+
+  const startAgainst: BattlesService['startAgainst'] = (user, mapId, encounter) =>
+    startWith(user, mapId, (_tx, map) => {
+      // Tutorial maps script the opponent (tech spec §7 `tutorialOverrides`).
+      const overrides = gameplayOverrides(map.kind);
+      const policy = overrides?.opponent.ai ?? 'wild';
+      const wild = encounter.squishies.map((s) =>
+        overrides ? { ...s, level: overrides.opponent.level } : s,
+      );
+      return Promise.resolve({
+        kind: 'wild',
+        side: { controller: { type: 'ai', policy }, squishies: wild },
+        spawn: encounter.spawn ?? null,
+      });
+    });
 
   return {
     current: async (user, mapId) => {
@@ -457,13 +603,19 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
 
     startAgainst,
 
+    startTile: (user, mapId, prepare) =>
+      startWith(user, mapId, async (tx, map, at) => {
+        const opponent = await prepare(tx, { map, at });
+        return { ...opponent, spawn: null };
+      }),
+
     act: async (user, battleId, request) => {
       const { row: next, mapId } = await store.transaction(async (repo, tx) => {
         const { row, map } = await requireOwn(tx, await repo.lockBattle(battleId), user);
         if (row.status !== 'active') throw new AppError('CONFLICT', MESSAGES.over);
         const at = now();
-        if (row.contentHash !== content.contentHash) {
-          await endNoContest(repo, row, at);
+        // Re-tuned content or a tile battle left: it ends instead (see `settle`).
+        if (await settle(repo, tx, row, at)) {
           return { row: await repo.findBattle(row.id), mapId: row.mapId };
         }
         // A stale or repeated submit (the client acted on an older turn) is
@@ -496,8 +648,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           throw err;
         }
         const actions = [...row.actions, action];
-        if (state.phase.type === 'over') await finish(repo, tx, row, actions, state, at);
-        else await repo.saveProgress(row.id, { actions, state });
+        if (state.phase.type === 'over') {
+          await finish(repo, tx, row, actions, state, at);
+        } else {
+          await repo.saveProgress(row.id, { actions, state });
+          if (TILE_BATTLE_KINDS.has(row.kind)) await options.tileBattles?.acted(tx, row.id, at);
+        }
         return { row: await repo.findBattle(row.id), mapId: row.mapId };
       });
       if (!next) throw new AppError('NOT_FOUND', MESSAGES.notFound);

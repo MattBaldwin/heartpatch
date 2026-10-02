@@ -68,6 +68,9 @@ const BattleEndedSchema = z.strictObject({
   xp: z.array(z.strictObject({ squishyId: z.uuid(), xp: z.number().int().min(0) })),
 });
 
+const TileBattleKindSchema = z.enum(['tile', 'rival-tile']);
+const coords = { q: z.number().int(), r: z.number().int() };
+
 export const GAME_EVENTS = {
   /** A player made a map and is its owner. Always seq 1. */
   'map.created': {
@@ -198,6 +201,64 @@ export const GAME_EVENTS = {
       items: z.record(z.string(), z.number().int().min(1)),
     }),
     public: z.object({ userId: z.uuid(), recipeId: z.string() }),
+  },
+  /**
+   * A player started a battle for a tile (#15): a neutral tile's guardians
+   * (`defenderUserId` null) or another player's land. It used one of their
+   * daily attempts and put the tile on cooldown until `cooldownUntil`.
+   * Members see who, where and the cooldown ("Someone challenged your
+   * patch!"); the raid log (#16) reads the rest.
+   */
+  'tile.attacked': {
+    internal: z.strictObject({
+      attackId: z.uuid(),
+      battleId: z.uuid(),
+      kind: TileBattleKindSchema,
+      attackerUserId: z.uuid(),
+      defenderUserId: z.uuid().nullable(),
+      ...coords,
+      cooldownUntil: z.iso.datetime(),
+    }),
+    public: z.object({
+      attackerUserId: z.uuid(),
+      defenderUserId: z.uuid().nullable(),
+      ...coords,
+      cooldownUntil: z.iso.datetime(),
+    }),
+  },
+  /**
+   * A tile changed hands after a won tile battle (#15), in the battle's own
+   * transaction: every member's map shows the new owner. Squishies that stood
+   * watch there went home (`returnedSquishyIds`). Found clothing (#43) and
+   * milestones (#44) read the internal payload; `rewardPercent` is the Gentle
+   * mode share of capture rewards (decision B), 100 otherwise.
+   */
+  'tile.captured': {
+    internal: z.strictObject({
+      attackId: z.uuid(),
+      battleId: z.uuid(),
+      kind: TileBattleKindSchema,
+      userId: z.uuid(),
+      fromUserId: z.uuid().nullable(),
+      ...coords,
+      terrain: z.string(),
+      rewardPercent: z.number().int().min(0).max(100),
+      returnedSquishyIds: z.array(z.uuid()),
+    }),
+    public: z.object({ userId: z.uuid(), fromUserId: z.uuid().nullable(), ...coords }),
+  },
+  /**
+   * A player changed who stands watch on one of their tiles (#15). Members
+   * see how many; which squishies stays internal.
+   */
+  'defenders.changed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      count: z.number().int().min(0),
+      squishyIds: z.array(z.uuid()),
+    }),
+    public: z.object({ userId: z.uuid(), ...coords, count: z.number().int().min(0) }),
   },
   /**
    * A player put up a building on their home base (#18). Members see it on

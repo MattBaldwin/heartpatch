@@ -4,6 +4,7 @@ import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
 import type { CareDebug } from '../care/care-sheet.js';
 import type { MapDebug } from '../map/map-screen.js';
+import type { TerritoryDebug } from '../territory/territory-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { KeeperDebug } from '../ui/keeper/keeper-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
@@ -37,6 +38,8 @@ declare global {
       keeper?(): KeeperDebug | null;
       /** The open map's bag, gathers and the tile panel's gather action (#17), or null. */
       inventory?(): InventoryDebug | null;
+      /** Tries left, squishies on watch and the tile panel's land action (#15), or null. */
+      territory?(): TerritoryDebug | null;
       /** The home base (#18): open or not, its buildings, squishies and wander hops, or null. */
       home?(): HomeDebug | null;
       /** The care sheet (#19): the squishy shown, its mood and level, celebrations, or null. */

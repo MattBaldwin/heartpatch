@@ -40,8 +40,11 @@ export const squishyState = pgEnum('squishy_state', ['active', 'hollowed']);
 /** Map owner's PvP setting (design doc §11, decision B). */
 export const pvpMode = pgEnum('pvp_mode', ['on', 'gentle', 'off']);
 export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'approved', 'denied']);
-/** PvE battle kinds (design doc §6). Tile guardians and raids add values with their issues. */
-export const battleKind = pgEnum('battle_kind', ['wild']);
+/**
+ * Battle kinds (design doc §6): a wild squishy, a neutral tile's guardians
+ * (`tile`, #15) and another player's tile defenders (`rival-tile`, #15).
+ */
+export const battleKind = pgEnum('battle_kind', ['wild', 'tile', 'rival-tile']);
 /** `no-contest`: the server called it off (content re-tuned mid-battle). */
 export const battleStatus = pgEnum('battle_status', ['active', 'finished', 'no-contest']);
 
@@ -672,6 +675,99 @@ export const crafts = pgTable(
       .on(t.mapId, t.userId)
       .where(sql`${t.collectedAt} is null`),
     check('crafts_ready_after_start', sql`${t.readyAt} >= ${t.startedAt}`),
+  ],
+);
+
+/**
+ * How a tile battle went (#15). `active` while it runs; `captured` won and
+ * took the tile; `won` won but the tile couldn't change hands (it went home
+ * base or another way meanwhile); `lost` lost or left; `no-contest` called
+ * off by the server, which refunds the attempt.
+ */
+export const tileAttackOutcome = pgEnum('tile_attack_outcome', [
+  'active',
+  'captured',
+  'won',
+  'lost',
+  'no-contest',
+]);
+
+/**
+ * Every tile battle (#15, design doc §11 raid rules): the attempt log the
+ * daily attempt cap, the tile cooldown and the per-defender daily loss cap
+ * count from. Timestamps, not counters (CLAUDE.md rule 4): "today" is the
+ * map-local day, worked out when counting. The raid log (#16) reads it too.
+ */
+export const tileAttacks = pgTable(
+  'tile_attacks',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    attackerUserId: uuid('attacker_user_id').notNull(),
+    // The tile's owner when the battle started; null for a neutral tile.
+    defenderUserId: uuid('defender_user_id'),
+    battleId: uuid('battle_id')
+      .notNull()
+      .references(() => battles.id, { onDelete: 'cascade' }),
+    outcome: tileAttackOutcome('outcome').notNull().default('active'),
+    // Gentle mode share of capture rewards (decision B); 100 otherwise.
+    rewardPercent: smallint('reward_percent').notNull().default(100),
+    startedAt: timestamptz('started_at').notNull(),
+    // Nobody can battle for the tile again before this (started + cooldown).
+    cooldownUntil: timestamptz('cooldown_until').notNull(),
+    // The player's last action; idle past the abandon time counts as a loss.
+    lastActionAt: timestamptz('last_action_at').notNull(),
+    endedAt: timestamptz('ended_at'),
+  },
+  (t) => [
+    unique('tile_attacks_battle_id_key').on(t.battleId),
+    foreignKey({
+      name: 'tile_attacks_attacker_member_fk',
+      columns: [t.mapId, t.attackerUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // Attempts today, cooldowns, losses today.
+    index('tile_attacks_map_id_attacker_idx').on(t.mapId, t.attackerUserId, t.startedAt),
+    index('tile_attacks_tile_id_idx').on(t.tileId, t.cooldownUntil),
+    index('tile_attacks_map_id_defender_idx')
+      .on(t.mapId, t.defenderUserId, t.endedAt)
+      .where(sql`${t.defenderUserId} is not null`),
+    check('tile_attacks_reward_percent_range', sql`${t.rewardPercent} between 0 and 100`),
+    check('tile_attacks_cooldown_after_start', sql`${t.cooldownUntil} >= ${t.startedAt}`),
+  ],
+);
+
+/**
+ * Squishies standing watch on their owner's tiles (#15, decision C): up to
+ * `TERRITORY_RULES.maxDefenders` per tile, by slot. A squishy stands on one
+ * tile at most. Rows only count while the squishy's owner still owns the
+ * tile; capture and leaving a map delete them (the squishies go home).
+ */
+export const tileDefenders = pgTable(
+  'tile_defenders',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    slot: smallint('slot').notNull(),
+    squishyId: uuid('squishy_id')
+      .notNull()
+      .references(() => squishies.id, { onDelete: 'cascade' }),
+    assignedAt: timestamptz('assigned_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tileId, t.slot] }),
+    unique('tile_defenders_squishy_id_key').on(t.squishyId),
+    index('tile_defenders_map_id_idx').on(t.mapId),
+    check('tile_defenders_slot_range', sql`${t.slot} between 0 and 5`),
   ],
 );
 
