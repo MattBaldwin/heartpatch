@@ -67,6 +67,7 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 |---|---|
 | Build sessions that write code; reviewers on code PRs | Opus (strongest) |
 | Docs-only PR reviews, drift audits, simple content/docs sessions | Sonnet 5.5 |
+| Exceptions named by the owner (currently: the #13 build session) | Fable |
 
 **Keeping supervisor cost down:**
 - Treat trivial wakes (subscription confirmations, merge echoes) as one-liners.
@@ -76,7 +77,7 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 **Avoid mid-flight scope changes** unless they're blocking contracts. They roughly doubled one lane's cost (#6).
 
-Report usage to the owner when asked, and flag any lane above about $20. A typical phase-1 lane cost $5–12; read per-session cost from `get_session`.
+Report usage to the owner when asked, and flag any lane above about $20 (except #13: about $30, see §9). A typical phase-1 lane cost $5–12; read per-session cost from `get_session`.
 
 ## 7. Brief template
 
@@ -145,6 +146,7 @@ The supervisor keeps this list current. Remove items as they land.
   - handle the stale-cursor resync case noted in PR #61's verdict;
   - `tiles.home_slot` tiles can never be captured (#4).
 - **#13/#14 (battles, spawns):**
+  - the #13 build session runs on Fable; its reviewers stay on Opus. Flag its cost above about $30;
   - add a zod `ClientBattleViewSchema`;
   - map `BattleRuleError` → `AppError`;
   - a content-hash mismatch mid-battle ends it as "no contest" and refunds the attempt;

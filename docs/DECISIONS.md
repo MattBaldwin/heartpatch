@@ -84,6 +84,7 @@ _Proposed in PR #55; the project owner confirms on merge._
 ## 2026-10-02 — Usage, models and supervisor handoff
 
 - **Models (owner decision):** build sessions that write code and reviewers on code PRs use the strongest model (Opus). Docs-only reviews, drift audits and simple content/docs work use **Sonnet 5.5**. *Why:* code reviews have caught real bugs every round; the rest is cheaper without losing much.
+- **#13 (battles) runs on Fable (owner decision, 2026-10-02).** The #13 build session uses Fable; its code reviewers stay on Opus. *Why:* #13 is the most rule-heavy Phase 1 lane and mistakes there are costly to unwind. Fable currently costs about 2.5× Opus per token, so the supervisor flags #13's cost against a higher bar (about $30, not $20) and reports how it compares with the Opus lanes.
 - **Fresh supervisor (owner decision):** when the supervisor's context gets large, a new supervisor session takes over with a compact handoff. *Why:* every wake re-reads the whole context, so a long-running supervisor becomes the biggest cost. The process lives in `docs/COORDINATOR.md` so it survives the handoff.
 - **Review loops are capped at 4 rounds** (proposed in PR #63; owner confirms on merge) before the build session reports `blocked` to the supervisor, who escalates to the owner if needed; and the supervisor avoids mid-flight scope changes unless they're blocking contracts.
 
