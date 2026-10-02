@@ -50,6 +50,16 @@ function hashSeed(seed: string): [number, number, number, number] {
   return [h1 >>> 0, h2 >>> 0, h3 >>> 0, h4 >>> 0];
 }
 
+/**
+ * A stable 128-bit hash of a string as 32 hex characters (cyrb128). For
+ * fingerprints such as a battle's content hash; not cryptographic.
+ */
+export function hashString(text: string): string {
+  return hashSeed(text)
+    .map((word) => word.toString(16).padStart(8, '0'))
+    .join('');
+}
+
 /** A weighted choice: anything with a non-negative `weight`. */
 export interface Weighted {
   readonly weight: number;

@@ -5,8 +5,8 @@ import {
   FIXTURE_BATTLE_CONTENT as content,
   patchActive,
   squishy,
+  FIXTURE_BATTLE_RULES,
 } from '../../tests/fixtures/battle.js';
-import { BATTLE_RULES } from '../data/battle.js';
 import { Rng } from '../rng/index.js';
 import type { BattleChoice, BattleSquishySetup } from '../schemas/battle.js';
 import type { BattleAiPolicy } from '../schemas/data/battle.js';
@@ -118,7 +118,7 @@ describe('AI policies (design doc §6)', () => {
 });
 
 describe('scoreMove', () => {
-  const policy = BATTLE_RULES.ai.balanced;
+  const policy = FIXTURE_BATTLE_RULES.ai.balanced;
   const state = start([squishy('fixture-emberbun')], [squishy('fixture-twirlysprout')]);
   const user = activeSquishy(state, 'a');
   const target = activeSquishy(state, 'b');
@@ -135,7 +135,7 @@ describe('scoreMove', () => {
   it('stops valuing a stat boost at the cap', () => {
     const capped = {
       ...user,
-      stages: { ...user.stages, speed: BATTLE_RULES.statStages.maxStages },
+      stages: { ...user.stages, speed: FIXTURE_BATTLE_RULES.statStages.maxStages },
     };
     const withBoost = scoreMove(content, policy, zoom, user, target);
     const atCap = scoreMove(content, policy, zoom, capped, target);

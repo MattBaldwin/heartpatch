@@ -23,6 +23,7 @@ import {
   otherSide,
   type BattleEndReason,
   type BattleEvent,
+  type BattleResult,
   type BattleSquishy,
   type BattleState,
   type BattleXpAward,
@@ -80,6 +81,7 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
   };
   return {
     version: 1,
+    contentHash: content.contentHash,
     turn: 0,
     rng: Rng.fromSeed(setup.seed).state(),
     sides: { a: sideFrom('a'), b: sideFrom('b') },
@@ -103,6 +105,7 @@ function draftOf(state: BattleState): Draft<BattleState> {
   });
   return {
     version: state.version,
+    contentHash: state.contentHash,
     turn: state.turn,
     rng: [...state.rng],
     sides: { a: copySide(state.sides.a), b: copySide(state.sides.b) },
@@ -379,7 +382,13 @@ class Step {
     this.emit({ turn: this.state.turn, type: 'battle-end', winner, reason });
     this.state.phase = {
       type: 'over',
-      result: { winner, reason, turns: this.state.turn, xp: this.xpAwards(winner, reason) },
+      result: {
+        winner,
+        reason,
+        contentHash: this.state.contentHash,
+        turns: this.state.turn,
+        xp: this.xpAwards(winner, reason),
+      },
     };
   }
 
@@ -421,6 +430,11 @@ export function applyBattleAction(
 ): BattleState {
   const { phase } = state;
   if (phase.type === 'over') throw new BattleRuleError('the battle is over');
+  if (state.contentHash !== content.contentHash) {
+    throw new BattleRuleError(
+      `battle was played with content ${state.contentHash}, not ${content.contentHash}`,
+    );
+  }
   const step = new Step(content, state);
 
   switch (action.type) {
@@ -497,8 +511,37 @@ export type ClientBattleView = Omit<BattleState, 'rng'>;
  * let a client predict every roll, so they never leave the server.
  */
 export function clientBattleView(state: BattleState): ClientBattleView {
-  const { version, turn, sides, phase, log } = state;
-  return { version, turn, sides, phase, log };
+  const { version, contentHash, turn, sides, phase, log } = state;
+  return { version, contentHash, turn, sides, phase, log };
+}
+
+/**
+ * What to store for a finished battle: the replay inputs (setup with its
+ * seed, and the actions) plus what actually happened (the content hash, the
+ * result and the resolved event log), so a battle stays explainable even
+ * after the data is re-tuned and it no longer replays the same way.
+ */
+export interface BattleRecord {
+  readonly setup: BattleSetup;
+  readonly actions: readonly BattleAction[];
+  readonly contentHash: string;
+  readonly result: BattleResult;
+  readonly log: readonly BattleEvent[];
+}
+
+export function battleRecord(
+  setup: BattleSetup,
+  actions: readonly BattleAction[],
+  state: BattleState,
+): BattleRecord {
+  if (state.phase.type !== 'over') throw new BattleRuleError('the battle is not over yet');
+  return {
+    setup,
+    actions,
+    contentHash: state.contentHash,
+    result: state.phase.result,
+    log: state.log,
+  };
 }
 
 /** Every choice a side could legally make this turn (for the UI and tests). */

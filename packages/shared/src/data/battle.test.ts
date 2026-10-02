@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FIXTURE_BATTLE_RULES } from '../../tests/fixtures/battle.js';
 import { checkBattleRules, type BattleRules } from '../schemas/data/battle.js';
 import { scanPlayerFacingText } from './avoided-words.js';
 import { BATTLE_RULES } from './battle.js';
@@ -11,8 +12,9 @@ function problemsAfter(edit: (rules: BattleRules) => void): string[] {
 }
 
 describe('battle rules', () => {
-  it('accepts the shipped rules', () => {
+  it('accepts the shipped rules and the pinned test rules', () => {
     expect(checkBattleRules(BATTLE_RULES)).toEqual([]);
+    expect(checkBattleRules(FIXTURE_BATTLE_RULES)).toEqual([]);
   });
 
   it('uses design doc §6 defaults: teams of 3, variance 0.9–1.1', () => {

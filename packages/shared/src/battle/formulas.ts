@@ -7,9 +7,14 @@ import { BattleRuleError, type BattleContent } from './content.js';
 import type { BattleSquishy } from './state.js';
 
 /*
- * Battle maths (design doc §6). Only +, −, ×, ÷ and Math.floor/min/max, which
- * IEEE 754 makes identical on every JS engine, so a replay on the client, the
- * server or the simulator gives the same numbers. No Math.pow, exp or trig.
+ * Battle maths (design doc §6), bit-identical on every JS engine (V8 on the
+ * server, JavaScriptCore in Safari). Only +, −, ×, ÷ and Math.floor/min/max/
+ * abs are used: ECMAScript requires each of these to be a correctly rounded
+ * IEEE 754 double operation, evaluated in source order, with no fused
+ * multiply-add. Each step rounds explicitly by that rule, so the same inputs
+ * give the same bits everywhere. Never use Math.pow, exp, log or trig here:
+ * engines may approximate those differently. Energy, damage and heals are
+ * floored to integers before they touch state.
  */
 
 /** Stats at `level` from base stats (battle rules `stats`). */

@@ -3,8 +3,8 @@ import {
   battleSetup,
   FIXTURE_BATTLE_CONTENT as content,
   squishy,
+  FIXTURE_BATTLE_RULES,
 } from '../../tests/fixtures/battle.js';
-import { BATTLE_RULES } from '../data/battle.js';
 import { ELEMENT_MATRIX, FEELING_MATRIX, SYNERGY_TABLE } from '../data/matrices.js';
 import { Rng } from '../rng/index.js';
 import { getMove } from './content.js';
@@ -35,13 +35,13 @@ function fighter(speciesId: string, extra: Parameters<typeof squishy>[1] = {}): 
 describe('statsAtLevel', () => {
   it('scales base stats with level', () => {
     const base = { hp: 50, attack: 55, defense: 40, speed: 60 };
-    expect(statsAtLevel(base, 10, BATTLE_RULES)).toEqual({
+    expect(statsAtLevel(base, 10, FIXTURE_BATTLE_RULES)).toEqual({
       hp: 30,
       attack: 16,
       defense: 13,
       speed: 17,
     });
-    expect(statsAtLevel(base, 50, BATTLE_RULES)).toEqual({
+    expect(statsAtLevel(base, 50, FIXTURE_BATTLE_RULES)).toEqual({
       hp: 110,
       attack: 60,
       defense: 45,
@@ -52,9 +52,9 @@ describe('statsAtLevel', () => {
 
 describe('stageMultiplier', () => {
   it('raises by perStage per stage and lowers by the reciprocal', () => {
-    expect(stageMultiplier(0, BATTLE_RULES)).toBe(1);
-    expect(stageMultiplier(2, BATTLE_RULES)).toBe(2);
-    expect(stageMultiplier(-2, BATTLE_RULES)).toBe(0.5);
+    expect(stageMultiplier(0, FIXTURE_BATTLE_RULES)).toBe(1);
+    expect(stageMultiplier(2, FIXTURE_BATTLE_RULES)).toBe(2);
+    expect(stageMultiplier(-2, FIXTURE_BATTLE_RULES)).toBe(0.5);
   });
 });
 
@@ -127,15 +127,15 @@ describe('damage (design doc §6)', () => {
 
 describe('effectivenessTier', () => {
   it('picks the first tier the multiplier reaches', () => {
-    expect(effectivenessTier(2.5, BATTLE_RULES)).toBe('super');
-    expect(effectivenessTier(1.5, BATTLE_RULES)).toBe('super');
-    expect(effectivenessTier(1.25, BATTLE_RULES)).toBe('good');
-    expect(effectivenessTier(1, BATTLE_RULES)).toBe('normal');
-    expect(effectivenessTier(0.4, BATTLE_RULES)).toBe('weak');
+    expect(effectivenessTier(2.5, FIXTURE_BATTLE_RULES)).toBe('super');
+    expect(effectivenessTier(1.5, FIXTURE_BATTLE_RULES)).toBe('super');
+    expect(effectivenessTier(1.25, FIXTURE_BATTLE_RULES)).toBe('good');
+    expect(effectivenessTier(1, FIXTURE_BATTLE_RULES)).toBe('normal');
+    expect(effectivenessTier(0.4, FIXTURE_BATTLE_RULES)).toBe('weak');
   });
 
   it('throws if the rules leave a gap at the bottom', () => {
-    const rules = { ...BATTLE_RULES, effectiveness: [{ id: 'super', atLeast: 1.5 }] };
+    const rules = { ...FIXTURE_BATTLE_RULES, effectiveness: [{ id: 'super', atLeast: 1.5 }] };
     expect(() => effectivenessTier(1, rules)).toThrow(/starts at 0/);
   });
 });

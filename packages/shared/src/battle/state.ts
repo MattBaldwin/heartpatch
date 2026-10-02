@@ -44,6 +44,8 @@ export interface BattleXpAward {
 export interface BattleResult {
   readonly winner: BattleSideId | 'draw';
   readonly reason: BattleEndReason;
+  /** The `BattleContent.contentHash` the battle was played with. */
+  readonly contentHash: string;
   /** Turns played. */
   readonly turns: number;
   readonly xp: readonly BattleXpAward[];
@@ -111,6 +113,8 @@ export type BattleEvent =
 export interface BattleState {
   /** Bumped if the shape changes, so stored battles can be migrated. */
   readonly version: 1;
+  /** The `BattleContent.contentHash` this battle must be played with. */
+  readonly contentHash: string;
   /** Turns resolved so far. */
   readonly turn: number;
   readonly rng: RngState;

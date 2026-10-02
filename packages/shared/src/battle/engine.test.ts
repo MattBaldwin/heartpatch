@@ -8,8 +8,8 @@ import {
   patchActive,
   PLAYER,
   squishy,
+  FIXTURE_BATTLE_RULES,
 } from '../../tests/fixtures/battle.js';
-import { BATTLE_RULES } from '../data/battle.js';
 import type {
   BattleAction,
   BattleChoice,
@@ -17,7 +17,13 @@ import type {
   BattleSetup,
 } from '../schemas/battle.js';
 import { BattleRuleError, createBattleContent, type BattleContent } from './content.js';
-import { applyBattleAction, clientBattleView, legalChoices, startBattle } from './engine.js';
+import {
+  applyBattleAction,
+  battleRecord,
+  clientBattleView,
+  legalChoices,
+  startBattle,
+} from './engine.js';
 import type { BattleEvent, BattleState } from './state.js';
 
 const move = (id: string): BattleChoice => ({ type: 'move', move: `fixture-${id}` });
@@ -37,9 +43,16 @@ const newEvents = (before: BattleState, after: BattleState) => after.log.slice(b
 const ofType = <T extends BattleEvent['type']>(events: readonly BattleEvent[], type: T) =>
   events.filter((e): e is Extract<BattleEvent, { type: T }> => e.type === type);
 
-const duel = (seed: string, a: string, b: string, extraA = {}, extraB = {}) =>
+const duel = (
+  seed: string,
+  a: string,
+  b: string,
+  extraA = {},
+  extraB = {},
+  c: BattleContent = content,
+) =>
   startBattle(
-    content,
+    c,
     battleSetup(
       seed,
       { squishies: [squishy(`fixture-${a}`, extraA)] },
@@ -362,6 +375,7 @@ describe('tuckered out, replacements and the end', () => {
       result: {
         winner: 'a',
         reason: 'tuckered-out',
+        contentHash: content.contentHash,
         turns: 2,
         xp: [
           // 4 XP × (5 + 5) opponent levels × 1.5 for the win. Puddlepuff never came out.
@@ -420,19 +434,22 @@ describe('tuckered out, replacements and the end', () => {
   });
 
   it('ends at the turn limit: more energy left wins, equal is a draw', () => {
-    const short = createBattleContent(FIXTURE_BATTLE_DATA, { ...BATTLE_RULES, maxTurns: 3 });
-    let calm = duel('limit', 'snoozlet', 'snoozlet');
+    const short = createBattleContent(FIXTURE_BATTLE_DATA, {
+      ...FIXTURE_BATTLE_RULES,
+      maxTurns: 3,
+    });
+    let calm = duel('limit', 'snoozlet', 'snoozlet', {}, {}, short);
     for (let i = 0; i < 3; i++) calm = turn(calm, move('cuddle-nap'), move('cuddle-nap'), short);
     expect(calm.phase).toMatchObject({
       type: 'over',
       result: { winner: 'draw', reason: 'turn-limit', turns: 3 },
     });
 
-    let close = duel('limit', 'emberbun', 'snoozlet', {}, { level: 50 });
+    let close = duel('limit', 'emberbun', 'snoozlet', {}, { level: 50 }, short);
     for (let i = 0; i < 3; i++)
       close = turn(close, move('tickle-tackle'), move('cuddle-nap'), short);
     expect(close.phase).toMatchObject({ result: { winner: 'a', reason: 'turn-limit' } });
-    let flipped = duel('limit', 'snoozlet', 'emberbun', { level: 50 });
+    let flipped = duel('limit', 'snoozlet', 'emberbun', { level: 50 }, {}, short);
     for (let i = 0; i < 3; i++)
       flipped = turn(flipped, move('cuddle-nap'), move('tickle-tackle'), short);
     expect(flipped.phase).toMatchObject({ result: { winner: 'b', reason: 'turn-limit' } });
@@ -494,6 +511,66 @@ describe('choice checks', () => {
     ]);
     const over = applyBattleAction(content, state, { type: 'forfeit', side: 'a' });
     expect(legalChoices(over, 'a')).toEqual([]);
+  });
+});
+
+describe('content hash and battle records', () => {
+  it('stamps each battle with the content it was played with, and refuses other content', () => {
+    const state = duel('hash', 'emberbun', 'twirlysprout');
+    expect(state.contentHash).toMatch(/^[0-9a-f]{32}$/);
+    expect(state.contentHash).toBe(content.contentHash);
+
+    const retuned = createBattleContent({
+      ...FIXTURE_BATTLE_DATA,
+      moves: FIXTURE_BATTLE_DATA.moves.map((m) =>
+        m.id === 'fixture-tickle-tackle' ? { ...m, power: 80 } : m,
+      ),
+    });
+    expect(retuned.contentHash).not.toBe(content.contentHash);
+    expect(() => turn(state, move('silly-face'), move('silly-face'), retuned)).toThrow(
+      /played with content/,
+    );
+  });
+
+  it('ignores player-facing words and row order, but not rules', () => {
+    const reworded = createBattleContent({
+      ...FIXTURE_BATTLE_DATA,
+      species: [...FIXTURE_BATTLE_DATA.species].reverse(),
+      moves: FIXTURE_BATTLE_DATA.moves.map((m) => ({ ...m, name: 'Boop', description: 'Boop!' })),
+    });
+    expect(reworded.contentHash).toBe(content.contentHash);
+    const relined = createBattleContent(FIXTURE_BATTLE_DATA, {
+      ...FIXTURE_BATTLE_RULES,
+      effectiveness: FIXTURE_BATTLE_RULES.effectiveness.map((t) => ({ ...t, line: 'Wow!' })),
+    });
+    expect(relined.contentHash).toBe(content.contentHash);
+    const longer = createBattleContent(FIXTURE_BATTLE_DATA, {
+      ...FIXTURE_BATTLE_RULES,
+      maxTurns: 60,
+    });
+    expect(longer.contentHash).not.toBe(content.contentHash);
+  });
+
+  it('builds a stored record with the result and resolved log, once the battle is over', () => {
+    const setup = battleSetup(
+      'record',
+      { squishies: [squishy('fixture-emberbun', { level: 50 })] },
+      { squishies: [squishy('fixture-twirlysprout', { level: 5 })] },
+    );
+    const actions: BattleAction[] = [
+      { type: 'turn', choices: { a: move('tickle-tackle'), b: move('silly-face') } },
+    ];
+    const start = startBattle(content, setup);
+    expect(() => battleRecord(setup, [], start)).toThrow(/not over/);
+    const end = applyBattleAction(content, start, actions[0]!);
+    const record = battleRecord(setup, actions, end);
+    expect(record).toMatchObject({
+      setup,
+      actions,
+      contentHash: content.contentHash,
+      result: { winner: 'a', contentHash: content.contentHash },
+    });
+    expect(record.log).toBe(end.log);
   });
 });
 
