@@ -228,3 +228,20 @@ _Proposed in the #14 PR; the project owner confirms on merge._
 - **`squishy.captured` doesn't name the species on the wire**, like `battle.started`: a secret squishy would otherwise reach members who never met it.
 - **`spawnWindowId` lives in `apps/server/src/lib/time.ts`**, next to `localDate`: shared code is lint-banned from `Intl`, which time zones need. The block maths (`spawnWindowAt`) is shared. A window's time of day is judged at its middle, so 4-hour windows run night, day, day, day, dusk, night (`SPAWN_RULES.timesOfDay`).
 - **Hand-authored maps (no secret seed) spawn from the map id.** Their spawns are predictable, which is fine for a one-player Glade; real maps always have a seed.
+
+## 2026-10-02 — Territory (#15)
+
+_Proposed in the #15 PR; the project owner confirms on merge._
+
+- **Tile battles are a battle kind, and the raid rules run in their start transaction** (coordinator-approved contracts: battle kinds `tile` and `rival-tile`, `tile_attacks`, `tile_defenders`, events `tile.attacked`, `tile.captured` and `defenders.changed`, public tile `cooldownUntil` and `defenders`). The battles service builds the battle; the territory module checks the rules under row locks and builds the other side (`startTile` + `prepare`), and settles the attempt and the capture on the battle's own transactions (`TileBattlePort`). A refused start uses nothing. *Why:* the attempt, the battle and the tile must commit together (CLAUDE.md rule 7), and battles stays the one place that runs the engine.
+- **`defenders.changed`, not `tile.defenders.changed`:** the event registry names types `noun.verb` (checked by its test).
+- **Cooldown counts from the start of any battle for the tile, by anyone, win or lose**, and a no-contest keeps it (only the attempt is refunded). *Why:* design doc §11 "after a battle on it"; lifting it would need another event for a rare server-side case.
+- **Leaving is noticed lazily** (CLAUDE.md rule 4): a tile battle with no action for `abandonMinutes` ends as a forfeit (a loss) on the next read, action or start, never by a timer. Starting anything else ends it first, so a player is never stuck behind a battle they walked away from.
+- **The daily loss cap counts challenges still going**, under a lock on the defender's member row. *Why:* two siblings challenging the same player at once could otherwise both get under Gentle's one-a-day.
+- **A rival tile with nobody on watch is defended by the land's own guardians.** *Why:* a battle needs someone on the other side, and an empty tile being free would make guards a chore rather than a choice.
+- **Guardians are fixed per tile per map-local day** (`GUARDIAN_RULES.windowHours: 24`, `// TUNE:`), seeded `deriveSeed(mapSeed, 'guardian', q, r, windowId)`. A retry after the 4 h cooldown meets the same team; tomorrow's may differ.
+- **Gentle's 50% applies to capture rewards**, carried as `rewardPercent` on `tile.captured` for found clothing (#43) and milestones (#44). The showdown's own XP isn't scaled: the battle screen shows the engine's XP, and the squishies did the work either way. *Open product question* (below).
+- **Guards stand on your land outside your home base** (home tiles can never be taken, so a guard there would only shelter from the Hollow Man). A squishy on watch still joins its owner's battles until team picking arrives.
+- **Each feature gets its own slot in the tile panel** (`tileActions` is a list): gathering (#17) and territory draw side by side, and home base (#18) can add one without touching either.
+
+**Open product questions (for the owner):** whether Gentle's 50% should also halve the showdown's XP; whether a new player's shield should drop early when they challenge someone; whether squishies on watch should sit out the owner's own battles.
