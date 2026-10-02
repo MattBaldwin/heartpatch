@@ -102,12 +102,21 @@ const maps = createMapScreen({
     lobby.showMessage(message);
   },
 });
-// The tutorial (#47) sits over the lobby and map; it never blocks the lobby
-// unless the server requires it first (decision A).
-// TODO(#47): open the run's Tutorial Glade with maps.open() once the server
-// serves a view of tutorial maps (the maps API hides them today).
+// The tutorial (#47) draws its Tutorial Glade with the map screen and sits
+// over it; it never blocks the lobby unless the server requires it first
+// (decision A).
 const tutorial = createTutorialScreen({
   root: document.body,
+  glade: {
+    open: async (mapId) => {
+      await maps.open(mapId);
+      lobby.hide();
+    },
+    close: () => {
+      maps.close();
+      lobby.show();
+    },
+  },
   onDone: (choice) => {
     if (choice === 'create') lobby.showCreate();
     else if (choice === 'join') lobby.showJoin();

@@ -950,5 +950,40 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       );
       expect(lobby.maps).toEqual([]);
     });
+
+    it('shows a player the view of their own active tutorial run, and nothing else about it', async () => {
+      const server = await start();
+      const kid = await player();
+      const stranger = await player();
+      const [tutorial] = await db
+        .insert(maps)
+        .values({ kind: 'tutorial', name: 'Tutorial Glade', timeZone: 'UTC', maxPlayers: 1 })
+        .returning({ id: maps.id });
+      await db.insert(mapMembers).values({ mapId: tutorial!.id, userId: kid.id, role: 'owner' });
+
+      const view = await call(server, 'GET', `/maps/${tutorial!.id}/view`, kid);
+      expect(view.statusCode).toBe(200);
+      expect(MapViewSchema.parse(view.json()).map.id).toBe(tutorial!.id);
+      expect((await call(server, 'GET', `/maps/${tutorial!.id}/view`, stranger)).statusCode).toBe(
+        404,
+      );
+
+      // Invites, admin and leave never apply to a tutorial map.
+      for (const [method, path] of [
+        ['GET', `/maps/${tutorial!.id}`],
+        ['POST', `/maps/${tutorial!.id}/invite`],
+        ['POST', `/maps/${tutorial!.id}/invite/revoke`],
+        ['POST', `/maps/${tutorial!.id}/pvp-mode`],
+        ['POST', `/maps/${tutorial!.id}/leave`],
+      ] as const) {
+        const body = path.endsWith('pvp-mode') ? { pvpMode: 'off' } : undefined;
+        const res = await call(server, method, path, kid, body);
+        expect(res.statusCode, path).toBe(404);
+      }
+
+      // A replayed or skipped run is archived: its view is gone too.
+      await createMapsRepo(db).archiveMember(tutorial!.id, kid.id);
+      expect((await call(server, 'GET', `/maps/${tutorial!.id}/view`, kid)).statusCode).toBe(404);
+    });
   });
 });

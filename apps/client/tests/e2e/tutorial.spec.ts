@@ -9,6 +9,7 @@ import { newPlayer, uniqueName } from './players.js';
 interface TutorialDebug {
   status: 'not-started' | 'in-progress' | 'completed' | null;
   stepId: string | null;
+  mapId: string | null;
   line: number;
   overlay: { spotlightOn: string | null; gate: 'blockAll' | 'spotlight' | 'open' | null };
   sprout: string | null;
@@ -16,6 +17,7 @@ interface TutorialDebug {
 
 interface Hook {
   tutorial?(): TutorialDebug | null;
+  map?(): { id: string } | null;
   updatesHeld?(): boolean;
 }
 
@@ -23,22 +25,31 @@ const debug = (page: Page) =>
   page.evaluate(
     () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.tutorial?.() ?? null,
   );
+/** The map the map screen is drawing, if any. */
+const drawnMap = (page: Page) =>
+  page.evaluate(
+    () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.map?.()?.id ?? null,
+  );
 const updatesHeld = (page: Page) =>
   page.evaluate(
     () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.updatesHeld?.() ?? null,
   );
 
-/** The `data-testid` of whatever takes a tap at the centre of `target` (or its nearest parent's). */
+/** The `data-testid` of whatever takes a tap at (x, y) (or its nearest parent's). */
+function testIdAt(page: Page, x: number, y: number): Promise<string | null> {
+  return page.evaluate(
+    ([px, py]) =>
+      document.elementFromPoint(px, py)?.closest('[data-testid]')?.getAttribute('data-testid') ??
+      null,
+    [x, y] as const,
+  );
+}
+
+/** What takes a tap at the centre of `target`. */
 async function topAt(page: Page, target: Locator): Promise<string | null> {
   const box = await target.boundingBox();
   if (!box) return null;
-  return page.evaluate(
-    ([x, y]) => {
-      const hit = document.elementFromPoint(x, y);
-      return hit?.closest('[data-testid]')?.getAttribute('data-testid') ?? null;
-    },
-    [box.x + box.width / 2, box.y + box.height / 2] as const,
-  );
+  return testIdAt(page, box.x + box.width / 2, box.y + box.height / 2);
 }
 
 test('the optional tutorial: start, resume after reload, graduate, replay and skip', async ({
@@ -59,11 +70,16 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   await expect.poll(async () => (await debug(page))?.stepId).toBe('welcome');
   // Sprout is just talking: everything behind the bubble is blocked.
   expect((await debug(page))?.overlay.gate).toBe('blockAll');
-  const heading = lobby.getByRole('heading', { name: 'Your patches' });
-  expect(await topAt(page, heading)).toBe('tutorial-blocker');
+  // Near the top of the screen, away from Sprout's bubble at the bottom.
+  const width = page.viewportSize()?.width ?? 390;
+  expect(await testIdAt(page, width / 2, 160)).toBe('tutorial-blocker');
   // Sprout joins the scene once the renderer is up.
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   await expect.poll(async () => (await debug(page))?.sprout).toMatch(/^[0-9a-f]{32}$/);
+  // The Tutorial Glade is drawn as a normal map: the run's own map.
+  const run = (await debug(page))?.mapId;
+  expect(run).toBeTruthy();
+  await expect.poll(() => drawnMap(page)).toBe(run);
 
   await bubble.getByRole('button', { name: 'Next' }).tap();
   expect((await debug(page))?.line).toBe(1);
@@ -92,6 +108,7 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   await expect(lobby.getByRole('heading', { name: 'Make a patch' })).toBeVisible();
   expect((await debug(page))?.status).toBe('completed');
   expect((await debug(page))?.sprout).toBeNull();
+  expect(await drawnMap(page)).toBeNull();
 
   // Replay from Settings; a replay can be skipped.
   await lobby.getByRole('button', { name: 'Back to my patches' }).tap();

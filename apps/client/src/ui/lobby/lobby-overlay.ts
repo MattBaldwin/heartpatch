@@ -46,6 +46,10 @@ export interface Lobby {
   showJoin: () => void;
   /** Redraws the patch list if it's on screen (e.g. the tutorial's button changed). */
   refreshList: () => void;
+  /** Shows the patch list (e.g. back from the Tutorial Glade). */
+  show: () => void;
+  /** Steps aside for a map, leaving the "My patches" button (as "Visit patch" does). */
+  hide: () => void;
 }
 
 export interface LobbyOptions {
@@ -79,6 +83,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   let refresh: () => void = () => undefined;
   /** True while the patch list is the screen showing. */
   let onList = false;
+  /** Bumped by every screen change, so a slow list fetch can't cover a newer screen. */
+  let shown = 0;
   /** Set while a one-time password and recovery code are on screen (#47). */
   let releaseUpdates: (() => void) | null = null;
 
@@ -86,6 +92,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     releaseUpdates?.();
     releaseUpdates = null;
     onList = false;
+    shown += 1;
     card.replaceChildren(...children);
     panel.hidden = false;
     openButton.hidden = true;
@@ -150,10 +157,12 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   async function showList(message?: string): Promise<void> {
     refresh = () => void showList();
     loading();
+    const at = shown;
     let mine: MyMapsResponse;
     try {
       mine = await lobbyApi.myMaps();
     } catch (err) {
+      if (at !== shown) return;
       show(
         title('Your patches'),
         notice(messageOf(err)),
@@ -162,6 +171,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       return;
     }
 
+    if (at !== shown) return;
     const list = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-maps' });
     for (const map of mine.maps) {
       const open = el(
@@ -671,6 +681,14 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     },
     refreshList: () => {
       if (user && onList && !panel.hidden) void showList();
+    },
+    show: () => {
+      if (user) void showList();
+    },
+    hide: () => {
+      if (!user) return;
+      panel.hidden = true;
+      openButton.hidden = false;
     },
   };
 }

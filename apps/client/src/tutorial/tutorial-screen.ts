@@ -26,6 +26,12 @@ export interface TutorialScreenOptions {
   onDone: (choice: GraduationChoice | null) => void;
   /** The lobby's tutorial button or Settings row may have changed. */
   onEntryChange: () => void;
+  /**
+   * Draws the run's Tutorial Glade as a normal map (the map screen) while
+   * the tutorial is open. `open` rejects if it can't; the tutorial carries
+   * on over whatever is on screen.
+   */
+  glade?: { open: (mapId: string) => Promise<void>; close: () => void };
   api?: Pick<TutorialApi, 'state' | 'start' | 'replay' | 'skip' | 'acknowledge'>;
   createWs?: (options: WsClientOptions) => WsClient;
 }
@@ -71,6 +77,22 @@ export function createTutorialScreen(options: TutorialScreenOptions): TutorialSc
   let sprout: SproutActor | null = null;
   /** The step and line Sprout last hopped for. */
   let saying = '';
+  /** The Glade on screen (its map id), if any. */
+  let glade: string | null = null;
+
+  /** The Glade is on screen exactly while a run is open. */
+  const syncGlade = (view: TutorialView) => {
+    const want =
+      view.phase !== 'closed' && view.state?.status === 'in-progress' ? view.state.mapId : null;
+    if (want === glade || (want === null && view.phase !== 'closed')) return;
+    if (glade !== null && want === null) {
+      glade = null;
+      options.glade?.close();
+      return;
+    }
+    glade = want;
+    if (want) options.glade?.open(want).catch(() => undefined);
+  };
 
   const overlay = mountTutorialOverlay(options.root, targets, {
     nextLine: () => controller?.nextLine(),
@@ -98,6 +120,7 @@ export function createTutorialScreen(options: TutorialScreenOptions): TutorialSc
 
   const render = (view: TutorialView) => {
     overlay.render(view);
+    syncGlade(view);
     syncSprout(view.phase !== 'closed');
     const now = view.step && view.phase === 'step' ? `${view.step.id}:${String(view.line)}` : '';
     if (now && now !== saying) sprout?.hop();
