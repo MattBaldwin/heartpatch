@@ -65,9 +65,16 @@ const captureRules = (percent: number): BattleRules => ({
 const contentWith = (rules: BattleRules) =>
   createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA), rules);
 
-/** Every tile has a Moonpuff (any season, any time). */
+/** Every tile has a Moonpuff (any season, any time), whatever the shipped tables hold. */
 const EVERYWHERE: SpawnData = {
   ...defaultSpawnData(),
+  tables: [
+    {
+      id: 'moonpuffs-everywhere',
+      terrains: GAME_DATA.terrains.map((t) => t.id),
+      entries: [{ species: MOONPUFF, weight: 1 }],
+    },
+  ],
   rules: { ...SPAWN_RULES, chance: 100 },
 };
 

@@ -1,6 +1,6 @@
-import { BODIES, checkSpeciesVisual, PARTS, visualRegistry } from '@heartpatch/shared';
+import { BODIES, checkSpeciesVisual, PARTS, SPECIES, visualRegistry } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { showcaseLooks } from './showcase.js';
+import { galleryLooks, showcaseLooks } from './showcase.js';
 
 describe('showcaseLooks', () => {
   const looks = showcaseLooks(BODIES, PARTS);
@@ -22,6 +22,14 @@ describe('showcaseLooks', () => {
   });
 
   it('gives every look a unique id', () => {
+    expect(new Set(looks.map((l) => l.id)).size).toBe(looks.length);
+  });
+});
+
+describe('galleryLooks', () => {
+  it('lists every species in the roster first, then the showcase', () => {
+    const looks = galleryLooks(SPECIES, BODIES, PARTS);
+    expect(looks.slice(0, SPECIES.length).map((l) => l.id)).toEqual(SPECIES.map((s) => s.id));
     expect(new Set(looks.map((l) => l.id)).size).toBe(looks.length);
   });
 });

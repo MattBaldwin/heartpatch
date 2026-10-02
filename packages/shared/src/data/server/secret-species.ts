@@ -7,10 +7,14 @@ import type { Species } from '../../schemas/data/species.js';
  * forms (design doc §4, §8). Secret (CLAUDE.md rule 6): server-only. The
  * public species table refuses `rarity: 'secret'`, so secrets always land
  * here. A secret species is sent to a player only once they meet it.
+ *
+ * The `placeholder-*` rows come first and stay until the tests that use
+ * them move to the roster (a follow-up to #10); the launch secret comes
+ * after them.
  */
 
 export const SECRET_MOVES: Move[] = [
-  // TUNE: placeholder; #10 writes real content
+  // TUNE: placeholder, kept for tests
   {
     id: 'placeholder-hush-hum',
     name: 'Hush Hum',
@@ -19,7 +23,7 @@ export const SECRET_MOVES: Move[] = [
     power: 40,
     accuracy: 100,
   },
-  // TUNE: placeholder; #10 writes real content
+  // TUNE: placeholder, kept for tests
   {
     id: 'placeholder-moon-blink',
     name: 'Moon Blink',
@@ -29,10 +33,23 @@ export const SECRET_MOVES: Move[] = [
     accuracy: 100,
     effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 100 }],
   },
+  // Only Heartlet's line knows it, so naming it publicly would give it away.
+  {
+    id: 'heart-glow',
+    name: 'Heart Glow',
+    description: 'A warm, pink glow from deep inside. Everyone feels a little better.',
+    element: 'light',
+    power: 0,
+    accuracy: 100,
+    effects: [
+      { type: 'heal', percent: 40 }, // TUNE:
+      { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 100 }, // TUNE:
+    ],
+  },
 ];
 
 export const SECRET_SPECIES: Species[] = [
-  // TUNE: placeholder; #10 writes real content
+  // TUNE: placeholder, kept for tests
   {
     id: 'placeholder-moonpuff',
     name: 'Moonpuff',
@@ -46,7 +63,7 @@ export const SECRET_SPECIES: Species[] = [
     visual: { body: 'blob', palette: ['#3b3561', '#f5e6a8'], parts: ['sleepy-eyes', 'tiny-smile'] },
     habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
   },
-  // TUNE: placeholder; #10 writes real content
+  // TUNE: placeholder, kept for tests
   {
     id: 'placeholder-moonmallow',
     name: 'Moonmallow',
@@ -65,9 +82,48 @@ export const SECRET_SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
   },
+  // Light + Cozy. A tiny piece of the Heartpatch that never quite scattered
+  // (design doc §2); it wanders Juniper's Gap on quiet nights (spawn table
+  // `gap-nights`).
+  {
+    id: 'heartlet',
+    name: 'Heartlet',
+    description: 'A tiny, glowing piece of the Heartpatch. It hums when it is happy.',
+    element: 'light',
+    feeling: 'cozy',
+    rarity: 'secret',
+    baseStats: { hp: 65, attack: 55, defense: 65, speed: 60 }, // TUNE:
+    moves: ['sunny-beam', 'cozy-crackle', 'heart-glow'],
+    evolutions: [],
+    visual: {
+      body: 'blob',
+      palette: ['#ffc2d6', '#fff6f9', '#ff7aa2', '#ffe066'],
+      parts: ['happy-eyes', 'tiny-smile', 'blush-cheeks', 'nub-wings'],
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['cozy', 'joy'] },
+  },
+  {
+    id: 'heartbloom',
+    name: 'Heartbloom',
+    description: 'A Heartlet in full bloom. Little flowers pop up wherever it naps.',
+    element: 'light',
+    feeling: 'cozy',
+    rarity: 'secret',
+    baseStats: { hp: 90, attack: 80, defense: 90, speed: 85 }, // TUNE:
+    moves: ['sunny-beam', 'cozy-crackle', 'heart-glow', 'night-light'],
+    evolutions: [],
+    visual: {
+      body: 'blob',
+      palette: ['#ffadc8', '#fff6f9', '#ff5c8f', '#ffd23f'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'nub-wings', 'leaf-sprout', 'freckles'],
+      size: 1.3,
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['cozy', 'joy'] },
+  },
 ];
 
 export const SECRET_EVOLUTIONS: SecretEvolution[] = [
-  // TUNE: placeholder; #10 writes real content
+  // TUNE: placeholder, kept for tests
   { from: 'placeholder-moonpuff', into: 'placeholder-moonmallow', level: 20 },
+  { from: 'heartlet', into: 'heartbloom', level: 25 }, // TUNE:
 ];

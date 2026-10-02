@@ -315,9 +315,14 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
         expect.objectContaining({ speciesId: SECRET_IDS[0], level: 5, joined: true }),
       ]);
       // Secret species the client has never seen come along, with their moves.
-      expect(battle.speciesDefs.map((s) => s.id).sort()).toEqual([...SECRET_IDS].sort());
+      const inBattle = SECRET.slice(0, 2);
+      expect(battle.speciesDefs.map((s) => s.id).sort()).toEqual(inBattle.map((s) => s.id).sort());
+      const theirMoves = new Set(inBattle.flatMap((s) => s.moves));
       expect(battle.moveDefs.map((m) => m.id).sort()).toEqual(
-        SERVER_GAME_DATA.secretMoves.map((m) => m.id).sort(),
+        SERVER_GAME_DATA.secretMoves
+          .filter((m) => theirMoves.has(m.id))
+          .map((m) => m.id)
+          .sort(),
       );
 
       const events = await eventsOf(mapId);
@@ -388,8 +393,11 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
-      await grant(server, kid, mapId, { level: 10 });
-      const battle = await pickFight(server, kid, mapId);
+      // Moonpuffs both sides, so one move can't end the battle before the stale submit.
+      await grant(server, kid, mapId, { speciesId: SECRET_IDS[0], level: 10 });
+      const battle = await pickFight(server, kid, mapId, {
+        opponent: { speciesId: SECRET_IDS[0] },
+      });
 
       const unknown = await act(server, kid, battle, { type: 'move', move: 'mega-blast' });
       expect(unknown.statusCode).toBe(409);
