@@ -10,8 +10,9 @@ import type { Species } from '../schemas/data/species.js';
 export interface BattleContent {
   /**
    * Fingerprint of every number and id that can change a battle's outcome
-   * (not names or descriptions). Stored on each battle, so a replay after
-   * re-tuning is caught instead of quietly playing out differently.
+   * (not names or descriptions). Stored on each battle, so a step or a
+   * `replayBattleRecord` after re-tuning fails instead of quietly playing out
+   * differently.
    */
   readonly contentHash: string;
   readonly species: ReadonlyMap<string, Species>;

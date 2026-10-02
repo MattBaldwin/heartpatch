@@ -480,6 +480,20 @@ export function replayBattle(
 }
 
 /**
+ * Replays a stored `BattleRecord`. Throws if `content` isn't what the battle
+ * was played with: after re-tuning, the stored `result` and `log` are the
+ * truth, and a replay would quietly tell a different story.
+ */
+export function replayBattleRecord(content: BattleContent, record: BattleRecord): BattleState {
+  if (record.contentHash !== content.contentHash) {
+    throw new BattleRuleError(
+      `battle was played with content ${record.contentHash}, not ${content.contentHash}`,
+    );
+  }
+  return replayBattle(content, record.setup, record.actions);
+}
+
+/**
  * Plays a battle where both sides are AI-controlled to the end (offline
  * raids and the balance simulator). Returns the final state and the action
  * log, which `replayBattle` turns back into the same state.

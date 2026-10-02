@@ -22,6 +22,7 @@ import {
   battleRecord,
   clientBattleView,
   legalChoices,
+  replayBattleRecord,
   startBattle,
 } from './engine.js';
 import type { BattleEvent, BattleState } from './state.js';
@@ -110,10 +111,13 @@ describe('startBattle', () => {
 
   it('rejects unknown species and species with unknown moves', () => {
     expect(() => duel('x', 'nobody', 'snoozlet')).toThrow(BattleRuleError);
-    const noLullaby = createBattleContent({
-      ...FIXTURE_BATTLE_DATA,
-      moves: FIXTURE_BATTLE_DATA.moves.filter((m) => m.id !== 'fixture-lullaby'),
-    });
+    const noLullaby = createBattleContent(
+      {
+        ...FIXTURE_BATTLE_DATA,
+        moves: FIXTURE_BATTLE_DATA.moves.filter((m) => m.id !== 'fixture-lullaby'),
+      },
+      FIXTURE_BATTLE_RULES,
+    );
     expect(() =>
       startBattle(
         noLullaby,
@@ -520,12 +524,15 @@ describe('content hash and battle records', () => {
     expect(state.contentHash).toMatch(/^[0-9a-f]{32}$/);
     expect(state.contentHash).toBe(content.contentHash);
 
-    const retuned = createBattleContent({
-      ...FIXTURE_BATTLE_DATA,
-      moves: FIXTURE_BATTLE_DATA.moves.map((m) =>
-        m.id === 'fixture-tickle-tackle' ? { ...m, power: 80 } : m,
-      ),
-    });
+    const retuned = createBattleContent(
+      {
+        ...FIXTURE_BATTLE_DATA,
+        moves: FIXTURE_BATTLE_DATA.moves.map((m) =>
+          m.id === 'fixture-tickle-tackle' ? { ...m, power: 80 } : m,
+        ),
+      },
+      FIXTURE_BATTLE_RULES,
+    );
     expect(retuned.contentHash).not.toBe(content.contentHash);
     expect(() => turn(state, move('silly-face'), move('silly-face'), retuned)).toThrow(
       /played with content/,
@@ -533,11 +540,14 @@ describe('content hash and battle records', () => {
   });
 
   it('ignores player-facing words and row order, but not rules', () => {
-    const reworded = createBattleContent({
-      ...FIXTURE_BATTLE_DATA,
-      species: [...FIXTURE_BATTLE_DATA.species].reverse(),
-      moves: FIXTURE_BATTLE_DATA.moves.map((m) => ({ ...m, name: 'Boop', description: 'Boop!' })),
-    });
+    const reworded = createBattleContent(
+      {
+        ...FIXTURE_BATTLE_DATA,
+        species: [...FIXTURE_BATTLE_DATA.species].reverse(),
+        moves: FIXTURE_BATTLE_DATA.moves.map((m) => ({ ...m, name: 'Boop', description: 'Boop!' })),
+      },
+      FIXTURE_BATTLE_RULES,
+    );
     expect(reworded.contentHash).toBe(content.contentHash);
     const relined = createBattleContent(FIXTURE_BATTLE_DATA, {
       ...FIXTURE_BATTLE_RULES,
@@ -571,6 +581,13 @@ describe('content hash and battle records', () => {
       result: { winner: 'a', contentHash: content.contentHash },
     });
     expect(record.log).toBe(end.log);
+
+    expect(replayBattleRecord(content, record)).toEqual(end);
+    const retuned = createBattleContent(FIXTURE_BATTLE_DATA, {
+      ...FIXTURE_BATTLE_RULES,
+      maxTurns: 9,
+    });
+    expect(() => replayBattleRecord(retuned, record)).toThrow(/played with content/);
   });
 });
 
