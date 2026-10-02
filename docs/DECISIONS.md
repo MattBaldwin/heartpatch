@@ -45,3 +45,9 @@
 | Owner mute | Deferred to Phase 2 with free chat |
 | Recovery codes | One active hashed code; a fresh one after each use; plus an operator CLI reset for players with no map owner |
 | Hollow Man vs "absence is not punished" | Hearthfires store up to 5 nights of fuel (burn one per nightfall) — teaches planning ahead; squishies at home behind a lit fire are always safe |
+
+## 2026-10-02 — Session reporting
+
+- **Sessions report; the coordinator doesn't poll.** Build sessions report milestones to the coordinator themselves (PR opened, ready to merge, blocked, CI red), as required in `CLAUDE.md` → Workflow and repeated in every session brief. No scheduled check-ins.
+- **Why it's in CLAUDE.md:** sessions rightly treat messages relayed from another session as information, not authority, and declined reporting requests sent that way. Reporting therefore lives in the instructions each session starts with.
+- **Backstop:** the coordinator subscribes to every PR, so CI results, comments and merges arrive as GitHub events, and it is notified if a session's turn fails. Both are event-driven, not polling.
