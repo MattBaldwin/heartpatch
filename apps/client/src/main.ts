@@ -3,8 +3,10 @@ import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
+import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
+import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
@@ -100,6 +102,39 @@ function showScene(build: SceneBuilder | null): void {
 // The bag and gathering (#17): a Bag button over a multiplayer map, and the
 // gather buttons in its tile panel.
 const inventory = createInventoryScreen({ root: document.body, devTools: import.meta.env.DEV });
+// The home base (#18): a Home button over a multiplayer map opens the
+// player's home tiles up close, where they build, fuel the fire and house
+// squishies. Like battles, it owns the screen while open.
+const home = createHomeScreen({
+  root: document.body,
+  onProblem: (message) => {
+    lobby.showMessage(message);
+  },
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  keeper: () => keeper.current,
+  onOpen: () => {
+    maps.close();
+    catalog.close();
+    void inventory.setMap(null);
+    void battles.setMap(null);
+    lobby.stepOut();
+  },
+  onClosed: (mapId) => {
+    maps
+      .open(mapId)
+      .then(() => {
+        void inventory.setMap(mapId);
+        void battles.setMap(mapId);
+        home.setMap(mapId);
+      })
+      .catch((err: unknown) => {
+        lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
+      });
+    lobby.hide();
+  },
+});
 // Login and the lobby come first, so a renderer that can't start never hides them.
 const maps = createMapScreen({
   root: document.body,
@@ -109,9 +144,10 @@ const maps = createMapScreen({
     void battles.setMap(null);
     catalog.close();
     void inventory.setMap(null);
+    home.setMap(null);
     lobby.showMessage(message);
   },
-  tileActions: inventory.tileActions,
+  tileActions: combineTileActions(inventory.tileActions, home.tileActions),
 });
 // The squishy catalog (#14) opens from the button by the battle entry.
 const catalog = createCatalogScreen({ root: document.body });
@@ -127,6 +163,7 @@ const tutorial = createTutorialScreen({
       await battles.setMap(null);
       catalog.close();
       await inventory.setMap(null);
+      home.setMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
       if (stillWanted()) lobby.hide();
@@ -134,6 +171,7 @@ const tutorial = createTutorialScreen({
     close: () => {
       void battles.setMap(null);
       void inventory.setMap(null);
+      home.setMap(null);
       maps.close();
       lobby.show();
     },
@@ -158,11 +196,15 @@ const battles = createBattleScreen({
     maps.close();
     catalog.close();
     void inventory.setMap(null);
+    home.setMap(null);
     lobby.stepOut();
   },
   onClosed: (mapId) => {
     maps.open(mapId).then(
-      () => inventory.setMap(mapId),
+      () => {
+        home.setMap(mapId);
+        return inventory.setMap(mapId);
+      },
       (err: unknown) => {
         // No map to go back to: no battle button over the lobby either.
         void battles.setMap(null);
@@ -193,6 +235,7 @@ const keeper = createKeeperScreen({
   onEditOpen: () => {
     void battles.setMap(null);
     void inventory.setMap(null);
+    home.setMap(null);
     maps.close();
     catalog.close();
     lobby.stepOut();
@@ -207,6 +250,7 @@ const lobby = mountLobby(document.body, {
     catalog.close();
     await maps.open(mapId);
     void inventory.setMap(mapId);
+    home.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
     // battle resumed here (after a refresh) must step it out again after that.
     void battles.setMap(mapId);
@@ -219,6 +263,7 @@ mountAuth(document.body, {
     battles.setUser(user);
     catalog.setUser(user);
     inventory.setUser(user);
+    home.setUser(user);
     maps.setUser(user);
     // The lobby and tutorial wait for a Keeper (`onReady` above).
     keeper.setUser(user);
@@ -273,5 +318,6 @@ if (import.meta.env.DEV) {
     keeper: () => keeper.debug,
     catalog: () => catalog.debug,
     inventory: () => inventory.debug,
+    home: () => home.debug,
   };
 }

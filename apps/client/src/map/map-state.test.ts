@@ -82,4 +82,57 @@ describe('MapState', () => {
     expect(state.member(userId(2))).toBeDefined();
     expect(state.view.tiles.filter((t) => t.ownerUserId === userId(2))).toHaveLength(7);
   });
+
+  it('applies building events to the tile they happen on (#18)', () => {
+    const state = new MapState(testView(1));
+    const home = state.view.tiles.find((t) => t.homeSlot === 0)!;
+    const other = state.view.tiles.find((t) => t.homeSlot === 0 && t !== home)!;
+    const building = {
+      id: '0190a8c4-0000-7000-8000-0000000000f1',
+      buildingId: 'hearthfire',
+      kind: 'hearthfire',
+      level: 1,
+      spot: 2,
+      lit: false,
+      safeRadius: 1,
+      q: home.q,
+      r: home.r,
+    };
+    const tileOf = (t: { q: number; r: number }) => state.tileAt(hexKey(t))!;
+    expect(state.apply(event('building.placed', { userId: userId(1), building }))).toBe('none');
+    expect(tileOf(home).buildings).toEqual([
+      {
+        id: building.id,
+        buildingId: 'hearthfire',
+        kind: 'hearthfire',
+        level: 1,
+        spot: 2,
+        lit: false,
+        safeRadius: 1,
+      },
+    ]);
+    state.apply(
+      event('building.fueled', { userId: userId(1), building: { ...building, lit: true } }, 3),
+    );
+    expect(tileOf(home).buildings[0]?.lit).toBe(true);
+    const moved = { ...building, lit: true, q: other.q, r: other.r, spot: 4 };
+    state.apply(
+      event(
+        'building.moved',
+        { userId: userId(1), from: { q: home.q, r: home.r, spot: 2 }, building: moved },
+        4,
+      ),
+    );
+    expect(tileOf(home).buildings).toEqual([]);
+    expect(tileOf(other).buildings.map((b) => b.spot)).toEqual([4]);
+    state.apply(
+      event(
+        'building.removed',
+        { userId: userId(1), buildingRowId: building.id, q: other.q, r: other.r },
+        5,
+      ),
+    );
+    expect(tileOf(other).buildings).toEqual([]);
+    expect(state.apply(event('building.placed', { userId: userId(1) }, 6))).toBe('resync');
+  });
 });

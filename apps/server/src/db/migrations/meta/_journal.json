@@ -57,6 +57,13 @@
       "when": 1790961044942,
       "tag": "0007_wild_capture",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790963552903,
+      "tag": "0008_home_base",
+      "breakpoints": true
     }
   ]
 }

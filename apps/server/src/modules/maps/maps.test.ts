@@ -408,7 +408,16 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(view.members).toHaveLength(2);
       expect(view.tiles).toHaveLength(generated.tiles.length);
       expect(Object.keys(view.tiles[0]!).sort()).toEqual(
-        ['gathering', 'homeSlot', 'nodeResource', 'ownerUserId', 'q', 'r', 'terrain'].sort(),
+        [
+          'buildings',
+          'gathering',
+          'homeSlot',
+          'nodeResource',
+          'ownerUserId',
+          'q',
+          'r',
+          'terrain',
+        ].sort(),
       );
       expect(view.tiles.filter((t) => t.ownerUserId === friend.id)).toHaveLength(7);
       // Up to date with the friend joining, so live sync follows on from there.
