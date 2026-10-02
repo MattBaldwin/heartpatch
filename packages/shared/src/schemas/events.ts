@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
+import { ClothingDropSourceSchema } from './data/clothing-drops.js';
 import { ContentIdSchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
@@ -328,6 +329,29 @@ export const GAME_EVENTS = {
       squishyId: z.uuid(),
       habitatId: z.uuid().nullable(),
     }),
+  },
+  /**
+   * A player found a piece of clothing (#43): a lucky drop from a gather (and
+   * later a capture or a rescue). Clothing is account-level; the event goes on
+   * the map where it was found. What caused it stays internal.
+   */
+  'clothing.found': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      itemId: ContentIdSchema,
+      source: ClothingDropSourceSchema,
+      /** The gather, capture or rescue that found it. */
+      refId: z.uuid(),
+    }),
+    public: z.object({ userId: z.uuid(), itemId: ContentIdSchema }),
+  },
+  /**
+   * A player's Keeper changed clothes (#43). Written on every active map they
+   * play on, so members see the new outfit live.
+   */
+  'outfit.changed': {
+    internal: z.strictObject({ userId: z.uuid(), wearing: z.array(ContentIdSchema) }),
+    public: z.object({ userId: z.uuid(), wearing: z.array(ContentIdSchema) }),
   },
 } satisfies Record<string, GameEventSchemas>;
 

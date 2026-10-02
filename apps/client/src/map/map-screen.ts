@@ -4,6 +4,7 @@ import {
   type MapView,
   type PublicTile,
   type PublicUser,
+  type WsEventMessage,
 } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
@@ -39,6 +40,8 @@ export interface MapScreenOptions {
   createWs?: (options: WsClientOptions) => WsClient;
   /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
   tileActions?: TileActions;
+  /** Every live event the socket delivers, in seq order, after the map saw it (a find, #43). */
+  onLiveEvent?: (event: WsEventMessage) => void;
 }
 
 /** A feature's buttons in the tile panel. */
@@ -131,6 +134,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     ws ??= createWs({
       onEvent: (event) => {
         sync.event(event);
+        options.onLiveEvent?.(event);
       },
       onResync: (mapId) => {
         sync.serverResync(mapId);

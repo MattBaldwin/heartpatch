@@ -29,6 +29,7 @@ import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField } from '../procedural/keeper/keeper-field.js';
+import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { loftRoundedHex, type MeshArrays, type ProfileRing } from './hex-mesh.js';
 import {
   FALLBACK_LOOK,
@@ -90,6 +91,8 @@ export interface MapSceneStats {
   readonly litFires: number;
   /** Tiles under a lit Hearthfire's soft glow (its safe radius, #18). */
   readonly safeTiles: number;
+  /** Clothing ids each drawn Keeper wears (#43), by drawing order. */
+  readonly keepersWearing: readonly (readonly string[])[];
 }
 
 function linear(hex: string): Color3 {
@@ -361,6 +364,7 @@ export class MapScene {
       keepers: this.keepers.handles.length,
       buildings: this.buildings.stats.buildings,
       litFires: this.buildings.stats.lit,
+      keepersWearing: this.keepers.handles.map((h) => h.params.worn),
     };
   }
 
@@ -410,13 +414,19 @@ export class MapScene {
       const keeper = view.members.find((m) => m.user.id === owner)?.keeper;
       if (!keeper) continue;
       const p = hexToWorld(home.seed, HEX_SIZE);
-      this.keepers.add(keeper, {
-        x: p.x + place.offset.x,
-        z: p.z + place.offset.z,
-        y: HOME_LOOK.height,
-        scale: place.scale,
-        lean: place.lean,
-      });
+      // Dressed in what they wear (#43), so rivals see outfits.
+      const { wearing, ...config } = keeper;
+      this.keepers.add(
+        config,
+        {
+          x: p.x + place.offset.x,
+          z: p.z + place.offset.z,
+          y: HOME_LOOK.height,
+          scale: place.scale,
+          lean: place.lean,
+        },
+        keeperItems(wearing),
+      );
     }
     // Fires and habitats (#18), and the warm glow over tiles a lit fire keeps safe.
     this.buildings.set(

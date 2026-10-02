@@ -12,6 +12,7 @@ import type { SceneContent } from '../engine/stage.js';
 import type { SquishMove, SquishyLod } from '../procedural/config.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
+import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import {
   SquishyField,
   type SquishyHandle,
@@ -51,6 +52,8 @@ export interface BattleSceneOptions {
   readonly mySide: BattleSideId;
   /** The player's Keeper, standing behind their squishy; null if not known. */
   readonly keeper: KeeperConfig | null;
+  /** What the Keeper wears (#43): clothing ids. */
+  readonly keeperWearing?: readonly string[];
 }
 
 export class BattleScene {
@@ -70,13 +73,17 @@ export class BattleScene {
     const mine = this.#placement(options.mySide);
     const place = KEEPER_PLACES.battle;
     this.#keeper = options.keeper
-      ? this.#keepers.add(options.keeper, {
-          x: mine.x + place.offset.x,
-          z: mine.z + place.offset.z,
-          yaw: place.yaw,
-          lean: place.lean,
-          scale: place.scale,
-        })
+      ? this.#keepers.add(
+          options.keeper,
+          {
+            x: mine.x + place.offset.x,
+            z: mine.z + place.offset.z,
+            yaw: place.yaw,
+            lean: place.lean,
+            scale: place.scale,
+          },
+          keeperItems(options.keeperWearing ?? []),
+        )
       : null;
 
     this.#floor = CreateCylinder(

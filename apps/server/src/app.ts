@@ -34,6 +34,9 @@ import { mapsRoutes } from './modules/maps/routes.js';
 import { createMapsService } from './modules/maps/service.js';
 import { createHealthService, type ReadinessCheck } from './modules/health/service.js';
 import { tutorialRoutes } from './modules/tutorial/routes.js';
+import { setDevDropChance } from './modules/wardrobe/drops.js';
+import { wardrobeRoutes } from './modules/wardrobe/routes.js';
+import { createWardrobeService } from './modules/wardrobe/service.js';
 import { createTutorialService } from './modules/tutorial/service.js';
 import { createWsHub, type WsHubOptions } from './ws/hub.js';
 import { MAX_CLIENT_MESSAGE_BYTES } from './ws/limits.js';
@@ -200,6 +203,15 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           buildingsRoutes(createBuildingsService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
+          }),
+        );
+        // Found clothing rolls inside gathers (captures and rescues later).
+        setDevDropChance(config.HP_DEV_DROP_CHANCE ?? null);
+        await api.register(
+          wardrobeRoutes(createWardrobeService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+            devGrants: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
       }

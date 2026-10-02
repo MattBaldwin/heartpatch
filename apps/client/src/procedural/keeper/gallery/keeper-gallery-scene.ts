@@ -10,7 +10,8 @@ import type { KeeperItem } from '../keeper-items.js';
 
 export interface KeeperGalleryOptions {
   readonly configs: readonly KeeperConfig[];
-  readonly items: readonly KeeperItem[];
+  /** What Keeper `i` wears. */
+  readonly items: (i: number) => readonly KeeperItem[];
   readonly lod: SquishyLod;
   /** Extra scale (close-up view). */
   readonly scale: number;
@@ -48,7 +49,7 @@ export function buildKeeperGalleryScene(
         yaw: options.yaw,
         lean: options.lean,
       },
-      options.items,
+      options.items(i),
     );
   });
 

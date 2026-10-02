@@ -132,6 +132,13 @@ describe('MapSync', () => {
     expect(redraws.map((v) => v.seq)).toEqual([8]);
   });
 
+  it("redraws, without refetching, when a member's Keeper changes clothes (#43)", async () => {
+    const { sync, fetches, redraws } = await opened(5);
+    sync.event(event('outfit.changed', { userId: userId(1), wearing: ['witch-hat'] }, 6));
+    expect(fetches).toHaveLength(1);
+    expect(redraws.map((v) => v.members[0]?.keeper?.wearing)).toEqual([['witch-hat']]);
+  });
+
   it('applies a settings change without refetching', async () => {
     const { sync, fetches } = await opened();
     sync.event(event('map.updated', { pvpMode: 'on' }, 6));

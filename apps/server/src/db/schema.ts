@@ -763,3 +763,72 @@ export const tileDefenders = pgTable(
     check('tile_defenders_slot_range', sql`${t.slot} between 0 and 5`),
   ],
 );
+
+/**
+ * Clothing a player owns (#43, design doc §23): account-level (tech spec §4),
+ * one row per piece, so a trade can later move a single piece. Starter items
+ * aren't stored: every account owns them. `source` says how it arrived
+ * (`gather`, `capture`, `rescue`, `dev-grant`; later `tutorial`, `milestone`,
+ * `boutique`, `trade`) and `ref_id` what caused it (a gather's id). One piece
+ * per source event, so a retried grant can't add a second.
+ */
+export const clothingOwned = pgTable(
+  'clothing_owned',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Clothing id from the shared catalog.
+    itemId: text('item_id').notNull(),
+    source: text('source').notNull(),
+    refId: uuid('ref_id'),
+    // Where it was found, if anywhere; the piece stays when the map goes.
+    mapId: uuid('map_id').references(() => maps.id, { onDelete: 'set null' }),
+    acquiredAt: timestamptz('acquired_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('clothing_owned_user_id_item_id_idx').on(t.userId, t.itemId),
+    uniqueIndex('clothing_owned_source_ref_id_key')
+      .on(t.source, t.refId)
+      .where(sql`${t.refId} is not null`),
+  ],
+);
+
+/**
+ * What a player's Keeper wears and their saved outfits (#43, design doc §23):
+ * `preset` 0 is what's worn now, 1–3 the saved presets. `wearing` is a list
+ * of clothing ids, one per wardrobe slot, in slot order. Account-level.
+ */
+export const outfits = pgTable(
+  'outfits',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    preset: smallint('preset').notNull(),
+    // Player-typed, filtered (style guide §8); presets only.
+    name: text('name'),
+    wearing: jsonb('wearing').notNull(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.preset] }),
+    check('outfits_preset_range', sql`${t.preset} between 0 and 3`),
+  ],
+);
+
+/**
+ * The accessory a squishy wears (#43): one per squishy, an item from its
+ * owner's wardrobe. Goes with the squishy.
+ */
+export const squishyAccessories = pgTable('squishy_accessories', {
+  squishyId: uuid('squishy_id')
+    .primaryKey()
+    .references(() => squishies.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  itemId: text('item_id').notNull(),
+  updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+});

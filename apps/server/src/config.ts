@@ -42,6 +42,9 @@ const ConfigSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  // Dev/test only: every found-clothing drop table's chance, in percent (#43),
+  // so a find can be tried without gathering a hundred times. Never in production.
+  HP_DEV_DROP_CHANCE: z.coerce.number().int().min(0).max(100).optional(),
 });
 
 /** Settings only the HTTP server needs; tools like `db/cli.ts` skip these checks. */
@@ -59,6 +62,10 @@ const ServerConfigSchema = ConfigSchema.refine(
   })
   .refine((c) => c.NODE_ENV !== 'production' || !c.HP_DEV_SQUISHY_GRANTS, {
     path: ['HP_DEV_SQUISHY_GRANTS'],
+    message: 'development and tests only',
+  })
+  .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_DROP_CHANCE === undefined, {
+    path: ['HP_DEV_DROP_CHANCE'],
     message: 'development and tests only',
   });
 
