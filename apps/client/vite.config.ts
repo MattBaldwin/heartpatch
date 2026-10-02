@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { defaultClientConditions, defineConfig, type Plugin } from 'vite';
+import { pwa } from './tooling/pwa/plugin.js';
 
 /**
  * Fails the dev server and build if any server-only data module is loaded,
@@ -19,7 +20,7 @@ function forbidServerData(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [forbidServerData()],
+  plugins: [forbidServerData(), pwa()],
   resolve: {
     // Use workspace package sources directly (see packages/shared/package.json).
     conditions: ['@heartpatch/source', ...defaultClientConditions],
@@ -43,6 +44,6 @@ export default defineConfig({
     sourcemap: true,
   },
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'tooling/**/*.test.ts'],
   },
 });

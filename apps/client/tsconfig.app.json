@@ -9,5 +9,7 @@
     "types": ["vite/client"],
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // The service worker has its own globals (tsconfig.sw.json).
+  "exclude": ["src/pwa/sw.ts"]
 }

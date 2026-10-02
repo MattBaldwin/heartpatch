@@ -118,3 +118,13 @@ _Proposed in the #9 PR; the project owner confirms on merge._
 - **Squash and rim light are GLSL only for now.** They run in a Babylon material plugin on the WebGL2 default. Under the opt-in WebGPU renderer the plugin isn't attached, so squishies render still and without the rim until a WGSL port (tech spec §6).
 - **Detail levels:** the map always uses low detail; close-ups use high detail unless the quality governor has dropped to the low tier (`lodFor`).
 - **The squishy gallery is a separate dev page** (`/gallery.html`), never in the production build, so it doesn't touch `main.ts`.
+
+## 2026-10-02 — Installable app (#26)
+
+_Proposed in the #26 PR; the project owner confirms on merge._
+
+- **The shell version is a content hash, not `APP_VERSION`.** The cache is `heartpatch-shell-<12 hex>`, a hash of every precached byte plus the worker's code, computed from the build output (`apps/client/tooling/pwa/`). A deploy that only changes the server keeps the phones' cache, so kids don't re-download the 1 MB+ engine on cellular for nothing. Any client change gives a new worker, a new cache, and the old caches are deleted on activate.
+- **No stale shells.** Page loads are network-first, so every launch or reload gets the newest `index.html` and bundles; the cache is only for offline or slow loads (4 s, `// TUNE`). A new worker waits, rather than swapping code under a running game: the app checks for updates on launch, on returning to the foreground and every 30 minutes, then shows "Ooh, a new Heartpatch is ready!" with an Update button. If a new version finished installing while the app was closed, it switches straight away at the next launch. `/api` and `/ws` are never handled by the worker (CLAUDE.md rule 1).
+- **Production builds only.** The dev server never registers the worker (it would serve stale modules); e2e checks it against `vite preview` of a real build.
+- **Status bar `black-translucent`:** the game draws under the iOS status bar for a full-screen feel, and HUD stays inside `env(safe-area-inset-*)`. The status bar text is white over the pastel background.
+- **Icons and launch screens are drawn at build time** from signed distance fields (a glossy heart squishy, no third-party art). Launch screens aren't precached: iOS reads them once, when the app is added to the home screen.

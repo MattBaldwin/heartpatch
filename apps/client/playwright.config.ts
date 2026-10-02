@@ -52,5 +52,14 @@ export default defineConfig({
       reuseExistingServer: !isCI,
       timeout: 60_000,
     },
+    {
+      // A production build for the installed-app specs (pwa.spec.ts): the dev
+      // server never registers the service worker. Proxies /api like dev.
+      command:
+        'pnpm --filter @heartpatch/client build && pnpm --filter @heartpatch/client preview --port 4173 --strictPort',
+      url: 'http://localhost:4173',
+      reuseExistingServer: !isCI,
+      timeout: 120_000,
+    },
   ],
 });
