@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { inventoryItems, sessions, users } from '../../db/schema.js';
+import { inventories, sessions, users } from '../../db/schema.js';
 import { AppError } from '../../lib/errors.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -129,6 +129,26 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
     headers: Record<string, string> = {},
   ) => call(server, 'POST', `/maps/${mapId}/crafts/${craftId}/collect`, who, undefined, headers);
 
+  /**
+   * The ledger reconciles (tech spec §4): every balance equals the sum of its
+   * ledger deltas, for every item the player ever had. Returns the ledger.
+   */
+  async function reconciled(mapId: string, userId: string) {
+    const [balances, ledger] = await Promise.all([
+      db.query.inventories.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, userId)),
+      }),
+      db.query.resourceLedger.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, userId)),
+        orderBy: (t, { asc }) => [asc(t.createdAt), asc(t.id)],
+      }),
+    ]);
+    const sums: Record<string, number> = {};
+    for (const row of ledger) sums[row.itemId] = (sums[row.itemId] ?? 0) + row.delta;
+    expect(Object.fromEntries(balances.map((b) => [b.itemId, b.quantity]))).toEqual(sums);
+    return ledger;
+  }
+
   describe('grantItems and consumeItems (the contract #14 builds on)', () => {
     it('adds and takes inside the caller transaction; short means CONFLICT and no change', async () => {
       const server = await start();
@@ -136,13 +156,15 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       const mapId = await newMap(server, kid);
       const owner = { mapId, userId: kid.id };
 
-      await withTransaction(db, (tx) => grantItems(tx, owner, { timber: 3, 'heart-charm': 2 }));
-      await withTransaction(db, (tx) => grantItems(tx, owner, { timber: 1 }));
+      await withTransaction(db, (tx) =>
+        grantItems(tx, owner, { timber: 3, 'heart-charm': 2 }, 'capture'),
+      );
+      await withTransaction(db, (tx) => grantItems(tx, owner, { timber: 1 }, 'capture'));
       expect((await inventory(server, kid, mapId)).items).toEqual({ timber: 4, 'heart-charm': 2 });
 
       // One short item: nothing at all is taken, and the message says what's missing.
       const short = withTransaction(db, (tx) =>
-        consumeItems(tx, owner, { 'heart-charm': 1, timber: 6, treats: 1 }),
+        consumeItems(tx, owner, { 'heart-charm': 1, timber: 6, treats: 1 }, 'capture'),
       );
       await expect(short).rejects.toMatchObject({
         code: 'CONFLICT',
@@ -151,18 +173,33 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       await expect(short).rejects.toBeInstanceOf(AppError);
       expect((await inventory(server, kid, mapId)).items).toEqual({ timber: 4, 'heart-charm': 2 });
 
-      await withTransaction(db, (tx) => consumeItems(tx, owner, { 'heart-charm': 2, timber: 1 }));
+      await withTransaction(db, (tx) =>
+        consumeItems(tx, owner, { 'heart-charm': 2, timber: 1 }, 'capture'),
+      );
       // Spent-out rows stay at 0 and don't show in the bag.
       expect((await inventory(server, kid, mapId)).items).toEqual({ timber: 3 });
 
       // A rollback in the caller undoes the grant with everything else.
       await expect(
         withTransaction(db, async (tx) => {
-          await grantItems(tx, owner, { stone: 5 });
+          await grantItems(tx, owner, { stone: 5 }, 'capture');
           throw new Error('the capture fell through');
         }),
       ).rejects.toThrow('the capture fell through');
       expect((await inventory(server, kid, mapId)).items).toEqual({ timber: 3 });
+
+      // Every change that committed is in the ledger, with its reason; none that rolled back.
+      const ledger = await reconciled(mapId, kid.id);
+      expect(ledger.map((l) => [l.itemId, l.delta, l.reason])).toEqual(
+        expect.arrayContaining([
+          ['timber', 3, 'capture'],
+          ['heart-charm', 2, 'capture'],
+          ['timber', 1, 'capture'],
+          ['heart-charm', -2, 'capture'],
+          ['timber', -1, 'capture'],
+        ]),
+      );
+      expect(ledger).toHaveLength(5);
     });
 
     it('refuses item ids the game data does not have', async () => {
@@ -172,7 +209,7 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       const owner = { mapId, userId: kid.id };
       for (const move of [grantItems, consumeItems]) {
         await expect(
-          withTransaction(db, (tx) => move(tx, owner, { 'golden-ticket': 1 })),
+          withTransaction(db, (tx) => move(tx, owner, { 'golden-ticket': 1 }, 'capture')),
         ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
       }
       const res = await call(server, 'POST', `/maps/${mapId}/dev/items`, kid, {
@@ -189,14 +226,19 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       await give(server, kid, mapId, { 'heart-charm': 1 });
       const results = await Promise.allSettled(
         [1, 2].map(() =>
-          withTransaction(db, (tx) => consumeItems(tx, owner, { 'heart-charm': 1 })),
+          withTransaction(db, (tx) => consumeItems(tx, owner, { 'heart-charm': 1 }, 'capture')),
         ),
       );
       expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected']);
-      const rows = await db.query.inventoryItems.findMany({
+      const rows = await db.query.inventories.findMany({
         where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
       });
       expect(rows.map((r) => [r.itemId, r.quantity])).toEqual([['heart-charm', 0]]);
+      // One grant, one spend: the loser left no trace.
+      expect((await reconciled(mapId, kid.id)).map((l) => [l.delta, l.reason])).toEqual([
+        [1, 'dev-grant'],
+        [-1, 'capture'],
+      ]);
     });
 
     it('keeps quantities at 0 or more in the database too', async () => {
@@ -204,7 +246,7 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await expect(
-        db.insert(inventoryItems).values({ mapId, userId: kid.id, itemId: 'timber', quantity: -1 }),
+        db.insert(inventories).values({ mapId, userId: kid.id, itemId: 'timber', quantity: -1 }),
       ).rejects.toThrow();
     });
   });
@@ -288,6 +330,16 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       const after = await inventory(server, kid, mapId);
       expect(after.items['heart-charm']).toBe(1);
       expect(after.crafts).toEqual([]);
+      // Inputs and output are both on the ledger, pointing at the craft.
+      const crafted = (await reconciled(mapId, kid.id)).filter((l) => l.reason === 'craft');
+      expect(crafted.map((l) => [l.itemId, l.delta, l.refId])).toEqual(
+        expect.arrayContaining([
+          ['timber', -2, made.craft.id],
+          ['treats', -1, made.craft.id],
+          ['heart-charm', 1, made.craft.id],
+        ]),
+      );
+      expect(crafted).toHaveLength(3);
 
       const events = await db.query.gameEvents.findMany({
         where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.type, 'item.crafted')),

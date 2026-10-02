@@ -126,6 +126,26 @@ export const GAME_EVENTS = {
    */
   'battle.ended': { internal: BattleEndedSchema, public: z.object(BattleEndedSchema.shape) },
   /**
+   * A player started gathering a node they own (#17): members see "gathering
+   * here, ready at …" on the tile. What it will yield stays internal.
+   */
+  'gather.started': {
+    internal: z.strictObject({
+      gatherId: z.uuid(),
+      userId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+      resource: z.string(),
+      readyAt: z.iso.datetime(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+      readyAt: z.iso.datetime(),
+    }),
+  },
+  /**
    * A player collected a finished gather on a node they own (#17). Members
    * see where (the tile's "gathering here" ends); how much stays internal.
    */

@@ -7,6 +7,13 @@ import { ContentIdSchema } from './data/common.js';
 // `readyAt` and its own `now`, so the client counts down against the game
 // clock (which a dev override can move), not the phone's.
 
+/**
+ * Why an inventory changed, stored with every `resource_ledger` row (tech
+ * spec §4). Later issues add their own (buildings, trades, care).
+ */
+export const ItemChangeReasonSchema = z.enum(['gather', 'craft', 'capture', 'dev-grant']);
+export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
+
 /** Item id → how many the player has. A missing id means none. */
 export const ItemCountsSchema = z.record(ContentIdSchema, z.number().int().min(0));
 

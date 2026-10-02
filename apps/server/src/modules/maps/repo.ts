@@ -4,7 +4,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
-  gathers,
+  gatherJobs,
   inviteCodes,
   joinRequests,
   mapMembers,
@@ -302,16 +302,16 @@ function queries(db: Executor): MapsRepo {
           ownerUserId: tiles.ownerUserId,
           nodeResource: tiles.nodeResource,
           homeSlot: tiles.homeSlot,
-          gatheringReadyAt: gathers.readyAt,
+          gatheringReadyAt: gatherJobs.readyAt,
         })
         .from(tiles)
         // "Gathering here" (#17): only the tile owner's own gather counts.
         .leftJoin(
-          gathers,
+          gatherJobs,
           and(
-            eq(gathers.tileId, tiles.id),
-            eq(gathers.status, 'active'),
-            eq(gathers.userId, tiles.ownerUserId),
+            eq(gatherJobs.tileId, tiles.id),
+            eq(gatherJobs.status, 'active'),
+            eq(gatherJobs.userId, tiles.ownerUserId),
           ),
         )
         .where(eq(tiles.mapId, mapId))

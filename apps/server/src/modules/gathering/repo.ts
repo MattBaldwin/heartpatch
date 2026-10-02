@@ -2,7 +2,7 @@ import { ItemCountsSchema, type ItemCounts } from '@heartpatch/shared';
 import { and, asc, eq } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { gathers, tiles } from '../../db/schema.js';
+import { gatherJobs, tiles } from '../../db/schema.js';
 
 /** A tile as gathering needs it (read only: tiles belong to the maps module). */
 export interface NodeTileRow {
@@ -13,7 +13,7 @@ export interface NodeTileRow {
   nodeResource: string | null;
 }
 
-export type GatherStatus = (typeof gathers.$inferSelect)['status'];
+export type GatherStatus = (typeof gatherJobs.$inferSelect)['status'];
 
 export interface GatherRow {
   id: string;
@@ -70,18 +70,18 @@ export interface GatheringTxRepo extends GatheringRepo {
 }
 
 const gatherColumns = {
-  id: gathers.id,
-  mapId: gathers.mapId,
-  userId: gathers.userId,
-  tileId: gathers.tileId,
+  id: gatherJobs.id,
+  mapId: gatherJobs.mapId,
+  userId: gatherJobs.userId,
+  tileId: gatherJobs.tileId,
   q: tiles.q,
   r: tiles.r,
-  resource: gathers.resource,
-  items: gathers.items,
-  status: gathers.status,
-  startedAt: gathers.startedAt,
-  readyAt: gathers.readyAt,
-  endedAt: gathers.endedAt,
+  resource: gatherJobs.resource,
+  items: gatherJobs.items,
+  status: gatherJobs.status,
+  startedAt: gatherJobs.startedAt,
+  readyAt: gatherJobs.readyAt,
+  endedAt: gatherJobs.endedAt,
 };
 
 const toGather = (row: Omit<GatherRow, 'items'> & { items: unknown }): GatherRow => ({
@@ -100,7 +100,7 @@ function createGatheringTxRepo(tx: Transaction): GatheringTxRepo {
 
 function queries(db: Executor): GatheringRepo {
   const selectGathers = () =>
-    db.select(gatherColumns).from(gathers).innerJoin(tiles, eq(tiles.id, gathers.tileId));
+    db.select(gatherColumns).from(gatherJobs).innerJoin(tiles, eq(tiles.id, gatherJobs.tileId));
 
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createGatheringTxRepo(tx), tx)),
@@ -130,26 +130,26 @@ function queries(db: Executor): GatheringRepo {
 
     findActiveOnTile: async (tileId) => {
       const [row] = await selectGathers().where(
-        and(eq(gathers.tileId, tileId), eq(gathers.status, 'active')),
+        and(eq(gatherJobs.tileId, tileId), eq(gatherJobs.status, 'active')),
       );
       return row ? toGather(row) : null;
     },
 
     insertGather: async (gather) => {
       const [row] = await db
-        .insert(gathers)
+        .insert(gatherJobs)
         .values({ ...gather, status: 'active' })
-        .returning({ id: gathers.id });
+        .returning({ id: gatherJobs.id });
       if (!row) throw new Error('insertGather: insert returned no row');
-      const [inserted] = await selectGathers().where(eq(gathers.id, row.id));
+      const [inserted] = await selectGathers().where(eq(gatherJobs.id, row.id));
       if (!inserted) throw new Error('insertGather: gather vanished');
       return toGather(inserted);
     },
 
     lockGather: async (gatherId) => {
       const [row] = await selectGathers()
-        .where(eq(gathers.id, gatherId))
-        .for('update', { of: gathers });
+        .where(eq(gatherJobs.id, gatherId))
+        .for('update', { of: gatherJobs });
       return row ? toGather(row) : null;
     },
 
@@ -158,20 +158,20 @@ function queries(db: Executor): GatheringRepo {
         await selectGathers()
           .where(
             and(
-              eq(gathers.mapId, mapId),
-              eq(gathers.userId, userId),
-              eq(gathers.status, 'active'),
+              eq(gatherJobs.mapId, mapId),
+              eq(gatherJobs.userId, userId),
+              eq(gatherJobs.status, 'active'),
               eq(tiles.ownerUserId, userId),
             ),
           )
-          .orderBy(asc(gathers.startedAt), asc(gathers.id))
+          .orderBy(asc(gatherJobs.startedAt), asc(gatherJobs.id))
       ).map(toGather),
 
     endGather: async (gatherId, end) => {
       await db
-        .update(gathers)
+        .update(gatherJobs)
         .set({ status: end.status, endedAt: end.at })
-        .where(eq(gathers.id, gatherId));
+        .where(eq(gatherJobs.id, gatherId));
     },
   };
 }

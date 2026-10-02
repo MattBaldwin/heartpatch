@@ -261,6 +261,19 @@ describe.skipIf(!url)('gathering (needs DATABASE_URL)', () => {
         expect(shown?.gathering).toEqual({ readyAt: gather.readyAt });
       }
       expect((await inventory(server, kid, mapId)).gathers).toEqual([gather]);
+      // Live: members hear where and until when, never what it will yield.
+      const startedEvent = (await eventsOf(mapId)).at(-1)!;
+      expect(startedEvent).toMatchObject({
+        type: 'gather.started',
+        actorUserId: kid.id,
+        payload: { gatherId: gather.id, resource: 'timber', readyAt: gather.readyAt },
+      });
+      expect(publicViewFor(PUBLIC_VIEWS, startedEvent, { userId: friend.id })).toEqual({
+        userId: kid.id,
+        q: tile.q,
+        r: tile.r,
+        readyAt: gather.readyAt,
+      });
 
       const early = await collect(server, kid, mapId, gather.id);
       expect(early.statusCode).toBe(409);
@@ -304,6 +317,13 @@ describe.skipIf(!url)('gathering (needs DATABASE_URL)', () => {
           items: { timber: TIMBER.gather!.quantity },
         },
       });
+      // On the ledger once, pointing at the gather (tech spec §4).
+      const ledger = await db.query.resourceLedger.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+      });
+      expect(ledger.map((l) => [l.itemId, l.delta, l.reason, l.refId])).toEqual([
+        ['timber', TIMBER.gather!.quantity, 'gather', gather.id],
+      ]);
       // Members hear where; how much stays with the gatherer.
       expect(publicViewFor(PUBLIC_VIEWS, event, { userId: friend.id })).toEqual({
         userId: kid.id,

@@ -412,14 +412,15 @@ export const idempotencyKeys = pgTable(
 );
 
 /**
- * Inventory (#17, design doc §12): how many of each item a player has on a
- * map. `item_id` is a resource or crafted-item id from the shared resource
- * table (`timber`, `heart-charm`). A missing row means 0. Only
- * `modules/inventory` (`grantItems`, `consumeItems`) changes it, inside the
- * caller's transaction (CLAUDE.md rule 7).
+ * Inventory balances (#17, design doc §12, tech spec §4): how many of each
+ * item a player has on a map. `item_id` is a resource or crafted-item id
+ * from the shared resource table (`timber`, `heart-charm`). A missing row
+ * means 0. Only `modules/inventory` (`grantItems`, `consumeItems`) changes
+ * it, inside the caller's transaction (CLAUDE.md rule 7), and every change
+ * also writes a `resource_ledger` row.
  */
-export const inventoryItems = pgTable(
-  'inventory_items',
+export const inventories = pgTable(
+  'inventories',
   {
     mapId: uuid('map_id')
       .notNull()
@@ -432,11 +433,44 @@ export const inventoryItems = pgTable(
   (t) => [
     primaryKey({ columns: [t.mapId, t.userId, t.itemId] }),
     foreignKey({
-      name: 'inventory_items_member_fk',
+      name: 'inventories_member_fk',
       columns: [t.mapId, t.userId],
       foreignColumns: [mapMembers.mapId, mapMembers.userId],
     }),
-    check('inventory_items_quantity_nonnegative', sql`${t.quantity} >= 0`),
+    check('inventories_quantity_nonnegative', sql`${t.quantity} >= 0`),
+  ],
+);
+
+/**
+ * Every inventory change, with a reason (tech spec §4 "ledger table"): the
+ * balances in `inventories` always equal the sum of `delta` per item, which
+ * tests reconcile. `ref_id` points at what caused it (a gather, a craft, a
+ * capture's battle) when there is one. Append-only.
+ */
+export const resourceLedger = pgTable(
+  'resource_ledger',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    itemId: text('item_id').notNull(),
+    // Positive for a grant, negative for a spend; never 0.
+    delta: integer('delta').notNull(),
+    // `ItemChangeReason` from shared (`gather`, `craft`, `capture`, `dev-grant`, …).
+    reason: text('reason').notNull(),
+    refId: uuid('ref_id'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'resource_ledger_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    index('resource_ledger_map_id_user_id_idx').on(t.mapId, t.userId),
+    check('resource_ledger_delta_nonzero', sql`${t.delta} <> 0`),
   ],
 );
 
@@ -449,8 +483,8 @@ export const gatherStatus = pgEnum('gather_status', ['active', 'collected', 'los
  * checked when the player collects. `items` is the yield, fixed when it
  * started (seasonal extras included), so it never changes while it runs.
  */
-export const gathers = pgTable(
-  'gathers',
+export const gatherJobs = pgTable(
+  'gather_jobs',
   {
     id: id(),
     mapId: uuid('map_id')
@@ -472,16 +506,16 @@ export const gathers = pgTable(
   },
   (t) => [
     foreignKey({
-      name: 'gathers_member_fk',
+      name: 'gather_jobs_member_fk',
       columns: [t.mapId, t.userId],
       foreignColumns: [mapMembers.mapId, mapMembers.userId],
     }),
     // One gather at a time per node.
-    uniqueIndex('gathers_one_active_per_tile_key')
+    uniqueIndex('gather_jobs_one_active_per_tile_key')
       .on(t.tileId)
       .where(sql`${t.status} = 'active'`),
-    index('gathers_map_id_user_id_idx').on(t.mapId, t.userId),
-    check('gathers_ready_after_start', sql`${t.readyAt} >= ${t.startedAt}`),
+    index('gather_jobs_map_id_user_id_idx').on(t.mapId, t.userId),
+    check('gather_jobs_ready_after_start', sql`${t.readyAt} >= ${t.startedAt}`),
   ],
 );
 

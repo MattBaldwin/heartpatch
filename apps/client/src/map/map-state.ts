@@ -66,14 +66,19 @@ export class MapState {
       case 'member.left':
       case 'member.removed':
         return 'resync';
+      case 'gather.started':
       case 'resource.gathered': {
-        // The gather on that tile is collected: nobody's gathering there now.
-        const parsed = GAME_EVENTS['resource.gathered'].public.safeParse(event.data);
+        // A gather started ("gathering here, ready at …") or was collected (#17).
+        const parsed =
+          event.type === 'gather.started'
+            ? GAME_EVENTS['gather.started'].public.safeParse(event.data)
+            : GAME_EVENTS['resource.gathered'].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
+        const gathering = 'readyAt' in parsed.data ? { readyAt: parsed.data.readyAt } : null;
         const key = hexKey(parsed.data);
         const tile = this.byHex.get(key);
-        if (!tile?.gathering) return 'none';
-        const next = { ...tile, gathering: null };
+        if (!tile) return 'none';
+        const next = { ...tile, gathering };
         this.byHex.set(key, next);
         this.current = {
           ...this.current,

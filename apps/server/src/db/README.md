@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), and `inventory_items`, `gathers` and `crafts` (#17). Feature tables (`keepers`, `buildings`, ledgers, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), and `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17). Feature tables (`keepers`, `buildings`, ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -184,16 +184,28 @@ Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessor
 | `response` | jsonb, null | The reply body, replayed to retries |
 | `created_at` | timestamptz | Indexed, for the cleanup job (`lib/idempotency.ts`) |
 
-### `inventory_items`
+### `inventories`
 | Column | Type | Notes |
 |---|---|---|
 | `map_id` | uuid → maps | PK part. Cascade delete |
 | `user_id` | uuid | PK part. FK `(map_id, user_id)` → `map_members` |
 | `item_id` | text | PK part. A resource or crafted-item id from the shared resource table (`timber`, `heart-charm`) |
-| `quantity` | integer | `>= 0` (check). A missing row means 0. Changed only by `grantItems` / `consumeItems` (`modules/inventory`), in the caller's transaction |
+| `quantity` | integer | `>= 0` (check). A missing row means 0. Changed only by `grantItems` / `consumeItems` (`modules/inventory`), in the caller's transaction, each writing `resource_ledger` rows |
 | `updated_at` | timestamptz | |
 
-### `gathers`
+### `resource_ledger`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete. Indexed with `user_id` |
+| `user_id` | uuid | FK `(map_id, user_id)` → `map_members` |
+| `item_id` | text | |
+| `delta` | integer | `+` granted, `−` spent; never 0 (check). Per item, the sum equals `inventories.quantity` (tests reconcile it) |
+| `reason` | text | `ItemChangeReason` from shared (`gather`, `craft`, `capture`, `dev-grant`; later issues add more) |
+| `ref_id` | uuid, null | What caused it: the gather or craft id |
+| `created_at` | timestamptz | Append-only |
+
+### `gather_jobs`
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid PK | |

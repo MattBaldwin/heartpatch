@@ -1,13 +1,20 @@
-import { ItemCountsSchema, type ItemCounts } from '@heartpatch/shared';
+import { ItemCountsSchema, type ItemChangeReason, type ItemCounts } from '@heartpatch/shared';
 import { and, asc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { crafts, inventoryItems } from '../../db/schema.js';
+import { crafts, inventories, resourceLedger } from '../../db/schema.js';
 
 /** Whose bag: inventory is per player per map. */
 export interface ItemOwner {
   mapId: string;
   userId: string;
+}
+
+/** Why items moved, for the ledger (tech spec §4). */
+export interface ItemChange {
+  reason: ItemChangeReason;
+  /** What caused it (a gather, a craft), if there is one. */
+  refId: string | null;
 }
 
 export interface CraftRow {
@@ -36,10 +43,16 @@ export interface InventoryRepo {
    * deadlock) and returns what the player has of each. Missing rows are 0.
    */
   lockItems: (owner: ItemOwner, itemIds: readonly string[]) => Promise<ItemCounts>;
-  /** Adds to each item, creating rows as needed. Quantities must be positive. */
-  add: (owner: ItemOwner, items: ItemCounts) => Promise<void>;
-  /** Takes from each item. The caller has locked the rows and checked there's enough. */
-  subtract: (owner: ItemOwner, items: ItemCounts) => Promise<void>;
+  /**
+   * Adds to each item, creating rows as needed, and writes a ledger row per
+   * item. Quantities must be positive.
+   */
+  add: (owner: ItemOwner, items: ItemCounts, change: ItemChange) => Promise<void>;
+  /**
+   * Takes from each item and writes a ledger row per item. The caller has
+   * locked the rows and checked there's enough.
+   */
+  subtract: (owner: ItemOwner, items: ItemCounts, change: ItemChange) => Promise<void>;
 
   insertCraft: (craft: Omit<CraftRow, 'id' | 'collectedAt'>) => Promise<CraftRow>;
   /** Row-locks the craft until commit; collecting runs under it. */
@@ -56,7 +69,7 @@ export interface InventoryTxRepo extends InventoryRepo {
 }
 
 const ownedBy = (owner: ItemOwner) =>
-  and(eq(inventoryItems.mapId, owner.mapId), eq(inventoryItems.userId, owner.userId));
+  and(eq(inventories.mapId, owner.mapId), eq(inventories.userId, owner.userId));
 
 const toCraft = (row: typeof crafts.$inferSelect): CraftRow => ({
   ...row,
@@ -82,25 +95,25 @@ function queries(db: Executor): InventoryRepo {
     list: async (owner) =>
       counts(
         await db
-          .select({ itemId: inventoryItems.itemId, quantity: inventoryItems.quantity })
-          .from(inventoryItems)
-          .where(and(ownedBy(owner), gt(inventoryItems.quantity, 0)))
-          .orderBy(asc(inventoryItems.itemId)),
+          .select({ itemId: inventories.itemId, quantity: inventories.quantity })
+          .from(inventories)
+          .where(and(ownedBy(owner), gt(inventories.quantity, 0)))
+          .orderBy(asc(inventories.itemId)),
       ),
 
     lockItems: async (owner, itemIds) => {
       if (itemIds.length === 0) return {};
       return counts(
         await db
-          .select({ itemId: inventoryItems.itemId, quantity: inventoryItems.quantity })
-          .from(inventoryItems)
-          .where(and(ownedBy(owner), inArray(inventoryItems.itemId, [...itemIds])))
-          .orderBy(asc(inventoryItems.itemId))
+          .select({ itemId: inventories.itemId, quantity: inventories.quantity })
+          .from(inventories)
+          .where(and(ownedBy(owner), inArray(inventories.itemId, [...itemIds])))
+          .orderBy(asc(inventories.itemId))
           .for('update'),
       );
     },
 
-    add: async (owner, items) => {
+    add: async (owner, items, change) => {
       const rows = Object.entries(items).map(([itemId, quantity]) => ({
         ...owner,
         itemId,
@@ -110,24 +123,34 @@ function queries(db: Executor): InventoryRepo {
       // Sorted, so concurrent grants take row locks in the same order.
       rows.sort((a, b) => (a.itemId < b.itemId ? -1 : a.itemId > b.itemId ? 1 : 0));
       await db
-        .insert(inventoryItems)
+        .insert(inventories)
         .values(rows)
         .onConflictDoUpdate({
-          target: [inventoryItems.mapId, inventoryItems.userId, inventoryItems.itemId],
+          target: [inventories.mapId, inventories.userId, inventories.itemId],
           set: {
-            quantity: sql`${inventoryItems.quantity} + excluded.quantity`,
+            quantity: sql`${inventories.quantity} + excluded.quantity`,
             updatedAt: sql`now()`,
           },
         });
+      await db
+        .insert(resourceLedger)
+        .values(rows.map((r) => ({ ...owner, itemId: r.itemId, delta: r.quantity, ...change })));
     },
 
-    subtract: async (owner, items) => {
-      for (const [itemId, quantity] of Object.entries(items)) {
+    subtract: async (owner, items, change) => {
+      const entries = Object.entries(items);
+      if (entries.length === 0) return;
+      for (const [itemId, quantity] of entries) {
         await db
-          .update(inventoryItems)
-          .set({ quantity: sql`${inventoryItems.quantity} - ${quantity}`, updatedAt: sql`now()` })
-          .where(and(ownedBy(owner), eq(inventoryItems.itemId, itemId)));
+          .update(inventories)
+          .set({ quantity: sql`${inventories.quantity} - ${quantity}`, updatedAt: sql`now()` })
+          .where(and(ownedBy(owner), eq(inventories.itemId, itemId)));
       }
+      await db
+        .insert(resourceLedger)
+        .values(
+          entries.map(([itemId, quantity]) => ({ ...owner, itemId, delta: -quantity, ...change })),
+        );
     },
 
     insertCraft: async (craft) => {

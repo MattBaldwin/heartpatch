@@ -67,8 +67,9 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
   return {
     start: async (user, mapId, { q, r }) => {
       const at = now();
+      let result: GatherResponse;
       try {
-        return await store.transaction(async (repo, tx) => {
+        result = await store.transaction(async (repo, tx) => {
           const map = await requireMember(tx, user, mapId);
           // Share-locked: the tile can't change hands while this starts.
           const tile = await repo.lockTileAt(mapId, q, r);
@@ -97,6 +98,19 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
             startedAt: at,
             readyAt: new Date(at.getTime() + seconds * 1000),
           });
+          await repo.appendEvent({
+            mapId,
+            type: 'gather.started',
+            actorUserId: user.id,
+            payload: {
+              gatherId: gather.id,
+              userId: user.id,
+              q: gather.q,
+              r: gather.r,
+              resource: gather.resource,
+              readyAt: gather.readyAt.toISOString(),
+            },
+          });
           return { gather: toGather(gather), now: at.toISOString() };
         });
       } catch (err) {
@@ -104,6 +118,8 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
         if (isUniqueViolation(err)) throw new AppError('CONFLICT', MESSAGES.already);
         throw err;
       }
+      published(mapId);
+      return result;
     },
 
     collect: async (user, mapId, gatherId) => {
@@ -123,7 +139,7 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
         if (gather.readyAt > at) throw new AppError('CONFLICT', MESSAGES.notReady);
 
         // Lock order: gather, inventory rows, then `maps` via appendEvent.
-        await grantItems(tx, owner, gather.items);
+        await grantItems(tx, owner, gather.items, 'gather', gather.id);
         await repo.endGather(gather.id, { status: 'collected', at });
         await repo.appendEvent({
           mapId,

@@ -8,6 +8,7 @@ import {
   type CraftResponse,
   type CollectResponse,
   type InventoryResponse,
+  type ItemChangeReason,
   type ItemCounts,
   type PublicUser,
 } from '@heartpatch/shared';
@@ -64,24 +65,34 @@ function checkItems(items: ItemCounts): void {
 }
 
 /**
- * Adds items to a player's bag, inside the caller's transaction. Unknown item
- * ids are refused (`VALIDATION_FAILED`). Call before the transaction's game
- * event (the event takes the `maps` row lock last).
+ * Adds items to a player's bag, inside the caller's transaction, with a
+ * ledger row per item (`reason`, and `refId` for what caused it). Unknown
+ * item ids are refused (`VALIDATION_FAILED`). Call before the transaction's
+ * game event (the event takes the `maps` row lock last).
  */
-export async function grantItems(tx: Executor, owner: ItemOwner, items: ItemCounts): Promise<void> {
+export async function grantItems(
+  tx: Executor,
+  owner: ItemOwner,
+  items: ItemCounts,
+  reason: ItemChangeReason,
+  refId: string | null = null,
+): Promise<void> {
   checkItems(items);
-  await createInventoryRepo(tx).add(owner, items);
+  await createInventoryRepo(tx).add(owner, items, { reason, refId });
 }
 
 /**
- * Takes items from a player's bag, inside the caller's transaction. Locks the
- * rows first; if any item is short it throws `CONFLICT` with a kid-readable
- * line ("You need 1 more Timber first!") and changes nothing.
+ * Takes items from a player's bag, inside the caller's transaction, with a
+ * ledger row per item. Locks the rows first; if any item is short it throws
+ * `CONFLICT` with a kid-readable line ("You need 1 more Timber first!") and
+ * changes nothing.
  */
 export async function consumeItems(
   tx: Executor,
   owner: ItemOwner,
   items: ItemCounts,
+  reason: ItemChangeReason,
+  refId: string | null = null,
 ): Promise<void> {
   checkItems(items);
   const repo = createInventoryRepo(tx);
@@ -90,7 +101,7 @@ export async function consumeItems(
   if (Object.keys(short).length > 0) {
     throw new AppError('CONFLICT', MESSAGES.needMore(describeShortfall(short)));
   }
-  await repo.subtract(owner, items);
+  await repo.subtract(owner, items, { reason, refId });
 }
 
 /** Season ids on today on a map (its local date, design doc §15). */
@@ -187,7 +198,6 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
           if ((await repo.listActiveCrafts(owner)).length > 0) {
             throw new AppError('CONFLICT', MESSAGES.busy);
           }
-          await consumeItems(tx, owner, recipe.inputs);
           const craft = await repo.insertCraft({
             ...owner,
             recipeId: recipe.id,
@@ -195,6 +205,8 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
             startedAt: at,
             readyAt: new Date(at.getTime() + recipe.craftSeconds * 1000),
           });
+          // Short of anything: CONFLICT, and the craft row rolls back with it.
+          await consumeItems(tx, owner, recipe.inputs, 'craft', craft.id);
           return { craft: toCraft(craft), items: await repo.list(owner), now: at.toISOString() };
         });
       } catch (err) {
@@ -215,7 +227,7 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
         }
         if (craft.collectedAt) throw new AppError('CONFLICT', MESSAGES.collected);
         if (craft.readyAt > at) throw new AppError('CONFLICT', MESSAGES.notReady);
-        await grantItems(tx, owner, craft.items);
+        await grantItems(tx, owner, craft.items, 'craft', craft.id);
         await repo.markCraftCollected(craft.id, at);
         await repo.appendEvent({
           mapId,
@@ -238,7 +250,7 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
       const owner = { mapId, userId: user.id };
       return store.transaction(async (repo, tx) => {
         await requireMember(tx, user, mapId);
-        await grantItems(tx, owner, items);
+        await grantItems(tx, owner, items, 'dev-grant');
         return repo.list(owner);
       });
     },
