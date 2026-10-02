@@ -184,7 +184,7 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
 
     it('enqueues the wake-up inside the command transaction', async () => {
       const consumer = testConsumer();
-      // Never picks jobs up here (the worker's poll sees them later, after we look).
+      // Asserts on pgboss.job rows (any state), not on delivery timing.
       jobs = await startJobs({
         connectionString: url!,
         db,
@@ -220,8 +220,6 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
         }
       });
       expect(await jobsFor(consumer, mapId)).toBe(1);
-      await eventually(async () => (await applied(consumer, mapId)).length === 2);
-      expect(await applied(consumer, mapId)).toEqual([1, 2]);
     });
 
     it('wakes only consumers that read the map kind', async () => {
@@ -244,6 +242,7 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       );
     });
 
+    // The one end-to-end delivery test: catch-up at boot, then a worker runs the job.
     it('catches up on events whose wake-up was lost', async () => {
       const consumer = testConsumer();
       const mapId = await newMap();
