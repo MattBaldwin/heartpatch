@@ -8,22 +8,60 @@ import * as root from '../src/index.js';
 const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = resolve(here, '../src');
 const serverDir = resolve(srcDir, 'data/server');
+const clientDir = resolve(here, '../../../apps/client');
 
-/** Every source file reachable from `entry` through relative imports and re-exports. */
-function importGraph(entry: string): Set<string> {
+/** The workspace package entries, as the client resolves them (`@heartpatch/source`). */
+const packageEntries: Record<string, string> = {
+  '@heartpatch/shared': resolve(srcDir, 'index.ts'),
+  '@heartpatch/shared/server': resolve(serverDir, 'index.ts'),
+};
+
+/**
+ * Every source file reachable from `entries` through relative imports,
+ * re-exports and `@heartpatch/shared` package imports.
+ */
+function importGraph(...entries: string[]): Set<string> {
   const seen = new Set<string>();
-  const queue = [entry];
+  const queue = [...entries];
   while (queue.length > 0) {
     const file = queue.pop()!;
     if (seen.has(file)) continue;
     seen.add(file);
     const source = readFileSync(file, 'utf8');
-    for (const match of source.matchAll(/(?:from|import)\s*\(?\s*['"](\.[^'"]+)['"]/g)) {
-      const target = resolve(dirname(file), match[1]!.replace(/\.js$/, '.ts'));
-      if (existsSync(target)) queue.push(target);
+    for (const match of source.matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)) {
+      const spec = match[1]!;
+      const target = spec.startsWith('.')
+        ? resolve(dirname(file), spec.replace(/\.js$/, '.ts'))
+        : packageEntries[spec];
+      if (target !== undefined && existsSync(target)) queue.push(target);
     }
   }
   return seen;
+}
+
+/** The client's entry modules: each page's `<script type="module" src>`. */
+function clientEntries(): string[] {
+  return ['index.html', 'gallery.html'].flatMap((page) => {
+    const html = readFileSync(resolve(clientDir, page), 'utf8');
+    return [...html.matchAll(/<script[^>]*\ssrc="\/([^"]+)"/g)].map((m) =>
+      resolve(clientDir, m[1]!),
+    );
+  });
+}
+
+/** Ids that must never reach a client: secret species, their moves and evolution targets. */
+const secretIds = [
+  ...server.SERVER_GAME_DATA.secretSpecies.map((s) => s.id),
+  ...server.SERVER_GAME_DATA.secretMoves.map((m) => m.id),
+  ...server.SERVER_GAME_DATA.secretEvolutions.map((e) => e.into),
+];
+
+/** Secret ids mentioned anywhere in `files`, as `file: id`. */
+function secretMentions(files: Iterable<string>): string[] {
+  return [...files].flatMap((file) => {
+    const source = readFileSync(file, 'utf8');
+    return secretIds.filter((id) => source.includes(id)).map((id) => `${file}: ${id}`);
+  });
 }
 
 describe('server-only data split (tech spec §2)', () => {
@@ -55,5 +93,39 @@ describe('server-only data split (tech spec §2)', () => {
       default: './dist/data/server/index.js',
     });
     expect(Object.keys(pkg.exports['./server']!)).toEqual(Object.keys(pkg.exports['.']!));
+  });
+
+  it('has secret rows to look for', () => {
+    expect(server.SERVER_GAME_DATA.secretSpecies.length).toBeGreaterThan(0);
+    expect(server.SERVER_GAME_DATA.secretMoves.length).toBeGreaterThan(0);
+    expect(server.SERVER_GAME_DATA.secretEvolutions.length).toBeGreaterThan(0);
+  });
+
+  // CLAUDE.md rule 6: secret species and forms are server-only.
+  it('never mentions a secret id in a module the root entry reaches', () => {
+    expect(secretMentions(importGraph(resolve(srcDir, 'index.ts')))).toEqual([]);
+  });
+
+  it('never puts a secret species, move or evolution in the public data export', () => {
+    const exported = JSON.stringify(root);
+    expect(secretIds.filter((id) => exported.includes(id))).toEqual([]);
+    expect(root.GAME_DATA.species.filter((s) => s.rarity === 'secret')).toEqual([]);
+    const publicSpecies = new Set(root.GAME_DATA.species.map((s) => s.id));
+    const reachableSecret = root.GAME_DATA.species.flatMap((s) =>
+      s.evolutions.filter((e) => !publicSpecies.has(e.into)).map((e) => `${s.id} → ${e.into}`),
+    );
+    expect(reachableSecret).toEqual([]);
+  });
+
+  it('never reaches data/server or a secret id from a client entry point', () => {
+    const entries = clientEntries();
+    expect(entries.map((file) => file.slice(clientDir.length + 1)).sort()).toEqual([
+      'src/main.ts',
+      'src/procedural/gallery/gallery-main.ts',
+    ]);
+    const reachable = importGraph(...entries);
+    expect(reachable.has(resolve(srcDir, 'index.ts'))).toBe(true);
+    expect([...reachable].filter((file) => file.startsWith(serverDir))).toEqual([]);
+    expect(secretMentions(reachable)).toEqual([]);
   });
 });
