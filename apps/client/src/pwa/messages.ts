@@ -13,6 +13,12 @@ export interface WorkerDescription {
   hasPath: boolean;
 }
 
+export function isWorkerDescription(data: unknown): data is WorkerDescription {
+  if (typeof data !== 'object' || data === null) return false;
+  const { version, cache, hasPath } = data as Record<string, unknown>;
+  return typeof version === 'string' && typeof cache === 'string' && typeof hasPath === 'boolean';
+}
+
 export function isWorkerRequest(data: unknown): data is WorkerRequest {
   if (typeof data !== 'object' || data === null) return false;
   const { type, path } = data as { type?: unknown; path?: unknown };

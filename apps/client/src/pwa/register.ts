@@ -3,7 +3,7 @@ import {
   UPDATE_CHECK_INTERVAL_MS,
   UPDATE_CHECK_MIN_GAP_MS,
 } from './config.js';
-import type { WorkerDescription } from './messages.js';
+import { isWorkerDescription, type WorkerDescription } from './messages.js';
 import { startUpdates, type RegistrationLike, type WorkerLike } from './update-flow.js';
 
 /** How long to wait for a worker to describe itself before assuming it's new. */
@@ -15,11 +15,11 @@ function describe(worker: WorkerLike, path: string): Promise<WorkerDescription |
     const timer = setTimeout(() => {
       resolve(null);
     }, DESCRIBE_TIMEOUT_MS);
-    channel.port1.onmessage = (event: MessageEvent<WorkerDescription>) => {
+    channel.port1.onmessage = (event: MessageEvent<unknown>) => {
       clearTimeout(timer);
-      resolve(event.data);
+      resolve(isWorkerDescription(event.data) ? event.data : null);
     };
-    (worker as ServiceWorker).postMessage({ type: 'describe', path }, [channel.port2]);
+    worker.postMessage({ type: 'describe', path }, [channel.port2]);
   });
 }
 

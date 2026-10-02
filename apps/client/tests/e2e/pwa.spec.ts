@@ -125,17 +125,25 @@ test('a new install deletes old shell caches', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => caches.keys())).toEqual([cache]);
 });
 
-test('opens the cached shell offline, but never answers the API from cache', async ({
+test('serves the cached shell offline, but never answers the API from cache', async ({
   page,
   context,
+  browserName,
 }) => {
   await page.goto('/');
   await activeShell(page);
   await page.reload(); // now controlled by the worker
+  expect(await page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
 
   await context.setOffline(true);
-  await page.reload();
-  await expect(page.locator('#game')).toBeAttached();
+  // From inside the page, through the worker: the shell comes from its cache…
+  const shell = await page.evaluate(async () => {
+    const response = await fetch('/');
+    return { status: response.status, html: await response.text() };
+  });
+  expect(shell.status).toBe(200);
+  expect(shell.html).toContain('<canvas id="game"');
+  // …and the API fails rather than coming from a cache.
   const offlineApi = await page.evaluate(() =>
     fetch('/api/v1/health').then(
       () => 'answered',
@@ -143,6 +151,16 @@ test('opens the cached shell offline, but never answers the API from cache', asy
     ),
   );
   expect(offlineApi).toBe('failed');
+
+  // A full offline page load too, where the harness supports it. Playwright's
+  // WebKit fails any offline top-level navigation with "WebKit encountered an
+  // internal error" before the worker can answer, so on WebKit the in-page
+  // fetch above is the check; offline launch is checked by hand on a real
+  // iPhone (PR #70, "How to test on iPhone").
+  if (browserName === 'chromium') {
+    await page.reload();
+    await expect(page.locator('#game')).toBeAttached();
+  }
   await context.setOffline(false);
 });
 

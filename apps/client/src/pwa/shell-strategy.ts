@@ -7,7 +7,11 @@ export type PrecacheEntry = string | { url: string; revision: string | null };
 /** Every shell cache starts with this; old versions are deleted on activate. */
 export const CACHE_PREFIX = 'heartpatch-shell-';
 
-/** The cache key for the app page. index.html is fetched as `/`: Caddy redirects `/index.html` there. */
+/**
+ * The cache key for the app page. index.html is fetched and cached as `/`,
+ * the URL players open, so a server that redirects `/index.html` to `/`
+ * can't leave a redirected response in the cache.
+ */
 export const SHELL_URL = '/';
 
 /**
@@ -52,7 +56,7 @@ export function shellVersion(entries: readonly PrecacheEntry[]): string {
 
 /**
  * A copy without the "redirected" flag. Browsers refuse a redirected response
- * for a page load, and Caddy redirects `/index.html` to `/`.
+ * for a page load, so none may go into the cache.
  */
 export async function withoutRedirect(response: Response): Promise<Response> {
   if (!response.redirected) return response;
@@ -81,7 +85,8 @@ export async function networkFirst(
   });
   try {
     const first = await Promise.race([network, timeout]);
-    if (first?.ok) return first;
+    // A page-load redirect arrives as `opaqueredirect`; let the browser follow it.
+    if (first?.ok || first?.type === 'opaqueredirect') return first;
     return (await cached()) ?? first ?? (await network);
   } catch {
     return (await cached()) ?? Response.error();

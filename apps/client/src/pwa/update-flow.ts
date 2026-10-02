@@ -7,7 +7,7 @@ import type { WorkerDescription, WorkerRequest } from './messages.js';
 /** The parts of a ServiceWorker this uses. */
 export interface WorkerLike extends EventTarget {
   readonly state: ServiceWorkerState;
-  postMessage(message: WorkerRequest): void;
+  postMessage(message: WorkerRequest, transfer?: Transferable[]): void;
 }
 
 export interface RegistrationLike extends EventTarget {

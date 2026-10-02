@@ -86,6 +86,13 @@ describe('networkFirst', () => {
     expect(await networkFirst(never, cached, 5)).toBe(shell);
   });
 
+  it('lets the browser follow a page-load redirect', async () => {
+    const redirect = new Response(null, { status: 200 });
+    Object.defineProperty(redirect, 'ok', { value: false });
+    Object.defineProperty(redirect, 'type', { value: 'opaqueredirect' });
+    expect(await networkFirst(Promise.resolve(redirect), cached, 1000)).toBe(redirect);
+  });
+
   it('returns the network answer when there is no cached shell', async () => {
     const error = new Response('', { status: 502 });
     const none = () => Promise.resolve(undefined);
