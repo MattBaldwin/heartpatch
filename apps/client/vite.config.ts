@@ -24,11 +24,15 @@ export default defineConfig({
     // Use workspace package sources directly (see packages/shared/package.json).
     conditions: ['@heartpatch/source', ...defaultClientConditions],
   },
+  // Vitest runs tests as SSR, so its resolver needs the workspace condition too.
+  ssr: { resolve: { conditions: ['@heartpatch/source', 'node'] } },
   server: {
     port: 5173,
     strictPort: true,
     proxy: {
       '/api': 'http://localhost:3000',
+      // Live sync (tech spec §5). The Origin header passes through unchanged.
+      '/ws': { target: 'ws://localhost:3000', ws: true },
     },
   },
   build: {

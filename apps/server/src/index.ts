@@ -2,6 +2,7 @@ import { buildApp } from './app.js';
 import { loadServerConfig } from './config.js';
 import { createDbClient, dbReadinessCheck } from './db/client.js';
 import { createAuthRepo } from './modules/auth/repo.js';
+import { createWsRepo } from './ws/repo.js';
 
 const config = loadServerConfig();
 const db = createDbClient(config.DATABASE_URL);
@@ -9,6 +10,7 @@ const app = await buildApp({
   config,
   readinessChecks: [dbReadinessCheck(db)],
   authRepo: createAuthRepo(db.db),
+  wsRepo: createWsRepo(db.db),
 });
 // Closing the app (shutdown or failed start) also drains the DB pool.
 app.addHook('onClose', () => db.close());
