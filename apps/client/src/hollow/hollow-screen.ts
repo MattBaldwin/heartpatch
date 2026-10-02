@@ -36,6 +36,12 @@ export interface HollowScreenOptions {
   now?: () => number;
   /** Dev builds: a button that makes night fall now. */
   devTools?: boolean;
+  /**
+   * Another morning report is on screen (#16's raid report): the Hollow's
+   * card and list wait their turn, so the player sees one thing at a time.
+   * Call `otherReportClosed` when it goes away.
+   */
+  otherReportOpen?: () => boolean;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -58,6 +64,8 @@ export interface HollowScreen {
   setUser: (user: PublicUser | null) => void;
   /** A live event on the open map (`map-screen`'s `onLiveEvent`). */
   liveEvent: (event: WsEventMessage) => void;
+  /** The other morning report opened or closed (see `otherReportOpen`). */
+  otherReportChanged: () => void;
   readonly debug: HollowDebug | null;
 }
 
@@ -191,7 +199,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     badge.textContent = hollowed.length > 0 ? String(hollowed.length) : '';
     badge.hidden = hollowed.length === 0;
 
-    reportBox.hidden = !on || report.length === 0 || visitPlaying;
+    const heldBack = options.otherReportOpen?.() ?? false;
+    reportBox.hidden = !on || report.length === 0 || visitPlaying || heldBack;
     if (!reportBox.hidden) {
       const { title, lines } = reportText(report, (t) => nameOf(t));
       const waiting = report.flatMap((r) => (r.taken?.inHollow ? [r.taken] : []));
@@ -233,7 +242,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       );
     }
 
-    sheet.hidden = !on || !sheetOpen || !reportBox.hidden;
+    sheet.hidden = !on || !sheetOpen || !reportBox.hidden || heldBack;
     if (!sheet.hidden && status) {
       const reward =
         status.rescue.rewardsLeftToday > 0
@@ -412,6 +421,10 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       render();
     },
 
+    otherReportChanged: () => {
+      render();
+    },
+
     liveEvent: (event) => {
       if (event.mapId !== mapId) return;
       if (event.type === 'hollow.nightfall') {
@@ -438,7 +451,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         mapId,
         night: layer.night,
         hollowed: status.hollowed.length,
-        report: report.map((r) => r.night),
+        report: reportBox.hidden ? [] : report.map((r) => r.night),
         sheetOpen: !sheet.hidden,
         visiting: layer.visiting,
         visits: layer.visits,

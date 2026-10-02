@@ -75,6 +75,10 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
 
   // One squishy, waiting by the Heart Seed with no Hearthfire built: exposed.
   expect((await devPost(page, `/maps/${mapId}/dev/squishies`, { level: 5 })).status).toBe(201);
+  // The raid report (#16) is open when night falls: the Hollow's report waits its turn.
+  await page.getByTestId('raid-open').tap();
+  const raidSheet = page.getByTestId('raid-report');
+  await expect(raidSheet).toBeVisible();
   const fell = await devPost(page, `/maps/${mapId}/dev/nightfall`);
   expect(fell).toMatchObject({ status: 200, body: { taken: 1 } });
 
@@ -85,8 +89,12 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
     .toBe(false);
   await expect.poll(() => isIdle(page), { timeout: 30_000 }).toBe(true);
 
-  // The morning report: gentle, and always "you can rescue them".
+  // One morning report at a time: the Hollow's shows once the raid report closes.
   const report = page.getByTestId('hollow-report');
+  await expect(report).toBeHidden();
+  await raidSheet.getByTestId('raid-done').tap();
+  await expect(raidSheet).toBeHidden();
+  // The morning report: gentle, and always "you can rescue them".
   await expect(report).toBeVisible();
   await expect(report).toContainText('The Hollow Man visited last night');
   await expect(report).toContainText('You can rescue them!');

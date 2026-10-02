@@ -18,6 +18,11 @@ export interface RaidReportOptions {
   /** Plays a raid's replay in the battle screen. */
   watch: (replay: RaidReplay) => void;
   api?: RaidsApi;
+  /**
+   * The sheet opened or closed (by the player or on its own), so other
+   * morning news (the Hollow Man's report, #21) can wait its turn.
+   */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -80,6 +85,12 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
     body,
   );
   sheet.hidden = true;
+  if (options.onOpenChange) {
+    const changed = options.onOpenChange;
+    new MutationObserver(() => {
+      changed(!sheet.hidden);
+    }).observe(sheet, { attributes: true, attributeFilter: ['hidden'] });
+  }
   options.root.append(button, sheet);
 
   button.addEventListener('click', () => {

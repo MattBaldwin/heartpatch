@@ -112,6 +112,8 @@ const inventory = createInventoryScreen({ root: document.body, devTools: import.
 // from home base and the catalog; it celebrates an evolution the first time
 // the player is back from the battle that caused it, or opens their home.
 const care = createCareSheet({ root: document.body });
+/** #16's raid report is open: the Hollow's morning report waits its turn (#21). */
+let raidReportOpen = false;
 // Territory (#15): Claim, Challenge and guards in the tile panel. A tile
 // battle opens the battle screen, unless another screen sits over the map.
 // The raid report (#16) rides along with territory onto every map: challenges
@@ -122,6 +124,10 @@ const raidReport = createRaidReport({
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) {
       battles.watch(replay.start, replay.end);
     }
+  },
+  onOpenChange: (open) => {
+    raidReportOpen = open;
+    hollow.otherReportChanged();
   },
 });
 const territory = withRaidReport(
@@ -138,6 +144,7 @@ const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
 const hollow = createHollowScreen({
   root: document.body,
   layer: hollowLayer,
+  otherReportOpen: () => raidReportOpen,
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) battles.open(battle);
   },
