@@ -168,6 +168,23 @@ await repo.transaction(async (repo, tx) => {
 
 **Reach** is the player's land and the tiles next to it; `findWildEncounter` (the battles port) takes a picked tile or the nearest spawn, skipping any the player befriended this window (`battles.spawn_window`). `species_seen` rows are written by the battles service on its own transactions (`createSpawnsRepo(tx)`).
 
+## Home base and buildings
+
+Building on a home base (design doc §11, §13–14; issue #18) lives in `src/modules/buildings`. A building is a `buildings` row on a spot (0 = the middle, 1–6 around it) of one of the player's own home tiles. Hearthfire fuel is a date (tech spec §7): `fuelled_through` is the last map-local night it covers, and "lit" / "nights left" are worked out on read (`hearthfire.ts`: `mapLocalTime`, `fireStateAt`), so nothing ticks.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/home` | → `HomeResponse`: my home tiles, buildings (with fuel and residents), active squishies, `speciesDefs` for secret species I own, my bag, today's seasons, `tonight` and `now` |
+| `POST /api/v1/maps/:mapId/buildings` | `{ buildingId, q, r, spot }` → 201 `HomeResponse`. My home tile only (`FORBIDDEN`), a free spot, within `maxPerHome`, seasonal ones in season; pays with `consumeItems(…, 'build')` in the same transaction; `building.placed` |
+| `POST /api/v1/maps/:mapId/buildings/:buildingId/move` | `{ q, r, spot }` → `HomeResponse`; `building.moved` (no event if it didn't move) |
+| `POST /api/v1/maps/:mapId/buildings/:buildingId/remove` | → `{ refund, home }`: its refund percent of what it cost plus unburned fuel (`grantItems(…, 'build-refund')`); residents move out; `building.removed` |
+| `POST /api/v1/maps/:mapId/buildings/:buildingId/fuel` | `{ nights }` → `HomeResponse`. Fires only; adds what fits (up to `maxFuelNights` from tonight) and charges `consumeItems(…, 'fuel')` for that; `CONFLICT` when full; `building.fueled` |
+| `POST /api/v1/maps/:mapId/squishies/:squishyId/habitat` | `{ habitatId \| null }` → `HomeResponse`. My own active squishy into my habitat, up to its capacity, or out; `squishy.housed` |
+
+Mutating routes take an `Idempotency-Key`. Every command locks the player's home tiles first (`lockHomeTiles`), so one player's building commands run one at a time ("one Hearthfire per home" and habitat capacity can't race), then the building, squishy and inventory rows, then `maps` (the event).
+
+**For nightfall (#21):** `mapLocalTime(at, zone)` gives the map-local date and minute; shared `tonightOf`, `protectsNight(fuelledThrough, night)` and `hearthfireState` answer "is this fire lit for this night"; `litSafeTiles(fires, homeTiles, local)` (or shared `safeTiles`) gives the protected tiles: a lit fire's whole home base plus every tile within its radius. `BuildingsRepo.listOnMap` returns every building with its tile. **Leaving:** `removeMemberBuildings` runs inside the maps module's leave/remove transaction. **Map view:** `listPublicBuildings` fills `PublicTile.buildings` from the view's own snapshot.
+
 ## Live sync (`/ws`)
 
 `src/ws/` pushes game events to players in real time (tech spec §5 and §7). Messages are the zod schemas in `packages/shared/src/schemas/ws.ts`.

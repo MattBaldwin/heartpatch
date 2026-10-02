@@ -124,8 +124,9 @@ export function createWardrobeService(options: WardrobeServiceOptions): Wardrobe
    * the caller's transaction; returns the maps to publish to.
    */
   const putOn = async (repo: WardrobeTxRepo, userId: string, wearing: string[]) => {
-    const current = await repo.lockWorn(userId);
-    if (current && sameList(current.wearing, wearing)) return [];
+    // Never dressed is the same as wearing nothing.
+    const current = (await repo.lockWorn(userId))?.wearing ?? [];
+    if (sameList(current, wearing)) return [];
     await repo.saveOutfit(userId, { preset: WORN, name: null, wearing }, now());
     const mapIds = await repo.activeMapIds(userId);
     for (const mapId of mapIds) {

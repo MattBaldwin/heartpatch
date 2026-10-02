@@ -24,6 +24,9 @@ import {
   type PublicTile,
 } from '@heartpatch/shared';
 import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
+import { MAP_BUILDING_SCALE, SAFE_GLOW } from '../home/home-config.js';
+import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
+import { BuildingField } from '../procedural/buildings/building-field.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
@@ -56,17 +59,17 @@ import {
 
 const TILE_RADIUS = HEX_SIZE * TILE_FILL;
 /** Rounded-top profile shared by tiles and the tint laid over them (top at y = 0). */
-const DOME = 0.035; // TUNE
-const BEVEL = 0.07; // TUNE
-const TOP_RINGS: readonly ProfileRing[] = [
+export const DOME = 0.035; // TUNE
+export const BEVEL = 0.07; // TUNE
+export const TOP_RINGS: readonly ProfileRing[] = [
   { scale: 0.5, y: DOME * 0.75 },
   { scale: 0.8, y: DOME * 0.25 },
   { scale: 0.92, y: -BEVEL * 0.25 },
   { scale: 0.98, y: -BEVEL * 0.7 },
   { scale: 1, y: -BEVEL },
 ];
-const CORNER = 0.2; // TUNE: corner rounding, fraction of the radius
-const SEGMENTS = 3;
+export const CORNER = 0.2; // TUNE: corner rounding, fraction of the radius
+export const SEGMENTS = 3;
 /** Tint floats this far above the tile so it never z-fights. */
 const TINT_LIFT = 0.012;
 /** Highest a tap can land, for the first guess when picking a tile. */
@@ -83,6 +86,11 @@ export interface MapSceneStats {
   readonly tileMeshes: number;
   /** Keepers standing at their home bases (#42). */
   readonly keepers: number;
+  /** Buildings on home bases (#18), and the Hearthfires among them drawn lit. */
+  readonly buildings: number;
+  readonly litFires: number;
+  /** Tiles under a lit Hearthfire's soft glow (its safe radius, #18). */
+  readonly safeTiles: number;
   /** Clothing ids each drawn Keeper wears (#43), by drawing order. */
   readonly keepersWearing: readonly (readonly string[])[];
 }
@@ -96,7 +104,11 @@ function lookOf(tile: PublicTile): TerrainLook {
   return TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
 }
 
-function vinyl(scene: Scene, name: string, look: TerrainLook | { color: string }): PBRMaterial {
+export function vinyl(
+  scene: Scene,
+  name: string,
+  look: TerrainLook | { color: string },
+): PBRMaterial {
   const m = new PBRMaterial(name, scene);
   m.albedoColor = linear(look.color);
   m.metallic = 0;
@@ -111,7 +123,7 @@ function vinyl(scene: Scene, name: string, look: TerrainLook | { color: string }
 }
 
 /** Unlit, vertex-coloured and alpha-blended: tint, selection and blob shadows. */
-function overlayMaterial(scene: Scene, name: string): StandardMaterial {
+export function overlayMaterial(scene: Scene, name: string): StandardMaterial {
   const m = new StandardMaterial(name, scene);
   m.disableLighting = true;
   m.diffuseColor = Color3.White();
@@ -123,7 +135,7 @@ function overlayMaterial(scene: Scene, name: string): StandardMaterial {
   return m;
 }
 
-function meshFrom(scene: Scene, name: string, arrays: MeshArrays): Mesh {
+export function meshFrom(scene: Scene, name: string, arrays: MeshArrays): Mesh {
   const mesh = new Mesh(name, scene);
   const data = new VertexData();
   data.positions = arrays.positions;
@@ -141,7 +153,7 @@ function meshFrom(scene: Scene, name: string, arrays: MeshArrays): Mesh {
 }
 
 /** Writes instance matrices; a mesh with no instances is switched off (it would draw at the origin). */
-function setInstances(mesh: Mesh, matrices: readonly Matrix[], dynamic = false): void {
+export function setInstances(mesh: Mesh, matrices: readonly Matrix[], dynamic = false): void {
   if (matrices.length === 0) {
     mesh.thinInstanceSetBuffer('matrix', null);
     mesh.setEnabled(false);
@@ -158,12 +170,12 @@ function setInstances(mesh: Mesh, matrices: readonly Matrix[], dynamic = false):
 const NO_TURN = Quaternion.Identity();
 const ONE = Vector3.One();
 
-function placeAt(x: number, y: number, z: number, scale = ONE, turn = NO_TURN): Matrix {
+export function placeAt(x: number, y: number, z: number, scale = ONE, turn = NO_TURN): Matrix {
   return Matrix.Compose(scale, turn, new Vector3(x, y, z));
 }
 
 /** Paints a builder mesh one colour (for merging parts into one vertex-coloured mesh). */
-function painted(mesh: Mesh, hex: string): Mesh {
+export function painted(mesh: Mesh, hex: string): Mesh {
   const c = linear(hex);
   const count = mesh.getTotalVertices();
   const colors = new Float32Array(count * 4);
@@ -172,7 +184,7 @@ function painted(mesh: Mesh, hex: string): Mesh {
   return mesh;
 }
 
-function merged(name: string, parts: Mesh[]): Mesh {
+export function merged(name: string, parts: Mesh[]): Mesh {
   const mesh = Mesh.MergeMeshes(parts, true, true);
   if (!mesh) throw new Error(`could not build ${name}`);
   mesh.name = name;
@@ -181,8 +193,28 @@ function merged(name: string, parts: Mesh[]): Mesh {
   return mesh;
 }
 
+/** The Heart Seed (design doc §11): a softly glowing pink seed with a leaf. Diameter 0.3. */
+export function buildHeartSeed(scene: Scene): Mesh {
+  const mesh = merged('heart-seed', [
+    painted(CreateSphere('seed', { diameter: 0.3, segments: 16 }, scene), '#ff8fb8'),
+    painted(
+      (() => {
+        const leaf = CreateSphere('leaf', { diameter: 0.12, segments: 8 }, scene);
+        leaf.position.set(0.05, 0.17, 0);
+        leaf.scaling.set(1.4, 0.5, 0.8);
+        return leaf;
+      })(),
+      '#7fd48f',
+    ),
+  ]);
+  const mat = vinyl(scene, 'heart-seed-mat', { color: '#ffffff' });
+  mat.emissiveColor = linear('#ff8fb8').scale(0.35); // TUNE: the Heart Seed glows softly
+  mesh.material = mat;
+  return mesh;
+}
+
 /** Procedural vinyl-toy props (design doc §19), one mesh per kind. */
-function buildProp(scene: Scene, kind: PropKind): { mesh: Mesh; shadow: number } {
+export function buildProp(scene: Scene, kind: PropKind): { mesh: Mesh; shadow: number } {
   const at = (m: Mesh, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1): Mesh => {
     m.position.set(x, y, z);
     m.scaling.set(sx, sy, sz);
@@ -254,8 +286,12 @@ export class MapScene {
   private readonly selection: Mesh;
   /** Each member's Keeper by their Heart Seed (design doc §23). Low detail; never animates here. */
   private readonly keepers: KeeperField;
+  /** Fires and habitats on home bases (#18), at map scale. */
+  private readonly buildings: BuildingField;
+  /** The soft glow over tiles a lit Hearthfire keeps safe (#18). */
+  private readonly safeGlow: Mesh;
   private tileMeshes = 0;
-  private counts = { tinted: 0, homes: 0, claimedHomes: 0 };
+  private counts = { tinted: 0, homes: 0, claimedHomes: 0, safeTiles: 0 };
 
   constructor(scene: Scene, view: MapView) {
     this.scene = scene;
@@ -269,21 +305,7 @@ export class MapScene {
     this.buildGap();
 
     this.tintMaterial = overlayMaterial(scene, 'tint-mat');
-    this.seedMesh = merged('heart-seed', [
-      painted(CreateSphere('seed', { diameter: 0.3, segments: 16 }, scene), '#ff8fb8'),
-      painted(
-        (() => {
-          const leaf = CreateSphere('leaf', { diameter: 0.12, segments: 8 }, scene);
-          leaf.position.set(0.05, 0.17, 0);
-          leaf.scaling.set(1.4, 0.5, 0.8);
-          return leaf;
-        })(),
-        '#7fd48f',
-      ),
-    ]);
-    const seedMat = vinyl(scene, 'heart-seed-mat', { color: '#ffffff' });
-    seedMat.emissiveColor = linear('#ff8fb8').scale(0.35); // TUNE: the Heart Seed glows softly
-    this.seedMesh.material = seedMat;
+    this.seedMesh = buildHeartSeed(scene);
     this.plotMesh = CreateTorus('home-plot', { diameter: 0.34, thickness: 0.05 }, scene);
     this.plotMesh.material = vinyl(scene, 'home-plot-mat', { color: '#f3dcb0' });
     this.plotMesh.isPickable = false;
@@ -309,6 +331,28 @@ export class MapScene {
 
     // No contact shadows: map props have none either, and Keepers are tiny here.
     this.keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: 'low', shadows: false });
+    this.buildings = new BuildingField(scene);
+    this.safeGlow = meshFrom(
+      scene,
+      'safe-glow',
+      loftRoundedHex(
+        TILE_RADIUS,
+        [
+          { scale: 0.5, y: DOME * 0.75, alpha: SAFE_GLOW.fill },
+          { scale: 0.8, y: DOME * 0.25, alpha: SAFE_GLOW.fill },
+          { scale: 0.92, y: -BEVEL * 0.25, alpha: SAFE_GLOW.edge },
+          { scale: 1, y: -BEVEL, alpha: 0 },
+        ],
+        {
+          corner: CORNER,
+          segments: SEGMENTS,
+          centre: { y: DOME, alpha: SAFE_GLOW.fill },
+          rgb: [...SAFE_GLOW.rgb],
+        },
+      ),
+    );
+    this.safeGlow.material = overlayMaterial(scene, 'safe-glow-mat');
+    this.safeGlow.setEnabled(false);
     this.update(view);
   }
 
@@ -318,6 +362,8 @@ export class MapScene {
       tileMeshes: this.tileMeshes,
       ...this.counts,
       keepers: this.keepers.handles.length,
+      buildings: this.buildings.stats.buildings,
+      litFires: this.buildings.stats.lit,
       keepersWearing: this.keepers.handles.map((h) => h.params.worn),
     };
   }
@@ -382,7 +428,31 @@ export class MapScene {
         keeperItems(wearing),
       );
     }
-    this.counts = { tinted, homes: homes.length, claimedHomes: seeds.length };
+    // Fires and habitats (#18), and the warm glow over tiles a lit fire keeps safe.
+    this.buildings.set(
+      mapBuildings(view, HEX_SIZE).map(({ tile, building, at }) => ({
+        buildingId: building.buildingId,
+        lit: building.lit,
+        x: at.x,
+        z: at.z,
+        y: lookOf(tile).height + DOME * 0.5,
+        scale: HEX_SIZE * MAP_BUILDING_SCALE,
+      })),
+    );
+    const safe: Matrix[] = [];
+    for (const key of mapSafeTiles(view)) {
+      const tile = this.tiles.get(key);
+      if (!tile) continue;
+      const p = hexToWorld(tile, HEX_SIZE);
+      safe.push(placeAt(p.x, lookOf(tile).height + TINT_LIFT * 1.5, p.z));
+    }
+    setInstances(this.safeGlow, safe, true);
+    this.counts = {
+      tinted,
+      homes: homes.length,
+      claimedHomes: seeds.length,
+      safeTiles: safe.length,
+    };
   }
 
   /** Rings the selected tile, or clears the ring (null). */

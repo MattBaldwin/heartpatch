@@ -62,8 +62,6 @@ export type SavePresetRequest = z.infer<typeof SavePresetRequestSchema>;
 export const SetAccessoryRequestSchema = z.strictObject({ itemId: ContentIdSchema.nullable() });
 export type SetAccessoryRequest = z.infer<typeof SetAccessoryRequestSchema>;
 
-export const SquishyParamsSchema = z.object({ mapId: z.uuid(), squishyId: z.uuid() });
-
 export const SetAccessoryResponseSchema = z.object({
   squishyId: z.uuid(),
   accessory: ContentIdSchema.nullable(),

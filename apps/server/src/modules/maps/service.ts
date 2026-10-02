@@ -25,6 +25,7 @@ import { assertAllowedText } from '../../lib/filter.js';
 import { newSeed } from '../../lib/rng.js';
 import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
+import { listPublicBuildings, removeMemberBuildings } from '../buildings/service.js';
 import { createKeepersRepo } from '../keepers/repo.js';
 import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
@@ -224,8 +225,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     actor: PublicUser,
     type: 'member.removed' | 'member.left',
   ) =>
-    store.transaction(async (repo) => {
-      // Lock order: seats, the player, tiles, then maps (appendGameEvent).
+    store.transaction(async (repo, tx) => {
+      // Lock order: seats, the player, tiles, buildings, then maps (appendGameEvent).
       await repo.lockSeats(mapId);
       await repo.lockUser(memberId);
       const membership = await repo.membership(mapId, memberId);
@@ -243,6 +244,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       }
       await repo.archiveMember(mapId, memberId);
       const releasedTiles = await repo.releaseTiles(mapId, memberId);
+      // A returning player gets a fresh home base (#4), so their buildings go (#18).
+      await removeMemberBuildings(tx, mapId, memberId);
       await repo.appendEvent({
         mapId,
         type,
@@ -320,11 +323,13 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     // One snapshot, so the seq matches the tiles and members exactly: live
     // sync replays everything after it and nothing before (tech spec §5).
     view: (user, mapId) =>
-      store.snapshot(async (repo) => {
+      store.snapshot(async (repo, tx) => {
         const map = await requireViewer(repo, user, mapId);
-        const [members, tiles] = await Promise.all([
+        const [members, tiles, buildings] = await Promise.all([
           repo.listMembers(mapId),
           repo.listTiles(mapId),
+          // Fires and habitats (#18), with `lit` as of now.
+          listPublicBuildings(tx, mapId, now(), map.timeZone),
         ]);
         return {
           map: {
@@ -335,7 +340,10 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             maxPlayers: map.maxPlayers,
           },
           members: members.map(toMember),
-          tiles,
+          tiles: tiles.map((t) => ({
+            ...t,
+            buildings: buildings.get(`${String(t.q)},${String(t.r)}`) ?? [],
+          })),
           seq: map.eventSeq,
         };
       }),

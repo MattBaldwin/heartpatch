@@ -116,3 +116,12 @@
   font-weight: 600;
   color: #6b8a3a;
 }
+
+/* Each feature's entries in the tile panel sit in their own slot (tile-actions.ts). */
+.tile-actions-slot {
+  display: contents;
+}
+
+.tile-panel-actions:not(:has(.tile-actions-slot > *)) {
+  display: none;
+}

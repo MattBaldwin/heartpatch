@@ -293,6 +293,9 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       const seq = (await eventsOf(mine)).length;
       await wearOk(server, kid, ['puddle-boots', 'witch-hat']);
       expect(await eventsOf(mine)).toHaveLength(seq);
+      // Nor does a player who never dressed taking nothing off.
+      await wearOk(server, friend, []);
+      expect(await eventsOf(mine)).toHaveLength(seq);
     });
 
     it('replays a retried wear instead of applying it twice (Idempotency-Key)', async () => {
@@ -402,6 +405,14 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       expect(SetAccessoryResponseSchema.parse(crown.json()).accessory).toBe('tiny-crown');
       const off = await call(server, 'POST', path, kid, { itemId: null });
       expect(SetAccessoryResponseSchema.parse(off.json()).accessory).toBeNull();
+
+      // A squishy taken to the Hollow is rescued first, then dressed up.
+      await db.execute(`update squishies set state = 'hollowed' where id = '${squishy.id}'`);
+      const hollowed = await call(server, 'POST', path, kid, { itemId: 'tiny-bow' });
+      expect(hollowed.statusCode).toBe(409);
+      expect(errorOf(hollowed).message).toBe(
+        'That squishy is in the Hollow. Rescue them first, then dress them up!',
+      );
     });
   });
 

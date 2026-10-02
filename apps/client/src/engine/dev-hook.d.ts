@@ -1,4 +1,5 @@
 import type { BattleDebug } from '../battle/battle-screen.js';
+import type { HomeDebug } from '../home/home-screen.js';
 import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
@@ -36,6 +37,8 @@ declare global {
       keeper?(): KeeperDebug | null;
       /** The open map's bag, gathers and the tile panel's gather action (#17), or null. */
       inventory?(): InventoryDebug | null;
+      /** The home base (#18): open or not, its buildings, squishies and wander hops, or null. */
+      home?(): HomeDebug | null;
       /** The open squishy catalog (seen, friends, names on the cards), or null. */
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */

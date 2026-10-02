@@ -15,8 +15,18 @@ const buildingBase = {
   id: ContentIdSchema,
   name: DisplayNameSchema,
   description: DescriptionSchema,
-  /** Seasonal buildings can only be built during their season. */
+  /**
+   * Seasonal buildings can only be built during their season. One already
+   * built stays and keeps working after the season ends (keepsakes, §15).
+   */
   season: ContentIdSchema.optional(),
+  /** How many of this building one home base can have. */
+  maxPerHome: z.number().int().positive(),
+  /**
+   * Percent of what it cost that comes back when it's taken down (rounded
+   * down per item). Defaults to `HOME_BASE_RULES.removeRefundPercent`.
+   */
+  refundPercent: z.number().int().min(0).max(100).optional(),
 };
 
 /**
@@ -63,3 +73,5 @@ export const BuildingSchema = z.discriminatedUnion('kind', [
 ]);
 export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];
+export type HearthfireBuilding = z.infer<typeof HearthfireBuildingSchema>;
+export type HabitatBuilding = z.infer<typeof HabitatBuildingSchema>;

@@ -12,6 +12,8 @@ import { createClock, type Clock } from './lib/time.js';
 import { createIdempotencyStore } from './db/idempotency-keys.js';
 import { registerIdempotency } from './lib/idempotency.js';
 import { battlesRoutes } from './modules/battles/routes.js';
+import { buildingsRoutes } from './modules/buildings/routes.js';
+import { createBuildingsService } from './modules/buildings/service.js';
 import { createBattlesService } from './modules/battles/service.js';
 import { gatheringRoutes } from './modules/gathering/routes.js';
 import { createGatheringService } from './modules/gathering/service.js';
@@ -183,6 +185,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         await api.register(
           gatheringRoutes(createGatheringService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
+        await api.register(
+          buildingsRoutes(createBuildingsService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),
