@@ -68,7 +68,7 @@ New players experience this story in the opening cinematic (§25) and the tutori
 - 2–4 players per map. One player creates the map and is its **owner** (admin).
 - Creating a map produces an **invite code**. Entering a code creates a **join request** that the owner must approve.
 - Codes expire **[DEFAULT: 7 days]** and can be regenerated or revoked.
-- Owner admin powers: approve/deny joins, remove a player, mute a player, reset a player's password, toggle free chat (Phase 2).
+- Owner admin powers: approve/deny joins, remove a player, reset a player's password. Mute a player and toggle free chat arrive with free chat in Phase 2 (Phase 1 has only preset messages and emoji, which rate limits cover).
 - A player can be in several maps; progress is per map.
 - **Multiplayer model: hybrid.**
   - The world is **persistent and asynchronous**: state lives in Postgres; timers (mining, training, care decay) resolve from timestamps.
@@ -120,11 +120,12 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 
 **XP gained = battle XP × care multiplier × habitat multiplier**
 
-- **Care multiplier.** Care actions (feed, pet, play, groom, train) raise **contentment** (0–100). Contentment decays slowly over real time **[DEFAULT: ~24h from full to baseline]**. Multiplier **[DEFAULT: 1.0× to 1.75×]**.
+- **Care multiplier.** Care actions (**feed, pet, play**) raise **contentment** (0–100). Contentment decays slowly over real time **[DEFAULT: ~24h from full to baseline]**. Multiplier **[DEFAULT: 1.0× to 1.75×]**.
 - **Habitat multiplier.** Habitats carry element and feeling tags. A squishy housed in a matching habitat gets **[DEFAULT: up to 1.75×]**. A mismatch gives 1.0×.
 - **Floor of 1.0×.** Neglect never weakens or sickens a squishy; it only means no bonus. Combat alone always advances a squishy, just more slowly.
 - **Cap.** Combined multiplier capped at **[DEFAULT: 3×]**.
 - **Implementation:** no ticking simulation. Store `contentment` and `lastCaredAt`; compute current contentment lazily from elapsed time on read. Care actions have server-side cooldowns so tap-spamming can't max care.
+- **Why three actions:** they map one-to-one to the close-up gestures (drag a treat → feed, stroke → pet, tap/tickle → play), which keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
 - Care history (a rolling score over the squishy's life) feeds evolution odds (§8).
 
 ## 8. Evolution
@@ -196,7 +197,7 @@ Gathering is timer-based (start a gather on an owned node; collect when done), c
 
 The home base is where squishies live, train, play, breed and hang out to be admired.
 
-- **Hearthfire:** projects a safe radius (in tiles) against the Hollow Man; burns Emberwood.
+- **Hearthfire:** projects a safe radius (in tiles) against the Hollow Man; burns one night of Emberwood at each nightfall and stores several nights of fuel (§14).
 - **Habitats:** tagged by element/feeling (e.g. Frost Grotto, Cozy Meadow, Ember Den, Glimmer Cave). Each has capacity. Matching squishies get the habitat multiplier.
 - **Training Grounds:** passive XP trickle for assigned squishies (small).
 - **Play areas and decorations:** raise Harmony (Phase 3) and give squishies cute idle behavior.
@@ -211,7 +212,8 @@ The shared threat and the heart of the lore. Tall, flickering silhouette with gl
 
 - **"He only needs one."** Each night at **nightfall [DEFAULT: 9:00 PM in the map's time zone]** a server job runs per map. For each player, if any squishies are **exposed**, he takes **one** of them.
 - **Exposure:** a squishy is exposed if it's housed or stationed outside all Hearthfire safe radii and noise coverage. Squishies inside the home base with a lit Hearthfire are safe.
-- **"Keep the fire lit."** Hearthfires need Emberwood; an unfuelled fire goes out at nightfall.
+- **"Keep the fire lit."** Hearthfires burn **one night of fuel** at each nightfall and store up to **[DEFAULT: 5 nights]** of Emberwood. A fire with no fuel left goes out at nightfall. Stocking up teaches planning ahead: an active player tops up in seconds, and a player who misses a few days comes back to a fire that's still lit. The fire shows its remaining nights clearly (e.g. "3 nights left").
+- **Absence is not punished (pillar 2).** Squishies at home behind a lit fire are always safe. Only squishies the player chose to station outside the light (on map tiles) can be taken, and taken squishies can always be rescued.
 - **Repelled by noise.** Noise buildings extend protection.
 - **Repelled by family love.** (Phase 2) Warmth between players with nearby territories reduces his reach.
 - **"Never look too long."** (Phase 2 polish) Keeping the camera locked on him when he appears makes nearby squishies start to drift toward him.
@@ -221,6 +223,10 @@ The shared threat and the heart of the lore. Tall, flickering silhouette with gl
 ## 15. Seasons
 
 Seasons are date windows in config (with time zone). Resource nodes, recipes, spawn tables and evolution branches carry an optional `season` tag. A dev-only date override lets any season be tested early.
+
+**Windows may overlap** (New Year already overlaps Christmas). When two seasons are active, content tagged with either is available.
+
+**2026 launch:** the Halloween window is extended to **[DEFAULT: Nov 9, 2026]** so the first playable gets a full Halloween run. This is a data change, not code.
 
 | Season | Window [DEFAULT] | Resources | Specials |
 |---|---|---|---|
@@ -259,7 +265,8 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 
 - Kids create their own accounts: **username + password**. **No email required.**
 - Passwords hashed with **Argon2id**. Sessions in secure, HttpOnly, SameSite cookies. Login rate-limited per username and IP.
-- At signup the player gets a **recovery code** to save. The map owner can also reset a player's password.
+- At signup the player gets a **recovery code** to save (one active code, stored hashed; using it to reset the password shows a fresh code). The map owner can also reset a member's password.
+- **Operator reset:** a player who isn't in any map yet (e.g. still in the tutorial) has no owner to help, so the game operator can reset any password with a server-side command-line tool.
 - Usernames pass the same filter as chat (no inappropriate or identifying names).
 - **Birth year** prompt at signup; under-13 profiles need a lightweight parent-approval step before free chat unlocks. (COPPA consideration — verify before public launch.)
 - Passkeys (WebAuthn) are an optional later upgrade.

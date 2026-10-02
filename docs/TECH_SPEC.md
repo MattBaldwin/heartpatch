@@ -6,7 +6,8 @@
 
 - **Primary devices:** iPhone and iPad, Safari, installed as a PWA. Minimum **iOS/iPadOS 17**.
 - **Secondary:** desktop Chrome, Safari, Firefox (latest 2 versions).
-- **Performance:** 60 fps on iPhone 13 or newer; never below 30 fps on iPad 9th gen. Initial load under 5 s on 4G; total first-load download under **15 MB** (rest lazy-loaded).
+- **Playtest devices:** iPhone 14 and newer; iPads from the last ~4 years (lowest ≈ iPad 10th gen, A14). These run iOS/iPadOS 26, where Safari enables WebGPU by default.
+- **Performance:** 60 fps on iPhone 13 or newer; never below 30 fps on iPad 9th gen (kept as a safety margin below the playtest devices). Initial load under 5 s on 4G; total first-load download under **15 MB** (rest lazy-loaded).
 - **Memory:** stay under ~400 MB in Safari to avoid tab reloads.
 
 ## 2. Repository layout
@@ -90,6 +91,8 @@ Add anything else only with a one-line justification in the PR.
 - Soft-delete is not used; removed players' data is archived by status flags.
 - Migrations: `drizzle-kit generate`, committed, applied on deploy. Never edit a merged migration.
 
+**Core spine (designed up front in issue #2):** `users`, `sessions`, `maps` (including `event_seq`), `map_members`, `tiles`, `squishies`, `game_events`. These are the tables most others reference, so they are designed once rather than piecemeal by parallel branches. **Feature tables** (wardrobe, ledgers, milestones, battles, etc.) arrive in their own issue's migration. Generate a migration right before merging, from the latest `main`, so parallel branches don't produce clashing migration numbers.
+
 **Core tables (Phase 1):** `users`, `sessions`, `recovery_codes`, `keepers`, `maps`, `map_members`, `invite_codes`, `join_requests`, `tiles`, `species_seen`, `squishies`, `buildings`, `inventories`, `resource_ledger`, `gather_jobs`, `battles` (seed, action log, result), `raids`, `hollow_events`, `clothing_owned`, `outfits`, `milestone_progress`, `milestone_rewards`, `coin_ledger`, `boutique_stock`, `quick_messages`, `game_events`.
 
 ## 5. API
@@ -114,8 +117,8 @@ Add anything else only with a one-line justification in the PR.
 
 ## 6. Client architecture
 
-- **Rendering:** one Babylon `Engine`; scenes swapped (map, home base, battle, close-up, wardrobe). Use WebGPU when `navigator.gpu` is available and stable, else WebGL2.
-- **Quality settings:** `engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio, 2))`; FXAA or SMAA post-process; dynamic resolution scaler targeting 60 fps; quality tiers (high/medium/low) auto-picked from a short benchmark and adjustable in settings.
+- **Rendering:** one Babylon `Engine`; scenes swapped (map, home base, battle, close-up, wardrobe). WebGPU is the primary renderer (`navigator.gpu` present and the adapter initialises); fall back to WebGL2 automatically. Scene code must work on both.
+- **Quality settings:** `engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio, 2))`; FXAA or SMAA post-process; dynamic resolution scaler targeting 60 fps; quality tiers (high/medium/low) auto-picked from a short benchmark and adjustable in settings. **Default tier is high** on the playtest devices; spend the headroom on squishy quality (clearcoat, bloom, close-up depth of field) first.
 - **UI:** HTML/CSS overlay on top of the canvas for menus, inventory, wardrobe lists and text input (sharper text, native accessibility, iOS keyboard works properly). Babylon GUI only for in-world labels and bubbles.
 - **State:** a small typed store (no heavy framework needed); server is the source of truth. Optimistic UI only for cosmetic actions (e.g. equipping clothing), rolled back on server error.
 - **Assets:** glTF/GLB, Draco or meshopt compression, KTX2 textures. Procedural squishies and Keepers need few textures; environment props are small GLBs. Lazy-load per scene.
@@ -133,6 +136,9 @@ Add anything else only with a one-line justification in the PR.
 - **Modules** follow `routes → service → repo`. Services contain game logic and call `packages/shared` formulas; repos are the only place that touches Drizzle.
 - **Transactions:** any command touching multiple rows (capture, trade, purchase, reward) runs in one DB transaction with row locks (`SELECT … FOR UPDATE`) on the affected entities.
 - **Game event stream:** every meaningful change writes a `game_events` row (type, mapId, actor, payload). This one stream feeds WebSocket broadcast, milestone progress, Easter-egg triggers and the raid log.
+  - **Same transaction (transactional outbox):** the event row is written in the **same DB transaction** as the state change it describes. If the change rolls back, so does the event. Broadcast to WebSocket clients only **after commit**.
+  - **Per-map `seq` without gaps:** allocate `seq` with `UPDATE maps SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq` inside that transaction. Don't use a Postgres sequence: sequences skip numbers on rollback, and a reconnecting client would think it missed an event. The row lock also orders concurrent writers on the same map.
+  - Index `(map_id, seq)` unique; retention for replay is a tunable window (older history is refetched as full state).
 - **Scheduled jobs (pg-boss):**
   - `nightfall` per map at 21:00 map time (Hollow Man, §14 of the design doc)
   - `stranded-decay` (Phase 2)
@@ -151,7 +157,8 @@ Add anything else only with a one-line justification in the PR.
 ## 9. Security and safety
 
 - Argon2id with library defaults (or memory ≥ 19 MiB, iterations ≥ 2).
-- Recovery codes: 12 characters, shown once, stored hashed.
+- Recovery codes: 12 characters, shown once, stored hashed. **One active code per user**; resetting with it marks it used and shows a fresh one. The `recovery_codes` table keeps used codes for audit.
+- **Operator password reset:** a server CLI (`pnpm --filter @heartpatch/server ops:reset-password <username>`) for players with no map owner. It runs on the host via `docker compose exec`, never over HTTP.
 - All user-entered text (usernames, nicknames, outfit names, chat in Phase 2) goes through `lib/filter` on the server.
 - Helmet security headers; Content-Security-Policy restricting scripts to self.
 - No third-party analytics or ads. No email collection. Birth year only.
@@ -207,5 +214,18 @@ Small and cheap on purpose: one server for a few families.
 ## 14. Observability
 
 - Structured pino logs to stdout; Docker log rotation configured.
-- `/api/v1/health` (liveness) and `/api/v1/ready` (DB reachable).
+- `/api/v1/health` (liveness: process is up) and `/api/v1/ready` (readiness: DB reachable). The deploy rollback check uses **`/health` only**, so a brief database hiccup can't trigger a rollback or restart a healthy container.
 - A small admin page for the map owner (Phase 1: members, join requests, password reset; later: chat review).
+
+## 15. Audio
+
+- **Sources:** CC0 assets only (e.g. Kenney, Freesound filtered to CC0, OpenGameArt filtered to CC0), each logged in `ASSETS.md` with source URL and license, plus **procedural synthesis** (Web Audio API) for squishy voices.
+- **Formats:** AAC (`.m4a`) for music and longer SFX; play from decoded Web Audio buffers with exact loop points so loops are gapless (avoid MP3 because of its encoder padding).
+- **Loudness:** normalise music to about −16 LUFS integrated and match SFX loudness by category; no clipping.
+- **Mix:** buses for music, SFX, UI and ambience, each with its own volume setting; a limiter on the master bus; music ducks under key moments (capture, evolution, Hollow Man arrival).
+- **Variation:** each SFX has 2–4 variants plus small random pitch/volume variation per play, to avoid repetition fatigue.
+- **Procedural voices:** layered oscillators with envelopes, pitch bends and formant (vowel-like) filters; per-species voice parameters live in species data (size → pitch, feeling → contour).
+- **iOS:** unlock the `AudioContext` on the first user gesture; resume it on `visibilitychange`.
+- **Sound gallery:** a dev-only page that plays every sound and loop, so a human can judge quality by ear.
+- **Budget:** audio counts toward the 15 MB first load; lazy-load music per scene.
+

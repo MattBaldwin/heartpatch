@@ -2,7 +2,7 @@
 
 Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting game for ages 10–17, played mainly on iPhone and iPad as an installable web app (PWA) at `play.pumpkinpatchgames.com`.
 
-**Read `docs/GAME_DESIGN.md` and `docs/TECH_SPEC.md` before starting any issue.** The design doc is the source of truth for game rules; the tech spec is the source of truth for repo layout, libraries, API/WebSocket conventions, data model, infrastructure (AWS Lightsail) and CI/CD. If an issue and the design doc disagree, flag it in the PR rather than guessing.
+**Read `docs/GAME_DESIGN.md`, `docs/TECH_SPEC.md`, `docs/STYLE_GUIDE.md` and `docs/DECISIONS.md` before starting any issue.** The design doc is the source of truth for game rules; the tech spec is the source of truth for repo layout, libraries, API/WebSocket conventions, data model, infrastructure (AWS Lightsail) and CI/CD. If an issue and the design doc disagree, flag it in the PR rather than guessing.
 
 ## Tech stack (decided — don't swap without asking)
 
@@ -37,6 +37,15 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 - Use `pnpm` scripts from the repo root: `pnpm dev`, `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm build`.
 - Don't add heavy dependencies without noting why in the PR.
 - Art is procedural (vinyl-toy style, see design doc §19). Don't import copyrighted characters or assets. Any third-party asset must be CC0 or clearly licensed for commercial use; record it in `ASSETS.md`.
+
+## Workflow (every session)
+
+- **Branch from the latest `main`.** Stay inside the folders your issue owns. If you need to change a shared contract (`game_events` types, error codes, WS envelope, hex coords, data schemas, the core DB tables), stop and flag it to the coordinator instead of changing it yourself.
+- **Follow the patterns already on `main`**, not just the docs. If something already has an established way (module shape, errors, logging, tests, naming), use it. A second way of doing the same thing is drift.
+- **Player-facing text** follows `docs/STYLE_GUIDE.md`: cozy, cute, playful, funny, short, kid-readable.
+- **Before handing off:** run `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` and make them pass. Generate DB migrations last, from the latest `main`.
+- **Review:** every PR is reviewed by the `reviewer` subagent (`.claude/agents/reviewer.md`). Address each finding with a fix or evidence; a fresh reviewer re-reviews. Points still contested after 3 rounds go to the project owner. Once the reviewer approves and CI is green, the coordinator merges and posts the verdict as a PR comment.
+- Decisions already made are recorded in `docs/DECISIONS.md`. Don't re-open them; add new ones there.
 
 ## Milestones
 
