@@ -19,11 +19,11 @@ import {
   type PvpMode,
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
+import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import { newSeed } from '../../lib/rng.js';
 import { canonicalTimeZone, type Clock } from '../../lib/time.js';
-import { isUniqueViolation } from '../../db/errors.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
