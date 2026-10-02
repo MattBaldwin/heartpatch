@@ -272,7 +272,9 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
 
   return {
     setMap: async (next) => {
-      // The same map again (back from a battle): fetch fresh news, no reopen.
+      // A new map (or the same one again: a battle or the home base steps the
+      // map out with null first) opens the sheet if there's news; a repeat
+      // call for the map on screen only refreshes.
       const same = next === mapId;
       if (!same) reset();
       mapId = next;

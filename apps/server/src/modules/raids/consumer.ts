@@ -75,14 +75,17 @@ export function createRaidsConsumer(): EventConsumer {
         resolvedAt: battle.endedAt ?? event.createdAt,
       });
       if (!raid) return; // already logged
-      // The defender's squishies met the challenger's team: their catalog
-      // knows them now, so the replay can name a secret one (CLAUDE.md rule 6).
-      await createSpawnsRepo(tx).markSeen(
-        event.mapId,
-        challenge.defenderUserId,
-        battle.setup[ended.playerSide].squishies.map((s) => s.speciesId),
-        battle.endedAt ?? event.createdAt,
-      );
+      // The defender's squishies met the challenger's team in a showdown
+      // that played out: their catalog knows them now, so the replay can name
+      // a secret one (CLAUDE.md rule 6). A called-off one has no replay.
+      if (battle.status === 'finished') {
+        await createSpawnsRepo(tx).markSeen(
+          event.mapId,
+          challenge.defenderUserId,
+          battle.setup[ended.playerSide].squishies.map((s) => s.speciesId),
+          battle.endedAt ?? event.createdAt,
+        );
+      }
       await repo.appendEvent({
         mapId: event.mapId,
         type: 'raid.resolved',

@@ -7,6 +7,14 @@ describe('raid rules (#16)', () => {
   it('are valid', () => {
     expect(checkRaidRules(RAID_RULES)).toEqual([]);
     expect(checkRaidRules({ ...RAID_RULES, defaultStance: 'sneaky' })).not.toEqual([]);
+    const policies = (stancePolicies: Record<string, string>) =>
+      checkRaidRules({ ...RAID_RULES, stancePolicies });
+    expect(
+      policies({ aggressive: 'balanced', defensive: 'defensive', balanced: 'balanced' }),
+    ).not.toEqual([]);
+    expect(
+      policies({ aggressive: 'guardian', defensive: 'defensive', balanced: 'balanced' }),
+    ).not.toEqual([]);
   });
 
   it('defaults to Balanced (design doc §6)', () => {

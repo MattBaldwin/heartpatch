@@ -36,6 +36,7 @@ import { createBattlesRepo } from '../battles/repo.js';
 import { createBattlesService } from '../battles/service.js';
 import { createTileBattlePort } from '../territory/service.js';
 import { createRaidsConsumer, raidOutcome } from './consumer.js';
+import { createRaidsService } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -260,10 +261,19 @@ describe.skipIf(!url)('raids (needs DATABASE_URL)', () => {
 
     it('keeps the guardian policy when the land’s guardians stand in', async () => {
       const server = await start();
-      const { rival, mapId, attack } = await challenge(server, { rivalLevel: null });
+      const { kid, rival, mapId, attack } = await challenge(server, { rivalLevel: null });
       await call(server, 'POST', `/maps/${mapId}/defense-style`, rival, { stance: 'aggressive' });
       const battle = battleOf(await attack());
       expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'guardian' });
+      // Still the owner's raid, with no style of theirs.
+      await call(server, 'POST', `/battles/${battle.id}/actions`, kid, {
+        action: { type: 'forfeit' },
+        turn: battle.view.turn,
+      });
+      await runConsumer(db, consumer, mapId);
+      expect((await report(server, rival, mapId)).raids).toEqual([
+        expect.objectContaining({ battleId: battle.id, outcome: 'held', stance: null }),
+      ]);
     });
 
     it('refuses an unknown style, and players who aren’t on the patch', async () => {
@@ -378,6 +388,29 @@ describe.skipIf(!url)('raids (needs DATABASE_URL)', () => {
       expect(end.view.log).toEqual(
         replayBattle(content, { seed: battle.seed, sides: battle.setup }, battle.actions).log,
       );
+
+      // The defender's catalog met the challenger's team (so a secret one can be named).
+      const met = await db.query.speciesSeen.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, rival.id)),
+      });
+      expect(met.map((m) => m.speciesId)).toEqual(
+        expect.arrayContaining(battle.setup.a.squishies.map((sq) => sq.speciesId)),
+      );
+
+      // After a re-tune the stored log is the truth: listed, but not replayable.
+      const retuned = createRaidsService({
+        db,
+        clock: () => clock,
+        content: createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA), {
+          ...BATTLE_RULES,
+          maxTurns: BATTLE_RULES.maxTurns + 1,
+        }),
+      });
+      expect((await retuned.report(rival, mapId)).raids[0]!.replayable).toBe(false);
+      await expect(retuned.replay(rival, mapId, row!.id)).rejects.toMatchObject({
+        code: 'CONFLICT',
+        message: expect.stringMatching(/learned new tricks/) as unknown,
+      });
     });
 
     it('logs a held tile when the defenders win, and when the challenger scoots home', async () => {
@@ -432,6 +465,11 @@ describe.skipIf(!url)('raids (needs DATABASE_URL)', () => {
       const replay = await call(server, 'GET', `/maps/${mapId}/raids/${raid!.id}/replay`, rival);
       expect(replay.statusCode).toBe(409);
       expect(errorOf(replay).message).toMatch(/called off/);
+      // Nothing to watch, so the defender's catalog meets nobody new.
+      const met = await db.query.speciesSeen.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, rival.id)),
+      });
+      expect(met).toEqual([]);
     });
 
     it('logs each challenge once, however often the consumer sees it', async () => {

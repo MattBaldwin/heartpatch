@@ -261,7 +261,7 @@ export const GAME_EVENTS = {
    * A challenge on a player's land finished and is in their raid log (#16),
    * written by the raid-log consumer after the battle's `battle.ended`.
    * Members see who, where and how it went (the tile events already showed
-   * that much); the defender's client uses it to show the report.
+   * that much). The report itself is fetched when the defender opens the map.
    */
   'raid.resolved': {
     internal: z.strictObject({

@@ -36,6 +36,8 @@ export const PLAYBACK = {
   swapMs: 700, // TUNE
   /** Offering a Heart Charm: a hopeful pause, then a bounce or a wiggle. */
   captureMs: 1300, // TUNE
+  /** A raid replay (#16) rests on its first turn this long before it plays. */
+  replayLeadMs: 900, // TUNE
   /** Breather before the result screen. */
   endMs: 900, // TUNE
 } as const;

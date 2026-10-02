@@ -1,5 +1,5 @@
 import type { BattleAiPolicy } from '../schemas/data/battle.js';
-import type { DefenseStance, RaidRules } from '../schemas/data/raids.js';
+import { DefenseStanceSchema, type DefenseStance, type RaidRules } from '../schemas/data/raids.js';
 
 /**
  * Offline defense (design doc §6, issue #16). Each stance plays with the
@@ -25,6 +25,7 @@ export function stanceOfPolicy(
   policy: BattleAiPolicy,
   rules: Pick<RaidRules, 'stancePolicies'> = RAID_RULES,
 ): DefenseStance | null {
-  const stances = Object.keys(rules.stancePolicies) as DefenseStance[];
-  return stances.find((stance) => rules.stancePolicies[stance] === policy) ?? null;
+  return (
+    DefenseStanceSchema.options.find((stance) => rules.stancePolicies[stance] === policy) ?? null
+  );
 }

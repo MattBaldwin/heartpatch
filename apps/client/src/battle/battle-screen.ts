@@ -653,7 +653,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     watch: (start, end) => {
       open(start, true);
       // A breath on the first turn, then the showdown plays out.
-      later(PLAYBACK.endMs, () => {
+      later(PLAYBACK.replayLeadMs, () => {
         if (battle?.id === start.id && replaying) receive(end);
       });
     },
