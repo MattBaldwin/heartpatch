@@ -257,7 +257,7 @@ function queries(db: Executor): BuildingsRepo {
         .from(squishies)
         .where(eq(squishies.habitatBuildingId, buildingRowId))
         .orderBy(asc(squishies.id))
-        .for('update');
+        .for('no key update');
       return (
         await db
           .update(squishies)
