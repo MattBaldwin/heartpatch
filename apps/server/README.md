@@ -113,7 +113,7 @@ PvE battles (design doc §6; tech spec §8; DECISIONS "Battle engine (#11)") liv
 - **Tile battles (#15)** start through `startTile(user, mapId, prepare)`: `prepare` (the territory module) checks the raid rules and builds the other side inside the start transaction, so a refused start uses nothing. The `tileBattles` port (`createTileBattlePort`) is called on the battle's own transactions: `acted` restarts the abandon timer, `ended` settles the attempt and moves the tile on a win (its events follow `battle.ended`), `noContest` refunds the attempt. A tile battle with no action for `abandonMinutes` has been left: it ends as a forfeit (a loss) on the next read, action or start (`settle`), so a player is never stuck behind one.
 - **Capture (#14):** `{ type: 'capture' }` offers a Heart Charm to the wild squishy (wild battles only, `CAPTURABLE_BATTLE_KINDS`). In one transaction: one `heart-charm` through #17's `consumeItems` (reason `capture`, ledgered against the battle; `CONFLICT` when out, nothing changes), the engine's capture turn (one roll on the battle RNG; `sure` on tutorial maps), and on a catch the new `squishies` row, `species_seen.first_caught_at`, `battle.ended` (`reason: 'captured'`) and `squishy.captured`. Starting a battle records the opponent's species as seen.
 - **Tutorial maps:** `gameplayOverrides(map.kind)` scripts the opponent's AI policy and level (tech spec §7).
-- **XP:** on a finished battle the player's squishies get the engine's base battle XP (`squishies.xp`), under a row lock, in the same transaction as the result and the `battle.ended` event. Care and habitat multipliers (#19) and levelling (the XP curve) come with their issues.
+- **XP:** on a finished battle the player's squishies get the engine's base battle XP through care's `applyXp` (below), under a row lock, in the same transaction as the result and the `battle.ended` event (whose `xp` is what was granted); `squishy.leveled` / `squishy.evolved` follow it.
 - Events: `battle.started` and `battle.ended` (shared registry); `wsHub.publish` after commit.
 
 ## Inventory and gathering
@@ -205,6 +205,28 @@ Building on a home base (design doc §11, §13–14; issue #18) lives in `src/mo
 Mutating routes take an `Idempotency-Key`. Every command locks the player's home tiles first (`lockHomeTiles`), so one player's building commands run one at a time ("one Hearthfire per home" and habitat capacity can't race), then the building, squishy and inventory rows, then `maps` (the event).
 
 **For nightfall (#21):** `mapLocalTime(at, zone)` gives the map-local date and minute; shared `tonightOf`, `protectsNight(fuelledThrough, night)` and `hearthfireState` answer "is this fire lit for this night"; `litSafeTiles(fires, homeTiles, local)` (or shared `safeTiles`) gives the protected tiles: a lit fire's whole home base plus every tile within its radius. `BuildingsRepo.listOnMap` returns every building with its tile. **Leaving:** `removeMemberBuildings` runs inside the maps module's leave/remove transaction. **Map view:** `listPublicBuildings` fills `PublicTile.buildings` from the view's own snapshot.
+
+## Care, levels and evolution
+
+Care (design doc §7–8; issue #19; DECISIONS G and "Care (#19)") lives in `src/modules/care`. Contentment is stored as its value at the last care action (`squishies.contentment_at_last_care`) plus `last_cared_at`, and today's value is worked out on read with shared `contentmentAt` (CLAUDE.md rule 4). Every care action is a `care_log` row, which counts a squishy's actions per day (diminishing returns) and an account's Patch Coins from care per day (the cap); the day is the account's (`users.time_zone`).
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/care` | → `CareListResponse`: my active squishies as their care sheets show them (contentment, mood, level, XP bar, stats, XP bonus, care today, debounce, an unseen evolution), `speciesDefs` for secret forms I own or just grew out of, my bag, `coinsToday`, `now` |
+| `POST /api/v1/maps/:mapId/squishies/:squishyId/care` | `{ action }` → `CareResponse` (the list plus `result`). My own active squishy; a short per-action debounce (`cooldownSeconds`, `CONFLICT`); feed pays a Treat with `consumeItems(…, 'care', careLogId)`; `squishy.cared` |
+| `POST /api/v1/maps/:mapId/squishies/:squishyId/care/seen` | → `CareListResponse`: the owner saw the evolution celebration |
+
+Mutating routes take an `Idempotency-Key` and are rate limited (`limits.ts`). Lock order for a care action: the account (`users`, so the daily coin cap can't race across squishies and patches), the squishy, inventory rows, then `maps` (the event).
+
+**For other modules (battles, Training Grounds later):** grant XP only through `applyXp(tx, squishyId, baseXp, at)` inside your transaction, with the squishy rows already locked, then `appendGrowthEvents(repo.appendEvent, growths)` after your own event:
+
+```ts
+const growth = await applyXp(tx, squishyId, baseXp, at); // base × care × habitat (1×–3×), levels, evolution
+await repo.appendEvent(...);                              // your event
+await appendGrowthEvents(repo.appendEvent, growth ? [growth] : []);
+```
+
+It multiplies by the care and habitat multiplier (shared `xpMultiplier`: whole percents, floor 100, cap `GROWTH_RULES.capPercent`), levels from the XP curve in `GROWTH_RULES` (a squishy that joined above level 1 counts from its level's XP), and evolves at the threshold into the single next form (shared `evolutionAt` over public `Species.evolutions`, then server-only `secretEvolutions`), writing a `squishy_evolutions` row. `squishy.evolved` never names a form on the wire; the owner's care list carries the secret rows once it has happened.
 
 ## Live sync (`/ws`)
 

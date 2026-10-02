@@ -55,11 +55,13 @@ export interface HomeScreenOptions {
   /** What the Keeper wears (#43), clothing ids. */
   keeperWearing?: () => readonly string[];
   /** The home opened: the map, the bag and the lobby step out. */
-  onOpen: () => void;
+  onOpen: (mapId: string) => void;
   /** Back to the map. */
   onClosed: (mapId: string) => void;
   /** The home couldn't open (offline): say why where the player is looking. */
   onProblem: (message: string) => void;
+  /** A squishy chip was tapped: open its care sheet (#19). */
+  onCare?: (mapId: string, squishyId: string) => void;
   api?: HomeApi;
 }
 
@@ -118,6 +120,7 @@ export const HOME_TEXT = {
   cozy: 'Loves it here!',
   full: 'Full',
   yours: 'Your buildings',
+  friends: 'Your squishies',
   none: 'Nothing built yet. Tap Build!',
   noSquishies: 'No squishies yet. Befriend one on the map!',
   confirm: (name: string, back: string) =>
@@ -390,11 +393,28 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             true,
           ),
         );
+        const species = speciesMap(current);
+        const friends = current.squishies.map((s) =>
+          button(
+            `💗 ${squishyName(s, species)}`,
+            () => {
+              if (mapId) options.onCare?.(mapId, s.id);
+            },
+            { 'data-care-squishy': s.id, class: 'home-chip' },
+            true,
+          ),
+        );
         body.replaceChildren(
           el('h3', { class: 'home-section-title' }, HOME_TEXT.yours),
           chips.length > 0
             ? el('div', { class: 'home-chips' }, ...chips)
             : el('p', { class: 'home-empty' }, HOME_TEXT.none),
+          ...(friends.length > 0 && options.onCare
+            ? [
+                el('h3', { class: 'home-section-title' }, HOME_TEXT.friends),
+                el('div', { class: 'home-chips', 'data-testid': 'home-friends' }, ...friends),
+              ]
+            : []),
           row(
             button(
               HOME_TEXT.build,
@@ -720,7 +740,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     isOpen = true;
     mode = { kind: 'idle' };
     say('');
-    options.onOpen();
+    options.onOpen(id);
     options.showScene(build);
     render();
     syncWander();

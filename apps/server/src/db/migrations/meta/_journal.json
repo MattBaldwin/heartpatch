@@ -78,6 +78,13 @@
       "when": 1790969428684,
       "tag": "0010_wardrobe",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790973751826,
+      "tag": "0011_care",
+      "breakpoints": true
     }
   ]
 }

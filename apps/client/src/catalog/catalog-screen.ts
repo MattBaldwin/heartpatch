@@ -10,6 +10,8 @@ import './catalog.css';
 export interface CatalogScreenOptions {
   root: HTMLElement;
   api?: typeof catalogApi;
+  /** A befriended species was tapped: open the care sheet for one (#19). */
+  onCare?: (mapId: string, speciesId: string) => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -84,15 +86,32 @@ export function createCatalogScreen(options: CatalogScreenOptions): CatalogScree
         });
         if (card.color) blob.style.background = card.color;
         const badge = card.caught ? 'Friend ♥' : card.seen ? 'Seen' : '';
+        const parts = [
+          blob,
+          el('span', { class: 'catalog-name' }, card.name ?? UNSEEN),
+          el('span', { class: 'catalog-badge' }, badge),
+        ];
+        const careFor = options.onCare;
+        let content: Node[] = parts;
+        // A friend's card opens its care sheet (#19).
+        if (card.caught && careFor) {
+          const open = el(
+            'button',
+            { type: 'button', class: 'catalog-care', 'data-care-species': card.speciesId },
+            ...parts,
+          );
+          open.addEventListener('click', () => {
+            if (mapId) careFor(mapId, card.speciesId);
+          });
+          content = [open];
+        }
         return el(
           'li',
           {
             class: card.caught ? 'catalog-entry catalog-entry-caught' : 'catalog-entry',
             'data-testid': 'catalog-entry',
           },
-          blob,
-          el('span', { class: 'catalog-name' }, card.name ?? UNSEEN),
-          el('span', { class: 'catalog-badge' }, badge),
+          ...content,
         );
       }),
     );

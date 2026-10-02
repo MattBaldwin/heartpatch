@@ -1,0 +1,137 @@
+import type { GrowthRules } from '../schemas/data/care.js';
+import type { ElementId, FeelingId } from '../schemas/data/elements.js';
+
+// XP, levels and evolution (design doc §7–8). XP gained = battle XP × care
+// multiplier × habitat multiplier, floor 1.0×, cap 3×. Multipliers are whole
+// percents and every step floors, so the maths is integers only and the same
+// on every engine (DECISIONS "Battle engine (#11)").
+
+/** A habitat's tags (`HabitatBuilding.tags`). */
+export interface HabitatTags {
+  readonly elements: readonly ElementId[];
+  readonly feelings: readonly FeelingId[];
+}
+
+/** Care multiplier, as a percent: 100 at no contentment, rising to `care.maxPercent` when full. */
+export function carePercent(
+  contentment: number,
+  rules: Pick<GrowthRules, 'care'>,
+  maxContentment = 100,
+): number {
+  const { minPercent, maxPercent } = rules.care;
+  const c = Math.max(0, Math.min(maxContentment, contentment));
+  return minPercent + Math.floor(((maxPercent - minPercent) * c) / maxContentment);
+}
+
+/**
+ * Habitat multiplier, as a percent: the squishy's habitat matches its element
+ * or its feeling (`onePercent`), both (`bothPercent`), or neither / no
+ * habitat (100).
+ */
+export function habitatPercent(
+  habitat: HabitatTags | null,
+  squishy: { readonly element: ElementId; readonly feeling: FeelingId },
+  rules: Pick<GrowthRules, 'habitat'>,
+): number {
+  if (!habitat) return 100;
+  const matches =
+    (habitat.elements.includes(squishy.element) ? 1 : 0) +
+    (habitat.feelings.includes(squishy.feeling) ? 1 : 0);
+  if (matches === 2) return rules.habitat.bothPercent;
+  if (matches === 1) return rules.habitat.onePercent;
+  return 100;
+}
+
+/**
+ * The whole XP multiplier, as a percent (150 = 1.5×): care × habitat, never
+ * below 100 (neglect costs nothing, design doc §7) nor above `capPercent`.
+ */
+export function xpMultiplier(
+  contentment: number,
+  habitat: HabitatTags | null,
+  squishy: { readonly element: ElementId; readonly feeling: FeelingId },
+  rules: Pick<GrowthRules, 'care' | 'habitat' | 'capPercent'>,
+): number {
+  const combined = Math.floor(
+    (carePercent(contentment, rules) * habitatPercent(habitat, squishy, rules)) / 100,
+  );
+  return Math.max(100, Math.min(rules.capPercent, combined));
+}
+
+/** XP a squishy actually gets from `baseXp` battle XP at `multiplier` percent. */
+export function grantedXp(baseXp: number, multiplier: number): number {
+  return Math.floor((Math.max(0, baseXp) * multiplier) / 100);
+}
+
+/** Total XP a squishy needs to be `level` (level 1 is 0). */
+export function xpForLevel(
+  level: number,
+  rules: Pick<GrowthRules, 'xpCurve' | 'maxLevel'>,
+): number {
+  const steps = Math.max(0, Math.min(level, rules.maxLevel) - 1);
+  return rules.xpCurve.perLevel * steps + rules.xpCurve.curve * steps * steps;
+}
+
+/** The level `xp` total XP reaches, up to `maxLevel`. */
+export function levelForXp(xp: number, rules: Pick<GrowthRules, 'xpCurve' | 'maxLevel'>): number {
+  let level = 1;
+  while (level < rules.maxLevel && xp >= xpForLevel(level + 1, rules)) level += 1;
+  return level;
+}
+
+/** A squishy's level and total XP (`squishies.level`, `squishies.xp`). */
+export interface LevelState {
+  readonly level: number;
+  readonly xp: number;
+}
+
+/**
+ * Adds `gained` XP. A squishy that joined above level 1 (a befriended one
+ * keeps its battle level) starts counting from that level's XP, so nobody
+ * ever goes down a level and the next one is the usual distance away.
+ */
+export function addXp(
+  state: LevelState,
+  gained: number,
+  rules: Pick<GrowthRules, 'xpCurve' | 'maxLevel'>,
+): LevelState {
+  const xp = Math.max(state.xp, xpForLevel(state.level, rules)) + Math.max(0, gained);
+  return { xp, level: Math.max(state.level, levelForXp(xp, rules)) };
+}
+
+/** How far into its level a squishy is, for the XP bar. `toNext` is null at the top level. */
+export function xpProgress(
+  state: LevelState,
+  rules: Pick<GrowthRules, 'xpCurve' | 'maxLevel'>,
+): { intoLevel: number; toNext: number | null } {
+  const start = xpForLevel(state.level, rules);
+  const into = Math.max(0, state.xp - start);
+  if (state.level >= rules.maxLevel) return { intoLevel: into, toNext: null };
+  return { intoLevel: into, toNext: xpForLevel(state.level + 1, rules) - start };
+}
+
+/** One evolution: public (`Species.evolutions`) or secret (`SecretEvolution`). */
+export interface EvolutionStep {
+  readonly from: string;
+  readonly into: string;
+  readonly level: number;
+}
+
+/**
+ * Phase 1 evolution (design doc §8): the single next form a species reaches
+ * at `level`, or null. Of the steps from it whose level it has reached, the
+ * lowest level wins, then the first listed (callers list public steps before
+ * secret ones). Branch weights and rare conditions arrive in Phase 2.
+ */
+export function evolutionAt(
+  speciesId: string,
+  level: number,
+  steps: readonly EvolutionStep[],
+): EvolutionStep | null {
+  let best: EvolutionStep | null = null;
+  for (const step of steps) {
+    if (step.from !== speciesId || step.level > level) continue;
+    if (!best || step.level < best.level) best = step;
+  }
+  return best;
+}
