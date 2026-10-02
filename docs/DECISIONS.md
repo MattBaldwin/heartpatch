@@ -118,3 +118,12 @@ _Proposed in the #9 PR; the project owner confirms on merge._
 - **Squash and rim light are GLSL only for now.** They run in a Babylon material plugin on the WebGL2 default. Under the opt-in WebGPU renderer the plugin isn't attached, so squishies render still and without the rim until a WGSL port (tech spec §6).
 - **Detail levels:** the map always uses low detail; close-ups use high detail unless the quality governor has dropped to the low tier (`lodFor`).
 - **The squishy gallery is a separate dev page** (`/gallery.html`), never in the production build, so it doesn't touch `main.ts`.
+
+## 2026-10-02 — Secret species are server-only data
+
+_Proposed in the secret-species Chore PR; the project owner confirms on merge._
+
+- **Secret content lives in `packages/shared/src/data/server/secret-species.ts`.** `ServerGameData` holds `secretSpecies`, `secretMoves` and `secretEvolutions`. Secret species and moves use the public row shapes (visual included), so a species can be sent to a player once they meet it. `checkGameData` refuses `rarity: 'secret'` in the public table. *Why:* the public table ships to every client (CLAUDE.md rule 6).
+- **`secretMoves` too.** A move only a secret squishy knows would name it in the public move list. Moves any public species uses stay public.
+- **One home for each evolution.** An evolution into a secret form goes only in `secretEvolutions` (`from` a public or secret species, `into` a secret one); `Species.evolutions` only points at public forms. Ids are unique across public and secret rows, and `checkServerGameData` checks every reference against both together. Branch weights and rare conditions join `SecretEvolution` when branching arrives (Phase 2).
+- **Server battles use `serverBattleData(GAME_DATA, SERVER_GAME_DATA)`** (`@heartpatch/shared/server`), so the content hash covers secret rows. A client can't recompute that hash from public data, and doesn't need to: the server checks it.

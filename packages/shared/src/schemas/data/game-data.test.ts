@@ -54,6 +54,15 @@ describe('checkGameData', () => {
     ]);
   });
 
+  it('keeps secret species out of the public table', () => {
+    const problems = problemsAfter((d) => {
+      d.species[0]!.rarity = 'secret';
+    });
+    expect(problems).toEqual([
+      'species["fixture-puddlepuff"].rarity: secret species are server-only: add them to SECRET_SPECIES in packages/shared/src/data/server/secret-species.ts',
+    ]);
+  });
+
   it('reports evolution chains that loop', () => {
     const problems = problemsAfter((d) => {
       d.species[1]!.evolutions = [{ into: 'fixture-puddlepuff', level: 30 }];
