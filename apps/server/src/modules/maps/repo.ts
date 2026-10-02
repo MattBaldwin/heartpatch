@@ -1,7 +1,7 @@
 import type { MapRole, PublicTile, PvpMode } from '@heartpatch/shared';
 import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import type { Executor } from '../../db/client.js';
+import { withTransaction, type Executor } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { inviteCodes, joinRequests, mapMembers, maps, tiles, users } from '../../db/schema.js';
 
@@ -66,10 +66,17 @@ export interface PendingRequestRow {
 }
 
 /**
- * Map storage. Plain queries; the service decides the rules and runs commands
- * in one transaction with `withTransaction` and `createMapsRepo(tx)`.
+ * Map storage. Plain queries; the service decides the rules and runs each
+ * command in one transaction with `transaction`.
  */
 export interface MapsRepo {
+  /**
+   * Runs `fn` in one transaction (`withTransaction`): `repo` is this repo on
+   * that transaction, and `tx` builds other modules' repos on it too
+   * (`createAuthRepo(tx)`), so all their writes commit together.
+   */
+  transaction: <T>(fn: (repo: MapsRepo, tx: Executor) => Promise<T>) => Promise<T>;
+
   /** `users.tutorial_completed_at` (null = not finished). */
   tutorialCompletedAt: (userId: string) => Promise<Date | null>;
   findUser: (userId: string) => Promise<UserRef | null>;
@@ -175,7 +182,7 @@ export interface MapsRepo {
   listPendingRequests: (mapId: string) => Promise<PendingRequestRow[]>;
   listMyPendingRequests: (userId: string) => Promise<JoinRequestRow[]>;
 
-  /** `appendGameEvent`; only works on a repo made from a transaction. */
+  /** `appendGameEvent`; only inside `transaction`. */
   appendEvent: <T extends NewGameEvent['type']>(event: NewGameEvent<T>) => Promise<GameEvent>;
 }
 
@@ -204,6 +211,8 @@ const activeMemberCount = sql<number>`(
 
 export function createMapsRepo(db: Executor): MapsRepo {
   return {
+    transaction: (fn) => withTransaction(db, (tx) => fn(createMapsRepo(tx), tx)),
+
     tutorialCompletedAt: async (userId) => {
       const [row] = await db
         .select({ at: users.tutorialCompletedAt })
@@ -537,7 +546,7 @@ export function createMapsRepo(db: Executor): MapsRepo {
 
     appendEvent: (event) => {
       if (!('rollback' in db)) {
-        throw new Error('appendEvent: create the repo from a transaction (withTransaction)');
+        throw new Error('appendEvent: call it inside repo.transaction(...)');
       }
       return appendGameEvent(db, event);
     },

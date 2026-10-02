@@ -1,4 +1,4 @@
-import { randomBytes, randomInt } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import {
   formatInviteCode,
   formatRecoveryCode,
@@ -19,9 +19,10 @@ import {
   type PublicUser,
   type PvpMode,
 } from '@heartpatch/shared';
-import { withTransaction, type Executor } from '../../db/client.js';
+import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
+import { newSeed } from '../../lib/rng.js';
 import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { hashSecret, newRecoveryCode, newTemporaryPassword } from '../auth/secrets.js';
@@ -124,11 +125,11 @@ async function withFreshCode<T>(fn: (code: string) => Promise<T>): Promise<T> {
 export function createMapsService(options: MapsServiceOptions): MapsService {
   const { db, tutorialRequired } = options;
   const now = options.clock ?? (() => new Date());
-  const reads = createMapsRepo(db);
+  const store = createMapsRepo(db);
 
   const assertTutorialDone = async (user: PublicUser) => {
     if (!tutorialRequired) return;
-    if ((await reads.tutorialCompletedAt(user.id)) === null) {
+    if ((await store.tutorialCompletedAt(user.id)) === null) {
       throw new AppError('FORBIDDEN', MESSAGES.tutorialFirst);
     }
   };
@@ -155,13 +156,13 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   };
 
   const detail = async (user: PublicUser, mapId: string): Promise<MapDetail> => {
-    const { map, role } = await requireMember(reads, user, mapId);
-    const members = await reads.listMembers(mapId);
+    const { map, role } = await requireMember(store, user, mapId);
+    const members = await store.listMembers(mapId);
     let admin: MapDetail['admin'] = null;
     if (role === 'owner') {
       const [invite, requests] = await Promise.all([
-        reads.liveInvite(mapId, now()),
-        reads.listPendingRequests(mapId),
+        store.liveInvite(mapId, now()),
+        store.listPendingRequests(mapId),
       ]);
       admin = {
         invite: invite
@@ -189,8 +190,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     actor: PublicUser,
     type: 'member.removed' | 'member.left',
   ) =>
-    withTransaction(db, async (tx) => {
-      const repo = createMapsRepo(tx);
+    store.transaction(async (repo) => {
       // Lock order: seats, the player, tiles, then maps (appendGameEvent).
       await repo.lockSeats(mapId);
       await repo.lockUser(memberId);
@@ -220,8 +220,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   return {
     myMaps: async (user) => {
       const [maps, requests] = await Promise.all([
-        reads.listMyMaps(user.id),
-        reads.listMyPendingRequests(user.id),
+        store.listMyMaps(user.id),
+        store.listMyPendingRequests(user.id),
       ]);
       return { maps, requests: requests.map(toRequest) };
     },
@@ -235,14 +235,13 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // Generate once and store it all (design doc §3): every seat's home base
       // exists from the start, so joining never resizes the map. The seed is
       // secret and never leaves the server (tech spec §8).
-      const seed = randomBytes(16).toString('base64url');
+      const seed = newSeed();
       const maxPlayers = MAP_MAX_PLAYERS;
       const generated = generateMap(GAME_DATA, { seed, playerCount: maxPlayers });
       const homeSlot = 0;
 
       const mapId = await withFreshCode((code) =>
-        withTransaction(db, async (tx) => {
-          const repo = createMapsRepo(tx);
+        store.transaction(async (repo) => {
           const map = await repo.insertMap({ name: input.name, timeZone, seed, maxPlayers });
           await repo.upsertMember({
             mapId: map.id,
@@ -281,10 +280,10 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     get: detail,
 
     view: async (user, mapId) => {
-      const { map } = await requireMember(reads, user, mapId);
+      const { map } = await requireMember(store, user, mapId);
       const [members, tiles] = await Promise.all([
-        reads.listMembers(mapId),
-        reads.listTiles(mapId),
+        store.listMembers(mapId),
+        store.listTiles(mapId),
       ]);
       return {
         map: {
@@ -300,10 +299,9 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     regenerateInvite: async (user, mapId) => {
-      await requireOwner(reads, user, mapId);
+      await requireOwner(store, user, mapId);
       return withFreshCode((code) =>
-        withTransaction(db, async (tx) => {
-          const repo = createMapsRepo(tx);
+        store.transaction(async (repo) => {
           const at = now();
           const expiresAt = new Date(at.getTime() + INVITE_CODE_TTL_MS);
           await repo.revokeInvites(mapId, at);
@@ -314,15 +312,14 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     revokeInvite: async (user, mapId) => {
-      await requireOwner(reads, user, mapId);
-      await reads.revokeInvites(mapId, now());
+      await requireOwner(store, user, mapId);
+      await store.revokeInvites(mapId, now());
     },
 
     join: async (user, code) => {
       await assertTutorialDone(user);
       const attempt = () =>
-        withTransaction(db, async (tx) => {
-          const repo = createMapsRepo(tx);
+        store.transaction(async (repo) => {
           const invite = await repo.findLiveInviteByCode(code, now());
           if (!invite) throw new AppError('NOT_FOUND', MESSAGES.badCode);
           const [membership, owner, map] = await Promise.all([
@@ -360,9 +357,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     approve: async (user, mapId, requestId) => {
-      await requireOwner(reads, user, mapId);
-      await withTransaction(db, async (tx) => {
-        const repo = createMapsRepo(tx);
+      await requireOwner(store, user, mapId);
+      await store.transaction(async (repo) => {
         // Lock order: seats, request, the player, tiles, then maps (appendGameEvent).
         // Seats first, so two approvals racing for the last seat run one at a time.
         await repo.lockSeats(mapId);
@@ -409,28 +405,27 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     deny: async (user, mapId, requestId) => {
-      await requireOwner(reads, user, mapId);
-      if (!(await reads.decideJoinRequest({ mapId, requestId, status: 'denied', now: now() }))) {
+      await requireOwner(store, user, mapId);
+      if (!(await store.decideJoinRequest({ mapId, requestId, status: 'denied', now: now() }))) {
         throw new AppError('CONFLICT', MESSAGES.requestAnswered);
       }
     },
 
     removeMember: async (user, mapId, memberId) => {
-      await requireOwner(reads, user, mapId);
+      await requireOwner(store, user, mapId);
       if (memberId === user.id) throw new AppError('FORBIDDEN', MESSAGES.removeSelf);
       await depart(mapId, memberId, user, 'member.removed');
     },
 
     leave: async (user, mapId) => {
-      const { role } = await requireMember(reads, user, mapId);
+      const { role } = await requireMember(store, user, mapId);
       if (role === 'owner') throw new AppError('FORBIDDEN', MESSAGES.ownerLeave);
       await depart(mapId, user.id, user, 'member.left');
     },
 
     setPvpMode: async (user, mapId, pvpMode) => {
-      await requireOwner(reads, user, mapId);
-      await withTransaction(db, async (tx) => {
-        const repo = createMapsRepo(tx);
+      await requireOwner(store, user, mapId);
+      await store.transaction(async (repo) => {
         if (!(await repo.setPvpMode(mapId, pvpMode))) return;
         await repo.appendEvent({
           mapId,
@@ -443,7 +438,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     resetMemberPassword: async (user, mapId, memberId) => {
-      await requireOwner(reads, user, mapId);
+      await requireOwner(store, user, mapId);
       if (memberId === user.id) throw new AppError('FORBIDDEN', MESSAGES.resetSelf);
 
       // Hash before taking any locks; Argon2 is slow on purpose.
@@ -454,8 +449,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         hashSecret(recoveryCode),
       ]);
 
-      const member = await withTransaction(db, async (tx) => {
-        const repo = createMapsRepo(tx);
+      const member = await store.transaction(async (repo, tx) => {
         // Locking the account holds off joins (approve locks it too), so the
         // scope check below stays true until the reset commits.
         await repo.lockUser(memberId);

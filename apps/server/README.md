@@ -17,13 +17,12 @@ Register the module's routes in `src/app.ts` under the `/api/v1` prefix. `buildA
 
 ## Transactions across repos
 
-Repo factories take an `Executor` (`Database | Transaction`, from `db/client.ts`). A command that writes through several repos runs them in **one** transaction:
+Repo factories take an `Executor` (`Database | Transaction`, from `db/client.ts`). A command that writes through several repos runs them in **one** transaction. Services can't import `db/client` (lint), so a repo exposes `transaction`, which wraps `withTransaction` and hands back the repo on the transaction plus the `tx` for other modules' repos:
 
 ```ts
-await withTransaction(db, async (tx) => {
-  const maps = createMapsRepo(tx);
+await mapsRepo.transaction(async (maps, tx) => {
   await maps.lockSeats(mapId);          // SELECT … FOR UPDATE first
-  // … more writes, any repo built from tx (createAuthRepo(tx), …)
+  await createAuthRepo(tx).resetPassword(...); // another module's repo, same transaction
   await maps.appendEvent({ mapId, type: 'member.joined', actorUserId, payload }); // last write
 });
 ```
