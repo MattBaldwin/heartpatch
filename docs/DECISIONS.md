@@ -21,11 +21,11 @@
 - Content issues most at risk of story drift (#10, #24, #43, #46) don't run at the same time.
 
 ### Deployment
-- **Build towards a workable version before deploying.** Client work is verified with Playwright (WebKit, iPhone/iPad viewports) and PR screenshots. *(Superseded by the 2026-10-02 audit entry, decision E.)*
+- **Build towards a workable version before deploying.** Client work is verified with Playwright (WebKit, iPhone/iPad viewports) and PR screenshots. *(Deploy timing superseded by the 2026-10-02 audit entry, decision E; Playwright verification still applies.)*
 - When gameplay and visuals are ready to test on a real device (after #6, #7, #9), the coordinator walks the owner step by step through AWS account creation, Lightsail setup and the GoDaddy DNS change, then lands #27. *(Superseded by the 2026-10-02 audit entry, decision E.)*
 
 ### Devices and playtesting
-- Playtest devices: **iPhone 14+** and **iPads from the last ~4 years**. Default quality tier high; WebGPU primary with WebGL2 fallback. The spec's lower performance floor stays as a safety margin. *(Superseded by the 2026-10-02 audit entry, decision E.)*
+- Playtest devices: **iPhone 14+** and **iPads from the last ~4 years**. Default quality tier high; WebGPU primary with WebGL2 fallback. The spec's lower performance floor stays as a safety margin. *("WebGPU primary" superseded by the 2026-10-02 audit entry, decision E: WebGL2 default. Devices and tier still apply.)*
 - The owner playtests with their kids. **Gameplay must be easy to pick up** (style guide §3).
 
 ### Content

@@ -68,8 +68,8 @@ New players experience this story in the opening cinematic (§25) and the tutori
 - 2–4 players per map. One player creates the map and is its **owner** (admin).
 - Creating a map produces an **invite code**. Entering a code creates a **join request** that the owner must approve.
 - Codes expire **[DEFAULT: 7 days]** and can be regenerated or revoked.
-- Owner admin powers: approve/deny joins, remove a player, set the map's **PvP mode** (§11), and reset the password of a member whose maps are **all** owned by this owner (otherwise the operator resets it, §18). Mute a player and toggle free chat arrive with free chat in Phase 2 (Phase 1 has only preset messages and emoji, which rate limits cover).
-- A player can be in several maps; progress is per map.
+- Owner admin powers: approve/deny joins, remove a player, set the map's **PvP mode** (§11), and reset the password of a member whose game maps (tutorial maps excluded) are **all** owned by this owner (otherwise the operator resets it, §18). Mute a player and toggle free chat arrive with free chat in Phase 2 (Phase 1 has only preset messages and emoji, which rate limits cover).
+- A player can be in several maps. **Per map:** squishies, territory, resources and buildings. **Per account:** Keeper, wardrobe, Patch Coins, milestones and titles (§23–24). Account-level daily caps reset at midnight in the time zone saved on the account (taken from the device at signup).
 - **Multiplayer model: hybrid.**
   - The world is **persistent and asynchronous**: state lives in Postgres; timers (mining, training, care decay) resolve from timestamps.
   - Attacks on an offline defender resolve server-side using the defender's **defense stance**.
@@ -173,12 +173,12 @@ Phase 1 ships simple level-based single-form evolution; branching arrives in Pha
 - **Capture:** defeat the tile's wild guardians or the rival squishies defending it.
 - **Expansion rule:** you may attack tiles **adjacent to your territory** or **within an outpost's reach** (outposts: Phase 2).
 - **Home base:** the Heart Seed tile and its surrounding ring are permanently owned and can never be captured. You can lose territory right up to your home base.
-- **Guaranteed home resources:** every home ring contains a Timber node, a Stone node, an **Emberwood** node and a farm plot (Treats), so a player can always fuel their Hearthfire and feed their squishies, however much land they lose.
+- **Guaranteed home resources:** every home ring contains a Timber node, a Stone node, an **Emberwood** node and a farm plot (Treats), regardless of the ring's terrain, so a player can always fuel their Hearthfire and feed their squishies, however much land they lose.
 - **Connected supply (Phase 2):** owned tiles must connect to the home base. After each capture, run BFS from the home base; unreached tiles become **stranded** and fade to neutral over **[DEFAULT: 36h]** unless reconnected.
-- **Raid rules [DEFAULT]:** a tile can't be re-attacked for 4h after a battle on it; new players get a 48h protection shield; each player gets 10 attack attempts per day (refills daily). Starting a battle uses an attempt and starts the tile cooldown; leaving a battle counts as a loss.
+- **Raid rules [DEFAULT]:** a tile can't be re-attacked for 4h after a battle on it; new players get a 48h protection shield; each player gets 10 attack attempts per day (refills daily). Starting a tile battle (neutral or rival) uses an attempt and starts the tile cooldown; wild encounters and rescues don't use attempts. **Leaving** a battle means an explicit forfeit or no action for **[DEFAULT: 10 minutes]**, and counts as a loss. A dropped connection (app backgrounded, a phone call) resumes where it left off, because battle state lives on the server.
 - **PvP mode (map owner setting) [DEFAULT: Gentle]:** families have kids of very different ages and schedules, so rivalry must never turn into one player farming another.
-  - **On:** rival tiles can be challenged; a defender can lose at most **[DEFAULT: 3]** tiles per day.
-  - **Gentle (default):** as On, but a defender can lose at most **[DEFAULT: 1]** tile per day, and challenging a player with far less territory (under **[DEFAULT: half]** of yours) earns reduced rewards.
+  - **On:** rival tiles can be challenged; a defender can lose at most **[DEFAULT: 3]** tiles per map-local day. Once a defender reaches the cap, challenges against them are blocked for the day (they don't use up attempts).
+  - **Gentle (default):** as On, but a defender can lose at most **[DEFAULT: 1]** tile per map-local day, and challenging a player with far less territory (under **[DEFAULT: half]** of yours, home rings not counted) earns **[DEFAULT: 50%]** rewards.
   - **Off:** no player-vs-player challenges. Players race for neutral land and work together against the Hollow Man.
 - Hearthfire safe radii are measured in hex tiles (§14).
 
@@ -311,7 +311,7 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 
 ## 22. Phased roadmap
 
-**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts; **opening cinematic and single-player tutorial (§25–26)**; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture; 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and simple evolution; the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
+**Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts (family signup code); **opening cinematic and single-player tutorial (§25–26)**; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture, with the map-owner PvP mode (On / Gentle / Off); 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and simple evolution; the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
 
 **Phase 2 — Thanksgiving:** live real-time battles (Colyseus rooms); trading and gifting (squishies and clothing); free text chat with filtering and parent controls; branching evolution; outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
 
@@ -366,7 +366,7 @@ Milestones are long-term goals that reward signature clothing, Patch Coins and t
 | Collector | Catch 10 / 25 / 50 species; complete an element | Squishy Net → Collector's Satchel → Rainbow Jacket |
 | Evolution | Evolve 5 / 20 squishies; get a rare branch | Evolver's Goggles → Prism Boots |
 | Caretaker | Pet/feed 100 / 500 / 2,000 times; keep 5 squishies at max contentment | Cozy Apron → Heart Mittens |
-| Defender | Win 10 / 50 defenses; protect every squishy for 7 nights | Hearthkeeper Lantern → Ember Cloak |
+| Defender | Win 10 / 50 defenses (only on maps where PvP isn't Off); protect every squishy for 7 nights | Hearthkeeper Lantern → Ember Cloak |
 | Rescuer | Rescue 1 / 10 Hollowed squishies | Brave Scarf → Lightbringer Wings |
 | Friendship | (Phase 2) Gift 10 items; complete 10 fair trades | Friendship Bracelet → Matching outfit sets for both players |
 | Seasonal | Complete each season's event goals | That season's legendary costume |
@@ -404,7 +404,7 @@ A short, skippable cinematic that every new player sees once, right after choosi
 
 ## 26. Single-player tutorial: "The First Patch"
 
-Every new player plays a short solo tutorial before joining or creating a multiplayer map. It teaches every Phase 1 mechanic hands-on, in story order, with nothing to lose.
+Every new player plays a short solo tutorial before joining or creating a multiplayer map, unless the operator has turned the tutorial gate off (see Rules below). It teaches every Phase 1 mechanic hands-on, in story order, with nothing to lose.
 
 **Where:** a small private map, **the Tutorial Glade** [DEFAULT: hex radius 3, 37 tiles], hand-authored (not random) so every player gets the same, well-paced experience.
 
@@ -431,5 +431,5 @@ Every new player plays a short solo tutorial before joining or creating a multip
 - Nothing can be lost in the tutorial. The Hollow Man can't take anything here.
 - **Carry-over:** the player's Partner species, the Seedling Scarf and the "First Patch" milestone are account-level rewards. Every new map the player joins starts them with their Partner (a fresh level-1 copy) alongside the normal starting kit.
 - Players can skip the tutorial only after finishing it once (e.g. on a new device), and can replay it any time from Settings.
-- **Tutorial gate is a server setting:** while the tutorial is still being built (and for testing), the operator can let new accounts create or join maps without finishing it. The multiplayer game never waits on the tutorial to be playable. The tutorial's last steps (Seedling Scarf in the Wardrobe, First Patch milestone) can arrive once those systems exist.
+- **Tutorial gate is a server setting:** while the tutorial is still being built (and for testing), the operator can let new accounts create or join maps without finishing it. The multiplayer game never waits on the tutorial to be playable. A player who skipped it starts each map with a starter Partner from a small starter list **[DEFAULT]** instead of the tutorial Partner. The tutorial's last steps (Seedling Scarf in the Wardrobe, First Patch milestone) can arrive once those systems exist.
 - Every step is reachable with one hand on an iPhone; text is short and large.

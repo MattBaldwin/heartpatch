@@ -98,7 +98,7 @@ Add anything else only with a one-line justification in the PR.
   4. CI fails if `drizzle-kit generate` would produce a diff, and runs `drizzle-kit check`.
   5. Migrations must be safe while the previous release is still running (expand, then contract in a later release), because a rollback runs the previous image against the already-migrated schema.
 
-**Core tables (Phase 1):** `users`, `sessions`, `recovery_codes`, `keepers`, `maps`, `map_members`, `invite_codes`, `join_requests`, `tiles`, `species_seen`, `squishies`, `buildings`, `inventories`, `resource_ledger`, `gather_jobs`, `battles` (seed, action log, result), `raids`, `hollow_events`, `clothing_owned`, `outfits`, `milestone_progress`, `milestone_rewards`, `coin_ledger`, `boutique_stock`, `quick_messages`, `game_events`.
+**Core tables (Phase 1):** `users` (with `time_zone`), `sessions`, `event_consumers`, `recovery_codes`, `keepers`, `maps`, `map_members`, `invite_codes`, `join_requests`, `tiles`, `species_seen`, `squishies`, `buildings`, `inventories`, `resource_ledger`, `gather_jobs`, `battles` (seed, action log, result), `raids`, `hollow_events`, `clothing_owned`, `outfits`, `milestone_progress`, `milestone_rewards`, `coin_ledger`, `boutique_stock`, `quick_messages`, `game_events`.
 
 ## 5. API
 
@@ -125,8 +125,8 @@ Add anything else only with a one-line justification in the PR.
 - **Rendering:** one Babylon `Engine`; scenes swapped (map, home base, battle, close-up, wardrobe). **WebGL2 is the default renderer for Phase 1** (owner decision, docs/DECISIONS.md). WebGPU is opt-in behind a setting until it's proven on real devices; when enabled, it falls back to WebGL2 automatically, including on device loss. Scene code must work on both.
   - **Testing caveat:** Playwright WebKit in CI runs without WebGPU, so CI exercises the WebGL2 path; the WebGPU path is verified on real devices.
   - **Shaders:** write Phase 1 custom shaders for WebGL2 (GLSL ES 3.0, or Babylon node materials). Add WGSL versions only when the WebGPU path is enabled, so Babylon never has to load its glslang/twgsl WASM converters, which would count against the 15 MB first-load budget.
-  - **Memory and heat:** no MSAA on any tier (FXAA/SMAA only), and no half-float HDR pipeline unless a feature needs it. A 4× MSAA RGBA16F pipeline at DPR 2 costs about 250 MB of GPU memory on a 10th-gen iPad before any content. Render only when something changes (camera motion, animation, state updates), or cap at 30 fps while idle, so a static map doesn't drain battery or throttle.
-- **Quality settings:** `engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio, 2))`; FXAA or SMAA post-process; dynamic resolution scaler targeting 60 fps; quality tiers (high/medium/low) auto-picked from a short benchmark and adjustable in settings. **Default tier is high** on the playtest devices; spend the headroom on squishy quality (clearcoat, bloom, close-up depth of field) first.
+  - **Memory and heat:** no MSAA on any tier (FXAA/SMAA only), and no half-float HDR pipeline unless a feature needs it. A 4× MSAA RGBA16F pipeline at DPR 2 costs about 250 MB of GPU memory on a 10th-gen iPad before any content. Render only when something changes, or cap at 30 fps while idle, so a static map doesn't drain battery or throttle. Babylon has no built-in render-on-demand: keep a dirty flag inside `runRenderLoop`, set by camera matrix changes, running animations and store updates.
+- **Quality settings:** `engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio, 2))`; FXAA post-process (Babylon core has no SMAA; add one only if FXAA isn't good enough), and create the engine with `antialias: false` so the default framebuffer has no MSAA; dynamic resolution scaler targeting 60 fps, paused while the scene is idle so idle frames aren't mistaken for slow ones; quality tiers (high/medium/low) auto-picked from a short benchmark and adjustable in settings. **Default tier is high** on the playtest devices; spend the headroom on squishy quality (clearcoat, bloom, close-up depth of field) first.
 - **UI:** HTML/CSS overlay on top of the canvas for menus, inventory, wardrobe lists and text input (sharper text, native accessibility, iOS keyboard works properly). Babylon GUI only for in-world labels and bubbles.
 - **State:** a small typed store (no heavy framework needed); server is the source of truth. Optimistic UI only for cosmetic actions (e.g. equipping clothing), rolled back on server error.
 - **Assets:** glTF/GLB, Draco or meshopt compression, KTX2 textures. Procedural squishies and Keepers need few textures; environment props are small GLBs. Lazy-load per scene.
@@ -149,13 +149,17 @@ Add anything else only with a one-line justification in the PR.
   - **Ordering on the wire:** post-commit broadcasts can still leave Node out of order. The client buffers briefly and applies events in `seq` order. Only a gap that persists past a short timeout triggers a replay request.
   - **Delivery guarantee:** if the process crashes between commit and broadcast, live delivery of that event is lost, but the row is committed, so clients pick it up on reconnect or `visibilitychange` resync. That is acceptable for this game; there is no separate outbox relay.
   - Index `(map_id, seq)` unique. Pruning old `game_events` only limits **WS replay** (older gaps refetch full state). Consumers that need history (raid log, milestone progress, Easter-egg state) keep their own tables and don't rely on old `game_events` rows.
-  - **Event consumers (milestones, tutorial steps, Easter eggs, raid log):** these never run inside the command's transaction and never depend on live broadcast. Each consumer records its position in `event_consumers (consumer, map_id, last_seq)` and processes events **in `seq` order** from `game_events` via a pg-boss job after commit. Handlers are idempotent, so a crash or deploy only delays processing and never loses it. Because `seq` is gap-free, "everything after `last_seq`" is exact.
+  - **Event consumers (milestones, tutorial steps, Easter eggs, raid log):** these never run inside the command's transaction and never depend on live broadcast. Each consumer records its position in `event_consumers (consumer, map_id, last_seq)` and processes events **in `seq` order** from `game_events`. Because `seq` is gap-free and commits happen in `seq` order (the `maps` row lock), "everything after `last_seq`" is exact. To make "a crash only delays processing, never loses it" true:
+    - **Wake-up inside the transaction:** the command enqueues the consumer job with pg-boss `send` using the command's own transaction, so the wake-up commits or rolls back with the event. A periodic catch-up job also wakes any consumer whose `last_seq` is behind `maps.event_seq`.
+    - **One worker per `(consumer, map_id)`:** a pg-boss `singletonKey`, plus `SELECT … FOR UPDATE` on the `event_consumers` row while processing, so events are applied in order exactly once per consumer.
+    - **Idempotent handlers**, with `last_seq` advanced in the same transaction as the handler's writes.
+    - **Pruning:** never prune `game_events` below the lowest `last_seq` of any consumer for that map.
   - **Public vs internal payloads:** a `game_events` row's `payload` is internal and may hold server-only detail. WebSocket broadcast sends a **public view** built per event type (and per recipient where needed), never the raw payload.
 - **Scheduled jobs (pg-boss):**
   - `nightfall` per map at 21:00 map time (Hollow Man, §14 of the design doc)
     - **Hearthfire fuel is a date, not a counter:** each Hearthfire stores `fuelled_through` (the last map-local night its fuel covers). `tonight` means the **next nightfall that hasn't run yet** for that map (after 21:00, that's tomorrow's). Adding *n* nights of Emberwood sets `fuelled_through = max(fuelled_through, tonight − 1) + n`, capped at `tonight − 1 + max_nights`. At nightfall the fire protects tonight if `fuelled_through ≥ tonight`. "Nights left" is shown as `fuelled_through − tonight + 1` (minimum 0). Nothing is decremented, so a retried or duplicate nightfall run can't burn fuel twice.
   - `stranded-decay` (Phase 2)
-  - `boutique-rotate` daily per map
+  - `boutique-rotate` daily per account (coins and wardrobe are account-level), at midnight in the account's time zone
   - `invite-expiry`, `session-cleanup`, `chat-retention` daily
   - Jobs are idempotent and keyed by `(job, mapId, date)` so a restart never runs nightfall twice.
 - **Tutorial maps:** a tutorial is a normal map row with `kind = 'tutorial'` and one member, created from a hand-authored layout in `data/tutorial/`. It runs the **same** modules (gathering, battles, capture, care, buildings, nightfall) with a `tutorialOverrides` config (fast timers, guaranteed capture, scripted opponent AI, Hollow Man can't take anything). No separate code path for tutorial gameplay.
@@ -167,15 +171,15 @@ Add anything else only with a one-line justification in the PR.
 - `packages/shared/src/rng`: a small seeded PRNG (e.g. `sfc32` or `mulberry32`) with `next()`, `int(min, max)`, `pick()`, `weighted()`.
 - Never use `Math.random()` in game logic (lint rule). Seeds are generated server-side with `crypto.randomBytes` and stored with the battle/roll.
 - **Server-side secrecy:** RNG state and seeds stay on the server while a battle is in progress. The client gets a **public view** of battle state that can't be used to predict misses, damage variance or capture rolls. The seed may be revealed after the battle ends (for replays).
-- **No rerolls:** wild spawns and guardians are fixed per tile and time window (seeded server-side from the map seed, tile and window, or stored), so restarting a battle can't reroll what appears. Starting a battle consumes an attempt and starts the tile cooldown, and abandoning counts as a loss.
-- **Cross-engine determinism:** outcome maths uses integer or fixed-step arithmetic with explicit rounding at each step, and no `Math.pow`/`exp`/trig, so results are bit-identical on V8 (Node) and JavaScriptCore (Safari).
+- **No rerolls:** wild spawns and guardians are fixed per tile and time window (seeded server-side from the map seed, tile and window, or stored), so restarting a battle can't reroll what appears. The **map seed is never revealed** to clients, since it would predict every spawn; individual battle seeds may be revealed after the battle. Starting a battle consumes an attempt and starts the tile cooldown, and abandoning counts as a loss.
+- **Cross-engine determinism:** plain float `+ − × ÷` is identical on V8 (Node) and JavaScriptCore (Safari), so float multipliers are fine; apply `Math.floor`/`Math.round` at defined steps. Banned in outcome maths: transcendental `Math.*` (`pow`, `exp`, `log`, trig), `Math.random`, and sorts without a total-order comparator. Curves that need powers (e.g. XP) use lookup tables or integer loops.
 - **Content versioning:** every battle records a content version (a hash of the data tables it used) and its resolved turn log alongside the seed and actions, so replays and explanations survive re-tuning.
 
 ## 9. Security and safety
 
 - Argon2id with library defaults (or memory ≥ 19 MiB, iterations ≥ 2).
 - Recovery codes: 12 characters, shown once, stored hashed. **One active code per user**; resetting with it marks it used and shows a fresh one. The `recovery_codes` table keeps used codes for audit.
-- **Operator password reset:** a built server script for players with no map owner, run on the host as `docker compose exec server node dist/ops/reset-password.js <username>` (the production image has no pnpm or dev tooling). Never exposed over HTTP. A reset also revokes the user's existing sessions and shows a new recovery code.
+- **Operator password reset:** a built server script for players with no map owner, or whose game maps have different owners, run on the host as `docker compose exec server node dist/ops/reset-password.js <username>` (the production image has no pnpm or dev tooling). Never exposed over HTTP. A reset (operator or map owner) also revokes the user's existing sessions and shows a new recovery code.
 - All user-entered text (usernames, nicknames, outfit names, chat in Phase 2) goes through `lib/filter` on the server.
 - Helmet security headers; Content-Security-Policy restricting scripts to self.
 - No third-party analytics or ads. No email collection. Birth year only.
@@ -194,8 +198,8 @@ Add anything else only with a one-line justification in the PR.
 | `APP_VERSION` | `2026.10.02-abc123` | set by deploy (image tag); reported by `/api/v1/health` |
 | `TRUST_PROXY` | `true` | `true` behind Caddy so `request.ip` is the player's IP (per-IP rate limits) |
 | `HP_DEV_NOW` | `2026-12-20T20:59:00-05:00` | dev/test only |
-| `HP_SIGNUP_CODE` | random string | required to create an account (family-only signup, Phase 1) |
-| `HP_TUTORIAL_REQUIRED` | `false` | when `false`, new accounts can create/join maps without finishing the tutorial |
+| `HP_SIGNUP_CODE` | random string | required to create an account (family-only signup, Phase 1); checked with a constant-time comparison under the auth rate limit |
+| `HP_TUTORIAL_REQUIRED` | `false` | defaults to `false` when unset; when `false`, new accounts can create/join maps without finishing the tutorial. Flip to `true` once the tutorial (#24) ships |
 
 Parsed and validated by `apps/server/src/config.ts` (zod); the server refuses to start on invalid config. Keep `.env.example` current.
 

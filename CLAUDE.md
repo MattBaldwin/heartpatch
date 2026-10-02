@@ -8,7 +8,7 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 
 - **Language:** TypeScript everywhere, `strict: true`.
 - **Monorepo:** pnpm workspaces.
-  - `apps/client` — Vite + **Babylon.js** (WebGPU primary, automatic WebGL2 fallback). Touch-first UI.
+  - `apps/client` — Vite + **Babylon.js** (WebGL2 default for Phase 1; WebGPU opt-in with automatic WebGL2 fallback). Touch-first UI.
   - `apps/server` — Node 22 LTS, **Fastify** (REST + WebSocket via `@fastify/websocket`). **Colyseus** is added in Phase 2 for live battle rooms.
   - `packages/shared` — game data tables, types, zod schemas, the battle engine, formulas. Pure and deterministic; no I/O.
 - **Database:** Postgres 16, **Drizzle ORM** with versioned migrations.
