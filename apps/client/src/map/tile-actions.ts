@@ -8,7 +8,7 @@ import type { TileActions } from './map-screen.js';
 export function combineTileActions(...features: readonly TileActions[]): TileActions {
   const slots = new WeakMap<HTMLElement, HTMLElement[]>();
   return {
-    show: (container, tile) => {
+    show: (container, tile, view) => {
       let boxes = slots.get(container);
       if (!boxes) {
         boxes = features.map(() => el('div', { class: 'tile-actions-slot' }));
@@ -17,7 +17,7 @@ export function combineTileActions(...features: readonly TileActions[]): TileAct
       }
       features.forEach((feature, i) => {
         const box = boxes[i];
-        if (box) feature.show(box, tile);
+        if (box) feature.show(box, tile, view);
       });
     },
     hide: () => {

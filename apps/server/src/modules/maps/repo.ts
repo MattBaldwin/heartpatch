@@ -11,6 +11,9 @@ import {
   mapMembers,
   maps,
   outfits,
+  squishies,
+  tileAttacks,
+  tileDefenders,
   tiles,
   users,
 } from '../../db/schema.js';
@@ -129,7 +132,7 @@ export interface MapsRepo {
     homeSlot: number,
     userId: string,
   ) => Promise<{ q: number; r: number }[]>;
-  /** Sends all of a player's tiles back to neutral; returns how many. */
+  /** Sends all of a player's tiles back to neutral (squishies on watch go home); returns how many. */
   releaseTiles: (mapId: string, userId: string) => Promise<number>;
 
   /** The player's membership in any status, or null if they never joined. */
@@ -310,6 +313,19 @@ function queries(db: Executor): MapsRepo {
           nodeResource: tiles.nodeResource,
           homeSlot: tiles.homeSlot,
           gatheringReadyAt: gatherJobs.readyAt,
+          // The raid cooldown (#15): the latest tile battle's, past or not.
+          cooldownUntil: sql<string | null>`(
+            select max(${tileAttacks.cooldownUntil}) from ${tileAttacks}
+            where ${tileAttacks.tileId} = ${tiles.id}
+          )`,
+          // Squishies on watch (#15) that are still the owner's and not in the Hollow.
+          defenders: sql<number>`(
+            select count(*) from ${tileDefenders}
+            join ${squishies} on ${squishies.id} = ${tileDefenders.squishyId}
+            where ${tileDefenders.tileId} = ${tiles.id}
+              and ${squishies.ownerUserId} = ${tiles.ownerUserId}
+              and ${squishies.state} = 'active'
+          )::int`.mapWith(Number),
         })
         .from(tiles)
         // "Gathering here" (#17): only the tile owner's own gather counts.
@@ -323,9 +339,10 @@ function queries(db: Executor): MapsRepo {
         )
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.q), asc(tiles.r));
-      return rows.map(({ gatheringReadyAt, ...tile }) => ({
+      return rows.map(({ gatheringReadyAt, cooldownUntil, ...tile }) => ({
         ...tile,
         gathering: gatheringReadyAt ? { readyAt: gatheringReadyAt.toISOString() } : null,
+        cooldownUntil: cooldownUntil === null ? null : new Date(cooldownUntil).toISOString(),
       }));
     },
 
@@ -337,6 +354,16 @@ function queries(db: Executor): MapsRepo {
         .returning({ q: tiles.q, r: tiles.r }),
 
     releaseTiles: async (mapId, userId) => {
+      // Squishies on watch there go home (#15): the land isn't theirs to guard now.
+      await db.delete(tileDefenders).where(
+        inArray(
+          tileDefenders.tileId,
+          db
+            .select({ id: tiles.id })
+            .from(tiles)
+            .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId))),
+        ),
+      );
       const released = await db
         .update(tiles)
         .set({ ownerUserId: null })

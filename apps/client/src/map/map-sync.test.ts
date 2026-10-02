@@ -283,4 +283,18 @@ describe('MapSync', () => {
     expect(await first).toBeNull();
     expect(sync.state?.view.seq).toBe(20);
   });
+
+  it('redraws from the copy when a live event fully describes a tile change (#15)', async () => {
+    const { sync, redraws, calls } = await opened(5);
+    const tile = testView(1).tiles.find((t) => t.ownerUserId === null && t.homeSlot === null)!;
+    sync.event(
+      event('tile.captured', { userId: userId(1), fromUserId: null, q: tile.q, r: tile.r }, 6),
+    );
+    expect(redraws).toHaveLength(1);
+    expect(redraws[0]!.tiles.find((t) => t.q === tile.q && t.r === tile.r)?.ownerUserId).toBe(
+      userId(1),
+    );
+    // No refetch: the event said everything.
+    expect(calls).toEqual([]);
+  });
 });

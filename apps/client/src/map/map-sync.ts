@@ -21,7 +21,7 @@ export interface MapSyncOptions {
   fetchView: (mapId: string) => Promise<MapView>;
   /** The live socket (made on first use). */
   socket: () => Pick<WsClient, 'subscribe' | 'unsubscribe'>;
-  /** A fresh view of the open map arrived (resync): redraw from it. */
+  /** A fresh view of the open map arrived (resync), or a live event changed a tile: redraw from it. */
   onRedraw: (state: MapState) => void;
   /** The server won't let this player follow the map anymore. */
   onLeave: (message: string) => void;

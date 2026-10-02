@@ -109,7 +109,8 @@ PvE battles (design doc §6; tech spec §8; DECISIONS "Battle engine (#11)") liv
 **Rules of the service:**
 - The team is the player's active squishies on the map, strongest first, up to `rules.teamSize` (team picking is a later feature). No squishy → `CONFLICT` "You need a squishy friend first!".
 - `BattleRuleError` from the engine (an unknown move, a swap to an empty slot, acting in the wrong phase) becomes `CONFLICT` with a kid-readable message; the client refetches the battle on `CONFLICT`.
-- **Content re-tuned mid-battle:** if the stored `content_hash` isn't today's, the battle ends as `no-contest` on the next read or action: nothing is won or lost, no XP, `battle.ended` with `reason: 'no-contest'`. Wild battles cost no attempt; a kind that does (tile guardians, #15) refunds it in `endNoContest`.
+- **Content re-tuned mid-battle:** if the stored `content_hash` isn't today's, the battle ends as `no-contest` on the next read or action: nothing is won or lost, no XP, `battle.ended` with `reason: 'no-contest'`. Wild battles cost no attempt; tile battles (#15) refund theirs in `endNoContest`.
+- **Tile battles (#15)** start through `startTile(user, mapId, prepare)`: `prepare` (the territory module) checks the raid rules and builds the other side inside the start transaction, so a refused start uses nothing. The `tileBattles` port (`createTileBattlePort`) is called on the battle's own transactions: `acted` restarts the abandon timer, `ended` settles the attempt and moves the tile on a win (its events follow `battle.ended`), `noContest` refunds the attempt. A tile battle with no action for `abandonMinutes` has been left: it ends as a forfeit (a loss) on the next read, action or start (`settle`), so a player is never stuck behind one.
 - **Capture (#14):** `{ type: 'capture' }` offers a Heart Charm to the wild squishy (wild battles only, `CAPTURABLE_BATTLE_KINDS`). In one transaction: one `heart-charm` through #17's `consumeItems` (reason `capture`, ledgered against the battle; `CONFLICT` when out, nothing changes), the engine's capture turn (one roll on the battle RNG; `sure` on tutorial maps), and on a catch the new `squishies` row, `species_seen.first_caught_at`, `battle.ended` (`reason: 'captured'`) and `squishy.captured`. Starting a battle records the opponent's species as seen.
 - **Tutorial maps:** `gameplayOverrides(map.kind)` scripts the opponent's AI policy and level (tech spec §7).
 - **XP:** on a finished battle the player's squishies get the engine's base battle XP (`squishies.xp`), under a row lock, in the same transaction as the result and the `battle.ended` event. Care and habitat multipliers (#19) and levelling (the XP curve) come with their issues.
@@ -167,6 +168,26 @@ await repo.transaction(async (repo, tx) => {
 **No rerolls.** A tile's squishy for a window is `resolveWildSpawn` (shared, pure) over the secret `SPAWN_TABLES` and `SPAWN_RULES` with the seed `deriveSeed(mapSeed, 'spawn', q, r, windowId)`; nothing is stored until someone battles it, and the seed is never sent anywhere. Battle seeds still come from `newSeed()`. The window is `spawnWindowFor(now, maps.time_zone, SPAWN_RULES.windowHours)` (`lib/time.ts`), so it follows `HP_DEV_NOW`. Season-tagged tables and seasonal species only spawn while their season is on, by the window's map-local date.
 
 **Reach** is the player's land and the tiles next to it; `findWildEncounter` (the battles port) takes a picked tile or the nearest spawn, skipping any the player befriended this window (`battles.spawn_window`). `species_seen` rows are written by the battles service on its own transactions (`createSpawnsRepo(tx)`).
+
+## Territory
+
+`src/modules/territory` (issue #15; design doc §11; decisions B and C): claiming neutral land, challenging another player's, and squishies standing watch. Players say **Claim** and **Challenge** (style guide §9); the code says attack.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/territory` | → `{ territory }`: tries left today, my new-player shield, my tiles with squishies on watch, my squishies (and the secret species rows among them), and the server's clock |
+| `POST /api/v1/maps/:mapId/attacks` | `{ q, r }` → 201 `{ battle }` (a `tile` or `rival-tile` battle), or 200 with the battle already going. Takes an `Idempotency-Key` |
+| `POST /api/v1/maps/:mapId/defenders` | `{ q, r, squishyIds }` (up to `maxDefenders`, in slot order; `[]` sends everyone home) → `{ territory }`. Only my land outside my home base, only my squishies not in the Hollow; a squishy on watch elsewhere moves. Appends `defenders.changed` when it changes |
+
+**Raid rules** are `TERRITORY_RULES` (shared, public, `// TUNE:`), all checked on the server in the battle's start transaction, in this order: the tile exists; the target is next to my land, not a home tile, not mine, and not another player's when PvP is Off (`attackTargetProblem`, shared with the client); the tile's cooldown (`cooldownHours` from the last battle **started** on it, by anyone, win or lose); my tries today (`attemptsPerDay` per map-local day; a no-contest doesn't count); and for a rival tile, their new-player shield (`newPlayerShieldHours` from joining), then their daily loss cap (`dailyLossCap[pvpMode]`, counting tiles lost today **plus** challenges against them still going, so two at once can't both get under it). Refusals use nothing up. Lock order: the defender's `map_members` row (`for no key update`, so the cap count is serialized per defender), the tile, then the battle and attempt rows, `maps` last.
+
+**Who defends.** Neutral land: the tile's guardians, `resolveGuardians` over the secret `GUARDIAN_RULES` with `deriveSeed(mapSeed, 'guardian', q, r, windowId)` (tech spec §8: fixed per window, the seed and `guardian_strength` never leave the server). A rival tile: the owner's squishies on watch, or the land's own guardians if nobody stands watch. `defendingSide` is the one place that picks who plays that side (Phase 1: the engine's `balanced` AI for squishies, `guardian` for guardians); #16 swaps in defense stances there.
+
+**Capture.** In the battle's finishing transaction (CLAUDE.md rule 7): the tile changes hands only if it's still held by whoever held it at the start (or nobody) and isn't a home tile, the squishies on watch go home (`tile_defenders` rows deleted, the squishies untouched), the attempt is `captured`, and `tile.captured` follows `battle.ended`. Leaving a map releases its tiles and sends its squishies on watch home too (`releaseTiles`).
+
+**Events:** `tile.attacked` (public: who, whose, where, `cooldownUntil`), `tile.captured` (public: new and old owner, where; internal also the kind, terrain, Gentle `rewardPercent` and returned squishies, for found clothing #43 and milestones #44), `defenders.changed` (public: whose and where, and how many; which squishies stays internal). `PublicTile` carries `cooldownUntil` (the latest, may be past) and `defenders` (a count).
+
+**On watch (decision C):** `isOnWatch(squishy, post)` (shared) is true for an active squishy posted on land its owner still holds; the Hollow Man (#21) skips those.
 
 ## Home base and buildings
 
@@ -272,7 +293,7 @@ Commands take an `Idempotency-Key`.
 
 **Storage:** `clothing_owned` (one row per piece; starters aren't stored, everyone owns them), `outfits` (preset 0 is what's worn, 1–3 the presets) and `squishy_accessories`. Other players see the worn set on `MapMember.keeper.wearing`.
 
-**Found clothing, for other modules** (captures #15, Hollow rescues #21): call `rollFoundDrop` inside your transaction, after your own state writes and just before your own event, so your event stays the last write (gathering does this):
+**Found clothing, for other modules** (gathering and tile captures call it; Hollow rescues #21 will): call `rollFoundDrop` inside your transaction, after your own state writes and just before your own event, so your event stays the last write (gathering does this):
 
 ```ts
 import { rollFoundDrop } from '../wardrobe/drops.js';

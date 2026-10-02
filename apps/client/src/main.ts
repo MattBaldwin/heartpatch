@@ -16,6 +16,7 @@ import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
+import { createTerritoryScreen } from './territory/territory-screen.js';
 import { createTutorialScreen } from './tutorial/tutorial-screen.js';
 import './styles.css';
 
@@ -103,6 +104,13 @@ function showScene(build: SceneBuilder | null): void {
 // The bag and gathering (#17): a Bag button over a multiplayer map, and the
 // gather buttons in its tile panel.
 const inventory = createInventoryScreen({ root: document.body, devTools: import.meta.env.DEV });
+// Territory (#15): Claim, Challenge and guards in the tile panel. A tile
+// battle opens the battle screen, unless another screen sits over the map.
+const territory = createTerritoryScreen({
+  openBattle: (battle) => {
+    if (!lobby.isOpen && !catalog.isOpen) battles.open(battle);
+  },
+});
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
@@ -120,6 +128,7 @@ const home = createHomeScreen({
     maps.close();
     catalog.close();
     void inventory.setMap(null);
+    void territory.setMap(null);
     void battles.setMap(null);
     lobby.stepOut();
   },
@@ -128,6 +137,7 @@ const home = createHomeScreen({
       .open(mapId)
       .then(() => {
         void inventory.setMap(mapId);
+        void territory.setMap(mapId);
         void battles.setMap(mapId);
         home.setMap(mapId);
       })
@@ -146,10 +156,11 @@ const maps = createMapScreen({
     void battles.setMap(null);
     catalog.close();
     void inventory.setMap(null);
+    void territory.setMap(null);
     home.setMap(null);
     lobby.showMessage(message);
   },
-  tileActions: combineTileActions(inventory.tileActions, home.tileActions),
+  tileActions: combineTileActions(inventory.tileActions, home.tileActions, territory.tileActions),
   // A piece of clothing found while gathering (#43) shows a little note.
   onLiveEvent: (event) => {
     wardrobe.liveEvent(event);
@@ -169,6 +180,7 @@ const tutorial = createTutorialScreen({
       await battles.setMap(null);
       catalog.close();
       await inventory.setMap(null);
+      await territory.setMap(null);
       home.setMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
@@ -177,6 +189,7 @@ const tutorial = createTutorialScreen({
     close: () => {
       void battles.setMap(null);
       void inventory.setMap(null);
+      void territory.setMap(null);
       home.setMap(null);
       maps.close();
       lobby.show();
@@ -202,6 +215,7 @@ const battles = createBattleScreen({
     maps.close();
     catalog.close();
     void inventory.setMap(null);
+    void territory.setMap(null);
     home.setMap(null);
     lobby.stepOut();
   },
@@ -209,7 +223,7 @@ const battles = createBattleScreen({
     maps.open(mapId).then(
       () => {
         home.setMap(mapId);
-        return inventory.setMap(mapId);
+        return Promise.all([inventory.setMap(mapId), territory.setMap(mapId)]);
       },
       (err: unknown) => {
         // No map to go back to: no battle button over the lobby either.
@@ -242,6 +256,7 @@ const keeper = createKeeperScreen({
   onEditOpen: () => {
     void battles.setMap(null);
     void inventory.setMap(null);
+    void territory.setMap(null);
     home.setMap(null);
     maps.close();
     catalog.close();
@@ -278,6 +293,7 @@ const lobby = mountLobby(document.body, {
     catalog.close();
     await maps.open(mapId);
     void inventory.setMap(mapId);
+    void territory.setMap(mapId);
     home.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
     // battle resumed here (after a refresh) must step it out again after that.
@@ -291,6 +307,7 @@ mountAuth(document.body, {
     battles.setUser(user);
     catalog.setUser(user);
     inventory.setUser(user);
+    territory.setUser(user);
     home.setUser(user);
     wardrobe.setUser(user);
     maps.setUser(user);
@@ -347,6 +364,7 @@ if (import.meta.env.DEV) {
     keeper: () => keeper.debug,
     catalog: () => catalog.debug,
     inventory: () => inventory.debug,
+    territory: () => territory.debug,
     home: () => home.debug,
     wardrobe: () => wardrobe.debug,
   };

@@ -1,6 +1,7 @@
 import type { Scene } from '@babylonjs/core/scene';
 import {
   CAPTURABLE_BATTLE_KINDS,
+  TILE_BATTLE_KINDS,
   GAME_DATA,
   visualRegistry,
   type BattleSideId,
@@ -105,6 +106,7 @@ export interface BattleScreen {
 
 const MESSAGES = {
   resultWon: 'You won! Hooray!',
+  resultLand: 'This land is yours!',
   resultLost: 'Aw, tuckered out.',
   resultScooted: 'You scooted home.',
   scootedSub: 'Maybe next time!',
@@ -116,6 +118,9 @@ const MESSAGES = {
   drawSub: 'Everyone needs a nap.',
   noContestSub: 'The squishies got distracted. Nobody won or lost.',
   noXp: 'No XP this time.',
+  wildStart: 'A wild squishy wants to play!',
+  guardiansStart: 'The guardians want to play!',
+  rivalStart: 'Squishies on watch want to play!',
   done: 'Back to patch',
 } as const;
 
@@ -352,7 +357,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           : result.winner === b.mySide
             ? result.reason === 'captured'
               ? { title: MESSAGES.resultFriend, subtitle: friendLine(b, names) }
-              : { title: MESSAGES.resultWon, subtitle: MESSAGES.wonSub }
+              : {
+                  title: TILE_BATTLE_KINDS.has(b.kind) ? MESSAGES.resultLand : MESSAGES.resultWon,
+                  subtitle: MESSAGES.wonSub,
+                }
             : result.reason === 'forfeit'
               ? { title: MESSAGES.resultScooted, subtitle: MESSAGES.scootedSub }
               : { title: MESSAGES.resultLost, subtitle: MESSAGES.lostSub };
@@ -372,7 +380,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       if (battle.view.phase.type === 'replace' && battle.view.phase.sides.includes(battle.mySide)) {
         hud.setCaption('Your squishy is tuckered out. Who comes out next?');
       } else if (battle.view.log.length === 0) {
-        hud.setCaption('A wild squishy wants to play!');
+        hud.setCaption(
+          battle.kind === 'tile'
+            ? MESSAGES.guardiansStart
+            : battle.kind === 'rival-tile'
+              ? MESSAGES.rivalStart
+              : MESSAGES.wildStart,
+        );
       }
     } else {
       showResult(battle);

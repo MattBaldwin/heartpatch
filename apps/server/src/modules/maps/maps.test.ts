@@ -409,6 +409,8 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(view.tiles).toHaveLength(generated.tiles.length);
       expect(Object.keys(view.tiles[0]!).sort()).toEqual(
         [
+          'cooldownUntil',
+          'defenders',
           'buildings',
           'gathering',
           'homeSlot',

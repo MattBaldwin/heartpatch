@@ -71,6 +71,13 @@
       "when": 1790966621907,
       "tag": "0009_territory",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790969428684,
+      "tag": "0010_wardrobe",
+      "breakpoints": true
     }
   ]
 }
