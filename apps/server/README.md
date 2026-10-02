@@ -36,3 +36,7 @@ Register the module's routes in `src/app.ts` under the `/api/v1` prefix. Pass de
 ## Config
 
 Environment variables are parsed in `src/config.ts` (zod) and the server refuses to start on invalid values. `NODE_ENV` defaults to `production`; `pnpm dev` sets `development`. Keep `.env.example` current.
+
+## Database
+
+Postgres 16 via Drizzle. Schema, migrations, the `game_events` helper and the `db:*` scripts are documented in [`src/db/README.md`](src/db/README.md).
