@@ -1,7 +1,6 @@
 import { randomInt } from 'node:crypto';
 import {
   formatInviteCode,
-  formatRecoveryCode,
   GAME_DATA,
   generateMap,
   INVITE_CODE_ALPHABET,
@@ -24,16 +23,11 @@ import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import { newSeed } from '../../lib/rng.js';
 import { canonicalTimeZone, type Clock } from '../../lib/time.js';
+import { isUniqueViolation } from '../../db/errors.js';
 import { createAuthRepo } from '../auth/repo.js';
-import { hashSecret, newRecoveryCode, newTemporaryPassword } from '../auth/secrets.js';
+import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
-import {
-  createMapsRepo,
-  isUniqueViolation,
-  type JoinRequestRow,
-  type MapsRepo,
-  type MemberRow,
-} from './repo.js';
+import { createMapsRepo, type JoinRequestRow, type MapsRepo, type MemberRow } from './repo.js';
 
 export interface MapsService {
   myMaps: (user: PublicUser) => Promise<MyMapsResponse>;
@@ -242,6 +236,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 
       const mapId = await withFreshCode((code) =>
         store.transaction(async (repo) => {
+          // Ordered against an owner resetting this player (decision D scope check).
+          await repo.lockUser(user.id);
           const map = await repo.insertMap({ name: input.name, timeZone, seed, maxPlayers });
           await repo.upsertMember({
             mapId: map.id,
@@ -322,6 +318,9 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         store.transaction(async (repo) => {
           const invite = await repo.findLiveInviteByCode(code, now());
           if (!invite) throw new AppError('NOT_FOUND', MESSAGES.badCode);
+          // Ordered against approvals (which lock the joiner too), so a second
+          // tap during an approval sees the new membership.
+          await repo.lockUser(user.id);
           const [membership, owner, map] = await Promise.all([
             repo.membership(invite.mapId, user.id),
             repo.owner(invite.mapId),
@@ -366,6 +365,11 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         if (!request) throw new AppError('NOT_FOUND', MESSAGES.requestNotFound);
         if (request.status !== 'pending') throw new AppError('CONFLICT', MESSAGES.requestAnswered);
         await repo.lockUser(request.userId);
+        // Already in (a stale request): close it without a second home base.
+        if ((await repo.membership(mapId, request.userId))?.status === 'active') {
+          await repo.decideJoinRequest({ mapId, requestId, status: 'approved', now: now() });
+          return;
+        }
 
         const map = await repo.findMap(mapId);
         if (!map) throw new AppError('NOT_FOUND', MESSAGES.notFound);
@@ -442,16 +446,11 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       if (memberId === user.id) throw new AppError('FORBIDDEN', MESSAGES.resetSelf);
 
       // Hash before taking any locks; Argon2 is slow on purpose.
-      const temporaryPassword = newTemporaryPassword();
-      const recoveryCode = newRecoveryCode();
-      const [passwordHash, newRecoveryCodeHash] = await Promise.all([
-        hashSecret(temporaryPassword),
-        hashSecret(recoveryCode),
-      ]);
+      const credentials = await newResetCredentials();
 
       const member = await store.transaction(async (repo, tx) => {
-        // Locking the account holds off joins (approve locks it too), so the
-        // scope check below stays true until the reset commits.
+        // Locking the account holds off joins and new maps (approve and create
+        // lock it too), so the scope check below stays true until the reset commits.
         await repo.lockUser(memberId);
         const membership = await repo.membership(mapId, memberId);
         const target = await repo.findUser(memberId);
@@ -465,16 +464,16 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         // Revokes their sessions and rotates their recovery code (auth contract).
         await createAuthRepo(tx).resetPassword({
           userId: memberId,
-          passwordHash,
-          newRecoveryCodeHash,
+          passwordHash: credentials.passwordHash,
+          newRecoveryCodeHash: credentials.newRecoveryCodeHash,
           now: now(),
         });
         return target;
       });
       return {
         user: member,
-        temporaryPassword,
-        recoveryCode: formatRecoveryCode(recoveryCode),
+        temporaryPassword: credentials.temporaryPassword,
+        recoveryCode: credentials.recoveryCode,
       };
     },
   };

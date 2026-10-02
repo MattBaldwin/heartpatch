@@ -15,7 +15,7 @@ import {
   hashSessionToken,
   newRecoveryCode,
   newSessionToken,
-  newTemporaryPassword,
+  newResetCredentials,
   safeEqual,
   verifyAgainstDummy,
   verifySecret,
@@ -184,22 +184,17 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     operatorReset: async (username) => {
       const found = await repo.findUserByUsername(username);
       if (!found) return null;
-      const temporaryPassword = newTemporaryPassword();
-      const recoveryCode = newRecoveryCode();
-      const [passwordHash, newRecoveryCodeHash] = await Promise.all([
-        hashSecret(temporaryPassword),
-        hashSecret(recoveryCode),
-      ]);
+      const credentials = await newResetCredentials();
       await repo.resetPassword({
         userId: found.id,
-        passwordHash,
-        newRecoveryCodeHash,
+        passwordHash: credentials.passwordHash,
+        newRecoveryCodeHash: credentials.newRecoveryCodeHash,
         now: now(),
       });
       return {
         user: { id: found.id, username: found.username },
-        temporaryPassword,
-        recoveryCode: formatRecoveryCode(recoveryCode),
+        temporaryPassword: credentials.temporaryPassword,
+        recoveryCode: credentials.recoveryCode,
       };
     },
   };

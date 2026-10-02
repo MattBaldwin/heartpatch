@@ -90,4 +90,4 @@ _Proposed in the #4 PR; the project owner confirms on merge._
 - **The owner can't leave or be removed.** Ownership transfer isn't in Phase 1.
 - **Join requests and invite codes write no game events.** Only the owner sees them; game events are for map state every member sees.
 - **Repos take a transaction** (`Database | Transaction`) and services run multi-repo commands through `repo.transaction` (which wraps `withTransaction`); `buildApp` takes `{ db, clock }` (coordinator's drift audit). The per-map "seats" lock is the owner's `map_members` row, so seat changes never lock the busy `maps` row early.
-- **Owner resets lock the account.** The reset-scope check (decision D) and the reset run in one transaction holding the member's `users` row, which approvals also lock, so a reset can't race the member joining someone else's map.
+- **Owner resets lock the account.** The reset-scope check (decision D) and the reset run in one transaction holding the member's `users` row, which joining (request and approval) and creating a map also lock, so a reset can't race the member joining or making another map.

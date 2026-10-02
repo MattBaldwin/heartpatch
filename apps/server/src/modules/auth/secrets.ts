@@ -69,3 +69,28 @@ export function safeEqual(a: string, b: string): boolean {
   const digest = (s: string) => createHash('sha256').update(s).digest();
   return timingSafeEqual(digest(a), digest(b));
 }
+
+/**
+ * Fresh credentials for a password reset by someone else (operator or map
+ * owner): a temporary password and recovery code to show once, formatted, and
+ * the hashes to store with `AuthRepo.resetPassword`.
+ */
+export async function newResetCredentials(): Promise<{
+  temporaryPassword: string;
+  recoveryCode: string;
+  passwordHash: string;
+  newRecoveryCodeHash: string;
+}> {
+  const temporaryPassword = newTemporaryPassword();
+  const recoveryCode = newRecoveryCode();
+  const [passwordHash, newRecoveryCodeHash] = await Promise.all([
+    hashSecret(temporaryPassword),
+    hashSecret(recoveryCode),
+  ]);
+  return {
+    temporaryPassword,
+    recoveryCode: formatRecoveryCode(recoveryCode),
+    passwordHash,
+    newRecoveryCodeHash,
+  };
+}

@@ -21,7 +21,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { mapMembers, maps, sessions, users } from '../../db/schema.js';
+import { joinRequests, mapMembers, maps, sessions, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS, MAP_RATE_LIMITS } from './limits.js';
@@ -609,6 +609,31 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(results.map((r) => r.statusCode).sort()).toEqual([204, 409]);
       expect((await getMap(server, map.id, owner)).members).toHaveLength(2);
     });
+  });
+
+  it('closes a stale request from someone already in, without a second home base', async () => {
+    const server = await start();
+    const { owner, map, members } = await mapWith(server, 1);
+    const friend = members[0]!;
+    // A second tap that slipped in while the first request was being approved.
+    const invite = await db.query.inviteCodes.findFirst({
+      where: (t, { eq }) => eq(t.mapId, map.id),
+    });
+    const [stale] = await db
+      .insert(joinRequests)
+      .values({ mapId: map.id, userId: friend.id, inviteCodeId: invite!.id })
+      .returning({ id: joinRequests.id });
+    const eventsBefore = (await eventsOf(map.id)).length;
+
+    expect((await approve(server, owner, map.id, stale!.id)).statusCode).toBe(204);
+
+    const owned = (await tilesOf(map.id)).filter((t) => t.ownerUserId === friend.id);
+    expect(owned).toHaveLength(7);
+    expect(owned.every((t) => t.homeSlot === 1)).toBe(true);
+    const after = await getMap(server, map.id, owner);
+    expect(after.members.find((m) => m.user.id === friend.id)?.homeSlot).toBe(1);
+    expect(after.admin!.requests).toEqual([]);
+    expect(await eventsOf(map.id)).toHaveLength(eventsBefore);
   });
 
   describe('leaving and removing', () => {

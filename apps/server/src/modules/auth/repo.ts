@@ -1,5 +1,6 @@
 import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { Executor } from '../../db/client.js';
+import { isUniqueViolation } from '../../db/errors.js';
 import { recoveryCodes, sessions, users } from '../../db/schema.js';
 
 export interface AccountUser {
@@ -57,20 +58,6 @@ export interface AuthRepo {
    * Returns false, changing nothing, if `redeemRecoveryCodeId` is no longer active.
    */
   resetPassword: (reset: PasswordReset) => Promise<boolean>;
-}
-
-/** Postgres unique_violation. */
-const UNIQUE_VIOLATION = '23505';
-
-function isUniqueViolation(err: unknown): boolean {
-  // Drizzle wraps driver errors; the postgres error is the cause.
-  const cause = err instanceof Error && err.cause !== undefined ? err.cause : err;
-  return (
-    typeof cause === 'object' &&
-    cause !== null &&
-    'code' in cause &&
-    cause.code === UNIQUE_VIOLATION
-  );
 }
 
 class RollbackSignal extends Error {}

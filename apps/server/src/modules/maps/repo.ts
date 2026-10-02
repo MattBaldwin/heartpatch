@@ -1,7 +1,7 @@
 import type { MapRole, PublicTile, PvpMode } from '@heartpatch/shared';
 import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { withTransaction, type Executor } from '../../db/client.js';
+import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { inviteCodes, joinRequests, mapMembers, maps, tiles, users } from '../../db/schema.js';
 
@@ -75,7 +75,7 @@ export interface MapsRepo {
    * that transaction, and `tx` builds other modules' repos on it too
    * (`createAuthRepo(tx)`), so all their writes commit together.
    */
-  transaction: <T>(fn: (repo: MapsRepo, tx: Executor) => Promise<T>) => Promise<T>;
+  transaction: <T>(fn: (repo: MapsTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
 
   /** `users.tutorial_completed_at` (null = not finished). */
   tutorialCompletedAt: (userId: string) => Promise<Date | null>;
@@ -95,8 +95,6 @@ export interface MapsRepo {
   }) => Promise<{ id: string; pvpMode: PvpMode }>;
   insertTiles: (mapId: string, rows: readonly NewTile[]) => Promise<void>;
   findMap: (mapId: string) => Promise<MapRow | null>;
-  /** Server-only (tech spec §8). Null for hand-authored maps. */
-  mapSeed: (mapId: string) => Promise<string | null>;
   /** True if the mode changed. */
   setPvpMode: (mapId: string, pvpMode: PvpMode) => Promise<boolean>;
   /** Sorted by `q`, then `r`. */
@@ -181,23 +179,12 @@ export interface MapsRepo {
   }) => Promise<boolean>;
   listPendingRequests: (mapId: string) => Promise<PendingRequestRow[]>;
   listMyPendingRequests: (userId: string) => Promise<JoinRequestRow[]>;
-
-  /** `appendGameEvent`; only inside `transaction`. */
-  appendEvent: <T extends NewGameEvent['type']>(event: NewGameEvent<T>) => Promise<GameEvent>;
 }
 
-/** Postgres unique_violation. */
-const UNIQUE_VIOLATION = '23505';
-
-export function isUniqueViolation(err: unknown): boolean {
-  // Drizzle wraps driver errors; the postgres error is the cause.
-  const cause = err instanceof Error && err.cause !== undefined ? err.cause : err;
-  return (
-    typeof cause === 'object' &&
-    cause !== null &&
-    'code' in cause &&
-    cause.code === UNIQUE_VIOLATION
-  );
+/** The repo inside `transaction`: the only place game events can be written. */
+export interface MapsTxRepo extends MapsRepo {
+  /** `appendGameEvent` in this transaction; call it as the last write. */
+  appendEvent: <T extends NewGameEvent['type']>(event: NewGameEvent<T>) => Promise<GameEvent>;
 }
 
 const owners = alias(mapMembers, 'owners');
@@ -210,8 +197,16 @@ const activeMemberCount = sql<number>`(
 )`;
 
 export function createMapsRepo(db: Executor): MapsRepo {
+  return queries(db);
+}
+
+function createMapsTxRepo(tx: Transaction): MapsTxRepo {
+  return { ...queries(tx), appendEvent: (event) => appendGameEvent(tx, event) };
+}
+
+function queries(db: Executor): MapsRepo {
   return {
-    transaction: (fn) => withTransaction(db, (tx) => fn(createMapsRepo(tx), tx)),
+    transaction: (fn) => withTransaction(db, (tx) => fn(createMapsTxRepo(tx), tx)),
 
     tutorialCompletedAt: async (userId) => {
       const [row] = await db
@@ -263,11 +258,6 @@ export function createMapsRepo(db: Executor): MapsRepo {
         .from(maps)
         .where(eq(maps.id, mapId));
       return row ?? null;
-    },
-
-    mapSeed: async (mapId) => {
-      const [row] = await db.select({ seed: maps.seed }).from(maps).where(eq(maps.id, mapId));
-      return row?.seed ?? null;
     },
 
     setPvpMode: async (mapId, pvpMode) => {
@@ -543,12 +533,5 @@ export function createMapsRepo(db: Executor): MapsRepo {
         .innerJoin(ownerUsers, eq(ownerUsers.id, owners.userId))
         .where(and(eq(joinRequests.userId, userId), eq(joinRequests.status, 'pending')))
         .orderBy(asc(joinRequests.createdAt), asc(joinRequests.id)),
-
-    appendEvent: (event) => {
-      if (!('rollback' in db)) {
-        throw new Error('appendEvent: call it inside repo.transaction(...)');
-      }
-      return appendGameEvent(db, event);
-    },
   };
 }
