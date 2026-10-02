@@ -37,6 +37,13 @@ export const VARIATION = {
  */
 export type SquishyLod = 'low' | 'high';
 
+/**
+ * Detail a squishy field can draw at: the shared levels, plus `hero` for the
+ * one squishy that fills the screen in the close-up view (#20). Keepers stay
+ * on `SquishyLod`.
+ */
+export type SquishyDetail = SquishyLod | 'hero';
+
 export interface LodSettings {
   /** Body rings top to bottom; the body has twice as many segments around. */
   bodyRings: number;
@@ -46,9 +53,12 @@ export interface LodSettings {
   partSegments: number;
 }
 
-export const LOD: Readonly<Record<SquishyLod, LodSettings>> = {
+export const LOD: Readonly<Record<SquishyDetail, LodSettings>> = {
   low: { bodyRings: 14, partRings: 6, partSegments: 10 }, // TUNE
   high: { bodyRings: 32, partRings: 12, partSegments: 20 }, // TUNE
+  // TUNE: one squishy at full-screen size on a 2× display, so the silhouette
+  // stays round (~9k body triangles; still one draw call per shape).
+  hero: { bodyRings: 48, partRings: 16, partSegments: 28 },
 };
 
 /** Soft-vinyl material (matches the test scene's vinyl). */

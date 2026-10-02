@@ -3,6 +3,7 @@ import {
   CareRequestSchema,
   CareResponseSchema,
   MapIdParamsSchema,
+  RenameSquishyRequestSchema,
   SquishyParamsSchema,
 } from '@heartpatch/shared';
 import { normalizeIP } from '@fastify/rate-limit';
@@ -79,6 +80,26 @@ export const careRoutes =
           request.params.mapId,
           request.params.squishyId,
           request.body.action,
+        ),
+    );
+
+    app.post(
+      '/maps/:mapId/squishies/:squishyId/rename',
+      {
+        schema: {
+          params: SquishyParamsSchema,
+          body: RenameSquishyRequestSchema,
+          response: { 200: CareListResponseSchema },
+        },
+        preHandler: [requireAuth, rateLimit('rename'), idempotency.preHandler],
+        onSend: idempotency.onSend,
+      },
+      async (request) =>
+        service.rename(
+          requireUser(request),
+          request.params.mapId,
+          request.params.squishyId,
+          request.body.nickname,
         ),
     );
 

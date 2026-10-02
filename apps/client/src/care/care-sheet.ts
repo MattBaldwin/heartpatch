@@ -23,6 +23,8 @@ import './care.css';
 export interface CareSheetOptions {
   root: HTMLElement;
   api?: CareApi;
+  /** "Up close": opens the squishy in the close-up view (#20); no button without it. */
+  onCloseUp?: (mapId: string, squishyId: string) => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -112,6 +114,12 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'care-close' },
     CARE_TEXT.close,
   );
+  const closeUpButton = el(
+    'button',
+    { type: 'button', class: 'auth-button', 'data-testid': 'care-close-up' },
+    `👀 ${CARE_TEXT.upClose}`,
+  );
+  closeUpButton.hidden = true;
   const panel = el(
     'section',
     { class: 'care', role: 'dialog', 'aria-labelledby': 'care-title', 'data-testid': 'care' },
@@ -129,7 +137,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       actions,
       note,
       info,
-      el('div', { class: 'auth-actions' }, closeButton),
+      el('div', { class: 'auth-actions' }, closeUpButton, closeButton),
     ),
   );
   panel.hidden = true;
@@ -169,6 +177,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     window.clearTimeout(readyTimer);
     readyTimer = undefined;
     const squishy = current();
+    closeUpButton.hidden = !options.onCloseUp || !reply || !squishy;
     if (!reply || !squishy) {
       name.textContent = '';
       mood.textContent = CARE_TEXT.noneYet;
@@ -261,6 +270,12 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
 
   closeButton.addEventListener('click', () => {
     hide();
+  });
+
+  closeUpButton.addEventListener('click', () => {
+    const map = mapId;
+    const id = squishyId;
+    if (map && id) options.onCloseUp?.(map, id);
   });
 
   function hide(): void {

@@ -9,6 +9,7 @@ import {
   GROWTH_RULES,
   HomeResponseSchema,
   MapResponseSchema,
+  NICKNAME_MAX_LENGTH,
   SquishyResponseSchema,
   xpForLevel,
   type CareSquishy,
@@ -25,6 +26,7 @@ import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
+import { CARE_RATE_LIMITS } from './limits.js';
 import { appendGrowthEvents, applyXp } from './service.js';
 import { createCareRepo } from './repo.js';
 
@@ -385,6 +387,105 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       expect(retry.headers['idempotent-replayed']).toBe('true');
       expect(retry.json()).toEqual(first.json());
       expect((await one(server, kid, mapId, id)).caredToday).toBe(1);
+    });
+  });
+
+  describe('renaming', () => {
+    const rename = (
+      server: FastifyInstance,
+      who: Player | null,
+      mapId: string,
+      id: string,
+      nickname: string | null,
+      headers: Record<string, string> = {},
+    ) => call(server, 'POST', `/maps/${mapId}/squishies/${id}/rename`, who, { nickname }, headers);
+
+    it('renames your own squishy, trimmed, and tells members the new name', async () => {
+      const server = await start();
+      const [kid, friend] = [await player(), await player()];
+      const mapId = await newMap(server, kid);
+      const id = await squishy(mapId, kid);
+
+      const res = await rename(server, kid, mapId, id, '  Sir   Puffs  ');
+      expect(res.statusCode, res.body).toBe(200);
+      const sheet = CareListResponseSchema.parse(res.json()).squishies.find((s) => s.id === id);
+      expect(sheet?.nickname).toBe('Sir Puffs');
+      expect((await rowOf(id))?.nickname).toBe('Sir Puffs');
+
+      const event = (await eventsOf(mapId)).find((e) => e.type === 'squishy.updated')!;
+      expect(event.payload).toEqual({
+        userId: kid.id,
+        squishyId: id,
+        nickname: 'Sir Puffs',
+        fromNickname: null,
+      });
+      expect(publicViewFor(PUBLIC_VIEWS, event, { userId: friend.id })).toEqual({
+        userId: kid.id,
+        squishyId: id,
+        nickname: 'Sir Puffs',
+      });
+
+      // The same name again changes nothing and says nothing.
+      expect((await rename(server, kid, mapId, id, 'Sir Puffs')).statusCode).toBe(200);
+      // Null goes back to the species name.
+      const cleared = await rename(server, kid, mapId, id, null);
+      expect(CareListResponseSchema.parse(cleared.json()).squishies[0]?.nickname).toBeNull();
+      const types = (await eventsOf(mapId)).map((e) => e.type);
+      expect(types.filter((t) => t === 'squishy.updated')).toHaveLength(2);
+    });
+
+    it('runs every nickname through the text filter', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const id = await squishy(mapId, kid);
+      const rude = await rename(server, kid, mapId, id, 'fuck');
+      expect(rude.statusCode).toBe(400);
+      expect(errorOf(rude).message).toBe("Let's pick a kinder name. Try another one!");
+      const phone = await rename(server, kid, mapId, id, '555 123 4567');
+      expect(phone.statusCode).toBe(400);
+      expect(errorOf(phone).message).toContain('phone numbers');
+      const empty = await rename(server, kid, mapId, id, '   ');
+      expect(empty.statusCode).toBe(400);
+      const long = await rename(server, kid, mapId, id, 'x'.repeat(NICKNAME_MAX_LENGTH + 1));
+      expect(long.statusCode).toBe(400);
+      const odd = await rename(server, kid, mapId, id, 'Puff<script>');
+      expect(odd.statusCode).toBe(400);
+      expect((await rowOf(id))?.nickname).toBeNull();
+      expect((await eventsOf(mapId)).some((e) => e.type === 'squishy.updated')).toBe(false);
+    });
+
+    it("only renames your own active squishy, and a retry doesn't rename twice", async () => {
+      const server = await start();
+      const [kid, stranger] = [await player(), await player()];
+      const mapId = await newMap(server, kid);
+      const id = await squishy(mapId, kid);
+      const away = await squishy(mapId, kid, { state: 'hollowed' });
+      expect((await rename(server, stranger, mapId, id, 'Mine')).statusCode).toBe(404);
+      expect((await rename(server, null, mapId, id, 'Mine')).statusCode).toBe(401);
+      expect((await rename(server, kid, mapId, away, 'Ghosty')).statusCode).toBe(409);
+
+      const key = { 'idempotency-key': 'rename-retry-1' };
+      const first = await rename(server, kid, mapId, id, 'Bloop', key);
+      const retry = await rename(server, kid, mapId, id, 'Bloop', key);
+      expect(retry.headers['idempotent-replayed']).toBe('true');
+      expect(retry.json()).toEqual(first.json());
+      const types = (await eventsOf(mapId)).map((e) => e.type);
+      expect(types.filter((t) => t === 'squishy.updated')).toHaveLength(1);
+    });
+
+    it('rate limits renaming per player', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const id = await squishy(mapId, kid);
+      const max = CARE_RATE_LIMITS.rename.perUser.max;
+      for (let i = 0; i < max; i++) {
+        expect((await rename(server, kid, mapId, id, `Puff ${String(i)}`)).statusCode).toBe(200);
+      }
+      const res = await rename(server, kid, mapId, id, 'One more');
+      expect(res.statusCode).toBe(429);
+      expect(errorOf(res).code).toBe('RATE_LIMITED');
     });
   });
 

@@ -388,6 +388,21 @@ export const GAME_EVENTS = {
     public: z.object({ userId: z.uuid(), squishyId: z.uuid(), level: z.number().int().min(1) }),
   },
   /**
+   * A player renamed one of their squishies (#20): the new nickname, or null
+   * for the species name again. It passed the server's text filter. Other
+   * players' squishy changes that aren't care, growth or housing can join
+   * this type later as optional fields.
+   */
+  'squishy.updated': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      nickname: z.string().nullable(),
+      fromNickname: z.string().nullable(),
+    }),
+    public: z.object({ userId: z.uuid(), squishyId: z.uuid(), nickname: z.string().nullable() }),
+  },
+  /**
    * A player found a piece of clothing (#43): a lucky drop from a gather (and
    * later a capture or a rescue). Clothing is account-level; the event goes on
    * the map where it was found. What caused it stays internal.

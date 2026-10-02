@@ -42,7 +42,7 @@ function bounds(mesh: MeshArrays): { min: Vec3; max: Vec3 } {
 }
 
 describe.each(BODIES.map((b) => [b.id, b] as const))('body %s', (_id, body: Body) => {
-  for (const lod of ['low', 'high'] as const) {
+  for (const lod of ['low', 'high', 'hero'] as const) {
     it(`builds closed, front-facing ${lod} geometry sitting on the ground`, () => {
       const mesh = orientTriangles(bodyArrays(body, LOD[lod].bodyRings));
       expectFrontFacing(mesh);
@@ -63,7 +63,7 @@ describe.each(BODIES.map((b) => [b.id, b] as const))('body %s', (_id, body: Body
 });
 
 describe.each(PartShapeSchema.options)('part shape %s', (shape) => {
-  for (const lod of ['low', 'high'] as const) {
+  for (const lod of ['low', 'high', 'hero'] as const) {
     it(`fills the unit box and faces outwards (${lod})`, () => {
       const mesh = partArrays(shape, LOD[lod]);
       expectFrontFacing(mesh);

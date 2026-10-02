@@ -62,6 +62,8 @@ export interface HomeScreenOptions {
   onProblem: (message: string) => void;
   /** A squishy chip was tapped: open its care sheet (#19). */
   onCare?: (mapId: string, squishyId: string) => void;
+  /** A squishy itself was tapped: open it up close (#20). */
+  onCloseUp?: (mapId: string, squishyId: string) => void;
   api?: HomeApi;
 }
 
@@ -665,6 +667,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         (x, y) => {
           const hit = built.pick(x, y);
           if (hit?.kind === 'spot') chooseSpot(hit.spot);
+          else if (hit?.kind === 'squishy' && mapId && !working) options.onCloseUp?.(mapId, hit.id);
           else if (hit?.kind === 'building' && mode.kind !== 'placing' && mode.kind !== 'moving') {
             setMode({ kind: 'selected', id: hit.id });
           }

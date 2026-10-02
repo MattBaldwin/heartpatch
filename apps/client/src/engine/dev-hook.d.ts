@@ -3,6 +3,7 @@ import type { HomeDebug } from '../home/home-screen.js';
 import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
 import type { CareDebug } from '../care/care-sheet.js';
+import type { CloseUpDebug } from '../close-up/close-up-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
@@ -45,6 +46,8 @@ declare global {
       home?(): HomeDebug | null;
       /** The care sheet (#19): the squishy shown, its mood and level, celebrations, or null. */
       care?(): CareDebug | null;
+      /** The close-up view (#20): phase, detail, the squishy's screen spot, care sent and held, or null. */
+      closeUp?(): CloseUpDebug | null;
       /** The open squishy catalog (seen, friends, names on the cards), or null. */
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */

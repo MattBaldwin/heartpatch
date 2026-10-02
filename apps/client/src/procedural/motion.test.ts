@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SQUISH } from './config.js';
-import { eventAttribute, eventRunning, lodFor } from './motion.js';
+import { eventAttribute, eventRunning, heroLodFor, lodFor } from './motion.js';
 
 describe('squish moves', () => {
   it('runs for exactly its duration', () => {
@@ -27,5 +27,13 @@ describe('lodFor', () => {
     expect(lodFor('closeUp', 'high')).toBe('high');
     expect(lodFor('closeUp', 'medium')).toBe('high');
     expect(lodFor('closeUp', 'low')).toBe('low');
+  });
+});
+
+describe('heroLodFor', () => {
+  it('draws the close-up squishy in extra detail on the high tier, stepping down with the tier', () => {
+    expect(heroLodFor('high')).toBe('hero');
+    expect(heroLodFor('medium')).toBe('high');
+    expect(heroLodFor('low')).toBe('low');
   });
 });

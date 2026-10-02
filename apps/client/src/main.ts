@@ -7,6 +7,7 @@ import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
+import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
@@ -108,7 +109,65 @@ const inventory = createInventoryScreen({ root: document.body, devTools: import.
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time
 // the player is back from the battle that caused it, or opens their home.
-const care = createCareSheet({ root: document.body });
+const care = createCareSheet({
+  root: document.body,
+  onCloseUp: (mapId, squishyId) => {
+    void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
+  },
+});
+/** Home base is on screen (the close-up returns there, #20). */
+const homeOpen = () => home.debug?.open ?? false;
+// The close-up view (#20): a squishy face to face, with gestures for care.
+// Opened by tapping a squishy at home base, or "Up close" on its care sheet
+// (from home base, or the catalog over the map). Like home base, it owns the
+// screen while open; Back swoops out and returns where the player was.
+const closeUp = createCloseUpScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  requestFrame: () => stage?.requestFrame(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  snapshot: () => {
+    if (!stage) return null;
+    // Draw now so the canvas holds a fresh frame to read in this same task.
+    stage.scene.render();
+    return stage.renderer.engine.getRenderingCanvas();
+  },
+  onOpen: () => {
+    maps.close();
+    catalog.close();
+    care.close();
+    void inventory.setMap(null);
+    void territory.setMap(null);
+    void battles.setMap(null);
+    home.setMap(null);
+    lobby.stepOut();
+  },
+  onClosed: (mapId: string, from: CloseUpFrom) => {
+    if (from === 'home') {
+      home.setMap(mapId);
+      // Home base celebrates an evolution as it opens (#19).
+      void home.open();
+      return;
+    }
+    maps
+      .open(mapId)
+      .then(() => {
+        void inventory.setMap(mapId);
+        void territory.setMap(mapId);
+        void battles.setMap(mapId);
+        home.setMap(mapId);
+        void care.celebrateNews(mapId);
+      })
+      .catch((err: unknown) => {
+        lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
+      });
+    lobby.hide();
+  },
+  onProblem: (message) => {
+    lobby.showMessage(message);
+  },
+});
 // Territory (#15): Claim, Challenge and guards in the tile panel. A tile
 // battle opens the battle screen, unless another screen sits over the map.
 const territory = createTerritoryScreen({
@@ -141,6 +200,9 @@ const home = createHomeScreen({
   },
   onCare: (mapId, squishyId) => {
     void care.open(mapId, squishyId);
+  },
+  onCloseUp: (mapId, squishyId) => {
+    void closeUp.open(mapId, squishyId, 'home');
   },
   onClosed: (mapId) => {
     care.close();
@@ -330,6 +392,7 @@ mountAuth(document.body, {
     battles.setUser(user);
     catalog.setUser(user);
     care.setUser(user);
+    closeUp.setUser(user);
     inventory.setUser(user);
     territory.setUser(user);
     home.setUser(user);
@@ -391,6 +454,7 @@ if (import.meta.env.DEV) {
     territory: () => territory.debug,
     home: () => home.debug,
     care: () => care.debug,
+    closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,
   };
 }
