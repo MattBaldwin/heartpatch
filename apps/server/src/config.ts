@@ -26,16 +26,24 @@ const ConfigSchema = z.object({
     .transform((v) => v === 'true'),
   // Dev time override (tech spec §7): the clock starts here. Never in production.
   HP_DEV_NOW: z.iso.datetime({ offset: true }).optional(),
+  // Signups per IP per window (auth limits.ts), raised for e2e: every Playwright
+  // device project signs up fresh players from one IP. Never in production.
+  HP_DEV_SIGNUP_LIMIT_PER_IP: z.coerce.number().int().min(1).max(10_000).optional(),
 });
 
 /** Settings only the HTTP server needs; tools like `db/cli.ts` skip these checks. */
 const ServerConfigSchema = ConfigSchema.refine(
   (c) => c.NODE_ENV !== 'production' || c.HP_SIGNUP_CODE !== undefined,
   { path: ['HP_SIGNUP_CODE'], message: 'required in production (family-only signup)' },
-).refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_NOW === undefined, {
-  path: ['HP_DEV_NOW'],
-  message: 'development and tests only',
-});
+)
+  .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_NOW === undefined, {
+    path: ['HP_DEV_NOW'],
+    message: 'development and tests only',
+  })
+  .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_SIGNUP_LIMIT_PER_IP === undefined, {
+    path: ['HP_DEV_SIGNUP_LIMIT_PER_IP'],
+    message: 'development and tests only',
+  });
 
 export type Config = z.infer<typeof ConfigSchema>;
 

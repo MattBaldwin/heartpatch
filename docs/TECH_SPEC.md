@@ -199,6 +199,7 @@ Add anything else only with a one-line justification in the PR.
 | `APP_VERSION` | `2026.10.02-abc123` | set by deploy (image tag); reported by `/api/v1/health` |
 | `TRUST_PROXY` | `true` | `true` behind Caddy so `request.ip` is the player's IP (per-IP rate limits) |
 | `HP_DEV_NOW` | `2026-12-20T20:59:00-05:00` | dev/test only |
+| `HP_DEV_SIGNUP_LIMIT_PER_IP` | `500` | dev/test only; raises the per-IP signup limit for e2e (Playwright sets it) |
 | `HP_SIGNUP_CODE` | random string | required to create an account (family-only signup, Phase 1); checked with a constant-time comparison under the auth rate limit |
 | `HP_TUTORIAL_REQUIRED` | `false` | defaults to `false` when unset; when `false`, new accounts can create/join maps without finishing the tutorial. Flip to `true` once the tutorial (#24) ships |
 

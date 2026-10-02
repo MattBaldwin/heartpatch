@@ -31,6 +31,8 @@ export interface AuthRoutesOptions {
   hooks: AuthHooks;
   /** Secure cookies (HTTPS only); true in production. */
   secureCookies: boolean;
+  /** Dev and e2e only (`HP_DEV_SIGNUP_LIMIT_PER_IP`): replaces the per-IP signup max. */
+  signupPerIpMax?: number;
 }
 
 export const authRoutes =
@@ -48,8 +50,12 @@ export const authRoutes =
       const limiter = (limit: RateLimit, keyGenerator: (request: FastifyRequest) => string) =>
         fastify.createRateLimit({ max: limit.max, timeWindow: limit.windowMs, keyGenerator });
       const limits = AUTH_RATE_LIMITS[action];
+      const perIp =
+        action === 'signup' && options.signupPerIpMax !== undefined
+          ? { ...limits.perIp, max: options.signupPerIpMax }
+          : limits.perIp;
       const checks = [
-        limiter(limits.perIp, (request) => `ip:${normalizeIP(request.ip)}`),
+        limiter(perIp, (request) => `ip:${normalizeIP(request.ip)}`),
         limiter(limits.perUsername, (request) => `user:${usernameKey(request)}`),
       ];
       return async (request, reply) => {

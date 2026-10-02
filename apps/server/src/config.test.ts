@@ -60,6 +60,26 @@ describe('loadServerConfig', () => {
     );
   });
 
+  it('accepts HP_DEV_SIGNUP_LIMIT_PER_IP outside production only', () => {
+    expect(
+      loadServerConfig({ DATABASE_URL, NODE_ENV: 'development', HP_DEV_SIGNUP_LIMIT_PER_IP: '200' })
+        .HP_DEV_SIGNUP_LIMIT_PER_IP,
+    ).toBe(200);
+    expect(loadServerConfig({ DATABASE_URL, NODE_ENV: 'test' }).HP_DEV_SIGNUP_LIMIT_PER_IP).toBe(
+      undefined,
+    );
+    expect(() =>
+      loadServerConfig({
+        DATABASE_URL,
+        HP_SIGNUP_CODE: 'family-code',
+        HP_DEV_SIGNUP_LIMIT_PER_IP: '200',
+      }),
+    ).toThrow(/HP_DEV_SIGNUP_LIMIT_PER_IP/);
+    expect(() => loadConfig({ DATABASE_URL, HP_DEV_SIGNUP_LIMIT_PER_IP: '0' })).toThrow(
+      /HP_DEV_SIGNUP_LIMIT_PER_IP/,
+    );
+  });
+
   it('accepts HP_DEV_NOW outside production only', () => {
     const at = '2026-12-20T20:59:00-05:00';
     expect(

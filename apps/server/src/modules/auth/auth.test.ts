@@ -236,6 +236,14 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
       });
       expect(otherIp.statusCode).toBe(201);
     });
+
+    it('takes a raised per-IP signup limit from dev config (e2e)', async () => {
+      const server = await start({ HP_DEV_SIGNUP_LIMIT_PER_IP: '50' });
+      const { max } = AUTH_RATE_LIMITS.signup.perIp;
+      for (let i = 0; i <= max; i += 1) {
+        expect((await post(server, '/auth/signup', signupBody())).statusCode).toBe(201);
+      }
+    });
   });
 
   describe('login and logout', () => {
