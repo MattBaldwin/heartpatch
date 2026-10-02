@@ -4,7 +4,7 @@ import { ContentIdSchema } from './common.js';
 /**
  * Where and what wild squishies spawn (design doc §4, §16). The schema is
  * public; the tables themselves are secret and live in `data/server/`.
- * Terrain ids are free-form until the map issue defines the terrain set.
+ * `terrains` are ids from the terrain table (`checkServerGameData` checks them).
  */
 export const SpawnTableSchema = z.strictObject({
   id: ContentIdSchema,
