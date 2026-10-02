@@ -118,7 +118,11 @@ export const FIXTURE_SPECIES: Species[] = [
     baseStats: { hp: 45, attack: 40, defense: 35, speed: 55 },
     moves: ['fixture-giggle-drizzle', 'fixture-belly-flop'],
     evolutions: [{ into: 'fixture-splashmallow', level: 16 }],
-    visual: { body: 'blob', palette: ['#6ec6ff', '#ffffff'], parts: ['round-ears'] },
+    visual: {
+      body: 'blob',
+      palette: ['#6ec6ff', '#ffffff'],
+      parts: ['dot-eyes', 'smile', 'round-ears'],
+    },
     habitatPreferences: { elements: ['water'], feelings: ['silly'] },
   },
   {
@@ -131,7 +135,12 @@ export const FIXTURE_SPECIES: Species[] = [
     baseStats: { hp: 70, attack: 60, defense: 55, speed: 75 },
     moves: ['fixture-giggle-drizzle', 'fixture-belly-flop'],
     evolutions: [],
-    visual: { body: 'blob', palette: ['#3fa9f5', '#ffffff', '#ffd1e8'], parts: ['round-ears'] },
+    visual: {
+      body: 'blob',
+      palette: ['#3fa9f5', '#ffffff', '#ffd1e8'],
+      parts: ['oval-eyes', 'open-mouth', 'round-ears', 'spots'],
+      size: 1.25,
+    },
     habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
   },
   {
@@ -145,7 +154,7 @@ export const FIXTURE_SPECIES: Species[] = [
     baseStats: { hp: 60, attack: 35, defense: 60, speed: 20 },
     moves: ['fixture-rock-a-bye', 'fixture-pebble-puff'],
     evolutions: [],
-    visual: { body: 'pebble', palette: ['#a39e93'], parts: [] },
+    visual: { body: 'pebble', palette: ['#a39e93'], parts: ['sleepy-eyes', 'tiny-smile'] },
     habitatPreferences: { elements: ['stone'], feelings: ['sleepy'] },
   },
   // Battle engine fixtures (#11).
@@ -164,7 +173,11 @@ export const FIXTURE_SPECIES: Species[] = [
       'fixture-silly-face',
     ],
     evolutions: [],
-    visual: { body: 'bunny', palette: ['#ff8a3d', '#ffe0b2'], parts: ['long-ears'] },
+    visual: {
+      body: 'bean',
+      palette: ['#ff8a3d', '#ffe0b2'],
+      parts: ['dot-eyes', 'cat-mouth', 'long-ears', 'blush-cheeks'],
+    },
     habitatPreferences: { elements: ['fire'], feelings: ['cozy'] },
   },
   {
@@ -177,7 +190,7 @@ export const FIXTURE_SPECIES: Species[] = [
     baseStats: { hp: 55, attack: 45, defense: 45, speed: 45 },
     moves: ['fixture-leafy-boop', 'fixture-dizzy-dance', 'fixture-lullaby', 'fixture-silly-face'],
     evolutions: [],
-    visual: { body: 'sprout', palette: ['#7bd389'], parts: ['leaf-hat'] },
+    visual: { body: 'bean', palette: ['#7bd389'], parts: ['happy-eyes', 'smile', 'leaf-sprout'] },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy'] },
   },
   {
@@ -190,7 +203,7 @@ export const FIXTURE_SPECIES: Species[] = [
     baseStats: { hp: 40, attack: 30, defense: 30, speed: 30 },
     moves: ['fixture-lullaby', 'fixture-cuddle-nap'],
     evolutions: [],
-    visual: { body: 'blob', palette: ['#5b5280'], parts: [] },
+    visual: { body: 'drop', palette: ['#5b5280'], parts: ['sleepy-eyes'] },
     habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
   },
 ];

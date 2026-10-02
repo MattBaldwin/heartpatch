@@ -269,9 +269,24 @@ export default defineConfig(
     },
   },
   {
-    // Procedural squishies/Keepers must look identical for every player.
+    // Procedural squishies/Keepers must look identical for every player: all
+    // variation comes from the seeded Rng (scripts/check-procedural-rules.mjs checks it still fires).
     files: ['apps/client/src/procedural/**/*.ts'],
-    rules: { ...determinismRules },
+    rules: {
+      'no-restricted-properties': [
+        ...determinismRules['no-restricted-properties'],
+        {
+          object: 'crypto',
+          property: 'getRandomValues',
+          message: 'Use the seeded RNG from @heartpatch/shared (tech spec §8).',
+        },
+        {
+          object: 'crypto',
+          property: 'randomUUID',
+          message: 'Use the seeded RNG from @heartpatch/shared (tech spec §8).',
+        },
+      ],
+    },
   },
   {
     files: ['apps/client/*.config.ts', 'apps/client/tests/**/*.ts'],

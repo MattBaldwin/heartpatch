@@ -1,0 +1,226 @@
+import { expect, test, type Page } from '@playwright/test';
+
+/**
+ * The dev squishy gallery (`/gallery.html`, issue #9). Everything is checked
+ * through the dev hook's signals (counts, hashes, flags), never pixels.
+ */
+
+interface Stats {
+  squishies: number;
+  meshes: number;
+  instances: number;
+  lod: 'low' | 'high';
+}
+
+interface Look {
+  id: string;
+  visual: { body: string; palette: string[]; parts: string[] };
+}
+
+/** The dev-only hooks from gallery-main.ts (typed in gallery-hook.d.ts, which this project can't see). */
+interface GalleryHook {
+  stats(): Stats | null;
+  shown(): string[];
+  coverage(): {
+    bodies: string[];
+    parts: string[];
+    registryBodies: string[];
+    registryParts: string[];
+  };
+  missing(): string[];
+  paramsHash(species: Look, instanceId: string): string;
+  squishyHash(i: number): string | null;
+  screenPoint(i: number): { x: number; y: number } | null;
+  lastTapped(): number | null;
+  playing(i: number): boolean;
+  play(move: 'jiggle' | 'wobble' | 'bounce'): void;
+  animating(): boolean;
+}
+
+interface EngineHook {
+  draws(): number;
+  idle(): boolean;
+}
+
+type Hooks = { __heartpatchGallery?: GalleryHook; __heartpatch?: EngineHook };
+
+/**
+ * Same look and instance as `GOLDEN` in src/procedural/params.test.ts. That
+ * test pins the hash in Node (V8); this one checks it in the browser under
+ * test (WebKit in CI), proving every engine builds the same squishy.
+ */
+const GOLDEN_LOOK: Look = {
+  id: 'test-puff',
+  visual: {
+    body: 'blob',
+    palette: ['#ffb3c7', '#fff4ea'],
+    parts: ['dot-eyes', 'smile', 'round-ears', 'spots'],
+  },
+};
+const GOLDEN_HASH = '10014ec48d2aaefec62a4d8e84c4cb12';
+
+function watchErrors(page: Page): string[] {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => {
+    // Babylon's own warnings count too (a missing side-effect import only warns);
+    // the browser's GPU driver chatter doesn't.
+    const babylonWarning = msg.type() === 'warning' && msg.text().startsWith('BJS -');
+    if (msg.type() === 'error' || babylonWarning) errors.push(msg.text());
+  });
+  return errors;
+}
+
+async function openGallery(page: Page, query = ''): Promise<Stats> {
+  await page.goto(`/gallery.html${query}`);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await expect
+    .poll(() => page.evaluate(() => (window as Hooks).__heartpatchGallery?.stats() ?? null), {
+      timeout: 30_000,
+    })
+    .not.toBeNull();
+  return (await page.evaluate(() => (window as Hooks).__heartpatchGallery!.stats()))!;
+}
+
+const draws = (page: Page) => page.evaluate(() => (window as Hooks).__heartpatch?.draws() ?? 0);
+
+/** Waits until nothing is drawn for `quietMs` and the loop reports idle (see smoke.spec.ts). */
+async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const before = await draws(page);
+        await page.waitForTimeout(quietMs);
+        const idle = await page.evaluate(() => (window as Hooks).__heartpatch?.idle() ?? false);
+        return idle && (await draws(page)) === before;
+      },
+      { timeout: 30_000, intervals: [0] },
+    )
+    .toBe(true);
+}
+
+test('shows every body and part in the registry, with no errors', async ({ page }) => {
+  test.setTimeout(90_000); // first load compiles shaders; CI renders in software
+  const errors = watchErrors(page);
+  const stats = await openGallery(page, '?still');
+  await expect(page.locator('#game')).toHaveAttribute('data-renderer', 'webgl2');
+
+  const info = await page.evaluate(() => {
+    const hook = (window as Hooks).__heartpatchGallery!;
+    return { coverage: hook.coverage(), shown: hook.shown(), missing: hook.missing() };
+  });
+  expect(info.coverage.bodies.toSorted()).toEqual(info.coverage.registryBodies.toSorted());
+  expect(info.coverage.parts.toSorted()).toEqual(info.coverage.registryParts.toSorted());
+  expect(info.missing).toEqual([]);
+  expect(stats.squishies).toBe(info.shown.length);
+  expect(stats.lod).toBe('low'); // map view
+  await expect(page.getByTestId('gallery-panel')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('the same species and instance id always build the same squishy', async ({ page }) => {
+  test.setTimeout(90_000);
+  await openGallery(page, '?still&count=12');
+  const first = await page.evaluate(
+    ({ look }) => {
+      const hook = (window as Hooks).__heartpatchGallery!;
+      return {
+        golden: hook.paramsHash(look, 'golden-1'),
+        other: hook.paramsHash(look, 'golden-2'),
+        squishies: [0, 1, 11].map((i) => hook.squishyHash(i)),
+        shown: hook.shown(),
+      };
+    },
+    { look: GOLDEN_LOOK },
+  );
+  expect(first.golden).toBe(GOLDEN_HASH);
+  expect(first.other).not.toBe(GOLDEN_HASH);
+  // Squishies 0 and 9 are the same look with different instance ids: alike, not identical.
+  const repeat = first.shown.indexOf(first.shown[0]!, 1);
+  expect(repeat).toBeGreaterThan(0);
+  const hashes = await page.evaluate(
+    (i) => [0, i].map((n) => (window as Hooks).__heartpatchGallery!.squishyHash(n)),
+    repeat,
+  );
+  expect(hashes[0]).not.toBe(hashes[1]);
+
+  await page.reload();
+  await openGallery(page, '?still&count=12');
+  const again = await page.evaluate(() =>
+    [0, 1, 11].map((i) => (window as Hooks).__heartpatchGallery!.squishyHash(i)),
+  );
+  expect(again).toEqual(first.squishies);
+});
+
+test('draw calls stay flat as squishies multiply (shared geometry, thin instances)', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const ten = await openGallery(page, '?still&count=10');
+  const fifty = await openGallery(page, '?still&count=50');
+  expect(ten.squishies).toBe(10);
+  expect(fifty.squishies).toBe(50);
+  expect(fifty.meshes).toBe(ten.meshes);
+  expect(fifty.meshes).toBeLessThanOrEqual(16);
+  expect(fifty.instances).toBeGreaterThan(ten.instances * 3);
+});
+
+test('tapping a squishy jiggles it, then the still scene goes idle again', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = watchErrors(page); // e.g. Babylon's "Ray needs to be imported" when picking
+  await openGallery(page, '?still&view=closeup');
+  await waitForIdle(page);
+
+  const point = await page.evaluate(() => (window as Hooks).__heartpatchGallery!.screenPoint(0));
+  expect(point).not.toBeNull();
+  const before = await draws(page);
+  // A short, still touch (synthetic pointer events behave alike in WebKit and
+  // Chromium). Read the result in the same task: a slow software-rendered
+  // frame could outlast the jiggle before the next evaluate.
+  const tapped = await page.evaluate(({ x, y }) => {
+    const canvas = document.querySelector('#game')!;
+    for (const type of ['pointerdown', 'pointerup']) {
+      canvas.dispatchEvent(
+        new PointerEvent(type, {
+          pointerId: 1,
+          pointerType: 'touch',
+          isPrimary: true,
+          clientX: x,
+          clientY: y,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    }
+    const hook = (window as Hooks).__heartpatchGallery!;
+    return { last: hook.lastTapped(), playing: hook.playing(0) };
+  }, point!);
+  expect(tapped).toEqual({ last: 0, playing: true });
+  await expect.poll(() => draws(page)).toBeGreaterThan(before);
+  await waitForIdle(page);
+  expect(await page.evaluate(() => (window as Hooks).__heartpatchGallery!.playing(0))).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test('breathing keeps drawing; moves play on every squishy', async ({ page }) => {
+  test.setTimeout(90_000);
+  await openGallery(page, '?count=4');
+  expect(await page.evaluate(() => (window as Hooks).__heartpatchGallery!.animating())).toBe(true);
+  const before = await draws(page);
+  await expect.poll(() => draws(page)).toBeGreaterThan(before + 2);
+
+  // Read in the same task as the play, so a slow frame can't outlast the bounce.
+  const playing = await page.evaluate(() => {
+    const hook = (window as Hooks).__heartpatchGallery!;
+    hook.play('bounce');
+    return [0, 1, 2, 3].map((i) => hook.playing(i));
+  });
+  expect(playing).toEqual([true, true, true, true]);
+});
+
+test('detail follows the view and the quality tier', async ({ page }) => {
+  test.setTimeout(120_000);
+  expect((await openGallery(page, '?still&view=closeup')).lod).toBe('high');
+  expect((await openGallery(page, '?still&view=closeup&quality=low')).lod).toBe('low');
+  expect((await openGallery(page, '?still&quality=high')).lod).toBe('low');
+});
