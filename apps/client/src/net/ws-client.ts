@@ -117,6 +117,8 @@ export function createWsClient(options: WsClientOptions): WsClient {
   let attempt = 0;
   /** Connects in a row that never reached `ws.ready`. */
   let failures = 0;
+  /** Bumped on every `ws.ready`, so a stale session check can't end a newer connection. */
+  let readyCount = 0;
   let closedForGood = false;
   let sub: { mapId: string; buffer: ReorderBuffer } | null = null;
 
@@ -197,6 +199,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
         ready = true;
         attempt = 0;
         failures = 0;
+        readyCount += 1;
         clearTimeout(connectTimer);
         connectTimer = undefined;
         setStatus('live');
@@ -285,9 +288,10 @@ export function createWsClient(options: WsClientOptions): WsClient {
     attempt += 1;
     if (!wasReady) failures += 1;
     if (!wasReady && failures % FAILURES_BEFORE_SESSION_CHECK === 0) {
+      const readyAtCheck = readyCount;
       checkSession().then(
         (loggedIn) => {
-          if (!loggedIn && !closedForGood) loggedOut();
+          if (!loggedIn && !closedForGood && readyCount === readyAtCheck) loggedOut();
         },
         () => undefined, // Offline or server down: keep retrying.
       );

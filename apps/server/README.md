@@ -74,7 +74,7 @@ void wsHub?.publish(event.mapId); // after commit; never rejects
 
 **Protocol in short.**
 
-- **Connect:** the upgrade needs a live `hp_session` (`UNAUTHENTICATED` otherwise). It is looked up with `AuthRepo.findSession` **without renewing**: the 101 response can't carry a `Set-Cookie`, so renewal is left to REST requests and `Origin` equal to `PUBLIC_ORIGIN` (`FORBIDDEN` otherwise; this guards against cross-site WebSocket hijacking). The server sends `ws.ready`.
+- **Connect:** the upgrade needs a live `hp_session` (`UNAUTHENTICATED` otherwise). It is looked up with `AuthRepo.findSession` **without renewing**: the 101 response can't carry a `Set-Cookie`, so renewal is left to REST requests. `Origin` must equal `PUBLIC_ORIGIN` (`FORBIDDEN` otherwise; this guards against cross-site WebSocket hijacking). The server sends `ws.ready`.
 - **Subscribe:** `{ type: 'subscribe', mapId, afterSeq }` subscribes to one map per socket. The player must be an **active** member (`FORBIDDEN` otherwise, also re-checked on every delivery, so a removed player stops at once). The server replays the public views after `afterSeq` in seq order, then sends `ws.subscribed { seq }`; live events follow. Sending `subscribe` again is how the client asks for a replay after a gap.
 - **Cursor:** seqs a player doesn't get (no view, or a view for someone else) are covered by `ws.cursor { seq }`, so the client never waits on them as a gap.
 - **Resync:** if the client is more than `REPLAY_WINDOW` events behind, its events were pruned, or it is ahead of the map, it gets `ws.resync`. It then refetches state over REST and subscribes again with that state's seq.

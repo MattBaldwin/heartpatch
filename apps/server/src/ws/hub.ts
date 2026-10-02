@@ -399,8 +399,12 @@ export function createWsHub(options: WsHubOptions): WsHub {
         windowStart: Date.now(),
         windowCount: 0,
       };
+      if (closed) {
+        socket.close(1001, 'server shutting down');
+        return;
+      }
       const mine = byUser.get(user.id) ?? new Set<Connection>();
-      if (closed || mine.size >= MAX_SOCKETS_PER_USER) {
+      if (mine.size >= MAX_SOCKETS_PER_USER) {
         socket.close(WS_CLOSE_CODES.TOO_MANY_CONNECTIONS, 'too many connections');
         return;
       }

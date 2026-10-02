@@ -30,7 +30,7 @@ export const WsEventMessageSchema = z.object({
   type: WsEventTypeSchema,
   mapId: z.uuid(),
   seq: WsSeqSchema.min(1),
-  /** When the event was committed (ISO 8601, UTC). */
+  /** When the event was recorded (`game_events.created_at`, ISO 8601, UTC). */
   at: z.iso.datetime({ offset: true }),
   data: z.record(z.string(), z.unknown()),
 });
