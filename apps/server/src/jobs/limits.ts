@@ -3,8 +3,11 @@
 /** Events applied per consumer transaction. */
 export const CONSUMER_BATCH_SIZE = 50; // TUNE: guess; keeps each transaction short
 
-/** How often an idle consumer worker checks for wake-ups (a tutorial step waits on it). */
+/** How often an idle consumer worker polls; LISTEN/NOTIFY usually wakes it first. */
 export const CONSUMER_POLL_SECONDS = 1; // TUNE: pg-boss minimum is 0.5
+
+/** Maps a consumer works on at once in this process. */
+export const CONSUMER_CONCURRENCY = 4; // TUNE: guess; fits pg-boss's and the app's pools
 
 /** How often the catch-up job wakes consumers that lag (cron). */
 export const CATCH_UP_CRON = '* * * * *'; // TUNE: every minute

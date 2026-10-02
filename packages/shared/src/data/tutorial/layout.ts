@@ -13,8 +13,8 @@ const wild = (
 
 /**
  * The Tutorial Glade (design doc §26): hand-authored, the same for every
- * player. Home base in the middle with Timber, Emberwood and Stone right next
- * to it (step 2), gentle guardians on the next ring (step 8), a little
+ * player. Home base in the middle with Timber, Emberwood, Stone and a farm
+ * plot (Treats) on its ring, like every real home (design doc §11; step 2), gentle guardians on the next ring (step 8), a little
  * tougher at the edge. `checkTutorialData` checks it covers radius 3 exactly.
  */
 export const TUTORIAL_LAYOUT: TutorialLayout = {
@@ -24,7 +24,7 @@ export const TUTORIAL_LAYOUT: TutorialLayout = {
   tiles: [
     // The Heart Seed and its ring: the player's home base.
     home(0, 0, 'meadow'),
-    home(-1, 1, 'meadow'),
+    home(-1, 1, 'meadow', 'treats'), // the farm plot
     home(0, 1, 'meadow'),
     home(1, 0, 'forest', 'timber'),
     home(1, -1, 'old-forest', 'emberwood'),

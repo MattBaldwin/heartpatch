@@ -22,9 +22,11 @@ describe('checkTutorialData', () => {
     const home = layout.tiles.filter((t) => t.homeSlot === 0);
     expect(home).toHaveLength(7);
     // Step 2 gathers Timber and Emberwood right next to home (design doc §26).
+    // Like every real home ring (design doc §11, decision B): step 6 feeds Treats.
     expect(home.map((t) => t.nodeResource)).toEqual(
-      expect.arrayContaining(['timber', 'emberwood', 'stone']),
+      expect.arrayContaining(GAME_DATA.mapGen.homeRingNodes),
     );
+    expect(home.find((t) => t.q === 0 && t.r === 0)?.terrain).toBe(GAME_DATA.mapGen.homeTerrain);
   });
 
   it('keeps Sprout short, kind and free of avoided words (style guide §2, §9)', () => {
@@ -33,12 +35,17 @@ describe('checkTutorialData', () => {
         expect(findAvoidedWords(text)).toEqual([]);
         expect(text.split(/\s+/).length).toBeLessThanOrEqual(20);
       }
+      // Style guide §6: at most two sentences per bubble.
+      for (const line of step.sproutLines) {
+        expect(line.split(/[.!?…]+(?:\s|$)/).filter(Boolean).length).toBeLessThanOrEqual(2);
+      }
     }
   });
 
   it('names duplicate steps and engine-only or unknown completion events', () => {
     const data = copy();
     data.steps[1]!.id = 'welcome';
+    data.steps[1]!.completeOn.where = [{ op: 'equals', field: 'stepId', value: 'welcome' }];
     expect(check(data)).toEqual(['steps["welcome"].id: duplicate id "welcome"']);
 
     const engine = copy();
@@ -86,14 +93,14 @@ describe('checkTutorialData', () => {
     tiles.pop(); // (-3, 2)
     tiles.push({ ...tiles[10]! }); // (1, 1) again
     tiles[1]!.homeSlot = null; // a home tile without its slot
-    tiles[3]!.nodeResource = 'glimmer'; // forest can't have Glimmer
+    tiles[11]!.nodeResource = 'glimmer'; // forest can't have Glimmer
     tiles[8]!.guardianStrength = 9; // too strong
     tiles[0]!.guardianStrength = 1; // a guardian on the Heart Seed
     expect(check(data)).toEqual([
       'layout.tiles[0].guardianStrength: home tiles have no guardian',
       'layout.tiles[1].homeSlot: home tiles need homeSlot 0',
-      'layout.tiles[3].nodeResource: "forest" tiles can\'t have a "glimmer" node',
       'layout.tiles[8].guardianStrength: must be 1–4 (map-gen guardian strength)',
+      'layout.tiles[11].nodeResource: "forest" tiles can\'t have a "glimmer" node',
       'layout.tiles[36]: tile (1,1) is listed twice',
       'layout.tiles: missing tile (-3,2)',
     ]);
@@ -108,6 +115,27 @@ describe('checkTutorialData', () => {
     expect(problems).toContain('layout.heartSeed: the home base must fit inside the Glade');
     expect(problems).toContain('layout.tiles[0].terrain: unknown terrain "swamp"');
     expect(problems).toContain('layout.tiles[0].nodeResource: unknown resource "gold"');
+  });
+
+  it('needs the home ring nodes, on any terrain, and a plain Heart Seed', () => {
+    const data = copy();
+    const farm = data.layout.tiles.find((t) => t.nodeResource === 'treats')!;
+    farm.nodeResource = null;
+    data.layout.tiles[0]!.terrain = 'forest';
+    data.layout.tiles[0]!.nodeResource = 'timber';
+    expect(check(data)).toEqual([
+      'layout.tiles[0].terrain: the Heart Seed sits on "meadow" (map-gen)',
+      'layout.tiles[0].nodeResource: the Heart Seed tile has no node',
+      'layout.tiles: the home ring needs a "treats" node (map-gen homeRingNodes)',
+    ]);
+  });
+
+  it('makes talk-only steps name themselves, so a stale tap cannot skip ahead', () => {
+    const data = copy();
+    data.steps[1]!.completeOn.where = [];
+    expect(check(data)).toEqual([
+      'steps["graduation"].completeOn.where: needs { op: "equals", field: "stepId", value: "graduation" }',
+    ]);
   });
 
   it('fixes the design-doc rules in the overrides shape', () => {

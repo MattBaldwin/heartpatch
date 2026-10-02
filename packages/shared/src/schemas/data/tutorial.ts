@@ -158,7 +158,11 @@ export const TutorialDataSchema = z.strictObject({
 });
 export type TutorialData = z.infer<typeof TutorialDataSchema>;
 
-/** The zod schema at `path` inside an object schema, or null if there isn't one. */
+/**
+ * The zod schema at `path` inside an object schema, or null if there isn't one.
+ * zod's introspection types are loose (`unwrap()` and `shape` aren't typed as
+ * plain schemas), hence the casts.
+ */
 function schemaAt(schema: z.ZodType, path: readonly string[]): z.ZodType | null {
   let node: z.ZodType = schema;
   for (const key of path) {
@@ -180,6 +184,17 @@ function checkSteps(steps: readonly TutorialStep[], report: Report): void {
     const { eventType, where } = step.completeOn;
     if (TUTORIAL_ENGINE_EVENT_TYPES.includes(eventType)) {
       report([...path, 'completeOn', 'eventType'], `steps can't complete on "${eventType}"`);
+    }
+    // A tap names its step, so a stale double tap on the step before can't
+    // complete this one too.
+    if (
+      eventType === 'tutorial.acknowledged' &&
+      !where.some((p) => p.op === 'equals' && p.field === 'stepId' && p.value === step.id)
+    ) {
+      report(
+        [...path, 'completeOn', 'where'],
+        `needs { op: "equals", field: "stepId", value: "${step.id}" }`,
+      );
     }
     where.forEach((predicate, j) => {
       const field = predicate.field.split('.');
@@ -206,8 +221,10 @@ function checkLayout(
   }
   const terrains = new Map(gameData.terrains.map((t) => [t.id, t]));
   const resources = new Set(gameData.resources.map((r) => r.id));
-  const strength = gameData.mapGen.guardianStrength;
+  const { mapGen } = gameData;
+  const strength = mapGen.guardianStrength;
   const seen = new Set<string>();
+  const ringNodes = new Set<string>();
 
   layout.tiles.forEach((tile, i) => {
     const path: Path = [...at, 'tiles', i];
@@ -216,11 +233,21 @@ function checkLayout(
     seen.add(key);
     if (!expected.has(key)) report(path, `tile (${key}) is outside radius ${layout.radius}`);
 
+    const isHome = home.has(key);
+    const isHeartSeed = key === hexKey(layout.heartSeed);
     checkRef(new Set(terrains.keys()), 'terrain', tile.terrain, [...path, 'terrain'], report);
+    if (isHeartSeed && tile.terrain !== mapGen.homeTerrain) {
+      report([...path, 'terrain'], `the Heart Seed sits on "${mapGen.homeTerrain}" (map-gen)`);
+    }
+    if (isHeartSeed && tile.nodeResource !== null) {
+      report([...path, 'nodeResource'], 'the Heart Seed tile has no node');
+    }
     if (tile.nodeResource !== null) {
       checkRef(resources, 'resource', tile.nodeResource, [...path, 'nodeResource'], report);
+      if (isHome) ringNodes.add(tile.nodeResource);
       const terrain = terrains.get(tile.terrain);
-      if (terrain && !terrain.nodeResources.includes(tile.nodeResource)) {
+      // Home ring nodes are guaranteed whatever the terrain, as mapgen does (design doc §11).
+      if (!isHome && terrain && !terrain.nodeResources.includes(tile.nodeResource)) {
         report(
           [...path, 'nodeResource'],
           `"${tile.terrain}" tiles can't have a "${tile.nodeResource}" node`,
@@ -228,7 +255,6 @@ function checkLayout(
       }
     }
 
-    const isHome = home.has(key);
     if (isHome !== (tile.homeSlot === 0)) {
       report([...path, 'homeSlot'], isHome ? 'home tiles need homeSlot 0' : 'not a home tile');
     }
@@ -250,6 +276,12 @@ function checkLayout(
   });
   for (const key of expected) {
     if (!seen.has(key)) report([...at, 'tiles'], `missing tile (${key})`);
+  }
+  // Every home ring has these, like on a real map (design doc §11, decision B).
+  for (const resource of mapGen.homeRingNodes) {
+    if (!ringNodes.has(resource)) {
+      report([...at, 'tiles'], `the home ring needs a "${resource}" node (map-gen homeRingNodes)`);
+    }
   }
 }
 

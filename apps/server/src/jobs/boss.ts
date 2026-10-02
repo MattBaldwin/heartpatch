@@ -5,6 +5,7 @@ import { setEventWakeup } from '../db/game-events.js';
 import { runConsumer, type EventConsumer } from './consumers.js';
 import {
   CATCH_UP_CRON,
+  CONSUMER_CONCURRENCY,
   CONSUMER_POLL_SECONDS,
   CONSUMER_RETRY_DELAY_SECONDS,
   CONSUMER_RETRY_LIMIT,
@@ -55,6 +56,9 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
     connectionString: options.connectionString,
     schema: PG_BOSS_SCHEMA,
     max: 4, // TUNE: pg-boss's own pool; the app's is separate
+    // Wake workers on commit (LISTEN/NOTIFY) instead of waiting for a poll, so
+    // Sprout moves on right after a tap. Polling stays as the fallback.
+    useListenNotify: true,
   });
   boss.on('error', (err) => {
     logger.error({ err }, 'pg-boss error');
@@ -71,15 +75,23 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
       retryLimit: CONSUMER_RETRY_LIMIT,
       retryDelay: CONSUMER_RETRY_DELAY_SECONDS,
       retryBackoff: true,
+      notify: true,
     });
+    // Several maps at once; one map's jobs never overlap (stately key + row lock).
     await boss.work<WakeUp>(
       queue,
-      { pollingIntervalSeconds: CONSUMER_POLL_SECONDS },
+      { pollingIntervalSeconds: CONSUMER_POLL_SECONDS, localConcurrency: CONSUMER_CONCURRENCY },
       async ([job]) => {
         if (!job) return;
-        const applied = await runConsumer(db, consumer, job.data.mapId, { afterCommit });
-        if (applied > 0) {
-          logger.debug({ consumer: consumer.name, mapId: job.data.mapId, applied }, 'consumer ran');
+        const { mapId } = job.data;
+        try {
+          const applied = await runConsumer(db, consumer, mapId, { afterCommit });
+          if (applied > 0)
+            logger.debug({ consumer: consumer.name, mapId, applied }, 'consumer ran');
+        } catch (err) {
+          // pg-boss retries; log so a stuck event (a player's tutorial frozen) is visible.
+          logger.error({ err, consumer: consumer.name, mapId }, 'event consumer failed');
+          throw err;
         }
       },
     );

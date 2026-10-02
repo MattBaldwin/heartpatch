@@ -82,6 +82,10 @@ export function createJobsRepo(db: Executor): JobsRepo {
  * Lets pg-boss run its statements on a Drizzle transaction (its `db`
  * option), so a `send` commits or rolls back with the command (tech spec §7).
  * pg-boss writes `$1`-style placeholders; they become bound parameters.
+ *
+ * Only for `send` with `{ mapId }` data: its SQL has one placeholder and the
+ * data travels as a parameter. Statements that inline data into the SQL text
+ * (e.g. flows) could contain `$<digit>` and must not go through this.
  */
 export function pgBossOnTransaction(tx: Transaction): PgBossDb {
   return {

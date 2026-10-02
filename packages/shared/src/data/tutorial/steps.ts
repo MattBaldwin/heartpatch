@@ -30,7 +30,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'graduation',
     goal: 'Find your patch',
     sproutLines: [
-      "Ta-da! You're a real Keeper now. I'm so proud of you!",
+      "Ta-da! You're a real Keeper now, and I'm so proud!",
       'Other Keepers have Heart Seeds too… Start a patch, or join a friend!',
     ],
     highlightTarget: 'graduation-choices',
