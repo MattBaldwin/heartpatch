@@ -52,7 +52,8 @@ jobs:
       - name: Migrations match the schema
         run: |
           pnpm db:check
-          pnpm db:generate
+          # Fail fast if drizzle-kit stops to ask about an ambiguous rename.
+          timeout 120 pnpm db:generate
           if [ -n "$(git status --porcelain -- apps/server/src/db/migrations)" ]; then
             git status --porcelain -- apps/server/src/db/migrations
             echo "::error::Schema changed without a migration. Run pnpm db:generate and commit the result."

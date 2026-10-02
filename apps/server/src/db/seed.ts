@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import { mapMembers, maps, tiles, users } from './schema.js';
 
@@ -40,7 +40,8 @@ export async function seed(db: Database): Promise<SeedResult> {
       const members = await tx
         .select({ userId: mapMembers.userId })
         .from(mapMembers)
-        .where(eq(mapMembers.mapId, existing.mapId));
+        .where(eq(mapMembers.mapId, existing.mapId))
+        .orderBy(asc(mapMembers.role)); // owner first, matching the created result
       return { created: false, mapId: existing.mapId, userIds: members.map((m) => m.userId) };
     }
 

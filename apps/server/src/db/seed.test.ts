@@ -42,11 +42,8 @@ describe.skipIf(!url)('seed (needs DATABASE_URL)', () => {
     ).toBe(true);
 
     const again = await seed(db);
-    expect(again).toEqual({
-      ...first,
-      created: false,
-      userIds: expect.arrayContaining(first.userIds) as unknown,
-    });
+    // Same ids in the same order (owner first) as when it was created.
+    expect(again).toEqual({ ...first, created: false });
     expect(await db.select().from(maps).where(eq(maps.name, map!.name))).toHaveLength(1);
   });
 });

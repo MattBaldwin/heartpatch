@@ -42,7 +42,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 - **Map scoping:** game state carries `map_id` and is deleted with its map (`on delete cascade`). Users and sessions are per account.
 - **Owners must be members:** `tiles` and `squishies` reference `map_members (map_id, user_id)`, so a row can only be owned by a member of **the same map**.
 - **Removed players are archived,** not deleted: `map_members.status = 'removed'` (tech spec §4). That's why `users` aren't cascade-deleted from maps.
-- **Statuses** are Postgres enums. Adding a value later is a safe, additive migration.
+- **Statuses** are Postgres enums. Adding a value is additive, but Postgres won't let a value added by `ALTER TYPE … ADD VALUE` be used in the same transaction, and the migrator applies all pending migrations in one transaction. So add the value in one migration and start using it (defaults, backfills) in a later deploy.
 - **Content ids** (species, element, feeling, terrain) are plain `text` holding ids from the shared data tables. Their values are validated by zod data, not duplicated in the database.
 
 ## Tables (core spine)

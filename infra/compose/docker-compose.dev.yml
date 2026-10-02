@@ -4,7 +4,8 @@ name: heartpatch-dev
 
 services:
   db:
-    image: postgres:16-alpine
+    # Same image as CI (glibc), so text collation and ordering match.
+    image: postgres:16
     environment:
       POSTGRES_USER: heartpatch
       POSTGRES_PASSWORD: heartpatch

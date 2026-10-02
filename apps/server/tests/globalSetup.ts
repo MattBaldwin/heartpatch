@@ -1,7 +1,8 @@
 // Gives DB integration tests a fresh database per run: creates it from
 // DATABASE_URL, applies every migration from scratch, and drops it afterwards,
-// so tests never touch your dev data. Without DATABASE_URL the DB tests skip
-// locally, but CI must run them.
+// so tests never touch your dev data. Reads the repo-root .env like the db:*
+// scripts do. Without DATABASE_URL the DB tests skip locally, but CI must run them.
+import { existsSync } from 'node:fs';
 import type { TestProject } from 'vitest/node';
 import { createDbClient } from '../src/db/client.js';
 import { runMigrations } from '../src/db/migrator.js';
@@ -16,6 +17,8 @@ declare module 'vitest' {
 export default async function setup(
   project: TestProject,
 ): Promise<(() => Promise<void>) | undefined> {
+  const envFile = new URL('../../../.env', import.meta.url);
+  if (existsSync(envFile)) process.loadEnvFile(envFile);
   const baseUrl = process.env['DATABASE_URL'];
   if (!baseUrl) {
     if (process.env['CI'])
@@ -32,17 +35,21 @@ export default async function setup(
   testUrl.pathname = `/${name}`;
 
   const admin = createDbClient(baseUrl, { max: 1, quiet: true });
+  const dropDatabase = async () => {
+    await admin.db.execute(`drop database if exists "${name}" with (force)`);
+    await admin.close();
+  };
   await admin.db.execute(`create database "${name}"`);
   const test = createDbClient(testUrl.href, { max: 1, quiet: true });
   try {
     await runMigrations(test.db);
-  } finally {
+  } catch (err) {
     await test.close();
+    await dropDatabase();
+    throw err;
   }
+  await test.close();
   project.provide('testDatabaseUrl', testUrl.href);
 
-  return async () => {
-    await admin.db.execute(`drop database if exists "${name}" with (force)`);
-    await admin.close();
-  };
+  return dropDatabase;
 }
