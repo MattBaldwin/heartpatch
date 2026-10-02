@@ -87,6 +87,13 @@ export const GameDataSchema = z
     const visuals = visualRegistry(data);
 
     data.species.forEach((s, i) => {
+      // CLAUDE.md rule 6: the public table ships to every client.
+      if (s.rarity === 'secret') {
+        report(
+          ['species', i, 'rarity'],
+          'secret species are server-only: add them to SECRET_SPECIES in packages/shared/src/data/server/secret-species.ts',
+        );
+      }
       checkSpeciesVisual(s.visual, visuals, ['species', i, 'visual'], report);
       checkRef(seasons, 'season', s.season, ['species', i, 'season'], report);
       s.moves.forEach((move, j) => {
@@ -96,7 +103,12 @@ export const GameDataSchema = z
         }
       });
       s.evolutions.forEach((evo, j) => {
-        checkRef(species, 'species', evo.into, ['species', i, 'evolutions', j, 'into'], report);
+        if (!species.has(evo.into)) {
+          report(
+            ['species', i, 'evolutions', j, 'into'],
+            `unknown species "${evo.into}" (evolutions into secret forms go in SECRET_EVOLUTIONS)`,
+          );
+        }
         if (evo.into === s.id) {
           report(['species', i, 'evolutions', j, 'into'], 'a species cannot evolve into itself');
         }
