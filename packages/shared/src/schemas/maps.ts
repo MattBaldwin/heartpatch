@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
+import { PublicBuildingSchema } from './buildings.js';
 import { KeeperConfigSchema } from './data/keepers.js';
 import { TimeZoneSchema } from './time.js';
 import { WsSeqSchema } from './ws.js';
@@ -212,6 +213,11 @@ export const PublicTileSchema = z.object({
    * when nobody is. What it will yield is only in the owner's own inventory.
    */
   gathering: z.object({ readyAt: z.iso.datetime() }).nullable(),
+  /**
+   * Buildings on a home tile (#18), in spot order: everyone sees fires and
+   * habitats. `lit` is as of the view (or the event that carried it).
+   */
+  buildings: z.array(PublicBuildingSchema),
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 
