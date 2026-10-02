@@ -60,6 +60,24 @@ export function hashString(text: string): string {
     .join('');
 }
 
+/**
+ * Derives a child seed from a parent seed and labels, e.g. a tile's spawn seed:
+ * `deriveSeed(mapSeed, 'spawn', q, r, windowId)`. The same inputs always give
+ * the same seed, so restarting a battle can't reroll what appears (tech spec
+ * §8). Labels are joined unambiguously, so ('a', 'bc') and ('ab', 'c') differ.
+ * The hash is fast and non-cryptographic and can be partly inverted: a seed
+ * derived from a secret parent must never be revealed (tech spec §8). Seeds
+ * that may be revealed come from the server's `newSeed()`.
+ */
+export function deriveSeed(parent: Seed, ...labels: readonly (string | number)[]): Seed {
+  for (const label of labels) {
+    if (typeof label === 'number' && !Number.isSafeInteger(label)) {
+      throw new RangeError(`deriveSeed labels must be strings or safe integers, got ${label}`);
+    }
+  }
+  return hashString(JSON.stringify([SeedSchema.parse(parent), ...labels]));
+}
+
 /** A weighted choice: anything with a non-negative `weight`. */
 export interface Weighted {
   readonly weight: number;
