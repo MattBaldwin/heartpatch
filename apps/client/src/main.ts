@@ -18,7 +18,7 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
 }
 
 const params = new URLSearchParams(window.location.search);
-// TUNE: `?quality=` and `?renderer=webgl2` are for testing until the settings screen exists.
+// `?quality=` and `?renderer=webgpu` (opt-in, tech spec §6) stand in for the settings screen.
 const tier = pickInitialTier(params.get('quality'));
 let stage: Stage | null = null;
 
@@ -80,5 +80,7 @@ if (import.meta.env.DEV) {
     renderer: () => stage?.renderer.kind ?? null,
     quality: () => stage?.quality.snapshot ?? null,
     camera: () => stage?.camera.state ?? null,
+    draws: () => stage?.draws ?? 0,
+    invalidate: () => stage?.invalidate(),
   };
 }

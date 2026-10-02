@@ -15,6 +15,14 @@ interface CameraState {
 /** The dev-only hook from src/main.ts (typed in src/engine/dev-hook.d.ts, which this project can't see). */
 interface DevHook {
   camera(): CameraState | null;
+  draws(): number;
+  invalidate(): void;
+}
+
+function draws(page: Page): Promise<number> {
+  return page.evaluate(
+    () => (window as unknown as { __heartpatch?: DevHook }).__heartpatch?.draws() ?? 0,
+  );
 }
 
 function cameraState(page: Page): Promise<CameraState> {
@@ -85,8 +93,8 @@ test('renders the Babylon scene and reaches the server', async ({ page }) => {
   const canvas = page.locator('#game');
   await expect(canvas).toBeVisible();
   await expect(canvas).toHaveAttribute('data-ready', 'true');
-  // CI's WebKit has no WebGPU, so it exercises the WebGL2 path (tech spec §6).
-  await expect(canvas).toHaveAttribute('data-renderer', /^(webgpu|webgl2)$/);
+  // WebGL2 is the Phase 1 default (tech spec §6).
+  await expect(canvas).toHaveAttribute('data-renderer', 'webgl2');
 
   const box = await canvas.boundingBox();
   const viewport = page.viewportSize();
@@ -95,16 +103,63 @@ test('renders the Babylon scene and reaches the server', async ({ page }) => {
 
   await expect(page.locator('[data-testid="dev-status"]')).toHaveText(/server: ok/);
   await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(
-    /^\d+ fps · (WebGPU|WebGL2) · high · \d\.\d\dx$/,
+    /^(\d+ fps|idle) · WebGL2 · high · \d\.\d\dx$/,
     { timeout: 15_000 },
   );
   expect(errors).toEqual([]);
 });
 
-test('falls back to WebGL2 when asked', async ({ page }) => {
-  await page.goto('/?renderer=webgl2&quality=low');
-  await expect(page.locator('#game')).toHaveAttribute('data-renderer', 'webgl2');
-  await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(/WebGL2 · low/);
+test('WebGPU is opt-in and falls back to WebGL2 without errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text());
+  });
+  await page.goto('/?renderer=webgpu&quality=low');
+  // CI's WebKit has no WebGPU, so this lands on WebGL2 there; real devices may use WebGPU.
+  await expect(page.locator('#game')).toHaveAttribute('data-renderer', /^(webgpu|webgl2)$/);
+  await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(/(WebGPU|WebGL2) · low/, {
+    timeout: 15_000,
+  });
+  expect(errors).toEqual([]);
+});
+
+test('renders only when something changes', async ({ page }) => {
+  test.setTimeout(90_000); // first load compiles shaders; CI renders in software
+  await page.goto('/');
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+
+  // Once loaded, a still map stops drawing.
+  await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(/^idle · /, {
+    timeout: 30_000,
+  });
+  const still = await draws(page);
+  await page.waitForTimeout(1000);
+  expect(await draws(page)).toBe(still);
+
+  // The frame left on screen while idle must be a finished one, not a frame
+  // drawn while shaders were still compiling: redrawing must not change it,
+  // and it must not be a blank, single-colour canvas.
+  const canvas = page.locator('#game');
+  const idleShot = await canvas.screenshot();
+  await page.evaluate(() => {
+    (window as unknown as { __heartpatch?: DevHook }).__heartpatch?.invalidate();
+  });
+  await expect.poll(() => draws(page)).toBeGreaterThan(still);
+  await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(/^idle · /);
+  expect((await canvas.screenshot()).equals(idleShot)).toBe(true);
+  expect(idleShot.length).toBeGreaterThan(20_000); // a flat colour compresses to a few KB
+
+  // A pan draws frames, then the loop goes idle again.
+  const vp = page.viewportSize()!;
+  const mid = { x: vp.width / 2, y: vp.height / 2 };
+  const to = { x: mid.x - 60, y: mid.y };
+  const beforePan = await draws(page);
+  await touch(page, [...drag(mid, to, 6), ...Array.from({ length: 8 }, () => ({ 1: to }))]);
+  await expect.poll(() => draws(page), { timeout: 10_000 }).toBeGreaterThan(beforePan);
+  await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(/^idle · /, {
+    timeout: 30_000,
+  });
 });
 
 test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }) => {

@@ -8,6 +8,10 @@ declare global {
       renderer(): string | null;
       quality(): QualitySnapshot | null;
       camera(): MapCameraState | null;
+      /** Frames drawn so far; stays put while the scene is idle. */
+      draws(): number;
+      /** Draws a few frames, as any untracked change would. */
+      invalidate(): void;
     };
   }
 }

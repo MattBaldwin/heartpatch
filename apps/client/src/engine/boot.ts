@@ -18,11 +18,12 @@ export interface Disposable {
 }
 
 export interface BootOptions<R extends LosableRenderer, S extends Disposable> {
-  readonly preference: 'auto' | 'webgl2';
+  /** `webgpu` tries WebGPU first; a lost WebGPU device always restarts on WebGL2. */
+  readonly preference: 'webgpu' | 'webgl2';
   /** Builds a renderer on `canvas`; may call `freshCanvas` before falling back. */
   readonly createRenderer: (
     canvas: HTMLCanvasElement,
-    preference: 'auto' | 'webgl2',
+    preference: 'webgpu' | 'webgl2',
     freshCanvas: () => HTMLCanvasElement,
   ) => Promise<R>;
   /** Returns the canvas in the page now, replacing the old one with a clean copy. */
@@ -44,7 +45,7 @@ export async function boot<R extends LosableRenderer, S extends Disposable>(
     return current;
   };
 
-  const start = async (preference: 'auto' | 'webgl2'): Promise<void> => {
+  const start = async (preference: 'webgpu' | 'webgl2'): Promise<void> => {
     const renderer = await opts.createRenderer(current, preference, fresh);
     const stage = opts.mount(renderer, current);
     opts.onStart?.(stage, renderer);

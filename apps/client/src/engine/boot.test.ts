@@ -27,7 +27,7 @@ function setup(createKind: (pref: string, attempt: number) => string | Error) {
   const freshCanvas = vi.fn(() => fakeCanvas(++canvasCount));
   const renderers: FakeRenderer[] = [];
   let attempt = 0;
-  const createRenderer = vi.fn((_canvas: HTMLCanvasElement, pref: 'auto' | 'webgl2') => {
+  const createRenderer = vi.fn((_canvas: HTMLCanvasElement, pref: 'webgpu' | 'webgl2') => {
     const kind = createKind(pref, attempt++);
     if (kind instanceof Error) return Promise.reject(kind);
     const r = new FakeRenderer(kind);
@@ -48,22 +48,22 @@ function setup(createKind: (pref: string, attempt: number) => string | Error) {
 describe('boot', () => {
   it('mounts the scene on the first renderer', async () => {
     const t = setup(() => 'webgpu');
-    await boot(t.first, { preference: 'auto', ...t });
-    expect(t.createRenderer).toHaveBeenCalledWith(t.first, 'auto', expect.any(Function));
+    await boot(t.first, { preference: 'webgpu', ...t });
+    expect(t.createRenderer).toHaveBeenCalledWith(t.first, 'webgpu', expect.any(Function));
     expect(t.stages).toHaveLength(1);
     expect(t.stages[0]!.canvas).toBe(t.first);
     expect(t.onStart).toHaveBeenCalledWith(t.stages[0], t.renderers[0]);
   });
 
-  it('honours a forced WebGL2 preference', async () => {
+  it('starts straight on WebGL2 when that is the preference', async () => {
     const t = setup((pref) => pref);
     await boot(t.first, { preference: 'webgl2', ...t });
     expect(t.renderers[0]!.kind).toBe('webgl2');
   });
 
   it('falls back to WebGL2 on a fresh canvas when the WebGPU device is lost', async () => {
-    const t = setup((pref) => (pref === 'auto' ? 'webgpu' : 'webgl2'));
-    await boot(t.first, { preference: 'auto', ...t });
+    const t = setup((pref) => (pref === 'webgpu' ? 'webgpu' : 'webgl2'));
+    await boot(t.first, { preference: 'webgpu', ...t });
     const [gpu] = t.renderers;
 
     gpu!.loseDevice();
@@ -85,8 +85,8 @@ describe('boot', () => {
   });
 
   it('reports a failed restart instead of throwing into the void', async () => {
-    const t = setup((pref) => (pref === 'auto' ? 'webgpu' : new Error('no webgl')));
-    await boot(t.first, { preference: 'auto', ...t });
+    const t = setup((pref) => (pref === 'webgpu' ? 'webgpu' : new Error('no webgl')));
+    await boot(t.first, { preference: 'webgpu', ...t });
     t.renderers[0]!.loseDevice();
     await vi.waitFor(() => {
       expect(t.onError).toHaveBeenCalledOnce();
@@ -95,6 +95,6 @@ describe('boot', () => {
 
   it('rejects if the very first renderer cannot start', async () => {
     const t = setup(() => new Error('no gpu at all'));
-    await expect(boot(t.first, { preference: 'auto', ...t })).rejects.toThrow('no gpu at all');
+    await expect(boot(t.first, { preference: 'webgpu', ...t })).rejects.toThrow('no gpu at all');
   });
 });

@@ -92,6 +92,11 @@ export class MapCamera {
     });
   }
 
+  /** True while the camera needs frames drawn: it moved, or a fling is gliding. */
+  get wantsFrame(): boolean {
+    return this.dirty || this.velocity.x !== 0 || this.velocity.z !== 0;
+  }
+
   get state(): MapCameraState {
     return {
       target: this.target,

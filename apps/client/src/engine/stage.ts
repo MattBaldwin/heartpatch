@@ -1,7 +1,8 @@
 import { Scene } from '@babylonjs/core/scene';
 import { MapCamera } from './camera/map-camera.js';
 import type { Bounds } from './camera/camera-math.js';
-import { CAMERA, type QualityTier } from './config.js';
+import { CAMERA, SETTLE_FRAMES, type QualityTier } from './config.js';
+import { FrameScheduler } from './frame-scheduler.js';
 import { setupLighting } from './lighting/lighting.js';
 import { RenderQuality } from './quality/render-quality.js';
 import type { Renderer } from './renderer.js';
@@ -20,6 +21,12 @@ export interface Stage {
   readonly scene: Scene;
   readonly camera: MapCamera;
   readonly quality: RenderQuality;
+  /** Draw a few frames: call after any change the scheduler can't see (e.g. store updates). */
+  invalidate(): void;
+  /** True while nothing is being drawn. */
+  readonly idle: boolean;
+  /** Frames drawn so far (dev overlay and tests). */
+  readonly draws: number;
   dispose(): void;
 }
 
@@ -41,10 +48,12 @@ export function mountStage(
   scene.activeCamera = camera.camera;
   const quality = new RenderQuality(scene, camera.camera, tier);
 
+  const frames = new FrameScheduler(SETTLE_FRAMES);
   const abort = new AbortController();
   const onResize = (): void => {
     quality.refreshPixelRatio(); // the DPR changes when a window moves screens
     engine.resize();
+    frames.invalidate();
   };
   window.addEventListener('resize', onResize, { signal: abort.signal });
 
@@ -52,8 +61,20 @@ export function mountStage(
     canvas.dataset['ready'] = 'true';
   });
   canvas.dataset['renderer'] = renderer.kind;
+  // Render on demand (tech spec §6): draw only while something changes.
+  let loaded = false;
   engine.runRenderLoop(() => {
+    // Keep drawing until every shader, texture and post-process is ready,
+    // then draw a few more: the frames drawn while loading may be empty.
+    if (!loaded && scene.isReady(true) && quality.ready) {
+      loaded = true;
+      frames.invalidate();
+    }
+    const busy = !loaded || camera.wantsFrame || scene.animatables.length > 0;
+    const { draw, frameMs } = frames.next(performance.now(), busy);
+    if (!draw) return;
     scene.render();
+    if (frameMs !== null && quality.sample(frameMs)) frames.invalidate();
   });
 
   return {
@@ -61,6 +82,15 @@ export function mountStage(
     scene,
     camera,
     quality,
+    invalidate: () => {
+      frames.invalidate();
+    },
+    get idle() {
+      return frames.idle;
+    },
+    get draws() {
+      return frames.draws;
+    },
     dispose() {
       abort.abort();
       engine.stopRenderLoop();

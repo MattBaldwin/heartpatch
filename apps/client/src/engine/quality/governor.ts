@@ -17,7 +17,7 @@ import { higherTier, lowerTier, renderScaleFloor } from './tiers.js';
  *   that frame rate until it changes. The hold is re-tested now and then, less
  *   often each time the cap is confirmed.
  * - **Pinned at the floor and still well below target** for a while, with the
- *   last cut having helped: step the quality tier down (MSAA, then bloom).
+ *   last cut having helped: step the quality tier down (softer bloom, then none).
  * - **At target for a while:** raise resolution a step at a time, then the
  *   tier, never above the tier the player started on. Vsync caps the reading
  *   at 60 fps, so headroom is invisible; if a raise makes us drop again

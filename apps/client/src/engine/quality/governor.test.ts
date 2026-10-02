@@ -26,7 +26,7 @@ const config: ScalerConfig = {
 };
 const ctx = { config, devicePixelRatio: 2 };
 
-/** Relative GPU cost of each tier (MSAA and bloom cost on high). */
+/** Relative GPU cost of each tier (bloom costs on high and medium). */
 const TIER_COST: Record<QualityTier, number> = { high: 1, medium: 0.75, low: 0.6 };
 
 /**
@@ -117,7 +117,7 @@ describe('stepGovernor on simulated devices', () => {
 
   it('keeps the tier under Low Power Mode even when the GPU is also busy', () => {
     // Too slow at full res, capped at 30 once trimmed: the trim helps, dropping
-    // MSAA/bloom wouldn't, so the tier stays.
+    // bloom wouldn't, so the tier stays.
     for (const gpuMs of [36, 40]) {
       const { state } = simulate(start(), { capFps: 30, gpuMs }, 120_000);
       expect(state.tier).toBe('high');

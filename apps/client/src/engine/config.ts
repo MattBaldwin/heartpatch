@@ -12,9 +12,12 @@ export const QUALITY_TIERS: readonly QualityTier[] = ['high', 'medium', 'low'];
 /** Tier used when the player hasn't picked one (tech spec §6). */
 export const DEFAULT_QUALITY_TIER: QualityTier = 'high';
 
+/**
+ * Every tier uses FXAA with 8-bit render targets: no MSAA and no half-float
+ * HDR pipeline (tech spec §6 "Memory and heat"). 4× MSAA RGBA16F plus post
+ * buffers would take ~250 MB of GPU memory at DPR 2 on an iPad.
+ */
 export interface TierSettings {
-  /** MSAA samples on the post-process chain (1 = off). FXAA runs on every tier. */
-  msaaSamples: number;
   bloom: boolean;
   /** Bloom blur kernel in render pixels; bigger is softer and costlier. */
   bloomKernel: number;
@@ -28,11 +31,11 @@ export interface TierSettings {
 
 export const TIER_SETTINGS: Readonly<Record<QualityTier, TierSettings>> = {
   // TUNE: high is the default on playtest devices; spend headroom here first.
-  high: { msaaSamples: 4, bloom: true, bloomKernel: 64, minRenderScale: 0.75 },
+  high: { bloom: true, bloomKernel: 64, minRenderScale: 0.75 },
   // TUNE
-  medium: { msaaSamples: 1, bloom: true, bloomKernel: 32, minRenderScale: 0.75 },
+  medium: { bloom: true, bloomKernel: 32, minRenderScale: 0.75 },
   // TUNE
-  low: { msaaSamples: 1, bloom: false, bloomKernel: 0, minRenderScale: 0.7 },
+  low: { bloom: false, bloomKernel: 0, minRenderScale: 0.7 },
 };
 
 /**
@@ -107,6 +110,9 @@ export const SCALER: Readonly<ScalerConfig> = {
   tierFlapWindowMs: 10_000, // TUNE
 };
 
+/** Frames drawn after a change before the loop goes idle (render on demand). */
+export const SETTLE_FRAMES = 2; // TUNE
+
 export const LIGHTING = {
   /** Edge length of each procedural sky cube face, in texels. */
   envSize: 64, // TUNE
@@ -116,8 +122,12 @@ export const LIGHTING = {
   sunIntensity: 1.6, // TUNE
   exposure: 1.05, // TUNE
   contrast: 1.05, // TUNE
-  /** Only the brightest highlights glow, so bloom stays gentle. */
-  bloomThreshold: 0.85, // TUNE
+  /**
+   * Only near-white highlights glow, so bloom stays gentle. The pipeline is
+   * 8-bit (tone-mapped in the materials), so the pastel ground sits just
+   * below this and must not cross it.
+   */
+  bloomThreshold: 0.95, // TUNE
   bloomWeight: 0.25, // TUNE
   bloomScale: 0.5, // TUNE: bloom renders at half resolution
 } as const;
