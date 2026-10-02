@@ -1,4 +1,4 @@
-import { createEngineAndScene } from './engine/createScene.js';
+import { createEngineAndScene } from './engine/create-scene.js';
 import { fetchHealth } from './net/api.js';
 import './styles.css';
 
