@@ -8,6 +8,7 @@ import {
   type PublicUser,
   type PvpMode,
 } from '@heartpatch/shared';
+import { updateHold } from '../../pwa/update-hold.js';
 import { deviceTimeZone, el, messageOf } from '../dom.js';
 import { lobbyApi } from './lobby-api.js';
 import '../auth/auth.css';
@@ -40,11 +41,24 @@ export interface Lobby {
   setUser: (user: PublicUser | null) => void;
   /** Opens the lobby's patch list with a message (e.g. after leaving a map). */
   showMessage: (message: string) => void;
+  /** Opens "Make a patch" or "Join a patch" (the tutorial's graduation choices). */
+  showCreate: () => void;
+  showJoin: () => void;
+  /** Redraws the patch list if it's on screen (e.g. the tutorial's button changed). */
+  refreshList: () => void;
+  /** Shows the patch list (e.g. back from the Tutorial Glade). */
+  show: () => void;
+  /** Steps aside for a map, leaving the "My patches" button (as "Visit patch" does). */
+  hide: () => void;
 }
 
 export interface LobbyOptions {
   /** Shows a patch's map; rejects with a player-safe message if it can't. */
   onOpen?: (mapId: string) => Promise<void>;
+  /** Extra buttons under the patch list (the tutorial's "Meet Sprout", #47). */
+  listActions?: () => Node[];
+  /** Rows on the Settings screen (the tutorial's replay, #47). */
+  settings?: () => Node[];
 }
 
 export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby {
@@ -67,8 +81,18 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   let user: PublicUser | null = null;
   /** Which screen to come back to after a refresh. */
   let refresh: () => void = () => undefined;
+  /** True while the patch list is the screen showing. */
+  let onList = false;
+  /** Bumped by every screen change, so a slow list fetch can't cover a newer screen. */
+  let shown = 0;
+  /** Set while a one-time password and recovery code are on screen (#47). */
+  let releaseUpdates: (() => void) | null = null;
 
   const show = (...children: Node[]) => {
+    releaseUpdates?.();
+    releaseUpdates = null;
+    onList = false;
+    shown += 1;
     card.replaceChildren(...children);
     panel.hidden = false;
     openButton.hidden = true;
@@ -133,10 +157,12 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   async function showList(message?: string): Promise<void> {
     refresh = () => void showList();
     loading();
+    const at = shown;
     let mine: MyMapsResponse;
     try {
       mine = await lobbyApi.myMaps();
     } catch (err) {
+      if (at !== shown) return;
       show(
         title('Your patches'),
         notice(messageOf(err)),
@@ -145,6 +171,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       return;
     }
 
+    if (at !== shown) return;
     const list = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-maps' });
     for (const map of mine.maps) {
       const open = el(
@@ -178,6 +205,12 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     }
 
     const empty = mine.maps.length === 0 && mine.requests.length === 0;
+    const settingsLink = el(
+      'button',
+      { type: 'button', class: 'auth-link', 'data-testid': 'lobby-settings' },
+      'Settings',
+    );
+    settingsLink.addEventListener('click', showSettings);
     const close = el(
       'button',
       { type: 'button', class: 'auth-link', 'data-testid': 'lobby-close' },
@@ -207,8 +240,16 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
           ? [button('Check again', () => void showList(), { soft: true, small: true })]
           : []),
       ),
+      ...(options.listActions?.() ?? []),
+      ...(options.settings ? [settingsLink] : []),
       close,
     );
+    onList = true;
+  }
+
+  function showSettings(): void {
+    refresh = () => undefined;
+    show(title('Settings'), ...(options.settings?.() ?? []), backLink());
   }
 
   /** A one-field form. `submit` resolves to an error to show, or null when done. */
@@ -608,6 +649,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         button('Done', () => void showMap(map.id)),
       ),
     );
+    // Shown once: an automatic update must not reload it away (#47).
+    releaseUpdates = updateHold.hold();
   }
 
   openButton.addEventListener('click', () => void showList());
@@ -622,13 +665,32 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       if (next) {
         void showList();
       } else {
+        show(); // clears the card (and any hold on updates)
         panel.hidden = true;
         openButton.hidden = true;
-        card.replaceChildren();
       }
     },
     showMessage: (message) => {
       if (user) void showList(message);
+    },
+    showCreate: () => {
+      if (user) showCreate();
+    },
+    showJoin: () => {
+      if (user) showJoin();
+    },
+    refreshList: () => {
+      if (user && onList && !panel.hidden) void showList();
+    },
+    show: () => {
+      if (user) void showList();
+    },
+    hide: () => {
+      if (!user) return;
+      releaseUpdates?.();
+      releaseUpdates = null;
+      panel.hidden = true;
+      openButton.hidden = false;
     },
   };
 }

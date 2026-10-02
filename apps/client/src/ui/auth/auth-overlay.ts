@@ -4,6 +4,7 @@ import {
   SignupRequestSchema,
   type PublicUser,
 } from '@heartpatch/shared';
+import { updateHold } from '../../pwa/update-hold.js';
 import { deviceTimeZone, el, messageOf, type Attrs } from '../dom.js';
 import { authApi } from './auth-api.js';
 import './auth.css';
@@ -92,13 +93,22 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
   chip.hidden = true;
   root.append(overlay, chip);
 
+  /** Set while a recovery code is on screen: no update may reload it away. */
+  let releaseUpdates: (() => void) | null = null;
+  const letUpdatesThrough = () => {
+    releaseUpdates?.();
+    releaseUpdates = null;
+  };
+
   const showCard = (...children: Node[]) => {
+    letUpdatesThrough();
     card.replaceChildren(...children);
     overlay.hidden = false;
     chip.hidden = true;
   };
 
   const signedIn = (user: PublicUser) => {
+    letUpdatesThrough();
     overlay.hidden = true;
     card.replaceChildren();
     chipName.textContent = `Hi, ${user.username}!`;
@@ -348,6 +358,8 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
       ),
       el('div', { class: 'auth-actions' }, done, ...('clipboard' in navigator ? [copy] : [])),
     );
+    // Shown once: an automatic update must not reload it away (#47).
+    releaseUpdates = updateHold.hold();
     done.focus();
   }
 

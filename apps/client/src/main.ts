@@ -8,6 +8,8 @@ import { buildTestScene } from './scenes/test-scene.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { startPwa } from './pwa/pwa.js';
+import { updateHold } from './pwa/update-hold.js';
+import { createTutorialScreen } from './tutorial/tutorial-screen.js';
 import './styles.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -64,6 +66,14 @@ function showRendererError(err: unknown): void {
   document.body.append(box);
 }
 
+/** A stage went on screen: the tutorial puts Sprout in it while it's open. */
+function mounted(next: Stage): Stage {
+  tutorial.attachScene(next.scene, next.camera.state.target, () => {
+    next.invalidate();
+  });
+  return next;
+}
+
 /**
  * Swaps the scene on the running renderer (tech spec §6: one engine, scenes
  * swapped). Before the renderer starts, or after it failed, this only picks
@@ -77,7 +87,7 @@ function showScene(build: SceneBuilder | null): void {
   currentStage.dispose();
   if (!target) return;
   try {
-    stage = mountStage(renderer, target, sceneBuilder, tier);
+    stage = mounted(mountStage(renderer, target, sceneBuilder, tier));
   } catch (err) {
     showRendererError(err);
   }
@@ -92,11 +102,40 @@ const maps = createMapScreen({
     lobby.showMessage(message);
   },
 });
-const lobby = mountLobby(document.body, { onOpen: (mapId) => maps.open(mapId) });
+// The tutorial (#47) draws its Tutorial Glade with the map screen and sits
+// over it; it never blocks the lobby unless the server requires it first
+// (decision A).
+const tutorial = createTutorialScreen({
+  root: document.body,
+  glade: {
+    open: async (mapId, stillWanted) => {
+      await maps.open(mapId);
+      // Put away ("Later") while it loaded: the lobby stays.
+      if (stillWanted()) lobby.hide();
+    },
+    close: () => {
+      maps.close();
+      lobby.show();
+    },
+  },
+  onDone: (choice) => {
+    if (choice === 'create') lobby.showCreate();
+    else if (choice === 'join') lobby.showJoin();
+  },
+  onEntryChange: () => {
+    lobby.refreshList();
+  },
+});
+const lobby = mountLobby(document.body, {
+  onOpen: (mapId) => maps.open(mapId),
+  listActions: tutorial.listActions,
+  settings: tutorial.settings,
+});
 mountAuth(document.body, {
   onChange: (user) => {
     maps.setUser(user);
     lobby.setUser(user);
+    tutorial.setUser(user);
   },
 });
 // Offline shell, update prompt, Add to Home Screen guide (issue #26).
@@ -107,7 +146,7 @@ await boot(canvas, {
   createRenderer,
   freshCanvas,
   mount: (renderer, target) => {
-    stage = mountStage(renderer, target, sceneBuilder, tier);
+    stage = mounted(mountStage(renderer, target, sceneBuilder, tier));
     return currentStage;
   },
   onError: showRendererError,
@@ -138,5 +177,7 @@ if (import.meta.env.DEV) {
     idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),
     map: () => maps.debug,
+    tutorial: () => tutorial.debug,
+    updatesHeld: () => updateHold.held,
   };
 }
