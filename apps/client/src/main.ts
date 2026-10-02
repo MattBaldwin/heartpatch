@@ -181,6 +181,7 @@ const keeper = createKeeperScreen({
   onEditOpen: () => {
     void battles.setMap(null);
     maps.close();
+    catalog.close();
     lobby.stepOut();
   },
   onEditClosed: (saved) => {
