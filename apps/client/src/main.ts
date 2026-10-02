@@ -111,11 +111,15 @@ const tutorial = createTutorialScreen({
   root: document.body,
   glade: {
     open: async (mapId, stillWanted) => {
+      // The Glade is Sprout's: no battle button over it (battles come to the
+      // tutorial with its later steps).
+      await battles.setMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
       if (stillWanted()) lobby.hide();
     },
     close: () => {
+      void battles.setMap(null);
       maps.close();
       lobby.show();
     },
@@ -128,7 +132,8 @@ const tutorial = createTutorialScreen({
     lobby.refreshList();
   },
 });
-// Battles (#13) take the screen over from the map and hand it back after.
+// Battles (#13) own the whole screen: the map and the lobby's button step
+// out while one is open, and the map comes back after.
 const battles = createBattleScreen({
   root: document.body,
   showScene,
@@ -137,18 +142,22 @@ const battles = createBattleScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onOpen: () => {
     maps.close();
+    lobby.stepOut();
   },
   onClosed: (mapId) => {
     maps.open(mapId).catch((err: unknown) => {
       lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
     });
+    lobby.hide();
   },
   devTools: import.meta.env.DEV,
 });
 const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
     await maps.open(mapId);
-    await battles.setMap(mapId);
+    // Not awaited: the lobby shows its button once this resolves, and a
+    // battle resumed here (after a refresh) must step it out again after that.
+    void battles.setMap(mapId);
   },
   listActions: tutorial.listActions,
   settings: tutorial.settings,

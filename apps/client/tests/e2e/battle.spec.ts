@@ -139,3 +139,66 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
 
   expect(errors).toEqual([]);
 });
+
+test('a battle owns the screen: no lobby button mid-battle, no battle button in the Glade', async ({
+  browser,
+}) => {
+  test.setTimeout(240_000);
+  const page = await newPlayer(browser, uniqueName('own'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Owner Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await expect(page.getByTestId('map-hud')).toContainText('Owner Patch');
+  const entry = page.getByTestId('battle-entry');
+  const lobbyButton = page.getByTestId('lobby-open');
+  await expect(entry).toBeVisible();
+  await expect(lobbyButton).toBeVisible();
+
+  // Mid-battle, "My patches" steps out: the battle is the only screen.
+  await page.getByTestId('battle-dev-grant').tap();
+  await expect(page.locator('.battle-entry-note')).toContainText('joined you');
+  await page.getByTestId('battle-dev-fight').tap();
+  const hud = page.getByTestId('battle-hud');
+  await expect(hud).toBeVisible();
+  await settled(page);
+  await expect(lobbyButton).toBeHidden();
+  await expect(entry).toBeHidden();
+
+  // Back keeps the battle going and hands the map back, button and all.
+  await hud.getByRole('button', { name: 'Back to patch' }).tap();
+  await expect(hud).toBeHidden();
+  await expect(page.getByTestId('map-hud')).toContainText('Owner Patch');
+  await expect(lobbyButton).toBeVisible();
+  await expect(entry).toBeVisible();
+  expect(await battleState(page)).toBeNull();
+
+  // Visiting the patch again from the lobby resumes the battle, and the
+  // lobby button steps out again.
+  await lobbyButton.tap();
+  await openPatch(page, 'Owner Patch');
+  await expect(hud).toBeVisible({ timeout: 30_000 });
+  await settled(page);
+  await expect(lobbyButton).toBeHidden();
+  await hud.getByRole('button', { name: 'Back to patch' }).tap();
+  await expect(hud).toBeHidden();
+
+  // Sprout's Glade (#47) is drawn by the map screen too, but it's Sprout's:
+  // no battle button over it, and none left behind after "Later".
+  await lobbyButton.tap();
+  await lobby.getByTestId('tutorial-start').tap();
+  await expect(page.getByTestId('tutorial-bubble')).toBeVisible({ timeout: 30_000 });
+  await expect(entry).toBeHidden();
+  await page.getByTestId('tutorial-bubble').getByRole('button', { name: 'Later' }).tap();
+  await expect(page.getByTestId('tutorial')).toBeHidden();
+  await lobby.getByTestId('lobby-close').tap();
+  await expect(entry).toBeHidden();
+  expect(
+    await page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.() ?? null),
+  ).toBeNull();
+
+  expect(errors).toEqual([]);
+});

@@ -131,12 +131,24 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   entry.hidden = true;
   options.root.append(entry);
 
-  const busy = (fn: () => Promise<void>) => {
-    if (enter.disabled) return;
+  /**
+   * Runs an entry action for the map on screen now. A reply that lands after
+   * the player moved on (another map, the Glade, logout, a battle opened
+   * another way) is dropped, so it can never open a battle over the wrong screen.
+   */
+  const busy = (start: (id: string) => Promise<PlayerBattle | null>) => {
+    const id = mapId;
+    const who = user;
+    if (!id || enter.disabled) return;
     enter.disabled = true;
     note.textContent = '';
-    fn()
+    const stillHere = () => mapId === id && user === who && battle === null;
+    start(id)
+      .then((next) => {
+        if (next && stillHere()) open(next);
+      })
       .catch((err: unknown) => {
+        if (!stillHere()) return;
         note.textContent = messageOf(err);
       })
       .finally(() => {
@@ -144,11 +156,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       });
   };
   enter.addEventListener('click', () => {
-    const id = mapId;
-    if (!id) return;
-    busy(async () => {
-      open(await api.startWild(id));
-    });
+    busy((id) => api.startWild(id));
   });
   if (options.devTools) {
     const grant = el(
@@ -161,11 +169,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       'Dev: new squishy',
     );
     grant.addEventListener('click', () => {
-      const id = mapId;
-      if (!id) return;
-      busy(async () => {
+      busy(async (id) => {
         const squishy = await api.dev.grantSquishy(id);
         note.textContent = `A ${content?.speciesName(squishy.speciesId) ?? 'squishy'} joined you! (dev)`;
+        return null;
       });
     });
     const fight = el(
@@ -178,11 +185,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       'Dev: pick a fight',
     );
     fight.addEventListener('click', () => {
-      const id = mapId;
-      if (!id) return;
-      busy(async () => {
-        open(await api.dev.pickFight(id));
-      });
+      busy((id) => api.dev.pickFight(id));
     });
     entry.append(el('div', { class: 'battle-row' }, grant, fight));
   }
@@ -381,7 +384,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         hud.setControls(controlsFor(current));
       }
     } finally {
-      waiting = false;
+      // Only this battle's submit may clear the flag: a late reply from one
+      // the player left must not unlock another battle's controls.
+      if (stillOpen()) waiting = false;
     }
   }
 
@@ -487,10 +492,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       }
       entry.hidden = battle !== null;
       note.textContent = '';
-      // Refreshing mid-battle resumes it.
+      // Refreshing mid-battle resumes it (unless the player moved on meanwhile).
+      const who = user;
       try {
         const going = await api.current(next);
-        if (going && mapId === next) open(going);
+        if (going && mapId === next && user === who && !battle) open(going);
       } catch (err) {
         note.textContent = messageOf(err);
       }

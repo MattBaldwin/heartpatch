@@ -41,7 +41,7 @@ describe('FrameScheduler', () => {
     run(s, 5, () => false);
     // A 60 Hz loop for one second; breathing asks for a frame every other
     // tick (a 30 fps interval less half a tick, see BREATHING_FRAME_MS).
-    const askEveryMs = 29;
+    const askEveryMs = 29; // BREATHING_FRAME_MS in src/battle/battle-config.ts
     let lastAsk = -Infinity;
     let draws = 0;
     for (let i = 0; i < 60; i++) {
