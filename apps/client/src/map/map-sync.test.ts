@@ -203,6 +203,18 @@ describe('MapSync', () => {
     expect(sync.state?.view.map.pvpMode).toBe('off');
   });
 
+  it("doesn't start a second resync when one began during the failed open", async () => {
+    const { sync, fetches, calls, answer } = await opened(5);
+    const reopening = sync.open(MAP_ID); // fetch 1
+    sync.event(joined(6)); // resync during the open: fetch 2
+    fetches[1]!.reject(new ApiRequestError('OFFLINE', 'offline'));
+    await expect(reopening).rejects.toThrow('offline');
+    expect(fetches).toHaveLength(3);
+
+    await answer(at(6, testView(2)));
+    expect(calls).toEqual(['unsubscribe', `subscribe ${MAP_ID} 6`]);
+  });
+
   it('keeps a live map live when a failed open came in between', async () => {
     const { sync, fetches, calls } = await opened(5);
     const reopening = sync.open(MAP_ID);

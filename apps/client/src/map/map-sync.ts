@@ -32,6 +32,8 @@ export class MapSync {
   /** Bumped by every open and close, so a slow fetch can't bring back a map the player left. */
   private generation = 0;
   private resyncing = false;
+  /** The generation the running resync belongs to (its answer is dropped otherwise). */
+  private resyncAt = 0;
   /** Live events are off (unsubscribed for a resync) until a fresh view is in. */
   private unsynced = false;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -59,7 +61,8 @@ export class MapSync {
       view = await this.options.fetchView(mapId);
     } catch (err) {
       // The map on screen stays; a resync this open cut short is started again.
-      if (at === this.generation && this.current) {
+      // (One started during this open is still live; leave it be.)
+      if (at === this.generation && this.current && !(this.resyncing && this.resyncAt === at)) {
         this.resyncing = false;
         if (this.unsynced) this.resync();
       }
@@ -107,6 +110,7 @@ export class MapSync {
     const state = this.current;
     if (!state || this.resyncing) return;
     const at = this.generation;
+    this.resyncAt = at;
     this.resyncing = true;
     this.unsynced = true;
     clearTimeout(this.retryTimer);
