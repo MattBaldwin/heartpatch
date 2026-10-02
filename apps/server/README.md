@@ -191,7 +191,7 @@ The single-player tutorial (design doc §26; tech spec §7) lives in `src/module
 
 **Step engine.** Steps are data (`TUTORIAL_STEPS`: id, goal, Sprout's lines, highlight target, `completeOn: { eventType, actor, where }` with declarative predicates), checked by `checkTutorialData`. The `tutorial` event consumer (`consumer.ts`) feeds each event on a tutorial map to the shared `advanceTutorial`; a match moves the player one step on, or finishes the tutorial after the last one, and appends `tutorial.advanced` (a system event) so the client hears it live. Events on an archived run do nothing. Archived runs keep their map, tiles and events (replays are rate limited); a cleanup job can prune them later. Rewards on first completion are a stub tied to #44, #43 and #14.
 
-**Gameplay on tutorial maps** goes through the real modules. They read `gameplayOverrides(map.kind)` from shared (fast timers, sure capture, scripted opponents, the Hollow Man can't take anything) rather than branching on the map kind themselves. The maps API (`/maps`, `/maps/:id`, `/maps/:id/view`) doesn't show tutorial maps.
+**Gameplay on tutorial maps** goes through the real modules. They read `gameplayOverrides(map.kind)` from shared (fast timers, sure capture, scripted opponents, the Hollow Man can't take anything) rather than branching on the map kind themselves. The maps API (`/maps`, `/maps/:id`, invites, admin, leave) doesn't show tutorial maps; only `/maps/:id/view` serves a player's own active run, so the client draws the Tutorial Glade as a normal map. An archived run stays NOT_FOUND.
 
 ## Workspace source condition
 

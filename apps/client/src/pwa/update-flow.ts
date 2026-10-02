@@ -1,4 +1,5 @@
 import type { WorkerDescription, WorkerRequest } from './messages.js';
+import type { UpdateHold } from './update-hold.js';
 
 // How a new version reaches a running app (issue #26). A new service worker
 // installs in the background, then waits; this decides when it takes over.
@@ -32,6 +33,8 @@ export interface UpdateEnv {
   onVisibilityChange(listener: (visible: boolean) => void): void;
   /** A new version is ready; `apply` switches to it and reloads. */
   onUpdateReady(apply: () => void): void;
+  /** No reload while this is held (e.g. a recovery code on screen; update-hold.ts). */
+  hold: Pick<UpdateHold, 'held' | 'whenReleased'>;
 }
 
 export interface UpdateTiming {
@@ -53,10 +56,23 @@ export async function startUpdates(env: UpdateEnv, timing: UpdateTiming): Promis
     env.reload();
   });
 
-  /** Activates `worker`; reloads unless the page already runs its version. */
+  /**
+   * Activates `worker`; reloads unless the page already runs its version.
+   * A reload waits until nothing holds updates, so a screen that can't be
+   * shown again (a new recovery code) is never reloaded away.
+   */
   const activate = (worker: WorkerLike, reload: boolean) => {
-    reloadOnSwitch = reload;
-    worker.postMessage({ type: 'skip-waiting' });
+    if (!reload) {
+      reloadOnSwitch = false;
+      worker.postMessage({ type: 'skip-waiting' });
+      return;
+    }
+    env.hold.whenReleased(() => {
+      // Replaced by a newer version while held: that one gets its own offer.
+      if (worker.state === 'redundant') return;
+      reloadOnSwitch = true;
+      worker.postMessage({ type: 'skip-waiting' });
+    });
   };
 
   let waiting: WorkerLike | null = null;
@@ -114,6 +130,7 @@ export async function startUpdates(env: UpdateEnv, timing: UpdateTiming): Promis
     // not run against a new server forever: apply a waiting version when the
     // player comes back after a real break, when there's nothing to lose.
     if (waiting && awayMs >= timing.applyAfterHiddenMs) {
+      // Held (a recovery code on screen): it applies once that's put away.
       activate(waiting, true);
       waiting = null;
       return;

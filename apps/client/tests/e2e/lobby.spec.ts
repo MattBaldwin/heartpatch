@@ -1,5 +1,14 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { newPlayer } from './players.js';
+
+/** True while a screen holds automatic updates (dev hook, src/pwa/update-hold.ts). */
+const updatesHeld = (page: Page) =>
+  page.evaluate(
+    () =>
+      (
+        window as unknown as { __heartpatch?: { updatesHeld?(): boolean } }
+      ).__heartpatch?.updatesHeld?.() ?? null,
+  );
 
 test('owner makes a patch, a friend joins with the code, owner approves and resets', async ({
   browser,
@@ -54,6 +63,10 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   await expect(ownerLobby.getByTestId('lobby-recovery-code')).toHaveText(
     /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/,
   );
+  // Shown once: no automatic update may reload it away (#47).
+  expect(await updatesHeld(owner)).toBe(true);
+  await ownerLobby.getByRole('button', { name: 'Done' }).tap();
+  expect(await updatesHeld(owner)).toBe(false);
 
   await friend.reload();
   const overlay = friend.getByTestId('auth-overlay');

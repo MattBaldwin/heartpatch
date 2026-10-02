@@ -5,6 +5,7 @@ import {
 } from './config.js';
 import { isWorkerDescription, type WorkerDescription } from './messages.js';
 import { startUpdates, type RegistrationLike, type WorkerLike } from './update-flow.js';
+import { updateHold } from './update-hold.js';
 
 /** How long to wait for a worker to describe itself before assuming it's new. */
 const DESCRIBE_TIMEOUT_MS = 3000;
@@ -54,6 +55,7 @@ export async function registerServiceWorker(
         });
       },
       onUpdateReady,
+      hold: updateHold,
     },
     {
       checkIntervalMs: UPDATE_CHECK_INTERVAL_MS,

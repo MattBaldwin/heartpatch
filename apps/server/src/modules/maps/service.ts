@@ -152,6 +152,24 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     return { map, role: membership.role };
   };
 
+  /**
+   * Like `requireMember`, for reading the map view only: it also lets a
+   * player see their own active tutorial run (the client draws the Tutorial
+   * Glade as a normal map, tech spec §7). An archived run (replayed or
+   * skipped) stays NOT_FOUND. Invites, admin and leave keep `requireMember`.
+   */
+  const requireViewer = async (repo: MapsRepo, user: PublicUser, mapId: string) => {
+    const [map, membership] = await Promise.all([
+      repo.findMap(mapId),
+      repo.membership(mapId, user.id),
+    ]);
+    const viewable = map?.kind === 'multiplayer' || map?.kind === 'tutorial';
+    if (!map || !viewable || membership?.status !== 'active') {
+      throw new AppError('NOT_FOUND', MESSAGES.notFound);
+    }
+    return map;
+  };
+
   const requireOwner = async (repo: MapsRepo, user: PublicUser, mapId: string) => {
     const found = await requireMember(repo, user, mapId);
     if (found.role !== 'owner') throw new AppError('FORBIDDEN', MESSAGES.ownerOnly);
@@ -289,7 +307,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     // sync replays everything after it and nothing before (tech spec §5).
     view: (user, mapId) =>
       store.snapshot(async (repo) => {
-        const { map } = await requireMember(repo, user, mapId);
+        const map = await requireViewer(repo, user, mapId);
         const [members, tiles] = await Promise.all([
           repo.listMembers(mapId),
           repo.listTiles(mapId),

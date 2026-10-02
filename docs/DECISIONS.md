@@ -166,6 +166,18 @@ _Proposed in the #7 PR; the project owner confirms on merge._
 - **Scenes are swapped on the running engine.** Opening a map disposes the current stage and mounts the map's on the same renderer; a GPU-loss rebuild mounts whatever is on screen.
 - **The tile panel doesn't show guardians yet.** `PublicTile` has no public guardian field (guardian strength hints at secret spawns, tech spec §8); the panel adds them once one exists.
 
+## 2026-10-02 — Tutorial client (#47)
+
+_Proposed in the #47 client PR; the project owner confirms on merge._
+
+- **The Glade is drawn by the map screen** (coordinator-approved server change): `GET /maps/:id/view` alone accepts the player's active tutorial run; every other maps operation still hides tutorial maps. *Why:* tech spec §7, the tutorial runs on normal map machinery, so one view path.
+- **The tutorial layer is DOM and CSS over the canvas.** The dim is one element's box-shadow; four blocker rects around the spotlight swallow taps; no extra render passes. Talk-only steps block everything but Sprout's bubble; a gameplay step whose target can't be found leaves input open, so it can never trap a player.
+- **Highlight targets:** DOM targets opt in with `data-tutorial-target="<id>"`; canvas targets are registered by the scene that draws them (`tutorial/highlight-targets.ts`) as their gameplay arrives.
+- **It opens by itself** only for a run already going (resume) or when `HP_TUTORIAL_REQUIRED` is on and it isn't done. Otherwise the lobby offers "Meet Sprout", "Later" is always offered, and the lobby is never blocked. Replay lives in a new lobby Settings screen; "Skip it" shows only on a run after a first completion.
+- **Progress follows `tutorial.advanced` on the run's own socket**, from the run's start, taking only the advance from the step on screen; if none comes within a few seconds the client asks `GET /tutorial`. While the Glade is drawn that's a second socket next to the map screen's (two of the five per player): the tutorial keeps working when the Glade can't load, and the map screen stays untouched. Feeding it from the map screen's socket is a later tidy-up.
+- **The tutorial never traps a player.** "Log out" sits above the tutorial layer, and a step this app doesn't know yet (newer server data) leaves input open with a "Check again" button.
+- **Sprout is procedural and seeded per player** (`procedural/sprout/`, `deriveSeed('sprout', userId)`), not a species. It floats still and only hops (a short Babylon animation) when it speaks, so an idle scene stays idle.
+- **Update hold** (`pwa/update-hold.ts`): screens that show something once (a new recovery code; the owner's password reset) hold updates, and update-flow never reloads while held; a reload that came due waits until release.
 
 ## 2026-10-02 — Battle API and battle UI (#13)
 

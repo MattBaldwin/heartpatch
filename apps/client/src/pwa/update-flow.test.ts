@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkerDescription, WorkerRequest } from './messages.js';
 import { startUpdates, type UpdateEnv, type WorkerLike } from './update-flow.js';
+import { createUpdateHold } from './update-hold.js';
 
 class FakeWorker extends EventTarget implements WorkerLike {
   state: ServiceWorkerState = 'installing';
@@ -48,6 +49,7 @@ function setup({ controlled = true, waiting = null as FakeWorker | null } = {}) 
   const visibilityListeners: ((visible: boolean) => void)[] = [];
   const offers: (() => void)[] = [];
   let reloads = 0;
+  const hold = createUpdateHold();
   const env: UpdateEnv = {
     controller: () => (controlled ? new FakeWorker() : null),
     onControllerChange: (listener) => controllerListeners.push(listener),
@@ -66,9 +68,11 @@ function setup({ controlled = true, waiting = null as FakeWorker | null } = {}) 
     every: () => undefined,
     onVisibilityChange: (listener) => visibilityListeners.push(listener),
     onUpdateReady: (apply) => offers.push(apply),
+    hold,
   };
   return {
     registration,
+    hold,
     offers,
     start: () => startUpdates(env, timing),
     reloads: () => reloads,
@@ -164,5 +168,90 @@ describe('startUpdates', () => {
     expect(t.registration.updates).toBe(0);
     t.away(200);
     expect(t.registration.updates).toBe(1);
+  });
+
+  describe('while a screen holds updates (a recovery code on screen)', () => {
+    /** A new version installed and waiting, offered to the player. */
+    async function waitingUpdate() {
+      const t = setup();
+      await t.start();
+      const worker = new FakeWorker(['/assets/index-new.js']);
+      t.registration.found(worker);
+      worker.install();
+      await settle();
+      return { t, worker };
+    }
+
+    it("doesn't apply a waiting version on return, then applies it once released", async () => {
+      const { t, worker } = await waitingUpdate();
+      const release = t.hold.hold();
+      t.away(10_000); // back after a long break, recovery code still showing
+      expect(worker.skipped).toBe(false);
+      t.switchController();
+      expect(t.reloads()).toBe(0);
+
+      release(); // "I saved it!"
+      expect(worker.skipped).toBe(true);
+      t.switchController();
+      expect(t.reloads()).toBe(1);
+    });
+
+    it('waits for every hold to be released', async () => {
+      const { t, worker } = await waitingUpdate();
+      const first = t.hold.hold();
+      const second = t.hold.hold();
+      t.away(10_000);
+      first();
+      first(); // releasing twice doesn't count as the other hold
+      expect(worker.skipped).toBe(false);
+      second();
+      expect(worker.skipped).toBe(true);
+    });
+
+    it('holds a tapped "Update" until released', async () => {
+      const { t, worker } = await waitingUpdate();
+      const release = t.hold.hold();
+      t.offers[0]!();
+      expect(worker.skipped).toBe(false);
+      release();
+      expect(worker.skipped).toBe(true);
+      t.switchController();
+      expect(t.reloads()).toBe(1);
+    });
+
+    it('holds the switch at launch too', async () => {
+      const waiting = new FakeWorker(['/assets/index-new.js']);
+      waiting.state = 'installed';
+      const t = setup({ waiting });
+      const release = t.hold.hold();
+      await t.start();
+      expect(waiting.skipped).toBe(false);
+      release();
+      expect(waiting.skipped).toBe(true);
+    });
+
+    it('drops a held reload for a version replaced in the meantime', async () => {
+      const { t, worker } = await waitingUpdate();
+      const release = t.hold.hold();
+      t.away(10_000);
+      worker.state = 'redundant';
+      release();
+      expect(worker.skipped).toBe(false);
+      t.switchController();
+      expect(t.reloads()).toBe(0);
+    });
+
+    it('still catches up silently to a version the page already runs (no reload)', async () => {
+      const t = setup();
+      await t.start();
+      t.hold.hold();
+      const worker = new FakeWorker([RUNNING]);
+      t.registration.found(worker);
+      worker.install();
+      await settle();
+      expect(worker.skipped).toBe(true);
+      t.switchController();
+      expect(t.reloads()).toBe(0);
+    });
   });
 });
