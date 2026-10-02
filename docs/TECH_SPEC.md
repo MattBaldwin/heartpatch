@@ -203,6 +203,7 @@ Add anything else only with a one-line justification in the PR.
 | `HP_DEV_SQUISHY_GRANTS` | `true` | dev/test only; registers routes that hand a player a squishy and start a battle against a chosen wild squishy (#13), until spawns (#14) and the tutorial's starter exist (Playwright sets it) |
 | `HP_SIGNUP_CODE` | random string | required to create an account (family-only signup, Phase 1); checked with a constant-time comparison under the auth rate limit |
 | `HP_TUTORIAL_REQUIRED` | `false` | defaults to `false` when unset; when `false`, new accounts can create/join maps without finishing the tutorial. Flip to `true` once the tutorial (#24) ships |
+| `HP_KEEPER_REQUIRED` | `true` | defaults to `true`; creating or joining a map needs a Keeper (#42), so other players always see who's who. `false` only for testing |
 
 Parsed and validated by `apps/server/src/config.ts` (zod); the server refuses to start on invalid config. Keep `.env.example` current.
 

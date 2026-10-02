@@ -1,5 +1,7 @@
 import {
+  defaultKeeperConfig,
   GAME_DATA,
+  KEEPER_BASES,
   MAP_MAX_PLAYERS,
   generateMap,
   type MapMember,
@@ -17,11 +19,13 @@ export function userId(n: number): string {
 }
 
 export function member(n: number, homeSlot: number): MapMember {
+  const base = KEEPER_BASES[(n - 1) % KEEPER_BASES.length];
   return {
     user: { id: userId(n), username: `keeper${String(n)}` },
     role: n === 1 ? 'owner' : 'member',
     homeSlot,
     joinedAt: '2026-10-02T12:00:00.000Z',
+    keeper: base ? defaultKeeperConfig(base) : null,
   };
 }
 

@@ -8,6 +8,7 @@ import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
+import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
@@ -163,6 +164,28 @@ const battles = createBattleScreen({
     lobby.hide();
   },
   devTools: import.meta.env.DEV,
+  keeper: () => keeper.current,
+});
+// Picking a Keeper (#42) comes right after signup, before the tutorial and
+// the lobby; Settings opens it again to change the Keeper for free.
+const keeper = createKeeperScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  onReady: (user) => {
+    lobby.setUser(user);
+    tutorial.setUser(user);
+  },
+  onEditOpen: () => {
+    void battles.setMap(null);
+    maps.close();
+    lobby.stepOut();
+  },
+  onEditClosed: (saved) => {
+    if (saved) lobby.showMessage(KEEPER_TEXT.changed);
+    else lobby.show();
+  },
 });
 const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
@@ -173,15 +196,19 @@ const lobby = mountLobby(document.body, {
     void battles.setMap(mapId);
   },
   listActions: tutorial.listActions,
-  settings: tutorial.settings,
+  settings: () => [...keeper.settings(), ...tutorial.settings()],
 });
 mountAuth(document.body, {
   onChange: (user) => {
     battles.setUser(user);
     inventory.setUser(user);
     maps.setUser(user);
-    lobby.setUser(user);
-    tutorial.setUser(user);
+    // The lobby and tutorial wait for a Keeper (`onReady` above).
+    keeper.setUser(user);
+    if (!user) {
+      lobby.setUser(null);
+      tutorial.setUser(null);
+    }
   },
 });
 // Offline shell, update prompt, Add to Home Screen guide (issue #26).
@@ -226,6 +253,7 @@ if (import.meta.env.DEV) {
     tutorial: () => tutorial.debug,
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,
+    keeper: () => keeper.debug,
     inventory: () => inventory.debug,
   };
 }

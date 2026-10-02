@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { inventories, sessions, users } from '../../db/schema.js';
+import { inventories, keepers, sessions, users } from '../../db/schema.js';
 import { AppError } from '../../lib/errors.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -22,6 +22,7 @@ import { consumeItems, grantItems } from './service.js';
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
+const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
 const START = '2026-10-02T12:00:00Z';
 
 interface Player {
@@ -75,6 +76,8 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       tokenHash,
       expiresAt: new Date(Date.parse(START) + 365 * DAY_MS),
     });
+    // Every player has picked a Keeper (the map gate, #42).
+    await db.insert(keepers).values({ userId: user!.id, ...TEST_KEEPER });
     return { id: user!.id, username, token };
   }
 

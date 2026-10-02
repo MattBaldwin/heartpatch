@@ -1,6 +1,6 @@
 {
-  "id": "d8a2f831-76d6-457a-85d1-98de1488c710",
-  "prevId": "b7e3ef7b-1c51-4c70-98db-080320d950d2",
+  "id": "4e259f38-f117-4d40-a715-0d0abcac6354",
+  "prevId": "d8a2f831-76d6-457a-85d1-98de1488c710",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -169,6 +169,114 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.crafts": {
+      "name": "crafts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "recipe_id": {
+          "name": "recipe_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "items": {
+          "name": "items",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ready_at": {
+          "name": "ready_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "collected_at": {
+          "name": "collected_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "crafts_one_active_key": {
+          "name": "crafts_one_active_key",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"crafts\".\"collected_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "crafts_map_id_maps_id_fk": {
+          "name": "crafts_map_id_maps_id_fk",
+          "tableFrom": "crafts",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "crafts_member_fk": {
+          "name": "crafts_member_fk",
+          "tableFrom": "crafts",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "crafts_ready_after_start": {
+          "name": "crafts_ready_after_start",
+          "value": "\"crafts\".\"ready_at\" >= \"crafts\".\"started_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.event_consumers": {
       "name": "event_consumers",
       "schema": "",
@@ -308,6 +416,152 @@
       },
       "isRLSEnabled": false
     },
+    "public.gather_jobs": {
+      "name": "gather_jobs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tile_id": {
+          "name": "tile_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resource": {
+          "name": "resource",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "items": {
+          "name": "items",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "gather_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ready_at": {
+          "name": "ready_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "gather_jobs_one_active_per_tile_key": {
+          "name": "gather_jobs_one_active_per_tile_key",
+          "columns": [
+            {
+              "expression": "tile_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"gather_jobs\".\"status\" = 'active'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gather_jobs_map_id_user_id_idx": {
+          "name": "gather_jobs_map_id_user_id_idx",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "gather_jobs_map_id_maps_id_fk": {
+          "name": "gather_jobs_map_id_maps_id_fk",
+          "tableFrom": "gather_jobs",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "gather_jobs_tile_id_tiles_id_fk": {
+          "name": "gather_jobs_tile_id_tiles_id_fk",
+          "tableFrom": "gather_jobs",
+          "tableTo": "tiles",
+          "columnsFrom": ["tile_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "gather_jobs_member_fk": {
+          "name": "gather_jobs_member_fk",
+          "tableFrom": "gather_jobs",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "gather_jobs_ready_after_start": {
+          "name": "gather_jobs_ready_after_start",
+          "value": "\"gather_jobs\".\"ready_at\" >= \"gather_jobs\".\"started_at\""
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.idempotency_keys": {
       "name": "idempotency_keys",
       "schema": "",
@@ -393,6 +647,79 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.inventories": {
+      "name": "inventories",
+      "schema": "",
+      "columns": {
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_id": {
+          "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "inventories_map_id_maps_id_fk": {
+          "name": "inventories_map_id_maps_id_fk",
+          "tableFrom": "inventories",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "inventories_member_fk": {
+          "name": "inventories_member_fk",
+          "tableFrom": "inventories",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "inventories_map_id_user_id_item_id_pk": {
+          "name": "inventories_map_id_user_id_item_id_pk",
+          "columns": ["map_id", "user_id", "item_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "inventories_quantity_nonnegative": {
+          "name": "inventories_quantity_nonnegative",
+          "value": "\"inventories\".\"quantity\" >= 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.invite_codes": {
@@ -988,6 +1315,114 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.resource_ledger": {
+      "name": "resource_ledger",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_id": {
+          "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delta": {
+          "name": "delta",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ref_id": {
+          "name": "ref_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "resource_ledger_map_id_user_id_idx": {
+          "name": "resource_ledger_map_id_user_id_idx",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "resource_ledger_map_id_maps_id_fk": {
+          "name": "resource_ledger_map_id_maps_id_fk",
+          "tableFrom": "resource_ledger",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "resource_ledger_member_fk": {
+          "name": "resource_ledger_member_fk",
+          "tableFrom": "resource_ledger",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "resource_ledger_delta_nonzero": {
+          "name": "resource_ledger_delta_nonzero",
+          "value": "\"resource_ledger\".\"delta\" <> 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.sessions": {
       "name": "sessions",
       "schema": "",
@@ -1422,6 +1857,11 @@
       "name": "battle_status",
       "schema": "public",
       "values": ["active", "finished", "no-contest"]
+    },
+    "public.gather_status": {
+      "name": "gather_status",
+      "schema": "public",
+      "values": ["active", "collected", "lost"]
     },
     "public.join_request_status": {
       "name": "join_request_status",

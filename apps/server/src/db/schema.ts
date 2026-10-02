@@ -412,6 +412,24 @@ export const idempotencyKeys = pgTable(
 );
 
 /**
+ * Each player's Keeper (design doc §23; issue #42): account-level, one row per
+ * player, written when they pick one after signup and whenever they change
+ * it. Ids are from the shared Keeper data (`KEEPER_DATA`), checked by the
+ * keepers service. Clothing and outfits get their own tables with #43.
+ */
+export const keepers = pgTable('keepers', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  base: text('base').notNull(),
+  hairColor: text('hair_color').notNull(),
+  eyeColor: text('eye_color').notNull(),
+  outfit: text('outfit').notNull(),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+  updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+});
+
+/**
  * Inventory balances (#17, design doc §12, tech spec §4): how many of each
  * item a player has on a map. `item_id` is a resource or crafted-item id
  * from the shared resource table (`timber`, `heart-charm`). A missing row
