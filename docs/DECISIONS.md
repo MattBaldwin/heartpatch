@@ -80,3 +80,9 @@ _Proposed in PR #55; the project owner confirms on merge._
 - **Bit-identical maths on every engine** (owner-approved): outcome maths uses only `+ − × ÷` and `Math.floor/min/max/abs` (correctly rounded IEEE 754, no FMA), never `Math.pow`, `**`, exp, log or trig, and floors to integers before state. So V8 (server) and JavaScriptCore (Safari previews) agree to the bit.
 - **Every battle carries a content hash** (owner-approved): a fingerprint of the outcome-affecting data and rules. Steps and `replayBattleRecord` refuse other content, and the stored record keeps the result and resolved log, so battles stay explainable after re-tuning.
 - **`rng` and `seed` never leave the server.** Anyone holding them can predict every future roll. Send clients `clientBattleView(state)`, which leaves out the RNG state.
+
+## 2026-10-02 — Usage, models and supervisor handoff
+
+- **Models (owner decision):** build sessions that write code and reviewers on code PRs use the strongest model (Opus). Docs-only reviews, drift audits and simple content/docs work use **Sonnet 5.5**. *Why:* code reviews have caught real bugs every round; the rest is cheaper without losing much.
+- **Fresh supervisor (owner decision):** when the supervisor's context gets large, a new supervisor session takes over with a compact handoff. *Why:* every wake re-reads the whole context, so a long-running supervisor becomes the biggest cost. The process lives in `docs/COORDINATOR.md` so it survives the handoff.
+- **Review loops are capped at 4 rounds** before escalating to the supervisor, and the supervisor avoids mid-flight scope changes unless they're blocking contracts.
