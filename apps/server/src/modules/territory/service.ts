@@ -5,12 +5,15 @@ import {
   deriveSeed,
   GAME_DATA,
   landCount,
+  RAID_RULES,
+  stancePolicy,
   TERRITORY_RULES,
   tileBattleKindFor,
   type AttackTargetProblem,
   type AttackTileRequest,
   type BattleSideSetup,
   type BattleSquishySetup,
+  type DefenseStance,
   type PublicUser,
   type SetDefendersRequest,
   type Species,
@@ -115,18 +118,20 @@ export function defaultGuardianData(): GuardianData {
 
 /**
  * Who plays the defending side of a tile battle, and with whom. The owner's
- * squishies on watch when there are any, else the tile's own guardians. In
- * Phase 1 the engine's opponent AI plays them (`balanced` for squishies on
- * watch, `guardian` for guardians); #16 swaps in the owner's defense stance
- * here, and nowhere else.
+ * squishies on watch when there are any, else the tile's own guardians. The
+ * server's AI always plays it, so the owner never has to be online (design
+ * doc §3, §6 "offline defense"): squishies on watch follow the owner's
+ * defense stance (#16), guardians the `guardian` policy. The policy is stored
+ * in the battle's setup, so a replay needs no lookup.
  */
 export function defendingSide(
   defenders: readonly DefenderRow[],
   guardians: readonly BattleSquishySetup[],
+  stance: DefenseStance = RAID_RULES.defaultStance,
 ): BattleSideSetup {
   if (defenders.length > 0) {
     return {
-      controller: { type: 'ai', policy: 'balanced' },
+      controller: { type: 'ai', policy: stancePolicy(stance) },
       squishies: defenders.map(({ id, speciesId, level, element, feeling }) => ({
         id,
         speciesId,
@@ -234,9 +239,11 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         defenders = await repo.listDefenders(tile.id, defenderId);
       }
 
+      // The defender's stance, read under their member lock (#16).
       const side = defendingSide(
         defenders,
         defenders.length === 0 ? await guardiansOf(tx, map, tile, at) : [],
+        defender?.defenseStance,
       );
       if (side.squishies.length === 0) throw new AppError('CONFLICT', MESSAGES.nobodyGuards);
       const kind = tileBattleKindFor(tile);

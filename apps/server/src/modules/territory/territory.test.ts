@@ -585,7 +585,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(res.statusCode, res.body).toBe(201);
       const battle = battleOf(res);
       expect(battle.kind).toBe('rival-tile');
-      // Phase 1: the engine's opponent AI plays the squishies on watch (#16 adds stances).
+      // The server's AI plays the squishies on watch, in the owner's stance (#16; Balanced by default).
       expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'balanced' });
       expect(battle.view.sides.b.squishies.map((s) => s.id)).toEqual([buddy.id]);
       expect((await attacksOf(mapId))[0]).toMatchObject({ defenderUserId: rival.id });

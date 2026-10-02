@@ -1,4 +1,5 @@
 import {
+  type DefenseStance,
   ElementIdSchema,
   FeelingIdSchema,
   type ElementId,
@@ -65,10 +66,14 @@ export interface TerritoryRepo {
   lockTile: (tileId: string) => Promise<TerritoryTileRow | null>;
   /**
    * Row-locks a member's row (`for no key update`, like the seats lock) until
-   * commit and returns when they joined, or null if they're not active.
-   * Challenges against one player take it, so the daily loss cap can't race.
+   * commit and returns when they joined and their defense stance (#16), or
+   * null if they're not active. Challenges against one player take it, so the
+   * daily loss cap can't race.
    */
-  lockMember: (mapId: string, userId: string) => Promise<{ joinedAt: Date } | null>;
+  lockMember: (
+    mapId: string,
+    userId: string,
+  ) => Promise<{ joinedAt: Date; defenseStance: DefenseStance } | null>;
   joinedAt: (mapId: string, userId: string) => Promise<Date | null>;
 
   /** Tile battles the player started on `date` (map-local), not counting no-contests. */
@@ -197,7 +202,7 @@ function queries(db: Executor): TerritoryRepo {
 
     lockMember: async (mapId, userId) => {
       const [row] = await db
-        .select({ joinedAt: mapMembers.joinedAt })
+        .select({ joinedAt: mapMembers.joinedAt, defenseStance: mapMembers.defenseStance })
         .from(mapMembers)
         .where(
           and(

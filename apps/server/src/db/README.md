@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), and `species_seen` plus the `battles.spawn_*` columns (#14). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), and `raids` plus `map_members.defense_stance` (#16). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -103,6 +103,7 @@ One active code per user: a partial unique index on `user_id` where `used_at is 
 | `status` | enum `map_member_status` | `active` \| `removed` |
 | `home_slot` | smallint, null | Which home base (`tiles.home_slot`) is theirs. Unique per map among active members. A removed member keeps the old value but holds no slot |
 | `joined_at` | timestamptz | |
+| `defense_stance` | enum `defense_stance`, default `'balanced'` | How their squishies on watch play when challenged (#16): `aggressive` \| `defensive` \| `balanced` (UI: Bold, Careful, Balanced). Read under the member lock in a challenge's start transaction |
 
 The 2–4 players-per-map limit is a game rule, enforced by the maps service under a row lock (apps/server/README.md, "Maps").
 
@@ -204,6 +205,23 @@ Squishies standing watch on their owner's tiles (#15, decision C), up to `TERRIT
 | `assigned_at` | timestamptz | |
 
 Rows only count while the squishy's owner still owns the tile and it isn't in the Hollow. A capture and `releaseTiles` (leaving or removal) delete the tile's rows: the squishies go home.
+
+### `raids`
+The raid log (#16): one row per finished challenge on a player's land (a `rival-tile` battle), written by the `raid-log` event consumer from `battle.ended` (tech spec §7 "Event consumers"). The defender's report lists them and marks them seen.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `battle_id` | uuid → battles | Unique (the consumer's insert is idempotent on it). Cascade delete. The replay reads the battle |
+| `tile_id` | uuid → tiles | Cascade delete |
+| `attacker_user_id` | uuid | |
+| `defender_user_id` | uuid | FK `(map_id, defender_user_id)` → `map_members`. Indexed `(map_id, defender_user_id, resolved_at)` |
+| `outcome` | enum `raid_outcome` | From the defender's side: `held` (won, or the challenger left) \| `tie` \| `lost` (lost the showdown, land didn't move) \| `taken` \| `no-contest` |
+| `reason` | text | `battle.ended`'s reason (`tuckered-out`, `forfeit`, `turn-limit`, `no-contest`) |
+| `stance` | enum `defense_stance`, null | The style the defenders played with; null when the land's guardians stood in |
+| `resolved_at` | timestamptz | When the battle ended |
+| `seen_at` | timestamptz, null | When the defender saw it in their report |
 
 ### `species_seen`
 | Column | Type | Notes |

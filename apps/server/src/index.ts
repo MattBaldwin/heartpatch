@@ -3,6 +3,7 @@ import { loadServerConfig } from './config.js';
 import { createDbClient, dbReadinessCheck } from './db/client.js';
 import { startJobs } from './jobs/boss.js';
 import { createClock } from './lib/time.js';
+import { createRaidsConsumer } from './modules/raids/consumer.js';
 import { createTutorialConsumer } from './modules/tutorial/consumer.js';
 
 const config = loadServerConfig();
@@ -18,7 +19,7 @@ const app = await buildApp({
 const jobs = await startJobs({
   connectionString: config.DATABASE_URL,
   db: db.db,
-  consumers: [createTutorialConsumer({ clock })],
+  consumers: [createTutorialConsumer({ clock }), createRaidsConsumer()],
   logger: app.log,
   ...(app.wsHub ? { publish: app.wsHub.publish } : {}),
 });
