@@ -14,6 +14,7 @@ const tile = (extra: Partial<PublicTile>): PublicTile => ({
   ownerUserId: null,
   nodeResource: null,
   homeSlot: null,
+  gathering: null,
   ...extra,
 });
 

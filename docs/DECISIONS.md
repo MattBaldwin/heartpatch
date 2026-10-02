@@ -203,6 +203,19 @@ _Proposed in the #42 PR; the project owner confirms on merge._
 - **Drawn like squishies, cheaper:** `KeeperField` shares one mesh per primitive across every Keeper (thin instances: five meshes plus shadows, however many Keepers) and reuses the squishies' squash shader for cheers. Keepers never breathe, so an idle Keeper never wakes the renderer; they hop or wince only on battle log events. Keepers lean back a little so their faces show under the steep map camera.
 - **Where they stand now:** the map shows each member's Keeper beside their Heart Seed (low detail, no shadow); battles show the player's Keeper at their squishy's back, nearer the camera and off to the side, clear of the nameplates. Home-base idling and wandering arrives with home base (#18); profile cards and the close-up view's edge-of-frame Keeper come with the screens that show them.
 
+## 2026-10-02 — Resources, gathering and inventory (#17)
+
+_Proposed in the #17 PR; the project owner confirms on merge._
+
+- **The inventory contract is small, transactional and ledgered** (coordinator-set for #17 and #14, following tech spec §4): balances in `inventories (map_id, user_id, item_id, quantity ≥ 0)`, where a missing row is 0, and every change in `resource_ledger` with a reason and the id of what caused it. Other modules move items only with `grantItems(tx, owner, items, reason, refId?)` / `consumeItems(…)` inside their own transaction; `reason` is the shared `ItemChangeReason` union, which later issues extend. `consumeItems` locks the rows in id order and throws `CONFLICT` ("You need 1 more Heart Charm first!") with nothing changed if anything is short. Tests reconcile balances against ledger sums. *Why:* captures, buildings and trades must pay and get paid in the same commit as the change (CLAUDE.md rule 7), and every change needs a reason (tech spec §4).
+- **Gathers are `gather_jobs` rows and announce themselves** (coordinator-approved): `gather.started` carries the tile and ready time (never the yield), so every member sees "gathering here" live; `resource.gathered` clears it.
+- **A gather's yield is fixed when it starts.** The node's quantity plus any in-season extras is stored on the gather, and a gather started in season finishes after the season ends. *Why:* collecting a little late must never change what a kid gets.
+- **Witch Dust is a Halloween bonus on Emberwood and Pumpkin gathers** (`gather.extras`, `// TUNE:`; coordinator-approved), because map generation places no Witch Dust nodes. A Witch Dust node or terrain can replace it later as a data change.
+- **The node belongs to the tile's owner.** If a tile changes hands mid-gather, the old owner can't collect it, and the new owner's first gather there marks it `lost`. Only the current owner's gather shows as "gathering here" on the public tile.
+- **One craft at a time per player per map**, inputs used up front (`// TUNE:` if kids want a queue). Seasonal recipes only start in season; leftover seasonal items stay as keepsakes (design doc §15).
+- **The client counts down on the server's clock.** Every inventory reply carries `now`, so a phone with the wrong time, or a dev server on a Halloween date, shows the right time left.
+- **The Bag button sits bottom left above "My patches"** and steps aside while the tile panel is open; the panel's own button gathers and collects. Not on the Tutorial Glade yet (#24 adds the gather step).
+
 ## 2026-10-02 — Wild squishies and capture (#14)
 
 _Proposed in the #14 PR; the project owner confirms on merge._

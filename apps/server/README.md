@@ -110,10 +110,46 @@ PvE battles (design doc §6; tech spec §8; DECISIONS "Battle engine (#11)") liv
 - The team is the player's active squishies on the map, strongest first, up to `rules.teamSize` (team picking is a later feature). No squishy → `CONFLICT` "You need a squishy friend first!".
 - `BattleRuleError` from the engine (an unknown move, a swap to an empty slot, acting in the wrong phase) becomes `CONFLICT` with a kid-readable message; the client refetches the battle on `CONFLICT`.
 - **Content re-tuned mid-battle:** if the stored `content_hash` isn't today's, the battle ends as `no-contest` on the next read or action: nothing is won or lost, no XP, `battle.ended` with `reason: 'no-contest'`. Wild battles cost no attempt; a kind that does (tile guardians, #15) refunds it in `endNoContest`.
-- **Capture (#14):** `{ type: 'capture' }` offers a Heart Charm to the wild squishy (wild battles only, `CAPTURABLE_BATTLE_KINDS`). In one transaction: one `heart-charm` through the `items` port (#17's `consumeItems`; `CONFLICT` when out, nothing changes), the engine's capture turn (one roll on the battle RNG; `sure` on tutorial maps), and on a catch the new `squishies` row, `species_seen.first_caught_at`, `battle.ended` (`reason: 'captured'`) and `squishy.captured`. Starting a battle records the opponent's species as seen.
+- **Capture (#14):** `{ type: 'capture' }` offers a Heart Charm to the wild squishy (wild battles only, `CAPTURABLE_BATTLE_KINDS`). In one transaction: one `heart-charm` through #17's `consumeItems` (reason `capture`, ledgered against the battle; `CONFLICT` when out, nothing changes), the engine's capture turn (one roll on the battle RNG; `sure` on tutorial maps), and on a catch the new `squishies` row, `species_seen.first_caught_at`, `battle.ended` (`reason: 'captured'`) and `squishy.captured`. Starting a battle records the opponent's species as seen.
 - **Tutorial maps:** `gameplayOverrides(map.kind)` scripts the opponent's AI policy and level (tech spec §7).
 - **XP:** on a finished battle the player's squishies get the engine's base battle XP (`squishies.xp`), under a row lock, in the same transaction as the result and the `battle.ended` event. Care and habitat multipliers (#19) and levelling (the XP curve) come with their issues.
 - Events: `battle.started` and `battle.ended` (shared registry); `wsHub.publish` after commit.
+
+## Inventory and gathering
+
+Resources, gathering and crafting (design doc §12, §15; issue #17) live in `src/modules/inventory` and `src/modules/gathering`. Inventory is per player per map (`inventories`, a missing row is 0), and every change also writes a `resource_ledger` row with its reason (tech spec §4). Timers are timestamps (CLAUDE.md rule 4): a gather or craft stores `started_at` and `ready_at`, and collecting checks the clock then, so it finishes while the player is logged out and nothing ticks in between.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/inventory` | → `{ items, gathers, crafts, seasons, now }`: the bag, my gathers on land I still own, my craft on the go, the season ids on today (map-local date), and the server's clock, which the client counts down on |
+| `POST /api/v1/maps/:mapId/gathers` | `{ q, r }` → 201 `{ gather, now }` (a `gather_jobs` row) and `gather.started`. Only on a tile I own with a node (`FORBIDDEN` / `CONFLICT` otherwise), one active gather per node, seasonal nodes only in season. Tutorial maps use `gameplayOverrides(map.kind).gatherSeconds` |
+| `POST /api/v1/maps/:mapId/gathers/:gatherId/collect` | → `{ granted, items, now }` once `ready_at` has passed; grants and appends `resource.gathered` in one transaction |
+| `POST /api/v1/maps/:mapId/crafts` | `{ recipeId }` → 201 `{ craft, items, now }`. Uses the inputs up front (`consumeItems`); one craft at a time; seasonal recipes only in season (leftover seasonal items stay as keepsakes) |
+| `POST /api/v1/maps/:mapId/crafts/:craftId/collect` | → `{ granted, items, now }`; appends `item.crafted` |
+| `POST /api/v1/maps/:mapId/dev/items` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): `{ items: { "heart-charm": 3 } }` → 201 `{ items }` |
+
+Mutating routes take an `Idempotency-Key` (below), so a retried collect can't grant twice.
+
+**For other modules** (captures spend Heart Charms, buildings spend Timber): move items only with these, inside your own transaction, before your game event:
+
+```ts
+import { consumeItems, grantItems } from '../inventory/service.js';
+
+await repo.transaction(async (repo, tx) => {
+  // Locks the rows; CONFLICT "You need 1 more Heart Charm first!" and no change if short.
+  await consumeItems(tx, { mapId, userId }, { 'heart-charm': 1 }, 'capture', battleId);
+  // Unknown ids → VALIDATION_FAILED.
+  await grantItems(tx, { mapId, userId }, { timber: 5 }, 'capture', battleId);
+  await repo.appendEvent(...); // last write
+});
+```
+
+`reason` is a shared `ItemChangeReason` (add yours to `ItemChangeReasonSchema`); the optional last argument is the id of what caused it, stored as the ledger row's `ref_id`.
+
+**Rules of the service:**
+- A gather's yield is decided when it starts (`gatherYield` in shared `gathering/`): the node's `gather.quantity`, plus `extras` whose season is on (Witch Dust with Emberwood and Pumpkins around Halloween). A gather started in season finishes even if the season ends meanwhile.
+- If a tile changes hands, the old owner can't collect its gather, and the new owner's first gather there marks it `lost`. The map view's `PublicTile.gathering` (`{ readyAt }`) only shows the current owner's gather.
+- Events: `gather.started` (public: who, where and `readyAt`; the client shows "gathering here"), `resource.gathered` (public: who and where, not how much) and `item.crafted` (who and which recipe).
 
 ### Idempotency keys
 

@@ -2,13 +2,16 @@ import { el } from '../ui/dom.js';
 import type { TileInfo } from './tile-info.js';
 
 // The tile info panel: a bottom sheet over the map (tech spec §6, DOM overlay).
-// Information only; actions like claiming arrive with their own issues, and
-// home bases never get one (design doc §11).
+// Information, plus an actions slot other features fill (gathering, #17).
+// Claiming arrives with its own issue, and home bases never offer it (design
+// doc §11).
 
 export interface TilePanel {
   show: (info: TileInfo) => void;
   hide: () => void;
   readonly open: boolean;
+  /** Where features draw their buttons for the tile on show. */
+  readonly actions: HTMLElement;
 }
 
 export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePanel {
@@ -16,6 +19,7 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
   const owner = el('p', { class: 'tile-panel-owner', 'data-testid': 'tile-panel-owner' });
   const about = el('p', { class: 'tile-panel-about' });
   const resource = el('p', { class: 'tile-panel-resource' });
+  const actions = el('div', { class: 'tile-panel-actions', 'data-testid': 'tile-panel-actions' });
   const close = el(
     'button',
     { type: 'button', class: 'tile-panel-close', 'aria-label': 'Close' },
@@ -34,6 +38,7 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
     owner,
     about,
     resource,
+    actions,
   );
   panel.hidden = true;
   root.append(panel);
@@ -54,5 +59,6 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
     get open() {
       return !panel.hidden;
     },
+    actions,
   };
 }

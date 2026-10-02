@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   BATTLE_RULES,
+  BattleResponseSchema,
   CatalogResponseSchema,
   createBattleContent,
   GAME_DATA,
@@ -25,14 +26,14 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
-import { createDbClient, type Database, type DbClient, type Executor } from '../../db/client.js';
+import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import { keepers, sessions, users } from '../../db/schema.js';
-import { AppError } from '../../lib/errors.js';
 import { createClock, spawnWindowId } from '../../lib/time.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { createBattlesService, type ItemsPort } from '../battles/service.js';
+import { createBattlesService } from '../battles/service.js';
+import { grantItems } from '../inventory/service.js';
 import { createSpawnsService, defaultSpawnData } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -77,15 +78,9 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
   const clock = new Date('2026-10-02T18:00:00Z');
   let counter = 0;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     client = createDbClient(url!, { max: 10 });
     db = client.db;
-    // Stands in for #17's inventory_items until it merges: a charm count per
-    // player, changed on the caller's transaction like `consumeItems`.
-    await db.execute(`
-      create table if not exists test_heart_charms (
-        map_id uuid not null, user_id uuid not null, quantity integer not null check (quantity >= 0),
-        primary key (map_id, user_id))`);
   });
   afterAll(() => client.close());
   afterEach(async () => {
@@ -94,26 +89,18 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
     clock.setTime(Date.parse('2026-10-02T18:00:00Z'));
   });
 
-  /** `consumeItems` per the inventory contract: locks, refuses when short, changes nothing then. */
-  const items: ItemsPort = {
-    consume: async (tx: Executor, owner, wanted, reason) => {
-      expect(wanted).toEqual({ 'heart-charm': 1 });
-      expect(reason).toBe('capture');
-      const rows = await tx.execute(`
-        update test_heart_charms set quantity = quantity - 1
-        where map_id = ${id(owner.mapId)} and user_id = ${id(owner.userId)} and quantity >= 1
-        returning quantity`);
-      if (rows.length === 0) throw new AppError('CONFLICT', "You're out of Heart Charms!");
-    },
+  /** Heart Charms into the player's bag (#17's inventory, as the dev route does). */
+  const giveCharms = async (mapId: string, who: PublicUser, quantity: number) => {
+    if (quantity > 0) {
+      await grantItems(db, { mapId, userId: who.id }, { 'heart-charm': quantity }, 'dev-grant');
+    }
   };
-  const giveCharms = (mapId: string, who: PublicUser, quantity: number) =>
-    db.execute(`
-      insert into test_heart_charms values (${id(mapId)}, ${id(who.id)}, ${String(quantity)})
-      on conflict (map_id, user_id) do update set quantity = excluded.quantity`);
   const charmsLeft = async (mapId: string, who: PublicUser) => {
-    const rows = await db.execute(`
-      select quantity from test_heart_charms where map_id = ${id(mapId)} and user_id = ${id(who.id)}`);
-    return Number(rows[0]?.['quantity'] ?? 0);
+    const row = await db.query.inventories.findFirst({
+      where: (t, { and, eq }) =>
+        and(eq(t.mapId, mapId), eq(t.userId, who.id), eq(t.itemId, 'heart-charm')),
+    });
+    return row?.quantity ?? 0;
   };
 
   async function start(env: Record<string, string> = {}): Promise<FastifyInstance> {
@@ -128,7 +115,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
   }
 
   /** Services on the test clock: spawns with `data`, battles with `rules`. */
-  function services(options: { data?: SpawnData; rules?: BattleRules; withItems?: boolean } = {}) {
+  function services(options: { data?: SpawnData; rules?: BattleRules } = {}) {
     const spawns = createSpawnsService({
       db,
       clock: () => clock,
@@ -139,7 +126,6 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       clock: () => clock,
       content: contentWith(options.rules ?? captureRules(100)),
       findWildEncounter: spawns.findWildEncounter,
-      ...(options.withItems === false ? {} : { items }),
     });
     return { spawns, battles };
   }
@@ -165,11 +151,12 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
     path: string,
     who: Player | null,
     payload?: object,
+    headers: Record<string, string> = {},
   ) {
     return server.inject({
       method,
       url: `/api/v1${path}`,
-      headers: HEADERS,
+      headers: { ...HEADERS, ...headers },
       ...(who ? { cookies: { [SESSION_COOKIE]: who.token } } : {}),
       ...(payload ? { payload } : {}),
     });
@@ -368,6 +355,13 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       });
       expect(done.view.log.at(-2)).toMatchObject({ type: 'capture', side: 'b', caught: true });
       expect(await charmsLeft(mapId, kid)).toBe(1);
+      // The charm is ledgered against this battle (#17's resource_ledger).
+      const spent = await db.query.resourceLedger.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.reason, 'capture')),
+      });
+      expect(spent).toEqual([
+        expect.objectContaining({ itemId: 'heart-charm', delta: -1, refId: battle.id }),
+      ]);
 
       // The dev squishy is a level-40 Moonpuff too; the new friend is the other row.
       const mine = await squishiesOf(mapId, kid);
@@ -446,7 +440,11 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const { battles } = services();
       await giveCharms(mapId, kid, 0);
       const { battle } = await battles.startWild(kid, mapId);
-      await expect(capture(battles, kid, battle)).rejects.toMatchObject({ code: 'CONFLICT' });
+      // #17's kid-readable line ("You need 1 more Heart Charm first!").
+      await expect(capture(battles, kid, battle)).rejects.toMatchObject({
+        code: 'CONFLICT',
+        message: expect.stringMatching(/Heart Charm/) as unknown,
+      });
       expect(await battles.get(kid, battle.id)).toEqual(battle);
       expect(await squishiesOf(mapId, kid)).toHaveLength(1);
 
@@ -462,12 +460,6 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
         where id = ${id(battle.id)}`);
       await expect(capture(battles, kid, battle)).rejects.toMatchObject({ code: 'CONFLICT' });
       expect(await charmsLeft(mapId, kid)).toBe(1);
-
-      const noItems = services({ withItems: false }).battles;
-      await expect(capture(noItems, kid, battle)).rejects.toMatchObject({
-        code: 'CONFLICT',
-        message: expect.stringMatching(/Heart Charms/) as unknown,
-      });
     });
 
     it('always works on the tutorial map (tutorialOverrides.captureAlwaysSucceeds)', async () => {
@@ -483,6 +475,41 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const { battle } = await battles.startWild(kid, mapId);
       const done = await capture(battles, kid, battle);
       expect(done.view.phase).toMatchObject({ type: 'over', result: { reason: 'captured' } });
+    });
+  });
+
+  describe('capture over HTTP (the real app, #17 inventory)', () => {
+    it('spends one Heart Charm per try, and a retried submit replays instead of spending another', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patchWithSquishy(server, kid);
+      const granted = await call(server, 'POST', `/maps/${mapId}/dev/items`, kid, {
+        items: { 'heart-charm': 3 },
+      });
+      expect(granted.statusCode, granted.body).toBe(201);
+      const fight = await call(server, 'POST', `/maps/${mapId}/dev/battles`, kid, {});
+      const battle = BattleResponseSchema.parse(fight.json()).battle;
+
+      const submit = () =>
+        call(
+          server,
+          'POST',
+          `/battles/${battle.id}/actions`,
+          kid,
+          { action: { type: 'capture' }, turn: battle.view.turn },
+          { 'idempotency-key': 'charm-try-1' },
+        );
+      const first = await submit();
+      expect(first.statusCode, first.body).toBe(200);
+      const after = BattleResponseSchema.parse(first.json()).battle;
+      expect(after.view.log.some((e) => e.type === 'capture')).toBe(true);
+      expect(await charmsLeft(mapId, kid)).toBe(2);
+
+      const retry = await submit();
+      expect(retry.statusCode).toBe(200);
+      expect(retry.headers['idempotent-replayed']).toBe('true');
+      expect(retry.json()).toEqual(first.json());
+      expect(await charmsLeft(mapId, kid)).toBe(2);
     });
   });
 

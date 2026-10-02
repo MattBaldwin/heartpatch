@@ -143,7 +143,26 @@ export const GameDataSchema = z
           'seasonal resources need a season; others must not have one',
         );
       }
+      if (r.gather && r.kind === 'crafted') {
+        report(['resources', i, 'gather'], 'crafted things come from recipes, not nodes');
+      }
+      r.gather?.extras?.forEach((extra, j) => {
+        checkRef(
+          resources,
+          'resource',
+          extra.resource,
+          ['resources', i, 'gather', 'extras', j],
+          report,
+        );
+      });
     });
+    // Every resource a map can put on a node must know how it gathers.
+    const gatherable = new Set(data.resources.filter((r) => r.gather).map((r) => r.id));
+    const checkGatherable = (id: string, path: Path) => {
+      if (resources.has(id) && !gatherable.has(id)) {
+        report(path, `node resource "${id}" has no gather settings`);
+      }
+    };
 
     data.recipes.forEach((r, i) => {
       checkRef(seasons, 'season', r.season, ['recipes', i, 'season'], report);
@@ -174,6 +193,7 @@ export const GameDataSchema = z
     data.terrains.forEach((t, i) => {
       t.nodeResources.forEach((id, j) => {
         checkRef(resources, 'resource', id, ['terrains', i, 'nodeResources', j], report);
+        checkGatherable(id, ['terrains', i, 'nodeResources', j]);
       });
     });
     if (!data.terrains.some((t) => t.weight > 0)) {
@@ -190,6 +210,7 @@ export const GameDataSchema = z
     }
     mapGen.homeRingNodes.forEach((id, i) => {
       checkRef(resources, 'resource', id, ['mapGen', 'homeRingNodes', i], report);
+      checkGatherable(id, ['mapGen', 'homeRingNodes', i]);
     });
     const playerCounts = new Set<number>();
     mapGen.layouts.forEach((layout, i) => {

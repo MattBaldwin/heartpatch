@@ -4,6 +4,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
+  gatherJobs,
   inviteCodes,
   joinRequests,
   keepers,
@@ -296,8 +297,8 @@ function queries(db: Executor): MapsRepo {
       return changed.length > 0;
     },
 
-    listTiles: async (mapId) =>
-      db
+    listTiles: async (mapId) => {
+      const rows = await db
         .select({
           q: tiles.q,
           r: tiles.r,
@@ -305,10 +306,25 @@ function queries(db: Executor): MapsRepo {
           ownerUserId: tiles.ownerUserId,
           nodeResource: tiles.nodeResource,
           homeSlot: tiles.homeSlot,
+          gatheringReadyAt: gatherJobs.readyAt,
         })
         .from(tiles)
+        // "Gathering here" (#17): only the tile owner's own gather counts.
+        .leftJoin(
+          gatherJobs,
+          and(
+            eq(gatherJobs.tileId, tiles.id),
+            eq(gatherJobs.status, 'active'),
+            eq(gatherJobs.userId, tiles.ownerUserId),
+          ),
+        )
         .where(eq(tiles.mapId, mapId))
-        .orderBy(asc(tiles.q), asc(tiles.r)),
+        .orderBy(asc(tiles.q), asc(tiles.r));
+      return rows.map(({ gatheringReadyAt, ...tile }) => ({
+        ...tile,
+        gathering: gatheringReadyAt ? { readyAt: gatheringReadyAt.toISOString() } : null,
+      }));
+    },
 
     claimHomeTiles: async (mapId, homeSlot, userId) =>
       db

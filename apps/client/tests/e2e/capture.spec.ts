@@ -3,8 +3,10 @@ import { newPlayer, uniqueName } from './players.js';
 
 /**
  * Wild squishies and the catalog on an iPhone (issue #14): find a wild
- * squishy with the real button, offer a Heart Charm, and see it in the
- * catalog. Checked through the dev hook's signals, never pixels.
+ * squishy with the real button, offer a Heart Charm from the bag (#17), and
+ * see it in the catalog. Checked through the dev hook's signals and the API,
+ * never pixels. Whether one try befriends it is up to the battle's dice (the
+ * server tests pin both outcomes), so this checks whichever happened.
  */
 
 interface BattleDebug {
@@ -24,13 +26,41 @@ interface CatalogDebug {
   names: string[];
 }
 type Hook = {
-  __heartpatch?: { battle?(): BattleDebug | null; catalog?(): CatalogDebug | null };
+  __heartpatch?: {
+    battle?(): BattleDebug | null;
+    catalog?(): CatalogDebug | null;
+    map?(): { id: string } | null;
+  };
 };
 
 const battleState = (page: Page) =>
   page.evaluate(() => (window as unknown as Hook).__heartpatch?.battle?.() ?? null);
 const catalogState = (page: Page) =>
   page.evaluate(() => (window as unknown as Hook).__heartpatch?.catalog?.() ?? null);
+
+/** A JSON API call from the page (its session cookie); returns the status. */
+async function api(page: Page, method: 'GET' | 'POST', path: string, body?: object) {
+  return page.evaluate(
+    async ({ method, path, body }) => {
+      const res = await fetch(`/api/v1${path}`, {
+        method,
+        headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      return res.status;
+    },
+    { method, path, body },
+  );
+}
+
+/** Heart Charms in the player's bag on this patch (#17's inventory). */
+async function charmsLeft(page: Page, mapId: string): Promise<number> {
+  return page.evaluate(async (id) => {
+    const res = await fetch(`/api/v1/maps/${id}/inventory`);
+    const body = (await res.json()) as { items: Record<string, number> };
+    return body.items['heart-charm'] ?? 0;
+  }, mapId);
+}
 
 async function settled(page: Page): Promise<BattleDebug> {
   await expect
@@ -54,6 +84,11 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await lobby.getByRole('button', { name: 'Visit patch' }).tap();
   await expect(page.getByTestId('map-hud')).toContainText('Finder Patch');
 
+  const mapIdOf = () =>
+    page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.()?.id ?? '');
+  await expect.poll(mapIdOf).not.toBe('');
+  const mapId = await mapIdOf();
+
   // A hint, never a species: how many wild squishies are about.
   const note = page.locator('.battle-entry-note');
   await expect(note).toContainText(/nearby/);
@@ -76,26 +111,49 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   const start = await settled(page);
   expect(start).toMatchObject({ status: 'active', turn: 0 });
 
-  // "Use Heart Charm" is there for a wild squishy. Heart Charms come from the
-  // inventory (#17); until then the server says so kindly and nothing changes.
+  // "Use Heart Charm" is there for a wild squishy. With an empty bag the
+  // server says so kindly (#17's line) and nothing changes.
   const charm = page.getByTestId('battle-capture');
   await expect(charm).toBeVisible();
   await charm.tap();
   await expect(hud.locator('.battle-problem')).toContainText('Heart Charm');
   expect(await settled(page)).toMatchObject({ id: start.id, status: 'active', turn: 0 });
 
-  // Back to the patch: the squishy it met is in the catalog now.
-  await hud.getByRole('button', { name: 'Back to patch' }).tap();
+  // Three charms in the bag (dev), then one try: the charm lands on the wild
+  // squishy and is spent, whatever it decides.
+  expect(await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { 'heart-charm': 3 } })).toBe(
+    201,
+  );
+  await charm.tap();
+  const tried = await settled(page);
+  expect(tried.turn).toBe(1);
+  await expect.poll(() => charmsLeft(page, mapId)).toBe(2);
+  const caught = tried.reason === 'captured';
+
+  if (caught) {
+    // A new friend: the result card says so and the catalog marks it.
+    await expect(page.getByTestId('battle-result')).toContainText('A new friend!');
+    await page.getByTestId('battle-done').tap();
+  } else {
+    expect(tried.status).toBe('active');
+    await hud.getByRole('button', { name: 'Back to patch' }).tap();
+  }
   await expect(hud).toBeHidden();
+
+  // Back on the patch: the squishy it met is in the catalog now.
   await page.getByTestId('catalog-open').tap();
-  await expect.poll(() => catalogState(page)).toMatchObject({ loading: false, seen: 1, caught: 0 });
+  await expect
+    .poll(() => catalogState(page))
+    .toMatchObject({ loading: false, seen: 1, caught: caught ? 1 : 0 });
   await expect(page.getByTestId('catalog-grid')).toContainText('Moonpuff');
-  await expect(page.getByTestId('catalog-grid')).toContainText('Seen');
-  // A battle can't open over the catalog: the resumed one waits for the button.
+  await expect(page.getByTestId('catalog-grid')).toContainText(caught ? 'Friend' : 'Seen');
   await page.getByTestId('catalog-close').tap();
-  await page.getByTestId('battle-entry').tap();
-  await expect(hud).toBeVisible();
-  expect((await settled(page)).id).toBe(start.id);
+  if (!caught) {
+    // The battle waited behind the catalog; the button resumes it.
+    await page.getByTestId('battle-entry').tap();
+    await expect(hud).toBeVisible();
+    expect((await settled(page)).id).toBe(start.id);
+  }
 
   expect(errors).toEqual([]);
 });

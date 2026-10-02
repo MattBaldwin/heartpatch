@@ -47,6 +47,8 @@ export * from './schemas/maps.js';
 export * from './schemas/tutorial.js';
 export * from './schemas/keepers.js';
 export * from './schemas/squishies.js';
+export * from './schemas/inventory.js';
+export * from './gathering/index.js';
 export * from './schemas/events.js';
 export * from './schemas/time.js';
 export * from './spawns/window.js';

@@ -3,6 +3,7 @@ import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
+import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
@@ -96,6 +97,9 @@ function showScene(build: SceneBuilder | null): void {
   }
 }
 
+// The bag and gathering (#17): a Bag button over a multiplayer map, and the
+// gather buttons in its tile panel.
+const inventory = createInventoryScreen({ root: document.body, devTools: import.meta.env.DEV });
 // Login and the lobby come first, so a renderer that can't start never hides them.
 const maps = createMapScreen({
   root: document.body,
@@ -104,8 +108,10 @@ const maps = createMapScreen({
   onClosed: (message) => {
     void battles.setMap(null);
     catalog.close();
+    void inventory.setMap(null);
     lobby.showMessage(message);
   },
+  tileActions: inventory.tileActions,
 });
 // The squishy catalog (#14) opens from the button by the battle entry.
 const catalog = createCatalogScreen({ root: document.body });
@@ -116,16 +122,18 @@ const tutorial = createTutorialScreen({
   root: document.body,
   glade: {
     open: async (mapId, stillWanted) => {
-      // The Glade is Sprout's: no battle button over it (battles come to the
-      // tutorial with its later steps).
+      // The Glade is Sprout's: no battle or bag button over it (they come to
+      // the tutorial with its later steps).
       await battles.setMap(null);
       catalog.close();
+      await inventory.setMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
       if (stillWanted()) lobby.hide();
     },
     close: () => {
       void battles.setMap(null);
+      void inventory.setMap(null);
       maps.close();
       lobby.show();
     },
@@ -149,14 +157,18 @@ const battles = createBattleScreen({
   onOpen: () => {
     maps.close();
     catalog.close();
+    void inventory.setMap(null);
     lobby.stepOut();
   },
   onClosed: (mapId) => {
-    maps.open(mapId).catch((err: unknown) => {
-      // No map to go back to: no battle button over the lobby either.
-      void battles.setMap(null);
-      lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
-    });
+    maps.open(mapId).then(
+      () => inventory.setMap(mapId),
+      (err: unknown) => {
+        // No map to go back to: no battle button over the lobby either.
+        void battles.setMap(null);
+        lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
+      },
+    );
     lobby.hide();
   },
   onCatalog: (mapId) => {
@@ -180,6 +192,7 @@ const keeper = createKeeperScreen({
   },
   onEditOpen: () => {
     void battles.setMap(null);
+    void inventory.setMap(null);
     maps.close();
     catalog.close();
     lobby.stepOut();
@@ -193,6 +206,7 @@ const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
     catalog.close();
     await maps.open(mapId);
+    void inventory.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
     // battle resumed here (after a refresh) must step it out again after that.
     void battles.setMap(mapId);
@@ -204,6 +218,7 @@ mountAuth(document.body, {
   onChange: (user) => {
     battles.setUser(user);
     catalog.setUser(user);
+    inventory.setUser(user);
     maps.setUser(user);
     // The lobby and tutorial wait for a Keeper (`onReady` above).
     keeper.setUser(user);
@@ -257,5 +272,6 @@ if (import.meta.env.DEV) {
     battle: () => battles.debug,
     keeper: () => keeper.debug,
     catalog: () => catalog.debug,
+    inventory: () => inventory.debug,
   };
 }

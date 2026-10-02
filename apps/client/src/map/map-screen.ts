@@ -1,4 +1,10 @@
-import { hexKey, type Hex, type MapView, type PublicUser } from '@heartpatch/shared';
+import {
+  hexKey,
+  type Hex,
+  type MapView,
+  type PublicTile,
+  type PublicUser,
+} from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import {
@@ -31,6 +37,16 @@ export interface MapScreenOptions {
   onClosed: (message: string) => void;
   api?: { view: (mapId: string) => Promise<MapView> };
   createWs?: (options: WsClientOptions) => WsClient;
+  /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
+  tileActions?: TileActions;
+}
+
+/** A feature's buttons in the tile panel. */
+export interface TileActions {
+  /** The panel shows `tile` (on tap, and again when the map redraws). */
+  show: (container: HTMLElement, tile: PublicTile) => void;
+  /** The panel closed. */
+  hide: () => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -90,6 +106,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = null;
     scene3d?.select(null);
     panel.hide();
+    options.tileActions?.hide();
     options.invalidate();
   };
   const panel = mountTilePanel(options.root, deselect);
@@ -103,6 +120,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = h;
     scene3d?.select(h);
     panel.show(describeTile(tile, (id) => state.member(id), user?.id ?? null));
+    options.tileActions?.show(panel.actions, tile);
     options.invalidate();
   };
 
@@ -168,6 +186,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     scene3d = null;
     selected = null;
     panel.hide();
+    options.tileActions?.hide();
     hud.hidden = true;
     options.showScene(null);
   }
@@ -184,6 +203,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       scene3d = null;
       selected = null;
       panel.hide();
+      options.tileActions?.hide();
       options.showScene(build);
       hudName.textContent = state.view.map.name;
       hud.hidden = false;

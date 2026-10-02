@@ -30,6 +30,7 @@ import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
 import type { Clock } from '../../lib/time.js';
+import { consumeItems } from '../inventory/service.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { DEV_WILD_LEVEL } from './limits.js';
@@ -66,20 +67,6 @@ export interface WildEncounterContext {
   now: Date;
   /** The tile the player picked, or null for the nearest wild squishy. */
   tile: Hex | null;
-}
-
-/**
- * Inventory (#17's module): `consumeItems` on the caller's transaction, with
- * the ledger reason. It locks the rows and throws `CONFLICT` with a
- * kid-readable line, changing nothing, if any item is short.
- */
-export interface ItemsPort {
-  consume: (
-    tx: Executor,
-    owner: { mapId: string; userId: string },
-    items: Record<string, number>,
-    reason: 'capture',
-  ) => Promise<void>;
 }
 
 /** What a capture try costs (design doc §6): one Heart Charm. */
@@ -130,8 +117,6 @@ export interface BattlesServiceOptions {
   content?: BattleContent;
   /** What's around to fight (#14). Without one, there are no wild squishies. */
   findWildEncounter?: (context: WildEncounterContext) => Promise<WildEncounter | null>;
-  /** Heart Charms for capture (#17's inventory). Without one, capture is refused. */
-  items?: ItemsPort;
 }
 
 // Kid-readable messages (style guide §6).
@@ -145,7 +130,6 @@ const MESSAGES = {
   badChoice: "That's not a move you can make right now. Try another!",
   unknownSpecies: "We don't know that squishy.",
   noCapture: "You can't use a Heart Charm here.",
-  noCharms: "Heart Charms aren't ready yet. Check back soon!",
 } as const;
 
 export function defaultBattleContent(): BattleContent {
@@ -483,16 +467,18 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         if (request.turn !== row.state.turn) throw new AppError('CONFLICT', MESSAGES.movedOn);
 
         if (request.action.type === 'capture') {
-          // Only wild squishies can be befriended. Each try uses a Heart Charm,
-          // in this transaction: a refused step gives it back.
+          // Only wild squishies can be befriended. Each try uses a Heart Charm
+          // (#17's inventory, ledgered against this battle), in this
+          // transaction: a refused step gives it back. Lock order: battle,
+          // inventory, squishies, then `maps` via appendEvent.
           if (!CAPTURABLE_BATTLE_KINDS.has(row.kind))
             throw new AppError('CONFLICT', MESSAGES.noCapture);
-          if (!options.items) throw new AppError('CONFLICT', MESSAGES.noCharms);
-          await options.items.consume(
+          await consumeItems(
             tx,
             { mapId: row.mapId, userId: row.playerUserId },
             { [HEART_CHARM]: 1 },
             'capture',
+            row.id,
           );
         }
         const sureCapture = gameplayOverrides(map.kind)?.captureAlwaysSucceeds === true;

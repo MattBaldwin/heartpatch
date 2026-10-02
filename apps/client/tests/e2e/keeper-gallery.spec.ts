@@ -55,12 +55,36 @@ const GOLDEN_CONFIG: KeeperConfig = {
 };
 const GOLDEN_HASH = '9efc3ab44341fc2c668962479b508477';
 
+/**
+ * Babylon's report of a shader variant that failed to link, which it then
+ * recovers from with a fallback: "Unable to compile effect:", its Uniforms /
+ * Attributes / Defines dump, an `Error:` whose compile log is empty (only a
+ * stack follows), and "Trying next fallback.". Headless WebKit in CI has no
+ * GPU and intermittently fails to link a variant this way (#17's CI on PR
+ * #75), so these lines alone aren't a failure. Every other console error or
+ * Babylon warning still is, and the tests' own assertions (every slot on
+ * every base, hashes) still catch a Keeper that didn't build.
+ */
+const SHADER_FALLBACK_NOISE = [
+  /^Unable to compile effect:/,
+  /^(Uniforms|Attributes|Defines):/,
+  /^Error: [\w$.<>]*@\S+:\d+:\d+/, // an empty compile log: the message is just a stack
+  /^Trying next fallback\.$/,
+];
+
+function isShaderFallbackNoise(text: string): boolean {
+  const body = text.replace(/^BJS - \[[\d:]+\]: /, '');
+  return text.startsWith('BJS -') && SHADER_FALLBACK_NOISE.some((re) => re.test(body));
+}
+
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => {
     const babylonWarning = msg.type() === 'warning' && msg.text().startsWith('BJS -');
-    if (msg.type() === 'error' || babylonWarning) errors.push(msg.text());
+    if ((msg.type() === 'error' || babylonWarning) && !isShaderFallbackNoise(msg.text())) {
+      errors.push(msg.text());
+    }
   });
   return errors;
 }
