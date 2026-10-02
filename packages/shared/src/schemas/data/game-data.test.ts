@@ -49,7 +49,7 @@ describe('checkGameData', () => {
       ];
     });
     expect(problems).toEqual([
-      'species["fixture-puddlepuff"].evolutions[0].into: unknown species "fixture-nope"',
+      'species["fixture-puddlepuff"].evolutions[0].into: unknown species "fixture-nope" (evolutions into secret forms go in SECRET_EVOLUTIONS)',
       'species["fixture-puddlepuff"].evolutions[1].into: a species cannot evolve into itself',
     ]);
   });

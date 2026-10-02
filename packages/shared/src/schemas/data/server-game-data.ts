@@ -1,9 +1,9 @@
 import { z } from 'zod';
+import { ContentIdSchema } from './common.js';
 import type { GameData } from './game-data.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Report } from './issues.js';
 import { MoveSchema } from './moves.js';
 import { SpawnTableSchema } from './spawn-tables.js';
-import { ContentIdSchema } from './common.js';
 import { SpeciesSchema } from './species.js';
 import { checkSpeciesVisual, visualRegistry } from './visuals.js';
 

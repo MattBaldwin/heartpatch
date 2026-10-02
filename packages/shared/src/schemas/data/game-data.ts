@@ -103,7 +103,12 @@ export const GameDataSchema = z
         }
       });
       s.evolutions.forEach((evo, j) => {
-        checkRef(species, 'species', evo.into, ['species', i, 'evolutions', j, 'into'], report);
+        if (!species.has(evo.into)) {
+          report(
+            ['species', i, 'evolutions', j, 'into'],
+            `unknown species "${evo.into}" (evolutions into secret forms go in SECRET_EVOLUTIONS)`,
+          );
+        }
         if (evo.into === s.id) {
           report(['species', i, 'evolutions', j, 'into'], 'a species cannot evolve into itself');
         }
