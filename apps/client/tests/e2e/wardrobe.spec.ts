@@ -27,6 +27,7 @@ type Hook = {
   __heartpatch?: {
     wardrobe?(): WardrobeDebug | null;
     map?(): { keepers: number; keepersWearing: string[][] } | null;
+    home?(): { scene: { keeperWearing: string[] } | null } | null;
   };
 };
 
@@ -219,6 +220,22 @@ test('other players see the outfit on the map, live', async ({ browser }) => {
   await expect
     .poll(async () => (await mapState(friend))?.keepersWearing, { timeout: 15_000 })
     .toContainEqual(['sunny-cap', 'puddle-boots']);
+
+  // The owner's Keeper wears it at home too (#18's home base).
+  await wardrobe(owner).getByTestId('wardrobe-done').tap();
+  const ownerLobby = owner.getByTestId('lobby');
+  await ownerLobby.getByRole('button', { name: /Fashion Patch/ }).tap();
+  await ownerLobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await owner.getByTestId('home-open').tap();
+  await expect
+    .poll(
+      () =>
+        owner.evaluate(
+          () => (window as unknown as Hook).__heartpatch?.home?.()?.scene?.keeperWearing ?? null,
+        ),
+      { timeout: 60_000 },
+    )
+    .toEqual(['sunny-cap', 'puddle-boots']);
   expect(errors).toEqual([]);
   await owner.context().close();
   await friend.context().close();

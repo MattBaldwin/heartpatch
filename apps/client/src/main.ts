@@ -115,6 +115,7 @@ const home = createHomeScreen({
   invalidate: () => stage?.invalidate(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
+  keeperWearing: () => wardrobe.wearing,
   onOpen: () => {
     maps.close();
     catalog.close();
@@ -262,6 +263,7 @@ const wardrobe = createWardrobeScreen({
   onOpen: () => {
     void battles.setMap(null);
     void inventory.setMap(null);
+    home.setMap(null);
     maps.close();
     catalog.close();
     lobby.stepOut();
