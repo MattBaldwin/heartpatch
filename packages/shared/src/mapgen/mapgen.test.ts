@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { stubRng } from '../../tests/fixtures/stub-rng.js';
 import { GAME_DATA } from '../data/index.js';
+import { hashString } from '../rng/index.js';
 import { hex, hexDistance, hexKey, hexRing, hexSpiral } from '../hex/index.js';
 import { generateMap, homeShares, mapLayout, type GeneratedMap, type MapGenData } from './index.js';
 
 const { mapGen } = GAME_DATA;
 const PLAYER_COUNTS = [2, 3, 4] as const;
-const SEEDS = Array.from({ length: 60 }, (_, i) => i * 7919 + 1);
+const SEEDS = Array.from({ length: 60 }, (_, i) => `test-map-${i}`);
 const center = hex(0, 0);
 
-const generate = (seed: number, playerCount: number, data: MapGenData = GAME_DATA) =>
-  generateMap(data, { rng: stubRng(seed), playerCount });
+const generate = (seed: string, playerCount: number, data: MapGenData = GAME_DATA) =>
+  generateMap(data, { seed, playerCount });
 
 /** Every map we test against: each player count × many seeds. */
 const maps: GeneratedMap[] = PLAYER_COUNTS.flatMap((n) => SEEDS.map((seed) => generate(seed, n)));
@@ -20,7 +20,7 @@ const terrainById = new Map(GAME_DATA.terrains.map((t) => [t.id, t]));
 describe('generateMap: determinism', () => {
   it('gives an identical map for the same seed', () => {
     for (const n of PLAYER_COUNTS) {
-      for (const seed of [1, 42, 123456]) {
+      for (const seed of ['a', 'heartpatch', SEEDS[7]!]) {
         expect(generate(seed, n)).toEqual(generate(seed, n));
       }
     }
@@ -39,30 +39,21 @@ describe('generateMap: determinism', () => {
     }
   });
 
-  it('only draws whole numbers from the rng it is given', () => {
-    const calls: [number, number][] = [];
-    const inner = stubRng(9);
-    generateMap(GAME_DATA, {
-      rng: {
-        int: (min, max) => {
-          calls.push([min, max]);
-          return inner.int(min, max);
-        },
-      },
-      playerCount: 3,
-    });
-    expect(calls.length).toBeGreaterThan(100);
-    for (const [min, max] of calls) {
-      expect(Number.isSafeInteger(min) && Number.isSafeInteger(max) && min <= max).toBe(true);
-    }
+  it('pins the output for a known seed, so generator changes are deliberate', () => {
+    // If this fails, the generator changed: existing seeds now make different
+    // maps. That's fine for maps not created yet (tiles are persisted), so
+    // update the hash on purpose.
+    expect(hashString(JSON.stringify(generate('pinned-seed', 4)))).toBe(
+      '7f11bab5b87bb8c49389945abd10cdfa',
+    );
   });
 });
 
 describe('generateMap: size and shape', () => {
   it('uses the radius for each player count (design doc §3)', () => {
-    expect(generate(1, 2).tiles).toHaveLength(271);
-    expect(generate(1, 3).tiles).toHaveLength(397);
-    expect(generate(1, 4).tiles).toHaveLength(469);
+    expect(generate('size', 2).tiles).toHaveLength(271);
+    expect(generate('size', 3).tiles).toHaveLength(397);
+    expect(generate('size', 4).tiles).toHaveLength(469);
     expect(PLAYER_COUNTS.map((n) => mapLayout(GAME_DATA, n).radius)).toEqual([9, 11, 12]);
   });
 
@@ -75,8 +66,8 @@ describe('generateMap: size and shape', () => {
   });
 
   it('rejects player counts with no layout', () => {
-    expect(() => generate(1, 1)).toThrow(RangeError);
-    expect(() => generate(1, 5)).toThrow(RangeError);
+    expect(() => generate('size', 1)).toThrow(RangeError);
+    expect(() => generate('size', 5)).toThrow(RangeError);
   });
 });
 
@@ -107,7 +98,7 @@ describe("generateMap: Juniper's Gap", () => {
 
   it('can shrink the Gap to a single tile through data', () => {
     const data = { ...GAME_DATA, mapGen: { ...mapGen, gapRadius: 0 } };
-    const map = generate(5, 2, data);
+    const map = generate('tiny-gap', 2, data);
     expect(map.tiles.filter((t) => t.terrain === 'junipers-gap')).toEqual([
       expect.objectContaining({ q: 0, r: 0 }),
     ]);

@@ -8,17 +8,10 @@ import {
   type Hex,
   type HexKey,
 } from '../hex/index.js';
+import { Rng, type Seed } from '../rng/index.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import type { MapLayout } from '../schemas/data/map-gen.js';
 import type { Terrain } from '../schemas/data/terrains.js';
-
-/**
- * The slice of a seeded RNG the generator needs: a uniform integer in
- * [min, max], both inclusive. The shared seeded `Rng` (tech spec §8) fits it.
- */
-export interface MapRng {
-  int(min: number, max: number): number;
-}
 
 /** One generated tile, ready to persist as a `tiles` row. */
 export interface MapTile {
@@ -58,10 +51,11 @@ export type MapGenData = Pick<GameData, 'terrains' | 'mapGen'>;
 
 export interface GenerateMapOptions {
   /**
-   * A generator seeded from the map's seed. **The map seed is secret: never
-   * send it to clients.** It predicts every guardian and spawn (tech spec §8).
+   * The map's seed, made server-side with `crypto.randomBytes`. **Secret:
+   * never send it to clients.** It predicts every guardian and spawn (tech
+   * spec §8).
    */
-  readonly rng: MapRng;
+  readonly seed: Seed;
   readonly playerCount: number;
 }
 
@@ -75,7 +69,7 @@ export function mapLayout(data: MapGenData, playerCount: number): MapLayout {
 }
 
 /** A weighted pick over integer weights; at least one weight must be positive. */
-function pickTerrain(rng: MapRng, terrains: readonly Terrain[]): Terrain {
+function pickTerrain(rng: Rng, terrains: readonly Terrain[]): Terrain {
   const total = terrains.reduce((sum, t) => sum + t.weight, 0);
   let roll = rng.int(0, total - 1);
   for (const terrain of terrains) {
@@ -86,7 +80,7 @@ function pickTerrain(rng: MapRng, terrains: readonly Terrain[]): Terrain {
 }
 
 /** Removes and returns a uniformly random item (swap-remove: order isn't kept). */
-function takeRandom<T>(rng: MapRng, items: T[]): T {
+function takeRandom<T>(rng: Rng, items: T[]): T {
   const i = rng.int(0, items.length - 1);
   const item = items[i] as T; // i is in range
   items[i] = items[items.length - 1] as T;
@@ -138,7 +132,7 @@ function fairestRotations(
 }
 
 /**
- * Generates a map's tiles from a seeded RNG (design doc §3, §11–12): Juniper's
+ * Generates a map's tiles from its seed (design doc §3, §11–12): Juniper's
  * Gap at the centre, home bases spaced evenly around it, patchy terrain, resource
  * nodes and wild guardian slots. Pure and deterministic: the same seed, player
  * count and data always give an identical map, on every JS engine (integer
@@ -148,9 +142,10 @@ function fairestRotations(
  * holding it could predict every tile's guardians and spawns.
  */
 export function generateMap(data: MapGenData, options: GenerateMapOptions): GeneratedMap {
-  const { rng, playerCount } = options;
+  const { seed, playerCount } = options;
   const { mapGen } = data;
   const layout = mapLayout(data, playerCount);
+  const rng = Rng.fromSeed(seed);
   const center = hex(0, 0);
   const tiles = hexSpiral(center, layout.radius);
   const terrainById = new Map(data.terrains.map((t) => [t.id, t]));
@@ -180,7 +175,7 @@ export function generateMap(data: MapGenData, options: GenerateMapOptions): Gene
     for (const h of hexSpiral(home, 1)) homeSlot.set(hexKey(h), slot);
   });
 
-  // Terrain: scatter patch seeds over the land outside the Gap, then grow
+  // Terrain: scatter patch starts over the land outside the Gap, then grow
   // every patch outwards in random order until the land is covered.
   const terrain = new Map<HexKey, Terrain>();
   const land = tiles.filter((h) => !isGap(h));
@@ -193,9 +188,9 @@ export function generateMap(data: MapGenData, options: GenerateMapOptions): Gene
   const unseeded = [...land];
   const frontier: Hex[] = [];
   for (let i = 0; i < patchCount && unseeded.length > 0; i++) {
-    const seed = takeRandom(rng, unseeded);
-    terrain.set(hexKey(seed), pickTerrain(rng, scatterable));
-    frontier.push(seed);
+    const patchStart = takeRandom(rng, unseeded);
+    terrain.set(hexKey(patchStart), pickTerrain(rng, scatterable));
+    frontier.push(patchStart);
   }
   while (frontier.length > 0) {
     const from = takeRandom(rng, frontier);
