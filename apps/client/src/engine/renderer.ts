@@ -97,12 +97,15 @@ async function createWebGL(canvas: HTMLCanvasElement): Promise<Renderer> {
       // rebuild the whole stage instead (boot.ts), which also spares the CPU
       // copies of buffers and textures Babylon keeps for restoring.
       doNotHandleContextLost: true,
+      // Release the abandoned context's buffers on dispose instead of at GC,
+      // right after the memory pressure that cost us the context.
+      loseContextOnDispose: true,
     },
     false, // we manage the pixel ratio ourselves (dpr.ts)
   );
-  // Without preventDefault the browser never restores the context.
   canvas.addEventListener('webglcontextlost', (e) => {
-    e.preventDefault();
+    e.preventDefault(); // without this the browser never restores the context
+    engine.stopRenderLoop(); // nothing to draw until the rebuild (boot.ts)
   });
   return {
     engine,
