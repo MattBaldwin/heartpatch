@@ -38,6 +38,15 @@ export interface BattleRow {
   log: BattleEvent[] | null;
   startedAt: Date;
   endedAt: Date | null;
+  /** The tile and spawn window a wild squishy came from (#14), or null. */
+  spawn: BattleSpawn | null;
+}
+
+/** Where a battle's wild squishy spawned: a tile and spawn window. */
+export interface BattleSpawn {
+  q: number;
+  r: number;
+  window: string;
 }
 
 export interface NewBattle {
@@ -49,6 +58,7 @@ export interface NewBattle {
   setup: BattleSetup['sides'];
   state: BattleState;
   startedAt: Date;
+  spawn: BattleSpawn | null;
 }
 
 /** A squishy as the battle service needs it (a `squishies` row). */
@@ -143,6 +153,10 @@ function toRow(row: RawBattleRow): BattleRow {
     log: row.log === null ? null : LogSchema.parse(row.log),
     startedAt: row.startedAt,
     endedAt: row.endedAt,
+    spawn:
+      row.spawnWindow !== null && row.spawnQ !== null && row.spawnR !== null
+        ? { q: row.spawnQ, r: row.spawnR, window: row.spawnWindow }
+        : null,
   };
 }
 
@@ -226,10 +240,17 @@ function queries(db: Executor): BattlesRepo {
       return toSquishy(row);
     },
 
-    insertBattle: async (battle) => {
+    insertBattle: async ({ spawn, ...battle }) => {
       const [row] = await db
         .insert(battles)
-        .values({ ...battle, actions: [], status: 'active' })
+        .values({
+          ...battle,
+          actions: [],
+          status: 'active',
+          spawnQ: spawn?.q ?? null,
+          spawnR: spawn?.r ?? null,
+          spawnWindow: spawn?.window ?? null,
+        })
         .returning();
       if (!row) throw new Error('insertBattle: insert returned no row');
       return toRow(row);

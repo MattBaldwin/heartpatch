@@ -824,7 +824,7 @@ const SQUISHY: ClothingItem[] = [
   {
     id: 'tiny-witch-hat',
     name: 'Tiny Witch Hat',
-    description: 'Makes any squishy at least 10% more magical.',
+    description: 'Makes any squishy look extra magical.',
     slot: 'squishy',
     rarity: 'rare',
     season: 'halloween',

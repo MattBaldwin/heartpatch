@@ -459,7 +459,7 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       expect(reply).not.toMatch(/chance|weight|terrain/);
     });
 
-    it('finds nothing at the shipped odds most of the time, and never breaks the gather', async () => {
+    it('a miss still collects the gather, with no piece and no event', async () => {
       const server = await start({ HP_DEV_DROP_CHANCE: '0' });
       const kid = await player();
       const mapId = await newMap(server, kid);

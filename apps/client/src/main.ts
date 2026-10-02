@@ -4,6 +4,7 @@ import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
+import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
@@ -107,6 +108,7 @@ const maps = createMapScreen({
   invalidate: () => stage?.invalidate(),
   onClosed: (message) => {
     void battles.setMap(null);
+    catalog.close();
     void inventory.setMap(null);
     lobby.showMessage(message);
   },
@@ -116,6 +118,8 @@ const maps = createMapScreen({
     wardrobe.liveEvent(event);
   },
 });
+// The squishy catalog (#14) opens from the button by the battle entry.
+const catalog = createCatalogScreen({ root: document.body });
 // The tutorial (#47) draws its Tutorial Glade with the map screen and sits
 // over it; it never blocks the lobby unless the server requires it first
 // (decision A).
@@ -126,6 +130,7 @@ const tutorial = createTutorialScreen({
       // The Glade is Sprout's: no battle or bag button over it (they come to
       // the tutorial with its later steps).
       await battles.setMap(null);
+      catalog.close();
       await inventory.setMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
@@ -156,18 +161,26 @@ const battles = createBattleScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onOpen: () => {
     maps.close();
+    catalog.close();
     void inventory.setMap(null);
     lobby.stepOut();
   },
   onClosed: (mapId) => {
-    maps
-      .open(mapId)
-      .then(() => inventory.setMap(mapId))
-      .catch((err: unknown) => {
+    maps.open(mapId).then(
+      () => inventory.setMap(mapId),
+      (err: unknown) => {
+        // No map to go back to: no battle button over the lobby either.
+        void battles.setMap(null);
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
-      });
+      },
+    );
     lobby.hide();
   },
+  onCatalog: (mapId) => {
+    catalog.show(mapId);
+  },
+  // A reply landing while the lobby or catalog is up must not open a battle over it.
+  canOpen: () => !lobby.isOpen && !catalog.isOpen,
   devTools: import.meta.env.DEV,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
@@ -187,6 +200,7 @@ const keeper = createKeeperScreen({
     void battles.setMap(null);
     void inventory.setMap(null);
     maps.close();
+    catalog.close();
     lobby.stepOut();
   },
   onEditClosed: (saved) => {
@@ -206,6 +220,7 @@ const wardrobe = createWardrobeScreen({
     void battles.setMap(null);
     void inventory.setMap(null);
     maps.close();
+    catalog.close();
     lobby.stepOut();
   },
   onClosed: () => {
@@ -215,6 +230,7 @@ const wardrobe = createWardrobeScreen({
 });
 const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
+    catalog.close();
     await maps.open(mapId);
     void inventory.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
@@ -227,6 +243,7 @@ const lobby = mountLobby(document.body, {
 mountAuth(document.body, {
   onChange: (user) => {
     battles.setUser(user);
+    catalog.setUser(user);
     inventory.setUser(user);
     wardrobe.setUser(user);
     maps.setUser(user);
@@ -281,6 +298,7 @@ if (import.meta.env.DEV) {
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,
     keeper: () => keeper.debug,
+    catalog: () => catalog.debug,
     inventory: () => inventory.debug,
     wardrobe: () => wardrobe.debug,
   };

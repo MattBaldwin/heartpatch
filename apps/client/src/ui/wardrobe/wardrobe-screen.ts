@@ -11,12 +11,13 @@ import {
 import type { Scene } from '@babylonjs/core/scene';
 import type { QualityTier } from '../../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../../engine/stage.js';
-import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
+import { COMMAND_RETRY_MS } from '../../inventory/send-command.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
 import { keeperItems } from '../../procedural/keeper/keeper-items.js';
 import { lodFor } from '../../procedural/motion.js';
 import { el, messageOf } from '../dom.js';
 import { KeeperPreview } from '../keeper/keeper-preview.js';
+import { OutfitSync } from './outfit-sync.js';
 import { wardrobeApi, type WardrobeApi } from './wardrobe-api.js';
 import {
   hiddenByCostume,
@@ -24,7 +25,6 @@ import {
   sameOutfit,
   shownItems,
   tabCounts,
-  toggleWorn,
   WARDROBE_TABS,
   type RarityFilter,
   type WardrobeTab,
@@ -138,7 +138,7 @@ export const WARDROBE_TEXT = {
   loading: 'Opening the wardrobe…',
   loadFailed: 'We couldn’t open your wardrobe. Check your connection and try again!',
   retry: 'Try again',
-  found: (name: string) => `Ooh! You found a ${name}! It’s in your wardrobe.`,
+  found: (name: string) => `Ooh, something new: ${name}! It’s in your wardrobe.`,
   devGrant: 'Get clothes (dev)',
 } as const;
 
@@ -168,16 +168,9 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   /** Bumped on every login change, so a slow reply can't land on another player. */
   let session = 0;
   let isOpen = false;
-  /** The wardrobe as the server last described it. */
-  let server: Wardrobe | null = null;
-  /** What the preview wears: the server's outfit plus taps not sent yet. */
-  let trying: string[] = [];
   let tab: WardrobeTab = 'hat';
   let rarity: RarityFilter = 'all';
   let turned = false;
-  let sendTimer: ReturnType<typeof setTimeout> | null = null;
-  let inFlight = false;
-  let sends = 0;
   let found: string | null = null;
   let preview: KeeperPreview | null = null;
   let frame = 0;
@@ -249,7 +242,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   const showLook = (hop: boolean) => {
     const keeper = options.keeper();
     if (!preview || !keeper) return;
-    preview.show(keeper, performance.now(), hop, keeperItems(trying), turned);
+    preview.show(keeper, performance.now(), hop, keeperItems(outfit.trying), turned);
     options.invalidate();
   };
 
@@ -299,7 +292,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   };
 
   function renderTabs(): void {
-    const counts = tabCounts(server?.owned ?? []);
+    const counts = tabCounts(outfit.server?.owned ?? []);
     tabs.replaceChildren(
       ...WARDROBE_TABS.map((t) => {
         const node = chip(
@@ -332,11 +325,12 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   }
 
   function renderItems(): void {
+    const server = outfit.server;
     if (!server) return;
     const items = shownItems(server.owned, tab, rarity);
     const forSquishies = tab === SQUISHY_SLOT;
     const nodes: Node[] = items.map(({ item, count }) => {
-      const worn = trying.includes(item.id);
+      const worn = outfit.trying.includes(item.id);
       const swatch = el('span', { class: 'wardrobe-swatch' });
       swatch.style.background = item.visual.pieces[0]?.color ?? '#ffffff';
       const parts: Node[] = [
@@ -349,7 +343,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
         ),
       ];
       if (count > 1) parts.push(el('span', { class: 'wardrobe-count' }, `×${String(count)}`));
-      if (hiddenByCostume(trying, item.id)) {
+      if (hiddenByCostume(outfit.trying, item.id)) {
         parts.push(el('span', { class: 'wardrobe-under' }, WARDROBE_TEXT.under));
       }
       if (forSquishies) {
@@ -391,6 +385,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   }
 
   function renderOutfits(): void {
+    const server = outfit.server;
     if (!server) return;
     const presets = new Map(server.presets.map((p) => [p.preset, p]));
     const buttons: Node[] = [];
@@ -402,7 +397,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
           type: 'button',
           class: 'wardrobe-chip wardrobe-outfit',
           'data-preset': String(n),
-          'aria-pressed': String(saved !== undefined && sameOutfit(saved.wearing, trying)),
+          'aria-pressed': String(saved !== undefined && sameOutfit(saved.wearing, outfit.trying)),
         },
         saved?.name ?? WARDROBE_TEXT.outfit(n),
       );
@@ -433,73 +428,36 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   }
 
   // ── Trying things on ──────────────────────────────────────────────────
+  const outfit = new OutfitSync({
+    wear: (wearing, key) => api.wear(wearing, key),
+    newKey: newIdempotencyKey,
+    wait: delay,
+    retryAfterMs: COMMAND_RETRY_MS,
+    sendAfterMs,
+    onChange: () => {
+      if (!isOpen) return;
+      render();
+      showLook(false);
+    },
+    onError: say,
+  });
+
   function tryOn(itemId: string): void {
-    trying = toggleWorn(trying, itemId);
+    outfit.tryOn(itemId);
     say('');
     render();
     showLook(true);
-    scheduleSend();
-  }
-
-  function scheduleSend(): void {
-    if (sendTimer) clearTimeout(sendTimer);
-    sendTimer = setTimeout(() => {
-      sendTimer = null;
-      void sendOutfit();
-    }, sendAfterMs);
-  }
-
-  /** Sends what's tried on, if the server doesn't have it yet. One at a time. */
-  async function sendOutfit(): Promise<void> {
-    const mine = session;
-    if (!server || inFlight || sameOutfit(trying, server.wearing)) return;
-    const target = [...trying];
-    inFlight = true;
-    sends += 1;
-    try {
-      const result = await sendCommand(
-        { newKey: newIdempotencyKey, wait: delay, retryAfterMs: COMMAND_RETRY_MS },
-        (key) => api.wear(target, key),
-        () => mine === session,
-      );
-      if (mine !== session || !result) return;
-      server = result;
-      // Taps that came in meanwhile stay on and go next.
-      if (sameOutfit(trying, target)) trying = [...result.wearing];
-    } catch (err) {
-      if (mine !== session) return;
-      // Roll back to what the server kept (tech spec §6).
-      trying = [...server.wearing];
-      say(messageOf(err));
-      showLook(false);
-    } finally {
-      if (mine === session) {
-        inFlight = false;
-        if (isOpen) render();
-        if (!sameOutfit(trying, server.wearing) && !sendTimer) scheduleSend();
-      }
-    }
-  }
-
-  /** Sends a waiting outfit now (closing the wardrobe). */
-  function flush(): void {
-    if (!sendTimer) return;
-    clearTimeout(sendTimer);
-    sendTimer = null;
-    void sendOutfit();
   }
 
   async function wearPreset(preset: number): Promise<void> {
     const mine = session;
     // The preset replaces taps not sent yet (sending them too would race it).
-    if (sendTimer) clearTimeout(sendTimer);
-    sendTimer = null;
+    outfit.cancel();
     say('');
     try {
       const result = await api.wearPreset(preset, newIdempotencyKey());
       if (mine !== session) return;
-      server = result;
-      trying = [...result.wearing];
+      outfit.wore(result);
       render();
       showLook(true);
     } catch (err) {
@@ -552,12 +510,12 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     try {
       const result = await api.savePreset(
         preset,
-        { name: name === '' ? null : name, wearing: trying },
+        { name: name === '' ? null : name, wearing: [...outfit.trying] },
         newIdempotencyKey(),
       );
       if (mine !== session) return;
       // Saving never changes what's worn; keep any taps still on their way.
-      server = { ...result, wearing: server?.wearing ?? result.wearing };
+      outfit.adoptOwned(result);
       closeSave();
       render();
       say(WARDROBE_TEXT.saved);
@@ -573,9 +531,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     try {
       const wardrobe = await api.get();
       if (mine !== session) return;
-      server = wardrobe;
-      // Keep taps not sent yet; otherwise show what the server has.
-      if (!sendTimer && !inFlight) trying = [...wardrobe.wearing];
+      outfit.load(wardrobe);
       say('');
       if (isOpen) {
         render();
@@ -598,7 +554,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     closeSave();
     options.onOpen();
     panel.hidden = false;
-    if (server) render();
+    if (outfit.server) render();
     else list.replaceChildren();
     options.showScene(build);
     if (frame === 0) frame = requestAnimationFrame(tick);
@@ -607,7 +563,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
 
   function close(): void {
     if (!isOpen) return;
-    flush();
+    outfit.flush();
     isOpen = false;
     panel.hidden = true;
     if (frame !== 0) cancelAnimationFrame(frame);
@@ -628,7 +584,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     api.devGrant(DEV_ITEMS).then(
       (wardrobe) => {
         if (mine !== session) return;
-        server = { ...wardrobe, wearing: server?.wearing ?? wardrobe.wearing };
+        outfit.adoptOwned(wardrobe);
         render();
       },
       (err: unknown) => {
@@ -657,12 +613,8 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
       session += 1;
       close();
       user = next;
-      server = null;
-      trying = [];
+      outfit.reset();
       found = null;
-      inFlight = false;
-      if (sendTimer) clearTimeout(sendTimer);
-      sendTimer = null;
       toast.hidden = true;
       // Known early, so battles dress the Keeper before the wardrobe opens.
       if (next) void load();
@@ -684,24 +636,26 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
       if (parsed.success && parsed.data.userId === user.id) showFound(parsed.data.itemId);
     },
     get wearing() {
-      return server?.wearing ?? [];
+      return outfit.server?.wearing ?? [];
     },
     get debug() {
       if (!user) return null;
       return {
         open: isOpen,
-        loaded: server !== null,
+        loaded: outfit.server !== null,
         tab,
         rarity,
-        shown: server ? shownItems(server.owned, tab, rarity).map((s) => s.item.id) : [],
-        trying: [...trying],
-        wearing: [...(server?.wearing ?? [])],
-        owned: server?.owned.map((o) => o.itemId) ?? [],
-        presets: server?.presets ?? [],
+        shown: outfit.server
+          ? shownItems(outfit.server.owned, tab, rarity).map((s) => s.item.id)
+          : [],
+        trying: [...outfit.trying],
+        wearing: [...(outfit.server?.wearing ?? [])],
+        owned: outfit.server?.owned.map((o) => o.itemId) ?? [],
+        presets: outfit.server?.presets ?? [],
         preview: isOpen ? (preview?.hash ?? null) : null,
         turned,
-        sends,
-        sending: sendTimer !== null || inFlight,
+        sends: outfit.sends,
+        sending: outfit.sending,
         found,
       };
     },

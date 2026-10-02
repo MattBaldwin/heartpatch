@@ -58,7 +58,7 @@ describe('replay (design doc §6: every battle replays from its seed and action 
     }
   });
 
-  it('reproduces battles with a player side, including replacements and swaps', () => {
+  it('reproduces battles with a player side, including replacements, swaps and captures', () => {
     const kinds = new Set<string>();
     for (const seed of seeds.slice(0, 150)) {
       const setup = randomSetup(seed, PLAYER, ai(POLICIES[seed.length % POLICIES.length]!));
@@ -84,7 +84,7 @@ describe('replay (design doc §6: every battle replays from its seed and action 
       }
       expect(replayBattle(content, setup, actions)).toEqual(state);
     }
-    expect([...kinds].sort()).toEqual(['forfeit', 'move', 'replace', 'swap']);
+    expect([...kinds].sort()).toEqual(['capture', 'forfeit', 'move', 'replace', 'swap']);
   });
 
   it('plays out differently for different seeds', () => {
@@ -223,7 +223,7 @@ describe('replay (design doc §6: every battle replays from its seed and action 
         ],
         "phase": {
           "result": {
-            "contentHash": "5f4df021bca87ba7f19829bbcc476019",
+            "contentHash": "6f716d2a438631675e01ba5880e6d88d",
             "reason": "tuckered-out",
             "turns": 13,
             "winner": "a",

@@ -55,6 +55,8 @@ export interface Lobby {
    * whole stage (a battle). `hide` brings the button back.
    */
   stepOut: () => void;
+  /** True while the lobby's panel is up (over the map, or on its own). */
+  readonly isOpen: boolean;
 }
 
 export interface LobbyOptions {
@@ -702,6 +704,9 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       releaseUpdates = null;
       panel.hidden = true;
       openButton.hidden = true;
+    },
+    get isOpen() {
+      return !panel.hidden;
     },
   };
 }

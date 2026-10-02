@@ -151,6 +151,34 @@ describe('playbackSteps', () => {
     expect(line('tuckered-out')).toBe('Aw, tuckered out. Next time!');
   });
 
+  it('shows a Heart Charm: a bounce for a new friend, a wobble when it wiggles free', () => {
+    const [caught, end] = playbackSteps(
+      battle([
+        { ...at('b'), type: 'capture', caught: true },
+        { turn: 1, type: 'battle-end', winner: 'a', reason: 'captured' },
+      ]),
+      content,
+      0,
+    );
+    expect(caught).toMatchObject({
+      kind: 'capture',
+      side: 'b',
+      text: 'Heart Charm! Mallow wants to be friends!',
+      squish: 'bounce',
+      energy: null,
+    });
+    expect(end!.text).toBe('A new friend! Hooray!');
+    const [missed] = playbackSteps(
+      battle([{ ...at('b'), type: 'capture', caught: false }]),
+      content,
+      0,
+    );
+    expect(missed).toMatchObject({
+      text: 'Heart Charm! Wild Mallow wiggled free.',
+      squish: 'wobble',
+    });
+  });
+
   it('plays only what the client has not shown yet', () => {
     expect(playbackSteps(b, content, log.length - 1)).toHaveLength(1);
     expect(playbackSteps(b, content, log.length)).toEqual([]);
@@ -181,6 +209,15 @@ describe('playbackSteps', () => {
         0,
       ),
       ...playbackSteps(battle([{ turn: 1, type: 'forfeit', side: 'a' }]), content, 0),
+      ...playbackSteps(
+        battle([
+          { ...at('b'), type: 'capture', caught: false },
+          { ...at('b'), type: 'capture', caught: true },
+          { turn: 1, type: 'battle-end', winner: 'a', reason: 'captured' },
+        ]),
+        content,
+        0,
+      ),
       ...playbackSteps(
         battle([
           { ...at('b'), type: 'stat-change', stat: 'attack', stages: -1, total: -1 },

@@ -502,6 +502,7 @@ describe('choice checks', () => {
       move('cuddle-nap'),
       move('zippy-zoom'),
       move('silly-face'),
+      { type: 'capture' },
     ]);
   });
 
@@ -632,5 +633,90 @@ describe('purity (tech spec §8)', () => {
     let state = duel('json', 'emberbun', 'twirlysprout');
     state = turn(state, move('zippy-zoom'), move('dizzy-dance'));
     expect(JSON.parse(JSON.stringify(state))).toEqual(state);
+  });
+});
+
+describe('capture (Heart Charms, #14)', () => {
+  const capture: BattleChoice = { type: 'capture' };
+  const wild = (seed: string, energy?: number) => {
+    const state = startBattle(
+      content,
+      battleSetup(
+        seed,
+        { squishies: [squishy('fixture-emberbun')] },
+        { controller: ai('wild'), squishies: [squishy('fixture-snoozlet')] },
+      ),
+    );
+    return energy === undefined ? state : patchActive(state, 'b', { energy });
+  };
+
+  it('a sure capture always works and ends the battle, the thrower winning', () => {
+    const state = wild('sure');
+    const next = turn(state, { type: 'capture', sure: true });
+    expect(newEvents(state, next)).toEqual([
+      { turn: 1, side: 'b', slot: 0, type: 'capture', caught: true },
+      { turn: 1, type: 'battle-end', winner: 'a', reason: 'captured' },
+    ]);
+    expect(next.phase.type === 'over' && next.phase.result.reason).toBe('captured');
+  });
+
+  it('rolls once with the battle RNG; a miss costs the turn and the wild squishy still moves', () => {
+    let caught = 0;
+    let missed = 0;
+    for (let i = 0; i < 60; i++) {
+      const state = wild(`roll-${String(i)}`);
+      const next = turn(state, capture);
+      const [event] = ofType(newEvents(state, next), 'capture');
+      expect(event).toMatchObject({ side: 'b', slot: 0 });
+      if (event?.caught) {
+        caught += 1;
+        expect(next.phase.type).toBe('over');
+        expect(ofType(newEvents(state, next), 'move')).toEqual([]);
+      } else {
+        missed += 1;
+        expect(next.phase.type).not.toBe('over');
+        // The player's turn went on the charm; only the wild squishy moved.
+        expect(ofType(newEvents(state, next), 'move').map((e) => e.side)).toEqual(['b']);
+      }
+      // Same state and action, same answer (replayable).
+      expect(turn(state, capture)).toEqual(next);
+    }
+    // At full energy the chance is atFull (15%): mostly misses, some catches.
+    expect(missed).toBeGreaterThan(caught);
+    expect(caught).toBeGreaterThan(0);
+  });
+
+  it('works far more often when the wild squishy is nearly tuckered out', () => {
+    let caught = 0;
+    for (let i = 0; i < 60; i++) {
+      const state = wild(`low-${String(i)}`, 1);
+      if (ofType(newEvents(state, turn(state, capture)), 'capture')[0]?.caught) caught += 1;
+    }
+    expect(caught).toBeGreaterThan(40);
+  });
+
+  it("can't befriend another player's squishy, and AI sides can't be told to", () => {
+    const pvp = startBattle(
+      content,
+      battleSetup(
+        'pvp',
+        { squishies: [squishy('fixture-emberbun')] },
+        { squishies: [squishy('fixture-snoozlet')] },
+      ),
+    );
+    expect(() => turn(pvp, capture, move('silly-face'))).toThrow(BattleRuleError);
+    expect(legalChoices(pvp, 'a')).not.toContainEqual(capture);
+    const state = wild('ai');
+    expect(() => turn(state, move('tickle-tackle'), capture)).toThrow(/AI-controlled/);
+  });
+
+  it('gives the winning side its XP floor, like any win', () => {
+    const state = wild('xp');
+    const next = turn(state, { type: 'capture', sure: true });
+    expect(next.phase.type === 'over' && next.phase.result.xp).toContainEqual({
+      side: 'a',
+      squishyId: 'a:emberbun',
+      xp: content.rules.xp.minimum,
+    });
   });
 });

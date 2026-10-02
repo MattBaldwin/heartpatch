@@ -52,8 +52,9 @@ export function setDevDropChance(chance: number | null): void {
 
 /**
  * Rolls for a found piece of clothing and, on a find, grants it and appends
- * `clothing.found`, all inside the caller's transaction, after its own
- * writes. Idempotent: an event that already found something finds nothing
+ * `clothing.found`, all inside the caller's transaction: call it after your
+ * state writes and before your own event, which stays the last write.
+ * Idempotent: an event that already found something finds nothing
  * again. Returns the item id found, or null.
  */
 export async function rollFoundDrop(

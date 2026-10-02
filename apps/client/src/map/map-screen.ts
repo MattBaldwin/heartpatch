@@ -40,7 +40,7 @@ export interface MapScreenOptions {
   createWs?: (options: WsClientOptions) => WsClient;
   /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
   tileActions?: TileActions;
-  /** Every live event on the open map, in seq order, after the map took it (a find, #43). */
+  /** Every live event the socket delivers, in seq order, after the map saw it (a find, #43). */
   onLiveEvent?: (event: WsEventMessage) => void;
 }
 

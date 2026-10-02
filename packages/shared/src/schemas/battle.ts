@@ -80,10 +80,17 @@ export type BattleSetup = z.infer<typeof BattleSetupSchema>;
 /** Team slot index (0 is the first squishy listed). */
 const SlotSchema = z.number().int().min(0).max(5);
 
-/** What one side does this turn: use one of its moves, or swap (costs the turn). */
+/**
+ * What one side does this turn: use one of its moves, swap (costs the turn),
+ * or offer a Heart Charm to the other side's squishy (`capture`, #14; costs
+ * the turn too). Only a player side can capture, and only from an AI side.
+ * `sure` makes it always work (the tutorial's first capture, design doc §26);
+ * the server sets it, never the client.
+ */
 export const BattleChoiceSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('move'), move: ContentIdSchema }),
   z.strictObject({ type: z.literal('swap'), slot: SlotSchema }),
+  z.strictObject({ type: z.literal('capture'), sure: z.literal(true).optional() }),
 ]);
 export type BattleChoice = z.infer<typeof BattleChoiceSchema>;
 
@@ -145,7 +152,7 @@ export const BattleSideViewSchema = z.object({
 export type BattleSideView = z.infer<typeof BattleSideViewSchema>;
 
 /** `BattleEndReason` (battle/state.ts) as a schema. */
-export const BattleEndReasonSchema = z.enum(['tuckered-out', 'forfeit', 'turn-limit']);
+export const BattleEndReasonSchema = z.enum(['tuckered-out', 'forfeit', 'turn-limit', 'captured']);
 
 const WinnerSchema = z.union([BattleSideIdSchema, z.literal('draw')]);
 
@@ -203,6 +210,7 @@ export const BattleEventSchema = z.discriminatedUnion('type', [
   z.object({ ...at, type: z.literal('status-skip'), status: BattleStatusIdSchema }),
   z.object({ ...at, type: z.literal('status-end'), status: BattleStatusIdSchema }),
   z.object({ ...at, type: z.literal('tuckered-out') }),
+  z.object({ ...at, type: z.literal('capture'), caught: z.boolean() }),
   z.object({ turn: at.turn, type: z.literal('forfeit'), side: BattleSideIdSchema }),
   z.object({
     turn: at.turn,
@@ -233,6 +241,12 @@ export type BattleStatus = z.infer<typeof BattleStatusSchema>;
 /** Kinds of PvE battle. Tile guardians and raids arrive with their issues. */
 export const BattleKindSchema = z.enum(['wild']);
 export type BattleKind = z.infer<typeof BattleKindSchema>;
+
+/**
+ * Kinds whose squishy can be befriended with a Heart Charm (#14): wild ones,
+ * never tile guardians (#15) or another player's.
+ */
+export const CAPTURABLE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['wild']);
 
 /**
  * A battle as its player sees it (`GET /battles/:battleId`). `speciesDefs` and
@@ -275,6 +289,8 @@ export const PlayerBattleActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('swap'), slot: SlotSchema }),
   z.strictObject({ type: z.literal('replace'), slot: SlotSchema }),
   z.strictObject({ type: z.literal('forfeit') }),
+  /** Use a Heart Charm on the wild squishy (wild battles only; costs one charm). */
+  z.strictObject({ type: z.literal('capture') }),
 ]);
 export type PlayerBattleAction = z.infer<typeof PlayerBattleActionSchema>;
 
@@ -290,9 +306,10 @@ export const BattleActionRequestSchema = z.strictObject({
 export type BattleActionRequest = z.infer<typeof BattleActionRequestSchema>;
 
 // ── Dev and test only ──────────────────────────────────────────────────────
-// Wild spawns and capture arrive with #14 and the starter squishy with the
-// tutorial, so until then a dev-only route (`HP_DEV_SQUISHY_GRANTS`) hands a
-// player a squishy and picks a fight. The production server never registers it.
+// How a player gets their first squishy isn't decided yet (the tutorial's
+// starter, #24), so a dev-only route (`HP_DEV_SQUISHY_GRANTS`) hands a player a
+// squishy, and another picks a fight with a chosen one. The production server
+// never registers them.
 
 export const DevGrantSquishyRequestSchema = z.strictObject({
   /** Any species the server knows (public or secret). Defaults to the first one. */

@@ -367,8 +367,22 @@ export const battles = pgTable(
     log: jsonb('log'),
     startedAt: timestamptz('started_at').notNull().defaultNow(),
     endedAt: timestamptz('ended_at'),
+    // A wild squishy from a tile's spawn (#14): its tile and spawn window
+    // (`2026-10-31/5`), so a befriended one is gone for that player for the
+    // rest of the window. Null for battles that don't come from a spawn.
+    spawnQ: smallint('spawn_q'),
+    spawnR: smallint('spawn_r'),
+    spawnWindow: text('spawn_window'),
   },
   (t) => [
+    check(
+      'battles_spawn_all_or_none',
+      sql`(${t.spawnWindow} is null) = (${t.spawnQ} is null) and (${t.spawnWindow} is null) = (${t.spawnR} is null)`,
+    ),
+    // "Did this player befriend a spawn in this window?" (spawns module).
+    index('battles_spawn_window_idx')
+      .on(t.mapId, t.playerUserId, t.spawnWindow)
+      .where(sql`${t.spawnWindow} is not null`),
     foreignKey({
       name: 'battles_player_member_fk',
       columns: [t.mapId, t.playerUserId],
@@ -379,6 +393,33 @@ export const battles = pgTable(
       .on(t.mapId, t.playerUserId)
       .where(sql`${t.status} = 'active'`),
     index('battles_map_id_player_user_id_idx').on(t.mapId, t.playerUserId),
+  ],
+);
+
+/**
+ * The catalog (#14, design doc §21): every species a player has met on a map
+ * (started a battle with) and, once they befriend one, when. Secret species
+ * are only ever sent to a player who has a row here.
+ */
+export const speciesSeen = pgTable(
+  'species_seen',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    // Id from the shared species data (public or secret).
+    speciesId: text('species_id').notNull(),
+    firstSeenAt: timestamptz('first_seen_at').notNull(),
+    firstCaughtAt: timestamptz('first_caught_at'),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.userId, t.speciesId] }),
+    foreignKey({
+      name: 'species_seen_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
   ],
 );
 
@@ -634,7 +675,9 @@ export const squishyAccessories = pgTable('squishy_accessories', {
   squishyId: uuid('squishy_id')
     .primaryKey()
     .references(() => squishies.id, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull(),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   itemId: text('item_id').notNull(),
   updatedAt: timestamptz('updated_at').notNull().defaultNow(),
 });

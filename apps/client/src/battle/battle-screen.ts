@@ -1,5 +1,6 @@
 import type { Scene } from '@babylonjs/core/scene';
 import {
+  CAPTURABLE_BATTLE_KINDS,
   GAME_DATA,
   visualRegistry,
   type BattleSideId,
@@ -60,6 +61,13 @@ export interface BattleScreenOptions {
   now?: () => number;
   /** Dev builds show the dev grant buttons (server `HP_DEV_SQUISHY_GRANTS`). */
   devTools?: boolean;
+  /** Opens the squishy catalog for the map on screen ("Catalog" button). */
+  onCatalog?: (mapId: string) => void;
+  /**
+   * False while another screen sits over the map (the lobby's panel, the
+   * catalog): a battle reply landing then is dropped instead of opening.
+   */
+  canOpen?: () => boolean;
   /** The player's Keeper (#42), to stand behind their squishy; null if not known. */
   keeper?: () => KeeperConfig | null;
   /** What the player's Keeper wears (#43), clothing ids. */
@@ -78,6 +86,8 @@ export interface BattleDebug {
   readonly pending: number;
   readonly waiting: boolean;
   readonly winner: BattleSideId | 'draw' | null;
+  /** Why it ended (`captured` for a new friend), or null while it's on. */
+  readonly reason: string | null;
   readonly scene: BattleSceneStats | null;
   /** Reactions the Keeper has played in this battle (cheers, winces). */
   readonly keeperReactions: number;
@@ -99,6 +109,7 @@ const MESSAGES = {
   resultScooted: 'You scooted home.',
   scootedSub: 'Maybe next time!',
   resultDraw: "It's a tie!",
+  resultFriend: 'A new friend!',
   resultNoContest: 'No contest!',
   wonSub: 'Everyone had a great time.',
   lostSub: 'A nap and a snack, and they’ll be ready again.',
@@ -107,6 +118,13 @@ const MESSAGES = {
   noXp: 'No XP this time.',
   done: 'Back to patch',
 } as const;
+
+/** "Moonpuff joined your patch!": the squishy the player just befriended. */
+function friendLine(b: PlayerBattle, names: BattleContent): string {
+  const wild = b.view.sides[otherSide(b.mySide)];
+  const friend = wild.squishies[wild.active];
+  return `${friend ? names.speciesName(friend.speciesId) : 'Your new squishy'} joined your patch!`;
+}
 
 export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const api = options.api ?? battleApi;
@@ -135,11 +153,52 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const enter = el(
     'button',
     { type: 'button', class: 'auth-button battle-entry', 'data-testid': 'battle-entry' },
-    'Battle',
+    'Find a squishy',
   );
   const entry = el('div', { class: 'battle-entry-box' }, enter, note);
   entry.hidden = true;
   options.root.append(entry);
+  const { onCatalog } = options;
+  if (onCatalog) {
+    const catalog = el(
+      'button',
+      {
+        type: 'button',
+        class: 'auth-button auth-button-soft auth-button-small',
+        'data-testid': 'catalog-open',
+      },
+      'Catalog',
+    );
+    catalog.addEventListener('click', () => {
+      if (mapId) onCatalog(mapId);
+    });
+    entry.insertBefore(catalog, enter);
+  }
+  const mayOpen = () => options.canOpen?.() !== false;
+
+  /**
+   * "2 wild squishies nearby!": a hint for the map on screen (tiles only, no
+   * species, this spawn window only). A late reply for another map is dropped.
+   */
+  const refreshNearby = (): void => {
+    const id = mapId;
+    const who = user;
+    if (!id) return;
+    api
+      .wildNearby(id)
+      .then((count) => {
+        if (mapId !== id || user !== who || enter.disabled || note.textContent) return;
+        note.textContent =
+          count === 0
+            ? 'No wild squishies nearby right now.'
+            : count === 1
+              ? 'A wild squishy is nearby!'
+              : `${String(count)} wild squishies nearby!`;
+      })
+      .catch(() => {
+        // Only a hint: the button still works without it.
+      });
+  };
 
   /**
    * Runs an entry action for the map on screen now. A reply that lands after
@@ -152,7 +211,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (!id || enter.disabled) return;
     enter.disabled = true;
     note.textContent = '';
-    const stillHere = () => mapId === id && user === who && battle === null;
+    // Not over another screen either (the lobby's panel, the catalog).
+    const stillHere = () => mapId === id && user === who && battle === null && mayOpen();
     start(id)
       .then((next) => {
         if (next && stillHere()) open(next);
@@ -261,6 +321,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           type: 'choose',
           moves: activeOf(b, b.mySide).moves.map((id) => ({ id, name: names.moveName(id) })),
           bench,
+          capture: CAPTURABLE_BATTLE_KINDS.has(b.kind),
         };
       case 'replace':
         return b.view.phase.sides.includes(b.mySide)
@@ -289,7 +350,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         : result.winner === 'draw'
           ? { title: MESSAGES.resultDraw, subtitle: MESSAGES.drawSub }
           : result.winner === b.mySide
-            ? { title: MESSAGES.resultWon, subtitle: MESSAGES.wonSub }
+            ? result.reason === 'captured'
+              ? { title: MESSAGES.resultFriend, subtitle: friendLine(b, names) }
+              : { title: MESSAGES.resultWon, subtitle: MESSAGES.wonSub }
             : result.reason === 'forfeit'
               ? { title: MESSAGES.resultScooted, subtitle: MESSAGES.scootedSub }
               : { title: MESSAGES.resultLost, subtitle: MESSAGES.lostSub };
@@ -339,7 +402,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     } else if (step.squish) {
       scene3d.play(step.side, step.squish, t);
     }
-    if (step.kind === 'end' && step.squish) scene3d.play(otherSide(step.side), 'wobble', t, 0.6);
+    if (step.kind === 'end' && step.squish) {
+      // A new friend bounces along; anyone else is a little dizzy.
+      const captured =
+        battle.view.phase.type === 'over' && battle.view.phase.result.reason === 'captured';
+      scene3d.play(otherSide(step.side), captured ? 'bounce' : 'wobble', t, 0.6);
+    }
     const reaction = keeperReaction(step, battle.mySide);
     if (reaction && scene3d.hasKeeper) {
       scene3d.cheer(reaction.move, t, reaction.strength);
@@ -497,7 +565,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.hide();
     options.showScene(null);
     entry.hidden = mapId === null;
+    note.textContent = '';
     if (closedMap !== null) options.onClosed(closedMap);
+    refreshNearby();
   }
 
   return {
@@ -514,7 +584,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       const who = user;
       try {
         const going = await api.current(next);
-        if (going && mapId === next && user === who && !battle) open(going);
+        if (going && mapId === next && user === who && !battle && mayOpen()) open(going);
+        else if (!going) refreshNearby();
       } catch (err) {
         note.textContent = messageOf(err);
       }
@@ -544,6 +615,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         pending: queue.length,
         waiting,
         winner: battle.view.phase.type === 'over' ? battle.view.phase.result.winner : null,
+        reason:
+          battle.status === 'no-contest'
+            ? 'no-contest'
+            : battle.view.phase.type === 'over'
+              ? battle.view.phase.result.reason
+              : null,
         scene: scene3d?.stats ?? null,
         keeperReactions,
       };
