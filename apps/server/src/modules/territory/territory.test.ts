@@ -815,6 +815,38 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(territoryOf(home).defenders).toHaveLength(1);
     });
 
+    it('moves one squishy twice at once without a stray guard or a server error', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      const squishy = await grant(server, kid, mapId, 3);
+      const [a, b] = await edgeOf(mapId, kid);
+      await setOwner(a!.id, kid.id);
+      await setOwner(b!.id, kid.id);
+      const results = await Promise.all(
+        [a!, b!].map((t) =>
+          call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+            q: t.q,
+            r: t.r,
+            squishyIds: [squishy.id],
+          }),
+        ),
+      );
+      expect(results.map((r) => r.statusCode)).toEqual([200, 200]);
+      expect(await defendersOf(mapId)).toHaveLength(1);
+      // The last event for each tile matches where the squishy really stands.
+      const posted = (await defendersOf(mapId))[0]!.tileId;
+      const last = new Map<string, number>();
+      for (const e of await eventsOf(mapId)) {
+        if (e.type !== 'defenders.changed') continue;
+        const p = parseGameEventPayload('defenders.changed', e.payload);
+        last.set(`${String(p.q)},${String(p.r)}`, p.count);
+      }
+      for (const t of [a!, b!]) {
+        expect(last.get(`${String(t.q)},${String(t.r)}`)).toBe(t.id === posted ? 1 : 0);
+      }
+    });
+
     it('only guards your own land outside your home, with your own squishies', async () => {
       const server = await start();
       const kid = await player();

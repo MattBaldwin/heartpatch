@@ -99,7 +99,7 @@ export interface MapsRepo {
    * its tiles and its `event_seq` that agree with each other. Top level only
    * (Postgres can't change the isolation of a transaction already running).
    */
-  snapshot: <T>(fn: (repo: MapsRepo) => Promise<T>) => Promise<T>;
+  snapshot: <T>(fn: (repo: MapsRepo, tx: Executor) => Promise<T>) => Promise<T>;
 
   /** `users.tutorial_completed_at` (null = not finished). */
   tutorialCompletedAt: (userId: string) => Promise<Date | null>;
@@ -122,7 +122,8 @@ export interface MapsRepo {
   /** True if the mode changed. */
   setPvpMode: (mapId: string, pvpMode: PvpMode) => Promise<boolean>;
   /** Sorted by `q`, then `r`. */
-  listTiles: (mapId: string) => Promise<PublicTile[]>;
+  /** Every tile; the service adds each tile's buildings (#18). */
+  listTiles: (mapId: string) => Promise<Omit<PublicTile, 'buildings'>[]>;
   /** Gives the player every tile of a home slot; returns those tiles. */
   claimHomeTiles: (
     mapId: string,
@@ -235,7 +236,7 @@ function queries(db: Executor): MapsRepo {
     snapshot: (fn) =>
       withTransaction(db, async (tx) => {
         await tx.execute(sql`set transaction isolation level repeatable read, read only`);
-        return fn(queries(tx));
+        return fn(queries(tx), tx);
       }),
 
     tutorialCompletedAt: async (userId) => {

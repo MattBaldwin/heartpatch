@@ -229,6 +229,19 @@ _Proposed in the #14 PR; the project owner confirms on merge._
 - **`spawnWindowId` lives in `apps/server/src/lib/time.ts`**, next to `localDate`: shared code is lint-banned from `Intl`, which time zones need. The block maths (`spawnWindowAt`) is shared. A window's time of day is judged at its middle, so 4-hour windows run night, day, day, day, dusk, night (`SPAWN_RULES.timesOfDay`).
 - **Hand-authored maps (no secret seed) spawn from the map id.** Their spawns are predictable, which is fine for a one-player Glade; real maps always have a seed.
 
+## 2026-10-02 — Home base and buildings (#18)
+
+_Proposed in the #18 PR; the project owner confirms on merge._
+
+- **Buildings are `buildings` rows on spots of the player's own home tiles** (coordinator-approved shared contract): map, owner, tile, building id and kind, level, spot, and for Hearthfires `fuelled_through` (+ `fuel_updated_at`). Each home tile has 7 spots (the middle and six around it, `spotOffset`); the middle of the Heart Seed's tile and of a node tile is taken by what stands there. One building per spot; `maxPerHome` per building in data (one Hearthfire, one Jack-o'-Lantern, two of each habitat, `// TUNE:`). Only Hearthfires and habitats are buildable now (`HOME_BASE_RULES.buildableKinds`); Training Grounds wait for their XP (#19). Building is instant (no build timer) and upgrades are a follow-up.
+- **Fuel is a date, as tech spec §7 says**, not a stored count plus a timestamp: `fuelled_through` is the last map-local night it covers, and "lit" and "nights left" are worked out on read from the map clock (DST included). Adding more than fits fills it and charges only for what went in. *Why:* nothing ticks or decrements, so a nightfall run twice can't burn fuel twice (CLAUDE.md rule 4). Nightfall (#21) asks `protectsNight(fuelledThrough, night)`, and `litSafeTiles` / shared `safeTiles` give the protected tiles.
+- **A lit fire protects its whole home base plus its radius, measured from the fire's own tile.** *Why:* design doc §14 says squishies at home behind a lit fire are always safe; measuring from the fire makes where you put it matter for land beyond the home.
+- **The Jack-o'-Lantern Hearthfire is its own building** built from #17's crafted item, only in the Halloween window, with a bigger radius (2) in data. One already built keeps working after Halloween (keepsakes, §15). Taking it down gives the carved pumpkin back whole (`refundPercent: 100`); other buildings give back half their cost, rounded down, plus any fuel they hadn't burned.
+- **Habitat housing is a nullable `squishies.habitat_building_id`** (coordinator-approved), `ON DELETE SET NULL`, so taking a habitat down moves its squishies out. Only the owner's own active squishies, up to capacity; a squishy in the Hollow keeps its bed. Squishies without a habitat wait by the Heart Seed.
+- **A member who leaves loses their buildings** (same transaction as their tiles going neutral), so a returning player gets a fresh home base (#4 decision).
+- **Everyone sees fires and habitats:** `PublicTile.buildings` (kind, level, spot, lit, safe radius), kept live by `building.placed/moved/removed/fueled`. Nights left, costs and refunds stay internal. The map draws a soft warm glow over every tile a lit fire keeps safe.
+- **The home-base view is its own scene** (tech spec §6): the seven home tiles at about 4× map scale, with the map's tile, prop and Heart Seed meshes, procedural building models (one draw call per look) and the Keeper idling by the Heart Seed (#42's leftover). Squishies don't breathe there; a wander hop is an event every few seconds that draws only while it plays, so an idle home draws nothing.
+
 ## 2026-10-02 — Territory (#15)
 
 _Proposed in the #15 PR; the project owner confirms on merge._
@@ -242,6 +255,6 @@ _Proposed in the #15 PR; the project owner confirms on merge._
 - **Guardians are fixed per tile per map-local day** (`GUARDIAN_RULES.windowHours: 24`, `// TUNE:`), seeded `deriveSeed(mapSeed, 'guardian', q, r, windowId)`. A retry after the 4 h cooldown meets the same team; tomorrow's may differ.
 - **Gentle's 50% applies to capture rewards**, carried as `rewardPercent` on `tile.captured` for found clothing (#43) and milestones (#44). The showdown's own XP isn't scaled: the battle screen shows the engine's XP, and the squishies did the work either way. *Open product question* (below).
 - **Guards stand on your land outside your home base** (home tiles can never be taken, so a guard there would only shelter from the Hollow Man). A squishy on watch still joins its owner's battles until team picking arrives.
-- **Each feature gets its own slot in the tile panel** (`tileActions` is a list): gathering (#17) and territory draw side by side, and home base (#18) can add one without touching either.
+- **Territory's tile-panel buttons join #18's `combineTileActions`**, which now also passes each feature the whole map view (territory needs neighbours, owners and the PvP mode).
 
 **Open product questions (for the owner):** whether Gentle's 50% should also halve the showdown's XP; whether a new player's shield should drop early when they challenge someone; whether squishies on watch should sit out the owner's own battles.

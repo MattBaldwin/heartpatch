@@ -1,4 +1,5 @@
 import type { BattleDebug } from '../battle/battle-screen.js';
+import type { HomeDebug } from '../home/home-screen.js';
 import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
@@ -38,6 +39,8 @@ declare global {
       inventory?(): InventoryDebug | null;
       /** Tries left, squishies on watch and the tile panel's land action (#15), or null. */
       territory?(): TerritoryDebug | null;
+      /** The home base (#18): open or not, its buildings, squishies and wander hops, or null. */
+      home?(): HomeDebug | null;
       /** The open squishy catalog (seen, friends, names on the cards), or null. */
       catalog?(): CatalogDebug | null;
     };

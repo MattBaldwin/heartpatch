@@ -411,6 +411,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         [
           'cooldownUntil',
           'defenders',
+          'buildings',
           'gathering',
           'homeSlot',
           'nodeResource',

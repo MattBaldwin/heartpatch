@@ -1,5 +1,5 @@
 {
-  "id": "f66294dd-e7d7-402c-ba7f-094b1f683cd6",
+  "id": "1e76d727-b85c-47b9-b9c0-ab8f912ef156",
   "prevId": "99558b9d-5100-4c2e-b1e7-641d83b070f4",
   "version": "7",
   "dialect": "postgresql",
@@ -216,6 +216,152 @@
         "battles_spawn_all_or_none": {
           "name": "battles_spawn_all_or_none",
           "value": "(\"battles\".\"spawn_window\" is null) = (\"battles\".\"spawn_q\" is null) and (\"battles\".\"spawn_window\" is null) = (\"battles\".\"spawn_r\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.buildings": {
+      "name": "buildings",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tile_id": {
+          "name": "tile_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "building_id": {
+          "name": "building_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "level": {
+          "name": "level",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "spot": {
+          "name": "spot",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fuelled_through": {
+          "name": "fuelled_through",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fuel_updated_at": {
+          "name": "fuel_updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "placed_at": {
+          "name": "placed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "buildings_map_id_owner_user_id_idx": {
+          "name": "buildings_map_id_owner_user_id_idx",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "buildings_map_id_maps_id_fk": {
+          "name": "buildings_map_id_maps_id_fk",
+          "tableFrom": "buildings",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "buildings_tile_id_tiles_id_fk": {
+          "name": "buildings_tile_id_tiles_id_fk",
+          "tableFrom": "buildings",
+          "tableTo": "tiles",
+          "columnsFrom": ["tile_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "buildings_owner_member_fk": {
+          "name": "buildings_owner_member_fk",
+          "tableFrom": "buildings",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "owner_user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "buildings_tile_id_spot_key": {
+          "name": "buildings_tile_id_spot_key",
+          "nullsNotDistinct": false,
+          "columns": ["tile_id", "spot"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "buildings_level_positive": {
+          "name": "buildings_level_positive",
+          "value": "\"buildings\".\"level\" >= 1"
+        },
+        "buildings_spot_range": {
+          "name": "buildings_spot_range",
+          "value": "\"buildings\".\"spot\" between 0 and 6"
         }
       },
       "isRLSEnabled": false
@@ -1700,6 +1846,12 @@
           "notNull": true,
           "default": "'active'"
         },
+        "habitat_building_id": {
+          "name": "habitat_building_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -1709,6 +1861,21 @@
         }
       },
       "indexes": {
+        "squishies_habitat_building_id_idx": {
+          "name": "squishies_habitat_building_id_idx",
+          "columns": [
+            {
+              "expression": "habitat_building_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "squishies_map_id_owner_user_id_idx": {
           "name": "squishies_map_id_owner_user_id_idx",
           "columns": [
@@ -1741,6 +1908,15 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "squishies_habitat_building_id_buildings_id_fk": {
+          "name": "squishies_habitat_building_id_buildings_id_fk",
+          "tableFrom": "squishies",
+          "tableTo": "buildings",
+          "columnsFrom": ["habitat_building_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
         "squishies_owner_member_fk": {
           "name": "squishies_owner_member_fk",
           "tableFrom": "squishies",
@@ -1762,326 +1938,6 @@
         "squishies_xp_nonnegative": {
           "name": "squishies_xp_nonnegative",
           "value": "\"squishies\".\"xp\" >= 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.tile_attacks": {
-      "name": "tile_attacks",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "map_id": {
-          "name": "map_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tile_id": {
-          "name": "tile_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "attacker_user_id": {
-          "name": "attacker_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "defender_user_id": {
-          "name": "defender_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "battle_id": {
-          "name": "battle_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "outcome": {
-          "name": "outcome",
-          "type": "tile_attack_outcome",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
-        },
-        "reward_percent": {
-          "name": "reward_percent",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 100
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "cooldown_until": {
-          "name": "cooldown_until",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "last_action_at": {
-          "name": "last_action_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "tile_attacks_map_id_attacker_idx": {
-          "name": "tile_attacks_map_id_attacker_idx",
-          "columns": [
-            {
-              "expression": "map_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "attacker_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "started_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tile_attacks_tile_id_idx": {
-          "name": "tile_attacks_tile_id_idx",
-          "columns": [
-            {
-              "expression": "tile_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "cooldown_until",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "tile_attacks_map_id_defender_idx": {
-          "name": "tile_attacks_map_id_defender_idx",
-          "columns": [
-            {
-              "expression": "map_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "defender_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "ended_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"tile_attacks\".\"defender_user_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "tile_attacks_map_id_maps_id_fk": {
-          "name": "tile_attacks_map_id_maps_id_fk",
-          "tableFrom": "tile_attacks",
-          "tableTo": "maps",
-          "columnsFrom": ["map_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "tile_attacks_tile_id_tiles_id_fk": {
-          "name": "tile_attacks_tile_id_tiles_id_fk",
-          "tableFrom": "tile_attacks",
-          "tableTo": "tiles",
-          "columnsFrom": ["tile_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "tile_attacks_battle_id_battles_id_fk": {
-          "name": "tile_attacks_battle_id_battles_id_fk",
-          "tableFrom": "tile_attacks",
-          "tableTo": "battles",
-          "columnsFrom": ["battle_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "tile_attacks_attacker_member_fk": {
-          "name": "tile_attacks_attacker_member_fk",
-          "tableFrom": "tile_attacks",
-          "tableTo": "map_members",
-          "columnsFrom": ["map_id", "attacker_user_id"],
-          "columnsTo": ["map_id", "user_id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "tile_attacks_battle_id_key": {
-          "name": "tile_attacks_battle_id_key",
-          "nullsNotDistinct": false,
-          "columns": ["battle_id"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "tile_attacks_reward_percent_range": {
-          "name": "tile_attacks_reward_percent_range",
-          "value": "\"tile_attacks\".\"reward_percent\" between 0 and 100"
-        },
-        "tile_attacks_cooldown_after_start": {
-          "name": "tile_attacks_cooldown_after_start",
-          "value": "\"tile_attacks\".\"cooldown_until\" >= \"tile_attacks\".\"started_at\""
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.tile_defenders": {
-      "name": "tile_defenders",
-      "schema": "",
-      "columns": {
-        "map_id": {
-          "name": "map_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "tile_id": {
-          "name": "tile_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "slot": {
-          "name": "slot",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "squishy_id": {
-          "name": "squishy_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "assigned_at": {
-          "name": "assigned_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "tile_defenders_map_id_idx": {
-          "name": "tile_defenders_map_id_idx",
-          "columns": [
-            {
-              "expression": "map_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "tile_defenders_map_id_maps_id_fk": {
-          "name": "tile_defenders_map_id_maps_id_fk",
-          "tableFrom": "tile_defenders",
-          "tableTo": "maps",
-          "columnsFrom": ["map_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "tile_defenders_tile_id_tiles_id_fk": {
-          "name": "tile_defenders_tile_id_tiles_id_fk",
-          "tableFrom": "tile_defenders",
-          "tableTo": "tiles",
-          "columnsFrom": ["tile_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "tile_defenders_squishy_id_squishies_id_fk": {
-          "name": "tile_defenders_squishy_id_squishies_id_fk",
-          "tableFrom": "tile_defenders",
-          "tableTo": "squishies",
-          "columnsFrom": ["squishy_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "tile_defenders_tile_id_slot_pk": {
-          "name": "tile_defenders_tile_id_slot_pk",
-          "columns": ["tile_id", "slot"]
-        }
-      },
-      "uniqueConstraints": {
-        "tile_defenders_squishy_id_key": {
-          "name": "tile_defenders_squishy_id_key",
-          "nullsNotDistinct": false,
-          "columns": ["squishy_id"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "tile_defenders_slot_range": {
-          "name": "tile_defenders_slot_range",
-          "value": "\"tile_defenders\".\"slot\" between 0 and 5"
         }
       },
       "isRLSEnabled": false
@@ -2289,7 +2145,7 @@
     "public.battle_kind": {
       "name": "battle_kind",
       "schema": "public",
-      "values": ["wild", "tile", "rival-tile"]
+      "values": ["wild"]
     },
     "public.battle_status": {
       "name": "battle_status",
@@ -2330,11 +2186,6 @@
       "name": "squishy_state",
       "schema": "public",
       "values": ["active", "hollowed"]
-    },
-    "public.tile_attack_outcome": {
-      "name": "tile_attack_outcome",
-      "schema": "public",
-      "values": ["active", "captured", "won", "lost", "no-contest"]
     }
   },
   "schemas": {},

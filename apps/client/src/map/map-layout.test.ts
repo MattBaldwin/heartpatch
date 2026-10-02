@@ -35,6 +35,7 @@ describe('findHomeBases', () => {
       gathering: null,
       cooldownUntil: null,
       defenders: 0,
+      buildings: [],
     });
     // Five of the six neighbours: no tile is surrounded, so no Heart Seed.
     const tiles = [tile(0, 0), ...HEX_DIRECTIONS.slice(0, 5).map((d) => tile(d.q, d.r))];
@@ -54,6 +55,7 @@ describe('tintSlot', () => {
     gathering: null,
     cooldownUntil: null,
     defenders: 0,
+    buildings: [],
   });
 
   it("uses the owner's home slot", () => {
@@ -99,6 +101,7 @@ describe('propPlacements', () => {
     gathering: null,
     cooldownUntil: null,
     defenders: 0,
+    buildings: [],
   };
   const look = TERRAIN_LOOKS['forest']!;
 

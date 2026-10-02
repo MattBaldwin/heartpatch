@@ -4,6 +4,7 @@ import {
   type HexKey,
   type MapMember,
   type MapView,
+  type PlacedBuilding,
   type PublicTile,
   type WsEventMessage,
 } from '@heartpatch/shared';
@@ -105,6 +106,27 @@ export class MapState {
         if (!parsed.success) return 'resync';
         return this.patchTile(parsed.data, { defenders: parsed.data.count }) ? 'redraw' : 'none';
       }
+      case 'building.placed':
+      case 'building.fueled': {
+        // A building went up, or a fire was fuelled and lit (#18).
+        const parsed = GAME_EVENTS[event.type].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        this.putBuilding(parsed.data.building);
+        return 'none';
+      }
+      case 'building.moved': {
+        const parsed = GAME_EVENTS['building.moved'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        this.dropBuilding(hexKey(parsed.data.from), parsed.data.building.id);
+        this.putBuilding(parsed.data.building);
+        return 'none';
+      }
+      case 'building.removed': {
+        const parsed = GAME_EVENTS['building.removed'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        this.dropBuilding(hexKey(parsed.data), parsed.data.buildingRowId);
+        return 'none';
+      }
       default:
         // Types this map doesn't draw (yet).
         return 'none';
@@ -123,6 +145,26 @@ export class MapState {
       tiles: this.current.tiles.map((t) => (t === tile ? next : t)),
     };
     return true;
+  }
+
+  /** Adds or replaces a building on its tile, keeping spot order. */
+  private putBuilding(placed: PlacedBuilding): void {
+    const { q, r, ...building } = placed;
+    const key = hexKey({ q, r });
+    this.editTile(key, (tile) =>
+      [...tile.buildings.filter((b) => b.id !== building.id), building].sort(
+        (a, b) => a.spot - b.spot,
+      ),
+    );
+  }
+
+  private dropBuilding(key: HexKey, id: string): void {
+    this.editTile(key, (tile) => tile.buildings.filter((b) => b.id !== id));
+  }
+
+  private editTile(key: HexKey, buildings: (tile: PublicTile) => PublicTile['buildings']): void {
+    const tile = this.byHex.get(key);
+    if (tile) this.patchTile(tile, { buildings: buildings(tile) });
   }
 
   private index(): void {

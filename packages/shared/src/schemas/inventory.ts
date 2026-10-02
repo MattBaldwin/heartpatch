@@ -9,9 +9,19 @@ import { ContentIdSchema } from './data/common.js';
 
 /**
  * Why an inventory changed, stored with every `resource_ledger` row (tech
- * spec §4). Later issues add their own (buildings, trades, care).
+ * spec §4). Later issues add their own (trades, care). Home base (#18):
+ * `build` (a building's cost), `fuel` (Emberwood into a Hearthfire) and
+ * `build-refund` (what comes back when a building is taken down).
  */
-export const ItemChangeReasonSchema = z.enum(['gather', 'craft', 'capture', 'dev-grant']);
+export const ItemChangeReasonSchema = z.enum([
+  'gather',
+  'craft',
+  'capture',
+  'dev-grant',
+  'build',
+  'fuel',
+  'build-refund',
+]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
 /** Item id → how many the player has. A missing id means none. */

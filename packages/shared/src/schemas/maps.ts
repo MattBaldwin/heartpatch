@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
+import { PublicBuildingSchema } from './buildings.js';
 import { KeeperConfigSchema } from './data/keepers.js';
 import { TimeZoneSchema } from './time.js';
 import { WsSeqSchema } from './ws.js';
@@ -219,6 +220,11 @@ export const PublicTileSchema = z.object({
   cooldownUntil: z.iso.datetime().nullable(),
   /** How many of the owner's squishies stand watch here (#15). Never which ones. */
   defenders: z.number().int().min(0),
+  /**
+   * Buildings on a home tile (#18), in spot order: everyone sees fires and
+   * habitats. `lit` is as of the view (or the event that carried it).
+   */
+  buildings: z.array(PublicBuildingSchema),
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 

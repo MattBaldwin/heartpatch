@@ -37,11 +37,8 @@ export interface MapScreenOptions {
   onClosed: (message: string) => void;
   api?: { view: (mapId: string) => Promise<MapView> };
   createWs?: (options: WsClientOptions) => WsClient;
-  /**
-   * Buttons for the tapped tile, drawn into the tile panel (gathering #17,
-   * territory #15). Each feature gets its own slot, in this order.
-   */
-  tileActions?: readonly TileActions[];
+  /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
+  tileActions?: TileActions;
 }
 
 /** A feature's buttons in the tile panel. */
@@ -112,19 +109,10 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = null;
     scene3d?.select(null);
     panel.hide();
-    hideActions();
+    options.tileActions?.hide();
     options.invalidate();
   };
   const panel = mountTilePanel(options.root, deselect);
-  // One slot per feature, so each redraws only its own buttons.
-  const actionSlots = (options.tileActions ?? []).map((actions) => ({
-    actions,
-    slot: el('div', { class: 'tile-panel-slot' }),
-  }));
-  panel.actions.append(...actionSlots.map((a) => a.slot));
-  function hideActions(): void {
-    for (const { actions } of actionSlots) actions.hide();
-  }
 
   const showTile = (state: MapState, h: Hex): void => {
     const tile = state.tileAt(hexKey(h));
@@ -135,7 +123,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = h;
     scene3d?.select(h);
     panel.show(describeTile(tile, (id) => state.member(id), user?.id ?? null));
-    for (const { actions, slot } of actionSlots) actions.show(slot, tile, state.view);
+    options.tileActions?.show(panel.actions, tile, state.view);
     options.invalidate();
   };
 
@@ -201,7 +189,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     scene3d = null;
     selected = null;
     panel.hide();
-    hideActions();
+    options.tileActions?.hide();
     hud.hidden = true;
     options.showScene(null);
   }
@@ -218,7 +206,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       scene3d = null;
       selected = null;
       panel.hide();
-      hideActions();
+      options.tileActions?.hide();
       options.showScene(build);
       hudName.textContent = state.view.map.name;
       hud.hidden = false;

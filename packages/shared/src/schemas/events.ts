@@ -3,6 +3,8 @@ import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
+import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
+import { LocalDateSchema } from './time.js';
 
 /**
  * The game-event type registry (tech spec §5, §7): every `game_events.type`,
@@ -38,6 +40,8 @@ const TutorialAdvancedSchema = z.strictObject({
   completedStepId: z.string(),
   stepId: z.string().nullable(),
 });
+/** A building as stored in an event payload (`PlacedBuilding`, strict). */
+const PlacedBuildingStrictSchema = z.strictObject(PlacedBuildingSchema.shape);
 const BattleStartedSchema = z.strictObject({
   battleId: z.uuid(),
   kind: BattleKindSchema,
@@ -251,6 +255,79 @@ export const GAME_EVENTS = {
       squishyIds: z.array(z.uuid()),
     }),
     public: z.object({ userId: z.uuid(), ...coords, count: z.number().int().min(0) }),
+  },
+  /**
+   * A player put up a building on their home base (#18). Members see it on
+   * the map (fires and habitats are public).
+   */
+  'building.placed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      building: PlacedBuildingStrictSchema,
+      /** What it cost (internal: other players don't need the bill). */
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
+  },
+  /** A player moved one of their buildings to another spot (#18). */
+  'building.moved': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      from: z.strictObject({ q: z.number().int(), r: z.number().int(), spot: BuildingSpotSchema }),
+      building: PlacedBuildingStrictSchema,
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      from: z.object({ q: z.number().int(), r: z.number().int(), spot: BuildingSpotSchema }),
+      building: PlacedBuildingSchema,
+    }),
+  },
+  /** A player took a building down (#18). Its residents moved out. */
+  'building.removed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      buildingId: z.string(),
+      q: z.number().int(),
+      r: z.number().int(),
+      refund: z.record(z.string(), z.number().int().min(1)),
+      /** Squishies that lived there and moved out. */
+      movedOut: z.array(z.uuid()),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      buildingRowId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+    }),
+  },
+  /**
+   * A player added fuel to a Hearthfire (#18). Members see it light up; how
+   * many nights it has stays internal.
+   */
+  'building.fueled': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      building: PlacedBuildingStrictSchema,
+      nights: z.number().int().min(1),
+      fuelledThrough: LocalDateSchema,
+    }),
+    public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
+  },
+  /** A squishy moved into a habitat, or out of one (`habitatId` null) (#18). */
+  'squishy.housed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      habitatId: z.uuid().nullable(),
+      /** The habitat it left, if it lived in one. */
+      fromHabitatId: z.uuid().nullable(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      habitatId: z.uuid().nullable(),
+    }),
   },
 } satisfies Record<string, GameEventSchemas>;
 

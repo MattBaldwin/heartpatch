@@ -317,6 +317,11 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       }
       const map = await requireMember(db, user, mapId);
       const changed = await store.transaction(async (repo) => {
+        // One guard change at a time per player (a double tap moving the same
+        // squishy twice): lock order is the player, then tiles, `maps` last.
+        if (!(await repo.lockMember(map.id, user.id))) {
+          throw new AppError('NOT_FOUND', MESSAGES.noMap);
+        }
         const seen = await repo.findTile(map.id, request.q, request.r);
         if (!seen) throw new AppError('NOT_FOUND', MESSAGES.noTile);
         // Squishies moving here leave their old posts, whose counts change too.

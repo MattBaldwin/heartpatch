@@ -6,6 +6,7 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   check,
+  date,
   foreignKey,
   index,
   integer,
@@ -202,6 +203,54 @@ export const tiles = pgTable(
   ],
 );
 
+/**
+ * Home-base buildings (#18, design doc §13–14): one row per building a player
+ * put up on a spot of one of their home tiles. `building_id` is from the
+ * shared building table (`hearthfire`, `cozy-meadow`); `kind` is copied from
+ * it so nightfall (#21) can find every fire with one query.
+ *
+ * Hearthfire fuel is a date, not a counter (tech spec §7): `fuelled_through`
+ * is the last map-local night its fuel covers (null: never fuelled), so
+ * nothing ticks and nothing is decremented; whether it's lit is worked out
+ * on read (shared `hearthfireState`). `fuel_updated_at` is when it was last
+ * fuelled. Rows are deleted when the building is taken down or its owner
+ * leaves the map (a returning player gets a fresh home base).
+ */
+export const buildings = pgTable(
+  'buildings',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    ownerUserId: uuid('owner_user_id').notNull(),
+    // One of the owner's home tiles (the service checks it).
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    buildingId: text('building_id').notNull(),
+    kind: text('kind').notNull(),
+    level: smallint('level').notNull().default(1),
+    // Building spot on the tile: 0 is the middle, 1-6 around it (shared `spotOffset`).
+    spot: smallint('spot').notNull(),
+    fuelledThrough: date('fuelled_through', { mode: 'string' }),
+    fuelUpdatedAt: timestamptz('fuel_updated_at'),
+    placedAt: timestamptz('placed_at').notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'buildings_owner_member_fk',
+      columns: [t.mapId, t.ownerUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // One building per spot.
+    unique('buildings_tile_id_spot_key').on(t.tileId, t.spot),
+    index('buildings_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
+    check('buildings_level_positive', sql`${t.level} >= 1`),
+    check('buildings_spot_range', sql`${t.spot} between 0 and 6`),
+  ],
+);
+
 export const squishies = pgTable(
   'squishies',
   {
@@ -220,9 +269,15 @@ export const squishies = pgTable(
     level: integer('level').notNull().default(1),
     xp: integer('xp').notNull().default(0),
     state: squishyState('state').notNull().default('active'),
+    // The habitat it lives in (#18); null: none yet. Only the owner's own
+    // habitat, checked by the buildings service. Taking it down moves it out.
+    habitatBuildingId: uuid('habitat_building_id').references(() => buildings.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
+    index('squishies_habitat_building_id_idx').on(t.habitatBuildingId),
     foreignKey({
       name: 'squishies_owner_member_fk',
       columns: [t.mapId, t.ownerUserId],
