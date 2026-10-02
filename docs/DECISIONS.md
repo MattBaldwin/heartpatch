@@ -326,3 +326,11 @@ _Proposed in the #21 PR; the project owner confirms on merge._
 - **Dev nightfall** (`HP_DEV_SQUISHY_GRANTS`) makes the next night that hasn't come yet fall now; pressing again moves on a night, so fuel runs down as it would.
 
 **Open product questions (for the owner):** whether a brand-new player should get a first-night grace (a player who joins at 8:55 PM with a squishy and no fire yet can lose it at 9:00); whether shadow guardians should look shadowy in the battle (they're drawn as their species for now).
+
+## 2026-10-02 — Lock order (Fix PR)
+
+_Proposed in the lock-order Fix PR; the project owner confirms on merge._
+
+- **One event per consumer transaction.** `runConsumer` applies one event, advances `last_seq` and commits, then takes the next. *Why:* a batch held `maps` from one handler's append while the next handler locked squishies, tiles or raid rows: the reverse of every command's order, so nightfall (squishies, then `maps`) could deadlock with it. Handlers returning their events for one append per batch would also work, but it changes every handler and the helpers they call (`rollFoundDrop` appends its own event); one event per transaction needs no handler change and keeps "a crash only delays, never loses" as it was. The cost is a commit per event, which these volumes don't notice.
+- **The lock order is written down** (tech spec §7 "Lock order"), including squishies always in id order. `lockSquishies` (battles) and `moveOutAll` (buildings) now lock in id order, and gathering's `collect` locks the tile before the gather, like `start`.
+- **Care and capture take a squishy and inventory in opposite orders.** Care locks the squishy, then its cost's inventory rows; a capture try locks the Heart Charm's inventory row, then (when it ends the battle) the team's squishies for XP. Safe today because the item rows differ: care never spends a Heart Charm. **#45 and #84 must not let care spend a Heart Charm** without first moving one of them to the order above.

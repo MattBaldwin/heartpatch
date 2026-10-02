@@ -1,8 +1,5 @@
 // Scheduled-job and event-consumer settings (tech spec §7).
 
-/** Events applied per consumer transaction. */
-export const CONSUMER_BATCH_SIZE = 50; // TUNE: guess; keeps each transaction short
-
 /**
  * How often a consumer worker polls, also as the backstop when LISTEN/NOTIFY
  * is on (a backlog drains at this pace, not only on new notifies).

@@ -249,8 +249,16 @@ function queries(db: Executor): BuildingsRepo {
       await db.update(squishies).set({ habitatBuildingId }).where(eq(squishies.id, squishyId));
     },
 
-    moveOutAll: async (buildingRowId) =>
-      (
+    moveOutAll: async (buildingRowId) => {
+      // Lock the residents in id order first, like nightfall (tech spec §7
+      // "Lock order"): a bare multi-row UPDATE locks in scan order.
+      await db
+        .select({ id: squishies.id })
+        .from(squishies)
+        .where(eq(squishies.habitatBuildingId, buildingRowId))
+        .orderBy(asc(squishies.id))
+        .for('update');
+      return (
         await db
           .update(squishies)
           .set({ habitatBuildingId: null })
@@ -258,6 +266,7 @@ function queries(db: Executor): BuildingsRepo {
           .returning({ id: squishies.id })
       )
         .map((r) => r.id)
-        .sort(),
+        .sort();
+    },
   };
 }

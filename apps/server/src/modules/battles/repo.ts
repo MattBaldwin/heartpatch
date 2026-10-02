@@ -223,6 +223,9 @@ function queries(db: Executor): BattlesRepo {
         .select({ id: squishies.id })
         .from(squishies)
         .where(inArray(squishies.id, [...ids]))
+        // Id order, like nightfall's (tech spec §7 "Lock order"), so two
+        // transactions locking overlapping squishies never deadlock.
+        .orderBy(asc(squishies.id))
         .for('update');
     },
 
