@@ -2,12 +2,14 @@ import { z } from 'zod';
 import { BuildingSchema } from './buildings.js';
 import { CareActionSchema } from './care-actions.js';
 import { ElementIdSchema, ElementSchema, FeelingIdSchema, FeelingSchema } from './elements.js';
+import { MapGenSettingsSchema } from './map-gen.js';
 import { ElementMatrixSchema, FeelingMatrixSchema, SynergyTableSchema } from './matrices.js';
 import { MoveSchema } from './moves.js';
 import { RecipeSchema } from './recipes.js';
 import { ResourceSchema } from './resources.js';
 import { SeasonSchema } from './seasons.js';
 import { SpeciesSchema } from './species.js';
+import { TerrainSchema } from './terrains.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Path, type Report } from './issues.js';
 
 function checkCost(
@@ -24,7 +26,8 @@ const ids = (rows: readonly { id: string }[]) => new Set(rows.map((r) => r.id));
 
 /**
  * Every public content table, validated row by row and then cross-checked so
- * every id a row mentions exists (moves, evolutions, seasons, resources).
+ * every id a row mentions exists (moves, evolutions, seasons, resources,
+ * terrains).
  */
 export const GameDataSchema = z
   .strictObject({
@@ -40,6 +43,8 @@ export const GameDataSchema = z
     recipes: z.array(RecipeSchema),
     seasons: z.array(SeasonSchema),
     careActions: z.array(CareActionSchema),
+    terrains: z.array(TerrainSchema),
+    mapGen: MapGenSettingsSchema,
   })
   .superRefine((data, ctx) => {
     const report: Report = (path, message) => {
@@ -56,6 +61,7 @@ export const GameDataSchema = z
       'recipes',
       'seasons',
       'careActions',
+      'terrains',
     ] as const) {
       checkUniqueIds(table, data[table], report);
     }
@@ -144,6 +150,44 @@ export const GameDataSchema = z
 
     data.careActions.forEach((c, i) => {
       checkCost(resources, c.cost, ['careActions', i, 'cost'], report);
+    });
+
+    data.terrains.forEach((t, i) => {
+      t.nodeResources.forEach((id, j) => {
+        checkRef(resources, 'resource', id, ['terrains', i, 'nodeResources', j], report);
+      });
+    });
+    if (!data.terrains.some((t) => t.weight > 0)) {
+      report(['terrains'], 'at least one terrain needs a weight above 0');
+    }
+
+    const { mapGen } = data;
+    const terrains = ids(data.terrains);
+    checkRef(terrains, 'terrain', mapGen.gapTerrain, ['mapGen', 'gapTerrain'], report);
+    checkRef(terrains, 'terrain', mapGen.homeTerrain, ['mapGen', 'homeTerrain'], report);
+    const gapTerrain = data.terrains.find((t) => t.id === mapGen.gapTerrain);
+    if (gapTerrain !== undefined && gapTerrain.weight !== 0) {
+      report(['mapGen', 'gapTerrain'], "Juniper's Gap terrain must have weight 0");
+    }
+    mapGen.homeRingNodes.forEach((id, i) => {
+      checkRef(resources, 'resource', id, ['mapGen', 'homeRingNodes', i], report);
+    });
+    const playerCounts = new Set<number>();
+    mapGen.layouts.forEach((layout, i) => {
+      if (playerCounts.has(layout.players)) {
+        report(
+          ['mapGen', 'layouts', i, 'players'],
+          `duplicate layout for ${layout.players} players`,
+        );
+      }
+      playerCounts.add(layout.players);
+      // Leave at least one neutral tile between the Gap and every home ring.
+      if (layout.homeDistance - 1 - mapGen.gapRadius < 2) {
+        report(
+          ['mapGen', 'layouts', i, 'homeDistance'],
+          "home rings must sit at least 2 steps outside Juniper's Gap",
+        );
+      }
     });
   });
 export type GameData = z.infer<typeof GameDataSchema>;

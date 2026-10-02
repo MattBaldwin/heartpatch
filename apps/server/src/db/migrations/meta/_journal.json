@@ -8,6 +8,13 @@
       "when": 1790907183606,
       "tag": "0000_core_spine",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790910754117,
+      "tag": "0001_accounts",
+      "breakpoints": true
     }
   ]
 }

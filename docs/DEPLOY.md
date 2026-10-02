@@ -106,7 +106,7 @@ Before you start, have:
 3. **Attach a static IP.** Instance → **Networking** tab → **Attach static IP** (or **Create static IP**) → name it `heartpatch-ip` → **Create**. Write the address down: it's `STATIC_IP` in the rest of this runbook. *Why:* an instance's default public IP changes if it's stopped; the static one never does, and DNS points at it.
 4. **Firewall.** Same **Networking** tab → **IPv4 Firewall**: make sure there are exactly three rules, **SSH (TCP 22)**, **HTTP (TCP 80)** and **HTTPS (TCP 443)**; add HTTPS with **+ Add rule** if it's missing. Do the same under **IPv6 Firewall**. *Why:* 80/443 serve the game (80 only redirects to HTTPS and answers Let's Encrypt's check); 22 is SSH.
    - Leave SSH open to all IPs. GitHub Actions deploys over SSH from a large, changing pool of addresses, so SSH can't be limited to your home IP. It's protected instead by keys only (no passwords), a separate deploy user, and fail2ban (step 3).
-5. **Automatic snapshots.** Instance → **Snapshots** tab → turn on **Automatic snapshots**, pick a time (e.g. 09:00 UTC). Lightsail keeps the last 7 daily snapshots. *Why:* a whole-server backup you can restore in a few clicks if the server itself breaks; the nightly database dumps (step 8) are the finer-grained backup.
+5. **Automatic snapshots.** Instance → **Snapshots** tab → turn on **Automatic snapshots**, pick a time (e.g. 10:00 UTC, after the 09:00 automatic-update reboot window and the 08:30 database backup). Lightsail keeps the last 7 daily snapshots. *Why:* a whole-server backup you can restore in a few clicks if the server itself breaks; the nightly database dumps (step 8) are the finer-grained backup.
 
 ## 3. Log in and run the setup script
 
@@ -115,7 +115,7 @@ Before you start, have:
 - installs updates and turns on **automatic security updates** (with a reboot at 09:00 UTC when a kernel update needs one; the game restarts by itself),
 - installs **Docker** with the compose plugin, and **rotates container logs** so they can't fill the disk,
 - adds a **2 GB swap file**,
-- creates a **`deploy` user** that only GitHub Actions uses, which accepts **one SSH key** and can't forward ports or open a terminal,
+- creates a **`deploy` user** that only GitHub Actions uses, which accepts **one SSH key**, with port forwarding and interactive terminals turned off. It can still run commands, including Docker, which is as powerful as root; that's what deploying needs, so guard that key,
 - makes SSH **key-only** (no passwords, no root login),
 - turns on the **ufw firewall** (only 22, 80, 443 in; a second layer behind Lightsail's),
 - turns on **fail2ban** (bans IPs that keep failing SSH logins),
@@ -204,7 +204,7 @@ Then delete the laptop copy of the private deploy key: `rm ~/.ssh/heartpatch-dep
    sudo -u deploy sed -i \
      -e "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$(openssl rand -hex 32)/" \
      -e "s|^SESSION_SECRET=$|SESSION_SECRET=$(openssl rand -base64 64 | tr -d '\n')|" \
-     -e "s/^HP_SIGNUP_CODE=$/HP_SIGNUP_CODE=$(openssl rand -hex 12)/" \
+     -e "s/^HP_SIGNUP_CODE=$/HP_SIGNUP_CODE=$(tr -dc a-km-np-z2-9 </dev/urandom | head -c 10)/" \
      /opt/heartpatch/.env
    ```
 3. Check it (and note the signup code: your family types it to create accounts):
@@ -294,13 +294,19 @@ bin/backup.sh
 ls -lh backups/
 ```
 
-Copy one to your laptop for safekeeping now and then (**💻 laptop**). It holds password hashes, so keep it private:
+Copy one to your laptop for safekeeping now and then. It holds password hashes, so keep it private. Only the `deploy` user can read `backups/`, so first make a copy `ubuntu` can fetch (**🖥️ server**, as `ubuntu`):
 
 ```sh
-scp -i ~/.ssh/heartpatch-admin.pem ubuntu@STATIC_IP:/opt/heartpatch/backups/heartpatch-<time>.dump ~/heartpatch-backups/
+sudo install -o ubuntu -m 600 /opt/heartpatch/backups/heartpatch-<time>.dump ~/
 ```
 
-(`ubuntu` can't read `backups/` directly; first run `sudo cp /opt/heartpatch/backups/heartpatch-<time>.dump ~ubuntu/ && sudo chown ubuntu ~ubuntu/heartpatch-*.dump` on the server, and delete that copy afterwards.)
+then download it (**💻 laptop**) and delete the server-side copy:
+
+```sh
+mkdir -p ~/heartpatch-backups
+scp -i ~/.ssh/heartpatch-admin.pem ubuntu@STATIC_IP:heartpatch-<time>.dump ~/heartpatch-backups/
+ssh -i ~/.ssh/heartpatch-admin.pem ubuntu@STATIC_IP 'rm ~/heartpatch-*.dump'
+```
 
 **Restore a dump** (replaces the live database):
 
@@ -308,7 +314,7 @@ scp -i ~/.ssh/heartpatch-admin.pem ubuntu@STATIC_IP:/opt/heartpatch/backups/hear
 bin/restore.sh backups/heartpatch-<time>.dump
 ```
 
-It asks you to type `restore`, then: takes a **safety backup** of the current database, stops the game server, recreates the database from the dump in one transaction, applies any newer migrations, starts the server and checks `/health` and `/ready`. Players are offline for under a minute. If the restore itself fails, the message tells you which safety backup to restore instead.
+It asks you to type `restore`, then: takes a **safety backup** of the current database, restores the dump into a scratch database while the game keeps running, and only if that worked, stops the server for a few seconds, swaps the databases, applies any newer migrations and checks `/health` and `/ready`. If anything fails, the live database is left (or put back) as it was.
 
 **Restore the whole server** (it won't boot, or was badly misconfigured): Lightsail → **Snapshots** → pick one → **Create new instance** (same plan) → move the static IP to the new instance (**Networking** → detach from old, attach to new). DNS needs no change because the IP is the same. Delete the old instance once the new one works.
 

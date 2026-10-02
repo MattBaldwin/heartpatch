@@ -45,7 +45,9 @@ jobs:
         run: infra/scripts/local-smoke.sh
 
   preflight:
-    if: github.event_name != 'pull_request'
+    # Only main ever reaches production, including manual runs (Run workflow
+    # lets you pick any branch).
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -73,7 +75,7 @@ jobs:
           fi
 
   images:
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -108,7 +110,7 @@ jobs:
           # One plain manifest per tag (no untagged attestation children), so
           # pruning old versions below can't break a kept image.
           provenance: false
-      # Private package storage has a quota: keep the newest 10 releases.
+      # Private package storage has a quota: keep the newest 5 releases.
       # Never fails the run; the server keeps its own copy of what it runs.
       - name: Prune old image versions
         uses: actions/delete-package-versions@v5
@@ -116,11 +118,11 @@ jobs:
         with:
           package-name: heartpatch-${{ matrix.image }}
           package-type: container
-          min-versions-to-keep: 10
+          min-versions-to-keep: 5
 
   deploy:
     needs: [preflight, images]
-    if: needs.preflight.outputs.ready == 'true'
+    if: github.ref == 'refs/heads/main' && needs.preflight.outputs.ready == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment:

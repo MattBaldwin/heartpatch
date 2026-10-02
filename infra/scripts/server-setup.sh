@@ -109,7 +109,8 @@ passwd -l "$DEPLOY_USER" >/dev/null
 deploy_home=$(getent passwd "$DEPLOY_USER" | cut -d: -f6)
 install -d -m 700 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$deploy_home/.ssh"
 if [[ -n $deploy_key ]]; then
-  # `restrict`: no port forwarding, agent or X11 forwarding, or terminal for this key.
+  # `restrict`: no port/agent/X11 forwarding or interactive terminal. The key can
+  # still run commands (deploying needs that), so it is as powerful as the user.
   printf 'restrict %s\n' "$deploy_key" >"$deploy_home/.ssh/authorized_keys"
   chown "$DEPLOY_USER:$DEPLOY_USER" "$deploy_home/.ssh/authorized_keys"
   chmod 600 "$deploy_home/.ssh/authorized_keys"

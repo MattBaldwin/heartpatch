@@ -78,8 +78,10 @@ services:
     logging: *logging
 
   db:
-    # Same major version as dev and CI. Never published to the host.
-    image: postgres:16
+    # Pinned (same major and distro as dev and CI), so a deploy's pull never
+    # swaps the database image or its collations by surprise. Upgrade on purpose.
+    # Never published to the host.
+    image: postgres:16.15-trixie
     restart: unless-stopped
     environment:
       POSTGRES_USER: heartpatch

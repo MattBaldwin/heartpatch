@@ -209,7 +209,7 @@ Small and cheap on purpose: one server for a few families.
 
 - **AWS Lightsail** Linux instance, **Ubuntu 24.04 LTS**, **2 GB RAM plan** (check current Lightsail pricing), region **us-east-2 (Ohio)**.
 - **Static IP** attached to the instance.
-- **Lightsail firewall:** allow TCP 22 (SSH, ideally restricted to your IP), 80, 443. Nothing else.
+- **Lightsail firewall:** allow TCP 22 (SSH; open to all because GitHub-hosted runners deploy from changing IPs, protected by key-only auth and fail2ban), 80, 443. Nothing else.
 - **Automatic daily snapshots** enabled in Lightsail.
 - **DNS:** stays at **GoDaddy**. Add an **A record** `play` → Lightsail static IP. The root domain keeps serving the GoDaddy Website Builder homepage, which gets a "Play Heartpatch" button.
 - **On the instance (docker compose):**
@@ -227,7 +227,7 @@ Small and cheap on purpose: one server for a few families.
   1. Build Docker images for server and client (client is a static build copied into the Caddy image or a volume).
   2. Push to **GitHub Container Registry** (`ghcr.io/mattbaldwin/heartpatch-*`).
   3. SSH to Lightsail, `docker compose pull`, run migrations with the new image (one-off container) **before** switching, then `docker compose up -d`. Health-check `/api/v1/health` and roll back to the previous image tag on failure. Then make a **one-off** `/api/v1/ready` check; if it fails, roll back the image the same way and report the failure (a broken `DATABASE_URL` or failed migration). Ongoing container health checks use `/health` only.
-- **Repository secrets:** `LIGHTSAIL_HOST`, `LIGHTSAIL_USER`, `LIGHTSAIL_SSH_KEY`, plus production env values stored in a `.env` file on the server (not in GitHub).
+- **Repository secrets:** `LIGHTSAIL_HOST`, `LIGHTSAIL_USER`, `LIGHTSAIL_SSH_KEY`, `LIGHTSAIL_KNOWN_HOSTS` (the server's pinned SSH host key), plus production env values stored in a `.env` file on the server (not in GitHub).
 
 ## 13. Testing and definition of done
 

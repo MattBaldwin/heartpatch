@@ -28,6 +28,7 @@ tag=${1:-}
 [[ $tag =~ ^[A-Za-z0-9._-]{1,128}$ ]] || fail "usage: deploy.sh <image tag>"
 
 cd "$HP_DIR"
+HP_DIR=$(pwd -P)
 [[ -f .env ]] || fail "$HP_DIR/.env is missing (docs/DEPLOY.md step 6)"
 
 # One deploy at a time (a push and a manual rollback could otherwise overlap).
@@ -52,8 +53,11 @@ deploy_tag=$tag
 
 # Install the uploaded compose file and scripts, keeping the current ones so a
 # rollback runs the previous release with the config it shipped with.
+# Only when this script *is* the uploaded one: a manual `bin/deploy.sh <old tag>`
+# must never pick up a newer compose file left behind by a failed upload.
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 staged=false
-if [[ -d incoming ]]; then
+if [[ $script_dir == "$HP_DIR/incoming" ]]; then
   rm -rf .rollback && mkdir .rollback
   [[ -f compose.yaml ]] && cp -p compose.yaml .rollback/
   [[ -d bin ]] && cp -pR bin .rollback/

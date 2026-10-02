@@ -90,7 +90,7 @@ step "writing a production-style .env in $HP_DIR"
 sed \
   -e "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$(openssl rand -hex 32)/" \
   -e "s|^SESSION_SECRET=$|SESSION_SECRET=$(openssl rand -base64 64 | tr -d '\n')|" \
-  -e "s/^HP_SIGNUP_CODE=$/HP_SIGNUP_CODE=$(openssl rand -hex 12)/" \
+  -e "s/^HP_SIGNUP_CODE=$/HP_SIGNUP_CODE=$(tr -dc a-km-np-z2-9 </dev/urandom | head -c 10)/" \
   -e "s|^PUBLIC_ORIGIN=.*|PUBLIC_ORIGIN=https://localhost|" \
   "$repo/infra/compose/.env.prod.example" >"$HP_DIR/.env"
 cat >>"$HP_DIR/.env" <<ENV
@@ -183,6 +183,10 @@ RESTORE_CONFIRM=yes "$HP_DIR/bin/restore.sh" "$dump"
 pass "restored $users_before users and $tiles_before tiles"
 https https://localhost/api/v1/ready | grep -q '"status":"ready"' || fail "not ready after restore"
 pass "server is ready after the restore"
+leftover=$(compose exec -T db psql -U heartpatch -d postgres -tAc \
+  "select count(*) from pg_database where datname in ('heartpatch_restore', 'heartpatch_before_restore')")
+[[ $leftover == 0 ]] || fail "scratch databases left behind"
+pass "no scratch databases left behind"
 
 step "a release that fails /health rolls back"
 stage
@@ -219,7 +223,12 @@ pass "releases.log records the deploys"
 
 step "manual rollback on the server, with no registry access"
 docker stop "$project-registry" >/dev/null
+# A failed upload can leave a newer compose file behind; a manual run must ignore it.
+mkdir -p "$HP_DIR/incoming"
+printf '# stale upload\n' >"$HP_DIR/incoming/docker-compose.prod.yml"
 "$HP_DIR/bin/deploy.sh" good-1 || fail "manual rollback to good-1 failed"
+grep -q 'stale upload' "$HP_DIR/compose.yaml" && fail "manual deploy installed a stale upload"
+pass "a manual deploy ignores a stale incoming/ folder"
 [[ $(current_version) == good-1 ]] || fail "health reports $(current_version), not good-1"
 pass "bin/deploy.sh good-1 used the images kept on the server"
 

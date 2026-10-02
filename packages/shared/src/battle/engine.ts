@@ -1,0 +1,568 @@
+import { Rng } from '../rng/index.js';
+import {
+  BattleSetupSchema,
+  BattleSideIdSchema,
+  type BattleAction,
+  type BattleChoice,
+  type BattleSetup,
+  type BattleSideId,
+} from '../schemas/battle.js';
+import type { BattleStat, Move } from '../schemas/data/moves.js';
+import { chooseAiChoice, chooseAiReplacement } from './ai.js';
+import { BattleRuleError, getMove, getSpecies, type BattleContent } from './content.js';
+import {
+  effectiveStat,
+  effectivenessTier,
+  matchupMultiplier,
+  rollDamage,
+  statsAtLevel,
+} from './formulas.js';
+import {
+  activeSquishy,
+  benchOf,
+  otherSide,
+  type BattleEndReason,
+  type BattleEvent,
+  type BattleResult,
+  type BattleSquishy,
+  type BattleState,
+  type BattleXpAward,
+  type Draft,
+} from './state.js';
+
+/*
+ * The battle reducer (design doc §6, tech spec §8).
+ *
+ * The spec writes it as `(state, action, seed) → newState`. Here the seed is
+ * used once, by `startBattle`, and the RNG's state is then stored in the
+ * battle state. So every step is a pure function of (state, action): the
+ * same inputs always give the same output, nothing reads a clock or
+ * `Math.random()`, and inputs are never changed. A stored battle is just
+ * `setup` (which holds the seed) plus the list of actions, and
+ * `replayBattle` rebuilds it exactly.
+ */
+
+const SIDES = BattleSideIdSchema.options;
+
+const freshStages = (): Record<BattleStat, number> => ({ attack: 0, defense: 0, speed: 0 });
+
+/** Builds the first state from a setup. Throws if the setup breaks the rules. */
+export function startBattle(content: BattleContent, input: BattleSetup): BattleState {
+  const setup = BattleSetupSchema.parse(input);
+  const sideFrom = (side: BattleSideId): Draft<BattleState>['sides'][BattleSideId] => {
+    const { controller, squishies } = setup.sides[side];
+    if (squishies.length > content.rules.teamSize) {
+      throw new BattleRuleError(
+        `side ${side} brings ${squishies.length} squishies; the limit is ${content.rules.teamSize}`,
+      );
+    }
+    return {
+      controller: { ...controller },
+      active: 0,
+      squishies: squishies.map((s, slot) => {
+        const species = getSpecies(content, s.speciesId);
+        for (const move of species.moves) getMove(content, move);
+        const stats = s.stats ?? statsAtLevel(species.baseStats, s.level, content.rules);
+        return {
+          id: s.id,
+          speciesId: species.id,
+          level: s.level,
+          element: s.element ?? species.element,
+          feeling: s.feeling ?? species.feeling,
+          stats: { ...stats },
+          moves: [...species.moves],
+          energy: stats.hp,
+          stages: freshStages(),
+          status: null,
+          joined: slot === 0,
+        };
+      }),
+    };
+  };
+  return {
+    version: 1,
+    contentHash: content.contentHash,
+    turn: 0,
+    rng: Rng.fromSeed(setup.seed).state(),
+    sides: { a: sideFrom('a'), b: sideFrom('b') },
+    phase: { type: 'turn' },
+    log: [],
+  };
+}
+
+/** A writable copy of everything a step can change. Events are never changed, so they're shared. */
+function draftOf(state: BattleState): Draft<BattleState> {
+  const copySide = (side: BattleState['sides'][BattleSideId]) => ({
+    controller: { ...side.controller },
+    active: side.active,
+    squishies: side.squishies.map((s) => ({
+      ...s,
+      stats: { ...s.stats },
+      moves: [...s.moves],
+      stages: { ...s.stages },
+      status: s.status && { ...s.status },
+    })),
+  });
+  return {
+    version: state.version,
+    contentHash: state.contentHash,
+    turn: state.turn,
+    rng: [...state.rng],
+    sides: { a: copySide(state.sides.a), b: copySide(state.sides.b) },
+    phase: structuredPhase(state.phase),
+    log: [...state.log],
+  };
+}
+
+function structuredPhase(phase: BattleState['phase']): Draft<BattleState>['phase'] {
+  switch (phase.type) {
+    case 'turn':
+      return { type: 'turn' };
+    case 'replace':
+      return { type: 'replace', sides: [...phase.sides] };
+    case 'over':
+      return {
+        type: 'over',
+        result: { ...phase.result, xp: phase.result.xp.map((x) => ({ ...x })) },
+      };
+  }
+}
+
+/** One step's working state: a private draft and RNG. */
+class Step {
+  readonly content: BattleContent;
+  readonly state: Draft<BattleState>;
+  readonly rng: Rng;
+
+  constructor(content: BattleContent, state: BattleState) {
+    this.content = content;
+    this.state = draftOf(state);
+    this.rng = Rng.fromState(state.rng);
+  }
+
+  finish(): BattleState {
+    this.state.rng = [...this.rng.state()];
+    return this.state;
+  }
+
+  emit(event: BattleEvent): void {
+    this.state.log.push(event);
+  }
+
+  active(side: BattleSideId): Draft<BattleSquishy> {
+    return activeSquishy(this.state, side);
+  }
+
+  at(side: BattleSideId) {
+    return { turn: this.state.turn, side, slot: this.state.sides[side].active };
+  }
+
+  get over(): boolean {
+    return this.state.phase.type === 'over';
+  }
+
+  // ── Turns ────────────────────────────────────────────────────────────
+
+  turn(choices: Partial<Record<BattleSideId, BattleChoice>>): void {
+    // AI sides pick in a fixed order (a, then b) so their rolls replay exactly.
+    const picked = { a: this.choiceFor('a', choices.a), b: this.choiceFor('b', choices.b) };
+
+    this.state.turn += 1;
+
+    // Swaps happen before moves; a swap is the side's whole turn.
+    for (const side of SIDES) {
+      const choice = picked[side];
+      if (choice.type === 'swap') this.swap(side, choice.slot);
+    }
+
+    const movers = SIDES.filter((side) => picked[side].type === 'move');
+    for (const side of this.speedOrder(movers)) {
+      const choice = picked[side];
+      if (choice.type !== 'move') continue;
+      this.useMove(side, getMove(this.content, choice.move));
+      this.checkForWinner();
+      if (this.over) return;
+    }
+    this.endTurn();
+  }
+
+  /** The player's validated choice, or the AI's pick for an AI side. */
+  private choiceFor(side: BattleSideId, given: BattleChoice | undefined): BattleChoice {
+    const { controller } = this.state.sides[side];
+    if (controller.type === 'ai') {
+      if (given) throw new BattleRuleError(`side ${side} is AI-controlled; leave its choice out`);
+      return chooseAiChoice(this.content, this.state, side, controller.policy, this.rng);
+    }
+    if (!given) throw new BattleRuleError(`side ${side} needs a choice this turn`);
+    if (given.type === 'move') {
+      if (!this.active(side).moves.includes(given.move)) {
+        throw new BattleRuleError(`side ${side}'s squishy doesn't know "${given.move}"`);
+      }
+    } else {
+      this.checkBenchSlot(side, given.slot);
+    }
+    return given;
+  }
+
+  private checkBenchSlot(side: BattleSideId, slot: number): void {
+    if (!benchOf(this.state, side).some((b) => b.slot === slot)) {
+      throw new BattleRuleError(`side ${side} can't send out slot ${slot}`);
+    }
+  }
+
+  /** Faster squishies go first; an exact tie is a seeded coin flip. */
+  private speedOrder(sides: BattleSideId[]): BattleSideId[] {
+    const [first, second] = sides;
+    if (first === undefined || second === undefined) return sides;
+    const { rules } = this.content;
+    const a = effectiveStat(this.active(first), 'speed', rules);
+    const b = effectiveStat(this.active(second), 'speed', rules);
+    if (a > b) return [first, second];
+    if (b > a) return [second, first];
+    return this.rng.chance(50) ? [first, second] : [second, first];
+  }
+
+  private swap(side: BattleSideId, slot: number): void {
+    const leaving = this.active(side);
+    leaving.stages = freshStages();
+    if (leaving.status && this.content.rules.status[leaving.status.id].clearsOnSwap) {
+      leaving.status = null;
+    }
+    this.emit({ ...this.at(side), type: 'swap', to: slot });
+    this.sendOut(side, slot);
+  }
+
+  private sendOut(side: BattleSideId, slot: number): void {
+    this.state.sides[side].active = slot;
+    this.active(side).joined = true;
+  }
+
+  // ── Moves ────────────────────────────────────────────────────────────
+
+  /** Sleepy and dizzy squishies may miss their turn. Returns true if it can act. */
+  private canAct(side: BattleSideId): boolean {
+    const user = this.active(side);
+    const status = user.status;
+    if (!status) return true;
+    if (status.turnsLeft === 0) {
+      user.status = null;
+      this.emit({ ...this.at(side), type: 'status-end', status: status.id });
+      return true;
+    }
+    status.turnsLeft -= 1;
+    if (this.rng.chance(this.content.rules.status[status.id].skipChance)) {
+      this.emit({ ...this.at(side), type: 'status-skip', status: status.id });
+      return false;
+    }
+    return true;
+  }
+
+  private useMove(side: BattleSideId, move: Move): void {
+    const user = this.active(side);
+    if (user.energy === 0 || !this.canAct(side)) return;
+    const foeSide = otherSide(side);
+    const target = this.active(foeSide);
+
+    this.emit({ ...this.at(side), type: 'move', move: move.id });
+    if (!this.rng.chance(move.accuracy)) {
+      this.emit({ ...this.at(side), type: 'miss', move: move.id });
+      return;
+    }
+
+    if (move.power > 0) {
+      const amount = Math.min(
+        target.energy,
+        rollDamage(this.content, move, user, target, this.rng),
+      );
+      target.energy -= amount;
+      const effectiveness = effectivenessTier(
+        matchupMultiplier(this.content, move, user, target),
+        this.content.rules,
+      );
+      this.emit({ ...this.at(foeSide), type: 'hit', amount, energy: target.energy, effectiveness });
+      if (target.energy === 0) this.emit({ ...this.at(foeSide), type: 'tuckered-out' });
+    }
+
+    for (const effect of move.effects ?? []) {
+      switch (effect.type) {
+        case 'heal': {
+          const restored = Math.floor((user.stats.hp * effect.percent) / 100);
+          const amount = Math.min(restored, user.stats.hp - user.energy);
+          if (amount === 0) break;
+          user.energy += amount;
+          this.emit({ ...this.at(side), type: 'heal', amount, energy: user.energy });
+          break;
+        }
+        case 'stat': {
+          const who = effect.target === 'self' ? side : foeSide;
+          const squishy = this.active(who);
+          if (squishy.energy === 0 || !this.rng.chance(effect.chance)) break;
+          const { maxStages } = this.content.rules.statStages;
+          const before = squishy.stages[effect.stat];
+          const after = Math.max(-maxStages, Math.min(maxStages, before + effect.stages));
+          squishy.stages[effect.stat] = after;
+          this.emit({
+            ...this.at(who),
+            type: 'stat-change',
+            stat: effect.stat,
+            stages: after - before,
+            total: after,
+          });
+          break;
+        }
+        case 'status': {
+          if (target.energy === 0 || target.status || !this.rng.chance(effect.chance)) break;
+          const rule = this.content.rules.status[effect.status];
+          target.status = {
+            id: effect.status,
+            turnsLeft: this.rng.int(rule.minTurns, rule.maxTurns),
+          };
+          this.emit({ ...this.at(foeSide), type: 'status-start', status: effect.status });
+          break;
+        }
+      }
+    }
+  }
+
+  // ── End of turn and end of battle ────────────────────────────────────
+
+  private checkForWinner(): void {
+    for (const side of SIDES) {
+      if (this.state.sides[side].squishies.every((s) => s.energy === 0)) {
+        this.end(otherSide(side), 'tuckered-out');
+        return;
+      }
+    }
+  }
+
+  private endTurn(): void {
+    if (this.state.turn >= this.content.rules.maxTurns) {
+      this.end(this.energyLeader(), 'turn-limit');
+      return;
+    }
+    const waiting: BattleSideId[] = [];
+    for (const side of SIDES) {
+      if (this.active(side).energy > 0) continue;
+      const { controller } = this.state.sides[side];
+      if (controller.type === 'player') {
+        waiting.push(side);
+      } else {
+        this.replace(
+          side,
+          chooseAiReplacement(this.content, this.state, side, controller.policy, this.rng),
+        );
+      }
+    }
+    if (waiting.length > 0) this.state.phase = { type: 'replace', sides: waiting };
+  }
+
+  replace(side: BattleSideId, slot: number): void {
+    this.checkBenchSlot(side, slot);
+    this.sendOut(side, slot);
+    this.emit({ ...this.at(side), type: 'replace' });
+  }
+
+  /** The side with more of its total energy left; equal shares are a draw. */
+  private energyLeader(): BattleSideId | 'draw' {
+    const share = (side: BattleSideId) => {
+      const squishies = this.state.sides[side].squishies;
+      return {
+        left: squishies.reduce((sum, s) => sum + s.energy, 0),
+        full: squishies.reduce((sum, s) => sum + s.stats.hp, 0),
+      };
+    };
+    const a = share('a');
+    const b = share('b');
+    // Cross-multiplied so the comparison is exact integer maths.
+    const diff = a.left * b.full - b.left * a.full;
+    return diff > 0 ? 'a' : diff < 0 ? 'b' : 'draw';
+  }
+
+  end(winner: BattleSideId | 'draw', reason: BattleEndReason): void {
+    this.emit({ turn: this.state.turn, type: 'battle-end', winner, reason });
+    this.state.phase = {
+      type: 'over',
+      result: {
+        winner,
+        reason,
+        contentHash: this.state.contentHash,
+        turns: this.state.turn,
+        xp: this.xpAwards(winner, reason),
+      },
+    };
+  }
+
+  /**
+   * Base battle XP for every squishy that came out (battle rules `xp`). A
+   * side that runs away earns nothing, and the `minimum` only counts once a
+   * turn was played, so "start a battle, run away" is never an XP loop.
+   */
+  private xpAwards(winner: BattleSideId | 'draw', reason: BattleEndReason): BattleXpAward[] {
+    const { perOpponentLevel, winMultiplier, minimum } = this.content.rules.xp;
+    const floor = this.state.turn > 0 ? minimum : 0;
+    return SIDES.flatMap((side) => {
+      const levels = this.state.sides[otherSide(side)].squishies
+        .filter((s) => s.energy === 0)
+        .reduce((sum, s) => sum + s.level, 0);
+      const multiplier = winner === side ? winMultiplier : 1;
+      const ranAway = reason === 'forfeit' && winner !== side;
+      const xp = ranAway ? 0 : Math.max(floor, Math.floor(perOpponentLevel * levels * multiplier));
+      return this.state.sides[side].squishies
+        .filter((s) => s.joined)
+        .map((s) => ({ side, squishyId: s.id, xp }));
+    });
+  }
+}
+
+/**
+ * Applies one action and returns the next state. Pure: `state` and `action`
+ * are not changed, and the same inputs always give the same result. Throws
+ * `BattleRuleError` for an action the current phase doesn't allow.
+ *
+ * `action` is trusted to match `BattleActionSchema`: the API or WebSocket
+ * layer parses it at the boundary (CLAUDE.md). The rule checks here still
+ * reject unknown moves and slots.
+ */
+export function applyBattleAction(
+  content: BattleContent,
+  state: BattleState,
+  action: BattleAction,
+): BattleState {
+  const { phase } = state;
+  if (phase.type === 'over') throw new BattleRuleError('the battle is over');
+  if (state.contentHash !== content.contentHash) {
+    throw new BattleRuleError(
+      `battle was played with content ${state.contentHash}, not ${content.contentHash}`,
+    );
+  }
+  const step = new Step(content, state);
+
+  switch (action.type) {
+    case 'turn':
+      if (phase.type !== 'turn') {
+        throw new BattleRuleError(
+          `waiting for side ${phase.sides.join(' and ')} to send someone out`,
+        );
+      }
+      step.turn(action.choices);
+      break;
+    case 'replace': {
+      if (phase.type !== 'replace' || !phase.sides.includes(action.side)) {
+        throw new BattleRuleError(`side ${action.side} has nobody to replace`);
+      }
+      step.replace(action.side, action.slot);
+      const waiting = phase.sides.filter((s) => s !== action.side);
+      step.state.phase =
+        waiting.length > 0 ? { type: 'replace', sides: waiting } : { type: 'turn' };
+      break;
+    }
+    case 'forfeit':
+      if (state.sides[action.side].controller.type === 'ai') {
+        throw new BattleRuleError(`side ${action.side} is AI-controlled; it can't forfeit`);
+      }
+      step.emit({ turn: state.turn, type: 'forfeit', side: action.side });
+      step.end(otherSide(action.side), 'forfeit');
+      break;
+  }
+  return step.finish();
+}
+
+/** Rebuilds a battle from its setup (with the seed) and its action log. */
+export function replayBattle(
+  content: BattleContent,
+  setup: BattleSetup,
+  actions: readonly BattleAction[],
+): BattleState {
+  return actions.reduce(
+    (state, action) => applyBattleAction(content, state, action),
+    startBattle(content, setup),
+  );
+}
+
+/**
+ * Replays a stored `BattleRecord`. Throws if `content` isn't what the battle
+ * was played with: after re-tuning, the stored `result` and `log` are the
+ * truth, and a replay would quietly tell a different story.
+ */
+export function replayBattleRecord(content: BattleContent, record: BattleRecord): BattleState {
+  if (record.contentHash !== content.contentHash) {
+    throw new BattleRuleError(
+      `battle was played with content ${record.contentHash}, not ${content.contentHash}`,
+    );
+  }
+  return replayBattle(content, record.setup, record.actions);
+}
+
+/**
+ * Plays a battle where both sides are AI-controlled to the end (offline
+ * raids and the balance simulator). Returns the final state and the action
+ * log, which `replayBattle` turns back into the same state.
+ */
+export function autoplayBattle(
+  content: BattleContent,
+  setup: BattleSetup,
+): { state: BattleState; actions: BattleAction[] } {
+  for (const side of SIDES) {
+    if (setup.sides[side].controller.type !== 'ai') {
+      throw new BattleRuleError(`autoplay needs both sides AI-controlled; side ${side} is not`);
+    }
+  }
+  const actions: BattleAction[] = [];
+  let state = startBattle(content, setup);
+  while (state.phase.type !== 'over') {
+    const action: BattleAction = { type: 'turn', choices: {} };
+    actions.push(action);
+    state = applyBattleAction(content, state, action);
+  }
+  return { state, actions };
+}
+
+/** A battle as a client may see it: everything but the RNG state. */
+export type ClientBattleView = Omit<BattleState, 'rng'>;
+
+/**
+ * What the server sends players. The RNG state (and the setup's seed) would
+ * let a client predict every roll, so they never leave the server.
+ */
+export function clientBattleView(state: BattleState): ClientBattleView {
+  const { version, contentHash, turn, sides, phase, log } = state;
+  return { version, contentHash, turn, sides, phase, log };
+}
+
+/**
+ * What to store for a finished battle: the replay inputs (setup with its
+ * seed, and the actions) plus what actually happened (the content hash, the
+ * result and the resolved event log), so a battle stays explainable even
+ * after the data is re-tuned and it no longer replays the same way.
+ */
+export interface BattleRecord {
+  readonly setup: BattleSetup;
+  readonly actions: readonly BattleAction[];
+  readonly contentHash: string;
+  readonly result: BattleResult;
+  readonly log: readonly BattleEvent[];
+}
+
+export function battleRecord(
+  setup: BattleSetup,
+  actions: readonly BattleAction[],
+  state: BattleState,
+): BattleRecord {
+  if (state.phase.type !== 'over') throw new BattleRuleError('the battle is not over yet');
+  return {
+    setup,
+    actions,
+    contentHash: state.contentHash,
+    result: state.phase.result,
+    log: state.log,
+  };
+}
+
+/** Every choice a side could legally make this turn (for the UI and tests). */
+export function legalChoices(state: BattleState, side: BattleSideId): BattleChoice[] {
+  if (state.phase.type !== 'turn') return [];
+  return [
+    ...activeSquishy(state, side).moves.map((move): BattleChoice => ({ type: 'move', move })),
+    ...benchOf(state, side).map(({ slot }): BattleChoice => ({ type: 'swap', slot })),
+  ];
+}
