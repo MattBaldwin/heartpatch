@@ -13,6 +13,7 @@ import { buildTestScene } from './scenes/test-scene.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
+import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
@@ -134,6 +135,7 @@ const home = createHomeScreen({
   invalidate: () => stage?.invalidate(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
+  keeperWearing: () => wardrobe.wearing,
   onOpen: () => {
     maps.close();
     catalog.close();
@@ -171,6 +173,10 @@ const maps = createMapScreen({
     lobby.showMessage(message);
   },
   tileActions: combineTileActions(inventory.tileActions, home.tileActions, territory.tileActions),
+  // A piece of clothing found while playing (#43) shows a little note.
+  onLiveEvent: (event) => {
+    wardrobe.liveEvent(event);
+  },
 });
 // The squishy catalog (#14) opens from the button by the battle entry.
 const catalog = createCatalogScreen({ root: document.body });
@@ -246,6 +252,7 @@ const battles = createBattleScreen({
   canOpen: () => !lobby.isOpen && !catalog.isOpen,
   devTools: import.meta.env.DEV,
   keeper: () => keeper.current,
+  keeperWearing: () => wardrobe.wearing,
 });
 // Picking a Keeper (#42) comes right after signup, before the tutorial and
 // the lobby; Settings opens it again to change the Keeper for free.
@@ -272,6 +279,27 @@ const keeper = createKeeperScreen({
     else lobby.show();
   },
 });
+// The wardrobe (#43): from the lobby, it owns the whole screen like the
+// Keeper picker, and brings the lobby back when done.
+const wardrobe = createWardrobeScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  keeper: () => keeper.current,
+  onOpen: () => {
+    void battles.setMap(null);
+    void inventory.setMap(null);
+    home.setMap(null);
+    maps.close();
+    catalog.close();
+    lobby.stepOut();
+  },
+  onClosed: () => {
+    lobby.show();
+  },
+  devTools: import.meta.env.DEV,
+});
 const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
     catalog.close();
@@ -283,7 +311,7 @@ const lobby = mountLobby(document.body, {
     // battle resumed here (after a refresh) must step it out again after that.
     void battles.setMap(mapId);
   },
-  listActions: tutorial.listActions,
+  listActions: () => [...tutorial.listActions(), ...wardrobe.listActions()],
   settings: () => [...keeper.settings(), ...tutorial.settings()],
 });
 mountAuth(document.body, {
@@ -293,6 +321,7 @@ mountAuth(document.body, {
     inventory.setUser(user);
     territory.setUser(user);
     home.setUser(user);
+    wardrobe.setUser(user);
     maps.setUser(user);
     // The lobby and tutorial wait for a Keeper (`onReady` above).
     keeper.setUser(user);
@@ -350,5 +379,6 @@ if (import.meta.env.DEV) {
     territory: () => territory.debug,
     raids: () => raidReport.debug,
     home: () => home.debug,
+    wardrobe: () => wardrobe.debug,
   };
 }

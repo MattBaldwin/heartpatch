@@ -36,6 +36,7 @@ import {
 import { BuildingField } from '../procedural/buildings/building-field.js';
 import type { SquishyLod } from '../procedural/config.js';
 import { KeeperField } from '../procedural/keeper/keeper-field.js';
+import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
 import { HOME_VIEW, SPOT_SIZE, WANDER } from './home-config.js';
 import { centreOf, spotWorld } from './home-layout.js';
@@ -57,6 +58,8 @@ export interface HomeSceneStats {
   /** Squishies drawn at a habitat (the rest wait by the Heart Seed). */
   readonly housed: number;
   readonly keeper: boolean;
+  /** Clothing ids the Keeper wears (#43). */
+  readonly keeperWearing: readonly string[];
   /** Free spots glowing while the player picks where to build. */
   readonly spots: number;
   /** Building draw calls (one per look, not per building). */
@@ -73,6 +76,8 @@ export interface HomeSceneOptions {
   readonly registry: VisualRegistry;
   readonly lod: SquishyLod;
   readonly keeper: KeeperConfig | null;
+  /** What the Keeper wears (#43): clothing ids. */
+  readonly keeperWearing?: readonly string[];
 }
 
 /** Node resources drawn as the map's props in the middle of their tile. */
@@ -161,6 +166,7 @@ export class HomeScene {
       squishies: this.#residents.size,
       housed: this.#counts.housed,
       keeper: this.#keepers.handles.length > 0,
+      keeperWearing: this.#keepers.handles[0]?.params.worn ?? [],
       spots: this.#spots.length,
       buildingMeshes: this.#buildings.stats.meshes,
     };
@@ -233,13 +239,17 @@ export class HomeScene {
     this.#keepers.clear();
     if (this.#options.keeper) {
       const k = HOME_VIEW.keeper;
-      this.#keepers.add(this.#options.keeper, {
-        x: k.offset.x * HOME_VIEW.hexSize,
-        z: k.offset.z * HOME_VIEW.hexSize,
-        y: this.#ground,
-        scale: k.scale,
-        lean: k.lean,
-      });
+      this.#keepers.add(
+        this.#options.keeper,
+        {
+          x: k.offset.x * HOME_VIEW.hexSize,
+          z: k.offset.z * HOME_VIEW.hexSize,
+          y: this.#ground,
+          scale: k.scale,
+          lean: k.lean,
+        },
+        keeperItems(this.#options.keeperWearing ?? []),
+      );
     }
   }
 

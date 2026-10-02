@@ -1,5 +1,5 @@
 {
-  "id": "71481724-46b6-4aa7-a702-cf132bc11b76",
+  "id": "d7845d1d-c009-43ec-b830-4105650ed3b5",
   "prevId": "169ea164-8326-4107-891e-e362598c5c00",
   "version": "7",
   "dialect": "postgresql",
@@ -364,6 +364,125 @@
           "value": "\"buildings\".\"spot\" between 0 and 6"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.clothing_owned": {
+      "name": "clothing_owned",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_id": {
+          "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ref_id": {
+          "name": "ref_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "acquired_at": {
+          "name": "acquired_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "clothing_owned_user_id_item_id_idx": {
+          "name": "clothing_owned_user_id_item_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "clothing_owned_source_ref_id_key": {
+          "name": "clothing_owned_source_ref_id_key",
+          "columns": [
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "ref_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"clothing_owned\".\"ref_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "clothing_owned_user_id_users_id_fk": {
+          "name": "clothing_owned_user_id_users_id_fk",
+          "tableFrom": "clothing_owned",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "clothing_owned_map_id_maps_id_fk": {
+          "name": "clothing_owned_map_id_maps_id_fk",
+          "tableFrom": "clothing_owned",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.crafts": {
@@ -1251,14 +1370,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "defense_stance": {
-          "name": "defense_stance",
-          "type": "defense_stance",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'balanced'"
         }
       },
       "indexes": {
@@ -1434,156 +1545,68 @@
       },
       "isRLSEnabled": false
     },
-    "public.raids": {
-      "name": "raids",
+    "public.outfits": {
+      "name": "outfits",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "map_id": {
-          "name": "map_id",
+        "user_id": {
+          "name": "user_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "battle_id": {
-          "name": "battle_id",
-          "type": "uuid",
+        "preset": {
+          "name": "preset",
+          "type": "smallint",
           "primaryKey": false,
           "notNull": true
         },
-        "tile_id": {
-          "name": "tile_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "attacker_user_id": {
-          "name": "attacker_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "defender_user_id": {
-          "name": "defender_user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "outcome": {
-          "name": "outcome",
-          "type": "raid_outcome",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "reason": {
-          "name": "reason",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
-        },
-        "stance": {
-          "name": "stance",
-          "type": "defense_stance",
-          "typeSchema": "public",
-          "primaryKey": false,
           "notNull": false
         },
-        "resolved_at": {
-          "name": "resolved_at",
-          "type": "timestamp with time zone",
+        "wearing": {
+          "name": "wearing",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true
         },
-        "seen_at": {
-          "name": "seen_at",
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "now()"
         }
       },
-      "indexes": {
-        "raids_map_id_defender_idx": {
-          "name": "raids_map_id_defender_idx",
-          "columns": [
-            {
-              "expression": "map_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "defender_user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "resolved_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
-        "raids_map_id_maps_id_fk": {
-          "name": "raids_map_id_maps_id_fk",
-          "tableFrom": "raids",
-          "tableTo": "maps",
-          "columnsFrom": ["map_id"],
+        "outfits_user_id_users_id_fk": {
+          "name": "outfits_user_id_users_id_fk",
+          "tableFrom": "outfits",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "raids_battle_id_battles_id_fk": {
-          "name": "raids_battle_id_battles_id_fk",
-          "tableFrom": "raids",
-          "tableTo": "battles",
-          "columnsFrom": ["battle_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "raids_tile_id_tiles_id_fk": {
-          "name": "raids_tile_id_tiles_id_fk",
-          "tableFrom": "raids",
-          "tableTo": "tiles",
-          "columnsFrom": ["tile_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "raids_defender_member_fk": {
-          "name": "raids_defender_member_fk",
-          "tableFrom": "raids",
-          "tableTo": "map_members",
-          "columnsFrom": ["map_id", "defender_user_id"],
-          "columnsTo": ["map_id", "user_id"],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "raids_battle_id_key": {
-          "name": "raids_battle_id_key",
-          "nullsNotDistinct": false,
-          "columns": ["battle_id"]
+      "compositePrimaryKeys": {
+        "outfits_user_id_preset_pk": {
+          "name": "outfits_user_id_preset_pk",
+          "columns": ["user_id", "preset"]
         }
       },
+      "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "outfits_preset_range": {
+          "name": "outfits_preset_range",
+          "value": "\"outfits\".\"preset\" between 0 and 3"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.recovery_codes": {
@@ -2100,6 +2123,63 @@
           "value": "\"squishies\".\"xp\" >= 0"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.squishy_accessories": {
+      "name": "squishy_accessories",
+      "schema": "",
+      "columns": {
+        "squishy_id": {
+          "name": "squishy_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_id": {
+          "name": "item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "squishy_accessories_squishy_id_squishies_id_fk": {
+          "name": "squishy_accessories_squishy_id_squishies_id_fk",
+          "tableFrom": "squishy_accessories",
+          "tableTo": "squishies",
+          "columnsFrom": ["squishy_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "squishy_accessories_user_id_users_id_fk": {
+          "name": "squishy_accessories_user_id_users_id_fk",
+          "tableFrom": "squishy_accessories",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.tile_attacks": {
@@ -2632,11 +2712,6 @@
       "schema": "public",
       "values": ["active", "finished", "no-contest"]
     },
-    "public.defense_stance": {
-      "name": "defense_stance",
-      "schema": "public",
-      "values": ["aggressive", "defensive", "balanced"]
-    },
     "public.gather_status": {
       "name": "gather_status",
       "schema": "public",
@@ -2666,11 +2741,6 @@
       "name": "pvp_mode",
       "schema": "public",
       "values": ["on", "gentle", "off"]
-    },
-    "public.raid_outcome": {
-      "name": "raid_outcome",
-      "schema": "public",
-      "values": ["held", "tie", "lost", "taken", "no-contest"]
     },
     "public.squishy_state": {
       "name": "squishy_state",
