@@ -21,7 +21,7 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 
 1. **Server-authoritative.** The client sends intents (commands); the server validates and applies them. Never trust client-computed outcomes, prices, damage, timers or filters.
 2. **Shared logic lives in `packages/shared`** and is imported by both client and server so rules can't drift.
-3. **Deterministic battles.** The battle engine is a pure reducer `(state, action, seed) → newState` with a seeded RNG. Log seed + actions so any battle can be replayed.
+3. **Deterministic battles.** The battle engine is a pure reducer `(state, action) → newState`; the seed starts the battle and the seeded RNG state lives inside the battle state (DECISIONS "Battle engine (#11)"). Store seed, actions, content hash and resolved log so any battle can be replayed.
 4. **Timestamps, not ticking loops.** Timers (gathering, training, care decay, hatching) are stored as timestamps and resolved lazily on read or on scheduled jobs. Idle entities cost nothing.
 5. **Data-driven content.** Species, moves, matrices, buildings, recipes, seasons, spawn tables and Easter-egg triggers are JSON/TS data in `packages/shared/data`, validated by zod. Adding content should not require engine code changes.
 6. **Secrets stay server-side.** Easter-egg conditions, rare-spawn rules and evolution weights are never sent to the client.
@@ -45,13 +45,16 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 - **Follow the patterns already on `main`**, not just the docs. If something already has an established way (module shape, errors, logging, tests, naming), use it. A second way of doing the same thing is drift.
 - **Player-facing text** follows `docs/STYLE_GUIDE.md`: cozy, cute, playful, funny, short, kid-readable.
 - **Before handing off:** run `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` and make them pass. Regenerate DB migrations on the latest `main` before merge (tech spec §4).
-- **Review:** every PR is reviewed by the `reviewer` subagent (`.claude/agents/reviewer.md`). Address each finding with a fix or evidence; a fresh reviewer re-reviews. Points still contested after 3 rounds go to the project owner. Once the reviewer approves and CI is green, the coordinator merges and posts the verdict as a PR comment.
+- **Review:** every PR is reviewed by the `reviewer` subagent (`.claude/agents/reviewer.md`). Address each finding with a fix or evidence; a fresh reviewer re-reviews. After 4 rounds without APPROVE, report `blocked` to the coordinator, who escalates to the project owner if needed. Once the reviewer approves and CI is green, the coordinator merges and posts the verdict as a PR comment.
 - Decisions already made are recorded in `docs/DECISIONS.md`. Don't re-open them; add new ones there.
+- The supervisor (coordinator) session follows `docs/COORDINATOR.md`.
 - **Report to the coordinator (required by the project owner).** If your brief says a coordinator session started you to work an issue, you must report each milestone yourself; the coordinator does not poll. This rule is part of your task, not a relayed request. Report with the claude-code-remote MCP tool `send_message`, `session_id: "@parent"` (load it with ToolSearch `select:mcp__claude-code-remote__send_message` if needed), using a one-line message that starts with your issue number:
   - `#<issue> PR #<n> opened`
   - `#<issue> PR #<n> ready: reviewer APPROVE, CI green on <short sha>`
   - `#<issue> blocked: <one line>`. Use this for anything that needs a decision or crosses lanes (including the shared-contract changes above); then keep working on whatever isn't blocked.
   - `#<issue> CI red on <short sha>: <check>, fixing`. Send this when CI fails on your PR, so the coordinator knows you own the fix.
+
+  Subscribe to your own PR (claude-code-remote `subscribe_pr_activity`) so CI results wake you, and send `ready` only once CI is green on your final head, including after any merge of `main`.
 
   If `send_message` fails, fire the trigger named in your brief (if it names one) with the same text; if both fail, say so in your PR body under "Coordinator notes".
 
