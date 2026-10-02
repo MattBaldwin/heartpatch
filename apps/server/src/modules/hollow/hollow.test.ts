@@ -27,6 +27,7 @@ import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService } from '../battles/service.js';
+import { setDevDropChance } from '../wardrobe/drops.js';
 import { createHollowConsumer } from './consumer.js';
 import { createHollowService, type HollowService } from './service.js';
 
@@ -435,6 +436,8 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const lost = await squishy(mapId, kid, { habitat: meadow, state: 'hollowed' });
       const lost2 = await squishy(mapId, kid, { state: 'hollowed' });
       const hollow = hollowService();
+      // Every rewarded rescue finds a little thank-you to wear (#43's `rescue` drops).
+      setDevDropChance(100);
 
       const started = await hollow.rescue(kid, mapId, { squishyId: lost });
       expect(started.created).toBe(true);
@@ -469,6 +472,9 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         battleId: battle.id,
         heartdust: HOLLOW_RULES.rescue.heartdust,
       });
+      const found = () =>
+        db.query.clothingOwned.findMany({ where: (t, { eq }) => eq(t.userId, kid.id) });
+      expect(await found()).toMatchObject([{ source: 'rescue', mapId }]);
       // The consumer runs each event once: running it again changes nothing.
       await runConsumer(db, createHollowConsumer(hollow), mapId);
       expect(await heartdustOf(mapId, kid)).toBe(HOLLOW_RULES.rescue.heartdust);
@@ -479,6 +485,9 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       await runConsumer(db, createHollowConsumer(hollow), mapId);
       expect(await stateOf(lost2)).toBe('active');
       expect(await heartdustOf(mapId, kid)).toBe(HOLLOW_RULES.rescue.heartdust);
+      // …and finds no clothing either (decision C: not a farm).
+      expect(await found()).toHaveLength(1);
+      setDevDropChance(null);
       expect((await statusOf(server, kid, mapId)).rescue.rewardsLeftToday).toBe(0);
     });
 

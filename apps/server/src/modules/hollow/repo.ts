@@ -72,7 +72,7 @@ export interface RescueRow {
  * rules and holds the transaction. Nightfall's lock order: the night's
  * `hollow_events` row (the idempotency guard), then squishies, then `maps`
  * (the events, last). A rescue's: the rescue row, the squishy, inventory,
- * then `maps`.
+ * found clothing (#43), then `maps`.
  */
 export interface HollowRepo {
   transaction: <T>(fn: (repo: HollowTxRepo, tx: Executor) => Promise<T>) => Promise<T>;

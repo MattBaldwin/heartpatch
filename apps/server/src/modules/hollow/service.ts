@@ -39,6 +39,7 @@ import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles, mapLocalTime } from '../buildings/hearthfire.js';
 import { grantItems, requireMember } from '../inventory/service.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
+import { rollFoundDrop } from '../wardrobe/drops.js';
 import {
   createHollowRepo,
   createHollowTxRepo,
@@ -382,6 +383,19 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         );
       }
       await repo.endRescue(rescue.id, 'rescued', heartdust, at);
+      // A rewarded rescue may also find a little thank-you to wear (#43's
+      // `rescue` drop table); past the day's cap it finds nothing, so
+      // exposing squishies on purpose isn't a farm (decision C).
+      if (heartdust > 0) {
+        await rollFoundDrop(tx, {
+          source: 'rescue',
+          refId: rescue.id,
+          userId: rescue.userId,
+          mapId: map.id,
+          tileId: null,
+          at,
+        });
+      }
       if (home) {
         await repo.appendEvent({
           mapId: map.id,

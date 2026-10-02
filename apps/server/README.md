@@ -225,7 +225,7 @@ Lock order: the night's row, squishies, then `maps` (events).
 
 **The job** (`jobs/nightfall.ts`): a `nightfall.sweep` every minute (and at boot) asks `dueNightfalls()` which maps' latest nightfall hasn't run (maps with an active member who joined before it; map-local time, DST included), and enqueues one `nightfall` job per map and night (`singletonKey: mapId/night`). After downtime only the latest missed night runs.
 
-**Rescues** start through the battles service's `startRescue` (shadows from the secret `RESCUE_GUARDIANS`, fixed per squishy per map-local day, at the player's strongest level plus an offset; if every squishy is in the Hollow, the one being rescued fights). The `hollow` event consumer settles them from `battle.ended` (kind `rescue`): a win brings the squishy home (`state = 'active'`) and grants `HOLLOW_RULES.rescue.heartdust` through `grantItems(…, 'rescue')` if the player has rescues left today (counted by the battle's end, map-local day); a loss or no contest leaves it waiting. TODO(#19): reset its contentment once care exposes a call.
+**Rescues** start through the battles service's `startRescue` (shadows from the secret `RESCUE_GUARDIANS`, fixed per squishy per map-local day, at the player's strongest level plus an offset; if every squishy is in the Hollow, the one being rescued fights). The `hollow` event consumer settles them from `battle.ended` (kind `rescue`): a win brings the squishy home (`state = 'active'`) and grants `HOLLOW_RULES.rescue.heartdust` through `grantItems(…, 'rescue')` if the player has rescues left today (counted by the battle's end, map-local day), and rolls #43's `rescue` clothing drop (`rollFoundDrop`) for those rewarded rescues only; a loss or no contest leaves it waiting. TODO(#19): reset its contentment once care exposes a call.
 
 **Events:** `hollow.nightfall` (everyone: the night and who lost someone, never which squishy), `squishy.hollowed` and `squishy.rescued` (only the owner gets them live; `PUBLIC_VIEWS` overrides).
 
@@ -298,6 +298,37 @@ Each player's Keeper (design doc §23; issue #42) lives in `src/modules/keepers`
 | `POST /api/v1/keeper` | `KeeperConfig` (`base`, `hairColor`, `eyeColor`, `outfit`) → `{ keeper }`. Every id must be in the shared `KEEPER_DATA` (`keeperConfigProblem`), else `VALIDATION_FAILED` with a kid-readable message. Rate limited (`limits.ts`) |
 
 **Map gate:** with `HP_KEEPER_REQUIRED` (default `true`), creating or joining a map needs a Keeper (`FORBIDDEN`, "Pick your Keeper first, then come back!"), checked before the tutorial gate. **Shown to other players:** `MapMember.keeper` (map detail and map view) carries each member's config, or null for one who never picked (only possible with the gate off). A change shows on other players' maps the next time they fetch the view; there's no live event for it yet.
+
+## Wardrobe
+
+Clothing and outfits (design doc §23; issue #43; DECISIONS "Wardrobe (#43)") live in `src/modules/wardrobe`. Account-level (tech spec §4): one wardrobe per player, and their Keeper wears the same outfit on every map. The catalog is shared data (`CLOTHING`); drop tables are server-only (`@heartpatch/shared/server`).
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/wardrobe` | → `{ wardrobe }`: `owned` (`{ itemId, count }`, starter items included, catalog order), `wearing` (slot order) and saved `presets` |
+| `POST /api/v1/wardrobe/wear` | `{ wearing }` → `{ wardrobe }`. The whole set (equip and unequip in one). Every id must be a known Keeper item the player owns, one per slot (`VALIDATION_FAILED` / `FORBIDDEN`). A change writes `outfit.changed` on every map the player is active on |
+| `POST /api/v1/wardrobe/presets/:preset` | `{ name, wearing }` (preset 1–3) → `{ wardrobe }`. Checked like wearing; the name passes the name filter |
+| `POST /api/v1/wardrobe/presets/:preset/wear` | → `{ wardrobe }`; `NOT_FOUND` for an empty preset |
+| `POST /api/v1/maps/:mapId/squishies/:squishyId/accessory` | `{ itemId \| null }` → `{ squishyId, accessory }`. The player's own active squishy, a squishy accessory they own |
+| `POST /api/v1/dev/wardrobe/items` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): `{ items: [...] }` → 201 `{ wardrobe }` |
+
+Commands take an `Idempotency-Key`.
+
+**Storage:** `clothing_owned` (one row per piece; starters aren't stored, everyone owns them), `outfits` (preset 0 is what's worn, 1–3 the presets) and `squishy_accessories`. Other players see the worn set on `MapMember.keeper.wearing`.
+
+**Found clothing, for other modules** (gathering calls it; tile captures and Hollow rescues #21 will): call `rollFoundDrop` inside your transaction, after your own state writes and just before your own event, so your event stays the last write (gathering does this):
+
+```ts
+import { rollFoundDrop } from '../wardrobe/drops.js';
+
+await repo.transaction(async (repo, tx) => {
+  // …your state writes, then:
+  await rollFoundDrop(tx, { source: 'capture', refId: battleId, userId, mapId, tileId, at });
+  await repo.appendEvent(...); // your event, last
+});
+```
+
+It rolls the source's table (a percent chance, then a weighted pick among pieces that can drop on this tile's terrain in the seasons on now, by the map's local date), grants the piece and appends `clothing.found` (public: who and what). At most one piece per `(source, refId)`, ever, so a retried command can't grant twice. `HP_DEV_DROP_CHANCE` (dev and test only) sets every table's chance.
 
 ## Tutorial
 

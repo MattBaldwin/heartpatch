@@ -42,7 +42,7 @@ export interface MapScreenOptions {
   tileActions?: TileActions;
   /** Features that draw over the map (the night and the Hollow Man, #21). */
   layers?: readonly MapLayer[];
-  /** Every live event on the open map, after the map has applied it. */
+  /** Every live event the socket delivers, in seq order, after the map saw it (a find, #43). */
   onLiveEvent?: (event: WsEventMessage) => void;
 }
 
@@ -146,7 +146,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     ws ??= createWs({
       onEvent: (event) => {
         sync.event(event);
-        if (event.mapId === sync.state?.id) options.onLiveEvent?.(event);
+        options.onLiveEvent?.(event);
       },
       onResync: (mapId) => {
         sync.serverResync(mapId);

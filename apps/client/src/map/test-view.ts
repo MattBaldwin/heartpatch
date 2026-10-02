@@ -25,7 +25,7 @@ export function member(n: number, homeSlot: number): MapMember {
     role: n === 1 ? 'owner' : 'member',
     homeSlot,
     joinedAt: '2026-10-02T12:00:00.000Z',
-    keeper: base ? defaultKeeperConfig(base) : null,
+    keeper: base ? { ...defaultKeeperConfig(base), wearing: [] } : null,
   };
 }
 

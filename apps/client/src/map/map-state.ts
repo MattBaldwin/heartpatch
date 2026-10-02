@@ -16,8 +16,9 @@ import {
 /**
  * What a live event means for the map on screen:
  * - `none`: nothing to redraw (the copy may still have changed, e.g. a setting).
- * - `redraw`: a tile changed in a way the event fully describes (a capture,
- *   #15): the copy is updated, so redraw the map and the tile panel from it.
+ * - `redraw`: the copy changed in a way the event fully describes (a capture,
+ *   #15; a Keeper's outfit, #43): it's updated, so redraw the map and the tile
+ *   panel from it.
  * - `resync`: the change touches tiles and members in ways only the server
  *   knows (a member joining gets a home base, a leaver's land goes wild), so
  *   refetch the map view rather than guess.
@@ -80,6 +81,20 @@ export class MapState {
         const gathering = 'readyAt' in parsed.data ? { readyAt: parsed.data.readyAt } : null;
         this.patchTile(parsed.data, { gathering });
         return 'none';
+      }
+      case 'outfit.changed': {
+        // A member's Keeper changed clothes (#43): dress it on the map.
+        const parsed = GAME_EVENTS['outfit.changed'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const member = this.byUser.get(parsed.data.userId);
+        if (!member?.keeper) return 'none';
+        const next = { ...member, keeper: { ...member.keeper, wearing: parsed.data.wearing } };
+        this.current = {
+          ...this.current,
+          members: this.current.members.map((m) => (m === member ? next : m)),
+        };
+        this.byUser.set(next.user.id, next);
+        return 'redraw';
       }
       case 'tile.attacked': {
         // A battle for the tile started (#15): it rests until `cooldownUntil`.
