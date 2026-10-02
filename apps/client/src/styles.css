@@ -5,6 +5,8 @@ body {
   overflow: hidden;
   background: #fde8f0;
   overscroll-behavior: none;
+  /* No accidental text selection while playing; DOM-overlay inputs must opt back in
+     with user-select: text. */
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;

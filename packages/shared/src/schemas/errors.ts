@@ -31,10 +31,10 @@ export type ApiError = z.infer<typeof ApiErrorSchema>;
  */
 export const DEFAULT_ERROR_MESSAGES: Readonly<Record<ErrorCode, string>> = {
   BAD_REQUEST: "Hmm, that didn't quite work. Let's try again!",
-  VALIDATION_FAILED: 'Something in there needs another look.',
+  VALIDATION_FAILED: 'Something in there needs another look. Check it and try again!',
   UNAUTHENTICATED: 'Please log in to keep playing.',
-  FORBIDDEN: "You can't do that here.",
-  NOT_FOUND: "We couldn't find that.",
+  FORBIDDEN: "You can't do that here. Let's try something else!",
+  NOT_FOUND: "We couldn't find that. Let's head back and try again.",
   CONFLICT: 'Something changed while you were busy. Please try again!',
   RATE_LIMITED: 'Whoa, slow down a little! Try again in a moment.',
   INTERNAL: 'Oops, something went wobbly on our side. Please try again!',

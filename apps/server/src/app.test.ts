@@ -1,4 +1,10 @@
-import { ApiErrorSchema, HealthResponseSchema, ReadyResponseSchema } from '@heartpatch/shared';
+import {
+  ApiErrorSchema,
+  HealthResponseSchema,
+  queryArray,
+  queryInt,
+  ReadyResponseSchema,
+} from '@heartpatch/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -83,6 +89,24 @@ describe('error envelope', () => {
     expect(ApiErrorSchema.parse(forbidden.json()).error.code).toBe('FORBIDDEN');
   });
 
+  it('keeps the envelope when a route declares its own schema for an error status', async () => {
+    const server = await start();
+    server.withTypeProvider<ZodTypeProvider>().post(
+      '/strict',
+      {
+        schema: {
+          body: z.object({ name: z.string().min(1) }),
+          response: { 200: z.object({ ok: z.boolean() }), 400: z.object({ custom: z.string() }) },
+        },
+      },
+      () => ({ ok: true }),
+    );
+    const res = await server.inject({ method: 'POST', url: '/strict', payload: { name: '' } });
+    expect(res.statusCode).toBe(400);
+    expect(ApiErrorSchema.parse(res.json()).error.code).toBe('VALIDATION_FAILED');
+    expect(res.body).not.toContain('invalid_type');
+  });
+
   it('returns BAD_REQUEST for malformed JSON', async () => {
     const server = await start();
     server.post('/echo', () => ({ ok: true }));
@@ -96,6 +120,19 @@ describe('error envelope', () => {
     expect(ApiErrorSchema.parse(res.json()).error.code).toBe('BAD_REQUEST');
   });
 
+  it('keeps the envelope for unsupported content types', async () => {
+    const server = await start();
+    server.post('/echo', () => ({ ok: true }));
+    const res = await server.inject({
+      method: 'POST',
+      url: '/echo',
+      headers: { 'content-type': 'text/csv' },
+      payload: 'a,b',
+    });
+    expect(res.statusCode).toBe(415);
+    expect(ApiErrorSchema.parse(res.json()).error.code).toBe('BAD_REQUEST');
+  });
+
   it('hides internal error details', async () => {
     const server = await start();
     server.get('/boom', () => {
@@ -105,5 +142,29 @@ describe('error envelope', () => {
     expect(res.statusCode).toBe(500);
     expect(res.body).not.toContain('secret');
     expect(ApiErrorSchema.parse(res.json()).error.code).toBe('INTERNAL');
+  });
+});
+
+describe('query params', () => {
+  it('parses query helpers through Fastify', async () => {
+    const server = await start();
+    server.withTypeProvider<ZodTypeProvider>().get(
+      '/q',
+      {
+        schema: {
+          querystring: z.object({ n: queryInt({ min: 1 }), tag: queryArray(z.string()) }),
+        },
+      },
+      (request) => ({ n: request.query.n, tag: request.query.tag }),
+    );
+
+    const one = await server.inject({ method: 'GET', url: '/q?n=5&tag=a' });
+    expect(one.json()).toEqual({ n: 5, tag: ['a'] });
+
+    const many = await server.inject({ method: 'GET', url: '/q?n=5&tag=a&tag=b' });
+    expect(many.json()).toEqual({ n: 5, tag: ['a', 'b'] });
+
+    const empty = await server.inject({ method: 'GET', url: '/q?n=&tag=a' });
+    expect(empty.statusCode).toBe(400);
   });
 });

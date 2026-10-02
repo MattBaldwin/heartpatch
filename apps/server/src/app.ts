@@ -17,6 +17,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const { config } = options;
   const app = Fastify({
     logger: options.logger ?? defaultLogger(config),
+    trustProxy: config.TRUST_PROXY,
   });
 
   app.setValidatorCompiler(validatorCompiler);

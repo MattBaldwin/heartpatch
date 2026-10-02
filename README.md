@@ -28,4 +28,4 @@ pnpm dev          # server on :3000, client on :5173 (proxies /api to the server
 | `pnpm format` | Prettier (code and config; Markdown is excluded) |
 | `pnpm build` | Builds shared, server and client |
 
-Workspace packages are consumed from source in dev and tests (`@heartpatch/source` export condition) and from `dist/` in production builds.
+Workspace packages are consumed from source via the `@heartpatch/source` export condition in dev, tests, typecheck and the client build (Vite bundles the source). The server's production build resolves `dist/`, so build shared first (`pnpm -r build` does this in order). See `apps/server/README.md`.

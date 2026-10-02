@@ -9,7 +9,7 @@ describe('error contract', () => {
   });
 
   it('accepts a well-formed error body', () => {
-    const body = { error: { code: 'NOT_FOUND', message: "We couldn't find that." } };
+    const body = { error: { code: 'NOT_FOUND', message: 'Not here!' } };
     expect(ApiErrorSchema.parse(body)).toEqual(body);
   });
 

@@ -1,5 +1,5 @@
 import { DEFAULT_ERROR_MESSAGES, type ApiError, type ErrorCode } from '@heartpatch/shared';
-import type { FastifyError, FastifyInstance } from 'fastify';
+import type { FastifyError, FastifyInstance, FastifyReply } from 'fastify';
 import { RequestValidationError } from './zod.js';
 
 const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
@@ -11,6 +11,15 @@ const STATUS_BY_CODE: Readonly<Record<ErrorCode, number>> = {
   CONFLICT: 409,
   RATE_LIMITED: 429,
   INTERNAL: 500,
+};
+
+/** Shared code for Fastify's own 4xx errors; anything unlisted is BAD_REQUEST. */
+const CODE_BY_CLIENT_STATUS: Readonly<Partial<Record<number, ErrorCode>>> = {
+  401: 'UNAUTHENTICATED',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+  409: 'CONFLICT',
+  429: 'RATE_LIMITED',
 };
 
 /**
@@ -29,29 +38,43 @@ export class AppError extends Error {
   }
 }
 
-function body(code: ErrorCode, message: string = DEFAULT_ERROR_MESSAGES[code]): ApiError {
-  return { error: { code, message } };
+/**
+ * Sends the error envelope. Uses plain JSON rather than the route's response
+ * schema, so a route that declares a schema for an error status can never turn
+ * an error into a serialization failure that leaks validation details.
+ */
+function sendError(
+  reply: FastifyReply,
+  statusCode: number,
+  code: ErrorCode,
+  message: string = DEFAULT_ERROR_MESSAGES[code],
+): FastifyReply {
+  const body: ApiError = { error: { code, message } };
+  return reply
+    .status(statusCode)
+    .type('application/json; charset=utf-8')
+    .serializer(JSON.stringify)
+    .send(body);
 }
 
 /** Turns every thrown error into the `{ error: { code, message } }` envelope. */
 export function registerErrorHandling(app: FastifyInstance): void {
   app.setErrorHandler((err: FastifyError | AppError | Error, request, reply) => {
     if (err instanceof AppError) {
-      return reply.status(err.statusCode).send(body(err.code, err.message));
+      return sendError(reply, err.statusCode, err.code, err.message);
     }
     if (err instanceof RequestValidationError) {
       request.log.info({ issues: err.issues }, 'request validation failed');
-      return reply.status(400).send(body('VALIDATION_FAILED'));
+      return sendError(reply, 400, 'VALIDATION_FAILED');
     }
-    // Fastify's own client errors (bad JSON, payload too large, etc.).
+    // Fastify's own client errors (bad JSON, payload too large, wrong content type, ...).
     const statusCode = 'statusCode' in err ? err.statusCode : undefined;
     if (statusCode !== undefined && statusCode >= 400 && statusCode < 500) {
-      const code: ErrorCode = statusCode === 429 ? 'RATE_LIMITED' : 'BAD_REQUEST';
-      return reply.status(statusCode).send(body(code));
+      return sendError(reply, statusCode, CODE_BY_CLIENT_STATUS[statusCode] ?? 'BAD_REQUEST');
     }
     request.log.error({ err }, 'unhandled error');
-    return reply.status(500).send(body('INTERNAL'));
+    return sendError(reply, 500, 'INTERNAL');
   });
 
-  app.setNotFoundHandler((_request, reply) => reply.status(404).send(body('NOT_FOUND')));
+  app.setNotFoundHandler((_request, reply) => sendError(reply, 404, 'NOT_FOUND'));
 }

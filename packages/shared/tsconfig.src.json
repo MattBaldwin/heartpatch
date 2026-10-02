@@ -1,0 +1,13 @@
+{
+  // Shared game logic: no Node or DOM types, so clocks, timers, process and
+  // I/O don't typecheck here (CLAUDE.md rules 2-3).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.src.tsbuildinfo",
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}

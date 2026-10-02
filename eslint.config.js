@@ -3,7 +3,38 @@ import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 import { defineConfig } from 'eslint/config';
+import { builtinModules } from 'node:module';
 import tseslint from 'typescript-eslint';
+
+/** Every Node built-in, bare and `node:`-prefixed, plus subpaths (`fs/promises`). */
+const nodeBuiltins = [...builtinModules.flatMap((m) => [m, `${m}/*`]), 'node:*'];
+
+const sharedForbiddenGlobals = [
+  'process',
+  'performance',
+  'setTimeout',
+  'setInterval',
+  'setImmediate',
+  'queueMicrotask',
+  'fetch',
+  'crypto',
+  'Buffer',
+  'require',
+  'window',
+  'document',
+  'localStorage',
+];
+
+const clockMessage = 'Shared logic takes time as an input; never read the clock.';
+
+const serverNoClient = {
+  group: ['@heartpatch/client'],
+  message: 'server must not import the client.',
+};
+const serverDbOnlyInRepos = {
+  group: ['drizzle-orm', 'drizzle-orm/*', 'postgres'],
+  message: 'Only repos (modules/*/repo.ts) and src/db/** touch the database (tech spec §7).',
+};
 
 /** Game logic must be deterministic: no hidden randomness or clock reads. */
 const determinismRules = {
@@ -55,30 +86,39 @@ export default defineConfig(
   },
 
   // packages/shared: pure, deterministic, no I/O (CLAUDE.md rules 2-3).
+  // tsconfig.src.json also has no Node/DOM types; these rules give clearer errors.
   {
     files: ['packages/shared/src/**/*.ts'],
-    languageOptions: { globals: {} },
     rules: {
       ...determinismRules,
+      'no-restricted-globals': [
+        'error',
+        ...sharedForbiddenGlobals.map((name) => ({
+          name,
+          message: 'packages/shared is pure: no I/O, timers or platform globals.',
+        })),
+      ],
       'no-restricted-syntax': [
         'error',
         {
           selector: "MemberExpression[object.name='Date'][property.name='now']",
-          message: 'Shared logic takes time as an input; never read the clock.',
+          message: clockMessage,
+        },
+        {
+          selector: "MemberExpression[object.property.name='Date'][property.name='now']",
+          message: clockMessage,
         },
         {
           selector: "NewExpression[callee.name='Date'][arguments.length=0]",
-          message: 'Shared logic takes time as an input; never read the clock.',
+          message: clockMessage,
         },
+        { selector: "CallExpression[callee.name='Date']", message: clockMessage },
       ],
       'no-restricted-imports': [
         'error',
         {
           patterns: [
-            {
-              group: ['node:*', 'fs', 'net', 'http', 'https', 'child_process', 'os', 'path'],
-              message: 'packages/shared does no I/O.',
-            },
+            { group: nodeBuiltins, message: 'packages/shared does no I/O.' },
             {
               group: ['@heartpatch/server', '@heartpatch/client'],
               message: 'shared must not depend on apps.',
@@ -95,14 +135,15 @@ export default defineConfig(
     languageOptions: { globals: globals.node },
     rules: {
       ...determinismRules,
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            { group: ['@heartpatch/client'], message: 'server must not import the client.' },
-          ],
-        },
-      ],
+      'no-console': 'error', // use the pino logger (request.log / app.log)
+      'no-restricted-imports': ['error', { patterns: [serverNoClient, serverDbOnlyInRepos] }],
+    },
+  },
+  {
+    // Repos are the only place that touches Drizzle (tech spec §7).
+    files: ['apps/server/src/**/repo.ts', 'apps/server/src/db/**/*.ts', 'apps/server/*.config.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [serverNoClient] }],
     },
   },
 

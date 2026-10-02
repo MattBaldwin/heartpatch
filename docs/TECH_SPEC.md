@@ -178,12 +178,14 @@ Add anything else only with a one-line justification in the PR.
 
 | Var | Example | Notes |
 |---|---|---|
-| `NODE_ENV` | `production` | |
+| `NODE_ENV` | `production` | defaults to `production`; `pnpm dev` sets `development` |
 | `PORT` | `3000` | server listens here behind Caddy |
 | `DATABASE_URL` | `postgres://heartpatch:…@db:5432/heartpatch` | |
 | `SESSION_SECRET` | 64 random bytes, base64 | cookie signing |
 | `PUBLIC_ORIGIN` | `https://play.pumpkinpatchgames.com` | CORS, cookies |
 | `LOG_LEVEL` | `info` | |
+| `APP_VERSION` | `2026.10.02-abc123` | set by deploy (image tag); reported by `/api/v1/health` |
+| `TRUST_PROXY` | `true` | `true` behind Caddy so `request.ip` is the player's IP (per-IP rate limits) |
 | `HP_DEV_NOW` | `2026-12-20T20:59:00-05:00` | dev/test only |
 
 Parsed and validated by `apps/server/src/config.ts` (zod); the server refuses to start on invalid config. Keep `.env.example` current.

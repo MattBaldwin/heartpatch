@@ -1,11 +1,17 @@
 import { z } from 'zod';
 
 const ConfigSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // Defaults to production so a misconfigured image never loads dev-only tooling.
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   PUBLIC_ORIGIN: z.url().default('http://localhost:5173'),
   APP_VERSION: z.string().min(1).default('dev'),
+  // Behind Caddy, trust one proxy hop so request.ip is the player's IP (per-IP rate limits).
+  TRUST_PROXY: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

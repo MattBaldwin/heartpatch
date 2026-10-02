@@ -1,7 +1,4 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "types": []
-  },
-  "include": ["src", "tests", "vitest.config.ts"]
+  "files": [],
+  "references": [{ "path": "./tsconfig.src.json" }, { "path": "./tsconfig.test.json" }]
 }
