@@ -1,3 +1,4 @@
+import type { MapDebug } from '../map/map-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 
@@ -14,6 +15,8 @@ declare global {
       idle(): boolean;
       /** Draws a few frames, as any untracked change would. */
       invalidate(): void;
+      /** The open map as drawn (id, tile and tint counts, selection), or null. */
+      map(): MapDebug | null;
     };
   }
 }

@@ -1,7 +1,8 @@
 import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
-import { mountStage, type Stage } from './engine/stage.js';
+import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
+import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
@@ -23,6 +24,15 @@ const params = new URLSearchParams(window.location.search);
 // `?quality=` and `?renderer=webgpu` (opt-in, tech spec §6) stand in for the settings screen.
 const tier = pickInitialTier(params.get('quality'));
 let stage: Stage | null = null;
+/** What the stage draws: the open map, or the test scene. */
+let sceneBuilder: SceneBuilder = buildTestScene;
+/** What boot() holds on to: always whichever stage is on screen now (showScene swaps it). */
+const currentStage = {
+  dispose: () => {
+    stage?.dispose();
+    stage = null;
+  },
+};
 
 /** Swaps the canvas for a clean copy (a WebGPU canvas can't become WebGL2). */
 function freshCanvas(): HTMLCanvasElement {
@@ -50,19 +60,53 @@ function showRendererError(err: unknown): void {
   document.body.append(box);
 }
 
+/**
+ * Swaps the scene on the running renderer (tech spec §6: one engine, scenes
+ * swapped). Before the renderer starts, or after it failed, this only picks
+ * what the next mount draws.
+ */
+function showScene(build: SceneBuilder | null): void {
+  sceneBuilder = build ?? buildTestScene;
+  if (!stage) return;
+  const { renderer } = stage;
+  const target = renderer.engine.getRenderingCanvas();
+  stage.dispose();
+  stage = null;
+  if (!target) return;
+  try {
+    stage = mountStage(renderer, target, sceneBuilder, tier);
+  } catch (err) {
+    showRendererError(err);
+  }
+}
+
+// Login and the lobby come first, so a renderer that can't start never hides them.
+const maps = createMapScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  onClosed: (message) => {
+    lobby.showMessage(message);
+  },
+});
+const lobby = mountLobby(document.body, { onOpen: (mapId) => maps.open(mapId) });
+mountAuth(document.body, {
+  onChange: (user) => {
+    maps.setUser(user);
+    lobby.setUser(user);
+  },
+});
+
 await boot(canvas, {
   preference: parseRendererPreference(params.get('renderer')),
   createRenderer,
   freshCanvas,
-  mount: (renderer, target) => mountStage(renderer, target, buildTestScene, tier),
-  onStart: (s) => {
-    stage = s;
+  mount: (renderer, target) => {
+    stage = mountStage(renderer, target, sceneBuilder, tier);
+    return currentStage;
   },
   onError: showRendererError,
 }).catch(showRendererError);
-
-const lobby = mountLobby(document.body);
-mountAuth(document.body, { onChange: lobby.setUser });
 
 if (import.meta.env.DEV) {
   const badge = document.createElement('div');
@@ -88,5 +132,6 @@ if (import.meta.env.DEV) {
     draws: () => stage?.draws ?? 0,
     idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),
+    map: () => maps.debug,
   };
 }

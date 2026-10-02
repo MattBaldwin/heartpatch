@@ -1,0 +1,54 @@
+import {
+  GAME_DATA,
+  MAP_MAX_PLAYERS,
+  generateMap,
+  type MapMember,
+  type MapView,
+  type PublicTile,
+} from '@heartpatch/shared';
+
+// A realistic map view for unit tests: a real generated 4-player map, as the
+// server would send it, with members taking home slots in order.
+
+export const MAP_ID = '0190a8c4-0000-7000-8000-00000000000a';
+
+export function userId(n: number): string {
+  return `0190a8c4-0000-7000-8000-${String(n).padStart(12, '0')}`;
+}
+
+export function member(n: number, homeSlot: number): MapMember {
+  return {
+    user: { id: userId(n), username: `keeper${String(n)}` },
+    role: n === 1 ? 'owner' : 'member',
+    homeSlot,
+    joinedAt: '2026-10-02T12:00:00.000Z',
+  };
+}
+
+/** A view with `players` members; each owns their home ring, as the server sets it. */
+export function testView(players = 1, seed = 'map-render-test'): MapView {
+  const generated = generateMap(GAME_DATA, { seed, playerCount: MAP_MAX_PLAYERS });
+  const members = Array.from({ length: players }, (_, i) => member(i + 1, i));
+  const tiles: PublicTile[] = generated.tiles
+    .map((t) => ({
+      q: t.q,
+      r: t.r,
+      terrain: t.terrain,
+      ownerUserId: t.homeSlot !== null && t.homeSlot < players ? userId(t.homeSlot + 1) : null,
+      nodeResource: t.nodeResource,
+      homeSlot: t.homeSlot,
+    }))
+    .sort((a, b) => a.q - b.q || a.r - b.r);
+  return {
+    map: {
+      id: MAP_ID,
+      name: 'Pumpkin Hollow',
+      timeZone: 'America/New_York',
+      pvpMode: 'gentle',
+      maxPlayers: MAP_MAX_PLAYERS,
+    },
+    members,
+    tiles,
+    seq: players,
+  };
+}
