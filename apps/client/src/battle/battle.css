@@ -1,0 +1,288 @@
+/* Battle screen overlays (tech spec §6): energy plates at the top, the caption
+   and move buttons at the bottom, the result card in the middle. 44pt+
+   targets, safe areas; above the map HUD (3), below the lobby (4). */
+
+.battle-hud {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+  pointer-events: none;
+}
+
+.battle-hud[hidden],
+.battle-plate-status[hidden],
+.battle-caption[hidden],
+.battle-controls[hidden],
+.battle-result[hidden] {
+  display: none;
+}
+
+.battle-plate {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(60vw, 260px);
+  padding: 8px 14px 10px;
+  border-radius: 20px;
+  background: rgb(255 255 255 / 88%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 12%);
+}
+
+.battle-plate-theirs {
+  top: calc(env(safe-area-inset-top) + 64px);
+  left: calc(env(safe-area-inset-left) + 16px);
+}
+
+/* Mine sits at the bottom right, their squishy at the top right: like a
+   card game, each plate is across from its squishy, never over it. */
+.battle-plate-mine {
+  position: relative;
+  align-self: flex-end;
+}
+
+.battle-plate-tuckered {
+  opacity: 0.75;
+}
+
+.battle-plate-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+
+.battle-plate-name {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-plate-status {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #f6dceb;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7a2d55;
+}
+
+.battle-plate-nature {
+  font-size: 13px;
+  color: #7d6380;
+}
+
+.battle-energy {
+  overflow: hidden;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: #f4e2ec;
+}
+
+.battle-energy-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #6fbf8f;
+  transition: width 0.45s ease-out;
+}
+
+.battle-energy-low {
+  background: #f2a93b;
+}
+
+.battle-plate-energy {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #6b4b6e;
+}
+
+.battle-callout {
+  position: absolute;
+  top: -22px;
+  left: 12px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #b8487a;
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(8px) scale(0.9);
+}
+
+.battle-callout-show {
+  animation: battle-callout-pop 1.1s ease-out forwards;
+}
+
+@keyframes battle-callout-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.08);
+  }
+  30% {
+    transform: translateY(0) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1);
+  }
+}
+
+.battle-bottom {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + 16px);
+  /* Sits above the "My patches" button in the bottom corner. */
+  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 420px;
+  margin: 0 auto;
+  pointer-events: auto;
+}
+
+.battle-caption {
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 18px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 12%);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.battle-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.battle-moves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.battle-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.battle-button {
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+}
+
+.battle-ask {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.battle-waiting {
+  min-height: 52px;
+  line-height: 52px;
+  color: #8a5f86;
+}
+
+.battle-problem {
+  text-align: center;
+}
+
+.battle-problem:empty {
+  display: none;
+}
+
+.battle-leave {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 64px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 88%);
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+  color: #8a5f86;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+
+.battle-result {
+  position: absolute;
+  top: 50%;
+  right: calc(env(safe-area-inset-right) + 16px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+  margin: 0 auto;
+  transform: translateY(-50%);
+  pointer-events: auto;
+}
+
+.battle-xp {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 17px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* The entry button over the map, bottom right (the lobby button is bottom left). */
+.battle-entry-box {
+  position: fixed;
+  z-index: 4;
+  right: calc(env(safe-area-inset-right) + 16px);
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: calc(100vw - 180px);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+}
+
+.battle-entry-box[hidden] {
+  display: none;
+}
+
+.battle-entry-note {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 88%);
+  font-size: 14px;
+  font-weight: 600;
+  color: #7a2d55;
+  text-align: right;
+}
+
+.battle-entry-note:empty {
+  display: none;
+}

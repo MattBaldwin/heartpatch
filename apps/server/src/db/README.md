@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4 and `event_consumers` (#47). Feature tables (`keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), and `battles` and `idempotency_keys` (#13). Feature tables (`keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -155,6 +155,34 @@ Tiles are written once, from `generateMap`, when the map is created.
 | `created_at` | timestamptz | |
 
 Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessories columns are added by their feature issues.
+
+### `battles`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete. Indexed with `player_user_id` |
+| `kind` | enum `battle_kind` | `wild` (tile guardians and raids add values with their issues) |
+| `status` | enum `battle_status` | `active` \| `finished` \| `no-contest` (the server called it off: content re-tuned mid-battle). One `active` per player per map (partial unique index) |
+| `player_user_id` | uuid | The player on side `a`. FK `(map_id, player_user_id)` → `map_members` |
+| `seed` | text | From `newSeed()`. **Server-only while active**; revealed by the API after the end (tech spec §8) |
+| `content_hash` | text | `BattleContent.contentHash` the battle is played with |
+| `setup` | jsonb | `BattleSetup.sides`; with `seed` and `actions` it replays the battle |
+| `actions` | jsonb | `BattleAction[]`, in order |
+| `state` | jsonb | The current `BattleState`, RNG state included. **Server-only** (the API sends `clientBattleView`) |
+| `result` | jsonb, null | `BattleResult` once finished |
+| `log` | jsonb, null | The resolved `BattleEvent[]` once over, kept so a battle stays explainable after re-tuning |
+| `started_at`, `ended_at` | timestamptz | |
+
+### `idempotency_keys`
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` | uuid → users | PK part. Cascade delete |
+| `key` | text | PK part. The `Idempotency-Key` header value |
+| `scope` | text | The route the key was used on |
+| `request_hash` | text | SHA-256 of method, URL and body, so the same key with another body is refused |
+| `status_code` | smallint, null | Null while the first request runs |
+| `response` | jsonb, null | The reply body, replayed to retries |
+| `created_at` | timestamptz | Indexed, for the cleanup job (`lib/idempotency.ts`) |
 
 ### `game_events`
 | Column | Type | Notes |

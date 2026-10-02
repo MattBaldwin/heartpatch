@@ -2,6 +2,7 @@ import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
+import { createBattleScreen } from './battle/battle-screen.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
@@ -89,12 +90,35 @@ const maps = createMapScreen({
   showScene,
   invalidate: () => stage?.invalidate(),
   onClosed: (message) => {
+    void battles.setMap(null);
     lobby.showMessage(message);
   },
 });
-const lobby = mountLobby(document.body, { onOpen: (mapId) => maps.open(mapId) });
+// Battles (#13) take the screen over from the map and hand it back after.
+const battles = createBattleScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  onOpen: () => {
+    maps.close();
+  },
+  onClosed: (mapId) => {
+    maps.open(mapId).catch((err: unknown) => {
+      lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
+    });
+  },
+  devTools: import.meta.env.DEV,
+});
+const lobby = mountLobby(document.body, {
+  onOpen: async (mapId) => {
+    await maps.open(mapId);
+    await battles.setMap(mapId);
+  },
+});
 mountAuth(document.body, {
   onChange: (user) => {
+    battles.setUser(user);
     maps.setUser(user);
     lobby.setUser(user);
   },
@@ -138,5 +162,6 @@ if (import.meta.env.DEV) {
     idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),
     map: () => maps.debug,
+    battle: () => battles.debug,
   };
 }

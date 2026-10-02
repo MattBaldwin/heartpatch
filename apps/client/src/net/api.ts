@@ -38,6 +38,8 @@ export async function apiCall<T>(
     body?: unknown;
     schema: Schema<T> | null;
     signal?: AbortSignal;
+    /** Extra request headers, e.g. `Idempotency-Key` (tech spec §5) on a retried command. */
+    headers?: Record<string, string>;
   },
   fetchImpl: typeof fetch = fetch,
 ): Promise<T | null> {
@@ -49,6 +51,7 @@ export async function apiCall<T>(
       headers: {
         'x-requested-with': 'heartpatch',
         ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...options.headers,
       },
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
       ...(options.signal ? { signal: options.signal } : {}),
@@ -69,7 +72,13 @@ export async function apiCall<T>(
 /** `apiCall` for replies that always have a body. */
 export async function apiCallFor<T>(
   path: string,
-  options: { method: 'GET' | 'POST'; body?: unknown; schema: Schema<T>; signal?: AbortSignal },
+  options: {
+    method: 'GET' | 'POST';
+    body?: unknown;
+    schema: Schema<T>;
+    signal?: AbortSignal;
+    headers?: Record<string, string>;
+  },
   fetchImpl: typeof fetch = fetch,
 ): Promise<T> {
   const value = await apiCall(path, options, fetchImpl);

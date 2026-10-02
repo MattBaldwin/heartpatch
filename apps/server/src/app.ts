@@ -9,6 +9,10 @@ import { serializerCompiler, validatorCompiler } from './lib/zod.js';
 import { createAuthHooks, registerRequestGuards } from './modules/auth/hooks.js';
 import type { Database } from './db/client.js';
 import { createClock, type Clock } from './lib/time.js';
+import { createIdempotencyStore } from './db/idempotency-keys.js';
+import { registerIdempotency } from './lib/idempotency.js';
+import { battlesRoutes } from './modules/battles/routes.js';
+import { createBattlesService } from './modules/battles/service.js';
 import { createAuthRepo } from './modules/auth/repo.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { hashSessionToken } from './modules/auth/secrets.js';
@@ -132,6 +136,21 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         await api.register(tutorialRoutes(tutorial, { hooks: authHooks }));
+
+        const battles = createBattlesService({
+          db,
+          clock,
+          ...(wsHub ? { publish: wsHub.publish } : {}),
+        });
+        const idempotencyStore = createIdempotencyStore(db);
+        await api.register(
+          battlesRoutes(battles, {
+            hooks: authHooks,
+            idempotency: (plugin) =>
+              registerIdempotency(plugin, { store: idempotencyStore, clock }),
+            devGrants: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
       }
     },
     { prefix: '/api/v1' },

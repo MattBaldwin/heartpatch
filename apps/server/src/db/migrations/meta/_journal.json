@@ -29,6 +29,13 @@
       "when": 1790922671852,
       "tag": "0003_event_consumers",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790941814312,
+      "tag": "0004_battles",
+      "breakpoints": true
     }
   ]
 }

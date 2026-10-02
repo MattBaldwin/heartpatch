@@ -15,6 +15,9 @@ process.env['HP_SIGNUP_CODE'] ??= 'heartpatch-dev-family';
 // Every device project signs up fresh players from this one IP, which the
 // per-IP signup limit (10 an hour) can't cover; dev and tests only.
 process.env['HP_DEV_SIGNUP_LIMIT_PER_IP'] ??= '500';
+// Battles (#13) need a squishy and a wild opponent, which spawns (#14) and the
+// tutorial's starter don't hand out yet; the dev routes do. Dev and tests only.
+process.env['HP_DEV_SQUISHY_GRANTS'] ??= 'true';
 
 const projects = chromiumPath
   ? [

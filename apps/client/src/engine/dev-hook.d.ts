@@ -1,3 +1,4 @@
+import type { BattleDebug } from '../battle/battle-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
@@ -20,6 +21,8 @@ declare global {
        * Only the game page has it (not dev pages like the squishy gallery).
        */
       map?(): MapDebug | null;
+      /** The open battle as shown (turn, phase, bar energies, pending steps), or null. */
+      battle?(): BattleDebug | null;
     };
   }
 }

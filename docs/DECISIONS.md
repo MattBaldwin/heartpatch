@@ -166,3 +166,15 @@ _Proposed in the #7 PR; the project owner confirms on merge._
 - **Scenes are swapped on the running engine.** Opening a map disposes the current stage and mounts the map's on the same renderer; a GPU-loss rebuild mounts whatever is on screen.
 - **The tile panel doesn't show guardians yet.** `PublicTile` has no public guardian field (guardian strength hints at secret spawns, tech spec §8); the panel adds them once one exists.
 
+
+## 2026-10-02 — Battle API and battle UI (#13)
+
+_Proposed in the #13 PR; the project owner confirms on merge._
+
+- **The current engine state is stored, and the record replays to it.** `battles` keeps the seed, setup and action list (the replay record), plus the current `BattleState` with its RNG, and once over the result and resolved log. Each action locks the row, steps the stored state once and saves it; tests check `replayBattle(setup, actions)` equals the stored state. *Why:* resuming after a refresh is one read, and a 50-turn replay on every tap buys nothing.
+- **The player is always side `a`; the client sends a `PlayerBattleAction`** (`move`, `swap`, `replace`, `forfeit`) with the view's `turn`, and the server builds the engine's `BattleAction` for side `a`. A client can never name a side or pass a whole turn, and a stale submit is `CONFLICT` rather than the next turn's move. Retries carry an `Idempotency-Key` (`lib/idempotency.ts`, `idempotency_keys`), so a flaky connection can't double-apply.
+- **`ClientBattleViewSchema` is exactly `clientBattleView(state)`**, and the API parses every view through it on the way out, so `rng` can't leak by accident; `seed` is on the `PlayerBattle` envelope and null until the battle ends. `speciesDefs`/`moveDefs` ride the envelope, next to the view, for species the public tables don't have (a secret squishy the player just met).
+- **One active battle per player per map; starting again resumes it.** Leaving the screen keeps the battle; it's there on the next visit. (Design doc §6 "leaving counts as a loss" is for tile battles, which consume an attempt; a wild encounter costs nothing to walk away from and come back to.)
+- **A content-hash mismatch ends the battle as `no-contest`** on the next read or action: no winner, no XP, the state kept as it was, `battle.ended` with `reason: 'no-contest'`. Wild battles cost no attempt; tile battles (#14) refund theirs at that point.
+- **Dev-only grants** (`HP_DEV_SQUISHY_GRANTS`, refused in production) hand a player a squishy and start a battle against a chosen wild squishy, through the same `startAgainst` spawns will call. The real acquisition rules (wild spawns and capture, the tutorial's starter) are #14's and #24's; nothing here decides them.
+- **The battle camera is the map camera.** The arena is a `SceneBuilder` on the shared stage (tech spec §6: one engine, scenes swapped), with the squishies at close-up scale and pan all but locked; a dedicated battle camera can come with polish.
