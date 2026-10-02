@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   BATTLE_RULES,
+  CARE_RULES,
   BattleResponseSchema,
   DevNightfallResponseSchema,
   HOLLOW_RULES,
@@ -64,6 +65,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
   });
   afterAll(() => client.close());
   afterEach(async () => {
+    setDevDropChance(null);
     await app?.close();
     app = undefined;
     clock.setTime(Date.parse(START));
@@ -459,9 +461,13 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       // Settled after commit by the `hollow` consumer.
       await runConsumer(db, createHollowConsumer(hollow), mapId);
       expect(await stateOf(lost)).toBe('active');
-      // Back in its own bed.
+      // Back in its own bed, and fully content again (#19), from the rescue on.
       const back = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, lost) });
       expect(back!.habitatBuildingId).toBe(meadow);
+      expect(back).toMatchObject({
+        contentmentAtLastCare: CARE_RULES.maxContentment,
+        lastCaredAt: clock,
+      });
       expect(await heartdustOf(mapId, kid)).toBe(HOLLOW_RULES.rescue.heartdust);
       const ledger = await db.query.resourceLedger.findMany({
         where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.itemId, 'heartdust')),
@@ -490,7 +496,6 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(await heartdustOf(mapId, kid)).toBe(HOLLOW_RULES.rescue.heartdust);
       // …and finds no clothing either (decision C: not a farm).
       expect(await found()).toHaveLength(1);
-      setDevDropChance(null);
       expect((await statusOf(server, kid, mapId)).rescue.rewardsLeftToday).toBe(0);
     });
 

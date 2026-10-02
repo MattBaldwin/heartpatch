@@ -8,6 +8,7 @@ import { HollowLayer } from './hollow/hollow-layer.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
+import { createCareSheet } from './care/care-sheet.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
@@ -106,11 +107,15 @@ function showScene(build: SceneBuilder | null): void {
 // The bag and gathering (#17): a Bag button over a multiplayer map, and the
 // gather buttons in its tile panel.
 const inventory = createInventoryScreen({ root: document.body, devTools: import.meta.env.DEV });
+// Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
+// from home base and the catalog; it celebrates an evolution the first time
+// the player is back from the battle that caused it, or opens their home.
+const care = createCareSheet({ root: document.body });
 // Territory (#15): Claim, Challenge and guards in the tile panel. A tile
 // battle opens the battle screen, unless another screen sits over the map.
 const territory = createTerritoryScreen({
   openBattle: (battle) => {
-    if (!lobby.isOpen && !catalog.isOpen) battles.open(battle);
+    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) battles.open(battle);
   },
 });
 // The Hollow Man (#21): the night on the map, his visit when night falls,
@@ -137,16 +142,22 @@ const home = createHomeScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
-  onOpen: () => {
+  onOpen: (mapId) => {
     maps.close();
     catalog.close();
+    care.close();
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
     void battles.setMap(null);
     lobby.stepOut();
+    void care.celebrateNews(mapId);
+  },
+  onCare: (mapId, squishyId) => {
+    void care.open(mapId, squishyId);
   },
   onClosed: (mapId) => {
+    care.close();
     maps
       .open(mapId)
       .then(() => {
@@ -170,6 +181,7 @@ const maps = createMapScreen({
   onClosed: (message) => {
     void battles.setMap(null);
     catalog.close();
+    care.close();
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
@@ -186,7 +198,12 @@ const maps = createMapScreen({
   },
 });
 // The squishy catalog (#14) opens from the button by the battle entry.
-const catalog = createCatalogScreen({ root: document.body });
+const catalog = createCatalogScreen({
+  root: document.body,
+  onCare: (mapId, speciesId) => {
+    void care.openForSpecies(mapId, speciesId);
+  },
+});
 // The tutorial (#47) draws its Tutorial Glade with the map screen and sits
 // over it; it never blocks the lobby unless the server requires it first
 // (decision A).
@@ -198,6 +215,7 @@ const tutorial = createTutorialScreen({
       // the tutorial with its later steps).
       await battles.setMap(null);
       catalog.close();
+      care.close();
       await inventory.setMap(null);
       await territory.setMap(null);
       await hollow.setMap(null);
@@ -235,6 +253,7 @@ const battles = createBattleScreen({
   onOpen: () => {
     maps.close();
     catalog.close();
+    care.close();
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
@@ -245,6 +264,8 @@ const battles = createBattleScreen({
     maps.open(mapId).then(
       () => {
         home.setMap(mapId);
+        // A battle can make a squishy evolve: celebrate it now (#19).
+        void care.celebrateNews(mapId);
         return Promise.all([
           inventory.setMap(mapId),
           territory.setMap(mapId),
@@ -287,6 +308,7 @@ const keeper = createKeeperScreen({
     home.setMap(null);
     maps.close();
     catalog.close();
+    care.close();
     lobby.stepOut();
   },
   onEditClosed: (saved) => {
@@ -318,6 +340,7 @@ const wardrobe = createWardrobeScreen({
 const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
     catalog.close();
+    care.close();
     await maps.open(mapId);
     void inventory.setMap(mapId);
     void territory.setMap(mapId);
@@ -334,6 +357,7 @@ mountAuth(document.body, {
   onChange: (user) => {
     battles.setUser(user);
     catalog.setUser(user);
+    care.setUser(user);
     inventory.setUser(user);
     territory.setUser(user);
     hollow.setUser(user);
@@ -396,6 +420,7 @@ if (import.meta.env.DEV) {
     territory: () => territory.debug,
     hollow: () => hollow.debug,
     home: () => home.debug,
+    care: () => care.debug,
     wardrobe: () => wardrobe.debug,
   };
 }

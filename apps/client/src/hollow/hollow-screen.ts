@@ -257,8 +257,10 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
               token(s.speciesId, true),
               el(
                 'span',
-                { class: 'hollow-list-name', 'aria-label': HOLLOW_TEXT.inHollow(nameOf(s)) },
+                { class: 'hollow-list-name' },
                 nameOf(s),
+                // Read out by VoiceOver; the greyed token says it on screen.
+                el('span', { class: 'hollow-sr' }, HOLLOW_TEXT.waiting),
               ),
               button(HOLLOW_TEXT.rescue, () => void rescue(s.id), {
                 'data-squishy': s.id,

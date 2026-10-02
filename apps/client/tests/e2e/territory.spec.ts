@@ -135,6 +135,13 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   await page.getByTestId('battle-done').tap();
   await expect(hud).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // A level-40 Moonpuff is past its evolution level, so the battle's XP grows
+  // it up and the care sheet celebrates (#19): say yay and close it.
+  await expect(page.getByTestId('care-celebrate')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('care-yay').tap();
+  await expect(page.getByTestId('care-celebrate')).toBeHidden();
+  await page.getByTestId('care-close').tap();
+  await expect(page.getByTestId('care')).toBeHidden();
 
   // Back on the map: one try used, and the same spot is ours to guard now.
   await expect.poll(() => territoryState(page)).toMatchObject({ attemptsLeft: 9 });

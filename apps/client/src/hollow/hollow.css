@@ -184,3 +184,13 @@
   gap: 8px;
   margin-bottom: 8px;
 }
+
+/* Text for screen readers only. */
+.hollow-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

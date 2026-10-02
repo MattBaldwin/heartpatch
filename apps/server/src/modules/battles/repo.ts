@@ -16,7 +16,7 @@ import {
   type FeelingId,
   type OwnedSquishy,
 } from '@heartpatch/shared';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -83,9 +83,8 @@ export interface BattlesRepo {
    * (team picking is a later feature).
    */
   listTeam: (mapId: string, userId: string, limit: number) => Promise<TeamSquishyRow[]>;
-  /** Row-locks the squishies until commit (XP is written under it). */
+  /** Row-locks the squishies until commit (XP is written under it, care's `applyXp`). */
   lockSquishies: (ids: readonly string[]) => Promise<void>;
-  addXp: (squishyId: string, xp: number) => Promise<void>;
   /** Dev/test only: hands a player a squishy. */
   insertSquishy: (squishy: {
     mapId: string;
@@ -225,13 +224,6 @@ function queries(db: Executor): BattlesRepo {
         .from(squishies)
         .where(inArray(squishies.id, [...ids]))
         .for('update');
-    },
-
-    addXp: async (squishyId, xp) => {
-      await db
-        .update(squishies)
-        .set({ xp: sql`${squishies.xp} + ${xp}` })
-        .where(eq(squishies.id, squishyId));
     },
 
     insertSquishy: async (squishy) => {

@@ -34,6 +34,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
 import type { Clock } from '../../lib/time.js';
+import { applyXp, appendGrowthEvents, type Growth } from '../care/service.js';
 import { consumeItems } from '../inventory/service.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
@@ -433,7 +434,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
   };
 
-  /** The battle is over: XP for the player's squishies, then the event. */
+  /** The battle is over: XP for the player's squishies, then the events. */
   const finish = async (
     repo: BattlesTxRepo,
     tx: Executor,
@@ -451,11 +452,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         ? await options.tileBattles.ended(tx, row, result.winner, at)
         : [];
     const awards = result.xp.filter((award) => award.side === PLAYER_SIDE && award.xp > 0);
-    // Base battle XP only (design doc §7); care and habitat multipliers come
-    // with care (#19), and levelling with the XP curve. Lock order: squishies,
-    // then `maps` via appendEvent.
+    // Base battle XP × care and habitat, levels and evolution (#19's
+    // `applyXp`), under the squishy locks (the order above).
     await repo.lockSquishies(awards.map((a) => a.squishyId));
-    for (const award of awards) await repo.addXp(award.squishyId, award.xp);
+    const grown: Growth[] = [];
+    for (const award of awards) {
+      const growth = await applyXp(tx, award.squishyId, award.xp, at);
+      if (growth) grown.push(growth);
+    }
     // Befriended (design doc §6): the wild squishy joins the player as it was
     // in the battle, and the catalog marks the species caught.
     let captured: OwnedSquishy | null = null;
@@ -493,9 +497,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         winner: result.winner,
         reason: result.reason,
         turns: result.turns,
-        xp: awards.map(({ squishyId, xp }) => ({ squishyId, xp })),
+        xp: grown.map(({ squishyId, xp }) => ({ squishyId, xp })),
       },
     });
+    await appendGrowthEvents(repo.appendEvent, grown);
     if (captured) {
       await repo.appendEvent({
         mapId: row.mapId,

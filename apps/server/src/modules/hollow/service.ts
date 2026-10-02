@@ -1,5 +1,6 @@
 import {
   addDays,
+  CARE_RULES,
   deriveSeed,
   GAME_DATA,
   gameplayOverrides,
@@ -38,6 +39,7 @@ import type { BattlesService, StartResult } from '../battles/service.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles, mapLocalTime } from '../buildings/hearthfire.js';
 import { grantItems, requireMember } from '../inventory/service.js';
+import { createCareRepo } from '../care/repo.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import {
@@ -366,9 +368,12 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         return;
       }
       // Back home, fully restored (design doc §14): active again, in its own
-      // habitat bed (kept while it was away, #18).
-      // TODO(#19): reset its contentment through care's restore call once care lands.
+      // habitat bed (kept while it was away, #18), and as content as can be
+      // (#19's contentment, set through care's own repo; it fades from now).
       const home = await repo.bringHome(rescue.squishyId);
+      if (home) {
+        await createCareRepo(tx).setContentment(rescue.squishyId, CARE_RULES.maxContentment, at);
+      }
       const day = localDate(at, map.timeZone);
       const heartdust = home
         ? rescueReward(await repo.rewardedOn(map.id, rescue.userId, day, map.timeZone), rules)
