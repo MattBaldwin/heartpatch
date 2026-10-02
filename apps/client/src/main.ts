@@ -3,6 +3,8 @@ import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
+import { createHollowScreen } from './hollow/hollow-screen.js';
+import { HollowLayer } from './hollow/hollow-layer.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
@@ -110,6 +112,17 @@ const territory = createTerritoryScreen({
     if (!lobby.isOpen && !catalog.isOpen) battles.open(battle);
   },
 });
+// The Hollow Man (#21): the night on the map, his visit when night falls,
+// the morning report, and rescues (a rescue battle opens the battle screen).
+const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
+const hollow = createHollowScreen({
+  root: document.body,
+  layer: hollowLayer,
+  openBattle: (battle) => {
+    if (!lobby.isOpen && !catalog.isOpen) battles.open(battle);
+  },
+  devTools: import.meta.env.DEV,
+});
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
@@ -127,6 +140,7 @@ const home = createHomeScreen({
     catalog.close();
     void inventory.setMap(null);
     void territory.setMap(null);
+    void hollow.setMap(null);
     void battles.setMap(null);
     lobby.stepOut();
   },
@@ -136,6 +150,7 @@ const home = createHomeScreen({
       .then(() => {
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
+        void hollow.setMap(mapId);
         void battles.setMap(mapId);
         home.setMap(mapId);
       })
@@ -155,10 +170,15 @@ const maps = createMapScreen({
     catalog.close();
     void inventory.setMap(null);
     void territory.setMap(null);
+    void hollow.setMap(null);
     home.setMap(null);
     lobby.showMessage(message);
   },
   tileActions: combineTileActions(inventory.tileActions, home.tileActions, territory.tileActions),
+  layers: [hollowLayer],
+  onLiveEvent: (event) => {
+    hollow.liveEvent(event);
+  },
 });
 // The squishy catalog (#14) opens from the button by the battle entry.
 const catalog = createCatalogScreen({ root: document.body });
@@ -175,6 +195,7 @@ const tutorial = createTutorialScreen({
       catalog.close();
       await inventory.setMap(null);
       await territory.setMap(null);
+      await hollow.setMap(null);
       home.setMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
@@ -184,6 +205,7 @@ const tutorial = createTutorialScreen({
       void battles.setMap(null);
       void inventory.setMap(null);
       void territory.setMap(null);
+      void hollow.setMap(null);
       home.setMap(null);
       maps.close();
       lobby.show();
@@ -210,6 +232,7 @@ const battles = createBattleScreen({
     catalog.close();
     void inventory.setMap(null);
     void territory.setMap(null);
+    void hollow.setMap(null);
     home.setMap(null);
     lobby.stepOut();
   },
@@ -217,7 +240,11 @@ const battles = createBattleScreen({
     maps.open(mapId).then(
       () => {
         home.setMap(mapId);
-        return Promise.all([inventory.setMap(mapId), territory.setMap(mapId)]);
+        return Promise.all([
+          inventory.setMap(mapId),
+          territory.setMap(mapId),
+          hollow.setMap(mapId),
+        ]);
       },
       (err: unknown) => {
         // No map to go back to: no battle button over the lobby either.
@@ -250,6 +277,7 @@ const keeper = createKeeperScreen({
     void battles.setMap(null);
     void inventory.setMap(null);
     void territory.setMap(null);
+    void hollow.setMap(null);
     home.setMap(null);
     maps.close();
     catalog.close();
@@ -266,6 +294,7 @@ const lobby = mountLobby(document.body, {
     await maps.open(mapId);
     void inventory.setMap(mapId);
     void territory.setMap(mapId);
+    void hollow.setMap(mapId);
     home.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
     // battle resumed here (after a refresh) must step it out again after that.
@@ -280,6 +309,7 @@ mountAuth(document.body, {
     catalog.setUser(user);
     inventory.setUser(user);
     territory.setUser(user);
+    hollow.setUser(user);
     home.setUser(user);
     maps.setUser(user);
     // The lobby and tutorial wait for a Keeper (`onReady` above).
@@ -336,6 +366,7 @@ if (import.meta.env.DEV) {
     catalog: () => catalog.debug,
     inventory: () => inventory.debug,
     territory: () => territory.debug,
+    hollow: () => hollow.debug,
     home: () => home.debug,
   };
 }
