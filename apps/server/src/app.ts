@@ -205,7 +205,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             idempotency,
           }),
         );
-        // Found clothing rolls inside gathers (and later captures and rescues).
+        // Found clothing rolls inside gathers (captures and rescues later).
         setDevDropChance(config.HP_DEV_DROP_CHANCE ?? null);
         await api.register(
           wardrobeRoutes(createWardrobeService({ db, clock, ...publish }), {

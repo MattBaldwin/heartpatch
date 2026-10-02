@@ -161,7 +161,7 @@ const maps = createMapScreen({
     lobby.showMessage(message);
   },
   tileActions: combineTileActions(inventory.tileActions, home.tileActions, territory.tileActions),
-  // A piece of clothing found while gathering (#43) shows a little note.
+  // A piece of clothing found while playing (#43) shows a little note.
   onLiveEvent: (event) => {
     wardrobe.liveEvent(event);
   },

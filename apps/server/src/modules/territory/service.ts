@@ -34,7 +34,6 @@ import type {
   TileBattlePort,
 } from '../battles/service.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
-import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createTerritoryRepo, type DefenderRow, type TerritoryTileRow } from './repo.js';
 
 /*
@@ -418,15 +417,6 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       const returned = await repo.clearDefenders(tile.id);
       await repo.setOwner(tile.id, attack.attackerUserId);
       await repo.endAttack(battle.id, 'captured', at);
-      // A little luck: maybe a piece of clothing turned up too (#43).
-      await rollFoundDrop(tx, {
-        source: 'capture',
-        refId: attack.id,
-        userId: attack.attackerUserId,
-        mapId: attack.mapId,
-        tileId: tile.id,
-        at,
-      });
       const event: NewGameEvent<'tile.captured'> = {
         mapId: attack.mapId,
         type: 'tile.captured',

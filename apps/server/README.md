@@ -293,7 +293,7 @@ Commands take an `Idempotency-Key`.
 
 **Storage:** `clothing_owned` (one row per piece; starters aren't stored, everyone owns them), `outfits` (preset 0 is what's worn, 1–3 the presets) and `squishy_accessories`. Other players see the worn set on `MapMember.keeper.wearing`.
 
-**Found clothing, for other modules** (gathering and tile captures call it; Hollow rescues #21 will): call `rollFoundDrop` inside your transaction, after your own state writes and just before your own event, so your event stays the last write (gathering does this):
+**Found clothing, for other modules** (gathering calls it; tile captures and Hollow rescues #21 will): call `rollFoundDrop` inside your transaction, after your own state writes and just before your own event, so your event stays the last write (gathering does this):
 
 ```ts
 import { rollFoundDrop } from '../wardrobe/drops.js';
