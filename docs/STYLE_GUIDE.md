@@ -9,7 +9,7 @@
 - Warm first. Every screen should feel like a hug from a friendly toy shop.
 - Funny through gentle silliness: squishies are a little clumsy, a little dramatic, very sincere.
 - Spooky through **atmosphere and absence** (dimming light, silence, a flicker at the edge of the screen), never through threats, gore, injury, jump scares or cruelty.
-- Nobody is ever hurt. Squishies get **tuckered out**, **sleepy**, **dizzy** or **Hollowed** (and always rescuable). Words to avoid are listed in §9.
+- Nobody is ever hurt. Squishies get **tuckered out**, **sleepy**, **dizzy** or **taken to the Hollow** (and always rescuable). Words to avoid are listed in §9.
 
 ## 2. Reading level and length
 
@@ -116,7 +116,7 @@ Player-facing words for game actions. The code can use technical names; the UI u
 | defense stance | **Defense style** (Bold, Careful, Balanced) |
 
 ### Avoided words
-One list, so tests can scan data files for it. Don't use these in player-facing text:
+One list, so tests can scan the **player-facing string fields** in data files (names, descriptions, lines, captions; not keys like `baseStats.attack`). Don't use these in player-facing text:
 
 `die`, `dead`, `death`, `kill`, `faint`, `hurt`, `injure`, `wound`, `bleed`, `blood`, `damage`, `destroy`, `crush`, `slash`, `stab`, `bite`, `attack` (in UI; fine in code), `weapon`, `enemy`, `hate`, `stupid`, `loser`.
 

@@ -96,7 +96,7 @@ Add anything else only with a one-line justification in the PR.
   2. Before merging, delete the branch's generated migration SQL and its `meta/` journal and snapshot entries, merge the latest `main`, and regenerate once.
   3. If `main` gains a migration between hand-off and merge, the coordinator regenerates again.
   4. CI fails if `drizzle-kit generate` would produce a diff, and runs `drizzle-kit check`.
-  5. Migrations must be safe while the previous release is still running (expand, then contract in a later release), because deploy starts new containers before old ones stop.
+  5. Migrations must be safe while the previous release is still running (expand, then contract in a later release), because a rollback runs the previous image against the already-migrated schema.
 
 **Core tables (Phase 1):** `users`, `sessions`, `recovery_codes`, `keepers`, `maps`, `map_members`, `invite_codes`, `join_requests`, `tiles`, `species_seen`, `squishies`, `buildings`, `inventories`, `resource_ledger`, `gather_jobs`, `battles` (seed, action log, result), `raids`, `hollow_events`, `clothing_owned`, `outfits`, `milestone_progress`, `milestone_rewards`, `coin_ledger`, `boutique_stock`, `quick_messages`, `game_events`.
 
@@ -150,7 +150,7 @@ Add anything else only with a one-line justification in the PR.
   - Index `(map_id, seq)` unique. Pruning old `game_events` only limits **WS replay** (older gaps refetch full state). Consumers that need history (raid log, milestone progress, Easter-egg state) keep their own tables and don't rely on old `game_events` rows.
 - **Scheduled jobs (pg-boss):**
   - `nightfall` per map at 21:00 map time (Hollow Man, §14 of the design doc)
-    - **Hearthfire fuel is a date, not a counter:** each Hearthfire stores `fuelled_through` (the last map-local night its fuel covers). Adding *n* nights of Emberwood sets `fuelled_through = max(fuelled_through, tonight − 1) + n`, capped at `tonight − 1 + max_nights`. At nightfall the fire protects tonight if `fuelled_through ≥ tonight`. "Nights left" is shown as `fuelled_through − tonight + 1` (minimum 0). Nothing is decremented, so a retried or duplicate nightfall run can't burn fuel twice.
+    - **Hearthfire fuel is a date, not a counter:** each Hearthfire stores `fuelled_through` (the last map-local night its fuel covers). `tonight` means the **next nightfall that hasn't run yet** for that map (after 21:00, that's tomorrow's). Adding *n* nights of Emberwood sets `fuelled_through = max(fuelled_through, tonight − 1) + n`, capped at `tonight − 1 + max_nights`. At nightfall the fire protects tonight if `fuelled_through ≥ tonight`. "Nights left" is shown as `fuelled_through − tonight + 1` (minimum 0). Nothing is decremented, so a retried or duplicate nightfall run can't burn fuel twice.
   - `stranded-decay` (Phase 2)
   - `boutique-rotate` daily per map
   - `invite-expiry`, `session-cleanup`, `chat-retention` daily
@@ -211,7 +211,7 @@ Small and cheap on purpose: one server for a few families.
 - **`deploy.yml`** on push to `main`:
   1. Build Docker images for server and client (client is a static build copied into the Caddy image or a volume).
   2. Push to **GitHub Container Registry** (`ghcr.io/mattbaldwin/heartpatch-*`).
-  3. SSH to Lightsail, `docker compose pull && docker compose up -d`, run migrations, health-check `/api/v1/health`; roll back to the previous image tag on failure. After migrations, the deploy script also makes a **one-off** `/api/v1/ready` check so a broken `DATABASE_URL` or failed migration fails the deploy. Ongoing container health checks use `/health` only.
+  3. SSH to Lightsail, `docker compose pull`, run migrations with the new image (one-off container) **before** switching, then `docker compose up -d`. Health-check `/api/v1/health` and roll back to the previous image tag on failure. Then make a **one-off** `/api/v1/ready` check; if it fails, roll back the image the same way and report the failure (a broken `DATABASE_URL` or failed migration). Ongoing container health checks use `/health` only.
 - **Repository secrets:** `LIGHTSAIL_HOST`, `LIGHTSAIL_USER`, `LIGHTSAIL_SSH_KEY`, plus production env values stored in a `.env` file on the server (not in GitHub).
 
 ## 13. Testing and definition of done
@@ -224,7 +224,7 @@ Small and cheap on purpose: one server for a few families.
 ## 14. Observability
 
 - Structured pino logs to stdout; Docker log rotation configured.
-- `/api/v1/health` (liveness: process is up) and `/api/v1/ready` (readiness: DB reachable). The deploy rollback check uses **`/health` only**, so a brief database hiccup can't trigger a rollback or restart a healthy container.
+- `/api/v1/health` (liveness: process is up) and `/api/v1/ready` (readiness: DB reachable). Ongoing container health checks use **`/health` only**, so a brief database hiccup can't restart a healthy container. `/ready` is checked once per deploy (§12).
 - A small admin page for the map owner (Phase 1: members, join requests, password reset; later: chat review).
 
 ## 15. Audio

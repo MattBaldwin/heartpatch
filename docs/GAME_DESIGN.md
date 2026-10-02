@@ -226,7 +226,7 @@ Seasons are date windows in config (with time zone). Resource nodes, recipes, sp
 
 **Windows may overlap** (New Year already overlaps Christmas). When two seasons are active, content tagged with either is available.
 
-**Window format:** each season has a **recurring month-day window** (e.g. `10-01` to `11-02`, in the map's time zone) plus optional **per-year overrides** (e.g. `2026: 10-01 to 11-09`). A one-year change is a data edit that doesn't affect future years.
+**Window format:** each season has a **recurring month-day window** (e.g. `10-01` to `11-02`, in the map's time zone) plus optional **per-year overrides** (e.g. `2026: 10-01 to 11-09`). A one-year change is a data edit that doesn't affect future years. A window whose end is earlier than its start (New Year, `12-31` to `01-02`) wraps into the next year; its per-year override is keyed by the start year.
 
 **2026 launch:** the Halloween window is extended to **[DEFAULT: Nov 9, 2026]** via a 2026 override so the first playable gets a full Halloween run.
 

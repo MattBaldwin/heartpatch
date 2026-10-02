@@ -38,7 +38,7 @@
 ### Docs conflicts resolved
 | Topic | Decision |
 |---|---|
-| Health endpoints | `/api/v1/health` (liveness) and `/api/v1/ready` (readiness); deploy rollback checks `/health` only |
+| Health endpoints | `/api/v1/health` (liveness) and `/api/v1/ready` (readiness); container health checks use `/health` only; deploy also checks `/ready` once and rolls back if it fails |
 | Event table | `game_events`, written in the same transaction as the change; per-map gap-free `seq` via `maps.event_seq` |
 | Initial tables | #2 designs the core spine (users, sessions, maps, map_members, tiles, squishies, game_events); feature tables arrive with their issues |
 | Care actions | Feed, pet, play. Training = Training Grounds building; grooming returns with squishy dress-up |
