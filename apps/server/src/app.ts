@@ -7,7 +7,7 @@ import { createHealthService, type ReadinessCheck } from './modules/health/servi
 
 export interface BuildAppOptions {
   config: Config;
-  /** Dependencies `/ready` must confirm (the database is added in #2). */
+  /** Dependencies `/ready` must confirm (e.g. `dbReadinessCheck` from `db/client.ts`). */
   readinessChecks?: readonly ReadinessCheck[];
   logger?: FastifyServerOptions['logger'];
 }
