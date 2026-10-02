@@ -11,7 +11,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @heartpatch/client test:e2e",
-    "lint": "eslint . --max-warnings 0 && node scripts/check-filenames.mjs",
+    "lint": "eslint . --max-warnings 0 && node scripts/check-filenames.mjs && node scripts/check-procedural-rules.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

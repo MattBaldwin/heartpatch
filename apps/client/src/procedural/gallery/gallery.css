@@ -1,0 +1,33 @@
+.gallery-panel {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px 8px 16px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 85%);
+  box-shadow: 0 6px 18px rgb(107 75 110 / 15%);
+  font:
+    600 14px/1.2 system-ui,
+    sans-serif;
+  color: #6b4b6e;
+  white-space: nowrap;
+}
+
+.gallery-panel button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffb3c7;
+  font: inherit;
+  color: #5a3a5d;
+}
+
+.gallery-panel button:active {
+  transform: scale(0.95);
+}
