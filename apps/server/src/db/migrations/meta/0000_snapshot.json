@@ -1,0 +1,685 @@
+{
+  "id": "a9ead64c-dfeb-4f8c-8cf0-732a0c64a966",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.game_events": {
+      "name": "game_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "game_events_map_id_maps_id_fk": {
+          "name": "game_events_map_id_maps_id_fk",
+          "tableFrom": "game_events",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "game_events_actor_user_id_users_id_fk": {
+          "name": "game_events_actor_user_id_users_id_fk",
+          "tableFrom": "game_events",
+          "tableTo": "users",
+          "columnsFrom": ["actor_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "game_events_map_id_seq_key": {
+          "name": "game_events_map_id_seq_key",
+          "nullsNotDistinct": false,
+          "columns": ["map_id", "seq"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "game_events_seq_positive": {
+          "name": "game_events_seq_positive",
+          "value": "\"game_events\".\"seq\" >= 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.map_members": {
+      "name": "map_members",
+      "schema": "",
+      "columns": {
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "map_member_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "map_member_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "joined_at": {
+          "name": "joined_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "map_members_user_id_idx": {
+          "name": "map_members_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "map_members_one_owner_key": {
+          "name": "map_members_one_owner_key",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"map_members\".\"role\" = 'owner'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "map_members_map_id_maps_id_fk": {
+          "name": "map_members_map_id_maps_id_fk",
+          "tableFrom": "map_members",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "map_members_user_id_users_id_fk": {
+          "name": "map_members_user_id_users_id_fk",
+          "tableFrom": "map_members",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "map_members_map_id_user_id_pk": {
+          "name": "map_members_map_id_user_id_pk",
+          "columns": ["map_id", "user_id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.maps": {
+      "name": "maps",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "map_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "time_zone": {
+          "name": "time_zone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_seq": {
+          "name": "event_seq",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "maps_event_seq_nonnegative": {
+          "name": "maps_event_seq_nonnegative",
+          "value": "\"maps\".\"event_seq\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sessions": {
+      "name": "sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "sessions_user_id_idx": {
+          "name": "sessions_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sessions_expires_at_idx": {
+          "name": "sessions_expires_at_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sessions_token_hash_unique": {
+          "name": "sessions_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": ["token_hash"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.squishies": {
+      "name": "squishies",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "species_id": {
+          "name": "species_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "element": {
+          "name": "element",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "feeling": {
+          "name": "feeling",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nickname": {
+          "name": "nickname",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "level": {
+          "name": "level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "xp": {
+          "name": "xp",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "state": {
+          "name": "state",
+          "type": "squishy_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "squishies_map_id_owner_user_id_idx": {
+          "name": "squishies_map_id_owner_user_id_idx",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "squishies_map_id_maps_id_fk": {
+          "name": "squishies_map_id_maps_id_fk",
+          "tableFrom": "squishies",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "squishies_owner_member_fk": {
+          "name": "squishies_owner_member_fk",
+          "tableFrom": "squishies",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "owner_user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "squishies_level_positive": {
+          "name": "squishies_level_positive",
+          "value": "\"squishies\".\"level\" >= 1"
+        },
+        "squishies_xp_nonnegative": {
+          "name": "squishies_xp_nonnegative",
+          "value": "\"squishies\".\"xp\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.tiles": {
+      "name": "tiles",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "map_id": {
+          "name": "map_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "q": {
+          "name": "q",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "r": {
+          "name": "r",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "terrain": {
+          "name": "terrain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "tiles_map_id_owner_user_id_idx": {
+          "name": "tiles_map_id_owner_user_id_idx",
+          "columns": [
+            {
+              "expression": "map_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tiles_map_id_maps_id_fk": {
+          "name": "tiles_map_id_maps_id_fk",
+          "tableFrom": "tiles",
+          "tableTo": "maps",
+          "columnsFrom": ["map_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "tiles_owner_member_fk": {
+          "name": "tiles_owner_member_fk",
+          "tableFrom": "tiles",
+          "tableTo": "map_members",
+          "columnsFrom": ["map_id", "owner_user_id"],
+          "columnsTo": ["map_id", "user_id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tiles_map_id_q_r_key": {
+          "name": "tiles_map_id_q_r_key",
+          "nullsNotDistinct": false,
+          "columns": ["map_id", "q", "r"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "birth_year": {
+          "name": "birth_year",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tutorial_step": {
+          "name": "tutorial_step",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tutorial_completed_at": {
+          "name": "tutorial_completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "users_username_lower_key": {
+          "name": "users_username_lower_key",
+          "columns": [
+            {
+              "expression": "lower(\"username\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "users_birth_year_range": {
+          "name": "users_birth_year_range",
+          "value": "\"users\".\"birth_year\" between 1900 and 2100"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.map_kind": {
+      "name": "map_kind",
+      "schema": "public",
+      "values": ["multiplayer", "tutorial"]
+    },
+    "public.map_member_role": {
+      "name": "map_member_role",
+      "schema": "public",
+      "values": ["owner", "member"]
+    },
+    "public.map_member_status": {
+      "name": "map_member_status",
+      "schema": "public",
+      "values": ["active", "removed"]
+    },
+    "public.squishy_state": {
+      "name": "squishy_state",
+      "schema": "public",
+      "values": ["active", "hollowed"]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

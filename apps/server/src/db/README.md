@@ -1,0 +1,153 @@
+# Database (`apps/server/src/db`)
+
+Postgres 16 with Drizzle ORM and the `postgres` driver. Read `docs/TECH_SPEC.md` §4 (data model) and §7 (game event stream) first.
+
+## Quick start
+
+```sh
+cp .env.example .env   # includes DATABASE_URL for the dev container
+pnpm db:up             # Postgres 16 in Docker (infra/compose/docker-compose.dev.yml)
+pnpm db:migrate        # create / update the schema
+pnpm db:seed           # a test map ("Seed Patch") with 2 users; re-running is a no-op
+pnpm db:down           # stop the container (data stays in the volume)
+```
+
+Already have Postgres 16 locally? Skip `db:up` and point `DATABASE_URL` at it.
+
+| Script | What it does |
+|---|---|
+| `pnpm db:generate` | Writes a new migration from `schema.ts` changes (then formats drizzle-kit's JSON) |
+| `pnpm db:check` | `drizzle-kit check`: migration history is consistent |
+| `pnpm db:migrate` | Applies pending migrations (`node dist/db/cli.js migrate` in production) |
+| `pnpm db:seed` | Seeds local test data. Refuses to run with `NODE_ENV=production` |
+
+## Files
+
+| File | Job |
+|---|---|
+| `schema.ts` | Table definitions. No `@heartpatch/shared` or relative imports (drizzle-kit loads it with its own loader) |
+| `migrations/` | Generated SQL + drizzle-kit journal. Committed; never edit a merged one. `pnpm build` copies it into `dist/` |
+| `client.ts` | `createDbClient(url)` → `{ db, ping, close }`, the `Database` / `Transaction` types, and `dbReadinessCheck` for `/api/v1/ready` |
+| `migrator.ts` | `runMigrations(db)` |
+| `game-events.ts` | `appendGameEvent(tx, event)`: the only way to write `game_events` |
+| `seed.ts` | Local test data |
+| `cli.ts` | `migrate` / `seed` entrypoint |
+
+Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and the tables from here. Nothing else touches Drizzle (lint-enforced).
+
+## Conventions
+
+- **IDs:** `uuid`, v7, generated in the app (`uuidv7` package) by the column's `$defaultFn`. Postgres 16 has no built-in v7, so raw SQL inserts must supply an id.
+- **Time:** `timestamptz`, read as UTC `Date`s. Map-local time uses `maps.time_zone`.
+- **Map scoping:** game state carries `map_id` and is deleted with its map (`on delete cascade`). Users and sessions are per account.
+- **Owners must be members:** `tiles` and `squishies` reference `map_members (map_id, user_id)`, so a row can only be owned by a member of **the same map**.
+- **Removed players are archived,** not deleted: `map_members.status = 'removed'` (tech spec §4). That's why `users` aren't cascade-deleted from maps.
+- **Statuses** are Postgres enums. Adding a value is additive, but Postgres won't let a value added by `ALTER TYPE … ADD VALUE` be used in the same transaction, and the migrator applies all pending migrations in one transaction. So add the value in one migration and start using it (defaults, backfills) in a later deploy.
+- **Content ids** (species, element, feeling, terrain) are plain `text` holding ids from the shared data tables. Their values are validated by zod data, not duplicated in the database.
+
+## Tables (core spine)
+
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`). Feature tables (`join_requests`, `invite_codes`, `recovery_codes`, `keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
+
+### `users`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `username` | text | Unique **case-insensitively** (`lower(username)` index). Filtered by the server text filter before insert |
+| `password_hash` | text | Argon2id (#3). Seed users get a placeholder that can never verify |
+| `birth_year` | smallint | The only personal detail kept (design doc §18). Checked 1900–2100 |
+| `tutorial_step` | text, null | Current tutorial step id from the tutorial data; null = not started |
+| `tutorial_completed_at` | timestamptz, null | Set on first completion and kept when replaying (unlocks skip, design doc §26) |
+| `created_at` | timestamptz | |
+
+### `sessions`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → users | Cascade delete. Indexed (revoke all sessions on password reset) |
+| `token_hash` | text, unique | Hash of the `hp_session` cookie token; the raw token is never stored |
+| `created_at` | timestamptz | |
+| `expires_at` | timestamptz | Rolling 30-day expiry. Indexed for the `session-cleanup` job |
+
+### `maps`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `kind` | enum `map_kind` | `multiplayer` \| `tutorial` (tech spec §7: tutorials are ordinary maps) |
+| `name` | text | |
+| `time_zone` | text | IANA zone, for nightfall and daily jobs |
+| `event_seq` | bigint, default 0 | Last allocated `game_events.seq`; see below |
+| `created_at` | timestamptz | |
+
+### `map_members`
+| Column | Type | Notes |
+|---|---|---|
+| `map_id` | uuid → maps | PK part. Cascade delete |
+| `user_id` | uuid → users | PK part. Indexed (a player's maps) |
+| `role` | enum `map_member_role` | `owner` \| `member`. At most one owner per map (partial unique index) |
+| `status` | enum `map_member_status` | `active` \| `removed` |
+| `joined_at` | timestamptz | |
+
+The 2–4 players-per-map limit is a game rule, enforced by the maps service.
+
+### `tiles`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `q`, `r` | smallint | Axial hex coords. Unique per map |
+| `terrain` | text | Terrain id from shared data |
+| `owner_user_id` | uuid, null | Null = neutral. FK `(map_id, owner_user_id)` → `map_members` |
+
+### `squishies`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `owner_user_id` | uuid | FK `(map_id, owner_user_id)` → `map_members`. Owned squishies only; wild ones are rolled from spawn data, not stored |
+| `species_id`, `element`, `feeling` | text | Ids from shared data. Feeling can shift with care |
+| `nickname` | text, null | Filtered before insert |
+| `level` | integer, default 1 | ≥ 1 |
+| `xp` | integer, default 0 | ≥ 0 |
+| `state` | enum `squishy_state` | `active` \| `hollowed` |
+| `created_at` | timestamptz | |
+
+Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessories columns are added by their feature issues.
+
+### `game_events`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `seq` | bigint | Per-map, gap-free, ≥ 1. Unique `(map_id, seq)` (also the replay index) |
+| `type` | text | Event type, e.g. `tile.updated` |
+| `actor_user_id` | uuid → users, null | Null for system events |
+| `payload` | jsonb | |
+| `created_at` | timestamptz | |
+
+## Writing game events
+
+Every meaningful change writes a `game_events` row **in the same transaction** as the change, through `appendGameEvent`, called as the **last write**:
+
+```ts
+await db.transaction(async (tx) => {
+  // 1. Lock and change entity rows (SELECT … FOR UPDATE, UPDATE …)
+  // 2. Last: allocate seq and write the event
+  const event = await appendGameEvent(tx, { mapId, type: 'tile.updated', actorUserId, payload });
+  return event;
+});
+// 3. After commit: broadcast `event` to WebSocket clients
+```
+
+`appendGameEvent` runs `UPDATE maps SET event_seq = event_seq + 1 … RETURNING event_seq` and inserts the event with that seq. The update row-locks the map until commit, so seqs never skip (a rollback undoes the bump too, unlike a Postgres sequence) and commit order matches seq order. Taking that lock last keeps a fixed lock order (entities, then `maps`), which avoids deadlocks. Integration tests in `game-events.test.ts` check concurrent appends, rollbacks and both mixed together.
+
+## Changing the schema
+
+1. Edit `schema.ts`, then `pnpm db:generate` and commit the migration.
+2. Migrations must work while the previous release is still running: **expand, then contract** in a later release (tech spec §4).
+3. Before merging a branch, follow the regenerate-on-latest-`main` workflow in tech spec §4.
+4. CI runs `drizzle-kit check` and fails if `pnpm db:generate` would produce a new migration.
+
+## Tests
+
+DB integration tests run against a real Postgres. `tests/global-setup.ts` creates a scratch database next to `DATABASE_URL` (the role needs `CREATEDB`), applies every migration from scratch, and drops it afterwards, so tests never touch your dev data. Without `DATABASE_URL`, those tests are skipped locally with a warning. CI sets it and fails if it's missing.
