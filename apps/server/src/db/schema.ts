@@ -428,3 +428,146 @@ export const keepers = pgTable('keepers', {
   createdAt: timestamptz('created_at').notNull().defaultNow(),
   updatedAt: timestamptz('updated_at').notNull().defaultNow(),
 });
+
+/**
+ * Inventory balances (#17, design doc §12, tech spec §4): how many of each
+ * item a player has on a map. `item_id` is a resource or crafted-item id
+ * from the shared resource table (`timber`, `heart-charm`). A missing row
+ * means 0. Only `modules/inventory` (`grantItems`, `consumeItems`) changes
+ * it, inside the caller's transaction (CLAUDE.md rule 7), and every change
+ * also writes a `resource_ledger` row.
+ */
+export const inventories = pgTable(
+  'inventories',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    itemId: text('item_id').notNull(),
+    quantity: integer('quantity').notNull(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.mapId, t.userId, t.itemId] }),
+    foreignKey({
+      name: 'inventories_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    check('inventories_quantity_nonnegative', sql`${t.quantity} >= 0`),
+  ],
+);
+
+/**
+ * Every inventory change, with a reason (tech spec §4 "ledger table"): the
+ * balances in `inventories` always equal the sum of `delta` per item, which
+ * tests reconcile. `ref_id` points at what caused it (a gather, a craft, a
+ * capture's battle) when there is one. Append-only.
+ */
+export const resourceLedger = pgTable(
+  'resource_ledger',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    itemId: text('item_id').notNull(),
+    // Positive for a grant, negative for a spend; never 0.
+    delta: integer('delta').notNull(),
+    // `ItemChangeReason` from shared (`gather`, `craft`, `capture`, `dev-grant`, …).
+    reason: text('reason').notNull(),
+    refId: uuid('ref_id'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'resource_ledger_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    index('resource_ledger_map_id_user_id_idx').on(t.mapId, t.userId),
+    check('resource_ledger_delta_nonzero', sql`${t.delta} <> 0`),
+  ],
+);
+
+/** `lost`: the tile changed hands before it was collected, and its new owner started one. */
+export const gatherStatus = pgEnum('gather_status', ['active', 'collected', 'lost']);
+
+/**
+ * Gathers on resource nodes (#17, design doc §12). Timestamps, not a ticking
+ * loop (CLAUDE.md rule 4): a gather is ready once the clock passes `ready_at`,
+ * checked when the player collects. `items` is the yield, fixed when it
+ * started (seasonal extras included), so it never changes while it runs.
+ */
+export const gatherJobs = pgTable(
+  'gather_jobs',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    // The node's resource id when it started (shared resource data).
+    resource: text('resource').notNull(),
+    // Item id → quantity collecting grants.
+    items: jsonb('items').notNull(),
+    status: gatherStatus('status').notNull().default('active'),
+    startedAt: timestamptz('started_at').notNull(),
+    readyAt: timestamptz('ready_at').notNull(),
+    // When it was collected, or found lost.
+    endedAt: timestamptz('ended_at'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'gather_jobs_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // One gather at a time per node.
+    uniqueIndex('gather_jobs_one_active_per_tile_key')
+      .on(t.tileId)
+      .where(sql`${t.status} = 'active'`),
+    index('gather_jobs_map_id_user_id_idx').on(t.mapId, t.userId),
+    check('gather_jobs_ready_after_start', sql`${t.readyAt} >= ${t.startedAt}`),
+  ],
+);
+
+/**
+ * Crafts (#17, design doc §12 recipes): the inputs are used up when one
+ * starts; collecting after `ready_at` puts `items` in the bag. One on the go
+ * per player per map.
+ */
+export const crafts = pgTable(
+  'crafts',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    // Recipe id from the shared recipe data.
+    recipeId: text('recipe_id').notNull(),
+    // Item id → quantity collecting grants.
+    items: jsonb('items').notNull(),
+    startedAt: timestamptz('started_at').notNull(),
+    readyAt: timestamptz('ready_at').notNull(),
+    // Null while it's on the go.
+    collectedAt: timestamptz('collected_at'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'crafts_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    uniqueIndex('crafts_one_active_key')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.collectedAt} is null`),
+    check('crafts_ready_after_start', sql`${t.readyAt} >= ${t.startedAt}`),
+  ],
+);

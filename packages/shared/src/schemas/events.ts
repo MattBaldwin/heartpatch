@@ -125,6 +125,56 @@ export const GAME_EVENTS = {
    * server (`no-contest`, when the content was re-tuned mid-battle).
    */
   'battle.ended': { internal: BattleEndedSchema, public: z.object(BattleEndedSchema.shape) },
+  /**
+   * A player started gathering a node they own (#17): members see "gathering
+   * here, ready at …" on the tile. What it will yield stays internal.
+   */
+  'gather.started': {
+    internal: z.strictObject({
+      gatherId: z.uuid(),
+      userId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+      resource: z.string(),
+      readyAt: z.iso.datetime(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+      readyAt: z.iso.datetime(),
+    }),
+  },
+  /**
+   * A player collected a finished gather on a node they own (#17). Members
+   * see where (the tile's "gathering here" ends); how much stays internal.
+   */
+  'resource.gathered': {
+    internal: z.strictObject({
+      gatherId: z.uuid(),
+      userId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+      resource: z.string(),
+      items: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      q: z.number().int(),
+      r: z.number().int(),
+      resource: z.string(),
+    }),
+  },
+  /** A player collected a finished craft into their bag (#17). */
+  'item.crafted': {
+    internal: z.strictObject({
+      craftId: z.uuid(),
+      userId: z.uuid(),
+      recipeId: z.string(),
+      items: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), recipeId: z.string() }),
+  },
 } satisfies Record<string, GameEventSchemas>;
 
 export type GameEventType = keyof typeof GAME_EVENTS;

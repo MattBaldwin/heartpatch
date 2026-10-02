@@ -98,7 +98,7 @@ Add anything else only with a one-line justification in the PR.
   4. CI fails if `drizzle-kit generate` would produce a diff, and runs `drizzle-kit check`.
   5. Migrations must be safe while the previous release is still running (expand, then contract in a later release), because a rollback runs the previous image against the already-migrated schema.
 
-**Core tables (Phase 1):** `users` (with `time_zone`), `sessions`, `event_consumers`, `recovery_codes`, `keepers`, `maps`, `map_members`, `invite_codes`, `join_requests`, `tiles`, `species_seen`, `squishies`, `buildings`, `inventories`, `resource_ledger`, `gather_jobs`, `battles` (seed, action log, result), `raids`, `hollow_events`, `clothing_owned`, `outfits`, `milestone_progress`, `milestone_rewards`, `coin_ledger`, `boutique_stock`, `quick_messages`, `game_events`.
+**Core tables (Phase 1):** `users` (with `time_zone`), `sessions`, `event_consumers`, `recovery_codes`, `keepers`, `maps`, `map_members`, `invite_codes`, `join_requests`, `tiles`, `species_seen`, `squishies`, `buildings`, `inventories`, `resource_ledger`, `gather_jobs`, `crafts`, `battles` (seed, action log, result), `raids`, `hollow_events`, `clothing_owned`, `outfits`, `milestone_progress`, `milestone_rewards`, `coin_ledger`, `boutique_stock`, `quick_messages`, `game_events`.
 
 ## 5. API
 
@@ -117,7 +117,7 @@ Add anything else only with a one-line justification in the PR.
   { v: 1, type: "tile.updated", mapId: string, seq: number, at: string, data: {...} }
   ```
 - `seq` is a per-map monotonically increasing number. On reconnect the client sends its last `seq`; the server replays missed events from `game_events` or tells the client to refetch full state. A REST snapshot says which `seq` it is up to date with (`MapView.seq`, read in the same transaction as the state), and the client subscribes from it.
-- Server → client events (Phase 1): `map.created`, `map.updated`, `member.joined`, `member.left`, `member.removed` (registered by #4), plus `tile.updated`, `raid.resolved`, `building.updated`, `squishy.updated`, `hollow.nightfall`, `chat.quick`, `milestone.earned` (each registered by the issue that writes it). The registry in `packages/shared/src/schemas/events.ts` is the source of truth: every type has an internal and a public schema, and `apps/server/src/ws/public-views.ts` builds broadcasts from it, so an unregistered type is never sent.
+- Server → client events (Phase 1): `map.created`, `map.updated`, `member.joined`, `member.left`, `member.removed` (registered by #4), plus `tile.updated`, `raid.resolved`, `building.updated`, `gather.started`, `resource.gathered`, `item.crafted`, `squishy.updated`, `hollow.nightfall`, `chat.quick`, `milestone.earned` (each registered by the issue that writes it). The registry in `packages/shared/src/schemas/events.ts` is the source of truth: every type has an internal and a public schema, and `apps/server/src/ws/public-views.ts` builds broadcasts from it, so an unregistered type is never sent.
 - Heartbeat ping every 25 s; iOS suspends background tabs, so always resync on `visibilitychange`.
 - Protocol messages use the reserved `ws.` type prefix: `ws.ready`, `ws.subscribed`, `ws.cursor` (seqs up to here that aren't for this player are skipped, so they're not a gap), `ws.resync` (refetch full state), `ws.error` (shared error codes) and `ws.pong`. Client → server: `subscribe { mapId, afterSeq }`, `unsubscribe`, `ping`. Details: `apps/server/README.md` → "Live sync".
 

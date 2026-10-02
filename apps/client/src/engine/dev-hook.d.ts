@@ -1,4 +1,5 @@
 import type { BattleDebug } from '../battle/battle-screen.js';
+import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { KeeperDebug } from '../ui/keeper/keeper-screen.js';
@@ -31,6 +32,8 @@ declare global {
       battle?(): BattleDebug | null;
       /** The Keeper picker: mode, the pick shown, the saved Keeper, the preview's hash (#42). */
       keeper?(): KeeperDebug | null;
+      /** The open map's bag, gathers and the tile panel's gather action (#17), or null. */
+      inventory?(): InventoryDebug | null;
     };
   }
 }

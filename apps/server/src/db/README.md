@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), and `keepers` (#42). Feature tables (`buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), and `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -196,6 +196,51 @@ Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessor
 | `updated_at` | timestamptz | Last change (changing is free, any time) |
 
 Written by the keepers service (#42), which checks every id against the shared Keeper data first. No row = the player hasn't picked yet; with `HP_KEEPER_REQUIRED` they can't make or join a map until they do. Clothing and outfits get their own tables with the wardrobe (#43).
+
+### `inventories`
+| Column | Type | Notes |
+|---|---|---|
+| `map_id` | uuid → maps | PK part. Cascade delete |
+| `user_id` | uuid | PK part. FK `(map_id, user_id)` → `map_members` |
+| `item_id` | text | PK part. A resource or crafted-item id from the shared resource table (`timber`, `heart-charm`) |
+| `quantity` | integer | `>= 0` (check). A missing row means 0. Changed only by `grantItems` / `consumeItems` (`modules/inventory`), in the caller's transaction, each writing `resource_ledger` rows |
+| `updated_at` | timestamptz | |
+
+### `resource_ledger`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete. Indexed with `user_id` |
+| `user_id` | uuid | FK `(map_id, user_id)` → `map_members` |
+| `item_id` | text | |
+| `delta` | integer | `+` granted, `−` spent; never 0 (check). Per item, the sum equals `inventories.quantity` (tests reconcile it) |
+| `reason` | text | `ItemChangeReason` from shared (`gather`, `craft`, `capture`, `dev-grant`; later issues add more) |
+| `ref_id` | uuid, null | What caused it: the gather or craft id |
+| `created_at` | timestamptz | Append-only |
+
+### `gather_jobs`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete. Indexed with `user_id` |
+| `user_id` | uuid | Who started it. FK `(map_id, user_id)` → `map_members` |
+| `tile_id` | uuid → tiles | Cascade delete. One `active` gather per tile (partial unique index) |
+| `resource` | text | The node's resource id when it started |
+| `items` | jsonb | What collecting grants (item id → quantity), fixed at the start, seasonal extras included |
+| `status` | enum `gather_status` | `active` \| `collected` \| `lost` (the tile changed hands and its new owner started one) |
+| `started_at`, `ready_at` | timestamptz | The timer (CLAUDE.md rule 4): collecting checks the clock against `ready_at` |
+| `ended_at` | timestamptz, null | When it was collected or lost |
+
+### `crafts`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `user_id` | uuid | FK `(map_id, user_id)` → `map_members`. One uncollected craft per player per map (partial unique index) |
+| `recipe_id` | text | Recipe id from the shared recipe table |
+| `items` | jsonb | What collecting grants. The inputs were used up when it started |
+| `started_at`, `ready_at` | timestamptz | `ready_at` = start + the recipe's `craftSeconds` |
+| `collected_at` | timestamptz, null | Null while it's on the go |
 
 ### `game_events`
 | Column | Type | Notes |
