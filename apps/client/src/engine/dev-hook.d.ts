@@ -10,6 +10,8 @@ declare global {
       camera(): MapCameraState | null;
       /** Frames drawn so far; stays put while the scene is idle. */
       draws(): number;
+      /** True when the render loop's last iteration drew nothing. */
+      idle(): boolean;
       /** Draws a few frames, as any untracked change would. */
       invalidate(): void;
     };

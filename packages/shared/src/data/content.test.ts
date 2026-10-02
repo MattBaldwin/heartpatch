@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from './buildings.js';
 import { CARE_ACTIONS } from './care-actions.js';
+import { MAP_GEN } from './map-gen.js';
 import { MOVES, SPECIES } from './species.js';
 import { SEASONS } from './seasons.js';
+import { TERRAINS } from './terrains.js';
 
 describe('decisions encoded in data (docs/DECISIONS.md)', () => {
   it('has exactly the feed, pet and play care actions', () => {
@@ -29,5 +31,30 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
   it('ships no species or moves yet: the roster is issue #10, fixtures stay in tests/', () => {
     expect(SPECIES).toEqual([]);
     expect(MOVES).toEqual([]);
+  });
+
+  it('sizes maps 9 / 11 / 12 for 2 / 3 / 4 players (design doc §3)', () => {
+    expect(MAP_GEN.layouts.map((l) => [l.players, l.radius])).toEqual([
+      [2, 9],
+      [3, 11],
+      [4, 12],
+    ]);
+  });
+
+  it('has the design doc terrain set plus the Gap', () => {
+    expect(TERRAINS.map((t) => t.id)).toEqual([
+      'meadow',
+      'forest',
+      'old-forest',
+      'hills',
+      'mountains',
+      'lake',
+      'pumpkin-fields',
+      'junipers-gap',
+    ]);
+  });
+
+  it('guarantees Timber, Stone, Emberwood and a farm plot in every home ring', () => {
+    expect([...MAP_GEN.homeRingNodes].sort()).toEqual(['emberwood', 'stone', 'timber', 'treats']);
   });
 });

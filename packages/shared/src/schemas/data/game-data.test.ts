@@ -181,4 +181,62 @@ describe('checkGameData', () => {
     expect(problems[0]).toBe('buildings["ember-den"].tags: a habitat needs at least one tag');
     expect(problems[1]).toMatch(/^buildings\["training-grounds"\]\.levels: /);
   });
+
+  it('reports unknown resources and terrains in terrain and map settings', () => {
+    const problems = problemsAfter((d) => {
+      d.terrains[1]!.nodeResources = ['acorns'];
+      d.mapGen.gapTerrain = 'volcano';
+      d.mapGen.homeTerrain = 'swamp';
+      d.mapGen.homeRingNodes = ['timber', 'cake'];
+    });
+    expect(problems).toEqual([
+      'terrains["forest"].nodeResources[0]: unknown resource "acorns"',
+      'mapGen.gapTerrain: unknown terrain "volcano"',
+      'mapGen.homeTerrain: unknown terrain "swamp"',
+      'mapGen.homeRingNodes[1]: unknown resource "cake"',
+    ]);
+  });
+
+  it("keeps Juniper's Gap terrain out of the scattered land", () => {
+    const problems = problemsAfter((d) => {
+      d.terrains.find((t) => t.id === 'junipers-gap')!.weight = 5;
+    });
+    expect(problems).toEqual(["mapGen.gapTerrain: Juniper's Gap terrain must have weight 0"]);
+  });
+
+  it('needs some scattered terrain and node resources when nodes can appear', () => {
+    const problems = problemsAfter((d) => {
+      for (const t of d.terrains) t.weight = 0;
+      d.terrains[1]!.nodeResources = [];
+    });
+    expect(problems).toEqual([
+      'terrains["forest"]: a terrain with a node chance needs at least one node resource',
+      'terrains: at least one terrain needs a weight above 0',
+    ]);
+  });
+
+  it('rejects map layouts that crowd the Gap, spill off the map or space homes unevenly', () => {
+    const problems = problemsAfter((d) => {
+      d.mapGen.layouts = [
+        { players: 2, radius: 9, homeDistance: 3 },
+        { players: 2, radius: 9, homeDistance: 9 },
+        { players: 4, radius: 12, homeDistance: 7 },
+      ];
+    });
+    expect(problems).toEqual([
+      'mapGen.layouts[1]: home rings must fit inside the map (homeDistance + 1 <= radius)',
+      'mapGen.layouts[2]: home bases need exactly even spacing: 6 × homeDistance must divide by players',
+      "mapGen.layouts[0].homeDistance: home rings must sit at least 2 steps outside Juniper's Gap",
+      'mapGen.layouts[1].players: duplicate layout for 2 players',
+    ]);
+  });
+
+  it("rejects guardians that aren't toughest in the Gap", () => {
+    const problems = problemsAfter((d) => {
+      d.mapGen.guardianStrength.gap = d.mapGen.guardianStrength.max;
+    });
+    expect(problems).toEqual([
+      "mapGen.guardianStrength: Juniper's Gap guardians must be the strongest",
+    ]);
+  });
 });

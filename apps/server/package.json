@@ -12,12 +12,17 @@
     "db:generate": "drizzle-kit generate && prettier --write --log-level warn src/db/migrations",
     "db:check": "drizzle-kit check",
     "db:migrate": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/db/cli.ts migrate",
-    "db:seed": "NODE_ENV=development tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/db/cli.ts seed"
+    "db:seed": "NODE_ENV=development tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/db/cli.ts seed",
+    "ops:reset-password": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/reset-password.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/rate-limit": "^11.2.0",
     "@heartpatch/shared": "workspace:*",
+    "argon2": "^0.45.1",
     "drizzle-orm": "^0.45.3",
     "fastify": "^5.12.5",
+    "obscenity": "^0.4.6",
     "pino": "^10.3.1",
     "postgres": "^3.4.9",
     "uuidv7": "^1.2.1",

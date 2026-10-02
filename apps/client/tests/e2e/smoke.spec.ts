@@ -16,6 +16,7 @@ interface CameraState {
 interface DevHook {
   camera(): CameraState | null;
   draws(): number;
+  idle(): boolean;
   invalidate(): void;
 }
 
@@ -85,7 +86,12 @@ async function waitForIdle(page: Page, quietMs = 500, timeout = 30_000): Promise
       async () => {
         const before = await draws(page);
         await page.waitForTimeout(quietMs);
-        return (await draws(page)) === before;
+        // Draw count unchanged *and* the loop itself reports idle, so one very
+        // slow frame (software rendering) can't pass for idleness.
+        const idle = await page.evaluate(
+          () => (window as unknown as { __heartpatch?: DevHook }).__heartpatch?.idle() ?? false,
+        );
+        return idle && (await draws(page)) === before;
       },
       { timeout, intervals: [0] },
     )
@@ -93,12 +99,15 @@ async function waitForIdle(page: Page, quietMs = 500, timeout = 30_000): Promise
 }
 
 /**
- * PNG of the canvas alone (dev badges hidden). Only its size is checked:
+ * PNG of the canvas alone (DOM overlays hidden). Only its size is checked:
  * WebKit's compositor can change screenshot bytes while nothing is drawn, so
  * idleness is asserted on the draw counter, never on pixel equality.
  */
 function canvasShot(page: Page): Promise<Buffer> {
-  return page.locator('#game').screenshot({ style: '.dev-status { visibility: hidden; }' });
+  return page.locator('#game').screenshot({
+    // Only the canvas: hide the dev badges and the sign-in overlay drawn over it.
+    style: '.dev-status, .auth-overlay, .auth-chip { visibility: hidden; }',
+  });
 }
 
 /** A flat or blank canvas compresses to a few KB; the test scene to ~200 KB. */

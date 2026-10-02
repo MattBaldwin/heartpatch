@@ -103,6 +103,8 @@ async function createWebGL(canvas: HTMLCanvasElement): Promise<Renderer> {
     },
     false, // we manage the pixel ratio ourselves (dpr.ts)
   );
+  // Also fires on the abandoned canvas when dispose() runs with
+  // loseContextOnDispose; harmless, as nothing restores that context.
   canvas.addEventListener('webglcontextlost', (e) => {
     e.preventDefault(); // without this the browser never restores the context
     engine.stopRenderLoop(); // nothing to draw until the rebuild (boot.ts)

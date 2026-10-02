@@ -4,6 +4,7 @@ import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type Stage } from './engine/stage.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
+import { mountAuth } from './ui/auth/auth-overlay.js';
 import './styles.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -59,6 +60,8 @@ await boot(canvas, {
   onError: showRendererError,
 }).catch(showRendererError);
 
+mountAuth(document.body);
+
 if (import.meta.env.DEV) {
   const badge = document.createElement('div');
   badge.className = 'dev-status';
@@ -81,6 +84,7 @@ if (import.meta.env.DEV) {
     quality: () => stage?.quality.snapshot ?? null,
     camera: () => stage?.camera.state ?? null,
     draws: () => stage?.draws ?? 0,
+    idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),
   };
 }

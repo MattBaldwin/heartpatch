@@ -2,11 +2,13 @@ import type { GameData } from '../schemas/data/game-data.js';
 import { BUILDINGS } from './buildings.js';
 import { CARE_ACTIONS } from './care-actions.js';
 import { ELEMENTS, FEELINGS } from './elements.js';
+import { MAP_GEN } from './map-gen.js';
 import { ELEMENT_MATRIX, FEELING_MATRIX, SYNERGY_TABLE } from './matrices.js';
 import { RECIPES } from './recipes.js';
 import { RESOURCES } from './resources.js';
 import { SEASONS } from './seasons.js';
 import { MOVES, SPECIES } from './species.js';
+import { TERRAINS } from './terrains.js';
 
 /** Every public content table, checked by `checkGameData` in tests. */
 export const GAME_DATA: GameData = {
@@ -22,4 +24,6 @@ export const GAME_DATA: GameData = {
   recipes: RECIPES,
   seasons: SEASONS,
   careActions: CARE_ACTIONS,
+  terrains: TERRAINS,
+  mapGen: MAP_GEN,
 };
