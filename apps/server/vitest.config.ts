@@ -9,6 +9,6 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     // Creates and migrates a scratch database for DB integration tests.
-    globalSetup: ['./tests/globalSetup.ts'],
+    globalSetup: ['./tests/global-setup.ts'],
   },
 });

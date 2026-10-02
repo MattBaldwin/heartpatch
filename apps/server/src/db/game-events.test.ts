@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from './client.js';
-import { appendGameEvent } from './gameEvents.js';
+import { appendGameEvent } from './game-events.js';
 import { gameEvents, maps } from './schema.js';
 
 const url = inject('testDatabaseUrl');

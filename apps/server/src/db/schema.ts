@@ -84,7 +84,7 @@ export const maps = pgTable(
     name: text('name').notNull(),
     // IANA zone for map-local time (nightfall, daily jobs).
     timeZone: text('time_zone').notNull(),
-    // Last allocated game_events.seq for this map; see gameEvents.ts.
+    // Last allocated game_events.seq for this map; see game-events.ts.
     eventSeq: bigint('event_seq', { mode: 'number' }).notNull().default(0),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },

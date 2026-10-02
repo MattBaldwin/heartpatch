@@ -29,7 +29,7 @@ Already have Postgres 16 locally? Skip `db:up` and point `DATABASE_URL` at it.
 | `migrations/` | Generated SQL + drizzle-kit journal. Committed; never edit a merged one. `pnpm build` copies it into `dist/` |
 | `client.ts` | `createDbClient(url)` → `{ db, ping, close }`, the `Database` / `Transaction` types, and `dbReadinessCheck` for `/api/v1/ready` |
 | `migrator.ts` | `runMigrations(db)` |
-| `gameEvents.ts` | `appendGameEvent(tx, event)`: the only way to write `game_events` |
+| `game-events.ts` | `appendGameEvent(tx, event)`: the only way to write `game_events` |
 | `seed.ts` | Local test data |
 | `cli.ts` | `migrate` / `seed` entrypoint |
 
@@ -139,7 +139,7 @@ await db.transaction(async (tx) => {
 // 3. After commit: broadcast `event` to WebSocket clients
 ```
 
-`appendGameEvent` runs `UPDATE maps SET event_seq = event_seq + 1 … RETURNING event_seq` and inserts the event with that seq. The update row-locks the map until commit, so seqs never skip (a rollback undoes the bump too, unlike a Postgres sequence) and commit order matches seq order. Taking that lock last keeps a fixed lock order (entities, then `maps`), which avoids deadlocks. Integration tests in `gameEvents.test.ts` check concurrent appends, rollbacks and both mixed together.
+`appendGameEvent` runs `UPDATE maps SET event_seq = event_seq + 1 … RETURNING event_seq` and inserts the event with that seq. The update row-locks the map until commit, so seqs never skip (a rollback undoes the bump too, unlike a Postgres sequence) and commit order matches seq order. Taking that lock last keeps a fixed lock order (entities, then `maps`), which avoids deadlocks. Integration tests in `game-events.test.ts` check concurrent appends, rollbacks and both mixed together.
 
 ## Changing the schema
 
@@ -150,4 +150,4 @@ await db.transaction(async (tx) => {
 
 ## Tests
 
-DB integration tests run against a real Postgres. `tests/globalSetup.ts` creates a scratch database next to `DATABASE_URL` (the role needs `CREATEDB`), applies every migration from scratch, and drops it afterwards, so tests never touch your dev data. Without `DATABASE_URL`, those tests are skipped locally with a warning. CI sets it and fails if it's missing.
+DB integration tests run against a real Postgres. `tests/global-setup.ts` creates a scratch database next to `DATABASE_URL` (the role needs `CREATEDB`), applies every migration from scratch, and drops it afterwards, so tests never touch your dev data. Without `DATABASE_URL`, those tests are skipped locally with a warning. CI sets it and fails if it's missing.
