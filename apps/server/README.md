@@ -122,6 +122,48 @@ void publish?.(mapId); // after commit; never rejects
 
 Tunables are in `src/ws/limits.ts`.
 
+## Event consumers and jobs (`src/jobs/`)
+
+Scheduled jobs and event consumers run in this process on **pg-boss** (tech spec §3, §7), which keeps its tables in the `pgboss` schema (created by `boss.start()`, outside Drizzle's migrations; the database role needs `CREATE` on the database). `src/index.ts` calls `startJobs` before listening and stops it on close.
+
+An **event consumer** reads each map's `game_events` in seq order **after commit** and keeps its own state: the tutorial step engine today; milestones, Easter eggs and the raid log later. It never runs inside a command's transaction and never depends on live broadcast.
+
+```ts
+export function createMilestonesConsumer(): EventConsumer {
+  return {
+    name: 'milestones',                 // event_consumers.consumer and the queue name; never rename
+    mapKinds: ['multiplayer'],          // only woken for these maps
+    handle: async (tx, event) => { … }, // write only through tx; throw to retry the batch
+  };
+}
+```
+
+Add it to the `consumers` list in `src/index.ts`. How it stays exactly-once:
+
+- **Position:** `event_consumers (consumer, map_id, last_seq)`. `runConsumer` (`jobs/consumers.ts`) works in batches; each batch is one transaction that locks the row `FOR UPDATE`, applies the events after `last_seq` and advances it. A crash or a throwing handler rolls the batch back, so it's only delayed. It keeps going until it reaches `maps.event_seq`.
+- **Wake-up in the command's transaction:** `appendGameEvent` calls the wake-up `startJobs` installs (`setEventWakeup`), which runs pg-boss `send` on the command's own transaction (`pgBossOnTransaction`). A rolled-back command wakes nobody. Without jobs running (tests, ops tools) there is no wake-up; the catch-up finds the events later.
+- **One worker per (consumer, map):** queue `event-consumer.<name>` uses the `stately` policy with the map id as `singletonKey` (one queued and one running job per map); the row lock covers the rest.
+- **Catch-up:** `event-consumers.catch-up` runs every minute (`CATCH_UP_CRON`) and at boot, and wakes every consumer whose `last_seq` is behind `maps.event_seq`.
+- **Handlers may append events** (the tutorial does). Call `appendGameEvent` through `tx`; the runner publishes after each batch commits. A consumer never completes anything on its own event types.
+
+Tunables are in `src/jobs/limits.ts`. Never prune `game_events` below the lowest `last_seq` for a map.
+
+## Tutorial
+
+The single-player tutorial (design doc §26; tech spec §7) lives in `src/modules/tutorial` (issue #47). A run is an ordinary map with `kind = 'tutorial'`, one member and the hand-authored Tutorial Glade (`TUTORIAL_LAYOUT` in shared `data/tutorial/`). `users.tutorial_step` is the current step while a run is going (null otherwise); `users.tutorial_completed_at` is the first completion and never moves.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/tutorial` | → `{ tutorial }`: status, current step and map, first completion, and `required` (`HP_TUTORIAL_REQUIRED`). What the client resumes from |
+| `POST /api/v1/tutorial/start` | First run → 201 `{ tutorial }`; a run already going → 200 with it. `CONFLICT` once finished (use replay) |
+| `POST /api/v1/tutorial/replay` | A fresh Glade from the first step, any time; the old run is archived → 201 |
+| `POST /api/v1/tutorial/skip` | Ends any run; only after finishing once (`FORBIDDEN` before) → 200 |
+| `POST /api/v1/tutorial/acknowledge` | `{ stepId }`: the player read a talk-only step → 204. Only the current step, and only a step that completes on `tutorial.acknowledged` |
+
+**Step engine.** Steps are data (`TUTORIAL_STEPS`: id, goal, Sprout's lines, highlight target, `completeOn: { eventType, actor, where }` with declarative predicates), checked by `checkTutorialData`. The `tutorial` event consumer (`consumer.ts`) feeds each event on a tutorial map to the shared `advanceTutorial`; a match moves the player one step on, or finishes the tutorial after the last one, and appends `tutorial.advanced` (a system event) so the client hears it live. Events on an archived run do nothing. Rewards on first completion are a stub tied to #44, #43 and #14.
+
+**Gameplay on tutorial maps** goes through the real modules. They read `gameplayOverrides(map.kind)` from shared (fast timers, sure capture, scripted opponents, the Hollow Man can't take anything) rather than branching on the map kind themselves. The maps API (`/maps`, `/maps/:id`, `/maps/:id/view`) doesn't show tutorial maps.
+
 ## Workspace source condition
 
 `@heartpatch/shared` resolves to its TypeScript source under the `@heartpatch/source` export condition, and to `dist/` otherwise.

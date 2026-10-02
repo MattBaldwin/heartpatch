@@ -1,0 +1,17 @@
+// Scheduled-job and event-consumer settings (tech spec §7).
+
+/** Events applied per consumer transaction. */
+export const CONSUMER_BATCH_SIZE = 50; // TUNE: guess; keeps each transaction short
+
+/** How often an idle consumer worker checks for wake-ups (a tutorial step waits on it). */
+export const CONSUMER_POLL_SECONDS = 1; // TUNE: pg-boss minimum is 0.5
+
+/** How often the catch-up job wakes consumers that lag (cron). */
+export const CATCH_UP_CRON = '* * * * *'; // TUNE: every minute
+
+/** Retries for a consumer job that throws (the next wake-up or catch-up also retries). */
+export const CONSUMER_RETRY_LIMIT = 5; // TUNE: guess
+export const CONSUMER_RETRY_DELAY_SECONDS = 5; // TUNE: guess, doubles each time
+
+/** How long `stop()` waits for running jobs on shutdown. */
+export const JOBS_STOP_TIMEOUT_MS = 10_000; // TUNE:

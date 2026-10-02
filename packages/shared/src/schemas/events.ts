@@ -32,6 +32,10 @@ const DepartedSchema = z.strictObject({
   releasedTiles: z.number().int().min(0),
 });
 const DepartedPublicSchema = z.object(DepartedSchema.shape);
+const TutorialAdvancedSchema = z.strictObject({
+  completedStepId: z.string(),
+  stepId: z.string().nullable(),
+});
 
 export const GAME_EVENTS = {
   /** A player made a map and is its owner. Always seq 1. */
@@ -68,6 +72,23 @@ export const GAME_EVENTS = {
   'member.left': { internal: DepartedSchema, public: DepartedPublicSchema },
   /** The owner removed a member. */
   'member.removed': { internal: DepartedSchema, public: DepartedPublicSchema },
+  /**
+   * Tutorial maps only: the player tapped through a talk-only step (Sprout's
+   * welcome, graduation). The step engine completes such a step on it.
+   */
+  'tutorial.acknowledged': {
+    internal: z.strictObject({ stepId: z.string() }),
+    public: z.object({ stepId: z.string() }),
+  },
+  /**
+   * Tutorial maps only, written by the step engine (a system event): the
+   * player finished `completedStepId`. `stepId` is the new current step, or
+   * null when the tutorial is done.
+   */
+  'tutorial.advanced': {
+    internal: TutorialAdvancedSchema,
+    public: z.object(TutorialAdvancedSchema.shape),
+  },
 } satisfies Record<string, GameEventSchemas>;
 
 export type GameEventType = keyof typeof GAME_EVENTS;
