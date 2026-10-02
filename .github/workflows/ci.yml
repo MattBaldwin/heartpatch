@@ -61,6 +61,8 @@ jobs:
           fi
 
       - run: pnpm test
+      - name: Coverage thresholds (shared game logic)
+        run: pnpm --filter @heartpatch/shared test:coverage
       - run: pnpm build
 
       - name: DB scripts from scratch (migrate + seed, twice each)

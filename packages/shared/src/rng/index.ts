@@ -61,6 +61,23 @@ export function hashString(text: string): string {
 }
 
 /** A weighted choice: anything with a non-negative `weight`. */
+/**
+ * Derives a child seed from a parent seed and labels, e.g. a tile's spawn seed:
+ * `deriveSeed(mapSeed, 'spawn', q, r, windowId)`. The same inputs always give
+ * the same seed, so restarting a battle can't reroll what appears (tech spec
+ * §8). Labels are joined unambiguously, so ('a', 'bc') and ('ab', 'c') differ.
+ * The result is a fingerprint, not a secret-preserving hash: a derived seed
+ * must stay on the server whenever its parent does.
+ */
+export function deriveSeed(parent: Seed, ...labels: readonly (string | number)[]): Seed {
+  for (const label of labels) {
+    if (typeof label === 'number' && !Number.isSafeInteger(label)) {
+      throw new RangeError(`deriveSeed labels must be strings or safe integers, got ${label}`);
+    }
+  }
+  return hashString(JSON.stringify([SeedSchema.parse(parent), ...labels]));
+}
+
 export interface Weighted {
   readonly weight: number;
 }
