@@ -14,7 +14,11 @@ export const ELEMENTS: Element[] = [
 export const FEELINGS: Feeling[] = [
   { id: 'joy', name: 'Joy', description: 'Bouncy and beaming. Joy squishies love a party!' },
   { id: 'cozy', name: 'Cozy', description: 'Snuggly and warm. Cozy squishies give the best hugs.' },
-  { id: 'brave', name: 'Brave', description: 'Puffed up and bold. Brave squishies go first.' },
+  {
+    id: 'brave',
+    name: 'Brave',
+    description: 'Puffed up and bold. Brave squishies never back down.',
+  },
   { id: 'silly', name: 'Silly', description: 'Wiggly and giggly. Silly squishies spin for fun.' },
   {
     id: 'sleepy',

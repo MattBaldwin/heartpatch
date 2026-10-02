@@ -54,6 +54,23 @@ describe('checkGameData', () => {
     ]);
   });
 
+  it('reports evolution chains that loop', () => {
+    const problems = problemsAfter((d) => {
+      d.species[1]!.evolutions = [{ into: 'fixture-puddlepuff', level: 30 }];
+    });
+    expect(problems).toEqual([
+      'species["fixture-puddlepuff"].evolutions: evolution chain loops back to this species',
+      'species["fixture-splashmallow"].evolutions: evolution chain loops back to this species',
+    ]);
+  });
+
+  it('rejects a recipe with no inputs', () => {
+    const problems = problemsAfter((d) => {
+      d.recipes[0]!.inputs = {};
+    });
+    expect(problems).toEqual(['recipes["heart-charm"].inputs: a recipe needs at least one input']);
+  });
+
   it('reports duplicate ids', () => {
     const problems = problemsAfter((d) => {
       d.moves.push({ ...d.moves[0]! });

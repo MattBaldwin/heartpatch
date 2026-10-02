@@ -34,9 +34,15 @@ export const PLAYER_FACING_FIELDS: ReadonlySet<string> = new Set([
   'captions',
 ]);
 
-// Common inflections too: "dies", "died", "bites", "attacked", "enemies".
+/**
+ * Irregular forms the suffix rule below can't build. Not "bit": "a little
+ * bit sticky" is everyday cozy wording (style guide §5).
+ */
+const IRREGULAR_FORMS = ['dying', 'bitten', 'biting', 'killer', 'hating'];
+
+// Regular inflections too: "dies", "died", "bites", "attacked", "enemies".
 const AVOIDED_PATTERN = new RegExp(
-  `\\b(?:${AVOIDED_WORDS.map((w) => (w.endsWith('y') ? `${w.slice(0, -1)}(?:y|ies)` : w)).join('|')})(?:s|es|d|ed|ing)?\\b`,
+  `\\b(?:(?:${AVOIDED_WORDS.map((w) => (w.endsWith('y') ? `${w.slice(0, -1)}(?:y|ies)` : w)).join('|')})(?:s|es|d|ed|ing)?|${IRREGULAR_FORMS.join('|')}s?)\\b`,
   'gi',
 );
 

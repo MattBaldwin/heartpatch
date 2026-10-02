@@ -26,11 +26,13 @@ describe('style guide §9: avoided words in player-facing data', () => {
       'enemies',
       'died',
     ]);
+    expect(findAvoidedWords('dying, bitten, a killer')).toEqual(['dying', 'bitten', 'killer']);
   });
 
   it('does not flag words that merely contain an avoided word', () => {
     expect(findAvoidedWords('A diet of soft studies and a hateful-free stabilizer')).toEqual([]);
     expect(findAvoidedWords('Tuckered out, then a cozy nap.')).toEqual([]);
+    expect(findAvoidedWords('A little bit sticky.')).toEqual([]);
   });
 
   it('names the row and field, and ignores non-text fields like baseStats.attack', () => {

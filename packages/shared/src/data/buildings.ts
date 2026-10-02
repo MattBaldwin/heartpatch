@@ -5,7 +5,7 @@ export const BUILDINGS: Building[] = [
     id: 'hearthfire',
     kind: 'hearthfire',
     name: 'Hearthfire',
-    description: 'A warm, bright fire. Squishies near it are safe all night.',
+    description: "A warm, bright fire. While it's lit, squishies near it are safe all night.",
     fuelResource: 'emberwood',
     fuelPerNight: 1, // TUNE:
     maxFuelNights: 5, // TUNE: docs/DECISIONS.md, design doc §14

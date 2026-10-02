@@ -10,7 +10,10 @@ export const RecipeSchema = z.strictObject({
   id: ContentIdSchema,
   name: DisplayNameSchema,
   description: DescriptionSchema,
-  inputs: ResourceCostSchema,
+  inputs: ResourceCostSchema.refine(
+    (inputs) => Object.keys(inputs).length > 0,
+    'a recipe needs at least one input',
+  ),
   output: z.strictObject({
     resource: ContentIdSchema,
     quantity: z.number().int().positive(),

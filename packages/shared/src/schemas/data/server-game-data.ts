@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { checkRef, checkUniqueIds, formatDataIssues, type GameData } from './game-data.js';
+import type { GameData } from './game-data.js';
+import { checkRef, checkUniqueIds, formatDataIssues } from './issues.js';
 import { SpawnTableSchema } from './spawn-tables.js';
 
 /** Server-only tables (tech spec §2). Never sent to or bundled for the client. */
