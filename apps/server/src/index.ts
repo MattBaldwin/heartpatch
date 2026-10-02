@@ -5,6 +5,7 @@ import { startJobs } from './jobs/boss.js';
 import { createClock } from './lib/time.js';
 import { createHollowConsumer } from './modules/hollow/consumer.js';
 import type { HollowService } from './modules/hollow/service.js';
+import { createRaidsConsumer } from './modules/raids/consumer.js';
 import { createTutorialConsumer } from './modules/tutorial/consumer.js';
 
 const config = loadServerConfig();
@@ -26,7 +27,11 @@ const hollow = hollowService;
 const jobs = await startJobs({
   connectionString: config.DATABASE_URL,
   db: db.db,
-  consumers: [createTutorialConsumer({ clock }), createHollowConsumer(hollow)],
+  consumers: [
+    createTutorialConsumer({ clock }),
+    createRaidsConsumer(),
+    createHollowConsumer(hollow),
+  ],
   // The Hollow Man (#21): night falls on each map at 21:00 map time.
   nightfall: {
     due: hollow.dueNightfalls,

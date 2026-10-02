@@ -19,6 +19,7 @@ import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
+import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createTerritoryScreen } from './territory/territory-screen.js';
 import { createTutorialScreen } from './tutorial/tutorial-screen.js';
 import './styles.css';
@@ -113,11 +114,24 @@ const inventory = createInventoryScreen({ root: document.body, devTools: import.
 const care = createCareSheet({ root: document.body });
 // Territory (#15): Claim, Challenge and guards in the tile panel. A tile
 // battle opens the battle screen, unless another screen sits over the map.
-const territory = createTerritoryScreen({
-  openBattle: (battle) => {
-    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) battles.open(battle);
+// The raid report (#16) rides along with territory onto every map: challenges
+// on my land while I was away, my defense style, and replays in the battle screen.
+const raidReport = createRaidReport({
+  root: document.body,
+  watch: (replay) => {
+    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) {
+      battles.watch(replay.start, replay.end);
+    }
   },
 });
+const territory = withRaidReport(
+  createTerritoryScreen({
+    openBattle: (battle) => {
+      if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) battles.open(battle);
+    },
+  }),
+  raidReport,
+);
 // The Hollow Man (#21): the night on the map, his visit when night falls,
 // the morning report, and rescues (a rescue battle opens the battle screen).
 const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
@@ -125,7 +139,7 @@ const hollow = createHollowScreen({
   root: document.body,
   layer: hollowLayer,
   openBattle: (battle) => {
-    if (!lobby.isOpen && !catalog.isOpen) battles.open(battle);
+    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) battles.open(battle);
   },
   devTools: import.meta.env.DEV,
 });
@@ -419,6 +433,7 @@ if (import.meta.env.DEV) {
     inventory: () => inventory.debug,
     territory: () => territory.debug,
     hollow: () => hollow.debug,
+    raids: () => raidReport.debug,
     home: () => home.debug,
     care: () => care.debug,
     wardrobe: () => wardrobe.debug,

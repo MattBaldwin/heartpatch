@@ -182,13 +182,26 @@ await repo.transaction(async (repo, tx) => {
 
 **Raid rules** are `TERRITORY_RULES` (shared, public, `// TUNE:`), all checked on the server in the battle's start transaction, in this order: the tile exists; the target is next to my land, not a home tile, not mine, and not another player's when PvP is Off (`attackTargetProblem`, shared with the client); the tile's cooldown (`cooldownHours` from the last battle **started** on it, by anyone, win or lose); my tries today (`attemptsPerDay` per map-local day; a no-contest doesn't count); and for a rival tile, their new-player shield (`newPlayerShieldHours` from joining), then their daily loss cap (`dailyLossCap[pvpMode]`, counting tiles lost today **plus** challenges against them still going, so two at once can't both get under it). Refusals use nothing up. Lock order: the defender's `map_members` row (`for no key update`, so the cap count is serialized per defender), the tile, then the battle and attempt rows, `maps` last.
 
-**Who defends.** Neutral land: the tile's guardians, `resolveGuardians` over the secret `GUARDIAN_RULES` with `deriveSeed(mapSeed, 'guardian', q, r, windowId)` (tech spec §8: fixed per window, the seed and `guardian_strength` never leave the server). A rival tile: the owner's squishies on watch, or the land's own guardians if nobody stands watch. `defendingSide` is the one place that picks who plays that side (Phase 1: the engine's `balanced` AI for squishies, `guardian` for guardians); #16 swaps in defense stances there.
+**Who defends.** Neutral land: the tile's guardians, `resolveGuardians` over the secret `GUARDIAN_RULES` with `deriveSeed(mapSeed, 'guardian', q, r, windowId)` (tech spec §8: fixed per window, the seed and `guardian_strength` never leave the server). A rival tile: the owner's squishies on watch, or the land's own guardians if nobody stands watch. `defendingSide` is the one place that picks who plays that side: the server's AI always does, so the owner never has to be online. Squishies on watch play the owner's defense stance (`stancePolicy`, #16, read with their member lock), guardians the `guardian` policy; the policy is stored in the battle's setup, so replays need no lookup.
 
 **Capture.** In the battle's finishing transaction (CLAUDE.md rule 7): the tile changes hands only if it's still held by whoever held it at the start (or nobody) and isn't a home tile, the squishies on watch go home (`tile_defenders` rows deleted, the squishies untouched), the attempt is `captured`, and `tile.captured` follows `battle.ended`. Leaving a map releases its tiles and sends its squishies on watch home too (`releaseTiles`).
 
 **Events:** `tile.attacked` (public: who, whose, where, `cooldownUntil`), `tile.captured` (public: new and old owner, where; internal also the kind, terrain, Gentle `rewardPercent` and returned squishies, for found clothing #43 and milestones #44), `defenders.changed` (public: whose and where, and how many; which squishies stays internal). `PublicTile` carries `cooldownUntil` (the latest, may be past) and `defenders` (a count).
 
 **On watch (decision C):** `isOnWatch(squishy, post)` (shared) is true for an active squishy posted on land its owner still holds; the Hollow Man (#21) skips those.
+
+## Raid log and defense style
+
+`src/modules/raids` (issue #16; design doc §3, §6): offline defense and the defender's "morning report". The challenger plays a rival-tile battle live (#15); the defender's side is always the server's AI in their **defense stance** (`map_members.defense_stance`, per map, default `RAID_RULES.defaultStance`; the UI says **Defense style**: Bold, Careful, Balanced). So a challenge resolves without waiting on the defender.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/raids` | → `{ report }`: my stance, how many raids are new, and my latest `RAID_RULES.reportLimit` raids (newest first). Only the defender's own |
+| `POST /api/v1/maps/:mapId/raids/seen` | `{ raidIds }` → `{ report }`. Marks my raids seen (once; others' ids change nothing). Takes an `Idempotency-Key` |
+| `GET /api/v1/maps/:mapId/raids/:raidId/replay` | → `{ replay: { start, end } }`: the battle from my side (`mySide: 'b'`) through `playerBattleView` (#13's view): `start` is `startBattle(seed, setup)`, `end` the stored finished battle. 409 if it was called off, or the content was re-tuned since (the stored log is then the truth) |
+| `POST /api/v1/maps/:mapId/defense-style` | `{ stance }` → `{ report }`. Takes the member lock a challenge's start takes, so a change lands before or after a start, never during. Takes an `Idempotency-Key` |
+
+**The raid log is an event consumer** (`raid-log`, multiplayer maps; tech spec §7): for each `battle.ended` of a `rival-tile` battle it reads the attempt log (`tile_attacks`) and the battle, writes one `raids` row (unique per battle, so a re-run writes nothing), marks the challenger's species seen for the defender (their squishies met them, so the replay can name a secret one), and appends `raid.resolved` (public: raid id, who, whose, where, outcome). Why not the battle's own transaction: everything that must commit together (attempt, tile) already does; the log only reports it, and `battle.ended` carries the reason (a forfeit) the territory port doesn't see. A broken raid log can delay a report, never a showdown.
 
 ## Home base and buildings
 
@@ -288,7 +301,7 @@ Tunables are in `src/ws/limits.ts`.
 
 Scheduled jobs and event consumers run in this process on **pg-boss** (tech spec §3, §7), which keeps its tables in the `pgboss` schema (created by `boss.start()`, outside Drizzle's migrations; the database role needs `CREATE` on the database). `src/index.ts` calls `startJobs` before listening and stops it on close.
 
-An **event consumer** reads each map's `game_events` in seq order **after commit** and keeps its own state: the tutorial step engine today; milestones, Easter eggs and the raid log later. It never runs inside a command's transaction and never depends on live broadcast.
+An **event consumer** reads each map's `game_events` in seq order **after commit** and keeps its own state: the tutorial step engine and the raid log (#16) today; milestones and Easter eggs later. It never runs inside a command's transaction and never depends on live broadcast.
 
 ```ts
 export function createMilestonesConsumer(): EventConsumer {

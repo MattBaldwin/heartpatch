@@ -25,6 +25,8 @@ import { inventoryRoutes } from './modules/inventory/routes.js';
 import { createInventoryService } from './modules/inventory/service.js';
 import { spawnsRoutes } from './modules/spawns/routes.js';
 import { createSpawnsService } from './modules/spawns/service.js';
+import { raidsRoutes } from './modules/raids/routes.js';
+import { createRaidsService } from './modules/raids/service.js';
 import { territoryRoutes } from './modules/territory/routes.js';
 import { createTerritoryService, createTileBattlePort } from './modules/territory/service.js';
 import { createAuthRepo } from './modules/auth/repo.js';
@@ -214,6 +216,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             hooks: authHooks,
             idempotency,
           }),
+        );
+        // The raid log and defense style (#16); the raid-log consumer writes
+        // the rows (`modules/raids/consumer.ts`, started in index.ts).
+        await api.register(
+          raidsRoutes(createRaidsService({ db, clock }), { hooks: authHooks, idempotency }),
         );
         await api.register(
           buildingsRoutes(createBuildingsService({ db, clock, ...publish }), {

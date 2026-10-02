@@ -1,12 +1,12 @@
 /* The Hollow Man (#21). Big text, 44pt+ targets, safe areas, one-handed:
-   the Hollow button sits bottom left above Home; the morning report and the
+   the Hollow button sits bottom left, above Home and the raid Report (#16); the morning report and the
    rescue sheet are bottom cards, like the tile panel. Dusky, not dark. */
 
 .hollow-open {
   position: fixed;
   z-index: 4;
   left: calc(env(safe-area-inset-left) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 236px);
+  bottom: calc(env(safe-area-inset-bottom) + 312px);
   display: flex;
   flex-direction: column;
   align-items: center;
