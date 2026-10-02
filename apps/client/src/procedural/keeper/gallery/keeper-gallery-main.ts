@@ -1,7 +1,10 @@
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import {
+  CLOTHING,
   defaultKeeperConfig,
+  isKeeperClothing,
   KEEPER_DATA,
+  STARTER_CLOTHING,
   WARDROBE_SLOTS,
   type KeeperConfig,
   type WardrobeSlot,
@@ -16,7 +19,7 @@ import type { SquishMove } from '../../config.js';
 import { lodFor, type SquishyView } from '../../motion.js';
 import { KEEPER_PLACES } from '../keeper-config.js';
 import type { KeeperField, KeeperHandle } from '../keeper-field.js';
-import { PLACEHOLDER_ITEMS, type KeeperItem } from '../keeper-items.js';
+import { keeperItems, type KeeperItem } from '../keeper-items.js';
 import { keeperHash, keeperParams } from '../keeper-params.js';
 import { buildKeeperGalleryScene } from './keeper-gallery-scene.js';
 import '../../../styles.css';
@@ -27,10 +30,13 @@ import '../../gallery/gallery.css';
  * part of the production build). Shows every Keeper base; tap the buttons to
  * cheer.
  *
- * Query flags: `?items=all` (a stand-in item in every slot but costume),
- * `?items=costume` or `?items=hat,shoes`, `?count=40` (stress test, colours
- * vary), `?base=wren`, `?view=closeup`, `?yaw=180` (turn them round), plus
- * the main page's `?quality=` and `?renderer=webgpu`.
+ * Query flags: `?items=all` (the starter set: an item in every slot but
+ * costume), `?items=costume` (the Ghost Sheet) or `?items=hat,shoes`,
+ * `?wear=witch-hat,ghost-cape` (any catalog items on every Keeper),
+ * `?each=hat` (one Keeper per catalog item in that slot, to judge them side
+ * by side; `?each=all` for every Keeper item), `?count=40` (stress test,
+ * colours vary), `?base=wren`, `?view=closeup`, `?yaw=180` (turn them
+ * round), plus the main page's `?quality=` and `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The Keeper gallery is dev-only');
@@ -50,13 +56,20 @@ const data = KEEPER_DATA;
 
 const baseParam = params.get('base');
 const bases = baseParam ? data.bases.filter((b) => b.id === baseParam) : data.bases;
+/** `?each=<slot>`: the catalog items shown one per Keeper. */
+const eachParam = params.get('each');
+const each = eachParam
+  ? CLOTHING.filter(isKeeperClothing).filter((i) => eachParam === 'all' || i.slot === eachParam)
+  : [];
 const requested = Number(params.get('count'));
 const count =
   Number.isInteger(requested) && requested > 0
     ? Math.min(requested, 200)
-    : view === 'closeUp'
-      ? 1
-      : bases.length;
+    : each.length > 0
+      ? each.length
+      : view === 'closeUp'
+        ? 1
+        : bases.length;
 /** Base defaults first; past the end, colours cycle so repeats look different. */
 const configs: KeeperConfig[] = Array.from({ length: count }, (_, i) => {
   const base = bases[i % bases.length];
@@ -72,13 +85,22 @@ const configs: KeeperConfig[] = Array.from({ length: count }, (_, i) => {
   };
 });
 
+/** The starter set (an item in every slot but costume) plus the Ghost Sheet. */
+const STAND_INS = keeperItems([...STARTER_CLOTHING, 'ghost-sheet']);
+
 function itemsFor(flag: string | null): KeeperItem[] {
   if (!flag || flag === 'none') return [];
-  if (flag === 'all') return PLACEHOLDER_ITEMS.filter((item) => item.slot !== 'costume');
+  if (flag === 'all') return STAND_INS.filter((item) => item.slot !== 'costume');
   const slots = new Set(flag.split(','));
-  return PLACEHOLDER_ITEMS.filter((item) => slots.has(item.slot));
+  return STAND_INS.filter((item) => slots.has(item.slot));
 }
-const items = itemsFor(params.get('items'));
+const wear = params.get('wear');
+const items = wear ? keeperItems(wear.split(',')) : itemsFor(params.get('items'));
+/** What Keeper `i` wears. */
+const itemsOf = (i: number): KeeperItem[] => {
+  const one = each[i];
+  return one ? keeperItems([one.id]) : items;
+};
 // Degrees; 180 shows the back (hair, backpacks).
 const yaw = (Number(params.get('yaw')) || 0) * (Math.PI / 180);
 
@@ -111,7 +133,7 @@ await boot(canvas, {
         field?.dispose();
         const built = buildKeeperGalleryScene(scene, data, {
           configs,
-          items,
+          items: itemsOf,
           lod: lodFor(view, tier),
           scale: view === 'closeUp' ? KEEPER_PLACES.preview.scale : 1,
           yaw,
@@ -213,7 +235,7 @@ window.__heartpatchKeepers = {
       keeperParams(
         config,
         data,
-        PLACEHOLDER_ITEMS.filter((item) => slots.includes(item.slot)),
+        STAND_INS.filter((item) => slots.includes(item.slot)),
       ),
     ),
   hashOf: (i) => {

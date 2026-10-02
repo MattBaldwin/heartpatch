@@ -88,7 +88,9 @@ export class MapSync {
   event(event: WsEventMessage): void {
     const state = this.current;
     if (!state || this.resyncing || event.mapId !== state.id) return;
-    if (state.apply(event) === 'resync') this.resync();
+    const effect = state.apply(event);
+    if (effect === 'resync') this.resync();
+    else if (effect === 'redraw') this.options.onRedraw(state);
   }
 
   /** ws-client `onResync`: too much was missed to replay. */

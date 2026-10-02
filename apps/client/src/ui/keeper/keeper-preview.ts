@@ -7,11 +7,13 @@ import type { SceneContent } from '../../engine/stage.js';
 import type { SquishyLod } from '../../procedural/config.js';
 import { KEEPER_PLACES } from '../../procedural/keeper/keeper-config.js';
 import { KeeperField, type KeeperHandle } from '../../procedural/keeper/keeper-field.js';
+import type { KeeperItem } from '../../procedural/keeper/keeper-items.js';
 import { keeperHash } from '../../procedural/keeper/keeper-params.js';
 
 // The picker's 3D preview (design doc §23): the Keeper being picked, close
-// up on a little pastel stage, above the picker card. It only draws when the
-// pick changes or the Keeper hops (render on demand, tech spec §6).
+// up on a little pastel stage, above the picker card. The wardrobe (#43)
+// shows it dressed, and turned round to see capes and wings. It only draws
+// when the pick changes or the Keeper hops (render on demand, tech spec §6).
 
 export class KeeperPreview {
   readonly content: SceneContent;
@@ -43,11 +45,24 @@ export class KeeperPreview {
     };
   }
 
-  /** Shows `config`; `hop` makes the new look jump for joy. */
-  show(config: KeeperConfig, now: number, hop: boolean): void {
+  /**
+   * Shows `config` wearing `items`; `hop` makes the new look jump for joy.
+   * `turned` shows its back, tipped towards the camera (the front view's lean
+   * mirrored) so the back shows rather than the top of the head.
+   */
+  show(
+    config: KeeperConfig,
+    now: number,
+    hop: boolean,
+    items: readonly KeeperItem[] = [],
+    turned = false,
+  ): void {
     if (this.#handle) this.#field.remove(this.#handle);
     const { scale, lean } = KEEPER_PLACES.preview;
-    this.#handle = this.#field.add(config, { x: 0, z: 0, scale, lean });
+    const placement = turned
+      ? { x: 0, z: 0, scale, lean: -lean, yaw: Math.PI }
+      : { x: 0, z: 0, scale, lean };
+    this.#handle = this.#field.add(config, placement, items);
     if (hop) this.#field.play(this.#handle, 'bounce', now);
   }
 

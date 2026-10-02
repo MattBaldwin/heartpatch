@@ -62,6 +62,8 @@ export interface BattleScreenOptions {
   devTools?: boolean;
   /** The player's Keeper (#42), to stand behind their squishy; null if not known. */
   keeper?: () => KeeperConfig | null;
+  /** What the player's Keeper wears (#43), clothing ids. */
+  keeperWearing?: () => readonly string[];
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -412,6 +414,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       content,
       mySide: battle.mySide,
       keeper: options.keeper?.() ?? null,
+      keeperWearing: options.keeperWearing?.() ?? [],
     });
     lastTier = options.tier();
     for (const side of ['a', 'b'] as const) {

@@ -1,0 +1,271 @@
+/* The wardrobe (design doc §23, #43): the Keeper in 3D up top and a bottom
+   card for one thumb, like the Keeper picker (../keeper/keeper.css). Cards,
+   buttons and inputs come from ../auth/auth.css. 44pt+ tap targets, safe
+   areas. Over the lobby (4), level with the Keeper picker (7), under the
+   install guide (8), the tutorial (9) and the "Log out" chip (10). */
+
+.wardrobe {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: calc(env(safe-area-inset-top) + 56px) calc(env(safe-area-inset-right) + 12px)
+    calc(env(safe-area-inset-bottom) + 12px) calc(env(safe-area-inset-left) + 12px);
+  /* The top stays clear: that's where the Keeper stands. */
+  pointer-events: none;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.wardrobe[hidden],
+.wardrobe-toast[hidden],
+.wardrobe-save[hidden],
+.wardrobe-outfits[hidden] {
+  display: none;
+}
+
+.wardrobe-card {
+  /* The items get whatever room the other rows leave (the hidden one of
+     outfits / save row takes no row). A set height, so that room is known. */
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  gap: 6px;
+  height: min(55vh, 520px);
+  margin: 0 auto;
+  padding: 12px 12px 8px;
+  pointer-events: auto;
+}
+
+.wardrobe-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wardrobe-header .auth-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 22px;
+  text-align: left;
+}
+
+.wardrobe-tabs,
+.wardrobe-rarities,
+.wardrobe-outfits,
+.wardrobe-spots {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  padding: 2px 2px 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.wardrobe-tabs::-webkit-scrollbar,
+.wardrobe-rarities::-webkit-scrollbar,
+.wardrobe-outfits::-webkit-scrollbar,
+.wardrobe-spots::-webkit-scrollbar {
+  display: none;
+}
+
+.wardrobe-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #fbeaf2;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+}
+
+.wardrobe-chip[aria-pressed='true'] {
+  border-color: #ff7aa2;
+  background: #fff;
+}
+
+.wardrobe-chip:active,
+.wardrobe-item:active {
+  transform: scale(0.96);
+}
+
+.wardrobe-chip:disabled {
+  opacity: 0.55;
+}
+
+.wardrobe-done {
+  background: #b8487a;
+  color: #fff;
+}
+
+.wardrobe-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+}
+
+/* Rarity colours, from plain to sparkly (design doc §23). */
+.rarity-common {
+  --rarity: #8fbf8a;
+}
+.rarity-uncommon {
+  --rarity: #4fa36b;
+}
+.rarity-rare {
+  --rarity: #4f8fd6;
+}
+.rarity-epic {
+  --rarity: #8a62c4;
+}
+.rarity-legendary {
+  --rarity: #e0a12a;
+}
+
+.wardrobe-rarity:not(.rarity-all)::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--rarity);
+}
+
+.wardrobe-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  grid-auto-rows: min-content;
+  gap: 8px;
+  min-height: 0;
+  padding: 2px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.wardrobe-item {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 64px;
+  padding: 8px 10px;
+  border: 3px solid transparent;
+  border-radius: 18px;
+  background: #fbeaf2;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+div.wardrobe-item {
+  cursor: default;
+}
+
+.wardrobe-item[aria-pressed='true'] {
+  border-color: #ff7aa2;
+  background: #fff;
+}
+
+.wardrobe-swatch {
+  grid-row: span 3;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 12%);
+}
+
+.wardrobe-item-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.wardrobe-rarity-dot {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--rarity);
+}
+
+.wardrobe-item .wardrobe-count {
+  justify-self: start;
+  background: #f6dceb;
+}
+
+.wardrobe-under {
+  font-size: 12px;
+  color: #8a6b8c;
+}
+
+.wardrobe-empty {
+  grid-column: 1 / -1;
+  margin: 8px 0;
+  font-size: 15px;
+  text-align: center;
+  color: #6b4b6e;
+}
+
+.wardrobe-outfits-title {
+  flex: none;
+  align-self: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wardrobe-outfit {
+  flex-direction: column;
+  gap: 0;
+  min-width: 88px;
+}
+
+.wardrobe-save {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wardrobe-save-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wardrobe-note {
+  min-height: 1.3em;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #7a2d55;
+}
+
+/* "You found …": a note at the top of the map, out of the way of the HUD. */
+.wardrobe-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 64px);
+  left: 50%;
+  z-index: 6;
+  max-width: min(90vw, 420px);
+  margin: 0;
+  padding: 12px 18px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 6px 24px rgb(74 49 80 / 20%);
+  transform: translateX(-50%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  color: #4a3150;
+  pointer-events: none;
+}

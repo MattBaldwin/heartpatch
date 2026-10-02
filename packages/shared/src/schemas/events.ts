@@ -175,6 +175,29 @@ export const GAME_EVENTS = {
     }),
     public: z.object({ userId: z.uuid(), recipeId: z.string() }),
   },
+  /**
+   * A player found a piece of clothing (#43): a lucky drop from a gather (and
+   * later a capture or a rescue). Clothing is account-level; the event goes on
+   * the map where it was found. What caused it stays internal.
+   */
+  'clothing.found': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      itemId: z.string(),
+      source: z.enum(['gather', 'capture', 'rescue']),
+      /** The gather, capture or rescue that found it. */
+      refId: z.uuid(),
+    }),
+    public: z.object({ userId: z.uuid(), itemId: z.string() }),
+  },
+  /**
+   * A player's Keeper changed clothes (#43). Written on every active map they
+   * play on, so members see the new outfit live.
+   */
+  'outfit.changed': {
+    internal: z.strictObject({ userId: z.uuid(), wearing: z.array(z.string()) }),
+    public: z.object({ userId: z.uuid(), wearing: z.array(z.string()) }),
+  },
 } satisfies Record<string, GameEventSchemas>;
 
 export type GameEventType = keyof typeof GAME_EVENTS;

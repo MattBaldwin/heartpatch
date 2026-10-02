@@ -50,6 +50,13 @@
       "when": 1790956398738,
       "tag": "0006_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790961619422,
+      "tag": "0007_wardrobe",
+      "breakpoints": true
     }
   ]
 }

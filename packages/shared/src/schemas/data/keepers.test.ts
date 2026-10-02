@@ -90,8 +90,11 @@ describe('Keeper configs', () => {
       homeSlot: 0,
       joinedAt: '2026-10-02T00:00:00.000Z',
     };
-    expect(MapMemberSchema.parse({ ...member, keeper: defaultKeeperConfig(pip) }).keeper).toEqual(
-      defaultKeeperConfig(pip),
+    // With what it wears (#43), so other players see outfits.
+    const keeper = { ...defaultKeeperConfig(pip), wearing: ['sunny-cap', 'puddle-boots'] };
+    expect(MapMemberSchema.parse({ ...member, keeper }).keeper).toEqual(keeper);
+    expect(MapMemberSchema.safeParse({ ...member, keeper: defaultKeeperConfig(pip) }).success).toBe(
+      false,
     );
     expect(MapMemberSchema.parse({ ...member, keeper: null }).keeper).toBeNull();
   });

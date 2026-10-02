@@ -1,17 +1,22 @@
 import {
+  CLOTHING,
   defaultKeeperConfig,
+  isKeeperClothing,
   KEEPER_DATA,
+  STARTER_CLOTHING,
   WARDROBE_SLOTS,
   type KeeperConfig,
   type WardrobeSlot,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { PLACEHOLDER_ITEMS } from './keeper-items.js';
+import { keeperItems } from './keeper-items.js';
 import { keeperHash, keeperParams, type KeeperParams, type KeeperPiece } from './keeper-params.js';
 
 const BASES = KEEPER_DATA.bases;
-const ALL_BUT_COSTUME = PLACEHOLDER_ITEMS.filter((i) => i.slot !== 'costume');
-const itemFor = (slot: WardrobeSlot) => PLACEHOLDER_ITEMS.filter((i) => i.slot === slot);
+/** The starter set: one item in every slot but costume (and a squishy bow, skipped). */
+const ALL_BUT_COSTUME = keeperItems(STARTER_CLOTHING);
+const itemFor = (slot: WardrobeSlot) => ALL_BUT_COSTUME.filter((i) => i.slot === slot);
+const GHOST_SHEET = keeperItems(['ghost-sheet']);
 
 /**
  * Same config as `GOLDEN_CONFIG` in tests/e2e/keeper-gallery.spec.ts. This
@@ -175,13 +180,41 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
 
   it('a costume covers the whole Keeper and hides the other items and the hair', () => {
     for (const base of BASES) {
-      const p = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, PLACEHOLDER_ITEMS);
-      expect(p.worn).toEqual(['test-ghost-sheet']);
+      const p = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, [
+        ...ALL_BUT_COSTUME,
+        ...GHOST_SHEET,
+      ]);
+      expect(p.worn).toEqual(['ghost-sheet']);
       expect(piecesOf(p, 'hat')).toEqual([]);
       expect(piecesOf(p, 'hair')).toEqual([]);
       const sheet = piecesOf(p, 'costume')[0]!;
       expect(sheet.size[1]).toBeGreaterThan(p.height);
       expect(sheet.size[0]).toBeGreaterThan(p.width);
     }
+  });
+
+  it('fits every catalog item on every base, near the Keeper (no body-type locks)', () => {
+    for (const base of BASES) {
+      const bare = keeperParams(defaultKeeperConfig(base), KEEPER_DATA);
+      for (const item of CLOTHING.filter(isKeeperClothing)) {
+        const p = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, keeperItems([item.id]));
+        const pieces = piecesOf(p, item.slot);
+        const copies = item.slot === 'shoes' ? 2 : 1;
+        expect(pieces.length, `${base.id} ${item.id}`).toBe(item.visual.pieces.length * copies);
+        for (const piece of pieces) {
+          // Inside a box around the Keeper: nothing floats off on a small or tall base.
+          expect(Math.abs(piece.at[0]), `${base.id} ${item.id} x`).toBeLessThan(bare.width * 1.6);
+          expect(piece.at[1], `${base.id} ${item.id} y`).toBeGreaterThan(-0.05);
+          expect(piece.at[1], `${base.id} ${item.id} y`).toBeLessThan(bare.height * 1.5);
+          expect(Math.abs(piece.at[2]), `${base.id} ${item.id} z`).toBeLessThan(bare.width * 1.6);
+        }
+      }
+    }
+  });
+
+  it('draws worn ids from the catalog, skipping ones this client does not know', () => {
+    expect(keeperItems(['witch-hat', 'from-the-future', 'tiny-bow']).map((i) => i.id)).toEqual([
+      'witch-hat',
+    ]);
   });
 });

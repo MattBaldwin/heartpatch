@@ -10,6 +10,7 @@ import { buildTestScene } from './scenes/test-scene.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
+import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createTutorialScreen } from './tutorial/tutorial-screen.js';
@@ -110,6 +111,10 @@ const maps = createMapScreen({
     lobby.showMessage(message);
   },
   tileActions: inventory.tileActions,
+  // A piece of clothing found while gathering (#43) shows a little note.
+  onLiveEvent: (event) => {
+    wardrobe.liveEvent(event);
+  },
 });
 // The tutorial (#47) draws its Tutorial Glade with the map screen and sits
 // over it; it never blocks the lobby unless the server requires it first
@@ -165,6 +170,7 @@ const battles = createBattleScreen({
   },
   devTools: import.meta.env.DEV,
   keeper: () => keeper.current,
+  keeperWearing: () => wardrobe.wearing,
 });
 // Picking a Keeper (#42) comes right after signup, before the tutorial and
 // the lobby; Settings opens it again to change the Keeper for free.
@@ -188,6 +194,25 @@ const keeper = createKeeperScreen({
     else lobby.show();
   },
 });
+// The wardrobe (#43): from the lobby, it owns the whole screen like the
+// Keeper picker, and brings the lobby back when done.
+const wardrobe = createWardrobeScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  keeper: () => keeper.current,
+  onOpen: () => {
+    void battles.setMap(null);
+    void inventory.setMap(null);
+    maps.close();
+    lobby.stepOut();
+  },
+  onClosed: () => {
+    lobby.show();
+  },
+  devTools: import.meta.env.DEV,
+});
 const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
     await maps.open(mapId);
@@ -196,13 +221,14 @@ const lobby = mountLobby(document.body, {
     // battle resumed here (after a refresh) must step it out again after that.
     void battles.setMap(mapId);
   },
-  listActions: tutorial.listActions,
+  listActions: () => [...tutorial.listActions(), ...wardrobe.listActions()],
   settings: () => [...keeper.settings(), ...tutorial.settings()],
 });
 mountAuth(document.body, {
   onChange: (user) => {
     battles.setUser(user);
     inventory.setUser(user);
+    wardrobe.setUser(user);
     maps.setUser(user);
     // The lobby and tutorial wait for a Keeper (`onReady` above).
     keeper.setUser(user);
@@ -256,5 +282,6 @@ if (import.meta.env.DEV) {
     battle: () => battles.debug,
     keeper: () => keeper.debug,
     inventory: () => inventory.debug,
+    wardrobe: () => wardrobe.debug,
   };
 }

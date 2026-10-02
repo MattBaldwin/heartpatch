@@ -76,6 +76,22 @@ describe('MapState', () => {
     expect(state.apply(event('resource.gathered', { q: 'here' }))).toBe('resync');
   });
 
+  it("dresses a member's Keeper live when their outfit changes (#43)", () => {
+    const state = new MapState(testView(2));
+    const changed = { userId: userId(2), wearing: ['witch-hat', 'ghost-cape'] };
+    expect(state.apply(event('outfit.changed', changed))).toBe('redraw');
+    expect(state.member(userId(2))?.keeper?.wearing).toEqual(['witch-hat', 'ghost-cape']);
+    expect(state.view.members[1]?.keeper?.wearing).toEqual(['witch-hat', 'ghost-cape']);
+    expect(state.member(userId(1))?.keeper?.wearing).toEqual([]);
+    // Someone this copy doesn't have: nothing to draw. Malformed: refetch.
+    expect(state.apply(event('outfit.changed', { userId: userId(9), wearing: [] }))).toBe('none');
+    expect(state.apply(event('outfit.changed', { userId: userId(2) }))).toBe('resync');
+    // A find is the wardrobe's business, not the map's.
+    expect(state.apply(event('clothing.found', { userId: userId(2), itemId: 'witch-hat' }))).toBe(
+      'none',
+    );
+  });
+
   it('swaps in a fresh view and re-indexes it', () => {
     const state = new MapState(testView(1));
     state.replace(testView(2));

@@ -3,6 +3,7 @@ import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { KeeperDebug } from '../ui/keeper/keeper-screen.js';
+import type { WardrobeDebug } from '../ui/wardrobe/wardrobe-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 
@@ -34,6 +35,8 @@ declare global {
       keeper?(): KeeperDebug | null;
       /** The open map's bag, gathers and the tile panel's gather action (#17), or null. */
       inventory?(): InventoryDebug | null;
+      /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */
+      wardrobe?(): WardrobeDebug | null;
     };
   }
 }

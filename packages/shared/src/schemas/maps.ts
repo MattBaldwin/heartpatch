@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
-import { KeeperConfigSchema } from './data/keepers.js';
+import { PublicKeeperSchema } from './data/keepers.js';
 import { TimeZoneSchema } from './time.js';
 import { WsSeqSchema } from './ws.js';
 
@@ -103,8 +103,11 @@ export const MapMemberSchema = z.object({
   /** Which home base is theirs (`PublicTile.homeSlot`). */
   homeSlot: z.number().int().nullable(),
   joinedAt: z.iso.datetime(),
-  /** Their Keeper, so other players see who's who (design doc §23); null if not picked yet. */
-  keeper: KeeperConfigSchema.nullable(),
+  /**
+   * Their Keeper and what it wears, so other players see who's who (design
+   * doc §23); null if not picked yet.
+   */
+  keeper: PublicKeeperSchema.nullable(),
 });
 export type MapMember = z.infer<typeof MapMemberSchema>;
 

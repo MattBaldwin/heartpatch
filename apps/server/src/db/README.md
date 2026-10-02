@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), and `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), and `clothing_owned`, `outfits` and `squishy_accessories` (#43). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -195,7 +195,37 @@ Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessor
 | `created_at` | timestamptz | First pick |
 | `updated_at` | timestamptz | Last change (changing is free, any time) |
 
-Written by the keepers service (#42), which checks every id against the shared Keeper data first. No row = the player hasn't picked yet; with `HP_KEEPER_REQUIRED` they can't make or join a map until they do. Clothing and outfits get their own tables with the wardrobe (#43).
+Written by the keepers service (#42), which checks every id against the shared Keeper data first. No row = the player hasn't picked yet; with `HP_KEEPER_REQUIRED` they can't make or join a map until they do. What the Keeper wears is in `outfits` (#43).
+
+### `clothing_owned`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | One row per piece, so a trade can move one (account-level, tech spec §4) |
+| `user_id` | uuid → users | Cascade delete. Indexed with `item_id` |
+| `item_id` | text | Clothing id (`CLOTHING`) |
+| `source` | text | How it arrived: `gather`, `capture`, `rescue`, `dev-grant` (later `tutorial`, `milestone`, `boutique`, `trade`) |
+| `ref_id` | uuid, null | What caused it (a gather's id). Unique with `source` when set: one piece per event |
+| `map_id` | uuid, null → maps | Where it was found; set null when the map goes (the piece stays) |
+| `acquired_at` | timestamptz | |
+
+Starter items are never stored: every account owns them (DECISIONS "Wardrobe (#43)").
+
+### `outfits`
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` | uuid → users | Cascade delete. PK with `preset` |
+| `preset` | smallint | 0 is what the Keeper wears now; 1–3 the saved presets (checked) |
+| `name` | text, null | A preset's name, filtered |
+| `wearing` | jsonb | Clothing ids, one per wardrobe slot, in slot order |
+| `updated_at` | timestamptz | |
+
+### `squishy_accessories`
+| Column | Type | Notes |
+|---|---|---|
+| `squishy_id` | uuid PK → squishies | One accessory per squishy; cascade delete |
+| `user_id` | uuid | The owner when it was put on |
+| `item_id` | text | A squishy accessory (`CLOTHING`, slot `squishy`) |
+| `updated_at` | timestamptz | |
 
 ### `inventories`
 | Column | Type | Notes |
