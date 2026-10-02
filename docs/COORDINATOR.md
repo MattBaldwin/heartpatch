@@ -39,6 +39,7 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 ## 4. After a merge
 
 - **Tell dependent sessions** what landed that affects them (new contracts, files they also touch). Use `send_message` with priority `next`; use `now` only for something blocking or urgent.
+- **Check the other open PRs for conflicts** (`pull_request_read` → `get`, `mergeable_state: "dirty"`, or `git merge-tree` locally). A PR that conflicts with `main` runs **no** `pull_request` CI, so no `check_suite` event ever fires and its session can wait forever. Tell each conflicted session to merge `main` now.
 - **Archive the finished session** (owner-approved). Before archiving, delete its self-scheduled "Re-check PR" triggers (`list_triggers`, filter by `persistent_session_id`).
 - **Start what the merge unblocked.**
 - **Drift audit after each batch:** run a fresh read-only auditor over `main`. It looks for duplicate implementations, pattern drift, code vs docs, secret data reachable from the client, and contracts the next batch will need. Turn findings into:
@@ -140,7 +141,9 @@ The supervisor keeps this list current. Remove items as they land.
 - **#7 (hex map render):**
   - add `hexToWorld(hex, size) → {x, z}` (north = +z) in shared `hex/`;
   - render from `PublicTileSchema`/`MapViewSchema` (#4);
-  - the client REST client is `apps/client/src/net/api.ts`.
+  - the client REST client is `apps/client/src/net/api.ts`; live updates come from `apps/client/src/net/ws-client.ts` (#22);
+  - handle the stale-cursor resync case noted in PR #61's verdict;
+  - `tiles.home_slot` tiles can never be captured (#4).
 - **#13/#14 (battles, spawns):**
   - add a zod `ClientBattleViewSchema`;
   - map `BattleRuleError` → `AppError`;
@@ -156,7 +159,10 @@ The supervisor keeps this list current. Remove items as they land.
 - **#47 (tutorial framework):**
   - a `HighlightTargetSchema` enum;
   - `event_consumers` + pg-boss, with the consumer wake-up enqueued inside the command's transaction via `appendGameEvent`.
-- **Server hardening** (small PR, or with #27):
+- **Client polish** (small `Fix:` PR or with the next client lane): `.renderer-error` z-index above the auth overlay; mount auth before `boot()` (#6/#3).
+- **Deploy follow-ups** (#27): `restore.sh` should re-allow connections on a leftover `heartpatch_restore` after a failed restore; add a `/ws` check to `local-smoke.sh`.
+- **Maps follow-ups** (#4): an end-to-end `/ws` test of a real maps command with the default views; move the PvP hint copy ("1 tile a day", "up to 3 tiles a day") into data with the territory/PvP issue.
+- **Server hardening** (small PR):
   - shared `lib/rate-limit.ts`;
   - a loose global per-IP limit;
   - helmet/CSP, or note that Caddy sets the headers.
@@ -164,5 +170,6 @@ The supervisor keeps this list current. Remove items as they land.
 - **Docs drift:**
   - TECH_SPEC §2 layout (module `schemas.ts`, `lib/time`, `formulas/` home);
   - §10 `SESSION_SECRET` (unused);
+  - TECH_SPEC §6 "short benchmark" vs the continuous quality governor from #6;
   - TECH_SPEC `battles` table wording, versus RNG-in-state (DECISIONS "Battle engine (#11)"); CLAUDE.md and GAME_DESIGN were fixed in PR #63.
 - **Owner FYI:** #11 resolved a design ambiguity: synergy multiplies damage once, for the attacker, not stats too.
