@@ -179,6 +179,7 @@ const keeper = createKeeperScreen({
   },
   onEditOpen: () => {
     void battles.setMap(null);
+    void inventory.setMap(null);
     maps.close();
     lobby.stepOut();
   },

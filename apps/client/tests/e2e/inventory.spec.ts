@@ -118,5 +118,13 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   expect(findAvoidedWords(text)).toEqual([]);
   await bag.getByRole('button', { name: 'Close' }).tap();
   await expect(bag).toBeHidden();
+
+  // Leaving the map (here: Settings → Change Keeper, #42) takes the bag with it.
+  await page.getByRole('button', { name: 'My patches' }).tap();
+  await lobby.getByTestId('lobby-settings').tap();
+  await lobby.getByTestId('keeper-settings').tap();
+  await expect(page.getByTestId('keeper-picker')).toBeVisible();
+  await expect.poll(() => bagState(page)).toBeNull();
+  await expect(page.getByTestId('bag-open')).toBeHidden();
   expect(errors).toEqual([]);
 });
