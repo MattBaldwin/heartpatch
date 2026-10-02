@@ -32,4 +32,12 @@ describe('checkServerGameData', () => {
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/^spawnTables\["fixture-forest-day"\]\.entries\[0\]\.weight: /);
   });
+
+  it('names spawn table terrains that are not in the terrain table', () => {
+    const table = structuredClone(FIXTURE_SPAWN_TABLES[0]!);
+    table.terrains = ['forest', 'swamp'];
+    expect(checkServerGameData({ spawnTables: [table] }, gameData)).toEqual([
+      'spawnTables["fixture-forest-day"].terrains[1]: unknown terrain "swamp"',
+    ]);
+  });
 });
