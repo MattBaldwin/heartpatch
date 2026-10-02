@@ -75,8 +75,13 @@ export default defineConfig(
   },
   {
     // Plain JS config files aren't part of any tsconfig.
-    files: ['**/*.js'],
+    files: ['**/*.{js,mjs,cjs}'],
     extends: [tseslint.configs.disableTypeChecked],
+  },
+  {
+    // Repo tooling scripts run in Node.
+    files: ['scripts/**/*.{js,mjs,cjs}'],
+    languageOptions: { globals: globals.node },
   },
   {
     files: ['**/*.test.ts', '**/tests/**/*.ts'],
