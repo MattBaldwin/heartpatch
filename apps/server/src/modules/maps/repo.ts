@@ -1,9 +1,18 @@
-import type { MapRole, PublicTile, PvpMode } from '@heartpatch/shared';
+import type { KeeperConfig, MapRole, PublicTile, PvpMode } from '@heartpatch/shared';
 import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { inviteCodes, joinRequests, mapMembers, maps, tiles, users } from '../../db/schema.js';
+import {
+  inviteCodes,
+  joinRequests,
+  keepers,
+  mapMembers,
+  maps,
+  tiles,
+  users,
+} from '../../db/schema.js';
+import { keeperColumns } from '../keepers/repo.js';
 
 export interface UserRef {
   id: string;
@@ -59,6 +68,8 @@ export interface MemberRow {
   role: MapRole;
   homeSlot: number | null;
   joinedAt: Date;
+  /** Shown to the other members (#42); null until they pick one. */
+  keeper: KeeperConfig | null;
 }
 
 export interface PendingRequestRow {
@@ -370,9 +381,12 @@ function queries(db: Executor): MapsRepo {
           role: mapMembers.role,
           homeSlot: mapMembers.homeSlot,
           joinedAt: mapMembers.joinedAt,
+          // Drizzle makes a left-joined object null when every column is null.
+          keeper: keeperColumns,
         })
         .from(mapMembers)
         .innerJoin(users, eq(users.id, mapMembers.userId))
+        .leftJoin(keepers, eq(keepers.userId, mapMembers.userId))
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active')))
         // 'owner' is the enum's first value, so it sorts first.
         .orderBy(asc(mapMembers.role), asc(mapMembers.joinedAt), asc(users.id)),

@@ -4,6 +4,7 @@ import {
   GAME_DATA,
   visualRegistry,
   type BattleSideId,
+  type KeeperConfig,
   type PlayerBattle,
   type PlayerBattleAction,
   type PublicUser,
@@ -25,6 +26,7 @@ import {
   type ShownState,
 } from './battle-playback.js';
 import { BattleScene, type BattleSceneStats } from './battle-scene.js';
+import { keeperReaction } from './keeper-reaction.js';
 import { sendAction, type SubmitDeps } from './battle-submit.js';
 import {
   activeOf,
@@ -66,6 +68,8 @@ export interface BattleScreenOptions {
    * catalog): a battle reply landing then is dropped instead of opening.
    */
   canOpen?: () => boolean;
+  /** The player's Keeper (#42), to stand behind their squishy; null if not known. */
+  keeper?: () => KeeperConfig | null;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -83,6 +87,8 @@ export interface BattleDebug {
   /** Why it ended (`captured` for a new friend), or null while it's on. */
   readonly reason: string | null;
   readonly scene: BattleSceneStats | null;
+  /** Reactions the Keeper has played in this battle (cheers, winces). */
+  readonly keeperReactions: number;
 }
 
 export interface BattleScreen {
@@ -126,6 +132,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let user: PublicUser | null = null;
   let mapId: string | null = null;
   let battle: PlayerBattle | null = null;
+  /** Keeper reactions played in the battle on screen (the dev hook counts them). */
+  let keeperReactions = 0;
   let content: BattleContent | null = null;
   let scene3d: BattleScene | null = null;
   let shown: ShownState | null = null;
@@ -398,6 +406,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         battle.view.phase.type === 'over' && battle.view.phase.result.reason === 'captured';
       scene3d.play(otherSide(step.side), captured ? 'bounce' : 'wobble', t, 0.6);
     }
+    const reaction = keeperReaction(step, battle.mySide);
+    if (reaction && scene3d.hasKeeper) {
+      scene3d.cheer(reaction.move, t, reaction.strength);
+      keeperReactions += 1;
+    }
     if (step.callout) hud.callout(plateSideOf(battle.mySide, step.side), step.callout);
     plate(step.side);
     options.invalidate();
@@ -466,6 +479,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       lod: lodFor('closeUp', options.tier()),
       content,
       mySide: battle.mySide,
+      keeper: options.keeper?.() ?? null,
     });
     lastTier = options.tier();
     for (const side of ['a', 'b'] as const) {
@@ -520,6 +534,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     shown = shownFrom(next);
     shownLog = next.view.log.length;
     scene3d = null;
+    keeperReactions = 0;
     if (!wasOpen) options.onOpen(next.mapId);
     entry.hidden = true;
     hud.hideResult();
@@ -604,6 +619,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
               ? battle.view.phase.result.reason
               : null,
         scene: scene3d?.stats ?? null,
+        keeperReactions,
       };
     },
   };

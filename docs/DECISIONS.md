@@ -191,6 +191,18 @@ _Proposed in the #13 PR; the project owner confirms on merge._
 - **Dev-only grants** (`HP_DEV_SQUISHY_GRANTS`, refused in production) hand a player a squishy and start a battle against a chosen wild squishy, through the same `startAgainst` spawns will call. The real acquisition rules (wild spawns and capture, the tutorial's starter) are #14's and #24's; nothing here decides them.
 - **The battle camera is the map camera.** The arena is a `SceneBuilder` on the shared stage (tech spec §6: one engine, scenes swapped), with the squishies at close-up scale and pan all but locked; a dedicated battle camera can come with polish.
 
+## 2026-10-02 — Keepers (#42)
+
+_Proposed in the #42 PR; the project owner confirms on merge._
+
+- **A Keeper is an account-level `keepers` row** (coordinator-approved shared contract): base, hair colour, eye colour and starter outfit, all ids from shared `KEEPER_DATA` (8 bases, 9 hair colours, 6 eye colours, 6 outfit palettes). `KeeperConfigSchema` checks the shape and the server checks every id against the data (`VALIDATION_FAILED` otherwise). Picking a new base starts from that base's own colours. Changing it is free, any time (design doc §23).
+- **Picked after signup, before anything else** (coordinator-approved gate): the client shows the picker right after "I saved it!" and only then hands the player to the tutorial and lobby; the cinematic (#46) slots in after it. On the server, `HP_KEEPER_REQUIRED` (default `true`) makes creating or joining a map need a Keeper, checked before the tutorial gate. Starting the solo tutorial isn't gated: nobody else sees the Glade, and the client never gets there without a Keeper.
+- **Other players see it** on `MapMember.keeper` (coordinator-approved), null for a member who never picked (only with the gate off). A change shows on others' maps at their next view fetch; a live `member.updated`-style event is a follow-up.
+- **Wardrobe sockets are the contract #43 builds on** (coordinator-approved): `WARDROBE_SLOTS` = hat, hair-accessory, top, bottom, shoes, back, held, costume. Every base has a socket per slot with an anchor (two mirrored ones for shoes; `held` is the right hand) and the size of the body part it sits on. An item is primitive pieces in socket units, so one item fits every base and nothing is made per body type. A costume hides the other items and tucks the hair away. The item shape lives in the client for now (`procedural/keeper/keeper-items.ts`); #43 can move it into shared clothing data.
+- **Procedural and seeded by the config**, like squishies: pure params (`keeperParams`, `+ − × ÷` and `Math.sqrt` only) with a pinned hash checked in Node and in the browser, so the same config is the same Keeper on every engine. Hairstyles are one builder per style; bases are data.
+- **Drawn like squishies, cheaper:** `KeeperField` shares one mesh per primitive across every Keeper (thin instances: five meshes plus shadows, however many Keepers) and reuses the squishies' squash shader for cheers. Keepers never breathe, so an idle Keeper never wakes the renderer; they hop or wince only on battle log events. Keepers lean back a little so their faces show under the steep map camera.
+- **Where they stand now:** the map shows each member's Keeper beside their Heart Seed (low detail, no shadow); battles show the player's Keeper at their squishy's back, nearer the camera and off to the side, clear of the nameplates. Home-base idling and wandering arrives with home base (#18); profile cards and the close-up view's edge-of-frame Keeper come with the screens that show them.
+
 ## 2026-10-02 — Wild squishies and capture (#14)
 
 _Proposed in the #14 PR; the project owner confirms on merge._

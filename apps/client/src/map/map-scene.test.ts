@@ -87,6 +87,26 @@ describe('MapScene', () => {
     expect(instances('home-plot')).toBe(0);
   });
 
+  it('stands each member’s Keeper by their Heart Seed, and only theirs', () => {
+    const { scene, map } = build(testView(1));
+    expect(map.stats.keepers).toBe(1);
+    map.update(testView(3));
+    expect(map.stats.keepers).toBe(3);
+    // A member who hasn't picked one (the gate switched off) shows no Keeper.
+    const view = testView(3);
+    const noKeeper = {
+      ...view,
+      members: view.members.map((m, i) => (i === 1 ? { ...m, keeper: null } : m)),
+    };
+    map.update(noKeeper);
+    expect(map.stats.keepers).toBe(2);
+    map.update(testView(1));
+    expect(map.stats.keepers).toBe(1);
+    // Instanced: Keepers share a handful of meshes, however many there are.
+    const keeperMeshes = scene.meshes.filter((m) => m.name.startsWith('keeper-'));
+    expect(keeperMeshes.length).toBeLessThanOrEqual(5);
+  });
+
   it('starts the camera at my Heart Seed, or the centre for a visitor', () => {
     const view = testView(2);
     const { map } = build(view);

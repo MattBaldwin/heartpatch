@@ -19,7 +19,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { sessions, users } from '../../db/schema.js';
+import { keepers, sessions, users } from '../../db/schema.js';
 import { KEY_TTL_MS } from '../../lib/idempotency.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -29,6 +29,7 @@ import { createBattlesService } from './service.js';
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
+const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
 
 interface Player {
   id: string;
@@ -78,6 +79,8 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
     await db
       .insert(sessions)
       .values({ userId: user!.id, tokenHash, expiresAt: new Date(Date.now() + 30 * DAY_MS) });
+    // Every player has picked a Keeper (the map gate, #42; keepers.test.ts covers it).
+    await db.insert(keepers).values({ userId: user!.id, ...TEST_KEEPER });
     return { id: user!.id, username, token };
   }
 

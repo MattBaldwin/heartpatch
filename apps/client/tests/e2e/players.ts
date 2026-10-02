@@ -32,8 +32,18 @@ export async function newPlayer(browser: Browser, name: string): Promise<Page> {
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();
+  await pickKeeper(page);
   await expect(
     page.getByTestId('lobby').getByRole('heading', { name: 'Your patches' }),
   ).toBeVisible();
   return page;
+}
+
+/** A new account picks its Keeper right after signup (#42), before the lobby. */
+export async function pickKeeper(page: Page, base = 'Clover'): Promise<void> {
+  const picker = page.getByTestId('keeper-picker');
+  await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();
+  await picker.getByRole('button', { name: base, exact: true }).tap();
+  await picker.getByRole('button', { name: 'That’s me!' }).tap();
+  await expect(picker).toBeHidden();
 }

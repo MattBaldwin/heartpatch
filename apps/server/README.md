@@ -191,6 +191,17 @@ Add it to the `consumers` list in `src/index.ts`. How it stays exactly-once:
 
 Tunables are in `src/jobs/limits.ts`. Never prune `game_events` below the lowest `last_seq` for a map.
 
+## Keepers
+
+Each player's Keeper (design doc §23; issue #42) lives in `src/modules/keepers`: one `keepers` row per account, written when they pick one right after signup and whenever they change it (free, any time).
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/keeper` | → `{ keeper }`: the player's `KeeperConfig`, or null before they pick one |
+| `POST /api/v1/keeper` | `KeeperConfig` (`base`, `hairColor`, `eyeColor`, `outfit`) → `{ keeper }`. Every id must be in the shared `KEEPER_DATA` (`keeperConfigProblem`), else `VALIDATION_FAILED` with a kid-readable message. Rate limited (`limits.ts`) |
+
+**Map gate:** with `HP_KEEPER_REQUIRED` (default `true`), creating or joining a map needs a Keeper (`FORBIDDEN`, "Pick your Keeper first, then come back!"), checked before the tutorial gate. **Shown to other players:** `MapMember.keeper` (map detail and map view) carries each member's config, or null for one who never picked (only possible with the gate off). A change shows on other players' maps the next time they fetch the view; there's no live event for it yet.
+
 ## Tutorial
 
 The single-player tutorial (design doc §26; tech spec §7) lives in `src/modules/tutorial` (issue #47). A run is an ordinary map with `kind = 'tutorial'`, one member and the hand-authored Tutorial Glade (`TUTORIAL_LAYOUT` in shared `data/tutorial/`). `users.tutorial_step` is the current step while a run is going (null otherwise); `users.tutorial_completed_at` is the first completion and never moves.

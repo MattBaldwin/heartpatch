@@ -26,7 +26,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient, type Executor } from '../../db/client.js';
-import { sessions, users } from '../../db/schema.js';
+import { keepers, sessions, users } from '../../db/schema.js';
 import { AppError } from '../../lib/errors.js';
 import { createClock, spawnWindowId } from '../../lib/time.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
@@ -38,6 +38,7 @@ import { createSpawnsService, defaultSpawnData } from './service.js';
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
+const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
 const HOUR_MS = 60 * 60 * 1000;
 const MOONPUFF = 'placeholder-moonpuff';
 const UUID = /^[0-9a-f-]{36}$/;
@@ -149,6 +150,8 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       .insert(users)
       .values({ username, passwordHash: 'not-a-hash', birthYear: 2014, timeZone: 'America/Denver' })
       .returning({ id: users.id });
+    // Every player has picked a Keeper (the map gate, #42).
+    await db.insert(keepers).values({ userId: user!.id, ...TEST_KEEPER });
     const { token, tokenHash } = newSessionToken();
     await db
       .insert(sessions)

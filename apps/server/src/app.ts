@@ -20,6 +20,8 @@ import { authRoutes } from './modules/auth/routes.js';
 import { hashSessionToken } from './modules/auth/secrets.js';
 import { createAuthService } from './modules/auth/service.js';
 import { healthRoutes } from './modules/health/routes.js';
+import { keepersRoutes } from './modules/keepers/routes.js';
+import { createKeepersService } from './modules/keepers/service.js';
 import { mapsRoutes } from './modules/maps/routes.js';
 import { createMapsService } from './modules/maps/service.js';
 import { createHealthService, type ReadinessCheck } from './modules/health/service.js';
@@ -123,9 +125,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           }),
         );
 
+        const keepers = createKeepersService({ db, clock });
+        await api.register(keepersRoutes(keepers, { hooks: authHooks }));
+
         const maps = createMapsService({
           db,
           tutorialRequired: config.HP_TUTORIAL_REQUIRED,
+          keeperRequired: config.HP_KEEPER_REQUIRED,
           clock,
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
