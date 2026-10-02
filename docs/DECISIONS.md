@@ -45,3 +45,9 @@
 | Owner mute | Deferred to Phase 2 with free chat |
 | Recovery codes | One active hashed code; a fresh one after each use; plus an operator CLI reset for players with no map owner |
 | Hollow Man vs "absence is not punished" | Hearthfires store up to 5 nights of fuel (burn one per nightfall) — teaches planning ahead; squishies at home behind a lit fire are always safe |
+
+## 2026-10-02 — Battle engine (#11)
+
+- **The RNG state lives inside the battle state.** The spec writes the reducer as `(state, action, seed) → newState`; the engine uses the seed once (`startBattle`) and stores the sfc32 state in `BattleState.rng`, so each step is a pure `(state, action) → newState`. A stored battle is its setup (with the seed) plus its action list; `replayBattle` rebuilds it exactly.
+- **AI sides pick inside the reducer** with the battle's RNG, so AI-vs-AI battles (offline raids, the balance simulator) replay from the same record.
+- **Synergy multiplies damage once, for the attacker** (design doc §6 formula), rather than also scaling stats, so it isn't counted twice.
