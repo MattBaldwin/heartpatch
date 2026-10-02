@@ -6,6 +6,7 @@ import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
 import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
 import { MoodIdSchema } from './data/care.js';
+import { RaidOutcomeSchema } from './raids.js';
 import { LocalDateSchema } from './time.js';
 
 /**
@@ -260,6 +261,29 @@ export const GAME_EVENTS = {
       squishyIds: z.array(z.uuid()),
     }),
     public: z.object({ userId: z.uuid(), ...coords, count: z.number().int().min(0) }),
+  },
+  /**
+   * A challenge on a player's land finished and is in their raid log (#16),
+   * written by the raid-log consumer after the battle's `battle.ended`.
+   * Members see who, where and how it went (the tile events already showed
+   * that much). The report itself is fetched when the defender opens the map.
+   */
+  'raid.resolved': {
+    internal: z.strictObject({
+      raidId: z.uuid(),
+      battleId: z.uuid(),
+      attackerUserId: z.uuid(),
+      defenderUserId: z.uuid(),
+      ...coords,
+      outcome: RaidOutcomeSchema,
+    }),
+    public: z.object({
+      raidId: z.uuid(),
+      attackerUserId: z.uuid(),
+      defenderUserId: z.uuid(),
+      ...coords,
+      outcome: RaidOutcomeSchema,
+    }),
   },
   /**
    * A player put up a building on their home base (#18). Members see it on

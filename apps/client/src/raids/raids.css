@@ -1,0 +1,158 @@
+/* The raid report (#16): a Report button above Home on the left (44pt+
+   targets, safe areas, one-handed), and a sheet like the bag's. */
+
+.raid-open {
+  position: fixed;
+  z-index: 4;
+  left: calc(env(safe-area-inset-left) + 16px);
+  bottom: calc(env(safe-area-inset-bottom) + 236px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border: none;
+  border-radius: 999px;
+  background: #fffafc;
+  box-shadow: 0 4px 14px rgb(107 75 110 / 22%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.raid-open:active {
+  transform: scale(0.95);
+}
+
+.raid-open-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.raid-open-label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.raid-open-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #d0578f;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 22px;
+  text-align: center;
+}
+
+.raid-open[hidden],
+.raid-open-badge[hidden],
+.raid-sheet[hidden] {
+  display: none;
+}
+
+.raid-lead,
+.raid-quiet {
+  margin: 10px 0 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.raid-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: #fff1f7;
+}
+
+.raid-row-new {
+  box-shadow: inset 0 0 0 2px #f0a9c9;
+}
+
+.raid-row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.raid-new {
+  display: inline-block;
+  margin-bottom: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #d0578f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.raid-line {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.raid-style-line,
+.raid-style-note {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #8a5f86;
+}
+
+.raid-styles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.raid-style {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #f3dbe7;
+  border-radius: 14px;
+  background: #fffafc;
+  color: #7a2d55;
+  font: inherit;
+  text-align: left;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.raid-style[aria-pressed='true'] {
+  border-color: #d0578f;
+  background: #ffe9f3;
+}
+
+.raid-style:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.raid-style-name {
+  font-weight: 800;
+}
+
+.raid-style-hint {
+  font-size: 0.85em;
+  opacity: 0.8;
+}
+
+.raid-sheet .auth-button[data-testid='raid-done'] {
+  width: 100%;
+  margin-top: 12px;
+}

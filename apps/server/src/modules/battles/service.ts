@@ -212,6 +212,59 @@ export function defaultBattleContent(): BattleContent {
 const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
 const PUBLIC_MOVES = new Set(GAME_DATA.moves.map((m) => m.id));
 
+/**
+ * Rows the client may not have: species and moves outside the public tables
+ * (a secret squishy the player just met), so it can draw and name them.
+ */
+function defsFor(
+  content: BattleContent,
+  state: BattleState,
+): { speciesDefs: Species[]; moveDefs: Move[] } {
+  const speciesDefs = new Map<string, Species>();
+  const moveDefs = new Map<string, Move>();
+  for (const side of [state.sides.a, state.sides.b]) {
+    for (const squishy of side.squishies) {
+      // A species dropped from the data since (an old battle) is left out;
+      // the client names it "Mystery squishy" rather than the read failing.
+      const species = content.species.get(squishy.speciesId);
+      if (species && !PUBLIC_SPECIES.has(species.id)) speciesDefs.set(species.id, species);
+      for (const id of squishy.moves) {
+        const move = content.moves.get(id);
+        if (move && !PUBLIC_MOVES.has(id)) moveDefs.set(id, move);
+      }
+    }
+  }
+  return { speciesDefs: [...speciesDefs.values()], moveDefs: [...moveDefs.values()] };
+}
+
+/**
+ * What a client sees of a battle: `clientBattleView` of `state` (the row's
+ * current state unless given), from `mySide`. The battle's own player is
+ * always side `a`; the raid log's replay (#16) shows a finished challenge to
+ * the defender, side `b`.
+ */
+export function playerBattleView(
+  content: BattleContent,
+  row: BattleRow,
+  options: { mySide?: BattleSideId; state?: BattleState } = {},
+): PlayerBattle {
+  const state = options.state ?? row.state;
+  return {
+    id: row.id,
+    mapId: row.mapId,
+    kind: row.kind,
+    status: row.status,
+    mySide: options.mySide ?? PLAYER_SIDE,
+    // Parsed on the way out too, so a view can never carry `rng` (rule 6).
+    view: ClientBattleViewSchema.parse(clientBattleView(state)),
+    ...defsFor(content, state),
+    // The seed predicts every roll, so it stays secret until the end (tech spec §8).
+    seed: row.status === 'active' ? null : row.seed,
+    startedAt: row.startedAt.toISOString(),
+    endedAt: row.endedAt?.toISOString() ?? null,
+  };
+}
+
 export function createBattlesService(options: BattlesServiceOptions): BattlesService {
   const { db } = options;
   const now = options.clock ?? (() => new Date());
@@ -233,42 +286,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     return map;
   };
 
-  /**
-   * Rows the client may not have: species and moves outside the public tables
-   * (a secret squishy the player just met), so it can draw and name them.
-   */
-  const defsFor = (state: BattleState): { speciesDefs: Species[]; moveDefs: Move[] } => {
-    const speciesDefs = new Map<string, Species>();
-    const moveDefs = new Map<string, Move>();
-    for (const side of [state.sides.a, state.sides.b]) {
-      for (const squishy of side.squishies) {
-        // A species dropped from the data since (an old battle) is left out;
-        // the client names it "Mystery squishy" rather than the read failing.
-        const species = content.species.get(squishy.speciesId);
-        if (species && !PUBLIC_SPECIES.has(species.id)) speciesDefs.set(species.id, species);
-        for (const id of squishy.moves) {
-          const move = content.moves.get(id);
-          if (move && !PUBLIC_MOVES.has(id)) moveDefs.set(id, move);
-        }
-      }
-    }
-    return { speciesDefs: [...speciesDefs.values()], moveDefs: [...moveDefs.values()] };
-  };
-
-  const toPlayerBattle = (row: BattleRow): PlayerBattle => ({
-    id: row.id,
-    mapId: row.mapId,
-    kind: row.kind,
-    status: row.status,
-    mySide: PLAYER_SIDE,
-    // Parsed on the way out too, so a view can never carry `rng` (rule 6).
-    view: ClientBattleViewSchema.parse(clientBattleView(row.state)),
-    ...defsFor(row.state),
-    // The seed predicts every roll, so it stays secret until the end (tech spec §8).
-    seed: row.status === 'active' ? null : row.seed,
-    startedAt: row.startedAt.toISOString(),
-    endedAt: row.endedAt?.toISOString() ?? null,
-  });
+  const toPlayerBattle = (row: BattleRow): PlayerBattle => playerBattleView(content, row);
 
   /** The battle, if it's this player's and they're still on its map. */
   const requireOwn = async (

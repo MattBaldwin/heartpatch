@@ -39,6 +39,8 @@ export const mapMemberStatus = pgEnum('map_member_status', ['active', 'removed']
 export const squishyState = pgEnum('squishy_state', ['active', 'hollowed']);
 /** Map owner's PvP setting (design doc §11, decision B). */
 export const pvpMode = pgEnum('pvp_mode', ['on', 'gentle', 'off']);
+/** How a player's squishies on watch play (design doc §6, #16). Mirrors `DefenseStanceSchema`. */
+export const defenseStance = pgEnum('defense_stance', ['aggressive', 'defensive', 'balanced']);
 export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'approved', 'denied']);
 /**
  * Battle kinds (design doc §6): a wild squishy, a neutral tile's guardians
@@ -154,6 +156,9 @@ export const mapMembers = pgTable(
     // A removed member keeps the old value, but only active members hold a slot.
     homeSlot: smallint('home_slot'),
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
+    // How their squishies on watch play when challenged (#16); per map.
+    // The default is `RAID_RULES.defaultStance`.
+    defenseStance: defenseStance('defense_stance').notNull().default('balanced'),
   },
   (t) => [
     primaryKey({ columns: [t.mapId, t.userId] }),
@@ -904,5 +909,50 @@ export const squishyEvolutions = pgTable(
     index('squishy_evolutions_unseen_idx')
       .on(t.squishyId)
       .where(sql`${t.seenAt} is null`),
+  ],
+);
+
+/** How a challenge ended for the defender (#16). Mirrors `RaidOutcomeSchema`. */
+export const raidOutcome = pgEnum('raid_outcome', ['held', 'tie', 'lost', 'taken', 'no-contest']);
+
+/**
+ * The raid log (#16, design doc §3 "offline defense"): one row per finished
+ * challenge on a player's land (a `rival-tile` battle), written by the
+ * raid-log event consumer from `battle.ended`. The defender sees new rows in
+ * their report next time they open the map, and marks them seen.
+ */
+export const raids = pgTable(
+  'raids',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    // One row per battle: the consumer's insert is idempotent on it.
+    battleId: uuid('battle_id')
+      .notNull()
+      .references(() => battles.id, { onDelete: 'cascade' }),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    attackerUserId: uuid('attacker_user_id').notNull(),
+    defenderUserId: uuid('defender_user_id').notNull(),
+    outcome: raidOutcome('outcome').notNull(),
+    // `battle.ended`'s reason (`forfeit`: the challenger scooted home).
+    reason: text('reason').notNull(),
+    // The stance the defenders played with; null when the land's guardians stood in.
+    stance: defenseStance('stance'),
+    resolvedAt: timestamptz('resolved_at').notNull(),
+    seenAt: timestamptz('seen_at'),
+  },
+  (t) => [
+    unique('raids_battle_id_key').on(t.battleId),
+    foreignKey({
+      name: 'raids_defender_member_fk',
+      columns: [t.mapId, t.defenderUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // A defender's report, newest first.
+    index('raids_map_id_defender_idx').on(t.mapId, t.defenderUserId, t.resolvedAt),
   ],
 );

@@ -92,6 +92,8 @@ export interface BattleDebug {
   readonly scene: BattleSceneStats | null;
   /** Reactions the Keeper has played in this battle (cheers, winces). */
   readonly keeperReactions: number;
+  /** A raid replay (#16) is playing, not a battle to play. */
+  readonly replay: boolean;
 }
 
 export interface BattleScreen {
@@ -100,6 +102,12 @@ export interface BattleScreen {
   setUser: (user: PublicUser | null) => void;
   /** Shows a battle (fetched or just started). */
   open: (battle: PlayerBattle) => void;
+  /**
+   * Plays a finished battle back from its first turn (a raid on my land,
+   * #16): shows `start`, then plays `end`'s log the way a live turn plays.
+   * Nothing can be tapped but Leave and Done.
+   */
+  watch: (start: PlayerBattle, end: PlayerBattle) => void;
   close: () => void;
   readonly debug: BattleDebug | null;
 }
@@ -122,6 +130,13 @@ const MESSAGES = {
   guardiansStart: 'The guardians want to play!',
   rivalStart: 'Squishies on watch want to play!',
   done: 'Back to patch',
+  replayStart: 'Replay! Someone challenged your patch.',
+  replayHeld: 'Your squishies held on!',
+  replayScooted: 'They scooted home!',
+  replayLost: 'They won this one.',
+  replayHeldSub: 'Your land is safe.',
+  replayLostSub: 'Everyone came home safe for a nap.',
+  replayNote: 'Just a replay. Nothing changed.',
 } as const;
 
 /** "Moonpuff joined your patch!": the squishy the player just befriended. */
@@ -151,6 +166,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let frame = 0;
   let lastBreathDraw = 0;
   let lastTier: QualityTier | null = null;
+  /** A raid replay is on screen (`watch`): no controls, replay words. */
+  let replaying = false;
   const timers = new Set<number>();
 
   // ── Entry button (shown over the map) ─────────────────────────────────
@@ -315,7 +332,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
 
   const controlsFor = (b: PlayerBattle): ControlMode => {
     const names = content;
-    if (!names || b.status !== 'active') return { type: 'hidden' };
+    if (!names || b.status !== 'active' || replaying) return { type: 'hidden' };
     const bench = benchOf(b, b.mySide).map(({ slot, squishy }) => ({
       slot,
       name: names.speciesName(squishy.speciesId),
@@ -341,6 +358,22 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const names = content;
     if (!names) return;
     const result = b.view.phase.type === 'over' ? b.view.phase.result : null;
+    if (replaying) {
+      // The defender's side of a challenge: kind either way, and no XP (#16).
+      const outcome = !result
+        ? { title: MESSAGES.resultNoContest, subtitle: MESSAGES.noContestSub }
+        : result.winner === 'draw'
+          ? { title: MESSAGES.resultDraw, subtitle: MESSAGES.replayHeldSub }
+          : result.winner === b.mySide
+            ? {
+                title: result.reason === 'forfeit' ? MESSAGES.replayScooted : MESSAGES.replayHeld,
+                subtitle: MESSAGES.replayHeldSub,
+              }
+            : { title: MESSAGES.replayLost, subtitle: MESSAGES.replayLostSub };
+      hud.setCaption(null);
+      hud.showResult({ ...outcome, xp: [MESSAGES.replayNote], done: MESSAGES.done });
+      return;
+    }
     const mine = b.view.sides[b.mySide];
     const xp = (result?.xp ?? [])
       .filter((award) => award.side === b.mySide && award.xp > 0)
@@ -375,7 +408,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     shownLog = battle.view.log.length;
     plate('a');
     plate('b');
-    if (battle.status === 'active') {
+    if (replaying && battle.view.phase.type !== 'over') {
+      // A replay's first turn: the log plays next (`watch`).
+      hud.setControls({ type: 'hidden' });
+      hud.setCaption(MESSAGES.replayStart);
+    } else if (battle.status === 'active') {
       hud.setControls(controlsFor(battle));
       if (battle.view.phase.type === 'replace' && battle.view.phase.sides.includes(battle.mySide)) {
         hud.setCaption('Your squishy is tuckered out. Who comes out next?');
@@ -443,7 +480,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     battle = next;
     content = new BattleContent(next);
     queue = playbackSteps(next, content, from);
-    hud.setControls({ type: 'waiting' });
+    hud.setControls(replaying ? { type: 'hidden' } : { type: 'waiting' });
     if (queue.length === 0) settle();
     else playNext();
   };
@@ -541,11 +578,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     frame = requestAnimationFrame(tick);
   };
 
-  function open(next: PlayerBattle): void {
+  function open(next: PlayerBattle, replay = false): void {
     const wasOpen = battle !== null;
     clearTimers();
     queue = [];
     waiting = false;
+    replaying = replay;
     battle = next;
     content = new BattleContent(next);
     shown = shownFrom(next);
@@ -573,6 +611,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
     battle = null;
+    replaying = false;
     content = null;
     shown = null;
     scene3d = null;
@@ -611,7 +650,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       mapId = null;
       entry.hidden = true;
     },
-    open,
+    open: (next) => {
+      open(next);
+    },
+    watch: (start, end) => {
+      open(start, true);
+      // A breath on the first turn, then the showdown plays out.
+      later(PLAYBACK.replayLeadMs, () => {
+        if (battle?.id === start.id && replaying) receive(end);
+      });
+    },
     close,
     get debug() {
       if (!battle || !shown) return null;
@@ -637,6 +685,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
               : null,
         scene: scene3d?.stats ?? null,
         keeperReactions,
+        replay: replaying,
       };
     },
   };
