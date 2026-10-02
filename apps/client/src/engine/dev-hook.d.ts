@@ -1,5 +1,5 @@
-import type { MapCameraState } from './camera/mapCamera.js';
-import type { QualitySnapshot } from './quality/renderQuality.js';
+import type { MapCameraState } from './camera/map-camera.js';
+import type { QualitySnapshot } from './quality/render-quality.js';
 
 declare global {
   interface Window {

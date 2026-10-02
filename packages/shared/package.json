@@ -8,6 +8,11 @@
       "@heartpatch/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./server": {
+      "@heartpatch/source": "./src/data/server/index.ts",
+      "types": "./dist/data/server/index.d.ts",
+      "default": "./dist/data/server/index.js"
     }
   },
   "scripts": {

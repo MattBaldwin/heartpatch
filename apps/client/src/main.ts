@@ -3,7 +3,7 @@ import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type Stage } from './engine/stage.js';
 import { fetchHealth } from './net/api.js';
-import { buildTestScene } from './scenes/testScene.js';
+import { buildTestScene } from './scenes/test-scene.js';
 import './styles.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -73,7 +73,7 @@ if (import.meta.env.DEV) {
       badge.textContent = 'server: offline';
     });
 
-  const { mountDevOverlay } = await import('./engine/devOverlay.js');
+  const { mountDevOverlay } = await import('./engine/dev-overlay.js');
   mountDevOverlay(() => stage);
   // Read-only hook for the Playwright smoke test; dev builds only.
   window.__heartpatch = {

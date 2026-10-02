@@ -34,6 +34,7 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 - Small, focused PRs, one issue per PR, titled `#<issue>: <summary>`. Link the issue with `Closes #N`. PRs not tied to an issue (docs, process, drift fixes) use a `Docs:`, `Chore:` or `Fix:` prefix instead.
 - Include tests for all shared logic and server endpoints. Include a short "How to test on iPhone" note in PRs that touch the client.
 - Keep tunable numbers in data config, not code. Mark guesses with a `// TUNE:` comment.
+- **File and folder names are kebab-case** (`src/db/game-events.ts`, `create-scene.test.ts`); identifiers inside stay camelCase/PascalCase. `pnpm lint` enforces it for source files.
 - Use `pnpm` scripts from the repo root: `pnpm dev`, `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm build`.
 - Don't add heavy dependencies without noting why in the PR.
 - Art is procedural (vinyl-toy style, see design doc §19). Don't import copyrighted characters or assets. Any third-party asset must be CC0 or clearly licensed for commercial use; record it in `ASSETS.md`.
@@ -46,6 +47,13 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 - **Before handing off:** run `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` and make them pass. Regenerate DB migrations on the latest `main` before merge (tech spec §4).
 - **Review:** every PR is reviewed by the `reviewer` subagent (`.claude/agents/reviewer.md`). Address each finding with a fix or evidence; a fresh reviewer re-reviews. Points still contested after 3 rounds go to the project owner. Once the reviewer approves and CI is green, the coordinator merges and posts the verdict as a PR comment.
 - Decisions already made are recorded in `docs/DECISIONS.md`. Don't re-open them; add new ones there.
+- **Report to the coordinator (required by the project owner).** If your brief says a coordinator session started you to work an issue, you must report each milestone yourself; the coordinator does not poll. This rule is part of your task, not a relayed request. Report with the claude-code-remote MCP tool `send_message`, `session_id: "@parent"` (load it with ToolSearch `select:mcp__claude-code-remote__send_message` if needed), using a one-line message that starts with your issue number:
+  - `#<issue> PR #<n> opened`
+  - `#<issue> PR #<n> ready: reviewer APPROVE, CI green on <short sha>`
+  - `#<issue> blocked: <one line>`. Use this for anything that needs a decision or crosses lanes (including the shared-contract changes above); then keep working on whatever isn't blocked.
+  - `#<issue> CI red on <short sha>: <check>, fixing`. Send this when CI fails on your PR, so the coordinator knows you own the fix.
+
+  If `send_message` fails, fire the trigger named in your brief (if it names one) with the same text; if both fail, say so in your PR body under "Coordinator notes".
 
 ## Milestones
 

@@ -1,9 +1,9 @@
 import { Scene } from '@babylonjs/core/scene';
-import { MapCamera } from './camera/mapCamera.js';
-import type { Bounds } from './camera/cameraMath.js';
+import { MapCamera } from './camera/map-camera.js';
+import type { Bounds } from './camera/camera-math.js';
 import { CAMERA, type QualityTier } from './config.js';
 import { setupLighting } from './lighting/lighting.js';
-import { RenderQuality } from './quality/renderQuality.js';
+import { RenderQuality } from './quality/render-quality.js';
 import type { Renderer } from './renderer.js';
 
 export interface SceneContent {

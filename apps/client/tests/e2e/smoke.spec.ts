@@ -12,7 +12,7 @@ interface CameraState {
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
 
-/** The dev-only hook from src/main.ts (typed in src/engine/devHook.d.ts, which this project can't see). */
+/** The dev-only hook from src/main.ts (typed in src/engine/dev-hook.d.ts, which this project can't see). */
 interface DevHook {
   camera(): CameraState | null;
 }

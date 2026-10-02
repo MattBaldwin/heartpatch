@@ -18,7 +18,7 @@ import {
   type CameraPose,
   type GroundPoint,
   type MotionSample,
-} from './cameraMath.js';
+} from './camera-math.js';
 
 /** Read-only snapshot for the dev overlay and Playwright hook. */
 export interface MapCameraState {
@@ -40,7 +40,7 @@ const MAX_INERTIA_DT = 0.1;
  * Top-down tilted map camera (design doc §20): one-finger pan with inertia,
  * two-finger pinch zoom (anchored under the fingers) with pan, mouse-wheel
  * zoom on desktop, all clamped to the map bounds. Uses Pointer Events
- * directly; all the maths is in cameraMath.ts.
+ * directly; all the maths is in camera-math.ts.
  */
 export class MapCamera {
   readonly camera: TargetCamera;

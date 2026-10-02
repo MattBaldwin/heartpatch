@@ -13,7 +13,7 @@ import {
   type Bounds,
   type CameraPose,
   type InertiaState,
-} from './cameraMath.js';
+} from './camera-math.js';
 
 const pose: CameraPose = {
   target: { x: 3, z: -2 },
