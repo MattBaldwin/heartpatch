@@ -14,7 +14,13 @@
     "lint": "eslint . --max-warnings 0",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "db:up": "docker compose -f infra/compose/docker-compose.dev.yml up -d --wait",
+    "db:down": "docker compose -f infra/compose/docker-compose.dev.yml down",
+    "db:generate": "pnpm --filter @heartpatch/server db:generate",
+    "db:check": "pnpm --filter @heartpatch/server db:check",
+    "db:migrate": "pnpm --filter @heartpatch/server db:migrate",
+    "db:seed": "pnpm --filter @heartpatch/server db:seed"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -8,5 +8,7 @@ export default defineConfig({
   ssr: { resolve: { conditions, externalConditions: conditions } },
   test: {
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
+    // Creates and migrates a scratch database for DB integration tests.
+    globalSetup: ['./tests/globalSetup.ts'],
   },
 });

@@ -13,7 +13,11 @@ import { loadConfig } from './config.js';
 import { AppError } from './lib/errors.js';
 import type { ZodTypeProvider } from './lib/zod.js';
 
-const config = loadConfig({ NODE_ENV: 'test', APP_VERSION: '1.2.3' });
+const config = loadConfig({
+  NODE_ENV: 'test',
+  APP_VERSION: '1.2.3',
+  DATABASE_URL: 'postgres://localhost:5432/unused',
+});
 let app: FastifyInstance | undefined;
 
 async function start(options: Partial<BuildAppOptions> = {}): Promise<FastifyInstance> {

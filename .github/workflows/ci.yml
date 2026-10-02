@@ -17,6 +17,23 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: heartpatch
+          POSTGRES_PASSWORD: heartpatch
+          POSTGRES_DB: heartpatch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U heartpatch -d heartpatch"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      # DB integration tests fail (not skip) in CI without this.
+      DATABASE_URL: postgres://heartpatch:heartpatch@localhost:5432/heartpatch
     steps:
       - uses: actions/checkout@v5
 
@@ -31,8 +48,24 @@ jobs:
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
+
+      - name: Migrations match the schema
+        run: |
+          pnpm db:check
+          pnpm db:generate
+          if [ -n "$(git status --porcelain -- apps/server/src/db/migrations)" ]; then
+            git status --porcelain -- apps/server/src/db/migrations
+            echo "::error::Schema changed without a migration. Run pnpm db:generate and commit the result."
+            exit 1
+          fi
+
       - run: pnpm test
       - run: pnpm build
+
+      - name: DB scripts from scratch (migrate + seed, twice each)
+        run: |
+          pnpm db:migrate && pnpm db:migrate
+          pnpm db:seed && pnpm db:seed
 
       - name: Install Playwright WebKit
         run: pnpm --filter @heartpatch/client exec playwright install --with-deps webkit
