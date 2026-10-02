@@ -132,6 +132,7 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
   // Each care reply keeps its action resting for a minute (the server's own
   // debounce is 10 s, covered by its tests), so "still resting" below doesn't
   // depend on how fast this runner is.
+  const resting = new Map<string, string>();
   await page.route('**/api/v1/maps/*/squishies/*/care', async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as {
@@ -139,8 +140,9 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
       squishies: { id: string; nextCareAt: Record<string, string> }[];
     };
     const done = body.result;
+    if (done) resting.set(done.action, new Date(Date.now() + 60_000).toISOString());
     const cared = done ? body.squishies.find((s) => s.id === done.squishyId) : undefined;
-    if (done && cared) cared.nextCareAt[done.action] = new Date(Date.now() + 60_000).toISOString();
+    if (cared) Object.assign(cared.nextCareAt, Object.fromEntries(resting));
     await route.fulfill({ response, json: body });
   });
   const opened = await openFromHome(page);

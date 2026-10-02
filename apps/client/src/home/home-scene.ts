@@ -284,7 +284,8 @@ export class HomeScene {
 
   /**
    * What's under a point on the canvas (CSS pixels): a lit spot first, then
-   * a squishy (opens its close-up, #20), then a building.
+   * a squishy (opens its close-up, #20: a direct hit, or near its feet when
+   * that's nearer than a building), then a building.
    */
   pick(x: number, y: number): HomePick {
     const camera = this.#scene.activeCamera;
@@ -314,12 +315,16 @@ export class HomeScene {
     };
     const spot = near(this.#spots, (s) => this.spotAt(s));
     if (spot) return { kind: 'spot', spot };
+    const building = near(this.#home.buildings, (b) => this.spotAt(b));
     if (this.#spots.length === 0) {
+      // Near a squishy's feet counts too (they're small), unless the tap is
+      // nearer the building it lives by.
       const reach = HOME_VIEW.hexSize * SQUISHY_REACH;
+      const d2 = (a: WorldPoint) => (a.x - p.x) ** 2 + (a.z - p.z) ** 2;
       let best: string | null = null;
-      let bestD = reach * reach;
+      let bestD = Math.min(reach * reach, building ? d2(this.spotAt(building)) : Infinity);
       for (const [id, r] of this.#residents) {
-        const d = (r.at.x - p.x) ** 2 + (r.at.z - p.z) ** 2;
+        const d = d2(r.at);
         if (d < bestD) {
           best = id;
           bestD = d;
@@ -327,7 +332,6 @@ export class HomeScene {
       }
       if (best) return { kind: 'squishy', id: best };
     }
-    const building = near(this.#home.buildings, (b) => this.spotAt(b));
     return building ? { kind: 'building', id: building.id } : null;
   }
 
