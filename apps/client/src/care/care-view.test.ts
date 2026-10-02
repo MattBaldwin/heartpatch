@@ -6,7 +6,14 @@ import {
   type Species,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { CARE_TEXT, careDoneLine, careSheet, evolutionLine, speciesById } from './care-view.js';
+import {
+  CARE_TEXT,
+  careDoneLine,
+  careSheet,
+  evolutionLine,
+  nextReadyIn,
+  speciesById,
+} from './care-view.js';
 
 const NOW = '2026-10-02T12:00:00.000Z';
 
@@ -94,6 +101,20 @@ describe('careSheet', () => {
     });
   });
 
+  it('turns a debounced button back on once its time has passed', () => {
+    const resting = squishy({
+      nextCareAt: { pet: '2026-10-02T12:00:05.000Z', play: '2026-10-02T12:00:08.000Z' },
+    });
+    const at = (ms: number) => Date.parse(NOW) + ms;
+    expect(nextReadyIn(resting, at(0))).toBe(5000);
+    expect(nextReadyIn(resting, at(6000))).toBe(2000);
+    expect(nextReadyIn(resting, at(9000))).toBeNull();
+    const note = (ms: number) =>
+      careSheet(resting, reply(), at(ms)).buttons.find((b) => b.action === 'pet')!.note;
+    expect(note(4999)).toBe(CARE_TEXT.wait);
+    expect(note(5000)).toBeNull();
+  });
+
   it('fills the bar at the top level, and says so', () => {
     const model = careSheet(squishy({ level: 100, xpToNext: null }), reply());
     expect(model).toMatchObject({ xp: 1, xpLine: 'Top level!' });
@@ -141,6 +162,7 @@ describe('lines', () => {
       CARE_TEXT.bonus(100),
       CARE_TEXT.fullLeft(1),
       CARE_TEXT.evolved('Moonpuff', 'Moonmallow'),
+      CARE_TEXT.notHere,
       ...CARE_RULES.moods.map((m) => m.line),
     ];
     expect(texts.flatMap((t) => findAvoidedWords(t))).toEqual([]);

@@ -14,6 +14,13 @@ import {
  * without the DOM, and the close-up view (#20) can reuse it.
  */
 
+/** What each care action's cheer says (by care action id). */
+const DONE_LINES: Readonly<Record<string, string>> = {
+  feed: 'Nom nom! What a yummy treat.',
+  pet: 'So soft! They wiggle happily.',
+  play: 'Boop! Giggles all around.',
+};
+
 // Player-facing text (style guide §2, §6, §9).
 export const CARE_TEXT = {
   title: 'Care',
@@ -24,11 +31,7 @@ export const CARE_TEXT = {
   noTreats: 'No Treats',
   treats: (n: number) => `${String(n)} ${n === 1 ? 'Treat' : 'Treats'}`,
   wait: 'Just a sec…',
-  done: {
-    feed: 'Nom nom! What a yummy treat.',
-    pet: 'So soft! They wiggle happily.',
-    play: 'Boop! Giggles all around.',
-  } as Readonly<Record<string, string>>,
+  done: DONE_LINES,
   fallbackDone: 'They loved that!',
   lessNow: "They're nice and full of love for today!",
   coins: (n: number) => `+${String(n)} Patch ${n === 1 ? 'Coin' : 'Coins'}`,
@@ -44,6 +47,7 @@ export const CARE_TEXT = {
   yay: 'Yay!',
   care: 'Care',
   noneYet: 'No squishy friends here yet. Befriend one on the map!',
+  notHere: "That friend isn't here right now. Say hi to this one!",
 } as const;
 
 const ACTION_ICONS: Readonly<Record<string, string>> = { feed: '🍪', pet: '🤚', play: '✨' };
@@ -87,12 +91,16 @@ export interface CareSheetModel {
   readonly info: readonly string[];
 }
 
+/**
+ * The sheet for one squishy. `now` is the server's time (ms) as the client
+ * reckons it, so a debounced button comes back on; it defaults to the reply's.
+ */
 export function careSheet(
   squishy: CareSquishy,
   reply: Pick<CareListResponse, 'speciesDefs' | 'items' | 'now'>,
+  now = Date.parse(reply.now),
 ): CareSheetModel {
   const species = speciesById(reply);
-  const now = Date.parse(reply.now);
   const buttons = GAME_DATA.careActions.map((action): CareButton => {
     const readyAt = squishy.nextCareAt[action.id];
     const costs = Object.entries(action.cost ?? {});
@@ -145,4 +153,14 @@ export function evolutionLine(
   const from = species.get(evolution.fromSpeciesId)?.name ?? 'Your squishy';
   const into = species.get(evolution.intoSpeciesId)?.name ?? 'something new';
   return CARE_TEXT.evolved(squishy.nickname ?? from, into);
+}
+
+/** Milliseconds until the next debounced action on this squishy can count again, or null. */
+export function nextReadyIn(squishy: CareSquishy, now: number): number | null {
+  let soonest: number | null = null;
+  for (const at of Object.values(squishy.nextCareAt)) {
+    const wait = Date.parse(at) - now;
+    if (wait > 0 && (soonest === null || wait < soonest)) soonest = wait;
+  }
+  return soonest;
 }

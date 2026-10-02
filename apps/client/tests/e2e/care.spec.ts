@@ -68,8 +68,11 @@ test('cares for a squishy from home base: pet, play and feed', async ({ browser 
   await expect.poll(async () => (await careState(page))?.contentment, slow).toBe(10);
   await slowExpect(page.getByTestId('care-note')).toContainText('So soft!');
   expect(await careState(page)).toMatchObject({ caredToday: 1, mood: 'calm', squishes: 1 });
-  // The same action again straight away waits a moment (one gesture counts once).
+  // The same action again straight away waits a moment (one gesture counts once),
+  // then the button comes back on by itself.
   await slowExpect(sheet.locator('[data-care="pet"]')).toBeDisabled();
+  await slowExpect(sheet.locator('[data-care="pet"]')).toContainText('Just a sec');
+  await slowExpect(sheet.locator('[data-care="pet"]')).toBeEnabled();
 
   // Play, then feed a Treat.
   await sheet.locator('[data-care="play"]').tap();

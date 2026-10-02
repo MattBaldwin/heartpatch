@@ -4,7 +4,14 @@ import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { careApi, type CareApi } from './care-api.js';
-import { CARE_TEXT, careDoneLine, careSheet, evolutionLine, speciesById } from './care-view.js';
+import {
+  CARE_TEXT,
+  careDoneLine,
+  careSheet,
+  evolutionLine,
+  nextReadyIn,
+  speciesById,
+} from './care-view.js';
 import './care.css';
 
 // The care sheet (#19, design doc §7–8): one squishy's mood, level and XP,
@@ -53,6 +60,10 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   let mapId: string | null = null;
   let squishyId: string | null = null;
   let reply: CareListResponse | null = null;
+  /** `performance.now()` when `reply` arrived: the server clock is `reply.now` plus the time since. */
+  let replyAt = 0;
+  /** Re-renders when the next debounced button can come back on. */
+  let readyTimer: number | undefined;
   let working = false;
   let squishes = 0;
   /** Bumped on every open, close and user change, so a late reply is dropped. */
@@ -130,6 +141,14 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     retryAfterMs: COMMAND_RETRY_MS,
   };
 
+  const setReply = (next: CareListResponse | null) => {
+    reply = next;
+    replyAt = performance.now();
+  };
+  /** The server's time now, as reckoned from the last reply (a phone's own clock may be off). */
+  const serverNow = (): number =>
+    reply ? Date.parse(reply.now) + (performance.now() - replyAt) : 0;
+
   const current = (): CareSquishy | null =>
     reply?.squishies.find((s) => s.id === squishyId) ?? null;
 
@@ -147,6 +166,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   });
 
   function render(): void {
+    window.clearTimeout(readyTimer);
+    readyTimer = undefined;
     const squishy = current();
     if (!reply || !squishy) {
       name.textContent = '';
@@ -154,7 +175,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       actions.replaceChildren();
       return;
     }
-    const model = careSheet(squishy, reply);
+    const now = serverNow();
+    const model = careSheet(squishy, reply, now);
     blob.style.background = model.color;
     name.textContent = model.name;
     mood.textContent = model.mood;
@@ -168,9 +190,9 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
           'button',
           { type: 'button', class: 'auth-button care-action', 'data-care': b.action },
           b.label,
+          ...(b.note ? [el('span', { class: 'care-action-note' }, b.note)] : []),
         );
         button.disabled = working || b.note !== null;
-        if (b.note) button.title = b.note;
         button.addEventListener('click', () => void act(b.action));
         return button;
       }),
@@ -179,6 +201,9 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     const evolved = evolutionLine(squishy, speciesById(reply));
     celebrate.hidden = evolved === null;
     if (evolved) celebrateLine.textContent = evolved;
+    // A debounced button comes back on by itself (one timer, the soonest).
+    const wait = nextReadyIn(squishy, now);
+    if (wait !== null) readyTimer = window.setTimeout(render, wait + 50);
   }
 
   async function act(action: string): Promise<void> {
@@ -195,7 +220,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
         () => mine === ticket,
       );
       if (!next || mine !== ticket) return;
-      reply = next;
+      setReply(next);
       note.textContent = careDoneLine(next.result);
       squish('care');
     } catch (err) {
@@ -203,7 +228,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       note.textContent = messageOf(err);
       // The debounce or the bag changed under us: show the server's view again.
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
-        reply = await api.list(map).catch(() => reply);
+        setReply(await api.list(map).catch(() => reply));
       }
     } finally {
       working = false;
@@ -224,7 +249,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     )
       .then((next) => {
         if (next && mine === ticket) {
-          reply = next;
+          setReply(next);
           render();
         }
       })
@@ -238,6 +263,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   });
 
   function hide(): void {
+    window.clearTimeout(readyTimer);
+    readyTimer = undefined;
     ticket += 1;
     mapId = null;
     squishyId = null;
@@ -261,19 +288,21 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       if (mine !== ticket || quiet) return;
       mapId = map;
       squishyId = null;
-      reply = null;
+      setReply(null);
       panel.hidden = false;
       note.textContent = messageOf(err);
       render();
       return;
     }
     if (mine !== ticket) return;
-    const chosen = pick(list);
+    const picked = pick(list);
+    const chosen = picked ?? (quiet ? undefined : list.squishies[0]);
     if (!chosen && quiet) return;
     mapId = map;
     squishyId = chosen?.id ?? null;
-    reply = list;
-    note.textContent = '';
+    setReply(list);
+    // Asked for one that isn't here (it grew up, or it's in the Hollow): say so.
+    note.textContent = !picked && chosen ? CARE_TEXT.notHere : '';
     panel.hidden = false;
     render();
     if (chosen?.newEvolution) squish('evolve');
@@ -282,12 +311,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   return {
     open: (map, id) => load(map, (list) => list.squishies.find((s) => s.id === id), false),
     openForSpecies: (map, speciesId) =>
-      // One that has since grown into another form shows the first friend instead.
-      load(
-        map,
-        (list) => list.squishies.find((s) => s.speciesId === speciesId) ?? list.squishies[0],
-        false,
-      ),
+      load(map, (list) => list.squishies.find((s) => s.speciesId === speciesId), false),
     celebrateNews: (map) =>
       load(map, (list) => list.squishies.find((s) => s.newEvolution !== null), true),
     close: hide,

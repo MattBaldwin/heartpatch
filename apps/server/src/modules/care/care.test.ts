@@ -4,6 +4,7 @@ import {
   BattleResponseSchema,
   CARE_RULES,
   CareListResponseSchema,
+  CatalogResponseSchema,
   CareResponseSchema,
   GROWTH_RULES,
   HomeResponseSchema,
@@ -530,6 +531,14 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
         level: 20,
         element: 'shadow',
       });
+      // Its new form gets a catalog card, secret row included.
+      const catalog = CatalogResponseSchema.parse(
+        (await call(server, 'GET', `/maps/${mapId}/catalog`, kid)).json(),
+      ).catalog;
+      expect(catalog.entries).toContainEqual(
+        expect.objectContaining({ speciesId: MOONMALLOW, firstCaughtAt: clock.toISOString() }),
+      );
+      expect(catalog.speciesDefs.map((s) => s.id)).toContain(MOONMALLOW);
 
       const events = await eventsOf(mapId);
       const evolved = events.find((e) => e.type === 'squishy.evolved')!;

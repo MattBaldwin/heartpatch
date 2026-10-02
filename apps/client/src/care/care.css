@@ -258,3 +258,11 @@
   font-size: 17px;
   font-weight: 700;
 }
+
+/* Why a care button is resting ("Just a sec…"), shown on the button itself. */
+.care-action-note {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}

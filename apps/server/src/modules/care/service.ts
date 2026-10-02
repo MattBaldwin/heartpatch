@@ -31,6 +31,8 @@ import { AppError } from '../../lib/errors.js';
 import { localDate, type Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems, requireMember } from '../inventory/service.js';
+import { createMapsRepo } from '../maps/repo.js';
+import { createSpawnsRepo } from '../spawns/repo.js';
 import { createCareRepo, type CareRepo, type CareSquishyRow } from './repo.js';
 
 /*
@@ -44,6 +46,9 @@ import { createCareRepo, type CareRepo, type CareSquishyRow } from './repo.js';
  */
 
 const CARE_ACTIONS = new Map<string, CareAction>(GAME_DATA.careActions.map((a) => [a.id, a]));
+/** Only care this recent can still be debounced (`cooldownSeconds`), so older rows aren't read. */
+const DEBOUNCE_MS = Math.max(0, ...GAME_DATA.careActions.map((a) => a.cooldownSeconds)) * 1000;
+const debounceSince = (at: Date) => new Date(at.getTime() - DEBOUNCE_MS);
 const PUBLIC_SPECIES = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 const SECRET_SPECIES = new Map(SERVER_GAME_DATA.secretSpecies.map((s) => [s.id, s]));
 const speciesOf = (id: string): Species | undefined =>
@@ -187,6 +192,8 @@ export async function applyXp(
       level: next.level,
       evolvedAt: at,
     });
+    // Its new form is a friend too: the catalog gets its card (and its row, if secret).
+    await createSpawnsRepo(tx).markCaught(row.mapId, row.ownerUserId, evolution.intoSpeciesId, at);
   }
   return {
     squishyId: row.id,
@@ -263,7 +270,7 @@ export function createCareService(options: CareServiceOptions): CareService {
     const [habitats, counts, lastCare, coinsToday, unseen, items] = await Promise.all([
       habitatTagsFor(repo, rows),
       repo.countCareOn(ids, day),
-      repo.lastCare(ids),
+      repo.lastCare(ids, debounceSince(at)),
       repo.coinsOn(userId, day),
       repo.unseenEvolutions(ids),
       createInventoryRepo(tx).list({ mapId, userId }),
@@ -350,11 +357,11 @@ export function createCareService(options: CareServiceOptions): CareService {
       const reply = await store.transaction(async (repo, tx) => {
         await requireMember(tx, user, mapId);
         // The account first: the daily coin cap spans every squishy and patch.
-        await repo.lockUser(user.id);
+        await createMapsRepo(tx).lockUser(user.id);
         const row = await lockMine(repo, user, mapId, squishyId);
 
         // A short debounce, so one stroke or a double tap counts once.
-        const last = (await repo.lastCare([row.id])).get(row.id)?.get(action.id);
+        const last = (await repo.lastCare([row.id], debounceSince(at))).get(row.id)?.get(action.id);
         if (last && at.getTime() - last.getTime() < action.cooldownSeconds * 1000) {
           throw new AppError('CONFLICT', MESSAGES.tooSoon(nameOf(row)));
         }

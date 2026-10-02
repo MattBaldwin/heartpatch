@@ -4,7 +4,7 @@ import {
   type ElementId,
   type FeelingId,
 } from '@heartpatch/shared';
-import { and, asc, desc, eq, inArray, isNull, max, sql, sum } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, max, sql, sum } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { buildings, careLog, squishies, squishyEvolutions, users } from '../../db/schema.js';
@@ -49,16 +49,14 @@ export interface EvolutionRow {
 /**
  * Care and growth storage (#19). Plain queries; the service decides the
  * rules and runs each command in one transaction. Lock order for a care
- * action: the account (`lockUser`, so the daily coin cap can't race across
- * squishies or patches), the squishy, inventory rows (`consumeItems`), then
+ * action: the account (the maps repo's `lockUser`, so the daily coin cap
+ * can't race across squishies or patches), the squishy, inventory rows (`consumeItems`), then
  * `maps` (the event). XP from battles locks the squishies (under the battle
  * row) and never the account.
  */
 export interface CareRepo {
   transaction: <T>(fn: (repo: CareTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
 
-  /** Row-locks the account until commit (`FOR NO KEY UPDATE`, as the maps module does). */
-  lockUser: (userId: string) => Promise<void>;
   /** The account's IANA time zone (its day for daily caps), or null if there's no such user. */
   timeZoneOf: (userId: string) => Promise<string | null>;
 
@@ -72,8 +70,8 @@ export interface CareRepo {
 
   /** Care actions per squishy on `day`. */
   countCareOn: (squishyIds: readonly string[], day: string) => Promise<Map<string, number>>;
-  /** When each action was last done on each squishy (`squishyId` → action → when). */
-  lastCare: (squishyIds: readonly string[]) => Promise<Map<string, Map<string, Date>>>;
+  /** When each action was last done on each squishy since `since` (`squishyId` → action → when). */
+  lastCare: (squishyIds: readonly string[], since: Date) => Promise<Map<string, Map<string, Date>>>;
   /** Patch Coins care earned the account on `day`, across every patch. */
   coinsOn: (userId: string, day: string) => Promise<number>;
   insertCare: (care: NewCare) => Promise<string>;
@@ -136,14 +134,6 @@ function queries(db: Executor): CareRepo {
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createCareTxRepo(tx), tx)),
 
-    lockUser: async (userId) => {
-      await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.id, userId))
-        .for('no key update');
-    },
-
     timeZoneOf: async (userId) => {
       const [row] = await db
         .select({ timeZone: users.timeZone })
@@ -190,13 +180,13 @@ function queries(db: Executor): CareRepo {
       return new Map(rows.map((r) => [r.squishyId, r.n]));
     },
 
-    lastCare: async (squishyIds) => {
+    lastCare: async (squishyIds, since) => {
       const byId = new Map<string, Map<string, Date>>();
       if (squishyIds.length === 0) return byId;
       const rows = await db
         .select({ squishyId: careLog.squishyId, action: careLog.action, at: max(careLog.caredAt) })
         .from(careLog)
-        .where(inArray(careLog.squishyId, [...squishyIds]))
+        .where(and(inArray(careLog.squishyId, [...squishyIds]), gt(careLog.caredAt, since)))
         .groupBy(careLog.squishyId, careLog.action);
       for (const row of rows) {
         if (!row.at) continue;
