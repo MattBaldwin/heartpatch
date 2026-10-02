@@ -238,9 +238,16 @@ export const ClientBattleViewSchema = z.object({
 export const BattleStatusSchema = z.enum(['active', 'finished', 'no-contest']);
 export type BattleStatus = z.infer<typeof BattleStatusSchema>;
 
-/** Kinds of PvE battle. Tile guardians and raids arrive with their issues. */
-export const BattleKindSchema = z.enum(['wild']);
+/**
+ * Kinds of battle: a wild squishy (#14), a neutral tile's guardians (`tile`,
+ * #15) and another player's defenders (`rival-tile`, #15). Tile battles use
+ * one of the player's daily attempts.
+ */
+export const BattleKindSchema = z.enum(['wild', 'tile', 'rival-tile']);
 export type BattleKind = z.infer<typeof BattleKindSchema>;
+
+/** Kinds that battle for a tile (#15): they use an attempt, and leaving counts as a loss. */
+export const TILE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['tile', 'rival-tile']);
 
 /**
  * Kinds whose squishy can be befriended with a Heart Charm (#14): wild ones,

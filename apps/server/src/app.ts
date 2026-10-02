@@ -19,6 +19,8 @@ import { inventoryRoutes } from './modules/inventory/routes.js';
 import { createInventoryService } from './modules/inventory/service.js';
 import { spawnsRoutes } from './modules/spawns/routes.js';
 import { createSpawnsService } from './modules/spawns/service.js';
+import { territoryRoutes } from './modules/territory/routes.js';
+import { createTerritoryService, createTileBattlePort } from './modules/territory/service.js';
 import { createAuthRepo } from './modules/auth/repo.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { hashSessionToken } from './modules/auth/secrets.js';
@@ -149,13 +151,15 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         });
         await api.register(tutorialRoutes(tutorial, { hooks: authHooks }));
 
-        // Wild squishies (#14) plug into battles through `findWildEncounter`.
+        // Wild squishies (#14) plug into battles through `findWildEncounter`,
+        // and territory (#15) through `tileBattles` (attempts and captures).
         const spawns = createSpawnsService({ db, clock });
         await api.register(spawnsRoutes(spawns, { hooks: authHooks }));
         const battles = createBattlesService({
           db,
           clock,
           findWildEncounter: spawns.findWildEncounter,
+          tileBattles: createTileBattlePort(),
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         const idempotencyStore = createIdempotencyStore(db);
@@ -180,6 +184,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         await api.register(
           gatheringRoutes(createGatheringService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
+        await api.register(
+          territoryRoutes(createTerritoryService({ db, clock, battles, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),

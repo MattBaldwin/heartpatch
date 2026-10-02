@@ -37,14 +37,20 @@ export interface MapScreenOptions {
   onClosed: (message: string) => void;
   api?: { view: (mapId: string) => Promise<MapView> };
   createWs?: (options: WsClientOptions) => WsClient;
-  /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
-  tileActions?: TileActions;
+  /**
+   * Buttons for the tapped tile, drawn into the tile panel (gathering #17,
+   * territory #15). Each feature gets its own slot, in this order.
+   */
+  tileActions?: readonly TileActions[];
 }
 
 /** A feature's buttons in the tile panel. */
 export interface TileActions {
-  /** The panel shows `tile` (on tap, and again when the map redraws). */
-  show: (container: HTMLElement, tile: PublicTile) => void;
+  /**
+   * The panel shows `tile` (on tap, and again when the map redraws). `view`
+   * is the whole map as this player has it now (neighbours, owners, PvP mode).
+   */
+  show: (container: HTMLElement, tile: PublicTile, view: MapView) => void;
   /** The panel closed. */
   hide: () => void;
 }
@@ -106,10 +112,19 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = null;
     scene3d?.select(null);
     panel.hide();
-    options.tileActions?.hide();
+    hideActions();
     options.invalidate();
   };
   const panel = mountTilePanel(options.root, deselect);
+  // One slot per feature, so each redraws only its own buttons.
+  const actionSlots = (options.tileActions ?? []).map((actions) => ({
+    actions,
+    slot: el('div', { class: 'tile-panel-slot' }),
+  }));
+  panel.actions.append(...actionSlots.map((a) => a.slot));
+  function hideActions(): void {
+    for (const { actions } of actionSlots) actions.hide();
+  }
 
   const showTile = (state: MapState, h: Hex): void => {
     const tile = state.tileAt(hexKey(h));
@@ -120,7 +135,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = h;
     scene3d?.select(h);
     panel.show(describeTile(tile, (id) => state.member(id), user?.id ?? null));
-    options.tileActions?.show(panel.actions, tile);
+    for (const { actions, slot } of actionSlots) actions.show(slot, tile, state.view);
     options.invalidate();
   };
 
@@ -186,7 +201,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     scene3d = null;
     selected = null;
     panel.hide();
-    options.tileActions?.hide();
+    hideActions();
     hud.hidden = true;
     options.showScene(null);
   }
@@ -203,7 +218,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       scene3d = null;
       selected = null;
       panel.hide();
-      options.tileActions?.hide();
+      hideActions();
       options.showScene(build);
       hudName.textContent = state.view.map.name;
       hud.hidden = false;

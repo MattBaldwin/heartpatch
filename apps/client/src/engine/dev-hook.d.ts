@@ -2,6 +2,7 @@ import type { BattleDebug } from '../battle/battle-screen.js';
 import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
+import type { TerritoryDebug } from '../territory/territory-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { KeeperDebug } from '../ui/keeper/keeper-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
@@ -35,6 +36,8 @@ declare global {
       keeper?(): KeeperDebug | null;
       /** The open map's bag, gathers and the tile panel's gather action (#17), or null. */
       inventory?(): InventoryDebug | null;
+      /** Tries left, squishies on watch and the tile panel's land action (#15), or null. */
+      territory?(): TerritoryDebug | null;
       /** The open squishy catalog (seen, friends, names on the cards), or null. */
       catalog?(): CatalogDebug | null;
     };
