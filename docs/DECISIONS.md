@@ -87,6 +87,15 @@ _Proposed in PR #55; the project owner confirms on merge._
 - **Fresh supervisor (owner decision):** when the supervisor's context gets large, a new supervisor session takes over with a compact handoff. *Why:* every wake re-reads the whole context, so a long-running supervisor becomes the biggest cost. The process lives in `docs/COORDINATOR.md` so it survives the handoff.
 - **Review loops are capped at 4 rounds** (proposed in PR #63; owner confirms on merge) before the build session reports `blocked` to the supervisor, who escalates to the owner if needed; and the supervisor avoids mid-flight scope changes unless they're blocking contracts.
 
+## 2026-10-02 — Production deploy (#27)
+
+_Proposed in PR #59; the project owner confirms on merge._
+
+- **`TRUST_PROXY=true` trusts exactly one private-network hop** (the direct peer, only if it's a private or loopback address, i.e. Caddy on the Docker network), not every `X-Forwarded-For` entry. *Why:* trusting every hop lets a client pick its own IP and dodge per-IP rate limits. A numeric hop count (`trustProxy: 1`) can't be used: Fastify 5 deliberately treats it as "trust nothing".
+- **The deploy pins the server's SSH host key** in a fourth secret, `LIGHTSAIL_KNOWN_HOSTS`, instead of trusting whatever answers on first connect.
+- **SSH stays open to all IPs** in the Lightsail firewall, because GitHub-hosted runners deploy from a large, changing IP pool. It's protected by key-only auth, a separate deploy user with one restricted key, and fail2ban.
+- **Only `main` deploys**, including manual "Run workflow" runs.
+
 ## 2026-10-02 — Maps and invites (#4)
 
 _Proposed in the #4 PR; the project owner confirms on merge._

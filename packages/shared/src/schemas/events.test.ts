@@ -6,13 +6,16 @@ import {
   isGameEventType,
   parseGameEventPayload,
 } from './events.js';
+import { WsEventTypeSchema } from './ws.js';
 
 const userId = '0190a000-0000-7000-8000-000000000001';
 
 describe('game event registry', () => {
   it('names every type noun.past-tense-verb', () => {
     for (const type of Object.keys(GAME_EVENTS)) {
-      expect(type).toMatch(/^[a-z_]+\.[a-z_]+$/);
+      expect(type).toMatch(/^[a-z]+\.[a-z]+$/);
+      // The live-sync hub refuses anything its wire schema can't carry.
+      expect(WsEventTypeSchema.parse(type)).toBe(type);
       expect(isGameEventType(type)).toBe(true);
       expect(GameEventTypeSchema.parse(type)).toBe(type);
     }

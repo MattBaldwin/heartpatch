@@ -4,6 +4,7 @@ build/
 .env
 .env.*
 !.env.example
+!infra/compose/.env.prod.example
 *.log
 .DS_Store
 coverage/

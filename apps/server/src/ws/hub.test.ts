@@ -183,6 +183,35 @@ describe('WsHub catch-up races', () => {
     expect(late.sent).toEqual([]);
   });
 
+  it('logs a view that throws (a bad stored payload) and skips just that event', async () => {
+    const { repo, pending } = gatedRepo(3);
+    const errors: unknown[] = [];
+    const logger = {
+      error: (obj: unknown) => errors.push(obj),
+      warn: () => undefined,
+    } as unknown as FastifyBaseLogger;
+    const views: PublicViews = {
+      'test.pinged': definePublicView({
+        schema: z.object({}),
+        build: (event) => {
+          if (event.seq === 2) throw new Error('payload does not match its schema');
+          return {};
+        },
+      }),
+    };
+    const hub = createWsHub({ repo, views, sessionIsValid: () => Promise.resolve(true), logger });
+    const socket = new FakeSocket();
+    hub.accept(socket as unknown as WebSocket, USER, 'token');
+    socket.receive({ v: 1, type: 'subscribe', mapId: MAP_A, afterSeq: 0 });
+    await until(() => pending.length === 1);
+    pending[0]!.release();
+    await until(() => socket.sent.some((m) => m.type === 'ws.subscribed'));
+
+    expect(seqs(socket)).toEqual([1, 3]);
+    expect(errors).toEqual([expect.objectContaining({ seq: 2, type: 'test.pinged' })]);
+    await hub.close();
+  });
+
   it('refuses a public view for an event type clients cannot parse', () => {
     const { repo } = gatedRepo(0);
     const views: PublicViews = { tile_updated: VIEWS['test.pinged'] };

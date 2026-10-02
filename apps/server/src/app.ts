@@ -1,3 +1,4 @@
+import { BlockList, isIPv6 } from 'node:net';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
@@ -47,7 +48,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const clock = options.clock ?? createClock(config);
   const app = Fastify({
     logger: options.logger ?? defaultLogger(config),
-    trustProxy: config.TRUST_PROXY,
+    trustProxy: config.TRUST_PROXY ? trustOneProxyHop : false,
   });
 
   app.setValidatorCompiler(validatorCompiler);
@@ -119,6 +120,25 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   );
 
   return app;
+}
+
+/** Private and loopback ranges: where Caddy sits on the Docker network. */
+const proxyNetworks = new BlockList();
+proxyNetworks.addSubnet('10.0.0.0', 8);
+proxyNetworks.addSubnet('172.16.0.0', 12);
+proxyNetworks.addSubnet('192.168.0.0', 16);
+proxyNetworks.addSubnet('127.0.0.0', 8);
+proxyNetworks.addSubnet('fc00::', 7, 'ipv6');
+proxyNetworks.addAddress('::1', 'ipv6');
+
+/**
+ * Exactly one proxy (Caddy) sits in front, so trust one hop: the direct peer,
+ * and only when it's on a private network. `trustProxy: true` would trust every
+ * X-Forwarded-For entry, letting a client spoof its IP past per-IP rate limits.
+ * (Fastify treats a numeric hop count as "trust nothing", so it can't be used.)
+ */
+export function trustOneProxyHop(address: string, hop: number): boolean {
+  return hop === 0 && proxyNetworks.check(address, isIPv6(address) ? 'ipv6' : 'ipv4');
 }
 
 function defaultLogger(config: Config): FastifyServerOptions['logger'] {
