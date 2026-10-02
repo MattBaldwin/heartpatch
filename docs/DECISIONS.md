@@ -190,3 +190,15 @@ _Proposed in the #13 PR; the project owner confirms on merge._
 - **A content-hash mismatch ends the battle as `no-contest`** on the next read or action: no winner, no XP, the state kept as it was, `battle.ended` with `reason: 'no-contest'`. Wild battles cost no attempt; tile battles (#14) refund theirs at that point.
 - **Dev-only grants** (`HP_DEV_SQUISHY_GRANTS`, refused in production) hand a player a squishy and start a battle against a chosen wild squishy, through the same `startAgainst` spawns will call. The real acquisition rules (wild spawns and capture, the tutorial's starter) are #14's and #24's; nothing here decides them.
 - **The battle camera is the map camera.** The arena is a `SceneBuilder` on the shared stage (tech spec §6: one engine, scenes swapped), with the squishies at close-up scale and pan all but locked; a dedicated battle camera can come with polish.
+
+## 2026-10-02 — Resources, gathering and inventory (#17)
+
+_Proposed in the #17 PR; the project owner confirms on merge._
+
+- **The inventory contract is small and transactional** (coordinator-set for #17 and #14): `inventory_items (map_id, user_id, item_id, quantity ≥ 0)`, a missing row is 0, and other modules move items only with `grantItems(tx, owner, items)` / `consumeItems(tx, owner, items)` inside their own transaction. `consumeItems` locks the rows in id order and throws `CONFLICT` ("You need 1 more Heart Charm first!") with nothing changed if anything is short. *Why:* captures, buildings and trades must pay and get paid in the same commit as the change (CLAUDE.md rule 7).
+- **A gather's yield is fixed when it starts.** The node's quantity plus any in-season extras is stored on the gather, and a gather started in season finishes after the season ends. *Why:* collecting a little late must never change what a kid gets.
+- **Witch Dust is a Halloween bonus on Emberwood and Pumpkin gathers** (`gather.extras`, `// TUNE:`), because map generation places no Witch Dust nodes. Flagged to the coordinator; a Witch Dust node or terrain can replace it later as a data change.
+- **The node belongs to the tile's owner.** If a tile changes hands mid-gather, the old owner can't collect it, and the new owner's first gather there marks it `lost`. Only the current owner's gather shows as "gathering here" on the public tile.
+- **One craft at a time per player per map**, inputs used up front (`// TUNE:` if kids want a queue). Seasonal recipes only start in season; leftover seasonal items stay as keepsakes (design doc §15).
+- **The client counts down on the server's clock.** Every inventory reply carries `now`, so a phone with the wrong time, or a dev server on a Halloween date, shows the right time left.
+- **The Bag button sits bottom left above "My patches"** and steps aside while the tile panel is open; the panel's own button gathers and collects. Not on the Tutorial Glade yet (#24 adds the gather step).

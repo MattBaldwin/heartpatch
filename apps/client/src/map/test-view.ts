@@ -37,6 +37,7 @@ export function testView(players = 1, seed = 'map-render-test'): MapView {
       ownerUserId: t.homeSlot !== null && t.homeSlot < players ? userId(t.homeSlot + 1) : null,
       nodeResource: t.nodeResource,
       homeSlot: t.homeSlot,
+      gathering: null,
     }))
     .sort((a, b) => a.q - b.q || a.r - b.r);
   return {

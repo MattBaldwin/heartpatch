@@ -13,6 +13,10 @@ import { createIdempotencyStore } from './db/idempotency-keys.js';
 import { registerIdempotency } from './lib/idempotency.js';
 import { battlesRoutes } from './modules/battles/routes.js';
 import { createBattlesService } from './modules/battles/service.js';
+import { gatheringRoutes } from './modules/gathering/routes.js';
+import { createGatheringService } from './modules/gathering/service.js';
+import { inventoryRoutes } from './modules/inventory/routes.js';
+import { createInventoryService } from './modules/inventory/service.js';
 import { createAuthRepo } from './modules/auth/repo.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { hashSessionToken } from './modules/auth/secrets.js';
@@ -149,6 +153,23 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             idempotency: (plugin) =>
               registerIdempotency(plugin, { store: idempotencyStore, clock }),
             devGrants: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+
+        const publish = wsHub ? { publish: wsHub.publish } : {};
+        const idempotency = (plugin: Parameters<typeof registerIdempotency>[0]) =>
+          registerIdempotency(plugin, { store: idempotencyStore, clock });
+        await api.register(
+          inventoryRoutes(createInventoryService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+            devGrants: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        await api.register(
+          gatheringRoutes(createGatheringService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
           }),
         );
       }

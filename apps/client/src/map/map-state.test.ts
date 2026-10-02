@@ -1,4 +1,4 @@
-import type { WsEventMessage } from '@heartpatch/shared';
+import { hexKey, type WsEventMessage } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { MapState } from './map-state.js';
 import { MAP_ID, testView, userId } from './test-view.js';
@@ -57,6 +57,23 @@ describe('MapState', () => {
     const before = state.view;
     expect(state.apply(event('chat.quick', { text: 'hi' }))).toBe('none');
     expect(state.view).toBe(before);
+  });
+
+  it("clears a tile's gathering when its gather is collected (#17)", () => {
+    const view = testView(1);
+    const node = view.tiles.find((t) => t.ownerUserId === userId(1) && t.nodeResource)!;
+    const gathering = { readyAt: '2026-10-02T12:15:00.000Z' };
+    const state = new MapState({
+      ...view,
+      tiles: view.tiles.map((t) => (t === node ? { ...t, gathering } : t)),
+    });
+    const key = hexKey(node);
+    expect(state.tileAt(key)?.gathering).toEqual(gathering);
+    const collected = { userId: userId(1), q: node.q, r: node.r, resource: node.nodeResource };
+    expect(state.apply(event('resource.gathered', collected))).toBe('none');
+    expect(state.tileAt(key)?.gathering).toBeNull();
+    expect(state.view.tiles.find((t) => t.q === node.q && t.r === node.r)?.gathering).toBeNull();
+    expect(state.apply(event('resource.gathered', { q: 'here' }))).toBe('resync');
   });
 
   it('swaps in a fresh view and re-indexes it', () => {

@@ -66,6 +66,21 @@ export class MapState {
       case 'member.left':
       case 'member.removed':
         return 'resync';
+      case 'resource.gathered': {
+        // The gather on that tile is collected: nobody's gathering there now.
+        const parsed = GAME_EVENTS['resource.gathered'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const key = hexKey(parsed.data);
+        const tile = this.byHex.get(key);
+        if (!tile?.gathering) return 'none';
+        const next = { ...tile, gathering: null };
+        this.byHex.set(key, next);
+        this.current = {
+          ...this.current,
+          tiles: this.current.tiles.map((t) => (t === tile ? next : t)),
+        };
+        return 'none';
+      }
       default:
         // Types this map doesn't draw (yet). Tile events arrive with their
         // issue (#13) and are applied here then.

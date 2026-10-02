@@ -204,6 +204,11 @@ export const PublicTileSchema = z.object({
   nodeResource: z.string().nullable(),
   /** Set on a home base's tiles: whose slot (`MapMember.homeSlot`) it is. */
   homeSlot: z.number().int().nullable(),
+  /**
+   * The owner is gathering this tile's node (#17), ready at this time; null
+   * when nobody is. What it will yield is only in the owner's own inventory.
+   */
+  gathering: z.object({ readyAt: z.iso.datetime() }).nullable(),
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 

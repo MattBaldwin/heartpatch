@@ -1,4 +1,5 @@
 import type { BattleDebug } from '../battle/battle-screen.js';
+import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
@@ -28,6 +29,8 @@ declare global {
       updatesHeld?(): boolean;
       /** The open battle as shown (turn, phase, bar energies, pending steps), or null. */
       battle?(): BattleDebug | null;
+      /** The open map's bag, gathers and the tile panel's gather action (#17), or null. */
+      inventory?(): InventoryDebug | null;
     };
   }
 }

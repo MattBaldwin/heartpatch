@@ -32,6 +32,7 @@ describe('findHomeBases', () => {
       ownerUserId: null,
       nodeResource: null,
       homeSlot: 0,
+      gathering: null,
     });
     // Five of the six neighbours: no tile is surrounded, so no Heart Seed.
     const tiles = [tile(0, 0), ...HEX_DIRECTIONS.slice(0, 5).map((d) => tile(d.q, d.r))];
@@ -48,6 +49,7 @@ describe('tintSlot', () => {
     ownerUserId: owner,
     nodeResource: null,
     homeSlot: null,
+    gathering: null,
   });
 
   it("uses the owner's home slot", () => {
@@ -90,6 +92,7 @@ describe('propPlacements', () => {
     ownerUserId: null,
     nodeResource: 'timber',
     homeSlot: null,
+    gathering: null,
   };
   const look = TERRAIN_LOOKS['forest']!;
 
