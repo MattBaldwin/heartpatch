@@ -379,19 +379,25 @@ class Step {
     this.emit({ turn: this.state.turn, type: 'battle-end', winner, reason });
     this.state.phase = {
       type: 'over',
-      result: { winner, reason, turns: this.state.turn, xp: this.xpAwards(winner) },
+      result: { winner, reason, turns: this.state.turn, xp: this.xpAwards(winner, reason) },
     };
   }
 
-  /** Base battle XP for every squishy that came out (battle rules `xp`). */
-  private xpAwards(winner: BattleSideId | 'draw'): BattleXpAward[] {
+  /**
+   * Base battle XP for every squishy that came out (battle rules `xp`). A
+   * side that runs away earns nothing, and the `minimum` only counts once a
+   * turn was played, so "start a battle, run away" is never an XP loop.
+   */
+  private xpAwards(winner: BattleSideId | 'draw', reason: BattleEndReason): BattleXpAward[] {
     const { perOpponentLevel, winMultiplier, minimum } = this.content.rules.xp;
+    const floor = this.state.turn > 0 ? minimum : 0;
     return SIDES.flatMap((side) => {
       const levels = this.state.sides[otherSide(side)].squishies
         .filter((s) => s.energy === 0)
         .reduce((sum, s) => sum + s.level, 0);
       const multiplier = winner === side ? winMultiplier : 1;
-      const xp = Math.max(minimum, Math.floor(perOpponentLevel * levels * multiplier));
+      const ranAway = reason === 'forfeit' && winner !== side;
+      const xp = ranAway ? 0 : Math.max(floor, Math.floor(perOpponentLevel * levels * multiplier));
       return this.state.sides[side].squishies
         .filter((s) => s.joined)
         .map((s) => ({ side, squishyId: s.id, xp }));
@@ -403,6 +409,10 @@ class Step {
  * Applies one action and returns the next state. Pure: `state` and `action`
  * are not changed, and the same inputs always give the same result. Throws
  * `BattleRuleError` for an action the current phase doesn't allow.
+ *
+ * `action` is trusted to match `BattleActionSchema`: the API or WebSocket
+ * layer parses it at the boundary (CLAUDE.md). The rule checks here still
+ * reject unknown moves and slots.
  */
 export function applyBattleAction(
   content: BattleContent,
@@ -433,6 +443,9 @@ export function applyBattleAction(
       break;
     }
     case 'forfeit':
+      if (state.sides[action.side].controller.type === 'ai') {
+        throw new BattleRuleError(`side ${action.side} is AI-controlled; it can't forfeit`);
+      }
       step.emit({ turn: state.turn, type: 'forfeit', side: action.side });
       step.end(otherSide(action.side), 'forfeit');
       break;
@@ -474,6 +487,18 @@ export function autoplayBattle(
     state = applyBattleAction(content, state, action);
   }
   return { state, actions };
+}
+
+/** A battle as a client may see it: everything but the RNG state. */
+export type ClientBattleView = Omit<BattleState, 'rng'>;
+
+/**
+ * What the server sends players. The RNG state (and the setup's seed) would
+ * let a client predict every roll, so they never leave the server.
+ */
+export function clientBattleView(state: BattleState): ClientBattleView {
+  const { version, turn, sides, phase, log } = state;
+  return { version, turn, sides, phase, log };
 }
 
 /** Every choice a side could legally make this turn (for the UI and tests). */

@@ -3,7 +3,7 @@ import type { BattleRules } from '../schemas/data/battle.js';
 /** Battle tunables (design doc §6–7). Checked by `checkBattleRules` in tests. */
 export const BATTLE_RULES: BattleRules = {
   teamSize: 3, // TUNE: design doc §6 [DEFAULT: 3]
-  maxTurns: 100, // TUNE:
+  maxTurns: 50, // TUNE: long enough to finish, short enough for a phone session
 
   // TUNE: stats land near a classic monster-battler curve (a 50 base stat
   // is 15 at level 10 and 55 at level 50).

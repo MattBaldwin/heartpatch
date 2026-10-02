@@ -148,6 +148,119 @@ describe('replay (design doc §6: every battle replays from its seed and action 
     expect(findAvoidedWords([...types].join(' '))).toEqual([]);
   });
 
+  it('matches a pinned golden battle, so a change that alters outcomes breaks loudly', () => {
+    // Changing this snapshot means stored replays no longer reproduce: only
+    // do it on purpose, with a plan for battles already stored.
+    const setup = battleSetup(
+      'golden',
+      {
+        controller: ai('balanced'),
+        squishies: [squishy('fixture-emberbun'), squishy('fixture-puddlepuff', { level: 12 })],
+      },
+      {
+        controller: ai('guardian'),
+        squishies: [squishy('fixture-twirlysprout'), squishy('fixture-pebblesnooze')],
+      },
+    );
+    const { state, actions } = autoplayBattle(content, setup);
+    expect({
+      actions: actions.length,
+      events: state.log.length,
+      rng: state.rng,
+      phase: state.phase,
+      firstEvents: state.log.slice(0, 6),
+    }).toMatchInlineSnapshot(`
+      {
+        "actions": 13,
+        "events": 58,
+        "firstEvents": [
+          {
+            "move": "fixture-zippy-zoom",
+            "side": "a",
+            "slot": 0,
+            "turn": 1,
+            "type": "move",
+          },
+          {
+            "amount": 15,
+            "effectiveness": "super",
+            "energy": 16,
+            "side": "b",
+            "slot": 0,
+            "turn": 1,
+            "type": "hit",
+          },
+          {
+            "side": "a",
+            "slot": 0,
+            "stages": 2,
+            "stat": "speed",
+            "total": 2,
+            "turn": 1,
+            "type": "stat-change",
+          },
+          {
+            "move": "fixture-lullaby",
+            "side": "b",
+            "slot": 0,
+            "turn": 1,
+            "type": "move",
+          },
+          {
+            "side": "a",
+            "slot": 0,
+            "status": "sleepy",
+            "turn": 1,
+            "type": "status-start",
+          },
+          {
+            "side": "a",
+            "slot": 0,
+            "status": "sleepy",
+            "turn": 2,
+            "type": "status-skip",
+          },
+        ],
+        "phase": {
+          "result": {
+            "reason": "tuckered-out",
+            "turns": 13,
+            "winner": "a",
+            "xp": [
+              {
+                "side": "a",
+                "squishyId": "a:emberbun",
+                "xp": 120,
+              },
+              {
+                "side": "a",
+                "squishyId": "a:puddlepuff",
+                "xp": 120,
+              },
+              {
+                "side": "b",
+                "squishyId": "b:twirlysprout",
+                "xp": 40,
+              },
+              {
+                "side": "b",
+                "squishyId": "b:pebblesnooze",
+                "xp": 40,
+              },
+            ],
+          },
+          "type": "over",
+        },
+        "rng": [
+          114766198,
+          1096223947,
+          2406548053,
+          2118965419,
+        ],
+      }
+    `);
+  });
+
   it('only autoplays battles where both sides are AI', () => {
     expect(() => autoplayBattle(content, randomSetup('x', PLAYER, ai('wild')))).toThrow(/side a/);
     expect(() => autoplayBattle(content, randomSetup('x', ai('wild'), PLAYER))).toThrow(/side b/);

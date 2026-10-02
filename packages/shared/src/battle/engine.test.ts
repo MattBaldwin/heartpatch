@@ -17,7 +17,7 @@ import type {
   BattleSetup,
 } from '../schemas/battle.js';
 import { BattleRuleError, createBattleContent, type BattleContent } from './content.js';
-import { applyBattleAction, legalChoices, startBattle } from './engine.js';
+import { applyBattleAction, clientBattleView, legalChoices, startBattle } from './engine.js';
 import type { BattleEvent, BattleState } from './state.js';
 
 const move = (id: string): BattleChoice => ({ type: 'move', move: `fixture-${id}` });
@@ -383,12 +383,39 @@ describe('tuckered out, replacements and the end', () => {
       result: { winner: 'b', reason: 'forfeit', turns: 0 },
     });
     expect(ran.log.map((e) => e.type)).toEqual(['forfeit', 'battle-end']);
+    // Running away before a turn is played earns nobody XP: no free XP loop.
+    expect(ran.phase).toMatchObject({
+      result: {
+        xp: [
+          { squishyId: 'a:emberbun', xp: 0 },
+          { squishyId: 'b:twirlysprout', xp: 0 },
+        ],
+      },
+    });
 
     const waiting = turn(state, move('tickle-tackle'), move('leafy-boop'));
     const gaveUp = applyBattleAction(content, waiting, { type: 'forfeit', side: 'b' });
-    expect(gaveUp.phase).toMatchObject({ result: { winner: 'a', turns: 1 } });
+    expect(gaveUp.phase).toMatchObject({
+      result: {
+        winner: 'a',
+        turns: 1,
+        xp: [
+          // 4 × level 5 tuckered out × 1.5 for the win.
+          { squishyId: 'a:emberbun', xp: 30 },
+          // The side that ran away earns nothing.
+          { squishyId: 'b:twirlysprout', xp: 0 },
+        ],
+      },
+    });
     expect(() => applyBattleAction(content, gaveUp, { type: 'forfeit', side: 'a' })).toThrow(
       BattleRuleError,
+    );
+  });
+
+  it("doesn't let an AI side forfeit", () => {
+    const state = lopsided(ai('wild'));
+    expect(() => applyBattleAction(content, state, { type: 'forfeit', side: 'b' })).toThrow(
+      /AI-controlled/,
     );
   });
 
@@ -496,6 +523,15 @@ describe('purity (tech spec §8)', () => {
       state = deepFreeze(next);
     }
     expect(state.turn).toBeGreaterThan(0);
+  });
+
+  it('gives clients a view without the RNG state', () => {
+    const state = duel('view', 'emberbun', 'twirlysprout');
+    const view = clientBattleView(state);
+    expect(view).not.toHaveProperty('rng');
+    const { rng, ...rest } = state;
+    expect(rng).toHaveLength(4);
+    expect(view).toEqual(rest);
   });
 
   it('keeps state as plain JSON', () => {
