@@ -1,0 +1,196 @@
+/* The Hollow Man (#21). Big text, 44pt+ targets, safe areas, one-handed:
+   the Hollow button sits bottom left, above Home and the raid Report (#16); the morning report and the
+   rescue sheet are bottom cards, like the tile panel. Dusky, not dark. */
+
+.hollow-open {
+  position: fixed;
+  z-index: 4;
+  left: calc(env(safe-area-inset-left) + 16px);
+  bottom: calc(env(safe-area-inset-bottom) + 312px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border: none;
+  border-radius: 999px;
+  background: #f1ecff;
+  box-shadow: 0 4px 14px rgb(62 45 110 / 25%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4b3a7a;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hollow-open:active {
+  transform: scale(0.95);
+}
+
+.hollow-open-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.hollow-open-label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hollow-open-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #ffcf6e;
+  color: #4b3a7a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 22px;
+  text-align: center;
+}
+
+.hollow-open[hidden],
+.hollow-open-badge[hidden],
+.hollow-card[hidden] {
+  display: none;
+}
+
+.hollow-card {
+  position: fixed;
+  z-index: 5;
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  /* Sits above the "My patches" button in the bottom corner. */
+  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  box-sizing: border-box;
+  max-width: 420px;
+  max-height: 70vh;
+  overflow-y: auto;
+  margin: 0 auto;
+  padding: 16px 18px 18px;
+  border-radius: 24px;
+  background: #f7f3ff;
+  box-shadow: 0 8px 28px rgb(46 42 77 / 30%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #3d2f5c;
+}
+
+.hollow-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.hollow-line {
+  margin: 0 0 8px;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.hollow-sub {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #6b5b8f;
+}
+
+.hollow-note {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #7a2d55;
+}
+
+.hollow-note:empty {
+  display: none;
+}
+
+.hollow-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.hollow-button {
+  min-height: 44px;
+  flex: 1 1 auto;
+}
+
+.hollow-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hollow-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.hollow-list-name {
+  font-size: 17px;
+  font-weight: 700;
+  /* Taken to the Hollow: greyed (design doc §14), until rescued. */
+  color: #8a8199;
+}
+
+.hollow-list-row .hollow-button {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* A squishy as a little round token in its own colour; greyed while it's in
+   the Hollow (design doc §14), with sleepy eyes. */
+.hollow-token {
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 34px;
+  border-radius: 50% 50% 44% 44%;
+  background: var(--squishy-color, #b9a8d9);
+  box-shadow: inset 0 -5px 0 rgb(0 0 0 / 12%);
+}
+
+.hollow-token::before,
+.hollow-token::after {
+  content: '';
+  position: absolute;
+  top: 13px;
+  width: 7px;
+  height: 3px;
+  border-radius: 3px;
+  background: #fff6dc;
+}
+
+.hollow-token::before {
+  left: 10px;
+}
+
+.hollow-token::after {
+  right: 10px;
+}
+
+.hollow-token-grey {
+  filter: grayscale(1) brightness(1.4);
+  opacity: 0.75;
+}
+
+.hollow-tokens {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* Text for screen readers only. */
+.hollow-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

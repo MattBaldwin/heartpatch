@@ -6,6 +6,7 @@ import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
 import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
 import { MoodIdSchema } from './data/care.js';
+import { RaidOutcomeSchema } from './raids.js';
 import { LocalDateSchema } from './time.js';
 
 /**
@@ -262,6 +263,29 @@ export const GAME_EVENTS = {
     public: z.object({ userId: z.uuid(), ...coords, count: z.number().int().min(0) }),
   },
   /**
+   * A challenge on a player's land finished and is in their raid log (#16),
+   * written by the raid-log consumer after the battle's `battle.ended`.
+   * Members see who, where and how it went (the tile events already showed
+   * that much). The report itself is fetched when the defender opens the map.
+   */
+  'raid.resolved': {
+    internal: z.strictObject({
+      raidId: z.uuid(),
+      battleId: z.uuid(),
+      attackerUserId: z.uuid(),
+      defenderUserId: z.uuid(),
+      ...coords,
+      outcome: RaidOutcomeSchema,
+    }),
+    public: z.object({
+      raidId: z.uuid(),
+      attackerUserId: z.uuid(),
+      defenderUserId: z.uuid(),
+      ...coords,
+      outcome: RaidOutcomeSchema,
+    }),
+  },
+  /**
    * A player put up a building on their home base (#18). Members see it on
    * the map (fires and habitats are public).
    */
@@ -403,8 +427,52 @@ export const GAME_EVENTS = {
     public: z.object({ userId: z.uuid(), squishyId: z.uuid(), nickname: z.string().nullable() }),
   },
   /**
-   * A player found a piece of clothing (#43): a lucky drop from a gather (and
-   * later a capture or a rescue). Clothing is account-level; the event goes on
+   * Night fell on the map (#21, design doc §14): the Hollow Man came by.
+   * Every member sees who lost a squishy to the Hollow; which one stays
+   * internal (the owner hears it from `squishy.hollowed`).
+   */
+  'hollow.nightfall': {
+    internal: z.strictObject({
+      /** The night, as the map-local date its nightfall falls on. */
+      night: LocalDateSchema,
+      taken: z.array(z.strictObject({ userId: z.uuid(), squishyId: z.uuid() })),
+    }),
+    public: z.object({
+      night: LocalDateSchema,
+      /** Players who lost a squishy to the Hollow tonight (`z.object` strips which one). */
+      taken: z.array(z.object({ userId: z.uuid() })),
+    }),
+  },
+  /**
+   * The Hollow Man took one of a player's squishies to the Hollow (#21). Only
+   * its owner gets this live (`PUBLIC_VIEWS` override); others see
+   * `hollow.nightfall`.
+   */
+  'squishy.hollowed': {
+    internal: z.strictObject({ userId: z.uuid(), squishyId: z.uuid(), night: LocalDateSchema }),
+    public: z.object({ userId: z.uuid(), squishyId: z.uuid(), night: LocalDateSchema }),
+  },
+  /**
+   * A rescue expedition brought a squishy home from the Hollow (#21). Only
+   * its owner gets this live (`PUBLIC_VIEWS` override).
+   */
+  'squishy.rescued': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      battleId: z.uuid(),
+      /** Heartdust earned (0 once today's rescue rewards are used up). */
+      heartdust: z.number().int().min(0),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      heartdust: z.number().int().min(0),
+    }),
+  },
+  /**
+   * A player found a piece of clothing (#43): a lucky drop from a gather or a rescue
+   * (#21; later a capture). Clothing is account-level; the event goes on
    * the map where it was found. What caused it stays internal.
    */
   'clothing.found': {

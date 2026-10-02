@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), and `care_log`, `squishy_evolutions` plus the squishies' care columns (#19). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), `care_log`, `squishy_evolutions` plus the squishies' care columns (#19), and `raids` plus `map_members.defense_stance` (#16). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -103,6 +103,7 @@ One active code per user: a partial unique index on `user_id` where `used_at is 
 | `status` | enum `map_member_status` | `active` \| `removed` |
 | `home_slot` | smallint, null | Which home base (`tiles.home_slot`) is theirs. Unique per map among active members. A removed member keeps the old value but holds no slot |
 | `joined_at` | timestamptz | |
+| `defense_stance` | enum `defense_stance`, default `'balanced'` | How their squishies on watch play when challenged (#16): `aggressive` \| `defensive` \| `balanced` (UI: Bold, Careful, Balanced). Read under the member lock in a challenge's start transaction |
 
 The 2–4 players-per-map limit is a game rule, enforced by the maps service under a row lock (apps/server/README.md, "Maps").
 
@@ -189,7 +190,7 @@ Tiles are written once, from `generateMap`, when the map is created.
 |---|---|---|
 | `id` | uuid PK | |
 | `map_id` | uuid → maps | Cascade delete. Indexed with `player_user_id` |
-| `kind` | enum `battle_kind` | `wild`, `tile` (a neutral tile's guardians, #15) or `rival-tile` (another player's tile, #15). Tile battles have a `tile_attacks` row |
+| `kind` | enum `battle_kind` | `wild`, `tile` (a neutral tile's guardians, #15), `rival-tile` (another player's tile, #15) or `rescue` (the Hollow's shadow guardians, #21). Tile battles have a `tile_attacks` row; rescues a `hollow_rescues` row |
 | `status` | enum `battle_status` | `active` \| `finished` \| `no-contest` (the server called it off: content re-tuned mid-battle). One `active` per player per map (partial unique index) |
 | `player_user_id` | uuid | The player on side `a`. FK `(map_id, player_user_id)` → `map_members` |
 | `seed` | text | From `newSeed()`. **Server-only while active**; revealed by the API after the end (tech spec §8) |
@@ -232,6 +233,49 @@ Squishies standing watch on their owner's tiles (#15, decision C), up to `TERRIT
 | `assigned_at` | timestamptz | |
 
 Rows only count while the squishy's owner still owns the tile and it isn't in the Hollow. A capture and `releaseTiles` (leaving or removal) delete the tile's rows: the squishies go home.
+
+### `raids`
+The raid log (#16): one row per finished challenge on a player's land (a `rival-tile` battle), written by the `raid-log` event consumer from `battle.ended` (tech spec §7 "Event consumers"). The defender's report lists them and marks them seen.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `battle_id` | uuid → battles | Unique (the consumer's insert is idempotent on it). Cascade delete. The replay reads the battle |
+| `tile_id` | uuid → tiles | Cascade delete |
+| `attacker_user_id` | uuid | |
+| `defender_user_id` | uuid | FK `(map_id, defender_user_id)` → `map_members`. Indexed `(map_id, defender_user_id, resolved_at)` |
+| `outcome` | enum `raid_outcome` | From the defender's side: `held` (won, or the challenger left) \| `tie` \| `lost` (lost the showdown, land didn't move) \| `taken` \| `no-contest` |
+| `reason` | text | `battle.ended`'s reason (`tuckered-out`, `forfeit`, `turn-limit`, `no-contest`) |
+| `stance` | enum `defense_stance`, null | The style the defenders played with; null when the land's guardians stood in |
+| `resolved_at` | timestamptz | When the battle ended |
+| `seen_at` | timestamptz, null | When the defender saw it in their report |
+
+### `hollow_events`
+One row per map per night the Hollow Man came by (#21, design doc §14): the guard that makes nightfall idempotent, and what the morning report reads. Server-only.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `night` | date | The map-local date the nightfall fell on. Unique with `map_id` |
+| `ran_at` | timestamptz | |
+| `outcomes` | jsonb | Every active member's result: `{ userId, taken (squishy id or null), exposed, sheltered }` |
+
+### `hollow_rescues`
+Rescue expeditions (#21, decision C): which squishy a `rescue` battle is for, and how it went.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `user_id` | uuid | FK `(map_id, user_id)` → `map_members` |
+| `squishy_id` | uuid → squishies | Cascade delete. Indexed |
+| `battle_id` | uuid → battles | Unique. Cascade delete |
+| `outcome` | enum | `active`, `rescued`, `lost`, `no-contest` |
+| `heartdust` | smallint | Heartdust it earned (0 past the daily cap). The cap counts rows with `heartdust > 0` by map-local day (`(map_id, user_id, ended_at)` index) |
+| `started_at` | timestamptz | |
+| `ended_at` | timestamptz, null | The battle's end (game clock) |
 
 ### `species_seen`
 | Column | Type | Notes |

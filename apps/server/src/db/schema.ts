@@ -39,12 +39,15 @@ export const mapMemberStatus = pgEnum('map_member_status', ['active', 'removed']
 export const squishyState = pgEnum('squishy_state', ['active', 'hollowed']);
 /** Map owner's PvP setting (design doc §11, decision B). */
 export const pvpMode = pgEnum('pvp_mode', ['on', 'gentle', 'off']);
+/** How a player's squishies on watch play (design doc §6, #16). Mirrors `DefenseStanceSchema`. */
+export const defenseStance = pgEnum('defense_stance', ['aggressive', 'defensive', 'balanced']);
 export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'approved', 'denied']);
 /**
  * Battle kinds (design doc §6): a wild squishy, a neutral tile's guardians
- * (`tile`, #15) and another player's tile defenders (`rival-tile`, #15).
+ * (`tile`, #15), another player's tile defenders (`rival-tile`, #15) and the
+ * Hollow's shadow guardians (`rescue`, #21).
  */
-export const battleKind = pgEnum('battle_kind', ['wild', 'tile', 'rival-tile']);
+export const battleKind = pgEnum('battle_kind', ['wild', 'tile', 'rival-tile', 'rescue']);
 /** `no-contest`: the server called it off (content re-tuned mid-battle). */
 export const battleStatus = pgEnum('battle_status', ['active', 'finished', 'no-contest']);
 
@@ -154,6 +157,9 @@ export const mapMembers = pgTable(
     // A removed member keeps the old value, but only active members hold a slot.
     homeSlot: smallint('home_slot'),
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
+    // How their squishies on watch play when challenged (#16); per map.
+    // The default is `RAID_RULES.defaultStance`.
+    defenseStance: defenseStance('defense_stance').notNull().default('balanced'),
   },
   (t) => [
     primaryKey({ columns: [t.mapId, t.userId] }),
@@ -772,6 +778,74 @@ export const tileDefenders = pgTable(
 );
 
 /**
+ * One row per map per night the Hollow Man came by (#21, design doc §14):
+ * the guard that makes nightfall idempotent (a retry, a second job or a
+ * restart finds the row and takes nothing more), and the record the morning
+ * report reads. `night` is the map-local date the nightfall fell on.
+ * `outcomes` holds every active member's result: `{ userId, taken (squishy id
+ * or null), exposed, sheltered }`. Server-only.
+ */
+export const hollowEvents = pgTable(
+  'hollow_events',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    night: date('night', { mode: 'string' }).notNull(),
+    ranAt: timestamptz('ran_at').notNull(),
+    outcomes: jsonb('outcomes').notNull().default([]),
+  },
+  (t) => [unique('hollow_events_map_id_night_key').on(t.mapId, t.night)],
+);
+
+export const hollowRescueOutcome = pgEnum('hollow_rescue_outcome', [
+  'active',
+  'rescued',
+  'lost',
+  'no-contest',
+]);
+
+/**
+ * Rescue expeditions (#21, design doc §14, decision C): which squishy a
+ * `rescue` battle is for, how it went, and the Heartdust it earned (the daily
+ * reward cap counts these by map-local day). Settled by the `hollow` event
+ * consumer when the battle ends.
+ */
+export const hollowRescues = pgTable(
+  'hollow_rescues',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    squishyId: uuid('squishy_id')
+      .notNull()
+      .references(() => squishies.id, { onDelete: 'cascade' }),
+    battleId: uuid('battle_id')
+      .notNull()
+      .references(() => battles.id, { onDelete: 'cascade' }),
+    outcome: hollowRescueOutcome('outcome').notNull().default('active'),
+    heartdust: smallint('heartdust').notNull().default(0),
+    startedAt: timestamptz('started_at').notNull(),
+    endedAt: timestamptz('ended_at'),
+  },
+  (t) => [
+    unique('hollow_rescues_battle_id_key').on(t.battleId),
+    foreignKey({
+      name: 'hollow_rescues_user_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // Rewarded rescues today (the daily Heartdust cap).
+    index('hollow_rescues_map_id_user_id_idx').on(t.mapId, t.userId, t.endedAt),
+    index('hollow_rescues_squishy_id_idx').on(t.squishyId),
+    check('hollow_rescues_heartdust_nonnegative', sql`${t.heartdust} >= 0`),
+  ],
+);
+
+/**
  * Clothing a player owns (#43, design doc §23): account-level (tech spec §4),
  * one row per piece, so a trade can later move a single piece. Starter items
  * aren't stored: every account owns them. `source` says how it arrived
@@ -904,5 +978,50 @@ export const squishyEvolutions = pgTable(
     index('squishy_evolutions_unseen_idx')
       .on(t.squishyId)
       .where(sql`${t.seenAt} is null`),
+  ],
+);
+
+/** How a challenge ended for the defender (#16). Mirrors `RaidOutcomeSchema`. */
+export const raidOutcome = pgEnum('raid_outcome', ['held', 'tie', 'lost', 'taken', 'no-contest']);
+
+/**
+ * The raid log (#16, design doc §3 "offline defense"): one row per finished
+ * challenge on a player's land (a `rival-tile` battle), written by the
+ * raid-log event consumer from `battle.ended`. The defender sees new rows in
+ * their report next time they open the map, and marks them seen.
+ */
+export const raids = pgTable(
+  'raids',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    // One row per battle: the consumer's insert is idempotent on it.
+    battleId: uuid('battle_id')
+      .notNull()
+      .references(() => battles.id, { onDelete: 'cascade' }),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    attackerUserId: uuid('attacker_user_id').notNull(),
+    defenderUserId: uuid('defender_user_id').notNull(),
+    outcome: raidOutcome('outcome').notNull(),
+    // `battle.ended`'s reason (`forfeit`: the challenger scooted home).
+    reason: text('reason').notNull(),
+    // The stance the defenders played with; null when the land's guardians stood in.
+    stance: defenseStance('stance'),
+    resolvedAt: timestamptz('resolved_at').notNull(),
+    seenAt: timestamptz('seen_at'),
+  },
+  (t) => [
+    unique('raids_battle_id_key').on(t.battleId),
+    foreignKey({
+      name: 'raids_defender_member_fk',
+      columns: [t.mapId, t.defenderUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // A defender's report, newest first.
+    index('raids_map_id_defender_idx').on(t.mapId, t.defenderUserId, t.resolvedAt),
   ],
 );

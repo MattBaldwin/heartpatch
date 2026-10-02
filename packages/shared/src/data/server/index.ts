@@ -14,6 +14,8 @@ export * from '../../spawns/resolve.js';
 export * from '../../schemas/data/guardian-rules.js';
 export * from '../../territory/guardians.js';
 export { GUARDIAN_RULES } from './guardian-rules.js';
+export * from '../../hollow/rescue-guardians.js';
+export { RESCUE_GUARDIANS } from './rescue-guardians.js';
 export { CLOTHING_DROPS } from './clothing-drops.js';
 export { serverBattleData } from './battle-data.js';
 export { SECRET_EVOLUTIONS, SECRET_MOVES, SECRET_SPECIES } from './secret-species.js';

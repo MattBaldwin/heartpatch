@@ -265,5 +265,33 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
         mapId,
       );
     });
+
+    it('sweeps for due nightfalls at boot and runs one job per map and night (#21)', async () => {
+      const mapId = await newMap();
+      const ran: string[] = [];
+      jobs = await startJobs({
+        connectionString: url!,
+        db,
+        consumers: [],
+        logger,
+        schedule: false,
+        nightfall: {
+          due: () => Promise.resolve([{ mapId, night: '2026-10-31' }]),
+          run: (id, night) => {
+            ran.push(`${id}/${night}`);
+            return Promise.resolve();
+          },
+        },
+      });
+      await eventually(() => Promise.resolve(ran.length > 0));
+      expect(ran[0]).toBe(`${mapId}/2026-10-31`);
+      // Keyed by map and night (`stately`: at most one queued and one running per
+      // key); the night's `hollow_events` row makes any repeat a no-op.
+      expect(await jobs.nightfallSweep()).toBe(1);
+      const rows = await db.execute<{ n: string }>(
+        `select count(*) as n from pgboss.job where name = 'nightfall' and singleton_key = '${mapId}/2026-10-31'`,
+      );
+      expect(Number([...rows][0]!.n)).toBeGreaterThanOrEqual(1);
+    });
   });
 });

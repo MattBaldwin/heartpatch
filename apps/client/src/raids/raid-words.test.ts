@@ -1,0 +1,52 @@
+import { findAvoidedWords, RaidOutcomeSchema, type Raid } from '@heartpatch/shared';
+import { describe, expect, it } from 'vitest';
+import { RAID_TEXT, raidLine, raidStyleLine, STANCES, stanceName } from './raid-words.js';
+
+const raid = (over: Partial<Raid> = {}): Raid => ({
+  id: '0190a000-0000-7000-8000-000000000001',
+  battleId: '0190a000-0000-7000-8000-000000000002',
+  attackerUserId: '0190a000-0000-7000-8000-000000000003',
+  attackerName: 'Pumpkinpal',
+  q: 1,
+  r: -2,
+  outcome: 'held',
+  reason: 'tuckered-out',
+  stance: 'balanced',
+  resolvedAt: '2026-10-02T18:00:00.000Z',
+  seenAt: null,
+  replayable: true,
+  ...over,
+});
+
+describe('raid words', () => {
+  it('names the three styles with the style guide words', () => {
+    expect(STANCES.map((s) => s.name)).toEqual(['Bold', 'Balanced', 'Careful']);
+    expect(stanceName('aggressive')).toBe('Bold');
+    expect(stanceName('defensive')).toBe('Careful');
+  });
+
+  it('says who came by and how it went, gently', () => {
+    expect(raidLine(raid())).toBe('Pumpkinpal tried to visit your land. Your squishies held on!');
+    expect(raidLine(raid({ stance: null }))).toMatch(/guardians held on/);
+    expect(raidLine(raid({ reason: 'forfeit' }))).toMatch(/scooted home/);
+    expect(raidLine(raid({ outcome: 'taken' }))).toMatch(/Everyone came home safe/);
+    expect(raidStyleLine(raid({ stance: 'aggressive' }))).toBe('Style: Bold');
+    expect(raidStyleLine(raid({ stance: null }))).toBeNull();
+  });
+
+  it('never uses an avoided word, whatever happened', () => {
+    const lines = RaidOutcomeSchema.options.flatMap((outcome) =>
+      [null, 'balanced' as const].flatMap((stance) =>
+        (['tuckered-out', 'forfeit'] as const).map((reason) =>
+          raidLine(raid({ outcome, stance, reason })),
+        ),
+      ),
+    );
+    const all = [
+      ...lines,
+      ...Object.values(RAID_TEXT).map((t) => (typeof t === 'string' ? t : t('Bold'))),
+      ...STANCES.flatMap((s) => [s.name, s.hint]),
+    ];
+    for (const line of all) expect(findAvoidedWords(line), line).toEqual([]);
+  });
+});

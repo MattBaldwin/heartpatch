@@ -11,7 +11,8 @@ import { ContentIdSchema } from './data/common.js';
  * Why an inventory changed, stored with every `resource_ledger` row (tech
  * spec §4). Later issues add their own (trades, care). Home base (#18):
  * `build` (a building's cost), `fuel` (Emberwood into a Hearthfire) and
- * `build-refund` (what comes back when a building is taken down).
+ * `build-refund` (what comes back when a building is taken down). The Hollow
+ * Man (#21): `rescue` (Heartdust for bringing a squishy home).
  */
 export const ItemChangeReasonSchema = z.enum([
   'gather',
@@ -22,6 +23,7 @@ export const ItemChangeReasonSchema = z.enum([
   'fuel',
   'build-refund',
   'care',
+  'rescue',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

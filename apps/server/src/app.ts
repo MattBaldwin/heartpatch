@@ -18,11 +18,15 @@ import { careRoutes } from './modules/care/routes.js';
 import { createCareService } from './modules/care/service.js';
 import { createBattlesService } from './modules/battles/service.js';
 import { gatheringRoutes } from './modules/gathering/routes.js';
+import { hollowRoutes } from './modules/hollow/routes.js';
+import { createHollowService, type HollowService } from './modules/hollow/service.js';
 import { createGatheringService } from './modules/gathering/service.js';
 import { inventoryRoutes } from './modules/inventory/routes.js';
 import { createInventoryService } from './modules/inventory/service.js';
 import { spawnsRoutes } from './modules/spawns/routes.js';
 import { createSpawnsService } from './modules/spawns/service.js';
+import { raidsRoutes } from './modules/raids/routes.js';
+import { createRaidsService } from './modules/raids/service.js';
 import { territoryRoutes } from './modules/territory/routes.js';
 import { createTerritoryService, createTileBattlePort } from './modules/territory/service.js';
 import { createAuthRepo } from './modules/auth/repo.js';
@@ -63,6 +67,11 @@ export interface BuildAppOptions {
   /** The game clock; defaults to `createClock(config)` (honours `HP_DEV_NOW`). Tests can move it. */
   clock?: Clock;
   logger?: FastifyServerOptions['logger'];
+  /**
+   * The Hollow Man (#21) for `src/index.ts`, which runs his nightfall job and
+   * rescue consumer next to the app. Called once the service exists.
+   */
+  onHollow?: (hollow: HollowService) => void;
 }
 
 /** Builds the Fastify app without listening, so tests can use `app.inject()`. */
@@ -208,13 +217,29 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             idempotency,
           }),
         );
+        // The raid log and defense style (#16); the raid-log consumer writes
+        // the rows (`modules/raids/consumer.ts`, started in index.ts).
+        await api.register(
+          raidsRoutes(createRaidsService({ db, clock }), { hooks: authHooks, idempotency }),
+        );
         await api.register(
           buildingsRoutes(createBuildingsService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),
         );
-        // Found clothing rolls inside gathers (captures and rescues later).
+        // The Hollow Man (#21): nightfall runs as a job (`src/index.ts`), and
+        // rescues are battles the `hollow` event consumer settles.
+        const hollow = createHollowService({ db, clock, battles, ...publish });
+        options.onHollow?.(hollow);
+        await api.register(
+          hollowRoutes(hollow, {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // Found clothing rolls inside gathers and rescues (captures later).
         setDevDropChance(config.HP_DEV_DROP_CHANCE ?? null);
         await api.register(
           wardrobeRoutes(createWardrobeService({ db, clock, ...publish }), {

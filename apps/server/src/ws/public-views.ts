@@ -49,6 +49,17 @@ function registryView(type: GameEventType): PublicView {
   });
 }
 
+/** A registry view sent only to the player the event is about (`payload.userId`). */
+function ownerOnlyView(type: 'squishy.hollowed' | 'squishy.rescued'): PublicView {
+  return definePublicView({
+    schema: GAME_EVENTS[type].public,
+    build: (event, recipient) => {
+      const payload = parseGameEventPayload(type, event.payload);
+      return payload.userId === recipient.userId ? payload : null;
+    },
+  });
+}
+
 /**
  * The views live sync sends: one per type in the shared event registry
  * (`packages/shared/src/schemas/events.ts`), built from that type's `public`
@@ -56,9 +67,13 @@ function registryView(type: GameEventType): PublicView {
  * not broadcast (clients just move their cursor past it). A type that needs a
  * per-recipient view (e.g. a private event) overrides its entry here.
  */
-export const PUBLIC_VIEWS: PublicViews = Object.fromEntries(
-  GAME_EVENT_TYPES.map((type) => [type, registryView(type)]),
-);
+export const PUBLIC_VIEWS: PublicViews = {
+  ...Object.fromEntries(GAME_EVENT_TYPES.map((type) => [type, registryView(type)])),
+  // Which squishy the Hollow Man took, or which came home, is the owner's
+  // news (#21); everyone sees who lost someone in `hollow.nightfall`.
+  'squishy.hollowed': ownerOnlyView('squishy.hollowed'),
+  'squishy.rescued': ownerOnlyView('squishy.rescued'),
+};
 
 /**
  * The public view of `event` for `recipient`, or null when they get nothing:

@@ -39,7 +39,13 @@ import { consumeItems } from '../inventory/service.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { DEV_WILD_LEVEL } from './limits.js';
-import { createBattlesRepo, type BattleRow, type BattleSpawn, type BattlesTxRepo } from './repo.js';
+import {
+  createBattlesRepo,
+  type BattleRow,
+  type BattleSpawn,
+  type BattlesTxRepo,
+  type TeamSquishyRow,
+} from './repo.js';
 
 /*
  * PvE battles (design doc §6, tech spec §8, DECISIONS "Battle engine (#11)").
@@ -126,6 +132,32 @@ export interface TileBattlePort {
   noContest: (tx: Executor, battleId: string, at: Date) => Promise<void>;
 }
 
+/** The other side of a rescue (#21), built by the hollow module in the start transaction. */
+export interface RescueOpponent {
+  /** The Hollow's shadow guardians, and who plays them. */
+  side: BattleSideSetup;
+  /** After the battle row, in the same transaction: the rescue's own row. Events go after `battle.started`. */
+  started: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
+}
+
+/**
+ * A rescue expedition (#21, design doc §14): no attempt is used (decision C),
+ * and the hollow module settles it from `battle.ended`.
+ */
+export interface PrepareRescueBattle {
+  /**
+   * Checks the rescue under row locks and builds the other side; throws
+   * `AppError` to refuse (then nothing is used up). Runs only when there's no
+   * battle going to resume.
+   */
+  opponent: (tx: Executor, context: { map: MapRow; at: Date }) => Promise<RescueOpponent>;
+  /**
+   * Who fights when the player has no active squishy left (all in the
+   * Hollow): the squishy being rescued helps, so a rescue is always possible.
+   */
+  soloTeam: (tx: Executor) => Promise<TeamSquishyRow[]>;
+}
+
 /** What a capture try costs (design doc §6): one Heart Charm. */
 export const HEART_CHARM = 'heart-charm';
 
@@ -149,6 +181,12 @@ export interface BattlesService {
    * resumes the battle already going (`created: false`).
    */
   startTile: (user: PublicUser, mapId: string, prepare: PrepareTileBattle) => Promise<StartResult>;
+  /** Sets off on a rescue (#21) against what `prepare` builds, or resumes the battle going. */
+  startRescue: (
+    user: PublicUser,
+    mapId: string,
+    prepare: PrepareRescueBattle,
+  ) => Promise<StartResult>;
   /** Applies one player action; the AI side answers inside the same step. */
   act: (user: PublicUser, battleId: string, request: BattleActionRequest) => Promise<PlayerBattle>;
   /** Dev/test only: a squishy for the player on this map. */
@@ -212,6 +250,59 @@ export function defaultBattleContent(): BattleContent {
 const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
 const PUBLIC_MOVES = new Set(GAME_DATA.moves.map((m) => m.id));
 
+/**
+ * Rows the client may not have: species and moves outside the public tables
+ * (a secret squishy the player just met), so it can draw and name them.
+ */
+function defsFor(
+  content: BattleContent,
+  state: BattleState,
+): { speciesDefs: Species[]; moveDefs: Move[] } {
+  const speciesDefs = new Map<string, Species>();
+  const moveDefs = new Map<string, Move>();
+  for (const side of [state.sides.a, state.sides.b]) {
+    for (const squishy of side.squishies) {
+      // A species dropped from the data since (an old battle) is left out;
+      // the client names it "Mystery squishy" rather than the read failing.
+      const species = content.species.get(squishy.speciesId);
+      if (species && !PUBLIC_SPECIES.has(species.id)) speciesDefs.set(species.id, species);
+      for (const id of squishy.moves) {
+        const move = content.moves.get(id);
+        if (move && !PUBLIC_MOVES.has(id)) moveDefs.set(id, move);
+      }
+    }
+  }
+  return { speciesDefs: [...speciesDefs.values()], moveDefs: [...moveDefs.values()] };
+}
+
+/**
+ * What a client sees of a battle: `clientBattleView` of `state` (the row's
+ * current state unless given), from `mySide`. The battle's own player is
+ * always side `a`; the raid log's replay (#16) shows a finished challenge to
+ * the defender, side `b`.
+ */
+export function playerBattleView(
+  content: BattleContent,
+  row: BattleRow,
+  options: { mySide?: BattleSideId; state?: BattleState } = {},
+): PlayerBattle {
+  const state = options.state ?? row.state;
+  return {
+    id: row.id,
+    mapId: row.mapId,
+    kind: row.kind,
+    status: row.status,
+    mySide: options.mySide ?? PLAYER_SIDE,
+    // Parsed on the way out too, so a view can never carry `rng` (rule 6).
+    view: ClientBattleViewSchema.parse(clientBattleView(state)),
+    ...defsFor(content, state),
+    // The seed predicts every roll, so it stays secret until the end (tech spec §8).
+    seed: row.status === 'active' ? null : row.seed,
+    startedAt: row.startedAt.toISOString(),
+    endedAt: row.endedAt?.toISOString() ?? null,
+  };
+}
+
 export function createBattlesService(options: BattlesServiceOptions): BattlesService {
   const { db } = options;
   const now = options.clock ?? (() => new Date());
@@ -233,42 +324,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     return map;
   };
 
-  /**
-   * Rows the client may not have: species and moves outside the public tables
-   * (a secret squishy the player just met), so it can draw and name them.
-   */
-  const defsFor = (state: BattleState): { speciesDefs: Species[]; moveDefs: Move[] } => {
-    const speciesDefs = new Map<string, Species>();
-    const moveDefs = new Map<string, Move>();
-    for (const side of [state.sides.a, state.sides.b]) {
-      for (const squishy of side.squishies) {
-        // A species dropped from the data since (an old battle) is left out;
-        // the client names it "Mystery squishy" rather than the read failing.
-        const species = content.species.get(squishy.speciesId);
-        if (species && !PUBLIC_SPECIES.has(species.id)) speciesDefs.set(species.id, species);
-        for (const id of squishy.moves) {
-          const move = content.moves.get(id);
-          if (move && !PUBLIC_MOVES.has(id)) moveDefs.set(id, move);
-        }
-      }
-    }
-    return { speciesDefs: [...speciesDefs.values()], moveDefs: [...moveDefs.values()] };
-  };
-
-  const toPlayerBattle = (row: BattleRow): PlayerBattle => ({
-    id: row.id,
-    mapId: row.mapId,
-    kind: row.kind,
-    status: row.status,
-    mySide: PLAYER_SIDE,
-    // Parsed on the way out too, so a view can never carry `rng` (rule 6).
-    view: ClientBattleViewSchema.parse(clientBattleView(row.state)),
-    ...defsFor(row.state),
-    // The seed predicts every roll, so it stays secret until the end (tech spec §8).
-    seed: row.status === 'active' ? null : row.seed,
-    startedAt: row.startedAt.toISOString(),
-    endedAt: row.endedAt?.toISOString() ?? null,
-  });
+  const toPlayerBattle = (row: BattleRow): PlayerBattle => playerBattleView(content, row);
 
   /** The battle, if it's this player's and they're still on its map. */
   const requireOwn = async (
@@ -484,12 +540,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    * Starts a battle against `opponentFor`'s side, or resumes the one going.
    * A battle going that can't go on (see `settle`) is ended first, and a new
    * one starts. The opponent is built inside the start transaction, after the
-   * team check, so a refused start uses nothing up.
+   * team check, so a refused start uses nothing up. `soloTeam` fights when
+   * the player has no active squishy (rescues only).
    */
   const startWith = async (
     user: PublicUser,
     mapId: string,
     opponentFor: (tx: Executor, map: MapRow, at: Date) => Promise<Opponent>,
+    soloTeam?: (tx: Executor) => Promise<TeamSquishyRow[]>,
   ): Promise<StartResult> => {
     await requireMember(db, user, mapId);
     const going = await store.findActive(mapId, user.id);
@@ -503,7 +561,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         const active = await repo.findActive(mapId, user.id);
         if (active) return { row: active, created: false };
 
-        const team = await repo.listTeam(mapId, user.id, content.rules.teamSize);
+        const listed = await repo.listTeam(mapId, user.id, content.rules.teamSize);
+        const team = listed.length > 0 ? listed : ((await soloTeam?.(tx)) ?? []);
         if (team.length === 0) throw new AppError('CONFLICT', MESSAGES.noTeam);
 
         const at = now();
@@ -608,6 +667,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         const opponent = await prepare(tx, { map, at });
         return { ...opponent, spawn: null };
       }),
+
+    startRescue: (user, mapId, prepare) =>
+      startWith(
+        user,
+        mapId,
+        async (tx, map, at) => {
+          const opponent = await prepare.opponent(tx, { map, at });
+          return { kind: 'rescue', ...opponent, spawn: null };
+        },
+        prepare.soloTeam,
+      ),
 
     act: async (user, battleId, request) => {
       const { row: next, mapId } = await store.transaction(async (repo, tx) => {

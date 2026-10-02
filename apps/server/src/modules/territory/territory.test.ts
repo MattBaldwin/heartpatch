@@ -148,8 +148,17 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
     return map.id;
   }
 
-  async function grant(server: FastifyInstance, who: Player, mapId: string, level: number) {
-    const res = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, who, { level });
+  async function grant(
+    server: FastifyInstance,
+    who: Player,
+    mapId: string,
+    level: number,
+    speciesId?: string,
+  ) {
+    const res = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, who, {
+      level,
+      speciesId,
+    });
     expect(res.statusCode).toBe(201);
     return SquishyResponseSchema.parse(res.json()).squishy;
   }
@@ -236,7 +245,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
     const rival = await player();
     const mapId = await patch(server, kid, [rival]);
     const hero = await grant(server, kid, mapId, 40);
-    const buddy = await grant(server, rival, mapId, 3);
+    // A secret squishy, so the defender picker's speciesDefs have something to carry.
+    const buddy = await grant(server, rival, mapId, 3, SERVER_GAME_DATA.secretSpecies[0]!.id);
     clock.setTime(clock.getTime() + (TERRITORY_RULES.newPlayerShieldHours + 1) * HOUR_MS);
     // Two of the rival's tiles right next to the kid's land (as if they'd claimed them).
     const [near, near2] = await edgeOf(mapId, kid);
@@ -587,7 +597,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(res.statusCode, res.body).toBe(201);
       const battle = battleOf(res);
       expect(battle.kind).toBe('rival-tile');
-      // Phase 1: the engine's opponent AI plays the squishies on watch (#16 adds stances).
+      // The server's AI plays the squishies on watch, in the owner's stance (#16; Balanced by default).
       expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'balanced' });
       expect(battle.view.sides.b.squishies.map((s) => s.id)).toEqual([buddy.id]);
       expect((await attacksOf(mapId))[0]).toMatchObject({ defenderUserId: rival.id });

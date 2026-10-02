@@ -40,8 +40,20 @@ export interface MapScreenOptions {
   createWs?: (options: WsClientOptions) => WsClient;
   /** Buttons for the tapped tile, drawn into the tile panel (gathering, #17). */
   tileActions?: TileActions;
+  /** Features that draw over the map (the night and the Hollow Man, #21). */
+  layers?: readonly MapLayer[];
   /** Every live event the socket delivers, in seq order, after the map saw it (a find, #43). */
   onLiveEvent?: (event: WsEventMessage) => void;
+}
+
+/** A feature that adds to the map's scene (#21: night lighting and the Hollow Man). */
+export interface MapLayer {
+  /**
+   * The map was built into a fresh `scene` (on open, and again after a
+   * GPU-loss rebuild). Disposed with the scene; `scene.onDisposeObservable`
+   * says when.
+   */
+  attach: (scene: Scene, view: MapView) => void;
 }
 
 /** A feature's buttons in the tile panel. */
@@ -167,6 +179,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     if (!state) throw new Error('no map to build');
     const built = new MapScene(scene, state.view);
     scene3d = built;
+    for (const layer of options.layers ?? []) layer.attach(scene, state.view);
     if (selected) built.select(selected);
     const canvas = scene.getEngine().getRenderingCanvas();
     if (canvas) {

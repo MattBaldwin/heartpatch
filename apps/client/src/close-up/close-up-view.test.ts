@@ -1,4 +1,9 @@
-import { findAvoidedWords, type CareListResponse, type CareSquishy } from '@heartpatch/shared';
+import {
+  findAvoidedWords,
+  GAME_DATA,
+  type CareListResponse,
+  type CareSquishy,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { CARE_TEXT } from '../care/care-view.js';
 import { CAMERA_POSES, IDLE, IDLE_BY_FEELING, REACTIONS } from './close-up-config.js';
@@ -60,7 +65,7 @@ function reply(over: Partial<CareListResponse> = {}): CareListResponse {
         feeling: 'sleepy',
         rarity: 'secret',
         baseStats: { hp: 30, attack: 10, defense: 10, speed: 10 },
-        moves: ['tickle-tackle', 'rock-a-bye'],
+        moves: ['zz-mystery-wiggle', ...GAME_DATA.moves.slice(0, 1).map((m) => m.id)],
         evolutions: [],
         habitatPreferences: [],
         visual: { body: 'blob', palette: ['#8b7bd8'], parts: [] },
@@ -117,7 +122,8 @@ describe('info card', () => {
       feeling: 'Sleepy',
       mood: 'Happy and bouncy!',
       hearts: 0.4,
-      moves: ['Tickle Tackle', 'Rock A Bye'],
+      // A move this client has a row for uses its name; one it hasn't is tidied.
+      moves: ['Zz Mystery Wiggle', ...GAME_DATA.moves.slice(0, 1).map((m) => m.name)],
     });
     expect(card.buttons.map((b) => b.action)).toEqual(['feed', 'pet', 'play']);
   });

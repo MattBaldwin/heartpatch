@@ -11,6 +11,7 @@ import {
   CONSUMER_RETRY_LIMIT,
   JOBS_STOP_TIMEOUT_MS,
 } from './limits.js';
+import { startNightfall, type NightfallRunner } from './nightfall.js';
 import { createJobsRepo, pgBossOnTransaction } from './repo.js';
 
 /** pg-boss keeps its tables in their own schema, outside Drizzle's migrations. */
@@ -34,11 +35,15 @@ export interface JobsOptions {
   publish?: (mapId: string) => Promise<void>;
   /** Run the periodic catch-up on its cron (default true; tests trigger `catchUp` by hand). */
   schedule?: boolean;
+  /** The Hollow Man's nightfall (#21, `jobs/nightfall.ts`); none without it. */
+  nightfall?: NightfallRunner;
 }
 
 export interface Jobs {
   /** Wakes every consumer on every map it lags on. Also runs at start and on `CATCH_UP_CRON`. */
   catchUp: () => Promise<number>;
+  /** Enqueues every due nightfall now (also every minute, and at start). 0 without `nightfall`. */
+  nightfallSweep: () => Promise<number>;
   /** Stops taking jobs, waits for running ones, and stops enqueuing wake-ups. */
   stop: () => Promise<void>;
 }
@@ -48,7 +53,8 @@ export interface Jobs {
  * consumer with the `stately` policy and the map id as `singletonKey`, so at
  * most one job per (consumer, map) is queued and one runs; a worker that
  * applies events with `runConsumer`; the wake-up `appendGameEvent` enqueues
- * inside each command's transaction; and the periodic catch-up job.
+ * inside each command's transaction; the periodic catch-up job; and, given a
+ * runner, the Hollow Man's nightfall (`nightfall.ts`).
  */
 export async function startJobs(options: JobsOptions): Promise<Jobs> {
   const { db, consumers, logger } = options;
@@ -143,8 +149,13 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
   // A crash may have left events behind: catch up once at boot.
   await catchUp();
 
+  const nightfall = options.nightfall
+    ? await startNightfall(boss, options.nightfall, logger, options.schedule ?? true)
+    : null;
+
   return {
     catchUp,
+    nightfallSweep: () => nightfall?.sweep() ?? Promise.resolve(0),
     stop: async () => {
       setEventWakeup(null);
       await boss.stop({ graceful: true, timeout: JOBS_STOP_TIMEOUT_MS });
