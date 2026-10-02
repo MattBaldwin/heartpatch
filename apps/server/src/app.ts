@@ -145,7 +145,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           clock,
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
-        await api.register(mapsRoutes(maps, { hooks: authHooks }));
+        await api.register(
+          mapsRoutes(maps, {
+            hooks: authHooks,
+            ...(config.HP_DEV_MAP_CREATE_LIMIT_PER_IP !== undefined
+              ? { createPerIpMax: config.HP_DEV_MAP_CREATE_LIMIT_PER_IP }
+              : {}),
+          }),
+        );
 
         const tutorial = createTutorialService({
           db,

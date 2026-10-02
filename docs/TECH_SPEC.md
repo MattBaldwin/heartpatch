@@ -200,6 +200,7 @@ Add anything else only with a one-line justification in the PR.
 | `TRUST_PROXY` | `true` | `true` behind Caddy so `request.ip` is the player's IP (per-IP rate limits) |
 | `HP_DEV_NOW` | `2026-12-20T20:59:00-05:00` | dev/test only |
 | `HP_DEV_SIGNUP_LIMIT_PER_IP` | `500` | dev/test only; raises the per-IP signup limit for e2e (Playwright sets it) |
+| `HP_DEV_MAP_CREATE_LIMIT_PER_IP` | `500` | dev/test only; raises the per-IP patch-making limit for e2e (Playwright sets it) |
 | `HP_DEV_SQUISHY_GRANTS` | `true` | dev/test only; registers routes that hand a player a squishy and start a battle against a chosen wild squishy (#13), until spawns (#14) and the tutorial's starter exist (Playwright sets it) |
 | `HP_SIGNUP_CODE` | random string | required to create an account (family-only signup, Phase 1); checked with a constant-time comparison under the auth rate limit |
 | `HP_TUTORIAL_REQUIRED` | `false` | defaults to `false` when unset; when `false`, new accounts can create/join maps without finishing the tutorial. Flip to `true` once the tutorial (#24) ships |

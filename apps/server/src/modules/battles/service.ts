@@ -415,7 +415,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         : [];
     const awards = result.xp.filter((award) => award.side === PLAYER_SIDE && award.xp > 0);
     // Base battle XP × care and habitat, levels and evolution (#19's
-    // `applyXp`). Lock order: squishies, then `maps` via appendEvent.
+    // `applyXp`), under the squishy locks (the order above).
     await repo.lockSquishies(awards.map((a) => a.squishyId));
     const grown: Growth[] = [];
     for (const award of awards) {
