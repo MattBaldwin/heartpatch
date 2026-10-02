@@ -1,6 +1,6 @@
 # @heartpatch/server
 
-Fastify 5 app serving REST (`/api/v1`) and, later, WebSocket (`/ws`). Read `docs/TECH_SPEC.md` §5 and §7 first.
+Fastify 5 app serving REST (`/api/v1`) and live sync over WebSocket (`/ws`). Read `docs/TECH_SPEC.md` §5 and §7 first.
 
 ## Module shape
 
@@ -48,6 +48,39 @@ Signup, login and recover are rate limited per IP and per username (`modules/aut
 **Text filter:** run every piece of player-typed text through `assertAllowedText(text, 'name' | 'message')` from `lib/filter.ts` before storing it (tech spec §9). It throws `VALIDATION_FAILED` with a kid-readable message. `checkText` returns the verdict without throwing.
 
 **Operator reset** (tech spec §9): `docker compose exec server node dist/ops/reset-password.js <username>` (locally `pnpm --filter @heartpatch/server ops:reset-password <username>`) sets a temporary password, revokes sessions and prints a new recovery code. Never exposed over HTTP.
+
+## Live sync (`/ws`)
+
+`src/ws/` pushes game events to players in real time (tech spec §5 and §7). Messages are the zod schemas in `packages/shared/src/schemas/ws.ts`.
+
+**Publishing, for modules that write game events.** Take `wsHub` from `buildApp` (like `authHooks`), and call `publish` **after** your transaction commits:
+
+```ts
+const event = await db.transaction(async (tx) => {
+  // …change entity rows, then last:
+  return appendGameEvent(tx, { mapId, type: 'tile.updated', actorUserId, payload });
+});
+void wsHub?.publish(event.mapId); // after commit; never rejects
+```
+
+`publish(mapId)` takes no events. It only says "this map has new committed events"; the hub reads them from `game_events` on its own connection, so it can only ever send committed rows. Calling it inside the transaction is therefore harmless but useless: the new event isn't visible yet, so it goes out on the next publish or heartbeat (up to 25 s late). Always call it after commit.
+
+**Public views (default deny).** `game_events.payload` is internal and is never sent. Each event type needs an entry in `PUBLIC_VIEWS` (`src/ws/public-views.ts`), made with `definePublicView({ schema, build })`:
+
+- `build(event, recipient)` returns the view for one player, or `null` to send them nothing.
+- `schema` must be a `z.object`. The result is parsed with it, so undeclared fields are stripped even if `build` spreads the payload.
+- An event type without a view is not broadcast. Players just get a `ws.cursor` past its seq.
+- Kid safety: views carry usernames and in-game state only (no birth year, time zone or anything else about the account).
+
+**Protocol in short.**
+
+- **Connect:** the upgrade needs a live `hp_session` (`UNAUTHENTICATED` otherwise). It is looked up with `AuthRepo.findSession` **without renewing**: the 101 response can't carry a `Set-Cookie`, so renewal is left to REST requests. `Origin` must equal `PUBLIC_ORIGIN` (`FORBIDDEN` otherwise; this guards against cross-site WebSocket hijacking). The server sends `ws.ready`.
+- **Subscribe:** `{ type: 'subscribe', mapId, afterSeq }` subscribes to one map per socket. The player must be an **active** member (`FORBIDDEN` otherwise, also re-checked on every delivery, so a removed player stops at once). The server replays the public views after `afterSeq` in seq order, then sends `ws.subscribed { seq }`; live events follow. Sending `subscribe` again is how the client asks for a replay after a gap.
+- **Cursor:** seqs a player doesn't get (no view, or a view for someone else) are covered by `ws.cursor { seq }`, so the client never waits on them as a gap.
+- **Resync:** if the client is more than `REPLAY_WINDOW` events behind, its events were pruned, or it is ahead of the map, it gets `ws.resync`. It then refetches state over REST and subscribes again with that state's seq.
+- **Heartbeat:** a protocol ping every 25 s, and a socket that misses a pong is closed. The session is re-checked each beat: logout or a password reset closes the socket with `4401`. A player gets at most `MAX_SOCKETS_PER_USER` sockets (`4429` beyond that).
+
+Tunables are in `src/ws/limits.ts`.
 
 ## Workspace source condition
 
