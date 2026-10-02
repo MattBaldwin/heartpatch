@@ -285,24 +285,28 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 
     get: detail,
 
-    view: async (user, mapId) => {
-      const { map } = await requireMember(store, user, mapId);
-      const [members, tiles] = await Promise.all([
-        store.listMembers(mapId),
-        store.listTiles(mapId),
-      ]);
-      return {
-        map: {
-          id: map.id,
-          name: map.name,
-          timeZone: map.timeZone,
-          pvpMode: map.pvpMode,
-          maxPlayers: map.maxPlayers,
-        },
-        members: members.map(toMember),
-        tiles,
-      };
-    },
+    // One snapshot, so the seq matches the tiles and members exactly: live
+    // sync replays everything after it and nothing before (tech spec §5).
+    view: (user, mapId) =>
+      store.snapshot(async (repo) => {
+        const { map } = await requireMember(repo, user, mapId);
+        const [members, tiles] = await Promise.all([
+          repo.listMembers(mapId),
+          repo.listTiles(mapId),
+        ]);
+        return {
+          map: {
+            id: map.id,
+            name: map.name,
+            timeZone: map.timeZone,
+            pvpMode: map.pvpMode,
+            maxPlayers: map.maxPlayers,
+          },
+          members: members.map(toMember),
+          tiles,
+          seq: map.eventSeq,
+        };
+      }),
 
     regenerateInvite: async (user, mapId) => {
       await requireOwner(store, user, mapId);

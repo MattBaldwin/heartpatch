@@ -27,6 +27,8 @@ export interface MapRow {
   timeZone: string;
   pvpMode: PvpMode;
   maxPlayers: number;
+  /** The last event seq committed for this map (`maps.event_seq`). */
+  eventSeq: number;
 }
 
 export interface MembershipRow {
@@ -76,6 +78,13 @@ export interface MapsRepo {
    * (`createAuthRepo(tx)`), so all their writes commit together.
    */
   transaction: <T>(fn: (repo: MapsTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
+  /**
+   * Runs `fn`'s reads in one read-only `repeatable read` transaction
+   * (`withTransaction`), so they all see the same committed moment: a map,
+   * its tiles and its `event_seq` that agree with each other. Top level only
+   * (Postgres can't change the isolation of a transaction already running).
+   */
+  snapshot: <T>(fn: (repo: MapsRepo) => Promise<T>) => Promise<T>;
 
   /** `users.tutorial_completed_at` (null = not finished). */
   tutorialCompletedAt: (userId: string) => Promise<Date | null>;
@@ -208,6 +217,12 @@ function queries(db: Executor): MapsRepo {
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createMapsTxRepo(tx), tx)),
 
+    snapshot: (fn) =>
+      withTransaction(db, async (tx) => {
+        await tx.execute(sql`set transaction isolation level repeatable read, read only`);
+        return fn(queries(tx));
+      }),
+
     tutorialCompletedAt: async (userId) => {
       const [row] = await db
         .select({ at: users.tutorialCompletedAt })
@@ -254,6 +269,7 @@ function queries(db: Executor): MapsRepo {
           timeZone: maps.timeZone,
           pvpMode: maps.pvpMode,
           maxPlayers: maps.maxPlayers,
+          eventSeq: maps.eventSeq,
         })
         .from(maps)
         .where(eq(maps.id, mapId));

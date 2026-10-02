@@ -72,7 +72,7 @@ Maps (players say "patches") live in `src/modules/maps` (issue #4; design doc §
 | `GET /api/v1/maps` | → `{ maps, requests }`: my maps and my unanswered join requests |
 | `POST /api/v1/maps` | Name + IANA zone → 201 `{ map }`. Generates the map once (`generateMap` for `max_players` seats, secret seed), stores every tile, gives the owner home slot 0, makes the first invite code, appends `map.created` — one transaction |
 | `GET /api/v1/maps/:mapId` | → `{ map }` (members; `admin` with the code and pending requests for the owner) |
-| `GET /api/v1/maps/:mapId/view` | → `MapView`: map, members and public tiles (no seed, no guardian strength) |
+| `GET /api/v1/maps/:mapId/view` | → `MapView`: map, members, public tiles (no seed, no guardian strength) and `seq`, all from one read-only `repeatable read` snapshot (`repo.snapshot`), so the view holds every event up to `seq` and none after |
 | `POST /api/v1/maps/join` | `{ code }` → 201 `{ request }` (200 with the existing one if already pending) |
 | `POST /api/v1/maps/:mapId/invite` | Owner: a fresh code (7 days); the old one stops working |
 | `POST /api/v1/maps/:mapId/invite/revoke` | Owner: → 204, no live code |
@@ -117,7 +117,7 @@ void publish?.(mapId); // after commit; never rejects
 - **Connect:** the upgrade needs a live `hp_session` (`UNAUTHENTICATED` otherwise). It is looked up with `AuthRepo.findSession` **without renewing**: the 101 response can't carry a `Set-Cookie`, so renewal is left to REST requests. `Origin` must equal `PUBLIC_ORIGIN` (`FORBIDDEN` otherwise; this guards against cross-site WebSocket hijacking). The server sends `ws.ready`.
 - **Subscribe:** `{ type: 'subscribe', mapId, afterSeq }` subscribes to one map per socket. The player must be an **active** member (`FORBIDDEN` otherwise, also re-checked on every delivery, so a removed player stops at once). The server replays the public views after `afterSeq` in seq order, then sends `ws.subscribed { seq }`; live events follow. Sending `subscribe` again is how the client asks for a replay after a gap.
 - **Cursor:** seqs a player doesn't get (no view, or a view for someone else) are covered by `ws.cursor { seq }`, so the client never waits on them as a gap.
-- **Resync:** if the client is more than `REPLAY_WINDOW` events behind, its events were pruned, or it is ahead of the map, it gets `ws.resync`. It then refetches state over REST and subscribes again with that state's seq.
+- **Resync:** if the client is more than `REPLAY_WINDOW` events behind, its events were pruned, or it is ahead of the map, it gets `ws.resync`. It then refetches state over REST and subscribes again with that state's seq (`MapView.seq`).
 - **Heartbeat:** a protocol ping every 25 s, and a socket that misses a pong is closed. The session is re-checked each beat: logout or a password reset closes the socket with `4401`. A player gets at most `MAX_SOCKETS_PER_USER` sockets (`4429` beyond that).
 
 Tunables are in `src/ws/limits.ts`.

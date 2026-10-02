@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
 import { TimeZoneSchema } from './time.js';
+import { WsSeqSchema } from './ws.js';
 
 // Map (patch) API schemas (design doc §3, §11; tech spec §5). Players call a
 // map a "patch" in the UI (style guide). Messages are kid-readable.
@@ -206,7 +207,10 @@ export const PublicTileSchema = z.object({
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 
-/** `GET /api/v1/maps/:mapId/view`: everything needed to draw the map. Never the seed. */
+/**
+ * `GET /api/v1/maps/:mapId/view`: everything needed to draw the map. Never the seed.
+ * One consistent snapshot: it holds every event up to `seq` and none after.
+ */
 export const MapViewSchema = z.object({
   map: z.object({
     id: z.uuid(),
@@ -218,5 +222,10 @@ export const MapViewSchema = z.object({
   members: z.array(MapMemberSchema),
   /** Every tile, sorted by `q` then `r`. */
   tiles: z.array(PublicTileSchema),
+  /**
+   * The map's latest event seq this view includes (`maps.event_seq`). Live
+   * sync subscribes with it as `afterSeq` (tech spec §5 "WebSocket").
+   */
+  seq: WsSeqSchema,
 });
 export type MapView = z.infer<typeof MapViewSchema>;

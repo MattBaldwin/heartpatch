@@ -26,6 +26,7 @@ import { joinRequests, mapMembers, maps, sessions, users } from '../../db/schema
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS, MAP_RATE_LIMITS } from './limits.js';
+import { createMapsRepo } from './repo.js';
 import { createMapsService } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -407,6 +408,8 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         ['homeSlot', 'nodeResource', 'ownerUserId', 'q', 'r', 'terrain'].sort(),
       );
       expect(view.tiles.filter((t) => t.ownerUserId === friend.id)).toHaveLength(7);
+      // Up to date with the friend joining, so live sync follows on from there.
+      expect(view.seq).toBe(2);
       expect((await call(server, 'GET', `/maps/${map.id}/view`, await player())).statusCode).toBe(
         404,
       );
@@ -752,6 +755,53 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
 
       expect((await call(server, 'POST', path, owner, { pvpMode: 'on' })).statusCode).toBe(200);
       expect((await mapRow(map.id))?.pvpMode).toBe('on');
+    });
+  });
+
+  describe('map view', () => {
+    it("carries the seq of the map's latest event", async () => {
+      const server = await start();
+      const { owner, map } = await mapWith(server, 1);
+      const view = async () =>
+        MapViewSchema.parse((await call(server, 'GET', `/maps/${map.id}/view`, owner)).json());
+      const latest = async () => (await eventsOf(map.id)).at(-1)!.seq;
+
+      expect((await view()).seq).toBe(await latest());
+      const set = await call(server, 'POST', `/maps/${map.id}/pvp-mode`, owner, { pvpMode: 'off' });
+      expect(set.statusCode).toBe(200);
+      const after = await view();
+      expect(after.map.pvpMode).toBe('off');
+      expect(after.seq).toBe(await latest());
+      expect(after.seq).toBe(3);
+    });
+
+    it('reads the map, members, tiles and seq from one snapshot', async () => {
+      const server = await start();
+      const { owner, map, members } = await mapWith(server, 1);
+      const friend = members[0]!;
+      const repo = createMapsRepo(db);
+
+      const seen = await repo.snapshot(async (snap) => {
+        const before = await snap.findMap(map.id);
+        // Another connection removes the friend and commits in between.
+        const removed = await call(
+          server,
+          'POST',
+          `/maps/${map.id}/members/${friend.id}/remove`,
+          owner,
+        );
+        expect(removed.statusCode).toBe(204);
+        const tiles = await snap.listTiles(map.id);
+        return {
+          seq: before!.eventSeq,
+          members: (await snap.listMembers(map.id)).length,
+          friendTiles: tiles.filter((t) => t.ownerUserId === friend.id).length,
+        };
+      });
+
+      // Everything as of the snapshot: the friend and their land still there.
+      expect(seen).toEqual({ seq: 2, members: 2, friendTiles: 7 });
+      expect((await mapRow(map.id))?.eventSeq).toBe(3);
     });
   });
 
