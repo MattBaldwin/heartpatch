@@ -28,6 +28,19 @@ describe('loadConfig', () => {
     expect(loadConfig({ DATABASE_URL }).DATABASE_URL).toBe(DATABASE_URL);
   });
 
+  it('leaves the tutorial gate off unless set to true', () => {
+    expect(loadConfig({ DATABASE_URL }).HP_TUTORIAL_REQUIRED).toBe(false);
+    expect(loadConfig({ DATABASE_URL, HP_TUTORIAL_REQUIRED: 'false' }).HP_TUTORIAL_REQUIRED).toBe(
+      false,
+    );
+    expect(loadConfig({ DATABASE_URL, HP_TUTORIAL_REQUIRED: 'true' }).HP_TUTORIAL_REQUIRED).toBe(
+      true,
+    );
+    expect(() => loadConfig({ DATABASE_URL, HP_TUTORIAL_REQUIRED: 'yes' })).toThrow(
+      /HP_TUTORIAL_REQUIRED/,
+    );
+  });
+
   it('keeps the signup code optional for tools like db/cli.ts', () => {
     expect(loadConfig({ DATABASE_URL }).HP_SIGNUP_CODE).toBeUndefined();
   });
@@ -45,6 +58,17 @@ describe('loadServerConfig', () => {
     expect(loadServerConfig({ DATABASE_URL, NODE_ENV: 'development' }).HP_SIGNUP_CODE).toBe(
       undefined,
     );
+  });
+
+  it('accepts HP_DEV_NOW outside production only', () => {
+    const at = '2026-12-20T20:59:00-05:00';
+    expect(
+      loadServerConfig({ DATABASE_URL, NODE_ENV: 'development', HP_DEV_NOW: at }).HP_DEV_NOW,
+    ).toBe(at);
+    expect(() =>
+      loadServerConfig({ DATABASE_URL, HP_SIGNUP_CODE: 'family-code', HP_DEV_NOW: at }),
+    ).toThrow(/HP_DEV_NOW/);
+    expect(() => loadConfig({ DATABASE_URL, HP_DEV_NOW: 'next tuesday' })).toThrow(/HP_DEV_NOW/);
   });
 
   it('rejects a signup code that is too short to be secret', () => {

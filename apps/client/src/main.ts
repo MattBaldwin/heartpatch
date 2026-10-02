@@ -5,6 +5,7 @@ import { mountStage, type Stage } from './engine/stage.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
+import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import './styles.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -60,7 +61,8 @@ await boot(canvas, {
   onError: showRendererError,
 }).catch(showRendererError);
 
-mountAuth(document.body);
+const lobby = mountLobby(document.body);
+mountAuth(document.body, { onChange: lobby.setUser });
 
 if (import.meta.env.DEV) {
   const badge = document.createElement('div');

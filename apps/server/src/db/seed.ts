@@ -1,3 +1,4 @@
+import { GAME_DATA, generateMap, MAP_MAX_PLAYERS } from '@heartpatch/shared';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Database } from './client.js';
 import { mapMembers, maps, tiles, users } from './schema.js';
@@ -11,9 +12,8 @@ export const SEED_PASSWORD_HASH = 'seed-placeholder-not-a-real-hash';
 export const SEED_USERNAMES = ['pumpkinpal', 'mothmuffin'] as const;
 export const SEED_MAP_NAME = 'Seed Patch';
 
-const SEED_MAP_RADIUS = 2; // TUNE: 19 tiles; enough to poke at locally
-// Placeholder ids until the shared terrain table (#8) lands; terrain is plain text.
-const SEED_TERRAIN = ['meadow', 'forest', 'hills'] as const;
+/** Fixed, so every local database gets the same map. Real maps use crypto.randomBytes. */
+export const SEED_MAP_SEED = 'seed-patch';
 
 export interface SeedResult {
   created: boolean;
@@ -22,8 +22,9 @@ export interface SeedResult {
 }
 
 /**
- * Creates a multiplayer test map with two members (the first is the owner)
- * and a small hex of neutral tiles. Re-running it is a no-op.
+ * Creates a multiplayer test map with two members (the first is the owner),
+ * generated like a real map (`generateMap`, all seats' home bases), with each
+ * member holding their home base. Re-running it is a no-op.
  */
 export async function seed(db: Database): Promise<SeedResult> {
   return db.transaction(async (tx) => {
@@ -59,41 +60,45 @@ export async function seed(db: Database): Promise<SeedResult> {
       .returning({ id: users.id });
     const userIds = seededUsers.map((u) => u.id);
 
+    const generated = generateMap(GAME_DATA, {
+      seed: SEED_MAP_SEED,
+      playerCount: MAP_MAX_PLAYERS,
+    });
     const [map] = await tx
       .insert(maps)
-      .values({ kind: 'multiplayer', name: SEED_MAP_NAME, timeZone: 'America/New_York' })
+      .values({
+        kind: 'multiplayer',
+        name: SEED_MAP_NAME,
+        timeZone: 'America/New_York',
+        seed: SEED_MAP_SEED,
+        maxPlayers: MAP_MAX_PLAYERS,
+      })
       .returning({ id: maps.id });
     if (!map) throw new Error('seed: map insert returned no row');
 
+    // Member i holds home slot i.
     await tx
       .insert(mapMembers)
       .values(
         userIds.map(
-          (userId, i) => ({ mapId: map.id, userId, role: i === 0 ? 'owner' : 'member' }) as const,
+          (userId, i) =>
+            ({ mapId: map.id, userId, role: i === 0 ? 'owner' : 'member', homeSlot: i }) as const,
         ),
       );
 
     await tx.insert(tiles).values(
-      hexesWithin(SEED_MAP_RADIUS).map(({ q, r }, i) => ({
+      generated.tiles.map((t) => ({
         mapId: map.id,
-        q,
-        r,
-        terrain: SEED_TERRAIN[i % SEED_TERRAIN.length] ?? 'meadow',
-        ownerUserId: null,
+        q: t.q,
+        r: t.r,
+        terrain: t.terrain,
+        nodeResource: t.nodeResource,
+        guardianStrength: t.guardianStrength,
+        homeSlot: t.homeSlot,
+        ownerUserId: t.homeSlot === null ? null : (userIds[t.homeSlot] ?? null),
       })),
     );
 
     return { created: true, mapId: map.id, userIds };
   });
-}
-
-/** Axial coords within `radius` of the origin. Seed-only; real map generation uses shared hex code. */
-function hexesWithin(radius: number): { q: number; r: number }[] {
-  const out: { q: number; r: number }[] = [];
-  for (let q = -radius; q <= radius; q++) {
-    for (let r = Math.max(-radius, -q - radius); r <= Math.min(radius, -q + radius); r++) {
-      out.push({ q, r });
-    }
-  }
-  return out;
 }

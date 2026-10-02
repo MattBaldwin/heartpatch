@@ -13,12 +13,11 @@ import { z } from 'zod';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createDbClient, type Database, type DbClient } from '../db/client.js';
-import { appendGameEvent } from '../db/game-events.js';
+import { appendRawGameEvent } from '../db/game-events.js';
 import { mapMembers, maps } from '../db/schema.js';
 import { createAuthRepo, type AuthRepo } from '../modules/auth/repo.js';
 import { hashSessionToken, newSessionToken } from '../modules/auth/secrets.js';
 import { definePublicView, type PublicViews } from './public-views.js';
-import { createWsRepo } from './repo.js';
 
 const url = inject('testDatabaseUrl');
 const ORIGIN = 'http://localhost:5173';
@@ -136,8 +135,7 @@ describe.skipIf(!url)('live sync over /ws (needs DATABASE_URL)', () => {
     const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, PUBLIC_ORIGIN: ORIGIN });
     app = await buildApp({
       config,
-      authRepo,
-      wsRepo: createWsRepo(db),
+      db,
       wsHubOptions: { views: TEST_VIEWS, ...hubOptions },
       logger: false,
     });
@@ -187,7 +185,7 @@ describe.skipIf(!url)('live sync over /ws (needs DATABASE_URL)', () => {
     payload: Record<string, unknown> = { note: 'boo', secret: 'internal-only-xyzzy' },
   ): Promise<number> {
     const event = await db.transaction((tx) =>
-      appendGameEvent(tx, { mapId, type, actorUserId: null, payload }),
+      appendRawGameEvent(tx, { mapId, type, actorUserId: null, payload }),
     );
     await hub().publish(mapId);
     return event.seq;
@@ -411,7 +409,7 @@ describe.skipIf(!url)('live sync over /ws (needs DATABASE_URL)', () => {
       const before = socket.messages.length;
 
       await db.transaction(async (tx) => {
-        await appendGameEvent(tx, {
+        await appendRawGameEvent(tx, {
           mapId,
           type: 'test.pinged',
           actorUserId: null,

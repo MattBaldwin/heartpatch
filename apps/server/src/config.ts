@@ -18,13 +18,24 @@ const ConfigSchema = z.object({
   // Family-only signup (decision D): creating an account needs this code.
   // Unset closes signups; the server refuses to start without it in production.
   HP_SIGNUP_CODE: z.string().trim().min(8).max(128).optional(),
+  // Tutorial gate (decision A): when true, creating or joining a map needs a
+  // finished tutorial. Off until the tutorial (#24) ships.
+  HP_TUTORIAL_REQUIRED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  // Dev time override (tech spec §7): the clock starts here. Never in production.
+  HP_DEV_NOW: z.iso.datetime({ offset: true }).optional(),
 });
 
 /** Settings only the HTTP server needs; tools like `db/cli.ts` skip these checks. */
 const ServerConfigSchema = ConfigSchema.refine(
   (c) => c.NODE_ENV !== 'production' || c.HP_SIGNUP_CODE !== undefined,
   { path: ['HP_SIGNUP_CODE'], message: 'required in production (family-only signup)' },
-);
+).refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_NOW === undefined, {
+  path: ['HP_DEV_NOW'],
+  message: 'development and tests only',
+});
 
 export type Config = z.infer<typeof ConfigSchema>;
 

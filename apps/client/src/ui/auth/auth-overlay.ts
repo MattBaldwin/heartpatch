@@ -4,25 +4,12 @@ import {
   SignupRequestSchema,
   type PublicUser,
 } from '@heartpatch/shared';
-import { ApiRequestError, authApi } from './auth-api.js';
+import { deviceTimeZone, el, messageOf, type Attrs } from '../dom.js';
+import { authApi } from './auth-api.js';
 import './auth.css';
 
 // Sign up, log in and recovery as a DOM overlay over the canvas (tech spec §6).
 // Copy follows docs/STYLE_GUIDE.md: short, warm, kid-readable.
-
-type Attrs = Record<string, string>;
-
-/** Builds an element. Text always goes in as text, never as HTML. */
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  attrs: Attrs = {},
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, value);
-  node.append(...children);
-  return node;
-}
 
 interface FieldSpec {
   name: string;
@@ -64,14 +51,6 @@ function birthYearOptions(): { value: string; label: string }[] {
   return [{ value: '', label: 'Pick a year' }, ...years.map((y) => ({ value: y, label: y }))];
 }
 
-function deviceTimeZone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return 'UTC';
-  }
-}
-
 /** The first problem from a shared schema, with the field it belongs to. */
 function firstIssue(error: { issues: { path: PropertyKey[]; message: string }[] }): FormProblem {
   const issue = error.issues[0];
@@ -80,10 +59,6 @@ function firstIssue(error: { issues: { path: PropertyKey[]; message: string }[] 
     error: issue?.message ?? 'Something in there needs another look.',
     ...(typeof field === 'string' ? { field } : {}),
   };
-}
-
-function messageOf(err: unknown): string {
-  return err instanceof ApiRequestError ? err.message : 'Oops, something went wobbly. Try again!';
 }
 
 export interface AuthOverlayOptions {

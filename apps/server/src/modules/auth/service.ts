@@ -7,6 +7,7 @@ import {
 } from '@heartpatch/shared';
 import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
+import { canonicalTimeZone } from '../../lib/time.js';
 import { SESSION_RENEW_AFTER_MS, SESSION_TTL_MS } from './limits.js';
 import type { AuthRepo, NewSession } from './repo.js';
 import {
@@ -14,7 +15,7 @@ import {
   hashSessionToken,
   newRecoveryCode,
   newSessionToken,
-  newTemporaryPassword,
+  newResetCredentials,
   safeEqual,
   verifyAgainstDummy,
   verifySecret,
@@ -75,15 +76,6 @@ const MESSAGES = {
   wrongLogin: "That name and password don't match. Try again!",
   wrongRecoveryCode: "That recovery code doesn't match. Check it and try again!",
 } as const;
-
-/** The canonical IANA name, or null if the runtime doesn't know the zone. */
-function canonicalTimeZone(timeZone: string): string | null {
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone;
-  } catch {
-    return null;
-  }
-}
 
 export function createAuthService(options: AuthServiceOptions): AuthService {
   const { repo, signupCode } = options;
@@ -192,22 +184,17 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
     operatorReset: async (username) => {
       const found = await repo.findUserByUsername(username);
       if (!found) return null;
-      const temporaryPassword = newTemporaryPassword();
-      const recoveryCode = newRecoveryCode();
-      const [passwordHash, newRecoveryCodeHash] = await Promise.all([
-        hashSecret(temporaryPassword),
-        hashSecret(recoveryCode),
-      ]);
+      const credentials = await newResetCredentials();
       await repo.resetPassword({
         userId: found.id,
-        passwordHash,
-        newRecoveryCodeHash,
+        passwordHash: credentials.passwordHash,
+        newRecoveryCodeHash: credentials.newRecoveryCodeHash,
         now: now(),
       });
       return {
         user: { id: found.id, username: found.username },
-        temporaryPassword,
-        recoveryCode: formatRecoveryCode(recoveryCode),
+        temporaryPassword: credentials.temporaryPassword,
+        recoveryCode: credentials.recoveryCode,
       };
     },
   };

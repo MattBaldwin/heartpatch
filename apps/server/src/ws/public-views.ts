@@ -1,23 +1,11 @@
+import {
+  GAME_EVENT_TYPES,
+  GAME_EVENTS,
+  parseGameEventPayload,
+  type GameEventType,
+} from '@heartpatch/shared';
 import type { z } from 'zod';
 import type { GameEvent } from '../db/game-events.js';
-
-/**
- * Game event types from tech spec §5. A stand-in until the shared event
- * registry (`packages/shared/src/schemas/events.ts`, issue #4) lands; then
- * this list should come from there.
- */
-export const GAME_EVENT_TYPES = [
-  'tile.updated',
-  'raid.resolved',
-  'building.updated',
-  'squishy.updated',
-  'hollow.nightfall',
-  'member.joined',
-  'member.left',
-  'chat.quick',
-  'milestone.earned',
-] as const;
-export type GameEventType = (typeof GAME_EVENT_TYPES)[number];
 
 /** Who a view is being built for. */
 export interface ViewRecipient {
@@ -51,11 +39,26 @@ export function definePublicView<S extends z.ZodObject>(view: PublicView<S>): Pu
 }
 
 /**
- * The views live sync sends. **Default deny:** an event type with no entry is
- * not broadcast (clients just move their cursor past it). Each module adds the
- * view for the event types it writes, next to the event's internal schema.
+ * The view every member gets for a registry event: the stored payload checked
+ * against its internal schema, then cut down to its `public` schema.
  */
-export const PUBLIC_VIEWS = {} as const satisfies Partial<Record<GameEventType, PublicView>>;
+function registryView(type: GameEventType): PublicView {
+  return definePublicView({
+    schema: GAME_EVENTS[type].public,
+    build: (event) => parseGameEventPayload(type, event.payload),
+  });
+}
+
+/**
+ * The views live sync sends: one per type in the shared event registry
+ * (`packages/shared/src/schemas/events.ts`), built from that type's `public`
+ * schema. **Default deny:** a type that isn't registered has no entry and is
+ * not broadcast (clients just move their cursor past it). A type that needs a
+ * per-recipient view (e.g. a private event) overrides its entry here.
+ */
+export const PUBLIC_VIEWS: PublicViews = Object.fromEntries(
+  GAME_EVENT_TYPES.map((type) => [type, registryView(type)]),
+);
 
 /**
  * The public view of `event` for `recipient`, or null when they get nothing:

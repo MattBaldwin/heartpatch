@@ -25,7 +25,7 @@ import type { WsRepo } from './repo.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
-    /** Live sync; null when `buildApp` got no `wsRepo` (tests without the database). */
+    /** Live sync; null when `buildApp` got no `db` (tests without the database). */
     wsHub: WsHub | null;
   }
 }

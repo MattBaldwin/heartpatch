@@ -35,6 +35,9 @@ export const mapMemberRole = pgEnum('map_member_role', ['owner', 'member']);
 /** Removed players are archived by status, never deleted (tech spec §4). */
 export const mapMemberStatus = pgEnum('map_member_status', ['active', 'removed']);
 export const squishyState = pgEnum('squishy_state', ['active', 'hollowed']);
+/** Map owner's PvP setting (design doc §11, decision B). */
+export const pvpMode = pgEnum('pvp_mode', ['on', 'gentle', 'off']);
+export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'approved', 'denied']);
 
 export const users = pgTable(
   'users',
@@ -111,9 +114,20 @@ export const maps = pgTable(
     timeZone: text('time_zone').notNull(),
     // Last allocated game_events.seq for this map; see game-events.ts.
     eventSeq: bigint('event_seq', { mode: 'number' }).notNull().default(0),
+    // Seats (design doc §3). The map is generated with this many home slots.
+    maxPlayers: smallint('max_players').notNull().default(4),
+    // Who may challenge whom (design doc §11); the owner changes it.
+    pvpMode: pvpMode('pvp_mode').notNull().default('gentle'),
+    // Map generator seed (crypto.randomBytes). Server-only: it predicts every
+    // guardian and spawn, so it is never sent to clients (tech spec §8). Null
+    // for hand-authored maps (tutorial, local seed data).
+    seed: text('seed'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
-  (t) => [check('maps_event_seq_nonnegative', sql`${t.eventSeq} >= 0`)],
+  (t) => [
+    check('maps_event_seq_nonnegative', sql`${t.eventSeq} >= 0`),
+    check('maps_max_players_range', sql`${t.maxPlayers} between 1 and 4`),
+  ],
 );
 
 export const mapMembers = pgTable(
@@ -127,6 +141,9 @@ export const mapMembers = pgTable(
       .references(() => users.id),
     role: mapMemberRole('role').notNull(),
     status: mapMemberStatus('status').notNull().default('active'),
+    // Which home base (tiles.home_slot) is theirs. Null on hand-authored maps.
+    // A removed member keeps the old value, but only active members hold a slot.
+    homeSlot: smallint('home_slot'),
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
   },
   (t) => [
@@ -136,6 +153,11 @@ export const mapMembers = pgTable(
     uniqueIndex('map_members_one_owner_key')
       .on(t.mapId)
       .where(sql`${t.role} = 'owner'`),
+    // Two active players can never share a home base.
+    uniqueIndex('map_members_active_home_slot_key')
+      .on(t.mapId, t.homeSlot)
+      .where(sql`${t.status} = 'active'`),
+    check('map_members_home_slot_nonnegative', sql`${t.homeSlot} >= 0`),
   ],
 );
 
@@ -153,6 +175,14 @@ export const tiles = pgTable(
     terrain: text('terrain').notNull(),
     // Null = neutral. Must be a member of the same map.
     ownerUserId: uuid('owner_user_id'),
+    // Resource id of this tile's node (shared resource data); null = no node.
+    nodeResource: text('node_resource'),
+    // Wild guardian strength on a neutral tile; null on home tiles. Server-only
+    // (it hints at what guards the tile), so it isn't in the public tile view.
+    guardianStrength: smallint('guardian_strength'),
+    // Set on a home base's tiles (the Heart Seed and its ring): which player
+    // slot (map_members.home_slot) it belongs to. Home tiles are never captured.
+    homeSlot: smallint('home_slot'),
   },
   (t) => [
     unique('tiles_map_id_q_r_key').on(t.mapId, t.q, t.r),
@@ -215,5 +245,60 @@ export const gameEvents = pgTable(
   (t) => [
     unique('game_events_map_id_seq_key').on(t.mapId, t.seq),
     check('game_events_seq_positive', sql`${t.seq} >= 1`),
+  ],
+);
+
+export const inviteCodes = pgTable(
+  'invite_codes',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    // Normalized (no dashes, upper case). Shared out loud, so not hashed; it
+    // only lets someone ask to join, and the owner still has to say yes.
+    code: text('code').notNull(),
+    createdByUserId: uuid('created_by_user_id')
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    // Set when the owner revokes or regenerates the code. Kept for audit.
+    revokedAt: timestamptz('revoked_at'),
+  },
+  (t) => [
+    unique('invite_codes_code_key').on(t.code),
+    // One unrevoked code per map; regenerating revokes the old one first.
+    uniqueIndex('invite_codes_one_live_key')
+      .on(t.mapId)
+      .where(sql`${t.revokedAt} is null`),
+  ],
+);
+
+export const joinRequests = pgTable(
+  'join_requests',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    // The code that was entered (it may be revoked later; the request stays).
+    inviteCodeId: uuid('invite_code_id')
+      .notNull()
+      .references(() => inviteCodes.id),
+    status: joinRequestStatus('status').notNull().default('pending'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    // Set when the owner approves or denies.
+    decidedAt: timestamptz('decided_at'),
+  },
+  (t) => [
+    // One open request per player per map.
+    uniqueIndex('join_requests_one_pending_key')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.status} = 'pending'`),
+    index('join_requests_user_id_idx').on(t.userId),
   ],
 );

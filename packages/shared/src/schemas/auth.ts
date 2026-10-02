@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TimeZoneSchema } from './time.js';
 
 // Account API schemas (design doc §18, tech spec §5 and §9). Messages are
 // kid-readable (style guide §6): the client shows them next to the field.
@@ -36,16 +37,8 @@ export const BirthYearSchema = z
   .min(1900, 'Pick the year you were born.')
   .max(2100, 'Pick the year you were born.');
 
-/**
- * IANA time zone from the device (`Intl.DateTimeFormat().resolvedOptions().timeZone`).
- * The server checks it's a real zone; it sets the account's daily-cap boundary
- * (design doc §3).
- */
-export const TimeZoneSchema = z
-  .string()
-  .min(1)
-  .max(64)
-  .regex(/^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)*$/);
+// Moved to schemas/time.ts; re-exported so existing imports keep working.
+export { TimeZoneSchema } from './time.js';
 
 // Recovery codes: 12 characters from an alphabet with no look-alikes (no 0/O,
 // 1/I/L, and no U), shown as ABCD-EFGH-JKMN (tech spec §9).

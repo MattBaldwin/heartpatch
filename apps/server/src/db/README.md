@@ -27,9 +27,9 @@ Already have Postgres 16 locally? Skip `db:up` and point `DATABASE_URL` at it.
 |---|---|
 | `schema.ts` | Table definitions. No `@heartpatch/shared` or relative imports (drizzle-kit loads it with its own loader) |
 | `migrations/` | Generated SQL + drizzle-kit journal. Committed; never edit a merged one. `pnpm build` copies it into `dist/` |
-| `client.ts` | `createDbClient(url)` → `{ db, ping, close }`, the `Database` / `Transaction` types, and `dbReadinessCheck` for `/api/v1/ready` |
+| `client.ts` | `createDbClient(url)` → `{ db, ping, close }`, the `Database` / `Transaction` / `Executor` types, `withTransaction(db, fn)`, and `dbReadinessCheck` for `/api/v1/ready` |
 | `migrator.ts` | `runMigrations(db)` |
-| `game-events.ts` | `appendGameEvent(tx, event)`: the only way to write `game_events` |
+| `game-events.ts` | `appendGameEvent(tx, event)`: the only way to write `game_events`, typed by the shared registry |
 | `seed.ts` | Local test data |
 | `cli.ts` | `migrate` / `seed` entrypoint |
 
@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`). Feature tables (`join_requests`, `invite_codes`, `keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4. Feature tables (`keepers`, `buildings`, `inventories`, ledgers, `battles`, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -89,6 +89,9 @@ One active code per user: a partial unique index on `user_id` where `used_at is 
 | `name` | text | |
 | `time_zone` | text | IANA zone, for nightfall and daily jobs |
 | `event_seq` | bigint, default 0 | Last allocated `game_events.seq`; see below |
+| `max_players` | smallint, default 4 | Seats; the map is generated with this many home slots. Checked 1–4 |
+| `pvp_mode` | enum `pvp_mode`, default `gentle` | `on` \| `gentle` \| `off` (design doc §11, decision B); the owner changes it |
+| `seed` | text, null | Map generator seed (`crypto.randomBytes`). **Server-only**: never in a response schema (tech spec §8). Null for hand-authored maps |
 | `created_at` | timestamptz | |
 
 ### `map_members`
@@ -98,9 +101,10 @@ One active code per user: a partial unique index on `user_id` where `used_at is 
 | `user_id` | uuid → users | PK part. Indexed (a player's maps) |
 | `role` | enum `map_member_role` | `owner` \| `member`. At most one owner per map (partial unique index) |
 | `status` | enum `map_member_status` | `active` \| `removed` |
+| `home_slot` | smallint, null | Which home base (`tiles.home_slot`) is theirs. Unique per map among active members. A removed member keeps the old value but holds no slot |
 | `joined_at` | timestamptz | |
 
-The 2–4 players-per-map limit is a game rule, enforced by the maps service.
+The 2–4 players-per-map limit is a game rule, enforced by the maps service under a row lock (apps/server/README.md, "Maps").
 
 ### `tiles`
 | Column | Type | Notes |
@@ -110,6 +114,32 @@ The 2–4 players-per-map limit is a game rule, enforced by the maps service.
 | `q`, `r` | smallint | Axial hex coords. Unique per map |
 | `terrain` | text | Terrain id from shared data |
 | `owner_user_id` | uuid, null | Null = neutral. FK `(map_id, owner_user_id)` → `map_members` |
+| `node_resource` | text, null | Resource id of the tile's node; null = none |
+| `guardian_strength` | smallint, null | Wild guardian strength on neutral tiles. Server-only (not in `PublicTileSchema`) |
+| `home_slot` | smallint, null | Set on a home base's 7 tiles: whose slot it is. Home tiles are never captured |
+
+Tiles are written once, from `generateMap`, when the map is created.
+
+### `invite_codes`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `code` | text, unique | 8 characters, normalized (no dash). Not hashed: it's shared out loud and only lets someone *ask* to join |
+| `created_by_user_id` | uuid → users | |
+| `created_at`, `expires_at` | timestamptz | Live for 7 days (`INVITE_CODE_TTL_MS`, `// TUNE:`) |
+| `revoked_at` | timestamptz, null | Set on revoke or regenerate; kept for audit. One unrevoked code per map (partial unique index) |
+
+### `join_requests`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `map_id` | uuid → maps | Cascade delete |
+| `user_id` | uuid → users | Indexed |
+| `invite_code_id` | uuid → invite_codes | The code they entered |
+| `status` | enum `join_request_status` | `pending` \| `approved` \| `denied`. One pending request per player per map (partial unique index) |
+| `created_at` | timestamptz | |
+| `decided_at` | timestamptz, null | |
 
 ### `squishies`
 | Column | Type | Notes |
@@ -142,14 +172,16 @@ Care (`contentment`, `last_cared_at`, care history), stats, habitat and accessor
 Every meaningful change writes a `game_events` row **in the same transaction** as the change, through `appendGameEvent`, called as the **last write**:
 
 ```ts
-await db.transaction(async (tx) => {
+await withTransaction(db, async (tx) => {
   // 1. Lock and change entity rows (SELECT … FOR UPDATE, UPDATE …)
   // 2. Last: allocate seq and write the event
-  const event = await appendGameEvent(tx, { mapId, type: 'tile.updated', actorUserId, payload });
+  const event = await appendGameEvent(tx, { mapId, type: 'map.updated', actorUserId, payload });
   return event;
 });
-// 3. After commit: broadcast `event` to WebSocket clients
+// 3. After commit: wsHub.publish(mapId); live sync sends the type's public view (apps/server/README.md)
 ```
+
+Event types and payloads come from the shared registry, `packages/shared/src/schemas/events.ts`: each type has an **internal** payload schema (what's stored; `appendGameEvent` is generic over the type, so payloads typecheck, and it validates them at runtime too) and a **public** one (what live sync may broadcast: `PUBLIC_VIEWS` in `src/ws/public-views.ts` is built from these, one view per type). Add a type there before writing it. Tests of the event stream itself, which need made-up types, use `appendRawGameEvent`; modules never do.
 
 `appendGameEvent` runs `UPDATE maps SET event_seq = event_seq + 1 … RETURNING event_seq` and inserts the event with that seq. The update row-locks the map until commit, so seqs never skip (a rollback undoes the bump too, unlike a Postgres sequence) and commit order matches seq order. Taking that lock last keeps a fixed lock order (entities, then `maps`), which avoids deadlocks. Integration tests in `game-events.test.ts` check concurrent appends, rollbacks and both mixed together.
 

@@ -45,12 +45,17 @@ describe.skipIf(!url)('appendGameEvent (needs DATABASE_URL)', () => {
     const event = await db.transaction((tx) =>
       appendGameEvent(tx, {
         mapId,
-        type: 'tile.updated',
+        type: 'map.updated',
         actorUserId: null,
-        payload: { q: 1, r: -1 },
+        payload: { pvpMode: 'off' },
       }),
     );
-    expect(event).toMatchObject({ mapId, seq: 1, type: 'tile.updated', payload: { q: 1, r: -1 } });
+    expect(event).toMatchObject({
+      mapId,
+      seq: 1,
+      type: 'map.updated',
+      payload: { pvpMode: 'off' },
+    });
     expect(event.createdAt).toBeInstanceOf(Date);
     expect(await eventSeqOf(mapId)).toBe(1);
   });
@@ -65,9 +70,9 @@ describe.skipIf(!url)('appendGameEvent (needs DATABASE_URL)', () => {
           await tx.execute(`select pg_sleep(${String((i % 5) * 0.005)})`);
           return appendGameEvent(tx, {
             mapId,
-            type: 'test.concurrent',
+            type: 'map.updated',
             actorUserId: null,
-            payload: { i },
+            payload: { pvpMode: i % 2 ? 'on' : 'off' },
           });
         }),
       ),
@@ -79,31 +84,41 @@ describe.skipIf(!url)('appendGameEvent (needs DATABASE_URL)', () => {
   it('leaves no gap when a transaction rolls back after appending', async () => {
     const mapId = await newMap();
     await db.transaction((tx) =>
-      appendGameEvent(tx, { mapId, type: 'test.kept', actorUserId: null, payload: {} }),
+      appendGameEvent(tx, {
+        mapId,
+        type: 'map.updated',
+        actorUserId: null,
+        payload: { pvpMode: 'off' },
+      }),
     );
 
     await expect(
       db.transaction(async (tx) => {
         await appendGameEvent(tx, {
           mapId,
-          type: 'test.rolled_back',
+          type: 'map.updated',
           actorUserId: null,
-          payload: {},
+          payload: { pvpMode: 'on' },
         });
         throw new Error('change failed');
       }),
     ).rejects.toThrow('change failed');
 
     const next = await db.transaction((tx) =>
-      appendGameEvent(tx, { mapId, type: 'test.kept', actorUserId: null, payload: {} }),
+      appendGameEvent(tx, {
+        mapId,
+        type: 'map.updated',
+        actorUserId: null,
+        payload: { pvpMode: 'off' },
+      }),
     );
     expect(next.seq).toBe(2);
     expect(await seqsFor(mapId)).toEqual([1, 2]);
-    const types = await db
-      .select({ type: gameEvents.type })
+    const payloads = await db
+      .select({ payload: gameEvents.payload })
       .from(gameEvents)
       .where(eq(gameEvents.mapId, mapId));
-    expect(types.map((t) => t.type)).not.toContain('test.rolled_back');
+    expect(payloads.map((p) => p.payload)).not.toContainEqual({ pvpMode: 'on' });
   });
 
   it('stays gap-free when concurrent commits and rollbacks interleave', async () => {
@@ -114,9 +129,9 @@ describe.skipIf(!url)('appendGameEvent (needs DATABASE_URL)', () => {
         db.transaction(async (tx) => {
           await appendGameEvent(tx, {
             mapId,
-            type: 'test.mixed',
+            type: 'map.updated',
             actorUserId: null,
-            payload: { i },
+            payload: { pvpMode: i % 2 ? 'on' : 'off' },
           });
           if (i % 3 === 0) throw new Error('roll back');
         }),
@@ -135,9 +150,9 @@ describe.skipIf(!url)('appendGameEvent (needs DATABASE_URL)', () => {
         db.transaction((tx) =>
           appendGameEvent(tx, {
             mapId: i % 2 ? a : b,
-            type: 'test.split',
+            type: 'map.updated',
             actorUserId: null,
-            payload: {},
+            payload: { pvpMode: 'off' },
           }),
         ),
       ),
@@ -150,16 +165,43 @@ describe.skipIf(!url)('appendGameEvent (needs DATABASE_URL)', () => {
     const missing = '0190a000-0000-7000-8000-000000000000';
     await expect(
       db.transaction((tx) =>
-        appendGameEvent(tx, { mapId: missing, type: 'test.x', actorUserId: null, payload: {} }),
+        appendGameEvent(tx, {
+          mapId: missing,
+          type: 'map.updated',
+          actorUserId: null,
+          payload: { pvpMode: 'off' },
+        }),
       ),
     ).rejects.toThrow(/does not exist/);
     expect(await seqsFor(missing)).toEqual([]);
   });
 
+  it('rejects a payload that does not match its type, writing nothing', async () => {
+    const mapId = await newMap();
+    await expect(
+      db.transaction((tx) =>
+        appendGameEvent(tx, {
+          mapId,
+          type: 'map.updated',
+          actorUserId: null,
+          // @ts-expect-error: not a PvP mode
+          payload: { pvpMode: 'wild' },
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(await seqsFor(mapId)).toEqual([]);
+    expect(await eventSeqOf(mapId)).toBe(0);
+  });
+
   it('rejects a duplicate (map_id, seq) written around the helper', async () => {
     const mapId = await newMap();
     await db.transaction((tx) =>
-      appendGameEvent(tx, { mapId, type: 'test.x', actorUserId: null, payload: {} }),
+      appendGameEvent(tx, {
+        mapId,
+        type: 'map.updated',
+        actorUserId: null,
+        payload: { pvpMode: 'off' },
+      }),
     );
     await expect(
       db.insert(gameEvents).values({ mapId, seq: 1, type: 'test.dup', payload: {} }),
