@@ -801,6 +801,8 @@ export const careLog = pgTable(
   },
   (t) => [
     index('care_log_squishy_id_day_idx').on(t.squishyId, t.day),
+    // The debounce reads only the last few seconds of a squishy's care.
+    index('care_log_squishy_id_cared_at_idx').on(t.squishyId, t.caredAt),
     index('care_log_user_id_day_idx').on(t.userId, t.day),
     check('care_log_gained_nonnegative', sql`${t.gained} >= 0`),
     check('care_log_coins_nonnegative', sql`${t.coins} >= 0`),

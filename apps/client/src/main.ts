@@ -112,7 +112,7 @@ const care = createCareSheet({ root: document.body });
 // battle opens the battle screen, unless another screen sits over the map.
 const territory = createTerritoryScreen({
   openBattle: (battle) => {
-    if (!lobby.isOpen && !catalog.isOpen) battles.open(battle);
+    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) battles.open(battle);
   },
 });
 // The home base (#18): a Home button over a multiplayer map opens the

@@ -32,6 +32,7 @@ ALTER TABLE "care_log" ADD CONSTRAINT "care_log_squishy_id_squishies_id_fk" FORE
 ALTER TABLE "squishy_evolutions" ADD CONSTRAINT "squishy_evolutions_map_id_maps_id_fk" FOREIGN KEY ("map_id") REFERENCES "public"."maps"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "squishy_evolutions" ADD CONSTRAINT "squishy_evolutions_squishy_id_squishies_id_fk" FOREIGN KEY ("squishy_id") REFERENCES "public"."squishies"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "care_log_squishy_id_day_idx" ON "care_log" USING btree ("squishy_id","day");--> statement-breakpoint
+CREATE INDEX "care_log_squishy_id_cared_at_idx" ON "care_log" USING btree ("squishy_id","cared_at");--> statement-breakpoint
 CREATE INDEX "care_log_user_id_day_idx" ON "care_log" USING btree ("user_id","day");--> statement-breakpoint
 CREATE INDEX "squishy_evolutions_unseen_idx" ON "squishy_evolutions" USING btree ("squishy_id") WHERE "squishy_evolutions"."seen_at" is null;--> statement-breakpoint
 ALTER TABLE "squishies" ADD CONSTRAINT "squishies_contentment_range" CHECK ("squishies"."contentment_at_last_care" between 0 and 100);

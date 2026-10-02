@@ -1,5 +1,5 @@
 {
-  "id": "fb3d8e92-fc31-4a4f-8d31-0f827beb9650",
+  "id": "cdd8a778-923b-4040-9d26-23735356b6b1",
   "prevId": "169ea164-8326-4107-891e-e362598c5c00",
   "version": "7",
   "dialect": "postgresql",
@@ -443,6 +443,27 @@
             },
             {
               "expression": "day",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "care_log_squishy_id_cared_at_idx": {
+          "name": "care_log_squishy_id_cared_at_idx",
+          "columns": [
+            {
+              "expression": "squishy_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "cared_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

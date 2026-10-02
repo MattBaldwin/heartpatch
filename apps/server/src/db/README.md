@@ -165,7 +165,7 @@ Tiles are written once, from `generateMap`, when the map is created.
 | `id` | uuid PK | The `ref_id` of a feed's `resource_ledger` row |
 | `map_id` | uuid → maps | Cascade delete |
 | `user_id` | uuid → users | Cascade delete. Indexed with `day`: Patch Coins from care per account per day, across every patch (the cap) |
-| `squishy_id` | uuid → squishies | Cascade delete. Indexed with `day`: care actions per squishy per day (diminishing returns) |
+| `squishy_id` | uuid → squishies | Cascade delete. Indexed with `day` (care actions per squishy per day: diminishing returns) and with `cared_at` (the debounce) |
 | `action` | text | Care action id (`feed`, `pet`, `play`) |
 | `day` | date | The owner's account-local date (`users.time_zone`) when it happened |
 | `gained` | integer | Contentment it added, ≥ 0 |

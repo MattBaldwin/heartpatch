@@ -228,7 +228,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       note.textContent = messageOf(err);
       // The debounce or the bag changed under us: show the server's view again.
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
-        setReply(await api.list(map).catch(() => reply));
+        const fresh = await api.list(map).catch(() => null);
+        if (fresh && mine === ticket) setReply(fresh);
       }
     } finally {
       working = false;
