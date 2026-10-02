@@ -15,8 +15,11 @@ declare global {
       idle(): boolean;
       /** Draws a few frames, as any untracked change would. */
       invalidate(): void;
-      /** The open map as drawn (id, tile and tint counts, selection), or null. */
-      map(): MapDebug | null;
+      /**
+       * The open map as drawn (id, tile and tint counts, selection), or null.
+       * Only the game page has it (not dev pages like the squishy gallery).
+       */
+      map?(): MapDebug | null;
     };
   }
 }

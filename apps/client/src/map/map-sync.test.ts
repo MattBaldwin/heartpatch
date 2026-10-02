@@ -215,6 +215,37 @@ describe('MapSync', () => {
     expect(calls).toEqual(['unsubscribe', `subscribe ${MAP_ID} 6`]);
   });
 
+  it('drops a resync that began during an open that then succeeded', async () => {
+    const { sync, fetches, calls, redraws } = await opened(5);
+    const reopening = sync.open(MAP_ID); // fetch 1
+    sync.event(joined(6)); // resync on the old copy: fetch 2
+    fetches[1]!.resolve(at(10, testView(2)));
+    expect((await reopening)?.view.seq).toBe(10);
+    fetches[2]!.resolve(at(6, testView(2)));
+    await vi.advanceTimersByTimeAsync(RESYNC_RETRY_MAX_MS);
+    expect(redraws).toEqual([]);
+    expect(calls).toEqual(['unsubscribe', `subscribe ${MAP_ID} 10`]);
+    expect(sync.state?.view.seq).toBe(10);
+    // And the new copy is live.
+    sync.event(event('map.updated', { pvpMode: 'off' }, 11));
+    expect(sync.state?.view.map.pvpMode).toBe('off');
+  });
+
+  it("never lets an old map's late resync take over a different map", async () => {
+    const { sync, fetches, calls, redraws } = await opened(5);
+    const other = '0190a8c4-0000-7000-8000-0000000000bb';
+    const visiting = sync.open(other); // fetch 1
+    sync.serverResync(MAP_ID); // resync for the map still on screen: fetch 2
+    const otherView = testView(1);
+    fetches[1]!.resolve({ ...otherView, map: { ...otherView.map, id: other }, seq: 3 });
+    expect((await visiting)?.id).toBe(other);
+    fetches[2]!.resolve(at(9));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(redraws).toEqual([]);
+    expect(calls.at(-1)).toBe(`subscribe ${other} 3`);
+    expect(calls.filter((c) => c.startsWith('subscribe'))).toHaveLength(1);
+  });
+
   it('keeps a live map live when a failed open came in between', async () => {
     const { sync, fetches, calls } = await opened(5);
     const reopening = sync.open(MAP_ID);

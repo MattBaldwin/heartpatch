@@ -69,6 +69,8 @@ export class MapSync {
       throw err;
     }
     if (at !== this.generation) return null;
+    // A new map (or a fresh copy): any resync still running belongs to the old one.
+    this.generation += 1;
     this.reset();
     this.current = new MapState(view);
     this.options.socket().subscribe(mapId, view.seq);
@@ -118,7 +120,7 @@ export class MapSync {
     this.options.socket().unsubscribe();
     this.options.fetchView(state.id).then(
       (view) => {
-        if (at !== this.generation) return;
+        if (at !== this.generation || state !== this.current) return;
         this.resyncing = false;
         this.unsynced = false;
         this.retryDelay = RESYNC_RETRY_MS;
@@ -127,7 +129,7 @@ export class MapSync {
         this.options.socket().subscribe(view.map.id, view.seq);
       },
       (err: unknown) => {
-        if (at !== this.generation) return;
+        if (at !== this.generation || state !== this.current) return;
         this.resyncing = false;
         if (err instanceof ApiRequestError && !RETRYABLE.has(err.code)) {
           // Removed from the map, or logged out: retrying can't bring it back.
