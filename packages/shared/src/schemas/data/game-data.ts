@@ -10,6 +10,7 @@ import { ResourceSchema } from './resources.js';
 import { SeasonSchema } from './seasons.js';
 import { SpeciesSchema } from './species.js';
 import { TerrainSchema } from './terrains.js';
+import { BodySchema, checkSpeciesVisual, PartSchema, visualRegistry } from './visuals.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Path, type Report } from './issues.js';
 
 function checkCost(
@@ -27,7 +28,7 @@ const ids = (rows: readonly { id: string }[]) => new Set(rows.map((r) => r.id));
 /**
  * Every public content table, validated row by row and then cross-checked so
  * every id a row mentions exists (moves, evolutions, seasons, resources,
- * terrains).
+ * terrains, and the bodies and parts species visuals use).
  */
 export const GameDataSchema = z
   .strictObject({
@@ -45,6 +46,8 @@ export const GameDataSchema = z
     careActions: z.array(CareActionSchema),
     terrains: z.array(TerrainSchema),
     mapGen: MapGenSettingsSchema,
+    bodies: z.array(BodySchema),
+    parts: z.array(PartSchema),
   })
   .superRefine((data, ctx) => {
     const report: Report = (path, message) => {
@@ -62,6 +65,8 @@ export const GameDataSchema = z
       'seasons',
       'careActions',
       'terrains',
+      'bodies',
+      'parts',
     ] as const) {
       checkUniqueIds(table, data[table], report);
     }
@@ -79,8 +84,10 @@ export const GameDataSchema = z
     const resources = ids(data.resources);
     const moves = ids(data.moves);
     const species = ids(data.species);
+    const visuals = visualRegistry(data);
 
     data.species.forEach((s, i) => {
+      checkSpeciesVisual(s.visual, visuals, ['species', i, 'visual'], report);
       checkRef(seasons, 'season', s.season, ['species', i, 'season'], report);
       s.moves.forEach((move, j) => {
         checkRef(moves, 'move', move, ['species', i, 'moves', j], report);

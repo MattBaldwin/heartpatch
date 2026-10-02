@@ -239,4 +239,47 @@ describe('checkGameData', () => {
       "mapGen.guardianStrength: Juniper's Gap guardians must be the strongest",
     ]);
   });
+
+  it('reports unknown bodies and parts on a species visual', () => {
+    const problems = problemsAfter((d) => {
+      d.species[0]!.visual.body = 'cube';
+      d.species[0]!.visual.parts = ['dot-eyes', 'laser-eyes'];
+    });
+    expect(problems).toEqual([
+      'species["fixture-puddlepuff"].visual.body: unknown body "cube"',
+      'species["fixture-puddlepuff"].visual.parts[1]: unknown part "laser-eyes"',
+    ]);
+  });
+
+  it('reports a part listed twice or two parts in one slot', () => {
+    const problems = problemsAfter((d) => {
+      d.species[0]!.visual.parts = ['dot-eyes', 'dot-eyes', 'oval-eyes'];
+    });
+    expect(problems).toEqual([
+      'species["fixture-puddlepuff"].visual.parts[1]: part "dot-eyes" is listed twice',
+      'species["fixture-puddlepuff"].visual.parts[2]: parts "dot-eyes" and "oval-eyes" both use the eyes slot',
+    ]);
+  });
+
+  it('needs every squishy to have eyes', () => {
+    const problems = problemsAfter((d) => {
+      d.species[0]!.visual.parts = ['smile', 'round-ears'];
+    });
+    expect(problems).toEqual([
+      'species["fixture-puddlepuff"].visual.parts: every squishy needs eyes (a part in the eyes slot)',
+    ]);
+  });
+
+  it('reports duplicate and malformed bodies and parts', () => {
+    const problems = problemsAfter((d) => {
+      d.bodies.push({ ...d.bodies[0]! });
+      d.parts[0]!.size = [0.1, 0.1, 0];
+      d.parts[1]!.layout = { kind: 'scatter', count: 1, aroundRange: 10, upRange: 10 };
+    });
+    expect(problems).toEqual([
+      'parts["dot-eyes"].size[2]: Too small: expected number to be >=0.005',
+      'parts["oval-eyes"].layout.count: Too small: expected number to be >=2',
+      'bodies["blob"].id: duplicate id "blob"',
+    ]);
+  });
 });

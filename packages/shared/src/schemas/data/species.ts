@@ -25,13 +25,19 @@ export type Evolution = z.infer<typeof EvolutionSchema>;
 const HexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/, 'Expected a colour like "#ffaa00"');
 
 /**
- * Procedural vinyl-toy parameters (design doc §19): a body shape, a palette
- * and swappable parts. The procedural generator issue may extend this.
+ * Procedural vinyl-toy parameters (design doc §19). `body` and `parts` are
+ * ids from the registry (`BODIES`, `PARTS`); `checkGameData` checks them, and
+ * every squishy needs a part in the `eyes` slot. The palette is the
+ * `primary`, `secondary`, `accent` and `detail` colours in that order (see
+ * `PaletteRoleSchema`). Each squishy's small variations are seeded from its
+ * instance id on the client, so this is all the species decides.
  */
 export const SpeciesVisualSchema = z.strictObject({
   body: ContentIdSchema,
   palette: z.array(HexColorSchema).min(1).max(4),
   parts: z.array(ContentIdSchema).max(8),
+  /** Overall scale; evolutions are usually a little bigger. Defaults to 1. */
+  size: z.number().min(0.5).max(2).optional(),
 });
 export type SpeciesVisual = z.infer<typeof SpeciesVisualSchema>;
 

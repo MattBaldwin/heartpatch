@@ -107,3 +107,14 @@ _Proposed in the #4 PR; the project owner confirms on merge._
 - **Join requests and invite codes write no game events.** Only the owner sees them; game events are for map state every member sees.
 - **Repos take a transaction** (`Database | Transaction`) and services run multi-repo commands through `repo.transaction` (which wraps `withTransaction`); `buildApp` takes `{ db, clock }` (coordinator's drift audit). The per-map "seats" lock is the owner's `map_members` row, so seat changes never lock the busy `maps` row early.
 - **Owner resets lock the account.** The reset-scope check (decision D) and the reset run in one transaction holding the member's `users` row, which joining (request and approval) and creating a map also lock, so a reset can't race the member joining or making another map.
+
+## 2026-10-02 — Procedural squishies (#9)
+
+_Proposed in the #9 PR; the project owner confirms on merge._
+
+- **The body and part registry is the species-visual contract.** `BODIES` and `PARTS` (`packages/shared/src/data/visuals.ts`) hold every shape a species can use; `species.visual.body` and `visual.parts` point at their ids and `checkGameData` checks them (known ids, no part twice, one part per slot). Ids are never renamed. A new body or part is a data entry; only a new part `shape` (primitive) also needs a client builder. *Why:* #10 writes the roster against fixed ids, and content shouldn't need engine changes (CLAUDE.md rule 5).
+- **Every squishy has eyes.** A species visual must include a part in the `eyes` slot. *Why:* the face is what makes them cute; a faceless blob reads as a rock.
+- **Look variation is seeded per squishy, on the client.** `squishyParams(species, instanceId)` derives proportions, colour, placement and breathing from `deriveSeed('squishy', speciesId, instanceId)` with arithmetic only, so every player (V8 or Safari) sees the same squishy. It's cosmetic, so it isn't server-authoritative; stats variance stays server-side.
+- **Squash and rim light are GLSL only for now.** They run in a Babylon material plugin on the WebGL2 default. Under the opt-in WebGPU renderer the plugin isn't attached, so squishies render still and without the rim until a WGSL port (tech spec §6).
+- **Detail levels:** the map always uses low detail; close-ups use high detail unless the quality governor has dropped to the low tier (`lodFor`).
+- **The squishy gallery is a separate dev page** (`/gallery.html`), never in the production build, so it doesn't touch `main.ts`.
