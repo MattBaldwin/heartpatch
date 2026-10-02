@@ -132,9 +132,13 @@ const closeUp = createCloseUpScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   snapshot: () => {
     if (!stage) return null;
-    // Draw now so the canvas holds a fresh frame to read in this same task.
+    // Draw a whole frame now, so the canvas holds it to read in this same
+    // task (WebGPU only submits the frame at endFrame).
+    const { engine } = stage.renderer;
+    engine.beginFrame();
     stage.scene.render();
-    return stage.renderer.engine.getRenderingCanvas();
+    engine.endFrame();
+    return engine.getRenderingCanvas();
   },
   onOpen: () => {
     maps.close();
@@ -182,7 +186,7 @@ let raidReportOpen = false;
 const raidReport = createRaidReport({
   root: document.body,
   watch: (replay) => {
-    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) {
+    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) {
       battles.watch(replay.start, replay.end);
     }
   },
@@ -194,7 +198,7 @@ const raidReport = createRaidReport({
 const territory = withRaidReport(
   createTerritoryScreen({
     openBattle: (battle) => {
-      if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) battles.open(battle);
+      if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
     },
   }),
   raidReport,
@@ -207,7 +211,7 @@ const hollow = createHollowScreen({
   layer: hollowLayer,
   otherReportOpen: () => raidReportOpen,
   openBattle: (battle) => {
-    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen) battles.open(battle);
+    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
   },
   devTools: import.meta.env.DEV,
 });
@@ -369,7 +373,7 @@ const battles = createBattleScreen({
     catalog.show(mapId);
   },
   // A reply landing while the lobby or catalog is up must not open a battle over it.
-  canOpen: () => !lobby.isOpen && !catalog.isOpen,
+  canOpen: () => !lobby.isOpen && !catalog.isOpen && !closeUp.isOpen,
   devTools: import.meta.env.DEV,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,

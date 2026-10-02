@@ -71,8 +71,11 @@ export const GESTURE = {
   hitSlop: 0.25, // TUNE
 } as const;
 
-/** How the squishy reacts (design doc §20: happy wiggle, blush, giggle, yawn). */
-export type ReactionId = 'boop' | 'wiggle' | 'giggle' | 'nom' | 'sniff' | 'yawn';
+/**
+ * How the squishy reacts to a touch (design doc §20: happy wiggle, blush,
+ * giggle; the yawn is Sleepy's idle move).
+ */
+export type ReactionId = 'boop' | 'wiggle' | 'giggle' | 'nom' | 'sniff';
 
 export interface Reaction {
   readonly move: SquishMove;
@@ -90,7 +93,6 @@ export const REACTIONS: Readonly<Record<ReactionId, Reaction>> = {
   giggle: { move: 'jiggle', strength: 1.4, bubble: 'Hee hee!', blush: true },
   nom: { move: 'bounce', strength: 1, bubble: 'Nom nom!', blush: false },
   sniff: { move: 'wobble', strength: 0.4, bubble: 'Sniff sniff?', blush: false },
-  yawn: { move: 'wobble', strength: 0.35, bubble: 'Yaaawn…', blush: false },
 };
 
 /** Idle personality moves that aren't shader squish moves (design doc §20). */
@@ -114,7 +116,7 @@ export const IDLE_BY_FEELING: Readonly<Record<FeelingId, IdleMove>> = {
   cozy: { motion: 'snuggle', ms: 1600, bubble: '☺️', squish: 'wobble' },
   brave: { motion: 'puff', ms: 1300, bubble: null, squish: null },
   silly: { motion: 'spin', ms: 1000, bubble: 'Wheee!', squish: 'jiggle' },
-  sleepy: { motion: 'nod', ms: 2200, bubble: '💤', squish: null },
+  sleepy: { motion: 'nod', ms: 2200, bubble: 'Yaaawn… 💤', squish: null },
   spooky: { motion: 'boo', ms: 1200, bubble: 'Boo! …hee hee', squish: 'jiggle' },
 };
 

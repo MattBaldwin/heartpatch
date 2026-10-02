@@ -318,6 +318,24 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     reply = next;
     replyAt = performance.now();
   };
+  /** The species the 3D squishy was built as. */
+  let builtSpecies: string | null = null;
+
+  /**
+   * A fresh list from the server: the squishy may have evolved (redraw it as
+   * its new form) or left (taken to the Hollow overnight: say so and go back).
+   */
+  function accept(next: CareListResponse): void {
+    setReply(next);
+    const squishy = current();
+    if (!squishy) {
+      note.textContent = CARE_TEXT.notHere;
+      close();
+      return;
+    }
+    if (builtSpecies !== null && squishy.speciesId !== builtSpecies) options.showScene(build);
+    render();
+  }
   /** The server's time now, as reckoned from the last reply (a phone's own clock may be off). */
   const serverNow = (): number =>
     reply ? Date.parse(reply.now) + (performance.now() - replyAt) : 0;
@@ -496,19 +514,22 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
         () => mine === ticket,
       );
       if (!next || mine !== ticket) return;
-      setReply(next);
       note.textContent = careDoneLine(next.result);
+      accept(next);
     } catch (err) {
       if (mine !== ticket) return;
       note.textContent = messageOf(err);
       // The debounce or the bag changed under us: show the server's view again.
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
         const fresh = await api.list(map).catch(() => null);
-        if (fresh && mine === ticket) setReply(fresh);
+        if (fresh && mine === ticket) {
+          accept(fresh);
+          return;
+        }
       }
     } finally {
       inFlight.delete(action);
-      if (mine === ticket) render();
+      if (mine === ticket && phase !== 'leaving') render();
     }
   }
 
@@ -662,10 +683,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
       () => mine === ticket,
     )
       .then((next) => {
-        if (next && mine === ticket) {
-          setReply(next);
-          render();
-        }
+        if (next && mine === ticket) accept(next);
       })
       .catch((err: unknown) => {
         if (mine === ticket) note.textContent = messageOf(err);
@@ -704,6 +722,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     const species = squishy && reply ? speciesById(reply).get(squishy.speciesId) : undefined;
     if (!squishy || !species) throw new Error('no squishy to build');
     lastTier = options.tier();
+    builtSpecies = squishy.speciesId;
     const built = new CloseUpScene(scene, {
       registry,
       lod: heroLodFor(lastTier),
@@ -725,15 +744,20 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   /** The camera now: swooping in, face to face, or swooping out. */
   function cameraPose(now: number): { pose: ClosePose; drop: number } {
     const start = CAMERA_POSES.from;
-    const swoop = (t: number) => ({
-      pose: poseBetween(start, framed.pose, t),
-      drop: framed.drop * t,
-    });
     if (reducedMotion.matches) return framed;
-    if (phase === 'arriving') return swoop(easeOutCubic((now - phaseAt) / SWOOP.inMs));
-    if (phase === 'leaving') return swoop(1 - easeInOutSine((now - phaseAt) / SWOOP.outMs));
+    if (phase === 'arriving') {
+      const t = easeOutCubic((now - phaseAt) / SWOOP.inMs);
+      return { pose: poseBetween(start, framed.pose, t), drop: framed.drop * t };
+    }
+    if (phase === 'leaving') {
+      // From wherever it was (Back mid-swoop doesn't jump forward first).
+      const t = easeInOutSine((now - phaseAt) / SWOOP.outMs);
+      return { pose: poseBetween(leaveFrom.pose, start, t), drop: leaveFrom.drop * (1 - t) };
+    }
     return framed;
   }
+  /** The camera when Back was pressed. */
+  let leaveFrom: { pose: ClosePose; drop: number } = framed;
 
   /**
    * Frames the squishy in the space above the card (as it is with About
@@ -840,10 +864,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     const mine = ticket;
     if (!map) return;
     const fresh = await api.list(map).catch(() => null);
-    if (fresh && mine === ticket && fresh.squishies.some((s) => s.id === squishyId)) {
-      setReply(fresh);
-      render();
-    }
+    if (fresh && mine === ticket) accept(fresh);
   }
 
   // ── Open and close ────────────────────────────────────────────────────
@@ -899,6 +920,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   /** Swoops out, then hands the screen back. */
   function close(): void {
     if (!isOpen() || phase === 'leaving') return;
+    leaveFrom = cameraPose(performance.now());
     phase = 'leaving';
     phaseAt = performance.now();
     idle = null;
@@ -943,6 +965,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     squishyId = null;
     reply = null;
     backdrop = null;
+    builtSpecies = null;
     scene3d = null;
     renaming = false;
     overlay.hidden = true;
