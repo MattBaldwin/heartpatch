@@ -57,8 +57,8 @@ function addBoth(tallies: Tallies, r: MatchResult, keyOf: (e: Entrant, side: 'a'
 
 const speciesTune = (secret: boolean) =>
   secret
-    ? 'species base stats or moves (data/server/secret-species.ts)'
-    : 'species base stats or moves (data/species.ts)';
+    ? 'species base stats or moves (packages/shared/src/data/server/secret-species.ts)'
+    : 'species base stats or moves (packages/shared/src/data/species.ts)';
 
 export function buildRows(results: readonly MatchResult[], config: SimConfig): ReportRow[] {
   const { low, high } = config.thresholds;
@@ -126,7 +126,7 @@ export function buildRows(results: readonly MatchResult[], config: SimConfig): R
       subject: key,
       opponent: '',
       rarity: '',
-      tune: `element matrix (data/matrices.ts ELEMENT_MATRIX) or the ${key} moves (data/species.ts MOVES)`,
+      tune: `element matrix (packages/shared/src/data/matrices.ts ELEMENT_MATRIX) or the ${key} moves (packages/shared/src/data/species.ts MOVES)`,
     } as const;
     rows.push(row(fields, t));
   }
@@ -137,7 +137,7 @@ export function buildRows(results: readonly MatchResult[], config: SimConfig): R
       subject: key,
       opponent: '',
       rarity: '',
-      tune: 'feeling matrix (data/matrices.ts FEELING_MATRIX)',
+      tune: 'feeling matrix (packages/shared/src/data/matrices.ts FEELING_MATRIX)',
     } as const;
     rows.push(row(fields, t));
   }
@@ -148,7 +148,7 @@ export function buildRows(results: readonly MatchResult[], config: SimConfig): R
       subject: key,
       opponent: '',
       rarity: '',
-      tune: 'synergy table (data/matrices.ts SYNERGY_TABLE)',
+      tune: 'synergy table (packages/shared/src/data/matrices.ts SYNERGY_TABLE)',
     } as const;
     rows.push(row(fields, t));
   }
@@ -169,7 +169,7 @@ export function buildRows(results: readonly MatchResult[], config: SimConfig): R
       subject,
       opponent,
       rarity: '',
-      tune: 'AI stances (data/battle.ts BATTLE_RULES.ai)',
+      tune: 'AI stances (packages/shared/src/data/battle.ts BATTLE_RULES.ai)',
     } as const;
     rows.push(row(fields, t));
   }

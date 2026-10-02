@@ -13,7 +13,7 @@ import {
   type ElementId,
   type FeelingId,
 } from '../../src/schemas/data/elements.js';
-import type { Species } from '../../src/schemas/data/species.js';
+import { SpeciesSchema, type Species } from '../../src/schemas/data/species.js';
 import type { SimConfig } from './config.js';
 
 /*
@@ -59,6 +59,8 @@ export interface SimPlan {
 }
 
 const STAND_IN_PREFIX = 'sim-stand-in-';
+/** A species knows 2–4 moves (design doc §6, `SpeciesSchema`). */
+const MAX_MOVES = 4;
 
 /** The battle data the server plays with: public plus secret rows. */
 export function serverData(): BattleData {
@@ -78,8 +80,11 @@ export function speciesForms(data: BattleData): { base: Species[]; evolved: Spec
 }
 
 /**
- * One stand-in species per element: the average base form's stats and every
- * public move of that element. Its feeling is set per battle.
+ * One stand-in species per element: the average base form's stats and up to
+ * `MAX_MOVES` of that element's public moves, the ones most public base
+ * forms know first (ties in move-table order). Its feeling is set per battle.
+ * Validated like real data, so the engine never sees a squishy the game
+ * couldn't have.
  */
 export function standIns(data: BattleData): Species[] {
   const { base } = speciesForms(data);
@@ -94,13 +99,16 @@ export function standIns(data: BattleData): Species[] {
   };
   const template = publicBase[0];
   if (!template) throw new Error('the roster has no public base forms');
-  const publicMoves = new Set(GAME_DATA.moves.map((m) => m.id));
+  const knownBy = new Map<string, number>();
+  for (const s of publicBase) for (const id of s.moves) knownBy.set(id, (knownBy.get(id) ?? 0) + 1);
   return ElementIdSchema.options.map((element) => {
-    const moves = data.moves
-      .filter((m) => m.element === element && publicMoves.has(m.id))
-      .map((m) => m.id);
-    if (moves.length === 0) throw new Error(`no public ${element} moves for the stand-in`);
-    return {
+    const moves = GAME_DATA.moves
+      .map((m, index) => ({ m, index, uses: knownBy.get(m.id) ?? 0 }))
+      .filter(({ m }) => m.element === element)
+      .sort((x, y) => y.uses - x.uses || x.index - y.index)
+      .slice(0, MAX_MOVES)
+      .map(({ m }) => m.id);
+    return SpeciesSchema.parse({
       ...template,
       id: `${STAND_IN_PREFIX}${element}`,
       name: `Stand-in ${element}`,
@@ -108,7 +116,7 @@ export function standIns(data: BattleData): Species[] {
       baseStats,
       moves,
       evolutions: [],
-    };
+    });
   });
 }
 
@@ -125,6 +133,10 @@ function pairs<T>(items: readonly T[]): [T, T][] {
 }
 
 export function planSim(config: SimConfig): SimPlan {
+  for (const [name, games] of Object.entries(config.games)) {
+    // Entrants alternate sides, so an odd count would give side `a` an extra start.
+    if (games <= 0 || games % 2 !== 0) throw new Error(`games.${name} must be even, got ${games}`);
+  }
   const data = serverData();
   const content = createBattleContent(data, BATTLE_RULES);
   const stands = standIns(data);

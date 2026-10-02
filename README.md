@@ -38,11 +38,11 @@ Every battle is a 1v1 at matched levels, so a result points at one table:
 
 | Section | Who fights | If it's flagged, tune |
 |---|---|---|
-| Base forms / Evolved forms | each species against every other species of its stage (base at level 12, evolved at 25), in every stance | that species' base stats or moves (`data/species.ts`, secret ones in `data/server/secret-species.ts`) |
-| Elements | equal-stat stand-ins (average base stats, all of the element's public moves), against other elements | the element matrix, or that element's moves |
+| Base forms / Evolved forms | each species against every other species of its stage (base at level 12, evolved at 25), in every stance | that species' base stats or moves (`packages/shared/src/data/species.ts`, secret ones in `src/data/server/secret-species.ts`) |
+| Elements | equal-stat stand-ins (average base stats, up to 4 of the element's public moves, the ones most base forms know), against other elements | the element matrix, or that element's moves |
 | Feelings | the same stand-ins, against other feelings | the feeling matrix |
 | Element × feeling combos | every combo against every other combo | the synergy table |
-| Stances | every base form against itself, one stance against another | the AI stances (`BATTLE_RULES.ai`) |
+| Stances | every base form against itself, one stance against another (the second stance's rate is 100% minus the row's) | the AI stances (`BATTLE_RULES.ai`) |
 
 How to read it:
 

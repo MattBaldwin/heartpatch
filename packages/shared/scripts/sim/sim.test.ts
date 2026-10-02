@@ -2,7 +2,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { createBattleContent } from '../../src/battle/content.js';
 import { GAME_DATA } from '../../src/data/index.js';
+import { SpeciesSchema } from '../../src/schemas/data/species.js';
 import { ElementIdSchema, FeelingIdSchema } from '../../src/schemas/data/elements.js';
 import { SIM_CONFIG, type SimConfig } from './config.js';
 import {
@@ -69,12 +71,13 @@ describe('planSim', () => {
 describe('standIns', () => {
   const stands = standIns(serverData());
 
-  it('gives every element one stand-in with the same stats and only its own public moves', () => {
+  it('gives every element one valid stand-in with the same stats and only its own public moves', () => {
     expect(stands.map((s) => s.element)).toEqual(ElementIdSchema.options);
     const publicMoves = new Map(GAME_DATA.moves.map((m) => [m.id, m]));
     for (const s of stands) {
+      // Valid like real data: 2–4 moves and every other species rule.
+      expect(SpeciesSchema.safeParse(s).success, s.id).toBe(true);
       expect(s.baseStats).toEqual(stands[0]!.baseStats);
-      expect(s.moves.length).toBeGreaterThan(0);
       for (const id of s.moves) expect(publicMoves.get(id)?.element, id).toBe(s.element);
     }
   });
@@ -99,9 +102,20 @@ describe('runSim', () => {
   });
 
   it('credits the right entrant when sides swap', () => {
-    // Fire vs Leaf at equal stats: Fire's 2× wins nearly always, whichever side it starts on.
-    const fire: Entrant = { key: 'fire+joy', speciesId: 'sim-stand-in-fire', feeling: 'joy' };
-    const leaf: Entrant = { key: 'leaf+joy', speciesId: 'sim-stand-in-leaf', feeling: 'joy' };
+    // A made-up squishy with huge stats wins every game, whichever side it starts on,
+    // so this doesn't depend on how the real tables are tuned.
+    const data = serverData();
+    const giant = { ...standIns(data)[0]!, id: 'sim-giant' };
+    giant.baseStats = { hp: 250, attack: 250, defense: 250, speed: 250 };
+    const rigged = {
+      ...plan,
+      comboContent: createBattleContent({
+        ...data,
+        species: [...data.species, ...standIns(data), giant],
+      }),
+    };
+    const big: Entrant = { key: 'giant', speciesId: 'sim-giant' };
+    const small: Entrant = { key: 'fire+joy', speciesId: 'sim-stand-in-fire', feeling: 'joy' };
     const base = {
       bracket: 'combo',
       policyA: 'balanced',
@@ -109,12 +123,12 @@ describe('runSim', () => {
       level: 15,
       games: 20,
     } as const;
-    expect(playMatchup(plan, SMALL, { ...base, a: fire, b: leaf }).aWins).toBeGreaterThanOrEqual(
-      18,
-    );
-    expect(playMatchup(plan, SMALL, { ...base, a: leaf, b: fire }).bWins).toBeGreaterThanOrEqual(
-      18,
-    );
+    expect(playMatchup(rigged, SMALL, { ...base, a: big, b: small })).toMatchObject({ aWins: 20 });
+    expect(playMatchup(rigged, SMALL, { ...base, a: small, b: big })).toMatchObject({ bWins: 20 });
+  });
+
+  it('refuses an odd number of games (side `a` would get an extra start)', () => {
+    expect(() => planSim({ ...SMALL, games: { ...SMALL.games, combo: 3 } })).toThrow(/even/);
   });
 });
 
@@ -226,6 +240,8 @@ describe('report', () => {
 });
 
 describe('where the sim lives', () => {
+  // The real protection: scripts/ is outside src/, so it isn't in `dist` (tsconfig.build
+  // rootDir) or the package exports (`.` and `./server`). This catches a stray import.
   it('is never imported by game code or the client (it reads server-only data)', () => {
     const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
     const roots = ['packages/shared/src', 'apps/client/src', 'apps/server/src'].map((p) =>
