@@ -66,17 +66,25 @@ log "stopping the game server and swapping in the restored database"
 previous=heartpatch_before_restore
 sql "DROP DATABASE IF EXISTS $previous WITH (FORCE)"
 docker compose stop server
+
 # A rename fails while anyone is connected (a psql left open, the nightly
-# backup), so end those sessions first. If the swap still fails, the live
-# database is unchanged: start the server again and say so.
-if ! sql "SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity
-          WHERE datname IN ('heartpatch', 'heartpatch_restore') AND pid <> pg_backend_pid()" >/dev/null ||
-  ! sql "ALTER DATABASE heartpatch RENAME TO $previous"; then
+# backup). Refuse new connections, then end the existing ones, so nothing can
+# sneak in between. `connections` turns them back on for a database.
+connections() { sql "ALTER DATABASE $1 ALLOW_CONNECTIONS $2"; }
+end_sessions() {
+  sql "SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity
+       WHERE datname IN ('heartpatch', 'heartpatch_restore') AND pid <> pg_backend_pid()" >/dev/null
+}
+
+# If the swap fails, the live database is unchanged: start the server again and say so.
+if ! connections heartpatch false || ! end_sessions || ! sql "ALTER DATABASE heartpatch RENAME TO $previous"; then
+  connections heartpatch true || true
   docker compose up -d --wait --wait-timeout 120 server || true
   fail "could not swap the databases; the live database is unchanged and the server is running again. The restored copy is in heartpatch_restore"
 fi
 if ! sql "ALTER DATABASE heartpatch_restore RENAME TO heartpatch"; then
   sql "ALTER DATABASE $previous RENAME TO heartpatch" || true
+  connections heartpatch true || true
   docker compose up -d --wait --wait-timeout 120 server || true
   fail "could not swap the databases; the live database is back in place and the server is running again"
 fi
@@ -84,11 +92,13 @@ fi
 undo() {
   log "ERROR: $1. Putting the previous database back" >&2
   docker compose stop server || true
-  sql "SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity
-       WHERE datname = 'heartpatch' AND pid <> pg_backend_pid()" >/dev/null || true
+  connections heartpatch false || true
+  end_sessions || true
   sql "DROP DATABASE IF EXISTS heartpatch_restore WITH (FORCE)" || true
   sql "ALTER DATABASE heartpatch RENAME TO heartpatch_restore" || true
-  sql "ALTER DATABASE $previous RENAME TO heartpatch"
+  sql "ALTER DATABASE $previous RENAME TO heartpatch" ||
+    fail "could not put the previous database back: the server is stopped and the data is in the '$previous' database. See docs/DEPLOY.md, Troubleshooting"
+  connections heartpatch true || true
   docker compose up -d --wait --wait-timeout 120 server || true
   fail "$1; the previous database is back in place and nothing changed"
 }

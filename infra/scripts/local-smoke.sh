@@ -179,7 +179,13 @@ psql_value 'truncate users, maps cascade' >/dev/null
 pass "wiped users and maps"
 # Someone left a psql session open: the swap must still work.
 compose exec -T db psql -U heartpatch -d heartpatch -c 'select pg_sleep(600)' >/dev/null 2>&1 &
-sleep 2
+held=0
+for _ in $(seq 1 20); do
+  held=$(psql_value "select count(*) from pg_stat_activity where datname = 'heartpatch' and query like '%pg_sleep(600)%' and pid <> pg_backend_pid()")
+  [[ $held -ge 1 ]] && break
+  sleep 0.5
+done
+[[ $held -ge 1 ]] || fail "could not hold a session open for the restore test"
 RESTORE_CONFIRM=yes "$HP_DIR/bin/restore.sh" "$dump"
 wait || true
 [[ $(psql_value 'select count(*) from users') == "$users_before" ]] || fail "users not restored"

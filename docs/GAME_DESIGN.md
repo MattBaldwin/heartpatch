@@ -110,7 +110,7 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 - Teams of up to **[DEFAULT: 3]** squishies. Swap costs a turn.
 - Each species has 2–4 moves. Moves have element, power, accuracy and optional effects (status, buffs, heal).
 - **Damage** = `base(move power, attack, defense, level)` × element multiplier × feeling multiplier × synergy multiplier × random(0.9–1.1, seeded).
-- **Engine:** a pure deterministic reducer in `packages/shared`: `(state, action, seed) → newState`. The same code runs in live battles, offline raid resolution, client previews and the balance simulator. Every battle can be replayed from its seed and action log.
+- **Engine:** a pure deterministic reducer in `packages/shared`: `(state, action) → newState`, with the seeded RNG state stored inside the battle state. The same code runs in live battles, offline raid resolution, client previews and the balance simulator. Every battle can be replayed from its seed and action log (server-side only; the seed and RNG state never reach clients).
 - **PvE:** wild squishies and tile guardians use a simple AI.
 - **Offline defense:** the defender's squishies are controlled by an AI following their **defense stance** (aggressive, defensive, balanced).
 - **Capture:** weakening a wild squishy and using a **Heart Charm** (craftable) gives a capture chance that rises as its HP drops.

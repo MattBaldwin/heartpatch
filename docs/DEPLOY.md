@@ -366,6 +366,7 @@ docker compose exec server node dist/ops/reset-password.js <username>
 | Server keeps restarting | `docker compose logs --tail 100 server`. `Invalid configuration:` lists the bad `.env` setting. |
 | Need to change the database password | Postgres stored the first one. Run `docker compose exec db psql -U heartpatch -c "ALTER USER heartpatch PASSWORD 'NEW'"` with a new hex value, put the same value in `.env` as `POSTGRES_PASSWORD`, then `docker compose up -d server`. |
 | Disk filling up | `df -h /`, then `docker system df`. Old images are removed by each deploy; `docker image prune` clears dangling ones. |
+| Restore says **could not put the previous database back** | Rare: the old data is safe in `heartpatch_before_restore`. Put it back by hand: `docker compose exec db psql -U heartpatch -d postgres -c "ALTER DATABASE heartpatch RENAME TO heartpatch_failed" -c "ALTER DATABASE heartpatch_before_restore RENAME TO heartpatch" -c "ALTER DATABASE heartpatch ALLOW_CONNECTIONS true"`, then `docker compose up -d server`. |
 | A deploy run was cancelled or lost its connection mid-deploy | The containers may be on the new version while `.env` still names the old one. Re-run the same deploy so they agree again: `bin/deploy.sh <sha>` with the commit from the run's title (or Actions → Deploy → **Re-run jobs**). |
 | A whole-server problem | Restore a Lightsail snapshot (see "Backups and restore"). |
 
