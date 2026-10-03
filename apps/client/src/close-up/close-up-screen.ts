@@ -336,10 +336,17 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     const squishy = current();
     if (!squishy) {
       // Say why with the card still up, then swoop out (Back works at once).
+      // Two replies can find it gone (a boop and a stroke both refused): once.
+      if (gone) return;
       note.textContent = why ?? CLOSE_UP_TEXT.gone;
       gone = true;
+      celebrate.hidden = true;
+      showRename(false);
       window.clearTimeout(idleTimer);
-      goneTimer = window.setTimeout(close, GONE_MS);
+      const mine = ticket;
+      goneTimer = window.setTimeout(() => {
+        if (mine === ticket) close();
+      }, GONE_MS);
       return;
     }
     if (builtSpecies !== null && squishy.speciesId !== builtSpecies) options.showScene(build);
