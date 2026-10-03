@@ -1,4 +1,11 @@
-import { RESOURCES, TERRAINS, type MapMember, type PublicTile } from '@heartpatch/shared';
+import {
+  RESOURCES,
+  TERRAINS,
+  type GuardianDifficulty,
+  type GuardianHint,
+  type MapMember,
+  type PublicTile,
+} from '@heartpatch/shared';
 
 // What the tile info panel says about a tile (copy follows docs/STYLE_GUIDE.md).
 // Pure, so every case is unit-tested. Home bases can never be claimed (design
@@ -14,6 +21,8 @@ export interface TileInfo {
   readonly owner: string;
   /** What can be gathered here, if anything. */
   readonly resource: string | null;
+  /** Wild land's guardians today: how many and how tough (owner decision 10). */
+  readonly guardians: string | null;
   readonly home: boolean;
 }
 
@@ -47,6 +56,23 @@ export function describeTile(
     about: terrain?.description ?? 'Nobody knows much about this spot yet.',
     owner,
     resource: resource ? `Find ${resource.name} here.` : null,
+    guardians: guardianLine(tile.guardianHint),
     home,
   };
+}
+
+const DIFFICULTY_WORDS: Readonly<Record<GuardianDifficulty, string>> = {
+  easy: 'easy',
+  tough: 'tough',
+  'very-tough': 'very tough',
+};
+
+/**
+ * "Guarded by 3 sleepy squishies • tough": only how many and how tough, so a
+ * kid can pick a showdown they can win (the server never says who).
+ */
+export function guardianLine(hint: GuardianHint | null): string | null {
+  if (hint === null) return null;
+  const who = hint.count === 1 ? '1 sleepy squishy' : `${String(hint.count)} sleepy squishies`;
+  return `Guarded by ${who} • ${DIFFICULTY_WORDS[hint.difficulty]}`;
 }

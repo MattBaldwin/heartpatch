@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   GAME_DATA,
   generateMap,
+  GUARDIAN_DIFFICULTIES,
   InviteResponseSchema,
   JoinMapResponseSchema,
   MAP_MAX_PLAYERS,
@@ -17,6 +18,7 @@ import {
   type GameEventType,
   type MapDetail,
 } from '@heartpatch/shared';
+import { GUARDIAN_RULES, hintForGuardians } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -26,6 +28,7 @@ import { joinRequests, keepers, mapMembers, maps, sessions, users } from '../../
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS, MAP_RATE_LIMITS } from './limits.js';
+import { tileGuardians } from '../territory/service.js';
 import { createMapsRepo } from './repo.js';
 import { createMapsService } from './service.js';
 
@@ -231,7 +234,8 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       for (const r of responses) {
         expect(r.statusCode).toBeLessThan(300);
         expect(r.body).not.toContain(row!.seed!);
-        expect(r.body).not.toMatch(/seed"|guardian/i);
+        // Guardians show only as neutral land's `guardianHint` (owner decision 10).
+        expect(r.body).not.toMatch(/seed"|guardian(?!Hint")/i);
       }
     });
 
@@ -423,6 +427,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         [
           'cooldownUntil',
           'defenders',
+          'guardianHint',
           'buildings',
           'gathering',
           'homeSlot',
@@ -828,6 +833,74 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       // Everything as of the snapshot: the friend and their land still there.
       expect(seen).toEqual({ seq: 2, members: 2, friendTiles: 7 });
       expect((await mapRow(map.id))?.eventSeq).toBe(3);
+    });
+  });
+
+  describe('guardian hint (owner decision 10)', () => {
+    it("hints at neutral land's guardians today, the same for every member, never who", async () => {
+      const server = await start();
+      const { owner, map, members } = await mapWith(server, 1);
+      const friend = members[0]!;
+      const view = async (who: Player) => {
+        const res = await call(server, 'GET', `/maps/${map.id}/view`, who);
+        expect(res.statusCode).toBe(200);
+        return { raw: res.body, view: MapViewSchema.parse(res.json()) };
+      };
+      const mine = await view(owner);
+      const theirs = await view(friend);
+
+      // Identical for two members: the hint is the land's, not the viewer's.
+      expect(theirs.view.tiles).toEqual(mine.view.tiles);
+      const neutral = mine.view.tiles.filter((t) => t.ownerUserId === null && t.homeSlot === null);
+      expect(neutral.length).toBeGreaterThan(0);
+      for (const tile of mine.view.tiles) {
+        if (tile.ownerUserId === null && tile.homeSlot === null) {
+          expect(tile.guardianHint?.count).toBeGreaterThan(0);
+          expect(GUARDIAN_DIFFICULTIES).toContain(tile.guardianHint?.difficulty);
+        } else {
+          // Anyone's land and every home base (even a free one): no hint.
+          expect(tile.guardianHint).toBeNull();
+        }
+      }
+      expect(new Set(neutral.map((t) => t.guardianHint!.difficulty)).size).toBeGreaterThan(1);
+
+      // It describes the very team a claim would meet today (#15's builder).
+      const row = await mapRow(map.id);
+      const strengths = (
+        await db.query.tiles.findMany({ where: (t, { eq }) => eq(t.mapId, map.id) })
+      ).map((t) => ({ q: t.q, r: t.r, s: t.guardianStrength }));
+      const strengthAt = new Map(strengths.map((t) => [`${String(t.q)},${String(t.r)}`, t.s]));
+      const expected = (at: Date) =>
+        neutral.map((t) =>
+          hintForGuardians(
+            tileGuardians(
+              { id: map.id, timeZone: 'America/Chicago', seed: row!.seed },
+              { ...t, guardianStrength: strengthAt.get(`${String(t.q)},${String(t.r)}`) ?? null },
+              at,
+            ),
+            GUARDIAN_RULES,
+          ),
+        );
+      expect(neutral.map((t) => t.guardianHint)).toEqual(expected(clock));
+
+      // Never species, levels, moves, strengths or seeds (CLAUDE.md rule 6).
+      const rawTiles = (JSON.parse(mine.raw) as { tiles: { guardianHint: object | null }[] }).tiles;
+      const tilesJson = JSON.stringify(rawTiles);
+      expect(tilesJson).not.toMatch(/level|strength|seed|species|moves|guardian-\d/i);
+      for (const table of GUARDIAN_RULES.tables) {
+        for (const entry of table.entries) expect(tilesJson).not.toContain(`"${entry.species}"`);
+      }
+      for (const tile of rawTiles) {
+        if (tile.guardianHint)
+          expect(Object.keys(tile.guardianHint).sort()).toEqual(['count', 'difficulty']);
+      }
+
+      // Tomorrow's guardians may differ: worked out on read, by the map's day.
+      clock = new Date(clock.getTime() + DAY_MS);
+      const tomorrow = (await view(owner)).view.tiles.filter(
+        (t) => t.ownerUserId === null && t.homeSlot === null,
+      );
+      expect(tomorrow.map((t) => t.guardianHint)).toEqual(expected(clock));
     });
   });
 

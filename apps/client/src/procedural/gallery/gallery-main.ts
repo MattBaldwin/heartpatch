@@ -22,7 +22,7 @@ import './gallery.css';
  *
  * Query flags: `?count=50` (stress test), `?look=showcase-3`, `?view=closeup`,
  * `?yaw=180` (turn them round), `?still` (no breathing, so the scene goes
- * idle), plus the main page's
+ * idle), `?shadow` (the rescue guardians' shadow look), plus the main page's
  * `?quality=` and `?renderer=webgpu`.
  */
 
@@ -51,6 +51,8 @@ const count =
       ? 1
       : looks.length;
 const breathing = !params.has('still');
+// The rescue guardians' shadow look (owner decision 7), to judge by eye.
+const shadow = params.has('shadow');
 // Degrees; 180 shows the back (tails, wings).
 const yaw = (Number(params.get('yaw')) || 0) * (Math.PI / 180);
 
@@ -89,6 +91,7 @@ await boot(canvas, {
           breathing,
           scale: view === 'closeUp' ? 5 : 1,
           yaw,
+          shadow,
         });
         field = built.field;
         return built.content;

@@ -35,6 +35,12 @@ export interface NewTile {
   homeSlot: number | null;
 }
 
+/** A tile for the map view, before the service makes it a `PublicTile`. */
+export type TileViewRow = Omit<PublicTile, 'buildings' | 'guardianHint'> & {
+  /** `tiles.guardian_strength`. Secret: it picks the guardian tier (tech spec §8). */
+  guardianStrength: number | null;
+};
+
 export interface MapRow {
   id: string;
   kind: 'multiplayer' | 'tutorial';
@@ -124,8 +130,11 @@ export interface MapsRepo {
   /** True if the mode changed. */
   setPvpMode: (mapId: string, pvpMode: PvpMode) => Promise<boolean>;
   /** Sorted by `q`, then `r`. */
-  /** Every tile; the service adds each tile's buildings (#18). */
-  listTiles: (mapId: string) => Promise<Omit<PublicTile, 'buildings'>[]>;
+  /**
+   * Every tile; the service adds each tile's buildings (#18) and guardian
+   * hint, and drops `guardianStrength` (secret, tech spec §8).
+   */
+  listTiles: (mapId: string) => Promise<TileViewRow[]>;
   /** Gives the player every tile of a home slot; returns those tiles. */
   claimHomeTiles: (
     mapId: string,
@@ -312,6 +321,7 @@ function queries(db: Executor): MapsRepo {
           ownerUserId: tiles.ownerUserId,
           nodeResource: tiles.nodeResource,
           homeSlot: tiles.homeSlot,
+          guardianStrength: tiles.guardianStrength,
           gatheringReadyAt: gatherJobs.readyAt,
           // The raid cooldown (#15): the latest tile battle's, past or not.
           cooldownUntil: sql<string | null>`(

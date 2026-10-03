@@ -196,9 +196,26 @@ export const MemberPasswordResetResponseSchema = z.object({
 });
 export type MemberPasswordResetResponse = z.infer<typeof MemberPasswordResetResponseSchema>;
 
+/** How hard a neutral tile's guardians are, in three steps (owner decision 10). */
+export const GUARDIAN_DIFFICULTIES = ['easy', 'tough', 'very-tough'] as const;
+export const GuardianDifficultySchema = z.enum(GUARDIAN_DIFFICULTIES);
+export type GuardianDifficulty = z.infer<typeof GuardianDifficultySchema>;
+
+/**
+ * A neutral tile's guardians as the tile panel hints at them: how many, and a
+ * difficulty word. Never species, levels, moves or seeds (CLAUDE.md rule 6,
+ * tech spec §8).
+ */
+export const GuardianHintSchema = z.object({
+  count: z.number().int().min(1),
+  difficulty: GuardianDifficultySchema,
+});
+export type GuardianHint = z.infer<typeof GuardianHintSchema>;
+
 /**
  * One tile as players see it (#7 renders from this). Leaves out guardian
- * strength and anything else that hints at secret spawns (tech spec §8).
+ * strength and anything else that hints at secret spawns (tech spec §8); a
+ * neutral tile's guardians show only as `guardianHint`.
  */
 export const PublicTileSchema = z.object({
   q: HexSchema.shape.q,
@@ -223,6 +240,12 @@ export const PublicTileSchema = z.object({
   cooldownUntil: z.iso.datetime().nullable(),
   /** How many of the owner's squishies stand watch here (#15). Never which ones. */
   defenders: z.number().int().min(0),
+  /**
+   * Neutral land's guardians today (#15's team for the map-local day), as a
+   * count and a difficulty word; null on anyone's land, home bases, and land
+   * no table guards. Worked out on read, so it changes with the day.
+   */
+  guardianHint: GuardianHintSchema.nullable(),
   /**
    * Buildings on a home tile (#18), in spot order: everyone sees fires and
    * habitats. `lit` is as of the view (or the event that carried it).

@@ -18,6 +18,8 @@ export interface GalleryOptions {
   readonly scale: number;
   /** Heading for every squishy, radians. */
   readonly yaw: number;
+  /** Every squishy as a rescue guardian from the Hollow (`?shadow`, owner decision 7). */
+  readonly shadow?: boolean;
 }
 
 /** Tile spacing between squishies, in world units at scale 1. */
@@ -48,12 +50,17 @@ export function buildGalleryScene(
     if (!look) break;
     const col = i % columns;
     const row = Math.floor(i / columns);
-    field.add(look, `gallery-${i}`, {
-      x: (col - (columns - 1) / 2) * spacing,
-      z: (row - (rows - 1) / 2) * spacing,
-      scale: options.scale,
-      yaw: options.yaw,
-    });
+    field.add(
+      look,
+      `gallery-${i}`,
+      {
+        x: (col - (columns - 1) / 2) * spacing,
+        z: (row - (rows - 1) / 2) * spacing,
+        scale: options.scale,
+        yaw: options.yaw,
+      },
+      options.shadow ? 'shadow' : 'normal',
+    );
   }
 
   const half = Math.max(columns, rows) * spacing * 0.5 + spacing;

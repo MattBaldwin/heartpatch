@@ -4,6 +4,7 @@ import type { BattleSquishySetup } from '../schemas/battle.js';
 import type { GuardianRules, GuardianStrengthTier } from '../schemas/data/guardian-rules.js';
 import type { Season } from '../schemas/data/seasons.js';
 import type { Species } from '../schemas/data/species.js';
+import type { GuardianDifficulty, GuardianHint } from '../schemas/maps.js';
 import type { SpawnWindow } from '../spawns/window.js';
 
 /*
@@ -66,4 +67,21 @@ export function resolveGuardians(input: GuardianInput, data: GuardianData): Batt
     speciesId: rng.weighted(entries).species,
     level: rng.int(tier.levels.min, tier.levels.max),
   }));
+}
+
+/**
+ * What the tile panel may say about a team (owner decision 10): how many, and
+ * a difficulty word from the team's total level against the fixed `hint`
+ * bands, so every member sees the same hint. Null for no team. Never species,
+ * levels, moves or seeds (CLAUDE.md rule 6).
+ */
+export function hintForGuardians(
+  team: readonly Pick<BattleSquishySetup, 'level'>[],
+  rules: Pick<GuardianRules, 'hint'>,
+): GuardianHint | null {
+  if (team.length === 0) return null;
+  const total = team.reduce((sum, g) => sum + g.level, 0);
+  const difficulty: GuardianDifficulty =
+    total <= rules.hint.easyUpTo ? 'easy' : total <= rules.hint.toughUpTo ? 'tough' : 'very-tough';
+  return { count: team.length, difficulty };
 }

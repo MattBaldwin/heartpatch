@@ -26,7 +26,8 @@
 .map-hud-status[hidden],
 .map-hud-login[hidden],
 .tile-panel[hidden],
-.tile-panel-resource[hidden] {
+.tile-panel-resource[hidden],
+.tile-panel-guardians[hidden] {
   display: none;
 }
 
@@ -106,7 +107,8 @@
 }
 
 .tile-panel-about,
-.tile-panel-resource {
+.tile-panel-resource,
+.tile-panel-guardians {
   margin: 6px 0 0;
   font-size: 16px;
   line-height: 1.35;
@@ -115,6 +117,12 @@
 .tile-panel-resource {
   font-weight: 600;
   color: #6b8a3a;
+}
+
+/* Wild land's guardians today (owner decision 10): lavender, like the Hollow's dusk. */
+.tile-panel-guardians {
+  font-weight: 600;
+  color: #7a5a9a;
 }
 
 /* Each feature's entries in the tile panel sit in their own slot (tile-actions.ts). */

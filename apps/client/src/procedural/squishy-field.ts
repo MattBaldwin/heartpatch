@@ -15,8 +15,11 @@ import { bodyArrays, type MeshArrays } from './body-shape.js';
 import {
   CONTACT_SHADOW,
   LOD,
+  SHADOW_LOOK,
+  SQUISH_LOOK_CODE,
   VINYL,
   type SquishMove,
+  type SquishyLook,
   type SquishyDetail,
   type SquishyLod,
 } from './config.js';
@@ -55,6 +58,8 @@ export interface SquishyPlacement {
 export interface SquishyHandle {
   readonly id: number;
   readonly params: SquishyParams;
+  /** `shadow` for the Hollow's rescue guardians (owner decision 7). */
+  readonly look: SquishyLook;
 }
 
 /** `L`: the detail levels a field may use (`hero` only for the close-up's one squishy). */
@@ -73,6 +78,8 @@ export interface SquishyFieldStats<L extends SquishyDetail = SquishyLod> {
   readonly meshes: number;
   /** Thin instances across those meshes (bodies, parts and shadows). */
   readonly instances: number;
+  /** Squishies drawn with the shadow look (rescue guardians). */
+  readonly shadowLook: number;
   readonly lod: L;
 }
 
@@ -80,6 +87,8 @@ interface Instance {
   readonly owner: Squishy;
   readonly matrix: Matrix;
   readonly color: readonly [number, number, number, number];
+  /** `SQUISH_LOOK_CODE` for this instance (eyes differ from the body). */
+  readonly look: number;
 }
 
 interface Squishy {
@@ -103,6 +112,21 @@ interface Batch {
 function linear(rgb: readonly [number, number, number]): [number, number, number, number] {
   const c = new Color3(rgb[0], rgb[1], rgb[2]).toLinearSpace();
   return [c.r, c.g, c.b, 1];
+}
+
+/**
+ * The shadow look baked into a colour, for when the shader isn't attached
+ * (opt-in WebGPU): the body towards the tint, the eyes towards the glow.
+ */
+function shadowColor(color: Instance['color'], eyes: boolean): Instance['color'] {
+  const k = eyes ? SHADOW_LOOK.eyeGlowMix : SHADOW_LOOK.tintMix;
+  const [r, g, b] = eyes ? SHADOW_LOOK.glow : SHADOW_LOOK.tint;
+  return [
+    color[0] + (r - color[0]) * k,
+    color[1] + (g - color[1]) * k,
+    color[2] + (b - color[2]) * k,
+    color[3],
+  ];
 }
 
 export class SquishyField<L extends SquishyDetail = SquishyLod> {
@@ -146,8 +170,17 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     });
   }
 
-  /** Adds a squishy of `species`; `instanceId` seeds everything that varies. */
-  add(species: SquishySpecies, instanceId: string, placement: SquishyPlacement): SquishyHandle {
+  /**
+   * Adds a squishy of `species`; `instanceId` seeds everything that varies.
+   * `look: 'shadow'` draws it as a rescue guardian from the Hollow, on the
+   * same meshes and draw calls (a per-instance code, see squish-plugin.ts).
+   */
+  add(
+    species: SquishySpecies,
+    instanceId: string,
+    placement: SquishyPlacement,
+    look: SquishyLook = 'normal',
+  ): SquishyHandle {
     const params = squishyParams(species, instanceId, this.#registry);
     for (const id of params.missing) {
       if (this.#warned.has(id)) continue;
@@ -156,7 +189,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     }
     const body = this.#registry.bodies.get(params.body.id);
     if (!body) throw new Error(`unknown body ${params.body.id}`); // squishyParams falls back
-    const handle: SquishyHandle = { id: this.#nextId++, params };
+    const handle: SquishyHandle = { id: this.#nextId++, params, look };
     const squishy: Squishy = {
       handle,
       world: Matrix.Identity(),
@@ -263,7 +296,9 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       meshes++;
       instances += this.#squishies.size;
     }
-    return { squishies: this.#squishies.size, meshes, instances, lod: this.#lod };
+    let shadowLook = 0;
+    for (const s of this.#squishies.values()) if (s.handle.look === 'shadow') shadowLook++;
+    return { squishies: this.#squishies.size, meshes, instances, shadowLook, lod: this.#lod };
   }
 
   /** Uploads changed instance buffers. Runs before every render; call it to force one. */
@@ -315,8 +350,20 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     );
     squishy.origin = [ground.x, ground.y, ground.z, params.height * scale];
 
-    const attach = (batch: Batch, local: Matrix, color: Instance['color']) => {
-      const instance: Instance = { owner: squishy, matrix: local.multiply(squishy.world), color };
+    const shadow = squishy.handle.look === 'shadow';
+    const attach = (batch: Batch, local: Matrix, color: Instance['color'], eyes = false) => {
+      const look = !shadow
+        ? SQUISH_LOOK_CODE.normal
+        : eyes
+          ? SQUISH_LOOK_CODE.shadowEyes
+          : SQUISH_LOOK_CODE.shadow;
+      const instance: Instance = {
+        owner: squishy,
+        matrix: local.multiply(squishy.world),
+        // Without the shader (opt-in WebGPU) the look is baked into the colour.
+        color: shadow && !this.#plugin ? shadowColor(color, eyes) : color,
+        look,
+      };
       batch.instances.push(instance);
       batch.dirty = true;
       squishy.instances.push({ batch, instance });
@@ -338,7 +385,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       );
       const color = linear(part.color);
       for (const p of part.placements) {
-        attach(batch, Matrix.FromArray(partMatrix(body, params.body.scale, part, p)), color);
+        const local = Matrix.FromArray(partMatrix(body, params.body.scale, part, p));
+        attach(batch, local, color, part.slot === 'eyes');
       }
     }
     this.#shadowDirty = true;
@@ -392,7 +440,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       const { owner } = inst;
       origins.set(owner.origin, i * 4);
       const { phase, rate, amplitude } = owner.handle.params.motion;
-      motions.set([phase, rate, this.#breathing ? amplitude : 0, 0], i * 4);
+      motions.set([phase, rate, this.#breathing ? amplitude : 0, inst.look], i * 4);
       events.set(eventAttribute(owner.event), i * 4);
     });
     mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
