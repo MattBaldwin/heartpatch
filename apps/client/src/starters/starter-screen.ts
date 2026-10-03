@@ -213,8 +213,17 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
       await api.pick(forMap, choice.speciesId, key);
     } catch (err) {
       if (mine !== session || mapId !== forMap) return;
-      // Picked already (another tab or device): they have their friend.
-      if (!(err instanceof ApiRequestError && err.code === 'CONFLICT')) {
+      // A CONFLICT may mean they already picked (another tab or device), or
+      // just "still working": ask the patch, which knows.
+      const done =
+        err instanceof ApiRequestError &&
+        err.code === 'CONFLICT' &&
+        !(await api.needsStarter(forMap).catch(() => true));
+      if (mine !== session || mapId !== forMap) return;
+      if (!done) {
+        // The server answered, so this key has its reply: the next try needs
+        // a new one. A reply lost offline keeps it, so a retry can't grant twice.
+        if (!(err instanceof ApiRequestError && err.code === 'OFFLINE')) key = newIdempotencyKey();
         error.textContent = messageOf(err);
         refresh();
         return;

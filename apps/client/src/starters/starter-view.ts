@@ -7,7 +7,7 @@ import { GAME_DATA, STARTERS, type Species } from '@heartpatch/shared';
 export const STARTER_TEXT = {
   title: 'Choose your friend!',
   subtitle: 'Who will be your first squishy here?',
-  hint: 'Tap a squishy to meet them.',
+  hint: 'Tap a friend below to meet them.',
   choose: 'Choose',
   choosing: 'One moment…',
   loadFailed: 'We couldn’t reach your patch. Check your connection and try again!',

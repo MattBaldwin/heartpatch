@@ -276,6 +276,29 @@ describe.skipIf(!url)('starter pick (needs DATABASE_URL)', () => {
     expect((await pick(server, owner, mapId, 'puddlepuff')).statusCode).toBe(201);
   });
 
+  it('answers a retried pick with the same squishy (Idempotency-Key)', async () => {
+    const server = await start();
+    const owner = await player();
+    const { id: mapId } = await patch(server, owner);
+    const retry = () =>
+      server.inject({
+        method: 'POST',
+        url: `/api/v1/maps/${mapId}/starter`,
+        headers: { ...HEADERS, 'idempotency-key': 'starter-retry-1' },
+        cookies: { [SESSION_COOKIE]: owner.token },
+        payload: { speciesId: 'emberbun' },
+      });
+
+    const first = await retry();
+    expect(first.statusCode, first.body).toBe(201);
+    const again = await retry();
+    expect(again.statusCode, again.body).toBe(201);
+    expect(again.headers['idempotent-replayed']).toBe('true');
+    const id = SquishyResponseSchema.parse(first.json()).squishy.id;
+    expect(SquishyResponseSchema.parse(again.json()).squishy.id).toBe(id);
+    expect(await squishiesOf(mapId, owner.id)).toHaveLength(1);
+  });
+
   it('gives exactly one squishy when picks race', async () => {
     const server = await start();
     const owner = await player();

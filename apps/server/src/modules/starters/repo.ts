@@ -17,7 +17,7 @@ export interface StartersRepo {
     mapId: string,
     userId: string,
   ) => Promise<{ starterSquishyId: string | null } | null>;
-  /** Records the pick on the membership. */
+  /** Records the pick on the membership; throws if it already has one (a backstop to the lock). */
   setStarter: (mapId: string, userId: string, squishyId: string) => Promise<void>;
 }
 
@@ -50,10 +50,12 @@ export function createStartersRepo(db: Executor): StartersRepo {
     },
 
     setStarter: async (mapId, userId, squishyId) => {
-      await db
+      const updated = await db
         .update(mapMembers)
         .set({ starterSquishyId: squishyId })
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)));
+        .where(and(member(mapId, userId), isNull(mapMembers.starterSquishyId)))
+        .returning({ userId: mapMembers.userId });
+      if (updated.length !== 1) throw new Error('setStarter: membership already has a starter');
     },
   };
 }
