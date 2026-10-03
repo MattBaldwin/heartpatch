@@ -182,7 +182,8 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
   await page.getByTestId('battle-dev-fight').tap();
   await expect(page.getByTestId('battle-hud')).toBeVisible();
   const battle = () => page.evaluate(() => (window as unknown as Hook).__heartpatch?.battle?.());
-  await expect.poll(() => battle().then((b) => b?.scene?.keeper)).toBe(true);
+  // The arena builds first, which is slow when CI renders in software.
+  await expect.poll(() => battle().then((b) => b?.scene?.keeper), { timeout: 30_000 }).toBe(true);
   expect((await battle())?.keeperReactions).toBe(0);
 
   // …and reacts as the turn plays out (a run-away still ends the battle with a reaction).
