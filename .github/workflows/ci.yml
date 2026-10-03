@@ -74,8 +74,9 @@ jobs:
   # WebKit e2e, split by device and into shards that run side by side.
   e2e:
     runs-on: ubuntu-24.04
-    # Room for a slow apt mirror during the WebKit install (once took 15 min).
-    timeout-minutes: 25
+    # Room for a slow apt mirror during the WebKit install (once took 15 min)
+    # plus about 10 min of tests on the heavier shard.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -96,7 +97,7 @@ jobs:
           --health-timeout 3s
           --health-retries 15
     env:
-      # DB integration tests fail (not skip) in CI without this.
+      # The dev server and the db scripts need this.
       DATABASE_URL: postgres://heartpatch:heartpatch@localhost:5432/heartpatch
     steps:
       - uses: actions/checkout@v5
