@@ -77,7 +77,7 @@ export async function rollFoundDrop(
     seasons: new Set(seasonsOn(event.at, place.timeZone)),
     terrain: place.terrain ?? undefined,
   };
-  const percent = event.percent ?? 100;
+  const percent = Math.min(100, Math.max(0, event.percent ?? 100));
   const rolled = { ...table, chance: Math.floor(((devChance ?? table.chance) * percent) / 100) };
   const rng = options.rng ?? Rng.fromSeed(newSeed());
   const itemId = pickClothingDrop(rolled, context, CLOTHING_BY_ID, rng);

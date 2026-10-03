@@ -35,7 +35,7 @@ import { keepers, sessions, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { createBattlesService } from '../battles/service.js';
+import { createBattlesService, type TileBattleEnd } from '../battles/service.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createTerritoryService, createTileBattlePort, defaultGuardianData } from './service.js';
 
@@ -847,7 +847,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       // A retried finish grants nothing more: the finished battle refuses the
       // move again, and a second roll for the same capture finds nothing.
       const again = await act(server, kid, battle, { type: 'forfeit' });
-      expect(again.statusCode).toBeLessThan(500);
+      expect(again.statusCode).toBe(409);
       expect(
         await withTransaction(db, (tx) =>
           rollFoundDrop(tx, {
@@ -909,16 +909,57 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
     });
 
     it('scales the chance by Gentle’s share for picking on a much smaller player', async () => {
-      // 1% at full share; Gentle's half rounds down to nothing.
-      const server = await start(dropChance(1));
-      const { kid, mapId, near } = await rivals(server);
+      // A sure find, so only the share decides.
+      const server = await start(dropChance(100));
+      const { kid, mapId, near, near2 } = await rivals(server);
       for (const tile of (await edgeOf(mapId, kid)).slice(0, 6)) await setOwner(tile.id, kid.id);
-      await playOut(server, kid, battleOf(await attack(server, kid, mapId, near)));
-      const captured = (await eventsOf(mapId)).at(-1)!;
-      expect(parseGameEventPayload('tile.captured', captured.payload).rewardPercent).toBe(
-        TERRITORY_RULES.gentle.rewardPercent,
-      );
+      // The real port, recording the drop it hands battles; `share` then
+      // overrides what battles rolls with, to show it uses the port's share.
+      const real = createTileBattlePort();
+      const drops: (TileBattleEnd['drop'] | undefined)[] = [];
+      let share: number | null = null;
+      const fights = createBattlesService({
+        db,
+        clock: () => clock,
+        tileBattles: {
+          ...real,
+          ended: async (...args) => {
+            const end = await real.ended(...args);
+            drops.push(end.drop);
+            return end.drop && share !== null
+              ? { ...end, drop: { ...end.drop, percent: share } }
+              : end;
+          },
+        },
+      });
+      const territory = createTerritoryService({ db, clock: () => clock, battles: fights });
+      const fight = async (tile: Tile) => {
+        let battle = (await territory.attack(kid, mapId, tile)).battle;
+        for (let i = 0; i < BATTLE_RULES.maxTurns + 5 && battle.status === 'active'; i++) {
+          const side = battle.view.sides[battle.mySide];
+          const action: PlayerBattleAction =
+            battle.view.phase.type === 'replace'
+              ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
+              : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+          battle = await fights.act(kid, battle.id, { action, turn: battle.view.turn });
+        }
+        expect((await tileAt(mapId, tile)).ownerUserId).toBe(kid.id);
+      };
+
+      // Gentle hands battles half the chance…
+      share = 0;
+      await fight(near);
+      expect(drops).toEqual([{ tileId: near.id, percent: TERRITORY_RULES.gentle.rewardPercent }]);
+      // …and battles rolls with the share it's given: none finds nothing,
+      // even at 100%; the full share finds a piece.
       expect(await piecesOf(kid.id)).toEqual([]);
+      // (PvP On: Gentle allows one lost tile a day.)
+      share = 100;
+      const mode = await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'on' });
+      expect(mode.statusCode).toBe(200);
+      await fight(near2);
+      expect(drops.at(-1)).toEqual({ tileId: near2.id, percent: 100 });
+      expect(await piecesOf(kid.id)).toHaveLength(1);
     });
   });
 
