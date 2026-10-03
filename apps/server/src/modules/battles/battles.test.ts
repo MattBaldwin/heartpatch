@@ -2,9 +2,11 @@ import {
   ApiErrorSchema,
   BATTLE_RULES,
   BattleResponseSchema,
+  CARE_RULES,
   createBattleContent,
   CurrentBattleResponseSchema,
   GAME_DATA,
+  grantedXp,
   GROWTH_RULES,
   MapResponseSchema,
   replayBattle,
@@ -12,6 +14,7 @@ import {
   TUTORIAL_OVERRIDES,
   TutorialResponseSchema,
   xpForLevel,
+  xpMultiplier,
   type PlayerBattle,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
@@ -41,6 +44,18 @@ interface Player {
 
 const SECRET = SERVER_GAME_DATA.secretSpecies;
 const SECRET_IDS = SECRET.map((s) => s.id);
+
+/** XP a brand-new squishy (start contentment, no habitat) gets for `base`. */
+const newSquishyXp = (base: number) =>
+  grantedXp(
+    base,
+    xpMultiplier(
+      CARE_RULES.startContentment,
+      null,
+      { element: 'light', feeling: 'cozy' },
+      GROWTH_RULES,
+    ),
+  );
 
 describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
   let client: DbClient;
@@ -545,9 +560,12 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
 
       const award = result.xp.find((x) => x.squishyId === squishy.id)!;
       expect(award.xp).toBeGreaterThan(0);
-      // Never cared for, no habitat: exactly the base XP (design doc §7), counted
-      // from the start of its level (#19 `applyXp`).
-      expect((await squishyOf(squishy.id))!.xp).toBe(xpForLevel(20, GROWTH_RULES) + award.xp);
+      // New (start contentment, the clock hasn't moved), no habitat: the base XP
+      // × that care bonus (design doc §7), counted from the start of its level
+      // (#19 `applyXp`).
+      expect((await squishyOf(squishy.id))!.xp).toBe(
+        xpForLevel(20, GROWTH_RULES) + newSquishyXp(award.xp),
+      );
       expect((await eventsOf(mapId)).at(-1)).toMatchObject({
         type: 'battle.ended',
         actorUserId: kid.id,
@@ -556,7 +574,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
           winner: 'a',
           reason: 'tuckered-out',
           turns: result.turns,
-          xp: [{ squishyId: squishy.id, xp: award.xp }],
+          xp: [{ squishyId: squishy.id, xp: newSquishyXp(award.xp) }],
         },
       });
 
@@ -625,9 +643,9 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const xp = over.view.phase.result.xp.filter((x) => x.side === 'a');
       expect(xp.map((x) => x.squishyId).sort()).toEqual([first.id, second.id].sort());
       expect((await squishyOf(first.id))!.xp).toBe(
-        xpForLevel(2, GROWTH_RULES) + BATTLE_RULES.xp.minimum,
+        xpForLevel(2, GROWTH_RULES) + newSquishyXp(BATTLE_RULES.xp.minimum),
       );
-      expect((await squishyOf(second.id))!.xp).toBe(BATTLE_RULES.xp.minimum);
+      expect((await squishyOf(second.id))!.xp).toBe(newSquishyXp(BATTLE_RULES.xp.minimum));
     });
   });
 

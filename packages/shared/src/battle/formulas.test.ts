@@ -5,7 +5,6 @@ import {
   squishy,
   FIXTURE_BATTLE_RULES,
 } from '../../tests/fixtures/battle.js';
-import { ELEMENT_MATRIX, FEELING_MATRIX, SYNERGY_TABLE } from '../data/matrices.js';
 import { Rng } from '../rng/index.js';
 import { getMove } from './content.js';
 import { startBattle } from './engine.js';
@@ -69,7 +68,7 @@ describe('damage (design doc §6)', () => {
     const ratio =
       damageBeforeVariance(content, tackle, user, leaf) /
       damageBeforeVariance(content, tackle, user, water);
-    expect(ratio).toBeCloseTo(ELEMENT_MATRIX.fire.leaf / ELEMENT_MATRIX.fire.water);
+    expect(ratio).toBeCloseTo(content.elementMatrix.fire.leaf / content.elementMatrix.fire.water);
   });
 
   it('multiplies by the feeling matrix, from the data', () => {
@@ -79,7 +78,7 @@ describe('damage (design doc §6)', () => {
     const ratio =
       damageBeforeVariance(content, tackle, user, joy) /
       damageBeforeVariance(content, tackle, user, silly);
-    expect(ratio).toBeCloseTo(FEELING_MATRIX.cozy.joy / FEELING_MATRIX.cozy.silly);
+    expect(ratio).toBeCloseTo(content.feelingMatrix.cozy.joy / content.feelingMatrix.cozy.silly);
   });
 
   it("multiplies by the attacker's own synergy, from the data", () => {
@@ -90,8 +89,8 @@ describe('damage (design doc §6)', () => {
     const ratio =
       (damageBeforeVariance(content, tackle, cozy, target) /
         damageBeforeVariance(content, tackle, brave, target)) *
-      (FEELING_MATRIX.joy.joy / FEELING_MATRIX.cozy.joy);
-    expect(ratio).toBeCloseTo(SYNERGY_TABLE.fire.cozy / SYNERGY_TABLE.fire.joy);
+      (content.feelingMatrix.joy.joy / content.feelingMatrix.cozy.joy);
+    expect(ratio).toBeCloseTo(content.synergy.fire.cozy / content.synergy.fire.joy);
   });
 
   it('uses the base formula with level, power, attack and defense', () => {

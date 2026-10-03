@@ -4,6 +4,7 @@ import type { CareRules, GrowthRules } from '../schemas/data/care.js';
 export const CARE_RULES: CareRules = {
   maxContentment: 100,
   baselineContentment: 0, // TUNE: neglect only means no bonus (design doc §7)
+  startContentment: 50, // TUNE: a new squishy starts half content (owner, 2026-10-03)
   hoursFullToBaseline: 24, // TUNE: design doc §7 [DEFAULT: ~24h from full to baseline]
   fullActionsPerDay: 3, // TUNE: design doc §7 [DEFAULT: 3]
   // TUNE: the 4th action that day gives half, the 5th a quarter, then a little.

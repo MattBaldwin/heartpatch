@@ -1,4 +1,4 @@
-import { findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
+import { CARE_RULES, findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { newPlayer, uniqueName } from './players.js';
 
@@ -147,7 +147,9 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
     await route.fulfill({ response, json: body });
   });
   const opened = await openFromHome(page);
-  expect(opened).toMatchObject({ from: 'home', sent: 0, contentment: 0 });
+  // A new squishy starts part content (care rules `startContentment`).
+  const start = CARE_RULES.startContentment;
+  expect(opened).toMatchObject({ from: 'home', sent: 0, contentment: start });
   expect(opened.scene?.squishies).toBe(1);
   // The care sheet stepped out; the close-up owns the screen.
   await slowExpect(page.getByTestId('care')).toBeHidden();
@@ -155,7 +157,7 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
 
   // Boop: play counts on the server.
   await gesture(page, 'close-up-touch', tap(t.x, t.y));
-  await sentAndSettled(page, 1, 10);
+  await sentAndSettled(page, 1, start + 10);
   await slowExpect(page.getByTestId('close-up-note')).toContainText('Boop!');
 
   // Another boop: the squishy still reacts, but play is resting, so nothing
@@ -178,7 +180,7 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
     }),
     ['pointerup', 1, t.x + t.rx * 0.6, t.y],
   ]);
-  await sentAndSettled(page, 2, 20);
+  await sentAndSettled(page, 2, start + 20);
 
   // Pinch to tickle: play again, still resting, so it's a giggle and nothing sent.
   await gesture(page, 'close-up-touch', [
@@ -208,7 +210,7 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
     ],
     ' [data-care="feed"]',
   );
-  await sentAndSettled(page, 3, 40);
+  await sentAndSettled(page, 3, start + 40);
   await slowExpect(feed).toContainText('9 Treats');
   expect((await state(page))?.caredToday).toBe(3);
 

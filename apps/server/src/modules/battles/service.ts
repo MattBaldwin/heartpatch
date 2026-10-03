@@ -2,6 +2,7 @@ import {
   applyBattleAction,
   BattleRuleError,
   CAPTURABLE_BATTLE_KINDS,
+  CARE_RULES,
   ClientBattleViewSchema,
   clientBattleView,
   createBattleContent,
@@ -481,6 +482,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         element: friend.element,
         feeling: friend.feeling,
         level: friend.level,
+        contentment: CARE_RULES.startContentment,
+        at,
       });
       await createSpawnsRepo(tx).markCaught(row.mapId, row.playerUserId, friend.speciesId, at);
     }
@@ -733,6 +736,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         element: species.element,
         feeling: species.feeling,
         level: squishy.level ?? 1,
+        contentment: CARE_RULES.startContentment,
+        at: now(),
       });
     },
 
