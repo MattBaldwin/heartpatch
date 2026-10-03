@@ -1,5 +1,4 @@
 import {
-  type DefenseStance,
   ElementIdSchema,
   FeelingIdSchema,
   type ElementId,
@@ -7,7 +6,20 @@ import {
   type OwnedSquishy,
   type TileDefenders,
 } from '@heartpatch/shared';
-import { and, asc, count, desc, eq, gt, inArray, isNotNull, ne, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableName,
+  gt,
+  inArray,
+  isNotNull,
+  ne,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -64,16 +76,6 @@ export interface TerritoryRepo {
   findTile: (mapId: string, q: number, r: number) => Promise<TerritoryTileRow | null>;
   /** Row-locks the tile until commit: battles for it and captures run one at a time. */
   lockTile: (tileId: string) => Promise<TerritoryTileRow | null>;
-  /**
-   * Row-locks a member's row (`for no key update`, like the seats lock) until
-   * commit and returns when they joined and their defense stance (#16), or
-   * null if they're not active. Challenges against one player take it, so the
-   * daily loss cap can't race.
-   */
-  lockMember: (
-    mapId: string,
-    userId: string,
-  ) => Promise<{ joinedAt: Date; defenseStance: DefenseStance } | null>;
   joinedAt: (mapId: string, userId: string) => Promise<Date | null>;
 
   /** Tile battles the player started on `date` (map-local), not counting no-contests. */
@@ -158,6 +160,35 @@ const attackColumns = {
   lastActionAt: tileAttacks.lastActionAt,
 };
 
+/**
+ * The one SQL spelling of "on watch" (decision C; shared `isOnWatch` is the
+ * same rule for rows already read): the squishy has a post (`tile_defenders`)
+ * on a tile its owner still holds. A post on land that changed hands doesn't
+ * count (the squishy went home). Housing and care read it, and the map view
+ * counts a tile's guards with it, so "housed or on watch, not both"
+ * (DECISIONS "Owner rules pass") can't drift between them.
+ *
+ * `squishy` is a `squishies` row of the outer query (the table itself by
+ * default). Its columns are written `"table"."column"`, because a one-table
+ * select names its columns without the table, and the post and its tile get
+ * their own aliases, so the fragment can sit inside a query over `tiles` or
+ * `tile_defenders` too. Not state-aware: callers add `state` where it matters.
+ */
+export const squishyOnWatch = (
+  squishy: { id: AnyPgColumn; ownerUserId: AnyPgColumn } = squishies,
+) => {
+  const outer = (column: AnyPgColumn) =>
+    sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+  const post = (column: AnyPgColumn) => sql`watch_post.${sql.identifier(column.name)}`;
+  const tile = (column: AnyPgColumn) => sql`watch_tile.${sql.identifier(column.name)}`;
+  return sql<boolean>`exists (
+    select 1 from ${tileDefenders} as watch_post
+    join ${tiles} as watch_tile on ${tile(tiles.id)} = ${post(tileDefenders.tileId)}
+    where ${post(tileDefenders.squishyId)} = ${outer(squishy.id)}
+      and ${tile(tiles.ownerUserId)} = ${outer(squishy.ownerUserId)}
+  )`;
+};
+
 /** `column`'s calendar date in `timeZone` (Postgres' tz data). */
 const localDateOf = (column: AnyPgColumn, timeZone: string) =>
   sql`(${column} at time zone ${timeZone})::date`;
@@ -205,21 +236,6 @@ function queries(db: Executor): TerritoryRepo {
         .from(tiles)
         .where(eq(tiles.id, tileId))
         .for('update');
-      return row ?? null;
-    },
-
-    lockMember: async (mapId, userId) => {
-      const [row] = await db
-        .select({ joinedAt: mapMembers.joinedAt, defenseStance: mapMembers.defenseStance })
-        .from(mapMembers)
-        .where(
-          and(
-            eq(mapMembers.mapId, mapId),
-            eq(mapMembers.userId, userId),
-            eq(mapMembers.status, 'active'),
-          ),
-        )
-        .for('no key update');
       return row ?? null;
     },
 

@@ -37,7 +37,7 @@ import type {
   TileBattlePort,
 } from '../battles/service.js';
 import { requireMember } from '../maps/members.js';
-import type { MapRow } from '../maps/repo.js';
+import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createTerritoryRepo, type DefenderRow, type TerritoryTileRow } from './repo.js';
 
 /*
@@ -208,7 +208,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       const defenderId = seen.ownerUserId;
       const defender =
         defenderId !== null && defenderId !== user.id
-          ? await repo.lockMember(map.id, defenderId)
+          ? await createMapsRepo(tx).lockMember(map.id, defenderId)
           : null;
       const tile = await repo.lockTile(seen.id);
       if (!tile || tile.ownerUserId !== defenderId)
@@ -335,10 +335,10 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         throw new AppError('VALIDATION_FAILED', MESSAGES.tooMany(rules.maxDefenders));
       }
       const { map } = await requireMember(db, user, mapId);
-      const changed = await store.transaction(async (repo) => {
+      const changed = await store.transaction(async (repo, tx) => {
         // One guard change at a time per player (a double tap moving the same
         // squishy twice): lock order is the player, then tiles, `maps` last.
-        if (!(await repo.lockMember(map.id, user.id))) {
+        if (!(await createMapsRepo(tx).lockMember(map.id, user.id))) {
           throw new AppError('NOT_FOUND', MESSAGES.noMap);
         }
         const seen = await repo.findTile(map.id, request.q, request.r);

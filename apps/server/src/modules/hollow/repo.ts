@@ -283,6 +283,9 @@ function queries(db: Executor): HollowRepo {
         .innerJoin(mapMembers, activeMember)
         .leftJoin(buildings, eq(buildings.id, squishies.habitatBuildingId))
         .leftJoin(habitatTile, eq(habitatTile.id, buildings.tileId))
+        // The post and who holds its tile, not territory's `squishyOnWatch`:
+        // shared `shelterOf` decides from them (shared `isOnWatch`, the same
+        // rule plus `state`), so nightfall stays a pure step over plain rows.
         .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))
         .leftJoin(postTile, eq(postTile.id, tileDefenders.tileId))
         .where(eq(squishies.mapId, mapId))

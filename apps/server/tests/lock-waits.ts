@@ -11,20 +11,29 @@ export async function backendPid(tx: Executor): Promise<number> {
 }
 
 /**
- * Waits until another backend is blocked on a lock `pid` holds. Only waits
- * on that one backend, so other test files' locks in the same database never
- * count.
+ * Waits until `count` other backends are blocked on a lock `pid` holds,
+ * directly or queued behind one that is (a second locker of the same row
+ * waits on the first waiter, not on the holder). Only counts waits that lead
+ * back to that one backend, so other test files' locks in the same database
+ * never count.
  */
-export async function waitUntilBlockedBy(db: Executor, pid: number, timeoutMs = 5_000) {
+export async function waitUntilBlockedBy(db: Executor, pid: number, count = 1, timeoutMs = 5_000) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     // A pid from `backendPid`, so inlining it is safe.
     const rows = await db.execute<{ n: number }>(
-      `select count(*)::int as n from pg_stat_activity where ${String(pid)} = any(pg_blocking_pids(pid))`,
+      `with recursive waiting(pid) as (
+         select pid from pg_stat_activity where ${String(pid)} = any(pg_blocking_pids(pid))
+         union
+         select a.pid from pg_stat_activity a join waiting w on w.pid = any(pg_blocking_pids(a.pid))
+       )
+       select count(*)::int as n from waiting`,
     );
-    if (([...rows][0]?.n ?? 0) > 0) return;
+    if (([...rows][0]?.n ?? 0) >= count) return;
     if (Date.now() > deadline)
-      throw new Error(`timed out waiting for a backend blocked by ${String(pid)}`);
+      throw new Error(
+        `timed out waiting for ${String(count)} backend(s) blocked by ${String(pid)}`,
+      );
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }

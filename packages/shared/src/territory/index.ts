@@ -77,7 +77,8 @@ export interface WatchPost {
 /**
  * Decision C: a squishy stationed to defend its owner's tile is on watch, so
  * the Hollow Man doesn't count it as exposed (#21 uses this). A post on land
- * that changed hands doesn't count (the squishy went home).
+ * that changed hands doesn't count (the squishy went home). The server's SQL
+ * twin is territory's `squishyOnWatch` (without the `state` check).
  */
 export function isOnWatch(
   squishy: { readonly ownerUserId: string; readonly state: SquishyState },

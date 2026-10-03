@@ -8,15 +8,6 @@ export interface StartersRepo {
   transaction: <T>(fn: (repo: StartersRepo, tx: Executor) => Promise<T>) => Promise<T>;
   /** True if the player is an active member who hasn't picked a starter here yet. */
   needsStarter: (mapId: string, userId: string) => Promise<boolean>;
-  /**
-   * Row-locks the player's active membership until commit (tech spec §7
-   * "a member row locked to check it"), so two picks run one at a time.
-   * Null if they aren't an active member.
-   */
-  lockMember: (
-    mapId: string,
-    userId: string,
-  ) => Promise<{ starterSquishyId: string | null } | null>;
   /** Records the pick on the membership; throws if it already has one (a backstop to the lock). */
   setStarter: (mapId: string, userId: string, squishyId: string) => Promise<void>;
 }
@@ -38,15 +29,6 @@ export function createStartersRepo(db: Executor): StartersRepo {
         .from(mapMembers)
         .where(and(member(mapId, userId), isNull(mapMembers.starterSquishyId)));
       return row !== undefined;
-    },
-
-    lockMember: async (mapId, userId) => {
-      const [row] = await db
-        .select({ starterSquishyId: mapMembers.starterSquishyId })
-        .from(mapMembers)
-        .where(member(mapId, userId))
-        .for('no key update');
-      return row ?? null;
     },
 
     setStarter: async (mapId, userId, squishyId) => {

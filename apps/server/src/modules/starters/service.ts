@@ -10,6 +10,7 @@ import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import { requireMember } from '../maps/members.js';
+import { createMapsRepo } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { createStartersRepo } from './repo.js';
 
@@ -61,7 +62,7 @@ export function createStartersService(options: StartersServiceOptions): Starters
         // Lock order: the member row, then the new squishy and `species_seen`
         // (tech spec §7). No game event: no other member's view changes, and
         // `squishy.captured` belongs to a battle.
-        const member = await repo.lockMember(mapId, user.id);
+        const member = await createMapsRepo(tx).lockMember(mapId, user.id);
         if (!member) throw new AppError('NOT_FOUND', MESSAGES.notFound);
         if (member.starterSquishyId !== null) {
           throw new AppError('CONFLICT', MESSAGES.alreadyPicked);

@@ -7,6 +7,7 @@ import {
 import { and, asc, desc, eq, gt, inArray, isNull, max, sql, sum } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
+import { squishyOnWatch } from '../territory/repo.js';
 import { buildings, careLog, squishies, squishyEvolutions, users } from '../../db/schema.js';
 
 /** A squishy as care and growth need it (a `squishies` row). */
@@ -113,12 +114,7 @@ const squishyColumns = {
   xp: squishies.xp,
   state: squishies.state,
   habitatBuildingId: squishies.habitatBuildingId,
-  // Like `isOnWatch`: a post on land its owner still holds. Spelled out in
-  // full, because a one-table select names its columns without the table.
-  onWatch: sql<boolean>`exists (
-    select 1 from tile_defenders d join tiles t on t.id = d.tile_id
-    where d.squishy_id = "squishies"."id" and t.owner_user_id = "squishies"."owner_user_id"
-  )`,
+  onWatch: squishyOnWatch(),
   contentmentAtLastCare: squishies.contentmentAtLastCare,
   lastCaredAt: squishies.lastCaredAt,
 };

@@ -9,7 +9,8 @@ import {
 import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { buildings, squishies, tileDefenders, tiles } from '../../db/schema.js';
+import { squishyOnWatch } from '../territory/repo.js';
+import { buildings, squishies, tiles } from '../../db/schema.js';
 
 /** One of the player's home tiles (read only: tiles belong to the maps module). */
 export interface HomeTileRow {
@@ -273,14 +274,10 @@ function queries(db: Executor): BuildingsRepo {
 
     isOnWatch: async (squishyId) => {
       const [row] = await db
-        .select({ squishyId: tileDefenders.squishyId })
-        .from(tileDefenders)
-        .innerJoin(tiles, eq(tiles.id, tileDefenders.tileId))
-        .innerJoin(squishies, eq(squishies.id, tileDefenders.squishyId))
-        .where(
-          and(eq(tileDefenders.squishyId, squishyId), eq(tiles.ownerUserId, squishies.ownerUserId)),
-        );
-      return row !== undefined;
+        .select({ onWatch: squishyOnWatch() })
+        .from(squishies)
+        .where(eq(squishies.id, squishyId));
+      return row?.onWatch ?? false;
     },
 
     countResidents: async (buildingRowId) => {

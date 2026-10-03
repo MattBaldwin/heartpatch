@@ -1,4 +1,4 @@
-import type { MapRole, PublicKeeper, PublicTile, PvpMode } from '@heartpatch/shared';
+import type { DefenseStance, MapRole, PublicKeeper, PublicTile, PvpMode } from '@heartpatch/shared';
 import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
@@ -18,6 +18,7 @@ import {
   users,
 } from '../../db/schema.js';
 import { keeperColumns } from '../keepers/repo.js';
+import { squishyOnWatch } from '../territory/repo.js';
 import { WORN, wornOf } from '../wardrobe/repo.js';
 
 export interface UserRef {
@@ -56,6 +57,15 @@ export interface MembershipRow {
   role: MapRole;
   status: 'active' | 'removed';
   homeSlot: number | null;
+}
+
+/** The member row as `lockMember` returns it. */
+export interface LockedMemberRow {
+  joinedAt: Date;
+  /** The defense stance (#16). */
+  defenseStance: DefenseStance;
+  /** The starter pick's squishy; null until they pick (`map_members.starter_squishy_id`). */
+  starterSquishyId: string | null;
 }
 
 export interface MapSummaryRow {
@@ -162,6 +172,15 @@ export interface MapsRepo {
    * time per map. `no key update` still lets tiles and squishies reference it.
    */
   lockSeats: (mapId: string) => Promise<void>;
+  /**
+   * "A member row locked to check it" (tech spec §7): row-locks the player's
+   * active membership (`for no key update`, like the seats lock) until
+   * commit, or returns null if they aren't an active member. Posting guards
+   * and challenges (territory) and the starter pick take it, so a player's
+   * guard changes, a defender's daily loss cap and two starter picks each run
+   * one at a time.
+   */
+  lockMember: (mapId: string, userId: string) => Promise<LockedMemberRow | null>;
   /** Home slots held by active members. Run after `lockSeats` for an exact answer. */
   activeHomeSlots: (mapId: string) => Promise<{ count: number; slots: Set<number> }>;
   /** Active members, owner first, then by join time. */
@@ -328,12 +347,14 @@ function queries(db: Executor): MapsRepo {
             select max(${tileAttacks.cooldownUntil}) from ${tileAttacks}
             where ${tileAttacks.tileId} = ${tiles.id}
           )`,
-          // Squishies on watch (#15) that are still the owner's and not in the Hollow.
+          // Squishies posted here that are on watch (#15) and not in the Hollow.
+          // A squishy has one post at most, so "on watch" means this tile is
+          // still its owner's.
           defenders: sql<number>`(
             select count(*) from ${tileDefenders}
             join ${squishies} on ${squishies.id} = ${tileDefenders.squishyId}
             where ${tileDefenders.tileId} = ${tiles.id}
-              and ${squishies.ownerUserId} = ${tiles.ownerUserId}
+              and ${squishyOnWatch()}
               and ${squishies.state} = 'active'
           )::int`.mapWith(Number),
         })
@@ -426,6 +447,25 @@ function queries(db: Executor): MapsRepo {
         .from(mapMembers)
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.role, 'owner')))
         .for('no key update');
+    },
+
+    lockMember: async (mapId, userId) => {
+      const [row] = await db
+        .select({
+          joinedAt: mapMembers.joinedAt,
+          defenseStance: mapMembers.defenseStance,
+          starterSquishyId: mapMembers.starterSquishyId,
+        })
+        .from(mapMembers)
+        .where(
+          and(
+            eq(mapMembers.mapId, mapId),
+            eq(mapMembers.userId, userId),
+            eq(mapMembers.status, 'active'),
+          ),
+        )
+        .for('no key update');
+      return row ?? null;
     },
 
     activeHomeSlots: async (mapId) => {
