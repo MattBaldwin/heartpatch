@@ -5,6 +5,9 @@ import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
 // Owned squishies as players see them (design doc §4 "Instance fields").
 // Stats, care and habitat fields arrive with their issues.
 
+/** `/maps/:mapId/squishies/:squishyId/…` routes (care, habitats, the wardrobe). */
+export const SquishyParamsSchema = z.object({ mapId: z.uuid(), squishyId: z.uuid() });
+
 export const SquishyStateSchema = z.enum(['active', 'hollowed']);
 export type SquishyState = z.infer<typeof SquishyStateSchema>;
 

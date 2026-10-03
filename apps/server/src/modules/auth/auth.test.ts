@@ -295,37 +295,43 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
       expect(res.statusCode).toBe(401);
     });
 
-    it('rate limits wrong passwords per username, even from new IPs', async () => {
-      const server = await start();
-      const { body } = await signup(server);
-      const { max } = AUTH_RATE_LIMITS.login.perUsername;
-      for (let i = 0; i < max; i += 1) {
-        const res = await post(
-          server,
-          '/auth/login',
-          { username: body.username, password: `wrong-${i}` },
-          { remoteAddress: `198.51.100.${i + 1}` },
-        );
-        expect(res.statusCode).toBe(401);
-      }
-      // Locked for now, even with the right password.
-      const limited = await post(server, '/auth/login', {
-        username: body.username,
-        password: body.password,
-      });
-      expect(limited.statusCode).toBe(429);
-      expect(errorOf(limited).message).toMatch(/break/);
+    // A dozen full-cost Argon2 hashes and checks, one after another.
+    it(
+      'rate limits wrong passwords per username, even from new IPs',
+      { timeout: 30_000 },
+      async () => {
+        const server = await start();
+        const { body } = await signup(server);
+        const { max } = AUTH_RATE_LIMITS.login.perUsername;
+        for (let i = 0; i < max; i += 1) {
+          const res = await post(
+            server,
+            '/auth/login',
+            { username: body.username, password: `wrong-${i}` },
+            { remoteAddress: `198.51.100.${i + 1}` },
+          );
+          expect(res.statusCode).toBe(401);
+        }
+        // Locked for now, even with the right password.
+        const limited = await post(server, '/auth/login', {
+          username: body.username,
+          password: body.password,
+        });
+        expect(limited.statusCode).toBe(429);
+        expect(errorOf(limited).message).toMatch(/break/);
 
-      // Other players aren't affected.
-      const other = await signup(server);
-      const ok = await post(server, '/auth/login', {
-        username: other.body.username,
-        password: other.body.password,
-      });
-      expect(ok.statusCode).toBe(200);
-    });
+        // Other players aren't affected.
+        const other = await signup(server);
+        const ok = await post(server, '/auth/login', {
+          username: other.body.username,
+          password: other.body.password,
+        });
+        expect(ok.statusCode).toBe(200);
+      },
+    );
 
-    it('rate limits login attempts per IP across usernames', async () => {
+    // 30 full-cost Argon2 checks (64 MiB each) on 4 libuv threads: ~2-3 s on CI.
+    it('rate limits login attempts per IP across usernames', { timeout: 30_000 }, async () => {
       const server = await start();
       const { max } = AUTH_RATE_LIMITS.login.perIp;
       const attempts = Array.from({ length: max }, (_, i) =>

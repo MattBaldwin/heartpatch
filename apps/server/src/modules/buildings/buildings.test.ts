@@ -16,11 +16,12 @@ import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
 import { keepers, sessions, squishies, users } from '../../db/schema.js';
+import { mapLocalTime } from '../../lib/time.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
-import { fireStateAt, litSafeTiles, mapLocalTime } from './hearthfire.js';
+import { fireStateAt, litSafeTiles } from './hearthfire.js';
 import { createBuildingsRepo } from './repo.js';
 
 const url = inject('testDatabaseUrl');
@@ -33,31 +34,6 @@ const START = '2026-10-02T12:00:00Z';
 const PLENTY = { timber: 50, stone: 50, emberwood: 20 };
 
 const building = (id: string) => GAME_DATA.buildings.find((b) => b.id === id)!;
-
-describe('mapLocalTime (map-local wall clock)', () => {
-  it('follows daylight saving in the map time zone', () => {
-    // Denver falls back on Nov 1, 2026: 21:00 is 03:00Z before and 04:00Z after.
-    expect(mapLocalTime(new Date('2026-10-31T03:00:00Z'), ZONE)).toEqual({
-      date: '2026-10-30',
-      minute: 21 * 60,
-    });
-    expect(mapLocalTime(new Date('2026-11-02T04:00:00Z'), ZONE)).toEqual({
-      date: '2026-11-01',
-      minute: 21 * 60,
-    });
-    expect(mapLocalTime(new Date('2026-11-02T03:59:00Z'), ZONE).minute).toBe(20 * 60 + 59);
-    // Spring forward, Mar 8 2026: 21:00 MDT is 03:00Z.
-    expect(mapLocalTime(new Date('2026-03-09T03:00:00Z'), ZONE)).toEqual({
-      date: '2026-03-08',
-      minute: 21 * 60,
-    });
-    expect(mapLocalTime(new Date('2026-10-02T05:30:00Z'), 'Asia/Kolkata')).toEqual({
-      date: '2026-10-02',
-      minute: 11 * 60,
-    });
-    expect(mapLocalTime(new Date('2026-10-02T06:00:00Z'), 'UTC').minute).toBe(6 * 60);
-  });
-});
 
 interface Player {
   id: string;

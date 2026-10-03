@@ -17,6 +17,7 @@ import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import { defaultBattleContent, PLAYER_SIDE, playerBattleView } from '../battles/service.js';
+import { requireMember } from '../maps/members.js';
 import { createRaidsRepo, type RaidRow } from './repo.js';
 
 /*
@@ -87,9 +88,10 @@ export function createRaidsService(options: RaidsServiceOptions): RaidsService {
     replayable: replayable(row),
   });
 
-  /** NOT_FOUND unless an active member, so maps can't be probed. */
   const report = async (user: PublicUser, mapId: string): Promise<RaidReport> => {
+    await requireMember(db, user, mapId);
     const stance = await store.stanceOf(mapId, user.id);
+    // Removed from the map since the check: the same NOT_FOUND.
     if (stance === null) throw new AppError('NOT_FOUND', MESSAGES.noMap);
     const raids = (await store.listFor(mapId, user.id, rules.reportLimit)).map(toRaid);
     return { stance, unseen: raids.filter((r) => r.seenAt === null).length, raids };
@@ -107,18 +109,14 @@ export function createRaidsService(options: RaidsServiceOptions): RaidsService {
     },
 
     markSeen: async (user, mapId, request) => {
-      if ((await store.stanceOf(mapId, user.id)) === null) {
-        throw new AppError('NOT_FOUND', MESSAGES.noMap);
-      }
+      await requireMember(db, user, mapId);
       // Only the defender's own raids; anyone else's ids change nothing.
       await store.markSeen(mapId, user.id, request.raidIds, now());
       return report(user, mapId);
     },
 
     replay: async (user, mapId, raidId) => {
-      if ((await store.stanceOf(mapId, user.id)) === null) {
-        throw new AppError('NOT_FOUND', MESSAGES.noMap);
-      }
+      await requireMember(db, user, mapId);
       const row = await store.findRaid(raidId);
       // Only the defender's own raids (the challenger has the battle already).
       if (row?.mapId !== mapId || row.defenderUserId !== user.id) {

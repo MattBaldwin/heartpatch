@@ -9,13 +9,11 @@ import {
 import { normalizeIP } from '@fastify/rate-limit';
 import type { FastifyPluginCallback, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import { z } from 'zod';
-import { AppError } from '../../lib/errors.js';
+import { rateLimit } from '../../lib/rate-limit.js';
 import type { ZodTypeProvider } from '../../lib/zod.js';
 import { clearSessionCookie, setSessionCookie, type AuthHooks } from './hooks.js';
-import { AUTH_RATE_LIMITS, SESSION_COOKIE, type AuthAction, type RateLimit } from './limits.js';
+import { AUTH_RATE_LIMITS, SESSION_COOKIE, type AuthAction } from './limits.js';
 import type { AuthService } from './service.js';
-
-const RATE_LIMITED_MESSAGE = 'Too many tries! Take a little break and try again soon.';
 
 /** The lowercased username from an already-validated body, if any. */
 function usernameKey(request: FastifyRequest): string {
@@ -43,37 +41,25 @@ export const authRoutes =
 
     /**
      * Per-IP and per-username limits for one action (tech spec §5). Runs as a
-     * preHandler, after body validation, so the username is known. Each
-     * limiter has its own counters.
+     * preHandler, after body validation, so the username is known.
      */
-    const rateLimit = (action: AuthAction): preHandlerAsyncHookHandler => {
-      const limiter = (limit: RateLimit, keyGenerator: (request: FastifyRequest) => string) =>
-        fastify.createRateLimit({ max: limit.max, timeWindow: limit.windowMs, keyGenerator });
+    const authRateLimit = (action: AuthAction): preHandlerAsyncHookHandler => {
       const limits = AUTH_RATE_LIMITS[action];
       const perIp =
         action === 'signup' && options.signupPerIpMax !== undefined
           ? { ...limits.perIp, max: options.signupPerIpMax }
           : limits.perIp;
-      const checks = [
-        limiter(perIp, (request) => `ip:${normalizeIP(request.ip)}`),
-        limiter(limits.perUsername, (request) => `user:${usernameKey(request)}`),
-      ];
-      return async (request, reply) => {
-        for (const check of checks) {
-          const result = await check(request);
-          if (!result.isAllowed && result.isExceeded) {
-            void reply.header('retry-after', result.ttlInSeconds);
-            throw new AppError('RATE_LIMITED', RATE_LIMITED_MESSAGE);
-          }
-        }
-      };
+      return rateLimit(fastify, [
+        { limit: perIp, key: (request) => `ip:${normalizeIP(request.ip)}` },
+        { limit: limits.perUsername, key: (request) => `user:${usernameKey(request)}` },
+      ]);
     };
 
     app.post(
       '/auth/signup',
       {
         schema: { body: SignupRequestSchema, response: { 201: RecoveryCodeResponseSchema } },
-        preHandler: rateLimit('signup'),
+        preHandler: authRateLimit('signup'),
       },
       async (request, reply) => {
         const result = await service.signup(request.body);
@@ -86,7 +72,7 @@ export const authRoutes =
       '/auth/login',
       {
         schema: { body: LoginRequestSchema, response: { 200: SessionResponseSchema } },
-        preHandler: rateLimit('login'),
+        preHandler: authRateLimit('login'),
       },
       async (request, reply) => {
         const result = await service.login(request.body);
@@ -99,7 +85,7 @@ export const authRoutes =
       '/auth/recover',
       {
         schema: { body: RecoverRequestSchema, response: { 200: RecoveryCodeResponseSchema } },
-        preHandler: rateLimit('recover'),
+        preHandler: authRateLimit('recover'),
       },
       async (request, reply) => {
         const result = await service.recover(request.body);

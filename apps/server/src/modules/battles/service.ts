@@ -36,7 +36,8 @@ import { newSeed } from '../../lib/rng.js';
 import type { Clock } from '../../lib/time.js';
 import { applyXp, appendGrowthEvents, type Growth } from '../care/service.js';
 import { consumeItems } from '../inventory/service.js';
-import { createMapsRepo, type MapRow } from '../maps/repo.js';
+import { requireMember } from '../maps/members.js';
+import type { MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { DEV_WILD_LEVEL } from './limits.js';
 import {
@@ -232,7 +233,6 @@ interface Opponent {
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
   notFound: "We couldn't find that battle.",
-  noMap: "We couldn't find that patch.",
   noTeam: 'You need a squishy friend first!',
   nobodyAround: 'No wild squishies around right now. Try again soon!',
   over: 'That battle is already over.',
@@ -313,17 +313,6 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   };
   const store = createBattlesRepo(db);
 
-  /** The map, for an active member. NOT_FOUND otherwise, so maps can't be probed. */
-  const requireMember = async (tx: Executor, user: PublicUser, mapId: string) => {
-    const maps = createMapsRepo(tx);
-    const [map, membership] = await Promise.all([
-      maps.findMap(mapId),
-      maps.membership(mapId, user.id),
-    ]);
-    if (!map || membership?.status !== 'active') throw new AppError('NOT_FOUND', MESSAGES.noMap);
-    return map;
-  };
-
   const toPlayerBattle = (row: BattleRow): PlayerBattle => playerBattleView(content, row);
 
   /** The battle, if it's this player's and they're still on its map. */
@@ -333,7 +322,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     user: PublicUser,
   ): Promise<{ row: BattleRow; map: MapRow }> => {
     if (!row || row.playerUserId !== user.id) throw new AppError('NOT_FOUND', MESSAGES.notFound);
-    const map = await requireMember(tx, user, row.mapId);
+    const { map } = await requireMember(tx, user, row.mapId);
     return { row, map };
   };
 
@@ -557,7 +546,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
     const begin = () =>
       store.transaction(async (repo, tx) => {
-        const map = await requireMember(tx, user, mapId);
+        const { map } = await requireMember(tx, user, mapId);
         const active = await repo.findActive(mapId, user.id);
         if (active) return { row: active, created: false };
 
@@ -646,7 +635,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     },
 
     startWild: async (user, mapId, request = {}) => {
-      const map = await requireMember(db, user, mapId);
+      const { map } = await requireMember(db, user, mapId);
       const active = await store.findActive(mapId, user.id);
       if (active) return { battle: toPlayerBattle(await resolved(active)), created: false };
       const encounter = await options.findWildEncounter?.({

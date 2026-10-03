@@ -1,9 +1,8 @@
 // Rate limits for the tutorial (tech spec §5). Starting and replaying each
 // build a whole Tutorial Glade, so they're limited like making a map; each
 // acknowledgement writes a game event.
-import type { RateLimit } from '../auth/limits.js';
-
-const MINUTE_MS = 60_000;
+import type { RateLimitTable } from '../../lib/rate-limit.js';
+import { MINUTE_MS } from '../../lib/time.js';
 
 export const TUTORIAL_RATE_LIMITS = {
   newRun: {
@@ -14,6 +13,6 @@ export const TUTORIAL_RATE_LIMITS = {
     perIp: { max: 120, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 30, windowMs: MINUTE_MS }, // TUNE: guess; a fast reader taps a lot
   },
-} as const satisfies Record<string, { perIp: RateLimit; perUser: RateLimit }>;
+} as const satisfies RateLimitTable;
 
 export type TutorialAction = keyof typeof TUTORIAL_RATE_LIMITS;

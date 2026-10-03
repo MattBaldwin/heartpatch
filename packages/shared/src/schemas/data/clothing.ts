@@ -45,6 +45,14 @@ export const ClothingSourceSchema = z.enum([
 ]);
 export type ClothingSource = z.infer<typeof ClothingSourceSchema>;
 
+/**
+ * What can turn up a `found` item: a gather, a tile capture or a rescue. Game
+ * events name it, so it's public; the drop tables themselves are server-only
+ * (`schemas/data/clothing-drops.ts`, `data/server/clothing-drops.ts`).
+ */
+export const ClothingDropSourceSchema = z.enum(['gather', 'capture', 'rescue']);
+export type ClothingDropSource = z.infer<typeof ClothingDropSourceSchema>;
+
 /** Sources whose items stay with the account: never `tradable`. */
 const ACCOUNT_BOUND: readonly ClothingSource[] = ['starter', 'tutorial', 'milestone'];
 

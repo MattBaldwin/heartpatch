@@ -139,10 +139,17 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
 test('"Later" puts the optional tutorial away, and the lobby offers it back', async ({
   browser,
 }) => {
+  test.setTimeout(120_000); // draws the Glade; CI renders in software
   const page = await newPlayer(browser, uniqueName('later'));
   const lobby = page.getByTestId('lobby');
   await lobby.getByTestId('tutorial-start').tap();
   await expect.poll(async () => (await debug(page))?.stepId).toBe('welcome');
+  // Wait for the Glade to be built and drawn: until then the page is busy
+  // building it, and a tap can wait out the whole test.
+  await expect.poll(async () => (await debug(page))?.mapId ?? null).not.toBeNull();
+  const run = (await debug(page))?.mapId;
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await expect.poll(() => drawnMap(page), { timeout: 60_000 }).toBe(run);
   // A first run can't be skipped.
   await expect(
     page.getByTestId('tutorial-bubble').getByRole('button', { name: 'Skip it' }),

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalTimeZone, createClock, localDate, localDateHour, spawnWindowId } from './time.js';
+import {
+  canonicalTimeZone,
+  createClock,
+  localDate,
+  localDateHour,
+  mapLocalTime,
+  spawnWindowId,
+} from './time.js';
 
 describe('createClock', () => {
   it('is the real time without HP_DEV_NOW', () => {
@@ -117,5 +124,32 @@ describe('spawnWindowId (tech spec §8)', () => {
 
   it('refuses window lengths that don’t divide a day', () => {
     expect(() => spawnWindowId(new Date(), zone, 5)).toThrow(/divide a day/);
+  });
+});
+
+describe('mapLocalTime (map-local wall clock)', () => {
+  it('follows daylight saving in the map time zone', () => {
+    // Denver falls back on Nov 1, 2026: 21:00 is 03:00Z before and 04:00Z after.
+    expect(mapLocalTime(new Date('2026-10-31T03:00:00Z'), 'America/Denver')).toEqual({
+      date: '2026-10-30',
+      minute: 21 * 60,
+    });
+    expect(mapLocalTime(new Date('2026-11-02T04:00:00Z'), 'America/Denver')).toEqual({
+      date: '2026-11-01',
+      minute: 21 * 60,
+    });
+    expect(mapLocalTime(new Date('2026-11-02T03:59:00Z'), 'America/Denver').minute).toBe(
+      20 * 60 + 59,
+    );
+    // Spring forward, Mar 8 2026: 21:00 MDT is 03:00Z.
+    expect(mapLocalTime(new Date('2026-03-09T03:00:00Z'), 'America/Denver')).toEqual({
+      date: '2026-03-08',
+      minute: 21 * 60,
+    });
+    expect(mapLocalTime(new Date('2026-10-02T05:30:00Z'), 'Asia/Kolkata')).toEqual({
+      date: '2026-10-02',
+      minute: 11 * 60,
+    });
+    expect(mapLocalTime(new Date('2026-10-02T06:00:00Z'), 'UTC').minute).toBe(6 * 60);
   });
 });

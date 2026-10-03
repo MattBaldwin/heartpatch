@@ -26,10 +26,11 @@ import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
-import type { Clock } from '../../lib/time.js';
+import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
-import { consumeItems, grantItems, requireMember, seasonsOn } from '../inventory/service.js';
-import { BUILDING_DATA, mapLocalTime, toPublicBuilding } from './hearthfire.js';
+import { consumeItems, grantItems, seasonsOn } from '../inventory/service.js';
+import { requireMember } from '../maps/members.js';
+import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import {
   createBuildingsRepo,
   type BuildingRow,
@@ -239,7 +240,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     let result: T;
     try {
       result = await store.transaction(async (repo, tx) => {
-        const map = await requireMember(tx, user, mapId);
+        const { map } = await requireMember(tx, user, mapId);
         // Every building command for this player runs one at a time (repo.ts).
         const home = await repo.lockHomeTiles(mapId, user.id);
         return run({
@@ -275,7 +276,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
 
   return {
     home: async (user, mapId) => {
-      const map = await requireMember(db, user, mapId);
+      const { map } = await requireMember(db, user, mapId);
       return homeView(store, db, mapId, user.id, now(), map.timeZone);
     },
 

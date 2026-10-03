@@ -132,7 +132,6 @@ export const HouseSquishyRequestSchema = z.strictObject({
 export type HouseSquishyRequest = z.infer<typeof HouseSquishyRequestSchema>;
 
 export const BuildingParamsSchema = z.object({ mapId: z.uuid(), buildingId: z.uuid() });
-export const SquishyParamsSchema = z.object({ mapId: z.uuid(), squishyId: z.uuid() });
 
 /** Taking a building down: what came back, and the home after. */
 export const RemoveBuildingResponseSchema = z.object({

@@ -34,12 +34,13 @@ import {
 import type { Executor, Transaction } from '../../db/client.js';
 import type { GameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
-import { localDate, type Clock } from '../../lib/time.js';
+import { localDate, mapLocalTime, type Clock } from '../../lib/time.js';
 import type { BattlesService, StartResult } from '../battles/service.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
-import { litSafeTiles, mapLocalTime } from '../buildings/hearthfire.js';
-import { grantItems, requireMember } from '../inventory/service.js';
+import { litSafeTiles } from '../buildings/hearthfire.js';
+import { grantItems } from '../inventory/service.js';
 import { createCareRepo } from '../care/repo.js';
+import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import {
@@ -216,7 +217,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
 
   return {
     status: async (user, mapId) => {
-      const map = await requireMember(db, user, mapId);
+      const { map } = await requireMember(db, user, mapId);
       const at = now();
       const local = mapLocalTime(at, map.timeZone);
       const lastNight = lastNightOf(local, nightRules);
@@ -341,7 +342,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     },
 
     devNightfall: async (user, mapId) => {
-      const map = await requireMember(db, user, mapId);
+      const { map } = await requireMember(db, user, mapId);
       const local = mapLocalTime(now(), map.timeZone);
       let night = tonightOf(local, HOME_BASE_RULES);
       for (let i = 0; i < DEV_NIGHTS_AHEAD; i++, night = addDays(night, 1)) {

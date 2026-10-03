@@ -10,20 +10,15 @@ import {
   type MapLocalTime,
   type PublicBuilding,
 } from '@heartpatch/shared';
-import { localDateTime } from '../../lib/time.js';
+import { mapLocalTime } from '../../lib/time.js';
 import type { BuildingRow } from './repo.js';
 
 // Hearthfires on the server (#18; design doc §14, tech spec §7): turns the
 // clock into map-local time (DST included) for the shared pure rules.
-// Nightfall (#21) uses `mapLocalTime`, `fireStateAt` and `litSafeTiles`.
+// Nightfall (#21) uses `fireStateAt` and `litSafeTiles`, with `mapLocalTime`
+// from lib/time.ts.
 
 export const BUILDING_DATA = new Map<string, Building>(GAME_DATA.buildings.map((b) => [b.id, b]));
-
-/** Map-local wall-clock time at `at` in `timeZone` (an IANA zone), for the shared rules. */
-export function mapLocalTime(at: Date, timeZone: string): MapLocalTime {
-  const { date, hour, minute } = localDateTime(at, timeZone);
-  return { date, minute: hour * 60 + minute };
-}
 
 /** A fire's state at `at` on a map in `timeZone`. */
 export function fireStateAt(

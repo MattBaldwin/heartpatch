@@ -18,7 +18,7 @@ import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, type Clock } from '../../lib/time.js';
 import { createGatheringRepo, type GatherRow } from '../gathering/repo.js';
-import { createMapsRepo } from '../maps/repo.js';
+import { requireMember } from '../maps/members.js';
 import { createInventoryRepo, type CraftRow, type ItemOwner } from './repo.js';
 
 /*
@@ -34,7 +34,6 @@ const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
-  noMap: "We couldn't find that patch.",
   unknownItem: "We don't know that item.",
   unknownRecipe: "We don't know that recipe.",
   noCraft: "We couldn't find that.",
@@ -99,17 +98,6 @@ export function seasonsOn(at: Date, timeZone: string): string[] {
   return activeSeasons(GAME_DATA.seasons, localDate(at, timeZone)).map((s) => s.id);
 }
 
-/** The map, for an active member. NOT_FOUND otherwise, so maps can't be probed. */
-export async function requireMember(tx: Executor, user: PublicUser, mapId: string) {
-  const maps = createMapsRepo(tx);
-  const [map, membership] = await Promise.all([
-    maps.findMap(mapId),
-    maps.membership(mapId, user.id),
-  ]);
-  if (!map || membership?.status !== 'active') throw new AppError('NOT_FOUND', MESSAGES.noMap);
-  return map;
-}
-
 export const toGather = (row: GatherRow): Gather => ({
   id: row.id,
   q: row.q,
@@ -156,7 +144,7 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
 
   return {
     get: async (user, mapId) => {
-      const map = await requireMember(db, user, mapId);
+      const { map } = await requireMember(db, user, mapId);
       const owner = { mapId, userId: user.id };
       const at = now();
       const [items, gathers, crafts] = await Promise.all([
@@ -180,7 +168,7 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
       const at = now();
       try {
         return await store.transaction(async (repo, tx) => {
-          const map = await requireMember(tx, user, mapId);
+          const { map } = await requireMember(tx, user, mapId);
           if (!inSeason(recipe, new Set(seasonsOn(at, map.timeZone)))) {
             const season = SEASON_NAMES.get(recipe.season ?? '') ?? 'its season';
             throw new AppError('CONFLICT', MESSAGES.outOfSeason(season));

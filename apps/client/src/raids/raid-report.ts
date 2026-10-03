@@ -8,7 +8,8 @@ import { raidsApi, type RaidsApi } from './raids-api.js';
 import './raids.css';
 
 // The raid report (#16, design doc §3 "offline defense", style guide §6
-// "Morning report"): challenges on my land while I was away, opened by itself
+// "Morning report"; titled "Raid report" so it never reads like the Hollow's
+// morning report): challenges on my land while I was away, opened by itself
 // when there's something new, plus my defense style. A raid's replay plays in
 // the battle screen (#13), from my side. The server decides everything
 // (CLAUDE.md rule 1); this only shows what it says and sends taps.
