@@ -1,0 +1,19 @@
+/* Dev-only sound gallery (/sounds.html). */
+
+body {
+  margin: 0;
+  padding: 16px;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+  background: #fde8f0;
+}
+
+.sound-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.sound-button {
+  min-height: 48px;
+}

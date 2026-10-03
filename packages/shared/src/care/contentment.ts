@@ -11,7 +11,11 @@ const HOUR_MS = 60 * 60 * 1000;
 export interface CareState {
   /** Contentment right after the last care action (0–100). */
   readonly contentment: number;
-  /** When it was last cared for; null: never (a new squishy's stored 0 then stays put, below any baseline). */
+  /**
+   * When it was last cared for. A new squishy gets its creation time and the
+   * care rules' `startContentment`; null (rows from before that): never, and
+   * its stored value stays put, below any baseline.
+   */
   readonly lastCaredAt: Date | null;
 }
 

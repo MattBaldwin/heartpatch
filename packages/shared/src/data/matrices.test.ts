@@ -39,6 +39,17 @@ describe('element matrix', () => {
     expect(ELEMENT_MATRIX.leaf.fire).toBeLessThan(1);
   });
 
+  it('ranks strong over neutral over weak, softly enough for a counter to matter', () => {
+    const values = elements.flatMap((a) => elements.map((d) => ELEMENT_MATRIX[a][d]));
+    const strong = Math.max(...values);
+    const weak = Math.min(...values);
+    expect(strong).toBeGreaterThan(1);
+    expect(weak).toBeLessThan(1);
+    // Owner balance pass (2026-10-03): about 1.5× and 0.67×, not 2× and 0.5×.
+    expect(strong).toBeLessThan(2);
+    expect(weak).toBeGreaterThan(0.5);
+  });
+
   it('is neutral for a matchup with itself', () => {
     for (const e of elements) expect(ELEMENT_MATRIX[e][e]).toBe(1);
   });
@@ -69,9 +80,17 @@ describe('feeling matrix', () => {
     expect(FEELING_MATRIX.brave.sleepy).toBeGreaterThan(1); // Brave overwhelms Sleepy
   });
 
-  it('can blunt an element disadvantage', () => {
-    const best = Math.max(...feelings.flatMap((a) => feelings.map((d) => FEELING_MATRIX[a][d])));
-    expect(0.5 * best).toBeGreaterThan(0.5);
+  it('can blunt an element disadvantage, but matters less than elements', () => {
+    const all = <K extends string>(m: Record<K, Record<K, number>>, keys: readonly K[]) =>
+      keys.flatMap((a) => keys.map((d) => m[a][d]));
+    const elementValues = all(ELEMENT_MATRIX, elements);
+    const feelingValues = all(FEELING_MATRIX, feelings);
+    const [weak, strong] = [Math.min(...elementValues), Math.max(...elementValues)];
+    const [reverse, counter] = [Math.min(...feelingValues), Math.max(...feelingValues)];
+    // A weak element hit with a feeling counter lands within a sixth of neutral…
+    expect(weak * counter).toBeGreaterThan(5 / 6);
+    // …yet the element swing (strong ÷ weak) is still bigger than the feeling swing.
+    expect(strong / weak).toBeGreaterThan(counter / reverse);
   });
 
   it('gives every feeling counters both ways, and no strictly-best feeling', () => {

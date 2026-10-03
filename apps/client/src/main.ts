@@ -1,3 +1,5 @@
+import { createAudio } from './audio/audio.js';
+import { battleCue, careCue, touchCue } from './audio/cues.js';
 import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
@@ -107,6 +109,10 @@ function showScene(build: SceneBuilder | null): void {
   }
 }
 
+// Sound (#25): silent until the first tap, which unlocks it (iOS) and loads
+// the engine. Screens report moments; the audio module picks the sound.
+const audio = createAudio();
+
 // The bag and gathering (#17): a Bag button over a multiplayer map, and the
 // gather buttons in its tile panel.
 const inventory = createInventoryScreen({ root: document.body, devTools: import.meta.env.DEV });
@@ -115,6 +121,9 @@ const inventory = createInventoryScreen({ root: document.body, devTools: import.
 // the player is back from the battle that caused it, or opens their home.
 const care = createCareSheet({
   root: document.body,
+  onSquish: (kind) => {
+    audio.cue(careCue(kind));
+  },
   onCloseUp: (mapId, squishyId) => {
     void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
   },
@@ -179,6 +188,9 @@ const closeUp = createCloseUpScreen({
   onProblem: (message) => {
     lobby.showMessage(message);
   },
+  onTouch: (kind) => {
+    audio.cue(touchCue(kind));
+  },
 });
 /** #16's raid report is open: the Hollow's morning report waits its turn (#21). */
 let raidReportOpen = false;
@@ -211,7 +223,21 @@ const territory = withRaidReport(
 const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
 const hollow = createHollowScreen({
   root: document.body,
-  layer: hollowLayer,
+  // The night loop plays while it's night on the map, and his visit hushes it.
+  layer: {
+    setNight: (night) => {
+      hollowLayer.setNight(night);
+      audio.setNight(night);
+    },
+    visit: (done) => {
+      const visiting = hollowLayer.visit(done);
+      if (visiting) audio.cue('nightfall');
+      return visiting;
+    },
+    get debug() {
+      return hollowLayer.debug;
+    },
+  },
   otherReportOpen: () => raidReportOpen,
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
@@ -250,6 +276,7 @@ const home = createHomeScreen({
     void care.open(mapId, squishyId);
   },
   onCloseUp: (mapId, squishyId) => {
+    audio.cue('squeak');
     void closeUp.open(mapId, squishyId, 'home');
   },
   onClosed: (mapId) => {
@@ -391,6 +418,9 @@ const battles = createBattleScreen({
   devTools: import.meta.env.DEV,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
+  onStep: (step) => {
+    audio.cue(battleCue(step));
+  },
 });
 // Picking a Keeper (#42) comes right after signup, before the tutorial and
 // the lobby; Settings opens it again to change the Keeper for free.
@@ -456,7 +486,7 @@ const lobby = mountLobby(document.body, {
     void battles.setMap(mapId);
   },
   listActions: () => [...tutorial.listActions(), ...wardrobe.listActions()],
-  settings: () => [...keeper.settings(), ...tutorial.settings()],
+  settings: () => [...audio.settings(), ...keeper.settings(), ...tutorial.settings()],
 });
 mountAuth(document.body, {
   onChange: (user) => {
@@ -532,5 +562,6 @@ if (import.meta.env.DEV) {
     care: () => care.debug,
     closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,
+    audio: () => audio.debug,
   };
 }

@@ -512,6 +512,32 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       expect((await rowOf(id))?.contentmentAtLastCare).toBe(100);
     });
 
+    it('starts a new squishy half content, sliding down from when it joined', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
+        speciesId: MOONPUFF,
+      });
+      expect(granted.statusCode, granted.body).toBe(201);
+      const { id } = SquishyResponseSchema.parse(granted.json()).squishy;
+      const startsAt = CARE_RULES.startContentment;
+      expect(startsAt).toBeGreaterThan(CARE_RULES.baselineContentment);
+      const row = await rowOf(id);
+      expect(row).toMatchObject({ contentmentAtLastCare: startsAt, lastCaredAt: clock });
+      expect(row?.createdAt).toEqual(row?.lastCaredAt);
+      expect((await one(server, kid, mapId, id)).contentment).toBe(startsAt);
+      // It decays like care: the full-to-baseline slope, from its creation time.
+      clock.setTime(Date.parse(START) + 6 * HOUR_MS);
+      const drop = Math.floor(
+        (6 * (CARE_RULES.maxContentment - CARE_RULES.baselineContentment)) /
+          CARE_RULES.hoursFullToBaseline,
+      );
+      expect((await one(server, kid, mapId, id)).contentment).toBe(startsAt - drop);
+      clock.setTime(Date.parse(START) + 9 * DAY_MS);
+      expect((await one(server, kid, mapId, id)).contentment).toBe(CARE_RULES.baselineContentment);
+    });
+
     it('builds care on what is left, and caps at full', async () => {
       const server = await start();
       const kid = await player();

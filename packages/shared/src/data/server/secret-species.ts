@@ -43,7 +43,7 @@ export const SECRET_MOVES: Move[] = [
     power: 0,
     accuracy: 100,
     effects: [
-      { type: 'heal', percent: 40 }, // TUNE:
+      { type: 'heal', percent: 30 }, // TUNE:
       { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 100 }, // TUNE:
     ],
   },
@@ -93,7 +93,7 @@ export const SECRET_SPECIES: Species[] = [
     element: 'light',
     feeling: 'cozy',
     rarity: 'secret',
-    baseStats: { hp: 65, attack: 55, defense: 65, speed: 60 }, // TUNE:
+    baseStats: { hp: 60, attack: 55, defense: 60, speed: 55 }, // TUNE:
     moves: ['sunny-beam', 'cozy-crackle', 'heart-glow'],
     evolutions: [],
     visual: {
@@ -110,7 +110,7 @@ export const SECRET_SPECIES: Species[] = [
     element: 'light',
     feeling: 'cozy',
     rarity: 'secret',
-    baseStats: { hp: 90, attack: 80, defense: 90, speed: 85 }, // TUNE:
+    baseStats: { hp: 80, attack: 70, defense: 80, speed: 75 }, // TUNE:
     moves: ['sunny-beam', 'cozy-crackle', 'heart-glow', 'night-light'],
     evolutions: [],
     visual: {
