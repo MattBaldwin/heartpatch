@@ -139,6 +139,13 @@ describe('checkTutorialData', () => {
     ]);
   });
 
+  it('names the three starters in the befriend line, so it never goes stale', () => {
+    const line = TUTORIAL_DATA.steps.find((s) => s.id === 'befriend')!.sproutLines.join(' ');
+    for (const id of STARTERS.speciesIds) {
+      expect(line).toContain(GAME_DATA.species.find((s) => s.id === id)!.name);
+    }
+  });
+
   it("checks the run's setup: a year-round helper that isn't a starter, and known items", () => {
     const starters = ['emberbun', 'puddlepuff', 'thistlepip'];
     expect(checkTutorialData(TUTORIAL_DATA, GAME_DATA, starters)).toEqual([]);

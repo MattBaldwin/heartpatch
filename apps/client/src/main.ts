@@ -386,8 +386,9 @@ const tutorial = createTutorialScreen({
   onStep: (stepId) => {
     // The wardrobe step is done once the scarf is on: back to the Glade.
     if (stepId !== 'wardrobe' && wardrobe.debug?.open) wardrobe.close();
-    // A step can find a lore page (the Glade's night): look after each one.
-    lorebook.check();
+    // The Glade's page is found at its night: look once the step after it
+    // comes up, and when a run ends.
+    if (stepId === 'evolve' || stepId === null) lorebook.check();
   },
 });
 // Found lore pages (design doc §16). Mounted after the tutorial, so its card

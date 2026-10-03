@@ -1,6 +1,7 @@
 import { GAME_EVENTS, type TutorialState, type WsEventMessage } from '@heartpatch/shared';
 import { ApiRequestError } from '../net/api.js';
 import type { WsClient, WsClientOptions } from '../net/ws-client.js';
+import { checkNickname } from '../close-up/close-up-view.js';
 import { messageOf } from '../ui/dom.js';
 import type { TutorialApi } from './tutorial-api.js';
 import { stepView, type StepView } from './step-view.js';
@@ -220,8 +221,18 @@ export class TutorialController {
     const state = this.state;
     const partner = state?.partner;
     if (step?.action !== 'name' || !state?.mapId || !partner) return;
-    const name = nickname.trim();
-    if (name === '') return;
+    // Checked the way the close-up checks a name (the server filters it too).
+    const checked = checkNickname(nickname);
+    if (!checked.ok) {
+      if (nickname.trim() !== '') {
+        this.fail(checked.why, () => {
+          this.phase = 'step';
+          this.emit();
+        });
+      }
+      return;
+    }
+    const { name } = checked;
     if (this.nameKey?.name !== name) this.nameKey = { name, key: crypto.randomUUID() };
     const { key } = this.nameKey;
     const mapId = state.mapId;

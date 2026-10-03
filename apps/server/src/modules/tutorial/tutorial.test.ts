@@ -689,6 +689,43 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
       return current;
     }
 
+    it('names and grows the starter befriended on the befriend step, not an earlier one', async () => {
+      const server = await start();
+      const kid = await player();
+      const { mapId } = await begin(server, kid);
+      const m = mapId!;
+      const befriend = async (tile: { q: number; r: number }) => {
+        const res = await call(server, 'POST', `/maps/${m}/battles`, kid, { tile });
+        expect(res.statusCode, res.body).toBe(201);
+        const battle = battleOf(res);
+        await playOut(server, kid, battle, true);
+        await runConsumer(db, consumer, m);
+        return battle.view.sides.b.squishies[0]!.speciesId;
+      };
+      // A starter befriended early, while the kid is meant to be building a fire.
+      await jumpTo(kid, 'hearthfire');
+      const early = await befriend({ q: 0, r: 1 });
+      expect((await getTutorial(server, kid)).stepId).toBe('hearthfire');
+      // Then the real one, on the befriend step.
+      await jumpTo(kid, 'befriend');
+      const chosen = await befriend({ q: 1, r: 0 });
+      expect(chosen).not.toBe(early);
+      const { partner } = await getTutorial(server, kid);
+      expect(partner?.speciesId).toBe(chosen);
+      const account = await db.query.users.findFirst({ where: (t, { eq }) => eq(t.id, kid.id) });
+      expect(account?.partnerSpeciesId).toBe(chosen);
+
+      // The evolve step grows that one.
+      await jumpTo(kid, 'evolve');
+      const res = await call(server, 'POST', `/maps/${m}/battles`, kid, { tile: { q: -1, r: 1 } });
+      await playOut(server, kid, battleOf(res));
+      await runConsumer(db, consumer, m);
+      expect((await getTutorial(server, kid)).stepId).toBe('wardrobe');
+      const rows = await squishiesOf(m);
+      expect(rows.find((r) => r.id === partner!.squishyId)!.speciesId).not.toBe(chosen);
+      expect(rows.filter((r) => r.speciesId === early)).toHaveLength(1);
+    }, 30_000);
+
     it('teaches every step with the real modules, from the Heart Seed to graduation', async () => {
       const server = await start();
       const kid = await player();
@@ -841,6 +878,7 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
         .filter((e) => e.type === 'tutorial.advanced')
         .map((e) => parseGameEventPayload('tutorial.advanced', e.payload).completedStepId);
       expect(advanced).toEqual(TUTORIAL_STEPS.map((s) => s.id));
-    });
+      // ~60 requests and consumer runs: more than the 5 s default on a busy runner.
+    }, 30_000);
   });
 });

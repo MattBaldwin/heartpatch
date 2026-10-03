@@ -11,7 +11,7 @@ import type { EventConsumer } from '../../jobs/consumers.js';
 import type { Clock } from '../../lib/time.js';
 import { appendGrowthEvents, applyXp } from '../care/service.js';
 import { createTutorialTxRepo, type TutorialTxRepo } from './repo.js';
-import { grantSeedlingScarf, PARTNER_LINE, xpToEvolve } from './rewards.js';
+import { grantSeedlingScarf, partnerLineOf, xpToEvolve } from './rewards.js';
 
 /** Grants account-level rewards inside the consumer's transaction. */
 export type GrantRewards = (
@@ -72,10 +72,16 @@ export function createTutorialConsumer(options: TutorialConsumerOptions = {}): E
   const grantRewards = options.grantRewards ?? grantCompletionRewards;
 
   /** Grows the run's Partner to its next form, with care's growth events. */
-  const evolvePartner = async (repo: TutorialTxRepo, tx: Transaction, event: GameEvent) => {
+  const evolvePartner = async (
+    repo: TutorialTxRepo,
+    tx: Transaction,
+    event: GameEvent,
+    partnerSpeciesId: string | null,
+  ) => {
     const ended = parseGameEventPayload('battle.ended', event.payload);
     if (ended.reason === 'no-contest') return;
-    const partner = await repo.findPartner(event.mapId, ended.userId, PARTNER_LINE);
+    const line = partnerLineOf(partnerSpeciesId);
+    const partner = await repo.findPartner(event.mapId, ended.userId, line);
     const xp = partner ? xpToEvolve(partner) : 0;
     if (!partner || xp === 0) return;
     const growth = await applyXp(tx, partner.id, xp, now());
@@ -99,7 +105,7 @@ export function createTutorialConsumer(options: TutorialConsumerOptions = {}): E
           event.type === 'battle.ended' &&
           event.actorUserId === player.userId
         ) {
-          await evolvePartner(repo, tx, event);
+          await evolvePartner(repo, tx, event, player.partnerSpeciesId);
         }
         return;
       }

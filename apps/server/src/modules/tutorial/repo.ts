@@ -9,6 +9,8 @@ export interface TutorialProgress {
   tutorialStep: string | null;
   /** First completion; replaying never clears it. */
   tutorialCompletedAt: Date | null;
+  /** The Partner's species (set when the befriend step finishes), or null. */
+  partnerSpeciesId: string | null;
 }
 
 /** The run's Partner squishy (`findPartner`). */
@@ -45,7 +47,7 @@ export interface TutorialRepo {
   setPartnerSpecies: (userId: string, speciesId: string) => Promise<void>;
   /**
    * The run's Partner: the player's first squishy on the map whose species is
-   * one of `speciesIds` (the starters and what they grow into), or null.
+   * one of `speciesIds` (the stored Partner species and what it grows into), or null.
    */
   findPartner: (
     mapId: string,
@@ -71,6 +73,7 @@ export interface TutorialTxRepo extends TutorialRepo {
 const progressColumns = {
   tutorialStep: users.tutorialStep,
   tutorialCompletedAt: users.tutorialCompletedAt,
+  partnerSpeciesId: users.partnerSpeciesId,
 };
 
 export function createTutorialRepo(db: Executor): TutorialRepo {

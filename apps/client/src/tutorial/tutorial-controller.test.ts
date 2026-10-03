@@ -360,6 +360,16 @@ describe('TutorialController', () => {
     t.controller.name('   '); // nothing typed
     expect(t.calls).toEqual(['state']);
 
+    // Too long: refused here, with the close-up's words, before any request.
+    t.controller.name('x'.repeat(17));
+    expect(t.controller.view).toMatchObject({
+      phase: 'error',
+      message: 'Names can be up to 16 letters.',
+    });
+    t.controller.retry();
+    expect(t.controller.view.phase).toBe('step');
+    expect(t.calls).toEqual(['state']);
+
     t.failAcknowledge(new ApiRequestError('VALIDATION_FAILED', "Let's pick a different name!"));
     t.controller.name('  Sunny ');
     await settle();

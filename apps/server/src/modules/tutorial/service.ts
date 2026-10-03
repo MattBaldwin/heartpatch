@@ -28,7 +28,7 @@ import {
   type TutorialProgress,
   type TutorialTxRepo,
 } from './repo.js';
-import { grantSeedlingScarf, PARTNER_LINE } from './rewards.js';
+import { grantSeedlingScarf, partnerLineOf } from './rewards.js';
 
 export interface TutorialService {
   /** Where the player is: what the client resumes from after quitting. */
@@ -83,6 +83,7 @@ const MESSAGES = {
   movedOn: 'Sprout has already moved on. Take a look!',
   tryItFirst: 'Sprout wants you to give that one a try!',
   notNightYet: "It's not time for night yet. Let's finish this step first!",
+  noStep: "Sprout doesn't know that step.",
 } as const;
 
 const speciesById = new Map(GAME_DATA.species.map((s) => [s.id, s]));
@@ -195,7 +196,7 @@ export function createTutorialService(options: TutorialServiceOptions): Tutorial
     if (!progress) throw new AppError('UNAUTHENTICATED', MESSAGES.noAccount);
     const partner =
       runMapId && progress.tutorialStep !== null
-        ? await store.findPartner(runMapId, user.id, PARTNER_LINE)
+        ? await store.findPartner(runMapId, user.id, partnerLineOf(progress.partnerSpeciesId))
         : null;
     return toState(progress, runMapId, tutorialRequired, partner);
   };
@@ -267,7 +268,7 @@ export function createTutorialService(options: TutorialServiceOptions): Tutorial
 
     devJump: async (user, stepId) => {
       const target = steps.find((s) => s.id === stepId);
-      if (!target) throw new AppError('NOT_FOUND', MESSAGES.movedOn);
+      if (!target) throw new AppError('NOT_FOUND', MESSAGES.noStep);
       const mapId = await store.transaction(async (repo, tx) => {
         const player = await lock(repo, user);
         const running = await repo.currentRun(user.id);

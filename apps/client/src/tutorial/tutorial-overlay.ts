@@ -1,4 +1,4 @@
-import { GAME_DATA, type HighlightTarget } from '@heartpatch/shared';
+import { GAME_DATA, NICKNAME_MAX_LENGTH, type HighlightTarget } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
 import type { HighlightTargets } from './highlight-targets.js';
 import { layoutOverlay, type Insets, type OverlayLayout, type Rect } from './overlay-layout.js';
@@ -116,7 +116,7 @@ export function mountTutorialOverlay(
     autocapitalize: 'words',
     spellcheck: 'false',
     enterkeyhint: 'done',
-    maxlength: '24',
+    maxlength: String(NICKNAME_MAX_LENGTH),
   });
   const nameSave = el(
     'button',

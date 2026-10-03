@@ -1,10 +1,4 @@
-import {
-  GAME_DATA,
-  GROWTH_RULES,
-  STARTERS,
-  xpForLevel,
-  type ClothingSource,
-} from '@heartpatch/shared';
+import { GAME_DATA, GROWTH_RULES, xpForLevel, type ClothingSource } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import { uuidV5 } from '../../lib/uuid-v5.js';
 import { createWardrobeRepo } from '../wardrobe/repo.js';
@@ -50,22 +44,21 @@ export function grantSeedlingScarf(
 
 const speciesById = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 
-/** The starters and every form they grow into: what a Partner can be. */
-export const PARTNER_LINE: readonly string[] = (() => {
-  const line = new Set<string>(STARTERS.speciesIds);
-  for (let grew = true; grew;) {
-    grew = false;
-    for (const id of [...line]) {
-      for (const evolution of speciesById.get(id)?.evolutions ?? []) {
-        if (!line.has(evolution.into)) {
-          line.add(evolution.into);
-          grew = true;
-        }
-      }
-    }
+/**
+ * The stored Partner species and every form it grows into: which squishy on
+ * the run is the Partner (`users.partner_species_id`, set by the befriend
+ * step), so the one named and evolved is the one the starter pick pre-selects
+ * even if the kid befriended another starter earlier. Empty without one.
+ */
+export function partnerLineOf(speciesId: string | null): string[] {
+  const line: string[] = [];
+  let id = speciesId ?? undefined;
+  while (id !== undefined && !line.includes(id)) {
+    line.push(id);
+    id = speciesById.get(id)?.evolutions[0]?.into;
   }
-  return [...line];
-})();
+  return line;
+}
 
 /**
  * Base XP that takes the Partner to its next form's level (design doc §26
