@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
 import { PublicBuildingSchema } from './buildings.js';
-import { ContentIdSchema } from './data/common.js';
+import { ContentIdSchema, DisplayNameSchema } from './data/common.js';
 import { PublicKeeperSchema } from './data/keepers.js';
 import { TimeZoneSchema } from './time.js';
 import { WsSeqSchema } from './ws.js';
@@ -110,6 +110,8 @@ export const MapMemberSchema = z.object({
    * doc §23); null if not picked yet.
    */
   keeper: PublicKeeperSchema.nullable(),
+  /** The milestone title they wear on their profile card (#44), or null. */
+  title: DisplayNameSchema.nullable(),
 });
 export type MapMember = z.infer<typeof MapMemberSchema>;
 

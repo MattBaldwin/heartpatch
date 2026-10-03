@@ -35,16 +35,25 @@ const bannedWords = [...serverExports, ...publicEntryServerOnly];
 // Lore pages are found in play (design doc §16): their titles and words must
 // not be readable in the client before the server sends a found page.
 const lorePages = serverModule.LORE_PAGES ?? [];
+// Secret milestones (#44) show as "???" until earned: their names, goals,
+// titles and ids must only come from the server.
+const secretMilestones = serverModule.SECRET_MILESTONES ?? [];
 const bannedText = [
   'SECRET_',
   'placeholder-',
   ...lorePages.flatMap((page) => [page.title, page.text.slice(0, 40)]),
+  ...secretMilestones.flatMap((track) => [
+    track.id,
+    track.name,
+    ...track.tiers.flatMap((tier) => [tier.goal, tier.title.id, tier.title.name]),
+  ]),
 ];
 /** Source files of server-only data, as source maps list them. */
 const bannedSources = [
   /[\\/]data[\\/]server[\\/]/,
   /[\\/]schemas[\\/]data[\\/](clothing-drops|guardian-rules|lore-pages|server-game-data|spawn-rules|spawn-tables)\.ts$/,
   /[\\/]lore[\\/]index\.ts$/,
+  /[\\/]shared[\\/]src[\\/]milestones[\\/]index\.ts$/,
 ];
 
 const wordPattern = new RegExp(`\\b(${bannedWords.join('|')})\\b`, 'g');

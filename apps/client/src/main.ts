@@ -19,6 +19,7 @@ import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
 import { createLorebook } from './lore/lorebook.js';
+import { createMilestoneCelebration } from './milestones/milestone-celebration.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { boutiqueApi } from './ui/boutique/boutique-api.js';
@@ -330,6 +331,8 @@ const maps = createMapScreen({
     wardrobe.liveEvent(event);
     hollow.liveEvent(event);
     chat.liveEvent(event);
+    // The player's own play may have earned a milestone (#44).
+    milestones.liveEvent(event);
   },
 });
 // The squishy catalog (#14) opens from the button by the battle entry.
@@ -391,11 +394,18 @@ const tutorial = createTutorialScreen({
     // The Glade's page is found at its night: look once the step after it
     // comes up, and when a run ends.
     if (stepId === 'evolve' || stepId === null) lorebook.check();
+    // Finishing the Glade is The First Patch (#44).
+    if (stepId === null) milestones.check();
   },
 });
 // Found lore pages (design doc §16). Mounted after the tutorial, so its card
 // sits over Sprout's layer.
 const lorebook = createLorebook({ root: document.body });
+// A milestone earned (#44): a little party, but never over a battle.
+const milestones = createMilestoneCelebration({
+  root: document.body,
+  busy: () => battles.debug !== null,
+});
 // Battles (#13) own the whole screen: the map and the lobby's button step
 // out while one is open, and the map comes back after.
 const battles = createBattleScreen({
@@ -421,6 +431,8 @@ const battles = createBattleScreen({
         home.setMap(mapId);
         // A battle can make a squishy evolve: celebrate it now (#19).
         void care.celebrateNews(mapId);
+        // And earn a milestone that waited for the battle to close (#44).
+        milestones.check();
         return Promise.all([
           inventory.setMap(mapId),
           territory.setMap(mapId),
@@ -589,6 +601,7 @@ mountAuth(document.body, {
     wardrobe.setUser(user);
     starters.setUser(user);
     lorebook.setUser(user);
+    milestones.setUser(user);
     maps.setUser(user);
     // The lobby and tutorial wait for a Keeper (`onReady` above).
     keeper.setUser(user);
@@ -654,6 +667,7 @@ if (import.meta.env.DEV) {
     wardrobe: () => wardrobe.debug,
     starter: () => starters.debug,
     lore: () => lorebook.debug,
+    milestones: () => milestones.debug,
     audio: () => audio.debug,
   };
 }

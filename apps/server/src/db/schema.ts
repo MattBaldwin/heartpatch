@@ -553,6 +553,9 @@ export const keepers = pgTable('keepers', {
   hairColor: text('hair_color').notNull(),
   eyeColor: text('eye_color').notNull(),
   outfit: text('outfit').notNull(),
+  // The milestone title shown on their profile card (#44, design doc §24): a
+  // title id from the milestone data they've earned, or null for none.
+  titleId: text('title_id'),
   createdAt: timestamptz('created_at').notNull().defaultNow(),
   updatedAt: timestamptz('updated_at').notNull().defaultNow(),
 });
@@ -1141,4 +1144,64 @@ export const coinBalances = pgTable(
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
   (t) => [check('coin_balances_balance_nonnegative', sql`${t.balance} >= 0`)],
+);
+
+/**
+ * Keeper milestone progress (#44, design doc §24): one row per account and
+ * track, written by the `milestones` event consumer. `progress` is in
+ * hundredths of a step (`MILESTONE_UNIT`), so Gentle's half share counts half
+ * a tile; `kinds` holds what a "kinds of" track has already counted (species
+ * ids). Account-level (DECISIONS F). A missing row is no progress.
+ */
+export const milestoneProgress = pgTable(
+  'milestone_progress',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Track id from the milestone data (public or secret).
+    milestoneId: text('milestone_id').notNull(),
+    progress: integer('progress').notNull().default(0),
+    kinds: jsonb('kinds').$type<string[]>().notNull().default([]),
+    updatedAt: timestamptz('updated_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.milestoneId] }),
+    check('milestone_progress_progress_nonnegative', sql`${t.progress} >= 0`),
+  ],
+);
+
+/**
+ * Milestone tiers earned (#44): one row per account, track and tier, so a
+ * tier's reward is granted exactly once however often an event is retried
+ * (the unique key). `id` is uuid v5 of the three, and it is the `ref_id` of
+ * the tier's coins (`coin_ledger`) and piece (`clothing_owned`). `seen_at` is
+ * set once the player's client has celebrated it.
+ */
+export const milestoneRewards = pgTable(
+  'milestone_rewards',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    milestoneId: text('milestone_id').notNull(),
+    // 1 for a track's first tier.
+    tier: smallint('tier').notNull(),
+    // The patch whose play earned it, if any; the reward stays when the map goes.
+    mapId: uuid('map_id').references(() => maps.id, { onDelete: 'set null' }),
+    earnedAt: timestamptz('earned_at').notNull(),
+    seenAt: timestamptz('seen_at'),
+  },
+  (t) => [
+    uniqueIndex('milestone_rewards_user_id_milestone_id_tier_key').on(
+      t.userId,
+      t.milestoneId,
+      t.tier,
+    ),
+    index('milestone_rewards_unseen_idx')
+      .on(t.userId)
+      .where(sql`${t.seenAt} is null`),
+    check('milestone_rewards_tier_positive', sql`${t.tier} >= 1`),
+  ],
 );

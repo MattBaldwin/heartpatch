@@ -18,6 +18,7 @@ import {
   users,
 } from '../../db/schema.js';
 import { keeperColumns } from '../keepers/repo.js';
+import { titleName } from '../milestones/service.js';
 import { squishyOnWatch } from '../territory/repo.js';
 import { WORN, wornOf } from '../wardrobe/repo.js';
 
@@ -92,6 +93,8 @@ export interface MemberRow {
   joinedAt: Date;
   /** Shown to the other members (#42) with what it wears (#43); null until they pick one. */
   keeper: PublicKeeper | null;
+  /** The milestone title they wear (#44), by name; null for none. */
+  title: string | null;
 }
 
 export interface PendingRequestRow {
@@ -487,6 +490,8 @@ function queries(db: Executor): MapsRepo {
           joinedAt: mapMembers.joinedAt,
           // Drizzle makes a left-joined object null when every column is null.
           keeper: keeperColumns,
+          // The milestone title on their profile card (#44).
+          titleId: keepers.titleId,
           // What the Keeper wears (#43): the worn outfit row, if they ever dressed.
           wearing: outfits.wearing,
         })
@@ -497,9 +502,10 @@ function queries(db: Executor): MapsRepo {
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active')))
         // 'owner' is the enum's first value, so it sorts first.
         .orderBy(asc(mapMembers.role), asc(mapMembers.joinedAt), asc(users.id));
-      return rows.map(({ wearing, ...row }) => ({
+      return rows.map(({ wearing, titleId, ...row }) => ({
         ...row,
         keeper: row.keeper ? { ...row.keeper, wearing: wornOf(wearing) } : null,
+        title: titleName(titleId),
       }));
     },
 

@@ -18,6 +18,12 @@ import { lodFor } from '../../procedural/motion.js';
 import type { BoutiqueApi } from '../boutique/boutique-api.js';
 import { createBoutiqueCard, type BoutiqueDebug } from '../boutique/boutique-card.js';
 import { BOUTIQUE_TEXT, previewWearing } from '../boutique/boutique-view.js';
+import type { MilestonesApi } from '../../milestones/milestones-api.js';
+import {
+  createMilestonesCard,
+  type MilestonesCardDebug,
+} from '../../milestones/milestones-card.js';
+import { MILESTONES_TEXT } from '../../milestones/milestones-view.js';
 import { el, messageOf } from '../dom.js';
 import { KeeperPreview } from '../keeper/keeper-preview.js';
 import { OutfitSync } from './outfit-sync.js';
@@ -57,6 +63,8 @@ export interface WardrobeScreenOptions {
   api?: WardrobeApi;
   /** The Boutique's calls (#45); tests swap them. */
   boutiqueApi?: BoutiqueApi;
+  /** The Milestones card's calls (#44); tests swap them. */
+  milestonesApi?: MilestonesApi;
   /** Dev builds show a "get clothes" button (server `HP_DEV_SQUISHY_GRANTS`). */
   devTools?: boolean;
   /** How long after the last tap the outfit is sent. Tests shorten it. */
@@ -88,6 +96,8 @@ export interface WardrobeDebug {
   readonly found: string | null;
   /** The Boutique (#45), which takes the bottom card while it's open. */
   readonly boutique: BoutiqueDebug;
+  /** Milestones (#44), which also take the bottom card while open. */
+  readonly milestones: MilestonesCardDebug;
 }
 
 export interface WardrobeScreen {
@@ -202,7 +212,12 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     { type: 'button', class: 'wardrobe-chip', 'data-testid': 'wardrobe-boutique' },
     BOUTIQUE_TEXT.open,
   );
-  const header = el('div', { class: 'wardrobe-header' }, title, shop, turn, done);
+  const goals = el(
+    'button',
+    { type: 'button', class: 'wardrobe-chip', 'data-testid': 'wardrobe-milestones' },
+    MILESTONES_TEXT.open,
+  );
+  const header = el('div', { class: 'wardrobe-header' }, title, goals, shop, turn, done);
   const tabs = el('div', { class: 'wardrobe-tabs', role: 'tablist' });
   const rarities = el('div', { class: 'wardrobe-rarities' });
   const list = el('div', { class: 'wardrobe-items', 'data-testid': 'wardrobe-items' });
@@ -259,6 +274,16 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     ...(options.devTools ? { devTools: true } : {}),
   });
   panel.append(boutique.node);
+  // Milestones (#44) swap in the same way; the Keeper above shows off.
+  const milestones = createMilestonesCard({
+    onBack: () => {
+      card.hidden = false;
+      render();
+    },
+    username: () => user?.username ?? '',
+    ...(options.milestonesApi ? { api: options.milestonesApi } : {}),
+  });
+  panel.append(milestones.node);
   const toast = el('p', {
     class: 'wardrobe-toast',
     role: 'status',
@@ -600,6 +625,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   function close(): void {
     if (!isOpen) return;
     boutique.close();
+    milestones.close();
     card.hidden = false;
     outfit.flush();
     isOpen = false;
@@ -620,6 +646,11 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     closeSave();
     card.hidden = true;
     boutique.open();
+  });
+  goals.addEventListener('click', () => {
+    closeSave();
+    card.hidden = true;
+    milestones.open();
   });
 
   devGrant?.addEventListener('click', () => {
@@ -658,6 +689,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
       user = next;
       outfit.reset();
       boutique.reset();
+      milestones.reset();
       found = null;
       toast.hidden = true;
       // Known early, so battles dress the Keeper before the wardrobe opens.
@@ -703,6 +735,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
         sending: outfit.sending,
         found,
         boutique: boutique.debug,
+        milestones: milestones.debug,
       };
     },
   };

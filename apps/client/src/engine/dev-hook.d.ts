@@ -14,6 +14,7 @@ import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { KeeperDebug } from '../ui/keeper/keeper-screen.js';
 import type { WardrobeDebug } from '../ui/wardrobe/wardrobe-screen.js';
 import type { LorebookDebug } from '../lore/lorebook.js';
+import type { MilestoneCelebrationDebug } from '../milestones/milestone-celebration.js';
 import type { StarterDebug } from '../starters/starter-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
@@ -64,6 +65,8 @@ declare global {
       wardrobe?(): WardrobeDebug | null;
       starter?(): StarterDebug | null;
       lore?(): LorebookDebug;
+      /** The milestone celebration (#44): the card showing and how many wait. */
+      milestones?(): MilestoneCelebrationDebug;
       /** Quick messages (#23): the sheet, the feed and the bubbles over the map, or null. */
       chat?(): ChatDebug | null;
       /** Sound (#25): unlock state, engine, the loop wanted and playing, the last cue, levels. */

@@ -126,6 +126,16 @@
   overflow-wrap: anywhere;
 }
 
+.lobby-member-title {
+  /* Its own line under the name, after the row's buttons. */
+  flex: 1 1 100%;
+  order: 2;
+  margin-top: -6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #b07f2a;
+}
+
 .lobby-badge {
   padding: 2px 10px;
   border-radius: 999px;

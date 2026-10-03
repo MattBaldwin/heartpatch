@@ -17,12 +17,17 @@ import { createCareService } from '../modules/care/service.js';
 import { createCoinsRepo } from '../modules/coins/repo.js';
 import { grantItems } from '../modules/inventory/service.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
+import { createMilestonesConsumer } from '../modules/milestones/consumer.js';
+import { createMilestonesService, milestoneRewardId } from '../modules/milestones/service.js';
 import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
 import { setDevDropChance } from '../modules/wardrobe/drops.js';
 import { createWardrobeService } from '../modules/wardrobe/service.js';
 import { AppError } from '../lib/errors.js';
+import { createJobsRepo } from '../jobs/repo.js';
+import { runConsumer } from '../jobs/consumers.js';
+import { appendGameEvent } from './game-events.js';
 import {
   createDbClient,
   withTransaction,
@@ -39,6 +44,8 @@ import {
   inventories,
   mapMembers,
   maps,
+  milestoneProgress,
+  milestoneRewards,
   squishies,
   tileDefenders,
   tiles,
@@ -628,5 +635,125 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     // The pick committed first; leaving keeps its marker on the archived row.
     expect(owned).toHaveLength(1);
     expect(membership).toEqual({ status: 'removed', starter: owned[0]!.id });
+  });
+
+  /*
+   * Keeper milestones (#44): a consumer transaction takes `event_consumers`,
+   * then the track's `milestone_progress` row, then the tier's
+   * `milestone_rewards` row, then `coin_balances` (`creditCoins`), and never
+   * `maps` (tech spec §7 step 12 note). Each test holds one side, lets the
+   * milestone write queue there, then takes the other side: taken in the wrong
+   * order, Postgres reports a deadlock (40P01) or the lock timeout fails it.
+   */
+  async function milestonePatch(prefix: string) {
+    const kid = await player(prefix);
+    const pal = await player(`${prefix}pal`);
+    const [map] = await db
+      .insert(maps)
+      .values({ kind: 'multiplayer', name: 'Lock Milestones', timeZone: 'UTC', maxPlayers: 4 })
+      .returning({ id: maps.id });
+    const mapId = map!.id;
+    const joinedAt = new Date(Date.now() - 60_000);
+    await db.insert(mapMembers).values([
+      { mapId, userId: kid.id, role: 'owner', joinedAt },
+      { mapId, userId: pal.id, role: 'member', joinedAt },
+    ]);
+    // A rescue reaches the Rescuer track's first tier: a reward, a piece and coins.
+    await withTransaction(db, (tx) =>
+      appendGameEvent(tx, {
+        mapId,
+        type: 'squishy.rescued',
+        actorUserId: kid.id,
+        payload: { userId: kid.id, squishyId: randomUUID(), battleId: randomUUID(), heartdust: 1 },
+      }),
+    );
+    return { kid, mapId, consumer: createMilestonesConsumer() };
+  }
+
+  const milestoneCoins = async (userId: string) =>
+    (await coinRows(userId)).filter((r) => r.source === 'milestone');
+
+  it('counts milestone progress before paying its coins (milestones consumer, #44)', async () => {
+    const { kid, mapId, consumer } = await milestonePatch('climber');
+    await db
+      .insert(milestoneProgress)
+      .values({ userId: kid.id, milestoneId: 'rescuer', progress: 0, updatedAt: new Date() });
+    // Hold the track's row (another patch's event for the same player), let
+    // the consumer queue on it, then take the coins: it must not hold them yet.
+    await holdThen(
+      (tx) =>
+        tx
+          .select({ progress: milestoneProgress.progress })
+          .from(milestoneProgress)
+          .where(
+            and(eq(milestoneProgress.userId, kid.id), eq(milestoneProgress.milestoneId, 'rescuer')),
+          )
+          .for('update'),
+      () => runConsumer(db, consumer, mapId),
+      (tx) => lockCoins(tx, kid.id),
+    );
+    expect(await milestoneCoins(kid.id)).toHaveLength(1);
+  });
+
+  it('takes the consumer position before the milestone rows (milestones consumer, #44)', async () => {
+    const { kid, mapId, consumer } = await milestonePatch('queuer');
+    // Hold the consumer's position (a second worker), then a milestone row
+    // and the coins: the waiting consumer must hold none of them yet.
+    await holdThen(
+      (tx) => createJobsRepo(tx).lockPosition(consumer.name, mapId),
+      () => runConsumer(db, consumer, mapId),
+      async (tx) => {
+        await tx
+          .insert(milestoneProgress)
+          .values({ userId: kid.id, milestoneId: 'rescuer', progress: 0, updatedAt: new Date() })
+          .onConflictDoNothing();
+        await lockCoins(tx, kid.id);
+      },
+    );
+    expect(await milestoneCoins(kid.id)).toHaveLength(1);
+  });
+
+  it('records a milestone tier before paying its coins (milestones consumer, #44)', async () => {
+    const { kid, mapId, consumer } = await milestonePatch('granter');
+    const id = milestoneRewardId(kid.id, 'rescuer', 1);
+    // Another path granting the same tier (the First Patch check, another
+    // patch): hold its uncommitted reward row, let the consumer queue on the
+    // unique key, then take the coins. The holder commits the row without
+    // paying, so the consumer finds it granted and pays nothing.
+    await holdThen(
+      (tx) =>
+        tx.insert(milestoneRewards).values({
+          id,
+          userId: kid.id,
+          milestoneId: 'rescuer',
+          tier: 1,
+          mapId,
+          earnedAt: new Date(),
+        }),
+      () => runConsumer(db, consumer, mapId),
+      (tx) => lockCoins(tx, kid.id),
+    );
+    expect(await milestoneCoins(kid.id)).toEqual([]);
+  });
+
+  it('grants The First Patch before paying its coins (milestones `get`, #44)', async () => {
+    const kid = await player('finisher');
+    await db.update(users).set({ tutorialCompletedAt: new Date() }).where(eq(users.id, kid.id));
+    const id = milestoneRewardId(kid.id, 'first-patch', 1);
+    const service = createMilestonesService({ db });
+    await holdThen(
+      (tx) =>
+        tx.insert(milestoneRewards).values({
+          id,
+          userId: kid.id,
+          milestoneId: 'first-patch',
+          tier: 1,
+          mapId: null,
+          earnedAt: new Date(),
+        }),
+      () => service.get(kid),
+      (tx) => lockCoins(tx, kid.id),
+    );
+    expect(await milestoneCoins(kid.id)).toEqual([]);
   });
 });

@@ -20,6 +20,8 @@ export { CLOTHING_DROPS } from './clothing-drops.js';
 export * from '../../schemas/data/lore-pages.js';
 export * from '../../lore/index.js';
 export { LORE_PAGES } from './lore-pages.js';
+export * from '../../milestones/index.js';
+export { SECRET_MILESTONES } from './secret-milestones.js';
 export { serverBattleData } from './battle-data.js';
 export { SECRET_EVOLUTIONS, SECRET_MOVES, SECRET_SPECIES } from './secret-species.js';
 export { SPAWN_TABLES } from './spawn-tables.js';
