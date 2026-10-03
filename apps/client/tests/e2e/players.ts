@@ -1,4 +1,4 @@
-import { expect, test, type Browser, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 
 // Signup needs the family code the dev server was started with (playwright.config.ts).
 const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
@@ -46,4 +46,27 @@ export async function pickKeeper(page: Page, base = 'Clover'): Promise<void> {
   await picker.getByRole('button', { name: base, exact: true }).tap();
   await picker.getByRole('button', { name: 'That’s me!' }).tap();
   await expect(picker).toBeHidden();
+}
+
+/**
+ * Taps "Visit patch" in `lobby`. The first visit to a patch someone made or
+ * joined asks them to choose a starter before the map (owner decision
+ * 2026-10-03), so this picks `starter` when asked.
+ */
+export async function visitPatch(lobby: Locator, starter = 'Puddlepuff'): Promise<void> {
+  const page = lobby.page();
+  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  // The lobby steps aside either for the picker or, with a starter, for the map;
+  // the picker opens in the same moment the lobby steps out.
+  await expect(lobby).toBeHidden({ timeout: 30_000 });
+  if (await page.getByTestId('starter-picker').isVisible()) await pickStarter(page, starter);
+}
+
+/** Chooses `name` on the "Choose your friend!" screen. */
+export async function pickStarter(page: Page, name = 'Puddlepuff'): Promise<void> {
+  const picker = page.getByTestId('starter-picker');
+  await expect(picker.getByRole('heading', { name: 'Choose your friend!' })).toBeVisible();
+  await picker.getByRole('button', { name: new RegExp(`^${name},`) }).tap();
+  await picker.getByRole('button', { name: `Choose ${name}` }).tap();
+  await expect(picker).toBeHidden({ timeout: 30_000 });
 }

@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** Longer than one wander gap (home-config.ts `WANDER`: 3.5 s ± 1.5 s). */
 const WANDER_EVERY_MS = 5_000;
@@ -94,7 +94,7 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Cozy Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
   await expect.poll(async () => (await mapState(page))?.tiles, { timeout: 30_000 }).toBe(469);
 
@@ -147,7 +147,8 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
   await sheet.getByTestId('home-anywhere').tap();
   await expect.poll(async () => (await homeState(page))?.scene?.buildings, slow).toBe(2);
   await slowExpect(sheet.getByTestId('home-residents')).toBeVisible();
-  await sheet.getByTestId('home-residents').getByRole('button', { name: 'Move in' }).tap();
+  // Their starter and the dev squishy can both move in; one does.
+  await sheet.getByTestId('home-residents').getByRole('button', { name: 'Move in' }).first().tap();
   await expect.poll(async () => (await homeState(page))?.scene?.housed, slow).toBe(1);
   const meadow = (await homeState(page))?.buildings.find((b) => b.buildingId === 'cozy-meadow');
   expect(meadow?.residents).toBe(1);

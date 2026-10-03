@@ -27,6 +27,8 @@ import { inventoryRoutes } from './modules/inventory/routes.js';
 import { createInventoryService } from './modules/inventory/service.js';
 import { spawnsRoutes } from './modules/spawns/routes.js';
 import { createSpawnsService } from './modules/spawns/service.js';
+import { startersRoutes } from './modules/starters/routes.js';
+import { createStartersService } from './modules/starters/service.js';
 import { raidsRoutes } from './modules/raids/routes.js';
 import { createRaidsService } from './modules/raids/service.js';
 import { territoryRoutes } from './modules/territory/routes.js';
@@ -255,6 +257,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             hooks: authHooks,
             idempotency,
           }),
+        );
+        // The starter pick (owner decision 2026-10-03): 1 of 3, once per patch.
+        await api.register(
+          startersRoutes(createStartersService({ db, clock }), { hooks: authHooks, idempotency }),
         );
         // Quick messages (#23): preset phrases, emoji and stickers, by id only.
         await api.register(

@@ -30,6 +30,7 @@ import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { listPublicBuildings, removeMemberBuildings } from '../buildings/service.js';
 import { createKeepersRepo } from '../keepers/repo.js';
+import { needsStarter } from '../starters/service.js';
 import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
 import { requireMember } from './members.js';
@@ -205,7 +206,10 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 
   const detail = async (user: PublicUser, mapId: string): Promise<MapDetail> => {
     const { map, role } = await requireMember(db, user, mapId, PATCHES);
-    const members = await store.listMembers(mapId);
+    const [members, starter] = await Promise.all([
+      store.listMembers(mapId),
+      needsStarter(db, mapId, user.id),
+    ]);
     let admin: MapDetail['admin'] = null;
     if (role === 'owner') {
       const [invite, requests] = await Promise.all([
@@ -227,6 +231,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       role,
       maxPlayers: map.maxPlayers,
       members: members.map(toMember),
+      needsStarter: starter,
       admin,
     };
   };

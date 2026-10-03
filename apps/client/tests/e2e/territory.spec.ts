@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
  * Territory on an iPhone (issue #15): claim wild land next to your home base
@@ -94,12 +94,12 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Claiming Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   await expect.poll(() => territoryState(page)).toMatchObject({ attemptsLeft: 10, onWatch: 0 });
 
-  // A strong squishy from the dev route (the starter comes with the tutorial, #24).
+  // A strong squishy from the dev route, next to their level-1 starter.
   const mapId = (await mapState(page))!.id;
   const granted = await page.evaluate(async (id) => {
     const res = await fetch(`/api/v1/maps/${id}/dev/squishies`, {
@@ -181,10 +181,10 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
     .toBe('watch');
   await expect(page.getByTestId('territory-watch')).toContainText('Nobody stands watch');
 
-  // Post the squishy on watch there.
+  // Post a squishy on watch there (the starter and the strong one to choose from).
   await page.getByTestId('territory-pick').tap();
   const picker = page.getByTestId('territory-picker');
-  await expect(picker.getByRole('button')).toHaveCount(1);
+  await expect(picker.getByRole('button')).toHaveCount(2);
   await picker.getByRole('button').first().tap();
   await expect(picker.getByRole('button').first()).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('territory-save').tap();

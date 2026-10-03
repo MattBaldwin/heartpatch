@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** The open map as drawn, from the dev hook (src/map/map-screen.ts `MapDebug`). */
 interface MapDebug {
@@ -48,7 +48,7 @@ async function tapCanvas(page: Page, x: number, y: number): Promise<void> {
 async function openPatch(page: Page, name: string): Promise<void> {
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: new RegExp(name) }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.getByTestId('map-hud')).toContainText(name);
 }
@@ -69,7 +69,7 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
   await ownerLobby.getByLabel('Patch name').fill('Moonlit Patch');
   await ownerLobby.getByRole('button', { name: 'Make it!' }).tap();
   const code = (await ownerLobby.getByTestId('lobby-invite-code').textContent()) ?? '';
-  await ownerLobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(ownerLobby);
   await expect(ownerLobby).toBeHidden();
 
   // The full 4-player map: 469 tiles in a handful of instanced meshes, the

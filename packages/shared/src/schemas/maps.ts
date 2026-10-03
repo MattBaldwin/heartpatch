@@ -160,6 +160,11 @@ export const MapDetailSchema = z.object({
   role: MapRoleSchema,
   maxPlayers: z.number().int(),
   members: z.array(MapMemberSchema),
+  /**
+   * True until the player picks their starter on this patch (owner decision
+   * 2026-10-03): the client asks before opening the map.
+   */
+  needsStarter: z.boolean(),
   admin: z
     .object({
       invite: InviteSchema.nullable(),

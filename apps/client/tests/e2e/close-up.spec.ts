@@ -1,6 +1,6 @@
 import { CARE_RULES, findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -61,7 +61,7 @@ async function playerWithFriend(page: Page): Promise<void> {
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Close Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
   await page.getByTestId('bag-open').tap();
   await page.getByTestId('bag').getByRole('button', { name: 'Get stuff (dev)' }).tap();
@@ -125,7 +125,7 @@ async function sentAndSettled(page: Page, n: number, contentment: number) {
 }
 
 test('cares up close with gestures, renames, and swipes back home', async ({ browser }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(240_000); // two scene builds plus the starter screen; CI renders in software
   const page = await newPlayer(browser, uniqueName('close'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -247,7 +247,7 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
 test('celebrates an evolution in the close-up, and Back returns to the map', async ({
   browser,
 }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(240_000); // two scene builds plus the starter screen; CI renders in software
   const page = await newPlayer(browser, uniqueName('closeevo'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
