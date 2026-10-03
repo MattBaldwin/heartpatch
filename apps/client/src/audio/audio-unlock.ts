@@ -76,6 +76,9 @@ export class AudioUnlock<C extends UnlockContext> {
       this.ctx = made;
       made.addEventListener('statechange', () => {
         this.sync();
+        // Safari settles this resume when the call or Siri is over, so sound
+        // comes back without a tap if the page stayed in view.
+        if (made.state === 'interrupted') this.resume();
       });
       this.set('starting');
     }

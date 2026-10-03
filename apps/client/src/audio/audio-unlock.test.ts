@@ -99,18 +99,37 @@ describe('AudioUnlock', () => {
     expect(made).toHaveLength(1);
   });
 
-  it('goes suspended on an iOS interruption and resumes on the next gesture', async () => {
+  it('asks to resume during an iOS interruption, and runs again when it ends', async () => {
     const { unlock, made } = setup();
     unlock.gesture();
     await flush();
     const ctx = made[0];
     if (!ctx) throw new Error('no context');
+    // While the call lasts, Safari holds the resume.
+    ctx.resumes = 'stay';
     ctx.to('interrupted');
+    expect(ctx.resumeCalls).toBe(2);
+    await flush();
     expect(unlock.state).toBe('suspended');
+    // The call ends: Safari runs the context again, no tap needed.
+    ctx.to('running');
+    expect(unlock.state).toBe('running');
+  });
+
+  it('resumes on the next gesture if an interruption leaves it suspended', async () => {
+    const { unlock, made } = setup();
+    unlock.gesture();
+    await flush();
+    const ctx = made[0];
+    if (!ctx) throw new Error('no context');
+    ctx.resumes = 'refuse';
+    ctx.to('interrupted');
+    await flush();
+    expect(unlock.state).toBe('suspended');
+    ctx.resumes = 'run';
     unlock.gesture();
     await flush();
     expect(unlock.state).toBe('running');
-    expect(ctx.resumeCalls).toBe(2);
   });
 
   it('suspends while hidden and resumes when back in view', async () => {
