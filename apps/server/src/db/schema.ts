@@ -163,7 +163,9 @@ export const mapMembers = pgTable(
     defenseStance: defenseStance('defense_stance').notNull().default('balanced'),
     // The starter they picked on this patch (owner decision 2026-10-03); null
     // until then. Set once and kept when they leave and come back, so a
-    // membership never gets a second pick.
+    // membership never gets a second pick. `no action` on delete on purpose:
+    // `set null` would reopen the pick, so a future "release a squishy"
+    // must decide what happens to a starter first.
     starterSquishyId: uuid('starter_squishy_id').references((): AnyPgColumn => squishies.id),
   },
   (t) => [

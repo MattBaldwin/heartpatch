@@ -220,6 +220,13 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
         err.code === 'CONFLICT' &&
         !(await api.needsStarter(forMap).catch(() => true));
       if (mine !== session || mapId !== forMap) return;
+      // Not in the patch any more (removed, or it's gone): nothing to pick
+      // here, so hand the message back to the lobby rather than wait.
+      if (err instanceof ApiRequestError && err.code === 'NOT_FOUND') {
+        close();
+        settle(new Error(messageOf(err), { cause: err }));
+        return;
+      }
       if (!done) {
         // The server answered, so this key has its reply: the next try needs
         // a new one. A reply lost offline keeps it, so a retry can't grant twice.

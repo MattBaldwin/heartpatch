@@ -494,8 +494,17 @@ const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
     catalog.close();
     care.close();
-    await starters.ensure(mapId);
-    await maps.open(mapId);
+    try {
+      await starters.ensure(mapId);
+      await maps.open(mapId);
+    } catch (err) {
+      // The starter screen stepped the lobby out: bring it back with the
+      // message, so a failed pick or map never leaves a blank screen.
+      if (!lobby.isOpen) {
+        lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
+      }
+      throw err;
+    }
     void inventory.setMap(mapId);
     void territory.setMap(mapId);
     void hollow.setMap(mapId);

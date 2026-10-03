@@ -82,3 +82,49 @@ test('a new patch asks for a starter once, before the map', async ({ browser }) 
 
   expect(errors).toEqual([]);
 });
+
+test('a pick or map that fails never leaves the screen blank', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const page = await newPlayer(browser, uniqueName('oops'));
+  const lobby = page.getByTestId('lobby');
+  const picker = page.getByTestId('starter-picker');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Wobbly Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+
+  // Removed from the patch meanwhile: the pick is NOT_FOUND, and the lobby
+  // comes back with the message instead of a picker that can't go anywhere.
+  await page.route('**/api/v1/maps/*/starter', (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'NOT_FOUND', message: "We couldn't find that patch." },
+      }),
+    }),
+  );
+  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await picker.getByRole('button', { name: /^Puddlepuff,/ }).tap();
+  await picker.getByRole('button', { name: 'Choose Puddlepuff' }).tap();
+  await expect(picker).toBeHidden();
+  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
+  await expect(lobby.getByTestId('lobby-notice')).toHaveText("We couldn't find that patch.");
+  await page.unroute('**/api/v1/maps/*/starter');
+
+  // The pick works but the map can't load: back to the lobby with a message.
+  await page.route('**/api/v1/maps/*/view', (route) => route.abort());
+  await lobby.getByRole('button', { name: /Wobbly Patch/ }).tap();
+  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await picker.getByRole('button', { name: /^Puddlepuff,/ }).tap();
+  await picker.getByRole('button', { name: 'Choose Puddlepuff' }).tap();
+  await expect(picker).toBeHidden({ timeout: 30_000 });
+  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
+  await expect(lobby.getByTestId('lobby-notice')).not.toBeEmpty();
+  await page.unroute('**/api/v1/maps/*/view');
+
+  // Picked for real, so the next visit goes straight to the map.
+  await lobby.getByRole('button', { name: /Wobbly Patch/ }).tap();
+  await visitPatch(lobby);
+  await expect(picker).toBeHidden();
+  await expect(page.getByTestId('map-hud')).toContainText('Wobbly Patch');
+});
