@@ -496,8 +496,8 @@ export const SPECIES: Species[] = [
     element: 'spark',
     feeling: 'silly',
     rarity: 'common',
-    baseStats: { hp: 60, attack: 60, defense: 50, speed: 70 }, // TUNE:
-    moves: ['zip-zap', 'static-fluff', 'pebble-plop'],
+    baseStats: { hp: 50, attack: 50, defense: 45, speed: 70 }, // TUNE:
+    moves: ['zip-zap', 'fizzy-pop', 'pebble-plop'], // TUNE: Fizzy Pop, so it can hit hard
     evolutions: [{ into: 'frizzbolt', level: 16 }], // TUNE:
     visual: {
       body: 'blob',
@@ -513,8 +513,8 @@ export const SPECIES: Species[] = [
     element: 'spark',
     feeling: 'silly',
     rarity: 'uncommon',
-    baseStats: { hp: 80, attack: 75, defense: 65, speed: 95 }, // TUNE:
-    moves: ['zip-zap', 'static-fluff', 'fizzy-pop', 'pebble-plop'],
+    baseStats: { hp: 75, attack: 70, defense: 60, speed: 95 }, // TUNE:
+    moves: ['zip-zap', 'belly-flop', 'fizzy-pop', 'pebble-plop'], // TUNE: Belly Flop for Stone foes
     evolutions: [],
     visual: {
       body: 'blob',

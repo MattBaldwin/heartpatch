@@ -1,4 +1,4 @@
-import { findAvoidedWords } from '@heartpatch/shared';
+import { CARE_RULES, findAvoidedWords, moodFor } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { newPlayer, uniqueName } from './players.js';
 
@@ -60,14 +60,21 @@ test('cares for a squishy from home base: pet, play and feed', async ({ browser 
   await page.getByTestId('home-friends').locator('[data-care-squishy]').first().tap();
   const sheet = page.getByTestId('care');
   await slowExpect(sheet).toBeVisible();
-  await expect.poll(async () => (await careState(page))?.mood, slow).toBe('cuddly');
-  expect(await careState(page)).toMatchObject({ contentment: 0, caredToday: 0, squishes: 0 });
+  // A new squishy starts part content (care rules `startContentment`).
+  const start = CARE_RULES.startContentment;
+  const mood = (contentment: number) => moodFor(contentment, CARE_RULES);
+  await expect.poll(async () => (await careState(page))?.mood, slow).toBe(mood(start));
+  expect(await careState(page)).toMatchObject({ contentment: start, caredToday: 0, squishes: 0 });
 
   // Pet: more contentment, a squish, and a cheerful line.
   await sheet.locator('[data-care="pet"]').tap();
-  await expect.poll(async () => (await careState(page))?.contentment, slow).toBe(10);
+  await expect.poll(async () => (await careState(page))?.contentment, slow).toBe(start + 10);
   await slowExpect(page.getByTestId('care-note')).toContainText('So soft!');
-  expect(await careState(page)).toMatchObject({ caredToday: 1, mood: 'calm', squishes: 1 });
+  expect(await careState(page)).toMatchObject({
+    caredToday: 1,
+    mood: mood(start + 10),
+    squishes: 1,
+  });
   // The same action again straight away waits a moment (one gesture counts once),
   // then the button comes back on by itself.
   await slowExpect(sheet.locator('[data-care="pet"]')).toBeDisabled();
@@ -76,11 +83,15 @@ test('cares for a squishy from home base: pet, play and feed', async ({ browser 
 
   // Play, then feed a Treat.
   await sheet.locator('[data-care="play"]').tap();
-  await expect.poll(async () => (await careState(page))?.contentment, slow).toBe(20);
+  await expect.poll(async () => (await careState(page))?.contentment, slow).toBe(start + 20);
   await sheet.locator('[data-care="feed"]').tap();
-  await expect.poll(async () => (await careState(page))?.contentment, slow).toBe(40);
+  await expect.poll(async () => (await careState(page))?.contentment, slow).toBe(start + 40);
   await slowExpect(sheet.locator('[data-care="feed"]')).toContainText('9 Treats');
-  expect(await careState(page)).toMatchObject({ caredToday: 3, mood: 'happy', squishes: 3 });
+  expect(await careState(page)).toMatchObject({
+    caredToday: 3,
+    mood: mood(start + 40),
+    squishes: 3,
+  });
 
   // Kid-friendly words only (style guide §9).
   expect(findAvoidedWords((await sheet.textContent()) ?? '')).toEqual([]);

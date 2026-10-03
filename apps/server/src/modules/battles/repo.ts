@@ -1,6 +1,5 @@
 import {
   BattleActionSchema,
-  CARE_RULES,
   BattleSideSetupSchema,
   ClientBattleViewSchema,
   RngStateSchema,
@@ -88,7 +87,7 @@ export interface BattlesRepo {
   lockSquishies: (ids: readonly string[]) => Promise<void>;
   /**
    * A new squishy for a player (befriended, or the dev grant). It starts at
-   * the care rules' `startContentment`, sliding down from `at` like care.
+   * `contentment`, sliding down from `at` (its creation) like care.
    */
   insertSquishy: (squishy: {
     mapId: string;
@@ -97,6 +96,7 @@ export interface BattlesRepo {
     element: ElementId;
     feeling: FeelingId;
     level: number;
+    contentment: number;
     at: Date;
   }) => Promise<OwnedSquishy>;
 
@@ -234,14 +234,14 @@ function queries(db: Executor): BattlesRepo {
         .for('update');
     },
 
-    insertSquishy: async ({ at, ...squishy }) => {
+    insertSquishy: async ({ contentment, at, ...squishy }) => {
       const [row] = await db
         .insert(squishies)
         .values({
           ...squishy,
           // Passed explicitly (the column default stays 0, no migration);
           // `lastCaredAt` = creation, so contentment decays from here.
-          contentmentAtLastCare: CARE_RULES.startContentment,
+          contentmentAtLastCare: contentment,
           lastCaredAt: at,
           createdAt: at,
         })
