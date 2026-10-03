@@ -262,6 +262,20 @@ export const CAPTURABLE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['wild']
  * the player just met), so the client can draw and name every squishy here.
  * `seed` is null while the battle is going (tech spec §8).
  */
+/**
+ * What a finished battle gave the player's squishies, as the server granted
+ * it: the engine's base XP × the battle's `percent` (100, or Gentle's 50 for
+ * challenging a much smaller player: owner decision 2026-10-03), then × each
+ * squishy's care and habitat multiplier (#19). The same numbers as
+ * `battle.ended.xp`.
+ */
+export const BattleRewardsSchema = z.object({
+  xp: z.array(z.object({ squishyId: z.uuid(), xp: z.number().int().min(0) })),
+  /** The share of the battle's XP it paid, in percent (Gentle mode, design doc §11). */
+  percent: z.number().int().min(0).max(100),
+});
+export type BattleRewards = z.infer<typeof BattleRewardsSchema>;
+
 export const PlayerBattleSchema = z.object({
   id: z.uuid(),
   mapId: z.uuid(),
@@ -273,6 +287,13 @@ export const PlayerBattleSchema = z.object({
   speciesDefs: z.array(SpeciesSchema),
   moveDefs: z.array(MoveSchema),
   seed: SeedSchema.nullable(),
+  /**
+   * What the battle granted the player's squishies. Null while it runs,
+   * after no contest, on the defender's replay of a challenge (#16), and for
+   * battles that ended before rewards were stored (the view's base XP is all
+   * there is then).
+   */
+  rewards: BattleRewardsSchema.nullable(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
 });

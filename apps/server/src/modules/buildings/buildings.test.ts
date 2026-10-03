@@ -1,5 +1,6 @@
 import {
   ApiErrorSchema,
+  CareListResponseSchema,
   GAME_DATA,
   HOME_BASE_RULES,
   HomeResponseSchema,
@@ -15,7 +16,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, squishies, users } from '../../db/schema.js';
+import { keepers, sessions, squishies, tileDefenders, users } from '../../db/schema.js';
 import { mapLocalTime } from '../../lib/time.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -778,6 +779,121 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         HomeResponseSchema.parse(out.json()).buildings.find((b) => b.id === den.id),
       ).toMatchObject({ residents: 2 });
       expect((await house(kid, fourth, den.id)).statusCode).toBe(200);
+    });
+
+    it('houses a squishy or puts it on watch, never both (owner decision 2026-10-03)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const { plain } = await homeTiles(server, kid, mapId);
+      const den = await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 1 });
+      // Two non-home tiles of the kid's, as if claimed.
+      const [post, post2] = await db.query.tiles.findMany({
+        where: (t, { and, eq, isNull }) => and(eq(t.mapId, mapId), isNull(t.homeSlot)),
+        orderBy: (t, { asc }) => [asc(t.q), asc(t.r)],
+        limit: 2,
+      });
+      // Our own uuids, so raw SQL is safe.
+      await db.execute(
+        `update tiles set owner_user_id = '${kid.id}' where id in ('${post!.id}', '${post2!.id}')`,
+      );
+      const [pal] = await db
+        .insert(squishies)
+        .values({
+          mapId,
+          ownerUserId: kid.id,
+          speciesId: 'test-squishy',
+          element: 'fire',
+          feeling: 'cozy',
+          nickname: 'Puddles',
+        })
+        .returning({ id: squishies.id });
+      const palId = pal!.id;
+      const house = (habitatId: string | null) =>
+        call(server, 'POST', `/maps/${mapId}/squishies/${palId}/habitat`, kid, { habitatId });
+      const watch = (tile: { q: number; r: number }, squishyIds: string[]) =>
+        call(server, 'POST', `/maps/${mapId}/defenders`, kid, { q: tile.q, r: tile.r, squishyIds });
+
+      // On watch: housing is refused with how to free it, and nothing changes.
+      expect((await watch(post!, [palId])).statusCode).toBe(200);
+      const refused = await house(den.id);
+      expect(refused.statusCode).toBe(409);
+      expect(errorOf(refused).message).toBe('Bring Puddles home from watch first!');
+      expect((await home(server, kid, mapId)).squishies.find((s) => s.id === palId)).toMatchObject({
+        habitatId: null,
+      });
+      // Home from watch: now it can move in.
+      expect((await watch(post!, [])).statusCode).toBe(200);
+      expect((await house(den.id)).statusCode).toBe(200);
+
+      // Housed: standing watch is refused the same way, and nothing changes.
+      const posted = await watch(post!, [palId]);
+      expect(posted.statusCode).toBe(409);
+      expect(errorOf(posted).message).toBe('Move Puddles out of their habitat first!');
+      expect(
+        await db.query.tileDefenders.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) }),
+      ).toEqual([]);
+      // Moving out is always fine; then it can stand watch.
+      expect((await house(null)).statusCode).toBe(200);
+      expect((await watch(post!, [palId])).statusCode).toBe(200);
+      expect((await watch(post!, [])).statusCode).toBe(200);
+
+      // Housing and posting at once: exactly one wins (both lock the squishy).
+      const raced = await Promise.all([house(den.id), watch(post2!, [palId])]);
+      expect(raced.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+      const row = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, palId) });
+      const guards = await db.query.tileDefenders.findMany({
+        where: (t, { eq }) => eq(t.squishyId, palId),
+      });
+      expect(row!.habitatBuildingId === null).toBe(guards.length === 1);
+    });
+
+    it('treats a squishy both housed and on watch from before the rule as on watch only', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const { plain } = await homeTiles(server, kid, mapId);
+      const den = await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 1 });
+      const [post] = await db.query.tiles.findMany({
+        where: (t, { and, eq, isNull }) => and(eq(t.mapId, mapId), isNull(t.homeSlot)),
+        orderBy: (t, { asc }) => [asc(t.q), asc(t.r)],
+        limit: 1,
+      });
+      await db.execute(`update tiles set owner_user_id = '${kid.id}' where id = '${post!.id}'`);
+      const both = await squishy(mapId, kid);
+      const housed = await squishy(mapId, kid);
+      const homeless = await squishy(mapId, kid);
+      await db.execute(
+        `update squishies set habitat_building_id = '${den.id}' where id in ('${both}', '${housed}')`,
+      );
+      // Written straight to the table, as rows from before the rule were.
+      await db
+        .insert(tileDefenders)
+        .values({ mapId, tileId: post!.id, slot: 0, squishyId: both, assignedAt: new Date() });
+
+      // No habitat bonus while on watch: the same as a squishy with no habitat.
+      const res = await call(server, 'GET', `/maps/${mapId}/care`, kid);
+      expect(res.statusCode).toBe(200);
+      const bonus = new Map(
+        CareListResponseSchema.parse(res.json()).squishies.map((s) => [s.id, s.xpBonusPercent]),
+      );
+      expect(bonus.get(both)).toBe(bonus.get(homeless));
+      expect(bonus.get(housed)).toBeGreaterThan(bonus.get(homeless)!);
+
+      // It may keep its post when the guards on that spot change…
+      const kept = await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: post!.q,
+        r: post!.r,
+        squishyIds: [both, homeless],
+      });
+      expect(kept.statusCode, kept.body).toBe(200);
+      // …and move out of the habitat, which ends the overlap.
+      const out = await call(server, 'POST', `/maps/${mapId}/squishies/${both}/habitat`, kid, {
+        habitatId: null,
+      });
+      expect(out.statusCode).toBe(200);
     });
   });
 });

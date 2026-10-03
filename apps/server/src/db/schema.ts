@@ -436,11 +436,15 @@ export const battles = pgTable(
     // The resolved `BattleEvent[]` once over, kept so a battle stays
     // explainable after re-tuning (tech spec §8 "Content versioning").
     log: jsonb('log'),
+    // `BattleRewards` once finished: the XP actually granted (after Gentle's
+    // share and care × habitat) and the share paid. Null while active, after
+    // no contest, and for battles finished before it was stored.
+    rewards: jsonb('rewards'),
     startedAt: timestamptz('started_at').notNull().defaultNow(),
     endedAt: timestamptz('ended_at'),
     // A wild squishy from a tile's spawn (#14): its tile and spawn window
-    // (`2026-10-31/5`), so a befriended one is gone for that player for the
-    // rest of the window. Null for battles that don't come from a spawn.
+    // (`2026-10-31/5`), so one the player befriended or beat is gone for them
+    // for the rest of the window. Null for battles that don't come from a spawn.
     spawnQ: smallint('spawn_q'),
     spawnR: smallint('spawn_r'),
     spawnWindow: text('spawn_window'),
@@ -450,7 +454,7 @@ export const battles = pgTable(
       'battles_spawn_all_or_none',
       sql`(${t.spawnWindow} is null) = (${t.spawnQ} is null) and (${t.spawnWindow} is null) = (${t.spawnR} is null)`,
     ),
-    // "Did this player befriend a spawn in this window?" (spawns module).
+    // "Did this player befriend or beat a spawn in this window?" (spawns module).
     index('battles_spawn_window_idx')
       .on(t.mapId, t.playerUserId, t.spawnWindow)
       .where(sql`${t.spawnWindow} is not null`),

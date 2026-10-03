@@ -94,7 +94,8 @@ export interface HollowRepo {
   /** The map's nights from `since` on, newest first, at most `limit`. */
   nightsSince: (mapId: string, since: LocalDate, limit: number) => Promise<NightRow[]>;
 
-  activeMembers: (mapId: string) => Promise<string[]>;
+  /** Who plays here now, and when they joined (first-night grace), in user id order. */
+  activeMembers: (mapId: string) => Promise<{ userId: string; joinedAt: Date }[]>;
   /** Every home tile with an owner (the Heart Seeds and their rings). */
   homeTiles: (mapId: string) => Promise<{ ownerUserId: string; q: number; r: number }[]>;
   /** Every squishy of an active member, any state, row-locked until commit. */
@@ -249,14 +250,12 @@ function queries(db: Executor): HollowRepo {
       return rows.map((r) => ({ ...r, outcomes: StoredOutcomesSchema.parse(r.outcomes) }));
     },
 
-    activeMembers: async (mapId) => {
-      const rows = await db
-        .select({ userId: mapMembers.userId })
+    activeMembers: (mapId) =>
+      db
+        .select({ userId: mapMembers.userId, joinedAt: mapMembers.joinedAt })
         .from(mapMembers)
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active')))
-        .orderBy(asc(mapMembers.userId));
-      return rows.map((r) => r.userId);
-    },
+        .orderBy(asc(mapMembers.userId)),
 
     homeTiles: async (mapId) => {
       const rows = await db
@@ -290,8 +289,9 @@ function queries(db: Executor): HollowRepo {
         .orderBy(asc(squishies.id))
         // Locked until commit, so a squishy can't be moved into or out of a
         // habitat (#18 locks it) between this read and being taken (lock order:
-        // the night's row, then squishies). Posting a guard (#15) doesn't lock
-        // the squishy yet, so a post at the very stroke of nightfall can race.
+        // the night's row, then squishies). Posting a guard (#15) locks the
+        // squishy too, but the joined `tile_defenders` row isn't read again
+        // after a lock wait, so a post at the very stroke of nightfall can race.
         .for('update', { of: squishies });
       return rows.map((r) => ({
         id: r.id,

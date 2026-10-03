@@ -92,6 +92,7 @@ const MESSAGES = {
   tooMany: (max: number) => `Up to ${String(max)} squishies can stand watch on one spot.`,
   notYourSquishy: "That's not one of your squishies.",
   inHollow: 'That squishy is in the Hollow. Rescue them first!',
+  housed: (name: string) => `Move ${name} out of their habitat first!`,
 } as const;
 
 const PROBLEMS: Record<AttackTargetProblem, { code: 'FORBIDDEN' | 'CONFLICT'; message: string }> = {
@@ -107,6 +108,10 @@ const HOUR_MS = 60 * MINUTE_MS;
 const ALL_SPECIES: readonly Species[] = [...GAME_DATA.species, ...SERVER_GAME_DATA.secretSpecies];
 const SPECIES_BY_ID = new Map(ALL_SPECIES.map((s) => [s.id, s]));
 const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
+
+/** What to call one of my squishies in a message: its nickname, else its species. */
+const squishyName = (s: { nickname: string | null; speciesId: string }): string =>
+  s.nickname ?? SPECIES_BY_ID.get(s.speciesId)?.name ?? 'your squishy';
 
 export function defaultGuardianData(): GuardianData {
   return {
@@ -333,13 +338,24 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           throw new AppError('FORBIDDEN', MESSAGES.notYours);
         }
         if (tile.homeSlot !== null) throw new AppError('FORBIDDEN', MESSAGES.homeWatch);
+        // Squishy locks after the tiles (in id order): housing one locks it too.
+        const homes = new Map(
+          (await repo.lockSquishies(request.squishyIds)).map((s) => [s.id, s.habitatBuildingId]),
+        );
         const mine = new Map((await repo.mySquishies(map.id, user.id)).map((s) => [s.id, s]));
+        const before = await repo.listDefenders(tile.id, user.id);
+        const here = new Set(before.map((d) => d.id));
         for (const id of request.squishyIds) {
           const squishy = mine.get(id);
           if (!squishy) throw new AppError('FORBIDDEN', MESSAGES.notYourSquishy);
           if (squishy.state !== 'active') throw new AppError('CONFLICT', MESSAGES.inHollow);
+          // Housed or on watch, not both (owner decision 2026-10-03). One
+          // already here from before that rule may stay; it counts as on
+          // watch only (no habitat bonus) until it moves.
+          if (!here.has(id) && (homes.get(id) ?? null) !== null) {
+            throw new AppError('CONFLICT', MESSAGES.housed(squishyName(squishy)));
+          }
         }
-        const before = await repo.listDefenders(tile.id, user.id);
         const same =
           before.length === request.squishyIds.length &&
           before.every((d, i) => d.id === request.squishyIds[i]);
@@ -391,11 +407,14 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
     ended: async (tx, battle, winner, at) => {
       const repo = createTerritoryRepo(tx);
       const attack = await repo.findAttack(battle.id);
-      if (!attack) return [];
+      if (!attack) return { events: [], xpPercent: 100 };
+      // Gentle's share applies to the battle's XP too, win or lose (owner
+      // decision 2026-10-03), as well as to the capture rewards.
+      const xpPercent = attack.rewardPercent;
       if (winner !== 'a') {
         // Lost, tied, or left (a forfeit): no land changes hands.
         await repo.endAttack(battle.id, 'lost', at);
-        return [];
+        return { events: [], xpPercent };
       }
       const tile = await repo.lockTile(attack.tileId);
       // The tile is taken only from whoever held it when the battle began
@@ -407,7 +426,7 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         (tile.ownerUserId === attack.defenderUserId || tile.ownerUserId === null);
       if (!tile || !takeable) {
         await repo.endAttack(battle.id, 'won', at);
-        return [];
+        return { events: [], xpPercent };
       }
       // Squishies on watch go home, never lost (issue #15).
       const returned = await repo.clearDefenders(tile.id);
@@ -430,7 +449,7 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
           returnedSquishyIds: returned,
         },
       };
-      return [event];
+      return { events: [event], xpPercent };
     },
   };
 }

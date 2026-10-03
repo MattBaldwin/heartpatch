@@ -2,6 +2,7 @@ import {
   addDays,
   CARE_RULES,
   deriveSeed,
+  firstHollowNight,
   GAME_DATA,
   gameplayOverrides,
   heartSeedOf,
@@ -12,6 +13,7 @@ import {
   lastNightOf,
   minutesUntilNightChange,
   nightfall,
+  protectsNight,
   rescueReward,
   tonightOf,
   parseGameEventPayload,
@@ -159,9 +161,11 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       post: s.postOwnerUserId === undefined ? null : { tileOwnerUserId: s.postOwnerUserId },
     });
     const outcomes = nightfall(
-      members.map((userId) => ({
+      members.map(({ userId, joinedAt }) => ({
         userId,
         squishies: squishyRows.filter((s) => s.ownerUserId === userId).map(asNight),
+        // First-night grace (owner decision 2026-10-03), on the game clock.
+        grace: night < firstHollowNight(mapLocalTime(joinedAt, map.timeZone), nightRules),
       })),
       safe,
       // Secret, never revealed: derived from the map seed (tech spec §8).
@@ -222,11 +226,31 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       const local = mapLocalTime(at, map.timeZone);
       const lastNight = lastNightOf(local, nightRules);
       const since = addDays(lastNight, 1 - rules.reportNights);
-      const [nights, hollowed, rewarded] = await Promise.all([
+      const tonight = tonightOf(local, nightRules);
+      const [nights, hollowed, rewarded, members, buildings] = await Promise.all([
         store.nightsSince(mapId, since, rules.reportNights),
         store.hollowedOf(mapId, user.id),
         store.rewardedOn(mapId, user.id, local.date, map.timeZone),
+        store.activeMembers(mapId),
+        createBuildingsRepo(db).listOnMap(mapId),
       ]);
+      // Until the Hollow Man's first visit to me (first-night grace), a
+      // nudge to light a fire, unless one of mine is lit for tonight.
+      const joinedAt = members.find((m) => m.userId === user.id)?.joinedAt;
+      const firstVisit = joinedAt
+        ? firstHollowNight(mapLocalTime(joinedAt, map.timeZone), nightRules)
+        : null;
+      const fireLit = buildings.some(
+        (b) =>
+          b.ownerUserId === user.id &&
+          b.kind === 'hearthfire' &&
+          protectsNight(b.fuelledThrough, tonight),
+      );
+      const fireHint =
+        (gameplayOverrides(map.kind)?.hollowManCanTake ?? true) &&
+        firstVisit !== null &&
+        tonight <= firstVisit &&
+        !fireLit;
       const mine = nights.flatMap((n) => {
         const outcome = reportOf(n.outcomes, user.id);
         return outcome ? [{ night: n.night, outcome }] : [];
@@ -269,6 +293,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           heartdust: rules.rescue.heartdust,
           rewardsLeftToday: Math.max(0, rules.rescue.rewardsPerDay - rewarded),
         },
+        fireHint,
         now: at.toISOString(),
       };
     },

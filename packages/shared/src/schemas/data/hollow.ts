@@ -16,6 +16,11 @@ export const HollowRulesSchema = z.strictObject({
   morningMinute: minuteOfDay,
   /** How many past nights the morning report looks back over. */
   reportNights: z.number().int().min(1).max(14),
+  /**
+   * First-night grace (owner decision 2026-10-03): the Hollow Man skips a
+   * player for their first this-many nightfalls after joining a patch.
+   */
+  graceNights: z.number().int().min(0).max(14),
   rescue: z.strictObject({
     /** Heartdust for a rescue that wins a reward. */
     heartdust: z.number().int().min(1),

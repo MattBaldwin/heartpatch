@@ -29,8 +29,10 @@ import { createSpawnsRepo, type SpawnTileRow } from './repo.js';
  * tile's wild squishy is fixed for each spawn window: it's rolled from
  * `deriveSeed(mapSeed, 'spawn', q, r, windowId)`, a seed that is never sent
  * anywhere, against the secret spawn tables. Nothing about it is stored until
- * a player battles it. Once a player befriends it, it's gone for that player
- * until the next window (other players can still find theirs: DECISIONS #14).
+ * a player battles it. Once a player befriends it, or beats it without
+ * befriending it (it's tuckered out and toddles away: owner decision
+ * 2026-10-03), it's gone for that player until the next window. Other players
+ * can still find theirs (DECISIONS #14).
  */
 
 export interface SpawnsService {
@@ -95,7 +97,7 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
 
   /**
    * What's on the player's tiles in reach right now, nearest first, leaving
-   * out the ones they already befriended this window. With `only`, just that
+   * out the ones they already befriended or beat this window. With `only`, just that
    * tile (which must be in reach).
    */
   const spawnsFor = async (
@@ -112,11 +114,11 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
       reach = reach.filter((t) => t.q === only.q && t.r === only.r);
       if (reach.length === 0) throw new AppError('NOT_FOUND', MESSAGES.tooFar);
     }
-    const caught = new Set((await store.caughtSpawns(mapId, userId, window.id)).map(hexKey));
+    const gone = new Set((await store.goneSpawns(mapId, userId, window.id)).map(hexKey));
     // Hand-authored maps have no secret seed; their spawns key off the map id.
     const mapSeed = map.seed ?? deriveSeed('hand-authored-map', map.id);
     const found = reach.flatMap((tile): TileSpawn[] => {
-      if (caught.has(hexKey(tile))) return [];
+      if (gone.has(hexKey(tile))) return [];
       const seed = deriveSeed(mapSeed, 'spawn', tile.q, tile.r, window.id);
       const spawn = resolveWildSpawn({ seed, terrain: tile.terrain, window }, data);
       return spawn ? [{ tile, spawn }] : [];

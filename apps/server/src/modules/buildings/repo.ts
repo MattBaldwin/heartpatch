@@ -9,7 +9,7 @@ import {
 import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { buildings, squishies, tiles } from '../../db/schema.js';
+import { buildings, squishies, tileDefenders, tiles } from '../../db/schema.js';
 
 /** One of the player's home tiles (read only: tiles belong to the maps module). */
 export interface HomeTileRow {
@@ -87,6 +87,11 @@ export interface BuildingsRepo {
   listSquishies: (mapId: string, userId: string) => Promise<HomeSquishyRow[]>;
   /** Row-locks a squishy until commit. */
   lockSquishy: (squishyId: string) => Promise<(HomeSquishyRow & { mapId: string }) | null>;
+  /**
+   * Is the squishy standing watch on its owner's land (decision C, like
+   * `isOnWatch`)? Read under the squishy's lock, which posting it locks too.
+   */
+  isOnWatch: (squishyId: string) => Promise<boolean>;
   /** How many squishies live in a habitat now. */
   countResidents: (buildingRowId: string) => Promise<number>;
   setHabitat: (squishyId: string, habitatBuildingId: string | null) => Promise<void>;
@@ -264,6 +269,18 @@ function queries(db: Executor): BuildingsRepo {
         .where(eq(squishies.id, squishyId))
         .for('no key update');
       return row ? toSquishy(row) : null;
+    },
+
+    isOnWatch: async (squishyId) => {
+      const [row] = await db
+        .select({ squishyId: tileDefenders.squishyId })
+        .from(tileDefenders)
+        .innerJoin(tiles, eq(tiles.id, tileDefenders.tileId))
+        .innerJoin(squishies, eq(squishies.id, tileDefenders.squishyId))
+        .where(
+          and(eq(tileDefenders.squishyId, squishyId), eq(tiles.ownerUserId, squishies.ownerUserId)),
+        );
+      return row !== undefined;
     },
 
     countResidents: async (buildingRowId) => {

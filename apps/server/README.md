@@ -104,7 +104,7 @@ PvE battles (design doc §6; tech spec §8; DECISIONS "Battle engine (#11)") liv
 | `POST /api/v1/maps/:mapId/dev/squishies` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): `{ speciesId?, level? }` → 201 `{ squishy }`. Any species the server knows, secret ones included |
 | `POST /api/v1/maps/:mapId/dev/battles` | **Dev/test only**: `{ opponent?: { speciesId?, level? } }` → a wild battle against that squishy, through the same `startAgainst` spawns will call |
 
-**What players get** is `PlayerBattle` (`packages/shared/src/schemas/battle.ts`): `view` is `clientBattleView(state)`, checked against `ClientBattleViewSchema` on the way out, so the RNG state never leaves; `seed` is null while the battle is active and revealed once it ends (tech spec §8); `speciesDefs` and `moveDefs` carry rows outside the public tables (a secret species the player just met) so the client can draw and name every squishy.
+**What players get** is `PlayerBattle` (`packages/shared/src/schemas/battle.ts`): `view` is `clientBattleView(state)`, checked against `ClientBattleViewSchema` on the way out, so the RNG state never leaves; `seed` is null while the battle is active and revealed once it ends (tech spec §8); `speciesDefs` and `moveDefs` carry rows outside the public tables (a secret species the player just met) so the client can draw and name every squishy. `rewards` (from `battles.rewards`) is what a finished battle granted the player's squishies (Gentle's share, care and habitat included) and the share it paid; null while running, after no contest, on a defender's replay, and for battles from before it was stored.
 
 **Storage** (`battles`): seed (from `newSeed()`), `setup.sides`, the `actions` list, the current `state` (RNG included, server-only), and once over the `result` and resolved `log`, so a battle stays explainable after re-tuning. Setup + actions replays to the stored state (`battles.test.ts` checks it). One active battle per player per map (partial unique index); starting again resumes it, which is what makes "refresh mid-battle" work.
 
@@ -165,12 +165,12 @@ await repo.transaction(async (repo, tx) => {
 
 | Endpoint | Does |
 |---|---|
-| `GET /api/v1/maps/:mapId/wild` | → `{ wild: { tiles } }`: tiles in the player's reach with a wild squishy they haven't befriended, this spawn window only. No species |
+| `GET /api/v1/maps/:mapId/wild` | → `{ wild: { tiles } }`: tiles in the player's reach with a wild squishy they haven't befriended or beaten, this spawn window only. No species |
 | `GET /api/v1/maps/:mapId/catalog` | → `{ catalog: { entries, speciesDefs } }`: `species_seen` for the player, plus the rows of secret species they've met |
 
 **No rerolls.** A tile's squishy for a window is `resolveWildSpawn` (shared, pure) over the secret `SPAWN_TABLES` and `SPAWN_RULES` with the seed `deriveSeed(mapSeed, 'spawn', q, r, windowId)`; nothing is stored until someone battles it, and the seed is never sent anywhere. Battle seeds still come from `newSeed()`. The window is `spawnWindowFor(now, maps.time_zone, SPAWN_RULES.windowHours)` (`lib/time.ts`), so it follows `HP_DEV_NOW`. Season-tagged tables and seasonal species only spawn while their season is on, by the window's map-local date.
 
-**Reach** is the player's land and the tiles next to it; `findWildEncounter` (the battles port) takes a picked tile or the nearest spawn, skipping any the player befriended this window (`battles.spawn_window`). `species_seen` rows are written by the battles service on its own transactions (`createSpawnsRepo(tx)`).
+**Reach** is the player's land and the tiles next to it; `findWildEncounter` (the battles port) takes a picked tile or the nearest spawn, skipping any the player befriended or beat this window (a finished `battles` row for that `spawn_window` and tile that the player won: a beaten one toddles away, owner decision 2026-10-03). Others can still find theirs. `species_seen` rows are written by the battles service on its own transactions (`createSpawnsRepo(tx)`).
 
 ## Territory
 
@@ -180,17 +180,19 @@ await repo.transaction(async (repo, tx) => {
 |---|---|
 | `GET /api/v1/maps/:mapId/territory` | → `{ territory }`: tries left today, my new-player shield, my tiles with squishies on watch, my squishies (and the secret species rows among them), and the server's clock |
 | `POST /api/v1/maps/:mapId/attacks` | `{ q, r }` → 201 `{ battle }` (a `tile` or `rival-tile` battle), or 200 with the battle already going. Takes an `Idempotency-Key` |
-| `POST /api/v1/maps/:mapId/defenders` | `{ q, r, squishyIds }` (up to `maxDefenders`, in slot order; `[]` sends everyone home) → `{ territory }`. Only my land outside my home base, only my squishies not in the Hollow; a squishy on watch elsewhere moves. Appends `defenders.changed` when it changes |
+| `POST /api/v1/maps/:mapId/defenders` | `{ q, r, squishyIds }` (up to `maxDefenders`, in slot order; `[]` sends everyone home) → `{ territory }`. Only my land outside my home base, only my squishies not in the Hollow and not housed in a habitat (unless already on that tile); a squishy on watch elsewhere moves. Appends `defenders.changed` when it changes |
 
 **Raid rules** are `TERRITORY_RULES` (shared, public, `// TUNE:`), all checked on the server in the battle's start transaction, in this order: the tile exists; the target is next to my land, not a home tile, not mine, and not another player's when PvP is Off (`attackTargetProblem`, shared with the client); the tile's cooldown (`cooldownHours` from the last battle **started** on it, by anyone, win or lose); my tries today (`attemptsPerDay` per map-local day; a no-contest doesn't count); and for a rival tile, their new-player shield (`newPlayerShieldHours` from joining), then their daily loss cap (`dailyLossCap[pvpMode]`, counting tiles lost today **plus** challenges against them still going, so two at once can't both get under it). Refusals use nothing up. Lock order: the defender's `map_members` row (`for no key update`, so the cap count is serialized per defender), the tile, then the battle and attempt rows, `maps` last.
 
 **Who defends.** Neutral land: the tile's guardians, `resolveGuardians` over the secret `GUARDIAN_RULES` with `deriveSeed(mapSeed, 'guardian', q, r, windowId)` (tech spec §8: fixed per window, the seed and `guardian_strength` never leave the server). A rival tile: the owner's squishies on watch, or the land's own guardians if nobody stands watch. `defendingSide` is the one place that picks who plays that side: the server's AI always does, so the owner never has to be online. Squishies on watch play the owner's defense stance (`stancePolicy`, #16, read with their member lock), guardians the `guardian` policy; the policy is stored in the battle's setup, so replays need no lookup.
 
+**Gentle XP.** A challenge's `rewardPercent` (Gentle, against a much smaller player) also scales the battle's base XP before care × habitat, win or lose; the tile-battle port's `ended` returns it as `xpPercent`. `battle.ended.xp` and `PlayerBattle.rewards` carry what was granted.
+
 **Capture.** In the battle's finishing transaction (CLAUDE.md rule 7): the tile changes hands only if it's still held by whoever held it at the start (or nobody) and isn't a home tile, the squishies on watch go home (`tile_defenders` rows deleted, the squishies untouched), the attempt is `captured`, and `tile.captured` follows `battle.ended`. Leaving a map releases its tiles and sends its squishies on watch home too (`releaseTiles`).
 
 **Events:** `tile.attacked` (public: who, whose, where, `cooldownUntil`), `tile.captured` (public: new and old owner, where; internal also the kind, terrain, Gentle `rewardPercent` and returned squishies, for found clothing #43 and milestones #44), `defenders.changed` (public: whose and where, and how many; which squishies stays internal). `PublicTile` carries `cooldownUntil` (the latest, may be past) and `defenders` (a count).
 
-**On watch (decision C):** `isOnWatch(squishy, post)` (shared) is true for an active squishy posted on land its owner still holds; the Hollow Man (#21) skips those.
+**On watch (decision C):** `isOnWatch(squishy, post)` (shared) is true for an active squishy posted on land its owner still holds; the Hollow Man (#21) skips those. A squishy is housed or on watch, not both (owner decision 2026-10-03): posting locks the squishies after the tiles (id order) and refuses a housed one; housing refuses one on watch. One that was both before the rule counts as on watch only (care's XP multiplier skips its habitat).
 
 ## Raid log and defense style
 
@@ -216,7 +218,7 @@ Building on a home base (design doc §11, §13–14; issue #18) lives in `src/mo
 | `POST /api/v1/maps/:mapId/buildings/:buildingId/move` | `{ q, r, spot }` → `HomeResponse`; `building.moved` (no event if it didn't move) |
 | `POST /api/v1/maps/:mapId/buildings/:buildingId/remove` | → `{ refund, home }`: its refund percent of what it cost plus unburned fuel (`grantItems(…, 'build-refund')`); residents move out; `building.removed` |
 | `POST /api/v1/maps/:mapId/buildings/:buildingId/fuel` | `{ nights }` → `HomeResponse`. Fires only; adds what fits (up to `maxFuelNights` from tonight) and charges `consumeItems(…, 'fuel')` for that; `CONFLICT` when full; `building.fueled` |
-| `POST /api/v1/maps/:mapId/squishies/:squishyId/habitat` | `{ habitatId \| null }` → `HomeResponse`. My own active squishy into my habitat, up to its capacity, or out; `squishy.housed` |
+| `POST /api/v1/maps/:mapId/squishies/:squishyId/habitat` | `{ habitatId \| null }` → `HomeResponse`. My own active squishy into my habitat, up to its capacity, or out; not one standing watch ("Bring … home from watch first!"); `squishy.housed` |
 
 Mutating routes take an `Idempotency-Key`. Every command locks the player's home tiles first (`lockHomeTiles`), so one player's building commands run one at a time ("one Hearthfire per home" and habitat capacity can't race), then the building, squishy and inventory rows, then `maps` (the event).
 
@@ -228,14 +230,14 @@ Mutating routes take an `Idempotency-Key`. Every command locks the player's home
 
 | Endpoint | Does |
 |---|---|
-| `GET /api/v1/maps/:mapId/hollow` | → `{ hollow }`: `night` (is it night on the map, minutes until that changes), my `reports` for the last `HOLLOW_RULES.reportNights` nights, my squishies in the Hollow (`hollowed`, plus `speciesDefs` for secret ones I own), today's rescue reward and the server's clock |
+| `GET /api/v1/maps/:mapId/hollow` | → `{ hollow }`: `night` (is it night on the map, minutes until that changes), my `reports` for the last `HOLLOW_RULES.reportNights` nights, my squishies in the Hollow (`hollowed`, plus `speciesDefs` for secret ones I own), today's rescue reward, `fireHint` (until his first visit to me, with no fire of mine lit for tonight) and the server's clock |
 | `POST /api/v1/maps/:mapId/rescues` | `{ squishyId }` → 201 `{ battle }` (a `rescue` battle), or 200 with the battle already going. My own squishy, in the Hollow (`NOT_FOUND` / `CONFLICT` otherwise), from anywhere on the map; no attempt used. Takes an `Idempotency-Key` |
 | `POST /api/v1/maps/:mapId/dev/nightfall` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): the next night that hasn't come yet falls now → `{ night, taken }`. Pressing it again moves on a night |
 
 **Nightfall** (`service.ts` `runNightfall`, one transaction): claims the night's `hollow_events` row first (`insert … on conflict do nothing`), so a retry, a second job or a restart finds it and does nothing (rule 4); then every active member's squishies are sorted with shared `nightfall()`:
 - where a squishy sleeps is its habitat's tile, or its owner's Heart Seed;
 - it's **safe** inside the tiles lit fires protect that night (`litSafeTiles`, every player's fires, `protectsNight` through the night's date), **on watch** if `isOnWatch` (decision C), else **exposed**;
-- one exposed squishy per player is taken (`state = 'hollowed'`, habitat bed kept), picked with `deriveSeed(mapSeed, 'hollow', night, userId)` (never revealed); none on tutorial maps (`gameplayOverrides(kind).hollowManCanTake`).
+- one exposed squishy per player is taken (`state = 'hollowed'`, habitat bed kept), picked with `deriveSeed(mapSeed, 'hollow', night, userId)` (never revealed); none on tutorial maps (`gameplayOverrides(kind).hollowManCanTake`), and none from a player in their first-night grace (nights before `firstHollowNight(joined_at)`: their first `HOLLOW_RULES.graceNights` nightfalls after joining, game clock).
 Lock order: the night's row, squishies, then `maps` (events).
 
 **The job** (`jobs/nightfall.ts`): a `nightfall.sweep` every minute (and at boot) asks `dueNightfalls()` which maps' latest nightfall hasn't run (maps with an active member who joined before it; map-local time, DST included), and enqueues one `nightfall` job per map and night (`singletonKey: mapId/night`). After downtime only the latest missed night runs.

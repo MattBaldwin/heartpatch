@@ -1,4 +1,4 @@
-import type { MorningReport } from '@heartpatch/shared';
+import type { MorningReport, WsEventMessage } from '@heartpatch/shared';
 
 // The morning report's words (design doc §14, style guide §1, §9): kid-gentle,
 // short, and every squishy taken to the Hollow is followed by "you can rescue
@@ -24,6 +24,7 @@ export const HOLLOW_TEXT = {
   devNightfall: 'Night falls (dev)',
   devNight: (night: string, taken: number) =>
     taken === 0 ? `Night fell (${night}). Nobody was taken.` : `Night fell (${night}).`,
+  fireHint: 'Light a fire before night falls!',
   mystery: 'a squishy friend',
   waiting: ', waiting in the Hollow',
 } as const;
@@ -55,4 +56,15 @@ export function reportText(
   );
   if (lines.length === 0) lines.push(HOLLOW_TEXT.safe);
   return { title, lines };
+}
+
+/** Building events that can light (or put out) tonight's fire. */
+const FIRE_EVENTS = new Set(['building.placed', 'building.fueled', 'building.removed']);
+
+/** One of my buildings changed: tonight's fire may be lit now (the fire hint asks again). */
+export function changesMyFire(
+  event: Pick<WsEventMessage, 'type' | 'data'>,
+  userId: string,
+): boolean {
+  return FIRE_EVENTS.has(event.type) && event.data['userId'] === userId;
 }
