@@ -251,8 +251,9 @@ Care (design doc §7–8; issue #19; DECISIONS G and "Care (#19)") lives in `src
 | `GET /api/v1/maps/:mapId/care` | → `CareListResponse`: my active squishies as their care sheets show them (contentment, mood, level, XP bar, stats, XP bonus, care today, debounce, an unseen evolution), `speciesDefs` for secret forms I own or just grew out of, my bag, `coinsToday`, `now` |
 | `POST /api/v1/maps/:mapId/squishies/:squishyId/care` | `{ action }` → `CareResponse` (the list plus `result`). My own active squishy; a short per-action debounce (`cooldownSeconds`, `CONFLICT`); feed pays a Treat with `consumeItems(…, 'care', careLogId)`; `squishy.cared` |
 | `POST /api/v1/maps/:mapId/squishies/:squishyId/care/seen` | → `CareListResponse`: the owner saw the evolution celebration |
+| `POST /api/v1/maps/:mapId/squishies/:squishyId/rename` | `{ nickname }` (shared `NicknameSchema`: trimmed, 1–16 letters, numbers, spaces and a little punctuation; `null` goes back to the species name) → `CareListResponse` (#20). My own active squishy; every nickname passes `lib/filter.ts` (`assertAllowedText(…, 'name')`, `VALIDATION_FAILED` with a kid-readable message); `squishy.updated` (`{ userId, squishyId, nickname }` to members) only when the name changed |
 
-Mutating routes take an `Idempotency-Key` and are rate limited (`limits.ts`). Lock order for a care action: the account (`users`, so the daily coin cap can't race across squishies and patches), the squishy, inventory rows, then `maps` (the event).
+Mutating routes take an `Idempotency-Key` and are rate limited (`limits.ts`; renaming has its own tighter limit). Lock order for a care action: the account (`users`, so the daily coin cap can't race across squishies and patches), the squishy, inventory rows, then `maps` (the event).
 
 **For other modules (battles, Training Grounds later):** grant XP only through `applyXp(tx, squishyId, baseXp, at)` inside your transaction, with the squishy rows already locked, then `appendGrowthEvents(repo.appendEvent, growths)` after your own event:
 

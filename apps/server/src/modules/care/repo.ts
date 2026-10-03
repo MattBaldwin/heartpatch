@@ -76,6 +76,8 @@ export interface CareRepo {
   coinsOn: (userId: string, day: string) => Promise<number>;
   insertCare: (care: NewCare) => Promise<string>;
   setContentment: (squishyId: string, contentment: number, at: Date) => Promise<void>;
+  /** A new nickname, or null for the species name (#20). */
+  setNickname: (squishyId: string, nickname: string | null) => Promise<void>;
 
   setGrowth: (
     squishyId: string,
@@ -216,6 +218,10 @@ function queries(db: Executor): CareRepo {
         .update(squishies)
         .set({ contentmentAtLastCare: contentment, lastCaredAt: at })
         .where(eq(squishies.id, squishyId));
+    },
+
+    setNickname: async (squishyId, nickname) => {
+      await db.update(squishies).set({ nickname }).where(eq(squishies.id, squishyId));
     },
 
     setGrowth: async (squishyId, growth) => {

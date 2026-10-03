@@ -86,3 +86,31 @@ export type CareResult = z.infer<typeof CareResultSchema>;
 
 export const CareResponseSchema = CareListResponseSchema.extend({ result: CareResultSchema });
 export type CareResponse = z.infer<typeof CareResponseSchema>;
+
+export const NICKNAME_MAX_LENGTH = 16; // TUNE: fits the close-up's name plate on a phone
+
+/**
+ * A squishy's nickname (#20): trimmed, runs of spaces made one. Letters,
+ * numbers, spaces and a little friendly punctuation. The server also runs
+ * the text filter (CLAUDE.md rule 9).
+ */
+export const NicknameSchema = z
+  .string()
+  .transform((name) => name.trim().replace(/\s+/g, ' '))
+  .pipe(
+    z
+      .string()
+      .min(1, 'Type a name first!')
+      .max(NICKNAME_MAX_LENGTH, `Names can be up to ${String(NICKNAME_MAX_LENGTH)} letters.`)
+      .regex(
+        /^[\p{L}\p{N} '’!&.,-]+$/u,
+        'Names can use letters, numbers, spaces and a little punctuation.',
+      ),
+  );
+
+/**
+ * `POST /maps/:mapId/squishies/:squishyId/rename` (#20): a new nickname, or
+ * null to go back to the species name. Replies with the `CareListResponse`.
+ */
+export const RenameSquishyRequestSchema = z.strictObject({ nickname: NicknameSchema.nullable() });
+export type RenameSquishyRequest = z.input<typeof RenameSquishyRequestSchema>;

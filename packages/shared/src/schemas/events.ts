@@ -412,6 +412,21 @@ export const GAME_EVENTS = {
     public: z.object({ userId: z.uuid(), squishyId: z.uuid(), level: z.number().int().min(1) }),
   },
   /**
+   * A player renamed one of their squishies (#20): the new nickname, or null
+   * for the species name again. It passed the server's text filter. Other
+   * players' squishy changes that aren't care, growth or housing can join
+   * this type later as optional fields.
+   */
+  'squishy.updated': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      nickname: z.string().nullable(),
+      fromNickname: z.string().nullable(),
+    }),
+    public: z.object({ userId: z.uuid(), squishyId: z.uuid(), nickname: z.string().nullable() }),
+  },
+  /**
    * Night fell on the map (#21, design doc §14): the Hollow Man came by.
    * Every member sees who lost a squishy to the Hollow; which one stays
    * internal (the owner hears it from `squishy.hollowed`).

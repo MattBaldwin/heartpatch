@@ -25,6 +25,20 @@ export const careApi = {
       schema: CareListResponseSchema,
       headers: { 'idempotency-key': key },
     }),
+
+  /** A new nickname, or null for the species name (#20's close-up). */
+  rename: (
+    mapId: string,
+    squishyId: string,
+    nickname: string | null,
+    key: string,
+  ): Promise<CareListResponse> =>
+    apiCallFor(`/maps/${mapId}/squishies/${squishyId}/rename`, {
+      method: 'POST',
+      body: { nickname },
+      schema: CareListResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
 };
 
 export type CareApi = typeof careApi;

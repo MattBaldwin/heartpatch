@@ -46,6 +46,7 @@ export const CARE_TEXT = {
   evolved: (from: string, into: string) => `${from} grew into ${into}!`,
   yay: 'Yay!',
   care: 'Care',
+  upClose: 'Up close',
   noneYet: 'No squishy friends here yet. Befriend one on the map!',
   notHere: "That friend isn't here right now. Say hi to this one!",
 } as const;

@@ -12,7 +12,14 @@ import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Body, VisualRegistry } from '@heartpatch/shared';
 import { bodyArrays, type MeshArrays } from './body-shape.js';
-import { CONTACT_SHADOW, LOD, VINYL, type SquishMove, type SquishyLod } from './config.js';
+import {
+  CONTACT_SHADOW,
+  LOD,
+  VINYL,
+  type SquishMove,
+  type SquishyDetail,
+  type SquishyLod,
+} from './config.js';
 import { createContactShadowMesh } from './contact-shadow.js';
 import { eventAttribute, eventRunning, type SquishEvent } from './motion.js';
 import { squishyParams, type SquishyParams, type SquishySpecies } from './params.js';
@@ -50,22 +57,23 @@ export interface SquishyHandle {
   readonly params: SquishyParams;
 }
 
-export interface SquishyFieldOptions {
+/** `L`: the detail levels a field may use (`hero` only for the close-up's one squishy). */
+export interface SquishyFieldOptions<L extends SquishyDetail = SquishyLod> {
   readonly registry: VisualRegistry;
-  readonly lod: SquishyLod;
+  readonly lod: L;
   /** Idle breathing. Off keeps a still scene idle (render on demand). Default on. */
   readonly breathing?: boolean;
   /** A soft contact shadow under each squishy. Default on. */
   readonly shadows?: boolean;
 }
 
-export interface SquishyFieldStats {
+export interface SquishyFieldStats<L extends SquishyDetail = SquishyLod> {
   readonly squishies: number;
   /** Meshes with at least one instance: the field's draw calls. */
   readonly meshes: number;
   /** Thin instances across those meshes (bodies, parts and shadows). */
   readonly instances: number;
-  readonly lod: SquishyLod;
+  readonly lod: L;
 }
 
 interface Instance {
@@ -84,7 +92,7 @@ interface Squishy {
 
 interface Batch {
   readonly key: string;
-  readonly build: (lod: SquishyLod) => MeshArrays;
+  readonly build: (lod: SquishyDetail) => MeshArrays;
   /** Bodies are pickable (tap to jiggle); parts aren't. */
   readonly pickable: boolean;
   readonly instances: Instance[];
@@ -97,7 +105,7 @@ function linear(rgb: readonly [number, number, number]): [number, number, number
   return [c.r, c.g, c.b, 1];
 }
 
-export class SquishyField {
+export class SquishyField<L extends SquishyDetail = SquishyLod> {
   readonly #scene: Scene;
   readonly #registry: VisualRegistry;
   readonly #breathing: boolean;
@@ -108,13 +116,13 @@ export class SquishyField {
   readonly #shadow: Mesh | null;
   readonly #warned = new Set<string>();
   readonly #beforeRender: Observer<Scene> | null;
-  #lod: SquishyLod;
+  #lod: L;
   #shadowDirty = true;
   #nextId = 1;
   /** Wall-clock ms at squishy-clock zero, set by the first `update` or `play`. */
   #clockStart: number | null = null;
 
-  constructor(scene: Scene, options: SquishyFieldOptions) {
+  constructor(scene: Scene, options: SquishyFieldOptions<L>) {
     this.#scene = scene;
     this.#registry = options.registry;
     this.#lod = options.lod;
@@ -204,8 +212,8 @@ export class SquishyField {
     return squishy !== undefined && eventRunning(squishy.event, this.#clockAt(now));
   }
 
-  /** Switches detail level (see `lodFor`); rebuilds shared geometry only. */
-  setLod(lod: SquishyLod): void {
+  /** Switches detail level (see `lodFor`, `heroLodFor`); rebuilds shared geometry only. */
+  setLod(lod: L): void {
     if (lod === this.#lod) return;
     this.#lod = lod;
     for (const batch of this.#batches.values()) {
@@ -215,7 +223,7 @@ export class SquishyField {
     }
   }
 
-  get lod(): SquishyLod {
+  get lod(): L {
     return this.#lod;
   }
 
@@ -242,7 +250,7 @@ export class SquishyField {
     return [...this.#squishies.values()].map((s) => s.handle);
   }
 
-  get stats(): SquishyFieldStats {
+  get stats(): SquishyFieldStats<L> {
     this.flush();
     let meshes = 0;
     let instances = 0;
@@ -287,7 +295,7 @@ export class SquishyField {
     return this.#clockAt(now);
   }
 
-  #batch(key: string, build: (lod: SquishyLod) => MeshArrays, pickable: boolean): Batch {
+  #batch(key: string, build: (lod: SquishyDetail) => MeshArrays, pickable: boolean): Batch {
     let batch = this.#batches.get(key);
     if (!batch) {
       batch = { key, build, pickable, instances: [], mesh: null, dirty: true };

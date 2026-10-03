@@ -1,5 +1,11 @@
 import type { QualityTier } from '../engine/config.js';
-import { SQUISH, SQUISH_MOVE_CODE, type SquishMove, type SquishyLod } from './config.js';
+import {
+  SQUISH,
+  SQUISH_MOVE_CODE,
+  type SquishMove,
+  type SquishyDetail,
+  type SquishyLod,
+} from './config.js';
 
 /**
  * CPU-side bookkeeping for squish moves and detail levels. The shader does
@@ -33,4 +39,12 @@ export type SquishyView = 'map' | 'closeUp';
  */
 export function lodFor(view: SquishyView, tier: QualityTier): SquishyLod {
   return view === 'closeUp' && tier !== 'low' ? 'high' : 'low';
+}
+
+/**
+ * The detail level for the one squishy in the close-up view (#20): `hero` on
+ * the high tier, then the usual close-up detail as the governor steps down.
+ */
+export function heroLodFor(tier: QualityTier): SquishyDetail {
+  return tier === 'high' ? 'hero' : lodFor('closeUp', tier);
 }

@@ -69,8 +69,12 @@ export interface HomeSceneStats {
 /** What a tap hit. */
 export type HomePick =
   | { readonly kind: 'spot'; readonly spot: HomeSpot }
+  | { readonly kind: 'squishy'; readonly id: string }
   | { readonly kind: 'building'; readonly id: string }
   | null;
+
+/** A tap this close to a squishy's feet counts as on it (they're small), in hex sizes. */
+const SQUISHY_REACH = 0.2; // TUNE
 
 export interface HomeSceneOptions {
   readonly registry: VisualRegistry;
@@ -278,10 +282,19 @@ export class HomeScene {
     this.#selection.setEnabled(true);
   }
 
-  /** What's under a point on the canvas (CSS pixels): a lit spot first, then a building. */
+  /**
+   * What's under a point on the canvas (CSS pixels): a lit spot first, then
+   * a squishy (opens its close-up, #20: a direct hit, or near its feet when
+   * that's nearer than a building), then a building.
+   */
   pick(x: number, y: number): HomePick {
     const camera = this.#scene.activeCamera;
     if (!camera) return null;
+    if (this.#spots.length === 0) {
+      const hit = this.#squishies.pick(x, y);
+      const id = hit ? this.#residentOf(hit) : null;
+      if (id) return { kind: 'squishy', id };
+    }
     const ray = CreatePickingRay(this.#scene, x, y, null, camera);
     if (ray.direction.y >= 0) return null;
     const t = (this.#ground - ray.origin.y) / ray.direction.y;
@@ -303,7 +316,28 @@ export class HomeScene {
     const spot = near(this.#spots, (s) => this.spotAt(s));
     if (spot) return { kind: 'spot', spot };
     const building = near(this.#home.buildings, (b) => this.spotAt(b));
+    if (this.#spots.length === 0) {
+      // Near a squishy's feet counts too (they're small), unless the tap is
+      // nearer the building it lives by.
+      const reach = HOME_VIEW.hexSize * SQUISHY_REACH;
+      const d2 = (a: WorldPoint) => (a.x - p.x) ** 2 + (a.z - p.z) ** 2;
+      let best: string | null = null;
+      let bestD = Math.min(reach * reach, building ? d2(this.spotAt(building)) : Infinity);
+      for (const [id, r] of this.#residents) {
+        const d = d2(r.at);
+        if (d < bestD) {
+          best = id;
+          bestD = d;
+        }
+      }
+      if (best) return { kind: 'squishy', id: best };
+    }
     return building ? { kind: 'building', id: building.id } : null;
+  }
+
+  #residentOf(handle: SquishyHandle): string | null {
+    for (const [id, r] of this.#residents) if (r.handle.id === handle.id) return id;
+    return null;
   }
 
   /** Squishies that live in a habitat (only they wander). */

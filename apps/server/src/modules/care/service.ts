@@ -28,6 +28,7 @@ import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
+import { assertAllowedText } from '../../lib/filter.js';
 import { localDate, type Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems, requireMember } from '../inventory/service.js';
@@ -94,6 +95,16 @@ export interface CareService {
   ) => Promise<CareResponse>;
   /** The owner saw a squishy's evolution celebrated. */
   seen: (user: PublicUser, mapId: string, squishyId: string) => Promise<CareListResponse>;
+  /**
+   * The owner renamed a squishy (#20): `nickname` is already trimmed by
+   * `NicknameSchema`, or null for the species name again.
+   */
+  rename: (
+    user: PublicUser,
+    mapId: string,
+    squishyId: string,
+    nickname: string | null,
+  ) => Promise<CareListResponse>;
 }
 
 export interface CareServiceOptions {
@@ -435,5 +446,28 @@ export function createCareService(options: CareServiceOptions): CareService {
         await repo.markEvolutionsSeen(row.id, at);
         return careView(repo, tx, mapId, user.id, at);
       }),
+
+    rename: async (user, mapId, squishyId, nickname) => {
+      // Every nickname passes the text filter before it's stored (CLAUDE.md rule 9).
+      if (nickname !== null) assertAllowedText(nickname, 'name');
+      const at = now();
+      const { reply, changed } = await store.transaction(async (repo, tx) => {
+        await requireMember(tx, user, mapId);
+        const row = await lockMine(repo, user, mapId, squishyId);
+        const renamed = row.nickname !== nickname;
+        if (renamed) {
+          await repo.setNickname(row.id, nickname);
+          await repo.appendEvent({
+            mapId,
+            type: 'squishy.updated',
+            actorUserId: user.id,
+            payload: { userId: user.id, squishyId: row.id, nickname, fromNickname: row.nickname },
+          });
+        }
+        return { reply: await careView(repo, tx, mapId, user.id, at), changed: renamed };
+      });
+      if (changed) published(mapId);
+      return reply;
+    },
   };
 }
