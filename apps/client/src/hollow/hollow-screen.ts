@@ -456,7 +456,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       } else if (event.type === 'squishy.hollowed' || event.type === 'squishy.rescued') {
         void refresh();
       } else if (user && changesMyFire(event, user.id)) {
-        // My fire changed: the "light a fire" hint may be done (or back).
+        // My fire changed: the "light a fire" hint may be done now.
         if (status?.fireHint) void refresh();
       }
     },
