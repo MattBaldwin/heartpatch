@@ -471,8 +471,8 @@ export const GAME_EVENTS = {
     }),
   },
   /**
-   * A player found a piece of clothing (#43): a lucky drop from a gather or a rescue
-   * (#21; later a capture). Clothing is account-level; the event goes on
+   * A player found a piece of clothing (#43): a lucky drop from a gather, a rescue
+   * (#21) or a tile capture (#84). Clothing is account-level; the event goes on
    * the map where it was found. What caused it stays internal.
    */
   'clothing.found': {

@@ -40,6 +40,7 @@ import { consumeItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import type { MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
+import { rollFoundDrop } from '../wardrobe/drops.js';
 import { DEV_WILD_LEVEL } from './limits.js';
 import {
   createBattlesRepo,
@@ -123,17 +124,28 @@ export interface TileBattlePort {
   /**
    * The battle is over (won, lost or left): records it, and on a win the tile
    * changes hands. Lock order: battle (held), tile, then `maps` via events.
-   * Returns events to append after `battle.ended`, and the share of the
-   * battle's XP to grant (Gentle's `rewardPercent`: owner decision 2026-10-03).
+   * Returns events to append after `battle.ended`, the share of the battle's
+   * XP to grant (Gentle's `rewardPercent`: owner decision 2026-10-03), and,
+   * on a capture, the found-clothing roll for battles to make (#84). The port
+   * never rolls it itself: `clothing.found` takes `maps`, and the squishies
+   * aren't locked yet.
    */
   ended: (
     tx: Executor,
     battle: BattleRow,
     winner: BattleSideId | 'draw',
     at: Date,
-  ) => Promise<{ events: NewGameEvent[]; xpPercent: number }>;
+  ) => Promise<TileBattleEnd>;
   /** Called off by the server (DECISIONS #13): the attempt is refunded. */
   noContest: (tx: Executor, battleId: string, at: Date) => Promise<void>;
+}
+
+/** What the territory port settled when a tile battle ended. */
+export interface TileBattleEnd {
+  events: NewGameEvent[];
+  xpPercent: number;
+  /** A capture's chance of found clothing: the tile, and Gentle's share of the chance. */
+  drop: { tileId: string; percent: number } | null;
 }
 
 /** The other side of a rescue (#21), built by the hollow module in the start transaction. */
@@ -463,7 +475,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const tile =
       TILE_BATTLE_KINDS.has(row.kind) && options.tileBattles
         ? await options.tileBattles.ended(tx, row, result.winner, at)
-        : { events: [], xpPercent: 100 };
+        : { events: [], xpPercent: 100, drop: null };
     // Gentle mode's share (owner decision 2026-10-03): challenging a much
     // smaller player pays part of the battle's XP, win or lose.
     const awards = result.xp
@@ -509,6 +521,21 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       },
       endedAt: at,
     });
+    // A capture may turn up a piece of clothing (#84), rolled here rather
+    // than in the port: after the squishy locks above, since its
+    // `clothing.found` is this transaction's first event and takes `maps`.
+    // One piece per battle, however often a finish is retried.
+    if (tile.drop) {
+      await rollFoundDrop(tx, {
+        source: 'capture',
+        refId: row.id,
+        userId: row.playerUserId,
+        mapId: row.mapId,
+        tileId: tile.drop.tileId,
+        percent: tile.drop.percent,
+        at,
+      });
+    }
     await repo.appendEvent({
       mapId: row.mapId,
       type: 'battle.ended',
