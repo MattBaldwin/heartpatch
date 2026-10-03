@@ -14,12 +14,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  check:
+  # Lint, types, unit and DB tests, build: everything but the browser.
+  fast:
     runs-on: ubuntu-24.04
-    # Room for a slow apt mirror during the WebKit install (once took 15 min)
-    # and for WebKit e2e on iPhone and iPad (~25 min), which pushes the whole
-    # job past 30 min. TODO: lower again once e2e runs in shards.
-    timeout-minutes: 45
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -73,6 +71,49 @@ jobs:
           pnpm db:migrate && pnpm db:migrate
           pnpm db:seed && pnpm db:seed
 
+  # WebKit e2e, split by device and into shards that run side by side.
+  e2e:
+    runs-on: ubuntu-24.04
+    # Room for a slow apt mirror during the WebKit install (once took 15 min)
+    # plus about 10 min of tests on the heavier shard.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [iphone-webkit, ipad-webkit]
+        shard: [1, 2]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: heartpatch
+          POSTGRES_PASSWORD: heartpatch
+          POSTGRES_DB: heartpatch
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U heartpatch -d heartpatch"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      # The dev server and the db scripts need this.
+      DATABASE_URL: postgres://heartpatch:heartpatch@localhost:5432/heartpatch
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      # The specs import @heartpatch/shared's built output.
+      - run: pnpm --filter @heartpatch/shared build
+      - run: pnpm db:migrate && pnpm db:seed
+
       # Cache the browser download; the OS packages it needs still install each run.
       - uses: actions/cache@v4
         id: pw-cache
@@ -88,12 +129,28 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: pnpm --filter @heartpatch/client exec playwright install-deps webkit
 
-      - name: E2E smoke (iPhone + iPad, WebKit)
-        run: pnpm test:e2e
+      - name: E2E (${{ matrix.project }}, shard ${{ matrix.shard }}/2)
+        run: >-
+          pnpm --filter @heartpatch/client exec playwright test
+          --project=${{ matrix.project }} --shard=${{ matrix.shard }}/2
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}
           path: apps/client/playwright-report/
           retention-days: 7
+
+  # The one status to require and to gate merges on: green only when every
+  # job above is.
+  check:
+    if: always()
+    needs: [fast, e2e]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: All jobs passed
+        run: |
+          echo "fast: ${{ needs.fast.result }}, e2e: ${{ needs.e2e.result }}"
+          test "${{ needs.fast.result }}" = success
+          test "${{ needs.e2e.result }}" = success
