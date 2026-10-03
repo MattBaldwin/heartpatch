@@ -133,16 +133,16 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **In flight (batch 7, all Opus):**
-  - #43 wardrobe, PR #78 (session_0128FWWezZzy46QQHXWn3YgT): must merge main (#18 + #15) and regenerate its migration after 0009.
-  - #19 care/XP, PR #81 (session_01N3QHczH14p3onN2fbzG4Ww): owns a shared `applyXp` that every battle kind calls; care coins go only in the `squishy.cared` payload (`coin_ledger` is #45's).
-  - #21 Hollow Man (session_0153wdmXfxfmoWPzjjKoAZfB): uses `litSafeTiles`/`protectsNight` (#18) and `isOnWatch` (#15); `hollow_events` keeps nightfall idempotent.
-- **Next, by dependency:**
-  - #10 roster: after #43 merges, because content issues run one at a time. Adds spawn rows to #14's tables.
-  - #16 raid AI: replaces #15's `defendingSide` choice and adds the raid log.
-  - #20 close-up view: after #19.
-  - #12 sim: after #10.
-  - Fillers: #25 audio and #23 quick messages (check #22 is really done).
+- **In flight:** nothing. The Chore PR (code only) and the Docs PR that syncs the specs after batch 7 are open.
+- **Next, by dependency** (#23, #25, #24, #44, #45, #84, #87):
+  - #23 quick messages: adds `quick_messages` and the `chat.quick` event.
+  - #25 audio: a filler lane with no server work.
+  - #24 tutorial: needs a `tutorial` `ClothingSource` (a shared-contract change, so the coordinator approves it) and a fixed `ref_id` for the Seedling Scarf grant, so the grant is idempotent.
+  - #44 milestones: a new event consumer.
+  - #45 Patch Coins: pays out from `care_log.coins` (already capped), with an account-day idempotency key. Care must never spend a Heart Charm without reordering locks: care locks the squishy before inventory, a capture locks the Heart Charm first (TECH_SPEC §7, DECISIONS "Lock order (Fix PR)").
+  - #84 capture drops: return `clothing.found` with `tile.captured`, or use a consumer, because a battle's port can't append events before it locks squishies.
+  - #87 placeholder retirement: move the tests onto fixture tables first, then delete the `placeholder-*` rows.
+  - **Every new event consumer takes one `maps` lock per event** (TECH_SPEC §7). Don't batch events.
 - **Briefs:** follow §7, plus:
   - reporting with the fallback trigger;
   - neither sessions nor the supervisor can re-run CI (403), so a flaky test gets a robustness fix in the PR, never a skip;
@@ -150,17 +150,16 @@ The supervisor keeps this list current. Remove items as they land.
   - Name tables exactly as TECH_SPEC §4's core table list. #17 cost a mid-flight rename because a brief invented names.
 - **Merge order and churn:**
   - Every PR adds a migration, so later PRs regenerate theirs after each merge.
+  - **Run one migration-adding lane at a time.** #21 cost $58 after four merges of `main` and three migration regenerates.
   - Hold lanes that edit the same files (battles module, spawn tables) rather than run them in parallel. Lanes that started on a current main and never re-merged were the cheapest (#18 $25.77, #15 $23.11, #42 $23.57).
-- **Lock order** on main: member row, seats, player, tiles, buildings, then maps. New code must follow it.
+  - **Proposed (owner to confirm):** review rounds caused only by merging `main` don't count toward the 4-round cap.
+- **Lock order** is in TECH_SPEC §7 ("Lock order"). New code must follow it, and `lock-order.test.ts` checks it.
 - **Test robustness:**
   - `keeper-gallery.spec.ts` ignores Babylon's shader-fallback console noise (headless WebKit has no GPU). Check a real iPad for the fallback during #28.
   - `keeper.spec` timed out once under a full local run.
   - #9's `squishy-gallery.spec.ts:168` (jiggle to idle) should wait on a signal, not on timing.
   - The auth login rate-limit test runs about 2.6 s against a 5 s timeout: raise the timeout, or lower the Argon2 cost in tests.
-- **Docs drift:**
-  - TECH_SPEC §8 asks for a shared `spawnWindowId`; #14 put `spawnWindowFor` in server `lib/time.ts`.
-  - TECH_SPEC §2 layout; §10 `SESSION_SECRET` (unused); §6 "short benchmark" versus the continuous quality governor (#6).
-  - Possibly closed but still open on GitHub: #5 and #22. Confirm and close.
+- **Docs drift:** possibly closed but still open on GitHub: #5 and #22. Confirm and close.
 - **Earlier follow-ups still open:**
   - #9: count real draw calls in the "flat draw calls" e2e; NullEngine tests for `SquishyField.move` and `remove`; partial buffer updates; rebase `squishTime`; forward part taps to the body; the crypto ban misses `globalThis.crypto`.
   - #7: a FORBIDDEN resync for map A while the player opens map B lands them in the lobby; a doc comment on `generation`.
@@ -171,15 +170,18 @@ The supervisor keeps this list current. Remove items as they land.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
 - **Cost so far (USD):**
   - Batch 6: #13 48.88, #42 23.57, #17 36.72, #14 43.98.
-  - Batch 7 so far: #18 25.77, #15 23.11.
+  - Batch 7: #18 25.77, #15 23.11, #43 46.62, #19 32.99, #16 17.29, #10 17.19, #12 4.59, #21 58.10, #20 33.19. Fix PR 11.24, audit 1.87.
   - Supervisor 3: about 28.
   - Big lanes run $25–50; flag above about $35.
 - **Owner questions queued:**
-  - How a player gets their first squishy (recommended: a free starter in each new patch, replaced by the tutorial's Partner later).
-  - Wild-battle XP farming: a beaten-but-not-captured squishy can be fought again all window. Recommended: it leaves after a win, or repeat wins give no XP.
-  - Whether a squishy can live in a habitat and stand watch at the same time.
-  - Jack-o'-Lantern questions in PR #79.
-  - Guardians in the tile panel.
-  - Confirm the four #4 decisions; confirm or revert the 4-round review cap.
-  - OK for the DECISIONS merge Chore.
-  - AWS: Matt chose the new AWS experience ("project"), Region us-east-2, profile `heartpatch`. The CLI is installed in supervisor 3's container only. Remote `aws login` was started but the code never arrived. Restart with `aws login --remote --region us-east-2 --profile heartpatch` when he's ready. Agent Toolkit rules go in an uncommitted `CLAUDE.local.md` (his choice). Check Lightsail is available on the new experience, and update DEPLOY.md step 1 for projects (spend limits in AWS Settings rather than root MFA and budgets).
+  - **First squishy:** how a player gets one. Puddlepuff is suggested as a free starter in each new patch, replaced by the tutorial's Partner later.
+  - **Wild-battle XP farming:** a beaten-but-not-captured squishy can be fought again all window. Recommended: it leaves after a win, or repeat wins give no XP.
+  - **Element vs feeling balance:** the sim (#12) shows a 2× element matchup wins 98–100% of 1v1s at equal stats, so feeling counters can't blunt it, contrary to GAME_DESIGN §5. Either narrow the element range or widen the feeling range.
+  - **Heartlet lore:** sign-off on the new secret species (DECISIONS "Launch roster (#10)").
+  - **First-night grace** for new players (GAME_DESIGN §14 open question).
+  - **Shadow look** for rescue guardians (all drawn as Nookling for now).
+  - **Gentle 50% and XP:** Gentle's 50% scales capture rewards (`rewardPercent`) but not the showdown's XP. Should it halve XP too (DECISIONS "Territory (#15)")?
+  - **Habitat vs watch:** whether a squishy can live in a habitat and stand watch at the same time.
+  - **Review cap:** confirm or revert the 4-round cap, and the "merging main doesn't count" proposal above.
+  - **Still open from earlier:** Jack-o'-Lantern questions in PR #79; guardians in the tile panel; the four #4 decisions.
+  - **AWS:** Matt chose the new AWS experience ("project"), Region us-east-2, profile `heartpatch`. The CLI is installed in supervisor 3's container only. Remote `aws login` was started but the code never arrived. Restart with `aws login --remote --region us-east-2 --profile heartpatch` when he's ready. Agent Toolkit rules go in an uncommitted `CLAUDE.local.md` (his choice). Check Lightsail is available on the new experience, and update DEPLOY.md step 1 for projects (spend limits in AWS Settings rather than root MFA and budgets).

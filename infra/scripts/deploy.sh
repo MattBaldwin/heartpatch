@@ -38,7 +38,7 @@ flock -n 9 || fail "another deploy or a restore is running; try again when it fi
 # Reads KEY=value from .env without sourcing it (values may hold shell characters).
 env_value() { sed -n "s/^$1=//p" .env | tail -n 1; }
 
-for key in POSTGRES_PASSWORD SESSION_SECRET HP_SIGNUP_CODE PUBLIC_ORIGIN; do
+for key in POSTGRES_PASSWORD HP_SIGNUP_CODE PUBLIC_ORIGIN; do
   [[ -n $(env_value "$key") ]] || fail "$key is empty in $HP_DIR/.env (see .env.prod.example)"
 done
 

@@ -124,8 +124,8 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 - **Habitat multiplier.** Habitats carry element and feeling tags. A squishy housed in a matching habitat gets **[DEFAULT: up to 1.75×]**. A mismatch gives 1.0×.
 - **Floor of 1.0×.** Neglect never weakens or sickens a squishy; it only means no bonus. Combat alone always advances a squishy, just more slowly.
 - **Cap.** Combined multiplier capped at **[DEFAULT: 3×]**.
-- **Implementation:** no ticking simulation. Store `contentment` and `lastCaredAt`; compute current contentment lazily from elapsed time on read. Care actions have server-side cooldowns so tap-spamming can't max care.
-- **Diminishing returns:** the first **[DEFAULT: 3]** care actions per squishy per day give full contentment; later ones give less. Patch Coins from care are capped per account per day **[DEFAULT]**. Attentive play is rewarded without turning care into a chore that favours whoever has the most screen time.
+- **Implementation:** no ticking simulation. Store `contentment` and `lastCaredAt`; compute current contentment lazily from elapsed time on read. Care can't be tap-spammed: each squishy's returns shrink as the day's actions pile up (below), and the server ignores a repeat of the same action within about 10 seconds so one stroke counts once.
+- **Diminishing returns:** the first **[DEFAULT: 3]** care actions per squishy per day give full contentment; later ones give less (50%, then 25%, then 10%). Patch Coins from care are capped per account per day **[DEFAULT: 10]**, and only full-value actions earn one. Attentive play is rewarded without turning care into a chore that favours whoever has the most screen time.
 - **Why three actions:** each maps to close-up gestures (§20): drag a treat → **feed**, stroke → **pet**, tap to boop or pinch to tickle → **play**. Each also has a visible button. This keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
 - Care history (a rolling score over the squishy's life) feeds evolution odds (§8).
 
@@ -216,16 +216,17 @@ The shared threat and the heart of the lore. Tall, flickering silhouette with gl
 
 **His rules → mechanics**
 
-- **"He only needs one."** Each night at **nightfall [DEFAULT: 9:00 PM in the map's time zone]** a server job runs per map. For each player, if any squishies are **exposed**, he takes **one** of them.
-- **Exposure:** a squishy is exposed if it's housed outside all Hearthfire safe radii and noise coverage, or if it's at home when the fire has gone out. Squishies inside the home base with a lit Hearthfire are safe.
+- **"He only needs one."** Each night at **nightfall [DEFAULT: 9:00 PM in the map's time zone]** a server job runs per map. For each player, if any squishies are **exposed**, he takes **one** of them, picked by a seeded roll the player can't see. Tutorial maps take nothing. If the server was down, only the latest missed night runs, and a map's first night is the first nightfall after its first member joined.
+- **Open question (owner):** should a brand-new player get a first-night grace? Someone who joins at 8:55 PM with a squishy and no fire yet can lose it at 9:00.
+- **Exposure:** a squishy spends the night in its habitat's tile, or at its owner's Heart Seed if it has no habitat. It is exposed if that tile is outside every lit Hearthfire's safe radius (noise coverage joins in once noise buildings exist), or if the fire has gone out. Squishies inside the home base with a lit Hearthfire are safe.
 - **Defenders stand watch:** squishies stationed to defend an owned tile are on watch and are **not** exposed. Holding territory never costs a squishy every night, so the Hollow Man stays a planning challenge (keep the fire lit, house squishies inside its light), not a daily loss.
 - **"Keep the fire lit."** Hearthfires store up to **[DEFAULT: 5 nights]** of Emberwood. At each nightfall: if the fire has fuel for tonight, it burns one night's worth and protects tonight; otherwise it goes out. Stocking up teaches planning ahead: an active player tops up in seconds, and a player who misses a few days comes back to a fire that's still lit. The fire shows its remaining nights clearly (e.g. "3 nights left").
 - **Absence is not punished (pillar 2).** While the fire is lit, squishies at home are always safe; only squishies the player chose to house outside the light can be taken. If a player is away longer than their stored fuel lasts, the fire goes out and home squishies become exposed too. Taken squishies can always be rescued.
 - **Repelled by noise.** Noise buildings extend protection.
 - **Repelled by family love.** (Phase 2) Warmth between players with nearby territories reduces his reach.
 - **"Never look too long."** (Phase 2 polish) Keeping the camera locked on him when he appears makes nearby squishies start to drift toward him.
-- **Hollowed squishies** turn grey and are taken to **the Hollow** (entrance in Juniper's Gap). They are **never permanently lost**: a player rescues them via a rescue expedition (a special battle against shadow guardians), started from anywhere: the Hollow's entrance is in Juniper's Gap, but reaching it doesn't require owning nearby land. Rescue rewards Heartdust, capped at **[DEFAULT: 1]** rescue reward per player per day so exposing squishies on purpose isn't a farm.
-- Morning summary: "The Hollow Man visited last night…" shown on next login (push notification in Phase 3).
+- **Hollowed squishies** turn grey and are taken to **the Hollow** (entrance in Juniper's Gap). They are **never permanently lost**: a player rescues them via a rescue expedition (a special battle against shadow guardians, sized just under the player's strongest squishy; if every squishy is in the Hollow, the one being rescued fights), started from anywhere: the Hollow's entrance is in Juniper's Gap, but reaching it doesn't require owning nearby land. Rescue rewards Heartdust, capped at **[DEFAULT: 1]** rescue reward per player per day so exposing squishies on purpose isn't a farm.
+- Morning summary: "The Hollow Man visited last night…" shown on next login, covering the last 3 nights (push notification in Phase 3).
 
 ## 15. Seasons
 
