@@ -302,7 +302,11 @@ Small and cheap on purpose: one server for a few families.
 
 ## 12. CI/CD (GitHub Actions)
 
-- **`ci.yml`** on every PR: install (pnpm cache), lint, typecheck, unit tests, build, Playwright smoke against a dev stack (Postgres service container).
+- **`ci.yml`** on every PR. Since PR #100 it has three parts:
+  - **`fast`:** format, lint, typecheck, migration check, unit and DB tests, coverage, build and the db scripts.
+  - **`e2e`:** a matrix of `iphone-webkit` / `ipad-webkit` × shard 1/2. Each leg has its own Postgres service container.
+  - **`check`:** an aggregator that is green only when `fast` and every `e2e` leg are. It stays the one status to gate on.
+  - Build sessions can't edit `.github/workflows`; the coordinator makes CI changes.
 - **`deploy.yml`** on push to `main`:
   1. Build Docker images for server and client (client is a static build copied into the Caddy image or a volume).
   2. Push to **GitHub Container Registry** (`ghcr.io/mattbaldwin/heartpatch-*`).
