@@ -30,8 +30,8 @@ export interface CoinCredit {
   /** The battle, care action or milestone it's for: each pays once, ever. */
   refId: string;
   userId: string;
-  /** The patch it was earned on, or null (a milestone). */
-  mapId: string | null;
+  /** The patch it was earned on; leave it out (or null) for account-level ones like milestones. */
+  mapId?: string | null;
   /** Coins before the daily cap; 0 or less credits nothing. */
   amount: number;
   at: Date;
@@ -71,7 +71,7 @@ export async function creditCoins(tx: Executor, credit: CoinCredit): Promise<Coi
       : cap - (await repo.earnedOn(credit.userId, credit.source, day));
   const amount = Math.min(credit.amount, room);
   if (amount <= 0) return { credited: 0, balance };
-  const after = await repo.apply({ ...credit, amount, day });
+  const after = await repo.apply({ ...credit, mapId: credit.mapId ?? null, amount, day });
   return { credited: amount, balance: after };
 }
 
