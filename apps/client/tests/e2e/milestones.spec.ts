@@ -75,7 +75,7 @@ test('earn The First Patch, celebrate it, then see it and wear its title', async
   await expect.poll(() => milestones(page).then((m) => m?.loaded)).toBe(true);
   const shown = await milestones(page);
   expect(shown?.earned['first-patch']).toBe(1);
-  expect(shown?.earned.territory).toBe(0);
+  expect(shown?.earned['territory']).toBe(0);
   // Secrets are "???" until found.
   expect(shown?.tracks.filter((t) => t === '???').length).toBeGreaterThan(0);
   await expect(card.locator('[data-track="???"]').first()).toContainText('???');

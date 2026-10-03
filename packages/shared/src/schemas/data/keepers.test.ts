@@ -89,6 +89,7 @@ describe('Keeper configs', () => {
       role: 'owner',
       homeSlot: 0,
       joinedAt: '2026-10-02T00:00:00.000Z',
+      title: null,
     };
     // With what it wears (#43), so other players see outfits.
     const keeper = { ...defaultKeeperConfig(pip), wearing: ['sunny-cap', 'puddle-boots'] };
