@@ -16,8 +16,10 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-24.04
-    # Room for a slow apt mirror during the WebKit install (once took 15 min).
-    timeout-minutes: 30
+    # Room for a slow apt mirror during the WebKit install (once took 15 min)
+    # and for WebKit e2e on iPhone and iPad, which passes 30 min on its own.
+    # TUNE: back down once e2e runs in shards.
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16
