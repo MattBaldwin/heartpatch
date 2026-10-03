@@ -4,6 +4,7 @@ import type { HomeDebug } from '../home/home-screen.js';
 import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
 import type { CareDebug } from '../care/care-sheet.js';
+import type { ChatDebug } from '../chat/chat-screen.js';
 import type { CloseUpDebug } from '../close-up/close-up-screen.js';
 import type { MapDebug } from '../map/map-screen.js';
 import type { RaidReportDebug } from '../raids/raid-report.js';
@@ -58,6 +59,8 @@ declare global {
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */
       wardrobe?(): WardrobeDebug | null;
+      /** Quick messages (#23): the sheet, the feed and the bubbles over the map, or null. */
+      chat?(): ChatDebug | null;
     };
   }
 }

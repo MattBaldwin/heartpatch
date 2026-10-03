@@ -9,6 +9,7 @@ import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
+import { createChatScreen } from './chat/chat-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen } from './map/map-screen.js';
@@ -147,6 +148,7 @@ const closeUp = createCloseUpScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void chat.setMap(null);
     void battles.setMap(null);
     home.setMap(null);
     lobby.stepOut();
@@ -164,6 +166,7 @@ const closeUp = createCloseUpScreen({
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
+        void chat.setMap(mapId);
         void battles.setMap(mapId);
         home.setMap(mapId);
         void care.celebrateNews(mapId);
@@ -215,6 +218,9 @@ const hollow = createHollowScreen({
   },
   devTools: import.meta.env.DEV,
 });
+// Quick messages (#23): a Chat button over a multiplayer map, with presets,
+// emoji and squishy stickers, and little bubbles when someone says something.
+const chat = createChatScreen({ root: document.body });
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
@@ -235,6 +241,7 @@ const home = createHomeScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void chat.setMap(null);
     void battles.setMap(null);
     lobby.stepOut();
     void care.celebrateNews(mapId);
@@ -253,6 +260,7 @@ const home = createHomeScreen({
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
+        void chat.setMap(mapId);
         void battles.setMap(mapId);
         home.setMap(mapId);
       })
@@ -274,6 +282,7 @@ const maps = createMapScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void chat.setMap(null);
     home.setMap(null);
     lobby.showMessage(message);
   },
@@ -284,6 +293,7 @@ const maps = createMapScreen({
   onLiveEvent: (event) => {
     wardrobe.liveEvent(event);
     hollow.liveEvent(event);
+    chat.liveEvent(event);
   },
 });
 // The squishy catalog (#14) opens from the button by the battle entry.
@@ -308,6 +318,7 @@ const tutorial = createTutorialScreen({
       await inventory.setMap(null);
       await territory.setMap(null);
       await hollow.setMap(null);
+      await chat.setMap(null);
       home.setMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
@@ -318,6 +329,7 @@ const tutorial = createTutorialScreen({
       void inventory.setMap(null);
       void territory.setMap(null);
       void hollow.setMap(null);
+      void chat.setMap(null);
       home.setMap(null);
       maps.close();
       lobby.show();
@@ -346,6 +358,7 @@ const battles = createBattleScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void chat.setMap(null);
     home.setMap(null);
     lobby.stepOut();
   },
@@ -359,6 +372,7 @@ const battles = createBattleScreen({
           inventory.setMap(mapId),
           territory.setMap(mapId),
           hollow.setMap(mapId),
+          chat.setMap(mapId),
         ]);
       },
       (err: unknown) => {
@@ -394,6 +408,7 @@ const keeper = createKeeperScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void chat.setMap(null);
     home.setMap(null);
     maps.close();
     catalog.close();
@@ -434,6 +449,7 @@ const lobby = mountLobby(document.body, {
     void inventory.setMap(mapId);
     void territory.setMap(mapId);
     void hollow.setMap(mapId);
+    void chat.setMap(mapId);
     home.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
     // battle resumed here (after a refresh) must step it out again after that.
@@ -451,6 +467,7 @@ mountAuth(document.body, {
     inventory.setUser(user);
     territory.setUser(user);
     hollow.setUser(user);
+    chat.setUser(user);
     home.setUser(user);
     wardrobe.setUser(user);
     maps.setUser(user);
@@ -509,6 +526,7 @@ if (import.meta.env.DEV) {
     inventory: () => inventory.debug,
     territory: () => territory.debug,
     hollow: () => hollow.debug,
+    chat: () => chat.debug,
     raids: () => raidReport.debug,
     home: () => home.debug,
     care: () => care.debug,

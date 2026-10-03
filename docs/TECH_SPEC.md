@@ -38,8 +38,8 @@ heartpatch/
 │     │  ├─ db/               drizzle schema, migrations, seed
 │     │  ├─ modules/          auth, health, keepers, maps, tutorial, battles, spawns,
 │     │  │                    territory, gathering, inventory, buildings, care, raids,
-│     │  │                    hollow, wardrobe (milestones, boutique and chat come
-│     │  │                    with #44, #45 and #23)
+│     │  │                    hollow, wardrobe, chat (milestones and boutique
+│     │  │                    come with #44 and #45)
 │     │  │   └─ <module>/     routes.ts, service.ts, repo.ts, schemas.ts, *.test.ts
 │     │  ├─ ws/               WebSocket hub, channels, message handlers
 │     │  ├─ jobs/             pg-boss: boss, event consumers, nightfall, limits
@@ -130,7 +130,7 @@ Add anything else only with a one-line justification in the PR.
 | `milestone_progress`, `milestone_rewards` | not built yet | #44 |
 | `coin_ledger` | not built yet | #45 |
 | `boutique_stock` | not built yet | #45 |
-| `quick_messages` | not built yet | #23 |
+| `quick_messages` | Phase 1 quick messages: a preset, emoji or sticker id per row, never typed text; each map keeps its latest `feedLimit` | #23 |
 
 `game_events` is the stream in §7. A rescue's Heartdust goes into `inventories` through `resource_ledger` (reason `rescue`); `hollow_rescues.heartdust` records what it paid.
 
@@ -167,8 +167,9 @@ Add anything else only with a one-line justification in the PR.
   | #20 | `squishy.updated` (a new nickname) |
   | #21 | `hollow.nightfall`, `squishy.hollowed`, `squishy.rescued` (the last two only to the squishy's owner) |
   | #43 | `clothing.found`, `outfit.changed` |
+  | #23 | `chat.quick` (a quick message id, never text) |
 
-  Not registered yet: `chat.quick` (#23) and `milestone.earned` (#44). A tile's change is sent as `tile.attacked` or `tile.captured`; there is no `tile.updated`.
+  Not registered yet: `milestone.earned` (#44). A tile's change is sent as `tile.attacked` or `tile.captured`; there is no `tile.updated`.
 - Heartbeat ping every 25 s; iOS suspends background tabs, so always resync on `visibilitychange`.
 - Protocol messages use the reserved `ws.` type prefix: `ws.ready`, `ws.subscribed`, `ws.cursor` (seqs up to here that aren't for this player are skipped, so they're not a gap), `ws.resync` (refetch full state), `ws.error` (shared error codes) and `ws.pong`. Client → server: `subscribe { mapId, afterSeq }`, `unsubscribe`, `ping`. Details: `apps/server/README.md` → "Live sync".
 
@@ -228,7 +229,7 @@ Add anything else only with a one-line justification in the PR.
     - **Hearthfire fuel is a date, not a counter:** each Hearthfire stores `fuelled_through` (the last map-local night its fuel covers). `tonight` means the **next nightfall that hasn't run yet** for that map (after 21:00, that's tomorrow's). Adding *n* nights of Emberwood sets `fuelled_through = max(fuelled_through, tonight − 1) + n`, capped at `tonight − 1 + max_nights`. At nightfall the fire protects tonight if `fuelled_through ≥ tonight`. "Nights left" is shown as `fuelled_through − tonight + 1` (minimum 0). Nothing is decremented, so a retried or duplicate nightfall run can't burn fuel twice.
   - `stranded-decay` (Phase 2)
   - `boutique-rotate` daily per account (coins and wardrobe are account-level), at midnight in the account's time zone
-  - `invite-expiry`, `session-cleanup`, `chat-retention` daily
+  - `invite-expiry`, `session-cleanup` daily; `chat-retention` daily arrives with Phase 2 chat (Phase 1 quick messages keep each map's latest `feedLimit` on every send instead, #23)
   - Jobs are idempotent and keyed by `(job, scopeId, date)` (scope is the map, or the account for per-account jobs like `boutique-rotate`) so a restart never runs nightfall twice.
 - **Tutorial maps:** a tutorial is a normal map row with `kind = 'tutorial'` and one member, created from a hand-authored layout in `data/tutorial/`. It runs the **same** modules (gathering, battles, capture, care, buildings, nightfall) with a `tutorialOverrides` config (fast timers, guaranteed capture, scripted opponent AI, Hollow Man can't take anything). No separate code path for tutorial gameplay.
 - **Tutorial step engine:** steps are data (`id, goal, sproutLines, highlightTarget, completeOn: game event type + predicate`). The tutorial event consumer (see event consumers above) advances `users.tutorial_step` when it processes a matching `game_events` row, and the client renders the current step. Account-level rewards (Partner species, Seedling Scarf, First Patch milestone) are granted idempotently on completion.

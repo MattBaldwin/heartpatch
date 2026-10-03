@@ -267,6 +267,17 @@ await appendGrowthEvents(repo.appendEvent, growth ? [growth] : []);
 
 It multiplies by the care and habitat multiplier (shared `xpMultiplier`: whole percents, floor 100, cap `GROWTH_RULES.capPercent`), levels from the XP curve in `GROWTH_RULES` (a squishy that joined above level 1 counts from its level's XP), and evolves at the threshold into the single next form (shared `evolutionAt` over public `Species.evolutions`, then server-only `secretEvolutions`), writing a `squishy_evolutions` row. `squishy.evolved` never names a form on the wire; the owner's care list carries the secret rows once it has happened.
 
+## Quick messages
+
+Phase 1 chat (design doc §17; issue #23) lives in `src/modules/chat`. A member picks a preset phrase, emoji or squishy sticker from the shared `QUICK_MESSAGES`; the client sends only its id, the server checks it against that data, stores the id with the sender in `quick_messages` and appends `chat.quick` (`{ chatId, userId, username, messageId }` to members). Every client draws the words from the same shared data, so no player-typed text exists and nothing goes through `lib/filter.ts` (CLAUDE.md rule 9). Phase 2's free chat will.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/chat` | → `{ messages }`: the map's latest `QUICK_MESSAGES.feedLimit` messages, newest last (on open and reconnect) |
+| `POST /api/v1/maps/:mapId/chat` | `{ messageId }` → `{ message }`. An unknown id is `VALIDATION_FAILED`; takes an `Idempotency-Key`; `chat.quick` |
+
+Members only (`NOT_FOUND` otherwise); a tutorial map answers `FORBIDDEN` (Sprout's Glade has no chat). Sending is rate limited per IP, per player and per map (`limits.ts`); in Phase 1 those limits stand in for the owner's mute (tech spec §5). **Retention:** each send keeps the map's latest `feedLimit` rows and deletes older ones in the same transaction, skipping rows another send is already deleting (`for update skip locked`), so concurrent prunes never wait on each other; the next send catches up. Lock order: the new row, then `maps` (the event), last.
+
 ## Live sync (`/ws`)
 
 `src/ws/` pushes game events to players in real time (tech spec §5 and §7). Messages are the zod schemas in `packages/shared/src/schemas/ws.ts`.

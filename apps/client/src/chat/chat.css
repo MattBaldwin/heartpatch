@@ -1,0 +1,243 @@
+/* Quick messages (#23). Big targets (44pt+), safe areas, one-handed: the
+   Chat button sits bottom left, top of the column above the Hollow button
+   (#21); the sheet is a bottom card like the Hollow's; bubbles float near the
+   top, under the map name, and never block taps. */
+
+.chat-open {
+  position: fixed;
+  z-index: 4;
+  left: calc(env(safe-area-inset-left) + 16px);
+  bottom: calc(env(safe-area-inset-bottom) + 388px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border: none;
+  border-radius: 999px;
+  background: #fff6e8;
+  box-shadow: 0 4px 14px rgb(122 74 30 / 22%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #7a4a1e;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.chat-open:active {
+  transform: scale(0.95);
+}
+
+.chat-open-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.chat-open-label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chat-open[hidden],
+.chat-sheet[hidden] {
+  display: none;
+}
+
+.chat-sheet {
+  position: fixed;
+  z-index: 5;
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  /* Sits above the "My patches" button in the bottom corner. */
+  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  box-sizing: border-box;
+  max-width: 420px;
+  max-height: 72vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 auto;
+  padding: 16px 18px 18px;
+  border-radius: 24px;
+  background: #fffaf2;
+  box-shadow: 0 8px 28px rgb(77 52 32 / 28%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4d3420;
+}
+
+.chat-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.chat-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 24vh;
+  margin: 0 0 8px;
+  padding: 8px;
+  overflow-y: auto;
+  list-style: none;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.chat-feed-item,
+.chat-bubble {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.chat-feed-empty {
+  font-size: 15px;
+  color: #8a6d55;
+}
+
+.chat-who {
+  flex: none;
+  font-weight: 700;
+  color: #b0476f;
+}
+
+.chat-who::after {
+  content: ':';
+}
+
+.chat-emoji {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.chat-sticker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The squishy's vinyl colour in its blob shape (like the care sheet's), with gloss. */
+.chat-sticker-blob {
+  display: inline-block;
+  width: 30px;
+  height: 26px;
+  border-radius: 50% 50% 46% 46% / 58% 58% 42% 42%;
+  box-shadow:
+    inset -4px -5px 0 rgb(0 0 0 / 12%),
+    inset 4px 4px 0 rgb(255 255 255 / 40%);
+}
+
+.chat-sticker-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chat-note {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #7a2d55;
+}
+
+.chat-note:empty {
+  display: none;
+}
+
+.chat-section-title {
+  margin: 10px 0 6px;
+  font-size: 15px;
+  color: #8a6d55;
+}
+
+.chat-pick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chat-pick {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 999px;
+  background: #ffe9d1;
+  font: inherit;
+  font-size: 16px;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.chat-pick-emoji {
+  padding: 6px 10px;
+}
+
+.chat-pick:active {
+  transform: scale(0.95);
+}
+
+.chat-pick:disabled {
+  opacity: 0.5;
+}
+
+/* Under the tile panel (3) and every sheet; taps go through to the map. */
+.chat-bubbles {
+  position: fixed;
+  z-index: 2;
+  top: calc(env(safe-area-inset-top) + 132px);
+  left: calc(env(safe-area-inset-left) + 16px);
+  right: calc(env(safe-area-inset-right) + 16px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4d3420;
+}
+
+.chat-bubble {
+  max-width: min(90vw, 360px);
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: rgb(255 250 242 / 94%);
+  box-shadow: 0 4px 14px rgb(77 52 32 / 20%);
+  animation: chat-bubble var(--chat-bubble-ms, 6000ms) ease-in-out 1 both;
+}
+
+@keyframes chat-bubble {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.9);
+  }
+
+  6%,
+  85% {
+    opacity: 1;
+    transform: none;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-bubble {
+    animation-name: chat-bubble-fade;
+  }
+
+  @keyframes chat-bubble-fade {
+    0%,
+    100% {
+      opacity: 0;
+    }
+
+    6%,
+    85% {
+      opacity: 1;
+    }
+  }
+}

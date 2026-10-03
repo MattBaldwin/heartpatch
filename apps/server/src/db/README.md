@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), `care_log`, `squishy_evolutions` plus the squishies' care columns (#19), and `raids` plus `map_members.defense_stance` (#16). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), `care_log`, `squishy_evolutions` plus the squishies' care columns (#19), `raids` plus `map_members.defense_stance` (#16), and `quick_messages` (#23). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -408,6 +408,17 @@ Starter items are never stored: every account owns them (DECISIONS "Wardrobe (#4
 Event consumers' positions (tech spec §7; apps/server/README.md, "Event consumers and jobs"). A worker holds its row `FOR UPDATE` and advances `last_seq` in the same transaction as its own writes. Rows are created on first use. Never prune `game_events` below a map's lowest `last_seq`.
 
 pg-boss keeps its own tables in the `pgboss` schema; it creates and migrates them itself when the server starts.
+
+### `quick_messages`
+Phase 1 chat (#23, design doc §17): one row per quick message sent on a map. Only an id from the shared `QUICK_MESSAGES` data is stored, never typed text. Each send keeps the map's latest `QUICK_MESSAGES.feedLimit` rows and prunes older ones (Phase 2's free chat brings the 30-day history for parent review).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | Also `chat.quick`'s `chatId` |
+| `map_id` | uuid → maps | Cascade delete |
+| `user_id` | uuid | The sender. FK `(map_id, user_id)` → `map_members` |
+| `message_id` | text | Quick message id from the shared data |
+| `sent_at` | timestamptz | Indexed `(map_id, sent_at, id)` for the feed |
 
 ## Writing game events
 
