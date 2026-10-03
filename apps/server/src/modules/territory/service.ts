@@ -122,6 +122,28 @@ export function defaultGuardianData(): GuardianData {
 }
 
 /**
+ * A tile's guardian team for the window holding `at` (tech spec §8 "No
+ * rerolls"): what a claim battle meets, and what the map view's
+ * `guardianHint` describes (owner decision 10). Pure; the seed never leaves
+ * the server. `map.seed` is the map's secret seed, null on hand-authored maps,
+ * whose guardians key off the map id.
+ */
+export function tileGuardians(
+  map: { id: string; timeZone: string; seed: string | null },
+  tile: Pick<TerritoryTileRow, 'q' | 'r' | 'terrain' | 'guardianStrength'>,
+  at: Date,
+  data: GuardianData = defaultGuardianData(),
+): BattleSquishySetup[] {
+  const mapSeed = map.seed ?? deriveSeed('hand-authored-map', map.id);
+  const window = spawnWindowFor(at, map.timeZone, data.rules.windowHours);
+  const seed = deriveSeed(mapSeed, 'guardian', tile.q, tile.r, window.id);
+  return resolveGuardians(
+    { seed, terrain: tile.terrain, strength: tile.guardianStrength, window },
+    data,
+  );
+}
+
+/**
  * Who plays the defending side of a tile battle, and with whom. The owner's
  * squishies on watch when there are any, else the tile's own guardians. The
  * server's AI always plays it, so the owner never has to be online (design
@@ -166,17 +188,13 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
     map: MapRow,
     tile: TerritoryTileRow,
     at: Date,
-  ): Promise<BattleSquishySetup[]> => {
-    // Hand-authored maps have no secret seed; their guardians key off the map id.
-    const mapSeed =
-      (await createTerritoryRepo(tx).mapSeed(map.id)) ?? deriveSeed('hand-authored-map', map.id);
-    const window = spawnWindowFor(at, map.timeZone, guardianData.rules.windowHours);
-    const seed = deriveSeed(mapSeed, 'guardian', tile.q, tile.r, window.id);
-    return resolveGuardians(
-      { seed, terrain: tile.terrain, strength: tile.guardianStrength, window },
+  ): Promise<BattleSquishySetup[]> =>
+    tileGuardians(
+      { id: map.id, timeZone: map.timeZone, seed: await createTerritoryRepo(tx).mapSeed(map.id) },
+      tile,
+      at,
       guardianData,
     );
-  };
 
   /** Raid rules, checked in the battle's start transaction (see `PrepareTileBattle`). */
   const prepare =

@@ -112,7 +112,15 @@ describe('MapState', () => {
     const key = hexKey(wild);
     const state = new MapState({
       ...view,
-      tiles: view.tiles.map((t) => (t === wild ? { ...t, gathering: { readyAt: 'x' } } : t)),
+      tiles: view.tiles.map((t) =>
+        t === wild
+          ? {
+              ...t,
+              gathering: { readyAt: 'x' },
+              guardianHint: { count: 2, difficulty: 'tough' as const },
+            }
+          : t,
+      ),
     });
     const cooldownUntil = '2026-10-02T16:00:00.000Z';
     const at = { q: wild.q, r: wild.r };
@@ -127,10 +135,12 @@ describe('MapState', () => {
 
     const captured = { userId: userId(1), fromUserId: null, ...at };
     expect(state.apply(event('tile.captured', captured))).toBe('redraw');
+    // Someone's land now: its wild guardians went home with the hint.
     expect(state.tileAt(key)).toMatchObject({
       ownerUserId: userId(1),
       defenders: 0,
       gathering: null,
+      guardianHint: null,
     });
     expect(state.view.tiles.find((t) => hexKey(t) === key)?.ownerUserId).toBe(userId(1));
 

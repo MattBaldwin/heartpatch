@@ -7,6 +7,7 @@ import {
   INVITE_CODE_LENGTH,
   MAP_MAX_PLAYERS,
   type CreateMapRequest,
+  type GuardianHint,
   type Hex,
   type Invite,
   type MapDetail,
@@ -16,8 +17,10 @@ import {
   type MyJoinRequest,
   type MyMapsResponse,
   type PublicUser,
+  type PublicTile,
   type PvpMode,
 } from '@heartpatch/shared';
+import { hintForGuardians, type GuardianData } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
@@ -31,7 +34,9 @@ import { needsStarter } from '../starters/service.js';
 import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
 import { requireMember } from './members.js';
-import { createMapsRepo, type JoinRequestRow, type MemberRow } from './repo.js';
+import { createTerritoryRepo } from '../territory/repo.js';
+import { defaultGuardianData, tileGuardians } from '../territory/service.js';
+import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
 
 export interface MapsService {
   myMaps: (user: PublicUser) => Promise<MyMapsResponse>;
@@ -70,6 +75,8 @@ export interface MapsServiceOptions {
    * commits, so members see it right away. Never rejects.
    */
   publish?: (mapId: string) => Promise<void>;
+  /** Tests pass their own guardians (the view's `guardianHint`). */
+  guardians?: GuardianData;
 }
 
 /** The maps the maps API manages; tutorial maps are the tutorial module's. */
@@ -105,6 +112,30 @@ function newInviteCode(): string {
   ).join('');
 }
 
+/**
+ * A tile as members see it: every public field named, so the secret
+ * `guardianStrength` can never ride along (tech spec §8).
+ */
+function toPublicTile(
+  tile: TileViewRow,
+  guardianHint: GuardianHint | null,
+  buildings: PublicTile['buildings'],
+): PublicTile {
+  return {
+    q: tile.q,
+    r: tile.r,
+    terrain: tile.terrain,
+    ownerUserId: tile.ownerUserId,
+    nodeResource: tile.nodeResource,
+    homeSlot: tile.homeSlot,
+    gathering: tile.gathering,
+    cooldownUntil: tile.cooldownUntil,
+    defenders: tile.defenders,
+    guardianHint,
+    buildings,
+  };
+}
+
 /** The Heart Seed: the centre of a home base (a tile and its full ring). */
 function heartSeedOf(homeTiles: readonly Hex[]): Hex {
   const n = homeTiles.length;
@@ -138,6 +169,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   const published = (mapId: string) => {
     void options.publish?.(mapId);
   };
+  const guardians = options.guardians ?? defaultGuardianData();
   const store = createMapsRepo(db);
   const keepersRepo = createKeepersRepo(db);
 
@@ -311,12 +343,23 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     view: (user, mapId) =>
       store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
-        const [members, tiles, buildings] = await Promise.all([
+        const at = now();
+        const [members, tiles, buildings, seed] = await Promise.all([
           repo.listMembers(mapId),
           repo.listTiles(mapId),
           // Fires and habitats (#18), with `lit` as of now.
-          listPublicBuildings(tx, mapId, now(), map.timeZone),
+          listPublicBuildings(tx, mapId, at, map.timeZone),
+          createTerritoryRepo(tx).mapSeed(mapId),
         ]);
+        // Neutral land's guardians today (#15's team), as a count and a word
+        // (owner decision 10): the same for every member, and never who.
+        const hintFor = (tile: TileViewRow): GuardianHint | null =>
+          tile.ownerUserId === null && tile.homeSlot === null
+            ? hintForGuardians(
+                tileGuardians({ ...map, seed }, tile, at, guardians),
+                guardians.rules,
+              )
+            : null;
         return {
           map: {
             id: map.id,
@@ -326,10 +369,13 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             maxPlayers: map.maxPlayers,
           },
           members: members.map(toMember),
-          tiles: tiles.map((t) => ({
-            ...t,
-            buildings: buildings.get(`${String(t.q)},${String(t.r)}`) ?? [],
-          })),
+          tiles: tiles.map((tile) =>
+            toPublicTile(
+              tile,
+              hintFor(tile),
+              buildings.get(`${String(tile.q)},${String(tile.r)}`) ?? [],
+            ),
+          ),
           seq: map.eventSeq,
         };
       }),

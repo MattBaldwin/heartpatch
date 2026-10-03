@@ -4,7 +4,13 @@ import { SEASONS } from '../data/seasons.js';
 import { deriveSeed } from '../rng/index.js';
 import type { GuardianRules } from '../schemas/data/guardian-rules.js';
 import { spawnWindowAt } from '../spawns/window.js';
-import { guardianTier, resolveGuardians, type GuardianData } from './guardians.js';
+import { GuardianHintSchema } from '../schemas/maps.js';
+import {
+  guardianTier,
+  hintForGuardians,
+  resolveGuardians,
+  type GuardianData,
+} from './guardians.js';
 
 // fixture-pebblesnooze is a Halloween species; the others aren't seasonal.
 const RULES: GuardianRules = {
@@ -14,6 +20,7 @@ const RULES: GuardianRules = {
     { strength: 3, count: 2, levels: { min: 6, max: 8 } },
     { strength: 5, count: 3, levels: { min: 14, max: 16 } },
   ],
+  hint: { easyUpTo: 5, toughUpTo: 20 },
   tables: [
     {
       id: 'forest',
@@ -84,5 +91,26 @@ describe('resolveGuardians', () => {
     expect(guardians('meadow', 1, '2026-10-31')[0]!.speciesId).toBe('fixture-emberbun');
     expect(guardians('meadow', 1, '2026-12-01')).toEqual([]);
     expect(guardians('lake', 1)).toEqual([]);
+  });
+});
+
+describe('hintForGuardians', () => {
+  const team = (...levels: number[]) => levels.map((level) => ({ level }));
+
+  it('counts the team and bands its total level (easy, tough, very tough)', () => {
+    expect(hintForGuardians(team(5), RULES)).toEqual({ count: 1, difficulty: 'easy' });
+    expect(hintForGuardians(team(3, 3), RULES)).toEqual({ count: 2, difficulty: 'tough' });
+    expect(hintForGuardians(team(10, 10), RULES)).toEqual({ count: 2, difficulty: 'tough' });
+    expect(hintForGuardians(team(10, 11), RULES)).toEqual({ count: 2, difficulty: 'very-tough' });
+  });
+
+  it('is null for land nobody guards', () => {
+    expect(hintForGuardians([], RULES)).toBeNull();
+  });
+
+  it('says only how many and how tough, never who or what level', () => {
+    const hint = hintForGuardians(guardians('forest', 5), RULES);
+    expect(GuardianHintSchema.strict().parse(hint)).toEqual({ count: 3, difficulty: 'very-tough' });
+    expect(JSON.stringify(hint)).not.toMatch(/fixture|level|species|guardian-/);
   });
 });

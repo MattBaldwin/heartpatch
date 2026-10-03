@@ -40,6 +40,18 @@ export const GuardianRulesSchema = z
      * ignored). Every terrain needs at least one table.
      */
     tables: z.array(SpawnTableSchema).min(1),
+    /**
+     * The tile panel's difficulty word for a neutral tile's team (owner
+     * decision 10, 2026-10-03), by the team's total level: `easy` up to
+     * `easyUpTo`, `tough` up to `toughUpTo`, else `very-tough`. Fixed bands,
+     * so every member sees the same hint.
+     */
+    hint: z
+      .strictObject({ easyUpTo: positiveInt, toughUpTo: positiveInt })
+      .refine((h) => h.easyUpTo < h.toughUpTo, {
+        message: 'easyUpTo must be less than toughUpTo',
+        path: ['toughUpTo'],
+      }),
   })
   .superRefine((rules, ctx) => {
     rules.strengths.forEach((tier, i) => {

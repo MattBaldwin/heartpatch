@@ -402,6 +402,14 @@ _Proposed in the owner-rules Fix PR; the project owner confirms on merge. How th
 - **First-night grace counts calendar nightfalls from `map_members.joined_at`** (game clock, map time): `firstHollowNight` is `tonightOf(joined) + graceNights`, so joining at 8:55 PM makes that evening the first grace night and joining at 9:00 PM or later starts with the next. It's skipped where #21 skips tutorial maps (the `nightfall` call), per player; the night's outcome still counts their exposed squishies. A rejoining member's new `joined_at` gives a new grace, as they get a fresh home base.
 - **The fire hint is a status flag, shown as a small pill:** `HollowStatus.fireHint` is true until the night of the Hollow Man's first visit to me (included) while no Hearthfire of mine is lit for tonight, never on tutorial maps. The client shows "Light a fire before night falls!" beside the Hollow button by day; it takes no taps, so it never blocks the map.
 
+## 2026-10-03 — Shadowy rescue guardians and the guardian hint (polish)
+
+_Proposed in the client-polish Fix PR (owner decisions 7 and 10); the project owner confirms on merge._
+
+- **The guardian hint is worked out on read, from #15's own team** (coordinator-approved, additive `PublicTile.guardianHint: { count, difficulty } | null`). The map view runs the territory module's `tileGuardians` (the pure builder a claim battle also uses, now exported) for each neutral, non-home tile and keeps only how many and a difficulty word: the team's total level against fixed bands in the secret guardian data (`GUARDIAN_RULES.hint`, `// TUNE:`), so every member sees the same hint and a guess about bands says nothing about species. No event: guardians change with the map-local day, and a capture clears the hint on the client. *Why:* rule 4 (timestamps, not ticking), and one builder means the hint can't drift from the fight.
+- **Hint copy:** "Guarded by 3 sleepy squishies • tough" (easy, tough, very tough).
+- **The shadow look is a per-instance code, not a material.** The squishy field's spare `squishMotion.w` carries normal, shadow, or shadow eyes; the squish shader tints towards dark lavender (keeping the vinyl's shading), adds a soft glowing rim and mixes the eyes towards the glow so they read glassy. Shadows share meshes, the material and draw calls with every other squishy. Real transparency would need a second, blended material and pass, so "translucent" eyes are a colour effect. Under the opt-in WebGPU renderer (no shader plugin) the tint is baked into the instance colour, without the glow. The squishy gallery's `?shadow` shows it.
+
 ## 2026-10-03 — Starter pick (Fix PR)
 
 _Proposed in the starter-pick Fix PR; the project owner confirms on merge. How "First squishy: a pick of 3" in "2026-10-03 — Owner decisions" was built._

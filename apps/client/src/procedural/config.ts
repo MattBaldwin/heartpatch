@@ -71,6 +71,33 @@ export const VINYL = {
   rimStrength: 0.35, // TUNE
 } as const;
 
+/**
+ * How a squishy is drawn: `normal`, or `shadow` for the Hollow's rescue
+ * guardians (owner decision 7, 2026-10-03): dark lavender, a soft glowing rim
+ * and glassy eyes, on the same meshes in the same draw calls.
+ */
+export type SquishyLook = 'normal' | 'shadow';
+
+/**
+ * Look codes in the `squishMotion` attribute's spare `w`: 0 normal, then the
+ * shadow look for the body and parts, and for the eyes (and their glints).
+ */
+export const SQUISH_LOOK_CODE = { normal: 0, shadow: 1, shadowEyes: 2 } as const;
+
+/** The shadow look (linear RGB). Judge on the battle arena and in the gallery (`?shadow`). */
+export const SHADOW_LOOK = {
+  /** Dark lavender the vinyl is tinted towards, keeping its shading. */
+  tint: [0.11, 0.07, 0.22], // TUNE
+  /** How far (0–1) the colour moves towards the tint. */
+  tintMix: 0.9, // TUNE
+  /** Eyes keep their own colour, mixed this far towards the glow: soft, glassy, readable. */
+  eyeGlowMix: 0.55, // TUNE
+  /** The soft glowing rim: colour, strength and falloff (higher hugs the edge). */
+  glow: [0.72, 0.55, 1], // TUNE
+  glowStrength: 0.75, // TUNE
+  glowFalloff: 3.5, // TUNE
+} as const;
+
 /** Event animations. Each shader formula decays to rest within its duration. */
 export type SquishMove = 'jiggle' | 'wobble' | 'bounce';
 

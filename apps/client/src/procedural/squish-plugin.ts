@@ -5,7 +5,7 @@ import { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage';
 import type { UniformBuffer } from '@babylonjs/core/Materials/uniformBuffer';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Scene } from '@babylonjs/core/scene';
-import { SQUISH, SQUISH_MOVE_CODE, VINYL } from './config.js';
+import { SHADOW_LOOK, SQUISH, SQUISH_LOOK_CODE, SQUISH_MOVE_CODE, VINYL } from './config.js';
 
 /**
  * Squash-and-stretch and rim light for every squishy mesh (design doc §19).
@@ -13,7 +13,8 @@ import { SQUISH, SQUISH_MOVE_CODE, VINYL } from './config.js';
  * Per thin instance (all of one squishy's body and part instances carry the
  * same values, so parts deform with the body and stay stuck on):
  * - `squishOrigin`: the squishy's ground point (xyz) and body height (w).
- * - `squishMotion`: breathing phase, rate (breaths/s) and amplitude.
+ * - `squishMotion`: breathing phase, rate (breaths/s) and amplitude, and the
+ *   look (`SQUISH_LOOK_CODE`: normal, or a rescue guardian's shadow look).
  * - `squishEvent`: the current move's start time (s), kind code and strength.
  *
  * The vertex shader squashes around the ground point, keeping volume
@@ -29,6 +30,7 @@ import { SQUISH, SQUISH_MOVE_CODE, VINYL } from './config.js';
 export const SQUISH_ATTRIBUTES = ['squishOrigin', 'squishMotion', 'squishEvent'] as const;
 
 const num = (n: number) => (Number.isInteger(n) ? `${n}.0` : String(n));
+const vec3 = (v: readonly number[]) => `vec3(${v.map(num).join(', ')})`;
 const { jiggle, wobble, bounce, duration } = SQUISH;
 
 const VERTEX_DEFINITIONS = /* glsl */ `
@@ -36,6 +38,13 @@ const VERTEX_DEFINITIONS = /* glsl */ `
 attribute vec4 squishOrigin;
 attribute vec4 squishMotion;
 attribute vec4 squishEvent;
+varying float vSquishLook;
+#endif
+`;
+
+const FRAGMENT_DEFINITIONS = /* glsl */ `
+#ifdef SQUISH
+varying float vSquishLook;
 #endif
 `;
 
@@ -78,6 +87,7 @@ const VERTEX_WORLDPOS = /* glsl */ `
   sqRel.x += sqLean * sqRel.y;
   sqRel.y += sqLift;
   worldPos.xyz = squishOrigin.xyz + sqRel;
+  vSquishLook = squishMotion.w;
   vPositionW = worldPos.xyz;
 #ifdef NORMAL
   vNormalW = normalize(vNormalW * vec3(1.0 / sqSide, 1.0 / sqS, 1.0 / sqSide));
@@ -91,6 +101,23 @@ const FRAGMENT_RIM = /* glsl */ `
 {
   float rim = 1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0);
   finalColor.rgb += squishRim.rgb * (squishRim.a * rim * rim * rim);
+}
+#endif
+#ifdef SQUISH
+if (vSquishLook > ${num(SQUISH_LOOK_CODE.shadow)} - 0.5) {
+  // A rescue guardian from the Hollow: dark lavender that keeps the vinyl's
+  // shading (so the shape still reads), soft glassy eyes in their own colour
+  // washed towards the glow, and a soft glowing rim.
+  float shLum = dot(finalColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  vec3 shGlow = ${vec3(SHADOW_LOOK.glow)};
+  if (vSquishLook > ${num(SQUISH_LOOK_CODE.shadowEyes)} - 0.5) {
+    finalColor.rgb = mix(finalColor.rgb, shGlow * (0.4 + 0.6 * shLum), ${num(SHADOW_LOOK.eyeGlowMix)});
+  } else {
+    vec3 shTint = ${vec3(SHADOW_LOOK.tint)} * (0.5 + 1.5 * shLum);
+    finalColor.rgb = mix(finalColor.rgb, shTint, ${num(SHADOW_LOOK.tintMix)});
+  }
+  float shRim = 1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0);
+  finalColor.rgb += shGlow * (${num(SHADOW_LOOK.glowStrength)} * pow(shRim, ${num(SHADOW_LOOK.glowFalloff)}));
 }
 #endif
 `;
@@ -150,7 +177,12 @@ export class SquishPlugin extends MaterialPluginBase {
         CUSTOM_VERTEX_UPDATE_WORLDPOS: VERTEX_WORLDPOS,
       };
     }
-    if (shaderType === 'fragment') return { CUSTOM_FRAGMENT_BEFORE_FOG: FRAGMENT_RIM };
+    if (shaderType === 'fragment') {
+      return {
+        CUSTOM_FRAGMENT_DEFINITIONS: FRAGMENT_DEFINITIONS,
+        CUSTOM_FRAGMENT_BEFORE_FOG: FRAGMENT_RIM,
+      };
+    }
     return null;
   }
 }

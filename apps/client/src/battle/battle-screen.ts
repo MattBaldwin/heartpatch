@@ -553,6 +553,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       mySide: battle.mySide,
       keeper: options.keeper?.() ?? null,
       keeperWearing: options.keeperWearing?.() ?? [],
+      opponentLook: battle.kind === 'rescue' ? 'shadow' : 'normal',
     });
     lastTier = options.tier();
     for (const side of ['a', 'b'] as const) {

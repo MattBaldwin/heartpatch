@@ -9,7 +9,7 @@ import {
   type VisualRegistry,
 } from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
-import type { SquishMove, SquishyLod } from '../procedural/config.js';
+import type { SquishMove, SquishyLod, SquishyLook } from '../procedural/config.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
@@ -26,12 +26,15 @@ import type { BattleContent } from './battle-view.js';
 // Every squishy is a `(species, instanceId)` look, so the wild squishy is the
 // same squishy on every refresh and the player's is the one from their map.
 // The player's Keeper (#42) stands behind their squishy and reacts to what
-// happens (keeper-reaction.ts).
+// happens (keeper-reaction.ts). In a rescue the other side are the Hollow's
+// shadows, drawn with the field's shadow look (owner decision 7).
 
 export interface BattleSceneStats {
   readonly squishies: number;
   readonly meshes: number;
   readonly instances: number;
+  /** Squishies out with the shadow look (a rescue's guardians). */
+  readonly shadowLook: number;
   readonly lod: SquishyLod;
   /** The player's Keeper is in the arena. */
   readonly keeper: boolean;
@@ -54,6 +57,11 @@ export interface BattleSceneOptions {
   readonly keeper: KeeperConfig | null;
   /** What the Keeper wears (#43): clothing ids. */
   readonly keeperWearing?: readonly string[];
+  /**
+   * How the other side's squishies look: `shadow` in a rescue, the Hollow's
+   * shadows (owner decision 7). The player's own always look like themselves.
+   */
+  readonly opponentLook?: SquishyLook;
 }
 
 export class BattleScene {
@@ -130,7 +138,9 @@ export class BattleScene {
       return; // unknown species: nothing to draw, the HUD still names it
     }
     const placement = this.#placement(side);
-    const handle = this.#field.add(species, instanceId, placement);
+    const look =
+      side === this.#options.mySide ? 'normal' : (this.#options.opponentLook ?? 'normal');
+    const handle = this.#field.add(species, instanceId, placement, look);
     this.#fighters.set(side, { handle, placement, down: false });
   }
 

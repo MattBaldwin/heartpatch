@@ -105,14 +105,16 @@ export class MapState {
           : 'none';
       }
       case 'tile.captured': {
-        // The tile changed hands (#15). Squishies on watch went home, and the
-        // old owner's gather there no longer shows (#17).
+        // The tile changed hands (#15). Squishies on watch went home, the
+        // old owner's gather there no longer shows (#17), and owned land has
+        // no wild guardians to hint at (owner decision 10).
         const parsed = GAME_EVENTS['tile.captured'].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
         const changed = this.patchTile(parsed.data, {
           ownerUserId: parsed.data.userId,
           defenders: 0,
           gathering: null,
+          guardianHint: null,
         });
         return changed ? 'redraw' : 'none';
       }
