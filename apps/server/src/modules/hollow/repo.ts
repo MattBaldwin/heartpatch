@@ -94,7 +94,8 @@ export interface HollowRepo {
   /** The map's nights from `since` on, newest first, at most `limit`. */
   nightsSince: (mapId: string, since: LocalDate, limit: number) => Promise<NightRow[]>;
 
-  activeMembers: (mapId: string) => Promise<string[]>;
+  /** Who plays here now, and when they joined (first-night grace), in user id order. */
+  activeMembers: (mapId: string) => Promise<{ userId: string; joinedAt: Date }[]>;
   /** Every home tile with an owner (the Heart Seeds and their rings). */
   homeTiles: (mapId: string) => Promise<{ ownerUserId: string; q: number; r: number }[]>;
   /** Every squishy of an active member, any state, row-locked until commit. */
@@ -249,14 +250,12 @@ function queries(db: Executor): HollowRepo {
       return rows.map((r) => ({ ...r, outcomes: StoredOutcomesSchema.parse(r.outcomes) }));
     },
 
-    activeMembers: async (mapId) => {
-      const rows = await db
-        .select({ userId: mapMembers.userId })
+    activeMembers: (mapId) =>
+      db
+        .select({ userId: mapMembers.userId, joinedAt: mapMembers.joinedAt })
         .from(mapMembers)
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active')))
-        .orderBy(asc(mapMembers.userId));
-      return rows.map((r) => r.userId);
-    },
+        .orderBy(asc(mapMembers.userId)),
 
     homeTiles: async (mapId) => {
       const rows = await db

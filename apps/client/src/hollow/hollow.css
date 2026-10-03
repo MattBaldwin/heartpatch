@@ -52,6 +52,26 @@
   text-align: center;
 }
 
+.hollow-hint {
+  position: fixed;
+  z-index: 4;
+  left: calc(env(safe-area-inset-left) + 16px);
+  bottom: calc(env(safe-area-inset-bottom) + 388px);
+  max-width: min(260px, calc(100vw - 32px));
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #fff4dc;
+  box-shadow: 0 4px 14px rgb(62 45 110 / 20%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #6b3f12;
+  /* A nudge, not a control: taps go through to the map. */
+  pointer-events: none;
+}
+
+.hollow-hint[hidden],
 .hollow-open[hidden],
 .hollow-open-badge[hidden],
 .hollow-card[hidden] {

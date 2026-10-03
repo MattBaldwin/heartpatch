@@ -48,6 +48,12 @@ export const HollowStatusSchema = z.object({
     /** Rescues left today that earn it (decision C); rescues past it still bring them home. */
     rewardsLeftToday: z.number().int().min(0),
   }),
+  /**
+   * A cozy nudge, "Light a fire before night falls!": the Hollow Man's first
+   * visit to me (after my first-night grace) is tonight or still to come,
+   * and no fire of mine is lit for tonight.
+   */
+  fireHint: z.boolean(),
   /** The server's clock. */
   now: z.iso.datetime(),
 });

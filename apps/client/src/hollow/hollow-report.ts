@@ -24,6 +24,7 @@ export const HOLLOW_TEXT = {
   devNightfall: 'Night falls (dev)',
   devNight: (night: string, taken: number) =>
     taken === 0 ? `Night fell (${night}). Nobody was taken.` : `Night fell (${night}).`,
+  fireHint: 'Light a fire before night falls!',
   mystery: 'a squishy friend',
   waiting: ', waiting in the Hollow',
 } as const;

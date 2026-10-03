@@ -14,6 +14,7 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
   type PublicUser,
+  type HollowRules,
   type RescueGuardianRules,
 } from '@heartpatch/shared';
 import { RESCUE_GUARDIANS, SERVER_GAME_DATA } from '@heartpatch/shared/server';
@@ -40,6 +41,7 @@ const MOONPUFF = SERVER_GAME_DATA.secretSpecies.find((s) => s.id === 'placeholde
 // Noon in Denver on Oct 2 (MDT, UTC−6): tonight's nightfall is 03:00Z on Oct 3.
 const START = '2026-10-02T18:00:00Z';
 const TONIGHT = '2026-10-02';
+const NO_GRACE: HollowRules = { ...HOLLOW_RULES, graceNights: 0 };
 /** Weak shadows, so a strong squishy wins its rescue on first moves. */
 const WEAK_SHADOWS: RescueGuardianRules = {
   ...RESCUE_GUARDIANS,
@@ -81,10 +83,17 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
     return app;
   }
 
-  /** The service on its own, with weak shadows (rescues the tests can win). */
-  function hollowService(guardians: RescueGuardianRules = WEAK_SHADOWS): HollowService {
+  /**
+   * The service on its own, with weak shadows (rescues the tests can win) and
+   * no first-night grace unless asked, so a patch made this afternoon can
+   * lose a squishy tonight (the grace has its own tests).
+   */
+  function hollowService(
+    guardians: RescueGuardianRules = WEAK_SHADOWS,
+    rules: HollowRules = NO_GRACE,
+  ): HollowService {
     const battles = createBattlesService({ db, clock: () => clock });
-    return createHollowService({ db, clock: () => clock, battles, guardians });
+    return createHollowService({ db, clock: () => clock, battles, guardians, rules });
   }
 
   async function player(): Promise<Player> {
@@ -360,6 +369,60 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       ]);
     });
 
+    it('skips a player for their first two nightfalls after joining (first-night grace)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      // A friend joins at 8:55 PM, with a squishy and no fire.
+      clock.setTime(Date.parse('2026-10-03T02:55:00Z'));
+      const friend = await player();
+      const res = await call(server, 'GET', `/maps/${mapId}`, kid);
+      const code = MapResponseSchema.parse(res.json()).map.admin!.invite!.code;
+      const join = await call(server, 'POST', '/maps/join', friend, { code });
+      const request = JoinMapResponseSchema.parse(join.json()).request;
+      await call(server, 'POST', `/maps/${mapId}/requests/${request.id}/approve`, kid);
+      const theirs = await squishy(mapId, friend);
+      // The kid joined at noon: tonight is their first grace night too.
+      const mine = await squishy(mapId, kid);
+      const hollow = hollowService(WEAK_SHADOWS, HOLLOW_RULES);
+
+      // Tonight (5 minutes later) and tomorrow: nothing taken from either, the dark still counted.
+      clock.setTime(Date.parse('2026-10-03T03:00:30Z'));
+      expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
+      expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 0 });
+      const [night] = await nightsOf(mapId);
+      expect(night!.outcomes).toEqual(
+        expect.arrayContaining([{ userId: friend.id, taken: null, exposed: 1, sheltered: 0 }]),
+      );
+      expect(await stateOf(theirs)).toBe('active');
+      expect(await stateOf(mine)).toBe('active');
+      // The third nightfall is a normal night.
+      expect(await hollow.runNightfall(mapId, '2026-10-04')).toEqual({ taken: 2 });
+      expect(await stateOf(theirs)).toBe('hollowed');
+      expect(await stateOf(mine)).toBe('hollowed');
+    });
+
+    it('counts the grace from joining, so a later joiner keeps theirs while others do not', async () => {
+      const server = await start();
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(server, kid);
+      const mine = await squishy(mapId, kid);
+      // Two days on, a friend joins (game clock).
+      clock.setTime(Date.parse('2026-10-04T18:00:00Z'));
+      const res = await call(server, 'GET', `/maps/${mapId}`, kid);
+      const code = MapResponseSchema.parse(res.json()).map.admin!.invite!.code;
+      const join = await call(server, 'POST', '/maps/join', friend, { code });
+      const request = JoinMapResponseSchema.parse(join.json()).request;
+      await call(server, 'POST', `/maps/${mapId}/requests/${request.id}/approve`, kid);
+      const theirs = await squishy(mapId, friend);
+      expect(
+        await hollowService(WEAK_SHADOWS, HOLLOW_RULES).runNightfall(mapId, '2026-10-04'),
+      ).toEqual({ taken: 1 });
+      expect(await stateOf(mine)).toBe('hollowed');
+      expect(await stateOf(theirs)).toBe('active');
+    });
+
     it('falls at 21:00 map time, daylight saving included, once each night', async () => {
       const server = await start();
       const kid = await player();
@@ -428,6 +491,38 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       // It's night again from 21:00.
       clock.setTime(Date.parse('2026-10-04T03:30:00Z'));
       expect((await statusOf(server, kid, mapId)).night.isNight).toBe(true);
+    });
+  });
+
+  describe('the fire hint', () => {
+    it('nudges a new player to light a fire until the Hollow Man first visits, or a fire is lit', async () => {
+      const server = await start();
+      const kid = await player();
+      const friend = await player();
+      // Joined at noon on Oct 2: grace for Oct 2 and 3, his first visit on Oct 4.
+      const mapId = await patch(server, kid, [friend]);
+      expect((await statusOf(server, kid, mapId)).fireHint).toBe(true);
+      clock.setTime(Date.parse('2026-10-04T18:00:00Z')); // noon Oct 4: tonight is the first visit
+      expect((await statusOf(server, kid, mapId)).fireHint).toBe(true);
+      clock.setTime(Date.parse('2026-10-05T18:00:00Z')); // past it: no more nudging
+      expect((await statusOf(server, kid, mapId)).fireHint).toBe(false);
+
+      // A fire lit for tonight ends it early; one that's gone out doesn't.
+      clock.setTime(Date.parse(START));
+      const fire = await build(mapId, friend, 'hearthfire', { fuelledThrough: '2026-10-01' });
+      expect((await statusOf(server, friend, mapId)).fireHint).toBe(true);
+      await db.execute(`update buildings set fuelled_through = '${TONIGHT}' where id = '${fire}'`);
+      expect((await statusOf(server, friend, mapId)).fireHint).toBe(false);
+      // Someone else's fire doesn't count for me.
+      expect((await statusOf(server, kid, mapId)).fireHint).toBe(true);
+    });
+
+    it('never nudges on a tutorial map (nothing can be lost there)', async () => {
+      const server = await start();
+      const kid = await player();
+      const res = await call(server, 'POST', '/tutorial/start', kid);
+      const mapId = TutorialResponseSchema.parse(res.json()).tutorial.mapId!;
+      expect((await statusOf(server, kid, mapId)).fireHint).toBe(false);
     });
   });
 
@@ -568,19 +663,17 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       await squishy(mapId, kid);
       await squishy(mapId, kid);
 
-      const first = await call(server, 'POST', `/maps/${mapId}/dev/nightfall`, kid);
-      expect(first.statusCode, first.body).toBe(200);
-      expect(DevNightfallResponseSchema.parse(first.json())).toEqual({ night: TONIGHT, taken: 1 });
-      const second = await call(server, 'POST', `/maps/${mapId}/dev/nightfall`, kid);
-      expect(DevNightfallResponseSchema.parse(second.json())).toEqual({
-        night: '2026-10-03',
-        taken: 1,
-      });
-      const third = await call(server, 'POST', `/maps/${mapId}/dev/nightfall`, kid);
-      expect(DevNightfallResponseSchema.parse(third.json())).toEqual({
-        night: '2026-10-04',
-        taken: 0,
-      });
+      const fall = async () => {
+        const res = await call(server, 'POST', `/maps/${mapId}/dev/nightfall`, kid);
+        expect(res.statusCode, res.body).toBe(200);
+        return DevNightfallResponseSchema.parse(res.json());
+      };
+      // The real rules: two nights of first-night grace, then he only needs one.
+      expect(await fall()).toEqual({ night: TONIGHT, taken: 0 });
+      expect(await fall()).toEqual({ night: '2026-10-03', taken: 0 });
+      expect(await fall()).toEqual({ night: '2026-10-04', taken: 1 });
+      expect(await fall()).toEqual({ night: '2026-10-05', taken: 1 });
+      expect(await fall()).toEqual({ night: '2026-10-06', taken: 0 });
     });
 
     it("isn't there without the dev flag", async () => {

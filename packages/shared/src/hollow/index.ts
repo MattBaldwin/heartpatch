@@ -1,6 +1,6 @@
 import { hexKey, type Hex, type HexKey } from '../hex/index.js';
 import { addDays } from '../home/local-date.js';
-import type { MapLocalTime } from '../home/hearthfire.js';
+import { tonightOf, type MapLocalTime } from '../home/hearthfire.js';
 import { Rng, type Seed } from '../rng/index.js';
 import type { HollowRules } from '../schemas/data/hollow.js';
 import type { HomeBaseRules } from '../schemas/data/home-base.js';
@@ -14,6 +14,7 @@ import { isOnWatch, type WatchPost } from '../territory/index.js';
 
 type NightfallRules = Pick<HomeBaseRules, 'nightfallMinute'>;
 type MorningRules = Pick<HollowRules, 'morningMinute'>;
+type GraceRules = NightfallRules & Pick<HollowRules, 'graceNights'>;
 
 /** The night of the latest nightfall at or before `local` (yesterday's before 9 PM). */
 export function lastNightOf(local: MapLocalTime, rules: NightfallRules): LocalDate {
@@ -23,6 +24,17 @@ export function lastNightOf(local: MapLocalTime, rules: NightfallRules): LocalDa
 /** Is `a` earlier than `b`? Map-local wall-clock times on the same map. */
 export function isLocalBefore(a: MapLocalTime, b: MapLocalTime): boolean {
   return a.date < b.date || (a.date === b.date && a.minute < b.minute);
+}
+
+/**
+ * The first night the Hollow Man can visit a player who joined the patch at
+ * `joined` (map-local, game clock): their first `graceNights` nightfalls
+ * after joining are skipped (owner decision 2026-10-03). Joining at 8:55 PM
+ * makes that evening's nightfall the first of them; joining at 9:00 PM or
+ * later, the next day's.
+ */
+export function firstHollowNight(joined: MapLocalTime, rules: GraceRules): LocalDate {
+  return addDays(tonightOf(joined, rules), rules.graceNights);
 }
 
 /** Is it night on the map (between nightfall and morning)? Only for how the map looks. */
@@ -112,17 +124,23 @@ export interface NightfallOutcome {
 
 /**
  * One nightfall for every player on a map: at most one squishy per player
- * (design doc §14), never a protected one. `canTake` is false where the
+ * (design doc §14), never a protected one, and nothing from a player in
+ * their first-night grace. `canTake` is false where the
  * Hollow Man takes nothing (`gameplayOverrides(kind).hollowManCanTake`);
  * `seedFor` gives each player's secret seed for the night.
  */
 export function nightfall(
-  players: readonly { readonly userId: string; readonly squishies: readonly NightSquishy[] }[],
+  players: readonly {
+    readonly userId: string;
+    readonly squishies: readonly NightSquishy[];
+    /** Still in their first-night grace (`firstHollowNight`): nothing is taken from them. */
+    readonly grace?: boolean;
+  }[],
   safe: ReadonlySet<HexKey>,
   seedFor: (userId: string) => Seed,
   canTake: boolean,
 ): NightfallOutcome[] {
-  return players.map(({ userId, squishies }) => {
+  return players.map(({ userId, squishies, grace = false }) => {
     const mine = squishies.filter((s) => s.ownerUserId === userId);
     const shelters = mine.map((s) => ({ squishy: s, shelter: shelterOf(s, safe) }));
     const exposed = shelters.filter((s) => s.shelter === 'exposed').map((s) => s.squishy);
@@ -131,7 +149,7 @@ export function nightfall(
     ).length;
     return {
       userId,
-      taken: canTake ? pickTaken(exposed, seedFor(userId)) : null,
+      taken: canTake && !grace ? pickTaken(exposed, seedFor(userId)) : null,
       exposed: exposed.length,
       sheltered,
     };

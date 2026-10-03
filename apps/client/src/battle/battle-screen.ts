@@ -122,6 +122,8 @@ const MESSAGES = {
   resultFriend: 'A new friend!',
   resultNoContest: 'No contest!',
   wonSub: 'Everyone had a great time.',
+  wildWonSub: "It's tuckered out and toddles away!",
+  gentleNote: 'Gentle patch: half XP for playing a smaller Keeper.',
   lostSub: 'A nap and a snack, and they’ll be ready again.',
   drawSub: 'Everyone needs a nap.',
   noContestSub: 'The squishies got distracted. Nobody won or lost.',
@@ -378,8 +380,18 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       return;
     }
     const mine = b.view.sides[b.mySide];
-    const xp = (result?.xp ?? [])
-      .filter((award) => award.side === b.mySide && award.xp > 0)
+    // What the server granted (Gentle's share, care and habitat included);
+    // a battle from before rewards were stored has only the engine's base XP.
+    const awards =
+      b.rewards?.xp ??
+      (result?.xp ?? [])
+        .filter((award) => award.side === b.mySide)
+        .map(({ squishyId, xp }) => ({
+          squishyId,
+          xp,
+        }));
+    const xp = awards
+      .filter((award) => award.xp > 0)
       .map((award) => {
         const squishy = mine.squishies.find((s) => s.id === award.squishyId);
         const name = squishy ? names.speciesName(squishy.speciesId) : 'Your squishy';
@@ -397,13 +409,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
                 ? { title: MESSAGES.resultRescued, subtitle: MESSAGES.rescuedSub }
                 : {
                     title: TILE_BATTLE_KINDS.has(b.kind) ? MESSAGES.resultLand : MESSAGES.resultWon,
-                    subtitle: MESSAGES.wonSub,
+                    // A beaten wild squishy wanders off (owner decision 2026-10-03).
+                    subtitle: b.kind === 'wild' ? MESSAGES.wildWonSub : MESSAGES.wonSub,
                   }
             : result.reason === 'forfeit'
               ? { title: MESSAGES.resultScooted, subtitle: MESSAGES.scootedSub }
               : { title: MESSAGES.resultLost, subtitle: MESSAGES.lostSub };
     hud.setCaption(null);
-    hud.showResult({ ...outcome, xp: xp.length > 0 ? xp : [MESSAGES.noXp], done: MESSAGES.done });
+    const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
+    if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote);
+    hud.showResult({ ...outcome, xp: lines, done: MESSAGES.done });
   };
 
   /** Everything the log has played: the view is the truth now. */

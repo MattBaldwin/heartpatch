@@ -66,7 +66,8 @@ export interface WildEncounter {
   squishies: BattleSquishySetup[];
   /**
    * The tile and spawn window it came from, stored on the battle so a
-   * befriended squishy is gone for that player for the rest of the window.
+   * befriended or beaten squishy is gone for that player for the rest of the
+   * window.
    * Absent for squishies that aren't a tile's spawn (the dev route).
    */
   spawn?: { q: number; r: number; window: string };
@@ -121,14 +122,15 @@ export interface TileBattlePort {
   /**
    * The battle is over (won, lost or left): records it, and on a win the tile
    * changes hands. Lock order: battle (held), tile, then `maps` via events.
-   * Returns events to append after `battle.ended`.
+   * Returns events to append after `battle.ended`, and the share of the
+   * battle's XP to grant (Gentle's `rewardPercent`: owner decision 2026-10-03).
    */
   ended: (
     tx: Executor,
     battle: BattleRow,
     winner: BattleSideId | 'draw',
     at: Date,
-  ) => Promise<NewGameEvent[]>;
+  ) => Promise<{ events: NewGameEvent[]; xpPercent: number }>;
   /** Called off by the server (DECISIONS #13): the attempt is refunded. */
   noContest: (tx: Executor, battleId: string, at: Date) => Promise<void>;
 }
@@ -298,6 +300,8 @@ export function playerBattleView(
     ...defsFor(content, state),
     // The seed predicts every roll, so it stays secret until the end (tech spec §8).
     seed: row.status === 'active' ? null : row.seed,
+    // The player's own rewards; a defender watching the replay doesn't get them.
+    rewards: (options.mySide ?? PLAYER_SIDE) === PLAYER_SIDE ? row.rewards : null,
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
   };
@@ -345,6 +349,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       state: row.state,
       result: null,
       log: [...row.state.log],
+      rewards: null,
       endedAt: at,
     });
     await repo.appendEvent({
@@ -454,11 +459,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const { result } = state.phase;
     // A tile battle (#15): the attempt is settled and a win takes the tile,
     // in this transaction. Lock order: battle, tile, squishies, then `maps`.
-    const tileEvents =
+    const tile =
       TILE_BATTLE_KINDS.has(row.kind) && options.tileBattles
         ? await options.tileBattles.ended(tx, row, result.winner, at)
-        : [];
-    const awards = result.xp.filter((award) => award.side === PLAYER_SIDE && award.xp > 0);
+        : { events: [], xpPercent: 100 };
+    // Gentle mode's share (owner decision 2026-10-03): challenging a much
+    // smaller player pays part of the battle's XP, win or lose.
+    const awards = result.xp
+      .filter((award) => award.side === PLAYER_SIDE)
+      .map((award) => ({ ...award, xp: Math.floor((award.xp * tile.xpPercent) / 100) }))
+      .filter((award) => award.xp > 0);
     // Base battle XP × care and habitat, levels and evolution (#19's
     // `applyXp`), under the squishy locks (the order above).
     await repo.lockSquishies(awards.map((a) => a.squishyId));
@@ -490,6 +500,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       state,
       result,
       log: [...state.log],
+      rewards: {
+        xp: grown.map(({ squishyId, xp }) => ({ squishyId, xp })),
+        percent: tile.xpPercent,
+      },
       endedAt: at,
     });
     await repo.appendEvent({
@@ -522,7 +536,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         },
       });
     }
-    for (const event of tileEvents) await repo.appendEvent(event);
+    for (const event of tile.events) await repo.appendEvent(event);
   };
 
   /**

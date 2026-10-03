@@ -31,8 +31,13 @@ export interface SeenRow {
 export interface SpawnsRepo {
   findMap: (mapId: string) => Promise<SpawnMapRow | null>;
   listTiles: (mapId: string) => Promise<SpawnTileRow[]>;
-  /** Tiles whose wild squishy this player befriended in this spawn window. */
-  caughtSpawns: (
+  /**
+   * Tiles whose wild squishy this player is done with for this spawn window:
+   * befriended (#14) or beaten without befriending (it wandered off, owner
+   * decision 2026-10-03). Any battle the player won counts; a loss, a tie, a
+   * run home or a no contest leaves it there.
+   */
+  goneSpawns: (
     mapId: string,
     userId: string,
     window: string,
@@ -66,7 +71,7 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.q), asc(tiles.r)),
 
-    caughtSpawns: async (mapId, userId, window) => {
+    goneSpawns: async (mapId, userId, window) => {
       const rows = await db
         .select({ q: battles.spawnQ, r: battles.spawnR })
         .from(battles)
@@ -76,7 +81,8 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
             eq(battles.playerUserId, userId),
             eq(battles.spawnWindow, window),
             isNotNull(battles.result),
-            sql`${battles.result} ->> 'reason' = 'captured'`,
+            // The player is always side `a` (battles service, `PLAYER_SIDE`).
+            sql`${battles.result} ->> 'winner' = 'a'`,
           ),
         );
       return rows.flatMap(({ q, r }) => (q === null || r === null ? [] : [{ q, r }]));

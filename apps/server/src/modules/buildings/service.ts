@@ -52,6 +52,9 @@ import {
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
 const SECRET_SPECIES = new Map(SERVER_GAME_DATA.secretSpecies.map((s) => [s.id, s]));
+const SPECIES_NAMES = new Map(
+  [...GAME_DATA.species, ...SERVER_GAME_DATA.secretSpecies].map((s) => [s.id, s.name]),
+);
 
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
@@ -68,7 +71,12 @@ const MESSAGES = {
   noSquishy: "We couldn't find that squishy.",
   inHollow: 'That squishy is in the Hollow right now. Rescue them first!',
   habitatFull: (name: string) => `The ${name} is full! Try another home.`,
+  onWatch: (name: string) => `Bring ${name} home from watch first!`,
 } as const;
+
+/** What to call one of my squishies in a message: its nickname, else its species. */
+const squishyName = (s: { nickname: string | null; speciesId: string }): string =>
+  s.nickname ?? SPECIES_NAMES.get(s.speciesId) ?? 'your squishy';
 
 export interface BuildingsService {
   /** My home tiles, buildings and squishies, and my bag. */
@@ -418,6 +426,15 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           throw new AppError('NOT_FOUND', MESSAGES.noSquishy);
         }
         if (squishy.state !== 'active') throw new AppError('CONFLICT', MESSAGES.inHollow);
+        // Housed or on watch, not both (owner decision 2026-10-03). Moving out
+        // is always fine. Posting it locks the squishy too, so the two can't race.
+        if (
+          habitatRowId !== null &&
+          squishy.habitatBuildingId !== habitatRowId &&
+          (await repo.isOnWatch(squishy.id))
+        ) {
+          throw new AppError('CONFLICT', MESSAGES.onWatch(squishyName(squishy)));
+        }
         if (squishy.habitatBuildingId !== habitatRowId) {
           if (habitat && (await repo.countResidents(habitat.row.id)) >= habitat.capacity) {
             throw new AppError('CONFLICT', MESSAGES.habitatFull(habitat.name));

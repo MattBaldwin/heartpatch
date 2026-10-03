@@ -56,6 +56,8 @@ export interface HollowDebug {
   readonly visiting: boolean;
   readonly visits: number;
   readonly rewardsLeftToday: number;
+  /** The "light a fire" hint is showing (first-night grace). */
+  readonly fireHint: boolean;
 }
 
 export interface HollowScreen {
@@ -122,6 +124,16 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     render();
   });
 
+  // A small nudge before the Hollow Man's first visit (first-night grace,
+  // owner decision 2026-10-03). It never takes taps, so it can't get in the way.
+  const hint = el(
+    'p',
+    { class: 'hollow-hint', role: 'status', 'data-testid': 'hollow-fire-hint' },
+    el('span', { 'aria-hidden': 'true' }, '🔥 '),
+    HOLLOW_TEXT.fireHint,
+  );
+  hint.hidden = true;
+
   const reportBox = el('div', {
     class: 'hollow-card hollow-report',
     role: 'dialog',
@@ -136,7 +148,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     'data-testid': 'hollow-sheet',
   });
   sheet.hidden = true;
-  options.root.append(openButton, reportBox, sheet);
+  options.root.append(openButton, hint, reportBox, sheet);
 
   const speciesName = (speciesId: string): string | undefined => {
     const species: Species | undefined =
@@ -198,6 +210,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     openButton.hidden = !on || (hollowed.length === 0 && !options.devTools);
     badge.textContent = hollowed.length > 0 ? String(hollowed.length) : '';
     badge.hidden = hollowed.length === 0;
+
+    hint.hidden = !on || status?.fireHint !== true || status.night.isNight;
 
     const heldBack = options.otherReportOpen?.() ?? false;
     reportBox.hidden = !on || report.length === 0 || visitPlaying || heldBack;
@@ -456,6 +470,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         visiting: layer.visiting,
         visits: layer.visits,
         rewardsLeftToday: status.rescue.rewardsLeftToday,
+        fireHint: !hint.hidden,
       };
     },
   };
