@@ -86,6 +86,8 @@ Each squishy is an instance of a **species**. Species are data, not code.
 
 **Launch roster (Phase 1):** 12–15 base species across elements and feelings, plus 3–4 Halloween species.
 
+**First squishy:** on joining a patch, a new player picks 1 of 3 starters, one per element family (a data-driven list; Puddlepuff is one). The tutorial presents the same choice as meeting their Partner (§26).
+
 ## 5. Elements and feelings
 
 Every squishy has **one element** and **one feeling**.
@@ -95,7 +97,7 @@ Every squishy has **one element** and **one feeling**.
 
 Three data tables drive combat (all JSON config in `packages/shared`):
 
-1. **Element matrix** — attacker element vs defender element. Multipliers in the range 0.5× to 2×. Standard advantage wheel (e.g. Fire > Leaf > Water > Fire).
+1. **Element matrix** — attacker element vs defender element. Multipliers in the range **[DEFAULT: about 0.67× to 1.5×]**, softened so feelings can push back (tuned with the balance simulator). Standard advantage wheel (e.g. Fire > Leaf > Water > Fire).
 2. **Feeling matrix** — attacker feeling vs defender feeling. Smaller range **[DEFAULT: 0.75× to 1.5×]**. This is where counters live: a plain-looking squishy with the right feeling can blunt an element disadvantage (e.g. Silly disarms Brave; Brave overwhelms Sleepy).
 3. **Synergy table** — a squishy's own element × feeling combination gives a bonus or penalty **[DEFAULT: 0.85× to 1.2×]** to its stats. Harmonious combos (e.g. Spooky + Shadow, Cozy + Fire) are stronger; conflicted combos (e.g. Joy + Shadow) are weaker but may unlock unique evolution branches.
 
@@ -120,8 +122,8 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 
 **XP gained = battle XP × care multiplier × habitat multiplier**
 
-- **Care multiplier.** Care actions (**feed, pet, play**) raise **contentment** (0–100). Contentment decays slowly over real time **[DEFAULT: ~24h from full to baseline]**. Multiplier **[DEFAULT: 1.0× to 1.75×]**.
-- **Habitat multiplier.** Habitats carry element and feeling tags. A squishy housed in a matching habitat gets **[DEFAULT: up to 1.75×]**. A mismatch gives 1.0×.
+- **Care multiplier.** Care actions (**feed, pet, play**) raise **contentment** (0–100). Contentment decays slowly over real time **[DEFAULT: ~24h from full to baseline]**. Multiplier **[DEFAULT: 1.0× to 1.75×]**. A new squishy starts at contentment **[DEFAULT: 50]** ("Feeling okay!"), not at the baseline.
+- **Habitat multiplier.** Habitats carry element and feeling tags. A squishy housed in a matching habitat gets **[DEFAULT: up to 1.75×]**. A mismatch gives 1.0×. A squishy is either housed in a habitat or standing watch (§14), not both.
 - **Floor of 1.0×.** Neglect never weakens or sickens a squishy; it only means no bonus. Combat alone always advances a squishy, just more slowly.
 - **Cap.** Combined multiplier capped at **[DEFAULT: 3×]**.
 - **Implementation:** no ticking simulation. Store `contentment` and `lastCaredAt`; compute current contentment lazily from elapsed time on read. Care can't be tap-spammed: each squishy's returns shrink as the day's actions pile up (below), and the server ignores a repeat of the same action within about 10 seconds so one stroke counts once.
@@ -178,7 +180,7 @@ Phase 1 ships simple level-based single-form evolution; branching arrives in Pha
 - **Raid rules [DEFAULT]:** a tile can't be re-attacked for 4h after a battle on it; new players get a 48h protection shield; each player gets 10 attack attempts per map-local day (refills daily). Starting a tile battle (neutral or rival) uses an attempt and starts the tile cooldown; wild encounters and rescues don't use attempts. **Leaving** a battle means an explicit forfeit or no action for **[DEFAULT: 10 minutes]**, and counts as a loss. A dropped connection (app backgrounded, a phone call) resumes where it left off, because battle state lives on the server.
 - **PvP mode (map owner setting) [DEFAULT: Gentle]:** families have kids of very different ages and schedules, so rivalry must never turn into one player farming another.
   - **On:** rival tiles can be challenged; a defender can lose at most **[DEFAULT: 3]** tiles per map-local day. Once a defender reaches the cap, challenges against them are blocked for the day (they don't use up attempts).
-  - **Gentle (default):** as On, but a defender can lose at most **[DEFAULT: 1]** tile per map-local day, and challenging a player with far less territory (under **[DEFAULT: half]** of yours, home rings not counted) earns **[DEFAULT: 50%]** rewards.
+  - **Gentle (default):** as On, but a defender can lose at most **[DEFAULT: 1]** tile per map-local day, and challenging a player with far less territory (under **[DEFAULT: half]** of yours, home rings not counted) earns **[DEFAULT: 50%]** rewards, battle XP included (the result card shows the reduced XP).
   - **Off:** no player-vs-player challenges. Players race for neutral land and work together against the Hollow Man.
 - Hearthfire safe radii are measured in hex tiles (§14).
 
@@ -217,15 +219,15 @@ The shared threat and the heart of the lore. Tall, flickering silhouette with gl
 **His rules → mechanics**
 
 - **"He only needs one."** Each night at **nightfall [DEFAULT: 9:00 PM in the map's time zone]** a server job runs per map. For each player, if any squishies are **exposed**, he takes **one** of them, picked by a seeded roll the player can't see. Tutorial maps take nothing. If the server was down, only the latest missed night runs, and a map's first night is the first nightfall after its first member joined.
-- **Open question (owner):** should a brand-new player get a first-night grace? Someone who joins at 8:55 PM with a squishy and no fire yet can lose it at 9:00.
+- **First-night grace [DEFAULT: 2 nightfalls]:** he skips a player for their first 2 nightfalls after joining a patch, so someone who joins at 8:55 PM with no fire yet loses nothing. A cozy hint tells them to light a fire.
 - **Exposure:** a squishy spends the night in its habitat's tile, or at its owner's Heart Seed if it has no habitat. It is exposed if that tile is outside every lit Hearthfire's safe radius (noise coverage joins in once noise buildings exist), or if the fire has gone out. Squishies inside the home base with a lit Hearthfire are safe.
-- **Defenders stand watch:** squishies stationed to defend an owned tile are on watch and are **not** exposed. Holding territory never costs a squishy every night, so the Hollow Man stays a planning challenge (keep the fire lit, house squishies inside its light), not a daily loss.
+- **Defenders stand watch:** squishies stationed to defend an owned tile are on watch and are **not** exposed. A squishy on watch isn't housed in a habitat, and a housed one isn't on watch. Holding territory never costs a squishy every night, so the Hollow Man stays a planning challenge (keep the fire lit, house squishies inside its light), not a daily loss.
 - **"Keep the fire lit."** Hearthfires store up to **[DEFAULT: 5 nights]** of Emberwood. At each nightfall: if the fire has fuel for tonight, it burns one night's worth and protects tonight; otherwise it goes out. Stocking up teaches planning ahead: an active player tops up in seconds, and a player who misses a few days comes back to a fire that's still lit. The fire shows its remaining nights clearly (e.g. "3 nights left").
 - **Absence is not punished (pillar 2).** While the fire is lit, squishies at home are always safe; only squishies the player chose to house outside the light can be taken. If a player is away longer than their stored fuel lasts, the fire goes out and home squishies become exposed too. Taken squishies can always be rescued.
 - **Repelled by noise.** Noise buildings extend protection.
 - **Repelled by family love.** (Phase 2) Warmth between players with nearby territories reduces his reach.
 - **"Never look too long."** (Phase 2 polish) Keeping the camera locked on him when he appears makes nearby squishies start to drift toward him.
-- **Hollowed squishies** turn grey and are taken to **the Hollow** (entrance in Juniper's Gap). They are **never permanently lost**: a player rescues them via a rescue expedition (a special battle against shadow guardians, sized just under the player's strongest squishy; if every squishy is in the Hollow, the one being rescued fights), started from anywhere: the Hollow's entrance is in Juniper's Gap, but reaching it doesn't require owning nearby land. Rescue rewards Heartdust, capped at **[DEFAULT: 1]** rescue reward per player per day so exposing squishies on purpose isn't a farm.
+- **Hollowed squishies** turn grey and are taken to **the Hollow** (entrance in Juniper's Gap). They are **never permanently lost**: a player rescues them via a rescue expedition (a special battle against shadow guardians, sized just under the player's strongest squishy, drawn as the Nookling shape in a dark lavender, softly glowing tint; if every squishy is in the Hollow, the one being rescued fights), started from anywhere: the Hollow's entrance is in Juniper's Gap, but reaching it doesn't require owning nearby land. Rescue rewards Heartdust, capped at **[DEFAULT: 1]** rescue reward per player per day so exposing squishies on purpose isn't a farm.
 - Morning summary: "The Hollow Man visited last night…" shown on next login, covering the last 3 nights (push notification in Phase 3).
 
 ## 15. Seasons
@@ -245,7 +247,7 @@ Seasons are date windows in config (with time zone). Resource nodes, recipes, sp
 | Christmas / Winter | Dec 1 – Dec 31 | Presents | Presents open for random drops; gifting an unopened present doubles warmth; frosty squishies |
 | New Year | Dec 31 – Jan 2 | Fireworks | Fireworks are noise (Hollow Man repellent); midnight countdown event |
 
-**Rules:** presents are **earned only, never bought**, and each shows its possible contents. Leftover seasonal resources carry over as **keepsakes**; their special recipes only unlock during their season.
+**Rules:** presents are **earned only, never bought**, and each shows its possible contents. Leftover seasonal resources carry over as **keepsakes**; their special recipes only unlock during their season. A Jack-o'-Lantern Hearthfire already built keeps protecting after Halloween (radius 2).
 
 Each season also brings **seasonal clothing** (§23), obtainable only during that season and wearable forever.
 
