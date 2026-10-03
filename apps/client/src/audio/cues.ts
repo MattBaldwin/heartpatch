@@ -1,0 +1,103 @@
+import type { PlaybackStep } from '../battle/battle-playback.js';
+import type { CloseUpTouch } from '../close-up/close-up-view.js';
+
+// Which sound goes with which moment (#25). Screens report what happened
+// (a battle step, a touch, a care squish); this maps it to a cue, so the
+// screens never know about sound. Style guide §7: soft, round and bouncy;
+// spooky is a low hush, never a sting.
+
+export type CueName =
+  /** UI: any button. */
+  | 'tick'
+  /** Squishies, up close and at home. */
+  | 'boop'
+  | 'squeak'
+  | 'giggle'
+  | 'nom'
+  /** Care done, and an evolution. */
+  | 'twinkle'
+  | 'evolve'
+  /** Battles. */
+  | 'whoosh'
+  | 'bonk'
+  | 'whiff'
+  | 'sleepy'
+  | 'pop'
+  | 'charm'
+  | 'wiggle-free'
+  | 'yay'
+  | 'aww'
+  /** The Hollow Man comes by: a quiet low hush while the music dips. */
+  | 'nightfall';
+
+export const CUE_NAMES: readonly CueName[] = [
+  'tick',
+  'boop',
+  'squeak',
+  'giggle',
+  'nom',
+  'twinkle',
+  'evolve',
+  'whoosh',
+  'bonk',
+  'whiff',
+  'sleepy',
+  'pop',
+  'charm',
+  'wiggle-free',
+  'yay',
+  'aww',
+  'nightfall',
+];
+
+/** Cues that dip the music while they play (tech spec §15 "Mix"). */
+export const DUCKING_CUES: ReadonlySet<CueName> = new Set(['nightfall', 'charm', 'evolve', 'yay']);
+
+/** UI cues go on the UI bus; the rest on the SFX bus (both follow the Sounds slider). */
+export const UI_CUES: ReadonlySet<CueName> = new Set(['tick']);
+
+/** A battle step as it plays (`battle-screen`'s playback). */
+export function battleCue(step: Pick<PlaybackStep, 'kind' | 'squish'>): CueName | null {
+  switch (step.kind) {
+    case 'move':
+      return 'whoosh';
+    case 'hit':
+      return 'bonk';
+    case 'miss':
+    case 'forfeit':
+      return 'whiff';
+    case 'heal':
+      return 'twinkle';
+    case 'tuckered':
+      return 'sleepy';
+    case 'swap':
+      return 'pop';
+    case 'capture':
+      // The playback bounces a new friend and wobbles one that wiggled free.
+      return step.squish === 'bounce' ? 'charm' : 'wiggle-free';
+    case 'end':
+      // Only my win bounces; a tie, a scoot or a loss is a soft "aww".
+      return step.squish === 'bounce' ? 'yay' : 'aww';
+    case 'effect':
+      return 'boop';
+  }
+}
+
+/** A touch on a squishy up close (#20). */
+export function touchCue(kind: CloseUpTouch): CueName {
+  switch (kind) {
+    case 'boop':
+      return 'boop';
+    case 'stroke':
+      return 'squeak';
+    case 'tickle':
+      return 'giggle';
+    case 'treat':
+      return 'nom';
+  }
+}
+
+/** The care sheet's squash after care, or its sparkles after an evolution (#19). */
+export function careCue(kind: 'care' | 'evolve'): CueName {
+  return kind === 'evolve' ? 'evolve' : 'twinkle';
+}

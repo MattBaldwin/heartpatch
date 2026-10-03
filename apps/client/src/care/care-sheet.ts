@@ -25,6 +25,8 @@ export interface CareSheetOptions {
   api?: CareApi;
   /** "Up close": opens the squishy in the close-up view (#20); no button without it. */
   onCloseUp?: (mapId: string, squishyId: string) => void;
+  /** A squash after care, or sparkles for an evolution, starts (sound, #25). */
+  onSquish?: (kind: 'care' | 'evolve') => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -168,6 +170,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     // A reflow restarts the animation even if the same class was just there.
     stage.getBoundingClientRect();
     stage.classList.add(cls);
+    options.onSquish?.(kind);
   }
   stage.addEventListener('animationend', (event) => {
     if (event.target === blob) stage.classList.remove('care-stage-squish', 'care-stage-evolve');
