@@ -1,0 +1,2 @@
+ALTER TABLE "map_members" ADD COLUMN "starter_squishy_id" uuid;--> statement-breakpoint
+ALTER TABLE "map_members" ADD CONSTRAINT "map_members_starter_squishy_id_squishies_id_fk" FOREIGN KEY ("starter_squishy_id") REFERENCES "public"."squishies"("id") ON DELETE no action ON UPDATE no action;

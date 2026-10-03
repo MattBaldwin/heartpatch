@@ -21,6 +21,7 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { uuidv7 } from 'uuidv7';
 
@@ -160,6 +161,10 @@ export const mapMembers = pgTable(
     // How their squishies on watch play when challenged (#16); per map.
     // The default is `RAID_RULES.defaultStance`.
     defenseStance: defenseStance('defense_stance').notNull().default('balanced'),
+    // The starter they picked on this patch (owner decision 2026-10-03); null
+    // until then. Set once and kept when they leave and come back, so a
+    // membership never gets a second pick.
+    starterSquishyId: uuid('starter_squishy_id').references((): AnyPgColumn => squishies.id),
   },
   (t) => [
     primaryKey({ columns: [t.mapId, t.userId] }),

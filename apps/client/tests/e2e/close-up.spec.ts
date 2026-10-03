@@ -1,6 +1,6 @@
 import { CARE_RULES, findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -61,7 +61,7 @@ async function playerWithFriend(page: Page): Promise<void> {
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Close Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
   await page.getByTestId('bag-open').tap();
   await page.getByTestId('bag').getByRole('button', { name: 'Get stuff (dev)' }).tap();

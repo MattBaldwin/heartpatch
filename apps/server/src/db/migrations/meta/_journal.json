@@ -113,6 +113,13 @@
       "when": 1791002945758,
       "tag": "0015_battle_rewards",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791008022304,
+      "tag": "0016_starter_pick",
+      "breakpoints": true
     }
   ]
 }

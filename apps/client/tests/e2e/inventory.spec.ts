@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** The bag and the tile panel's gather action, from the dev hook (`InventoryDebug`). */
 interface InventoryDebug {
@@ -76,7 +76,7 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Gathering Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.()?.tiles), {

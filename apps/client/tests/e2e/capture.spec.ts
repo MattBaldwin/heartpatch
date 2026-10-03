@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
  * Wild squishies and the catalog on an iPhone (issue #14): find a wild
@@ -81,7 +81,7 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Finder Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(page.getByTestId('map-hud')).toContainText('Finder Patch');
 
   const mapIdOf = () =>
@@ -93,12 +93,12 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   const note = page.locator('.battle-entry-note');
   await expect(note).toContainText(/nearby/);
 
-  // The catalog starts empty: no secret squishy shows before it's met.
+  // The catalog starts with just their starter: no secret squishy shows before it's met.
   await page.getByTestId('catalog-open').tap();
-  await expect.poll(() => catalogState(page)).toMatchObject({ loading: false, seen: 0 });
-  const names = (await catalogState(page))!.names;
-  expect(names.every((n) => n === '???')).toBe(true);
-  await expect(page.getByTestId('catalog-progress')).toContainText('Go find some');
+  await expect.poll(() => catalogState(page)).toMatchObject({ loading: false, seen: 1, caught: 1 });
+  const known = (names: string[]) => names.filter((n) => n !== '???');
+  expect(known((await catalogState(page))!.names)).toEqual(['Puddlepuff']);
+  await expect(page.getByTestId('catalog-progress')).toContainText('Friends 1');
   await page.getByTestId('catalog-close').tap();
   await expect(page.getByTestId('catalog')).toBeHidden();
 
@@ -144,16 +144,20 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   }
   await expect(hud).toBeHidden();
 
-  // Back on the patch: the squishy it met is in the catalog now.
+  // Back on the patch: the squishy it met is in the catalog now. (A wild
+  // Puddlepuff is already there, as the starter.)
   await page.getByTestId('catalog-open').tap();
-  await expect
-    .poll(() => catalogState(page))
-    .toMatchObject({ loading: false, seen: 1, caught: caught ? 1 : 0 });
+  await expect.poll(() => catalogState(page).then((c) => c?.loading)).toBe(false);
+  const after = (await catalogState(page))!;
   // Whoever spawned (the roster's, or a secret one) now has a name; the rest stay "???".
-  const met = (await catalogState(page))!.names.filter((n) => n !== '???');
-  expect(met).toHaveLength(1);
-  await expect(page.getByTestId('catalog-grid')).toContainText(met[0]!);
-  await expect(page.getByTestId('catalog-grid')).toContainText(caught ? 'Friend' : 'Seen');
+  const met = known(after.names).filter((n) => n !== 'Puddlepuff');
+  expect(after.seen).toBe(1 + met.length);
+  expect(met.length).toBeLessThanOrEqual(1);
+  if (met.length === 1) {
+    expect(after.caught).toBe(caught ? 2 : 1);
+    await expect(page.getByTestId('catalog-grid')).toContainText(met[0]!);
+    if (!caught) await expect(page.getByTestId('catalog-grid')).toContainText('Seen');
+  }
   await page.getByTestId('catalog-close').tap();
   if (tried.status === 'active') {
     // The battle waited behind the catalog; the button resumes it.

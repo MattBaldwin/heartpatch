@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** The chat from the dev hook (src/chat/chat-screen.ts `ChatDebug`). */
 interface ChatDebug {
@@ -48,19 +48,19 @@ test('two players on one patch trade quick messages live', async ({ browser }) =
   await expect(friendLobby.getByTestId('lobby-waiting')).toBeVisible();
 
   // The owner reopens the patch's card to see the request (as in map.spec.ts).
-  await ownerLobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(ownerLobby);
   await expect(ownerLobby).toBeHidden();
   await owner.getByTestId('lobby-open').tap();
   await ownerLobby.getByRole('button', { name: /Chatter Patch/ }).tap();
   await expect(ownerLobby.getByRole('heading', { name: 'Chatter Patch' })).toBeVisible();
   await ownerLobby.getByTestId('lobby-requests').getByRole('button', { name: 'Yes!' }).tap();
   await expect(ownerLobby.getByTestId('lobby-notice')).toContainText(`${friendName} joined`);
-  await ownerLobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(ownerLobby);
   await expect(ownerLobby).toBeHidden();
 
   await friendLobby.getByRole('button', { name: 'Check again' }).tap();
   await friendLobby.getByRole('button', { name: /Chatter Patch/ }).tap();
-  await friendLobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(friendLobby);
   await expect(friendLobby).toBeHidden();
 
   // Both follow the patch live, with an empty feed.
@@ -104,7 +104,7 @@ test('two players on one patch trade quick messages live', async ({ browser }) =
   // A reload brings the feed back from the server.
   await friend.reload();
   await friendLobby.getByRole('button', { name: /Chatter Patch/ }).tap();
-  await friendLobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(friendLobby);
   await expect
     .poll(() => chatState(friend), { timeout: 30_000 })
     .toMatchObject({

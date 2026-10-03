@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
  * A PvE battle on an iPhone (issue #13): pick a fight, play it to the end,
@@ -37,7 +37,7 @@ async function settled(page: Page): Promise<BattleDebug> {
 async function openPatch(page: Page, name: string): Promise<void> {
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: new RegExp(name) }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(lobby).toBeHidden();
 }
 
@@ -53,19 +53,14 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Showdown Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.getByTestId('map-hud')).toContainText('Showdown Patch');
 
-  // With no squishy of their own yet, the real button says so kindly (or, if
-  // no wild squishy is about this window, that nobody's around)…
+  // Their starter is home already; the dev tools hand out another squishy
+  // and a fight against a chosen wild squishy.
   const entry = page.getByTestId('battle-entry');
   await expect(entry).toBeVisible();
-  await entry.tap();
-  await expect(page.locator('.battle-entry-note')).toContainText(
-    /No wild squishies|squishy friend/,
-  );
-  // …and the dev tools hand out a squishy and a fight.
   await page.getByTestId('battle-dev-grant').tap();
   await expect(page.locator('.battle-entry-note')).toContainText('joined you');
   await page.getByTestId('battle-dev-fight').tap();
@@ -152,7 +147,7 @@ test('a battle owns the screen: no lobby button mid-battle, no battle button in 
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Owner Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(page.getByTestId('map-hud')).toContainText('Owner Patch');
   const entry = page.getByTestId('battle-entry');
   const lobbyButton = page.getByTestId('lobby-open');

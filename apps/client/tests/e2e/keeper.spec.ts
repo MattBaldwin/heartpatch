@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { uniqueName } from './players.js';
+import { uniqueName, visitPatch } from './players.js';
 
 /**
  * Picking a Keeper (issue #42): a new account picks one before it can reach
@@ -167,7 +167,7 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Keeper Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(page.getByTestId('map-hud')).toContainText('Keeper Patch');
   // Drawn with the map, which can take a while when CI renders in software.
   await expect
@@ -177,7 +177,6 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
     .toBe(1);
 
   // A dev battle (spawns arrive with #14): the Keeper is in the arena…
-  await page.getByTestId('battle-entry').tap();
   await page.getByTestId('battle-dev-grant').tap();
   await expect(page.locator('.battle-entry-note')).toContainText('joined you');
   await page.getByTestId('battle-dev-fight').tap();

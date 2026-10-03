@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
  * The raid report on an iPhone (issue #16): a Report button over my patch
@@ -34,7 +34,7 @@ test('opens the raid report and saves a defense style', async ({ browser }) => {
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Report Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(lobby).toBeHidden();
 
   // Nothing new on a brand-new patch, so the report waits behind its button.
@@ -64,7 +64,7 @@ test('opens the raid report and saves a defense style', async ({ browser }) => {
   await page.reload();
   await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
   await lobby.getByRole('button', { name: /Report Patch/ }).tap();
-  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+  await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect.poll(async () => (await raidState(page))?.stance ?? null).toBe('aggressive');
   expect(errors).toEqual([]);

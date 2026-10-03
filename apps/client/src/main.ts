@@ -24,6 +24,7 @@ import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
+import { createStarterScreen } from './starters/starter-screen.js';
 import { createTerritoryScreen } from './territory/territory-screen.js';
 import { createTutorialScreen } from './tutorial/tutorial-screen.js';
 import './styles.css';
@@ -471,10 +472,29 @@ const wardrobe = createWardrobeScreen({
   },
   devTools: import.meta.env.DEV,
 });
+// The starter pick (owner decision 2026-10-03): the first visit to a patch
+// asks "Choose your friend!" before the map. It owns the screen while open.
+const starters = createStarterScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  onOpen: () => {
+    void battles.setMap(null);
+    void inventory.setMap(null);
+    void territory.setMap(null);
+    void hollow.setMap(null);
+    void chat.setMap(null);
+    home.setMap(null);
+    maps.close();
+    lobby.stepOut();
+  },
+});
 const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
     catalog.close();
     care.close();
+    await starters.ensure(mapId);
     await maps.open(mapId);
     void inventory.setMap(mapId);
     void territory.setMap(mapId);
@@ -500,6 +520,7 @@ mountAuth(document.body, {
     chat.setUser(user);
     home.setUser(user);
     wardrobe.setUser(user);
+    starters.setUser(user);
     maps.setUser(user);
     // The lobby and tutorial wait for a Keeper (`onReady` above).
     keeper.setUser(user);
@@ -562,6 +583,7 @@ if (import.meta.env.DEV) {
     care: () => care.debug,
     closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,
+    starter: () => starters.debug,
     audio: () => audio.debug,
   };
 }
