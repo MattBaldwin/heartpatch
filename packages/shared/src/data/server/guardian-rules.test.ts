@@ -30,7 +30,10 @@ describe('guardian rules', () => {
       for (const entry of table.entries) expect(species).toContain(entry.species);
     }
     for (const terrain of GAME_DATA.terrains) {
-      expect(GUARDIAN_RULES.tables.some((t) => t.terrains.includes(terrain.id))).toBe(true);
+      // Year-round: a terrain is guarded outside every season too.
+      expect(GUARDIAN_RULES.tables.some((t) => !t.season && t.terrains.includes(terrain.id))).toBe(
+        true,
+      );
     }
     const strengths = new Set(GUARDIAN_RULES.strengths.map((t) => t.strength));
     for (let s = MAP_GEN.guardianStrength.min; s <= MAP_GEN.guardianStrength.max; s += 1) {

@@ -42,7 +42,13 @@ interface Player {
   token: string;
 }
 
-const SECRET = SERVER_GAME_DATA.secretSpecies;
+/** A secret line's first and grown forms: two secret squishies the client has never met. */
+const SECRET_LINE = SERVER_GAME_DATA.secretEvolutions.find((e) =>
+  SERVER_GAME_DATA.secretSpecies.some((s) => s.id === e.from),
+)!;
+const SECRET = [SECRET_LINE.from, SECRET_LINE.into].map((id) =>
+  SERVER_GAME_DATA.secretSpecies.find((s) => s.id === id)!,
+);
 const SECRET_IDS = SECRET.map((s) => s.id);
 
 /** XP a brand-new squishy (start contentment, no habitat) gets for `base`. */
