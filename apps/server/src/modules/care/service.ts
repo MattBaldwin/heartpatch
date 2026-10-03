@@ -141,6 +141,15 @@ async function habitatTagsFor(
   return tags;
 }
 
+/**
+ * The habitat whose tags count for a squishy's XP, or null. A squishy on
+ * watch gets none: housed or on watch, not both (owner decision 2026-10-03).
+ */
+const habitatOf = (
+  tags: ReadonlyMap<string, HabitatTags>,
+  row: CareSquishyRow,
+): HabitatTags | null => (row.onWatch ? null : (tags.get(row.habitatBuildingId ?? '') ?? null));
+
 /** Stats at a level; a species dropped from the data shows the smallest stats rather than failing. */
 const MISSING_BASE_STATS = { hp: 1, attack: 1, defense: 1, speed: 1 };
 
@@ -177,7 +186,7 @@ export async function applyXp(
   const repo = createCareRepo(tx);
   const row = await repo.lockSquishy(squishyId);
   if (!row) return null;
-  const habitat = (await habitatTagsFor(repo, [row])).get(row.habitatBuildingId ?? '') ?? null;
+  const habitat = habitatOf(await habitatTagsFor(repo, [row]), row);
   const multiplier = xpMultiplier(contentmentOf(row, at), habitat, row, GROWTH_RULES);
   const xp = grantedXp(baseXp, multiplier);
   const next = addXp({ level: row.level, xp: row.xp }, xp, GROWTH_RULES);
@@ -299,7 +308,7 @@ export function createCareService(options: CareServiceOptions): CareService {
 
     const squishies = rows.map((row): CareSquishy => {
       const contentment = contentmentOf(row, at);
-      const habitat = habitats.get(row.habitatBuildingId ?? '') ?? null;
+      const habitat = habitatOf(habitats, row);
       const caredToday = counts.get(row.id) ?? 0;
       const nextCareAt: Record<string, string> = {};
       for (const [action, when] of lastCare.get(row.id) ?? []) {

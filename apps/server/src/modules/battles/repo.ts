@@ -7,6 +7,8 @@ import {
   type BattleEvent,
   type BattleKind,
   type BattleResult,
+  BattleRewardsSchema,
+  type BattleRewards,
   type BattleSetup,
   type BattleState,
   type BattleStatus,
@@ -36,6 +38,8 @@ export interface BattleRow {
   state: BattleState;
   result: BattleResult | null;
   log: BattleEvent[] | null;
+  /** What it granted the player's squishies, once finished (null before rewards were stored). */
+  rewards: BattleRewards | null;
   startedAt: Date;
   endedAt: Date | null;
   /** The tile and spawn window a wild squishy came from (#14), or null. */
@@ -120,6 +124,7 @@ export interface BattlesRepo {
       state: BattleState;
       result: BattleResult | null;
       log: BattleEvent[];
+      rewards: BattleRewards | null;
       endedAt: Date;
     },
   ) => Promise<void>;
@@ -155,6 +160,7 @@ function toRow(row: RawBattleRow): BattleRow {
     state: BattleStateSchema.parse(row.state),
     result: row.result === null ? null : ResultSchema.parse(row.result),
     log: row.log === null ? null : LogSchema.parse(row.log),
+    rewards: row.rewards === null ? null : BattleRewardsSchema.parse(row.rewards),
     startedAt: row.startedAt,
     endedAt: row.endedAt,
     spawn:

@@ -292,6 +292,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
 
       const done = await playOut(server, kid, battle);
       expect(done.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
+      // Claiming wild land pays the battle's full XP.
+      expect(done.rewards?.percent).toBe(100);
       expect((await tileAt(mapId, target!)).ownerUserId).toBe(kid.id);
       expect((await attacksOf(mapId))[0]).toMatchObject({ outcome: 'captured', endedAt: clock });
 
@@ -740,11 +742,43 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       // The kid has lots of land; the rival only the two tiles from `rivals`.
       const extra = (await edgeOf(mapId, kid)).slice(0, 6);
       for (const tile of extra) await setOwner(tile.id, kid.id);
-      await playOut(server, kid, battleOf(await attack(server, kid, mapId, near)));
-      const captured = (await eventsOf(mapId)).at(-1)!;
+      const done = await playOut(server, kid, battleOf(await attack(server, kid, mapId, near)));
+      const events = await eventsOf(mapId);
+      const captured = events.at(-1)!;
       expect(parseGameEventPayload('tile.captured', captured.payload).rewardPercent).toBe(
         TERRITORY_RULES.gentle.rewardPercent,
       );
+
+      // The showdown's XP is halved too (owner decision 2026-10-03): the base
+      // is halved before care × habitat (100–175% for a squishy with no
+      // habitat), and the result card gets the granted numbers and the share.
+      const result = done.view.phase.type === 'over' ? done.view.phase.result : null;
+      const base = result!.xp.filter((a) => a.side === 'a' && a.xp > 0);
+      expect(base.length).toBeGreaterThan(0);
+      const ended = parseGameEventPayload(
+        'battle.ended',
+        events.find((e) => e.type === 'battle.ended')!.payload,
+      );
+      expect(done.rewards).toEqual({
+        xp: ended.xp,
+        percent: TERRITORY_RULES.gentle.rewardPercent,
+      });
+      for (const award of base) {
+        const half = Math.floor((award.xp * TERRITORY_RULES.gentle.rewardPercent) / 100);
+        const granted = ended.xp.find((g) => g.squishyId === award.squishyId)?.xp ?? 0;
+        expect(granted).toBeGreaterThanOrEqual(half);
+        expect(granted).toBeLessThanOrEqual(Math.floor((half * 175) / 100));
+        expect(granted).toBeLessThan(award.xp);
+      }
+    });
+
+    it('applies Gentle’s share to a challenge lost or left, too', async () => {
+      const server = await start();
+      const { kid, mapId, near } = await rivals(server);
+      for (const tile of (await edgeOf(mapId, kid)).slice(0, 6)) await setOwner(tile.id, kid.id);
+      const ran = await forfeit(server, kid, battleOf(await attack(server, kid, mapId, near)));
+      expect(ran.view.phase).toMatchObject({ type: 'over', result: { winner: 'b' } });
+      expect(ran.rewards?.percent).toBe(TERRITORY_RULES.gentle.rewardPercent);
     });
 
     it('fights the land’s own guardians when nobody stands watch', async () => {

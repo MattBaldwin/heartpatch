@@ -22,6 +22,12 @@ export interface CareSquishyRow {
   xp: number;
   state: 'active' | 'hollowed';
   habitatBuildingId: string | null;
+  /**
+   * Standing watch on its owner's land (decision C). A squishy is housed or
+   * on watch, not both (owner decision 2026-10-03): one that is both, from
+   * before that rule, counts as on watch only, so its habitat gives no bonus.
+   */
+  onWatch: boolean;
   contentmentAtLastCare: number;
   lastCaredAt: Date | null;
 }
@@ -107,6 +113,12 @@ const squishyColumns = {
   xp: squishies.xp,
   state: squishies.state,
   habitatBuildingId: squishies.habitatBuildingId,
+  // Like `isOnWatch`: a post on land its owner still holds. Spelled out in
+  // full, because a one-table select names its columns without the table.
+  onWatch: sql<boolean>`exists (
+    select 1 from tile_defenders d join tiles t on t.id = d.tile_id
+    where d.squishy_id = "squishies"."id" and t.owner_user_id = "squishies"."owner_user_id"
+  )`,
   contentmentAtLastCare: squishies.contentmentAtLastCare,
   lastCaredAt: squishies.lastCaredAt,
 };

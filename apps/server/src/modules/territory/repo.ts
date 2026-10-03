@@ -120,6 +120,14 @@ export interface TerritoryRepo {
   myDefenders: (mapId: string, userId: string) => Promise<TileDefenders[]>;
   /** The player's squishies on the map, strongest first. */
   mySquishies: (mapId: string, userId: string) => Promise<OwnedSquishy[]>;
+  /**
+   * Row-locks squishies in id order (tech spec §7) until commit, after the
+   * tiles, and returns where each lives: housing locks the squishy too, so a
+   * squishy can't be housed and posted at once.
+   */
+  lockSquishies: (
+    squishyIds: readonly string[],
+  ) => Promise<{ id: string; habitatBuildingId: string | null }[]>;
 }
 
 export interface TerritoryTxRepo extends TerritoryRepo {
@@ -386,6 +394,16 @@ function queries(db: Executor): TerritoryRepo {
         byTile.set(key, entry);
       }
       return [...byTile.values()];
+    },
+
+    lockSquishies: async (squishyIds) => {
+      if (squishyIds.length === 0) return [];
+      return db
+        .select({ id: squishies.id, habitatBuildingId: squishies.habitatBuildingId })
+        .from(squishies)
+        .where(inArray(squishies.id, [...squishyIds]))
+        .orderBy(asc(squishies.id))
+        .for('no key update');
     },
 
     mySquishies: async (mapId, userId) => {

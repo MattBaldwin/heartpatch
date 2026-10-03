@@ -9,6 +9,7 @@ import { hexKey, hexSpiral, type Hex, type HexKey } from '../hex/index.js';
 import { checkHollowRules, checkRescueGuardianRules } from '../schemas/data/hollow.js';
 import type { Species } from '../schemas/data/species.js';
 import {
+  firstHollowNight,
   heartSeedOf,
   isLocalBefore,
   isNightAt,
@@ -163,6 +164,22 @@ describe('nightfall', () => {
     expect(outcome).toEqual({ userId: A, taken: null, exposed: 2, sheltered: 0 });
   });
 
+  it('takes nothing from a player in their first-night grace, and still counts the dark', () => {
+    const outcomes = nightfall(
+      [
+        { userId: A, squishies: [squishy('a1', 'dark-bed')], grace: true },
+        { userId: B, squishies: [squishy('b1', 'dark-bed', B)] },
+      ],
+      SAFE,
+      (userId) => userId,
+      true,
+    );
+    expect(outcomes).toEqual([
+      { userId: A, taken: null, exposed: 1, sheltered: 0 },
+      { userId: B, taken: 'b1', exposed: 1, sheltered: 0 },
+    ]);
+  });
+
   it('decides each player alone, from their own squishies', () => {
     const outcomes = nightfall(
       [
@@ -219,5 +236,27 @@ describe('rescues', () => {
       resolveRescueGuardians({ seed: 's', strongestLevel: 50 }, rules, species)[0]?.level,
     ).toBe(10);
     expect(resolveRescueGuardians({ seed: 's', strongestLevel: 5 }, rules, new Map())).toEqual([]);
+  });
+});
+
+describe('first-night grace (owner decision 2026-10-03)', () => {
+  const nine = HOME_BASE_RULES.nightfallMinute;
+  it('skips the first graceNights nightfalls after joining', () => {
+    expect(HOLLOW_RULES.graceNights).toBe(2);
+    // Joined at 8:55 PM: that evening's nightfall is the first grace night.
+    expect(firstHollowNight({ date: '2026-10-03', minute: nine - 5 }, RULES)).toBe('2026-10-05');
+    // At or after 9 PM, tonight's has fallen: grace starts with tomorrow's.
+    expect(firstHollowNight({ date: '2026-10-03', minute: nine }, RULES)).toBe('2026-10-06');
+    expect(firstHollowNight({ date: '2026-10-03', minute: 0 }, RULES)).toBe('2026-10-05');
+    // Across a month end, and with no grace at all.
+    expect(firstHollowNight({ date: '2026-10-31', minute: 23 * 60 }, RULES)).toBe('2026-11-03');
+    expect(
+      firstHollowNight({ date: '2026-10-03', minute: nine - 5 }, { ...RULES, graceNights: 0 }),
+    ).toBe('2026-10-03');
+  });
+
+  it('refuses a grace out of range', () => {
+    expect(checkHollowRules({ ...HOLLOW_RULES, graceNights: -1 })).not.toEqual([]);
+    expect(checkHollowRules({ ...HOLLOW_RULES, graceNights: 1.5 })).not.toEqual([]);
   });
 });

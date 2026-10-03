@@ -3,9 +3,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { newPlayer, uniqueName } from './players.js';
 
 /**
- * The Hollow Man on an iPhone (issue #21): night falls (the dev route), he
- * visits the map once, takes a squishy left outside a lit fire to the Hollow,
- * the morning report says so kindly, and a rescue sets off from anywhere.
+ * The Hollow Man on an iPhone (issue #21): a new player gets a nudge to light
+ * a fire and two nights of grace (owner decision 2026-10-03); then night falls
+ * (the dev route), he visits the map once, takes a squishy left outside a lit
+ * fire to the Hollow, the morning report says so kindly, and a rescue sets off
+ * from anywhere.
  * Checked through the dev hook's signals, never pixels or timing.
  */
 
@@ -19,6 +21,7 @@ interface HollowDebug {
   visiting: boolean;
   visits: number;
   rewardsLeftToday: number;
+  fireHint: boolean;
 }
 
 type Hook = {
@@ -80,8 +83,31 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
     .poll(() => hollowState(page))
     .toMatchObject({ mapId, hollowed: 0, report: [], visits: 0 });
 
+  // New here with no fire: a small nudge (unless it's night on the server's clock).
+  const hint = page.getByTestId('hollow-fire-hint');
+  if (!(await hollowState(page))!.night) {
+    await expect(hint).toBeVisible();
+    await expect(hint).toContainText('Light a fire before night falls!');
+    expect(findAvoidedWords((await hint.textContent()) ?? '')).toEqual([]);
+  }
+
   // One squishy, waiting by the Heart Seed with no Hearthfire built: exposed.
   expect((await devPost(page, `/maps/${mapId}/dev/squishies`, { level: 5 })).status).toBe(201);
+  // First-night grace: the first two nightfalls take nothing.
+  for (let night = 0; night < 2; night++) {
+    const graced = await devPost(page, `/maps/${mapId}/dev/nightfall`);
+    expect(graced).toMatchObject({ status: 200, body: { taken: 0 } });
+  }
+  // He still comes by (the live visit), then fades; wait for that before counting.
+  await expect
+    .poll(async () => (await hollowState(page))?.visits ?? 0, { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  await expect
+    .poll(async () => (await hollowState(page))?.visiting, { timeout: 30_000 })
+    .toBe(false);
+  await expect.poll(() => isIdle(page), { timeout: 30_000 }).toBe(true);
+  const visitsBefore = (await hollowState(page))!.visits;
+  expect(await hollowState(page)).toMatchObject({ hollowed: 0, report: [] });
   // The raid report (#16) is open when night falls: the Hollow's report waits its turn.
   await page.getByTestId('raid-open').tap();
   const raidSheet = page.getByTestId('raid-report');
@@ -90,7 +116,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   expect(fell).toMatchObject({ status: 200, body: { taken: 1 } });
 
   // He visits once, live, and the map stops drawing when he's gone.
-  await expect.poll(async () => (await hollowState(page))?.visits).toBe(1);
+  await expect.poll(async () => (await hollowState(page))?.visits).toBe(visitsBefore + 1);
   await expect
     .poll(async () => (await hollowState(page))?.visiting, { timeout: 30_000 })
     .toBe(false);

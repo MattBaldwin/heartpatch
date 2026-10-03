@@ -4,11 +4,13 @@ import {
   BattleResponseSchema,
   CatalogResponseSchema,
   createBattleContent,
+  JoinMapResponseSchema,
   GAME_DATA,
   hexKey,
   hexNeighbors,
   MapResponseSchema,
   replayBattle,
+  type MapDetail,
   SquishyResponseSchema,
   TutorialResponseSchema,
   WildHintsResponseSchema,
@@ -340,6 +342,132 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const stranger = await player();
       expect((await call(server, 'GET', `/maps/${mapId}/wild`, stranger)).statusCode).toBe(404);
       expect((await call(server, 'GET', `/maps/${mapId}/wild`, null)).statusCode).toBe(401);
+    });
+  });
+
+  /** Plays the player's first move until the battle ends (a level-40 squishy wins). */
+  const fight = async (
+    battles: ReturnType<typeof services>['battles'],
+    who: PublicUser,
+    start: PlayerBattle,
+  ): Promise<PlayerBattle> => {
+    let b = start;
+    for (let i = 0; i < 50 && b.status === 'active'; i++) {
+      const side = b.view.sides.a;
+      const move = side.squishies[side.active]!.moves[0]!;
+      b = await battles.act(who, b.id, { action: { type: 'move', move }, turn: b.view.turn });
+    }
+    return b;
+  };
+
+  describe('beaten wild squishies wander off (owner decision 2026-10-03)', () => {
+    /** A patch for `kid` with a level-40 squishy, and `other` joined through invite → approve. */
+    async function sharedPatch(server: FastifyInstance, kid: Player, other: Player) {
+      const res = await call(server, 'POST', '/maps', kid, {
+        name: 'Squishy Patch',
+        timeZone: 'America/Denver',
+      });
+      expect(res.statusCode, res.body).toBe(201);
+      const map: MapDetail = MapResponseSchema.parse(res.json()).map;
+      const join = await call(server, 'POST', '/maps/join', other, {
+        code: map.admin!.invite!.code,
+      });
+      expect(join.statusCode).toBe(201);
+      const request = JoinMapResponseSchema.parse(join.json()).request;
+      const ok = await call(server, 'POST', `/maps/${map.id}/requests/${request.id}/approve`, kid);
+      expect(ok.statusCode).toBe(204);
+      for (const who of [kid, other]) {
+        const granted = await call(server, 'POST', `/maps/${map.id}/dev/squishies`, who, {
+          level: 40,
+        });
+        expect(granted.statusCode).toBe(201);
+      }
+      return map.id;
+    }
+    const spawnTileOf = async (battleId: string) => {
+      const row = await db.query.battles.findFirst({ where: (t, { eq }) => eq(t.id, battleId) });
+      return { q: row!.spawnQ!, r: row!.spawnR! };
+    };
+
+    it('a win without a capture: gone for the winner this window, still there for others', async () => {
+      const server = await start();
+      const kid = await player();
+      const other = await player();
+      const mapId = await sharedPatch(server, kid, other);
+      const { battles, spawns } = services();
+      const hintsBefore = (await spawns.wildHints(kid, mapId)).tiles;
+
+      const { battle } = await battles.startWild(kid, mapId);
+      const wild = battle.view.sides.b.squishies[0]!;
+      const tile = await spawnTileOf(battle.id);
+      const done = await fight(battles, kid, battle);
+      expect(done.view.phase).toMatchObject({
+        type: 'over',
+        result: { winner: 'a', reason: 'tuckered-out' },
+      });
+      // No new friend: it toddled away.
+      expect(await squishiesOf(mapId, kid)).toHaveLength(1);
+
+      const hintsAfter = (await spawns.wildHints(kid, mapId)).tiles;
+      expect(hintsAfter).not.toContainEqual(tile);
+      expect(hintsAfter).toHaveLength(hintsBefore.length - 1);
+      await expect(battles.startWild(kid, mapId, { tile })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      // "Find a squishy" moves on to the next one rather than the beaten one.
+      const next = await battles.startWild(kid, mapId);
+      expect(await spawnTileOf(next.battle.id)).not.toEqual(tile);
+      await battles.act(kid, next.battle.id, { action: { type: 'forfeit' }, turn: 0 });
+
+      // Asking again changes nothing (it's read from the finished battle).
+      expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsAfter);
+      // Another member still finds it there: same squishy, same level. (Their
+      // reach is their own land, so hand them the tile for the test.)
+      await db.execute(`
+        update tiles set owner_user_id = ${id(other.id)}
+        where map_id = ${id(mapId)} and q = ${String(tile.q)} and r = ${String(tile.r)}`);
+      const theirs = await battles.startWild(other, mapId, { tile });
+      expect(theirs.battle.view.sides.b.squishies[0]).toMatchObject({
+        speciesId: wild.speciesId,
+        level: wild.level,
+      });
+
+      // Back for everyone in the next window.
+      clock.setTime(clock.getTime() + SPAWN_RULES.windowHours * HOUR_MS);
+      await db.execute(`
+        update tiles set owner_user_id = ${id(kid.id)}
+        where map_id = ${id(mapId)} and q = ${String(tile.q)} and r = ${String(tile.r)}`);
+      expect((await spawns.wildHints(kid, mapId)).tiles).toContainEqual(tile);
+    });
+
+    it('a loss or a run home leaves it there', async () => {
+      const server = await start();
+      const kid = await player();
+      const res = await call(server, 'POST', '/maps', kid, {
+        name: 'Squishy Patch',
+        timeZone: 'America/Denver',
+      });
+      const mapId = MapResponseSchema.parse(res.json()).map.id;
+      // A level-1 squishy against level-60 wild ones: a sure loss.
+      await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, { level: 1 });
+      const { battles, spawns } = services({
+        data: { ...EVERYWHERE, rules: { ...EVERYWHERE.rules, levels: { min: 60, max: 60 } } },
+      });
+      const hintsBefore = (await spawns.wildHints(kid, mapId)).tiles;
+
+      // Run home.
+      const first = await battles.startWild(kid, mapId);
+      const tile = await spawnTileOf(first.battle.id);
+      await battles.act(kid, first.battle.id, { action: { type: 'forfeit' }, turn: 0 });
+      expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsBefore);
+
+      // Lose.
+      const second = await battles.startWild(kid, mapId, { tile });
+      const lost = await fight(battles, kid, second.battle);
+      expect(lost.view.phase).toMatchObject({ type: 'over', result: { winner: 'b' } });
+      expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsBefore);
+      const third = await battles.startWild(kid, mapId, { tile });
+      expect(third.created).toBe(true);
     });
   });
 
