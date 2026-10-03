@@ -3,9 +3,13 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
-import { removeMemberBuildings } from '../modules/buildings/service.js';
+import { createBuildingsService, removeMemberBuildings } from '../modules/buildings/service.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
+import { createMapsService } from '../modules/maps/service.js';
+import { createStartersService } from '../modules/starters/service.js';
+import { createTerritoryService } from '../modules/territory/service.js';
 import { createWardrobeService } from '../modules/wardrobe/service.js';
+import { AppError } from '../lib/errors.js';
 import { createDbClient, type Database, type DbClient, type Transaction } from './client.js';
 import { backendPid, waitUntilBlockedBy } from '../../tests/lock-waits.js';
 import {
@@ -228,5 +232,166 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .where(and(inArray(gameEvents.mapId, mapIds), eq(gameEvents.type, 'outfit.changed')))
       .orderBy(asc(gameEvents.mapId));
     expect(told.map((e) => e.mapId)).toEqual(mapIds);
+  });
+
+  /** A new player (`users` row) for these tests. */
+  async function player(prefix: string) {
+    const username = `${prefix}_${String(process.pid)}_${String((counter += 1))}`;
+    const [user] = await db
+      .insert(users)
+      .values({ username, passwordHash: 'not-a-hash', birthYear: 2014 })
+      .returning({ id: users.id });
+    return { id: user!.id, username };
+  }
+
+  /** What a command came to: 'ok', or what it threw. Never rejects, so nothing goes unhandled. */
+  const outcome = (command: Promise<unknown>) =>
+    command.then(
+      () => 'ok' as const,
+      (err: unknown) => err,
+    );
+
+  const code = (err: unknown) => (err instanceof AppError ? err.code : err);
+
+  it('posts a guard and houses the same squishy one at a time; exactly one wins (territory `lockSquishies`, buildings `house`)', async () => {
+    const kid = await player('guard');
+    const [map] = await db
+      .insert(maps)
+      .values({ kind: 'multiplayer', name: 'Lock Patch', timeZone: 'UTC', maxPlayers: 4 })
+      .returning({ id: maps.id });
+    const mapId = map!.id;
+    await db.insert(mapMembers).values({ mapId, userId: kid.id, role: 'owner' });
+    const [home, post] = await db
+      .insert(tiles)
+      .values([
+        { mapId, q: 0, r: 0, terrain: 'meadow', ownerUserId: kid.id, homeSlot: 0 },
+        { mapId, q: 1, r: 0, terrain: 'meadow', ownerUserId: kid.id },
+      ])
+      .returning({ id: tiles.id });
+    const [den] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: home!.id,
+        buildingId: 'ember-den',
+        kind: 'habitat',
+        spot: 1,
+      })
+      .returning({ id: buildings.id });
+    const [squishy] = await db
+      .insert(squishies)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: 'emberbun',
+        element: 'fire',
+        feeling: 'cozy',
+      })
+      .returning({ id: squishies.id });
+    const squishyId = squishy!.id;
+
+    let posting: Promise<unknown> | undefined;
+    let housing: Promise<unknown> | undefined;
+    // Nightfall-style: hold the squishy, let both commands queue on it, then
+    // let go. Posting holds the member row and its tile while it waits;
+    // housing holds the player's home tiles and the den. Both take the squishy
+    // before `maps`, so whichever gets it first finishes and the other then
+    // sees what it did. Housing taking `maps` before the squishy would
+    // deadlock here (40P01).
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await lockSquishy(tx, squishyId);
+      const pid = await backendPid(tx);
+      posting = outcome(
+        createTerritoryService({
+          db,
+          // Posting guards starts no battle.
+          battles: { startTile: () => Promise.reject(new Error('no battles here')) },
+        }).setDefenders(kid, mapId, {
+          q: 1,
+          r: 0,
+          squishyIds: [squishyId],
+        }),
+      );
+      await waitUntilBlockedBy(db, pid);
+      housing = outcome(createBuildingsService({ db }).house(kid, mapId, squishyId, den!.id));
+      await waitUntilBlockedBy(db, pid, 2);
+    });
+    const results = await Promise.all([posting!, housing!]);
+    // One wins; the other is refused as housed or on watch, not deadlocked.
+    expect(results.filter((r) => r === 'ok')).toHaveLength(1);
+    expect(results.filter((r) => r !== 'ok').map(code)).toEqual(['CONFLICT']);
+
+    const [row] = await db
+      .select({ habitat: squishies.habitatBuildingId })
+      .from(squishies)
+      .where(eq(squishies.id, squishyId));
+    const posts = await db
+      .select({ tileId: tileDefenders.tileId })
+      .from(tileDefenders)
+      .where(eq(tileDefenders.squishyId, squishyId));
+    // Housed or on watch, not both.
+    if (results[0] === 'ok') {
+      expect(posts).toEqual([{ tileId: post!.id }]);
+      expect(row?.habitat).toBeNull();
+    } else {
+      expect(posts).toEqual([]);
+      expect(row?.habitat).toBe(den!.id);
+    }
+  });
+
+  it('picks a starter while the member is leaving, one at a time on the member row (starters `pick`, maps `leave`)', async () => {
+    const owner = await player('owner');
+    const kid = await player('picker');
+    const [map] = await db
+      .insert(maps)
+      .values({ kind: 'multiplayer', name: 'Lock Patch', timeZone: 'UTC', maxPlayers: 4 })
+      .returning({ id: maps.id });
+    const mapId = map!.id;
+    await db.insert(mapMembers).values([
+      { mapId, userId: owner.id, role: 'owner' },
+      { mapId, userId: kid.id, role: 'member' },
+    ]);
+    const lockMember = (tx: Transaction) =>
+      tx
+        .select({ userId: mapMembers.userId })
+        .from(mapMembers)
+        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, kid.id)))
+        .for('no key update');
+
+    let picking: Promise<unknown> | undefined;
+    let leaving: Promise<unknown> | undefined;
+    // Another member-row locker (a challenge against this player) holds the
+    // row; the pick queues on it first, then leaving, which already holds the
+    // seats lock and the player's `users` row. The pick takes nothing after
+    // the member row that leaving holds (its new squishy's foreign keys only
+    // key-share `maps` and the member row), so both finish. A pick that locked
+    // the player's `users` row after the member row would deadlock (40P01).
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await lockMember(tx);
+      const pid = await backendPid(tx);
+      picking = outcome(createStartersService({ db }).pick(kid, mapId, 'emberbun'));
+      await waitUntilBlockedBy(db, pid);
+      leaving = outcome(
+        createMapsService({ db, tutorialRequired: false, keeperRequired: false }).leave(kid, mapId),
+      );
+      await waitUntilBlockedBy(db, pid, 2);
+    });
+    expect(await picking).toBe('ok');
+    expect(await leaving).toBe('ok');
+
+    const [membership] = await db
+      .select({ status: mapMembers.status, starter: mapMembers.starterSquishyId })
+      .from(mapMembers)
+      .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, kid.id)));
+    const owned = await db
+      .select({ id: squishies.id })
+      .from(squishies)
+      .where(and(eq(squishies.mapId, mapId), eq(squishies.ownerUserId, kid.id)));
+    // The pick committed first; leaving keeps its marker on the archived row.
+    expect(owned).toHaveLength(1);
+    expect(membership).toEqual({ status: 'removed', starter: owned[0]!.id });
   });
 });

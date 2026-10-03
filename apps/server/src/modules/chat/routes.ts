@@ -27,6 +27,9 @@ export const chatRoutes =
 
     const limit = playerRateLimit(fastify, 'chat', CHAT_RATE_LIMITS);
     // After the per-player limit, so one player alone can't use up a map's share.
+    // It runs before the service, so a send the service then refuses (an
+    // unknown messageId, a non-member) still uses one of the map's sends; the
+    // per-player limit caps how many any one player can spend that way.
     const perMap = rateLimit(fastify, [
       {
         limit: CHAT_MAP_SEND_LIMIT,
