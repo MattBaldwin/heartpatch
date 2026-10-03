@@ -537,6 +537,52 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
       expect((await eventsOf(mapId)).filter((e) => e.type === 'clothing.found')).toHaveLength(1);
     });
 
+    it('scales the chance by the event’s share (a Gentle capture, #84)', async () => {
+      await start();
+      const kid = await player();
+      const mapId = await newMap(app!, kid);
+      const half: ClothingDropTable[] = [
+        { source: 'capture', chance: 60, entries: [{ item: 'big-bow', weight: 1 }] },
+      ];
+      const roll = (refId: string, percent: number) =>
+        withTransaction(db, (tx) =>
+          rollFoundDrop(
+            tx,
+            { source: 'capture', refId, userId: kid.id, mapId, tileId: null, percent, at: clock },
+            { tables: half, rng: Rng.fromSeed(refId) },
+          ),
+        );
+      // 60% at half share is 30%: each roll finds exactly when the same
+      // seeded roll would at 30, and some seeds land in between.
+      let between = 0;
+      for (let i = 0; i < 40; i++) {
+        const refId = `00000000-0000-7000-8000-${String(i).padStart(12, '0')}`;
+        const atHalf = Rng.fromSeed(refId).chance(30);
+        if (!atHalf && Rng.fromSeed(refId).chance(60)) between += 1;
+        expect(await roll(refId, 50)).toBe(atHalf ? 'big-bow' : null);
+      }
+      expect(between).toBeGreaterThan(0);
+      // No share, no find, even at 100%.
+      const sure: ClothingDropTable[] = [{ ...half[0]!, chance: 100 }];
+      expect(
+        await withTransaction(db, (tx) =>
+          rollFoundDrop(
+            tx,
+            {
+              source: 'capture',
+              refId: '00000000-0000-7000-8000-0000000000cc',
+              userId: kid.id,
+              mapId,
+              tileId: null,
+              percent: 0,
+              at: clock,
+            },
+            { tables: sure },
+          ),
+        ),
+      ).toBeNull();
+    });
+
     it('rolls back with the gather: no piece and no event if the transaction fails', async () => {
       await start();
       const kid = await player();

@@ -20,17 +20,23 @@ import {
   type PublicUser,
   type TerritoryRules,
 } from '@heartpatch/shared';
-import { GUARDIAN_RULES, SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
+import {
+  CLOTHING_DROPS,
+  GUARDIAN_RULES,
+  SERVER_GAME_DATA,
+  serverBattleData,
+} from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
-import { createDbClient, type Database, type DbClient } from '../../db/client.js';
+import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
 import { keepers, sessions, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { createBattlesService } from '../battles/service.js';
+import { createBattlesService, type TileBattleEnd } from '../battles/service.js';
+import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createTerritoryService, createTileBattlePort, defaultGuardianData } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -80,11 +86,12 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
     clock.setTime(Date.parse(START));
   });
 
-  async function start(): Promise<FastifyInstance> {
+  async function start(env: Record<string, string> = {}): Promise<FastifyInstance> {
     const config = loadConfig({
       NODE_ENV: 'test',
       DATABASE_URL: url!,
       HP_DEV_SQUISHY_GRANTS: 'true',
+      ...env,
     });
     app = await buildApp({ config, db, clock: () => clock, logger: false });
     return app;
@@ -201,6 +208,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       where: (t, { eq }) => eq(t.mapId, mapId),
       orderBy: (t, { asc }) => [asc(t.startedAt)],
     });
+  const piecesOf = (userId: string) =>
+    db.query.clothingOwned.findMany({ where: (t, { eq }) => eq(t.userId, userId) });
   const defendersOf = (mapId: string) =>
     db.query.tileDefenders.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
 
@@ -790,6 +799,167 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const battle = battleOf(await attack(server, kid, mapId, near));
       expect(battle.kind).toBe('rival-tile');
       expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'guardian' });
+    });
+  });
+
+  describe('found clothing on a capture (#84)', () => {
+    /** Every drop table's chance, as `HP_DEV_DROP_CHANCE` (dev and test only). */
+    const dropChance = (percent: number) => ({ HP_DEV_DROP_CHANCE: String(percent) });
+    const capturable = new Set(
+      CLOTHING_DROPS.find((t) => t.source === 'capture')!.entries.map((e) => e.item),
+    );
+
+    it('finds a piece from the capture table, once per capture, and members see who and what', async () => {
+      const server = await start(dropChance(100));
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(server, kid, [friend]);
+      await grant(server, kid, mapId, 40);
+      const [target] = await edgeOf(mapId, kid);
+      const battle = battleOf(await attack(server, kid, mapId, target!));
+      const done = await playOut(server, kid, battle);
+      expect((await tileAt(mapId, target!)).ownerUserId).toBe(kid.id);
+
+      const pieces = await piecesOf(kid.id);
+      expect(pieces).toHaveLength(1);
+      expect(pieces[0]).toMatchObject({ source: 'capture', refId: battle.id, mapId });
+      expect(capturable.has(pieces[0]!.itemId)).toBe(true);
+
+      // Found after the squishies are settled, so before `battle.ended`; the
+      // capture's own events still close the transaction.
+      const growth = new Set(['squishy.leveled', 'squishy.evolved']);
+      const events = await eventsOf(mapId);
+      const types = events.map((e) => e.type).filter((t) => !growth.has(t));
+      expect(types.slice(-3)).toEqual(['clothing.found', 'battle.ended', 'tile.captured']);
+      const found = events.find((e) => e.type === 'clothing.found')!;
+      expect(parseGameEventPayload('clothing.found', found.payload)).toEqual({
+        userId: kid.id,
+        itemId: pieces[0]!.itemId,
+        source: 'capture',
+        refId: battle.id,
+      });
+      // Public: who found what, never where it came from or the odds.
+      expect(publicViewFor(PUBLIC_VIEWS, found, { userId: friend.id })).toEqual({
+        userId: kid.id,
+        itemId: pieces[0]!.itemId,
+      });
+
+      // A retried finish grants nothing more: the finished battle refuses the
+      // move again, and a second roll for the same capture finds nothing.
+      const again = await act(server, kid, battle, { type: 'forfeit' });
+      expect(again.statusCode).toBe(409);
+      expect(
+        await withTransaction(db, (tx) =>
+          rollFoundDrop(tx, {
+            source: 'capture',
+            refId: done.id,
+            userId: kid.id,
+            mapId,
+            tileId: target!.id,
+            at: clock,
+          }),
+        ),
+      ).toBeNull();
+      expect(await piecesOf(kid.id)).toHaveLength(1);
+      expect((await eventsOf(mapId)).filter((e) => e.type === 'clothing.found')).toHaveLength(1);
+    });
+
+    it('finds nothing on a loss, a forfeit or a battle called off', async () => {
+      const server = await start(dropChance(100));
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await grant(server, kid, mapId, 40);
+      const [one, two] = await edgeOf(mapId, kid);
+
+      // Left (a forfeit is a loss).
+      const ran = await forfeit(server, kid, battleOf(await attack(server, kid, mapId, one!)));
+      expect(ran.view.phase).toMatchObject({ type: 'over', result: { winner: 'b' } });
+
+      // Called off: the content is re-tuned mid-battle.
+      const battle = battleOf(await attack(server, kid, mapId, two!));
+      const retuned = createBattlesService({
+        db,
+        clock: () => clock,
+        content: createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA), {
+          ...BATTLE_RULES,
+          maxTurns: BATTLE_RULES.maxTurns + 1,
+        }),
+        tileBattles: createTileBattlePort(),
+      });
+      expect((await retuned.get(kid, battle.id)).status).toBe('no-contest');
+
+      expect((await attacksOf(mapId)).map((a) => a.outcome)).toEqual(['lost', 'no-contest']);
+      expect(await piecesOf(kid.id)).toEqual([]);
+      expect((await eventsOf(mapId)).some((e) => e.type === 'clothing.found')).toBe(false);
+    });
+
+    it('finds a piece on a challenge won from another player', async () => {
+      const server = await start(dropChance(100));
+      const { kid, mapId, near } = await rivals(server);
+      const battle = battleOf(await attack(server, kid, mapId, near));
+      await playOut(server, kid, battle);
+      expect((await tileAt(mapId, near)).ownerUserId).toBe(kid.id);
+      const captured = (await eventsOf(mapId)).at(-1)!;
+      // Not much smaller than the kid, so the full chance.
+      expect(parseGameEventPayload('tile.captured', captured.payload)).toMatchObject({
+        kind: 'rival-tile',
+        rewardPercent: 100,
+      });
+      expect(await piecesOf(kid.id)).toMatchObject([{ source: 'capture', refId: battle.id }]);
+    });
+
+    it('scales the chance by Gentle’s share for picking on a much smaller player', async () => {
+      // A sure find, so only the share decides.
+      const server = await start(dropChance(100));
+      const { kid, mapId, near, near2 } = await rivals(server);
+      for (const tile of (await edgeOf(mapId, kid)).slice(0, 6)) await setOwner(tile.id, kid.id);
+      // The real port, recording the drop it hands battles; `share` then
+      // overrides what battles rolls with, to show it uses the port's share.
+      const real = createTileBattlePort();
+      const drops: (TileBattleEnd['drop'] | undefined)[] = [];
+      let share: number | null = null;
+      const fights = createBattlesService({
+        db,
+        clock: () => clock,
+        tileBattles: {
+          ...real,
+          ended: async (...args) => {
+            const end = await real.ended(...args);
+            drops.push(end.drop);
+            return end.drop && share !== null
+              ? { ...end, drop: { ...end.drop, percent: share } }
+              : end;
+          },
+        },
+      });
+      const territory = createTerritoryService({ db, clock: () => clock, battles: fights });
+      const fight = async (tile: Tile) => {
+        let battle = (await territory.attack(kid, mapId, tile)).battle;
+        for (let i = 0; i < BATTLE_RULES.maxTurns + 5 && battle.status === 'active'; i++) {
+          const side = battle.view.sides[battle.mySide];
+          const action: PlayerBattleAction =
+            battle.view.phase.type === 'replace'
+              ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
+              : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+          battle = await fights.act(kid, battle.id, { action, turn: battle.view.turn });
+        }
+        expect((await tileAt(mapId, tile)).ownerUserId).toBe(kid.id);
+      };
+
+      // Gentle hands battles half the chance…
+      share = 0;
+      await fight(near);
+      expect(drops).toEqual([{ tileId: near.id, percent: TERRITORY_RULES.gentle.rewardPercent }]);
+      // …and battles rolls with the share it's given: none finds nothing,
+      // even at 100%; the full share finds a piece.
+      expect(await piecesOf(kid.id)).toEqual([]);
+      // (PvP On: Gentle allows one lost tile a day.)
+      share = 100;
+      const mode = await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'on' });
+      expect(mode.statusCode).toBe(200);
+      await fight(near2);
+      expect(drops.at(-1)).toEqual({ tileId: near2.id, percent: 100 });
+      expect(await piecesOf(kid.id)).toHaveLength(1);
     });
   });
 

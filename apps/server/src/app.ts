@@ -251,7 +251,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         // The Lorebook (design doc §16): the `lore` consumer records finds.
         await api.register(loreRoutes(createLoreService({ db }), { hooks: authHooks }));
-        // Found clothing rolls inside gathers and rescues (captures later).
+        // Found clothing rolls inside gathers, rescues and tile captures.
         setDevDropChance(config.HP_DEV_DROP_CHANCE ?? null);
         await api.register(
           wardrobeRoutes(createWardrobeService({ db, clock, ...publish }), {

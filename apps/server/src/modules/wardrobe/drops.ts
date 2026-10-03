@@ -20,7 +20,7 @@ import { createWardrobeRepo } from './repo.js';
  * using the map's local date and the game clock (so `HP_DEV_NOW` tests it).
  */
 
-/** What found something. Gathering and Hollow rescues (#21) call this today; tile captures later. */
+/** What found something: a gather, a Hollow rescue (#21) or a tile capture (#84). */
 export interface FoundDropEvent {
   source: ClothingDropSource;
   /** The gather, capture or rescue: at most one piece per event, ever. */
@@ -29,6 +29,12 @@ export interface FoundDropEvent {
   mapId: string;
   /** The tile it happened on, for terrain-only pieces; null if none. */
   tileId: string | null;
+  /**
+   * The share of the chance this event gets, in percent (default 100): a
+   * Gentle capture's `rewardPercent` (DECISIONS "Territory (#15)"). It scales
+   * `HP_DEV_DROP_CHANCE` too.
+   */
+  percent?: number;
   at: Date;
 }
 
@@ -71,7 +77,8 @@ export async function rollFoundDrop(
     seasons: new Set(seasonsOn(event.at, place.timeZone)),
     terrain: place.terrain ?? undefined,
   };
-  const rolled = { ...table, chance: devChance ?? table.chance };
+  const percent = Math.min(100, Math.max(0, event.percent ?? 100));
+  const rolled = { ...table, chance: Math.floor(((devChance ?? table.chance) * percent) / 100) };
   const rng = options.rng ?? Rng.fromSeed(newSeed());
   const itemId = pickClothingDrop(rolled, context, CLOTHING_BY_ID, rng);
   if (!itemId) return null;
