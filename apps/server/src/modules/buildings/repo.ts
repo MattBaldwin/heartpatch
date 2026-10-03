@@ -6,7 +6,7 @@ import {
   type ElementId,
   type FeelingId,
 } from '@heartpatch/shared';
-import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { buildings, squishies, tiles } from '../../db/schema.js';
@@ -162,7 +162,18 @@ function queries(db: Executor): BuildingsRepo {
 
     listHomeTiles: (mapId, userId) => homeTiles(mapId, userId),
 
-    lockHomeTiles: (mapId, userId) => homeTiles(mapId, userId).for('no key update'),
+    lockHomeTiles: async (mapId, userId) => {
+      // Locked in id order (tech spec §7 "Lock order"), returned by (q, r).
+      const rows = await db
+        .select({ id: tiles.id, q: tiles.q, r: tiles.r, nodeResource: tiles.nodeResource })
+        .from(tiles)
+        .where(
+          and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId), isNotNull(tiles.homeSlot)),
+        )
+        .orderBy(asc(tiles.id))
+        .for('no key update');
+      return rows.sort((a, b) => a.q - b.q || a.r - b.r);
+    },
 
     listOwned: async (mapId, userId) =>
       (
@@ -212,10 +223,28 @@ function queries(db: Executor): BuildingsRepo {
     },
 
     deleteOwned: async (mapId, userId) => {
-      const deleted = await db
-        .delete(buildings)
-        .where(and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, userId)))
-        .returning({ id: buildings.id });
+      const owned = and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, userId));
+      // Tech spec §7 "Lock order": the buildings, then their residents in id
+      // order. Deleting them moves the residents out through the foreign key
+      // (`ON DELETE SET NULL`), a bare multi-row UPDATE that locks in scan order.
+      await db
+        .select({ id: buildings.id })
+        .from(buildings)
+        .where(owned)
+        .orderBy(asc(buildings.id))
+        .for('update');
+      await db
+        .select({ id: squishies.id })
+        .from(squishies)
+        .where(
+          inArray(
+            squishies.habitatBuildingId,
+            db.select({ id: buildings.id }).from(buildings).where(owned),
+          ),
+        )
+        .orderBy(asc(squishies.id))
+        .for('no key update');
+      const deleted = await db.delete(buildings).where(owned).returning({ id: buildings.id });
       return deleted.length;
     },
 
@@ -249,8 +278,16 @@ function queries(db: Executor): BuildingsRepo {
       await db.update(squishies).set({ habitatBuildingId }).where(eq(squishies.id, squishyId));
     },
 
-    moveOutAll: async (buildingRowId) =>
-      (
+    moveOutAll: async (buildingRowId) => {
+      // Lock the residents in id order first, like nightfall (tech spec §7
+      // "Lock order"): a bare multi-row UPDATE locks in scan order.
+      await db
+        .select({ id: squishies.id })
+        .from(squishies)
+        .where(eq(squishies.habitatBuildingId, buildingRowId))
+        .orderBy(asc(squishies.id))
+        .for('no key update');
+      return (
         await db
           .update(squishies)
           .set({ habitatBuildingId: null })
@@ -258,6 +295,7 @@ function queries(db: Executor): BuildingsRepo {
           .returning({ id: squishies.id })
       )
         .map((r) => r.id)
-        .sort(),
+        .sort();
+    },
   };
 }
