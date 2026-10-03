@@ -18,7 +18,7 @@ const me = { userId: 'me' };
 describe('public views', () => {
   it('denies by default: a type without a view is never sent', () => {
     // Not in the shared registry (yet), so no view.
-    for (const type of ['tile.updated', 'chat.quick', 'test.secret']) {
+    for (const type of ['tile.updated', 'milestone.earned', 'test.secret']) {
       expect(publicViewFor(PUBLIC_VIEWS, event(type, { secret: 1 }), me)).toBeNull();
     }
     expect(publicViewFor(PUBLIC_VIEWS, event('toString', {}), me)).toBeNull();

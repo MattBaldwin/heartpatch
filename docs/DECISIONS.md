@@ -348,7 +348,6 @@ _Proposed in the #20 PR; the project owner confirms on merge._
 - **Renaming** (coordinator-approved lane): `POST /maps/:mapId/squishies/:squishyId/rename` in `modules/care`, owner only, `Idempotency-Key`, its own rate limit, every nickname through `lib/filter.ts`, and the already-listed `squishy.updated` event (`nickname` public) rather than a new type.
 - **An evolution that arrives while the close-up is open is celebrated there** (sparkles, a big bounce, "Yay!" marks it seen); leaving the close-up for the map asks the care sheet to celebrate any other news, as returning from a battle does.
 
-
 ## 2026-10-03 — Owner decisions
 
 _Decided by the project owner on 2026-10-03. They answer the open questions in the entries named below; the design doc carries the resulting rules._
@@ -367,3 +366,13 @@ _Decided by the project owner on 2026-10-03. They answer the open questions in t
 - **Care starts friendly** (#19's product calls). New squishies start at contentment 50 ("Feeling okay!"), not 0. An evolved squishy takes the new form's element and keeps its own feeling. A squishy already past its evolution level evolves on its next XP. *Why:* a new squishy shouldn't look unhappy before anyone has met it, and an evolution shouldn't wait for a level it has already passed.
 - **The #4 map decisions are confirmed:** 4-seat maps, leaving frees the seat and the land, and the owner can't leave in Phase 1.
 - **Review cap: at most 4 reviewer rounds per PR.** A round caused only by merging `main` doesn't count. Confirms the cap and the proposal from "Usage, models and supervisor handoff". *Why:* a merge of `main` forces a re-review through no fault of the author, and the cap is there to catch contested findings.
+
+## 2026-10-03 — Quick messages (#23)
+
+_Proposed in the #23 PR; the project owner confirms on merge._
+
+- **Ids only, never text.** Phase 1 chat is the shared `QUICK_MESSAGES` list (14 preset phrases, 8 emoji, 5 squishy stickers). The client sends a message id; the server checks it against the data, stores the id and the sender, and broadcasts `chat.quick`; every client draws the words from shared data. No player text exists, so no filter call is needed (CLAUDE.md rule 9). Ids are stable keys: never rename or remove one.
+- **Rate limits stand in for mute** (tech spec §5): per IP, per player (a few messages per 30 s) and per map (`modules/chat/limits.ts`, all `TUNE:`).
+- **Retention: the latest `feedLimit` (30) per map,** pruned on every send, rather than a daily `chat-retention` job. *Why:* Phase 1 keeps nothing worth reviewing (only presets), and the feed is all anyone reads. Phase 2's free chat brings the 30-day history for parent review and the job.
+- **No chat on tutorial maps** (`FORBIDDEN`); the client never shows the Chat button over the Tutorial Glade.
+- **Stickers are public squishies drawn as their vinyl-colour blob** (the care sheet's look), so there are no new image assets and never a secret species.

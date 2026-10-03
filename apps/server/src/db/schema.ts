@@ -1025,3 +1025,32 @@ export const raids = pgTable(
     index('raids_map_id_defender_idx').on(t.mapId, t.defenderUserId, t.resolvedAt),
   ],
 );
+
+/**
+ * Quick messages (#23, design doc §17 Phase 1): a preset phrase, emoji or
+ * sticker id from the shared `QUICK_MESSAGES`, never typed text. Only a map's
+ * latest few are kept (the feed's length; older ones are pruned as new ones
+ * arrive). Phase 2's free chat brings the 30-day history for parent review.
+ */
+export const quickMessages = pgTable(
+  'quick_messages',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    // Quick message id from the shared data.
+    messageId: text('message_id').notNull(),
+    sentAt: timestamptz('sent_at').notNull(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'quick_messages_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // A map's feed, newest first.
+    index('quick_messages_map_id_sent_at_idx').on(t.mapId, t.sentAt, t.id),
+  ],
+);
