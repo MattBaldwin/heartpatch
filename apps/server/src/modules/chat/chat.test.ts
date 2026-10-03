@@ -169,6 +169,34 @@ describe.skipIf(!url)('quick messages (needs DATABASE_URL)', () => {
     }
   });
 
+  it('sends a retried tap once (same Idempotency-Key)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const tap = (key: string) =>
+      server.inject({
+        method: 'POST',
+        url: `/api/v1/maps/${mapId}/chat`,
+        headers: { ...HEADERS, 'idempotency-key': key },
+        cookies: { [SESSION_COOKIE]: kid.token },
+        payload: { messageId: 'heart' },
+      });
+    const first = await tap('chat-retry-1');
+    expect(first.statusCode, first.body).toBe(200);
+    const again = await tap('chat-retry-1');
+    expect(again.statusCode).toBe(200);
+    expect(again.headers['idempotent-replayed']).toBe('true');
+    const sent = SendQuickMessageResponseSchema.parse(first.json()).message;
+    expect(SendQuickMessageResponseSchema.parse(again.json()).message.id).toBe(sent.id);
+    expect(await rowsOf(mapId)).toHaveLength(1);
+    expect(await eventsOf(mapId)).toHaveLength(1);
+
+    // A new tap is a new message.
+    expect((await tap('chat-retry-2')).statusCode).toBe(200);
+    expect(await rowsOf(mapId)).toHaveLength(2);
+    expect(await eventsOf(mapId)).toHaveLength(2);
+  });
+
   it('refuses unknown ids, non-members, strangers and the Tutorial Glade', async () => {
     const server = await start();
     const kid = await player();
