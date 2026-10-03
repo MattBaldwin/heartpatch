@@ -419,7 +419,7 @@ Every new player plays a short solo tutorial before joining or creating a multip
 2. **Gather.** Collect Timber and Emberwood from nearby nodes (tutorial timers take seconds, not minutes). *Teaches: resources and timers.*
 3. **Light your first Hearthfire.** Build it, fuel it, see the warm safe radius on the map. *Teaches: fires keep squishies safe.*
 4. **Meet a wild squishy.** A friendly wild squishy wanders up. **First battle** (scripted to be winnable) introduces moves and one clear example of element and feeling effectiveness ("Super cozy!").
-5. **Capture it.** Use a Heart Charm (capture is guaranteed here). The player names their first squishy — it becomes their **Partner**.
+5. **Capture it.** Use a Heart Charm (capture is guaranteed here). *Teaches: befriending.* Then the player meets their **Partner**: the starter pick from §4 (1 of 3), named by the player. Exact beats are #24's.
 6. **Care for it.** The camera swoops into the **close-up view**: pet, boop and feed it. Sprout explains, simply, that happy squishies learn faster.
 7. **Give it a home.** Build a habitat that matches its element or feeling and move it in. *Teaches: the right home helps it grow.*
 8. **Claim your first territory.** Attack a neighboring tile, beat its guardian, and watch color return to the land. Sprout explains you can only claim land next to land you already hold, and that land brings resources and new squishies.
@@ -432,7 +432,7 @@ Every new player plays a short solo tutorial before joining or creating a multip
 **Rules**
 - Target length **[DEFAULT: 12–18 minutes]**. Progress is saved after every step; quitting resumes where you left off.
 - Nothing can be lost in the tutorial. The Hollow Man can't take anything here.
-- **Carry-over:** the player's Partner species, the Seedling Scarf and the "First Patch" milestone are account-level rewards. Every new map the player joins starts them with their Partner (a fresh level-1 copy) alongside the normal starting kit.
+- **Carry-over:** the player's Partner species, the Seedling Scarf and the "First Patch" milestone are account-level rewards. Every new map the player joins starts them with a fresh level-1 copy of their Partner species alongside the normal starting kit.
 - Players can skip the tutorial only after finishing it once (e.g. on a new device), and can replay it any time from Settings.
-- **Tutorial gate is a server setting:** while the tutorial is still being built (and for testing), the operator can let new accounts create or join maps without finishing it. The multiplayer game never waits on the tutorial to be playable. A player who skipped it starts each map with a starter Partner from a small starter list **[DEFAULT]** instead of the tutorial Partner. The tutorial's last steps (Seedling Scarf in the Wardrobe, First Patch milestone) can arrive once those systems exist.
+- **Tutorial gate is a server setting:** while the tutorial is still being built (and for testing), the operator can let new accounts create or join maps without finishing it. The multiplayer game never waits on the tutorial to be playable. A player who skipped it picks 1 of 3 starters from the starter list (§4) when they join a patch, like everyone else. The tutorial's last steps (Seedling Scarf in the Wardrobe, First Patch milestone) can arrive once those systems exist.
 - Every step is reachable with one hand on an iPhone; text is short and large.
