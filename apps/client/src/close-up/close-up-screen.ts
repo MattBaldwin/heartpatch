@@ -89,6 +89,8 @@ export interface CloseUpScreenOptions {
   onClosed: (mapId: string, from: CloseUpFrom) => void;
   /** It couldn't open (offline, or the squishy isn't here): say why where the player is. */
   onProblem: (message: string) => void;
+  /** The squishy was touched (a gesture or its button), sent or not (sound, #25). */
+  onTouch?: (kind: CloseUpTouch) => void;
   api?: CareApi;
 }
 
@@ -509,6 +511,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     hint.hidden = true;
     const decision = careDecision(kind, squishy, reply, serverNow(), inFlight);
     react(reactionFor(kind, decision.hold));
+    options.onTouch?.(kind);
     if (decision.hold !== null) {
       counts = { ...counts, held: counts.held + 1 };
       lastHold = decision.hold;

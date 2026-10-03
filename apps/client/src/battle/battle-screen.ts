@@ -73,6 +73,8 @@ export interface BattleScreenOptions {
   keeper?: () => KeeperConfig | null;
   /** What the player's Keeper wears (#43), clothing ids. */
   keeperWearing?: () => readonly string[];
+  /** A step of the log starts playing (sound, #25). */
+  onStep?: (step: PlaybackStep) => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -448,6 +450,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     const t = now();
     hud.setCaption(step.text);
+    options.onStep?.(step);
     shown = applyStep(shown, step);
     if (step.kind === 'swap' && step.to !== null) {
       const squishy = battle.view.sides[step.side].squishies[step.to];

@@ -1,3 +1,4 @@
+import type { AudioDebug } from '../audio/audio.js';
 import type { BattleDebug } from '../battle/battle-screen.js';
 import type { HollowDebug } from '../hollow/hollow-screen.js';
 import type { HomeDebug } from '../home/home-screen.js';
@@ -58,6 +59,8 @@ declare global {
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */
       wardrobe?(): WardrobeDebug | null;
+      /** Sound (#25): unlock state, engine, the loop wanted and playing, the last cue, levels. */
+      audio?(): AudioDebug;
     };
   }
 }

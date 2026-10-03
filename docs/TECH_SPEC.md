@@ -28,7 +28,8 @@ heartpatch/
 │  │  │  │                    feature folders: one per screen or system, each with its API
 │  │  │  │                    client, scene (map, home base, battle, close-up), DOM view,
 │  │  │  │                    CSS and tests; client state sits beside its feature (map-state.ts)
-│  │  │  └─ audio/            (not built yet, #25)
+│  │  │  └─ audio/            sound (#25): gesture unlock, settings, cues; lazy engine,
+│  │  │                       procedural SFX and music loops; dev gallery /sounds.html
 │  │  ├─ public/              icons, manifest, static assets
 │  │  └─ tests/e2e/           Playwright
 │  └─ server/                 Node 22 + Fastify
