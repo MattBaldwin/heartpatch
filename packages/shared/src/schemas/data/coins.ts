@@ -17,7 +17,7 @@ const coins = z.number().int().min(0).max(1000);
  * - `capture`: a squishy befriended or a tile claimed (`ref_id` the battle).
  * - `care`: a care action's coins (`ref_id` the `care_log` row).
  * - `milestone`: a milestone's reward (#44).
- * - `boutique`: a purchase (negative; `ref_id` the piece bought).
+ * - `boutique`: a purchase (negative; `ref_id` the purchase, also its `clothing_owned.ref_id`).
  * - `dev-grant`: dev and test builds only.
  */
 export const CoinSourceSchema = z.enum([

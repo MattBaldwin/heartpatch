@@ -213,7 +213,11 @@ export function createBoutiqueCard(options: BoutiqueCardOptions): BoutiqueCard {
     } else {
       ask.replaceChildren(
         el('p', { class: 'boutique-ask', id: 'boutique-ask' }, BOUTIQUE_TEXT.notEnough),
-        el('p', { class: 'boutique-ask-hint' }, BOUTIQUE_TEXT.earnHint),
+        el(
+          'p',
+          { class: 'boutique-ask-hint' },
+          `${BOUTIQUE_TEXT.need(entry.price - boutique.coins.balance)} ${BOUTIQUE_TEXT.earnHint}`,
+        ),
         el(
           'div',
           { class: 'boutique-ask-actions' },

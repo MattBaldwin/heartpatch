@@ -292,7 +292,7 @@ describe.skipIf(!url)('Boutique (needs DATABASE_URL)', () => {
       const kid = await player();
       const racks = await shop(server, kid);
       const [a, b, c] = racks.daily.map((i) => i.itemId);
-      // Enough for the dearest one only, never two.
+      // Never enough for the dearest piece plus the cheapest one.
       const prices = [a!, b!, c!].map(priceOf);
       const budget = Math.max(...prices) + Math.min(...prices) - 1;
       await coins(server, kid, budget);

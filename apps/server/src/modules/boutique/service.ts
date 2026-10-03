@@ -80,11 +80,12 @@ export function createBoutiqueService(options: BoutiqueServiceOptions): Boutique
       createWardrobeRepo(tx).countOwned(userId),
       coins.balance(userId),
     ]);
-    const item = (itemId: string): BoutiqueItem => ({
-      itemId,
-      price: CLOTHING_BY_ID.get(itemId)?.boutiquePrice ?? 0,
-      owned: STARTERS.has(itemId) || (owned.get(itemId) ?? 0) > 0,
-    });
+    const item = (itemId: string): BoutiqueItem => {
+      // Only priced pieces reach the racks (`boutiqueStock`).
+      const price = CLOTHING_BY_ID.get(itemId)?.boutiquePrice;
+      if (price === undefined) throw new Error(`boutique: ${itemId} has no price`);
+      return { itemId, price, owned: STARTERS.has(itemId) || (owned.get(itemId) ?? 0) > 0 };
+    };
     return {
       date,
       restocksAt: nextLocalMidnight(at, timeZone).toISOString(),
