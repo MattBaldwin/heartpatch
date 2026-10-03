@@ -54,11 +54,9 @@ export function setEventWakeup(wakeup: EventWakeup | null): void {
  *   waits for the lock;
  * - locks are always taken entity rows first, `maps` last, which avoids
  *   deadlocks and keeps the busy `maps` row locked only briefly. The full
- *   order (tech spec §7 "Lock order"): `event_consumers` (consumer
- *   transactions), member, seats, join request, `users`, `outfits`,
- *   battle, tiles, `gather_jobs`, buildings, craft, the Hollow's rows,
- *   squishies (id order), inventory, then `maps`. A consumer transaction applies one event, so it
- *   takes `maps` at most once, at its end (`jobs/consumers.ts`).
+ *   order is tech spec §7 "Lock order" (several rows of a kind in id
+ *   order). A consumer transaction applies one event, so it takes `maps`
+ *   at most once, at its end (`jobs/consumers.ts`).
  *
  * It also enqueues the event consumers' wake-up (pg-boss `send`) in the same
  * transaction (see `setEventWakeup`), so a rolled-back command wakes nobody.

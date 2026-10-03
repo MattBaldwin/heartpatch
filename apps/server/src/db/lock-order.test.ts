@@ -4,9 +4,10 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
 import { removeMemberBuildings } from '../modules/buildings/service.js';
+import { createMapsRepo } from '../modules/maps/repo.js';
 import { createDbClient, type Database, type DbClient, type Transaction } from './client.js';
 import { backendPid, waitUntilBlockedBy } from '../../tests/lock-waits.js';
-import { buildings, mapMembers, maps, squishies, tiles, users } from './schema.js';
+import { buildings, mapMembers, maps, squishies, tileDefenders, tiles, users } from './schema.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -127,6 +128,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .orderBy(asc(squishies.id));
     expect(left).toEqual([]);
   });
+
   it("locks a leaving member's habitat residents in id order (buildings `removeMemberBuildings`)", async () => {
     const { mapId, userId, buildingId, ids } = await patch();
     await nightfallAgainst(ids, () => unplanned((tx) => removeMemberBuildings(tx, mapId, userId)));
@@ -141,5 +143,39 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .where(eq(squishies.mapId, mapId))
       .orderBy(asc(squishies.id));
     expect(homeless.map((r) => r.id)).toEqual(ids);
+  });
+  it("locks a leaving member's tiles in id order before their defenders (maps `releaseTiles`)", async () => {
+    const { mapId, userId, ids: squishyIds } = await patch();
+    // Stored highest id first, like the squishies.
+    const tileIds = [randomUUID(), randomUUID(), randomUUID()].sort();
+    await db.insert(tiles).values(
+      [...tileIds].reverse().map((id, i) => ({
+        id,
+        mapId,
+        q: 1,
+        r: i,
+        terrain: 'meadow',
+        ownerUserId: userId,
+      })),
+    );
+    await db.insert(tileDefenders).values({
+      mapId,
+      tileId: tileIds[2]!,
+      slot: 0,
+      squishyId: squishyIds[0]!,
+      assignedAt: new Date(),
+    });
+
+    let running: Promise<number> | undefined;
+    // A capture: its tile, then the defenders posted there.
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await tx.select({ id: tiles.id }).from(tiles).where(eq(tiles.id, tileIds[0]!)).for('update');
+      const pid = await backendPid(tx);
+      running = unplanned((t) => createMapsRepo(t).releaseTiles(mapId, userId));
+      await waitUntilBlockedBy(db, pid);
+      await tx.delete(tileDefenders).where(eq(tileDefenders.tileId, tileIds[2]!));
+    });
+    expect(await running).toBe(3);
   });
 });

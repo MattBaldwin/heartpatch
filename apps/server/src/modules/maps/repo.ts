@@ -354,6 +354,14 @@ function queries(db: Executor): MapsRepo {
         .returning({ q: tiles.q, r: tiles.r }),
 
     releaseTiles: async (mapId, userId) => {
+      // Tech spec §7 "Lock order": the tiles (in id order), then their
+      // defenders, like a capture. A bare multi-row UPDATE locks in scan order.
+      await db
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId)))
+        .orderBy(asc(tiles.id))
+        .for('no key update');
       // Squishies on watch there go home (#15): the land isn't theirs to guard now.
       await db.delete(tileDefenders).where(
         inArray(

@@ -162,7 +162,18 @@ function queries(db: Executor): BuildingsRepo {
 
     listHomeTiles: (mapId, userId) => homeTiles(mapId, userId),
 
-    lockHomeTiles: (mapId, userId) => homeTiles(mapId, userId).for('no key update'),
+    lockHomeTiles: async (mapId, userId) => {
+      // Locked in id order (tech spec §7 "Lock order"), returned by (q, r).
+      const rows = await db
+        .select({ id: tiles.id, q: tiles.q, r: tiles.r, nodeResource: tiles.nodeResource })
+        .from(tiles)
+        .where(
+          and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId), isNotNull(tiles.homeSlot)),
+        )
+        .orderBy(asc(tiles.id))
+        .for('no key update');
+      return rows.sort((a, b) => a.q - b.q || a.r - b.r);
+    },
 
     listOwned: async (mapId, userId) =>
       (
