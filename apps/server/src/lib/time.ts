@@ -1,5 +1,12 @@
-import { spawnWindowAt, type LocalDate, type SpawnWindow } from '@heartpatch/shared';
+import {
+  spawnWindowAt,
+  type LocalDate,
+  type MapLocalTime,
+  type SpawnWindow,
+} from '@heartpatch/shared';
 import type { Config } from '../config.js';
+
+export const MINUTE_MS = 60_000;
 
 /** The game clock. Services take one instead of calling `new Date()`, so tests and dev can move time. */
 export type Clock = () => Date;
@@ -65,6 +72,15 @@ export function localDateTime(
     hour: Number(part('hour')),
     minute: Number(part('minute')),
   };
+}
+
+/**
+ * Map-local wall-clock time at `at` in `timeZone` (an IANA zone), for the
+ * shared Hearthfire and nightfall rules (#18, #21).
+ */
+export function mapLocalTime(at: Date, timeZone: string): MapLocalTime {
+  const { date, hour, minute } = localDateTime(at, timeZone);
+  return { date, minute: hour * 60 + minute };
 }
 
 /**

@@ -1,15 +1,11 @@
 import { AcknowledgeStepRequestSchema, TutorialResponseSchema } from '@heartpatch/shared';
-import { normalizeIP } from '@fastify/rate-limit';
-import type { FastifyPluginCallback, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
+import type { FastifyPluginCallback } from 'fastify';
 import { z } from 'zod';
-import { AppError } from '../../lib/errors.js';
+import { playerRateLimit } from '../../lib/rate-limit.js';
 import type { ZodTypeProvider } from '../../lib/zod.js';
 import { requireUser, type AuthHooks } from '../auth/hooks.js';
-import type { RateLimit } from '../auth/limits.js';
-import { TUTORIAL_RATE_LIMITS, type TutorialAction } from './limits.js';
+import { TUTORIAL_RATE_LIMITS } from './limits.js';
 import type { TutorialService } from './service.js';
-
-const RATE_LIMITED_MESSAGE = 'Too many tries! Take a little break and try again soon.';
 
 export interface TutorialRoutesOptions {
   hooks: AuthHooks;
@@ -21,25 +17,7 @@ export const tutorialRoutes =
     const app = fastify.withTypeProvider<ZodTypeProvider>();
     const { requireAuth } = options.hooks;
 
-    /** Per-IP and per-player limits for one action; runs after `requireAuth`. */
-    const rateLimit = (action: TutorialAction): preHandlerAsyncHookHandler => {
-      const limiter = (limit: RateLimit, keyGenerator: (request: FastifyRequest) => string) =>
-        fastify.createRateLimit({ max: limit.max, timeWindow: limit.windowMs, keyGenerator });
-      const limits = TUTORIAL_RATE_LIMITS[action];
-      const checks = [
-        limiter(limits.perIp, (request) => `tutorial:${action}:ip:${normalizeIP(request.ip)}`),
-        limiter(limits.perUser, (request) => `tutorial:${action}:user:${requireUser(request).id}`),
-      ];
-      return async (request, reply) => {
-        for (const check of checks) {
-          const result = await check(request);
-          if (!result.isAllowed && result.isExceeded) {
-            void reply.header('retry-after', result.ttlInSeconds);
-            throw new AppError('RATE_LIMITED', RATE_LIMITED_MESSAGE);
-          }
-        }
-      };
-    };
+    const rateLimit = playerRateLimit(fastify, 'tutorial', TUTORIAL_RATE_LIMITS);
 
     app.get(
       '/tutorial',

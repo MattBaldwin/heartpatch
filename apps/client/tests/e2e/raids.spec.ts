@@ -4,7 +4,7 @@ import { newPlayer, uniqueName } from './players.js';
 
 /**
  * The raid report on an iPhone (issue #16): a Report button over my patch
- * opens the morning report, and I pick how my squishies on watch play when
+ * opens the raid report, and I pick how my squishies on watch play when
  * someone challenges my land. Checked through the dev hook, never pixels.
  * (A real challenge needs a second player past the 48 h shield; the server
  * tests cover the raid log itself.)
@@ -24,7 +24,7 @@ type Hook = { __heartpatch?: { raids?(): RaidReportDebug | null } };
 const raidState = (page: Page) =>
   page.evaluate(() => (window as unknown as Hook).__heartpatch?.raids?.() ?? null);
 
-test('opens the morning report and saves a defense style', async ({ browser }) => {
+test('opens the raid report and saves a defense style', async ({ browser }) => {
   test.setTimeout(120_000); // a full map build; CI renders in software
   const page = await newPlayer(browser, uniqueName('raid'));
   const errors: string[] = [];

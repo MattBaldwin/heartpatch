@@ -1,8 +1,7 @@
 // Rate limits for territory (tech spec §5). The raid rules already cap tile
 // battles at a handful a day; these only stop tap-spamming the endpoints.
-import type { RateLimit } from '../auth/limits.js';
-
-const MINUTE_MS = 60_000;
+import type { RateLimitTable } from '../../lib/rate-limit.js';
+import { MINUTE_MS } from '../../lib/time.js';
 
 export const TERRITORY_RATE_LIMITS = {
   attack: {
@@ -13,6 +12,6 @@ export const TERRITORY_RATE_LIMITS = {
     perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 120, windowMs: MINUTE_MS }, // TUNE: guess; a fast tapper, with retries
   },
-} as const satisfies Record<string, { perIp: RateLimit; perUser: RateLimit }>;
+} as const satisfies RateLimitTable;
 
 export type TerritoryAction = keyof typeof TERRITORY_RATE_LIMITS;

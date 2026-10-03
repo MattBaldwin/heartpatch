@@ -41,6 +41,8 @@ Take time from the clock (`lib/time.ts`), never `new Date()` in services. `creat
 - **Handlers:** return the value from a sync handler, or use an `async` handler when you need `reply.code(x).send(...)` (a sync `return reply.send()` doesn't typecheck with the type provider).
 - **Logging:** `request.log` / `app.log` (pino). `console` is lint-banned here.
 - **Randomness:** never `Math.random()`. Seeds come from `crypto.randomBytes` and feed the shared seeded RNG.
+- **Rate limits:** numbers live in the module's `limits.ts` as a `RateLimitTable` (`as const satisfies RateLimitTable`, `MINUTE_MS` from `lib/time.ts`, every number with a `// TUNE:` note). Routes enforce them with `lib/rate-limit.ts`: `const rateLimit = playerRateLimit(fastify, '<module>', TABLE)` and `preHandler: [requireAuth, rateLimit('<action>')]` (per IP, then per player; `RATE_LIMITED` with `Retry-After`). `rateLimit(fastify, checks)` is the same preHandler for other keys (auth limits per username).
+- **Membership:** every module that acts on a map checks the player with `requireMember(tx, user, mapId)` from `modules/maps/members.ts`: `{ map, role }` for an active member, else `NOT_FOUND` with the same message as a missing map, so maps can't be probed.
 
 ## Auth
 
@@ -205,7 +207,7 @@ await repo.transaction(async (repo, tx) => {
 
 ## Home base and buildings
 
-Building on a home base (design doc §11, §13–14; issue #18) lives in `src/modules/buildings`. A building is a `buildings` row on a spot (0 = the middle, 1–6 around it) of one of the player's own home tiles. Hearthfire fuel is a date (tech spec §7): `fuelled_through` is the last map-local night it covers, and "lit" / "nights left" are worked out on read (`hearthfire.ts`: `mapLocalTime`, `fireStateAt`), so nothing ticks.
+Building on a home base (design doc §11, §13–14; issue #18) lives in `src/modules/buildings`. A building is a `buildings` row on a spot (0 = the middle, 1–6 around it) of one of the player's own home tiles. Hearthfire fuel is a date (tech spec §7): `fuelled_through` is the last map-local night it covers, and "lit" / "nights left" are worked out on read (`lib/time.ts`'s `mapLocalTime`, `hearthfire.ts`'s `fireStateAt`), so nothing ticks.
 
 | Endpoint | Does |
 |---|---|
@@ -218,7 +220,7 @@ Building on a home base (design doc §11, §13–14; issue #18) lives in `src/mo
 
 Mutating routes take an `Idempotency-Key`. Every command locks the player's home tiles first (`lockHomeTiles`), so one player's building commands run one at a time ("one Hearthfire per home" and habitat capacity can't race), then the building, squishy and inventory rows, then `maps` (the event).
 
-**For nightfall (#21):** `mapLocalTime(at, zone)` gives the map-local date and minute; shared `tonightOf`, `protectsNight(fuelledThrough, night)` and `hearthfireState` answer "is this fire lit for this night"; `litSafeTiles(fires, homeTiles, local)` (or shared `safeTiles`) gives the protected tiles: a lit fire's whole home base plus every tile within its radius. `BuildingsRepo.listOnMap` returns every building with its tile. **Leaving:** `removeMemberBuildings` runs inside the maps module's leave/remove transaction. **Map view:** `listPublicBuildings` fills `PublicTile.buildings` from the view's own snapshot.
+**For nightfall (#21):** `mapLocalTime(at, zone)` (`lib/time.ts`) gives the map-local date and minute; shared `tonightOf`, `protectsNight(fuelledThrough, night)` and `hearthfireState` answer "is this fire lit for this night"; `litSafeTiles(fires, homeTiles, local)` (or shared `safeTiles`) gives the protected tiles: a lit fire's whole home base plus every tile within its radius. `BuildingsRepo.listOnMap` returns every building with its tile. **Leaving:** `removeMemberBuildings` runs inside the maps module's leave/remove transaction. **Map view:** `listPublicBuildings` fills `PublicTile.buildings` from the view's own snapshot.
 
 ## The Hollow Man
 

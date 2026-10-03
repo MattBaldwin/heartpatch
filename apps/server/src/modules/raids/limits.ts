@@ -1,8 +1,7 @@
 // Rate limits for the raid log and defense style (tech spec §5). Reads and
 // one-tap settings; these only stop tap-spamming the endpoints.
-import type { RateLimit } from '../auth/limits.js';
-
-const MINUTE_MS = 60_000;
+import type { RateLimitTable } from '../../lib/rate-limit.js';
+import { MINUTE_MS } from '../../lib/time.js';
 
 export const RAID_RATE_LIMITS = {
   read: {
@@ -13,6 +12,6 @@ export const RAID_RATE_LIMITS = {
     perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess; a fast tapper, with retries
   },
-} as const satisfies Record<string, { perIp: RateLimit; perUser: RateLimit }>;
+} as const satisfies RateLimitTable;
 
 export type RaidAction = keyof typeof RAID_RATE_LIMITS;

@@ -9,17 +9,13 @@ import {
   RemoveBuildingResponseSchema,
   SquishyParamsSchema,
 } from '@heartpatch/shared';
-import { normalizeIP } from '@fastify/rate-limit';
-import type { FastifyPluginCallback, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
-import { AppError } from '../../lib/errors.js';
+import type { FastifyPluginCallback } from 'fastify';
 import type { Idempotency } from '../../lib/idempotency.js';
+import { playerRateLimit } from '../../lib/rate-limit.js';
 import type { ZodTypeProvider } from '../../lib/zod.js';
 import { requireUser, type AuthHooks } from '../auth/hooks.js';
-import type { RateLimit } from '../auth/limits.js';
-import { BUILDINGS_RATE_LIMITS, type BuildingsAction } from './limits.js';
+import { BUILDINGS_RATE_LIMITS } from './limits.js';
 import type { BuildingsService } from './service.js';
-
-const RATE_LIMITED_MESSAGE = 'Too many tries! Take a little break and try again soon.';
 
 export interface BuildingsRoutesOptions {
   hooks: AuthHooks;
@@ -34,25 +30,7 @@ export const buildingsRoutes =
     const { requireAuth } = options.hooks;
     const idempotency = options.idempotency(fastify);
 
-    /** Per-IP and per-player limits for one action; runs after `requireAuth`. */
-    const rateLimit = (action: BuildingsAction): preHandlerAsyncHookHandler => {
-      const limiter = (limit: RateLimit, keyGenerator: (request: FastifyRequest) => string) =>
-        fastify.createRateLimit({ max: limit.max, timeWindow: limit.windowMs, keyGenerator });
-      const limits = BUILDINGS_RATE_LIMITS[action];
-      const checks = [
-        limiter(limits.perIp, (request) => `buildings:${action}:ip:${normalizeIP(request.ip)}`),
-        limiter(limits.perUser, (request) => `buildings:${action}:user:${requireUser(request).id}`),
-      ];
-      return async (request, reply) => {
-        for (const check of checks) {
-          const result = await check(request);
-          if (!result.isAllowed && result.isExceeded) {
-            void reply.header('retry-after', result.ttlInSeconds);
-            throw new AppError('RATE_LIMITED', RATE_LIMITED_MESSAGE);
-          }
-        }
-      };
-    };
+    const rateLimit = playerRateLimit(fastify, 'buildings', BUILDINGS_RATE_LIMITS);
     const commandHooks = {
       preHandler: [requireAuth, rateLimit('build'), idempotency.preHandler],
       onSend: idempotency.onSend,

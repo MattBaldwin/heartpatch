@@ -21,7 +21,7 @@ import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { spawnWindowFor, type Clock } from '../../lib/time.js';
 import type { WildEncounter, WildEncounterContext } from '../battles/service.js';
-import { createMapsRepo } from '../maps/repo.js';
+import { requireMember } from '../maps/members.js';
 import { createSpawnsRepo, type SpawnTileRow } from './repo.js';
 
 /*
@@ -80,11 +80,6 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
   const data = options.data ?? defaultSpawnData();
   const store = createSpawnsRepo(db);
 
-  const requireMember = async (user: PublicUser, mapId: string) => {
-    const membership = await createMapsRepo(db).membership(mapId, user.id);
-    if (membership?.status !== 'active') throw new AppError('NOT_FOUND', MESSAGES.noMap);
-  };
-
   /**
    * Tiles the player can look for squishies on: their own land, then the
    * tiles next to it (the same reach as claiming, design doc §11), each group
@@ -141,13 +136,13 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
     },
 
     wildHints: async (user, mapId) => {
-      await requireMember(user, mapId);
+      await requireMember(db, user, mapId);
       const { found } = await spawnsFor(mapId, user.id, now(), null);
       return { tiles: found.map(({ tile }) => ({ q: tile.q, r: tile.r })) };
     },
 
     catalog: async (user, mapId) => {
-      await requireMember(user, mapId);
+      await requireMember(db, user, mapId);
       const seen = await store.listSeen(mapId, user.id);
       // Secret species go only to a player who has met them (CLAUDE.md rule 6).
       const speciesDefs = seen.flatMap(({ speciesId }) => {

@@ -19,6 +19,10 @@ const raid = (over: Partial<Raid> = {}): Raid => ({
 });
 
 describe('raid words', () => {
+  it('titles the sheet "Raid report", so it never reads like the Hollow’s morning report', () => {
+    expect(RAID_TEXT.title).toBe('Raid report');
+  });
+
   it('names the three styles with the style guide words', () => {
     expect(STANCES.map((s) => s.name)).toEqual(['Bold', 'Balanced', 'Careful']);
     expect(stanceName('aggressive')).toBe('Bold');

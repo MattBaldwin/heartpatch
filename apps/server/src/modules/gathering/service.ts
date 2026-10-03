@@ -14,7 +14,8 @@ import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
-import { grantItems, requireMember, seasonsOn, toGather } from '../inventory/service.js';
+import { grantItems, seasonsOn, toGather } from '../inventory/service.js';
+import { requireMember } from '../maps/members.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createGatheringRepo, type GatherRow } from './repo.js';
 
@@ -71,7 +72,7 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
       let result: GatherResponse;
       try {
         result = await store.transaction(async (repo, tx) => {
-          const map = await requireMember(tx, user, mapId);
+          const { map } = await requireMember(tx, user, mapId);
           // Share-locked: the tile can't change hands while this starts.
           const tile = await repo.lockTileAt(mapId, q, r);
           if (!tile) throw new AppError('NOT_FOUND', MESSAGES.noTile);

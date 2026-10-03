@@ -1,9 +1,8 @@
 // Rate limits for battles (tech spec §5). Starting a battle writes a game
 // event and a battle row; each action runs the engine once. Dev grants are
 // dev/test only but still limited, since e2e shares one IP.
-import type { RateLimit } from '../auth/limits.js';
-
-const MINUTE_MS = 60_000;
+import type { RateLimitTable } from '../../lib/rate-limit.js';
+import { MINUTE_MS } from '../../lib/time.js';
 
 export const BATTLE_RATE_LIMITS = {
   start: {
@@ -18,7 +17,7 @@ export const BATTLE_RATE_LIMITS = {
     perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: e2e signs up and grants from one IP
     perUser: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess
   },
-} as const satisfies Record<string, { perIp: RateLimit; perUser: RateLimit }>;
+} as const satisfies RateLimitTable;
 
 export type BattleAction = keyof typeof BATTLE_RATE_LIMITS;
 

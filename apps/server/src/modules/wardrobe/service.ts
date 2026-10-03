@@ -17,7 +17,7 @@ import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import type { Clock } from '../../lib/time.js';
-import { requireMember } from '../inventory/service.js';
+import { requireMember } from '../maps/members.js';
 import { createWardrobeRepo, WORN, type OutfitRow, type WardrobeTxRepo } from './repo.js';
 
 /*
@@ -120,8 +120,14 @@ export function createWardrobeService(options: WardrobeServiceOptions): Wardrobe
 
   /**
    * Stores the worn set and, if it changed, tells every map the player is on
-   * (`outfit.changed`, one per map, map ids in order: the lock order). Runs in
-   * the caller's transaction; returns the maps to publish to.
+   * (`outfit.changed`, one per map). Runs in the caller's transaction; returns
+   * the maps to publish to.
+   *
+   * Each append row-locks that map's `maps` row until commit (tech spec §7,
+   * "Lock order": `maps` last, several rows of one kind in id order), so the
+   * maps go in ascending id order (`activeMapIds` sorts them). Two players
+   * on the same maps dressing at once then queue on the lowest one instead of
+   * each holding a map the other is waiting for (a deadlock).
    */
   const putOn = async (repo: WardrobeTxRepo, userId: string, wearing: string[]) => {
     // Never dressed is the same as wearing nothing.

@@ -60,6 +60,22 @@ async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
     .toBe(true);
 }
 
+/**
+ * Waits for the lobby. After a save it opens only once the server has kept
+ * the Keeper (the picker closes, `saved` set) and the lobby has fetched my
+ * patches, two round trips that can be slow while other projects build maps.
+ */
+async function waitForLobby(page: Page): Promise<void> {
+  await expect
+    .poll(() => keeperState(page).then((s) => s !== null && s.mode === null && s.saved !== null), {
+      timeout: 30_000,
+    })
+    .toBe(true);
+  await expect(
+    page.getByTestId('lobby').getByRole('heading', { name: 'Your patches' }),
+  ).toBeVisible({ timeout: 30_000 });
+}
+
 async function signUp(page: Page, name: string): Promise<void> {
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');
@@ -110,13 +126,13 @@ test('a new Keeper is picked before any patch, remembered, and changed for free'
   // "That's me!" saves it and opens the lobby.
   await picker.getByRole('button', { name: 'That’s me!' }).tap();
   const lobby = page.getByTestId('lobby');
-  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
+  await waitForLobby(page);
   await expect(picker).toBeHidden();
   expect((await keeperState(page))!.saved).toEqual(picked.picked);
 
   // Remembered: a reload goes straight to the lobby.
   await page.reload();
-  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
+  await waitForLobby(page);
   await expect(picker).toBeHidden();
   await expect.poll(() => keeperState(page).then((s) => s?.saved ?? null)).toEqual(picked.picked);
 
@@ -135,7 +151,7 @@ test('a new Keeper is picked before any patch, remembered, and changed for free'
   await lobby.getByTestId('keeper-settings').tap();
   await picker.getByRole('button', { name: 'Pip', exact: true }).tap();
   await picker.getByRole('button', { name: 'Back' }).tap();
-  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
+  await waitForLobby(page);
   expect((await keeperState(page))!.saved).toMatchObject({ base: 'bramble' });
   expect(errors).toEqual([]);
 });
@@ -153,8 +169,11 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await lobby.getByRole('button', { name: 'Visit patch' }).tap();
   await expect(page.getByTestId('map-hud')).toContainText('Keeper Patch');
+  // Drawn with the map, which can take a while when CI renders in software.
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.()?.keepers))
+    .poll(() => page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.()?.keepers), {
+      timeout: 60_000,
+    })
     .toBe(1);
 
   // A dev battle (spawns arrive with #14): the Keeper is in the arena…

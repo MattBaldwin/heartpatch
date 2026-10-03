@@ -1,13 +1,23 @@
 import { randomUUID } from 'node:crypto';
-import { asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
 import { removeMemberBuildings } from '../modules/buildings/service.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
+import { createWardrobeService } from '../modules/wardrobe/service.js';
 import { createDbClient, type Database, type DbClient, type Transaction } from './client.js';
 import { backendPid, waitUntilBlockedBy } from '../../tests/lock-waits.js';
-import { buildings, mapMembers, maps, squishies, tileDefenders, tiles, users } from './schema.js';
+import {
+  buildings,
+  gameEvents,
+  mapMembers,
+  maps,
+  squishies,
+  tileDefenders,
+  tiles,
+  users,
+} from './schema.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -177,5 +187,45 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       await tx.delete(tileDefenders).where(eq(tileDefenders.tileId, tileIds[2]!));
     });
     expect(await running).toBe(3);
+  });
+
+  it("appends a new outfit's events on the player's maps in map id order (wardrobe `putOn`)", async () => {
+    const username = `dresser_${String(process.pid)}_${String((counter += 1))}`;
+    const [user] = await db
+      .insert(users)
+      .values({ username, passwordHash: 'not-a-hash', birthYear: 2014 })
+      .returning({ id: users.id });
+    const kid = { id: user!.id, username };
+    // Joined highest id first, so join order isn't id order.
+    const mapIds = [randomUUID(), randomUUID(), randomUUID()].sort();
+    for (const id of [...mapIds].reverse()) {
+      await db
+        .insert(maps)
+        .values({ id, kind: 'multiplayer', name: 'Lock Patch', timeZone: 'UTC', maxPlayers: 4 });
+      await db.insert(mapMembers).values({ mapId: id, userId: kid.id, role: 'owner' });
+    }
+    const lockMap = (tx: Transaction, id: string) =>
+      tx.select({ id: maps.id }).from(maps).where(eq(maps.id, id)).for('update');
+
+    let running: Promise<unknown> | undefined;
+    // Another command appending events on the same maps: it holds the lowest
+    // map's row, and once the wardrobe waits on it, takes the others in id
+    // order. Out of order, the wardrobe would already hold a higher map and
+    // Postgres would report a deadlock.
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await lockMap(tx, mapIds[0]!);
+      const pid = await backendPid(tx);
+      running = createWardrobeService({ db }).wear(kid, ['sunny-cap']);
+      await waitUntilBlockedBy(db, pid);
+      for (const id of mapIds.slice(1)) await lockMap(tx, id);
+    });
+    await running;
+    const told = await db
+      .select({ mapId: gameEvents.mapId })
+      .from(gameEvents)
+      .where(and(inArray(gameEvents.mapId, mapIds), eq(gameEvents.type, 'outfit.changed')))
+      .orderBy(asc(gameEvents.mapId));
+    expect(told.map((e) => e.mapId)).toEqual(mapIds);
   });
 });

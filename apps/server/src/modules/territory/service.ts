@@ -29,14 +29,15 @@ import {
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
-import { localDate, spawnWindowFor, type Clock } from '../../lib/time.js';
+import { localDate, MINUTE_MS, spawnWindowFor, type Clock } from '../../lib/time.js';
 import type {
   BattlesService,
   PrepareTileBattle,
   StartResult,
   TileBattlePort,
 } from '../battles/service.js';
-import { createMapsRepo, type MapRow } from '../maps/repo.js';
+import { requireMember } from '../maps/members.js';
+import type { MapRow } from '../maps/repo.js';
 import { createTerritoryRepo, type DefenderRow, type TerritoryTileRow } from './repo.js';
 
 /*
@@ -100,8 +101,7 @@ const PROBLEMS: Record<AttackTargetProblem, { code: 'FORBIDDEN' | 'CONFLICT'; me
   'pvp-off': { code: 'FORBIDDEN', message: MESSAGES.pvpOff },
 };
 
-const HOUR_MS = 60 * 60 * 1000;
-const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 
 /** Every species the server knows: public, then secret. */
 const ALL_SPECIES: readonly Species[] = [...GAME_DATA.species, ...SERVER_GAME_DATA.secretSpecies];
@@ -153,17 +153,6 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
   /** After commit only (apps/server/README.md, "Live sync"). */
   const published = (mapId: string) => {
     void options.publish?.(mapId);
-  };
-
-  /** The map, for an active member. NOT_FOUND otherwise, so maps can't be probed. */
-  const requireMember = async (tx: Executor, user: PublicUser, mapId: string): Promise<MapRow> => {
-    const maps = createMapsRepo(tx);
-    const [map, membership] = await Promise.all([
-      maps.findMap(mapId),
-      maps.membership(mapId, user.id),
-    ]);
-    if (!map || membership?.status !== 'active') throw new AppError('NOT_FOUND', MESSAGES.noMap);
-    return map;
   };
 
   /** The tile's guardians this window (tech spec §8 "No rerolls"; the seed never leaves). */
@@ -316,13 +305,13 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
     attack: (user, mapId, request) =>
       options.battles.startTile(user, mapId, prepare(user, request)),
 
-    status: async (user, mapId) => status(db, user, await requireMember(db, user, mapId)),
+    status: async (user, mapId) => status(db, user, (await requireMember(db, user, mapId)).map),
 
     setDefenders: async (user, mapId, request) => {
       if (request.squishyIds.length > rules.maxDefenders) {
         throw new AppError('VALIDATION_FAILED', MESSAGES.tooMany(rules.maxDefenders));
       }
-      const map = await requireMember(db, user, mapId);
+      const { map } = await requireMember(db, user, mapId);
       const changed = await store.transaction(async (repo) => {
         // One guard change at a time per player (a double tap moving the same
         // squishy twice): lock order is the player, then tiles, `maps` last.

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './common.js';
-import type { ClothingItem } from './clothing.js';
+import { ClothingDropSourceSchema, type ClothingItem } from './clothing.js';
 import { checkRef, formatDataIssues, type Report } from './issues.js';
 
 /**
@@ -10,9 +10,6 @@ import { checkRef, formatDataIssues, type Report } from './issues.js';
  * `data/server/clothing-drops.ts` (CLAUDE.md rule 6), so players can't read
  * the odds or which terrain hides what.
  */
-export const ClothingDropSourceSchema = z.enum(['gather', 'capture', 'rescue']);
-export type ClothingDropSource = z.infer<typeof ClothingDropSourceSchema>;
-
 export const ClothingDropEntrySchema = z.strictObject({
   item: ContentIdSchema,
   weight: z.number().int().positive(),

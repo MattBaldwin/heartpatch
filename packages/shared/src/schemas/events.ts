@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
-import { ClothingDropSourceSchema } from './data/clothing-drops.js';
+import { ClothingDropSourceSchema } from './data/clothing.js';
 import { ContentIdSchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';

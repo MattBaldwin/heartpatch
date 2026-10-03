@@ -80,6 +80,37 @@ async function touch(page: Page, frames: Record<number, Point>[]): Promise<void>
  * draw counter, not the dev overlay, whose text refreshes only every 500 ms
  * and can still show a previous stage's state.
  */
+/**
+ * More frames than any fling can glide for. A frame integrates at most 0.1 s
+ * of glide (`MAX_INERTIA_DT`, src/engine/camera/map-camera.ts), and even the
+ * fastest fling slows to the stop speed within about 1.5 s of glide time
+ * (`inertiaTimeConstant` 0.32 s, src/engine/config.ts): ~15 slow frames, or
+ * ~180 at 120 fps.
+ */
+const FLING_FRAME_CEILING = 600;
+
+/**
+ * Waits for a fling to stop, counted in drawn frames rather than seconds: a
+ * software-rendered iPad can take a second or more per frame, so how long the
+ * glide takes says nothing. Fails if it's still gliding after more frames
+ * than any glide needs. The test's own timeout is the only clock.
+ */
+async function waitForFlingToSettle(page: Page): Promise<void> {
+  const start = await draws(page);
+  await page.waitForFunction(
+    ([start, ceiling]) => {
+      const hook = (window as unknown as { __heartpatch?: DevHook }).__heartpatch;
+      return hook?.camera()?.flinging === false || (hook?.draws() ?? 0) - start > ceiling;
+    },
+    [start, FLING_FRAME_CEILING] as const,
+    { timeout: 0, polling: 100 },
+  );
+  const frames = (await draws(page)) - start;
+  expect((await cameraState(page)).flinging, `still gliding after ${String(frames)} frames`).toBe(
+    false,
+  );
+}
+
 async function waitForIdle(page: Page, quietMs = 500, timeout = 30_000): Promise<void> {
   await expect
     .poll(
@@ -257,10 +288,7 @@ test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }
   await touch(page, drag(mid, { x: mid.x + unit, y: mid.y }, 4));
   const released = await cameraState(page);
   expect(released.flinging).toBe(true);
-  // Generous: the glide integrates at most 100 ms per frame, and CI renders in software.
-  await expect
-    .poll(async () => (await cameraState(page)).flinging, { timeout: 20_000 })
-    .toBe(false);
+  await waitForFlingToSettle(page);
   const settled = await cameraState(page);
   expect(settled.target.x).toBeLessThan(released.target.x);
 

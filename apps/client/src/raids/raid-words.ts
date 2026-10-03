@@ -6,7 +6,7 @@ import type { DefenseStance, Raid } from '@heartpatch/shared';
 
 export const RAID_TEXT = {
   open: 'Report',
-  title: 'Morning report',
+  title: 'Raid report',
   challenged: 'Someone challenged your patch!',
   quiet: 'All quiet on your patch. Everyone is snug!',
   fresh: 'New!',

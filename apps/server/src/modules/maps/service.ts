@@ -29,7 +29,8 @@ import { listPublicBuildings, removeMemberBuildings } from '../buildings/service
 import { createKeepersRepo } from '../keepers/repo.js';
 import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
-import { createMapsRepo, type JoinRequestRow, type MapsRepo, type MemberRow } from './repo.js';
+import { requireMember } from './members.js';
+import { createMapsRepo, type JoinRequestRow, type MemberRow } from './repo.js';
 
 export interface MapsService {
   myMaps: (user: PublicUser) => Promise<MyMapsResponse>;
@@ -69,6 +70,9 @@ export interface MapsServiceOptions {
    */
   publish?: (mapId: string) => Promise<void>;
 }
+
+/** The maps the maps API manages; tutorial maps are the tutorial module's. */
+const PATCHES = ['multiplayer'] as const;
 
 // Kid-readable messages (style guide §6). Players call maps "patches".
 const MESSAGES = {
@@ -152,46 +156,23 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
   };
 
   /**
-   * The map and the player's role. NOT_FOUND for non-members and tutorial
-   * maps, so other maps can't be probed.
+   * For reading the map view only: besides patches it lets a player see their
+   * own active tutorial run (the client draws the Tutorial Glade as a normal
+   * map, tech spec §7). An archived run (replayed or skipped) stays NOT_FOUND.
+   * Everything else here (invites, admin, leave) is for patches only
+   * (`PATCHES`), so tutorial maps are NOT_FOUND there.
    */
-  const requireMember = async (repo: MapsRepo, user: PublicUser, mapId: string) => {
-    const [map, membership] = await Promise.all([
-      repo.findMap(mapId),
-      repo.membership(mapId, user.id),
-    ]);
-    if (map?.kind !== 'multiplayer' || membership?.status !== 'active') {
-      throw new AppError('NOT_FOUND', MESSAGES.notFound);
-    }
-    return { map, role: membership.role };
-  };
+  const requireViewer = async (tx: Executor, user: PublicUser, mapId: string) =>
+    (await requireMember(tx, user, mapId, ['multiplayer', 'tutorial'])).map;
 
-  /**
-   * Like `requireMember`, for reading the map view only: it also lets a
-   * player see their own active tutorial run (the client draws the Tutorial
-   * Glade as a normal map, tech spec §7). An archived run (replayed or
-   * skipped) stays NOT_FOUND. Invites, admin and leave keep `requireMember`.
-   */
-  const requireViewer = async (repo: MapsRepo, user: PublicUser, mapId: string) => {
-    const [map, membership] = await Promise.all([
-      repo.findMap(mapId),
-      repo.membership(mapId, user.id),
-    ]);
-    const viewable = map?.kind === 'multiplayer' || map?.kind === 'tutorial';
-    if (!map || !viewable || membership?.status !== 'active') {
-      throw new AppError('NOT_FOUND', MESSAGES.notFound);
-    }
-    return map;
-  };
-
-  const requireOwner = async (repo: MapsRepo, user: PublicUser, mapId: string) => {
-    const found = await requireMember(repo, user, mapId);
+  const requireOwner = async (tx: Executor, user: PublicUser, mapId: string) => {
+    const found = await requireMember(tx, user, mapId, PATCHES);
     if (found.role !== 'owner') throw new AppError('FORBIDDEN', MESSAGES.ownerOnly);
     return found.map;
   };
 
   const detail = async (user: PublicUser, mapId: string): Promise<MapDetail> => {
-    const { map, role } = await requireMember(store, user, mapId);
+    const { map, role } = await requireMember(db, user, mapId, PATCHES);
     const members = await store.listMembers(mapId);
     let admin: MapDetail['admin'] = null;
     if (role === 'owner') {
@@ -324,7 +305,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     // sync replays everything after it and nothing before (tech spec §5).
     view: (user, mapId) =>
       store.snapshot(async (repo, tx) => {
-        const map = await requireViewer(repo, user, mapId);
+        const map = await requireViewer(tx, user, mapId);
         const [members, tiles, buildings] = await Promise.all([
           repo.listMembers(mapId),
           repo.listTiles(mapId),
@@ -349,7 +330,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       }),
 
     regenerateInvite: async (user, mapId) => {
-      await requireOwner(store, user, mapId);
+      await requireOwner(db, user, mapId);
       return withFreshCode((code) =>
         store.transaction(async (repo) => {
           const at = now();
@@ -362,7 +343,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     revokeInvite: async (user, mapId) => {
-      await requireOwner(store, user, mapId);
+      await requireOwner(db, user, mapId);
       await store.revokeInvites(mapId, now());
     },
 
@@ -411,7 +392,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     approve: async (user, mapId, requestId) => {
-      await requireOwner(store, user, mapId);
+      await requireOwner(db, user, mapId);
       await store.transaction(async (repo) => {
         // Lock order: seats, request, the player, tiles, then maps (appendGameEvent).
         // Seats first, so two approvals racing for the last seat run one at a time.
@@ -465,28 +446,28 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     deny: async (user, mapId, requestId) => {
-      await requireOwner(store, user, mapId);
+      await requireOwner(db, user, mapId);
       if (!(await store.decideJoinRequest({ mapId, requestId, status: 'denied', now: now() }))) {
         throw new AppError('CONFLICT', MESSAGES.requestAnswered);
       }
     },
 
     removeMember: async (user, mapId, memberId) => {
-      await requireOwner(store, user, mapId);
+      await requireOwner(db, user, mapId);
       if (memberId === user.id) throw new AppError('FORBIDDEN', MESSAGES.removeSelf);
       await depart(mapId, memberId, user, 'member.removed');
       published(mapId);
     },
 
     leave: async (user, mapId) => {
-      const { role } = await requireMember(store, user, mapId);
+      const { role } = await requireMember(db, user, mapId, PATCHES);
       if (role === 'owner') throw new AppError('FORBIDDEN', MESSAGES.ownerLeave);
       await depart(mapId, user.id, user, 'member.left');
       published(mapId);
     },
 
     setPvpMode: async (user, mapId, pvpMode) => {
-      await requireOwner(store, user, mapId);
+      await requireOwner(db, user, mapId);
       await store.transaction(async (repo) => {
         if (!(await repo.setPvpMode(mapId, pvpMode))) return;
         await repo.appendEvent({
@@ -501,7 +482,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
     },
 
     resetMemberPassword: async (user, mapId, memberId) => {
-      await requireOwner(store, user, mapId);
+      await requireOwner(db, user, mapId);
       if (memberId === user.id) throw new AppError('FORBIDDEN', MESSAGES.resetSelf);
 
       // Hash before taking any locks; Argon2 is slow on purpose.
