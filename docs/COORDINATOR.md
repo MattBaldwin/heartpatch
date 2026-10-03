@@ -20,7 +20,7 @@ Session tools (`create_session`, `send_message`, `archive_session`, `list_trigge
    - concrete files on `main` to copy
    - the decisions that apply (DECISIONS.md entries by name)
    - issue-specific guidance
-   - build checks, PR rules, and a review loop capped at 4 rounds
+   - build checks, PR rules, and a review loop capped at 4 rounds (a round caused only by merging `main` doesn't count)
 3. **Start it** with `create_session` (source = repo, `outcome_branch` = `issue-<n>-<slug>`, tags `heartpatch:phase-1` and `heartpatch:batch-<k>`). Pick the model per §6.
 4. **Subscribe** to the PR as soon as the session reports `PR #<n> opened`.
 
@@ -51,7 +51,7 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 **A session is stuck if any of these is true:**
 - the same check fails on 3 consecutive pushes;
-- more than 4 review rounds without APPROVE;
+- more than 4 review rounds without APPROVE (rounds caused only by merging `main` don't count);
 - no new commit in about 40 minutes while it shows as working;
 - its cost is more than about 3× a typical lane with no green CI in sight.
 
@@ -115,6 +115,7 @@ Title `#{N}: <summary>`, `Closes #{N}` (or `Part of #{N}` + what remains), deps 
 
 ## Review loop
 Reviewer subagent until APPROVE; fresh reviewer each round; at most 4 rounds, then report blocked.
+A round caused only by merging main doesn't count.
 Post the verdict comment summarizing each round. Don't merge.
 ```
 
@@ -133,15 +134,13 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **In flight:** nothing. The Chore PR (code only) and the Docs PR that syncs the specs after batch 7 are open.
-- **Next, by dependency** (#23, #25, #24, #44, #45, #84, #87):
-  - #23 quick messages: adds `quick_messages` and the `chat.quick` event.
-  - #25 audio: a filler lane with no server work.
-  - #24 tutorial: needs a `tutorial` `ClothingSource` (a shared-contract change, so the coordinator approves it) and a fixed `ref_id` for the Seedling Scarf grant, so the grant is idempotent.
-  - #44 milestones: a new event consumer.
-  - #45 Patch Coins: pays out from `care_log.coins` (already capped), with an account-day idempotency key. Care must never spend a Heart Charm without reordering locks: care locks the squishy before inventory, a capture locks the Heart Charm first (TECH_SPEC §7, DECISIONS "Lock order (Fix PR)").
-  - #84 capture drops: return `clothing.found` with `tile.captured`, or use a consumer, because a battle's port can't append events before it locks squishies.
-  - #87 placeholder retirement: move the tests onto fixture tables first, then delete the `placeholder-*` rows.
+- **In flight:** the balance data lane, #23 (quick messages) and #25 (audio).
+- **Queued lanes** (owner decisions of 2026-10-03, see DECISIONS "2026-10-03 — Owner decisions"):
+  - **Balance data** (in flight): soften the element matrix to about 1.5× / 0.67×, tune with `pnpm sim`, and tune Heartbloom to about 60–65% win rate.
+  - **Rules pass** (after #23's migration): a beaten wild squishy wanders off for that player, a squishy is housed or on watch (not both), Gentle's 50% applies to battle XP and the result card shows it, first-night grace (2 nightfalls, with a hint to light a fire).
+  - **Starter pick** (a migration; after the rules pass): a new player picks 1 of 3 starters, one per element family, from a data list with Puddlepuff among them. Care changes ride along: new squishies start at contentment 50, and a squishy past its evolution level evolves on its next XP.
+  - **Client polish** (with a `PublicTile` hint field): the shadow tint for rescue guardians and the guardian strength hint on neutral tiles.
+  - Then, by dependency: #24 tutorial (needs a `tutorial` `ClothingSource`, a shared-contract change the coordinator approves, and a fixed `ref_id` for the Seedling Scarf grant so it's idempotent; presents the starter pick as meeting the Partner), #44 milestones (a new event consumer), #45 Patch Coins (pays out from `care_log.coins` with an account-day idempotency key; care must never spend a Heart Charm without reordering locks, TECH_SPEC §7), #84 capture drops (return `clothing.found` with `tile.captured`, or use a consumer), #87 placeholder retirement (fixtures first, then delete the `placeholder-*` rows).
   - **Every new event consumer takes one `maps` lock per event** (TECH_SPEC §7). Don't batch events.
 - **Briefs:** follow §7, plus:
   - reporting with the fallback trigger;
@@ -152,7 +151,7 @@ The supervisor keeps this list current. Remove items as they land.
   - Every PR adds a migration, so later PRs regenerate theirs after each merge.
   - **Run one migration-adding lane at a time.** #21 cost $58 after four merges of `main` and three migration regenerates.
   - Hold lanes that edit the same files (battles module, spawn tables) rather than run them in parallel. Lanes that started on a current main and never re-merged were the cheapest (#18 $25.77, #15 $23.11, #42 $23.57).
-  - **Proposed (owner to confirm):** review rounds caused only by merging `main` don't count toward the 4-round cap.
+  - **Review cap (owner decision, 2026-10-03):** at most 4 rounds; rounds caused only by merging `main` don't count.
 - **Lock order** is in TECH_SPEC §7 ("Lock order"). New code must follow it, and `lock-order.test.ts` checks it.
 - **Test robustness:**
   - `keeper-gallery.spec.ts` ignores Babylon's shader-fallback console noise (headless WebKit has no GPU). Check a real iPad for the fallback during #28.
@@ -174,14 +173,4 @@ The supervisor keeps this list current. Remove items as they land.
   - Supervisor 3: about 28.
   - Big lanes run $25–50; flag above about $35.
 - **Owner questions queued:**
-  - **First squishy:** how a player gets one. Puddlepuff is suggested as a free starter in each new patch, replaced by the tutorial's Partner later.
-  - **Wild-battle XP farming:** a beaten-but-not-captured squishy can be fought again all window. Recommended: it leaves after a win, or repeat wins give no XP.
-  - **Element vs feeling balance:** the sim (#12) shows a 2× element matchup wins 98–100% of 1v1s at equal stats, so feeling counters can't blunt it, contrary to GAME_DESIGN §5. Either narrow the element range or widen the feeling range.
-  - **Heartlet lore:** sign-off on the new secret species (DECISIONS "Launch roster (#10)").
-  - **First-night grace** for new players (GAME_DESIGN §14 open question).
-  - **Shadow look** for rescue guardians (all drawn as Nookling for now).
-  - **Gentle 50% and XP:** Gentle's 50% scales capture rewards (`rewardPercent`) but not the showdown's XP. Should it halve XP too (DECISIONS "Territory (#15)")?
-  - **Habitat vs watch:** whether a squishy can live in a habitat and stand watch at the same time.
-  - **Review cap:** confirm or revert the 4-round cap, and the "merging main doesn't count" proposal above.
-  - **Still open from earlier:** Jack-o'-Lantern questions in PR #79; guardians in the tile panel; the four #4 decisions.
   - **AWS:** Matt chose the new AWS experience ("project"), Region us-east-2, profile `heartpatch`. The CLI is installed in supervisor 3's container only. Remote `aws login` was started but the code never arrived. Restart with `aws login --remote --region us-east-2 --profile heartpatch` when he's ready. Agent Toolkit rules go in an uncommitted `CLAUDE.local.md` (his choice). Check Lightsail is available on the new experience, and update DEPLOY.md step 1 for projects (spend limits in AWS Settings rather than root MFA and budgets).
