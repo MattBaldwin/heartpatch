@@ -1,6 +1,7 @@
 import {
   deriveSeed,
   GAME_DATA,
+  STARTERS,
   hexKey,
   hexNeighbors,
   type Catalog,
@@ -33,6 +34,11 @@ import { createSpawnsRepo, type SpawnTileRow } from './repo.js';
  * befriending it (it's tuckered out and toddles away: owner decision
  * 2026-10-03), it's gone for that player until the next window. Other players
  * can still find theirs (DECISIONS #14).
+ *
+ * The Tutorial Glade (#24) is different in two ways: its wild squishies are
+ * the three starters, so the friend a player befriends there (their Partner)
+ * is one the starter pick offers; and one they beat without befriending stays,
+ * so they can always try again (nothing can be lost in the tutorial).
  */
 
 export interface SpawnsService {
@@ -68,6 +74,17 @@ export function defaultSpawnData(): SpawnData {
     seasons: GAME_DATA.seasons,
     rules: SPAWN_RULES,
   };
+}
+
+/**
+ * The Glade's wild squishy on a tile: a starter, by `(q - r) mod 3`, so tiles
+ * next to each other always show different ones and all three are around the
+ * home base. Battles set the level from `tutorialOverrides`.
+ */
+export function gladeSpawn(tile: Hex): WildSpawn {
+  const speciesId = STARTERS.speciesIds[(((tile.q - tile.r) % 3) + 3) % 3];
+  if (speciesId === undefined) throw new Error('gladeSpawn: no starters');
+  return { speciesId, level: 1 };
 }
 
 /** A tile with what's on it this window. */
@@ -114,11 +131,13 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
       reach = reach.filter((t) => t.q === only.q && t.r === only.r);
       if (reach.length === 0) throw new AppError('NOT_FOUND', MESSAGES.tooFar);
     }
-    const gone = new Set((await store.goneSpawns(mapId, userId, window.id)).map(hexKey));
+    const tutorial = map.kind === 'tutorial';
+    const gone = new Set((await store.goneSpawns(mapId, userId, window.id, tutorial)).map(hexKey));
     // Hand-authored maps have no secret seed; their spawns key off the map id.
     const mapSeed = map.seed ?? deriveSeed('hand-authored-map', map.id);
     const found = reach.flatMap((tile): TileSpawn[] => {
       if (gone.has(hexKey(tile))) return [];
+      if (tutorial) return [{ tile, spawn: gladeSpawn(tile) }];
       const seed = deriveSeed(mapSeed, 'spawn', tile.q, tile.r, window.id);
       const spawn = resolveWildSpawn({ seed, terrain: tile.terrain, window }, data);
       return spawn ? [{ tile, spawn }] : [];

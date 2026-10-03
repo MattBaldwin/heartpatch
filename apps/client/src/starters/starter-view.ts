@@ -69,3 +69,14 @@ export function chooseLabel(picked: StarterCard | null): string {
 export function starterSpots(count: number, spacing: number): number[] {
   return Array.from({ length: count }, (_, i) => (i - (count - 1) / 2) * spacing);
 }
+
+/**
+ * The card the pick starts on: the player's tutorial Partner (#24), if it's
+ * one of the cards, else none. They can still tap another.
+ */
+export function preselectedCard(
+  cards: readonly StarterCard[],
+  speciesId: string | null,
+): StarterCard | null {
+  return cards.find((c) => c.speciesId === speciesId) ?? null;
+}

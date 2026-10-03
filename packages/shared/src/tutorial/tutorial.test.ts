@@ -113,7 +113,11 @@ describe('tutorial step engine', () => {
   });
 
   it('matches the shipped steps with acknowledgements of the same step', () => {
-    for (const step of TUTORIAL_STEPS) {
+    const talkOnly = TUTORIAL_STEPS.filter(
+      (s) => s.completeOn.eventType === 'tutorial.acknowledged',
+    );
+    expect(talkOnly.map((s) => s.id)).toEqual(['welcome', 'plant', 'graduation']);
+    for (const step of talkOnly) {
       expect(completesStep(step.completeOn, ack(step.id), player)).toBe(true);
       expect(completesStep(step.completeOn, ack('nope'), player)).toBe(false);
     }

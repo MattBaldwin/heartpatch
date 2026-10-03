@@ -1,6 +1,12 @@
 import { findAvoidedWords, GAME_DATA, STARTERS } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { chooseLabel, STARTER_TEXT, starterCards, starterSpots } from './starter-view.js';
+import {
+  chooseLabel,
+  preselectedCard,
+  STARTER_TEXT,
+  starterCards,
+  starterSpots,
+} from './starter-view.js';
 
 describe('starter screen view', () => {
   it('shows the three starters in data order, with element and feeling names', () => {
@@ -36,5 +42,12 @@ describe('starter screen view', () => {
       expect(findAvoidedWords(line), line).toEqual([]);
       expect(line.split(/\s+/).length, line).toBeLessThanOrEqual(12);
     }
+  });
+
+  it("starts on the tutorial Partner's card, when it's one of the three", () => {
+    const cards = starterCards();
+    expect(preselectedCard(cards, 'thistlepip')?.speciesId).toBe('thistlepip');
+    expect(preselectedCard(cards, null)).toBeNull();
+    expect(preselectedCard(cards, 'fuzzbolt')).toBeNull();
   });
 });

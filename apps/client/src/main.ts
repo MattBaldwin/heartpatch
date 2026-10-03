@@ -18,6 +18,7 @@ import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
+import { createLorebook } from './lore/lorebook.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
@@ -110,6 +111,11 @@ function showScene(build: SceneBuilder | null): void {
   }
 }
 
+/** The Tutorial Glade on screen while the tutorial runs (#47, #24), else null. */
+let glade: string | null = null;
+/** Quick messages are for patches: none on the Glade (the server refuses them there). */
+const chatFor = (mapId: string): string | null => (mapId === glade ? null : mapId);
+
 // Sound (#25): silent until the first tap, which unlocks it (iOS) and loads
 // the engine. Screens report moments; the audio module picks the sound.
 const audio = createAudio();
@@ -176,7 +182,7 @@ const closeUp = createCloseUpScreen({
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
-        void chat.setMap(mapId);
+        void chat.setMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
         void care.celebrateNews(mapId);
@@ -288,7 +294,7 @@ const home = createHomeScreen({
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
-        void chat.setMap(mapId);
+        void chat.setMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
       })
@@ -338,21 +344,24 @@ const tutorial = createTutorialScreen({
   root: document.body,
   glade: {
     open: async (mapId, stillWanted) => {
-      // The Glade is Sprout's: no battle or bag button over it (they come to
-      // the tutorial with its later steps).
-      await battles.setMap(null);
+      // The Glade runs on the real game (tech spec §7): bag and gathering,
+      // home base, battles, territory and the night, like a patch. No chat.
+      glade = mapId;
       catalog.close();
       care.close();
-      await inventory.setMap(null);
-      await territory.setMap(null);
-      await hollow.setMap(null);
       await chat.setMap(null);
-      home.setMap(null);
       await maps.open(mapId);
       // Put away ("Later") while it loaded: the lobby stays.
-      if (stillWanted()) lobby.hide();
+      if (!stillWanted()) return;
+      lobby.hide();
+      home.setMap(mapId);
+      void inventory.setMap(mapId);
+      void territory.setMap(mapId);
+      void hollow.setMap(mapId);
+      void battles.setMap(mapId);
     },
     close: () => {
+      glade = null;
       void battles.setMap(null);
       void inventory.setMap(null);
       void territory.setMap(null);
@@ -370,7 +379,20 @@ const tutorial = createTutorialScreen({
   onEntryChange: () => {
     lobby.refreshList();
   },
+  // The wardrobe step (design doc §26 step 12): the Wardrobe over the Glade.
+  openWardrobe: () => {
+    wardrobe.open();
+  },
+  onStep: (stepId) => {
+    // The wardrobe step is done once the scarf is on: back to the Glade.
+    if (stepId !== 'wardrobe' && wardrobe.debug?.open) wardrobe.close();
+    // A step can find a lore page (the Glade's night): look after each one.
+    lorebook.check();
+  },
 });
+// Found lore pages (design doc §16). Mounted after the tutorial, so its card
+// sits over Sprout's layer.
+const lorebook = createLorebook({ root: document.body });
 // Battles (#13) own the whole screen: the map and the lobby's button step
 // out while one is open, and the map comes back after.
 const battles = createBattleScreen({
@@ -400,7 +422,7 @@ const battles = createBattleScreen({
           inventory.setMap(mapId),
           territory.setMap(mapId),
           hollow.setMap(mapId),
-          chat.setMap(mapId),
+          chat.setMap(chatFor(mapId)),
         ]);
       },
       (err: unknown) => {
@@ -468,7 +490,24 @@ const wardrobe = createWardrobeScreen({
     lobby.stepOut();
   },
   onClosed: () => {
-    lobby.show();
+    // Opened by the tutorial's wardrobe step: back to the Glade.
+    const run = glade;
+    if (run === null) {
+      lobby.show();
+      return;
+    }
+    maps.open(run).then(
+      () => {
+        home.setMap(run);
+        void inventory.setMap(run);
+        void territory.setMap(run);
+        void hollow.setMap(run);
+        void battles.setMap(run);
+      },
+      () => {
+        lobby.show();
+      },
+    );
   },
   devTools: import.meta.env.DEV,
 });
@@ -508,14 +547,21 @@ const lobby = mountLobby(document.body, {
     void inventory.setMap(mapId);
     void territory.setMap(mapId);
     void hollow.setMap(mapId);
-    void chat.setMap(mapId);
+    void chat.setMap(chatFor(mapId));
     home.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
     // battle resumed here (after a refresh) must step it out again after that.
     void battles.setMap(mapId);
+    // A page found on this patch while away (a rescue, a capture).
+    lorebook.check();
   },
   listActions: () => [...tutorial.listActions(), ...wardrobe.listActions()],
-  settings: () => [...audio.settings(), ...keeper.settings(), ...tutorial.settings()],
+  settings: () => [
+    ...audio.settings(),
+    ...keeper.settings(),
+    ...tutorial.settings(),
+    ...lorebook.settings(),
+  ],
 });
 mountAuth(document.body, {
   onChange: (user) => {
@@ -530,6 +576,7 @@ mountAuth(document.body, {
     home.setUser(user);
     wardrobe.setUser(user);
     starters.setUser(user);
+    lorebook.setUser(user);
     maps.setUser(user);
     // The lobby and tutorial wait for a Keeper (`onReady` above).
     keeper.setUser(user);
@@ -593,6 +640,7 @@ if (import.meta.env.DEV) {
     closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,
     starter: () => starters.debug,
+    lore: () => lorebook.debug,
     audio: () => audio.debug,
   };
 }

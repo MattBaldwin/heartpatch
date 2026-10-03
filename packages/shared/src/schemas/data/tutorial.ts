@@ -151,10 +151,25 @@ export const TutorialOverridesSchema = z.strictObject({
 });
 export type TutorialOverrides = z.infer<typeof TutorialOverridesSchema>;
 
+/**
+ * What a new run starts with (#24), besides the Glade itself. The player has
+ * no squishy yet, so a Glade friend plays the first battle with them; the
+ * wild squishy they befriend there becomes their Partner. A little bag from
+ * Sprout covers what the early steps would otherwise make them gather twice.
+ */
+export const TutorialSetupSchema = z.strictObject({
+  /** A public, year-round base form that isn't a starter (the Partner is the starter). */
+  helper: z.strictObject({ speciesId: ContentIdSchema, level: z.number().int().min(1).max(10) }),
+  /** Items in the run's bag at the start (`tutorial` ledger reason). */
+  bag: z.record(ContentIdSchema, z.number().int().min(1)),
+});
+export type TutorialSetup = z.infer<typeof TutorialSetupSchema>;
+
 export const TutorialDataSchema = z.strictObject({
   steps: z.array(TutorialStepSchema).min(1),
   layout: TutorialLayoutSchema,
   overrides: TutorialOverridesSchema,
+  setup: TutorialSetupSchema,
 });
 export type TutorialData = z.infer<typeof TutorialDataSchema>;
 
@@ -285,6 +300,25 @@ function checkLayout(
   }
 }
 
+function checkSetup(
+  setup: TutorialSetup,
+  gameData: Pick<GameData, 'resources' | 'species'>,
+  starters: readonly string[],
+  report: Report,
+): void {
+  const at: Path = ['setup'];
+  const species = gameData.species.find((s) => s.id === setup.helper.speciesId);
+  if (!species) {
+    report([...at, 'helper', 'speciesId'], `unknown species "${setup.helper.speciesId}"`);
+  } else if (species.season !== undefined || starters.includes(species.id)) {
+    report([...at, 'helper', 'speciesId'], 'the helper is a year-round squishy, not a starter');
+  }
+  const resources = new Set(gameData.resources.map((r) => r.id));
+  for (const item of Object.keys(setup.bag)) {
+    checkRef(resources, 'resource', item, [...at, 'bag', item], report);
+  }
+}
+
 /**
  * Validates the tutorial data against the public game data and the event
  * registry, and returns readable problems, or `[]`. Kept separate from
@@ -292,7 +326,8 @@ function checkLayout(
  */
 export function checkTutorialData(
   input: unknown,
-  gameData: Pick<GameData, 'terrains' | 'resources' | 'mapGen'>,
+  gameData: Pick<GameData, 'terrains' | 'resources' | 'mapGen' | 'species'>,
+  starters: readonly string[] = [],
 ): string[] {
   const schema = TutorialDataSchema.superRefine((data, ctx) => {
     const report: Report = (path, message) => {
@@ -300,6 +335,7 @@ export function checkTutorialData(
     };
     checkSteps(data.steps, report);
     checkLayout(data.layout, gameData, report);
+    checkSetup(data.setup, gameData, starters, report);
   });
   const result = schema.safeParse(input);
   return result.success ? [] : formatDataIssues(input, result.error);

@@ -4,6 +4,7 @@ import { createDbClient, dbReadinessCheck } from './db/client.js';
 import { startJobs } from './jobs/boss.js';
 import { createClock } from './lib/time.js';
 import { createHollowConsumer } from './modules/hollow/consumer.js';
+import { createLoreConsumer } from './modules/lore/consumer.js';
 import type { HollowService } from './modules/hollow/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
 import { createTutorialConsumer } from './modules/tutorial/consumer.js';
@@ -31,6 +32,7 @@ const jobs = await startJobs({
     createTutorialConsumer({ clock }),
     createRaidsConsumer(),
     createHollowConsumer(hollow),
+    createLoreConsumer({ clock }),
   ],
   // The Hollow Man (#21): night falls on each map at 21:00 map time.
   nightfall: {

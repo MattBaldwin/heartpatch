@@ -1,4 +1,5 @@
 import { TutorialResponseSchema, type TutorialState } from '@heartpatch/shared';
+import { careApi } from '../care/care-api.js';
 import { apiCall, apiCallFor } from '../net/api.js';
 
 /** The tutorial's calls to `/api/v1/tutorial` (server: modules/tutorial/routes.ts). */
@@ -25,6 +26,16 @@ export const tutorialApi = {
   /** The player read a talk-only step; `tutorial.advanced` follows over live sync. */
   acknowledge: async (stepId: string): Promise<void> => {
     await apiCall('/tutorial/acknowledge', { method: 'POST', body: { stepId }, schema: null });
+  },
+
+  /** Night falls on the Glade (its nightfall step only); `tutorial.advanced` follows. */
+  nightfall: async (): Promise<void> => {
+    await apiCall('/tutorial/nightfall', { method: 'POST', schema: null });
+  },
+
+  /** Names the Partner (care's rename, #20); `key` makes a retry safe. */
+  name: async (mapId: string, squishyId: string, nickname: string, key: string): Promise<void> => {
+    await careApi.rename(mapId, squishyId, nickname, key);
   },
 };
 

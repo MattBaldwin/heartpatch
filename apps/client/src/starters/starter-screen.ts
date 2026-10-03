@@ -10,6 +10,7 @@ import { starterApi, type StarterApi } from './starter-api.js';
 import { StarterPreview } from './starter-preview.js';
 import {
   chooseLabel,
+  preselectedCard,
   STARTER_TEXT,
   starterCards,
   starterSpecies,
@@ -32,7 +33,7 @@ export interface StarterScreenOptions {
   tier: () => QualityTier;
   /** The screen is taking the stage: put the lobby and map away. */
   onOpen: () => void;
-  api?: Pick<StarterApi, 'needsStarter' | 'pick'>;
+  api?: Pick<StarterApi, 'needsStarter' | 'pickInfo' | 'pick'>;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -169,9 +170,13 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
     options.invalidate();
   }
 
-  function open(next: string): void {
+  function open(next: string, preselect: string | null): void {
     mapId = next;
-    picked = null;
+    // A tutorial graduate starts on their Partner's species (#24).
+    picked = preselectedCard(
+      buttons.map((b) => b.card),
+      preselect,
+    );
     key = newIdempotencyKey();
     error.textContent = '';
     refresh();
@@ -252,20 +257,20 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
 
     ensure: async (next) => {
       const mine = session;
-      let needed: boolean;
+      let info: { needsStarter: boolean; preselectSpeciesId: string | null };
       try {
-        needed = await api.needsStarter(next);
+        info = await api.pickInfo(next);
       } catch (err) {
         throw new Error(messageOf(err), { cause: err });
       }
       if (mine !== session) throw new Error(STARTER_TEXT.loadFailed);
-      if (!needed) return;
+      if (!info.needsStarter) return;
       // Asked again while open (a double tap): the newest call waits instead.
       settle(new Error(STARTER_TEXT.loadFailed));
       const done = new Promise<void>((resolve, reject) => {
         pending = { resolve, reject };
       });
-      open(next);
+      open(next, info.preselectSpeciesId);
       return done;
     },
 

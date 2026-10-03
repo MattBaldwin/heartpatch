@@ -156,6 +156,51 @@
   justify-content: space-between;
 }
 
+.tutorial-name-form {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.tutorial-name-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid #ffd76a;
+  border-radius: 16px;
+  font: inherit;
+  font-size: 18px;
+  color: inherit;
+  background: #fff;
+}
+
+/* A gameplay step's bubble, tucked into a little chip at the side so it
+   never covers the buttons the step is about. Tap it to read Sprout again. */
+.tutorial.tutorial-tucked .tutorial-bubble {
+  top: 38%;
+  bottom: auto;
+  left: calc(env(safe-area-inset-left) + 8px);
+  right: auto;
+  max-width: min(46vw, 200px);
+  min-height: 48px;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 20px;
+}
+
+.tutorial.tutorial-tucked .tutorial-line,
+.tutorial.tutorial-tucked .tutorial-actions,
+.tutorial.tutorial-tucked .tutorial-links,
+.tutorial.tutorial-tucked .tutorial-name-form,
+.tutorial.tutorial-tucked .tutorial-arrow {
+  display: none;
+}
+
+.tutorial.tutorial-tucked .tutorial-goal {
+  font-size: 14px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tutorial-arrow {
     animation: none;

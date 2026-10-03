@@ -1,4 +1,4 @@
-import type { HighlightTarget } from '@heartpatch/shared';
+import { GAME_DATA, type HighlightTarget } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
 import type { HighlightTargets } from './highlight-targets.js';
 import { layoutOverlay, type Insets, type OverlayLayout, type Rect } from './overlay-layout.js';
@@ -23,7 +23,26 @@ export interface TutorialOverlayActions {
   leave: () => void;
   /** A blocked tap: Sprout gives a little hop to say "over here!". */
   nudge: () => void;
+  /** The naming step's Save. */
+  name: (nickname: string) => void;
+  /** The nightfall step's "Night falls". */
+  nightfall: () => void;
+  /** The wardrobe step's "Wardrobe". */
+  wardrobe: () => void;
+  /** A gameplay step's "Let's go!": tuck the bubble away. */
+  tuck: () => void;
+  /** Tapping the tucked chip: read the bubble again. */
+  untuck: () => void;
 }
+
+/** Chrome words (style guide §6). Sprout's lines come from the step data. */
+export const OVERLAY_TEXT = {
+  nameLabel: "Your Partner's name",
+  waiting: 'One moment…',
+  next: 'Next',
+} as const;
+
+const speciesNames = new Map(GAME_DATA.species.map((s) => [s.id, s.name]));
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
 export interface TutorialOverlayDebug {
@@ -83,7 +102,33 @@ export function mountTutorialOverlay(
 
   const goal = el('p', { class: 'tutorial-goal', 'data-testid': 'tutorial-goal' });
   const line = el('p', { class: 'tutorial-line', 'data-testid': 'tutorial-line' });
-  const mainButton = el('button', { type: 'button', class: 'auth-button' });
+  const mainButton = el('button', {
+    type: 'button',
+    class: 'auth-button',
+    'data-testid': 'tutorial-main',
+  });
+  const nameInput = el('input', {
+    type: 'text',
+    class: 'tutorial-name-input',
+    'aria-label': OVERLAY_TEXT.nameLabel,
+    'data-testid': 'tutorial-name-input',
+    autocomplete: 'off',
+    autocapitalize: 'words',
+    spellcheck: 'false',
+    enterkeyhint: 'done',
+    maxlength: '24',
+  });
+  const nameSave = el(
+    'button',
+    { type: 'submit', class: 'auth-button', 'data-testid': 'tutorial-name-save' },
+    'Save',
+  );
+  const nameForm = el(
+    'form',
+    { class: 'tutorial-name-form', 'data-testid': 'tutorial-name-form' },
+    nameInput,
+    nameSave,
+  );
   const skipButton = el('button', { type: 'button', class: 'auth-link' }, 'Skip it');
   const leaveButton = el('button', { type: 'button', class: 'auth-link' }, 'Later');
   const bubble = el(
@@ -97,6 +142,7 @@ export function mountTutorialOverlay(
     el('p', { class: 'tutorial-name' }, 'Sprout'),
     goal,
     el('div', { 'aria-live': 'polite' }, line),
+    nameForm,
     el('div', { class: 'tutorial-actions' }, mainButton),
     el('div', { class: 'tutorial-links' }, skipButton, leaveButton),
   );
@@ -123,10 +169,22 @@ export function mountTutorialOverlay(
     event.stopPropagation();
     onMain();
   });
-  // Tap the bubble to read on (style guide §6: "tap to continue").
+  // Tap the bubble to read on (style guide §6: "tap to continue"), or to
+  // open it again when it's tucked away.
   bubble.addEventListener('click', (event) => {
-    if (event.target instanceof HTMLButtonElement) return;
+    if (overlay.classList.contains('tutorial-tucked')) {
+      actions.untuck();
+      return;
+    }
+    if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLInputElement) {
+      return;
+    }
     actions.nextLine();
+  });
+  nameForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    actions.name(nameInput.value);
   });
   skipButton.addEventListener('click', () => {
     actions.skip();
@@ -157,7 +215,7 @@ export function mountTutorialOverlay(
       viewport,
       insets: readInsets(probe),
     });
-    spotlightOn = found?.element?.getAttribute('data-tutorial-target') ?? null;
+    spotlightOn = found?.element ? target : null;
     overlay.dataset['gate'] = layout.gate;
     overlay.dataset['bubble'] = layout.bubble;
 
@@ -199,6 +257,14 @@ export function mountTutorialOverlay(
     goal.hidden = !step?.goal;
     mainButton.hidden = false;
     mainButton.disabled = false;
+    overlay.classList.toggle('tutorial-tucked', next.tucked);
+    const naming = step?.action === 'name' && lastLine && next.phase !== 'error';
+    nameForm.hidden = !naming;
+    nameSave.disabled = next.phase === 'waiting';
+    if (naming && next.state?.partner) {
+      const species = speciesNames.get(next.state.partner.speciesId) ?? '';
+      nameInput.placeholder = species;
+    }
     if (next.phase === 'loading') {
       line.textContent = 'One moment…';
       mainButton.hidden = true;
@@ -209,23 +275,35 @@ export function mountTutorialOverlay(
     } else if (step) {
       line.textContent = step.lines[Math.min(next.line, step.lines.length - 1)] ?? '';
       if (!lastLine) {
-        mainButton.textContent = 'Next';
+        mainButton.textContent = OVERLAY_TEXT.next;
         onMain = actions.nextLine;
       } else if (step.talkOnly && !showChoices) {
-        mainButton.textContent = next.phase === 'waiting' ? 'One moment…' : 'Got it!';
+        mainButton.textContent = next.phase === 'waiting' ? OVERLAY_TEXT.waiting : step.actionLabel;
         mainButton.disabled = next.phase === 'waiting';
         onMain = () => {
           actions.acknowledge(null);
         };
+      } else if (step.action === 'name') {
+        // The name box has its own Save.
+        mainButton.hidden = true;
+      } else if (step.action === 'nightfall' || step.action === 'wardrobe') {
+        const waiting = next.phase === 'waiting';
+        mainButton.textContent = waiting ? OVERLAY_TEXT.waiting : step.actionLabel;
+        mainButton.disabled = waiting;
+        onMain = step.action === 'nightfall' ? actions.nightfall : actions.wardrobe;
       } else if (!step.known) {
         // A newer step than this app knows: input stays open, and Sprout can
         // check whether the server has moved on (an update is on its way).
         mainButton.textContent = 'Check again';
         onMain = actions.recheck;
+      } else if (showChoices) {
+        // Graduation goes on with a choice.
+        mainButton.hidden = true;
       } else {
         // Gameplay steps go on when the player does the thing (input stays
-        // open around the spotlight); graduation goes on with a choice.
-        mainButton.hidden = true;
+        // open around the spotlight): tuck Sprout away so it never covers it.
+        mainButton.textContent = step.actionLabel;
+        onMain = actions.tuck;
       }
     }
     skipButton.hidden = !next.canSkip;

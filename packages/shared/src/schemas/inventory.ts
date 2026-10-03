@@ -12,7 +12,8 @@ import { ContentIdSchema } from './data/common.js';
  * spec §4). Later issues add their own (trades, care). Home base (#18):
  * `build` (a building's cost), `fuel` (Emberwood into a Hearthfire) and
  * `build-refund` (what comes back when a building is taken down). The Hollow
- * Man (#21): `rescue` (Heartdust for bringing a squishy home).
+ * Man (#21): `rescue` (Heartdust for bringing a squishy home). The tutorial
+ * (#24): `tutorial` (Sprout's little bag at the start of a run).
  */
 export const ItemChangeReasonSchema = z.enum([
   'gather',
@@ -24,6 +25,7 @@ export const ItemChangeReasonSchema = z.enum([
   'build-refund',
   'care',
   'rescue',
+  'tutorial',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

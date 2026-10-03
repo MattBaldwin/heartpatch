@@ -25,6 +25,8 @@ import { createHollowService, type HollowService } from './modules/hollow/servic
 import { createGatheringService } from './modules/gathering/service.js';
 import { inventoryRoutes } from './modules/inventory/routes.js';
 import { createInventoryService } from './modules/inventory/service.js';
+import { loreRoutes } from './modules/lore/routes.js';
+import { createLoreService } from './modules/lore/service.js';
 import { spawnsRoutes } from './modules/spawns/routes.js';
 import { createSpawnsService } from './modules/spawns/service.js';
 import { startersRoutes } from './modules/starters/routes.js';
@@ -170,14 +172,6 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           }),
         );
 
-        const tutorial = createTutorialService({
-          db,
-          tutorialRequired: config.HP_TUTORIAL_REQUIRED,
-          clock,
-          ...(wsHub ? { publish: wsHub.publish } : {}),
-        });
-        await api.register(tutorialRoutes(tutorial, { hooks: authHooks }));
-
         // Wild squishies (#14) plug into battles through `findWildEncounter`,
         // and territory (#15) through `tileBattles` (attempts and captures).
         const spawns = createSpawnsService({ db, clock });
@@ -243,6 +237,20 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
+        // The tutorial (#47, #24) runs the Glade on these same modules; its
+        // scripted night is the Hollow's own nightfall.
+        const tutorial = createTutorialService({
+          db,
+          tutorialRequired: config.HP_TUTORIAL_REQUIRED,
+          clock,
+          runNightfall: hollow.runNightfall,
+          ...publish,
+        });
+        await api.register(
+          tutorialRoutes(tutorial, { hooks: authHooks, devTools: config.HP_DEV_SQUISHY_GRANTS }),
+        );
+        // The Lorebook (design doc §16): the `lore` consumer records finds.
+        await api.register(loreRoutes(createLoreService({ db }), { hooks: authHooks }));
         // Found clothing rolls inside gathers and rescues (captures later).
         setDevDropChance(config.HP_DEV_DROP_CHANCE ?? null);
         await api.register(

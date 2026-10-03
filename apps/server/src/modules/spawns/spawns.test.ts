@@ -12,6 +12,7 @@ import {
   replayBattle,
   type MapDetail,
   SquishyResponseSchema,
+  STARTERS,
   TutorialResponseSchema,
   WildHintsResponseSchema,
   type BattleRules,
@@ -36,7 +37,7 @@ import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService } from '../battles/service.js';
 import { grantItems } from '../inventory/service.js';
-import { createSpawnsService, defaultSpawnData } from './service.js';
+import { createSpawnsService, defaultSpawnData, gladeSpawn } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -453,6 +454,43 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
         update tiles set owner_user_id = ${id(kid.id)}
         where map_id = ${id(mapId)} and q = ${String(tile.q)} and r = ${String(tile.r)}`);
       expect((await spawns.wildHints(kid, mapId)).tiles).toContainEqual(tile);
+    });
+
+    it('on the Tutorial Glade a beaten one stays, and only befriending moves it on (#24)', async () => {
+      const server = await start();
+      const kid = await player();
+      const started = await call(server, 'POST', '/tutorial/start', kid);
+      const mapId = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
+      const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
+        speciesId: STRONG,
+        level: STRONG_LEVEL,
+      });
+      expect(granted.statusCode).toBe(201);
+      const { battles, spawns } = services();
+      const hintsBefore = (await spawns.wildHints(kid, mapId)).tiles;
+
+      // The Glade's wild squishies are the three starters (the Partner is one).
+      const tile = { q: 0, r: 1 };
+      const { battle } = await battles.startWild(kid, mapId, { tile });
+      expect(STARTERS.speciesIds).toContain(battle.view.sides.b.squishies[0]!.speciesId);
+      const done = await fight(battles, kid, battle);
+      expect(done.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
+      // Beaten, not befriended: still there, so the kid can try again.
+      expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsBefore);
+      const again = await battles.startWild(kid, mapId, { tile });
+      expect(await spawnTileOf(again.battle.id)).toEqual(tile);
+
+      // Befriended: gone for this window, as anywhere.
+      await giveCharms(mapId, kid, 1);
+      await capture(battles, kid, again.battle);
+      expect((await spawns.wildHints(kid, mapId)).tiles).not.toContainEqual(tile);
+      // Three tiles that all touch show three different starters.
+      const near = [
+        { q: 0, r: 0 },
+        { q: 1, r: 0 },
+        { q: 0, r: 1 },
+      ].map(gladeSpawn);
+      expect(new Set(near.map((n) => n.speciesId)).size).toBe(3);
     });
 
     it('a loss or a run home leaves it there', async () => {

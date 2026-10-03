@@ -8,6 +8,7 @@ export interface SpawnMapRow {
   timeZone: string;
   /** Null on hand-authored maps (tutorial, local seed data). */
   seed: string | null;
+  kind: 'multiplayer' | 'tutorial';
 }
 
 export interface SpawnTileRow {
@@ -35,12 +36,14 @@ export interface SpawnsRepo {
    * Tiles whose wild squishy this player is done with for this spawn window:
    * befriended (#14) or beaten without befriending (it wandered off, owner
    * decision 2026-10-03). Any battle the player won counts; a loss, a tie, a
-   * run home or a no contest leaves it there.
+   * run home or a no contest leaves it there. With `befriendedOnly`, only a
+   * befriend counts (the Tutorial Glade, where beaten ones stay, #24).
    */
   goneSpawns: (
     mapId: string,
     userId: string,
     window: string,
+    befriendedOnly?: boolean,
   ) => Promise<{ q: number; r: number }[]>;
   /** The player met these species (started a battle with them). Keeps the first time. */
   markSeen: (
@@ -58,7 +61,7 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
   return {
     findMap: async (mapId) => {
       const [row] = await db
-        .select({ id: maps.id, timeZone: maps.timeZone, seed: maps.seed })
+        .select({ id: maps.id, timeZone: maps.timeZone, seed: maps.seed, kind: maps.kind })
         .from(maps)
         .where(eq(maps.id, mapId));
       return row ?? null;
@@ -71,7 +74,7 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
         .where(eq(tiles.mapId, mapId))
         .orderBy(asc(tiles.q), asc(tiles.r)),
 
-    goneSpawns: async (mapId, userId, window) => {
+    goneSpawns: async (mapId, userId, window, befriendedOnly = false) => {
       const rows = await db
         .select({ q: battles.spawnQ, r: battles.spawnR })
         .from(battles)
@@ -83,6 +86,7 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
             isNotNull(battles.result),
             // The player is always side `a` (battles service, `PLAYER_SIDE`).
             sql`${battles.result} ->> 'winner' = 'a'`,
+            befriendedOnly ? sql`${battles.result} ->> 'reason' = 'captured'` : undefined,
           ),
         );
       return rows.flatMap(({ q, r }) => (q === null || r === null ? [] : [{ q, r }]));

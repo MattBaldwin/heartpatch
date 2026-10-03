@@ -21,8 +21,15 @@ const state = (patch: Partial<TutorialState> = {}): TutorialState => ({
   mapId: MAP,
   completedAt: null,
   required: false,
+  partner: null,
   ...patch,
 });
+
+const PARTNER = {
+  squishyId: '0190f000-0000-7000-8000-0000000000aa',
+  speciesId: 'puddlepuff',
+  nickname: null,
+};
 
 const advanced = (completedStepId: string, stepId: string | null, mapId = MAP): WsEventMessage => ({
   v: 1,
@@ -38,6 +45,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 function setup(initial: TutorialState = state()) {
   let server = initial;
   const calls: string[] = [];
+  const keys: string[] = [];
   let ackError: Error | null = null;
   const subscriptions: [string, number][] = [];
   let wsOptions: WsClientOptions | null = null;
@@ -71,6 +79,15 @@ function setup(initial: TutorialState = state()) {
         calls.push(`ack:${stepId}`);
         return ackError ? Promise.reject(ackError) : Promise.resolve();
       },
+      nightfall: () => {
+        calls.push('nightfall');
+        return ackError ? Promise.reject(ackError) : Promise.resolve();
+      },
+      name: (mapId, squishyId, nickname, key) => {
+        calls.push(`name:${mapId}:${squishyId}:${nickname}`);
+        keys.push(key);
+        return ackError ? Promise.reject(ackError) : Promise.resolve();
+      },
     },
     createWs: (options) => {
       wsOptions = options;
@@ -98,6 +115,7 @@ function setup(initial: TutorialState = state()) {
   return {
     controller,
     calls,
+    keys,
     subscriptions,
     timers,
     views,
@@ -106,7 +124,7 @@ function setup(initial: TutorialState = state()) {
     setServer: (next: TutorialState) => {
       server = next;
     },
-    failAcknowledge: (err: Error) => {
+    failAcknowledge: (err: Error | null) => {
       ackError = err;
     },
     /** The server's step engine moves on and writes `tutorial.advanced`. */
@@ -307,6 +325,99 @@ describe('TutorialController', () => {
     expect(t.closedSockets()).toBe(1);
     await t.controller.open();
     expect(t.controller.view.step?.id).toBe('welcome');
+  });
+
+  it("tucks a gameplay step's bubble away once read, and opens it again on a tap", async () => {
+    const t = setup(state({ stepId: 'gather' }));
+    await t.controller.open();
+    t.controller.tuck(); // not on the last line yet
+    expect(t.controller.view.tucked).toBe(false);
+    t.controller.nextLine();
+    t.controller.tuck();
+    expect(t.controller.view.tucked).toBe(true);
+    t.controller.untuck();
+    expect(t.controller.view.tucked).toBe(false);
+    t.controller.tuck();
+
+    // The next step starts untucked, from its first line.
+    t.serverAdvances(advanced('gather', 'hearthfire'), state({ stepId: 'hearthfire' }));
+    expect(t.controller.view).toMatchObject({ tucked: false, line: 0 });
+
+    // Talk-only steps never tuck: their button is the way on.
+    const talk = setup(state({ stepId: 'plant' }));
+    await talk.controller.open();
+    talk.controller.nextLine();
+    talk.controller.tuck();
+    expect(talk.controller.view.tucked).toBe(false);
+  });
+
+  it('names the Partner on the naming step, with one key per name', async () => {
+    const t = setup(state({ stepId: 'name-partner', partner: PARTNER }));
+    await t.controller.open();
+    t.controller.name('Sunny'); // Sprout hasn't finished talking
+    expect(t.calls).toEqual(['state']);
+    t.controller.nextLine();
+    t.controller.name('   '); // nothing typed
+    expect(t.calls).toEqual(['state']);
+
+    t.failAcknowledge(new ApiRequestError('VALIDATION_FAILED', "Let's pick a different name!"));
+    t.controller.name('  Sunny ');
+    await settle();
+    expect(t.controller.view).toMatchObject({
+      phase: 'error',
+      message: "Let's pick a different name!",
+    });
+    t.failAcknowledge(null);
+    t.controller.retry();
+    expect(t.controller.view.phase).toBe('waiting');
+    expect(t.calls.filter((c) => c.startsWith('name:'))).toEqual([
+      `name:${MAP}:${PARTNER.squishyId}:Sunny`,
+      `name:${MAP}:${PARTNER.squishyId}:Sunny`,
+    ]);
+    // The same name again is the same request (a retry can't rename twice).
+    expect(new Set(t.keys).size).toBe(1);
+
+    t.serverAdvances(advanced('name-partner', 'care'), state({ stepId: 'care', partner: PARTNER }));
+    expect(t.controller.view.step?.id).toBe('care');
+  });
+
+  it('asks who the Partner is when the live advance reaches the naming step', async () => {
+    const t = setup(state({ stepId: 'befriend' }));
+    await t.controller.open();
+    t.serverAdvances(
+      advanced('befriend', 'name-partner'),
+      state({ stepId: 'name-partner', partner: PARTNER }),
+    );
+    await settle();
+    expect(t.calls).toEqual(['state', 'state']);
+    expect(t.controller.view.state?.partner).toEqual(PARTNER);
+  });
+
+  it('only names a Partner the server knows about, and only on its step', async () => {
+    const none = setup(state({ stepId: 'name-partner' }));
+    await none.controller.open();
+    none.controller.nextLine();
+    none.controller.name('Sunny');
+    expect(none.calls).toEqual(['state']);
+
+    const wrong = setup(state({ stepId: 'gather', partner: PARTNER }));
+    await wrong.controller.open();
+    wrong.controller.nextLine();
+    wrong.controller.name('Sunny');
+    wrong.controller.nightfall();
+    expect(wrong.calls).toEqual(['state']);
+  });
+
+  it('asks for night on the nightfall step, then waits for the server to move on', async () => {
+    const t = setup(state({ stepId: 'nightfall' }));
+    await t.controller.open();
+    t.controller.nextLine();
+    t.controller.nightfall();
+    expect(t.calls).toContain('nightfall');
+    expect(t.controller.view.phase).toBe('waiting');
+    t.serverAdvances(advanced('nightfall', 'evolve'), state({ stepId: 'evolve' }));
+    expect(t.controller.view).toMatchObject({ phase: 'step', tucked: false });
+    expect(t.controller.view.step?.id).toBe('evolve');
   });
 
   it('drops a slow answer that arrives after it was put away', async () => {

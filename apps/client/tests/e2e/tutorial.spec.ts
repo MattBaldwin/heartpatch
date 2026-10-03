@@ -1,9 +1,11 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { newPlayer, uniqueName } from './players.js';
 
-// The tutorial layer (#47). Asserts on signals from the dev hook (step id,
-// spotlight target, gate), never on pixels. The dev server runs with
-// HP_TUTORIAL_REQUIRED=false, so the tutorial is optional here.
+// The tutorial layer (#47) and The First Patch (#24). Asserts on signals from
+// the dev hook (step id, spotlight target, gate), never on pixels. The dev
+// server runs with HP_TUTORIAL_REQUIRED=false, so the tutorial is optional
+// here. Gameplay steps are played for real in the server's tutorial.test.ts;
+// these jump over them with the dev step route.
 
 /** The tutorial from the dev hook (src/tutorial/tutorial-screen.ts `TutorialDebug`). */
 interface TutorialDebug {
@@ -30,6 +32,34 @@ const drawnMap = (page: Page) =>
   page.evaluate(
     () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.map?.()?.id ?? null,
   );
+/** Dev only: moves the run straight to `stepId` (the server's `POST /tutorial/dev/step`). */
+async function jumpTo(page: Page, stepId: string): Promise<void> {
+  const status = await page.evaluate(async (id) => {
+    const res = await fetch('/api/v1/tutorial/dev/step', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
+      body: JSON.stringify({ stepId: id }),
+    });
+    return res.status;
+  }, stepId);
+  expect(status).toBe(200);
+  await expect.poll(async () => (await debug(page))?.stepId).toBe(stepId);
+}
+
+/** `POST /api/v1/<path>` with the player's cookie: status and JSON body. */
+const apiPost = (page: Page, path: string, body: object) =>
+  page.evaluate(
+    async ([p, b]) => {
+      const res = await fetch(`/api/v1${p}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
+        body: JSON.stringify(b),
+      });
+      return { status: res.status, body: (await res.json()) as unknown };
+    },
+    [path, body] as const,
+  );
+
 const updatesHeld = (page: Page) =>
   page.evaluate(
     () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.updatesHeld?.() ?? null,
@@ -106,7 +136,9 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   await bubble.getByRole('button', { name: 'Next' }).tap();
   await bubble.getByRole('button', { name: 'Got it!' }).tap();
   // The server's step engine moves on and says so over live sync.
-  await expect.poll(async () => (await debug(page))?.stepId).toBe('graduation');
+  await expect.poll(async () => (await debug(page))?.stepId).toBe('plant');
+  // Over the gameplay steps (the full run below covers the rest).
+  await jumpTo(page, 'graduation');
 
   await bubble.getByRole('button', { name: 'Next' }).tap();
   // Graduation spotlights its two choices, and only they take taps.
@@ -175,4 +207,112 @@ test("an update can't reload away a new account's recovery code", async ({ page 
   expect(await updatesHeld(page)).toBe(true);
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();
   expect(await updatesHeld(page)).toBe(false);
+});
+
+test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, graduate', async ({
+  browser,
+}) => {
+  test.setTimeout(180_000); // draws the Glade and a patch; CI renders in software
+  const page = await newPlayer(browser, uniqueName('patch'));
+  const lobby = page.getByTestId('lobby');
+  const bubble = page.getByTestId('tutorial-bubble');
+  const main = bubble.getByTestId('tutorial-main');
+  const readAll = async () => {
+    while ((await main.isVisible()) && (await main.textContent()) === 'Next') await main.tap();
+  };
+  const step = async (id: string) => {
+    await expect.poll(async () => (await debug(page))?.stepId, { timeout: 15_000 }).toBe(id);
+  };
+
+  await lobby.getByTestId('tutorial-start').tap();
+  await step('welcome');
+  const glade = (await debug(page))?.mapId ?? null;
+  expect(glade).not.toBeNull();
+  await readAll();
+  await main.tap(); // Got it!
+  await step('plant');
+  await readAll();
+  await expect(main).toHaveText('Plant it!');
+  await main.tap();
+  await step('gather');
+  // A gameplay step tucks Sprout away, so the game underneath takes taps.
+  await readAll();
+  await expect(main).toHaveText("Let's go!");
+  await main.tap();
+  await expect(page.getByTestId('tutorial')).toHaveClass(/tutorial-tucked/);
+  expect((await debug(page))?.overlay.gate).not.toBe('blockAll');
+
+  // Befriend a starter in the Glade (the battle itself is server-tested).
+  await jumpTo(page, 'befriend');
+  const started = await apiPost(page, `/maps/${glade!}/battles`, { tile: { q: 0, r: 1 } });
+  expect(started.status).toBe(201);
+  const { battle } = started.body as {
+    battle: {
+      id: string;
+      view: { turn: number; sides: { b: { squishies: { speciesId: string }[] } } };
+    };
+  };
+  const befriended = battle.view.sides.b.squishies[0]?.speciesId;
+  const captured = await apiPost(page, `/battles/${battle.id}/actions`, {
+    action: { type: 'capture' },
+    turn: battle.view.turn,
+  });
+  expect(captured.status).toBe(200);
+  await step('name-partner');
+
+  // Name the Partner right in Sprout's bubble.
+  await readAll();
+  await bubble.getByTestId('tutorial-name-input').fill('Sunny');
+  await bubble.getByTestId('tutorial-name-save').tap();
+  await step('care');
+
+  // Night falls on the Glade: nothing is taken, and a lore page turns up.
+  await jumpTo(page, 'nightfall');
+  await readAll();
+  await expect(main).toHaveText('Night falls');
+  await main.tap();
+  await step('evolve');
+  const card = page.getByTestId('lore-card');
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByTestId('lore-title')).toHaveText('Paw Prints by the Fire');
+  await card.getByTestId('lore-close').tap();
+  await expect(card).toBeHidden();
+
+  // The Seedling Scarf, on in the Wardrobe.
+  await jumpTo(page, 'wardrobe');
+  await readAll();
+  await expect(main).toHaveText('Wardrobe');
+  await main.tap();
+  const wardrobe = page.getByTestId('wardrobe');
+  await expect(wardrobe).toBeVisible();
+  await wardrobe.getByRole('tab', { name: /Tops/ }).tap();
+  await wardrobe
+    .getByTestId('wardrobe-items')
+    .getByRole('button', { name: /Seedling Scarf/ })
+    .tap();
+  // Once it's on, Sprout moves on and the Glade comes back.
+  await step('graduation');
+  await expect(wardrobe).toBeHidden();
+
+  await readAll();
+  await page
+    .locator('[data-tutorial-target="graduation-choices"]')
+    .getByRole('button', { name: 'Make a patch' })
+    .tap();
+  await expect(page.getByTestId('tutorial')).toBeHidden();
+  await lobby.getByLabel('Patch name').fill('Partner Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await lobby.getByRole('button', { name: 'Visit patch' }).tap();
+
+  // The starter pick opens on the Partner's species; any can still be picked.
+  const picker = page.getByTestId('starter-picker');
+  await expect(picker.getByRole('heading', { name: 'Choose your friend!' })).toBeVisible();
+  const partner = await page.evaluate(
+    () =>
+      (
+        window as unknown as { __heartpatch?: { starter?(): { picked: string | null } | null } }
+      ).__heartpatch?.starter?.()?.picked ?? null,
+  );
+  expect(partner).toBe(befriended);
+  await expect(picker.getByRole('button', { name: /^Choose \w+$/ })).toBeEnabled();
 });
