@@ -5,7 +5,9 @@ import type { Executor } from '../src/db/client.js';
 /** The backend pid of this transaction's connection. */
 export async function backendPid(tx: Executor): Promise<number> {
   const rows = await tx.execute<{ pid: number }>('select pg_backend_pid() as pid');
-  return [...rows][0]!.pid;
+  const [row] = [...rows];
+  if (!row) throw new Error('backendPid: no row');
+  return row.pid;
 }
 
 /**
@@ -20,7 +22,7 @@ export async function waitUntilBlockedBy(db: Executor, pid: number, timeoutMs = 
     const rows = await db.execute<{ n: number }>(
       `select count(*)::int as n from pg_stat_activity where ${String(pid)} = any(pg_blocking_pids(pid))`,
     );
-    if ([...rows][0]!.n > 0) return;
+    if (([...rows][0]?.n ?? 0) > 0) return;
     if (Date.now() > deadline)
       throw new Error(`timed out waiting for a backend blocked by ${String(pid)}`);
     await new Promise((resolve) => setTimeout(resolve, 20));

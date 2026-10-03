@@ -411,9 +411,9 @@ describe.skipIf(!url)('gathering (needs DATABASE_URL)', () => {
     });
 
     // Tech spec §7 "Lock order": tile, then gather, in `start` and `collect`
-    // alike. Here a command (a capture taking the land) holds the tile, then
-    // wants the gather; were `collect` to hold the gather while it waits for
-    // the tile, Postgres would report a deadlock.
+    // alike. Simulated here: a transaction that holds the tile, then wants
+    // the gather (no command does both today). Were `collect` to hold the
+    // gather while it waits for the tile, Postgres would report a deadlock.
     it('collects under the tile lock first, so it never deadlocks with the land changing', async () => {
       const server = await start();
       const kid = await player();

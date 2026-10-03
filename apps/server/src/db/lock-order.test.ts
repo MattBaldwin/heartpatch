@@ -3,6 +3,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
+import { removeMemberBuildings } from '../modules/buildings/service.js';
 import { createDbClient, type Database, type DbClient, type Transaction } from './client.js';
 import { backendPid, waitUntilBlockedBy } from '../../tests/lock-waits.js';
 import { buildings, mapMembers, maps, squishies, tiles, users } from './schema.js';
@@ -73,7 +74,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
         habitatBuildingId: building!.id,
       })),
     );
-    return { mapId, buildingId: building!.id, ids };
+    return { mapId, userId, buildingId: building!.id, ids };
   }
 
   const lockSquishy = (tx: Transaction, id: string) =>
@@ -125,5 +126,20 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .where(eq(squishies.habitatBuildingId, buildingId))
       .orderBy(asc(squishies.id));
     expect(left).toEqual([]);
+  });
+  it("locks a leaving member's habitat residents in id order (buildings `removeMemberBuildings`)", async () => {
+    const { mapId, userId, buildingId, ids } = await patch();
+    await nightfallAgainst(ids, () => unplanned((tx) => removeMemberBuildings(tx, mapId, userId)));
+    const gone = await db
+      .select({ id: buildings.id })
+      .from(buildings)
+      .where(eq(buildings.id, buildingId));
+    expect(gone).toEqual([]);
+    const homeless = await db
+      .select({ id: squishies.id })
+      .from(squishies)
+      .where(eq(squishies.mapId, mapId))
+      .orderBy(asc(squishies.id));
+    expect(homeless.map((r) => r.id)).toEqual(ids);
   });
 });

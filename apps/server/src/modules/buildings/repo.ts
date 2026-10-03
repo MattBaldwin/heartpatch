@@ -6,7 +6,7 @@ import {
   type ElementId,
   type FeelingId,
 } from '@heartpatch/shared';
-import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { buildings, squishies, tiles } from '../../db/schema.js';
@@ -212,10 +212,28 @@ function queries(db: Executor): BuildingsRepo {
     },
 
     deleteOwned: async (mapId, userId) => {
-      const deleted = await db
-        .delete(buildings)
-        .where(and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, userId)))
-        .returning({ id: buildings.id });
+      const owned = and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, userId));
+      // Tech spec §7 "Lock order": the buildings, then their residents in id
+      // order. Deleting them moves the residents out through the foreign key
+      // (`ON DELETE SET NULL`), a bare multi-row UPDATE that locks in scan order.
+      await db
+        .select({ id: buildings.id })
+        .from(buildings)
+        .where(owned)
+        .orderBy(asc(buildings.id))
+        .for('update');
+      await db
+        .select({ id: squishies.id })
+        .from(squishies)
+        .where(
+          inArray(
+            squishies.habitatBuildingId,
+            db.select({ id: buildings.id }).from(buildings).where(owned),
+          ),
+        )
+        .orderBy(asc(squishies.id))
+        .for('no key update');
+      const deleted = await db.delete(buildings).where(owned).returning({ id: buildings.id });
       return deleted.length;
     },
 
