@@ -1,6 +1,13 @@
-import { findAvoidedWords } from '@heartpatch/shared';
+import { findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+
+/** The dev squishy's level: strong enough to beat the guardians next to home. */
+const STRONG_LEVEL = 40;
+/** A year-round public squishy that grows up before `STRONG_LEVEL`, so the claim evolves it. */
+const STRONG = GAME_DATA.species.find(
+  (s) => !s.season && s.evolutions.some((e) => e.level < STRONG_LEVEL),
+)!.id;
 
 /**
  * Territory on an iPhone (issue #15): claim wild land next to your home base
@@ -101,14 +108,17 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
 
   // A strong squishy from the dev route, next to their level-1 starter.
   const mapId = (await mapState(page))!.id;
-  const granted = await page.evaluate(async (id) => {
-    const res = await fetch(`/api/v1/maps/${id}/dev/squishies`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
-      body: JSON.stringify({ level: 40 }),
-    });
-    return res.status;
-  }, mapId);
+  const granted = await page.evaluate(
+    async ({ id, body }) => {
+      const res = await fetch(`/api/v1/maps/${id}/dev/squishies`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
+        body: JSON.stringify(body),
+      });
+      return res.status;
+    },
+    { id: mapId, body: { speciesId: STRONG, level: STRONG_LEVEL } },
+  );
   expect(granted).toBe(201);
 
   // Wild land next to home: the panel says Claim, kindly.
@@ -163,7 +173,7 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   await page.getByTestId('battle-done').tap();
   await expect(hud).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  // A level-40 Moonpuff is past its evolution level, so the battle's XP grows
+  // The level-40 dev squishy is past its evolution level, so the battle's XP grows
   // it up and the care sheet celebrates (#19): say yay and close it.
   await expect(page.getByTestId('care-celebrate')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('care-yay').tap();

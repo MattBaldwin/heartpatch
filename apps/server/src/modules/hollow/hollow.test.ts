@@ -37,7 +37,8 @@ const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
-const MOONPUFF = SERVER_GAME_DATA.secretSpecies.find((s) => s.id === 'placeholder-moonpuff')!;
+/** A secret squishy: the owner's Hollow status carries its row since they've met it (rule 6). */
+const SECRET = SERVER_GAME_DATA.secretSpecies[0]!;
 // Noon in Denver on Oct 2 (MDT, UTC−6): tonight's nightfall is 03:00Z on Oct 3.
 const START = '2026-10-02T18:00:00Z';
 const TONIGHT = '2026-10-02';
@@ -194,9 +195,9 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       .values({
         mapId,
         ownerUserId: who.id,
-        speciesId: MOONPUFF.id,
-        element: MOONPUFF.element,
-        feeling: MOONPUFF.feeling,
+        speciesId: SECRET.id,
+        element: SECRET.element,
+        feeling: SECRET.feeling,
         level: options.level ?? 5,
         habitatBuildingId: options.habitat ?? null,
         state: options.state ?? 'active',
@@ -469,13 +470,13 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(mine.reports).toEqual([
         {
           night: TONIGHT,
-          taken: { squishyId: taken, speciesId: MOONPUFF.id, nickname: null, inHollow: true },
+          taken: { squishyId: taken, speciesId: SECRET.id, nickname: null, inHollow: true },
           sheltered: 0,
         },
       ]);
       expect(mine.hollowed.map((s) => s.id)).toEqual([taken]);
-      // Moonpuff is secret: the owner gets its row, since they've met it.
-      expect(mine.speciesDefs.map((s) => s.id)).toEqual([MOONPUFF.id]);
+      // It's secret: the owner gets its row, since they've met it.
+      expect(mine.speciesDefs.map((s) => s.id)).toEqual([SECRET.id]);
       expect(mine.rescue).toEqual({
         heartdust: HOLLOW_RULES.rescue.heartdust,
         rewardsLeftToday: HOLLOW_RULES.rescue.rewardsPerDay,

@@ -5,6 +5,10 @@ import { MAP_GEN } from './map-gen.js';
 import { MOVES, SPECIES } from './species.js';
 import { SEASONS } from './seasons.js';
 import { TERRAINS } from './terrains.js';
+import { GUARDIAN_RULES } from './server/guardian-rules.js';
+import { RESCUE_GUARDIANS } from './server/rescue-guardians.js';
+import { SECRET_MOVES, SECRET_SPECIES } from './server/secret-species.js';
+import { SPAWN_TABLES } from './server/spawn-tables.js';
 
 describe('decisions encoded in data (docs/DECISIONS.md)', () => {
   it('has exactly the feed, pet and play care actions', () => {
@@ -32,6 +36,17 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
     expect(SPECIES.length).toBeGreaterThan(0);
     expect(MOVES.length).toBeGreaterThan(0);
     const ids = [...SPECIES, ...MOVES].map((row) => row.id);
+    expect(ids.filter((id) => id.startsWith('fixture-') || id.startsWith('placeholder-'))).toEqual(
+      [],
+    );
+  });
+
+  it('ships no placeholder species in the server data (#87)', () => {
+    const tables = [...SPAWN_TABLES, ...GUARDIAN_RULES.tables];
+    const ids = [
+      ...[...SECRET_SPECIES, ...SECRET_MOVES, ...tables].map((row) => row.id),
+      ...[...tables, RESCUE_GUARDIANS].flatMap((t) => t.entries.map((e) => e.species)),
+    ];
     expect(ids.filter((id) => id.startsWith('fixture-') || id.startsWith('placeholder-'))).toEqual(
       [],
     );

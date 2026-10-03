@@ -1,16 +1,5 @@
 import type { GuardianRules } from '../../schemas/data/guardian-rules.js';
 
-const EVERY_TERRAIN = [
-  'meadow',
-  'forest',
-  'old-forest',
-  'hills',
-  'mountains',
-  'lake',
-  'pumpkin-fields',
-  'junipers-gap',
-];
-
 /**
  * Tile guardians (design doc §11). Secret (CLAUDE.md rule 6): server-only.
  * A tile's `guardian_strength` (1–4 on ordinary land, 5 in Juniper's Gap,
@@ -118,12 +107,6 @@ export const GUARDIAN_RULES: GuardianRules = {
         { species: 'topsywing', weight: 2 },
         { species: 'brightboo', weight: 1 },
       ],
-    },
-    // TUNE: placeholder kept until its tests move to the roster (follow-up).
-    {
-      id: 'placeholder-guardians',
-      terrains: EVERY_TERRAIN,
-      entries: [{ species: 'placeholder-moonpuff', weight: 1 }],
     },
   ],
 };

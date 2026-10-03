@@ -410,7 +410,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
-      // Moonpuffs both sides, so one move can't end the battle before the stale submit.
+      // The same secret squishy on both sides, so one move can't end the battle before the stale submit.
       await grant(server, kid, mapId, { speciesId: SECRET_IDS[0], level: 10 });
       const battle = await pickFight(server, kid, mapId, {
         opponent: { speciesId: SECRET_IDS[0] },

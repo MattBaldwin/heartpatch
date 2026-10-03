@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { battleSetup, squishy } from '../../../tests/fixtures/battle.js';
-import { FIXTURE_MOVES, FIXTURE_SPECIES } from '../../../tests/fixtures/sample-content.js';
+import {
+  FIXTURE_MOVES,
+  FIXTURE_SECRET_EVOLUTIONS,
+  FIXTURE_SECRET_MOVES,
+  FIXTURE_SECRET_SPECIES,
+  FIXTURE_SPECIES,
+} from '../../../tests/fixtures/sample-content.js';
 import { createBattleContent } from '../../battle/content.js';
 import { startBattle } from '../../battle/engine.js';
 import { GAME_DATA } from '../index.js';
@@ -24,16 +30,23 @@ describe('serverBattleData', () => {
   });
 
   it('lets a public squishy battle a secret one', () => {
-    const content = createBattleContent(serverBattleData(gameData, SERVER_GAME_DATA));
+    const secrets = {
+      ...SERVER_GAME_DATA,
+      secretSpecies: FIXTURE_SECRET_SPECIES,
+      secretMoves: FIXTURE_SECRET_MOVES,
+      secretEvolutions: FIXTURE_SECRET_EVOLUTIONS,
+    };
+    const secret = FIXTURE_SECRET_SPECIES[0]!.id;
+    const content = createBattleContent(serverBattleData(gameData, secrets));
     const state = startBattle(
       content,
       battleSetup(
         'secret',
         { squishies: [squishy('fixture-puddlepuff')] },
-        { squishies: [squishy('placeholder-moonpuff')] },
+        { squishies: [squishy(secret)] },
       ),
     );
-    expect(state.sides.b.squishies[0]!.speciesId).toBe('placeholder-moonpuff');
+    expect(state.sides.b.squishies[0]!.speciesId).toBe(secret);
   });
 
   it('hashes the secret rows the server battles with', () => {
