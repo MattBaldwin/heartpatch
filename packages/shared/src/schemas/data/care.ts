@@ -18,6 +18,11 @@ export const CareRulesSchema = z
     maxContentment: z.literal(100),
     /** Where contentment settles when nobody cares for a while. */
     baselineContentment: percent,
+    /**
+     * Contentment a brand-new squishy starts with; it slides down from here
+     * like care does, from the moment it joins the player.
+     */
+    startContentment: percent,
     /** Hours from full contentment down to the baseline (design doc §7: ~24 h). */
     hoursFullToBaseline: z
       .number()
@@ -52,6 +57,16 @@ export const CareRulesSchema = z
         code: 'custom',
         path: ['baselineContentment'],
         message: 'the baseline must be below full',
+      });
+    }
+    if (
+      rules.startContentment < rules.baselineContentment ||
+      rules.startContentment > rules.maxContentment
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['startContentment'],
+        message: 'a new squishy starts between the baseline and full',
       });
     }
     rules.falloffPercents.forEach((p, i) => {

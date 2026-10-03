@@ -65,6 +65,16 @@ describe('care and growth data', () => {
     expect(problems).toContain('moods');
   });
 
+  it('starts a new squishy between the baseline and full', () => {
+    expect(CARE_RULES.startContentment).toBeGreaterThan(CARE_RULES.baselineContentment);
+    expect(CARE_RULES.startContentment).toBeLessThanOrEqual(CARE_RULES.maxContentment);
+    const below = { ...CARE_RULES, baselineContentment: 20, startContentment: 10 };
+    expect(checkCareRules(below).join('\n')).toContain('startContentment');
+    expect(checkCareRules({ ...CARE_RULES, startContentment: 101 }).join('\n')).toContain(
+      'startContentment',
+    );
+  });
+
   it('uses no avoided words in mood lines', () => {
     expect(findAvoidedWords(CARE_RULES.moods.map((m) => m.line).join(' '))).toEqual([]);
   });

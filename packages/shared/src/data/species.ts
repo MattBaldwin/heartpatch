@@ -496,7 +496,7 @@ export const SPECIES: Species[] = [
     element: 'spark',
     feeling: 'silly',
     rarity: 'common',
-    baseStats: { hp: 50, attack: 50, defense: 45, speed: 70 }, // TUNE:
+    baseStats: { hp: 60, attack: 60, defense: 50, speed: 70 }, // TUNE:
     moves: ['zip-zap', 'static-fluff', 'pebble-plop'],
     evolutions: [{ into: 'frizzbolt', level: 16 }], // TUNE:
     visual: {
@@ -513,7 +513,7 @@ export const SPECIES: Species[] = [
     element: 'spark',
     feeling: 'silly',
     rarity: 'uncommon',
-    baseStats: { hp: 70, attack: 70, defense: 60, speed: 95 }, // TUNE:
+    baseStats: { hp: 80, attack: 75, defense: 65, speed: 95 }, // TUNE:
     moves: ['zip-zap', 'static-fluff', 'fizzy-pop', 'pebble-plop'],
     evolutions: [],
     visual: {
@@ -698,7 +698,7 @@ export const SPECIES: Species[] = [
     element: 'stone',
     feeling: 'joy',
     rarity: 'epic',
-    baseStats: { hp: 85, attack: 85, defense: 105, speed: 55 }, // TUNE:
+    baseStats: { hp: 85, attack: 85, defense: 100, speed: 55 }, // TUNE:
     moves: ['pebble-plop', 'rumble-roll', 'sunny-beam', 'sturdy-sit'],
     evolutions: [],
     visual: {
@@ -755,7 +755,7 @@ export const SPECIES: Species[] = [
     element: 'leaf',
     feeling: 'cozy',
     rarity: 'rare',
-    baseStats: { hp: 70, attack: 55, defense: 65, speed: 40 }, // TUNE:
+    baseStats: { hp: 65, attack: 55, defense: 65, speed: 40 }, // TUNE:
     moves: ['leafy-tickle', 'mossy-nap', 'prickle-roll'],
     evolutions: [{ into: 'mossquilt', level: 22 }], // TUNE:
     visual: {
@@ -792,7 +792,7 @@ export const SPECIES: Species[] = [
     element: 'light',
     feeling: 'joy',
     rarity: 'epic',
-    baseStats: { hp: 60, attack: 70, defense: 55, speed: 65 }, // TUNE:
+    baseStats: { hp: 60, attack: 65, defense: 55, speed: 65 }, // TUNE:
     moves: ['sunny-beam', 'dazzle-dance', 'glow-up'],
     evolutions: [{ into: 'dazzledrop', level: 26 }], // TUNE:
     visual: {
@@ -809,7 +809,7 @@ export const SPECIES: Species[] = [
     element: 'light',
     feeling: 'joy',
     rarity: 'legendary',
-    baseStats: { hp: 85, attack: 100, defense: 75, speed: 90 }, // TUNE:
+    baseStats: { hp: 85, attack: 95, defense: 75, speed: 90 }, // TUNE:
     moves: ['sunny-beam', 'dazzle-dance', 'glow-up', 'giggle-drizzle'],
     evolutions: [],
     visual: {
@@ -829,7 +829,7 @@ export const SPECIES: Species[] = [
     element: 'spark',
     feeling: 'brave',
     rarity: 'legendary',
-    baseStats: { hp: 70, attack: 75, defense: 60, speed: 65 }, // TUNE:
+    baseStats: { hp: 70, attack: 70, defense: 60, speed: 60 }, // TUNE:
     moves: ['zip-zap', 'thunder-hug', 'zoomies', 'snowball-toss'],
     evolutions: [{ into: 'thunderplume', level: 30 }], // TUNE:
     visual: {

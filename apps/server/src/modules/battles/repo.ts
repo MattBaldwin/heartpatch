@@ -1,5 +1,6 @@
 import {
   BattleActionSchema,
+  CARE_RULES,
   BattleSideSetupSchema,
   ClientBattleViewSchema,
   RngStateSchema,
@@ -85,7 +86,10 @@ export interface BattlesRepo {
   listTeam: (mapId: string, userId: string, limit: number) => Promise<TeamSquishyRow[]>;
   /** Row-locks the squishies until commit (XP is written under it, care's `applyXp`). */
   lockSquishies: (ids: readonly string[]) => Promise<void>;
-  /** Dev/test only: hands a player a squishy. */
+  /**
+   * A new squishy for a player (befriended, or the dev grant). It starts at
+   * the care rules' `startContentment`, sliding down from `at` like care.
+   */
   insertSquishy: (squishy: {
     mapId: string;
     ownerUserId: string;
@@ -93,6 +97,7 @@ export interface BattlesRepo {
     element: ElementId;
     feeling: FeelingId;
     level: number;
+    at: Date;
   }) => Promise<OwnedSquishy>;
 
   insertBattle: (battle: NewBattle) => Promise<BattleRow>;
@@ -229,8 +234,18 @@ function queries(db: Executor): BattlesRepo {
         .for('update');
     },
 
-    insertSquishy: async (squishy) => {
-      const [row] = await db.insert(squishies).values(squishy).returning();
+    insertSquishy: async ({ at, ...squishy }) => {
+      const [row] = await db
+        .insert(squishies)
+        .values({
+          ...squishy,
+          // Passed explicitly (the column default stays 0, no migration);
+          // `lastCaredAt` = creation, so contentment decays from here.
+          contentmentAtLastCare: CARE_RULES.startContentment,
+          lastCaredAt: at,
+          createdAt: at,
+        })
+        .returning();
       if (!row) throw new Error('insertSquishy: insert returned no row');
       return toSquishy(row);
     },
