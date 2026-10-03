@@ -14,7 +14,7 @@ import { el, messageOf } from '../ui/dom.js';
 import { hollowApi, type HollowApi } from './hollow-api.js';
 import { VISIT_FRESH_MS } from './hollow-config.js';
 import type { HollowLayer } from './hollow-layer.js';
-import { HOLLOW_TEXT, reportText, unseenReports } from './hollow-report.js';
+import { changesMyFire, HOLLOW_TEXT, reportText, unseenReports } from './hollow-report.js';
 import './hollow.css';
 
 // The Hollow Man on the client (#21, design doc §14): the night look on the
@@ -455,6 +455,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         void refresh();
       } else if (event.type === 'squishy.hollowed' || event.type === 'squishy.rescued') {
         void refresh();
+      } else if (user && changesMyFire(event, user.id)) {
+        // My fire changed: the "light a fire" hint may be done (or back).
+        if (status?.fireHint) void refresh();
       }
     },
 

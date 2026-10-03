@@ -125,7 +125,8 @@ const MESSAGES = {
   resultNoContest: 'No contest!',
   wonSub: 'Everyone had a great time.',
   wildWonSub: "It's tuckered out and toddles away!",
-  gentleNote: 'Gentle patch: half XP for playing a smaller Keeper.',
+  gentleNote: (percent: number) =>
+    `Gentle patch: ${percent === 50 ? 'half' : `${String(percent)}%`} XP for playing a smaller Keeper.`,
   lostSub: 'A nap and a snack, and they’ll be ready again.',
   drawSub: 'Everyone needs a nap.',
   noContestSub: 'The squishies got distracted. Nobody won or lost.',
@@ -384,14 +385,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const mine = b.view.sides[b.mySide];
     // What the server granted (Gentle's share, care and habitat included);
     // a battle from before rewards were stored has only the engine's base XP.
-    const awards =
-      b.rewards?.xp ??
-      (result?.xp ?? [])
-        .filter((award) => award.side === b.mySide)
-        .map(({ squishyId, xp }) => ({
-          squishyId,
-          xp,
-        }));
+    const awards = b.rewards?.xp ?? (result?.xp ?? []).filter((award) => award.side === b.mySide);
     const xp = awards
       .filter((award) => award.xp > 0)
       .map((award) => {
@@ -419,7 +413,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
               : { title: MESSAGES.resultLost, subtitle: MESSAGES.lostSub };
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
-    if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote);
+    if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
     hud.showResult({ ...outcome, xp: lines, done: MESSAGES.done });
   };
 

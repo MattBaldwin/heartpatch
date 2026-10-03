@@ -55,9 +55,10 @@
 .hollow-hint {
   position: fixed;
   z-index: 4;
-  left: calc(env(safe-area-inset-left) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 388px);
-  max-width: min(260px, calc(100vw - 32px));
+  /* Beside the Hollow button's spot, clear of the left column (Chat sits above it). */
+  left: calc(env(safe-area-inset-left) + 92px);
+  bottom: calc(env(safe-area-inset-bottom) + 325px);
+  max-width: min(260px, calc(100vw - 108px));
   margin: 0;
   padding: 8px 14px;
   border-radius: 999px;

@@ -772,6 +772,15 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       }
     });
 
+    it('applies Gentle’s share to a challenge lost or left, too', async () => {
+      const server = await start();
+      const { kid, mapId, near } = await rivals(server);
+      for (const tile of (await edgeOf(mapId, kid)).slice(0, 6)) await setOwner(tile.id, kid.id);
+      const ran = await forfeit(server, kid, battleOf(await attack(server, kid, mapId, near)));
+      expect(ran.view.phase).toMatchObject({ type: 'over', result: { winner: 'b' } });
+      expect(ran.rewards?.percent).toBe(TERRITORY_RULES.gentle.rewardPercent);
+    });
+
     it('fights the land’s own guardians when nobody stands watch', async () => {
       const server = await start();
       const { kid, mapId, near } = await rivals(server);

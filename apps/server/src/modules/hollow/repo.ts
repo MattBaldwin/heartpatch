@@ -289,8 +289,9 @@ function queries(db: Executor): HollowRepo {
         .orderBy(asc(squishies.id))
         // Locked until commit, so a squishy can't be moved into or out of a
         // habitat (#18 locks it) between this read and being taken (lock order:
-        // the night's row, then squishies). Posting a guard (#15) doesn't lock
-        // the squishy yet, so a post at the very stroke of nightfall can race.
+        // the night's row, then squishies). Posting a guard (#15) locks the
+        // squishy too, but the joined `tile_defenders` row isn't read again
+        // after a lock wait, so a post at the very stroke of nightfall can race.
         .for('update', { of: squishies });
       return rows.map((r) => ({
         id: r.id,
