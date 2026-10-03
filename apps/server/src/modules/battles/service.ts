@@ -4,6 +4,7 @@ import {
   CAPTURABLE_BATTLE_KINDS,
   CARE_RULES,
   ClientBattleViewSchema,
+  COIN_RULES,
   clientBattleView,
   createBattleContent,
   GAME_DATA,
@@ -36,6 +37,7 @@ import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
 import type { Clock } from '../../lib/time.js';
 import { applyXp, appendGrowthEvents, type Growth } from '../care/service.js';
+import { creditCoins } from '../coins/service.js';
 import { consumeItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import type { MapRow } from '../maps/repo.js';
@@ -459,6 +461,24 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
   };
 
+  /** Credits each of a finished battle's coin rewards to its player (`creditCoins`). */
+  const payCoins = async (
+    tx: Executor,
+    row: BattleRow,
+    at: Date,
+    rewards: readonly { source: 'battle' | 'capture'; amount: number }[],
+  ): Promise<void> => {
+    for (const reward of rewards) {
+      await creditCoins(tx, {
+        ...reward,
+        refId: row.id,
+        userId: row.playerUserId,
+        mapId: row.mapId,
+        at,
+      });
+    }
+  };
+
   /** The battle is over: XP for the player's squishies, then the events. */
   const finish = async (
     repo: BattlesTxRepo,
@@ -509,6 +529,26 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       });
       await createSpawnsRepo(tx).markCaught(row.mapId, row.playerUserId, friend.speciesId, at);
     }
+    // Patch Coins (#45): a win, and a befriended squishy or a claimed tile,
+    // each once per battle. Gentle's share scales them like the XP and the
+    // find. After the squishy and `species_seen` locks, before the events.
+    await payCoins(tx, row, at, [
+      {
+        source: 'battle',
+        amount:
+          result.winner === PLAYER_SIDE
+            ? Math.floor((COIN_RULES.battleWin[row.kind] * tile.xpPercent) / 100)
+            : 0,
+      },
+      {
+        source: 'capture',
+        amount: captured
+          ? COIN_RULES.capture.wild
+          : tile.drop
+            ? Math.floor((COIN_RULES.capture.tile * tile.drop.percent) / 100)
+            : 0,
+      },
+    ]);
     await repo.finish(row.id, {
       status: 'finished',
       actions,

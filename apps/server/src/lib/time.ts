@@ -98,3 +98,21 @@ export function spawnWindowFor(at: Date, timeZone: string, hours: number): Spawn
 export function spawnWindowId(at: Date, timeZone: string, hours: number): string {
   return spawnWindowFor(at, timeZone, hours).id;
 }
+
+/**
+ * The first instant of the next calendar date in `timeZone` after `at`: its
+ * midnight, or whenever that date starts on a daylight-saving day that skips
+ * midnight. Account-level daily things (the Boutique's racks) turn over here.
+ */
+export function nextLocalMidnight(at: Date, timeZone: string): Date {
+  const today = localDate(at, timeZone);
+  // Every day ends within 26 hours, daylight saving included.
+  let before = at.getTime();
+  let after = before + 26 * 60 * MINUTE_MS;
+  while (after - before > 1) {
+    const mid = before + Math.floor((after - before) / 2);
+    if (localDate(new Date(mid), timeZone) === today) before = mid;
+    else after = mid;
+  }
+  return new Date(after);
+}

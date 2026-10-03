@@ -57,8 +57,8 @@ export interface EvolutionRow {
  * Care and growth storage (#19). Plain queries; the service decides the
  * rules and runs each command in one transaction. Lock order for a care
  * action: the account (the maps repo's `lockUser`, so the daily coin cap
- * can't race across squishies or patches), the squishy, inventory rows (`consumeItems`), then
- * `maps` (the event). XP from battles locks the squishies (under the battle
+ * can't race across squishies or patches), the squishy, inventory rows (`consumeItems`), the
+ * account's coin balance (`creditCoins`, #45), then `maps` (the event). XP from battles locks the squishies (under the battle
  * row) and never the account.
  */
 export interface CareRepo {

@@ -21,6 +21,8 @@ import { mountAuth } from './ui/auth/auth-overlay.js';
 import { createLorebook } from './lore/lorebook.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
+import { boutiqueApi } from './ui/boutique/boutique-api.js';
+import { createCoinCounter } from './ui/coins/coin-counter.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
@@ -530,6 +532,11 @@ const starters = createStarterScreen({
     lobby.stepOut();
   },
 });
+// The account's Patch Coins (#45), on the patch list; read fresh each time it shows.
+const lobbyCoins = createCoinCounter({
+  testId: 'lobby-coins',
+  fetchBalance: async () => (await boutiqueApi.coins()).balance,
+});
 const lobby = mountLobby(document.body, {
   onOpen: async (mapId) => {
     catalog.close();
@@ -557,6 +564,10 @@ const lobby = mountLobby(document.body, {
     lorebook.check();
   },
   listActions: () => [...tutorial.listActions(), ...wardrobe.listActions()],
+  listHeader: () => {
+    void lobbyCoins.refresh();
+    return [lobbyCoins.node];
+  },
   settings: () => [
     ...audio.settings(),
     ...keeper.settings(),
@@ -582,6 +593,7 @@ mountAuth(document.body, {
     // The lobby and tutorial wait for a Keeper (`onReady` above).
     keeper.setUser(user);
     if (!user) {
+      lobbyCoins.set(null);
       lobby.setUser(null);
       tutorial.setUser(null);
     }

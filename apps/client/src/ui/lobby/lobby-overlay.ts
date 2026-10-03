@@ -64,6 +64,8 @@ export interface LobbyOptions {
   onOpen?: (mapId: string) => Promise<void>;
   /** Extra buttons under the patch list (the tutorial's "Meet Sprout", #47). */
   listActions?: () => Node[];
+  /** Shown under the patch list's title (the Patch Coin counter, #45). */
+  listHeader?: () => Node[];
   /** Rows on the Settings screen (the tutorial's replay, #47). */
   settings?: () => Node[];
 }
@@ -229,6 +231,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     });
     show(
       title('Your patches'),
+      ...(options.listHeader?.() ?? []),
       subtitle(
         empty
           ? 'No patches yet! Make one, or join a friend.'

@@ -39,8 +39,8 @@ heartpatch/
 │     │  ├─ db/               drizzle schema, migrations, seed
 │     │  ├─ modules/          auth, health, keepers, maps, tutorial, battles, spawns,
 │     │  │                    territory, gathering, inventory, buildings, care, raids,
-│     │  │                    hollow, wardrobe, chat (milestones and boutique
-│     │  │                    come with #44 and #45)
+│     │  │                    hollow, wardrobe, chat, coins, boutique (milestones
+│     │  │                    come with #44)
 │     │  │   └─ <module>/     routes.ts, service.ts, repo.ts, schemas.ts, *.test.ts
 │     │  ├─ ws/               WebSocket hub, channels, message handlers
 │     │  ├─ jobs/             pg-boss: boss, event consumers, nightfall, limits
@@ -133,8 +133,8 @@ Add anything else only with a one-line justification in the PR.
 | `raids` | the raid log, one row per finished challenge on a player's land (`seen_at`) | #16 |
 | `hollow_events`, `hollow_rescues` | one row per map per night; one row per rescue expedition | #21 |
 | `milestone_progress`, `milestone_rewards` | not built yet | #44 |
-| `coin_ledger` | not built yet | #45 |
-| `boutique_stock` | not built yet | #45 |
+| `coin_ledger`, `coin_balances` (migration 0018) | every Patch Coin change, unique per `(source, ref_id)`, with the account day for the daily caps; each account's cached balance (its row lock serialises credits and purchases) | #45 |
+| `boutique_stock` | not built: the racks are worked out on read from the player's id and their account-local date (`boutiqueStock`), so there's nothing to store or rotate | #45 |
 | `quick_messages` | Phase 1 quick messages: a preset, emoji or sticker id per row, never typed text; each map keeps its latest `feedLimit` | #23 |
 
 `game_events` is the stream in §7. A rescue's Heartdust goes into `inventories` through `resource_ledger` (reason `rescue`); `hollow_rescues.heartdust` records what it paid.
@@ -145,6 +145,7 @@ Add anything else only with a one-line justification in the PR.
 - Base path `/api/v1`. JSON only. All bodies and responses validated with zod schemas from `packages/shared/src/schemas`.
 - Auth: session cookie `hp_session` (HttpOnly, Secure, SameSite=Lax, 30-day rolling). CSRF: require header `X-Requested-With: heartpatch` on mutating requests (simple and sufficient with SameSite cookies).
 - **Starter pick:** `POST /maps/:mapId/starter { speciesId }` grants the pick (#99). `MapDetail.needsStarter` (`GET /maps/:mapId`) is true until the player has picked. Patches only; the Tutorial Glade is `NOT_FOUND`.
+- **Patch Coins and the Boutique (#45):** `GET /coins` (the account's balance), `GET /boutique` (today's racks: prices, "owned", the balance, `restocksAt`), `POST /boutique/buy { itemId }` (send an `Idempotency-Key`; replies with the racks and the wardrobe). Account-level, like the wardrobe. A purchase writes no game event. Other modules pay coins only through `creditCoins(tx, { source, refId, … })` in their own transaction.
 - **Read-model additions:** `PublicTile.guardianHint: { count, difficulty } | null` on neutral tiles (#98, worked out on read, never species or levels); `PlayerBattle.rewards` (#97, null while running, after no contest, on a defender's replay and for older battles).
 - **Commands, not state writes:** e.g. `POST /maps/:mapId/tiles/:tileId/attack`, `POST /maps/:mapId/squishies/:id/care` with `{ action: "pet" }`. The server computes outcomes.
 - Errors: `{ error: { code: "TILE_NOT_ADJACENT", message: "Friendly text a kid can read" } }` with proper HTTP status. Codes are a shared enum.
@@ -218,10 +219,12 @@ Add anything else only with a one-line justification in the PR.
     9. the Hollow's rows (the night's `hollow_events`, a `hollow_rescues` row)
     10. squishies
     11. inventory rows (item id order), then `species_seen`
-    12. `maps`, last (`appendGameEvent`)
+    12. the account's `coin_balances` row (`creditCoins`, `spendCoins`; #45)
+    13. `maps`, last (`appendGameEvent`)
     - Commands that join or leave a map write the member row after `users` (approve's `upsertMember`, depart's `archiveMember`); nothing that takes `lockMember` then takes seats or `users`, so that's safe.
     - **Posting guards** (`setDefenders`) writes `tile_defenders` after the squishy locks. That's safe because the tile row lock (step 6) serialises everyone who writes a tile's defenders.
     - **Chat prune** locks `quick_messages` rows with `FOR UPDATE SKIP LOCKED`. They sit outside the order above and are locked before `maps` (the send's last write). A skipped prune never waits, so it can't deadlock; the next send catches up.
+    - **Patch Coins** are paid inside the transactions that earn them (a battle's finish, care, and #44's milestones) after their squishy, inventory and `species_seen` locks and before their events. A purchase locks only the balance row. Care's `users` lock (step 4) comes first, as before. `lock-order.test.ts` checks both sides for care and battles.
     - **One known exception:** a capture try locks the Heart Charm's inventory row before the team's squishies (XP when it ends the battle). It's safe only because no command locks a squishy and then a Heart Charm row (care never spends one); see DECISIONS "Lock order (Fix PR)".
     - A consumer transaction applies **one event** and takes `maps` at most once, at its end: a batch would hold `maps` from one event's append while the next event's handler locks squishies or tiles, the reverse of every command's order.
   - **Ordering on the wire:** post-commit broadcasts can still leave Node out of order. The client buffers briefly and applies events in `seq` order. Only a gap that persists past a short timeout triggers a replay request.
@@ -237,9 +240,9 @@ Add anything else only with a one-line justification in the PR.
   - `nightfall` per map at 21:00 map time (Hollow Man, §14 of the design doc). A `nightfall.sweep` every minute (and at boot) finds maps whose latest nightfall hasn't run, in each map's own time zone, and enqueues one `nightfall` job per map and night (`singletonKey: mapId/night`); the night's `hollow_events` row (unique per map and night) is the idempotency guard (#21)
     - **Hearthfire fuel is a date, not a counter:** each Hearthfire stores `fuelled_through` (the last map-local night its fuel covers). `tonight` means the **next nightfall that hasn't run yet** for that map (after 21:00, that's tomorrow's). Adding *n* nights of Emberwood sets `fuelled_through = max(fuelled_through, tonight − 1) + n`, capped at `tonight − 1 + max_nights`. At nightfall the fire protects tonight if `fuelled_through ≥ tonight`. "Nights left" is shown as `fuelled_through − tonight + 1` (minimum 0). Nothing is decremented, so a retried or duplicate nightfall run can't burn fuel twice.
   - `stranded-decay` (Phase 2)
-  - `boutique-rotate` daily per account (coins and wardrobe are account-level), at midnight in the account's time zone
+  - No `boutique-rotate` job: the Boutique's racks are worked out on read from the account's local date, so they change at midnight in the account's time zone with nothing to run (#45)
   - `invite-expiry`, `session-cleanup` daily; `chat-retention` daily arrives with Phase 2 chat (Phase 1 quick messages keep each map's latest `feedLimit` on every send instead, #23)
-  - Jobs are idempotent and keyed by `(job, scopeId, date)` (scope is the map, or the account for per-account jobs like `boutique-rotate`) so a restart never runs nightfall twice.
+  - Jobs are idempotent and keyed by `(job, scopeId, date)` (scope is the map, or the account for per-account jobs) so a restart never runs nightfall twice.
 - **Tutorial maps:** a tutorial is a normal map row with `kind = 'tutorial'` and one member, created from a hand-authored layout in `data/tutorial/`. It runs the **same** modules (gathering, battles, capture, care, buildings, nightfall) with a `tutorialOverrides` config (fast timers, guaranteed capture, scripted opponent AI, Hollow Man can't take anything). No separate code path for tutorial gameplay.
 - **Tutorial step engine:** steps are data (`id, goal, sproutLines, highlightTarget, completeOn: game event type + predicate`). The tutorial event consumer (see event consumers above) advances `users.tutorial_step` when it processes a matching `game_events` row, and the client renders the current step. Account-level rewards (Partner species, Seedling Scarf, First Patch milestone) are granted idempotently on completion.
 - **Dev time override:** env `HP_DEV_NOW` and an admin endpoint (dev only) to set the game clock for testing seasons and nightfall.

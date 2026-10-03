@@ -20,6 +20,7 @@
 }
 
 .wardrobe[hidden],
+.wardrobe-card[hidden],
 .wardrobe-toast[hidden],
 .wardrobe-save[hidden],
 .wardrobe-outfits[hidden] {
@@ -40,12 +41,14 @@
 
 .wardrobe-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
+/* On a narrow phone the chips drop to a second row rather than squash the title. */
 .wardrobe-header .auth-title {
-  flex: 1 1 auto;
+  flex: 1 1 120px;
   min-width: 0;
   font-size: 22px;
   text-align: left;

@@ -1090,3 +1090,55 @@ export const quickMessages = pgTable(
     index('quick_messages_map_id_sent_at_idx').on(t.mapId, t.sentAt, t.id),
   ],
 );
+
+/**
+ * Every Patch Coin change (#45, design doc §23, tech spec §4 "ledger table"):
+ * account-level (DECISIONS F), append-only. `coin_balances.balance` always
+ * equals the sum of `amount`, which tests reconcile. `(source, ref_id)` is
+ * unique, so each battle, capture, care action or milestone pays exactly
+ * once however often it's retried. `day` is the account's local date when
+ * it happened (`users.time_zone`), for the daily earning caps.
+ */
+export const coinLedger = pgTable(
+  'coin_ledger',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // `CoinSource` from shared (`battle`, `capture`, `care`, `milestone`, `boutique`, `dev-grant`).
+    source: text('source').notNull(),
+    // What it was for: a battle, a care action, a milestone, a piece bought.
+    refId: uuid('ref_id').notNull(),
+    // Positive for earning, negative for spending; never 0.
+    amount: integer('amount').notNull(),
+    // The patch it was earned on, if any; the coins stay when the map goes.
+    mapId: uuid('map_id').references(() => maps.id, { onDelete: 'set null' }),
+    day: date('day', { mode: 'string' }).notNull(),
+    createdAt: timestamptz('created_at').notNull(),
+  },
+  (t) => [
+    uniqueIndex('coin_ledger_source_ref_id_key').on(t.source, t.refId),
+    // The daily caps sum one account's day by source.
+    index('coin_ledger_user_id_day_idx').on(t.userId, t.day, t.source),
+    check('coin_ledger_amount_nonzero', sql`${t.amount} <> 0`),
+  ],
+);
+
+/**
+ * Each account's Patch Coins (#45), cached from `coin_ledger` and changed in
+ * the same transaction as its ledger row. The row lock is what serialises an
+ * account's credits and purchases, so a purchase can't overspend (tech spec
+ * §7 "Lock order"). A missing row is 0.
+ */
+export const coinBalances = pgTable(
+  'coin_balances',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    balance: integer('balance').notNull().default(0),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [check('coin_balances_balance_nonnegative', sql`${t.balance} >= 0`)],
+);

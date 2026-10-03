@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), `care_log`, `squishy_evolutions` plus the squishies' care columns (#19), `raids` plus `map_members.defense_stance` (#16), and `quick_messages` (#23). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), `coin_ledger` and `coin_balances` (#45), `care_log`, `squishy_evolutions` plus the squishies' care columns (#19), `raids` plus `map_members.defense_stance` (#16), and `quick_messages` (#23). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -318,7 +318,7 @@ Written by the keepers service (#42), which checks every id against the shared K
 | `id` | uuid PK | One row per piece, so a trade can move one (account-level, tech spec §4) |
 | `user_id` | uuid → users | Cascade delete. Indexed with `item_id` |
 | `item_id` | text | Clothing id (`CLOTHING`) |
-| `source` | text | How it arrived: `gather`, `capture`, `rescue`, `dev-grant` (later `tutorial`, `milestone`, `boutique`, `trade`) |
+| `source` | text | How it arrived: `gather`, `capture`, `rescue`, `tutorial`, `boutique`, `dev-grant` (later `milestone`, `trade`) |
 | `ref_id` | uuid, null | What caused it (a gather's id). Unique with `source` when set: one piece per event |
 | `map_id` | uuid, null → maps | Where it was found; set null when the map goes (the piece stays) |
 | `acquired_at` | timestamptz | |
@@ -341,6 +341,27 @@ Starter items are never stored: every account owns them (DECISIONS "Wardrobe (#4
 | `user_id` | uuid | The owner when it was put on |
 | `item_id` | text | A squishy accessory (`CLOTHING`, slot `squishy`) |
 | `updated_at` | timestamptz | |
+
+### `coin_ledger`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | Append-only: every Patch Coin change (#45, tech spec §4) |
+| `user_id` | uuid → users | Account-level (DECISIONS F); cascade delete |
+| `source` | text | `CoinSource`: `battle`, `capture`, `care`, `milestone`, `boutique` (a purchase), `dev-grant` |
+| `ref_id` | uuid | What it was for (a battle, a `care_log` row, a milestone, a purchase). Unique with `source`: each pays once |
+| `amount` | integer | Positive to earn, negative to spend; never 0 (checked) |
+| `map_id` | uuid, null → maps | The patch it was earned on; set null when the map goes (the coins stay) |
+| `day` | date | The account's local date (`users.time_zone`), for the daily caps. Indexed with `user_id`, `source` |
+| `created_at` | timestamptz | Game clock |
+
+### `coin_balances`
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` | uuid PK → users | One row per account, made on its first coin; cascade delete |
+| `balance` | integer | Always the sum of the account's `coin_ledger.amount`, changed in the same transaction; never below 0 (checked) |
+| `updated_at` | timestamptz | |
+
+Every credit and purchase locks this row first (tech spec §7 step 12), so an account's coins change one at a time.
 
 ### `inventories`
 | Column | Type | Notes |

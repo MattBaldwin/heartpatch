@@ -1,0 +1,113 @@
+/* The Boutique (design doc §23, #45): the wardrobe's bottom card, swapped
+   for racks of things to get with Patch Coins. Reuses the wardrobe's chips,
+   item cards and rarity colours (../wardrobe/wardrobe.css). */
+
+.boutique-card {
+  position: relative;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.boutique-card[hidden],
+.boutique-sheet[hidden] {
+  display: none;
+}
+
+.boutique-card .wardrobe-header .auth-title {
+  margin: 0;
+}
+
+.boutique-restock {
+  margin: 0;
+  font-size: 14px;
+  color: #8a6b8c;
+}
+
+.boutique-racks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.boutique-rack-title {
+  margin: 2px 2px 6px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.boutique-items {
+  overflow: visible;
+}
+
+.boutique-item .boutique-tag {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #7a5200;
+}
+
+.boutique-item .coin-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.boutique-item[data-state='owned'] {
+  opacity: 0.75;
+}
+
+.boutique-tag.boutique-owned {
+  color: #4fa36b;
+}
+
+/* Not enough yet: the price stays readable, just softer. */
+.boutique-tag.boutique-short {
+  color: #a08a7a;
+}
+
+.boutique-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.boutique-footer .wardrobe-note {
+  flex: 1 1 auto;
+}
+
+/* The "get it?" and "not enough yet" sheet slides over the card's bottom. */
+.boutique-sheet {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 -4px 24px rgb(74 49 80 / 22%);
+}
+
+.boutique-ask {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.boutique-ask-hint {
+  margin: 0;
+  font-size: 15px;
+  color: #6b4b6e;
+}
+
+.boutique-ask-actions {
+  display: flex;
+  gap: 8px;
+}
