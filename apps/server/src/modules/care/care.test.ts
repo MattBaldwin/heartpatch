@@ -7,6 +7,7 @@ import {
   CatalogResponseSchema,
   CareResponseSchema,
   GROWTH_RULES,
+  HollowResponseSchema,
   HomeResponseSchema,
   MapResponseSchema,
   NICKNAME_MAX_LENGTH,
@@ -17,6 +18,7 @@ import {
   type PlayerBattleAction,
 } from '@heartpatch/shared';
 import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -761,7 +763,7 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
     // Local and dev databases can still hold squishies of a retired species
     // (the `placeholder-*` rows). Reading them must not fail: they list with
     // no species row, the way an old battle names a "Mystery squishy".
-    it('still lists, cares for and catalogs the squishy', async () => {
+    it('still lists, cares for and catalogs the squishy, and the Hollow still reads', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
@@ -788,6 +790,13 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
         entries: [expect.objectContaining({ speciesId: retired })],
         speciesDefs: [],
       });
+      // Taken to the Hollow, it still shows up there.
+      await db.update(squishies).set({ state: 'hollowed' }).where(eq(squishies.id, id));
+      const hollow = await call(server, 'GET', `/maps/${mapId}/hollow`, kid);
+      expect(hollow.statusCode).toBe(200);
+      expect(HollowResponseSchema.parse(hollow.json()).hollow.hollowed.map((s) => s.id)).toEqual([
+        id,
+      ]);
     });
   });
 });
