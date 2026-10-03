@@ -30,6 +30,7 @@ import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import { localDate, type Clock } from '../../lib/time.js';
+import { creditCoins } from '../coins/service.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
@@ -42,7 +43,8 @@ import { createCareRepo, type CareRepo, type CareSquishyRow } from './repo.js';
  * G). Contentment is stored as its value at the last care action plus when
  * that was, and worked out on read (CLAUDE.md rule 4). Care actions count per
  * squishy per account day for diminishing returns; Patch Coins from care are
- * capped per account per day and only computed here (#45 pays them out).
+ * capped per account per day, computed here and paid out by `creditCoins`
+ * (#45) in the same transaction.
  * Battle XP goes through `applyXp`: care × habitat multiplier, levels, and
  * Phase 1's level-based evolution to the single next form.
  */
@@ -412,6 +414,16 @@ export function createCareService(options: CareServiceOptions): CareService {
         if (action.cost) {
           await consumeItems(tx, { mapId, userId: user.id }, action.cost, 'care', careId);
         }
+        // Pays out exactly what the care log records (#45), once per action.
+        // After the inventory rows and before the event (tech spec §7).
+        await creditCoins(tx, {
+          source: 'care',
+          refId: careId,
+          userId: user.id,
+          mapId,
+          amount: coins,
+          at,
+        });
         await repo.setContentment(row.id, contentment, at);
         const mood = moodFor(contentment, CARE_RULES);
         await repo.appendEvent({

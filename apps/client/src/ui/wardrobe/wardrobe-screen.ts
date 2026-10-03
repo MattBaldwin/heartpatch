@@ -15,6 +15,9 @@ import { COMMAND_RETRY_MS } from '../../inventory/send-command.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
 import { keeperItems } from '../../procedural/keeper/keeper-items.js';
 import { lodFor } from '../../procedural/motion.js';
+import type { BoutiqueApi } from '../boutique/boutique-api.js';
+import { createBoutiqueCard, type BoutiqueDebug } from '../boutique/boutique-card.js';
+import { BOUTIQUE_TEXT, previewWearing } from '../boutique/boutique-view.js';
 import { el, messageOf } from '../dom.js';
 import { KeeperPreview } from '../keeper/keeper-preview.js';
 import { OutfitSync } from './outfit-sync.js';
@@ -52,6 +55,8 @@ export interface WardrobeScreenOptions {
   /** It closed: bring the lobby back. */
   onClosed: () => void;
   api?: WardrobeApi;
+  /** The Boutique's calls (#45); tests swap them. */
+  boutiqueApi?: BoutiqueApi;
   /** Dev builds show a "get clothes" button (server `HP_DEV_SQUISHY_GRANTS`). */
   devTools?: boolean;
   /** How long after the last tap the outfit is sent. Tests shorten it. */
@@ -81,6 +86,8 @@ export interface WardrobeDebug {
   readonly sending: boolean;
   /** The last piece of clothing found while playing, if any. */
   readonly found: string | null;
+  /** The Boutique (#45), which takes the bottom card while it's open. */
+  readonly boutique: BoutiqueDebug;
 }
 
 export interface WardrobeScreen {
@@ -190,7 +197,12 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     { type: 'button', class: 'wardrobe-chip wardrobe-done', 'data-testid': 'wardrobe-done' },
     WARDROBE_TEXT.done,
   );
-  const header = el('div', { class: 'wardrobe-header' }, title, turn, done);
+  const shop = el(
+    'button',
+    { type: 'button', class: 'wardrobe-chip', 'data-testid': 'wardrobe-boutique' },
+    BOUTIQUE_TEXT.open,
+  );
+  const header = el('div', { class: 'wardrobe-header' }, title, shop, turn, done);
   const tabs = el('div', { class: 'wardrobe-tabs', role: 'tablist' });
   const rarities = el('div', { class: 'wardrobe-rarities' });
   const list = el('div', { class: 'wardrobe-items', 'data-testid': 'wardrobe-items' });
@@ -226,6 +238,27 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     card,
   );
   panel.hidden = true;
+  // The Boutique (#45) swaps in for this card; the Keeper above tries things on.
+  /** The Boutique piece the Keeper is trying on, over their outfit. */
+  let shopping: string | null = null;
+  const boutique = createBoutiqueCard({
+    onPreview: (itemId) => {
+      shopping = itemId;
+      showLook(itemId !== null);
+    },
+    onBought: (wardrobe) => {
+      outfit.adoptOwned(wardrobe);
+    },
+    onBack: () => {
+      card.hidden = false;
+      render();
+      showLook(false);
+    },
+    rarityName: (r) => WARDROBE_TEXT.rarities[r],
+    ...(options.boutiqueApi ? { api: options.boutiqueApi } : {}),
+    ...(options.devTools ? { devTools: true } : {}),
+  });
+  panel.append(boutique.node);
   const toast = el('p', {
     class: 'wardrobe-toast',
     role: 'status',
@@ -244,7 +277,8 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   const showLook = (hop: boolean) => {
     const keeper = options.keeper();
     if (!preview || !keeper) return;
-    preview.show(keeper, performance.now(), hop, keeperItems(outfit.trying), turned);
+    const wearing = previewWearing(outfit.trying, shopping, CLOTHING_BY_ID);
+    preview.show(keeper, performance.now(), hop, keeperItems(wearing), turned);
     options.invalidate();
   };
 
@@ -565,6 +599,8 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
 
   function close(): void {
     if (!isOpen) return;
+    boutique.close();
+    card.hidden = false;
     outfit.flush();
     isOpen = false;
     panel.hidden = true;
@@ -580,6 +616,11 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     showLook(false);
   });
   done.addEventListener('click', close);
+  shop.addEventListener('click', () => {
+    closeSave();
+    card.hidden = true;
+    boutique.open();
+  });
 
   devGrant?.addEventListener('click', () => {
     const mine = session;
@@ -616,6 +657,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
       close();
       user = next;
       outfit.reset();
+      boutique.reset();
       found = null;
       toast.hidden = true;
       // Known early, so battles dress the Keeper before the wardrobe opens.
@@ -660,6 +702,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
         sends: outfit.sends,
         sending: outfit.sending,
         found,
+        boutique: boutique.debug,
       };
     },
   };

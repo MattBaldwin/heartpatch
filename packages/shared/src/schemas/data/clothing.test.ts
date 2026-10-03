@@ -74,8 +74,8 @@ describe('the clothing catalog', () => {
     const items = copy();
     items[0]!.season = 'spring';
     items[1]!.tradable = true; // a starter
-    items[8]!.sources = ['found', 'boutique']; // no price
-    items[9]!.boutiquePrice = 50; // not sold
+    delete items[8]!.boutiquePrice; // sold, with no price
+    items[9]!.sources = ['found']; // priced, not sold
     items[10]!.visual.anchor = 'crown'; // a Keeper item
     items.push({ ...items[2]! });
     expect(checkClothingData(items, SEASON_IDS)).toEqual([
@@ -90,7 +90,11 @@ describe('the clothing catalog', () => {
   });
 
   it('needs starters for Keepers and squishies, so the wardrobe is never empty', () => {
-    const items = copy().map((i) => ({ ...i, sources: ['found' as const], tradable: true }));
+    const items = copy().map((i) => {
+      const found = { ...i, sources: ['found' as const], tradable: true };
+      delete found.boutiquePrice;
+      return found;
+    });
     expect(checkClothingData(items, SEASON_IDS)).toEqual([
       'clothing: no starter clothing for Keepers',
       'clothing: no starter accessory for squishies',

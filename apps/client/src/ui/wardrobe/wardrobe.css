@@ -20,6 +20,7 @@
 }
 
 .wardrobe[hidden],
+.wardrobe-card[hidden],
 .wardrobe-toast[hidden],
 .wardrobe-save[hidden],
 .wardrobe-outfits[hidden] {

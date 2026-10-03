@@ -127,6 +127,13 @@
       "when": 1791048231378,
       "tag": "0017_tutorial",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791060526751,
+      "tag": "0018_patch_coins",
+      "breakpoints": true
     }
   ]
 }

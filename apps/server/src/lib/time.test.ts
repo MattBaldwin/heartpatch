@@ -5,6 +5,7 @@ import {
   localDate,
   localDateHour,
   mapLocalTime,
+  nextLocalMidnight,
   spawnWindowId,
 } from './time.js';
 
@@ -151,5 +152,27 @@ describe('mapLocalTime (map-local wall clock)', () => {
       minute: 11 * 60,
     });
     expect(mapLocalTime(new Date('2026-10-02T06:00:00Z'), 'UTC').minute).toBe(6 * 60);
+  });
+});
+
+describe('nextLocalMidnight', () => {
+  it("is the zone's next midnight, not UTC's", () => {
+    const at = new Date('2026-10-31T23:30:00Z');
+    expect(nextLocalMidnight(at, 'UTC').toISOString()).toBe('2026-11-01T00:00:00.000Z');
+    // 6:30 PM in Chicago (CDT, UTC−5): midnight is 05:00 UTC.
+    expect(nextLocalMidnight(at, 'America/Chicago').toISOString()).toBe('2026-11-01T05:00:00.000Z');
+  });
+
+  it('is a whole day ahead at midnight itself', () => {
+    const midnight = new Date('2026-11-01T00:00:00Z');
+    expect(nextLocalMidnight(midnight, 'UTC').toISOString()).toBe('2026-11-02T00:00:00.000Z');
+  });
+
+  it('follows daylight saving (a 25-hour day in Chicago)', () => {
+    // Nov 1, 2026: clocks go back at 2 AM, so that day starts at 05:00 UTC and ends at 06:00 UTC.
+    const morning = new Date('2026-11-01T06:00:00Z');
+    expect(nextLocalMidnight(morning, 'America/Chicago').toISOString()).toBe(
+      '2026-11-02T06:00:00.000Z',
+    );
   });
 });

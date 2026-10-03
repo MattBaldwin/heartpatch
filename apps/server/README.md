@@ -379,6 +379,25 @@ await repo.transaction(async (repo, tx) => {
 });
 ```
 
+## Patch Coins and the Boutique
+
+Patch Coins (design doc §23; issue #45; DECISIONS "Patch Coins and the Boutique (#45)") live in `src/modules/coins`, the shop in `src/modules/boutique`. Account-level, like the wardrobe. Earned in play, never bought.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/coins` | → `{ coins: { balance } }` |
+| `GET /api/v1/boutique` | → `{ boutique }`: the account's `date`, `restocksAt` (its next local midnight), `daily` and `seasonal` racks (`{ itemId, price, owned }`) and `coins` |
+| `POST /api/v1/boutique/buy` | `{ itemId }` → `{ boutique, wardrobe }`. `NOT_FOUND` if the Boutique never sells it; `CONFLICT` if it isn't on today's racks, is owned already, or there aren't enough coins. Send an `Idempotency-Key` |
+| `POST /api/v1/dev/coins` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): `{ amount }` → 201 `{ coins }` |
+
+**Paying coins, for other modules** (battles and care do; #44's milestones will): call `creditCoins` inside your transaction, after your squishy, inventory and `species_seen` locks and before your events (tech spec §7 step 12). It pays once per `(source, refId)` and applies the daily caps (`COIN_RULES.dailyCaps`; care's coins arrive capped already):
+
+```ts
+import { creditCoins } from '../coins/service.js';
+
+await creditCoins(tx, { source: 'milestone', refId: rewardId, userId, mapId: null, amount, at });
+```
+
 It rolls the source's table (a percent chance, then a weighted pick among pieces that can drop on this tile's terrain in the seasons on now, by the map's local date), grants the piece and appends `clothing.found` (public: who and what). At most one piece per `(source, refId)`, ever, so a retried command can't grant twice. `HP_DEV_DROP_CHANCE` (dev and test only) sets every table's chance.
 
 ## Tutorial

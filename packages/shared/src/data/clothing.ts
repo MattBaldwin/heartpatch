@@ -12,6 +12,10 @@ import type { ClothingItem } from '../schemas/data/clothing.js';
  *   the Halloween window (design doc §15) and stay wearable forever.
  * - Where items drop, and how often, is server-only
  *   (`data/server/clothing-drops.ts`, CLAUDE.md rule 6).
+ * - **Boutique** items (`boutique` source, #45) can also be bought with
+ *   Patch Coins, priced by rarity (`BOUTIQUE_RULES` checks the range).
+ *   Legendary pieces and future milestone rewards (Cozy Apron, Squishy
+ *   Net, design doc §24) stay found-only.
  *
  * Pieces sit in their socket's units (`ClothingPieceSchema`): +y up, −z the
  * front, x across. Turns are degrees.
@@ -138,7 +142,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'Warm ears and a bouncy pom-pom on top.',
     slot: 'hat',
     rarity: 'common',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 15, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -154,7 +159,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'Picked from the sunniest corner of the meadow.',
     slot: 'hat',
     rarity: 'uncommon',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -178,7 +184,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'Fit for the ruler of a very cozy kingdom.',
     slot: 'hat',
     rarity: 'rare',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -196,7 +203,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'Wear your heart in your hair.',
     slot: 'hair-accessory',
     rarity: 'common',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 15, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -218,7 +226,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'The bigger the bow, the bigger the smile.',
     slot: 'hair-accessory',
     rarity: 'uncommon',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -262,7 +271,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'Every colour, all at once, all wrapped up.',
     slot: 'top',
     rarity: 'uncommon',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -297,7 +307,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'Spins all by itself. Probably.',
     slot: 'bottom',
     rarity: 'uncommon',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -312,7 +323,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'Hop-hop-hop wherever you go.',
     slot: 'shoes',
     rarity: 'rare',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -341,7 +353,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'Soft as a cloud, and only a little bit damp.',
     slot: 'back',
     rarity: 'rare',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -363,7 +376,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'Flutter, flutter. No flying, but lots of fluttering.',
     slot: 'back',
     rarity: 'epic',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 100, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -404,7 +418,8 @@ const EVERYDAY: ClothingItem[] = [
     description: 'One wave, a hundred tiny bubbles.',
     slot: 'held',
     rarity: 'uncommon',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -471,7 +486,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'hat',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -488,7 +504,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'hat',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -512,7 +529,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'hair-accessory',
     rarity: 'common',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 15, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -541,7 +559,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'hair-accessory',
     rarity: 'common',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 15, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -558,7 +577,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'top',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -575,7 +595,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'bottom',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -591,7 +612,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'shoes',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -615,7 +637,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'back',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -638,7 +661,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'back',
     rarity: 'epic',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 100, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -667,7 +691,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'held',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -692,7 +717,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'held',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -709,7 +735,8 @@ const HALLOWEEN: ClothingItem[] = [
     slot: 'costume',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       pieces: [
@@ -794,7 +821,8 @@ const SQUISHY: ClothingItem[] = [
     description: 'Keeps little necks toasty.',
     slot: 'squishy',
     rarity: 'common',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 15, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       anchor: 'neck',
@@ -810,7 +838,8 @@ const SQUISHY: ClothingItem[] = [
     description: 'Very fancy. Very tiny. Very proud.',
     slot: 'squishy',
     rarity: 'uncommon',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       anchor: 'crown',
@@ -827,7 +856,8 @@ const SQUISHY: ClothingItem[] = [
     description: 'For the bravest, snuggliest squishy around.',
     slot: 'squishy',
     rarity: 'epic',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 100, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       anchor: 'crown',
@@ -846,7 +876,8 @@ const SQUISHY: ClothingItem[] = [
     slot: 'squishy',
     rarity: 'rare',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 60, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       anchor: 'crown',
@@ -869,7 +900,8 @@ const SQUISHY: ClothingItem[] = [
     slot: 'squishy',
     rarity: 'uncommon',
     season: 'halloween',
-    sources: ['found'],
+    sources: ['found', 'boutique'],
+    boutiquePrice: 30, // TUNE: by rarity (#45)
     tradable: true,
     visual: {
       anchor: 'crown',

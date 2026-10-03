@@ -13,6 +13,9 @@ import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
 import { createBuildingsService, removeMemberBuildings } from '../modules/buildings/service.js';
+import { createCareService } from '../modules/care/service.js';
+import { createCoinsRepo } from '../modules/coins/repo.js';
+import { grantItems } from '../modules/inventory/service.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
 import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
@@ -20,12 +23,20 @@ import { createTerritoryService, createTileBattlePort } from '../modules/territo
 import { setDevDropChance } from '../modules/wardrobe/drops.js';
 import { createWardrobeService } from '../modules/wardrobe/service.js';
 import { AppError } from '../lib/errors.js';
-import { createDbClient, type Database, type DbClient, type Transaction } from './client.js';
+import {
+  createDbClient,
+  withTransaction,
+  type Database,
+  type DbClient,
+  type Transaction,
+} from './client.js';
 import { backendPid, waitUntilBlockedBy } from '../../tests/lock-waits.js';
 import {
   buildings,
   clothingOwned,
+  coinLedger,
   gameEvents,
+  inventories,
   mapMembers,
   maps,
   squishies,
@@ -352,8 +363,14 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     }
   });
 
-  it("rolls a capture's found clothing after the battle's squishy locks (battles `finish`, #84)", async () => {
-    const kid = await player('capturer');
+  /**
+   * A tile battle one move from the player winning it (and the tile): the
+   * player's level-40 hero against a neutral tile's guardians, played up to
+   * the turn before the end, checked against the stored state (the engine is
+   * deterministic). `finishing` is the move that wins.
+   */
+  async function oneMoveFromWinning(prefix: string) {
+    const kid = await player(prefix);
     const map = await createMapsService({
       db,
       tutorialRequired: false,
@@ -411,6 +428,12 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       }
     }
     expect(finishing).not.toBeNull();
+    return { kid, mapId, heroId, target, battle, fights, finishing: finishing! };
+  }
+
+  it("rolls a capture's found clothing after the battle's squishy locks (battles `finish`, #84)", async () => {
+    const { kid, mapId, heroId, target, battle, fights, finishing } =
+      await oneMoveFromWinning('capturer');
 
     setDevDropChance(100);
     let running: Promise<unknown> | undefined;
@@ -425,7 +448,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
         await tx.execute(sql`set local lock_timeout = '10s'`);
         await lockSquishy(tx, heroId);
         const pid = await backendPid(tx);
-        running = fights.act(kid, battle.id, finishing!);
+        running = fights.act(kid, battle.id, finishing);
         await waitUntilBlockedBy(db, pid);
         await tx.select({ id: maps.id }).from(maps).where(eq(maps.id, mapId)).for('update');
       });
@@ -441,6 +464,116 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .from(clothingOwned)
       .where(eq(clothingOwned.userId, kid.id));
     expect(pieces).toEqual([{ source: 'capture', refId: battle.id }]);
+  });
+
+  /*
+   * Patch Coins (#45): the account's `coin_balances` row comes after
+   * squishies, inventory and `species_seen`, and before `maps` (tech spec §7
+   * step 12). Each test holds a lock from one side of it, lets the command
+   * queue there, then takes a lock from the other side. Taken on the wrong
+   * side, the command would hold what the test then asks for, and Postgres
+   * would report a deadlock (40P01) or the lock timeout would fail it.
+   */
+  const lockCoins = (tx: Transaction, userId: string) => createCoinsRepo(tx).lockBalance(userId);
+  /** What `appendGameEvent`'s `event_seq` bump takes on the `maps` row. */
+  const lockMapRow = (tx: Transaction, mapId: string) =>
+    tx.select({ id: maps.id }).from(maps).where(eq(maps.id, mapId)).for('no key update');
+
+  /** Holds `first`, runs `command`, and once it waits, takes `then` too. */
+  async function holdThen(
+    first: (tx: Transaction) => Promise<unknown>,
+    command: () => Promise<unknown>,
+    then: (tx: Transaction) => Promise<unknown>,
+  ): Promise<void> {
+    let running: Promise<unknown> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await first(tx);
+      const pid = await backendPid(tx);
+      running = command();
+      await waitUntilBlockedBy(db, pid);
+      await then(tx);
+    });
+    await running;
+  }
+
+  /** A patch with one squishy and some Treats, for care. */
+  async function careSetup(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const [pet] = await db
+      .insert(squishies)
+      .values({
+        mapId: map.id,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+      })
+      .returning({ id: squishies.id });
+    await withTransaction(db, (tx) =>
+      grantItems(tx, { mapId: map.id, userId: kid.id }, { treats: 1 }, 'dev-grant'),
+    );
+    return { kid, mapId: map.id, petId: pet!.id, care: createCareService({ db }) };
+  }
+
+  const coinRows = (userId: string) =>
+    db
+      .select({ source: coinLedger.source, amount: coinLedger.amount })
+      .from(coinLedger)
+      .where(eq(coinLedger.userId, userId));
+
+  it('pays care coins after the inventory rows (care `care`, #45)', async () => {
+    const { kid, mapId, petId, care } = await careSetup('feeder');
+    // Hold the Treats row (another command spending Treats), let a feed queue
+    // on it, then take the coins: the feed must not hold them yet.
+    await holdThen(
+      (tx) =>
+        tx
+          .select({ itemId: inventories.itemId })
+          .from(inventories)
+          .where(and(eq(inventories.mapId, mapId), eq(inventories.userId, kid.id)))
+          .for('update'),
+      () => care.care(kid, mapId, petId, 'feed'),
+      (tx) => lockCoins(tx, kid.id),
+    );
+    expect(await coinRows(kid.id)).toEqual([{ source: 'care', amount: 1 }]);
+  });
+
+  it('pays care coins before the event (care `care`, #45)', async () => {
+    const { kid, mapId, petId, care } = await careSetup('petter');
+    // Hold the coins (a purchase), let a pet queue on them, then take `maps`
+    // as an event would: the pet must not have appended its event yet.
+    await holdThen(
+      (tx) => lockCoins(tx, kid.id),
+      () => care.care(kid, mapId, petId, 'pet'),
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect(await coinRows(kid.id)).toEqual([{ source: 'care', amount: 1 }]);
+  });
+
+  it("pays a battle's coins after the squishy locks (battles `finish`, #45)", async () => {
+    const { kid, heroId, battle, fights, finishing } = await oneMoveFromWinning('earner');
+    await holdThen(
+      (tx) => lockSquishy(tx, heroId),
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => lockCoins(tx, kid.id),
+    );
+    expect((await coinRows(kid.id)).map((r) => r.source).sort()).toEqual(['battle', 'capture']);
+  });
+
+  it("pays a battle's coins before its events (battles `finish`, #45)", async () => {
+    const { kid, mapId, battle, fights, finishing } = await oneMoveFromWinning('winner');
+    await holdThen(
+      (tx) => lockCoins(tx, kid.id),
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => lockMapRow(tx, mapId),
+    );
+    expect((await coinRows(kid.id)).map((r) => r.source).sort()).toEqual(['battle', 'capture']);
   });
 
   it('picks a starter while the member is leaving, one at a time on the member row (starters `pick`, maps `leave`)', async () => {
