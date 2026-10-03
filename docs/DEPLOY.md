@@ -199,17 +199,16 @@ Then delete the laptop copy of the private deploy key: `rm ~/.ssh/heartpatch-dep
    ```sh
    sudo install -o deploy -g deploy -m 600 ~/.env.prod.example /opt/heartpatch/.env
    ```
-2. Fill in the three secrets with fresh random values (this runs on the server, so they never leave it):
+2. Fill in the two secrets with fresh random values (this runs on the server, so they never leave it):
    ```sh
    sudo -u deploy sed -i \
      -e "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$(openssl rand -hex 32)/" \
-     -e "s|^SESSION_SECRET=$|SESSION_SECRET=$(openssl rand -base64 64 | tr -d '\n')|" \
      -e "s/^HP_SIGNUP_CODE=$/HP_SIGNUP_CODE=$(tr -dc a-km-np-z2-9 </dev/urandom | head -c 10)/" \
      /opt/heartpatch/.env
    ```
 3. Check it (and note the signup code: your family types it to create accounts):
    ```sh
-   sudo -u deploy grep -E '^(POSTGRES_PASSWORD|SESSION_SECRET|HP_SIGNUP_CODE|PUBLIC_ORIGIN|HP_TUTORIAL_REQUIRED)=' /opt/heartpatch/.env
+   sudo -u deploy grep -E '^(POSTGRES_PASSWORD|HP_SIGNUP_CODE|PUBLIC_ORIGIN|HP_TUTORIAL_REQUIRED)=' /opt/heartpatch/.env
    ```
    Every line should have a value. To edit by hand: `sudo -u deploy nano /opt/heartpatch/.env` (Ctrl+O, Enter to save; Ctrl+X to exit).
 
@@ -218,7 +217,6 @@ What each setting means is explained in the file itself. In short:
 | Setting | What it is |
 |---|---|
 | `POSTGRES_PASSWORD` | Database password. Set once: Postgres stores it when the database is first created (see Troubleshooting to change it) |
-| `SESSION_SECRET` | Signs login cookies. Changing it logs everyone out |
 | `PUBLIC_ORIGIN` | `https://play.pumpkinpatchgames.com` |
 | `LOG_LEVEL` | `info` |
 | `HP_SIGNUP_CODE` | Needed to create an account (family-only signup). Change it if it leaks |
@@ -383,7 +381,7 @@ It builds both images, pushes them to a throwaway local registry, and runs the r
 To click around the production build by hand instead:
 
 ```sh
-cp infra/compose/.env.prod.example infra/compose/.env   # fill in the three secrets
+cp infra/compose/.env.prod.example infra/compose/.env   # fill in the two secrets
 HEARTPATCH_TAG=local docker compose -f infra/compose/docker-compose.prod.yml \
   -f infra/compose/docker-compose.local.yml up -d --build --wait
 HEARTPATCH_TAG=local docker compose -f infra/compose/docker-compose.prod.yml \

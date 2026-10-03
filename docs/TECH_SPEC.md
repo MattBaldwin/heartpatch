@@ -18,13 +18,17 @@ heartpatch/
 │  ├─ client/                 Vite + Babylon.js PWA
 │  │  ├─ src/
 │  │  │  ├─ main.ts
-│  │  │  ├─ engine/           Babylon setup, render quality, camera, post-processing
-│  │  │  ├─ scenes/           map, homeBase, battle, closeUp, wardrobe
+│  │  │  ├─ engine/           Babylon setup, camera, frame scheduler, quality/ (governor, tiers)
+│  │  │  ├─ scenes/           dev test scene (each feature folder owns its own scene)
 │  │  │  ├─ procedural/       squishy + keeper generators, part library
-│  │  │  ├─ ui/               HUD and screens (Babylon GUI or DOM overlay — see §6)
+│  │  │  ├─ ui/               DOM helpers and the auth, lobby, keeper and wardrobe screens (see §6)
 │  │  │  ├─ net/              REST client, WebSocket client, reconnect
-│  │  │  ├─ state/            client store (mirrors server state)
-│  │  │  └─ audio/
+│  │  │  ├─ pwa/              install prompt, offline shell, update flow
+│  │  │  ├─ map/ territory/ home/ inventory/ catalog/ care/ close-up/ battle/ raids/ hollow/ tutorial/
+│  │  │  │                    feature folders: one per screen or system, each with its API
+│  │  │  │                    client, scene (map, home base, battle, close-up), DOM view,
+│  │  │  │                    CSS and tests; client state sits beside its feature (map-state.ts)
+│  │  │  └─ audio/            (not built yet, #25)
 │  │  ├─ public/              icons, manifest, static assets
 │  │  └─ tests/e2e/           Playwright
 │  └─ server/                 Node 22 + Fastify
@@ -32,31 +36,38 @@ heartpatch/
 │     │  ├─ index.ts          bootstrap
 │     │  ├─ config.ts         env parsing (zod)
 │     │  ├─ db/               drizzle schema, migrations, seed
-│     │  ├─ modules/          auth, maps, tiles, battles, squishies, buildings,
-│     │  │                    resources, care, hollowman, wardrobe, milestones,
-│     │  │                    boutique, chat, events
+│     │  ├─ modules/          auth, health, keepers, maps, tutorial, battles, spawns,
+│     │  │                    territory, gathering, inventory, buildings, care, raids,
+│     │  │                    hollow, wardrobe (milestones, boutique and chat come
+│     │  │                    with #44, #45 and #23)
 │     │  │   └─ <module>/     routes.ts, service.ts, repo.ts, schemas.ts, *.test.ts
 │     │  ├─ ws/               WebSocket hub, channels, message handlers
-│     │  ├─ jobs/             scheduled jobs (pg-boss)
-│     │  └─ lib/              filter, rng, time, errors
+│     │  ├─ jobs/             pg-boss: boss, event consumers, nightfall, limits
+│     │  ├─ ops/              operator scripts (reset-password)
+│     │  └─ lib/              filter, rng, time, errors, idempotency, zod
 │     └─ tests/
 ├─ packages/
 │  └─ shared/
 │     ├─ src/
-│     │  ├─ data/             species, moves, matrices, buildings, clothing,
-│     │  │                    milestones, seasons, spawn tables (TS/JSON)
-│     │  ├─ schemas/          zod schemas for data + API + WS messages
+│     │  ├─ data/             species, moves, matrices, buildings, clothing, recipes,
+│     │  │                    seasons, care, hollow, raids, spawn tables (TS/JSON);
+│     │  │                    server/ holds the secret data (below)
+│     │  ├─ schemas/          zod schemas for data + API + WS messages (events.ts is the event registry)
 │     │  ├─ battle/           deterministic battle engine
-│     │  ├─ formulas/         xp, contentment decay, capture chance, prices
-│     │  ├─ hex/              axial coords, neighbors, distance, BFS
+│     │  ├─ care/ gathering/ home/ hollow/ territory/ spawns/ wardrobe/ tutorial/
+│     │  │                    pure rules and formulas for each system (xp, contentment,
+│     │  │                    capture chance, fuel nights, spawn windows)
+│     │  ├─ hex/ mapgen/      axial coords, neighbors, distance, BFS; seeded map generator
 │     │  └─ rng/              seeded RNG
+│     ├─ scripts/sim/         balance simulator (`pnpm sim`, #12)
 │     └─ tests/
 ├─ infra/
 │  ├─ docker/                 Dockerfiles
 │  ├─ compose/                docker-compose.dev.yml, docker-compose.prod.yml
 │  ├─ caddy/Caddyfile
-│  └─ scripts/                deploy.sh, backup.sh, restore.sh, server-setup.sh
-├─ docs/                      GAME_DESIGN.md, TECH_SPEC.md, DEPLOY.md
+│  └─ scripts/                deploy.sh, backup.sh, restore.sh, server-setup.sh, local-smoke.sh
+├─ docs/                      GAME_DESIGN.md, TECH_SPEC.md, STYLE_GUIDE.md, DECISIONS.md,
+│                             DEPLOY.md, COORDINATOR.md
 └─ .github/workflows/         ci.yml, deploy.yml
 ```
 
@@ -98,7 +109,30 @@ Add anything else only with a one-line justification in the PR.
   4. CI fails if `drizzle-kit generate` would produce a diff, and runs `drizzle-kit check`.
   5. Migrations must be safe while the previous release is still running (expand, then contract in a later release), because a rollback runs the previous image against the already-migrated schema.
 
-**Core tables (Phase 1):** `users` (with `time_zone`), `sessions`, `event_consumers`, `recovery_codes`, `keepers`, `maps`, `map_members`, `invite_codes`, `join_requests`, `tiles`, `species_seen`, `squishies`, `buildings`, `inventories`, `resource_ledger`, `gather_jobs`, `crafts`, `battles` (seed, action log, result), `raids`, `hollow_events`, `hollow_rescues`, `clothing_owned`, `outfits`, `milestone_progress`, `milestone_rewards`, `coin_ledger`, `boutique_stock`, `quick_messages`, `game_events`.
+**Core tables (Phase 1).** Built means it is in `apps/server/src/db/schema.ts`; the issue is the one that added it. Names are exact: briefs use them as written.
+
+| Table | Holds | Issue |
+|---|---|---|
+| `users` (with `time_zone`), `sessions`, `recovery_codes` | accounts and login | #2, #3 |
+| `maps`, `map_members`, `tiles`, `squishies`, `game_events` | the core spine | #2 |
+| `invite_codes`, `join_requests` | joining a map | #4 |
+| `event_consumers` | each consumer's `last_seq` per map (§7) | #47 |
+| `battles` (seed, action log, result), `idempotency_keys` | battles; stored replies to retried requests | #13 |
+| `keepers` | each account's Keeper | #42 |
+| `inventories`, `resource_ledger`, `gather_jobs`, `crafts` | bag, every change to it, gathers and crafts | #17 |
+| `species_seen` | the catalog, per map | #14 |
+| `buildings` | home-base buildings, Hearthfire `fuelled_through` | #18 |
+| `tile_attacks`, `tile_defenders` | the tile battle attempt log; squishies on watch | #15 |
+| `clothing_owned`, `outfits`, `squishy_accessories` | wardrobe, saved outfits, the piece a squishy wears | #43 |
+| `care_log`, `squishy_evolutions` | one row per care action (day counts, coin cap, `coins`); what each squishy became | #19 |
+| `raids` | the raid log, one row per finished challenge on a player's land (`seen_at`) | #16 |
+| `hollow_events`, `hollow_rescues` | one row per map per night; one row per rescue expedition | #21 |
+| `milestone_progress`, `milestone_rewards` | not built yet | #44 |
+| `coin_ledger` | not built yet | #45 |
+| `boutique_stock` | not built yet | #45 |
+| `quick_messages` | not built yet | #23 |
+
+`game_events` is the stream in §7. A rescue's Heartdust goes into `inventories` through `resource_ledger` (reason `rescue`); `hollow_rescues.heartdust` records what it paid.
 
 ## 5. API
 
@@ -117,7 +151,24 @@ Add anything else only with a one-line justification in the PR.
   { v: 1, type: "tile.updated", mapId: string, seq: number, at: string, data: {...} }
   ```
 - `seq` is a per-map monotonically increasing number. On reconnect the client sends its last `seq`; the server replays missed events from `game_events` or tells the client to refetch full state. A REST snapshot says which `seq` it is up to date with (`MapView.seq`, read in the same transaction as the state), and the client subscribes from it.
-- Server → client events (Phase 1): `map.created`, `map.updated`, `member.joined`, `member.left`, `member.removed` (registered by #4), plus `tile.updated`, `tile.attacked`, `tile.captured`, `defenders.changed` (#15), `raid.resolved`, `building.placed`, `building.moved`, `building.removed`, `building.fueled`, `squishy.housed` (#18), `squishy.cared`, `squishy.leveled`, `squishy.evolved` (#19), `gather.started`, `resource.gathered`, `item.crafted`, `squishy.updated` (#20: a new nickname), `hollow.nightfall`, `squishy.hollowed`, `squishy.rescued` (#21; the last two only to the squishy's owner), `chat.quick`, `milestone.earned`, `clothing.found`, `outfit.changed` (each registered by the issue that writes it). The registry in `packages/shared/src/schemas/events.ts` is the source of truth: every type has an internal and a public schema, and `apps/server/src/ws/public-views.ts` builds broadcasts from it, so an unregistered type is never sent.
+- Server → client events. The registry in `packages/shared/src/schemas/events.ts` is the source of truth: every type has an internal and a public schema, and `apps/server/src/ws/public-views.ts` builds broadcasts from it, so an unregistered type is never sent. Each issue registers the types it writes:
+
+  | Issue | Types |
+  |---|---|
+  | #4 | `map.created`, `map.updated`, `member.joined`, `member.left`, `member.removed` |
+  | #47 | `tutorial.acknowledged`, `tutorial.advanced` (tutorial maps only) |
+  | #13 | `battle.started`, `battle.ended` |
+  | #14 | `squishy.captured` |
+  | #17 | `gather.started`, `resource.gathered`, `item.crafted` |
+  | #15 | `tile.attacked`, `tile.captured`, `defenders.changed` |
+  | #16 | `raid.resolved` |
+  | #18 | `building.placed`, `building.moved`, `building.removed`, `building.fueled`, `squishy.housed` |
+  | #19 | `squishy.cared`, `squishy.leveled`, `squishy.evolved` |
+  | #20 | `squishy.updated` (a new nickname) |
+  | #21 | `hollow.nightfall`, `squishy.hollowed`, `squishy.rescued` (the last two only to the squishy's owner) |
+  | #43 | `clothing.found`, `outfit.changed` |
+
+  Not registered yet: `chat.quick` (#23) and `milestone.earned` (#44). A tile's change is sent as `tile.attacked` or `tile.captured`; there is no `tile.updated`.
 - Heartbeat ping every 25 s; iOS suspends background tabs, so always resync on `visibilitychange`.
 - Protocol messages use the reserved `ws.` type prefix: `ws.ready`, `ws.subscribed`, `ws.cursor` (seqs up to here that aren't for this player are skipped, so they're not a gap), `ws.resync` (refetch full state), `ws.error` (shared error codes) and `ws.pong`. Client → server: `subscribe { mapId, afterSeq }`, `unsubscribe`, `ping`. Details: `apps/server/README.md` → "Live sync".
 
@@ -127,7 +178,7 @@ Add anything else only with a one-line justification in the PR.
   - **Testing caveat:** Playwright WebKit in CI runs without WebGPU, so CI exercises the WebGL2 path; the WebGPU path is verified on real devices.
   - **Shaders:** write Phase 1 custom shaders for WebGL2 (GLSL ES 3.0, or Babylon node materials). Add WGSL versions only when the WebGPU path is enabled, so Babylon never has to load its glslang/twgsl WASM converters, which would count against the 15 MB first-load budget.
   - **Memory and heat:** no MSAA on any tier (FXAA only), and no half-float HDR pipeline unless a feature needs it. A 4× MSAA RGBA16F pipeline at DPR 2 costs about 250 MB of GPU memory on a 10th-gen iPad before any content. Render only when something changes, or cap at 30 fps while idle, so a static map doesn't drain battery or throttle. Babylon has no built-in render-on-demand: keep a dirty flag inside `runRenderLoop`, set by camera matrix changes, running animations and store updates.
-- **Quality settings:** `engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio, 2))`; FXAA post-process (Babylon core has no SMAA; add one only if FXAA isn't good enough), and create the engine with `antialias: false` so the default framebuffer has no MSAA; dynamic resolution scaler targeting 60 fps, paused while the scene is idle so idle frames aren't mistaken for slow ones; quality tiers (high/medium/low) auto-picked from a short benchmark and adjustable in settings. **Default tier is high** on the playtest devices; spend the headroom on squishy quality (clearcoat, bloom, close-up depth of field) first.
+- **Quality settings:** `engine.setHardwareScalingLevel(1 / Math.min(devicePixelRatio, 2))`; FXAA post-process (Babylon core has no SMAA; add one only if FXAA isn't good enough), and create the engine with `antialias: false` so the default framebuffer has no MSAA; dynamic resolution scaler targeting 60 fps, paused while the scene is idle so idle frames aren't mistaken for slow ones; quality tiers (high/medium/low) managed by a continuous governor (`engine/quality/governor.ts`, #6), a pure reducer over frame times: it cuts the render scale when frames run slow (never below the tier's floor), steps the tier down only when pinned at the floor, and raises both again when there is headroom, never above the tier the player started on. It undoes a cut that didn't help, which is how it copes with a 30 fps cap (iOS Low Power Mode). There is no startup benchmark: it starts on **high** unless the player chose a tier (the settings screen is not built yet; `?quality=` works for testing), and the governor steps down if the device can't keep up; spend the headroom on squishy quality (clearcoat, bloom, close-up depth of field) first.
 - **UI:** HTML/CSS overlay on top of the canvas for menus, inventory, wardrobe lists and text input (sharper text, native accessibility, iOS keyboard works properly). Babylon GUI only for in-world labels and bubbles.
 - **State:** a small typed store (no heavy framework needed); server is the source of truth. Optimistic UI only for cosmetic actions (e.g. equipping clothing), rolled back on server error.
 - **Assets:** glTF/GLB, Draco or meshopt compression, KTX2 textures. Procedural squishies and Keepers need few textures; environment props are small GLBs. Lazy-load per scene.
@@ -188,7 +239,7 @@ Add anything else only with a one-line justification in the PR.
 - `packages/shared/src/rng`: a small seeded PRNG (e.g. `sfc32` or `mulberry32`) with `next()`, `int(min, max)`, `pick()`, `weighted()`.
 - Never use `Math.random()` in game logic (lint rule). In `packages/shared`, lint also bans transcendental `Math.*`, `**`, comparator-less sorts and `localeCompare`; client procedural code (`apps/client/src/procedural/`) bans `Math.random` too, so every player sees the same squishy. Seeds are generated server-side with `crypto.randomBytes` and stored with the battle/roll.
 - **Server-side secrecy:** RNG state and seeds stay on the server while a battle is in progress. The client gets a **public view** of battle state that can't be used to predict misses, damage variance or capture rolls. The seed may be revealed after the battle ends (for replays).
-- **No rerolls:** wild spawns and guardians are fixed per tile and time window (seeded server-side from the map seed, tile and window, or stored), so restarting a battle can't reroll what appears. The **map seed is never revealed** to clients, since it would predict every spawn; individual battle seeds may be revealed after the battle. **How:** new seeds come only from `newSeed()` (`apps/server/src/lib/rng.ts`, 128 bits from `crypto.randomBytes`); child seeds come from `deriveSeed(parent, ...labels)` (`packages/shared/src/rng`), e.g. a tile's spawn seed is `deriveSeed(mapSeed, 'spawn', q, r, windowId)`. A **spawn window** is a block of map-local wall-clock time whose length is its own tunable that divides 24 **[DEFAULT: 4 h]**. Its id is the map-local date plus the 0-based block index, `block = floor(local hour / window hours)` computed in `maps.time_zone`, written like `2026-10-31/5` (20:00–23:59). Daylight-saving days may have one uneven block (5 or 3 real hours); ids stay unique and ordered. `spawnWindowId(instant, timeZone, hours)` (`apps/server/src/lib/time.ts`, since shared code doesn't use `Intl`; the block maths is the shared `spawnWindowAt`) computes it, with daylight-saving tests; the window length is `SPAWN_RULES.windowHours` (server data). **Seeds that may be revealed** (battle seeds, for replays) come from `newSeed()` and are stored with the battle. `deriveSeed` is a fast non-cryptographic hash that can be partly inverted, so **never reveal a seed derived from a secret parent** (it would leak sibling spawn seeds). If a revealable seed must ever be derived, derive it server-side with HMAC-SHA256. Never invent another seed format. Starting a tile battle consumes an attempt and starts the tile cooldown, and abandoning counts as a loss (wild encounters and rescues don't use attempts).
+- **No rerolls:** wild spawns and guardians are fixed per tile and time window (seeded server-side from the map seed, tile and window, or stored), so restarting a battle can't reroll what appears. The **map seed is never revealed** to clients, since it would predict every spawn; individual battle seeds may be revealed after the battle. **How:** new seeds come only from `newSeed()` (`apps/server/src/lib/rng.ts`, 128 bits from `crypto.randomBytes`); child seeds come from `deriveSeed(parent, ...labels)` (`packages/shared/src/rng`), e.g. a tile's spawn seed is `deriveSeed(mapSeed, 'spawn', q, r, windowId)`. A **spawn window** is a block of map-local wall-clock time whose length is its own tunable that divides 24 **[DEFAULT: 4 h]**. Its id is the map-local date plus the 0-based block index, `block = floor(local hour / window hours)` computed in `maps.time_zone`, written like `2026-10-31/5` (20:00–23:59). Daylight-saving days may have one uneven block (5 or 3 real hours); ids stay unique and ordered. `spawnWindowFor(instant, timeZone, hours)` (`apps/server/src/lib/time.ts`, since shared code doesn't use `Intl`; the block maths is the shared `spawnWindowAt`) returns the window (its `id` is the string above; `spawnWindowId` returns just the id), with daylight-saving tests; the window length is `SPAWN_RULES.windowHours` (server data). **Seeds that may be revealed** (battle seeds, for replays) come from `newSeed()` and are stored with the battle. `deriveSeed` is a fast non-cryptographic hash that can be partly inverted, so **never reveal a seed derived from a secret parent** (it would leak sibling spawn seeds). If a revealable seed must ever be derived, derive it server-side with HMAC-SHA256. Never invent another seed format. Starting a tile battle consumes an attempt and starts the tile cooldown, and abandoning counts as a loss (wild encounters and rescues don't use attempts).
 - **Cross-engine determinism:** plain float `+ − × ÷` is identical on V8 (Node) and JavaScriptCore (Safari), so float multipliers are fine; apply `Math.floor`/`Math.round` at defined steps. Banned in outcome maths: transcendental `Math.*` (`pow`, `exp`, `log`, trig), `Math.random`, and sorts without a total-order comparator. Curves that need powers (e.g. XP) use lookup tables or integer loops.
 - **Content versioning:** every battle records a content version (a hash of the data tables it used) and its resolved turn log alongside the seed and actions, so replays and explanations survive re-tuning.
 
@@ -209,7 +260,6 @@ Add anything else only with a one-line justification in the PR.
 | `NODE_ENV` | `production` | defaults to `production`; `pnpm dev` sets `development` |
 | `PORT` | `3000` | server listens here behind Caddy |
 | `DATABASE_URL` | `postgres://heartpatch:…@db:5432/heartpatch` | |
-| `SESSION_SECRET` | 64 random bytes, base64 | cookie signing |
 | `PUBLIC_ORIGIN` | `https://play.pumpkinpatchgames.com` | CORS, cookies |
 | `LOG_LEVEL` | `info` | |
 | `APP_VERSION` | `2026.10.02-abc123` | set by deploy (image tag); reported by `/api/v1/health` |

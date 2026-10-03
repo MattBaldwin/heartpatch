@@ -89,7 +89,6 @@ done
 step "writing a production-style .env in $HP_DIR"
 sed \
   -e "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$(openssl rand -hex 32)/" \
-  -e "s|^SESSION_SECRET=$|SESSION_SECRET=$(openssl rand -base64 64 | tr -d '\n')|" \
   -e "s/^HP_SIGNUP_CODE=$/HP_SIGNUP_CODE=$(tr -dc a-km-np-z2-9 </dev/urandom | head -c 10)/" \
   -e "s|^PUBLIC_ORIGIN=.*|PUBLIC_ORIGIN=https://localhost|" \
   "$repo/infra/compose/.env.prod.example" >"$HP_DIR/.env"
