@@ -18,7 +18,6 @@ import {
   type PlayerBattleAction,
 } from '@heartpatch/shared';
 import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
-import { eq } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -791,7 +790,7 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
         speciesDefs: [],
       });
       // Taken to the Hollow, it still shows up there.
-      await db.update(squishies).set({ state: 'hollowed' }).where(eq(squishies.id, id));
+      await db.execute(`update squishies set state = 'hollowed' where id = '${id}'`);
       const hollow = await call(server, 'GET', `/maps/${mapId}/hollow`, kid);
       expect(hollow.statusCode).toBe(200);
       expect(HollowResponseSchema.parse(hollow.json()).hollow.hollowed.map((s) => s.id)).toEqual([
