@@ -15,6 +15,8 @@ import { battlesRoutes } from './modules/battles/routes.js';
 import { buildingsRoutes } from './modules/buildings/routes.js';
 import { createBuildingsService } from './modules/buildings/service.js';
 import { careRoutes } from './modules/care/routes.js';
+import { chatRoutes } from './modules/chat/routes.js';
+import { createChatService } from './modules/chat/service.js';
 import { createCareService } from './modules/care/service.js';
 import { createBattlesService } from './modules/battles/service.js';
 import { gatheringRoutes } from './modules/gathering/routes.js';
@@ -250,6 +252,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         await api.register(
           careRoutes(createCareService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
+        // Quick messages (#23): preset phrases, emoji and stickers, by id only.
+        await api.register(
+          chatRoutes(createChatService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),

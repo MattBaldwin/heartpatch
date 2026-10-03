@@ -367,6 +367,16 @@ _Decided by the project owner on 2026-10-03. They answer the open questions in t
 - **The #4 map decisions are confirmed:** 4-seat maps, leaving frees the seat and the land, and the owner can't leave in Phase 1.
 - **Review cap: at most 4 reviewer rounds per PR.** A round caused only by merging `main` doesn't count. Confirms the cap and the proposal from "Usage, models and supervisor handoff". *Why:* a merge of `main` forces a re-review through no fault of the author, and the cap is there to catch contested findings.
 
+## 2026-10-03 — Quick messages (#23)
+
+_Proposed in the #23 PR; the project owner confirms on merge._
+
+- **Ids only, never text.** Phase 1 chat is the shared `QUICK_MESSAGES` list (14 preset phrases, 8 emoji, 5 squishy stickers). The client sends a message id; the server checks it against the data, stores the id and the sender, and broadcasts `chat.quick`; every client draws the words from shared data. No player text exists, so no filter call is needed (CLAUDE.md rule 9). Ids are stable keys: never rename or remove one.
+- **Rate limits stand in for mute** (tech spec §5): per IP, per player (a few messages per 30 s) and per map (`modules/chat/limits.ts`, all `TUNE:`).
+- **Retention: the latest `feedLimit` (30) per map,** pruned on every send, rather than a daily `chat-retention` job. *Why:* Phase 1 keeps nothing worth reviewing (only presets), and the feed is all anyone reads. Phase 2's free chat brings the 30-day history for parent review and the job.
+- **No chat on tutorial maps** (`FORBIDDEN`); the client never shows the Chat button over the Tutorial Glade.
+- **Stickers are public squishies drawn as their vinyl-colour blob** (the care sheet's look), so there are no new image assets and never a secret species.
+
 ## 2026-10-03 — Audio (#25)
 
 _Proposed in the #25 PR; the project owner confirms on merge._

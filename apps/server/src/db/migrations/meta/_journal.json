@@ -99,6 +99,13 @@
       "when": 1790980002430,
       "tag": "0013_hollow",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790994832450,
+      "tag": "0014_quick_messages",
+      "breakpoints": true
     }
   ]
 }

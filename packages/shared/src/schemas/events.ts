@@ -493,6 +493,25 @@ export const GAME_EVENTS = {
     internal: z.strictObject({ userId: z.uuid(), wearing: z.array(ContentIdSchema) }),
     public: z.object({ userId: z.uuid(), wearing: z.array(ContentIdSchema) }),
   },
+  /**
+   * A member sent a quick message (#23, design doc §17 Phase 1): a preset
+   * phrase, emoji or sticker id from `QUICK_MESSAGES`, never typed text.
+   * `chatId` is the `quick_messages` row, so clients merge it with the feed.
+   */
+  'chat.quick': {
+    internal: z.strictObject({
+      chatId: z.uuid(),
+      userId: z.uuid(),
+      username: z.string(),
+      messageId: ContentIdSchema,
+    }),
+    public: z.object({
+      chatId: z.uuid(),
+      userId: z.uuid(),
+      username: z.string(),
+      messageId: ContentIdSchema,
+    }),
+  },
 } satisfies Record<string, GameEventSchemas>;
 
 export type GameEventType = keyof typeof GAME_EVENTS;
