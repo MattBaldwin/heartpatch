@@ -42,7 +42,13 @@ interface Player {
   token: string;
 }
 
-const SECRET = SERVER_GAME_DATA.secretSpecies;
+/** A secret line's first and grown forms: two secret squishies the client has never met. */
+const SECRET_LINE = SERVER_GAME_DATA.secretEvolutions.find((e) =>
+  SERVER_GAME_DATA.secretSpecies.some((s) => s.id === e.from),
+)!;
+const SECRET = [SECRET_LINE.from, SECRET_LINE.into].map((id) =>
+  SERVER_GAME_DATA.secretSpecies.find((s) => s.id === id)!,
+);
 const SECRET_IDS = SECRET.map((s) => s.id);
 
 /** XP a brand-new squishy (start contentment, no habitat) gets for `base`. */
@@ -410,7 +416,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
-      // Moonpuffs both sides, so one move can't end the battle before the stale submit.
+      // The same secret squishy on both sides, so one move can't end the battle before the stale submit.
       await grant(server, kid, mapId, { speciesId: SECRET_IDS[0], level: 10 });
       const battle = await pickFight(server, kid, mapId, {
         opponent: { speciesId: SECRET_IDS[0] },

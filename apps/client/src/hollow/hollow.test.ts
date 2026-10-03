@@ -3,7 +3,7 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Scene } from '@babylonjs/core/scene';
-import { findAvoidedWords, type MorningReport } from '@heartpatch/shared';
+import { findAvoidedWords, STARTERS, type MorningReport } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { testView } from '../map/test-view.js';
 import { VISIT_KEYS, visitFrames } from '../procedural/hollow-man/hollow-man-config.js';
@@ -14,7 +14,7 @@ import { changesMyFire, HOLLOW_TEXT, reportText, unseenReports } from './hollow-
 const ID = (n: number) => `0190a8c4-0000-7000-8000-0000000002${String(n).padStart(2, '0')}`;
 const taken = (n: number, inHollow = true) => ({
   squishyId: ID(n),
-  speciesId: 'placeholder-moonpuff',
+  speciesId: STARTERS.speciesIds[0]!,
   nickname: null,
   inHollow,
 });

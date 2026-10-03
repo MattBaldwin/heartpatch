@@ -43,7 +43,16 @@ const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
 const HOUR_MS = 60 * 60 * 1000;
-const MOONPUFF = 'placeholder-moonpuff';
+/** A secret squishy that isn't a grown-up form, so it can be met wild (CLAUDE.md rule 6). */
+const SECRET_WILD = SERVER_GAME_DATA.secretSpecies.find(
+  (s) => !SERVER_GAME_DATA.secretEvolutions.some((e) => e.into === s.id),
+)!.id;
+/** The dev squishy's level: strong enough to win any wild battle here. */
+const STRONG_LEVEL = 40;
+/** A year-round public squishy that grows up before `STRONG_LEVEL`, so battle XP evolves it. */
+const STRONG = GAME_DATA.species.find(
+  (s) => !s.season && s.evolutions.some((e) => e.level < STRONG_LEVEL),
+)!.id;
 const UUID = /^[0-9a-f-]{36}$/;
 /** A uuid for raw test SQL (only repos build queries; these are our own ids). */
 const id = (value: string) => {
@@ -67,14 +76,14 @@ const captureRules = (percent: number): BattleRules => ({
 const contentWith = (rules: BattleRules) =>
   createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA), rules);
 
-/** Every tile has a Moonpuff (any season, any time), whatever the shipped tables hold. */
+/** Every tile has a secret squishy (any season, any time), whatever the shipped tables hold. */
 const EVERYWHERE: SpawnData = {
   ...defaultSpawnData(),
   tables: [
     {
-      id: 'moonpuffs-everywhere',
+      id: 'secrets-everywhere',
       terrains: GAME_DATA.terrains.map((t) => t.id),
-      entries: [{ species: MOONPUFF, weight: 1 }],
+      entries: [{ species: SECRET_WILD, weight: 1 }],
     },
   ],
   rules: { ...SPAWN_RULES, chance: 100 },
@@ -180,7 +189,8 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
     expect(res.statusCode, res.body).toBe(201);
     const mapId = MapResponseSchema.parse(res.json()).map.id;
     const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, who, {
-      level: 40,
+      speciesId: STRONG,
+      level: STRONG_LEVEL,
     });
     expect(granted.statusCode).toBe(201);
     return mapId;
@@ -218,7 +228,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const first = await battles.startWild(kid, mapId);
       expect(first.created).toBe(true);
       const wild = first.battle.view.sides.b.squishies[0]!;
-      expect(wild.speciesId).toBe(MOONPUFF);
+      expect(wild.speciesId).toBe(SECRET_WILD);
       expect(wild.level).toBeGreaterThanOrEqual(SPAWN_RULES.levels.min);
       expect(wild.level).toBeLessThanOrEqual(SPAWN_RULES.levels.max);
       // The battle remembers its tile and window; the client never sees them.
@@ -229,7 +239,11 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect(row).toMatchObject({ spawnWindow: window });
       expect(JSON.stringify(first.battle)).not.toContain(window);
       expect(await seenOf(mapId, kid)).toEqual([
-        expect.objectContaining({ speciesId: MOONPUFF, firstSeenAt: clock, firstCaughtAt: null }),
+        expect.objectContaining({
+          speciesId: SECRET_WILD,
+          firstSeenAt: clock,
+          firstCaughtAt: null,
+        }),
       ]);
 
       // Run away and come back later in the window: the same squishy, same level.
@@ -303,7 +317,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
             id: 'halloween-only',
             terrains: GAME_DATA.terrains.map((t) => t.id),
             season: 'halloween',
-            entries: [{ species: MOONPUFF, weight: 1 }],
+            entries: [{ species: SECRET_WILD, weight: 1 }],
           },
         ],
       };
@@ -329,7 +343,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const { wild } = WildHintsResponseSchema.parse(res.json());
       expect(Object.keys(res.json<object>())).toEqual(['wild']);
       expect(Object.keys(wild)).toEqual(['tiles']);
-      expect(res.body).not.toContain('moonpuff');
+      expect(res.body).not.toContain(SECRET_WILD);
       // Only tiles in reach: their land and the tiles next to it.
       const tiles = await tilesOf(mapId);
       const ownKeys = new Set(tiles.filter((t) => t.ownerUserId === kid.id).map(hexKey));
@@ -378,7 +392,8 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect(ok.statusCode).toBe(204);
       for (const who of [kid, other]) {
         const granted = await call(server, 'POST', `/maps/${map.id}/dev/squishies`, who, {
-          level: 40,
+          speciesId: STRONG,
+          level: STRONG_LEVEL,
         });
         expect(granted.statusCode).toBe(201);
       }
@@ -449,7 +464,10 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       });
       const mapId = MapResponseSchema.parse(res.json()).map.id;
       // A level-1 squishy against level-60 wild ones: a sure loss.
-      await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, { level: 1 });
+      await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
+        speciesId: STRONG,
+        level: 1,
+      });
       const { battles, spawns } = services({
         data: { ...EVERYWHERE, rules: { ...EVERYWHERE.rules, levels: { min: 60, max: 60 } } },
       });
@@ -498,21 +516,21 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
         expect.objectContaining({ itemId: 'heart-charm', delta: -1, refId: battle.id }),
       ]);
 
-      // The dev squishy is a level-40 Moonpuff too; the new friend is the other row.
+      // The dev squishy is level 40; the new friend is the other row.
       const mine = await squishiesOf(mapId, kid);
       expect(mine).toHaveLength(2);
-      const friend = mine.find((s) => s.level !== 40)!;
+      const friend = mine.find((s) => s.level !== STRONG_LEVEL)!;
       expect(friend).toMatchObject({
         level: wild.level,
         element: wild.element,
         feeling: wild.feeling,
         state: 'active',
       });
-      // (The level-40 Moonpuff's new form, below, is caught too: #19.)
+      // (The dev squishy's new form, below, is caught too: #19.)
       expect(await seenOf(mapId, kid)).toContainEqual(
         expect.objectContaining({ speciesId: wild.speciesId, firstCaughtAt: clock }),
       );
-      // The level-40 Moonpuff is past its evolution level, so its battle XP
+      // The level-40 dev squishy is past its evolution level, so its battle XP
       // grows it up too (#19's `applyXp`).
       const all = (await eventsOf(mapId)).slice(-3);
       expect(all.map((e) => e.type)).toEqual([
@@ -610,7 +628,9 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const kid = await player();
       const started = await call(server, 'POST', '/tutorial/start', kid);
       const mapId = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
-      const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {});
+      const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
+        speciesId: STRONG,
+      });
       SquishyResponseSchema.parse(granted.json());
       // Default rules, where a secret squishy at full energy is a long shot.
       const { battles } = services({ rules: BATTLE_RULES });
@@ -673,9 +693,9 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const { battle } = await battles.startWild(kid, mapId);
       const seen = await read(kid);
       expect(seen.entries).toEqual([
-        { speciesId: MOONPUFF, firstSeenAt: clock.toISOString(), firstCaughtAt: null },
+        { speciesId: SECRET_WILD, firstSeenAt: clock.toISOString(), firstCaughtAt: null },
       ]);
-      expect(seen.speciesDefs.map((s) => s.id)).toEqual([MOONPUFF]);
+      expect(seen.speciesDefs.map((s) => s.id)).toEqual([SECRET_WILD]);
 
       await capture(battles, kid, battle);
       expect((await read(kid)).entries[0]!.firstCaughtAt).toBe(clock.toISOString());

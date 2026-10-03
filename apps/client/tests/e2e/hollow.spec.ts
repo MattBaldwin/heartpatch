@@ -1,4 +1,4 @@
-import { findAvoidedWords } from '@heartpatch/shared';
+import { findAvoidedWords, STARTERS } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
@@ -92,7 +92,8 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   }
 
   // One squishy, waiting by the Heart Seed with no Hearthfire built: exposed.
-  expect((await devPost(page, `/maps/${mapId}/dev/squishies`, { level: 5 })).status).toBe(201);
+  const squishy = { speciesId: STARTERS.speciesIds[0], level: 5 };
+  expect((await devPost(page, `/maps/${mapId}/dev/squishies`, squishy)).status).toBe(201);
   // First-night grace: the first two nightfalls take nothing.
   for (let night = 0; night < 2; night++) {
     const graced = await devPost(page, `/maps/${mapId}/dev/nightfall`);

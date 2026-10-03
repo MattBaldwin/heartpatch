@@ -168,36 +168,11 @@ export const SPAWN_TABLES: SpawnTable[] = [
   },
   {
     // Secret: a tiny piece of the Heartpatch, out on Gap nights. Weights add
-    // up across matching tables, so this is 1 in 28 Gap night spawns (1 in
-    // 39 at Halloween): about one Heartlet in the Gap every 5–6 days.
+    // up across matching tables, so this is 1 in 27 Gap night spawns (1 in
+    // 38 at Halloween): about one Heartlet in the Gap every 5–6 days.
     id: 'gap-nights',
     terrains: ['junipers-gap'],
     timeOfDay: 'night',
     entries: [{ species: 'heartlet', weight: 1 }], // TUNE:
-  },
-
-  // Placeholders below stay until their tests move to the roster (follow-up).
-  // TUNE: placeholder until #10's roster; Moonpuff is the only wild species yet.
-  {
-    id: 'placeholder-wanderers',
-    terrains: [
-      'meadow',
-      'forest',
-      'old-forest',
-      'hills',
-      'mountains',
-      'lake',
-      'pumpkin-fields',
-      'junipers-gap',
-    ],
-    entries: [{ species: 'placeholder-moonpuff', weight: 1 }],
-  },
-  // TUNE: placeholder; Halloween nights in the pumpkins draw Moonpuffs out.
-  {
-    id: 'placeholder-halloween-nights',
-    terrains: ['pumpkin-fields', 'old-forest'],
-    season: 'halloween',
-    timeOfDay: 'night',
-    entries: [{ species: 'placeholder-moonpuff', weight: 3 }],
   },
 ];

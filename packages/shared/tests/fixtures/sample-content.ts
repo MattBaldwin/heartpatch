@@ -5,6 +5,7 @@
  */
 import type { SpawnTable } from '../../src/data/server/index.js';
 import type { Move, Species } from '../../src/index.js';
+import type { SecretEvolution } from '../../src/schemas/data/server-game-data.js';
 
 export const FIXTURE_MOVES: Move[] = [
   {
@@ -218,4 +219,67 @@ export const FIXTURE_SPAWN_TABLES: SpawnTable[] = [
       { species: 'fixture-pebblesnooze', weight: 3 },
     ],
   },
+];
+
+/**
+ * A secret line for the server data checks: a secret squishy with secret
+ * moves that grows into a secret form, so the cases don't lean on whichever
+ * secrets the roster ships.
+ */
+export const FIXTURE_SECRET_MOVES: Move[] = [
+  {
+    id: 'fixture-hush-hum',
+    name: 'Hush Hum',
+    description: 'A soft, sleepy hum under the moon.',
+    element: 'shadow',
+    power: 40,
+    accuracy: 100,
+  },
+  {
+    id: 'fixture-moon-blink',
+    name: 'Moon Blink',
+    description: 'A slow, glowy blink that makes it feel extra quick.',
+    element: 'light',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 100 }],
+  },
+];
+
+export const FIXTURE_SECRET_SPECIES: Species[] = [
+  {
+    id: 'fixture-moonpuff',
+    name: 'Moonpuff',
+    description: 'A tiny puff that only comes out when the moon is just right.',
+    element: 'shadow',
+    feeling: 'sleepy',
+    rarity: 'secret',
+    baseStats: { hp: 50, attack: 40, defense: 45, speed: 60 },
+    moves: ['fixture-hush-hum', 'fixture-moon-blink'],
+    evolutions: [],
+    visual: { body: 'blob', palette: ['#3b3561', '#f5e6a8'], parts: ['sleepy-eyes', 'tiny-smile'] },
+    habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
+  },
+  {
+    id: 'fixture-moonmallow',
+    name: 'Moonmallow',
+    description: 'Moonpuff, all grown up and glowing softly.',
+    element: 'shadow',
+    feeling: 'sleepy',
+    rarity: 'secret',
+    baseStats: { hp: 75, attack: 60, defense: 65, speed: 80 },
+    moves: ['fixture-hush-hum', 'fixture-moon-blink'],
+    evolutions: [],
+    visual: {
+      body: 'blob',
+      palette: ['#3b3561', '#f5e6a8', '#c9b8ff'],
+      parts: ['sleepy-eyes', 'tiny-smile', 'nub-wings'],
+      size: 1.2,
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
+  },
+];
+
+export const FIXTURE_SECRET_EVOLUTIONS: SecretEvolution[] = [
+  { from: 'fixture-moonpuff', into: 'fixture-moonmallow', level: 20 },
 ];

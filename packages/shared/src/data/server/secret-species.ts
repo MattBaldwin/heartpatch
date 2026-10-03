@@ -7,32 +7,9 @@ import type { Species } from '../../schemas/data/species.js';
  * forms (design doc §4, §8). Secret (CLAUDE.md rule 6): server-only. The
  * public species table refuses `rarity: 'secret'`, so secrets always land
  * here. A secret species is sent to a player only once they meet it.
- *
- * The `placeholder-*` rows come first and stay until the tests that use
- * them move to the roster (a follow-up to #10); the launch secret comes
- * after them.
  */
 
 export const SECRET_MOVES: Move[] = [
-  // TUNE: placeholder, kept for tests
-  {
-    id: 'placeholder-hush-hum',
-    name: 'Hush Hum',
-    description: 'A soft, sleepy hum under the moon.',
-    element: 'shadow',
-    power: 40,
-    accuracy: 100,
-  },
-  // TUNE: placeholder, kept for tests
-  {
-    id: 'placeholder-moon-blink',
-    name: 'Moon Blink',
-    description: 'A slow, glowy blink that makes it feel extra quick.',
-    element: 'light',
-    power: 0,
-    accuracy: 100,
-    effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 100 }],
-  },
   // Only Heartlet's line knows it, so naming it publicly would give it away.
   {
     id: 'heart-glow',
@@ -50,39 +27,6 @@ export const SECRET_MOVES: Move[] = [
 ];
 
 export const SECRET_SPECIES: Species[] = [
-  // TUNE: placeholder, kept for tests
-  {
-    id: 'placeholder-moonpuff',
-    name: 'Moonpuff',
-    description: 'A tiny puff that only comes out when the moon is just right.',
-    element: 'shadow',
-    feeling: 'sleepy',
-    rarity: 'secret',
-    baseStats: { hp: 50, attack: 40, defense: 45, speed: 60 },
-    moves: ['placeholder-hush-hum', 'placeholder-moon-blink'],
-    evolutions: [],
-    visual: { body: 'blob', palette: ['#3b3561', '#f5e6a8'], parts: ['sleepy-eyes', 'tiny-smile'] },
-    habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
-  },
-  // TUNE: placeholder, kept for tests
-  {
-    id: 'placeholder-moonmallow',
-    name: 'Moonmallow',
-    description: 'Moonpuff, all grown up and glowing softly.',
-    element: 'shadow',
-    feeling: 'sleepy',
-    rarity: 'secret',
-    baseStats: { hp: 75, attack: 60, defense: 65, speed: 80 },
-    moves: ['placeholder-hush-hum', 'placeholder-moon-blink'],
-    evolutions: [],
-    visual: {
-      body: 'blob',
-      palette: ['#3b3561', '#f5e6a8', '#c9b8ff'],
-      parts: ['sleepy-eyes', 'tiny-smile', 'nub-wings'],
-      size: 1.2,
-    },
-    habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
-  },
   // Light + Cozy. A tiny piece of the Heartpatch that never quite scattered
   // (design doc §2); it wanders Juniper's Gap on quiet nights (spawn table
   // `gap-nights`).
@@ -124,7 +68,5 @@ export const SECRET_SPECIES: Species[] = [
 ];
 
 export const SECRET_EVOLUTIONS: SecretEvolution[] = [
-  // TUNE: placeholder, kept for tests
-  { from: 'placeholder-moonpuff', into: 'placeholder-moonmallow', level: 20 },
   { from: 'heartlet', into: 'heartbloom', level: 25 }, // TUNE:
 ];

@@ -11,6 +11,7 @@ import {
   MapViewSchema,
   parseGameEventPayload,
   SquishyResponseSchema,
+  STARTERS,
   TERRITORY_RULES,
   TerritoryResponseSchema,
   type MapDetail,
@@ -45,6 +46,8 @@ const uuid = (value: string) => {
 };
 // Noon in Denver: a whole map-local day either side to move around in.
 const START = '2026-10-02T18:00:00Z';
+/** The dev squishy: a starter, the kind of public squishy every player has. */
+const STARTER = STARTERS.speciesIds[0]!;
 
 interface Player extends PublicUser {
   token: string;
@@ -153,7 +156,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
     who: Player,
     mapId: string,
     level: number,
-    speciesId?: string,
+    speciesId: string = STARTER,
   ) {
     const res = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, who, {
       level,
@@ -298,7 +301,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await attacksOf(mapId))[0]).toMatchObject({ outcome: 'captured', endedAt: clock });
 
       // Events: started, attacked … ended, captured — in the battle's transaction.
-      // (A high-level Moonpuff also grows up here; #19's growth events sit in between.)
+      // (A level-40 starter also grows up here; #19's growth events sit in between.)
       const growth = new Set(['squishy.leveled', 'squishy.evolved']);
       const events = (await eventsOf(mapId)).map((e) => e.type).filter((t) => !growth.has(t));
       expect(events.slice(-2)).toEqual(['battle.ended', 'tile.captured']);

@@ -7,6 +7,7 @@ import {
   CatalogResponseSchema,
   CareResponseSchema,
   GROWTH_RULES,
+  HollowResponseSchema,
   HomeResponseSchema,
   MapResponseSchema,
   NICKNAME_MAX_LENGTH,
@@ -16,12 +17,13 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
+import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, squishies, users } from '../../db/schema.js';
+import { keepers, sessions, speciesSeen, squishies, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -39,8 +41,19 @@ const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 
 const ZONE = 'America/Denver';
 /** Oct 2, 6:00 AM in Denver. */
 const START = '2026-10-02T12:00:00Z';
-const MOONPUFF = 'placeholder-moonpuff';
-const MOONMALLOW = 'placeholder-moonmallow';
+/**
+ * A secret squishy that grows into a secret form (CLAUDE.md rule 6), read
+ * from the roster so the cases follow whatever secret line it ships.
+ */
+const SECRET_LINE = SERVER_GAME_DATA.secretEvolutions.find((e) =>
+  SERVER_GAME_DATA.secretSpecies.some((s) => s.id === e.from),
+)!;
+const secretSpecies = (id: string) => SERVER_GAME_DATA.secretSpecies.find((s) => s.id === id)!;
+const SECRET_BASE = secretSpecies(SECRET_LINE.from);
+const SECRET_GROWN = secretSpecies(SECRET_LINE.into);
+const SECRET_FROM = SECRET_BASE.id;
+const SECRET_INTO = SECRET_GROWN.id;
+const EVOLVES_AT = SECRET_LINE.level;
 
 interface Player {
   id: string;
@@ -127,9 +140,9 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       .values({
         mapId,
         ownerUserId: who.id,
-        speciesId: MOONPUFF,
-        element: 'shadow',
-        feeling: 'sleepy',
+        speciesId: SECRET_FROM,
+        element: SECRET_BASE.element,
+        feeling: SECRET_BASE.feeling,
         ...values,
       })
       .returning({ id: squishies.id });
@@ -222,7 +235,7 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       const id = await squishy(mapId, kid, { level: 3 });
       const sheet = await one(server, kid, mapId, id);
       expect(sheet).toMatchObject({
-        speciesId: MOONPUFF,
+        speciesId: SECRET_FROM,
         level: 3,
         contentment: 0,
         mood: 'cuddly',
@@ -235,7 +248,7 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
         xpToNext: xpForLevel(4, GROWTH_RULES) - xpForLevel(3, GROWTH_RULES),
       });
       // A secret species the player owns comes with its row.
-      expect((await list(server, kid, mapId)).speciesDefs.map((s) => s.id)).toEqual([MOONPUFF]);
+      expect((await list(server, kid, mapId)).speciesDefs.map((s) => s.id)).toEqual([SECRET_FROM]);
     });
 
     it('pets: contentment up, a debounce, an event members see without the numbers', async () => {
@@ -265,7 +278,9 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       // Same action again straight away: one gesture counts once.
       const again = await care(server, kid, mapId, id, 'pet');
       expect(again.statusCode).toBe(409);
-      expect(errorOf(again).message).toBe('Moonpuff needs a tiny moment. Try again soon!');
+      expect(errorOf(again).message).toBe(
+        `${SECRET_BASE.name} needs a tiny moment. Try again soon!`,
+      );
       // Another action is fine.
       await cared(server, kid, mapId, id, 'play');
 
@@ -517,7 +532,7 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
-        speciesId: MOONPUFF,
+        speciesId: SECRET_FROM,
       });
       expect(granted.statusCode, granted.body).toBe(201);
       const { id } = SquishyResponseSchema.parse(granted.json()).squishy;
@@ -628,7 +643,7 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       });
     });
 
-    /** A level-`level` Moonpuff's stats, from a fresh one. */
+    /** A level-`level` secret squishy's stats, from a fresh one. */
     async function statsAt(server: FastifyInstance, who: Player, mapId: string, level: number) {
       const id = await squishy(mapId, who, { level });
       return (await one(server, who, mapId, id)).stats;
@@ -638,52 +653,59 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       const server = await start();
       const [kid, friend] = [await player(), await player()];
       const mapId = await newMap(server, kid);
-      const id = await squishy(mapId, kid, { level: 19 });
+      const id = await squishy(mapId, kid, { level: EVOLVES_AT - 1 });
 
-      // One XP short of level 20: still a Moonpuff.
-      const toTwenty = xpForLevel(20, GROWTH_RULES) - xpForLevel(19, GROWTH_RULES);
-      expect(await grantXp(id, toTwenty - 1)).toMatchObject({ level: 19, evolutions: [] });
-      expect((await rowOf(id))?.speciesId).toBe(MOONPUFF);
+      // One XP short of its evolution level: still its first form.
+      const toNext =
+        xpForLevel(EVOLVES_AT, GROWTH_RULES) - xpForLevel(EVOLVES_AT - 1, GROWTH_RULES);
+      expect(await grantXp(id, toNext - 1)).toMatchObject({
+        level: EVOLVES_AT - 1,
+        evolutions: [],
+      });
+      expect((await rowOf(id))?.speciesId).toBe(SECRET_FROM);
       // Not a word about what it might become.
       const before = await list(server, kid, mapId);
-      expect(before.speciesDefs.map((s) => s.id)).toEqual([MOONPUFF]);
-      expect(JSON.stringify(before)).not.toContain(MOONMALLOW);
+      expect(before.speciesDefs.map((s) => s.id)).toEqual([SECRET_FROM]);
+      expect(JSON.stringify(before)).not.toContain(SECRET_INTO);
 
       expect(await grantXp(id, 1)).toMatchObject({
-        level: 20,
-        evolutions: [{ fromSpeciesId: MOONPUFF, intoSpeciesId: MOONMALLOW }],
+        level: EVOLVES_AT,
+        evolutions: [{ fromSpeciesId: SECRET_FROM, intoSpeciesId: SECRET_INTO }],
       });
       expect(await rowOf(id)).toMatchObject({
-        speciesId: MOONMALLOW,
-        level: 20,
-        element: 'shadow',
+        speciesId: SECRET_INTO,
+        level: EVOLVES_AT,
+        element: SECRET_GROWN.element,
       });
       // Its new form gets a catalog card, secret row included.
       const catalog = CatalogResponseSchema.parse(
         (await call(server, 'GET', `/maps/${mapId}/catalog`, kid)).json(),
       ).catalog;
       expect(catalog.entries).toContainEqual(
-        expect.objectContaining({ speciesId: MOONMALLOW, firstCaughtAt: clock.toISOString() }),
+        expect.objectContaining({ speciesId: SECRET_INTO, firstCaughtAt: clock.toISOString() }),
       );
-      expect(catalog.speciesDefs.map((s) => s.id)).toContain(MOONMALLOW);
+      expect(catalog.speciesDefs.map((s) => s.id)).toContain(SECRET_INTO);
 
       const events = await eventsOf(mapId);
       const evolved = events.find((e) => e.type === 'squishy.evolved')!;
-      expect(evolved.payload).toMatchObject({ fromSpeciesId: MOONPUFF, intoSpeciesId: MOONMALLOW });
+      expect(evolved.payload).toMatchObject({
+        fromSpeciesId: SECRET_FROM,
+        intoSpeciesId: SECRET_INTO,
+      });
       expect(publicViewFor(PUBLIC_VIEWS, evolved, { userId: friend.id })).toEqual({
         userId: kid.id,
         squishyId: id,
-        level: 20,
+        level: EVOLVES_AT,
       });
 
       const after = await one(server, kid, mapId, id);
       expect(after.newEvolution).toMatchObject({
-        fromSpeciesId: MOONPUFF,
-        intoSpeciesId: MOONMALLOW,
-        level: 20,
+        fromSpeciesId: SECRET_FROM,
+        intoSpeciesId: SECRET_INTO,
+        level: EVOLVES_AT,
       });
       expect((await list(server, kid, mapId)).speciesDefs.map((s) => s.id).sort()).toEqual(
-        [MOONMALLOW, MOONPUFF].sort(),
+        [SECRET_INTO, SECRET_FROM].sort(),
       );
       const seen = await call(server, 'POST', `/maps/${mapId}/squishies/${id}/care/seen`, kid);
       expect(seen.statusCode).toBe(200);
@@ -699,19 +721,19 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
-        speciesId: MOONPUFF,
-        level: 19,
+        speciesId: SECRET_FROM,
+        level: EVOLVES_AT - 1,
       });
       const pal = SquishyResponseSchema.parse(granted.json()).squishy;
-      // Just short of level 20: any battle that plays a turn gets it there.
+      // Just short of its evolution level: any battle that plays a turn gets it there.
       await createCareRepo(db).setGrowth(pal.id, {
-        xp: xpForLevel(20, GROWTH_RULES) - BATTLE_RULES.xp.minimum,
-        level: 19,
-        speciesId: MOONPUFF,
-        element: 'shadow',
+        xp: xpForLevel(EVOLVES_AT, GROWTH_RULES) - BATTLE_RULES.xp.minimum,
+        level: EVOLVES_AT - 1,
+        speciesId: SECRET_FROM,
+        element: SECRET_BASE.element,
       });
       const fight = await call(server, 'POST', `/maps/${mapId}/dev/battles`, kid, {
-        opponent: { speciesId: MOONPUFF, level: 3 },
+        opponent: { speciesId: SECRET_FROM, level: 3 },
       });
       let battle: PlayerBattle = BattleResponseSchema.parse(fight.json()).battle;
       for (let i = 0; i < BATTLE_RULES.maxTurns + 5 && battle.status === 'active'; i++) {
@@ -728,11 +750,52 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
         battle = BattleResponseSchema.parse(res.json()).battle;
       }
       expect(battle.status).toBe('finished');
-      expect(await rowOf(pal.id)).toMatchObject({ speciesId: MOONMALLOW, level: 20 });
+      expect(await rowOf(pal.id)).toMatchObject({ speciesId: SECRET_INTO, level: EVOLVES_AT });
       const types = (await eventsOf(mapId)).map((e) => e.type);
       expect(types.slice(-3)).toEqual(['battle.ended', 'squishy.leveled', 'squishy.evolved']);
       const ended = (await eventsOf(mapId)).find((e) => e.type === 'battle.ended')!;
       expect(ended.payload).toMatchObject({ xp: [{ squishyId: pal.id }] });
+    });
+  });
+
+  describe('a species dropped from the data (#87)', () => {
+    // Local and dev databases can still hold squishies of a retired species
+    // (the `placeholder-*` rows). Reading them must not fail: they list with
+    // no species row, the way an old battle names a "Mystery squishy".
+    it('still lists, cares for and catalogs the squishy, and the Hollow still reads', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const retired = 'placeholder-moonpuff';
+      const id = await squishy(mapId, kid, { speciesId: retired, level: 5 });
+      await db.insert(speciesSeen).values({
+        mapId,
+        userId: kid.id,
+        speciesId: retired,
+        firstSeenAt: clock,
+        firstCaughtAt: clock,
+      });
+
+      const sheet = await list(server, kid, mapId);
+      expect(sheet.squishies.map((s) => [s.id, s.speciesId])).toEqual([[id, retired]]);
+      expect(sheet.speciesDefs).toEqual([]);
+      await cared(server, kid, mapId, id, 'pet');
+      const home = await call(server, 'GET', `/maps/${mapId}/home`, kid);
+      expect(home.statusCode).toBe(200);
+      expect(HomeResponseSchema.parse(home.json()).squishies.map((s) => s.id)).toEqual([id]);
+      const catalog = await call(server, 'GET', `/maps/${mapId}/catalog`, kid);
+      expect(catalog.statusCode).toBe(200);
+      expect(CatalogResponseSchema.parse(catalog.json()).catalog).toMatchObject({
+        entries: [expect.objectContaining({ speciesId: retired })],
+        speciesDefs: [],
+      });
+      // Taken to the Hollow, it still shows up there.
+      await db.execute(`update squishies set state = 'hollowed' where id = '${id}'`);
+      const hollow = await call(server, 'GET', `/maps/${mapId}/hollow`, kid);
+      expect(hollow.statusCode).toBe(200);
+      expect(HollowResponseSchema.parse(hollow.json()).hollow.hollowed.map((s) => s.id)).toEqual([
+        id,
+      ]);
     });
   });
 });
