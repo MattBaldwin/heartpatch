@@ -1,11 +1,22 @@
+import { randomUUID } from 'node:crypto';
 import {
   ApiErrorSchema,
+  BattleResponseSchema,
+  CLOTHING,
+  GatherResponseSchema,
+  HomeResponseSchema,
+  LorebookResponseSchema,
   MapResponseSchema,
   MyMapsResponseSchema,
   parseGameEventPayload,
+  STARTERS,
   TUTORIAL_LAYOUT,
+  TUTORIAL_SETUP,
   TUTORIAL_STEPS,
   TutorialResponseSchema,
+  WardrobeResponseSchema,
+  type PlayerBattle,
+  type PlayerBattleAction,
   type TutorialStep,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
@@ -13,11 +24,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
+import { appendGameEvent } from '../../db/game-events.js';
 import { keepers, sessions, users } from '../../db/schema.js';
 import { runConsumer } from '../../jobs/consumers.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { createLoreConsumer } from '../lore/consumer.js';
 import { createTutorialConsumer } from './consumer.js';
+import { SEEDLING_SCARF, scarfRefId } from './rewards.js';
 import { createTutorialService } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -112,9 +126,18 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
     await runConsumer(db, consumer, mapId!);
   }
 
-  /** Plays the shipped tutorial from start to finish. */
+  /**
+   * Moves a run straight to a step (a test shortcut: the play-through test
+   * below plays every step for real).
+   */
+  async function jumpTo(who: Player, stepId: string) {
+    await db.execute(`update users set tutorial_step = '${stepId}' where id = '${who.id}'`);
+  }
+
+  /** Finishes the run going: straight to graduation, then the real tap. */
   async function finish(server: FastifyInstance, who: Player) {
-    for (const step of TUTORIAL_STEPS) await acknowledge(server, who, step.id);
+    await jumpTo(who, 'graduation');
+    await acknowledge(server, who, 'graduation');
   }
 
   const eventsOf = (mapId: string) =>
@@ -126,6 +149,12 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
   const membershipOf = (mapId: string, userId: string) =>
     db.query.mapMembers.findFirst({
       where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, userId)),
+    });
+
+  const squishiesOf = (mapId: string) =>
+    db.query.squishies.findMany({
+      where: (t, { eq }) => eq(t.mapId, mapId),
+      orderBy: (t, { asc }) => [asc(t.createdAt), asc(t.id)],
     });
 
   const progressOf = (userId: string) =>
@@ -157,6 +186,7 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
         mapId: null,
         completedAt: null,
         required: false,
+        partner: null,
       });
       await app!.close();
       expect((await getTutorial(await start({ HP_TUTORIAL_REQUIRED: 'true' }), kid)).required).toBe(
@@ -223,7 +253,7 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
       await app!.close();
       const again = await start();
       const resumed = await getTutorial(again, kid);
-      expect(resumed).toEqual({ ...first, stepId: 'graduation' });
+      expect(resumed).toEqual({ ...first, stepId: 'plant' });
       const res = await call(again, 'POST', '/tutorial/start', kid);
       expect(res.statusCode).toBe(200);
       expect(tutorialOf(res)).toEqual(resumed);
@@ -246,9 +276,12 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
       const { mapId } = await begin(server, kid);
 
       await acknowledge(server, kid, 'welcome');
-      expect((await getTutorial(server, kid)).stepId).toBe('graduation');
+      expect((await getTutorial(server, kid)).stepId).toBe('plant');
+      await acknowledge(server, kid, 'plant');
+      expect((await getTutorial(server, kid)).stepId).toBe('gather');
 
       clock = new Date('2026-10-02T12:15:00Z');
+      await jumpTo(kid, 'graduation');
       await acknowledge(server, kid, 'graduation');
       expect(await getTutorial(server, kid)).toEqual({
         status: 'completed',
@@ -256,6 +289,7 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
         mapId: null,
         completedAt: '2026-10-02T12:15:00.000Z',
         required: false,
+        partner: null,
       });
 
       // Each acknowledgement, then the engine's own system event, in seq order.
@@ -263,7 +297,9 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
       expect(events).toEqual([
         ['map.created', kid.id, expect.anything()],
         ['tutorial.acknowledged', kid.id, { stepId: 'welcome' }],
-        ['tutorial.advanced', null, { completedStepId: 'welcome', stepId: 'graduation' }],
+        ['tutorial.advanced', null, { completedStepId: 'welcome', stepId: 'plant' }],
+        ['tutorial.acknowledged', kid.id, { stepId: 'plant' }],
+        ['tutorial.advanced', null, { completedStepId: 'plant', stepId: 'gather' }],
         ['tutorial.acknowledged', kid.id, { stepId: 'graduation' }],
         ['tutorial.advanced', null, { completedStepId: 'graduation', stepId: null }],
       ]);
@@ -316,7 +352,7 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
         expect(res.statusCode).toBe(204);
       }
       await runConsumer(db, consumer, mapId!);
-      expect((await getTutorial(server, kid)).stepId).toBe('graduation');
+      expect((await getTutorial(server, kid)).stepId).toBe('plant');
       expect((await eventsOf(mapId!)).filter((e) => e.type === 'tutorial.advanced')).toHaveLength(
         1,
       );
@@ -342,7 +378,7 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
 
       await runConsumer(db, consumer, mapId!);
       await runConsumer(db, consumer, mapId!);
-      expect((await getTutorial(server, kid)).stepId).toBe('graduation');
+      expect((await getTutorial(server, kid)).stepId).toBe('plant');
       expect((await eventsOf(mapId!)).filter((e) => e.type === 'tutorial.advanced')).toHaveLength(
         1,
       );
@@ -390,31 +426,77 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
       expect((await getTutorial(server, kid)).completedAt).toBe(done.completedAt);
     });
 
-    it('grants the completion rewards once, whatever is replayed or retried', async () => {
+    it('grants rewards when the wardrobe step comes up and on finishing, once per event', async () => {
       const granted: string[] = [];
       const rewarding = createTutorialConsumer({
         clock: () => clock,
-        grantRewards: (_repo, userId) => {
+        grantRewards: (_tx, { userId }) => {
           granted.push(userId);
           return Promise.resolve();
         },
       });
       const server = await start();
       const kid = await player();
-      const playThrough = async () => {
-        for (const step of TUTORIAL_STEPS) {
-          await call(server, 'POST', '/tutorial/acknowledge', kid, { stepId: step.id });
-          const { mapId } = await getTutorial(server, kid);
-          await runConsumer(db, rewarding, mapId!);
-          await runConsumer(db, rewarding, mapId!);
-        }
-      };
-      await begin(server, kid);
-      await playThrough();
+      const { mapId } = await begin(server, kid);
+      // The evolve step finishes on the Partner's evolution: the scarf is next.
+      await jumpTo(kid, 'evolve');
+      await db.transaction((tx) =>
+        appendGameEvent(tx, {
+          mapId: mapId!,
+          type: 'squishy.evolved',
+          actorUserId: kid.id,
+          payload: {
+            userId: kid.id,
+            squishyId: randomUUID(),
+            fromSpeciesId: 'emberbun',
+            intoSpeciesId: 'hearthbun',
+            level: 16,
+          },
+        }),
+      );
+      await runConsumer(db, rewarding, mapId!);
+      await runConsumer(db, rewarding, mapId!);
+      expect((await getTutorial(server, kid)).stepId).toBe('wardrobe');
       expect(granted).toEqual([kid.id]);
+      await jumpTo(kid, 'graduation');
+      await call(server, 'POST', '/tutorial/acknowledge', kid, { stepId: 'graduation' });
+      await runConsumer(db, rewarding, mapId!);
+      await runConsumer(db, rewarding, mapId!);
+      expect(granted).toEqual([kid.id, kid.id]);
+    });
+
+    it('grants the Seedling Scarf once per account, with a ref of its own per player', async () => {
+      const server = await start();
+      const kid = await player();
+      const friend = await player();
+      for (const who of [kid, friend]) {
+        await begin(server, who);
+        await finish(server, who);
+      }
+      // Replayed and finished again: still one scarf.
       await call(server, 'POST', '/tutorial/replay', kid);
-      await playThrough();
-      expect(granted).toEqual([kid.id]);
+      await finish(server, kid);
+      const scarves = await db.query.clothingOwned.findMany({
+        where: (t, { and, eq, inArray }) =>
+          and(eq(t.itemId, SEEDLING_SCARF), inArray(t.userId, [kid.id, friend.id])),
+      });
+      expect(scarves).toHaveLength(2);
+      for (const who of [kid, friend]) {
+        const mine = scarves.filter((s) => s.userId === who.id);
+        expect(mine).toEqual([
+          expect.objectContaining({ source: 'tutorial', refId: scarfRefId(who.id) }),
+        ]);
+      }
+      expect(scarfRefId(kid.id)).not.toBe(scarfRefId(friend.id));
+      expect(CLOTHING.find((c) => c.id === SEEDLING_SCARF)).toMatchObject({
+        sources: ['tutorial'],
+        tradable: false,
+      });
+      // It's in their wardrobe to wear.
+      const res = await call(server, 'GET', '/wardrobe', kid);
+      expect(WardrobeResponseSchema.parse(res.json()).wardrobe.owned).toEqual(
+        expect.arrayContaining([expect.objectContaining({ itemId: SEEDLING_SCARF })]),
+      );
     });
 
     it('restarts a run in progress, and the old run can no longer advance', async () => {
@@ -456,5 +538,347 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
       expect(res.statusCode).toBe(201);
       expect(MapResponseSchema.parse(res.json()).map.name).toBe('Moon Patch');
     });
+  });
+  describe('a run', () => {
+    it("starts with the Glade friend and Sprout's little bag", async () => {
+      const server = await start();
+      const kid = await player();
+      const { mapId } = await begin(server, kid);
+      expect(await squishiesOf(mapId!)).toEqual([
+        expect.objectContaining({
+          ownerUserId: kid.id,
+          speciesId: TUTORIAL_SETUP.helper.speciesId,
+          level: TUTORIAL_SETUP.helper.level,
+          state: 'active',
+        }),
+      ]);
+      const bag = await db.query.inventories.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId!), eq(t.userId, kid.id)),
+      });
+      expect(Object.fromEntries(bag.map((row) => [row.itemId, row.quantity]))).toEqual(
+        TUTORIAL_SETUP.bag,
+      );
+    });
+
+    it('stores only a starter as the Partner, on the befriend step', async () => {
+      const server = await start();
+      const kid = await player();
+      const { mapId } = await begin(server, kid);
+      await jumpTo(kid, 'befriend');
+      const captured = (speciesId: string) =>
+        db.transaction((tx) =>
+          appendGameEvent(tx, {
+            mapId: mapId!,
+            type: 'squishy.captured',
+            actorUserId: kid.id,
+            payload: {
+              battleId: randomUUID(),
+              userId: kid.id,
+              squishyId: randomUUID(),
+              speciesId,
+              level: 1,
+            },
+          }),
+        );
+      const partnerOf = async () =>
+        (
+          await db.query.users.findFirst({
+            where: (t, { eq }) => eq(t.id, kid.id),
+            columns: { partnerSpeciesId: true },
+          })
+        )?.partnerSpeciesId;
+
+      // Not a starter (no Glade squishy is, but the step engine checks anyway).
+      await captured('fuzzbolt');
+      await runConsumer(db, consumer, mapId!);
+      expect((await getTutorial(server, kid)).stepId).toBe('befriend');
+      expect(await partnerOf()).toBeNull();
+
+      await captured('thistlepip');
+      await runConsumer(db, consumer, mapId!);
+      expect((await getTutorial(server, kid)).stepId).toBe('name-partner');
+      expect(await partnerOf()).toBe('thistlepip');
+    });
+
+    it('jumps steps for dev tools only, the way the step engine moves', async () => {
+      const off = await start();
+      const kid = await player();
+      const { mapId } = await begin(off, kid);
+      const jump = { stepId: 'wardrobe' };
+      expect((await call(off, 'POST', '/tutorial/dev/step', kid, jump)).statusCode).toBe(404);
+      await app!.close();
+
+      const server = await start({ HP_DEV_SQUISHY_GRANTS: 'true' });
+      const res = await call(server, 'POST', '/tutorial/dev/step', kid, jump);
+      expect(res.statusCode, res.body).toBe(200);
+      expect(tutorialOf(res).stepId).toBe('wardrobe');
+      const last = (await eventsOf(mapId!)).at(-1)!;
+      expect(last).toMatchObject({ type: 'tutorial.advanced', actorUserId: null });
+      expect(last.payload).toEqual({ completedStepId: 'welcome', stepId: 'wardrobe' });
+      // The wardrobe step needs the scarf to put on.
+      const scarves = await db.query.clothingOwned.findMany({
+        where: (t, { and, eq }) => and(eq(t.userId, kid.id), eq(t.itemId, SEEDLING_SCARF)),
+      });
+      expect(scarves).toHaveLength(1);
+    });
+
+    it('lets night fall on the Glade only on its step, and takes nothing', async () => {
+      const server = await start();
+      const kid = await player();
+      const { mapId } = await begin(server, kid);
+      const early = await call(server, 'POST', '/tutorial/nightfall', kid);
+      expect(early.statusCode).toBe(409);
+      expect(errorOf(early).message).toBe(
+        "It's not time for night yet. Let's finish this step first!",
+      );
+
+      await jumpTo(kid, 'nightfall');
+      expect((await call(server, 'POST', '/tutorial/nightfall', kid)).statusCode).toBe(204);
+      // A double tap before the engine moves on: the next night, still nothing taken.
+      expect((await call(server, 'POST', '/tutorial/nightfall', kid)).statusCode).toBe(204);
+      await runConsumer(db, consumer, mapId!);
+      expect((await getTutorial(server, kid)).stepId).toBe('evolve');
+      const nights = (await eventsOf(mapId!)).filter((e) => e.type === 'hollow.nightfall');
+      expect(nights.length).toBeGreaterThan(0);
+      for (const night of nights) {
+        expect(parseGameEventPayload('hollow.nightfall', night.payload).taken).toEqual([]);
+      }
+      expect((await squishiesOf(mapId!)).every((s) => s.state === 'active')).toBe(true);
+    });
+  });
+
+  describe('the whole Glade, played for real', () => {
+    const lore = createLoreConsumer({ clock: () => clock });
+    const later = (seconds: number) => {
+      clock = new Date(clock.getTime() + seconds * 1000);
+    };
+    const battleOf = (res: LightMyRequestResponse) => BattleResponseSchema.parse(res.json()).battle;
+
+    async function act(
+      server: FastifyInstance,
+      who: Player,
+      b: PlayerBattle,
+      action: PlayerBattleAction,
+    ) {
+      const res = await call(server, 'POST', `/battles/${b.id}/actions`, who, {
+        action,
+        turn: b.view.turn,
+      });
+      expect(res.statusCode, res.body).toBe(200);
+      return battleOf(res);
+    }
+
+    /** Plays the first move every turn (or befriends at once) until the battle ends. */
+    async function playOut(
+      server: FastifyInstance,
+      who: Player,
+      battle: PlayerBattle,
+      capture = false,
+    ) {
+      let current = battle;
+      for (let i = 0; i < 200 && current.status === 'active'; i++) {
+        const side = current.view.sides[current.mySide];
+        const action: PlayerBattleAction = capture
+          ? { type: 'capture' }
+          : current.view.phase.type === 'replace'
+            ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
+            : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+        current = await act(server, who, current, action);
+      }
+      expect(current.status).toBe('finished');
+      return current;
+    }
+
+    it('names and grows the starter befriended on the befriend step, not an earlier one', async () => {
+      const server = await start();
+      const kid = await player();
+      const { mapId } = await begin(server, kid);
+      const m = mapId!;
+      const befriend = async (tile: { q: number; r: number }) => {
+        const res = await call(server, 'POST', `/maps/${m}/battles`, kid, { tile });
+        expect(res.statusCode, res.body).toBe(201);
+        const battle = battleOf(res);
+        await playOut(server, kid, battle, true);
+        await runConsumer(db, consumer, m);
+        return battle.view.sides.b.squishies[0]!.speciesId;
+      };
+      // A starter befriended early, while the kid is meant to be building a fire.
+      await jumpTo(kid, 'hearthfire');
+      const early = await befriend({ q: 0, r: 1 });
+      expect((await getTutorial(server, kid)).stepId).toBe('hearthfire');
+      // Then the real one, on the befriend step.
+      await jumpTo(kid, 'befriend');
+      const chosen = await befriend({ q: 1, r: 0 });
+      expect(chosen).not.toBe(early);
+      const { partner } = await getTutorial(server, kid);
+      expect(partner?.speciesId).toBe(chosen);
+      const account = await db.query.users.findFirst({ where: (t, { eq }) => eq(t.id, kid.id) });
+      expect(account?.partnerSpeciesId).toBe(chosen);
+
+      // The evolve step grows that one.
+      await jumpTo(kid, 'evolve');
+      const res = await call(server, 'POST', `/maps/${m}/battles`, kid, { tile: { q: -1, r: 1 } });
+      await playOut(server, kid, battleOf(res));
+      await runConsumer(db, consumer, m);
+      expect((await getTutorial(server, kid)).stepId).toBe('wardrobe');
+      const rows = await squishiesOf(m);
+      expect(rows.find((r) => r.id === partner!.squishyId)!.speciesId).not.toBe(chosen);
+      expect(rows.filter((r) => r.speciesId === early)).toHaveLength(1);
+    }, 30_000);
+
+    it('teaches every step with the real modules, from the Heart Seed to graduation', async () => {
+      const server = await start();
+      const kid = await player();
+      const { mapId } = await begin(server, kid);
+      const m = mapId!;
+      const step = async () => {
+        await runConsumer(db, consumer, m);
+        await runConsumer(db, lore, m);
+        return (await getTutorial(server, kid)).stepId;
+      };
+      const ok = async (method: 'GET' | 'POST', path: string, body?: object) => {
+        const res = await call(server, method, path, kid, body);
+        expect(res.statusCode, `${path}: ${res.body}`).toBeLessThan(300);
+        return res;
+      };
+      const gather = async (q: number, r: number) => {
+        const res = await ok('POST', `/maps/${m}/gathers`, { q, r });
+        const { gather: job } = GatherResponseSchema.parse(res.json());
+        later(10);
+        await ok('POST', `/maps/${m}/gathers/${job.id}/collect`);
+      };
+      const build = async (buildingId: string) => {
+        for (const [q, r] of [
+          [0, 1],
+          [-1, 0],
+          [0, 0],
+        ] as const) {
+          for (let spot = 0; spot <= 6; spot++) {
+            const res = await call(server, 'POST', `/maps/${m}/buildings`, kid, {
+              buildingId,
+              q,
+              r,
+              spot,
+            });
+            if (res.statusCode === 201 || res.statusCode === 200) {
+              const home = HomeResponseSchema.parse(res.json());
+              return home.buildings.find((b) => b.buildingId === buildingId)!;
+            }
+          }
+        }
+        throw new Error(`no spot for ${buildingId}`);
+      };
+
+      // 1. Plant the Heart Seed (Sprout's welcome first).
+      await acknowledge(server, kid, 'welcome');
+      await acknowledge(server, kid, 'plant');
+      expect(await step()).toBe('gather');
+
+      // 2. Gather: Timber from the ring, in seconds.
+      await gather(1, 0);
+      expect(await step()).toBe('hearthfire');
+
+      // 3. Light a Hearthfire: Emberwood fuels it, the bag's Stone builds it.
+      await gather(1, -1);
+      const fire = await build('hearthfire');
+      await ok('POST', `/maps/${m}/buildings/${fire.id}/fuel`, { nights: 1 });
+      expect(await step()).toBe('first-battle');
+
+      // 4. First battle, with the Glade friend: won or not, it counts.
+      const first = battleOf(await ok('POST', `/maps/${m}/battles`, { tile: { q: 0, r: 1 } }));
+      expect(first.view.sides[first.mySide].squishies.map((s) => s.speciesId)).toEqual([
+        TUTORIAL_SETUP.helper.speciesId,
+      ]);
+      const wild = first.view.sides[first.mySide === 'a' ? 'b' : 'a'].squishies[0]!.speciesId;
+      expect(STARTERS.speciesIds).toContain(wild);
+      await playOut(server, kid, first);
+      expect(await step()).toBe('befriend');
+
+      // 5. Befriend a starter (always works here), and name the Partner.
+      const meet = battleOf(await ok('POST', `/maps/${m}/battles`, { tile: { q: 0, r: 1 } }));
+      await playOut(server, kid, meet, true);
+      expect(await step()).toBe('name-partner');
+      const { partner } = await getTutorial(server, kid);
+      expect(partner).toMatchObject({ speciesId: wild, nickname: null });
+      await ok('POST', `/maps/${m}/squishies/${partner!.squishyId}/rename`, { nickname: 'Sunny' });
+      expect(await step()).toBe('care');
+
+      // 6. Care up close.
+      await ok('POST', `/maps/${m}/squishies/${partner!.squishyId}/care`, { action: 'pet' });
+      expect(await step()).toBe('habitat');
+
+      // 7. A habitat (one more Timber gather pays for it), and move in.
+      await gather(1, 0);
+      const habitat = await build('cozy-meadow');
+      await ok('POST', `/maps/${m}/squishies/${partner!.squishyId}/habitat`, {
+        habitatId: habitat.id,
+      });
+      expect(await step()).toBe('territory');
+
+      // 8. Claim a tile next to home (another one, if the guardian wins).
+      let claimed: { q: number; r: number } | null = null;
+      for (const [q, r] of [
+        [1, 1],
+        [-1, 2],
+        [2, -1],
+        [-2, 1],
+        [1, -2],
+        [-1, -1],
+      ] as const) {
+        const res = await call(server, 'POST', `/maps/${m}/attacks`, kid, { q, r });
+        if (res.statusCode >= 300) continue;
+        const ended = await playOut(server, kid, battleOf(res));
+        if ((await step()) === 'defend') {
+          claimed = { q, r };
+          break;
+        }
+        expect(ended.status).toBe('finished');
+      }
+      expect(claimed).not.toBeNull();
+
+      // 9. Defend: the Glade friend stands watch on the new land.
+      const helper = (await squishiesOf(m)).find(
+        (s) => s.speciesId === TUTORIAL_SETUP.helper.speciesId,
+      )!;
+      await ok('POST', `/maps/${m}/defenders`, { ...claimed!, squishyIds: [helper.id] });
+      expect(await step()).toBe('nightfall');
+
+      // 10. Nightfall: the Hollow Man visits and takes nothing; a lore page is found.
+      await ok('POST', '/tutorial/nightfall');
+      expect(await step()).toBe('evolve');
+      const book = LorebookResponseSchema.parse((await ok('GET', '/lore')).json());
+      expect(book.pages.map((p) => p.id)).toEqual(['paw-prints-by-the-fire']);
+
+      // 11. One more battle, and the Partner evolves.
+      const last = battleOf(await ok('POST', `/maps/${m}/battles`, { tile: { q: -1, r: 1 } }));
+      await playOut(server, kid, last);
+      expect(await step()).toBe('wardrobe');
+      const grown = (await squishiesOf(m)).find((s) => s.id === partner!.squishyId)!;
+      expect(grown.speciesId).not.toBe(wild);
+      expect(grown.nickname).toBe('Sunny');
+
+      // 12. The Seedling Scarf is theirs: put it on.
+      const wardrobe = WardrobeResponseSchema.parse((await ok('GET', '/wardrobe')).json()).wardrobe;
+      expect(wardrobe.owned.map((o) => o.itemId)).toContain(SEEDLING_SCARF);
+      const top = new Set(CLOTHING.filter((c) => c.slot === 'top').map((c) => c.id));
+      await ok('POST', '/wardrobe/wear', {
+        wearing: [...wardrobe.wearing.filter((id) => !top.has(id)), SEEDLING_SCARF],
+      });
+      expect(await step()).toBe('graduation');
+
+      // 13. Graduation: done, with the Partner remembered for the starter pick.
+      await acknowledge(server, kid, 'graduation');
+      const done = await getTutorial(server, kid);
+      expect(done.status).toBe('completed');
+      const account = await db.query.users.findFirst({ where: (t, { eq }) => eq(t.id, kid.id) });
+      expect(account).toMatchObject({ partnerSpeciesId: wild, tutorialStep: null });
+      expect(account!.tutorialCompletedAt).not.toBeNull();
+      // Every step, in order, each with its own `tutorial.advanced`.
+      const advanced = (await eventsOf(m))
+        .filter((e) => e.type === 'tutorial.advanced')
+        .map((e) => parseGameEventPayload('tutorial.advanced', e.payload).completedStepId);
+      expect(advanced).toEqual(TUTORIAL_STEPS.map((s) => s.id));
+      // ~60 requests and consumer runs: more than the 5 s default on a busy runner.
+    }, 30_000);
   });
 });

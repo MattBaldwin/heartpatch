@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
 import { PublicBuildingSchema } from './buildings.js';
+import { ContentIdSchema } from './data/common.js';
 import { PublicKeeperSchema } from './data/keepers.js';
 import { TimeZoneSchema } from './time.js';
 import { WsSeqSchema } from './ws.js';
@@ -165,6 +166,12 @@ export const MapDetailSchema = z.object({
    * 2026-10-03): the client asks before opening the map.
    */
   needsStarter: z.boolean(),
+  /**
+   * While `needsStarter`, the starter the pick pre-selects: the player's
+   * tutorial Partner (#24, a `STARTERS` species), or null. They can still
+   * pick another.
+   */
+  preselectSpeciesId: ContentIdSchema.nullable(),
   admin: z
     .object({
       invite: InviteSchema.nullable(),

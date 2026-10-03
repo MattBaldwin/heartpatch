@@ -36,7 +36,17 @@ export interface TutorialScreenOptions {
     open: (mapId: string, stillWanted: () => boolean) => Promise<void>;
     close: () => void;
   };
-  api?: Pick<TutorialApi, 'state' | 'start' | 'replay' | 'skip' | 'acknowledge'>;
+  /**
+   * Opens the Wardrobe over the Glade for the wardrobe step (design doc §26
+   * step 12); the tutorial carries on when it closes.
+   */
+  openWardrobe?: () => void;
+  /** The step on screen changed (to null when the run closed). */
+  onStep?: (stepId: string | null) => void;
+  api?: Pick<
+    TutorialApi,
+    'state' | 'start' | 'replay' | 'skip' | 'acknowledge' | 'nightfall' | 'name'
+  >;
   createWs?: (options: WsClientOptions) => WsClient;
 }
 
@@ -111,7 +121,17 @@ export function createTutorialScreen(options: TutorialScreenOptions): TutorialSc
       options.onEntryChange();
     },
     nudge: () => sprout?.hop(),
+    name: (nickname) => controller?.name(nickname),
+    nightfall: () => controller?.nightfall(),
+    wardrobe: () => {
+      controller?.tuck();
+      options.openWardrobe?.();
+    },
+    tuck: () => controller?.tuck(),
+    untuck: () => controller?.untuck(),
   });
+  /** The step last reported to `onStep`. */
+  let reported: string | null = null;
 
   /** Sprout is in the scene exactly while the tutorial is open. */
   const syncSprout = (open: boolean) => {
@@ -127,6 +147,11 @@ export function createTutorialScreen(options: TutorialScreenOptions): TutorialSc
 
   const render = (view: TutorialView) => {
     overlay.render(view);
+    const stepId = view.phase === 'closed' ? null : (view.state?.stepId ?? null);
+    if (stepId !== reported) {
+      reported = stepId;
+      options.onStep?.(stepId);
+    }
     syncGlade(view);
     syncSprout(view.phase !== 'closed');
     const now = view.step && view.phase === 'step' ? `${view.step.id}:${String(view.line)}` : '';

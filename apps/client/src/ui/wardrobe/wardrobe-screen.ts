@@ -86,6 +86,8 @@ export interface WardrobeDebug {
 export interface WardrobeScreen {
   setUser: (user: PublicUser | null) => void;
   open: () => void;
+  /** Closes it as "Done" does (the tutorial's wardrobe step moving on, #24). */
+  close: () => void;
   /** The lobby's "Wardrobe" button. */
   listActions: () => Node[];
   /** A live event from the map on screen: a find shows a toast. */
@@ -620,6 +622,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
       if (next) void load();
     },
     open,
+    close,
     listActions: () => {
       if (!user) return [];
       const button = el(

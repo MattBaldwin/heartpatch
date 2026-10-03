@@ -1,6 +1,7 @@
 import { GAME_EVENTS, type TutorialState, type WsEventMessage } from '@heartpatch/shared';
 import { ApiRequestError } from '../net/api.js';
 import type { WsClient, WsClientOptions } from '../net/ws-client.js';
+import { checkNickname } from '../close-up/close-up-view.js';
 import { messageOf } from '../ui/dom.js';
 import type { TutorialApi } from './tutorial-api.js';
 import { stepView, type StepView } from './step-view.js';
@@ -45,10 +46,18 @@ export interface TutorialView {
    * requires it before multiplayer (`HP_TUTORIAL_REQUIRED`, decision A).
    */
   readonly canLeave: boolean;
+  /**
+   * A gameplay step's bubble is tucked into a small chip, so it never covers
+   * the buttons the step is about (battle moves, the home bar). Tap to read it again.
+   */
+  readonly tucked: boolean;
 }
 
 export interface TutorialControllerOptions {
-  api: Pick<TutorialApi, 'state' | 'start' | 'replay' | 'skip' | 'acknowledge'>;
+  api: Pick<
+    TutorialApi,
+    'state' | 'start' | 'replay' | 'skip' | 'acknowledge' | 'nightfall' | 'name'
+  >;
   /** The live socket for the run's map (made when a run opens). */
   createWs: (options: WsClientOptions) => Pick<WsClient, 'subscribe' | 'close' | 'status'>;
   onChange: (view: TutorialView) => void;
@@ -78,6 +87,11 @@ export class TutorialController {
   /** Retried by `retry()` after an error. */
   private retryAction: (() => void) | null = null;
   private choice: GraduationChoice | null = null;
+  private tucked = false;
+  /** Sends the last request again (Sprout's "Try again" after it got lost). */
+  private resend: () => void = () => undefined;
+  /** One key per name tried, so a retry after a lost reply can't rename twice. */
+  private nameKey: { name: string; key: string } | null = null;
   /** Bumped on every open and close, so a slow answer can't reopen a closed run. */
   private generation = 0;
   private ws: Pick<WsClient, 'subscribe' | 'close' | 'status'> | null = null;
@@ -109,6 +123,7 @@ export class TutorialController {
       message: this.message,
       canSkip: running && state.completedAt !== null,
       canLeave: state === null || !state.required || state.completedAt !== null,
+      tucked: this.tucked && this.phase === 'step',
     };
   }
 
@@ -174,28 +189,107 @@ export class TutorialController {
 
   /** The player read a talk-only step ("Got it!", or a graduation choice). */
   acknowledge(choice: GraduationChoice | null = null): void {
-    const state = this.state;
-    const step = this.view.step;
-    if (this.phase !== 'step' || !state?.stepId || !step?.talkOnly) return;
-    // Sprout finishes talking first.
-    if (this.line < step.lines.length - 1) return;
-    const stepId = state.stepId;
-    const at = this.generation;
+    const step = this.readStep();
+    if (!step?.talkOnly) return;
     this.choice = choice;
+    this.send(
+      step.id,
+      (stepId) => this.options.api.acknowledge(stepId),
+      () => {
+        this.acknowledge(choice);
+      },
+    );
+  }
+
+  /** "Night falls" on the Glade's nightfall step (design doc §26 step 10). */
+  nightfall(): void {
+    const step = this.readStep();
+    if (step?.action !== 'nightfall') return;
+    this.tucked = true;
+    this.send(
+      step.id,
+      () => this.options.api.nightfall(),
+      () => {
+        this.nightfall();
+      },
+    );
+  }
+
+  /** Names the Partner on the naming step (the server's text filter decides). */
+  name(nickname: string): void {
+    const step = this.readStep();
+    const state = this.state;
+    const partner = state?.partner;
+    if (step?.action !== 'name' || !state?.mapId || !partner) return;
+    // Checked the way the close-up checks a name (the server filters it too).
+    const checked = checkNickname(nickname);
+    if (!checked.ok) {
+      if (nickname.trim() !== '') {
+        this.fail(checked.why, () => {
+          this.phase = 'step';
+          this.emit();
+        });
+      }
+      return;
+    }
+    const { name } = checked;
+    if (this.nameKey?.name !== name) this.nameKey = { name, key: crypto.randomUUID() };
+    const { key } = this.nameKey;
+    const mapId = state.mapId;
+    this.send(
+      step.id,
+      () => this.options.api.name(mapId, partner.squishyId, name, key),
+      () => {
+        this.name(name);
+      },
+    );
+  }
+
+  /** Tucks a gameplay step's bubble away ("Let's go!"), after its last line. */
+  tuck(): void {
+    const step = this.readStep();
+    if (!step || step.talkOnly) return;
+    this.tucked = true;
+    this.emit();
+  }
+
+  /** Opens the tucked bubble again (tapping Sprout's chip). */
+  untuck(): void {
+    if (!this.tucked) return;
+    this.tucked = false;
+    this.emit();
+  }
+
+  /** The step on screen once Sprout has said everything, or null. */
+  private readStep(): StepView | null {
+    const step = this.view.step;
+    if (this.phase !== 'step' || !this.state?.stepId || !step) return null;
+    // Sprout finishes talking first.
+    if (this.line < step.lines.length - 1) return null;
+    return step;
+  }
+
+  /**
+   * Tells the server something that should finish `stepId`, then waits for
+   * `tutorial.advanced` (asking the server if it doesn't come).
+   */
+  private send(stepId: string, request: (stepId: string) => Promise<void>, again: () => void) {
+    const at = this.generation;
+    this.resend = again;
     this.phase = 'waiting';
     this.checks = 0;
     this.emit();
     this.armCheck(ADVANCE_CHECK_MS);
-    this.options.api.acknowledge(stepId).catch((err: unknown) => {
+    request(stepId).catch((err: unknown) => {
       if (at !== this.generation || this.state?.stepId !== stepId) return;
       // CONFLICT: the server already moved on (a double tap, another device).
-      if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
+      if (err instanceof ApiRequestError && err.code === 'CONFLICT' && this.view.step?.talkOnly) {
         void this.recheck(at);
         return;
       }
       this.fail(messageOf(err), () => {
         this.phase = 'step';
-        this.acknowledge(choice);
+        again();
       });
     });
   }
@@ -250,6 +344,10 @@ export class TutorialController {
       return;
     }
     this.adopt({ ...state, stepId: parsed.data.stepId });
+    // The advance doesn't say who the Partner is; the naming step needs it.
+    if (stepView(parsed.data.stepId).action === 'name' && !state.partner) {
+      void this.recheck(this.generation);
+    }
   }
 
   private async load(fetch: () => Promise<TutorialState>): Promise<void> {
@@ -284,6 +382,7 @@ export class TutorialController {
     }
     if (fresh || before?.stepId !== state.stepId || before.mapId !== state.mapId) {
       this.line = 0;
+      this.tucked = false;
       this.stopWaiting();
       if (this.phase === 'waiting') this.phase = 'step';
     }
@@ -319,10 +418,10 @@ export class TutorialController {
           return;
         }
         if (this.checks >= ADVANCE_CHECKS_BEFORE_RETRY) {
-          const choice = this.choice;
+          const again = this.resend;
           this.fail(STUCK_MESSAGE, () => {
             this.phase = 'step';
-            this.acknowledge(choice);
+            again();
           });
           return;
         }

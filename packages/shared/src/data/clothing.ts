@@ -274,6 +274,24 @@ const EVERYDAY: ClothingItem[] = [
     },
   },
   {
+    // The tutorial's reward (#24, design doc §26 step 12): account-bound.
+    id: 'seedling-scarf',
+    name: 'Seedling Scarf',
+    description: 'Knitted from the first leaves of your Heart Seed.',
+    slot: 'top',
+    rarity: 'uncommon',
+    sources: ['tutorial'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.44, 0], size: [1.12, 0.24, 1.12], color: '#7fc97f' },
+        { shape: 'ellipsoid', at: [0, 0.34, 0], size: [1.1, 0.16, 1.1], color: '#a8e6a1' },
+        { shape: 'capsule', at: [0.24, 0.1, -0.5], size: [0.2, 0.48, 0.1], color: '#7fc97f' },
+        { shape: 'ellipsoid', at: [0.3, -0.16, -0.52], size: [0.26, 0.12, 0.2], color: '#5fb85f' },
+      ],
+    },
+  },
+  {
     id: 'twirly-tutu',
     name: 'Twirly Tutu',
     description: 'Spins all by itself. Probably.',

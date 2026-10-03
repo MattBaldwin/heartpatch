@@ -1,7 +1,7 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { mapMembers, maps, users } from '../../db/schema.js';
+import { mapMembers, maps, squishies, users } from '../../db/schema.js';
 
 /** A player's tutorial columns (`users`). */
 export interface TutorialProgress {
@@ -9,6 +9,17 @@ export interface TutorialProgress {
   tutorialStep: string | null;
   /** First completion; replaying never clears it. */
   tutorialCompletedAt: Date | null;
+  /** The Partner's species (set when the befriend step finishes), or null. */
+  partnerSpeciesId: string | null;
+}
+
+/** The run's Partner squishy (`findPartner`). */
+export interface PartnerRow {
+  id: string;
+  speciesId: string;
+  nickname: string | null;
+  level: number;
+  xp: number;
 }
 
 /**
@@ -32,6 +43,17 @@ export interface TutorialRepo {
   /** A hand-authored map (no seed) for one player. */
   insertTutorialMap: (map: { name: string; timeZone: string }) => Promise<{ id: string }>;
   setStep: (userId: string, stepId: string | null) => Promise<void>;
+  /** Remembers the Partner's species (a starter; the caller checks) for the starter pick. */
+  setPartnerSpecies: (userId: string, speciesId: string) => Promise<void>;
+  /**
+   * The run's Partner: the player's first squishy on the map whose species is
+   * one of `speciesIds` (the stored Partner species and what it grows into), or null.
+   */
+  findPartner: (
+    mapId: string,
+    userId: string,
+    speciesIds: readonly string[],
+  ) => Promise<PartnerRow | null>;
   /** Ends the run; `completedAt` is the first completion (callers keep an earlier one). */
   complete: (userId: string, completedAt: Date) => Promise<void>;
   /**
@@ -51,6 +73,7 @@ export interface TutorialTxRepo extends TutorialRepo {
 const progressColumns = {
   tutorialStep: users.tutorialStep,
   tutorialCompletedAt: users.tutorialCompletedAt,
+  partnerSpeciesId: users.partnerSpeciesId,
 };
 
 export function createTutorialRepo(db: Executor): TutorialRepo {
@@ -110,6 +133,33 @@ function queries(db: Executor): TutorialRepo {
 
     setStep: async (userId, stepId) => {
       await db.update(users).set({ tutorialStep: stepId }).where(eq(users.id, userId));
+    },
+
+    setPartnerSpecies: async (userId, speciesId) => {
+      await db.update(users).set({ partnerSpeciesId: speciesId }).where(eq(users.id, userId));
+    },
+
+    findPartner: async (mapId, userId, speciesIds) => {
+      if (speciesIds.length === 0) return null;
+      const [row] = await db
+        .select({
+          id: squishies.id,
+          speciesId: squishies.speciesId,
+          nickname: squishies.nickname,
+          level: squishies.level,
+          xp: squishies.xp,
+        })
+        .from(squishies)
+        .where(
+          and(
+            eq(squishies.mapId, mapId),
+            eq(squishies.ownerUserId, userId),
+            inArray(squishies.speciesId, [...speciesIds]),
+          ),
+        )
+        .orderBy(asc(squishies.createdAt), asc(squishies.id))
+        .limit(1);
+      return row ?? null;
     },
 
     complete: async (userId, completedAt) => {

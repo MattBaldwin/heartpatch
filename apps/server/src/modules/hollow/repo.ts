@@ -82,7 +82,7 @@ export interface HollowRepo {
 
   /** The map's secret seed (null on hand-authored maps). Server-only. */
   mapSeed: (mapId: string) => Promise<string | null>;
-  /** Maps with an active member, with their latest night. */
+  /** Patches (not the Glade, #24) with an active member, with their latest night. */
   playedMaps: () => Promise<PlayedMapRow[]>;
   /**
    * Claims the night for the map: inserts its `hollow_events` row, or returns
@@ -214,6 +214,9 @@ function queries(db: Executor): HollowRepo {
         .from(maps)
         .innerJoin(played, eq(played.mapId, maps.id))
         .leftJoin(lastNight, eq(lastNight.mapId, maps.id))
+        // The Tutorial Glade's night is scripted (its own step, #24): the
+        // sweep skips it, so a finished Glade never gets a night again.
+        .where(eq(maps.kind, 'multiplayer'))
         .orderBy(asc(maps.id));
       // Aggregates in a subquery may come back as text; `new Date` takes either.
       return rows.flatMap(({ firstJoinedAt, ...row }) =>

@@ -66,7 +66,12 @@ export const users = pgTable(
     // Id of the current tutorial step (tutorial step data); null = not started.
     tutorialStep: text('tutorial_step'),
     // Set once the tutorial is finished; replaying it doesn't clear this.
+    // The First Patch milestone (#44) reads it: the first completion.
     tutorialCompletedAt: timestamptz('tutorial_completed_at'),
+    // The Partner's species (#24): the starter befriended in the latest
+    // tutorial run (always one of `STARTERS`, checked by the tutorial). The
+    // starter pick on a patch pre-selects it.
+    partnerSpeciesId: text('partner_species_id'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -885,6 +890,26 @@ export const clothingOwned = pgTable(
       .on(t.source, t.refId)
       .where(sql`${t.refId} is not null`),
   ],
+);
+
+/**
+ * Lore pages a player has found (#24, design doc §16): account-level, one row
+ * per page, found once. The pages and what finds them are server-only data
+ * (`LORE_PAGES`); a page's words reach the client only from here.
+ */
+export const loreFound = pgTable(
+  'lore_found',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Page id from `LORE_PAGES`.
+    pageId: text('page_id').notNull(),
+    // Where it was found; the page stays when the map goes.
+    mapId: uuid('map_id').references(() => maps.id, { onDelete: 'set null' }),
+    foundAt: timestamptz('found_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.pageId] })],
 );
 
 /**

@@ -136,7 +136,7 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   expect(errors).toEqual([]);
 });
 
-test('a battle owns the screen: no lobby button mid-battle, no battle button in the Glade', async ({
+test('a battle owns the screen: no lobby button mid-battle, none left after the Glade', async ({
   browser,
 }) => {
   test.setTimeout(240_000);
@@ -182,12 +182,12 @@ test('a battle owns the screen: no lobby button mid-battle, no battle button in 
   await hud.getByRole('button', { name: 'Back to patch' }).tap();
   await expect(hud).toBeHidden();
 
-  // Sprout's Glade (#47) is drawn by the map screen too, but it's Sprout's:
-  // no battle button over it, and none left behind after "Later".
+  // Sprout's Glade (#47) is drawn by the map screen too, and runs the real
+  // game (#24): its battle button is there, and none is left behind after "Later".
   await lobbyButton.tap();
   await lobby.getByTestId('tutorial-start').tap();
   await expect(page.getByTestId('tutorial-bubble')).toBeVisible({ timeout: 30_000 });
-  await expect(entry).toBeHidden();
+  await expect(entry).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('tutorial-bubble').getByRole('button', { name: 'Later' }).tap();
   await expect(page.getByTestId('tutorial')).toBeHidden();
   await lobby.getByTestId('lobby-close').tap();

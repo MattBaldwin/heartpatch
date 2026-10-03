@@ -41,9 +41,25 @@ const MESSAGES = {
 
 const speciesById = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 
-/** True if the player still needs to pick a starter on this patch (`MapDetail.needsStarter`). */
-export function needsStarter(db: Executor, mapId: string, userId: string): Promise<boolean> {
-  return createStartersRepo(db).needsStarter(mapId, userId);
+/**
+ * Whether the player still needs to pick a starter on this patch
+ * (`MapDetail.needsStarter`), and the one the pick pre-selects: their
+ * tutorial Partner's species (#24), if it's still a starter.
+ */
+export async function starterPick(
+  db: Executor,
+  mapId: string,
+  userId: string,
+): Promise<{ needsStarter: boolean; preselectSpeciesId: string | null }> {
+  const repo = createStartersRepo(db);
+  if (!(await repo.needsStarter(mapId, userId))) {
+    return { needsStarter: false, preselectSpeciesId: null };
+  }
+  const partner = await repo.partnerSpecies(userId);
+  return {
+    needsStarter: true,
+    preselectSpeciesId: partner !== null && isStarterSpecies(partner) ? partner : null,
+  };
 }
 
 export function createStartersService(options: StartersServiceOptions): StartersService {

@@ -65,6 +65,7 @@ export * from './mapgen/index.js';
 export * from './schemas/ws.js';
 export * from './schemas/maps.js';
 export * from './schemas/tutorial.js';
+export * from './schemas/lore.js';
 export * from './schemas/keepers.js';
 export * from './schemas/wardrobe.js';
 export * from './schemas/squishies.js';

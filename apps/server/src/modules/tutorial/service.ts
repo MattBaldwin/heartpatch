@@ -1,17 +1,34 @@
 import {
+  addDays,
+  CARE_RULES,
   firstTutorialStep,
+  GAME_DATA,
+  HOME_BASE_RULES,
+  tonightOf,
   TUTORIAL_LAYOUT,
+  TUTORIAL_SETUP,
   TUTORIAL_STEPS,
+  type LocalDate,
   type PublicUser,
   type TutorialLayout,
+  type TutorialSetup,
   type TutorialState,
   type TutorialStep,
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
-import type { Clock } from '../../lib/time.js';
+import { mapLocalTime, type Clock } from '../../lib/time.js';
+import { createBattlesRepo } from '../battles/repo.js';
+import { grantItems } from '../inventory/service.js';
 import { createMapsRepo } from '../maps/repo.js';
-import { createTutorialRepo, type TutorialProgress, type TutorialTxRepo } from './repo.js';
+import { createSpawnsRepo } from '../spawns/repo.js';
+import {
+  createTutorialRepo,
+  type PartnerRow,
+  type TutorialProgress,
+  type TutorialTxRepo,
+} from './repo.js';
+import { grantSeedlingScarf, partnerLineOf } from './rewards.js';
 
 export interface TutorialService {
   /** Where the player is: what the client resumes from after quitting. */
@@ -24,7 +41,20 @@ export interface TutorialService {
   skip: (user: PublicUser) => Promise<TutorialState>;
   /** The player read a talk-only step; the step engine completes it. */
   acknowledge: (user: PublicUser, stepId: string) => Promise<void>;
+  /**
+   * Night falls on the Glade now (design doc §26 step 10): only on the step
+   * that waits for it. The Hollow Man takes nothing here (`tutorialOverrides`).
+   */
+  nightfall: (user: PublicUser) => Promise<void>;
+  /**
+   * Dev/test only (`HP_DEV_SQUISHY_GRANTS`): moves the run going straight to
+   * `stepId`, as the step engine would (with the scarf if that step needs it).
+   */
+  devJump: (user: PublicUser, stepId: string) => Promise<TutorialState>;
 }
+
+/** Runs one night on a map (the Hollow's `runNightfall`); null if it already ran. */
+export type RunNightfall = (mapId: string, night: LocalDate) => Promise<unknown>;
 
 export interface TutorialServiceOptions {
   db: Executor;
@@ -33,10 +63,16 @@ export interface TutorialServiceOptions {
   clock?: Clock;
   /** Live sync (`wsHub.publish`), called after commit. Never rejects. */
   publish?: (mapId: string) => Promise<void>;
-  /** Tests swap the steps and layout. */
+  /** The Hollow's nightfall, for the Glade's scripted night (step 10). */
+  runNightfall?: RunNightfall;
+  /** Tests swap the steps, layout and setup. */
   steps?: readonly TutorialStep[];
   layout?: TutorialLayout;
+  setup?: TutorialSetup;
 }
+
+/** Safety: the scripted night looks this many nights ahead for one that hasn't come. */
+const NIGHTS_AHEAD = 30;
 
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
@@ -46,12 +82,17 @@ const MESSAGES = {
   notStarted: "Let's start your adventure with Sprout first!",
   movedOn: 'Sprout has already moved on. Take a look!',
   tryItFirst: 'Sprout wants you to give that one a try!',
+  notNightYet: "It's not time for night yet. Let's finish this step first!",
+  noStep: "Sprout doesn't know that step.",
 } as const;
+
+const speciesById = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 
 function toState(
   progress: TutorialProgress,
   runMapId: string | null,
   required: boolean,
+  partner: PartnerRow | null,
 ): TutorialState {
   const running = progress.tutorialStep !== null && runMapId !== null;
   return {
@@ -60,6 +101,10 @@ function toState(
     mapId: running ? runMapId : null,
     completedAt: progress.tutorialCompletedAt?.toISOString() ?? null,
     required,
+    partner:
+      running && partner
+        ? { squishyId: partner.id, speciesId: partner.speciesId, nickname: partner.nickname }
+        : null,
   };
 }
 
@@ -67,6 +112,7 @@ export function createTutorialService(options: TutorialServiceOptions): Tutorial
   const { db, tutorialRequired } = options;
   const steps = options.steps ?? TUTORIAL_STEPS;
   const layout = options.layout ?? TUTORIAL_LAYOUT;
+  const setup = options.setup ?? TUTORIAL_SETUP;
   const now = options.clock ?? (() => new Date());
   /** After commit only (apps/server/README.md, "Live sync"). */
   const published = (mapId: string) => {
@@ -108,6 +154,23 @@ export function createTutorialService(options: TutorialServiceOptions): Tutorial
     });
     await maps.insertTiles(map.id, layout.tiles);
     await maps.claimHomeTiles(map.id, 0, user.id);
+    // The Glade friend who plays the first battle, and Sprout's little bag
+    // (#24): the player has no squishy yet, and nothing in the Glade carries over.
+    const helper = speciesById.get(setup.helper.speciesId);
+    if (!helper) throw new Error(`tutorial helper ${setup.helper.speciesId} is not a species`);
+    const at = now();
+    await createBattlesRepo(tx).insertSquishy({
+      mapId: map.id,
+      ownerUserId: user.id,
+      speciesId: helper.id,
+      element: helper.element,
+      feeling: helper.feeling,
+      level: setup.helper.level,
+      contentment: CARE_RULES.startContentment,
+      at,
+    });
+    await grantItems(tx, { mapId: map.id, userId: user.id }, setup.bag, 'tutorial', map.id);
+    await createSpawnsRepo(tx).markCaught(map.id, user.id, helper.id, at);
     await repo.setStep(user.id, firstTutorialStep(steps).id);
     await repo.appendEvent({
       mapId: map.id,
@@ -131,7 +194,11 @@ export function createTutorialService(options: TutorialServiceOptions): Tutorial
       store.currentRun(user.id),
     ]);
     if (!progress) throw new AppError('UNAUTHENTICATED', MESSAGES.noAccount);
-    return toState(progress, runMapId, tutorialRequired);
+    const partner =
+      runMapId && progress.tutorialStep !== null
+        ? await store.findPartner(runMapId, user.id, partnerLineOf(progress.partnerSpeciesId))
+        : null;
+    return toState(progress, runMapId, tutorialRequired, partner);
   };
 
   return {
@@ -197,6 +264,55 @@ export function createTutorialService(options: TutorialServiceOptions): Tutorial
         return running;
       });
       published(mapId);
+    },
+
+    devJump: async (user, stepId) => {
+      const target = steps.find((s) => s.id === stepId);
+      if (!target) throw new AppError('NOT_FOUND', MESSAGES.noStep);
+      const mapId = await store.transaction(async (repo, tx) => {
+        const player = await lock(repo, user);
+        const running = await repo.currentRun(user.id);
+        if (player.tutorialStep === null || running === null) {
+          throw new AppError('CONFLICT', MESSAGES.notStarted);
+        }
+        await repo.setStep(user.id, target.id);
+        if (target.completeOn.eventType === 'outfit.changed') {
+          await grantSeedlingScarf(tx, user.id, running, now());
+        }
+        // The client follows `tutorial.advanced` from the step on screen.
+        await repo.appendEvent({
+          mapId: running,
+          type: 'tutorial.advanced',
+          actorUserId: null,
+          payload: { completedStepId: player.tutorialStep, stepId: target.id },
+        });
+        return running;
+      });
+      published(mapId);
+      return state(user);
+    },
+
+    nightfall: async (user) => {
+      const run = await store.transaction(async (repo) => {
+        const player = await lock(repo, user);
+        const running = await repo.currentRun(user.id);
+        if (player.tutorialStep === null || running === null) {
+          throw new AppError('CONFLICT', MESSAGES.notStarted);
+        }
+        const step = steps.find((s) => s.id === player.tutorialStep);
+        if (step?.completeOn.eventType !== 'hollow.nightfall') {
+          throw new AppError('CONFLICT', MESSAGES.notNightYet);
+        }
+        return { mapId: running, timeZone: player.timeZone };
+      });
+      // The next night that hasn't come yet falls now (its own transaction,
+      // like the scheduled job; the night's row makes a double tap harmless).
+      // The step engine finishes the step on its `hollow.nightfall`.
+      let night = tonightOf(mapLocalTime(now(), run.timeZone), HOME_BASE_RULES);
+      for (let i = 0; i < NIGHTS_AHEAD; i++, night = addDays(night, 1)) {
+        if (await options.runNightfall?.(run.mapId, night)) return;
+      }
+      throw new AppError('CONFLICT', MESSAGES.notNightYet);
     },
   };
 }

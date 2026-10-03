@@ -8,6 +8,20 @@ export const starterApi = {
     (await apiCallFor(`/maps/${mapId}`, { method: 'GET', schema: MapResponseSchema })).map
       .needsStarter,
 
+  /**
+   * Whether the pick is needed, and the starter it pre-selects: the
+   * player's tutorial Partner (#24), or null.
+   */
+  pickInfo: async (
+    mapId: string,
+  ): Promise<{ needsStarter: boolean; preselectSpeciesId: string | null }> => {
+    const { map } = await apiCallFor(`/maps/${mapId}`, {
+      method: 'GET',
+      schema: MapResponseSchema,
+    });
+    return { needsStarter: map.needsStarter, preselectSpeciesId: map.preselectSpeciesId };
+  },
+
   /** `key` makes a retry after a lost reply safe (tech spec §5). */
   pick: async (mapId: string, speciesId: string, key: string): Promise<OwnedSquishy> =>
     (

@@ -22,6 +22,13 @@ export const TutorialStateSchema = z.object({
   completedAt: z.iso.datetime().nullable(),
   /** `HP_TUTORIAL_REQUIRED`: new players must finish it before multiplayer (decision A). */
   required: z.boolean(),
+  /**
+   * The run's Partner (#24): the starter befriended in the Glade, once there
+   * is one, so the naming step knows who to name. Null otherwise.
+   */
+  partner: z
+    .object({ squishyId: z.uuid(), speciesId: ContentIdSchema, nickname: z.string().nullable() })
+    .nullable(),
 });
 export type TutorialState = z.infer<typeof TutorialStateSchema>;
 

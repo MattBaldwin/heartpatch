@@ -363,10 +363,13 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(res.statusCode, res.body).toBe(201);
       const mapId = TutorialResponseSchema.parse(res.json()).tutorial.mapId!;
       const id = await squishy(mapId, kid);
+      // The night is the tutorial's own step (#24): the sweep never runs it.
+      expect((await hollowService().dueNightfalls()).map((d) => d.mapId)).not.toContain(mapId);
       expect(await hollowService().runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
       expect(await stateOf(id)).toBe('active');
+      // Two out in the dark (the Glade friend too), and nobody taken.
       expect((await nightsOf(mapId))[0]!.outcomes).toEqual([
-        { userId: kid.id, taken: null, exposed: 1, sheltered: 0 },
+        { userId: kid.id, taken: null, exposed: 2, sheltered: 0 },
       ]);
     });
 

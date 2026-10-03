@@ -23,7 +23,8 @@ for (const [what, path] of [
 }
 
 /** Everything `@heartpatch/shared/server` exports: secret tables and the code that reads them. */
-const serverExports = Object.keys(await import(serverEntry));
+const serverModule = await import(serverEntry);
+const serverExports = Object.keys(serverModule);
 /** Server-only, though the public entry exports them (tree-shaking keeps them out). */
 const publicEntryServerOnly = [
   'checkClothingDrops',
@@ -31,11 +32,19 @@ const publicEntryServerOnly = [
   'ClothingDropEntrySchema',
 ];
 const bannedWords = [...serverExports, ...publicEntryServerOnly];
-const bannedText = ['SECRET_', 'placeholder-'];
+// Lore pages are found in play (design doc §16): their titles and words must
+// not be readable in the client before the server sends a found page.
+const lorePages = serverModule.LORE_PAGES ?? [];
+const bannedText = [
+  'SECRET_',
+  'placeholder-',
+  ...lorePages.flatMap((page) => [page.title, page.text.slice(0, 40)]),
+];
 /** Source files of server-only data, as source maps list them. */
 const bannedSources = [
   /[\\/]data[\\/]server[\\/]/,
-  /[\\/]schemas[\\/]data[\\/](clothing-drops|guardian-rules|server-game-data|spawn-rules|spawn-tables)\.ts$/,
+  /[\\/]schemas[\\/]data[\\/](clothing-drops|guardian-rules|lore-pages|server-game-data|spawn-rules|spawn-tables)\.ts$/,
+  /[\\/]lore[\\/]index\.ts$/,
 ];
 
 const wordPattern = new RegExp(`\\b(${bannedWords.join('|')})\\b`, 'g');

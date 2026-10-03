@@ -1,0 +1,44 @@
+/* A found lore page (design doc §16): a soft parchment card over everything,
+   even the tutorial layer (same layer, mounted after it). */
+.lore-card {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 9;
+  box-sizing: border-box;
+  width: min(360px, calc(100% - 32px));
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
+  padding: 20px 20px 16px;
+  border-radius: 24px;
+  background: #fff8ec;
+  box-shadow:
+    0 0 0 3px #f2d9a6,
+    0 16px 48px rgb(107 75 110 / 28%);
+  transform: translate(-50%, -50%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.lore-card[hidden] {
+  display: none;
+}
+
+.lore-kicker {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #b07f2a;
+}
+
+.lore-title {
+  margin: 4px 0 8px;
+  font-size: 22px;
+}
+
+.lore-text {
+  margin: 0 0 16px;
+  font-size: 18px;
+  line-height: 1.45;
+}

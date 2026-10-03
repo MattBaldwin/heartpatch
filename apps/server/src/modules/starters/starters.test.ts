@@ -4,6 +4,7 @@ import {
   JoinMapResponseSchema,
   MapResponseSchema,
   SquishyResponseSchema,
+  TUTORIAL_SETUP,
   TutorialResponseSchema,
   type PublicUser,
 } from '@heartpatch/shared';
@@ -221,7 +222,40 @@ describe.skipIf(!url)('starter pick (needs DATABASE_URL)', () => {
 
     const res = await pick(server, kid, glade, 'puddlepuff');
     expect(res.statusCode).toBe(404);
-    expect(await squishiesOf(glade, kid.id)).toHaveLength(0);
+    // Only the Glade friend the tutorial starts with (#24).
+    expect((await squishiesOf(glade, kid.id)).map((s) => s.speciesId)).toEqual([
+      TUTORIAL_SETUP.helper.speciesId,
+    ]);
+  });
+
+  /** What the tutorial stores for a Partner (tutorial.test.ts plays it for real). */
+  const partnerIs = (who: Player, speciesId: string) =>
+    db.execute(`update users set partner_species_id = '${speciesId}' where id = '${who.id}'`);
+
+  it("pre-selects the tutorial Partner's species, and only while there's a pick to make", async () => {
+    const server = await start();
+    const kid = await player();
+    const { id: mapId } = await patch(server, kid);
+    const detail = async () => {
+      const res = await call(server, 'GET', `/maps/${mapId}`, kid);
+      expect(res.statusCode, res.body).toBe(200);
+      return MapResponseSchema.parse(res.json()).map;
+    };
+    // No Partner yet (the tutorial wasn't played): nothing pre-selected.
+    expect(await detail()).toMatchObject({ needsStarter: true, preselectSpeciesId: null });
+
+    // The tutorial stored a Partner (tutorial.test.ts plays it for real).
+    await partnerIs(kid, 'thistlepip');
+    expect(await detail()).toMatchObject({ needsStarter: true, preselectSpeciesId: 'thistlepip' });
+
+    // A stored species that's no longer a starter pre-selects nothing.
+    await partnerIs(kid, 'fuzzbolt');
+    expect((await detail()).preselectSpeciesId).toBeNull();
+
+    // They can still pick another, and then there's nothing to pre-select.
+    await partnerIs(kid, 'thistlepip');
+    expect((await pick(server, kid, mapId, 'emberbun')).statusCode).toBe(201);
+    expect(await detail()).toMatchObject({ needsStarter: false, preselectSpeciesId: null });
   });
 
   it('gives no second pick to a player who leaves and comes back', async () => {

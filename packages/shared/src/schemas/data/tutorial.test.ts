@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { findAvoidedWords } from '../../data/avoided-words.js';
 import { GAME_DATA } from '../../data/index.js';
+import { STARTERS } from '../../data/starters.js';
 import { TUTORIAL_DATA } from '../../data/tutorial/index.js';
 import { hexKey, hexSpiral } from '../../hex/index.js';
 import { checkTutorialData, type TutorialData } from './tutorial.js';
 
-const check = (data: TutorialData) => checkTutorialData(data, GAME_DATA);
+const check = (data: TutorialData) => checkTutorialData(data, GAME_DATA, STARTERS.speciesIds);
 const copy = () => structuredClone(TUTORIAL_DATA);
 
 describe('checkTutorialData', () => {
@@ -132,10 +133,33 @@ describe('checkTutorialData', () => {
 
   it('makes talk-only steps name themselves, so a stale tap cannot skip ahead', () => {
     const data = copy();
-    data.steps[1]!.completeOn.where = [];
+    data.steps.at(-1)!.completeOn.where = [];
     expect(check(data)).toEqual([
       'steps["graduation"].completeOn.where: needs { op: "equals", field: "stepId", value: "graduation" }',
     ]);
+  });
+
+  it('names the three starters in the befriend line, so it never goes stale', () => {
+    const line = TUTORIAL_DATA.steps.find((s) => s.id === 'befriend')!.sproutLines.join(' ');
+    for (const id of STARTERS.speciesIds) {
+      expect(line).toContain(GAME_DATA.species.find((s) => s.id === id)!.name);
+    }
+  });
+
+  it("checks the run's setup: a year-round helper that isn't a starter, and known items", () => {
+    const starters = ['emberbun', 'puddlepuff', 'thistlepip'];
+    expect(checkTutorialData(TUTORIAL_DATA, GAME_DATA, starters)).toEqual([]);
+    const data = copy();
+    data.setup.helper.speciesId = 'puddlepuff';
+    data.setup.bag = { stone: 1, gold: 2 };
+    expect(checkTutorialData(data, GAME_DATA, starters)).toEqual([
+      'setup.helper.speciesId: the helper is a year-round squishy, not a starter',
+      'setup.bag.gold: unknown resource "gold"',
+    ]);
+    data.setup.helper.speciesId = 'nobody';
+    expect(checkTutorialData(data, GAME_DATA, starters)[0]).toBe(
+      'setup.helper.speciesId: unknown species "nobody"',
+    );
   });
 
   it('fixes the design-doc rules in the overrides shape', () => {

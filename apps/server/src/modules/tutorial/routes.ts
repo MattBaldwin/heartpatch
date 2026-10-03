@@ -9,6 +9,8 @@ import type { TutorialService } from './service.js';
 
 export interface TutorialRoutesOptions {
   hooks: AuthHooks;
+  /** `HP_DEV_SQUISHY_GRANTS`: the dev step jump (e2e and phone testing). */
+  devTools?: boolean;
 }
 
 export const tutorialRoutes =
@@ -69,6 +71,31 @@ export const tutorialRoutes =
         return reply.code(204).send(null);
       },
     );
+
+    app.post(
+      '/tutorial/nightfall',
+      {
+        schema: { response: { 204: z.null() } },
+        preHandler: [requireAuth, rateLimit('acknowledge')],
+      },
+      async (request, reply) => {
+        await service.nightfall(requireUser(request));
+        return reply.code(204).send(null);
+      },
+    );
+
+    if (options.devTools) {
+      app.post(
+        '/tutorial/dev/step',
+        {
+          schema: { body: AcknowledgeStepRequestSchema, response: { 200: TutorialResponseSchema } },
+          preHandler: [requireAuth, rateLimit('acknowledge')],
+        },
+        async (request) => ({
+          tutorial: await service.devJump(requireUser(request), request.body.stepId),
+        }),
+      );
+    }
 
     done();
   };

@@ -121,6 +121,8 @@ Add anything else only with a one-line justification in the PR.
 | `battles` (seed, action log, result), `idempotency_keys` | battles; stored replies to retried requests | #13 |
 | `battles.rewards` (jsonb, nullable, migration 0015) | what a finished battle granted and the share it paid | #97 |
 | `map_members.starter_squishy_id` (uuid, nullable, migration 0016) | the squishy a member picked as their starter; the "already picked" marker, kept on rejoin | #99 |
+| `users.partner_species_id` (text, nullable, migration 0017) | the tutorial Partner's species (a starter); the starter pick pre-selects it | #24 |
+| `lore_found` (migration 0017) | lore pages each player has found, one row per page (design doc §16) | #24 |
 | `keepers` | each account's Keeper | #42 |
 | `inventories`, `resource_ledger`, `gather_jobs`, `crafts` | bag, every change to it, gathers and crafts | #17 |
 | `species_seen` | the catalog, per map | #14 |
