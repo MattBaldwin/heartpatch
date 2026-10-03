@@ -179,7 +179,7 @@ The supervisor keeps this list current. Remove items as they land.
   - **Element vs feeling balance:** the sim (#12) shows a 2× element matchup wins 98–100% of 1v1s at equal stats, so feeling counters can't blunt it, contrary to GAME_DESIGN §5. Either narrow the element range or widen the feeling range.
   - **Heartlet lore:** sign-off on the new secret species (DECISIONS "Launch roster (#10)").
   - **First-night grace** for new players (GAME_DESIGN §14 open question).
-  - **Shadow look** for rescue guardians (drawn as their species for now).
+  - **Shadow look** for rescue guardians (all drawn as Nookling for now).
   - **Gentle 50% and XP:** Gentle's 50% scales capture rewards (`rewardPercent`) but not the showdown's XP. Should it halve XP too (DECISIONS "Territory (#15)")?
   - **Habitat vs watch:** whether a squishy can live in a habitat and stand watch at the same time.
   - **Review cap:** confirm or revert the 4-round cap, and the "merging main doesn't count" proposal above.
