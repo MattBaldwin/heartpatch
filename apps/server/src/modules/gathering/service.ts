@@ -16,7 +16,7 @@ import type { Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { grantItems, requireMember, seasonsOn, toGather } from '../inventory/service.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
-import { createGatheringRepo } from './repo.js';
+import { createGatheringRepo, type GatherRow } from './repo.js';
 
 /*
  * Gathering on resource nodes (#17, design doc §12). A gather is two
@@ -128,19 +128,22 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
       const owner = { mapId, userId: user.id };
       const result = await store.transaction(async (repo, tx) => {
         await requireMember(tx, user, mapId);
+        const isMine = (row: GatherRow | null): row is GatherRow =>
+          row !== null && row.mapId === mapId && row.userId === user.id;
+        // Lock order (tech spec §7): the tile, then the gather, like `start`.
+        // A gather's tile never changes, so read it unlocked first.
+        const found = await repo.findGather(gatherId);
+        if (!isMine(found)) throw new AppError('NOT_FOUND', MESSAGES.noGather);
+        // Share-locked like `start`, so a capture can't land mid-collect.
+        const tileOwner = await repo.lockTileOwner(found.tileId);
         const gather = await repo.lockGather(gatherId);
-        if (!gather || gather.mapId !== mapId || gather.userId !== user.id) {
-          throw new AppError('NOT_FOUND', MESSAGES.noGather);
-        }
+        if (!isMine(gather)) throw new AppError('NOT_FOUND', MESSAGES.noGather);
         if (gather.status === 'collected') throw new AppError('CONFLICT', MESSAGES.collected);
         if (gather.status === 'lost') throw new AppError('CONFLICT', MESSAGES.lost);
-        // Share-locked like `start`, so a capture can't land mid-collect.
-        if ((await repo.lockTileOwner(gather.tileId)) !== user.id) {
-          throw new AppError('CONFLICT', MESSAGES.notYoursNow);
-        }
+        if (tileOwner !== user.id) throw new AppError('CONFLICT', MESSAGES.notYoursNow);
         if (gather.readyAt > at) throw new AppError('CONFLICT', MESSAGES.notReady);
 
-        // Lock order: gather, inventory rows, then `maps` via appendEvent.
+        // Lock order: tile, gather, inventory rows, then `maps` via appendEvent.
         await grantItems(tx, owner, gather.items, 'gather', gather.id);
         await repo.endGather(gather.id, { status: 'collected', at });
         // A little luck: maybe a piece of clothing turned up too (#43).

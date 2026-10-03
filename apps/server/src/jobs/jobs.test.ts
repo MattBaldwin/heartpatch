@@ -1,8 +1,9 @@
 import pino from 'pino';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { createDbClient, type Database, type DbClient } from '../db/client.js';
-import { appendGameEvent } from '../db/game-events.js';
+import { appendGameEvent, appendRawGameEvent } from '../db/game-events.js';
 import { maps } from '../db/schema.js';
+import { backendPid, waitUntilBlockedBy } from '../../tests/lock-waits.js';
 import { startJobs, type Jobs } from './boss.js';
 import { runConsumer, type EventConsumer } from './consumers.js';
 import { createJobsRepo } from './repo.js';
@@ -22,6 +23,8 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
     await db.execute(
       'create table if not exists consumer_test_log (consumer text not null, map_id uuid not null, seq bigint not null)',
     );
+    // A stand-in for an entity row (a squishy, a tile) a handler locks.
+    await db.execute('create table if not exists consumer_test_entity (id uuid primary key)');
   });
   afterEach(async () => {
     await jobs?.stop();
@@ -107,10 +110,10 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       await addEvents(mapId, 7);
       const afterCommit = vi.fn();
 
-      expect(await runConsumer(db, consumer, mapId, { batchSize: 3, afterCommit })).toBe(7);
+      expect(await runConsumer(db, consumer, mapId, { afterCommit })).toBe(7);
       expect(await applied(consumer, mapId)).toEqual(range(1, 7));
       expect(await position(consumer, mapId)).toBe(7);
-      expect(afterCommit).toHaveBeenCalledTimes(3); // batches of 3, 3, 1
+      expect(afterCommit).toHaveBeenCalledTimes(7); // one transaction per event
 
       // Caught up: nothing to do, nothing applied twice.
       expect(await runConsumer(db, consumer, mapId)).toBe(0);
@@ -119,22 +122,22 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       expect(await applied(consumer, mapId)).toEqual(range(1, 9));
     });
 
-    it('rolls a failed batch back: the event is delayed, never lost or doubled', async () => {
+    it('rolls a failed event back: it is delayed, never lost or doubled', async () => {
       const consumer = testConsumer({ failOnSeq: 4 });
       const mapId = await newMap();
       await addEvents(mapId, 6);
 
-      // Batch 1-2 commits; batch 3-4 throws on 4 and rolls back with 3.
-      await expect(runConsumer(db, consumer, mapId, { batchSize: 2 })).rejects.toThrow('boom');
-      expect(await applied(consumer, mapId)).toEqual([1, 2]);
-      expect(await position(consumer, mapId)).toBe(2);
+      // 1-3 commit, each on its own; 4 throws and rolls back alone (a crash mid-run).
+      await expect(runConsumer(db, consumer, mapId)).rejects.toThrow('boom');
+      expect(await applied(consumer, mapId)).toEqual([1, 2, 3]);
+      expect(await position(consumer, mapId)).toBe(3);
 
-      // A retry fails at the same place without re-applying 1-2 or keeping 3.
-      await expect(runConsumer(db, consumer, mapId, { batchSize: 2 })).rejects.toThrow('boom');
-      expect(await applied(consumer, mapId)).toEqual([1, 2]);
+      // A retry fails at the same place without re-applying 1-3.
+      await expect(runConsumer(db, consumer, mapId)).rejects.toThrow('boom');
+      expect(await applied(consumer, mapId)).toEqual([1, 2, 3]);
 
       consumer.failOnSeq = undefined; // the bug is fixed (or the crash is over)
-      expect(await runConsumer(db, consumer, mapId, { batchSize: 2 })).toBe(4);
+      expect(await runConsumer(db, consumer, mapId)).toBe(3);
       expect(await applied(consumer, mapId)).toEqual(range(1, 6));
       expect(await position(consumer, mapId)).toBe(6);
     });
@@ -145,9 +148,9 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       await addEvents(mapId, 12);
 
       const runs = await Promise.all([
-        runConsumer(db, consumer, mapId, { batchSize: 2 }),
-        runConsumer(db, consumer, mapId, { batchSize: 2 }),
-        runConsumer(db, consumer, mapId, { batchSize: 5 }),
+        runConsumer(db, consumer, mapId),
+        runConsumer(db, consumer, mapId),
+        runConsumer(db, consumer, mapId),
       ]);
       expect(runs.reduce((a, b) => a + b, 0)).toBe(12);
       expect(await applied(consumer, mapId)).toEqual(range(1, 12));
@@ -157,10 +160,71 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       const consumer = testConsumer({ delayMs: 20 });
       const mapId = await newMap();
       await addEvents(mapId, 2);
-      const running = runConsumer(db, consumer, mapId, { batchSize: 1 });
+      const running = runConsumer(db, consumer, mapId);
       await addEvents(mapId, 3);
       await running;
       expect(await applied(consumer, mapId)).toEqual(range(1, 5));
+    });
+
+    // Tech spec §7 "Lock order". A handler locks an entity row, then appends
+    // (taking `maps`), like the hollow, raid and tutorial consumers. Were
+    // events batched in one transaction, event 1's append would hold `maps`
+    // while event 2 waits for the row, and a command holding the row that then
+    // appends (nightfall: squishies, then `maps`) would deadlock with it.
+    it('never holds `maps` while a later event waits for an entity row', async () => {
+      const mapId = await newMap();
+      await addEvents(mapId, 2);
+      await db.execute(`insert into consumer_test_entity values ('${mapId}')`);
+      const consumer: EventConsumer = {
+        name: `test-${String(process.pid)}-${String((counter += 1))}`,
+        mapKinds: ['tutorial'],
+        handle: async (tx, event) => {
+          if (event.type !== 'map.updated') return;
+          // The first event only appends, so the consumer has taken `maps` once
+          // before it meets the locked row.
+          if (event.seq > 1) {
+            await tx.execute(
+              `select id from consumer_test_entity where id = '${mapId}' for update`,
+            );
+          }
+          await appendRawGameEvent(tx, {
+            mapId,
+            type: 'test.reacted',
+            actorUserId: null,
+            payload: {},
+          });
+        },
+      };
+
+      let running: Promise<number> | undefined;
+      await db.transaction(async (tx) => {
+        // Fails fast instead of hanging if the order is ever wrong again.
+        await tx.execute(`set local lock_timeout = '10s'`);
+        // The command: the entity row first...
+        await tx.execute(`select id from consumer_test_entity where id = '${mapId}' for update`);
+        const pid = await backendPid(tx);
+        running = runConsumer(db, consumer, mapId);
+        await waitUntilBlockedBy(db, pid); // the consumer is at event 2, waiting on the row
+        // ...then `maps`, last. Free: the consumer committed event 1 on its own.
+        await appendGameEvent(tx, {
+          mapId,
+          type: 'map.updated',
+          actorUserId: null,
+          payload: { pvpMode: 'off' },
+        });
+      });
+      expect(await running).toBe(6);
+      const types = await db.execute<{ type: string }>(
+        `select type from game_events where map_id = '${mapId}' order by seq`,
+      );
+      expect([...types].map((r) => r.type)).toEqual([
+        'map.updated',
+        'map.updated',
+        'test.reacted', // event 1
+        'map.updated', // the command's
+        'test.reacted', // event 2, once the row was free
+        'test.reacted', // the command's event
+      ]);
     });
 
     it('ends quietly for a map that does not exist', async () => {

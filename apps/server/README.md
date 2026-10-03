@@ -309,18 +309,18 @@ export function createMilestonesConsumer(): EventConsumer {
   return {
     name: 'milestones',                 // event_consumers.consumer and the queue name; never rename
     mapKinds: ['multiplayer'],          // only woken for these maps
-    handle: async (tx, event) => { … }, // write only through tx; throw to retry the batch
+    handle: async (tx, event) => { … }, // write only through tx; throw to retry the event
   };
 }
 ```
 
 Add it to the `consumers` list in `src/index.ts`. How it stays exactly-once:
 
-- **Position:** `event_consumers (consumer, map_id, last_seq)`. `runConsumer` (`jobs/consumers.ts`) works in batches; each batch is one transaction that locks the row `FOR UPDATE`, applies the events after `last_seq` and advances it. A crash or a throwing handler rolls the batch back, so it's only delayed. It keeps going until it reaches `maps.event_seq`.
+- **Position:** `event_consumers (consumer, map_id, last_seq)`. `runConsumer` (`jobs/consumers.ts`) applies one event per transaction: it locks the row `FOR UPDATE`, applies the next event after `last_seq` and advances it. A crash or a throwing handler rolls that event back, so it's only delayed; the ones before it stay applied. It keeps going until it reaches `maps.event_seq`. One event per transaction keeps the lock order (tech spec §7): a handler's append takes `maps` last, and no later handler locks an entity row after it.
 - **Wake-up in the command's transaction:** `appendGameEvent` calls the wake-up `startJobs` installs (`setEventWakeup`), which runs pg-boss `send` on the command's own transaction (`pgBossOnTransaction`). A rolled-back command wakes nobody. Without jobs running (tests, ops tools) there is no wake-up; the catch-up finds the events later.
 - **One worker per (consumer, map):** queue `event-consumer.<name>` uses the `stately` policy with the map id as `singletonKey` (one queued and one running job per map); the row lock covers the rest. Different maps run side by side (`CONSUMER_CONCURRENCY`), and LISTEN/NOTIFY wakes the worker on commit, so a tutorial step moves on right after the tap. Failures are logged and retried.
 - **Catch-up:** `event-consumers.catch-up` runs every minute (`CATCH_UP_CRON`) and at boot, and wakes every consumer whose `last_seq` is behind `maps.event_seq`.
-- **Handlers may append events** (the tutorial does). Call `appendGameEvent` through `tx`; the runner publishes after each batch commits. A consumer never completes anything on its own event types.
+- **Handlers may append events** (the tutorial does). Call `appendGameEvent` through `tx`, as the handler's last write; the runner publishes after each event commits. A consumer never completes anything on its own event types.
 
 Tunables are in `src/jobs/limits.ts`. Never prune `game_events` below the lowest `last_seq` for a map.
 

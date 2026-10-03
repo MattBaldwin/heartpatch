@@ -31,7 +31,7 @@ export interface JobsOptions {
   db: Database;
   consumers: readonly EventConsumer[];
   logger: FastifyBaseLogger;
-  /** After a consumer batch commits; pass `wsHub.publish` so handlers' events go out live. */
+  /** After each consumer event's transaction commits; pass `wsHub.publish` so handlers' events go out live. */
   publish?: (mapId: string) => Promise<void>;
   /** Run the periodic catch-up on its cron (default true; tests trigger `catchUp` by hand). */
   schedule?: boolean;

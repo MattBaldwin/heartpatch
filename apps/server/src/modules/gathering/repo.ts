@@ -50,6 +50,8 @@ export interface GatheringRepo {
   /** The node's gather that is still going, whoever started it. */
   findActiveOnTile: (tileId: string) => Promise<GatherRow | null>;
   insertGather: (gather: NewGather) => Promise<GatherRow>;
+  /** The gather, unlocked (its tile never changes, so collect can lock that first). */
+  findGather: (gatherId: string) => Promise<GatherRow | null>;
   /** Row-locks the gather until commit; collecting runs under it. */
   lockGather: (gatherId: string) => Promise<GatherRow | null>;
   /**
@@ -146,6 +148,11 @@ function queries(db: Executor): GatheringRepo {
       const [inserted] = await selectGathers().where(eq(gatherJobs.id, row.id));
       if (!inserted) throw new Error('insertGather: gather vanished');
       return toGather(inserted);
+    },
+
+    findGather: async (gatherId) => {
+      const [row] = await selectGathers().where(eq(gatherJobs.id, gatherId));
+      return row ? toGather(row) : null;
     },
 
     lockGather: async (gatherId) => {

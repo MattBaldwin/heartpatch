@@ -20,6 +20,7 @@ import { keepers, sessions, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -407,6 +408,38 @@ describe.skipIf(!url)('gathering (needs DATABASE_URL)', () => {
       const lost = await collect(server, kid, mapId, gather.id);
       expect(lost.statusCode).toBe(409);
       expect(errorOf(lost).message).toBe('Someone else looks after that spot now.');
+    });
+
+    // Tech spec §7 "Lock order": tile, then gather, in `start` and `collect`
+    // alike. Simulated here: a transaction that holds the tile, then wants
+    // the gather (no command does both today). Were `collect` to hold the
+    // gather while it waits for the tile, Postgres would report a deadlock.
+    it('collects under the tile lock first, so it never deadlocks with the land changing', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const tile = await nodeTile(server, kid, mapId, 'timber');
+      const { gather } = GatherResponseSchema.parse(
+        (await gatherAt(server, kid, mapId, tile)).json(),
+      );
+      clock.setTime(Date.parse(gather.readyAt));
+
+      let collecting: ReturnType<typeof collect> | undefined;
+      await db.transaction(async (tx) => {
+        // Fails fast instead of hanging if the order is ever wrong again.
+        await tx.execute(`set local lock_timeout = '10s'`);
+        // Ids and numbers this test made itself.
+        await tx.execute(
+          `select id from tiles where map_id = '${mapId}' and q = ${String(tile.q)} and r = ${String(tile.r)} for update`,
+        );
+        const pid = await backendPid(tx);
+        collecting = collect(server, kid, mapId, gather.id);
+        await waitUntilBlockedBy(db, pid); // collect waits on the tile
+        await tx.execute(`select id from gather_jobs where id = '${gather.id}' for update`);
+      });
+      const res = await collecting!;
+      expect(res.statusCode).toBe(200);
+      expect(CollectResponseSchema.parse(res.json()).granted).toEqual(gather.items);
     });
 
     it('uses the quick tutorial timer on a tutorial map', async () => {
