@@ -221,6 +221,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       for (const id of mapIds.slice(1)) await lockMap(tx, id);
     });
     await running;
+    // The order itself is proven above (no deadlock); this checks every map was told once.
     const told = await db
       .select({ mapId: gameEvents.mapId })
       .from(gameEvents)

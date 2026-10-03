@@ -76,11 +76,6 @@ async function touch(page: Page, frames: Record<number, Point>[]): Promise<void>
 }
 
 /**
- * Waits until nothing is drawn for a whole `quietMs`. Uses the engine's own
- * draw counter, not the dev overlay, whose text refreshes only every 500 ms
- * and can still show a previous stage's state.
- */
-/**
  * More frames than any fling can glide for. A frame integrates at most 0.1 s
  * of glide (`MAX_INERTIA_DT`, src/engine/camera/map-camera.ts), and even the
  * fastest fling slows to the stop speed within about 1.5 s of glide time
@@ -111,6 +106,11 @@ async function waitForFlingToSettle(page: Page): Promise<void> {
   );
 }
 
+/**
+ * Waits until nothing is drawn for a whole `quietMs`. Uses the engine's own
+ * draw counter, not the dev overlay, whose text refreshes only every 500 ms
+ * and can still show a previous stage's state.
+ */
 async function waitForIdle(page: Page, quietMs = 500, timeout = 30_000): Promise<void> {
   await expect
     .poll(
