@@ -119,6 +119,8 @@ Add anything else only with a one-line justification in the PR.
 | `invite_codes`, `join_requests` | joining a map | #4 |
 | `event_consumers` | each consumer's `last_seq` per map (§7) | #47 |
 | `battles` (seed, action log, result), `idempotency_keys` | battles; stored replies to retried requests | #13 |
+| `battles.rewards` (jsonb, nullable, migration 0015) | what a finished battle granted and the share it paid | #97 |
+| `map_members.starter_squishy_id` (uuid, nullable, migration 0016) | the squishy a member picked as their starter; the "already picked" marker, kept on rejoin | #99 |
 | `keepers` | each account's Keeper | #42 |
 | `inventories`, `resource_ledger`, `gather_jobs`, `crafts` | bag, every change to it, gathers and crafts | #17 |
 | `species_seen` | the catalog, per map | #14 |
@@ -140,6 +142,8 @@ Add anything else only with a one-line justification in the PR.
 ### REST
 - Base path `/api/v1`. JSON only. All bodies and responses validated with zod schemas from `packages/shared/src/schemas`.
 - Auth: session cookie `hp_session` (HttpOnly, Secure, SameSite=Lax, 30-day rolling). CSRF: require header `X-Requested-With: heartpatch` on mutating requests (simple and sufficient with SameSite cookies).
+- **Starter pick:** `POST /maps/:mapId/starter { speciesId }` grants the pick (#99). `MapDetail.needsStarter` (`GET /maps/:mapId`) is true until the player has picked. Patches only; the Tutorial Glade is `NOT_FOUND`.
+- **Read-model additions:** `PublicTile.guardianHint: { count, difficulty } | null` on neutral tiles (#98, worked out on read, never species or levels); `PlayerBattle.rewards` (#97, null while running, after no contest, on a defender's replay and for older battles).
 - **Commands, not state writes:** e.g. `POST /maps/:mapId/tiles/:tileId/attack`, `POST /maps/:mapId/squishies/:id/care` with `{ action: "pet" }`. The server computes outcomes.
 - Errors: `{ error: { code: "TILE_NOT_ADJACENT", message: "Friendly text a kid can read" } }` with proper HTTP status. Codes are a shared enum.
 - Rate limits: global per-IP limit; tighter limits on auth, care actions and chat, including Phase 1 quick messages and emoji (`chat.quick`). In Phase 1 these limits stand in for owner mute.
@@ -214,6 +218,8 @@ Add anything else only with a one-line justification in the PR.
     11. inventory rows (item id order), then `species_seen`
     12. `maps`, last (`appendGameEvent`)
     - Commands that join or leave a map write the member row after `users` (approve's `upsertMember`, depart's `archiveMember`); nothing that takes `lockMember` then takes seats or `users`, so that's safe.
+    - **Posting guards** (`setDefenders`) writes `tile_defenders` after the squishy locks. That's safe because the tile row lock (step 6) serialises everyone who writes a tile's defenders.
+    - **Chat prune** locks `quick_messages` rows with `FOR UPDATE SKIP LOCKED`. They sit outside the order above and are locked before `maps` (the send's last write). A skipped prune never waits, so it can't deadlock; the next send catches up.
     - **One known exception:** a capture try locks the Heart Charm's inventory row before the team's squishies (XP when it ends the battle). It's safe only because no command locks a squishy and then a Heart Charm row (care never spends one); see DECISIONS "Lock order (Fix PR)".
     - A consumer transaction applies **one event** and takes `maps` at most once, at its end: a batch would hold `maps` from one event's append while the next event's handler locks squishies or tiles, the reverse of every command's order.
   - **Ordering on the wire:** post-commit broadcasts can still leave Node out of order. The client buffers briefly and applies events in `seq` order. Only a gap that persists past a short timeout triggers a replay request.
@@ -296,7 +302,11 @@ Small and cheap on purpose: one server for a few families.
 
 ## 12. CI/CD (GitHub Actions)
 
-- **`ci.yml`** on every PR: install (pnpm cache), lint, typecheck, unit tests, build, Playwright smoke against a dev stack (Postgres service container).
+- **`ci.yml`** on every PR. Since PR #100 it has three parts:
+  - **`fast`:** format, lint, typecheck, migration check, unit and DB tests, coverage, build and the db scripts.
+  - **`e2e`:** a matrix of `iphone-webkit` / `ipad-webkit` × shard 1/2. Each leg has its own Postgres service container.
+  - **`check`:** an aggregator that is green only when `fast` and every `e2e` leg are. It stays the one status to gate on.
+  - Build sessions can't edit `.github/workflows`; the coordinator makes CI changes.
 - **`deploy.yml`** on push to `main`:
   1. Build Docker images for server and client (client is a static build copied into the Caddy image or a volume).
   2. Push to **GitHub Container Registry** (`ghcr.io/mattbaldwin/heartpatch-*`).
@@ -318,13 +328,12 @@ Small and cheap on purpose: one server for a few families.
 
 ## 15. Audio
 
-- **Sources:** CC0 assets only (e.g. Kenney, Freesound filtered to CC0, OpenGameArt filtered to CC0), each logged in `ASSETS.md` with source URL and license, plus **procedural synthesis** (Web Audio API) for squishy voices.
-- **Formats:** AAC (`.m4a`) for music and SFX (short SFX as mono AAC, 44.1 kHz). Both MP3 and AAC add encoder padding at the start of a file (about 2112 samples for AAC). What makes loops gapless is playing from decoded Web Audio buffers with explicit `loopStart`/`loopEnd`, measured per file and verified in Safari and Chrome.
-- **Loudness:** normalise music to about −16 LUFS integrated and match SFX loudness by category; true-peak ceiling −1 dBTP.
-- **Mix:** buses for music, SFX, UI and ambience, each with its own volume setting; a limiter on the master bus; music ducks under key moments (capture, evolution, Hollow Man arrival).
-- **Variation:** each SFX has 2–4 variants plus small random pitch/volume variation per play, to avoid repetition fatigue.
-- **Procedural voices:** layered oscillators with envelopes, pitch bends and formant (vowel-like) filters; per-species voice parameters live in species data (size → pitch, feeling → contour).
-- **iOS:** unlock the `AudioContext` on the first user gesture; resume it on `visibilitychange` and when `statechange` reports `interrupted` (phone calls, Siri). Set `navigator.audioSession.type = "ambient"` where supported (iOS 16.4+) so game audio mixes with other apps and respects the silent switch.
-- **Sound gallery:** a dev-only page that plays every sound and loop, so a human can judge quality by ear.
-- **Budget:** audio counts toward the 15 MB first load; lazy-load music per scene.
+All sound is synthesised in the browser with Web Audio. There are no audio files (DECISIONS "Audio (#25)"). Real recordings can replace a cue later; they would go in `ASSETS.md`.
 
+- **Sounds:** oscillators, filters and noise, with pitch bends and vowel-like filters for squishy voices. Species voice parameters live in species data (size sets pitch, feeling sets contour).
+- **Music:** day, night and Halloween loops are note data (`music-score.ts`), rendered once on an `OfflineAudioContext` and played as a looping buffer. Loops cross-fade.
+- **Mix:** music, SFX and UI buses into a master gain and a limiter. Music dips under key moments (his visit, a new friend, an evolution, a win). Up to 10 voices at once; repeats within 50 ms are dropped; each play varies pitch and volume a little.
+- **Settings:** per device, in `localStorage` (read in try/catch). A slider and an On/Off switch each for Music and Sounds. Music drives the music bus; Sounds drives SFX and UI.
+- **iOS:** nothing is made or played before the first tap. Create, prime and resume the `AudioContext` inside that gesture, then load the engine chunk. Resume on `visibilitychange` and when `statechange` reports `interrupted`. Set `navigator.audioSession.type = "ambient"` where supported (iOS 16.4+) so the silent switch mutes the game and other apps keep playing.
+- **Sound gallery:** the dev-only `/sounds.html` page plays every cue and loop, so a human can judge quality by ear.
+- **Budget:** the engine is lazy-loaded after the first tap and counts toward the 15 MB first load (about 11 KB).

@@ -348,7 +348,7 @@ ${rateTable(section('combo'))}
 
 ## Element head-to-head (row's win rate against column, equal stats)
 
-Not flagged: 2× matchups are meant to win most of the time.
+Not flagged: 1.5× matchups are meant to win most of the time.
 
 ${matrix}
 

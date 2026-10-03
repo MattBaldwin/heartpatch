@@ -98,7 +98,7 @@ Every squishy has **one element** and **one feeling**.
 Three data tables drive combat (all JSON config in `packages/shared`):
 
 1. **Element matrix** — attacker element vs defender element. Multipliers in the range **[DEFAULT: about 0.67× to 1.5×]**, softened so feelings can push back (tuned with the balance simulator). Standard advantage wheel (e.g. Fire > Leaf > Water > Fire).
-2. **Feeling matrix** — attacker feeling vs defender feeling. Smaller range **[DEFAULT: 0.75× to 1.5×]**. This is where counters live: a plain-looking squishy with the right feeling can blunt an element disadvantage (e.g. Silly disarms Brave; Brave overwhelms Sleepy).
+2. **Feeling matrix** — attacker feeling vs defender feeling. Smaller range **[DEFAULT: 0.75× to 1.35×]**. This is where counters live: a plain-looking squishy with the right feeling can blunt an element disadvantage (e.g. Silly disarms Brave; Brave overwhelms Sleepy).
 3. **Synergy table** — a squishy's own element × feeling combination gives a bonus or penalty **[DEFAULT: 0.85× to 1.2×]** to its stats. Harmonious combos (e.g. Spooky + Shadow, Cozy + Fire) are stronger; conflicted combos (e.g. Joy + Shadow) are weaker but may unlock unique evolution branches.
 
 **Design intent:** no squishy is strictly best. Synergistic squishies are valuable finds; underdog counters to overpowered squishies are equally valuable.
@@ -116,6 +116,7 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 - **PvE:** wild squishies and tile guardians use a simple AI.
 - **Offline defense:** the defender's squishies are controlled by an AI following their **defense stance** (aggressive, defensive, balanced).
 - **Capture:** weakening a wild squishy and using a **Heart Charm** (craftable) gives a capture chance that rises as its HP drops.
+- **No re-fighting for XP:** a wild squishy you beat without befriending wanders off for you for the rest of its spawn window. Other players can still find it.
 - Battles are never violent: squishies get "tuckered out", not hurt.
 
 ## 7. Growth: care, habitats and XP
@@ -206,7 +207,7 @@ Gathering is timer-based (start a gather on an owned node; collect when done), c
 The home base is where squishies live, train, play, breed and hang out to be admired.
 
 - **Hearthfire:** projects a safe radius (in tiles) against the Hollow Man; burns one night of Emberwood at each nightfall and stores several nights of fuel (§14).
-- **Habitats:** tagged by element/feeling (e.g. Frost Grotto, Cozy Meadow, Ember Den, Glimmer Cave). Each has capacity. Matching squishies get the habitat multiplier.
+- **Habitats:** tagged by element/feeling (e.g. Frost Grotto, Cozy Meadow, Ember Den, Glimmer Cave). Each has capacity. Matching squishies get the habitat multiplier. A housed squishy can't stand watch on a tile (§14).
 - **Training Grounds:** passive XP trickle for assigned squishies (small).
 - **Play areas and decorations:** raise Harmony (Phase 3) and give squishies cute idle behavior.
 - **Nursery** (Phase 3), **Noise buildings** (bells, drums, squishy choir) for extra Hollow Man deterrence.
@@ -218,7 +219,7 @@ The shared threat and the heart of the lore. Tall, flickering silhouette with gl
 
 **His rules → mechanics**
 
-- **"He only needs one."** Each night at **nightfall [DEFAULT: 9:00 PM in the map's time zone]** a server job runs per map. For each player, if any squishies are **exposed**, he takes **one** of them, picked by a seeded roll the player can't see. Tutorial maps take nothing. If the server was down, only the latest missed night runs, and a map's first night is the first nightfall after its first member joined.
+- **"He only needs one."** Each night at **nightfall [DEFAULT: 9:00 PM in the map's time zone]** a server job runs per map. For each player, if any squishies are **exposed**, he takes **one** of them, picked by a seeded roll the player can't see. Tutorial maps take nothing. If the server was down, only the latest missed night runs, and a map's first night is the first nightfall after its first member joined (that's when the map starts running; each player's own grace is below).
 - **First-night grace [DEFAULT: 2 nightfalls]:** he skips a player for their first 2 nightfalls after joining a patch, so someone who joins at 8:55 PM with no fire yet loses nothing. A cozy hint tells them to light a fire.
 - **Exposure:** a squishy spends the night in its habitat's tile, or at its owner's Heart Seed if it has no habitat. It is exposed if that tile is outside every lit Hearthfire's safe radius (noise coverage joins in once noise buildings exist), or if the fire has gone out. Squishies inside the home base with a lit Hearthfire are safe.
 - **Defenders stand watch:** squishies stationed to defend an owned tile are on watch and are **not** exposed. A squishy on watch isn't housed in a habitat, and a housed one isn't on watch. Holding territory never costs a squishy every night, so the Hollow Man stays a planning challenge (keep the fire lit, house squishies inside its light), not a daily loss.
@@ -432,7 +433,7 @@ Every new player plays a short solo tutorial before joining or creating a multip
 **Rules**
 - Target length **[DEFAULT: 12–18 minutes]**. Progress is saved after every step; quitting resumes where you left off.
 - Nothing can be lost in the tutorial. The Hollow Man can't take anything here.
-- **Carry-over:** the player's Partner species, the Seedling Scarf and the "First Patch" milestone are account-level rewards. Every new map the player joins starts them with a fresh level-1 copy of their Partner species alongside the normal starting kit.
+- **Carry-over:** the Seedling Scarf and the "First Patch" milestone are account-level rewards. The Partner is not copied: on every patch the player joins, they pick 1 of 3 starters (§4), and the pick pre-selects their Partner's species once the Partner is stored (DECISIONS "Starter pick").
 - Players can skip the tutorial only after finishing it once (e.g. on a new device), and can replay it any time from Settings.
 - **Tutorial gate is a server setting:** while the tutorial is still being built (and for testing), the operator can let new accounts create or join maps without finishing it. The multiplayer game never waits on the tutorial to be playable. A player who skipped it picks 1 of 3 starters from the starter list (§4) when they join a patch, like everyone else. The tutorial's last steps (Seedling Scarf in the Wardrobe, First Patch milestone) can arrive once those systems exist.
 - Every step is reachable with one hand on an iPhone; text is short and large.

@@ -90,7 +90,8 @@ parallel right now ({PARALLEL}), so stay inside your lane.
 Follow "Report to the coordinator" in CLAUDE.md: send_message to "@parent" with one line:
 `#{N} PR #<n> opened` / `#{N} PR #<n> ready: reviewer APPROVE, CI green on <sha>` (only once CI is
 green on your final head) / `#{N} blocked: <one line>` / `#{N} CI red on <sha>: <check>, fixing`.
-Subscribe to your own PR (subscribe_pr_activity) so CI results wake you.
+Subscribe to your own PR (subscribe_pr_activity) so CI results wake you. If the CI wake doesn't arrive,
+check `get_check_runs` yourself before going idle; never wait silently on a green PR.
 
 ## Before writing code
 Read CLAUDE.md, the relevant GAME_DESIGN/TECH_SPEC sections, STYLE_GUIDE, DECISIONS (name the
@@ -100,6 +101,7 @@ entries), apps/server/README.md. Read the issue. Copy these files on main: {CONC
 - Owns: {OWNS}
 - Must not change: {NOT}
 - Shared-contract changes: don't; report `#{N} blocked:` instead.
+- Build sessions can't edit `.github/workflows`; the coordinator makes CI changes.
 
 ## Issue-specific guidance
 {GUIDANCE, including applicable decisions, audit carry-overs from the coordinator notes}
@@ -134,13 +136,14 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **In flight:** the balance data lane, #23 (quick messages) and #25 (audio).
-- **Queued lanes** (owner decisions of 2026-10-03, see DECISIONS "2026-10-03 — Owner decisions"):
-  - **Balance data** (in flight): soften the element matrix to about 1.5× / 0.67×, tune with `pnpm sim`, and tune Heartbloom to about 60–65% win rate.
-  - **Rules pass** (after #23's migration): a beaten wild squishy wanders off for that player, a squishy is housed or on watch (not both), Gentle's 50% applies to battle XP and the result card shows it, first-night grace (2 nightfalls, with a hint to light a fire).
-  - **Starter pick** (a migration; after the rules pass): a new player picks 1 of 3 starters, one per element family, from a data list with Puddlepuff among them. Care changes ride along: new squishies start at contentment 50, and a squishy past its evolution level evolves on its next XP.
-  - **Client polish** (with a `PublicTile` hint field): the shadow tint for rescue guardians and the guardian strength hint on neutral tiles.
-  - Then, by dependency: #24 tutorial (needs a `tutorial` `ClothingSource`, a shared-contract change the coordinator approves, and a fixed `ref_id` for the Seedling Scarf grant so it's idempotent; presents the starter pick as meeting the Partner), #44 milestones (a new event consumer), #45 Patch Coins (pays out from `care_log.coins` with an account-day idempotency key; care must never spend a Heart Charm without reordering locks, TECH_SPEC §7), #84 capture drops (return `clothing.found` with `tile.captured`, or use a consumer), #87 placeholder retirement (fixtures first, then delete the `placeholder-*` rows).
+- **In flight:** this Docs PR; a Chore PR (shared member-lock and on-watch helpers, lock tests); the coordinator's CI split.
+- **Next, by dependency:** #87 placeholder retirement, #84 capture drops, #24 tutorial, #44 milestones, #45 Patch Coins.
+- **Brief notes:**
+  - **#24:** store the Partner. It must pass `isStarterSpecies`, and the starter pick pre-selects it. Add the Seedling Scarf with the existing `tutorial` `ClothingSource`. The `clothing_owned` unique key is (source, ref_id), so use a per-user deterministic uuid, such as v5 of the userId.
+  - **#44:** the starter pick writes no game event. A "first friend" milestone must read `map_members.starter_squishy_id`, or the pick must append an event.
+  - **#45:** pays out from `care_log.coins` with an account-day idempotency key. Care must never spend a Heart Charm without reordering locks (TECH_SPEC §7).
+  - **#84:** the capture finish is at `battles/service.ts` ~L460–540. Return `clothing.found` with `tile.captured`, or use a consumer.
+  - **#87:** fixtures first, then delete the `placeholder-*` rows.
   - **Every new event consumer takes one `maps` lock per event** (TECH_SPEC §7). Don't batch events.
 - **Briefs:** follow §7, plus:
   - reporting with the fallback trigger;
@@ -167,9 +170,11 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons:** lost CI wakes left two finished PRs idle for about an hour (§7 now says to check `get_check_runs`). The CI job hit 30 minutes, so its timeout was raised to 45 and sharding is in progress.
 - **Cost so far (USD):**
   - Batch 6: #13 48.88, #42 23.57, #17 36.72, #14 43.98.
   - Batch 7: #18 25.77, #15 23.11, #43 46.62, #19 32.99, #16 17.29, #10 17.19, #12 4.59, #21 58.10, #20 33.19. Fix PR 11.24, audit 1.87.
+  - Batch 8–9: #95 10.14, #96 9.22, #94 10.96, #93 1.56, #97 16.73, #98 11.44, #99 29.61, audit 1.9.
   - Supervisor 3: about 28.
   - Big lanes run $25–50; flag above about $35.
 - **Owner questions queued:**
