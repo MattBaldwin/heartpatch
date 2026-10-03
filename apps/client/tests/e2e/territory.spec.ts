@@ -18,6 +18,7 @@ interface TerritoryDebug {
 }
 
 interface BattleDebug {
+  scene: { shadowLook: number } | null;
   status: 'active' | 'finished' | 'no-contest';
   phase: 'turn' | 'replace' | 'over';
   pending: number;
@@ -115,12 +116,39 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   const panel = page.getByTestId('tile-panel');
   await expect(panel).toContainText('tries left today');
   expect(findAvoidedWords((await panel.textContent()) ?? '')).toEqual([]);
+  // How many guardians and how tough (owner decision 10), as the server's view
+  // says for the tile the map has selected; never who.
+  const selected = (await mapState(page))!.selected!;
+  const hint = await page.evaluate(
+    async ({ id, key }) => {
+      const res = await fetch(`/api/v1/maps/${id}/view`, {
+        headers: { 'x-requested-with': 'heartpatch' },
+      });
+      const view = (await res.json()) as {
+        tiles: {
+          q: number;
+          r: number;
+          guardianHint: { count: number; difficulty: string } | null;
+        }[];
+      };
+      return view.tiles.find((t) => `${String(t.q)},${String(t.r)}` === key)?.guardianHint ?? null;
+    },
+    { id: mapId, key: selected },
+  );
+  expect(hint).not.toBeNull();
+  const words = { easy: 'easy', tough: 'tough', 'very-tough': 'very tough' } as const;
+  const who = hint!.count === 1 ? '1 sleepy squishy' : `${String(hint!.count)} sleepy squishies`;
+  await expect(page.getByTestId('tile-panel-guardians')).toHaveText(
+    `Guarded by ${who} • ${words[hint!.difficulty as keyof typeof words]}`,
+  );
   await page.getByTestId('tile-claim').tap();
 
   // The guardians' showdown takes the screen; play it out.
   const hud = page.getByTestId('battle-hud');
   await expect(hud).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('battle-caption')).toContainText('guardians');
+  // Tile guardians aren't the Hollow's shadows: they look like themselves.
+  await expect.poll(async () => (await battleState(page))?.scene?.shadowLook).toBe(0);
   for (let i = 0; i < 60; i++) {
     await expect
       .poll(() => battleState(page), { timeout: 30_000 })

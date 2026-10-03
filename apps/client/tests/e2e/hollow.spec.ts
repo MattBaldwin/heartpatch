@@ -26,7 +26,7 @@ type Hook = {
     hollow?(): HollowDebug | null;
     map?(): { id: string; live: string | null } | null;
     idle(): boolean;
-    battle?(): { status: string } | null;
+    battle?(): { status: string; scene: { squishies: number; shadowLook: number } | null } | null;
   };
 };
 
@@ -34,6 +34,8 @@ const hollowState = (page: Page) =>
   page.evaluate(() => (window as unknown as Hook).__heartpatch?.hollow?.() ?? null);
 const mapState = (page: Page) =>
   page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.() ?? null);
+const battleState = (page: Page) =>
+  page.evaluate(() => (window as unknown as Hook).__heartpatch?.battle?.() ?? null);
 const isIdle = (page: Page) =>
   page.evaluate(() => (window as unknown as Hook).__heartpatch?.idle() ?? false);
 
@@ -59,6 +61,11 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   const page = await newPlayer(browser, uniqueName('hollow'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
+  // A shader that doesn't compile only logs (the shadow look, owner decision 7).
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && /shader|effect|compile/i.test(msg.text()))
+      errors.push(msg.text());
+  });
 
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -118,6 +125,11 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   // The rescue is a showdown with the Hollow's shadows.
   await expect(page.getByTestId('battle-hud')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('battle-caption')).toContainText('Shadows from the Hollow');
+  // The shadow is drawn shadowy (dark lavender, glowing rim); the player's own
+  // squishy, out on the other side, looks like itself (owner decision 7).
+  await expect
+    .poll(async () => (await battleState(page))?.scene, { timeout: 30_000 })
+    .toMatchObject({ squishies: 2, shadowLook: 1 });
   await expect(sheet).toBeHidden();
   expect(errors).toEqual([]);
   // Close this player's page so its battle doesn't keep drawing under later tests.

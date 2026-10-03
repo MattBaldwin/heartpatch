@@ -17,6 +17,7 @@ const tile = (extra: Partial<PublicTile>): PublicTile => ({
   gathering: null,
   cooldownUntil: null,
   defenders: 0,
+  guardianHint: null,
   buildings: [],
   ...extra,
 });

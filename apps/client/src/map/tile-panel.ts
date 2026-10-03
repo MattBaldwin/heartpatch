@@ -19,6 +19,10 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
   const owner = el('p', { class: 'tile-panel-owner', 'data-testid': 'tile-panel-owner' });
   const about = el('p', { class: 'tile-panel-about' });
   const resource = el('p', { class: 'tile-panel-resource' });
+  const guardians = el('p', {
+    class: 'tile-panel-guardians',
+    'data-testid': 'tile-panel-guardians',
+  });
   const actions = el('div', { class: 'tile-panel-actions', 'data-testid': 'tile-panel-actions' });
   const close = el(
     'button',
@@ -38,6 +42,7 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
     owner,
     about,
     resource,
+    guardians,
     actions,
   );
   panel.hidden = true;
@@ -50,6 +55,8 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
       about.textContent = info.about;
       resource.textContent = info.resource ?? '';
       resource.hidden = info.resource === null;
+      guardians.textContent = info.guardians ?? '';
+      guardians.hidden = info.guardians === null;
       panel.classList.toggle('tile-panel-home', info.home);
       panel.hidden = false;
     },

@@ -19,6 +19,9 @@ describe('guardian rules', () => {
         strengths: [...GUARDIAN_RULES.strengths].reverse(),
       }).join(),
     ).toMatch(/weakest first/);
+    expect(
+      checkGuardianRules({ ...GUARDIAN_RULES, hint: { easyUpTo: 10, toughUpTo: 10 } }).join(),
+    ).toMatch(/less than toughUpTo/);
   });
 
   it('guards every terrain with species the server knows, at every strength the map makes', () => {
