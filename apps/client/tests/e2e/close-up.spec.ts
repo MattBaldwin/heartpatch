@@ -1,4 +1,4 @@
-import { findAvoidedWords } from '@heartpatch/shared';
+import { findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { newPlayer, uniqueName } from './players.js';
 
@@ -35,6 +35,7 @@ interface CloseUpDebug {
   caredToday: number | null;
   nickname: string | null;
   celebrating: boolean;
+  drawnSpecies: string | null;
   note: string;
 }
 
@@ -237,6 +238,8 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
   // Home base shows the new name.
   await slowExpect(page.getByTestId('home-friends')).toContainText('Sir Puffs');
   expect(errors).toEqual([]);
+  // Don't leave this player's page drawing while later specs run.
+  await page.context().close();
 });
 
 test('celebrates an evolution in the close-up, and Back returns to the map', async ({
@@ -274,37 +277,67 @@ test('celebrates an evolution in the close-up, and Back returns to the map', asy
   await page.locator(`[data-care-species="${speciesId}"]`).tap();
   await slowExpect(page.getByTestId('care')).toBeVisible();
 
-  // An evolution lands while it's up close (levelling takes many battles, so
-  // the care list says one just happened; the server's own is in its tests).
-  let evolved = false;
+  // What the care list says next (levelling takes many battles, so it is
+  // told an evolution just happened; the server's own is in its tests):
+  // one waiting to be celebrated, then a new form, then the squishy gone.
+  const otherForm = GAME_DATA.species.find((s) => s.id !== speciesId)!;
+  let mode: 'evolved' | 'real' | 'new-form' | 'gone' = 'evolved';
   await page.route('**/api/v1/maps/*/care', async (route) => {
     const response = await route.fetch();
     const body = (await response.json()) as {
       squishies: { speciesId: string; newEvolution: unknown }[];
     };
     const first = body.squishies[0];
-    if (first && !evolved) {
-      evolved = true;
+    if (first && mode === 'evolved') {
+      mode = 'real';
       first.newEvolution = {
         fromSpeciesId: first.speciesId,
         intoSpeciesId: first.speciesId,
         level: 20,
         at: new Date().toISOString(),
       };
+    } else if (first && mode === 'new-form') {
+      first.speciesId = otherForm.id;
+    } else if (mode === 'gone') {
+      body.squishies = [];
     }
     await route.fulfill({ response, json: body });
   });
+  /** Coming back to the app refetches the care list. */
+  const comeBack = () => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.getByTestId('care-close-up').tap();
   await expect.poll(async () => (await state(page))?.celebrating, slow).toBe(true);
   expect((await state(page))?.from).toBe('map');
   await slowExpect(page.getByTestId('close-up-celebrate')).toContainText('grew into');
   await page.getByTestId('close-up-yay').tap();
   await expect.poll(async () => (await state(page))?.celebrating, slow).toBe(false);
+  expect((await state(page))?.drawnSpecies).toBe(speciesId);
+
+  // It grew into a new form while up close: the 3D squishy is redrawn as it.
+  mode = 'new-form';
+  await comeBack();
+  await expect.poll(async () => (await state(page))?.drawnSpecies, slow).toBe(otherForm.id);
+  await expect.poll(async () => (await state(page))?.scene?.squishies, slow).toBe(1);
 
   // Back: swoops out and the map comes back.
+  mode = 'real';
   await page.getByTestId('close-up-back').tap();
   await expect.poll(() => state(page), slow).toBeNull();
   await expect.poll(() => mapOpen(page), slow).toBe(mapId);
   await slowExpect(page.getByTestId('battle-entry')).toBeVisible();
+
+  // Up close again, and it leaves (taken to the Hollow overnight): it says
+  // so with the card up, then swoops back to the map by itself.
+  await page.getByTestId('catalog-open').tap();
+  await page.locator(`[data-care-species="${speciesId}"]`).tap();
+  await page.getByTestId('care-close-up').tap();
+  await expect.poll(async () => (await state(page))?.phase, slow).toBe('here');
+  mode = 'gone';
+  await comeBack();
+  await slowExpect(page.getByTestId('close-up-note')).toContainText('wandered off');
+  await expect.poll(() => state(page), slow).toBeNull();
+  await expect.poll(() => mapOpen(page), slow).toBe(mapId);
   expect(errors).toEqual([]);
+  // Don't leave this player's page drawing while later specs run.
+  await page.context().close();
 });

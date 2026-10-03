@@ -60,6 +60,7 @@ export const CLOSE_UP_TEXT = {
   resting: 'They loved that! Give them a sec.',
   noTreats: 'No Treats left. Gather some on the map!',
   mysterySquishy: 'Mystery squishy',
+  gone: "They've wandered off for now. Let's go find them!",
 } as const;
 
 /** Why a touch didn't go to the server (it still gets its reaction). */

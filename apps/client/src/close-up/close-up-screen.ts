@@ -27,6 +27,7 @@ import {
   BREATHING_FRAME_MS,
   BUBBLE_MS,
   BUBBLE_TOP_PX,
+  GONE_MS,
   CAMERA_FOV,
   CAMERA_POSES,
   IDLE,
@@ -117,6 +118,8 @@ export interface CloseUpDebug {
   readonly caredToday: number | null;
   readonly nickname: string | null;
   readonly celebrating: boolean;
+  /** The species the 3D squishy is drawn as (redrawn when it evolves). */
+  readonly drawnSpecies: string | null;
   readonly note: string;
 }
 
@@ -320,17 +323,23 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   };
   /** The species the 3D squishy was built as. */
   let builtSpecies: string | null = null;
+  /** The squishy left while up close: touches do nothing until it swoops out. */
+  let gone = false;
+  let goneTimer: number | undefined;
 
   /**
    * A fresh list from the server: the squishy may have evolved (redraw it as
    * its new form) or left (taken to the Hollow overnight: say so and go back).
    */
-  function accept(next: CareListResponse): void {
+  function accept(next: CareListResponse, why?: string): void {
     setReply(next);
     const squishy = current();
     if (!squishy) {
-      note.textContent = CARE_TEXT.notHere;
-      close();
+      // Say why with the card still up, then swoop out (Back works at once).
+      note.textContent = why ?? CLOSE_UP_TEXT.gone;
+      gone = true;
+      window.clearTimeout(idleTimer);
+      goneTimer = window.setTimeout(close, GONE_MS);
       return;
     }
     if (builtSpecies !== null && squishy.speciesId !== builtSpecies) options.showScene(build);
@@ -489,7 +498,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     const squishy = current();
     const map = mapId;
     const id = squishyId;
-    if (!squishy || !reply || !map || !id || phase === 'leaving') return;
+    if (!squishy || !reply || !map || !id || phase === 'leaving' || gone) return;
     hint.hidden = true;
     const decision = careDecision(kind, squishy, reply, serverNow(), inFlight);
     react(reactionFor(kind, decision.hold));
@@ -523,7 +532,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
       if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
         const fresh = await api.list(map).catch(() => null);
         if (fresh && mine === ticket) {
-          accept(fresh);
+          accept(fresh, messageOf(err));
           return;
         }
       }
@@ -888,7 +897,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     if (mine !== ticket) return;
     const squishy = list.squishies.find((s) => s.id === id);
     if (!squishy || !speciesById(list).has(squishy.speciesId)) {
-      options.onProblem(CARE_TEXT.notHere);
+      options.onProblem(CLOSE_UP_TEXT.gone);
       return;
     }
     mapId = map;
@@ -966,6 +975,9 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     reply = null;
     backdrop = null;
     builtSpecies = null;
+    gone = false;
+    window.clearTimeout(goneTimer);
+    goneTimer = undefined;
     scene3d = null;
     renaming = false;
     overlay.hidden = true;
@@ -1008,6 +1020,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
         caredToday: squishy?.caredToday ?? null,
         nickname: squishy?.nickname ?? null,
         celebrating: !celebrate.hidden,
+        drawnSpecies: builtSpecies,
         note: note.textContent,
       };
     },
