@@ -425,14 +425,14 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
     ended: async (tx, battle, winner, at) => {
       const repo = createTerritoryRepo(tx);
       const attack = await repo.findAttack(battle.id);
-      if (!attack) return { events: [], xpPercent: 100 };
+      if (!attack) return { events: [], xpPercent: 100, drop: null };
       // Gentle's share applies to the battle's XP too, win or lose (owner
       // decision 2026-10-03), as well as to the capture rewards.
       const xpPercent = attack.rewardPercent;
       if (winner !== 'a') {
         // Lost, tied, or left (a forfeit): no land changes hands.
         await repo.endAttack(battle.id, 'lost', at);
-        return { events: [], xpPercent };
+        return { events: [], xpPercent, drop: null };
       }
       const tile = await repo.lockTile(attack.tileId);
       // The tile is taken only from whoever held it when the battle began
@@ -444,7 +444,7 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         (tile.ownerUserId === attack.defenderUserId || tile.ownerUserId === null);
       if (!tile || !takeable) {
         await repo.endAttack(battle.id, 'won', at);
-        return { events: [], xpPercent };
+        return { events: [], xpPercent, drop: null };
       }
       // Squishies on watch go home, never lost (issue #15).
       const returned = await repo.clearDefenders(tile.id);
@@ -467,7 +467,13 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
           returnedSquishyIds: returned,
         },
       };
-      return { events: [event], xpPercent };
+      // Battles rolls the capture's found clothing (#84) once it has locked
+      // the squishies; Gentle's share scales the chance like the XP.
+      return {
+        events: [event],
+        xpPercent,
+        drop: { tileId: tile.id, percent: attack.rewardPercent },
+      };
     },
   };
 }

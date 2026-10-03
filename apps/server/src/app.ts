@@ -243,7 +243,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
-        // Found clothing rolls inside gathers and rescues (captures later).
+        // Found clothing rolls inside gathers, rescues and tile captures.
         setDevDropChance(config.HP_DEV_DROP_CHANCE ?? null);
         await api.register(
           wardrobeRoutes(createWardrobeService({ db, clock, ...publish }), {

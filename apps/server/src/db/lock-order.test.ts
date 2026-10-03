@@ -1,19 +1,30 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import {
+  applyBattleAction,
+  hexKey,
+  hexNeighbors,
+  STARTERS,
+  type BattleAction,
+  type PlayerBattleAction,
+} from '@heartpatch/shared';
 import { createBattlesRepo } from '../modules/battles/repo.js';
+import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
 import { createBuildingsService, removeMemberBuildings } from '../modules/buildings/service.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
 import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
-import { createTerritoryService } from '../modules/territory/service.js';
+import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
+import { setDevDropChance } from '../modules/wardrobe/drops.js';
 import { createWardrobeService } from '../modules/wardrobe/service.js';
 import { AppError } from '../lib/errors.js';
 import { createDbClient, type Database, type DbClient, type Transaction } from './client.js';
 import { backendPid, waitUntilBlockedBy } from '../../tests/lock-waits.js';
 import {
   buildings,
+  clothingOwned,
   gameEvents,
   mapMembers,
   maps,
@@ -339,6 +350,97 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       expect(posts).toEqual([]);
       expect(row?.habitat).toBe(den!.id);
     }
+  });
+
+  it("rolls a capture's found clothing after the battle's squishy locks (battles `finish`, #84)", async () => {
+    const kid = await player('capturer');
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const mapId = map.id;
+    const [hero] = await db
+      .insert(squishies)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+        level: 40,
+      })
+      .returning({ id: squishies.id });
+    const heroId = hero!.id;
+    const all = await db.select().from(tiles).where(eq(tiles.mapId, mapId));
+    const mine = new Set(all.filter((t) => t.ownerUserId === kid.id).map(hexKey));
+    const target = all.find(
+      (t) =>
+        t.ownerUserId === null &&
+        t.homeSlot === null &&
+        hexNeighbors(t).some((n) => mine.has(hexKey(n))),
+    )!;
+
+    const content = defaultBattleContent();
+    const fights = createBattlesService({ db, content, tileBattles: createTileBattlePort() });
+    const territory = createTerritoryService({ db, battles: fights });
+    const { battle } = await territory.attack(kid, mapId, { q: target.q, r: target.r });
+    // Plays the first move every turn up to the one that wins the tile,
+    // checked against the stored state (the engine is deterministic).
+    let finishing: { action: PlayerBattleAction; turn: number } | null = null;
+    for (let i = 0; i < content.rules.maxTurns + 5 && !finishing; i++) {
+      const { state } = (await createBattlesRepo(db).findBattle(battle.id))!;
+      const side = state.sides.a;
+      let action: PlayerBattleAction;
+      let engine: BattleAction;
+      if (state.phase.type === 'replace') {
+        const slot = side.squishies.findIndex((s) => s.energy > 0);
+        action = { type: 'replace', slot };
+        engine = { type: 'replace', side: 'a', slot };
+      } else {
+        const move = side.squishies[side.active]!.moves[0]!;
+        action = { type: 'move', move };
+        engine = { type: 'turn', choices: { a: { type: 'move', move } } };
+      }
+      const next = applyBattleAction(content, state, engine);
+      if (next.phase.type === 'over') {
+        expect(next.phase.result.winner).toBe('a');
+        finishing = { action, turn: state.turn };
+      } else {
+        await fights.act(kid, battle.id, { action, turn: state.turn });
+      }
+    }
+    expect(finishing).not.toBeNull();
+
+    setDevDropChance(100);
+    let running: Promise<unknown> | undefined;
+    try {
+      // Nightfall-style: hold the hero, let the winning move queue on it,
+      // then append an event (the `maps` row). The finish holds the battle
+      // and the tile while it waits, but not `maps`: its find is rolled
+      // after the squishy locks. Rolled in the territory port (before them),
+      // the finish would hold `maps` here and Postgres would report a
+      // deadlock (40P01).
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`set local lock_timeout = '10s'`);
+        await lockSquishy(tx, heroId);
+        const pid = await backendPid(tx);
+        running = fights.act(kid, battle.id, finishing!);
+        await waitUntilBlockedBy(db, pid);
+        await tx.select({ id: maps.id }).from(maps).where(eq(maps.id, mapId)).for('update');
+      });
+      await running;
+    } finally {
+      setDevDropChance(null);
+    }
+
+    const [tile] = await db.select().from(tiles).where(eq(tiles.id, target.id));
+    expect(tile!.ownerUserId).toBe(kid.id);
+    const pieces = await db
+      .select({ source: clothingOwned.source, refId: clothingOwned.refId })
+      .from(clothingOwned)
+      .where(eq(clothingOwned.userId, kid.id));
+    expect(pieces).toEqual([{ source: 'capture', refId: battle.id }]);
   });
 
   it('picks a starter while the member is leaving, one at a time on the member row (starters `pick`, maps `leave`)', async () => {
