@@ -83,13 +83,13 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     return { id: user!.id, username, token };
   }
 
-  /** A bare patch with these active members, who joined a minute before the clock. */
+  /** A bare patch with these active members, who joined a minute before the game clock. */
   async function patch(members: Player[], kind: 'multiplayer' | 'tutorial' = 'multiplayer') {
     const [map] = await db
       .insert(maps)
       .values({ kind, name: 'Milestone Patch', timeZone: 'UTC', maxPlayers: 4 })
       .returning({ id: maps.id });
-    const joinedAt = new Date(Date.now() - 60_000);
+    const joinedAt = new Date(clock.getTime() - 60_000);
     await db.insert(mapMembers).values(
       members.map((m, i) => ({
         mapId: map!.id,
@@ -396,9 +396,15 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     await run(mapId);
     expect(trackOf(await milestones(server, kid), 'rescuer')?.progress).toBe(0);
 
-    // A friend joins after that rescue: it still doesn't count, the next one does.
+    // A friend joins after that rescue was counted: it stays uncounted, the next one counts.
+    // (The test clock stands still, so "joined" is a minute back, like `patch`.)
     const pal = await player();
-    await db.insert(mapMembers).values({ mapId, userId: pal.id, role: 'member' });
+    await db.insert(mapMembers).values({
+      mapId,
+      userId: pal.id,
+      role: 'member',
+      joinedAt: new Date(clock.getTime() - 60_000),
+    });
     await append(rescued(mapId, kid));
     await run(mapId);
     expect(trackOf(await milestones(server, kid), 'rescuer')?.progress).toBe(1);
@@ -421,9 +427,12 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     const mapId = await patch([kid]);
     await append(rescued(mapId, kid));
     // The second member's row says they joined after the rescue.
-    await db
-      .insert(mapMembers)
-      .values({ mapId, userId: pal.id, role: 'member', joinedAt: new Date(Date.now() + 60_000) });
+    await db.insert(mapMembers).values({
+      mapId,
+      userId: pal.id,
+      role: 'member',
+      joinedAt: new Date(clock.getTime() + 60_000),
+    });
     await run(mapId);
     expect(trackOf(await milestones(server, kid), 'rescuer')?.progress).toBe(0);
   });
@@ -546,6 +555,20 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     expect(JSON.stringify(res.json())).toContain(scarf);
   });
 
+  it('judges membership and seasons on the game clock, even far from the database clock', async () => {
+    // `HP_DEV_NOW` a month ahead: members join, and play, on the game clock.
+    clock = new Date(Date.now() + 30 * DAY_MS);
+    if (clock.getTime() > Date.parse('2026-11-09T00:00:00Z'))
+      clock = new Date('2026-11-01T12:00:00Z');
+    const server = await start();
+    const kid = await player();
+    const pal = await player();
+    const mapId = await patch([kid, pal]);
+    await append(rescued(mapId, kid));
+    await run(mapId);
+    expect(trackOf(await milestones(server, kid), 'rescuer')?.progress).toBe(1);
+  });
+
   it('counts Halloween things only in the Halloween window', async () => {
     const server = await start();
     const kid = await player();
@@ -587,10 +610,16 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     const pal = await player();
     const map = await createMapsService({
       db,
+      clock: () => new Date(clock.getTime() - 60_000),
       tutorialRequired: false,
       keeperRequired: false,
     }).create({ id: kid.id, username: kid.username }, { name: 'Title Patch', timeZone: 'UTC' });
-    await db.insert(mapMembers).values({ mapId: map.id, userId: pal.id, role: 'member' });
+    await db.insert(mapMembers).values({
+      mapId: map.id,
+      userId: pal.id,
+      role: 'member',
+      joinedAt: new Date(clock.getTime() - 60_000),
+    });
 
     const refused = await call(server, 'POST', '/milestones/title', kid, {
       titleId: 'hollow-rescuer',

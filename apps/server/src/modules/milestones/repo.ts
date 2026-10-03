@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
+import { and, asc, count, eq, gt, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import {
   keepers,
@@ -75,8 +75,15 @@ export interface MilestonesRepo {
   markSeen: (userId: string, ids: readonly string[], at: Date) => Promise<void>;
   /** When the player first finished the tutorial, or null. */
   tutorialCompletedAt: (userId: string) => Promise<Date | null>;
-  /** Players who finished the tutorial and don't have `milestoneId` tier 1 yet. */
-  missingTutorialReward: (milestoneId: string, limit: number) => Promise<string[]>;
+  /**
+   * Players who finished the tutorial and don't have `milestoneId` tier 1 yet,
+   * by id, after `after` (null: from the start).
+   */
+  missingTutorialReward: (
+    milestoneId: string,
+    after: string | null,
+    limit: number,
+  ) => Promise<string[]>;
   /** The worn title, or null; undefined if the player has no Keeper. */
   wornTitle: (userId: string) => Promise<string | null | undefined>;
   /** Sets the worn title; false if the player has no Keeper to show it on. */
@@ -194,7 +201,7 @@ export function createMilestonesRepo(db: Executor): MilestonesRepo {
       return row?.at ?? null;
     },
 
-    missingTutorialReward: async (milestoneId, limit) => {
+    missingTutorialReward: async (milestoneId, after, limit) => {
       const rows = await db
         .select({ id: users.id })
         .from(users)
@@ -206,7 +213,13 @@ export function createMilestonesRepo(db: Executor): MilestonesRepo {
             eq(milestoneRewards.tier, 1),
           ),
         )
-        .where(and(isNotNull(users.tutorialCompletedAt), isNull(milestoneRewards.id)))
+        .where(
+          and(
+            isNotNull(users.tutorialCompletedAt),
+            isNull(milestoneRewards.id),
+            after === null ? undefined : gt(users.id, after),
+          ),
+        )
         .orderBy(asc(users.id))
         .limit(limit);
       return rows.map((r) => r.id);

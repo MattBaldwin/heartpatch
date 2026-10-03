@@ -12,10 +12,26 @@ import type { GameEvent } from '../../db/game-events.js';
 import type { EventConsumer } from '../../jobs/consumers.js';
 import { localDate, type Clock } from '../../lib/time.js';
 import { createMilestonesRepo } from './repo.js';
-import { ALL_MILESTONES, awardTutorialMilestones, grantMilestoneTier } from './service.js';
+import {
+  awardTutorialMilestones,
+  grantMilestoneTiers,
+  tutorialGrants,
+  type TierGrant,
+} from './service.js';
+import { ALL_MILESTONES } from './tracks.js';
 
 /** Plain code-unit order (not locale order), the same in every process. */
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * When an event happened on the game clock. `game_events.created_at` is the
+ * database's clock, while `map_members.joined_at` and season dates use the
+ * game clock (`HP_DEV_NOW` moves it), so shift the row's time by the game
+ * clock's offset. Judging by the event's own time also means a consumer that
+ * lags, or replays history, counts Halloween play by when it was played.
+ */
+const gameTimeOf = (createdAt: Date, now: Date): Date =>
+  new Date(createdAt.getTime() + (now.getTime() - Date.now()));
 
 export interface MilestonesConsumerOptions {
   clock?: Clock;
@@ -36,12 +52,15 @@ export interface MilestonesConsumerOptions {
  *   Patch (`users.tutorial_completed_at`, set in that same transaction), as
  *   does the next counted event of a player who finished it before.
  *
+ * Membership and seasons are judged at the event's own game time.
+ *
  * Exactly once: the runner applies each event once (`jobs/consumers.ts`),
  * and a tier's reward row is unique, so a retried event or a second path
  * (`GET /milestones`, the boot backfill) never grants twice. It writes no
  * game event, so it never takes `maps`. Lock order (tech spec §7):
  * `event_consumers`, the tracks' `milestone_progress` rows (by player, then
- * track), `milestone_rewards`, then `coin_balances` (`creditCoins`).
+ * track), every `milestone_rewards` row (by player, track, tier), then the
+ * pieces and `coin_balances` (`grantMilestoneTiers`).
  */
 export function createMilestonesConsumer(options: MilestonesConsumerOptions = {}): EventConsumer {
   const now = options.clock ?? (() => new Date());
@@ -57,9 +76,10 @@ export function createMilestonesConsumer(options: MilestonesConsumerOptions = {}
       const finishing = event.type === 'tutorial.advanced';
       if (!finishing && !eventTypes.has(event.type)) return;
       const repo = createMilestonesRepo(tx);
-      const map = await repo.mapContext(event.mapId, event.createdAt);
-      if (!map) return;
       const at = now();
+      const happened = gameTimeOf(event.createdAt, at);
+      const map = await repo.mapContext(event.mapId, happened);
+      if (!map) return;
 
       if (map.kind === 'tutorial') {
         // Glade play never counts (decision F); finishing it is The First Patch.
@@ -72,13 +92,13 @@ export function createMilestonesConsumer(options: MilestonesConsumerOptions = {}
       }
       if (finishing || map.members < rules.minMembers) return;
 
-      const seasons = activeSeasons(SEASONS, localDate(at, map.timeZone)).map((s) => s.id);
+      const seasons = activeSeasons(SEASONS, localDate(happened, map.timeZone)).map((s) => s.id);
       // By player, then track: every milestone transaction locks rows in this order.
       const credits = milestoneCredits(tracks, event, seasons).sort(
         (a, b) => compare(a.userId, b.userId) || compare(a.trackId, b.trackId),
       );
       // Progress rows first (the lock order), then the tiers they reached.
-      const reached: { userId: string; track: MilestoneTrack; tier: number }[] = [];
+      const reached: TierGrant[] = [];
       for (const credit of credits) {
         const track = tracksById.get(credit.trackId);
         if (!track) continue;
@@ -91,17 +111,15 @@ export function createMilestonesConsumer(options: MilestonesConsumerOptions = {}
         });
         if (total === null) continue;
         for (const tier of tiersReached(track, total)) {
-          reached.push({ userId: credit.userId, track, tier });
+          reached.push({ userId: credit.userId, track, tier, mapId: event.mapId, at });
         }
       }
-      const players = [...new Set(credits.map((c) => c.userId))];
-      for (const userId of players) {
-        for (const { track, tier } of reached.filter((r) => r.userId === userId)) {
-          await grantMilestoneTier(tx, { userId, track, tier, mapId: event.mapId, at });
-        }
-        // "On the next milestone check": a First Patch finished before milestones.
-        await awardTutorialMilestones(tx, userId, at, tracks);
+      // "On the next milestone check": a First Patch finished before milestones.
+      for (const userId of new Set(credits.map((c) => c.userId))) {
+        reached.push(...(await tutorialGrants(tx, userId, at, tracks)));
       }
+      // Every reward row, then the pieces and coins (one ordered call).
+      await grantMilestoneTiers(tx, reached);
     },
   };
 }

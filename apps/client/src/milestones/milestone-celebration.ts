@@ -14,7 +14,10 @@ export interface MilestoneCelebrationOptions {
   root: HTMLElement;
   api?: Pick<MilestonesApi, 'get' | 'seen'>;
   setTimer?: (task: () => void, ms: number) => unknown;
-  /** True while a card would be in the way (a battle); news waits for the next check. */
+  /**
+   * True while a card would be in the way (a battle, a found lore page): the
+   * look waits and tries again, so cards come one at a time.
+   */
   busy?: () => boolean;
 }
 
@@ -41,6 +44,8 @@ export interface MilestoneCelebration {
  * two of the event, and the second look catches a slow one.
  */
 const CHECK_AFTER_MS = [1_500, 6_000]; // TUNE: guesses
+/** How often a look that found the screen busy tries again. */
+const BUSY_RETRY_MS = 3_000; // TUNE: guess
 
 export function createMilestoneCelebration(
   options: MilestoneCelebrationOptions,
@@ -55,6 +60,8 @@ export function createMilestoneCelebration(
   let queued = new Set<string>();
   /** Checks waiting on a timer: more play meanwhile needs no more. */
   let pending = 0;
+  /** A busy look waiting to try again (one at a time). */
+  let retrying = false;
 
   const sparkles = el(
     'div',
@@ -114,9 +121,19 @@ export function createMilestoneCelebration(
     showNext();
   });
 
-  const look = async () => {
+  const look = async (): Promise<void> => {
     const who = user;
-    if (!who || busy()) return;
+    if (!who) return;
+    if (busy()) {
+      if (!retrying) {
+        retrying = true;
+        setTimer(() => {
+          retrying = false;
+          void look();
+        }, BUSY_RETRY_MS);
+      }
+      return;
+    }
     try {
       const { news } = await api.get();
       if (user?.id !== who.id) return;

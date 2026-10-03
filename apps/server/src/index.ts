@@ -48,7 +48,9 @@ const jobs = await startJobs({
 // The First Patch for accounts that finished the tutorial before milestones
 // existed (#44). Idempotent, so every boot can run it; it never blocks start.
 createMilestonesService({ db: db.db, clock })
-  .backfillTutorial()
+  .backfillTutorial((userId, err) => {
+    app.log.error({ err, userId }, 'First Patch backfill skipped an account');
+  })
   .then(
     (granted) => {
       if (granted > 0) app.log.info({ granted }, 'backfilled The First Patch milestone');

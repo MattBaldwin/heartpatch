@@ -18,7 +18,7 @@ import {
   users,
 } from '../../db/schema.js';
 import { keeperColumns } from '../keepers/repo.js';
-import { titleName } from '../milestones/service.js';
+import { titleName } from '../milestones/tracks.js';
 import { squishyOnWatch } from '../territory/repo.js';
 import { WORN, wornOf } from '../wardrobe/repo.js';
 

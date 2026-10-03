@@ -1,5 +1,4 @@
 import {
-  MILESTONE_TRACKS,
   MILESTONE_UNIT,
   type MilestoneReward,
   type MilestonesResponse,
@@ -8,7 +7,7 @@ import {
   type MilestoneTrackView,
   type PublicUser,
 } from '@heartpatch/shared';
-import { SECRET_MILESTONES, shownProgress } from '@heartpatch/shared/server';
+import { shownProgress } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
@@ -16,6 +15,7 @@ import { uuidV5 } from '../../lib/uuid-v5.js';
 import { creditCoins } from '../coins/service.js';
 import { createWardrobeRepo } from '../wardrobe/repo.js';
 import { createMilestonesRepo, type RewardRow } from './repo.js';
+import { ALL_MILESTONES } from './tracks.js';
 
 /*
  * Keeper milestones (design doc §24; issue #44). Account-level (DECISIONS F).
@@ -33,12 +33,6 @@ export const MILESTONE_MESSAGES = {
   noKeeper: 'Pick your Keeper first, then you can show off a title!',
 } as const;
 
-/** Every track, public then secret. */
-export const ALL_MILESTONES: readonly MilestoneTrack[] = [
-  ...MILESTONE_TRACKS,
-  ...SECRET_MILESTONES,
-];
-
 /**
  * Fixed namespace for `milestone_rewards.id` (uuid v5 of account, track and
  * tier under it). It's also the tier's coin and clothing `ref_id`, so the
@@ -50,76 +44,99 @@ const REWARD_NAMESPACE = '6a0f8f5e-3c1b-4d0a-9b7e-2f6d4c8a1e57';
 export const milestoneRewardId = (userId: string, milestoneId: string, tier: number): string =>
   uuidV5(`${userId}/${milestoneId}/${String(tier)}`, REWARD_NAMESPACE);
 
+/** One tier to grant one player. */
+export interface TierGrant {
+  userId: string;
+  track: MilestoneTrack;
+  tier: number;
+  /** The patch whose play earned it; null for The First Patch. */
+  mapId: string | null;
+  at: Date;
+}
+
+/** Plain code-unit order (not locale order), the same in every process. */
+const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
 /**
- * Grants one tier inside the caller's transaction: the `milestone_rewards`
- * row, then the piece (`clothing_owned`, source `milestone`), then the coins
- * (`creditCoins`, no daily cap). Lock order (tech spec §7): after the track's
- * `milestone_progress` row, before `maps`; `creditCoins` takes the account's
- * `coin_balances` row. True if this call granted it, false if it already was.
+ * Grants tiers inside the caller's transaction, each exactly once. Lock order
+ * (tech spec §7): **every** `milestone_rewards` row first (by player, track,
+ * tier), then each new tier's piece (`clothing_owned`, source `milestone`) and
+ * coins (`creditCoins`, no daily cap: the account's `coin_balances` row). A
+ * reward row inserted after a coin lock would invert that order against
+ * another path granting the same tier (`GET /milestones`, the backfill).
+ * Returns how many tiers this call granted.
  */
-export async function grantMilestoneTier(
+export async function grantMilestoneTiers(
   tx: Executor,
-  grant: { userId: string; track: MilestoneTrack; tier: number; mapId: string | null; at: Date },
-): Promise<boolean> {
-  const { userId, track, tier, mapId, at } = grant;
-  const data = track.tiers[tier - 1];
-  if (!data) return false;
-  const id = milestoneRewardId(userId, track.id, tier);
+  grants: readonly TierGrant[],
+): Promise<number> {
   const repo = createMilestonesRepo(tx);
-  if (!(await repo.insertReward({ id, userId, milestoneId: track.id, tier, mapId, at }))) {
-    return false;
+  const sorted = [...grants].sort(
+    (a, b) => compare(a.userId, b.userId) || compare(a.track.id, b.track.id) || a.tier - b.tier,
+  );
+  const granted: { grant: TierGrant; tier: MilestoneTier; id: string }[] = [];
+  for (const grant of sorted) {
+    const { userId, track, tier, mapId, at } = grant;
+    const data = track.tiers[tier - 1];
+    if (!data) continue;
+    const id = milestoneRewardId(userId, track.id, tier);
+    if (await repo.insertReward({ id, userId, milestoneId: track.id, tier, mapId, at })) {
+      granted.push({ grant, tier: data, id });
+    }
   }
-  if (data.clothing !== undefined) {
-    await createWardrobeRepo(tx).grant({
-      userId,
-      itemId: data.clothing,
+  for (const { grant, tier, id } of granted) {
+    const { userId, mapId, at } = grant;
+    if (tier.clothing !== undefined) {
+      await createWardrobeRepo(tx).grant({
+        userId,
+        itemId: tier.clothing,
+        source: 'milestone',
+        refId: id,
+        mapId,
+        at,
+      });
+    }
+    await creditCoins(tx, {
       source: 'milestone',
       refId: id,
+      userId,
       mapId,
+      amount: tier.coins,
       at,
     });
   }
-  // Account-level: coins from milestones aren't a patch's (#45).
-  await creditCoins(tx, { source: 'milestone', refId: id, userId, amount: data.coins, at });
-  return true;
+  return granted.length;
 }
 
 /**
- * The First Patch (DECISIONS "The First Patch (#24)"): granted once the
- * account has finished the tutorial (`users.tutorial_completed_at`, which no
- * event announces). Idempotent, in the caller's transaction. True if it
- * granted something now.
+ * The First Patch's tiers a player is due (DECISIONS "The First Patch
+ * (#24)"): granted once the account has finished the tutorial
+ * (`users.tutorial_completed_at`, which no event announces). Empty if not.
  */
+export async function tutorialGrants(
+  tx: Executor,
+  userId: string,
+  at: Date,
+  tracks: readonly MilestoneTrack[] = ALL_MILESTONES,
+): Promise<TierGrant[]> {
+  const fromTutorial = tracks.filter((t) => t.progress.from === 'tutorial-completed');
+  if (fromTutorial.length === 0) return [];
+  if ((await createMilestonesRepo(tx).tutorialCompletedAt(userId)) === null) return [];
+  return fromTutorial.map((track) => ({ userId, track, tier: 1, mapId: null, at }));
+}
+
+/** Grants The First Patch if it's due, in the caller's transaction. True if it granted now. */
 export async function awardTutorialMilestones(
   tx: Executor,
   userId: string,
   at: Date,
   tracks: readonly MilestoneTrack[] = ALL_MILESTONES,
 ): Promise<boolean> {
-  const fromTutorial = tracks.filter((t) => t.progress.from === 'tutorial-completed');
-  if (fromTutorial.length === 0) return false;
-  if ((await createMilestonesRepo(tx).tutorialCompletedAt(userId)) === null) return false;
-  let granted = false;
-  for (const track of fromTutorial) {
-    if (await grantMilestoneTier(tx, { userId, track, tier: 1, mapId: null, at })) granted = true;
-  }
-  return granted;
+  return (await grantMilestoneTiers(tx, await tutorialGrants(tx, userId, at, tracks))) > 0;
 }
 
 /** Accounts per query while backfilling The First Patch. */
 const BACKFILL_BATCH = 100;
-
-const TITLE_NAMES = new Map(
-  ALL_MILESTONES.flatMap((t) => t.tiers.map((tier) => [tier.title.id, tier.title.name] as const)),
-);
-
-/**
- * A worn title's name for other players (`MapMember.title`), or null. Only
- * earned titles can be worn (`equipTitle` checks), so a secret one shown here
- * was earned by its wearer.
- */
-export const titleName = (titleId: string | null): string | null =>
-  titleId === null ? null : (TITLE_NAMES.get(titleId) ?? null);
 
 const rewardOf = (tier: MilestoneTier): MilestoneReward => ({
   title: tier.title,
@@ -136,9 +153,10 @@ export interface MilestonesService {
   /**
    * Grants The First Patch to everyone who finished the tutorial before
    * milestones existed (or whose grant was missed). Idempotent; run at boot.
+   * One account failing never stops the rest (`onError` hears about it).
    * Returns how many accounts it granted.
    */
-  backfillTutorial: () => Promise<number>;
+  backfillTutorial: (onError?: (userId: string, err: unknown) => void) => Promise<number>;
 }
 
 export interface MilestonesServiceOptions {
@@ -255,22 +273,25 @@ export function createMilestonesService(options: MilestonesServiceOptions): Mile
       return view(user.id);
     },
 
-    backfillTutorial: async () => {
+    backfillTutorial: async (onError) => {
       const fromTutorial = tracks.filter((t) => t.progress.from === 'tutorial-completed');
       let granted = 0;
       for (const track of fromTutorial) {
+        // Pages by account id, so a failed account is passed over, never retried in a loop.
+        let after: string | null = null;
         for (;;) {
-          const missing = await store.missingTutorialReward(track.id, BACKFILL_BATCH);
-          let batch = 0;
+          const missing = await store.missingTutorialReward(track.id, after, BACKFILL_BATCH);
           for (const userId of missing) {
-            const did = await store.transaction((_repo, tx) =>
-              grantMilestoneTier(tx, { userId, track, tier: 1, mapId: null, at: now() }),
-            );
-            if (did) batch += 1;
+            try {
+              granted += await store.transaction((_repo, tx) =>
+                grantMilestoneTiers(tx, [{ userId, track, tier: 1, mapId: null, at: now() }]),
+              );
+            } catch (err) {
+              onError?.(userId, err);
+            }
           }
-          granted += batch;
-          // Done, or nothing grantable left (never spin on the same rows).
-          if (missing.length < BACKFILL_BATCH || batch === 0) break;
+          after = missing[missing.length - 1] ?? null;
+          if (missing.length < BACKFILL_BATCH) break;
         }
       }
       return granted;

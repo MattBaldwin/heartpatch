@@ -401,10 +401,11 @@ const tutorial = createTutorialScreen({
 // Found lore pages (design doc §16). Mounted after the tutorial, so its card
 // sits over Sprout's layer.
 const lorebook = createLorebook({ root: document.body });
-// A milestone earned (#44): a little party, but never over a battle.
+// A milestone earned (#44): a little party, but never over a battle or a
+// lore page (one card at a time).
 const milestones = createMilestoneCelebration({
   root: document.body,
-  busy: () => battles.debug !== null,
+  busy: () => battles.debug !== null || lorebook.debug.showing !== null,
 });
 // Battles (#13) own the whole screen: the map and the lobby's button step
 // out while one is open, and the map comes back after.

@@ -645,8 +645,15 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
    * milestone write queue there, then takes the other side: taken in the wrong
    * order, Postgres reports a deadlock (40P01) or the lock timeout fails it.
    */
-  async function milestonePatch(prefix: string) {
+  async function milestonePatch(
+    prefix: string,
+    finishedTutorial = false,
+    play: 'rescue' | 'evolve' = 'rescue',
+  ) {
     const kid = await player(prefix);
+    if (finishedTutorial) {
+      await db.update(users).set({ tutorialCompletedAt: new Date() }).where(eq(users.id, kid.id));
+    }
     const pal = await player(`${prefix}pal`);
     const [map] = await db
       .insert(maps)
@@ -658,14 +665,37 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       { mapId, userId: kid.id, role: 'owner', joinedAt },
       { mapId, userId: pal.id, role: 'member', joinedAt },
     ]);
-    // A rescue reaches the Rescuer track's first tier: a reward, a piece and coins.
+    // A rescue reaches the Rescuer track's first tier: a reward, a piece and
+    // coins. An evolution reaches Evolution's, whose id sorts before
+    // "first-patch".
     await withTransaction(db, (tx) =>
-      appendGameEvent(tx, {
-        mapId,
-        type: 'squishy.rescued',
-        actorUserId: kid.id,
-        payload: { userId: kid.id, squishyId: randomUUID(), battleId: randomUUID(), heartdust: 1 },
-      }),
+      appendGameEvent(
+        tx,
+        play === 'rescue'
+          ? {
+              mapId,
+              type: 'squishy.rescued',
+              actorUserId: kid.id,
+              payload: {
+                userId: kid.id,
+                squishyId: randomUUID(),
+                battleId: randomUUID(),
+                heartdust: 1,
+              },
+            }
+          : {
+              mapId,
+              type: 'squishy.evolved',
+              actorUserId: kid.id,
+              payload: {
+                userId: kid.id,
+                squishyId: randomUUID(),
+                fromSpeciesId: 'puddlepuff',
+                intoSpeciesId: 'splashmallow',
+                level: 16,
+              },
+            },
+      ),
     );
     return { kid, mapId, consumer: createMilestonesConsumer() };
   }
@@ -734,6 +764,30 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       (tx) => lockCoins(tx, kid.id),
     );
     expect(await milestoneCoins(kid.id)).toEqual([]);
+  });
+
+  it("records The First Patch with a tier's other rewards before paying either (milestones consumer, #44)", async () => {
+    // A finisher whose evolution reaches a tier (Evolution's id sorts before
+    // The First Patch's, so its row comes first): the consumer grants both. Hold
+    // the First Patch row (`GET /milestones` or the backfill granting it), let
+    // the consumer queue on it, then take the coins. The consumer must not
+    // have paid the Evolution tier's coins before recording every reward row.
+    const { kid, mapId, consumer } = await milestonePatch('finished', true, 'evolve');
+    await holdThen(
+      (tx) =>
+        tx.insert(milestoneRewards).values({
+          id: milestoneRewardId(kid.id, 'first-patch', 1),
+          userId: kid.id,
+          milestoneId: 'first-patch',
+          tier: 1,
+          mapId: null,
+          earnedAt: new Date(),
+        }),
+      () => runConsumer(db, consumer, mapId),
+      (tx) => lockCoins(tx, kid.id),
+    );
+    // The holder recorded The First Patch without paying; the consumer paid the evolution.
+    expect((await milestoneCoins(kid.id)).map((r) => r.amount)).toEqual([25]);
   });
 
   it('grants The First Patch before paying its coins (milestones `get`, #44)', async () => {
