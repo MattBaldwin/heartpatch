@@ -28,7 +28,7 @@ function liveStatus(page: Page): Promise<string | null> {
 }
 
 test('two players on one patch trade quick messages live', async ({ browser }) => {
-  test.setTimeout(120_000); // two players, shader compiles; CI renders in software
+  test.setTimeout(240_000); // two players, two starter picks, shader compiles; CI renders in software
   const ownerName = uniqueName('chat');
   const friendName = uniqueName('pal');
 

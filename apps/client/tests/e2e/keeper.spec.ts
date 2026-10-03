@@ -188,5 +188,8 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
   // …and reacts as the turn plays out (a run-away still ends the battle with a reaction).
   await page.getByRole('button', { name: 'Run away' }).tap();
   await page.getByTestId('battle-run-confirm').tap();
-  await expect.poll(() => battle().then((b) => b?.keeperReactions ?? 0)).toBeGreaterThan(0);
+  // The log plays out first, which is slow when CI renders in software.
+  await expect
+    .poll(() => battle().then((b) => b?.keeperReactions ?? 0), { timeout: 30_000 })
+    .toBeGreaterThan(0);
 });
