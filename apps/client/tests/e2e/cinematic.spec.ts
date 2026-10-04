@@ -24,6 +24,9 @@ interface Hook {
   tutorial?(): { stepId: string | null } | null;
 }
 
+/** The story's scene builds on the main thread; under CI's software GL a poll can wait a while. */
+const SLOW = { timeout: 30_000 };
+
 const story = (page: Page) =>
   page.evaluate(
     () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.cinematic?.() ?? null,
@@ -63,18 +66,18 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   const cinematic = page.getByTestId('cinematic');
   await expect(cinematic).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('lobby')).toBeHidden();
-  await expect.poll(async () => (await story(page))?.mode).toBe('first');
+  await expect.poll(async () => (await story(page))?.mode, SLOW).toBe('first');
   // The first time there's no Skip button; holding is how to skip.
   await expect(page.getByTestId('cinematic-skip')).toBeHidden();
   await expect(page.getByTestId('cinematic-hold')).toContainText('Hold to skip');
   // A tap moves the captions on (whichever one is up, the next one follows).
   const caption = page.getByTestId('cinematic-caption');
   await cinematic.tap();
-  await expect.poll(async () => (await story(page))?.caption ?? null).not.toBeNull();
+  await expect.poll(async () => (await story(page))?.caption ?? null, SLOW).not.toBeNull();
   const first = (await story(page))!;
   await expect(caption).toHaveText(first.caption!);
   await cinematic.tap();
-  await expect.poll(async () => (await story(page))?.caption).not.toBe(first.caption);
+  await expect.poll(async () => (await story(page))?.caption, SLOW).not.toBe(first.caption);
   const second = (await story(page))!;
   expect(second.t).toBeGreaterThan(first.t);
   await expect(caption).toHaveText(second.caption!);
@@ -90,7 +93,7 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   await hold(page, 1600);
   await expect(cinematic).toBeHidden();
   expect((await story(page))?.ended).toBe('skipped');
-  await expect.poll(() => seenOnServer(page)).not.toBeNull();
+  await expect.poll(() => seenOnServer(page), SLOW).not.toBeNull();
 
   // Then the tutorial (optional on the dev server) and the lobby.
   const lobby = page.getByTestId('lobby');
@@ -130,7 +133,7 @@ test('Settings plays it again, with a Skip button and gentler motion', async ({ 
   const cinematic = page.getByTestId('cinematic');
   await expect(cinematic).toBeVisible({ timeout: 30_000 });
   await expect(lobby).toBeHidden();
-  await expect.poll(async () => (await story(page))?.mode).toBe('replay');
+  await expect.poll(async () => (await story(page))?.mode, SLOW).toBe('replay');
   const state = (await story(page))!;
   expect(state.skippable).toBe(true);
   expect(state.reducedMotion).toBe(true);

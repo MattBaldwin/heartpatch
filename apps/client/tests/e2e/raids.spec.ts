@@ -38,7 +38,10 @@ test('opens the raid report and saves a defense style', async ({ browser }) => {
   await expect(lobby).toBeHidden();
 
   // Nothing new on a brand-new patch, so the report waits behind its button.
-  await expect.poll(async () => (await raidState(page))?.stance ?? null).toBe('balanced');
+  // Roomy: the map builds first, and CI renders in software.
+  await expect
+    .poll(async () => (await raidState(page))?.stance ?? null, { timeout: 30_000 })
+    .toBe('balanced');
   expect(await raidState(page)).toMatchObject({ raids: 0, unseen: 0, open: false });
 
   await page.getByTestId('raid-open').tap();
@@ -62,7 +65,9 @@ test('opens the raid report and saves a defense style', async ({ browser }) => {
 
   // The server kept it: a fresh load reads it back.
   await page.reload();
-  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
+  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible({
+    timeout: 15_000,
+  });
   await lobby.getByRole('button', { name: /Report Patch/ }).tap();
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
