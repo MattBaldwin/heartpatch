@@ -75,13 +75,16 @@ jobs:
   e2e:
     runs-on: ubuntu-24.04
     # Room for a slow apt mirror during the WebKit install (once took 15 min)
-    # plus about 10 min of tests on the heavier shard.
+    # plus the tests on the heaviest shard (about 6-8 min with three shards).
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         project: [iphone-webkit, ipad-webkit]
-        shard: [1, 2]
+        # Playwright shards by spec file (not fullyParallel), so the split is
+        # uneven. Two shards left ipad shard 1 at ~17 min once the first-session
+        # spec landed (#112); three keeps every shard well under the timeout.
+        shard: [1, 2, 3]
     services:
       postgres:
         image: postgres:16
@@ -129,10 +132,10 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: pnpm --filter @heartpatch/client exec playwright install-deps webkit
 
-      - name: E2E (${{ matrix.project }}, shard ${{ matrix.shard }}/2)
+      - name: E2E (${{ matrix.project }}, shard ${{ matrix.shard }}/3)
         run: >-
           pnpm --filter @heartpatch/client exec playwright test
-          --project=${{ matrix.project }} --shard=${{ matrix.shard }}/2
+          --project=${{ matrix.project }} --shard=${{ matrix.shard }}/3
 
       - uses: actions/upload-artifact@v4
         if: failure()

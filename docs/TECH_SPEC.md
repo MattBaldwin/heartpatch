@@ -316,7 +316,7 @@ Small and cheap on purpose: one server for a few families.
 
 - **`ci.yml`** on every PR. Since PR #100 it has three parts:
   - **`fast`:** format, lint, typecheck, migration check, unit and DB tests, coverage, build and the db scripts.
-  - **`e2e`:** a matrix of `iphone-webkit` / `ipad-webkit` × shard 1/2. Each leg has its own Postgres service container.
+  - **`e2e`:** a matrix of `iphone-webkit` / `ipad-webkit` × shard 1/3 (Playwright splits by spec file, so three shards keep the heaviest leg well under the 30 min timeout). Each leg has its own Postgres service container.
   - **`check`:** an aggregator that is green only when `fast` and every `e2e` leg are. It stays the one status to gate on.
   - Build sessions can't edit `.github/workflows`; the coordinator makes CI changes.
 - **`deploy.yml`** on push to `main`:
