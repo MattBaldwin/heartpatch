@@ -11,8 +11,14 @@ describe('@heartpatch/shared/server', () => {
     expect(both).toEqual([]);
   });
 
-  it('keeps the drop tables and their schema server-only', () => {
-    for (const name of ['CLOTHING_DROPS', 'ClothingDropTableSchema', 'checkClothingDrops']) {
+  it('keeps the drop tables, their schema and the roll server-only', () => {
+    for (const name of [
+      'CLOTHING_DROPS',
+      'ClothingDropTableSchema',
+      'checkClothingDrops',
+      'pickClothingDrop',
+      'eligibleDrops',
+    ]) {
       expect(name in serverEntry).toBe(true);
       expect(name in publicEntry).toBe(false);
     }

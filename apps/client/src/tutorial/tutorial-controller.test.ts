@@ -1,5 +1,5 @@
 import type { TutorialState, WsEventMessage } from '@heartpatch/shared';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ApiRequestError } from '../net/api.js';
 import type { WsClientOptions } from '../net/ws-client.js';
 import {
@@ -389,6 +389,26 @@ describe('TutorialController', () => {
 
     t.serverAdvances(advanced('name-partner', 'care'), state({ stepId: 'care', partner: PARTNER }));
     expect(t.controller.view.step?.id).toBe('care');
+  });
+
+  it('names the Partner on plain http, where crypto.randomUUID throws', async () => {
+    // A phone on the LAN playtest (DEPLOY.md §9) isn't a secure context.
+    const insecure = vi.spyOn(crypto, 'randomUUID').mockImplementation(() => {
+      throw new TypeError('crypto.randomUUID is not available in an insecure context');
+    });
+    try {
+      const t = setup(state({ stepId: 'name-partner', partner: PARTNER }));
+      await t.controller.open();
+      t.controller.nextLine();
+      t.controller.name('Sunny');
+      await settle();
+      expect(t.calls.filter((c) => c.startsWith('name:'))).toEqual([
+        `name:${MAP}:${PARTNER.squishyId}:Sunny`,
+      ]);
+      expect(t.keys[0]).toMatch(/^[0-9a-f]{32}$/);
+    } finally {
+      insecure.mockRestore();
+    }
   });
 
   it('asks who the Partner is when the live advance reaches the naming step', async () => {

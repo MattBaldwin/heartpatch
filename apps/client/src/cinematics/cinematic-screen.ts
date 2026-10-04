@@ -11,6 +11,7 @@ import { el } from '../ui/dom.js';
 import { cinematicApi, type CinematicApi } from './cinematic-api.js';
 import type { CinematicScene, CinematicSceneStats } from './cinematic-scene.js';
 import { Playback, type PlaybackEnd } from './playback.js';
+import { checkSeen } from './seen-check.js';
 import { canSkip, prefersReducedMotion, shouldAutoPlay } from './skip.js';
 import { captionAt, musicAt, shotAt, titleAt, veilAt, type Timeline } from './timeline.js';
 import './cinematic.css';
@@ -357,12 +358,12 @@ export function createCinematicScreen(options: CinematicScreenOptions): Cinemati
     ensure: async (who) => {
       if (who.id !== user?.id) return;
       const mine = session;
-      seen = await (early ?? Promise.resolve(null));
-      // Not seen (or no answer) when logging in: ask again, since a first
-      // viewing on another device may have finished since. Only new players
-      // pay for the second call.
-      if (mine === session && !canSkip(seen)) seen = await api.get().catch(() => null);
-      if (mine !== session || mode !== null) return;
+      // Kept only while the same player is logged in, so a logout mid-fetch
+      // never leaves the old account's answer behind.
+      const result = await checkSeen(api, early, () => mine === session);
+      if (result.stale) return;
+      seen = result.seen;
+      if (mode !== null) return;
       // The game never waits on the story (decision A): no renderer, or no
       // answer from the server, and it goes straight on.
       if (!shouldAutoPlay(seen) || !options.canRender()) return;
