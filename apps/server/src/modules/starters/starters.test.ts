@@ -3,7 +3,9 @@ import {
   CARE_RULES,
   JoinMapResponseSchema,
   MapResponseSchema,
+  PickStarterResponseSchema,
   SquishyResponseSchema,
+  STARTERS,
   TUTORIAL_SETUP,
   TutorialResponseSchema,
   type PublicUser,
@@ -116,6 +118,19 @@ describe.skipIf(!url)('starter pick (needs DATABASE_URL)', () => {
   const squishiesOf = (mapId: string, userId: string) =>
     db.query.squishies.findMany({
       where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.ownerUserId, userId)),
+    });
+
+  /** The player's Heart Charms on a patch, and the ledger rows that put them there. */
+  async function charmsOf(mapId: string, userId: string) {
+    const rows = await db.query.inventories.findMany({
+      where: (t, { and: all, eq: is }) =>
+        all(is(t.mapId, mapId), is(t.userId, userId), is(t.itemId, 'heart-charm')),
+    });
+    return rows.reduce((n, r) => n + r.quantity, 0);
+  }
+  const giftsTo = (userId: string) =>
+    db.query.resourceLedger.findMany({
+      where: (t, { and: all, eq: is }) => all(is(t.userId, userId), is(t.reason, 'starter')),
     });
 
   async function markerOf(mapId: string, userId: string) {
@@ -357,5 +372,168 @@ describe.skipIf(!url)('starter pick (needs DATABASE_URL)', () => {
     // The marker points at a squishy that points at the member: both go with the map.
     await db.execute(`delete from maps where id = '${mapId}'`);
     expect(await squishiesOf(mapId, owner.id)).toHaveLength(0);
+  });
+  describe("Sprout's Heart Charms with the first pick (owner decision 2026-10-04)", () => {
+    it('puts 3 Heart Charms in the bag with the first pick, ledgered to the starter', async () => {
+      const server = await start();
+      const kid = await player();
+      const { id: mapId } = await patch(server, kid);
+      expect(await charmsOf(mapId, kid.id)).toBe(0);
+
+      const res = await pick(server, kid, mapId, 'thistlepip');
+      expect(res.statusCode, res.body).toBe(201);
+      const { squishy, gift } = PickStarterResponseSchema.parse(res.json());
+      expect(gift).toEqual({ 'heart-charm': 3 });
+      expect(gift).toEqual(STARTERS.firstPickGift);
+      expect(await charmsOf(mapId, kid.id)).toBe(3);
+      expect(
+        (await giftsTo(kid.id)).map((r) => ({
+          mapId: r.mapId,
+          itemId: r.itemId,
+          delta: r.delta,
+          refId: r.refId,
+        })),
+      ).toEqual([{ mapId, itemId: 'heart-charm', delta: 3, refId: squishy.id }]);
+      // The bag reads them back (#17's inventory).
+      const bag = await call(server, 'GET', `/maps/${mapId}/inventory`, kid);
+      expect(bag.statusCode, bag.body).toBe(200);
+      expect((bag.json() as { items: Record<string, number> }).items['heart-charm']).toBe(3);
+    });
+
+    it('gives nothing on a second patch, or to an account that picked before', async () => {
+      const server = await start();
+      const kid = await player();
+      const pal = await player();
+      const first = await patch(server, kid);
+      expect(PickStarterResponseSchema.parse((await pick(server, kid, first.id, 'emberbun')).json()).gift).toEqual(
+        { 'heart-charm': 3 },
+      );
+
+      // A second patch they make, and one they join: a starter each, no charms.
+      const second = await patch(server, kid);
+      const res = await pick(server, kid, second.id, 'puddlepuff');
+      expect(res.statusCode, res.body).toBe(201);
+      expect(PickStarterResponseSchema.parse(res.json()).gift).toEqual({});
+      const theirs = await patch(server, pal);
+      await approve(server, pal, theirs.id, await ask(server, kid, theirs.code));
+      const joined = await pick(server, kid, theirs.id, 'thistlepip');
+      expect(PickStarterResponseSchema.parse(joined.json()).gift).toEqual({});
+      expect(await charmsOf(second.id, kid.id)).toBe(0);
+      expect(await charmsOf(theirs.id, kid.id)).toBe(0);
+      expect(await giftsTo(kid.id)).toHaveLength(1);
+
+      // A joiner who picked, then left: the archived marker still counts.
+      const roamer = await player();
+      await approve(server, pal, theirs.id, await ask(server, roamer, theirs.code));
+      const joinedFirst = await pick(server, roamer, theirs.id, 'emberbun');
+      expect(PickStarterResponseSchema.parse(joinedFirst.json()).gift).toEqual({ 'heart-charm': 3 });
+      expect((await call(server, 'POST', `/maps/${theirs.id}/leave`, roamer)).statusCode).toBe(204);
+      const own = await patch(server, roamer);
+      const later = await pick(server, roamer, own.id, 'puddlepuff');
+      expect(PickStarterResponseSchema.parse(later.json()).gift).toEqual({});
+      expect(await charmsOf(own.id, roamer.id)).toBe(0);
+      expect(await giftsTo(roamer.id)).toHaveLength(1);
+    });
+
+    it('gives a joiner their own on their first pick', async () => {
+      const server = await start();
+      const owner = await player();
+      const friend = await player();
+      const { id: mapId, code } = await patch(server, owner);
+      await approve(server, owner, mapId, await ask(server, friend, code));
+      const res = await pick(server, friend, mapId, 'puddlepuff');
+      expect(PickStarterResponseSchema.parse(res.json()).gift).toEqual({ 'heart-charm': 3 });
+      expect(await charmsOf(mapId, friend.id)).toBe(3);
+      expect(await charmsOf(mapId, owner.id)).toBe(0);
+    });
+
+    it("gives a tutorial graduate them too: Sprout's little bag stayed in the Glade", async () => {
+      const server = await start();
+      const kid = await player();
+      const started = await call(server, 'POST', '/tutorial/start', kid);
+      expect(started.statusCode, started.body).toBe(201);
+      const glade = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
+      expect(await charmsOf(glade, kid.id)).toBe(TUTORIAL_SETUP.bag['heart-charm']);
+
+      const { id: mapId } = await patch(server, kid);
+      expect(await charmsOf(mapId, kid.id)).toBe(0);
+      const res = await pick(server, kid, mapId, 'emberbun');
+      expect(PickStarterResponseSchema.parse(res.json()).gift).toEqual({ 'heart-charm': 3 });
+      expect(await charmsOf(mapId, kid.id)).toBe(3);
+    });
+
+    it('answers a retry with the same gift and grants it once (Idempotency-Key)', async () => {
+      const server = await start();
+      const kid = await player();
+      const { id: mapId } = await patch(server, kid);
+      const retry = () =>
+        server.inject({
+          method: 'POST',
+          url: `/api/v1/maps/${mapId}/starter`,
+          headers: { ...HEADERS, 'idempotency-key': 'starter-gift-retry-1' },
+          cookies: { [SESSION_COOKIE]: kid.token },
+          payload: { speciesId: 'puddlepuff' },
+        });
+      const first = PickStarterResponseSchema.parse((await retry()).json());
+      const again = await retry();
+      expect(again.headers['idempotent-replayed']).toBe('true');
+      expect(PickStarterResponseSchema.parse(again.json())).toEqual(first);
+      expect(first.gift).toEqual({ 'heart-charm': 3 });
+      // A retry without the key is a second pick: refused, and nothing more.
+      expect((await pick(server, kid, mapId, 'puddlepuff')).statusCode).toBe(409);
+      expect(await charmsOf(mapId, kid.id)).toBe(3);
+      expect(await giftsTo(kid.id)).toHaveLength(1);
+    });
+
+    it('gives exactly one gift when first picks race on the same patch and on two patches', async () => {
+      const server = await start();
+      const kid = await player();
+      const a = await patch(server, kid);
+      const b = await patch(server, kid);
+      const results = await Promise.all([
+        pick(server, kid, a.id, 'emberbun'),
+        pick(server, kid, b.id, 'puddlepuff'),
+        pick(server, kid, a.id, 'thistlepip'),
+        pick(server, kid, b.id, 'emberbun'),
+      ]);
+      const ok = results.filter((r) => r.statusCode === 201);
+      // One starter per patch; the account lock lets only one be the first.
+      expect(ok).toHaveLength(2);
+      expect(results.filter((r) => r.statusCode === 409)).toHaveLength(2);
+      const gifts = ok.map((r) => PickStarterResponseSchema.parse(r.json()).gift);
+      expect(gifts.filter((g) => Object.keys(g).length > 0)).toEqual([{ 'heart-charm': 3 }]);
+      expect((await charmsOf(a.id, kid.id)) + (await charmsOf(b.id, kid.id))).toBe(3);
+      expect(await giftsTo(kid.id)).toHaveLength(1);
+    });
+
+    it('grants no charms if the pick fails after them (one transaction)', async () => {
+      const server = await start();
+      const kid = await player();
+      const { id: mapId } = await patch(server, kid);
+      // The catalog write comes after the gift; fail it for this player only.
+      await db.execute(`
+        create function starter_gift_fail() returns trigger language plpgsql as $$
+        begin
+          if new.user_id = '${kid.id}' then raise exception 'starter gift failure'; end if;
+          return new;
+        end $$;
+        create trigger starter_gift_fail before insert on species_seen
+          for each row execute function starter_gift_fail();
+      `);
+      try {
+        expect((await pick(server, kid, mapId, 'puddlepuff')).statusCode).toBe(500);
+      } finally {
+        await db.execute(`
+          drop trigger starter_gift_fail on species_seen;
+          drop function starter_gift_fail();
+        `);
+      }
+      expect(await charmsOf(mapId, kid.id)).toBe(0);
+      expect(await giftsTo(kid.id)).toHaveLength(0);
+      // Still their first pick: the gift comes with the one that works.
+      const res = await pick(server, kid, mapId, 'puddlepuff');
+      expect(PickStarterResponseSchema.parse(res.json()).gift).toEqual({ 'heart-charm': 3 });
+      expect(await charmsOf(mapId, kid.id)).toBe(3);
+    });
   });
 });

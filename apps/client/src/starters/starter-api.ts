@@ -1,4 +1,8 @@
-import { MapResponseSchema, SquishyResponseSchema, type OwnedSquishy } from '@heartpatch/shared';
+import {
+  MapResponseSchema,
+  PickStarterResponseSchema,
+  type PickStarterResponse,
+} from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
 /** The starter pick's calls (server: modules/starters, and `MapDetail.needsStarter`). */
@@ -22,16 +26,17 @@ export const starterApi = {
     return { needsStarter: map.needsStarter, preselectSpeciesId: map.preselectSpeciesId };
   },
 
-  /** `key` makes a retry after a lost reply safe (tech spec §5). */
-  pick: async (mapId: string, speciesId: string, key: string): Promise<OwnedSquishy> =>
-    (
-      await apiCallFor(`/maps/${mapId}/starter`, {
-        method: 'POST',
-        body: { speciesId },
-        schema: SquishyResponseSchema,
-        headers: { 'idempotency-key': key },
-      })
-    ).squishy,
+  /**
+   * The new squishy, and Sprout's gift with the account's first pick (empty
+   * after that). `key` makes a retry after a lost reply safe (tech spec §5).
+   */
+  pick: async (mapId: string, speciesId: string, key: string): Promise<PickStarterResponse> =>
+    apiCallFor(`/maps/${mapId}/starter`, {
+      method: 'POST',
+      body: { speciesId },
+      schema: PickStarterResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
 };
 
 export type StarterApi = typeof starterApi;

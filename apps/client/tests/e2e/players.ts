@@ -120,5 +120,12 @@ export async function pickStarter(page: Page, name = 'Puddlepuff'): Promise<void
   await expect(picker.getByRole('heading', { name: 'Choose your friend!' })).toBeVisible();
   await picker.getByRole('button', { name: new RegExp(`^${name},`) }).tap();
   await picker.getByRole('button', { name: `Choose ${name}` }).tap();
+  // The account's first pick shows Sprout's gift of Heart Charms first
+  // (owner decision 2026-10-04); any later pick goes straight to the map.
+  const go = picker.getByRole('button', { name: 'Let’s go!' });
+  await expect
+    .poll(async () => (await picker.isHidden()) || (await go.isVisible()), { timeout: 30_000 })
+    .toBe(true);
+  if (await go.isVisible()) await go.tap();
   await expect(picker).toBeHidden({ timeout: 30_000 });
 }

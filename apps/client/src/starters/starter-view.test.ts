@@ -2,6 +2,8 @@ import { findAvoidedWords, GAME_DATA, STARTERS } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import {
   chooseLabel,
+  giftLine,
+  giftTitle,
   preselectedCard,
   STARTER_TEXT,
   starterCards,
@@ -49,5 +51,20 @@ describe('starter screen view', () => {
     expect(preselectedCard(cards, 'thistlepip')?.speciesId).toBe('thistlepip');
     expect(preselectedCard(cards, null)).toBeNull();
     expect(preselectedCard(cards, 'fuzzbolt')).toBeNull();
+  });
+
+  it("tells the player about Sprout's Heart Charms after their first pick, in kid words", () => {
+    expect(giftLine(STARTERS.firstPickGift)).toBe('Sprout tucked 3 Heart Charms in your Bag!');
+    expect(giftLine({ 'heart-charm': 1 })).toBe('Sprout tucked 1 Heart Charm in your Bag!');
+    expect(giftLine({ 'heart-charm': 2, treats: 3 })).toBe(
+      'Sprout tucked 2 Heart Charms and 3 Treats in your Bag!',
+    );
+    // Any later pick brings nothing, so no card.
+    expect(giftLine({})).toBeNull();
+    const [first] = starterCards();
+    expect(giftTitle(first!)).toBe(`${first!.name} is your friend!`);
+    for (const text of [giftLine(STARTERS.firstPickGift), STARTER_TEXT.giftHint, STARTER_TEXT.giftDone]) {
+      expect(findAvoidedWords(text ?? '')).toEqual([]);
+    }
   });
 });

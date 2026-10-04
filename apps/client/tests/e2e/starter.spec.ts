@@ -13,6 +13,7 @@ interface StarterDebug {
   picked: string | null;
   shown: string[];
   hopping: boolean;
+  gift: string | null;
 }
 
 const starterState = (page: Page) => hook<StarterDebug>(page, 'starter');
@@ -51,13 +52,28 @@ test('a new patch asks for a starter once, before the map', async ({ browser }) 
   );
   await picker.getByRole('button', { name: 'Choose Thistlepip' }).tap();
 
-  // Then the map, with the new friend at home.
+  // Their very first pick: Sprout tucked 3 Heart Charms in the bag (owner
+  // decision 2026-10-04), so they can make a friend on day one.
+  await expect(picker.getByRole('heading', { name: 'Thistlepip is your friend!' })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(picker.getByTestId('starter-gift')).toHaveText(
+    'Sprout tucked 3 Heart Charms in your Bag!',
+  );
+  await expect
+    .poll(() => starterState(page).then((s) => s?.gift))
+    .toBe('Sprout tucked 3 Heart Charms in your Bag!');
+  await picker.getByRole('button', { name: 'Let’s go!' }).tap();
+
+  // Then the map, with the new friend at home and the charms in the bag.
   await expect(picker).toBeHidden({ timeout: 30_000 });
   await expect(page.getByTestId('map-hud')).toContainText('Friendly Patch');
   const mapId = (await hook<{ id: string }>(page, 'map'))?.id ?? null;
   expect(mapId).not.toBeNull();
   const detail = await api(page, 'GET', `/maps/${mapId!}`);
   expect(detail.body).toMatchObject({ map: { needsStarter: false } });
+  const bag = await api(page, 'GET', `/maps/${mapId!}/inventory`);
+  expect(bag.body).toMatchObject({ items: { 'heart-charm': 3 } });
 
   // Visiting again goes straight to the map.
   await page.getByTestId('lobby-open').tap();
@@ -103,6 +119,8 @@ test('a pick or map that fails never leaves the screen blank', async ({ browser 
   await lobby.getByRole('button', { name: 'Visit patch' }).tap();
   await picker.getByRole('button', { name: /^Puddlepuff,/ }).tap();
   await picker.getByRole('button', { name: 'Choose Puddlepuff' }).tap();
+  // Their first pick for real: Sprout's gift card, then the map tries to load.
+  await picker.getByRole('button', { name: 'Let’s go!' }).tap({ timeout: 30_000 });
   await expect(picker).toBeHidden({ timeout: 30_000 });
   await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
   await expect(lobby.getByTestId('lobby-notice')).not.toBeEmpty();

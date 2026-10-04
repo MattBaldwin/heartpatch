@@ -10,6 +10,8 @@ import { starterApi, type StarterApi } from './starter-api.js';
 import { StarterPreview } from './starter-preview.js';
 import {
   chooseLabel,
+  giftLine,
+  giftTitle,
   preselectedCard,
   STARTER_TEXT,
   starterCards,
@@ -22,7 +24,9 @@ import './starter.css';
 // opens a patch they joined or made, they pick 1 of 3 starters before the
 // map. A bottom card for one thumb with three choices, the squishies in 3D
 // above it in the same order. Tap to choose, then confirm; the server checks
-// the pick and grants the squishy.
+// the pick and grants the squishy. The account's very first pick also brings
+// Sprout's Heart Charms (owner decision 2026-10-04): a small "Ta-da" card says
+// so before the map, so a new player knows how to make more friends.
 
 export interface StarterScreenOptions {
   root: HTMLElement;
@@ -43,6 +47,8 @@ export interface StarterDebug {
   /** The starters standing in the 3D preview, while it's on screen. */
   readonly shown: readonly string[];
   readonly hopping: boolean;
+  /** The gift card's line, while it shows. */
+  readonly gift: string | null;
 }
 
 export interface StarterScreen {
@@ -103,6 +109,27 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
     },
     card,
   );
+  // Sprout's gift with the first pick: same card shape, one big button.
+  const giftHeading = el('h1', { class: 'auth-title', id: 'starter-gift-title' });
+  const giftText = el('p', { class: 'auth-subtitle starter-subtitle', 'data-testid': 'starter-gift' });
+  const giftDone = el('button', { type: 'button', class: 'auth-button' }, STARTER_TEXT.giftDone);
+  const giftCard = el(
+    'div',
+    { class: 'auth-card starter-card', role: 'status' },
+    giftHeading,
+    giftText,
+    el('p', { class: 'starter-about' }, STARTER_TEXT.giftHint),
+    el('div', { class: 'auth-actions' }, giftDone),
+  );
+  giftCard.hidden = true;
+  panel.append(giftCard);
+  /** Settles once the gift card is tapped away. */
+  let giftShown: (() => void) | null = null;
+  giftDone.addEventListener('click', () => {
+    const done = giftShown;
+    giftShown = null;
+    done?.();
+  });
   panel.hidden = true;
   options.root.append(panel);
 
@@ -170,8 +197,20 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
     options.invalidate();
   }
 
+  /** Swaps the picker card for the gift card (or back, with null). */
+  function showGift(line: string | null, choice: StarterCard | null): void {
+    card.hidden = line !== null;
+    giftCard.hidden = line === null;
+    panel.setAttribute('aria-labelledby', line === null ? 'starter-title' : 'starter-gift-title');
+    if (line === null || !choice) return;
+    giftHeading.textContent = giftTitle(choice);
+    giftText.textContent = line;
+    giftDone.focus();
+  }
+
   function open(next: string, preselect: string | null): void {
     mapId = next;
+    showGift(null, null);
     // A tutorial graduate starts on their Partner's species (#24).
     picked = preselectedCard(
       buttons.map((b) => b.card),
@@ -189,6 +228,10 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
   function close(): void {
     const was = mapId;
     mapId = null;
+    // A gift card still up (a logout meanwhile) lets its pick finish quietly.
+    const waiting = giftShown;
+    giftShown = null;
+    waiting?.();
     panel.hidden = true;
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
@@ -214,8 +257,9 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
     choose.disabled = true;
     choose.textContent = STARTER_TEXT.choosing;
     error.textContent = '';
+    let line: string | null = null;
     try {
-      await api.pick(forMap, choice.speciesId, key);
+      line = giftLine((await api.pick(forMap, choice.speciesId, key)).gift);
     } catch (err) {
       if (mine !== session || mapId !== forMap) return;
       // A CONFLICT may mean they already picked (another tab or device), or
@@ -242,6 +286,14 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
       }
     }
     if (mine !== session || mapId !== forMap) return;
+    if (line !== null) {
+      // Their very first pick: tell them about Sprout's Heart Charms first.
+      showGift(line, choice);
+      await new Promise<void>((resolve) => {
+        giftShown = resolve;
+      });
+      if (mine !== session || mapId !== forMap) return;
+    }
     close();
     settle(null);
   }
@@ -286,6 +338,7 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
         picked: picked?.speciesId ?? null,
         shown: preview?.shown ?? [],
         hopping: picked !== null && (preview?.isPlaying(picked.speciesId, now) ?? false),
+        gift: giftCard.hidden ? null : giftText.textContent,
       };
     },
   };
