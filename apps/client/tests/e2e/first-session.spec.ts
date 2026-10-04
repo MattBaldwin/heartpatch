@@ -122,7 +122,8 @@ async function findTile(page: Page, action: string): Promise<{ x: number; y: num
  */
 async function offerCharms(page: Page): Promise<boolean> {
   const charm = page.getByTestId('battle-capture');
-  for (;;) {
+  // The turn limit (50) ends the battle well before this.
+  for (let i = 0; i < 60; i++) {
     const state = await settled(page);
     if (state.status !== 'active') {
       await page.getByTestId('battle-done').tap();
@@ -132,6 +133,7 @@ async function offerCharms(page: Page): Promise<boolean> {
     await charm.tap();
     await expect.poll(async () => (await battleState(page))?.turn).toBeGreaterThan(state.turn);
   }
+  throw new Error('the battle outlasted its turn limit');
 }
 
 test('first session: signup, Keeper, story, tutorial, a patch with a friend, a capture, a tile', async ({

@@ -104,7 +104,7 @@ Watch the story with each tester, paying special attention to **shot 4, "The Hol
 
 ## Performance (owner)
 
-The frame-rate badge only shows in a **dev build**, so do this pass on a local playtest (DEPLOY.md, "Playtesting"), not on the real server. The badge in the corner reads like `58 fps · WebGL2 · high · 2.00x`; `idle` means nothing is moving, so nothing is being drawn. Test on a recent iPhone and the **oldest iPad** you have.
+The frame-rate badge only shows in a **dev build**, so do this pass on a local playtest (DEPLOY.md, "Playtesting"), not on the real server. The badge in the corner reads like `58 fps · WebGL2 · high · 2.00x`; `idle` means nothing is moving, so nothing is being drawn. Test on a recent iPhone and the **oldest iPad** you have. The dev build isn't minified like the real one, so the real game runs at least this fast.
 
 - [ ] **Map:** pan, fling and pinch for a minute on a busy patch. Recent iPhone holds about **60 fps**. The older iPad **never drops below 30**.
 - [ ] **Battle, home base and close-up view:** the same targets.
