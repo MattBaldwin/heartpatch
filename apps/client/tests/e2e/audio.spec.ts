@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName } from './players.js';
 
 /**
@@ -18,13 +19,7 @@ interface AudioSignals {
   settings: { music: number; sounds: number; musicOn: boolean; soundsOn: boolean };
 }
 
-const audio = (page: Page) =>
-  page.evaluate(
-    () =>
-      (
-        window as unknown as { __heartpatch?: { audio?(): AudioSignals } }
-      ).__heartpatch?.audio?.() ?? null,
-  );
+const audio = (page: Page) => hook<AudioSignals>(page, 'audio');
 
 test('sound waits for a tap, ticks for buttons, and keeps its settings on this device', async ({
   browser,

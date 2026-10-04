@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
+import { TEST_PASSWORD } from './players.js';
 
 // Signup needs the family code the dev server was started with (playwright.config.ts).
 const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
 
 test('signs up, logs out and logs back in', async ({ page }, testInfo) => {
   const username = `e2e_${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
-  const password = 'squishy-secret';
+  const password = TEST_PASSWORD;
 
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');

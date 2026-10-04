@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** The bag and the tile panel's gather action, from the dev hook (`InventoryDebug`). */
@@ -13,15 +14,8 @@ interface InventoryDebug {
   tileAction: string | null;
 }
 
-type Hook = {
-  __heartpatch?: {
-    inventory?(): InventoryDebug | null;
-    map?(): { tiles: number; selected: string | null } | null;
-  };
-};
-
 function bagState(page: Page): Promise<InventoryDebug | null> {
-  return page.evaluate(() => (window as unknown as Hook).__heartpatch?.inventory?.() ?? null);
+  return hook<InventoryDebug>(page, 'inventory');
 }
 
 /** A touch tap on the canvas as pointer events (as map.spec.ts does). */
@@ -79,9 +73,12 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.()?.tiles), {
-      timeout: 30_000,
-    })
+    .poll(
+      async () => (await hook<{ tiles: number; selected: string | null }>(page, 'map'))?.tiles,
+      {
+        timeout: 30_000,
+      },
+    )
     .toBe(469);
 
   // The bag starts empty, on the server's season (the dev server runs on today's date).

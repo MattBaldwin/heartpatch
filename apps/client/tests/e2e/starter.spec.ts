@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -14,17 +15,7 @@ interface StarterDebug {
   hopping: boolean;
 }
 
-type Hook = { __heartpatch?: { starter?(): StarterDebug | null } };
-
-const starterState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.starter?.() ?? null);
-
-/** `GET /api/v1/<path>` with the player's cookie: status and JSON body. */
-const apiGet = (page: Page, path: string) =>
-  page.evaluate(async (p) => {
-    const res = await fetch(`/api/v1${p}`, { headers: { 'x-requested-with': 'heartpatch' } });
-    return { status: res.status, body: (await res.json()) as unknown };
-  }, path);
+const starterState = (page: Page) => hook<StarterDebug>(page, 'starter');
 
 test('a new patch asks for a starter once, before the map', async ({ browser }) => {
   test.setTimeout(120_000);
@@ -63,14 +54,9 @@ test('a new patch asks for a starter once, before the map', async ({ browser }) 
   // Then the map, with the new friend at home.
   await expect(picker).toBeHidden({ timeout: 30_000 });
   await expect(page.getByTestId('map-hud')).toContainText('Friendly Patch');
-  const mapId = await page.evaluate(
-    () =>
-      (
-        window as unknown as { __heartpatch?: { map?(): { id: string } | null } }
-      ).__heartpatch?.map?.()?.id ?? null,
-  );
+  const mapId = (await hook<{ id: string }>(page, 'map'))?.id ?? null;
   expect(mapId).not.toBeNull();
-  const detail = await apiGet(page, `/maps/${mapId!}`);
+  const detail = await api(page, 'GET', `/maps/${mapId!}`);
   expect(detail.body).toMatchObject({ map: { needsStarter: false } });
 
   // Visiting again goes straight to the map.

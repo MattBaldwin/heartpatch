@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { draws, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** Longer than one wander gap (home-config.ts `WANDER`: 3.5 s ± 1.5 s). */
@@ -46,18 +47,8 @@ interface MapDebug {
   safeTiles: number;
 }
 
-type Hook = {
-  __heartpatch?: {
-    home?(): HomeDebug | null;
-    map?(): MapDebug | null;
-    idle(): boolean;
-  };
-};
-
-const homeState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.home?.() ?? null);
-const mapState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.() ?? null);
+const homeState = (page: Page) => hook<HomeDebug>(page, 'home');
+const mapState = (page: Page) => hook<MapDebug>(page, 'map');
 
 /** A touch tap on the canvas as pointer events (as map.spec.ts does). */
 async function tapCanvas(page: Page, x: number, y: number): Promise<void> {
@@ -160,19 +151,14 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
   // …and with reduced motion it stays put, so the home draws nothing at all.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as Hook).__heartpatch?.idle() ?? false), {
+    .poll(() => idle(page), {
       timeout: 30_000,
     })
     .toBe(true);
-  const draws = () =>
-    page.evaluate(
-      () =>
-        (window as unknown as { __heartpatch?: { draws(): number } }).__heartpatch?.draws() ?? 0,
-    );
   const hops = (await homeState(page))?.hops ?? 0;
-  const before = await draws();
+  const before = await draws(page);
   await page.waitForTimeout(WANDER_EVERY_MS * 2);
-  expect(await draws()).toBe(before);
+  expect(await draws(page)).toBe(before);
   expect((await homeState(page))?.hops).toBe(hops);
   await page.emulateMedia({ reducedMotion: null });
 

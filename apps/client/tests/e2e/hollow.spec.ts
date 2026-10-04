@@ -1,5 +1,6 @@
 import { findAvoidedWords, STARTERS } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -24,40 +25,10 @@ interface HollowDebug {
   fireHint: boolean;
 }
 
-type Hook = {
-  __heartpatch?: {
-    hollow?(): HollowDebug | null;
-    map?(): { id: string; live: string | null } | null;
-    idle(): boolean;
-    battle?(): { status: string; scene: { squishies: number; shadowLook: number } | null } | null;
-  };
-};
-
-const hollowState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.hollow?.() ?? null);
-const mapState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.() ?? null);
+const hollowState = (page: Page) => hook<HollowDebug>(page, 'hollow');
+const mapState = (page: Page) => hook<{ id: string; live: string | null }>(page, 'map');
 const battleState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.battle?.() ?? null);
-const isIdle = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.idle() ?? false);
-
-/** A dev/test route on the open map, from the page (its session cookie). */
-const devPost = (page: Page, path: string, body?: object) =>
-  page.evaluate(
-    async ({ path, body }) => {
-      const res = await fetch(`/api/v1${path}`, {
-        method: 'POST',
-        headers: {
-          'x-requested-with': 'heartpatch',
-          ...(body ? { 'content-type': 'application/json' } : {}),
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      });
-      return { status: res.status, body: (await res.json()) as unknown };
-    },
-    { path, body },
-  );
+  hook<{ status: string; scene: { squishies: number; shadowLook: number } | null }>(page, 'battle');
 
 test('night falls, the Hollow Man visits, and a rescue sets off', async ({ browser }) => {
   test.setTimeout(180_000); // map and arena builds; CI renders in software
@@ -93,10 +64,10 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
 
   // One squishy, waiting by the Heart Seed with no Hearthfire built: exposed.
   const squishy = { speciesId: STARTERS.speciesIds[0], level: 5 };
-  expect((await devPost(page, `/maps/${mapId}/dev/squishies`, squishy)).status).toBe(201);
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/squishies`, squishy)).status).toBe(201);
   // First-night grace: the first two nightfalls take nothing.
   for (let night = 0; night < 2; night++) {
-    const graced = await devPost(page, `/maps/${mapId}/dev/nightfall`);
+    const graced = await api(page, 'POST', `/maps/${mapId}/dev/nightfall`);
     expect(graced).toMatchObject({ status: 200, body: { taken: 0 } });
   }
   // He still comes by (the live visit), then fades; wait for that before counting.
@@ -106,14 +77,14 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await expect
     .poll(async () => (await hollowState(page))?.visiting, { timeout: 30_000 })
     .toBe(false);
-  await expect.poll(() => isIdle(page), { timeout: 30_000 }).toBe(true);
+  await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
   const visitsBefore = (await hollowState(page))!.visits;
   expect(await hollowState(page)).toMatchObject({ hollowed: 0, report: [] });
   // The raid report (#16) is open when night falls: the Hollow's report waits its turn.
   await page.getByTestId('raid-open').tap();
   const raidSheet = page.getByTestId('raid-report');
   await expect(raidSheet).toBeVisible();
-  const fell = await devPost(page, `/maps/${mapId}/dev/nightfall`);
+  const fell = await api(page, 'POST', `/maps/${mapId}/dev/nightfall`);
   expect(fell).toMatchObject({ status: 200, body: { taken: 1 } });
 
   // He visits once, live, and the map stops drawing when he's gone.
@@ -121,7 +92,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await expect
     .poll(async () => (await hollowState(page))?.visiting, { timeout: 30_000 })
     .toBe(false);
-  await expect.poll(() => isIdle(page), { timeout: 30_000 }).toBe(true);
+  await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
 
   // One morning report at a time: the Hollow's shows once the raid report closes.
   const report = page.getByTestId('hollow-report');

@@ -2,7 +2,13 @@ import { expect, test, type Browser, type Locator, type Page } from '@playwright
 
 // Signup needs the family code the dev server was started with (playwright.config.ts).
 const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
-const password = 'squishy-secret';
+/**
+ * Every e2e account's password. It matches the server's `SEED_PASSWORD` only so
+ * there's one password to remember; e2e never logs in as a seed account (each
+ * spec signs up its own players), and the client package can't import the
+ * server's (no dependency, and lint bans client→server imports).
+ */
+export const TEST_PASSWORD = 'squishy-secret';
 
 /** A name nobody has used yet, e.g. `own_lq3x9a0` (usernames are global). */
 export function uniqueName(prefix: string): string {
@@ -42,7 +48,7 @@ export async function signUp(page: Page, name: string): Promise<void> {
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByLabel('Family code').fill(signupCode);
   await overlay.getByLabel('Pick a name').fill(name);
-  await overlay.getByLabel('Pick a password').fill(password);
+  await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();

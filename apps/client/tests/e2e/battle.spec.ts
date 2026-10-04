@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -20,10 +21,8 @@ interface BattleDebug {
   scene: { squishies: number; meshes: number; instances: number } | null;
 }
 
-type Hook = { __heartpatch?: { battle?(): BattleDebug | null; map?(): unknown } };
-
 function battleState(page: Page): Promise<BattleDebug | null> {
-  return page.evaluate(() => (window as unknown as Hook).__heartpatch?.battle?.() ?? null);
+  return hook<BattleDebug>(page, 'battle');
 }
 
 /** Waits until the log has played out and the player may act (or the battle is over). */
@@ -80,18 +79,11 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
 
   // The client can't forge an outcome: the engine's own action shape is refused.
-  const forged = await page.evaluate(async (id) => {
-    const res = await fetch(`/api/v1/battles/${id}/actions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
-      body: JSON.stringify({
-        action: { type: 'turn', choices: { b: { type: 'move', move: 'x' } } },
-        turn: 0,
-      }),
-    });
-    return res.status;
-  }, battleId);
-  expect(forged).toBe(400);
+  const forged = await api(page, 'POST', `/battles/${battleId}/actions`, {
+    action: { type: 'turn', choices: { b: { type: 'move', move: 'x' } } },
+    turn: 0,
+  });
+  expect(forged.status).toBe(400);
 
   // One move: the log plays, then the bars show the server's numbers.
   const before = state.shown;
@@ -192,9 +184,7 @@ test('a battle owns the screen: no lobby button mid-battle, none left after the 
   await expect(page.getByTestId('tutorial')).toBeHidden();
   await lobby.getByTestId('lobby-close').tap();
   await expect(entry).toBeHidden();
-  expect(
-    await page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.() ?? null),
-  ).toBeNull();
+  expect(await hook(page, 'map')).toBeNull();
 
   expect(errors).toEqual([]);
 });

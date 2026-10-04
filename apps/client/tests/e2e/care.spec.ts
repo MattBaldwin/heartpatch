@@ -1,5 +1,6 @@
 import { CARE_RULES, findAvoidedWords, moodFor } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
@@ -25,12 +26,8 @@ interface CareDebug {
   note: string;
 }
 
-type Hook = { __heartpatch?: { care?(): CareDebug | null; home?(): { open: boolean } | null } };
-
-const careState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.care?.() ?? null);
-const homeOpen = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.home?.()?.open ?? false);
+const careState = (page: Page) => hook<CareDebug>(page, 'care');
+const homeOpen = async (page: Page) => (await hook<{ open: boolean }>(page, 'home'))?.open ?? false;
 
 /** A fresh player on their own patch with a squishy friend and a bag of stuff (dev tools). */
 async function playerWithFriend(page: Page): Promise<void> {

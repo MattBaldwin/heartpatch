@@ -1,5 +1,6 @@
 import { GAME_DATA } from '@heartpatch/shared';
 import { expect as baseExpect, test, type Page } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -33,40 +34,14 @@ interface BattleDebug {
   winner: 'a' | 'b' | 'draw' | null;
 }
 
-type Hook = {
-  __heartpatch?: {
-    cinematic?(): { mode: 'first' | 'replay' | null; ended: 'watched' | 'skipped' | null } | null;
-    tutorial?(): { status: string | null; stepId: string | null } | null;
-    map?(): { id: string; keepers: number } | null;
-    battle?(): BattleDebug | null;
-    territory?(): { attemptsLeft: number; tileAction: string | null } | null;
-  };
-};
-
 const story = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.cinematic?.() ?? null);
+  hook<{ mode: 'first' | 'replay' | null; ended: 'watched' | 'skipped' | null }>(page, 'cinematic');
 const tutorial = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.tutorial?.() ?? null);
-const mapState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.() ?? null);
-const battleState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.battle?.() ?? null);
+  hook<{ status: string | null; stepId: string | null }>(page, 'tutorial');
+const mapState = (page: Page) => hook<{ id: string; keepers: number }>(page, 'map');
+const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
 const territoryState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.territory?.() ?? null);
-
-/** A JSON API call with the player's cookie: status and body. */
-const api = (page: Page, method: 'GET' | 'POST', path: string, body?: object) =>
-  page.evaluate(
-    async ({ method, path, body }) => {
-      const res = await fetch(`/api/v1${path}`, {
-        method,
-        headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      });
-      return { status: res.status, body: (await res.json()) as unknown };
-    },
-    { method, path, body },
-  );
+  hook<{ attemptsLeft: number; tileAction: string | null }>(page, 'territory');
 
 /** Waits for the battle's playback to catch up with the server. */
 async function settled(page: Page): Promise<BattleDebug> {

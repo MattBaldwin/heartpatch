@@ -1,5 +1,6 @@
 import { findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** The dev squishy's level: strong enough to beat the guardians next to home. */
@@ -33,20 +34,9 @@ interface BattleDebug {
   winner: 'a' | 'b' | 'draw' | null;
 }
 
-type Hook = {
-  __heartpatch?: {
-    territory?(): TerritoryDebug | null;
-    battle?(): BattleDebug | null;
-    map?(): { id: string; selected: string | null } | null;
-  };
-};
-
-const territoryState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.territory?.() ?? null);
-const battleState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.battle?.() ?? null);
-const mapState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.() ?? null);
+const territoryState = (page: Page) => hook<TerritoryDebug>(page, 'territory');
+const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
+const mapState = (page: Page) => hook<{ id: string; selected: string | null }>(page, 'map');
 
 /** A touch tap on the canvas as pointer events (as map.spec.ts does). */
 async function tapCanvas(page: Page, x: number, y: number): Promise<void> {
@@ -108,18 +98,11 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
 
   // A strong squishy from the dev route, next to their level-1 starter.
   const mapId = (await mapState(page))!.id;
-  const granted = await page.evaluate(
-    async ({ id, body }) => {
-      const res = await fetch(`/api/v1/maps/${id}/dev/squishies`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
-        body: JSON.stringify(body),
-      });
-      return res.status;
-    },
-    { id: mapId, body: { speciesId: STRONG, level: STRONG_LEVEL } },
-  );
-  expect(granted).toBe(201);
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/squishies`, {
+    speciesId: STRONG,
+    level: STRONG_LEVEL,
+  });
+  expect(granted.status).toBe(201);
 
   // Wild land next to home: the panel says Claim, kindly.
   const spot = await findTile(page, 'claim');
@@ -129,22 +112,15 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   // How many guardians and how tough (owner decision 10), as the server's view
   // says for the tile the map has selected; never who.
   const selected = (await mapState(page))!.selected!;
-  const hint = await page.evaluate(
-    async ({ id, key }) => {
-      const res = await fetch(`/api/v1/maps/${id}/view`, {
-        headers: { 'x-requested-with': 'heartpatch' },
-      });
-      const view = (await res.json()) as {
-        tiles: {
-          q: number;
-          r: number;
-          guardianHint: { count: number; difficulty: string } | null;
-        }[];
-      };
-      return view.tiles.find((t) => `${String(t.q)},${String(t.r)}` === key)?.guardianHint ?? null;
-    },
-    { id: mapId, key: selected },
-  );
+  const { body: view } = await api<{
+    tiles: {
+      q: number;
+      r: number;
+      guardianHint: { count: number; difficulty: string } | null;
+    }[];
+  }>(page, 'GET', `/maps/${mapId}/view`);
+  const hint =
+    view.tiles.find((t) => `${String(t.q)},${String(t.r)}` === selected)?.guardianHint ?? null;
   expect(hint).not.toBeNull();
   const words = { easy: 'easy', tough: 'tough', 'very-tough': 'very tough' } as const;
   const who = hint!.count === 1 ? '1 sleepy squishy' : `${String(hint!.count)} sleepy squishies`;

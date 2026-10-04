@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** The open map as drawn, from the dev hook (src/map/map-screen.ts `MapDebug`). */
@@ -15,11 +16,7 @@ interface MapDebug {
 }
 
 function mapState(page: Page): Promise<MapDebug | null> {
-  return page.evaluate(
-    () =>
-      (window as unknown as { __heartpatch?: { map(): MapDebug | null } }).__heartpatch?.map() ??
-      null,
-  );
+  return hook<MapDebug>(page, 'map');
 }
 
 /** A touch tap on the canvas as pointer events (the same in WebKit and Chromium; see smoke.spec.ts). */

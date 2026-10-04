@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -21,14 +22,8 @@ interface BoutiqueDebug {
   buying: boolean;
 }
 
-type Hook = {
-  __heartpatch?: {
-    wardrobe?(): { owned: string[]; trying: string[]; boutique: BoutiqueDebug } | null;
-  };
-};
-
 const wardrobeState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.wardrobe?.() ?? null);
+  hook<{ owned: string[]; trying: string[]; boutique: BoutiqueDebug }>(page, 'wardrobe');
 const shopState = async (page: Page) => (await wardrobeState(page))?.boutique ?? null;
 
 test('earns Patch Coins from care, then buys a piece in the Boutique', async ({ browser }) => {

@@ -1,5 +1,6 @@
 import { CARE_RULES, findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
@@ -39,21 +40,9 @@ interface CloseUpDebug {
   note: string;
 }
 
-type Hook = {
-  __heartpatch?: {
-    closeUp?(): CloseUpDebug | null;
-    home?(): { open: boolean } | null;
-    map?(): { id: string } | null;
-    care?(): { open: boolean } | null;
-  };
-};
-
-const state = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.closeUp?.() ?? null);
-const homeOpen = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.home?.()?.open ?? false);
-const mapOpen = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.()?.id ?? null);
+const state = (page: Page) => hook<CloseUpDebug>(page, 'closeUp');
+const homeOpen = async (page: Page) => (await hook<{ open: boolean }>(page, 'home'))?.open ?? false;
+const mapOpen = async (page: Page) => (await hook<{ id: string }>(page, 'map'))?.id ?? null;
 
 /** A fresh player on their own patch with a squishy friend and a bag of stuff (dev tools). */
 async function playerWithFriend(page: Page): Promise<void> {
@@ -256,13 +245,10 @@ test('celebrates an evolution in the close-up, and Back returns to the map', asy
   // The squishy is a friend in the catalog (a dev grant doesn't fill it in),
   // so its card opens the care sheet over the map.
   const mapId = (await mapOpen(page))!;
-  const care = await page.evaluate(async (id) => {
-    const res = await fetch(`/api/v1/maps/${id}/care`);
-    return (await res.json()) as {
-      squishies: { speciesId: string }[];
-      speciesDefs: { id: string }[];
-    };
-  }, mapId);
+  const { body: care } = await api<{
+    squishies: { speciesId: string }[];
+    speciesDefs: { id: string }[];
+  }>(page, 'GET', `/maps/${mapId}/care`);
   const speciesId = care.squishies[0]!.speciesId;
   const def = care.speciesDefs.find((s) => s.id === speciesId);
   await page.route('**/api/v1/maps/*/catalog', async (route) => {

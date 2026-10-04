@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { newPlayer, uniqueName } from './players.js';
+import { api, hook } from './dev-hook.js';
+import { newPlayer, TEST_PASSWORD, uniqueName } from './players.js';
 
 // The tutorial layer (#47) and The First Patch (#24). Asserts on signals from
 // the dev hook (step id, spotlight target, gate), never on pixels. The dev
@@ -17,53 +18,17 @@ interface TutorialDebug {
   sprout: string | null;
 }
 
-interface Hook {
-  tutorial?(): TutorialDebug | null;
-  map?(): { id: string } | null;
-  updatesHeld?(): boolean;
-}
-
-const debug = (page: Page) =>
-  page.evaluate(
-    () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.tutorial?.() ?? null,
-  );
+const debug = (page: Page) => hook<TutorialDebug>(page, 'tutorial');
 /** The map the map screen is drawing, if any. */
-const drawnMap = (page: Page) =>
-  page.evaluate(
-    () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.map?.()?.id ?? null,
-  );
+const drawnMap = async (page: Page) => (await hook<{ id: string }>(page, 'map'))?.id ?? null;
 /** Dev only: moves the run straight to `stepId` (the server's `POST /tutorial/dev/step`). */
 async function jumpTo(page: Page, stepId: string): Promise<void> {
-  const status = await page.evaluate(async (id) => {
-    const res = await fetch('/api/v1/tutorial/dev/step', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
-      body: JSON.stringify({ stepId: id }),
-    });
-    return res.status;
-  }, stepId);
+  const { status } = await api(page, 'POST', '/tutorial/dev/step', { stepId });
   expect(status).toBe(200);
   await expect.poll(async () => (await debug(page))?.stepId).toBe(stepId);
 }
 
-/** `POST /api/v1/<path>` with the player's cookie: status and JSON body. */
-const apiPost = (page: Page, path: string, body: object) =>
-  page.evaluate(
-    async ([p, b]) => {
-      const res = await fetch(`/api/v1${p}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
-        body: JSON.stringify(b),
-      });
-      return { status: res.status, body: (await res.json()) as unknown };
-    },
-    [path, body] as const,
-  );
-
-const updatesHeld = (page: Page) =>
-  page.evaluate(
-    () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.updatesHeld?.() ?? null,
-  );
+const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
 
 /** The `data-testid` of whatever takes a tap at (x, y) (or its nearest parent's). */
 function testIdAt(page: Page, x: number, y: number): Promise<string | null> {
@@ -212,7 +177,7 @@ test("an update can't reload away a new account's recovery code", async ({ page 
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByLabel('Family code').fill(process.env['HP_SIGNUP_CODE'] ?? '');
   await overlay.getByLabel('Pick a name').fill(uniqueName('hold'));
-  await overlay.getByLabel('Pick a password').fill('squishy-secret');
+  await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   expect(await updatesHeld(page)).toBe(false);
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
@@ -258,7 +223,7 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
 
   // Befriend a starter in the Glade (the battle itself is server-tested).
   await jumpTo(page, 'befriend');
-  const started = await apiPost(page, `/maps/${glade!}/battles`, { tile: { q: 0, r: 1 } });
+  const started = await api(page, 'POST', `/maps/${glade!}/battles`, { tile: { q: 0, r: 1 } });
   expect(started.status).toBe(201);
   const { battle } = started.body as {
     battle: {
@@ -267,7 +232,7 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
     };
   };
   const befriended = battle.view.sides.b.squishies[0]?.speciesId;
-  const captured = await apiPost(page, `/battles/${battle.id}/actions`, {
+  const captured = await api(page, 'POST', `/battles/${battle.id}/actions`, {
     action: { type: 'capture' },
     turn: battle.view.turn,
   });
@@ -322,12 +287,7 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
   // The starter pick opens on the Partner's species; any can still be picked.
   const picker = page.getByTestId('starter-picker');
   await expect(picker.getByRole('heading', { name: 'Choose your friend!' })).toBeVisible();
-  const partner = await page.evaluate(
-    () =>
-      (
-        window as unknown as { __heartpatch?: { starter?(): { picked: string | null } | null } }
-      ).__heartpatch?.starter?.()?.picked ?? null,
-  );
+  const partner = (await hook<{ picked: string | null }>(page, 'starter'))?.picked ?? null;
   expect(partner).toBe(befriended);
   await expect(picker.getByRole('button', { name: /^Choose \w+$/ })).toBeEnabled();
 });

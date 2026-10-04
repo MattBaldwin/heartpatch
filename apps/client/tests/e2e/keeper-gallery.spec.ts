@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { draws, idle } from './dev-hook.js';
 
 /**
  * The dev Keeper gallery (`/keepers.html`, issue #42). Everything is checked
@@ -35,12 +36,7 @@ interface KeeperGalleryHook {
   animating(): boolean;
 }
 
-interface EngineHook {
-  draws(): number;
-  idle(): boolean;
-}
-
-type Hooks = { __heartpatchKeepers?: KeeperGalleryHook; __heartpatch?: EngineHook };
+type Hooks = { __heartpatchKeepers?: KeeperGalleryHook };
 
 /**
  * Same config as `GOLDEN_CONFIG` in src/procedural/keeper/keeper-params.test.ts.
@@ -100,8 +96,6 @@ async function openGallery(page: Page, query = ''): Promise<Stats> {
   return (await page.evaluate(() => (window as Hooks).__heartpatchKeepers!.stats()))!;
 }
 
-const draws = (page: Page) => page.evaluate(() => (window as Hooks).__heartpatch?.draws() ?? 0);
-
 /** Waits until nothing is drawn for `quietMs` and the loop reports idle (see smoke.spec.ts). */
 async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
   await expect
@@ -109,8 +103,8 @@ async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
       async () => {
         const before = await draws(page);
         await page.waitForTimeout(quietMs);
-        const idle = await page.evaluate(() => (window as Hooks).__heartpatch?.idle() ?? false);
-        return idle && (await draws(page)) === before;
+        const isIdle = await idle(page);
+        return isIdle && (await draws(page)) === before;
       },
       { timeout: 30_000, intervals: [0] },
     )
