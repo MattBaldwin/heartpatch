@@ -48,12 +48,19 @@ export async function signUp(page: Page, name: string): Promise<void> {
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();
 }
 
-/** Presses and holds on the opening cinematic for `ms` (a long press, like a finger). */
-export async function holdCinematic(page: Page, ms: number): Promise<void> {
+/**
+ * Presses on the opening cinematic and holds until it skips, then lets go,
+ * like a finger watching the "Hold to skip" ring fill. The hold is checked
+ * on drawn frames, and a software-rendered iPad in CI can go longer than the
+ * hold between frames, so a fixed-length press could lift before any frame
+ * saw it.
+ */
+export async function holdCinematic(page: Page): Promise<void> {
   const panel = page.getByTestId('cinematic');
-  await panel.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
-  await page.waitForTimeout(ms);
-  await panel.dispatchEvent('pointerup', { pointerType: 'touch', isPrimary: true, button: 0 });
+  const press = { pointerType: 'touch', isPrimary: true, button: 0 };
+  await panel.dispatchEvent('pointerdown', press);
+  await expect(panel).toBeHidden({ timeout: 60_000 });
+  await panel.dispatchEvent('pointerup', press);
 }
 
 /**

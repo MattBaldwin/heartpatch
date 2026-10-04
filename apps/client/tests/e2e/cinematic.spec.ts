@@ -74,7 +74,7 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   expect((await story(page))?.reducedMotion).toBe(false);
 
   // A long press skips it, even the first time; the account remembers.
-  await holdCinematic(page, 1600);
+  await holdCinematic(page);
   await expect(cinematic).toBeHidden();
   expect((await story(page))?.ended).toBe('skipped');
   await expect.poll(() => seenOnServer(page), SLOW).not.toBeNull();

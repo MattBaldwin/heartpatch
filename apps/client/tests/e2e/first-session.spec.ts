@@ -155,7 +155,7 @@ test('first session: signup, Keeper, story, tutorial, a patch with a friend, a c
   await expect.poll(async () => (await story(page))?.mode, { timeout: 30_000 }).toBe('first');
 
   // A long press skips it, through the real panel.
-  await holdCinematic(page, 1600);
+  await holdCinematic(page);
   await expect(cinematic).toBeHidden();
   expect((await story(page))?.ended).toBe('skipped');
 
