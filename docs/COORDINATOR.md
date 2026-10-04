@@ -176,10 +176,5 @@ The supervisor keeps this list current. Remove items as they land.
   - Batches 10–12: #102 5.24, #103 10.37, #104 6.31, #105 36.09, #106 32.17, #107 24.81, Docs #101 2.00, audits 2.83 and 2.92. The CI split (#100) was coordinator-made.
   - Supervisor 3: about 28.
   - Big lanes run $25–50; flag above about $35.
-- **Owner questions queued:**
-  - Flip `HP_TUTORIAL_REQUIRED` at launch?
-  - Should battle and capture coins be paid on tutorial maps?
-  - Halloween: judge it in the patch or the account time zone?
-  - Should the milestone member count ignore members who left?
-  - Confirm the #24, #44 and #45 decisions.
+- **Owner questions queued:** none open. The tutorial gate, tutorial coins, the Halloween clock, the milestone member count and the #24/#44/#45/#46 confirmations were answered on 2026-10-04 (DECISIONS, "2026-10-04 — Owner decisions").
   - **AWS:** Matt chose the new AWS experience ("project"), Region us-east-2, profile `heartpatch`. The CLI is installed in supervisor 3's container only. Remote `aws login` was started but the code never arrived. Restart with `aws login --remote --region us-east-2 --profile heartpatch` when he's ready. Agent Toolkit rules go in an uncommitted `CLAUDE.local.md` (his choice). Check Lightsail is available on the new experience, and update DEPLOY.md step 1 for projects (spend limits in AWS Settings rather than root MFA and budgets).
