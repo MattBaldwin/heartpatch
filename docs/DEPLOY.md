@@ -17,6 +17,7 @@ The design is in tech spec §10 (config), §11 (infrastructure) and §12 (CI/CD)
 - [6. Put the production settings on the server](#6-put-the-production-settings-on-the-server)
 - [7. First deploy](#7-first-deploy)
 - [8. Day-to-day operations](#8-day-to-day-operations): logs, backups and restore, rollback
+- [9. Playtesting](#9-playtesting): seed accounts, a local playtest on your Wi-Fi
 - [Troubleshooting](#troubleshooting)
 - [Testing the deploy setup locally](#testing-the-deploy-setup-locally)
 
@@ -351,6 +352,55 @@ For a player with no map owner to reset them (tech spec §9):
 ```sh
 docker compose exec server node dist/ops/reset-password.js <username>
 ```
+
+## 9. Playtesting
+
+The checklist for testers is [PLAYTEST.md](PLAYTEST.md). This section is where the game runs for a playtest and which accounts to use.
+
+### On the real server
+
+Testers sign up at `https://play.pumpkinpatchgames.com` with the family code (`HP_SIGNUP_CODE`), like any player. There are no seed accounts there: the seed refuses to run with `NODE_ENV=production`, which the compose file sets. Before inviting anyone, decide `HP_TUTORIAL_REQUIRED` (PLAYTEST.md, "Before inviting testers").
+
+The frame-rate badge only exists in dev builds, so the performance checks use a local playtest.
+
+### A local playtest on your Wi-Fi
+
+This runs the dev build on your computer and plays it on an iPhone or iPad on the same Wi-Fi. It shows the frame-rate badge and has the seed accounts.
+
+1. Find your computer's address on the Wi-Fi, like `192.168.1.20` (macOS: System Settings → Wi-Fi → Details).
+2. In the repo's `.env`, set `PUBLIC_ORIGIN=http://192.168.1.20:5173` (your address). Live updates check it.
+3. Start the database and fill it:
+
+   ```sh
+   pnpm db:up && pnpm db:migrate && pnpm db:seed
+   ```
+
+4. Start the server and the client, each in its own terminal. `--host` lets other devices on the Wi-Fi reach the client:
+
+   ```sh
+   pnpm --filter @heartpatch/server dev
+   pnpm --filter @heartpatch/client dev --host
+   ```
+
+5. On the iPhone or iPad, open `http://192.168.1.20:5173` in Safari.
+
+### Seed accounts
+
+`pnpm db:seed` (`apps/server/src/db/seed.ts`) makes these accounts in a dev database. All of them use the password `squishy-secret`. Running it again adds only what's missing and never resets anyone's progress.
+
+| Account | What it's for |
+|---|---|
+| `pumpkinpal` | Skips onboarding: it already has a Keeper, has seen the story and finished the tutorial. It owns **Seed Patch**. |
+| `mothmuffin` | Skips onboarding like `pumpkinpal`, and is a member of Seed Patch. Log in on a second device to play together. |
+| `newsprout` | A fresh account: no Keeper, no story, no tutorial, no patch. Logging in plays the whole first session. |
+
+`newsprout` is fresh only once. To play onboarding again, sign up a new account with the family code (`heartpatch-dev-family` in `.env.example`), or reset the dev database:
+
+```sh
+docker compose -f infra/compose/docker-compose.dev.yml down -v && pnpm db:up && pnpm db:migrate && pnpm db:seed
+```
+
+A database seeded before #28 gets the password and the skipped onboarding on the next `pnpm db:seed`; only `newsprout` is new.
 
 ## Troubleshooting
 

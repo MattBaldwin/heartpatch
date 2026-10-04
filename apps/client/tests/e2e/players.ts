@@ -23,6 +23,20 @@ export async function newPlayer(browser: Browser, name: string): Promise<Page> {
     ...(baseURL ? { baseURL } : {}),
   });
   const page = await context.newPage();
+  await signUp(page, name);
+  await pickKeeper(page);
+  // Roomy: under a full e2e run the lobby's first fetches can take a while.
+  await expect(
+    page.getByTestId('lobby').getByRole('heading', { name: 'Your patches' }),
+  ).toBeVisible({ timeout: 15_000 });
+  return page;
+}
+
+/**
+ * Signs up through the sign-in overlay with the family code and taps past the
+ * recovery code. The Keeper picker (#42) comes next.
+ */
+export async function signUp(page: Page, name: string): Promise<void> {
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
@@ -32,12 +46,14 @@ export async function newPlayer(browser: Browser, name: string): Promise<Page> {
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();
-  await pickKeeper(page);
-  // Roomy: under a full e2e run the lobby's first fetches can take a while.
-  await expect(
-    page.getByTestId('lobby').getByRole('heading', { name: 'Your patches' }),
-  ).toBeVisible({ timeout: 15_000 });
-  return page;
+}
+
+/** Presses and holds on the opening cinematic for `ms` (a long press, like a finger). */
+export async function holdCinematic(page: Page, ms: number): Promise<void> {
+  const panel = page.getByTestId('cinematic');
+  await panel.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
+  await page.waitForTimeout(ms);
+  await panel.dispatchEvent('pointerup', { pointerType: 'touch', isPrimary: true, button: 0 });
 }
 
 /**

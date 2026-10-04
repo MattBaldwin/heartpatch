@@ -1,9 +1,23 @@
-import { GAME_DATA, generateMap, MAP_MAX_PLAYERS } from '@heartpatch/shared';
-import { eq } from 'drizzle-orm';
+import {
+  GAME_DATA,
+  generateMap,
+  KEEPER_DATA,
+  keeperConfigProblem,
+  MAP_MAX_PLAYERS,
+} from '@heartpatch/shared';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type Database, type DbClient } from './client.js';
-import { mapMembers, maps, tiles, users } from './schema.js';
-import { SEED_MAP_SEED, SEED_PASSWORD_HASH, SEED_USERNAMES, seed } from './seed.js';
+import { verifySecret } from '../modules/auth/secrets.js';
+import { keepers, mapMembers, maps, tiles, users } from './schema.js';
+import {
+  SEED_ACCOUNTS,
+  SEED_FRESH_USERNAME,
+  SEED_MAP_SEED,
+  SEED_PASSWORD,
+  SEED_USERNAMES,
+  seed,
+} from './seed.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -32,7 +46,6 @@ describe.skipIf(!url)('seed (needs DATABASE_URL)', () => {
       .where(eq(mapMembers.mapId, first.mapId));
     expect(members.map((m) => m.username).sort()).toEqual([...SEED_USERNAMES].sort());
     expect(members.filter((m) => m.role === 'owner')).toHaveLength(1);
-    expect(members.every((m) => m.hash === SEED_PASSWORD_HASH)).toBe(true);
 
     expect(map?.seed).toBe(SEED_MAP_SEED);
     expect(map?.maxPlayers).toBe(MAP_MAX_PLAYERS);
@@ -59,9 +72,72 @@ describe.skipIf(!url)('seed (needs DATABASE_URL)', () => {
       expect.arrayContaining(first.userIds.map((userId, i) => ({ userId, homeSlot: i }))),
     );
 
+    // Every account logs in with the seed password; the onboarded ones skip
+    // the Keeper pick, the cinematic and the tutorial, the fresh one gets all three.
+    const accounts = await db
+      .select({
+        username: users.username,
+        hash: users.passwordHash,
+        cinematicSeenAt: users.cinematicSeenAt,
+        tutorialCompletedAt: users.tutorialCompletedAt,
+        tutorialStep: users.tutorialStep,
+        keeper: {
+          base: keepers.base,
+          hairColor: keepers.hairColor,
+          eyeColor: keepers.eyeColor,
+          outfit: keepers.outfit,
+        },
+      })
+      .from(users)
+      .leftJoin(keepers, eq(keepers.userId, users.id))
+      .where(
+        inArray(
+          sql`lower(${users.username})`,
+          SEED_ACCOUNTS.map((a) => a.username),
+        ),
+      );
+    expect(accounts).toHaveLength(SEED_ACCOUNTS.length);
+    for (const account of accounts) {
+      expect(await verifySecret(account.hash, SEED_PASSWORD), account.username).toBe(true);
+      expect(account.tutorialStep).toBeNull();
+      if (account.username === SEED_FRESH_USERNAME) {
+        expect(account).toMatchObject({
+          keeper: null,
+          cinematicSeenAt: null,
+          tutorialCompletedAt: null,
+        });
+      } else {
+        expect(account.cinematicSeenAt).not.toBeNull();
+        expect(account.tutorialCompletedAt).not.toBeNull();
+        expect(account.keeper).not.toBeNull();
+        expect(keeperConfigProblem(account.keeper!, KEEPER_DATA)).toBeNull();
+      }
+    }
+    expect(members.map((m) => m.username)).not.toContain(SEED_FRESH_USERNAME);
+
     const again = await seed(db);
     // Same ids in the same order (owner first) as when it was created.
     expect(again).toEqual({ ...first, created: false });
     expect(await db.select().from(maps).where(eq(maps.name, map!.name))).toHaveLength(1);
+  });
+  it('upgrades accounts from an older seed: real password, onboarding skipped', async () => {
+    await seed(db);
+    // What a seed from before #28 left behind.
+    await db
+      .update(users)
+      .set({
+        passwordHash: 'seed-placeholder-not-a-real-hash',
+        cinematicSeenAt: null,
+        tutorialCompletedAt: null,
+      })
+      .where(eq(sql`lower(${users.username})`, SEED_USERNAMES[0]));
+    await seed(db);
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(sql`lower(${users.username})`, SEED_USERNAMES[0]));
+    expect(await verifySecret(row!.passwordHash, SEED_PASSWORD)).toBe(true);
+    expect(row!.cinematicSeenAt).not.toBeNull();
+    expect(row!.tutorialCompletedAt).not.toBeNull();
   });
 });

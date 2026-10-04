@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newPlayer, pickKeeper, uniqueName } from './players.js';
+import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName } from './players.js';
 
 // The opening cinematic (#46, design doc §25): it plays once after the
 // Keeper pick and before the tutorial, a tap moves the captions on, a long
@@ -38,27 +38,11 @@ const seenOnServer = (page: Page) =>
     return ((await res.json()) as { cinematic: { seenAt: string | null } }).cinematic.seenAt;
   });
 
-/** Presses and holds on the story for `ms` (a long press, like a finger). */
-async function hold(page: Page, ms: number): Promise<void> {
-  const panel = page.getByTestId('cinematic');
-  await panel.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 });
-  await page.waitForTimeout(ms);
-  await panel.dispatchEvent('pointerup', { pointerType: 'touch', isPrimary: true, button: 0 });
-}
-
 test('a new player sees the story after their Keeper, then the tutorial', async ({ page }) => {
   test.setTimeout(180_000); // builds the story's world; CI renders in software
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
-  await page.goto('/');
-  const overlay = page.getByTestId('auth-overlay');
-  await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  await overlay.getByLabel('Family code').fill(process.env['HP_SIGNUP_CODE'] ?? '');
-  await overlay.getByLabel('Pick a name').fill(uniqueName('story'));
-  await overlay.getByLabel('Pick a password').fill('squishy-secret');
-  await overlay.getByLabel('Year you were born').selectOption('2014');
-  await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  await overlay.getByRole('button', { name: 'I saved it!' }).tap();
+  await signUp(page, uniqueName('story'));
   expect(await seenOnServer(page)).toBeNull();
 
   // Keeper first, then the story, with no lobby behind it.
@@ -90,7 +74,7 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   expect((await story(page))?.reducedMotion).toBe(false);
 
   // A long press skips it, even the first time; the account remembers.
-  await hold(page, 1600);
+  await holdCinematic(page, 1600);
   await expect(cinematic).toBeHidden();
   expect((await story(page))?.ended).toBe('skipped');
   await expect.poll(() => seenOnServer(page), SLOW).not.toBeNull();
