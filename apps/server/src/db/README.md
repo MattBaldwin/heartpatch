@@ -19,7 +19,7 @@ Already have Postgres 16 locally? Skip `db:up` and point `DATABASE_URL` at it.
 | `pnpm db:generate` | Writes a new migration from `schema.ts` changes (then formats drizzle-kit's JSON) |
 | `pnpm db:check` | `drizzle-kit check`: migration history is consistent |
 | `pnpm db:migrate` | Applies pending migrations (`node dist/db/cli.js migrate` in production) |
-| `pnpm db:seed` | Seeds local test data. Refuses to run with `NODE_ENV=production` or a non-local `DATABASE_URL` host (`HP_SEED_ALLOW_REMOTE=1` overrides; docs/DEPLOY.md, "Seed accounts") |
+| `pnpm db:seed` | Seeds local test data. Refuses to run with `NODE_ENV=production` or a non-local `DATABASE_URL` host (`HP_SEED_ALLOW_REMOTE=true` overrides; docs/DEPLOY.md, "Seed accounts") |
 
 ## Files
 

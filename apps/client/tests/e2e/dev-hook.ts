@@ -62,7 +62,7 @@ export function invalidate(page: Page): Promise<void> {
 
 export interface ApiResult<T = unknown> {
   status: number;
-  /** The JSON body, or null for an empty one (204). */
+  /** The JSON body, null for an empty one (204), or the raw text if it isn't JSON. */
   body: T;
 }
 
@@ -87,7 +87,15 @@ export function api<T = unknown>(
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       const text = await res.text();
-      return { status: res.status, body: (text === '' ? null : JSON.parse(text)) as T };
+      let parsed: unknown = null;
+      if (text !== '') {
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = text; // e.g. a proxy's HTML error page: the status check reports it
+        }
+      }
+      return { status: res.status, body: parsed as T };
     },
     { method, path, body },
   );

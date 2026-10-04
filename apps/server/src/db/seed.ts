@@ -7,8 +7,8 @@ import { keepers, mapMembers, maps, tiles, users } from './schema.js';
 /**
  * Every seed account's password. Dev and local playtests only: `cli.ts`
  * refuses to seed with NODE_ENV=production or a database that isn't local
- * (`seedTargetRefusal`), so it never reaches the real server (docs/DEPLOY.md,
- * "Playtesting").
+ * (`seedTargetRefusal`), which keeps it off the real server unless someone
+ * works around both (docs/DEPLOY.md, "Seed accounts").
  */
 export const SEED_PASSWORD = 'squishy-secret';
 
@@ -40,7 +40,7 @@ export function seedTargetRefusal(databaseUrl: string, allowRemote: boolean): st
     return 'refusing to seed: DATABASE_URL is not a URL';
   }
   if (LOCAL_DATABASE_HOSTS.has(host)) return null;
-  return `refusing to seed test accounts into a database on "${host || '(no host)'}": only localhost, 127.0.0.1, ::1 and the compose service "db" are allowed. Set HP_SEED_ALLOW_REMOTE=1 if you really mean it.`;
+  return `refusing to seed test accounts into a database on "${host || '(no host)'}": only localhost, 127.0.0.1, ::1 and the compose service "db" are allowed. Set HP_SEED_ALLOW_REMOTE=true if you really mean it.`;
 }
 
 /** What seeds before #28 stored instead of a hash; a re-run gives those rows the real password. */
