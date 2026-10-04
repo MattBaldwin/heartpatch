@@ -4,8 +4,8 @@ import { canSkip } from './skip.js';
 
 /*
  * Whether this account has seen the opening cinematic, as `ensure` needs it
- * after the Keeper pick. Pure (the API and the session check are passed
- * in), so it's unit-tested without the DOM.
+ * after the Keeper pick. The API and the session check are passed in, so
+ * it's unit-tested without the DOM.
  */
 
 /**

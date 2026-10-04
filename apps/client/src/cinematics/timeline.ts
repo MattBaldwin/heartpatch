@@ -203,6 +203,7 @@ export function segments<K extends { at: number; cut?: boolean }>(keys: readonly
 const runsCache = new WeakMap<readonly object[], readonly object[][]>();
 
 function runsOf<K extends { at: number; cut?: boolean }>(keys: readonly K[]): readonly K[][] {
+  // A WeakMap can't type its value by its key, so the runs come back cast.
   let runs = runsCache.get(keys) as readonly K[][] | undefined;
   if (!runs) {
     runs = segments(keys);
