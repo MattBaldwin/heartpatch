@@ -1,5 +1,6 @@
 import { GAME_EVENTS, type TutorialState, type WsEventMessage } from '@heartpatch/shared';
 import { ApiRequestError } from '../net/api.js';
+import { newIdempotencyKey } from '../net/idempotency-key.js';
 import type { WsClient, WsClientOptions } from '../net/ws-client.js';
 import { checkNickname } from '../close-up/close-up-view.js';
 import { messageOf } from '../ui/dom.js';
@@ -233,7 +234,7 @@ export class TutorialController {
       return;
     }
     const { name } = checked;
-    if (this.nameKey?.name !== name) this.nameKey = { name, key: crypto.randomUUID() };
+    if (this.nameKey?.name !== name) this.nameKey = { name, key: newIdempotencyKey() };
     const { key } = this.nameKey;
     const mapId = state.mapId;
     this.send(
