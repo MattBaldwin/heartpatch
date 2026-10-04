@@ -10,7 +10,7 @@ import { milestoneCredits, milestoneEventTypes, tiersReached } from '@heartpatch
 import type { Transaction } from '../../db/client.js';
 import type { GameEvent } from '../../db/game-events.js';
 import type { EventConsumer } from '../../jobs/consumers.js';
-import { localDate, type Clock } from '../../lib/time.js';
+import { localDate, onGameClock, type Clock } from '../../lib/time.js';
 import { createMilestonesRepo } from './repo.js';
 import {
   awardTutorialMilestones,
@@ -22,16 +22,6 @@ import { ALL_MILESTONES } from './tracks.js';
 
 /** Plain code-unit order (not locale order), the same in every process. */
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
-
-/**
- * When an event happened on the game clock. `game_events.created_at` is the
- * database's clock, while `map_members.joined_at` and season dates use the
- * game clock (`HP_DEV_NOW` moves it), so shift the row's time by the game
- * clock's offset. Judging by the event's own time also means a consumer that
- * lags, or replays history, counts Halloween play by when it was played.
- */
-const gameTimeOf = (createdAt: Date, now: Date): Date =>
-  new Date(createdAt.getTime() + (now.getTime() - Date.now()));
 
 export interface MilestonesConsumerOptions {
   clock?: Clock;
@@ -77,7 +67,10 @@ export function createMilestonesConsumer(options: MilestonesConsumerOptions = {}
       if (!finishing && !eventTypes.has(event.type)) return;
       const repo = createMilestonesRepo(tx);
       const at = now();
-      const happened = gameTimeOf(event.createdAt, at);
+      // When the event happened, on the game clock (`game_events.created_at`
+      // is the database's). Judging by the event's own time means a consumer
+      // that lags, or replays history, counts Halloween play by when it was played.
+      const happened = onGameClock(event.createdAt, at);
       const map = await repo.mapContext(event.mapId, happened);
       if (!map) return;
 

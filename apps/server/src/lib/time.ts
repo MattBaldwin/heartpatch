@@ -26,6 +26,17 @@ export function createClock(config: Pick<Config, 'NODE_ENV' | 'HP_DEV_NOW'>): Cl
 }
 
 /**
+ * `realAt` (a database timestamp such as `game_events.created_at`, which uses
+ * the real clock) on the game clock, given the game clock's reading `now`:
+ * shifted by the game clock's offset (`HP_DEV_NOW` moves it; zero otherwise),
+ * so it compares with game-clock times like `map_members.joined_at` and
+ * season dates.
+ */
+export function onGameClock(realAt: Date, now: Date): Date {
+  return new Date(realAt.getTime() + (now.getTime() - Date.now()));
+}
+
+/**
  * The canonical IANA name for a time zone (e.g. `US/Central` →
  * `America/Chicago`), or null if the runtime doesn't know the zone.
  */

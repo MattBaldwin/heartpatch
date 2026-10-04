@@ -1,29 +1,41 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import {
   applyBattleAction,
+  BATTLE_RULES,
+  GAME_DATA,
   hexKey,
   hexNeighbors,
   STARTERS,
   type BattleAction,
   type PlayerBattleAction,
 } from '@heartpatch/shared';
+import { RESCUE_GUARDIANS, type LoreEntry } from '@heartpatch/shared/server';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
+import { createBoutiqueService, stockFor } from '../modules/boutique/service.js';
 import { createBuildingsService, removeMemberBuildings } from '../modules/buildings/service.js';
 import { createCareService } from '../modules/care/service.js';
 import { createCoinsRepo } from '../modules/coins/repo.js';
+import { accountDay, creditCoins, spendCoins } from '../modules/coins/service.js';
+import { createGatheringService } from '../modules/gathering/service.js';
+import { createHollowConsumer } from '../modules/hollow/consumer.js';
+import { createHollowService } from '../modules/hollow/service.js';
 import { grantItems } from '../modules/inventory/service.js';
+import { createLoreConsumer } from '../modules/lore/consumer.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
 import { createMilestonesConsumer } from '../modules/milestones/consumer.js';
 import { createMilestonesService, milestoneRewardId } from '../modules/milestones/service.js';
 import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
+import { createTutorialConsumer } from '../modules/tutorial/consumer.js';
+import { createTutorialRepo } from '../modules/tutorial/repo.js';
+import { createTutorialService } from '../modules/tutorial/service.js';
 import { setDevDropChance } from '../modules/wardrobe/drops.js';
-import { createWardrobeService } from '../modules/wardrobe/service.js';
+import { createWardrobeService, grantClothing } from '../modules/wardrobe/service.js';
 import { AppError } from '../lib/errors.js';
 import { createJobsRepo } from '../jobs/repo.js';
 import { runConsumer } from '../jobs/consumers.js';
@@ -41,7 +53,9 @@ import {
   clothingOwned,
   coinLedger,
   gameEvents,
+  gatherJobs,
   inventories,
+  loreFound,
   mapMembers,
   maps,
   milestoneProgress,
@@ -809,5 +823,365 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       (tx) => lockCoins(tx, kid.id),
     );
     expect(await milestoneCoins(kid.id)).toEqual([]);
+  });
+
+  /*
+   * The Boutique (#45) takes only the account's `coin_balances` row, then
+   * writes its ledger row and piece (whose `users` foreign keys key-share the
+   * account row). Care takes `users` (no key update) first and the balance
+   * near its end. Each test holds one side, lets the other queue, then takes
+   * what the waiting command must not hold yet.
+   */
+  /** A care setup whose player has coins and a piece on today's racks to buy. */
+  async function shopperSetup(prefix: string) {
+    const setup = await careSetup(prefix);
+    const at = new Date();
+    const [itemId] = stockFor(setup.kid.id, await accountDay(db, setup.kid.id, at)).daily;
+    await withTransaction(db, (tx) =>
+      creditCoins(tx, {
+        source: 'dev-grant',
+        refId: randomUUID(),
+        userId: setup.kid.id,
+        amount: 500,
+        at,
+      }),
+    );
+    return { ...setup, itemId: itemId!, boutique: createBoutiqueService({ db }) };
+  }
+
+  const lockTreats = (tx: Transaction, mapId: string, userId: string) =>
+    tx
+      .select({ itemId: inventories.itemId })
+      .from(inventories)
+      .where(and(eq(inventories.mapId, mapId), eq(inventories.userId, userId)))
+      .orderBy(asc(inventories.itemId))
+      .for('update');
+
+  it("takes nothing before a purchase's balance lock that care holds (boutique `buy`, care `care`)", async () => {
+    const { kid, mapId, petId, itemId, boutique } = await shopperSetup('shopper');
+    // Hold the balance (a care paying its coins, or another purchase), let a
+    // purchase queue on it, then take care's earlier locks: the account, the
+    // squishy and the Treats. The waiting purchase must hold none of them.
+    await holdThen(
+      (tx) => lockCoins(tx, kid.id),
+      () => boutique.buy(kid, itemId),
+      async (tx) => {
+        await createMapsRepo(tx).lockUser(kid.id);
+        await lockSquishy(tx, petId);
+        await lockTreats(tx, mapId, kid.id);
+      },
+    );
+    const pieces = await db
+      .select({ source: clothingOwned.source, itemId: clothingOwned.itemId })
+      .from(clothingOwned)
+      .where(eq(clothingOwned.userId, kid.id));
+    expect(pieces).toEqual([{ source: 'boutique', itemId }]);
+  });
+
+  it('lets a purchase finish while care waits on its balance (care `care`, boutique `buy`)', async () => {
+    const { kid, mapId, petId, itemId, care } = await shopperSetup('saver');
+    // A purchase holds the balance; a feed queues on it holding the account,
+    // the squishy and the Treats. The purchase then writes its debit and its
+    // piece, whose foreign keys key-share the account row: care's account
+    // lock must leave that free (no key update), or this deadlocks (40P01).
+    await holdThen(
+      (tx) => lockCoins(tx, kid.id),
+      () => care.care(kid, mapId, petId, 'feed'),
+      async (tx) => {
+        const at = new Date();
+        const refId = randomUUID();
+        await spendCoins(tx, { userId: kid.id, refId, amount: 1, at });
+        await grantClothing(tx, {
+          userId: kid.id,
+          itemId,
+          source: 'boutique',
+          refId,
+          mapId: null,
+          at,
+        });
+      },
+    );
+    expect((await coinRows(kid.id)).map((r) => r.source).sort()).toEqual([
+      'boutique',
+      'care',
+      'dev-grant',
+    ]);
+  });
+
+  /*
+   * The tutorial (#24): start, replay and skip take the account's `users` row
+   * first, as care does, and only then archive the old run's membership. The
+   * tutorial consumer takes `users`, then the Partner (care's `applyXp`), then
+   * `maps`.
+   */
+  it.each(['start', 'replay', 'skip'] as const)(
+    'takes the account before anything care holds after it (tutorial `%s`, care `care`)',
+    async (command) => {
+      const { kid, mapId, petId } = await careSetup(`tut${command}`);
+      const tutorial = createTutorialService({ db, tutorialRequired: false });
+      // An old run whose membership the command archives: for `start`, one
+      // left without a step; for replay and skip, a finished player's.
+      await tutorial.start(kid);
+      const glade = (await tutorial.state(kid)).mapId!;
+      await db
+        .update(users)
+        .set(command === 'start' ? { tutorialStep: null } : { tutorialCompletedAt: new Date() })
+        .where(eq(users.id, kid.id));
+      // Hold the account as care does first, let the tutorial command queue on
+      // it, then take the rest of care's locks and the old run's membership
+      // (which replay and skip archive). The waiting command must hold none.
+      await holdThen(
+        (tx) => createMapsRepo(tx).lockUser(kid.id),
+        () => tutorial[command](kid),
+        async (tx) => {
+          await tx
+            .select({ userId: mapMembers.userId })
+            .from(mapMembers)
+            .where(and(eq(mapMembers.mapId, glade), eq(mapMembers.userId, kid.id)))
+            .for('no key update');
+          await lockSquishy(tx, petId);
+          await lockTreats(tx, mapId, kid.id);
+          await lockCoins(tx, kid.id);
+          await lockMapRow(tx, mapId);
+        },
+      );
+      const state = await tutorial.state(kid);
+      expect(state.status).toBe(command === 'skip' ? 'completed' : 'in-progress');
+      expect(state.mapId).not.toBe(glade);
+      const [old] = await db
+        .select({ status: mapMembers.status })
+        .from(mapMembers)
+        .where(and(eq(mapMembers.mapId, glade), eq(mapMembers.userId, kid.id)));
+      expect(old?.status).toBe('removed');
+    },
+  );
+
+  it('takes the account before the squishy, as the tutorial does (care `care`, tutorial)', async () => {
+    const { kid, mapId, petId, care } = await careSetup('cuddler');
+    // A tutorial transaction holds the account (`lockPlayer`); a feed queues
+    // on it. The holder then takes a squishy, as the tutorial consumer's
+    // `applyXp` does. Care taking its squishy before the account would
+    // deadlock here (40P01).
+    await holdThen(
+      (tx) => createTutorialRepo(tx).lockPlayer(kid.id),
+      () => care.care(kid, mapId, petId, 'feed'),
+      (tx) => lockSquishy(tx, petId),
+    );
+    expect(await coinRows(kid.id)).toEqual([{ source: 'care', amount: 1 }]);
+  });
+
+  it('grows the Partner after the account and before `maps` (tutorial consumer, a held squishy)', async () => {
+    const kid = await player('partner');
+    const tutorial = createTutorialService({ db, tutorialRequired: false });
+    await tutorial.start(kid);
+    await tutorial.devJump(kid, 'evolve');
+    const glade = (await tutorial.state(kid)).mapId!;
+    const speciesId = STARTERS.speciesIds[0]!;
+    const species = GAME_DATA.species.find((s) => s.id === speciesId)!;
+    await db.update(users).set({ partnerSpeciesId: speciesId }).where(eq(users.id, kid.id));
+    const [partner] = await db
+      .insert(squishies)
+      .values({
+        mapId: glade,
+        ownerUserId: kid.id,
+        speciesId,
+        element: species.element,
+        feeling: species.feeling,
+        level: 5,
+      })
+      .returning({ id: squishies.id });
+    // A battle that ends on the evolve step gives the Partner its next form.
+    await withTransaction(db, (tx) =>
+      appendGameEvent(tx, {
+        mapId: glade,
+        type: 'battle.ended',
+        actorUserId: kid.id,
+        payload: {
+          battleId: randomUUID(),
+          kind: 'wild',
+          userId: kid.id,
+          playerSide: 'a',
+          winner: 'a',
+          reason: 'tuckered-out',
+          turns: 3,
+          xp: [],
+        },
+      }),
+    );
+    // Nightfall-style: hold the Partner, let the consumer queue on it (holding
+    // its position and the account), then take `maps`: the consumer must not
+    // have appended anything yet.
+    await holdThen(
+      (tx) => lockSquishy(tx, partner!.id),
+      () => runConsumer(db, createTutorialConsumer(), glade),
+      (tx) => lockMapRow(tx, glade),
+    );
+    const evolved = await db
+      .select({ type: gameEvents.type })
+      .from(gameEvents)
+      .where(and(eq(gameEvents.mapId, glade), eq(gameEvents.type, 'squishy.evolved')));
+    expect(evolved).toHaveLength(1);
+  });
+
+  it('records found lore pages in key order (lore consumer)', async () => {
+    const kid = await player('reader');
+    const [map] = await db
+      .insert(maps)
+      .values({ kind: 'multiplayer', name: 'Lock Lore', timeZone: 'UTC', maxPlayers: 4 })
+      .returning({ id: maps.id });
+    const mapId = map!.id;
+    await db.insert(mapMembers).values({ mapId, userId: kid.id, role: 'owner' });
+    const page = (id: string): LoreEntry => ({
+      id,
+      title: 'A Lock Page',
+      text: 'Found while testing lock order.',
+      trigger: {
+        mapKinds: ['multiplayer'],
+        eventType: 'squishy.rescued',
+        where: [],
+        finder: 'actor',
+      },
+    });
+    // Listed out of key order, so only sorting puts them in it.
+    const pages = [page('lock-page-z'), page('lock-page-a')];
+    await withTransaction(db, (tx) =>
+      appendGameEvent(tx, {
+        mapId,
+        type: 'squishy.rescued',
+        actorUserId: kid.id,
+        payload: { userId: kid.id, squishyId: randomUUID(), battleId: randomUUID(), heartdust: 1 },
+      }),
+    );
+    const find = (tx: Transaction, pageId: string) =>
+      tx
+        .insert(loreFound)
+        .values({ userId: kid.id, pageId, mapId, foundAt: new Date() })
+        .onConflictDoNothing();
+    // Another consumer finding the same two pages: it inserts the first
+    // page, the lore consumer queues on it, then it inserts the second. Had
+    // the consumer inserted the second page first, this would deadlock (40P01).
+    await holdThen(
+      (tx) => find(tx, 'lock-page-a'),
+      () => runConsumer(db, createLoreConsumer({ pages }), mapId),
+      (tx) => find(tx, 'lock-page-z'),
+    );
+    const found = await db
+      .select({ pageId: loreFound.pageId })
+      .from(loreFound)
+      .where(eq(loreFound.userId, kid.id))
+      .orderBy(asc(loreFound.pageId));
+    expect(found.map((f) => f.pageId)).toEqual(['lock-page-a', 'lock-page-z']);
+  });
+
+  /*
+   * Found clothing (#43) is rolled after the command's own locks and before
+   * its event: `rollFoundDrop` appends `clothing.found` (`maps`). Each test
+   * holds the command's last lock before the find, lets it queue there, then
+   * takes `maps`; a find rolled earlier would hold `maps` and deadlock (40P01).
+   */
+  it("rolls a gather's find after the gather lock (gathering `collect`, #43)", async () => {
+    const kid = await player('forager');
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const [node] = await db
+      .select({ q: tiles.q, r: tiles.r })
+      .from(tiles)
+      .where(
+        and(eq(tiles.mapId, map.id), eq(tiles.ownerUserId, kid.id), isNotNull(tiles.nodeResource)),
+      )
+      .orderBy(asc(tiles.q), asc(tiles.r))
+      .limit(1);
+    const clock = { now: new Date() };
+    const gathering = createGatheringService({ db, clock: () => clock.now });
+    const { gather } = await gathering.start(kid, map.id, { q: node!.q, r: node!.r });
+    clock.now = new Date(gather.readyAt);
+
+    setDevDropChance(100);
+    try {
+      await holdThen(
+        (tx) =>
+          tx
+            .select({ id: gatherJobs.id })
+            .from(gatherJobs)
+            .where(eq(gatherJobs.id, gather.id))
+            .for('update'),
+        () => gathering.collect(kid, map.id, gather.id),
+        (tx) => lockMapRow(tx, map.id),
+      );
+    } finally {
+      setDevDropChance(null);
+    }
+    const pieces = await db
+      .select({ source: clothingOwned.source, refId: clothingOwned.refId })
+      .from(clothingOwned)
+      .where(eq(clothingOwned.userId, kid.id));
+    expect(pieces).toEqual([{ source: 'gather', refId: gather.id }]);
+  });
+
+  it("rolls a rescue's find after bringing the squishy home (Hollow consumer `settleRescue`, #43)", async () => {
+    const kid = await player('rescuer');
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const mapId = map.id;
+    const speciesId = STARTERS.speciesIds[0]!;
+    const [, lost] = await db
+      .insert(squishies)
+      .values(
+        (['active', 'hollowed'] as const).map((state) => ({
+          mapId,
+          ownerUserId: kid.id,
+          speciesId,
+          element: 'fire',
+          feeling: 'cozy',
+          level: state === 'active' ? 40 : 5,
+          state,
+        })),
+      )
+      .returning({ id: squishies.id });
+    const fights = createBattlesService({ db });
+    // Weak shadows, so the strong friend wins on first moves.
+    const hollow = createHollowService({
+      db,
+      battles: fights,
+      guardians: { ...RESCUE_GUARDIANS, count: 1, levelOffset: -40, levels: { min: 1, max: 100 } },
+    });
+    const { battle } = await hollow.rescue(kid, mapId, { squishyId: lost!.id });
+    for (let i = 0; i < BATTLE_RULES.maxTurns + 5; i++) {
+      const { state, status } = (await createBattlesRepo(db).findBattle(battle.id))!;
+      if (status !== 'active') break;
+      const side = state.sides.a;
+      const action: PlayerBattleAction =
+        state.phase.type === 'replace'
+          ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
+          : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+      await fights.act(kid, battle.id, { action, turn: state.turn });
+    }
+
+    setDevDropChance(100);
+    try {
+      await holdThen(
+        (tx) => lockSquishy(tx, lost!.id),
+        () => runConsumer(db, createHollowConsumer(hollow), mapId),
+        (tx) => lockMapRow(tx, mapId),
+      );
+    } finally {
+      setDevDropChance(null);
+    }
+    const [home] = await db
+      .select({ state: squishies.state })
+      .from(squishies)
+      .where(eq(squishies.id, lost!.id));
+    expect(home?.state).toBe('active');
+    const pieces = await db
+      .select({ source: clothingOwned.source })
+      .from(clothingOwned)
+      .where(eq(clothingOwned.userId, kid.id));
+    expect(pieces).toEqual([{ source: 'rescue' }]);
   });
 });

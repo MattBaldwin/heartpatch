@@ -54,8 +54,6 @@ export interface WardrobeRepo {
 
   /** Item id → how many stored pieces the player has (starter items aren't stored). */
   countOwned: (userId: string) => Promise<Map<string, number>>;
-  /** Stores a piece; false if this source event already granted one. */
-  grant: (piece: NewClothing) => Promise<boolean>;
   /** Every outfit row: the worn set and the saved presets, by preset. */
   listOutfits: (userId: string) => Promise<OutfitRow[]>;
   /** Row-locks the player's worn set until commit (null before they first dress). */
@@ -82,6 +80,30 @@ export interface WardrobeRepo {
 export interface WardrobeTxRepo extends WardrobeRepo {
   /** `appendGameEvent` in this transaction; call it as the last write. */
   appendEvent: <T extends NewGameEvent['type']>(event: NewGameEvent<T>) => Promise<GameEvent>;
+}
+
+/**
+ * Stores a piece; false if this source event already granted one. The
+ * wardrobe service's `grantClothing` is the one caller: everyone else grants
+ * through it.
+ */
+export async function insertClothing(db: Executor, piece: NewClothing): Promise<boolean> {
+  const inserted = await db
+    .insert(clothingOwned)
+    .values({
+      userId: piece.userId,
+      itemId: piece.itemId,
+      source: piece.source,
+      refId: piece.refId,
+      mapId: piece.mapId,
+      acquiredAt: piece.at,
+    })
+    .onConflictDoNothing({
+      target: [clothingOwned.source, clothingOwned.refId],
+      where: isNotNull(clothingOwned.refId),
+    })
+    .returning({ id: clothingOwned.id });
+  return inserted.length > 0;
 }
 
 export function createWardrobeRepo(db: Executor): WardrobeRepo {
@@ -116,25 +138,6 @@ function queries(db: Executor): WardrobeRepo {
         .where(eq(clothingOwned.userId, userId))
         .groupBy(clothingOwned.itemId);
       return new Map(rows.map((r) => [r.itemId, r.count]));
-    },
-
-    grant: async (piece) => {
-      const inserted = await db
-        .insert(clothingOwned)
-        .values({
-          userId: piece.userId,
-          itemId: piece.itemId,
-          source: piece.source,
-          refId: piece.refId,
-          mapId: piece.mapId,
-          acquiredAt: piece.at,
-        })
-        .onConflictDoNothing({
-          target: [clothingOwned.source, clothingOwned.refId],
-          where: isNotNull(clothingOwned.refId),
-        })
-        .returning({ id: clothingOwned.id });
-      return inserted.length > 0;
     },
 
     listOutfits: async (userId) =>

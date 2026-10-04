@@ -8,6 +8,7 @@ import {
   milestoneRewards,
   users,
 } from '../../db/schema.js';
+import { activeMember, createMapsRepo } from '../maps/repo.js';
 
 /** What the consumer needs to know about the patch an event happened on. */
 export interface MapContext {
@@ -103,21 +104,9 @@ export function createMilestonesRepo(db: Executor): MilestonesRepo {
       const [members] = await db
         .select({ n: count() })
         .from(mapMembers)
-        .where(
-          and(
-            eq(mapMembers.mapId, mapId),
-            eq(mapMembers.status, 'active'),
-            lte(mapMembers.joinedAt, at),
-          ),
-        );
-      let tutorialPlayer: string | null = null;
-      if (map.kind === 'tutorial') {
-        const [owner] = await db
-          .select({ userId: mapMembers.userId })
-          .from(mapMembers)
-          .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.role, 'owner')));
-        tutorialPlayer = owner?.userId ?? null;
-      }
+        .where(and(activeMember(mapId), lte(mapMembers.joinedAt, at)));
+      const tutorialPlayer =
+        map.kind === 'tutorial' ? await createMapsRepo(db).tutorialPlayerOf(mapId) : null;
       return { ...map, members: members?.n ?? 0, tutorialPlayer };
     },
 

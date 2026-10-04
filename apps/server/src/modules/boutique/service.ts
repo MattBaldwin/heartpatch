@@ -18,9 +18,9 @@ import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { createCoinsRepo } from '../coins/repo.js';
-import { spendCoins } from '../coins/service.js';
+import { accountDay, accountTimeZone, spendCoins } from '../coins/service.js';
 import { createWardrobeRepo } from '../wardrobe/repo.js';
-import { createWardrobeService } from '../wardrobe/service.js';
+import { createWardrobeService, grantClothing } from '../wardrobe/service.js';
 
 /*
  * The Boutique (design doc §23; issue #45): clothing bought with Patch Coins,
@@ -73,7 +73,7 @@ export function createBoutiqueService(options: BoutiqueServiceOptions): Boutique
   /** What the shop shows at `at`, read through `tx` (inside or outside a transaction). */
   async function view(tx: Executor, userId: string, at: Date): Promise<Boutique> {
     const coins = createCoinsRepo(tx);
-    const timeZone = (await coins.timeZoneOf(userId)) ?? 'UTC';
+    const timeZone = await accountTimeZone(tx, userId);
     const date = localDate(at, timeZone);
     const stock = stockFor(userId, date);
     const [owned, balance] = await Promise.all([
@@ -111,7 +111,7 @@ export function createBoutiqueService(options: BoutiqueServiceOptions): Boutique
         const at = now();
         // 2. On today's racks, by the account's own date (after the lock, so
         // a purchase that waited past midnight checks the new day).
-        const date = localDate(at, (await coins.timeZoneOf(user.id)) ?? 'UTC');
+        const date = await accountDay(tx, user.id, at);
         if (!inStock(stockFor(user.id, date), itemId)) {
           throw new AppError('CONFLICT', MESSAGES.notToday);
         }
@@ -124,7 +124,7 @@ export function createBoutiqueService(options: BoutiqueServiceOptions): Boutique
         // piece, both for this one purchase.
         const purchaseId = uuidv7();
         await spendCoins(tx, { userId: user.id, refId: purchaseId, amount: price, at });
-        await store.grant({
+        await grantClothing(tx, {
           userId: user.id,
           itemId,
           source: 'boutique',

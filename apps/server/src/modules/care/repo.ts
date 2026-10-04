@@ -8,7 +8,7 @@ import { and, asc, desc, eq, gt, inArray, isNull, max, sql, sum } from 'drizzle-
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { squishyOnWatch } from '../territory/repo.js';
-import { buildings, careLog, squishies, squishyEvolutions, users } from '../../db/schema.js';
+import { buildings, careLog, squishies, squishyEvolutions } from '../../db/schema.js';
 
 /** A squishy as care and growth need it (a `squishies` row). */
 export interface CareSquishyRow {
@@ -63,9 +63,6 @@ export interface EvolutionRow {
  */
 export interface CareRepo {
   transaction: <T>(fn: (repo: CareTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
-
-  /** The account's IANA time zone (its day for daily caps), or null if there's no such user. */
-  timeZoneOf: (userId: string) => Promise<string | null>;
 
   /** The player's active squishies on this map, oldest first. */
   listActive: (mapId: string, userId: string) => Promise<CareSquishyRow[]>;
@@ -143,14 +140,6 @@ function queries(db: Executor): CareRepo {
 
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createCareTxRepo(tx), tx)),
-
-    timeZoneOf: async (userId) => {
-      const [row] = await db
-        .select({ timeZone: users.timeZone })
-        .from(users)
-        .where(eq(users.id, userId));
-      return row?.timeZone ?? null;
-    },
 
     listActive: async (mapId, userId) => {
       const rows = await db

@@ -1,6 +1,7 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import type { Executor } from '../../db/client.js';
-import { loreFound, mapMembers, maps } from '../../db/schema.js';
+import { loreFound, maps } from '../../db/schema.js';
+import { createMapsRepo } from '../maps/repo.js';
 
 /** A page a player found (`lore_found`). */
 export interface FoundRow {
@@ -26,11 +27,7 @@ export function createLoreRepo(db: Executor): LoreRepo {
       const [map] = await db.select({ kind: maps.kind }).from(maps).where(eq(maps.id, mapId));
       if (!map) return null;
       if (map.kind !== 'tutorial') return { kind: map.kind, tutorialPlayer: null };
-      const [owner] = await db
-        .select({ userId: mapMembers.userId })
-        .from(mapMembers)
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.role, 'owner')));
-      return { kind: map.kind, tutorialPlayer: owner?.userId ?? null };
+      return { kind: map.kind, tutorialPlayer: await createMapsRepo(db).tutorialPlayerOf(mapId) };
     },
 
     found: async ({ userId, pageId, mapId, at }) => {
