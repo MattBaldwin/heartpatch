@@ -887,7 +887,7 @@ export const SPECIES: Species[] = [
     feeling: 'silly',
     rarity: 'uncommon',
     season: 'halloween',
-    baseStats: { hp: 85, attack: 70, defense: 75, speed: 55 }, // TUNE:
+    baseStats: { hp: 85, attack: 80, defense: 75, speed: 60 }, // TUNE: was attack 70, speed 55; #28's sim flagged it weak (33%)
     moves: ['pumpkin-roll', 'leafy-tickle', 'boo', 'ember-boop'],
     evolutions: [],
     visual: {
