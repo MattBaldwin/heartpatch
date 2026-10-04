@@ -17,9 +17,37 @@ import {
   SEED_PASSWORD,
   SEED_USERNAMES,
   seed,
+  seedTargetRefusal,
 } from './seed.js';
 
 const url = inject('testDatabaseUrl');
+
+describe('seedTargetRefusal', () => {
+  const at = (host: string) => `postgres://heartpatch:heartpatch@${host}/heartpatch`;
+
+  it.each(['localhost:5432', 'LOCALHOST', '127.0.0.1:5432', '[::1]:5432', 'db:5432'])(
+    'allows the local database at %s',
+    (host) => {
+      expect(seedTargetRefusal(at(host), false)).toBeNull();
+    },
+  );
+
+  it.each(['db.example.com', '10.0.0.5:5432', '127.0.0.2', 'play.pumpkinpatchgames.com'])(
+    'refuses %s',
+    (host) => {
+      expect(seedTargetRefusal(at(host), false)).toMatch(/refusing to seed/);
+    },
+  );
+
+  it('refuses a URL with no host (a socket path) or no URL at all', () => {
+    expect(seedTargetRefusal('postgres:///heartpatch?host=/tmp', false)).toMatch(/\(no host\)/);
+    expect(seedTargetRefusal('not a url', false)).toMatch(/not a URL/);
+  });
+
+  it('allows a remote database only with HP_SEED_ALLOW_REMOTE', () => {
+    expect(seedTargetRefusal(at('db.example.com'), true)).toBeNull();
+  });
+});
 
 describe.skipIf(!url)('seed (needs DATABASE_URL)', () => {
   let client: DbClient;

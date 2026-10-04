@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { draws, hook, idle, invalidate } from './dev-hook.js';
 
 interface Point {
   x: number;
@@ -12,27 +13,19 @@ interface CameraState {
   bounds: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
 
-/** The dev-only hook from src/main.ts (typed in src/engine/dev-hook.d.ts, which this project can't see). */
+/**
+ * The part of the dev-only hook (src/engine/dev-hook.d.ts, which this project
+ * can't see) that waitForFlingToSettle reads in one go, inside the page.
+ */
 interface DevHook {
   camera(): CameraState | null;
   draws(): number;
-  idle(): boolean;
-  invalidate(): void;
 }
 
-function draws(page: Page): Promise<number> {
-  return page.evaluate(
-    () => (window as unknown as { __heartpatch?: DevHook }).__heartpatch?.draws() ?? 0,
-  );
-}
-
-function cameraState(page: Page): Promise<CameraState> {
-  return page.evaluate(() => {
-    const hook = (window as unknown as { __heartpatch?: DevHook }).__heartpatch;
-    const state = hook?.camera();
-    if (!state) throw new Error('camera not ready');
-    return state;
-  });
+async function cameraState(page: Page): Promise<CameraState> {
+  const state = await hook<CameraState>(page, 'camera');
+  if (!state) throw new Error('camera not ready');
+  return state;
 }
 
 /**
@@ -119,10 +112,8 @@ async function waitForIdle(page: Page, quietMs = 500, timeout = 30_000): Promise
         await page.waitForTimeout(quietMs);
         // Draw count unchanged *and* the loop itself reports idle, so one very
         // slow frame (software rendering) can't pass for idleness.
-        const idle = await page.evaluate(
-          () => (window as unknown as { __heartpatch?: DevHook }).__heartpatch?.idle() ?? false,
-        );
-        return idle && (await draws(page)) === before;
+        const isIdle = await idle(page);
+        return isIdle && (await draws(page)) === before;
       },
       { timeout, intervals: [0] },
     )
@@ -211,9 +202,7 @@ test('renders only when something changes', async ({ page }) => {
   expect((await canvasShot(page)).length).toBeGreaterThan(NOT_FLAT);
 
   // An explicit invalidate draws, then the loop goes idle again.
-  await page.evaluate(() => {
-    (window as unknown as { __heartpatch?: DevHook }).__heartpatch?.invalidate();
-  });
+  await invalidate(page);
   await expect.poll(() => draws(page)).toBeGreaterThan(still);
   await waitForIdle(page);
 

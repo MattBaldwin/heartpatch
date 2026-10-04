@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName } from './players.js';
 
 // Keeper milestones (#44): finish the tutorial, celebrate The First Patch, see
@@ -15,20 +16,10 @@ interface MilestonesCardDebug {
   equippedTitleId: string | null;
 }
 
-interface Hook {
-  tutorial?(): { stepId: string | null; status: string | null } | null;
-  wardrobe?(): { milestones: MilestonesCardDebug } | null;
-}
-
 const tutorial = (page: Page) =>
-  page.evaluate(
-    () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.tutorial?.() ?? null,
-  );
-const milestones = (page: Page) =>
-  page.evaluate(
-    () =>
-      (window as unknown as { __heartpatch?: Hook }).__heartpatch?.wardrobe?.()?.milestones ?? null,
-  );
+  hook<{ stepId: string | null; status: string | null }>(page, 'tutorial');
+const milestones = async (page: Page) =>
+  (await hook<{ milestones: MilestonesCardDebug }>(page, 'wardrobe'))?.milestones ?? null;
 
 test('earn The First Patch, celebrate it, then see it and wear its title', async ({ browser }) => {
   test.setTimeout(120_000); // draws the Glade; CI renders in software
@@ -38,14 +29,7 @@ test('earn The First Patch, celebrate it, then see it and wear its title', async
   // Through the Glade quickly: the dev route jumps to graduation.
   await lobby.getByTestId('tutorial-start').tap();
   await expect.poll(() => tutorial(page).then((t) => t?.stepId)).toBe('welcome');
-  const status = await page.evaluate(async () => {
-    const res = await fetch('/api/v1/tutorial/dev/step', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
-      body: JSON.stringify({ stepId: 'graduation' }),
-    });
-    return res.status;
-  });
+  const { status } = await api(page, 'POST', '/tutorial/dev/step', { stepId: 'graduation' });
   expect(status).toBe(200);
   await expect.poll(() => tutorial(page).then((t) => t?.stepId)).toBe('graduation');
   const bubble = page.getByTestId('tutorial-bubble');

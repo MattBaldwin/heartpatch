@@ -83,11 +83,23 @@ describe('Playback', () => {
     expect(p.t).toBe(0);
   });
 
+  it('skips on a long press let go before any frame saw it pass the hold', () => {
+    const p = new Playback(timeline, { skippable: false });
+    p.pressStart(1000);
+    expect(p.holdTick(1000 + PRESS.holdMs / 2)).toBeLessThan(1);
+    // The next frame comes after the finger is up (a slow iPad).
+    p.pressEnd(1000 + PRESS.holdMs);
+    expect(p.ended).toBe('skipped');
+    expect(p.t).toBe(0);
+    expect(p.holdTick(1000 + PRESS.holdMs * 2)).toBe(0);
+  });
+
   it('ignores a press let go between a tap and a hold, or taken away', () => {
     const p = new Playback(timeline, { skippable: false });
     p.pressStart(0);
     p.pressEnd(PRESS.tapMaxMs + 100);
     expect(p.t).toBe(0);
+    expect(p.ended).toBeNull();
     p.pressStart(0);
     p.pressCancel();
     expect(p.holdTick(PRESS.holdMs * 2)).toBe(0);

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName } from './players.js';
 
 // The opening cinematic (#46, design doc §25): it plays once after the
@@ -19,24 +20,14 @@ interface CinematicDebug {
   scene: { squishies: number; tiles: number; playerKeeper: boolean } | null;
 }
 
-interface Hook {
-  cinematic?(): CinematicDebug | null;
-  tutorial?(): { stepId: string | null } | null;
-}
-
 /** The story's scene builds on the main thread; under CI's software GL a poll can wait a while. */
 const SLOW = { timeout: 30_000 };
 
-const story = (page: Page) =>
-  page.evaluate(
-    () => (window as unknown as { __heartpatch?: Hook }).__heartpatch?.cinematic?.() ?? null,
-  );
+const story = (page: Page) => hook<CinematicDebug>(page, 'cinematic');
 
-const seenOnServer = (page: Page) =>
-  page.evaluate(async () => {
-    const res = await fetch('/api/v1/cinematic', { headers: { 'x-requested-with': 'heartpatch' } });
-    return ((await res.json()) as { cinematic: { seenAt: string | null } }).cinematic.seenAt;
-  });
+const seenOnServer = async (page: Page) =>
+  (await api<{ cinematic: { seenAt: string | null } }>(page, 'GET', '/cinematic')).body.cinematic
+    .seenAt;
 
 test('a new player sees the story after their Keeper, then the tutorial', async ({ page }) => {
   test.setTimeout(180_000); // builds the story's world; CI renders in software
@@ -86,15 +77,9 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   });
   await lobby.getByTestId('tutorial-start').tap();
   await expect
-    .poll(
-      () =>
-        page.evaluate(
-          () =>
-            (window as unknown as { __heartpatch?: Hook }).__heartpatch?.tutorial?.()?.stepId ??
-            null,
-        ),
-      { timeout: 30_000 },
-    )
+    .poll(async () => (await hook<{ stepId: string | null }>(page, 'tutorial'))?.stepId ?? null, {
+      timeout: 30_000,
+    })
     .toBe('welcome');
 
   // A returning player goes straight on: here, back into the tutorial run.

@@ -6,10 +6,42 @@ import { keepers, mapMembers, maps, tiles, users } from './schema.js';
 
 /**
  * Every seed account's password. Dev and local playtests only: `cli.ts`
- * refuses to seed with NODE_ENV=production, so it never reaches the real
- * server (docs/DEPLOY.md, "Playtesting").
+ * refuses to seed with NODE_ENV=production or a database that isn't local
+ * (`seedTargetRefusal`), which keeps it off the real server unless someone
+ * works around both (docs/DEPLOY.md, "Seed accounts").
  */
 export const SEED_PASSWORD = 'squishy-secret';
+
+/**
+ * Database hosts the seed treats as local: loopback, and `db`, the compose
+ * service name, which resolves only inside a compose network (the
+ * in-container seed in infra/scripts/local-smoke.sh).
+ */
+const LOCAL_DATABASE_HOSTS: ReadonlySet<string> = new Set([
+  'localhost',
+  '127.0.0.1',
+  '[::1]',
+  'db',
+]);
+
+/**
+ * Why the seed must not write to `databaseUrl`, or null when it may.
+ * `pnpm db:seed` forces NODE_ENV=development, so the NODE_ENV guard alone
+ * wouldn't stop a laptop whose `.env` points at a remote database.
+ * `allowRemote` is `HP_SEED_ALLOW_REMOTE`. On the real server the host is
+ * `db`, so there only NODE_ENV=production stops the seed.
+ */
+export function seedTargetRefusal(databaseUrl: string, allowRemote: boolean): string | null {
+  if (allowRemote) return null;
+  let host: string;
+  try {
+    host = new URL(databaseUrl).hostname.toLowerCase();
+  } catch {
+    return 'refusing to seed: DATABASE_URL is not a URL';
+  }
+  if (LOCAL_DATABASE_HOSTS.has(host)) return null;
+  return `refusing to seed test accounts into a database on "${host || '(no host)'}": only localhost, 127.0.0.1, ::1 and the compose service "db" are allowed. Set HP_SEED_ALLOW_REMOTE=true if you really mean it.`;
+}
 
 /** What seeds before #28 stored instead of a hash; a re-run gives those rows the real password. */
 const LEGACY_PASSWORD_HASH = 'seed-placeholder-not-a-real-hash';

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { TEST_PASSWORD } from './players.js';
 
 // The installable app (issue #26), against a production build (`vite preview`,
 // playwright.config.ts): the dev server never registers the service worker.
@@ -189,7 +190,7 @@ test('shows the Add to Home Screen guide in Safari, after signing up, until dism
   await overlay
     .getByLabel('Pick a name')
     .fill(`pwa_${Date.now().toString(36)}${String(testInfo.workerIndex)}`);
-  await overlay.getByLabel('Pick a password').fill('squishy-secret');
+  await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();

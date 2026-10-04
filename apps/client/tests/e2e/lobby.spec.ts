@@ -1,14 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { hook } from './dev-hook.js';
 import { newPlayer } from './players.js';
 
 /** True while a screen holds automatic updates (dev hook, src/pwa/update-hold.ts). */
-const updatesHeld = (page: Page) =>
-  page.evaluate(
-    () =>
-      (
-        window as unknown as { __heartpatch?: { updatesHeld?(): boolean } }
-      ).__heartpatch?.updatesHeld?.() ?? null,
-  );
+const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
 
 test('owner makes a patch, a friend joins with the code, owner approves and resets', async ({
   browser,

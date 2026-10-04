@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** The chat from the dev hook (src/chat/chat-screen.ts `ChatDebug`). */
@@ -11,20 +12,11 @@ interface ChatDebug {
 }
 
 function chatState(page: Page): Promise<ChatDebug | null> {
-  return page.evaluate(
-    () =>
-      (window as unknown as { __heartpatch?: { chat(): ChatDebug | null } }).__heartpatch?.chat() ??
-      null,
-  );
+  return hook<ChatDebug>(page, 'chat');
 }
 
-function liveStatus(page: Page): Promise<string | null> {
-  return page.evaluate(
-    () =>
-      (
-        window as unknown as { __heartpatch?: { map(): { live: string | null } | null } }
-      ).__heartpatch?.map()?.live ?? null,
-  );
+async function liveStatus(page: Page): Promise<string | null> {
+  return (await hook<{ live: string | null }>(page, 'map'))?.live ?? null;
 }
 
 test('two players on one patch trade quick messages live', async ({ browser }) => {

@@ -266,15 +266,21 @@ export default defineConfig(
           ],
         },
       ],
-      // Throws outside a secure context, so on plain http (the LAN playtest) it breaks.
-      'no-restricted-properties': [
+      // Throws outside a secure context, so on plain http (the LAN playtest) it
+      // breaks. Matched by name, so `window.crypto.randomUUID`,
+      // `globalThis.crypto['randomUUID']` and `const { randomUUID } = crypto`
+      // are caught too (no-restricted-properties only sees `crypto.randomUUID`).
+      'no-restricted-syntax': [
         'error',
-        {
-          object: 'crypto',
-          property: 'randomUUID',
+        ...[
+          "MemberExpression[property.name='randomUUID']",
+          "MemberExpression[property.value='randomUUID']",
+          "ObjectPattern > Property[key.name='randomUUID']",
+        ].map((selector) => ({
+          selector,
           message:
             'crypto.randomUUID throws on plain http; use newIdempotencyKey() from net/idempotency-key.ts.',
-        },
+        })),
       ],
     },
   },

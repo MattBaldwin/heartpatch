@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -23,19 +24,9 @@ interface WardrobeDebug {
   sending: boolean;
 }
 
-type Hook = {
-  __heartpatch?: {
-    wardrobe?(): WardrobeDebug | null;
-    map?(): { keepers: number; keepersWearing: string[][] } | null;
-    home?(): { scene: { keeperWearing: string[] } | null } | null;
-  };
-};
+const wardrobeState = (page: Page) => hook<WardrobeDebug>(page, 'wardrobe');
 
-const wardrobeState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.wardrobe?.() ?? null);
-
-const mapState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.() ?? null);
+const mapState = (page: Page) => hook<{ keepers: number; keepersWearing: string[][] }>(page, 'map');
 
 /** Waits until the outfit tried on has reached the server. */
 async function settled(page: Page, wearing: string[]): Promise<void> {
@@ -158,24 +149,6 @@ test('tries clothes on, filters, layers a costume and saves an outfit', async ({
   await page.context().close();
 });
 
-/** Calls the API from the page, as the player (cookie and CSRF header). */
-async function api<T>(page: Page, method: 'GET' | 'POST', path: string, body?: object): Promise<T> {
-  return page.evaluate(
-    async ({ method, path, body }) => {
-      const res = await fetch(`/api/v1${path}`, {
-        method,
-        headers: {
-          'x-requested-with': 'heartpatch',
-          ...(body ? { 'content-type': 'application/json' } : {}),
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      });
-      return (res.status === 204 ? null : await res.json()) as T;
-    },
-    { method, path, body },
-  );
-}
-
 test('other players see the outfit on the map, live', async ({ browser }) => {
   test.setTimeout(150_000); // two players and a map build; CI renders in software
   const owner = await newPlayer(browser, uniqueName('host'));
@@ -184,16 +157,20 @@ test('other players see the outfit on the map, live', async ({ browser }) => {
   friend.on('pageerror', (err) => errors.push(err.message));
 
   // The friend joins the owner's patch (the lobby flow is lobby.spec.ts's).
-  const { map } = await api<{ map: { id: string } }>(owner, 'POST', '/maps', {
-    name: 'Fashion Patch',
-    timeZone: 'America/Chicago',
-  });
-  const detail = () =>
-    api<{ map: { admin: { invite: { code: string }; requests: { id: string }[] } } }>(
-      owner,
-      'GET',
-      `/maps/${map.id}`,
-    );
+  const { map } = (
+    await api<{ map: { id: string } }>(owner, 'POST', '/maps', {
+      name: 'Fashion Patch',
+      timeZone: 'America/Chicago',
+    })
+  ).body;
+  const detail = async () =>
+    (
+      await api<{ map: { admin: { invite: { code: string }; requests: { id: string }[] } } }>(
+        owner,
+        'GET',
+        `/maps/${map.id}`,
+      )
+    ).body;
   const code = (await detail()).map.admin.invite.code;
   await api(friend, 'POST', '/maps/join', { code });
   const requestId = (await detail()).map.admin.requests[0]!.id;
@@ -229,10 +206,9 @@ test('other players see the outfit on the map, live', async ({ browser }) => {
   await owner.getByTestId('home-open').tap();
   await expect
     .poll(
-      () =>
-        owner.evaluate(
-          () => (window as unknown as Hook).__heartpatch?.home?.()?.scene?.keeperWearing ?? null,
-        ),
+      async () =>
+        (await hook<{ scene: { keeperWearing: string[] } | null }>(owner, 'home'))?.scene
+          ?.keeperWearing ?? null,
       { timeout: 60_000 },
     )
     .toEqual(['sunny-cap', 'puddle-boots']);

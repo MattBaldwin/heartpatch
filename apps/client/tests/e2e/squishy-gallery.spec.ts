@@ -1,5 +1,6 @@
 import { SPECIES } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { draws, idle } from './dev-hook.js';
 
 /**
  * The dev squishy gallery (`/gallery.html`, issue #9). Everything is checked
@@ -38,12 +39,7 @@ interface GalleryHook {
   animating(): boolean;
 }
 
-interface EngineHook {
-  draws(): number;
-  idle(): boolean;
-}
-
-type Hooks = { __heartpatchGallery?: GalleryHook; __heartpatch?: EngineHook };
+type Hooks = { __heartpatchGallery?: GalleryHook };
 
 /**
  * Same look and instance as `GOLDEN` in src/procedural/params.test.ts. That
@@ -85,8 +81,6 @@ async function openGallery(page: Page, query = ''): Promise<Stats> {
   return (await page.evaluate(() => (window as Hooks).__heartpatchGallery!.stats()))!;
 }
 
-const draws = (page: Page) => page.evaluate(() => (window as Hooks).__heartpatch?.draws() ?? 0);
-
 /** Waits until nothing is drawn for `quietMs` and the loop reports idle (see smoke.spec.ts). */
 async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
   await expect
@@ -94,8 +88,8 @@ async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
       async () => {
         const before = await draws(page);
         await page.waitForTimeout(quietMs);
-        const idle = await page.evaluate(() => (window as Hooks).__heartpatch?.idle() ?? false);
-        return idle && (await draws(page)) === before;
+        const isIdle = await idle(page);
+        return isIdle && (await draws(page)) === before;
       },
       { timeout: 30_000, intervals: [0] },
     )

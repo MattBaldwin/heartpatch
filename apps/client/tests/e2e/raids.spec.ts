@@ -1,5 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -19,10 +20,7 @@ interface RaidReportDebug {
   open: boolean;
 }
 
-type Hook = { __heartpatch?: { raids?(): RaidReportDebug | null } };
-
-const raidState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.raids?.() ?? null);
+const raidState = (page: Page) => hook<RaidReportDebug>(page, 'raids');
 
 test('opens the raid report and saves a defense style', async ({ browser }) => {
   test.setTimeout(120_000); // a full map build; CI renders in software

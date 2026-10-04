@@ -74,12 +74,18 @@ export class Playback {
     this.#pressedAt = now;
   }
 
-  /** It comes up: a short press is a tap; a long one already skipped in `holdTick`. */
+  /**
+   * It comes up: a short press is a tap, and a long one skips. A long press
+   * usually skipped already in `holdTick`, but one let go between slow frames
+   * (no tick saw it pass the hold) still counts.
+   */
   pressEnd(now: number): void {
     const at = this.#pressedAt;
     this.#pressedAt = null;
     if (at === null || this.#ended) return;
-    if (classifyPress(now - at) === 'tap') this.tap();
+    const kind = classifyPress(now - at);
+    if (kind === 'tap') this.tap();
+    else if (kind === 'hold') this.#ended = 'skipped';
   }
 
   /** The press was taken away (a system gesture, a scroll): neither a tap nor a hold. */

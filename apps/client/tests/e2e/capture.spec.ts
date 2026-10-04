@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -25,41 +26,17 @@ interface CatalogDebug {
   total: number;
   names: string[];
 }
-type Hook = {
-  __heartpatch?: {
-    battle?(): BattleDebug | null;
-    catalog?(): CatalogDebug | null;
-    map?(): { id: string } | null;
-  };
-};
-
-const battleState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.battle?.() ?? null);
-const catalogState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.catalog?.() ?? null);
-
-/** A JSON API call from the page (its session cookie); returns the status. */
-async function api(page: Page, method: 'GET' | 'POST', path: string, body?: object) {
-  return page.evaluate(
-    async ({ method, path, body }) => {
-      const res = await fetch(`/api/v1${path}`, {
-        method,
-        headers: { 'content-type': 'application/json', 'x-requested-with': 'heartpatch' },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-      });
-      return res.status;
-    },
-    { method, path, body },
-  );
-}
+const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
+const catalogState = (page: Page) => hook<CatalogDebug>(page, 'catalog');
 
 /** Heart Charms in the player's bag on this patch (#17's inventory). */
 async function charmsLeft(page: Page, mapId: string): Promise<number> {
-  return page.evaluate(async (id) => {
-    const res = await fetch(`/api/v1/maps/${id}/inventory`);
-    const body = (await res.json()) as { items: Record<string, number> };
-    return body.items['heart-charm'] ?? 0;
-  }, mapId);
+  const { body } = await api<{ items: Record<string, number> }>(
+    page,
+    'GET',
+    `/maps/${mapId}/inventory`,
+  );
+  return body.items['heart-charm'] ?? 0;
 }
 
 async function settled(page: Page): Promise<BattleDebug> {
@@ -84,8 +61,7 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await visitPatch(lobby);
   await expect(page.getByTestId('map-hud')).toContainText('Finder Patch');
 
-  const mapIdOf = () =>
-    page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.()?.id ?? '');
+  const mapIdOf = async () => (await hook<{ id: string }>(page, 'map'))?.id ?? '';
   await expect.poll(mapIdOf).not.toBe('');
   const mapId = await mapIdOf();
 
@@ -121,9 +97,9 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
 
   // Three charms in the bag (dev), then one try: the charm lands on the wild
   // squishy and is spent, whatever it decides.
-  expect(await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { 'heart-charm': 3 } })).toBe(
-    201,
-  );
+  expect(
+    (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { 'heart-charm': 3 } })).status,
+  ).toBe(201);
   await charm.tap();
   const tried = await settled(page);
   expect(tried.turn).toBe(1);

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { skipCinematic, uniqueName, visitPatch } from './players.js';
+import { draws, hook, idle } from './dev-hook.js';
+import { skipCinematic, TEST_PASSWORD, uniqueName, visitPatch } from './players.js';
 
 /**
  * Picking a Keeper (issue #42): a new account picks one before it can reach
@@ -23,25 +24,7 @@ interface KeeperDebug {
   hopping: boolean;
 }
 
-type Hook = {
-  __heartpatch?: {
-    keeper?(): KeeperDebug | null;
-    map?(): { keepers: number } | null;
-    battle?(): {
-      scene: { keeper: boolean } | null;
-      keeperReactions: number;
-      pending: number;
-    } | null;
-    draws(): number;
-    idle(): boolean;
-  };
-};
-
-const keeperState = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.keeper?.() ?? null);
-
-const draws = (page: Page) =>
-  page.evaluate(() => (window as unknown as Hook).__heartpatch?.draws() ?? 0);
+const keeperState = (page: Page) => hook<KeeperDebug>(page, 'keeper');
 
 /** Waits until nothing is drawn for `quietMs` and the loop reports idle (see smoke.spec.ts). */
 async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
@@ -50,10 +33,8 @@ async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
       async () => {
         const before = await draws(page);
         await page.waitForTimeout(quietMs);
-        const idle = await page.evaluate(
-          () => (window as unknown as Hook).__heartpatch?.idle() ?? false,
-        );
-        return idle && (await draws(page)) === before;
+        const isIdle = await idle(page);
+        return isIdle && (await draws(page)) === before;
       },
       { timeout: 30_000, intervals: [0] },
     )
@@ -82,7 +63,7 @@ async function signUp(page: Page, name: string): Promise<void> {
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByLabel('Family code').fill(process.env['HP_SIGNUP_CODE'] ?? '');
   await overlay.getByLabel('Pick a name').fill(name);
-  await overlay.getByLabel('Pick a password').fill('squishy-secret');
+  await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();
@@ -173,7 +154,7 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
   await expect(page.getByTestId('map-hud')).toContainText('Keeper Patch');
   // Drawn with the map, which can take a while when CI renders in software.
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as Hook).__heartpatch?.map?.()?.keepers), {
+    .poll(async () => (await hook<{ keepers: number }>(page, 'map'))?.keepers, {
       timeout: 60_000,
     })
     .toBe(1);
@@ -183,7 +164,12 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
   await expect(page.locator('.battle-entry-note')).toContainText('joined you');
   await page.getByTestId('battle-dev-fight').tap();
   await expect(page.getByTestId('battle-hud')).toBeVisible();
-  const battle = () => page.evaluate(() => (window as unknown as Hook).__heartpatch?.battle?.());
+  const battle = () =>
+    hook<{
+      scene: { keeper: boolean } | null;
+      keeperReactions: number;
+      pending: number;
+    }>(page, 'battle');
   // The arena builds first, which is slow when CI renders in software.
   await expect.poll(() => battle().then((b) => b?.scene?.keeper), { timeout: 30_000 }).toBe(true);
   expect((await battle())?.keeperReactions).toBe(0);
