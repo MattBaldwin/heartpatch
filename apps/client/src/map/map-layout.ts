@@ -2,6 +2,7 @@ import {
   hexKey,
   hexNeighbors,
   hexToWorld,
+  type Hex,
   type HexKey,
   type MapMember,
   type PublicTile,
@@ -101,6 +102,11 @@ export interface PropPlacement {
  * none (the caller skips them), so the Heart Seed stands out.
  */
 export function propPlacements(tile: PublicTile, look: TerrainLook, size: number): PropPlacement[] {
+  return propPlacementsAt(tile, look, size);
+}
+
+/** `propPlacements` for any hex (the opening cinematic's world has no map tiles). */
+export function propPlacementsAt(tile: Hex, look: TerrainLook, size: number): PropPlacement[] {
   const kind = look.prop;
   if (kind === null) return [];
   const [min, max] = look.propsPerTile;

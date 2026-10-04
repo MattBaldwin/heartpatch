@@ -40,8 +40,30 @@ export async function newPlayer(browser: Browser, name: string): Promise<Page> {
   return page;
 }
 
-/** A new account picks its Keeper right after signup (#42), before the lobby. */
-export async function pickKeeper(page: Page, base = 'Clover'): Promise<void> {
+/**
+ * Marks the opening cinematic (#46) seen for the logged-in account, through
+ * the API, so it doesn't play after the Keeper pick. Every spec signs up a
+ * new player; only cinematic.spec.ts watches the story. Call it before
+ * "That's me!".
+ */
+export async function skipCinematic(page: Page): Promise<void> {
+  const res = await page.request.post('/api/v1/cinematic/seen', {
+    headers: { 'x-requested-with': 'heartpatch' },
+  });
+  expect(res.ok()).toBe(true);
+}
+
+/**
+ * A new account picks its Keeper right after signup (#42), before the lobby.
+ * The opening cinematic that comes next is marked seen first, unless
+ * `cinematic` says to let it play.
+ */
+export async function pickKeeper(
+  page: Page,
+  base = 'Clover',
+  cinematic: 'skip' | 'play' = 'skip',
+): Promise<void> {
+  if (cinematic === 'skip') await skipCinematic(page);
   const picker = page.getByTestId('keeper-picker');
   await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();
   await picker.getByRole('button', { name: base, exact: true }).tap();

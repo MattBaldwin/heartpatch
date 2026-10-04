@@ -44,7 +44,7 @@ const button = (label: string, onTap: () => void, testid: string) => {
   return b;
 };
 
-const tracks: TrackId[] = ['day', 'night', 'halloween'];
+const tracks: TrackId[] = ['day', 'night', 'halloween', 'wonder'];
 root.append(
   el('h1', { class: 'auth-title' }, 'Sound gallery'),
   el('p', { class: 'auth-subtitle' }, 'Tap to hear. All made in the browser, no files.'),

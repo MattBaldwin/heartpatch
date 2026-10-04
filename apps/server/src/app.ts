@@ -41,6 +41,8 @@ import { createAuthRepo } from './modules/auth/repo.js';
 import { authRoutes } from './modules/auth/routes.js';
 import { hashSessionToken } from './modules/auth/secrets.js';
 import { createAuthService } from './modules/auth/service.js';
+import { cinematicRoutes } from './modules/cinematic/routes.js';
+import { createCinematicService } from './modules/cinematic/service.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { keepersRoutes } from './modules/keepers/routes.js';
 import { createKeepersService } from './modules/keepers/service.js';
@@ -161,6 +163,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
         const keepers = createKeepersService({ db, clock });
         await api.register(keepersRoutes(keepers, { hooks: authHooks }));
+
+        // The opening cinematic (#46): plays once after the Keeper pick.
+        const cinematic = createCinematicService({ db, clock });
+        await api.register(cinematicRoutes(cinematic, { hooks: authHooks }));
 
         const maps = createMapsService({
           db,

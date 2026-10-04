@@ -141,6 +141,13 @@
       "when": 1791067785088,
       "tag": "0019_milestones",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791073296318,
+      "tag": "0020_cinematic_seen",
+      "breakpoints": true
     }
   ]
 }

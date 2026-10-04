@@ -1,10 +1,10 @@
-// The three music loops (#25), written as notes rather than recordings: the
+// The music loops (#25; `wonder` is the opening cinematic's, #46), written as notes rather than recordings: the
 // engine renders each one to a buffer the first time it plays. Day is a bright
 // marimba bounce, night a slow lavender music box, and Halloween a playful
 // minor-key plink with a wobbly whistle (style guide §1: lightly spooky,
 // never scary). Pure data and arithmetic, so it is unit-tested.
 
-export type TrackId = 'day' | 'night' | 'halloween';
+export type TrackId = 'day' | 'night' | 'halloween' | 'wonder';
 
 export type Voice =
   /** Soft sustained chord, slow in and out. */
@@ -257,8 +257,52 @@ const HALLOWEEN = compose(
   ]),
 );
 
+/**
+ * Wonder (the opening cinematic, #46): F major, slow and sweeping, a music
+ * box over warm open chords, like the first page of a storybook.
+ */
+const WONDER = compose(
+  'wonder',
+  72, // TUNE
+  4,
+  [
+    chord(53, MAJ),
+    chord(58, MAJ),
+    chord(50, MIN),
+    chord(48, MAJ),
+    chord(53, MAJ7),
+    chord(58, MAJ),
+    chord(55, MIN7),
+    chord(48, MAJ),
+  ],
+  [padPart(0.3), bassPart([0], 0.38), arpPart([0, 1, 2, 1], 1, 12, 0.2, 'bell')],
+  melody('bell', 0.3, [
+    [0, 1.5, 77],
+    [1.5, 0.5, 79],
+    [2, 2, 81],
+    [4, 1.5, 82],
+    [5.5, 0.5, 81],
+    [6, 2, 77],
+    [8, 1.5, 74],
+    [9.5, 0.5, 76],
+    [10, 2, 77],
+    [12, 3, 76],
+    [16, 1.5, 81],
+    [17.5, 0.5, 84],
+    [18, 2, 86],
+    [20, 1.5, 82],
+    [21.5, 0.5, 81],
+    [22, 2, 77],
+    [24, 1.5, 79],
+    [25.5, 0.5, 77],
+    [26, 2, 74],
+    [28, 4, 72],
+  ]),
+);
+
 export const SCORES: Readonly<Record<TrackId, Score>> = {
   day: DAY,
   night: NIGHT,
   halloween: HALLOWEEN,
+  wonder: WONDER,
 };
