@@ -9,7 +9,8 @@ Where the game runs, the seed accounts and the local dev setup are in [DEPLOY.md
 - [ ] The real server is up at `https://play.pumpkinpatchgames.com` (DEPLOY.md steps 1–7), or a local playtest is running (DEPLOY.md, "Playtesting").
 - [ ] **Decide whether the tutorial is required.** `HP_TUTORIAL_REQUIRED` is still an open owner question, so this checklist doesn't pick. `false` (today's default): new players land in the lobby and Sprout is offered. `true`: Sprout opens by itself until it's done. Either way, "Later" and "Log out" always work, and the story never blocks play (DECISIONS.md, "2026-10-02 — Architecture and product audit", decision A). Set it in `/opt/heartpatch/.env` (DEPLOY.md, "Changing a setting").
 - [ ] Each tester has the **family code** (`HP_SIGNUP_CODE`) and knows to keep their recovery code somewhere safe.
-- [ ] At least one tester starts on a **brand-new account**, so the whole first session (Keeper, story, Sprout) gets played.
+- [ ] At least one tester starts on a **brand-new account**, so the whole first session (Keeper, story, Sprout) gets played. Hold-to-skip works even the first time the story plays, so have someone try it on a second new account too.
+- [ ] **On a local playtest, leave `HP_DEV_SQUISHY_GRANTS` unset** in `.env` (or `false`). It turns on dev routes that hand out free coins, clothes, items and squishies, which would skip the economy checks below. The dev build still shows grown-up test buttons, labelled "(dev)" or "Dev:"; with the setting off they don't hand out anything. Tell testers to ignore them.
 - [ ] Every iPhone and iPad is on the latest iOS/iPadOS. Add the game to the Home Screen (Share → Add to Home Screen) and play from there.
 
 ## How to report a bug (testers)
@@ -34,12 +35,14 @@ Things that feel boring, confusing, too hard or too spooky count too!
 - [ ] You see a recovery code. Save it, then tap "I saved it!".
 - [ ] Pick your Keeper. Change their hair, eyes and outfit. Tap "That's me!".
 - [ ] The story starts. Tap to move the words along.
-- [ ] Press and hold to skip the story. (Try it on a second account: it skips even the first time.)
+- [ ] Press and hold on the story to skip it.
 - [ ] Meet Sprout in the lobby. Play the tutorial, or tap "Later" and come back to it.
 - [ ] Finish the tutorial: you get The First Patch milestone and a Seedling Scarf.
 - [ ] Log out and log back in. You land where you left off, and the story doesn't play again.
 
 ## Each part of the game (testers)
+
+See a button that says "dev"? That's a grown-up test button. Skip it!
 
 **Patches and the map**
 
@@ -64,7 +67,7 @@ Things that feel boring, confusing, too hard or too spooky count too!
 - [ ] Tap "Find a squishy" and battle a wild one.
 - [ ] Use a Heart Charm to befriend it. A new friend joins you!
 - [ ] Battles are easy to follow, even the first time.
-- [ ] Your squishy grows up (evolves) after enough battles. It gets a "Whoa!" party.
+- [ ] After enough battles, your squishy grows into a new, bigger friend. It gets a "Whoa!" party.
 
 **Claiming land and raids**
 

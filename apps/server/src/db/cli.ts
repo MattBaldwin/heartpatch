@@ -5,7 +5,7 @@ import { pino } from 'pino';
 import { loadConfig } from '../config.js';
 import { createDbClient } from './client.js';
 import { runMigrations } from './migrator.js';
-import { seed } from './seed.js';
+import { seed, seedTargetRefusal } from './seed.js';
 
 const log = pino({ name: 'db' });
 const command = process.argv[2];
@@ -18,6 +18,11 @@ if (command !== 'migrate' && command !== 'seed') {
 const config = loadConfig();
 if (command === 'seed' && config.NODE_ENV === 'production') {
   log.fatal('refusing to seed test data with NODE_ENV=production');
+  process.exit(1);
+}
+const refusal = command === 'seed' ? seedTargetRefusal(config.DATABASE_URL, process.env) : null;
+if (refusal !== null) {
+  log.fatal(refusal);
   process.exit(1);
 }
 

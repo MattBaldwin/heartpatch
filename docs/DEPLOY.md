@@ -359,7 +359,7 @@ The checklist for testers is [PLAYTEST.md](PLAYTEST.md). This section is where t
 
 ### On the real server
 
-Testers sign up at `https://play.pumpkinpatchgames.com` with the family code (`HP_SIGNUP_CODE`), like any player. There are no seed accounts there: the seed refuses to run with `NODE_ENV=production`, which the compose file sets. Before inviting anyone, decide `HP_TUTORIAL_REQUIRED` (PLAYTEST.md, "Before inviting testers").
+Testers sign up at `https://play.pumpkinpatchgames.com` with the family code (`HP_SIGNUP_CODE`), like any player. There are no seed accounts there: the seed refuses to run with `NODE_ENV=production`, which the compose file sets, and refuses any database that isn't on the computer running it ("Seed accounts" below). Before inviting anyone, decide `HP_TUTORIAL_REQUIRED` (PLAYTEST.md, "Before inviting testers").
 
 The frame-rate badge only exists in dev builds, so the performance checks use a local playtest.
 
@@ -368,7 +368,7 @@ The frame-rate badge only exists in dev builds, so the performance checks use a 
 This runs the dev build on your computer and plays it on an iPhone or iPad on the same Wi-Fi. It shows the frame-rate badge and has the seed accounts.
 
 1. Find your computer's address on the Wi-Fi, like `192.168.1.20` (macOS: System Settings → Wi-Fi → Details).
-2. In the repo's `.env`, set `PUBLIC_ORIGIN=http://192.168.1.20:5173` (your address). Live updates check it.
+2. In the repo's `.env`, set `PUBLIC_ORIGIN=http://192.168.1.20:5173` (your address). Live updates check it. For a playtest with kids, leave `HP_DEV_SQUISHY_GRANTS` unset (or `false`): it turns on dev routes that hand out free coins, clothes, items and squishies, which defeats the economy checks in PLAYTEST.md. The dev build still shows test buttons labelled "(dev)" or "Dev:"; with the setting off they don't hand out anything, so testers can ignore them.
 3. Start the database and fill it:
 
    ```sh
@@ -387,6 +387,8 @@ This runs the dev build on your computer and plays it on an iPhone or iPad on th
 ### Seed accounts
 
 `pnpm db:seed` (`apps/server/src/db/seed.ts`) makes these accounts in a dev database. All of them use the password `squishy-secret`. Running it again adds only what's missing and never resets anyone's progress.
+
+`pnpm db:seed` always runs with `NODE_ENV=development`, so the `NODE_ENV=production` check only protects a seed run inside the server's container. The seed therefore also checks where `DATABASE_URL` points: it only writes to a database on `localhost`, `127.0.0.1` or `::1`, or the compose service `db` (inside a compose network, as `infra/scripts/local-smoke.sh` does), and refuses any other host, so a laptop whose `.env` points at the real database can't fill it with accounts whose password is public. `HP_SEED_ALLOW_REMOTE=1` overrides that for a deliberate remote test database; never use it with the real one.
 
 | Account | What it's for |
 |---|---|

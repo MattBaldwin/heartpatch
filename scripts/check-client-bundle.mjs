@@ -57,6 +57,7 @@ const bannedSources = [
   /[\\/]shared[\\/]src[\\/]spawns[\\/]resolve\.ts$/,
   /[\\/]shared[\\/]src[\\/]territory[\\/]guardians\.ts$/,
   /[\\/]shared[\\/]src[\\/]hollow[\\/]rescue-guardians\.ts$/,
+  /[\\/]shared[\\/]src[\\/]wardrobe[\\/]/,
 ];
 
 const wordPattern = new RegExp(`\\b(${bannedWords.join('|')})\\b`, 'g');
