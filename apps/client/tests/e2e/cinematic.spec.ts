@@ -110,10 +110,10 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
     )
     .toBe('welcome');
 
-  // A returning player goes straight on.
+  // A returning player goes straight on: here, back into the tutorial run.
   await page.reload();
-  await expect(page.getByTestId('auth-user')).toBeVisible();
-  await expect.poll(async () => (await story(page))?.seen?.seenAt ?? null).not.toBeNull();
+  await expect(page.getByTestId('tutorial-bubble')).toBeVisible({ timeout: 30_000 });
+  expect((await story(page))?.seen?.seenAt ?? null).not.toBeNull();
   await expect(cinematic).toBeHidden();
   expect((await story(page))?.mode).toBeNull();
   expect(errors).toEqual([]);

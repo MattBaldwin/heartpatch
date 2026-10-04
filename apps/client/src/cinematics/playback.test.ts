@@ -103,6 +103,12 @@ describe('Playback', () => {
     expect(again.ended).toBe('skipped');
   });
 
+  it('skips on Escape even the first time (a keyboard has no long press)', () => {
+    const p = new Playback(timeline, { skippable: false });
+    p.skipNow();
+    expect(p.ended).toBe('skipped');
+  });
+
   it('reaches the end of the real cinematic in a handful of taps', () => {
     const p = new Playback(createTimeline(OPENING_CINEMATIC), { skippable: false });
     let taps = 0;

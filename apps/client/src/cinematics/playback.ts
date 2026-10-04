@@ -58,6 +58,16 @@ export class Playback {
     return true;
   }
 
+  /**
+   * Escape on a keyboard: skips even the first time, like a long press
+   * (a keyboard can't hold a press on the story).
+   */
+  skipNow(): void {
+    if (this.#ended) return;
+    this.#pressedAt = null;
+    this.#ended = 'skipped';
+  }
+
   /** A finger (or mouse button) goes down, at `now` ms. */
   pressStart(now: number): void {
     if (this.#ended) return;

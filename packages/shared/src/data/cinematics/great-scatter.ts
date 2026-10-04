@@ -198,15 +198,15 @@ const shot2: CinematicInput['shots'][number] = {
   ],
   actors: [
     // Pumpkins glowing, and spooky squishies popping up.
-    bloom('s-gourdon', 'gourdon', PUMPKINS.x - 0.9, PUMPKINS.z - 0.4, 1.0, 4.7),
-    bloom('s-glowboo', 'glowboo', PUMPKINS.x + 0.5, PUMPKINS.z - 0.9, 1.8, 4.7),
-    bloom('s-upsybat', 'upsybat', PUMPKINS.x + 0.2, PUMPKINS.z + 0.6, 2.6, 4.7),
+    bloom('s-gourdon', 'gourdon', PUMPKINS.x - 0.45, PUMPKINS.z - 1.0, 1.0, 4.7),
+    bloom('s-glowboo', 'glowboo', PUMPKINS.x + 0.45, PUMPKINS.z - 0.6, 1.8, 4.7),
+    bloom('s-upsybat', 'upsybat', PUMPKINS.x, PUMPKINS.z + 0.2, 2.6, 4.7),
     // Leaf piles with cozy squishies.
-    bloom('s-mossmuffin', 'mossmuffin', AUTUMN.x - 0.6, AUTUMN.z - 0.5, 5.7, 9.4),
-    bloom('s-snugglenook', 'snugglenook', AUTUMN.x + 0.7, AUTUMN.z - 0.2, 6.5, 9.4),
+    bloom('s-mossmuffin', 'mossmuffin', AUTUMN.x - 0.4, AUTUMN.z - 0.8, 5.7, 9.4),
+    bloom('s-snugglenook', 'snugglenook', AUTUMN.x + 0.45, AUTUMN.z - 0.3, 6.5, 9.4),
     // Snowfall and frosty squishies.
-    bloom('s-flurrypup', 'flurrypup', SNOW.x - 0.5, SNOW.z - 0.6, 10.4, 14),
-    bloom('s-snoozicle', 'snoozicle', SNOW.x + 0.7, SNOW.z - 0.1, 11.2, 14),
+    bloom('s-flurrypup', 'flurrypup', SNOW.x - 0.4, SNOW.z - 0.8, 10.4, 14),
+    bloom('s-snoozicle', 'snoozicle', SNOW.x + 0.45, SNOW.z - 0.3, 11.2, 14),
   ],
 };
 

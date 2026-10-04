@@ -62,6 +62,11 @@ export const CUE_NAMES: readonly CueName[] = [
   'title',
 ];
 
+/** True for a cue the engine has a sound for (data names cues as plain strings). */
+export function isCueName(name: string): name is CueName {
+  return (CUE_NAMES as readonly string[]).includes(name);
+}
+
 /** Cues that dip the music while they play (tech spec §15 "Mix"). */
 export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
   'nightfall',

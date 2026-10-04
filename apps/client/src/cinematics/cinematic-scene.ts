@@ -1,5 +1,5 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
-import type { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
+import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
@@ -124,6 +124,8 @@ export class CinematicScene {
   readonly #daySky = Color3.FromHexString(SKY.day);
   readonly #nightSky = Color3.FromHexString(SKY.night);
   readonly #lookAt = new Vector3();
+  readonly #sky = new Color3();
+  readonly #clear = new Color4(0, 0, 0, 1);
   #camera: CameraPose;
   #shot = 0;
   #mood: Mood = { drain: 0, night: 0, glow: 1 };
@@ -199,7 +201,7 @@ export class CinematicScene {
 
     // Night dims the stage's own sun and sky light (set up before this builder runs).
     this.#sun =
-      (scene.lights.find((l) => l.name === 'sun') as DirectionalLight | undefined) ?? null;
+      scene.lights.find((l): l is DirectionalLight => l instanceof DirectionalLight) ?? null;
     this.#base = { sun: this.#sun?.intensity ?? 1, environment: scene.environmentIntensity };
 
     // The drain's uniforms, on from the start (neutral), so they never recompile mid-shot.
@@ -432,15 +434,17 @@ export class CinematicScene {
     this.#scene.environmentIntensity =
       this.#base.environment * (1 - (1 - NIGHT_LIGHT.environment) * night);
     // The sky isn't drawn by a material, so it drains by hand.
-    const sky = Color3.Lerp(this.#daySky, this.#nightSky, night);
+    Color3.LerpToRef(this.#daySky, this.#nightSky, night, this.#sky);
+    const sky = this.#sky;
     const grey = (sky.r + sky.g + sky.b) / 3;
     const k = DRAIN.skyGrey * drain;
-    this.#scene.clearColor = new Color4(
+    this.#clear.set(
       sky.r + (grey - sky.r) * k,
       sky.g + (grey - sky.g) * k,
       sky.b + (grey - sky.b) * k,
       1,
     );
+    this.#scene.clearColor = this.#clear;
     this.#world.setGlow(glow);
   }
 

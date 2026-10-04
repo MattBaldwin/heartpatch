@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { PlaybackStep } from '../battle/battle-playback.js';
-import { battleCue, careCue, CUE_NAMES, DUCKING_CUES, touchCue, UI_CUES } from './cues.js';
+import {
+  battleCue,
+  careCue,
+  CUE_NAMES,
+  DUCKING_CUES,
+  isCueName,
+  touchCue,
+  UI_CUES,
+} from './cues.js';
 import { RECIPES } from './sfx.js';
 
 describe('cues', () => {
@@ -44,5 +52,10 @@ describe('cues', () => {
 
   it('dips the music for his visit, a new friend, an evolution, a win and the title card', () => {
     expect([...DUCKING_CUES].sort()).toEqual(['charm', 'evolve', 'nightfall', 'title', 'yay']);
+  });
+
+  it('tells a known cue name from any other string (cinematic data)', () => {
+    expect(isCueName('bloom')).toBe(true);
+    expect(isCueName('crash')).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import type { CinematicMusic, CinematicState, KeeperConfig, PublicUser } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
-import type { CueName } from '../audio/cues.js';
+import { isCueName, type CueName } from '../audio/cues.js';
 import type { TrackId } from '../audio/music-score.js';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
@@ -108,6 +108,8 @@ export function createCinematicScreen(options: CinematicScreenOptions): Cinemati
   /** Bumped on every login change, so a slow fetch can't land on another player. */
   let session = 0;
   let seen: CinematicState | null = null;
+  /** The viewed flag, fetched as soon as a player logs in (see `setUser`). */
+  let early: Promise<CinematicState | null> | null = null;
   let mode: 'first' | 'replay' | null = null;
   let playback: Playback | null = null;
   let scene: CinematicScene | null = null;
@@ -165,13 +167,15 @@ export function createCinematicScreen(options: CinematicScreenOptions): Cinemati
   options.root.append(panel);
 
   // A press anywhere: a short one is a tap (next caption), a long one skips.
+  // Timed by the events' own stamps (same clock as performance.now()), so a
+  // slow frame between the two handlers can't turn a quick tap into a hold.
   panel.addEventListener('pointerdown', (e) => {
     if (e.target instanceof Element && e.target.closest('.cinematic-skip')) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    playback?.pressStart(performance.now());
+    playback?.pressStart(e.timeStamp);
   });
-  panel.addEventListener('pointerup', () => {
-    playback?.pressEnd(performance.now());
+  panel.addEventListener('pointerup', (e) => {
+    playback?.pressEnd(e.timeStamp);
   });
   for (const type of ['pointercancel', 'pointerleave'] as const) {
     panel.addEventListener(type, () => {
@@ -183,7 +187,7 @@ export function createCinematicScreen(options: CinematicScreenOptions): Cinemati
       e.preventDefault();
       playback?.tap();
     } else if (e.key === 'Escape') {
-      playback?.skip();
+      playback?.skipNow();
     }
   });
   skip.addEventListener('click', () => {
@@ -206,7 +210,7 @@ export function createCinematicScreen(options: CinematicScreenOptions): Cinemati
     if (!p || mode === null) return;
     const dt = lastFrame === 0 ? 0 : (now - lastFrame) / 1000;
     lastFrame = now;
-    for (const c of p.step(dt)) options.audio.cue(c.cue as CueName);
+    for (const c of p.step(dt)) if (isCueName(c.cue)) options.audio.cue(c.cue);
     const fill = p.holdTick(now);
     ring.style.setProperty('--fill', String(fill));
     hold.classList.toggle('cinematic-holding', fill > 0);
@@ -244,7 +248,8 @@ export function createCinematicScreen(options: CinematicScreenOptions): Cinemati
     mode = next;
     reduced = reducedMotionNow();
     ended = null;
-    playback = new Playback(timeline, { skippable: canSkip(seen) });
+    // A replay was asked for, so it's been seen even if the server couldn't say.
+    playback = new Playback(timeline, { skippable: next === 'replay' || canSkip(seen) });
     lastFrame = 0;
     lastCaption = null;
     lastTier = null;
@@ -344,16 +349,19 @@ export function createCinematicScreen(options: CinematicScreenOptions): Cinemati
       user = next;
       seen = null;
       stop();
+      // Asked now, alongside the Keeper's own fetch, so a returning player
+      // never waits for two round trips in a row before the lobby.
+      early = next ? api.get().catch(() => null) : null;
     },
 
     ensure: async (who) => {
       if (who.id !== user?.id) return;
       const mine = session;
-      try {
-        seen = await api.get();
-      } catch {
-        seen = null;
-      }
+      seen = await (early ?? Promise.resolve(null));
+      // Not seen (or no answer) when logging in: ask again, since a first
+      // viewing on another device may have finished since. Only new players
+      // pay for the second call.
+      if (mine === session && !canSkip(seen)) seen = await api.get().catch(() => null);
       if (mine !== session || mode !== null) return;
       // The game never waits on the story (decision A): no renderer, or no
       // answer from the server, and it goes straight on.
@@ -385,7 +393,6 @@ export function createCinematicScreen(options: CinematicScreenOptions): Cinemati
         CINEMATIC_TEXT.settingsButton,
       );
       watch.addEventListener('click', () => {
-        // Asked again: it's been seen (or it will be), so Skip shows.
         screen.replay();
       });
       return [el('p', { class: 'auth-subtitle' }, CINEMATIC_TEXT.settings), watch];

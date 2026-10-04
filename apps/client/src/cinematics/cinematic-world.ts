@@ -218,7 +218,7 @@ export class CinematicWorld {
   setGlow(glow: number): void {
     const m = this.#heartpatch;
     if (!m) return;
-    m.emissiveColor = this.#heartpatchColor.scale(GROUND_LOOKS.heartpatch.glow * glow);
+    this.#heartpatchColor.scaleToRef(GROUND_LOOKS.heartpatch.glow * glow, m.emissiveColor);
   }
 
   /** Snowflakes at `t` seconds: each falls through its box and wraps round. */
