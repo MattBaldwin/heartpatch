@@ -442,6 +442,7 @@ To click around the production build by hand instead:
 
 ```sh
 cp infra/compose/.env.prod.example infra/compose/.env   # fill in the two secrets
+# (it sets HP_TUTORIAL_REQUIRED=true like production; set false to skip the tutorial)
 HEARTPATCH_TAG=local docker compose -f infra/compose/docker-compose.prod.yml \
   -f infra/compose/docker-compose.local.yml up -d --build --wait
 HEARTPATCH_TAG=local docker compose -f infra/compose/docker-compose.prod.yml \

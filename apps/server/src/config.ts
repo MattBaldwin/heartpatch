@@ -19,7 +19,8 @@ const ConfigSchema = z.object({
   // Unset closes signups; the server refuses to start without it in production.
   HP_SIGNUP_CODE: z.string().trim().min(8).max(128).optional(),
   // Tutorial gate (decision A): when true, creating or joining a map needs a
-  // finished tutorial. Off until the tutorial (#24) ships.
+  // finished tutorial. Code default off (dev, e2e); production sets it on
+  // (owner decision 2026-10-04, infra/compose/.env.prod.example).
   HP_TUTORIAL_REQUIRED: z
     .enum(['true', 'false'])
     .default('false')
