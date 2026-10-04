@@ -1,5 +1,5 @@
 import { GAME_DATA } from '@heartpatch/shared';
-import { expect, test, type Page } from '@playwright/test';
+import { expect as baseExpect, test, type Page } from '@playwright/test';
 import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName, visitPatch } from './players.js';
 
 /**
@@ -10,6 +10,12 @@ import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName, visitPatch } 
  * Each system has its own spec; this one checks they join up. Asserts on the
  * dev hook, test ids and the API, never on pixels.
  */
+
+/**
+ * Every check waits up to 30 s: the page's main thread renders in software in
+ * CI, so a single dev-hook read can take seconds while a scene is drawing.
+ */
+const expect = baseExpect.configure({ timeout: 30_000 });
 
 /** Strong enough to beat the guardians next to home, and nothing left to grow into. */
 const STRONG_LEVEL = 40;

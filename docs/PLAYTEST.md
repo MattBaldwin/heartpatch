@@ -7,7 +7,7 @@ Where the game runs, the seed accounts and the local dev setup are in [DEPLOY.md
 ## Before inviting testers (owner)
 
 - [ ] The real server is up at `https://play.pumpkinpatchgames.com` (DEPLOY.md steps 1–7), or a local playtest is running (DEPLOY.md, "Playtesting").
-- [ ] **Decide whether the tutorial is required.** `HP_TUTORIAL_REQUIRED` is still an open owner question, so this checklist doesn't pick. `false` (today's default): new players land in the lobby and Sprout is offered. `true`: Sprout opens by itself until it's done. Either way, "Later" and "Log out" always work, and the story never blocks play (DECISIONS A). Set it in `/opt/heartpatch/.env` (DEPLOY.md, "Changing a setting").
+- [ ] **Decide whether the tutorial is required.** `HP_TUTORIAL_REQUIRED` is still an open owner question, so this checklist doesn't pick. `false` (today's default): new players land in the lobby and Sprout is offered. `true`: Sprout opens by itself until it's done. Either way, "Later" and "Log out" always work, and the story never blocks play (DECISIONS.md, "2026-10-02 — Architecture and product audit", decision A). Set it in `/opt/heartpatch/.env` (DEPLOY.md, "Changing a setting").
 - [ ] Each tester has the **family code** (`HP_SIGNUP_CODE`) and knows to keep their recovery code somewhere safe.
 - [ ] At least one tester starts on a **brand-new account**, so the whole first session (Keeper, story, Sprout) gets played.
 - [ ] Every iPhone and iPad is on the latest iOS/iPadOS. Add the game to the Home Screen (Share → Add to Home Screen) and play from there.
@@ -85,7 +85,7 @@ Things that feel boring, confusing, too hard or too spooky count too!
 
 **Wardrobe, Boutique and milestones**
 
-- [ ] Open the Wardrobe and try things on your Keeper (wear the Seedling Scarf!).
+- [ ] Open the Wardrobe and try things on your Keeper (after Sprout's tutorial, wear the Seedling Scarf!).
 - [ ] Earn Patch Coins (battles, new friends, care), then buy something in the Boutique.
 - [ ] Open Milestones, see your progress, and wear a title your friends can see.
 

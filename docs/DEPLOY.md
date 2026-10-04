@@ -394,6 +394,8 @@ This runs the dev build on your computer and plays it on an iPhone or iPad on th
 | `mothmuffin` | Skips onboarding like `pumpkinpal`, and is a member of Seed Patch. Log in on a second device to play together. |
 | `newsprout` | A fresh account: no Keeper, no story, no tutorial, no patch. Logging in plays the whole first session. |
 
+The seed marks the tutorial done but doesn't hand out its prizes, so `pumpkinpal` and `mothmuffin` have no Seedling Scarf or First Patch milestone. Play the tutorial from Settings to earn them.
+
 `newsprout` is fresh only once. To play onboarding again, sign up a new account with the family code (`heartpatch-dev-family` in `.env.example`), or reset the dev database:
 
 ```sh
