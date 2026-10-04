@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { mapMembers, maps, squishies, users } from '../../db/schema.js';
+import { activeMember, createMapsRepo } from '../maps/repo.js';
 
 /** A player's tutorial columns (`users`). */
 export interface TutorialProgress {
@@ -170,22 +171,16 @@ function queries(db: Executor): TutorialRepo {
     },
 
     lockMapPlayer: async (mapId) => {
-      const [owner] = await db
-        .select({ userId: mapMembers.userId })
-        .from(mapMembers)
-        .innerJoin(maps, eq(maps.id, mapMembers.mapId))
-        .where(
-          and(eq(mapMembers.mapId, mapId), eq(mapMembers.role, 'owner'), eq(maps.kind, 'tutorial')),
-        );
-      if (!owner) return null;
-      const player = await lockPlayer(owner.userId);
+      const userId = await createMapsRepo(db).tutorialPlayerOf(mapId);
+      if (userId === null) return null;
+      const player = await lockPlayer(userId);
       // Read the membership after the lock: a replay or skip archives it under the same lock.
       const [member] = await db
-        .select({ status: mapMembers.status })
+        .select({ userId: mapMembers.userId })
         .from(mapMembers)
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, owner.userId)));
-      if (!player || member?.status !== 'active') return null;
-      return { userId: owner.userId, ...player };
+        .where(activeMember(mapId, userId));
+      if (!player || !member) return null;
+      return { userId, ...player };
     },
   };
 }

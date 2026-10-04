@@ -18,7 +18,14 @@ import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import type { Clock } from '../../lib/time.js';
 import { requireMember } from '../maps/members.js';
-import { createWardrobeRepo, WORN, type OutfitRow, type WardrobeTxRepo } from './repo.js';
+import {
+  createWardrobeRepo,
+  insertClothing,
+  WORN,
+  type NewClothing,
+  type OutfitRow,
+  type WardrobeTxRepo,
+} from './repo.js';
 
 /*
  * The wardrobe (design doc §23; issue #43). Account-level (tech spec §4): one
@@ -57,6 +64,17 @@ const problemMessage = (problem: WearingProblem): string => {
       return MESSAGES.sameSlot;
   }
 };
+
+/**
+ * Gives a player a piece of clothing inside the caller's transaction: a found
+ * piece, a purchase, a milestone's or the tutorial's. At most one piece per
+ * `(source, refId)`, so a retried grant stores nothing; true if this call
+ * stored it. Writes no game event. Lock order (tech spec §7): no row locks
+ * of its own (its `users` foreign key only key-shares the row).
+ */
+export function grantClothing(tx: Executor, piece: NewClothing): Promise<boolean> {
+  return insertClothing(tx, piece);
+}
 
 export interface WardrobeService {
   get: (user: PublicUser) => Promise<Wardrobe>;
@@ -202,10 +220,10 @@ export function createWardrobeService(options: WardrobeServiceOptions): Wardrobe
     devGrant: async (user, items) => {
       const unknown = items.find((id) => !CLOTHING_BY_ID.has(id));
       if (unknown) throw new AppError('VALIDATION_FAILED', MESSAGES.unknown);
-      return store.transaction(async (repo) => {
+      return store.transaction(async (repo, tx) => {
         const at = now();
         for (const itemId of items) {
-          await repo.grant({
+          await grantClothing(tx, {
             userId: user.id,
             itemId,
             source: 'dev-grant',

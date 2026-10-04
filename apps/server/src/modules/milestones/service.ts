@@ -13,7 +13,7 @@ import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { uuidV5 } from '../../lib/uuid-v5.js';
 import { creditCoins } from '../coins/service.js';
-import { createWardrobeRepo } from '../wardrobe/repo.js';
+import { grantClothing } from '../wardrobe/service.js';
 import { createMilestonesRepo, type RewardRow } from './repo.js';
 import { ALL_MILESTONES } from './tracks.js';
 
@@ -87,7 +87,7 @@ export async function grantMilestoneTiers(
   for (const { grant, tier, id } of granted) {
     const { userId, mapId, at } = grant;
     if (tier.clothing !== undefined) {
-      await createWardrobeRepo(tx).grant({
+      await grantClothing(tx, {
         userId,
         itemId: tier.clothing,
         source: 'milestone',
@@ -201,7 +201,18 @@ export function createMilestonesService(options: MilestonesServiceOptions): Mile
     const hidden: MilestoneTrackView[] = [];
     for (const track of tracks) {
       const mine = rewards.filter((r) => r.milestoneId === track.id);
-      if (track.secret && mine.length === 0) {
+      const tiers = track.tiers.map((tier, i) => ({
+        tier: i + 1,
+        threshold: tier.threshold,
+        goal: tier.goal,
+        reward: rewardOf(tier),
+        earnedAt: earned.get(`${track.id}/${String(i + 1)}`)?.earnedAt.toISOString() ?? null,
+      }));
+      // A secret track shows only the tiers earned, so its later goals and
+      // prizes stay secret too (CLAUDE.md rule 6), and none until one is.
+      const shownTiers = track.secret ? tiers.filter((t) => t.earnedAt !== null) : tiers;
+      const lastShown = shownTiers[shownTiers.length - 1];
+      if (!lastShown) {
         hidden.push({ hidden: true });
         continue;
       }
@@ -209,20 +220,16 @@ export function createMilestonesService(options: MilestonesServiceOptions): Mile
         track.progress.from === 'tutorial-completed'
           ? mine.length * MILESTONE_UNIT
           : (progress.get(track.id)?.progress ?? 0);
+      const counted = shownProgress(track, total);
       shown.push({
         hidden: false,
         id: track.id,
         name: track.name,
         secret: track.secret,
         season: track.season ?? null,
-        progress: shownProgress(track, total),
-        tiers: track.tiers.map((tier, i) => ({
-          tier: i + 1,
-          threshold: tier.threshold,
-          goal: tier.goal,
-          reward: rewardOf(tier),
-          earnedAt: earned.get(`${track.id}/${String(i + 1)}`)?.earnedAt.toISOString() ?? null,
-        })),
+        // Not past the last tier shown: how near a hidden tier is stays hidden too.
+        progress: track.secret ? Math.min(counted, lastShown.threshold) : counted,
+        tiers: shownTiers,
       });
     }
     // A reward whose track or tier the data no longer has shows nothing.

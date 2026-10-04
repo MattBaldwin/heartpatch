@@ -1,15 +1,10 @@
-import {
-  CLOTHING_BY_ID,
-  pickClothingDrop,
-  Rng,
-  type ClothingDropSource,
-  type ClothingDropTable,
-} from '@heartpatch/shared';
-import { CLOTHING_DROPS } from '@heartpatch/shared/server';
+import { CLOTHING_BY_ID, pickClothingDrop, Rng, type ClothingDropSource } from '@heartpatch/shared';
+import { CLOTHING_DROPS, type ClothingDropTable } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import { newSeed } from '../../lib/rng.js';
 import { seasonsOn } from '../inventory/service.js';
 import { createWardrobeRepo } from './repo.js';
+import { grantClothing } from './service.js';
 
 /*
  * Found clothing (design doc §23 "Getting clothing"; issue #43): a small,
@@ -83,8 +78,8 @@ export async function rollFoundDrop(
   const itemId = pickClothingDrop(rolled, context, CLOTHING_BY_ID, rng);
   if (!itemId) return null;
 
-  return store.transaction(async (repo) => {
-    const granted = await repo.grant({
+  return store.transaction(async (repo, inner) => {
+    const granted = await grantClothing(inner, {
       userId: event.userId,
       itemId,
       source: event.source,

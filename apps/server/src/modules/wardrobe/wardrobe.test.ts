@@ -10,10 +10,10 @@ import {
   SquishyResponseSchema,
   STARTER_CLOTHING,
   WardrobeResponseSchema,
-  type ClothingDropTable,
   type PublicTile,
   type Wardrobe,
 } from '@heartpatch/shared';
+import type { ClothingDropTable } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';

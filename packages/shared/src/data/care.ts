@@ -9,7 +9,7 @@ export const CARE_RULES: CareRules = {
   fullActionsPerDay: 3, // TUNE: design doc §7 [DEFAULT: 3]
   // TUNE: the 4th action that day gives half, the 5th a quarter, then a little.
   falloffPercents: [50, 25, 10],
-  coinsPerFullAction: 1, // TUNE: #45 pays these out
+  coinsPerFullAction: 1, // TUNE: Patch Coins per full care action (#45)
   dailyCoinCap: 10, // TUNE: design doc §7 [DEFAULT], per account per day
   // TUNE: the soft words for contentment (style guide §2: no numbers in the main UI).
   moods: [

@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { battles, mapMembers, raids, tileAttacks, tiles, users } from '../../db/schema.js';
+import { activeMember } from '../maps/repo.js';
 
 /** A `raids` row, with its tile and whether its battle can still be replayed. */
 export interface RaidRow {
@@ -109,13 +110,6 @@ export function createRaidsTxRepo(tx: Transaction): RaidsTxRepo {
 }
 
 function queries(db: Executor): RaidsRepo {
-  const activeMember = (mapId: string, userId: string) =>
-    and(
-      eq(mapMembers.mapId, mapId),
-      eq(mapMembers.userId, userId),
-      eq(mapMembers.status, 'active'),
-    );
-
   const raidsWhere = (where: ReturnType<typeof and>) =>
     db
       .select(raidColumns)

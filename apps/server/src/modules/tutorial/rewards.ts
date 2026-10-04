@@ -1,7 +1,7 @@
 import { GAME_DATA, GROWTH_RULES, xpForLevel, type ClothingSource } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import { uuidV5 } from '../../lib/uuid-v5.js';
-import { createWardrobeRepo } from '../wardrobe/repo.js';
+import { grantClothing } from '../wardrobe/service.js';
 import type { PartnerRow } from './repo.js';
 
 // What the tutorial gives (design doc §26, #24): the Partner, the
@@ -32,7 +32,7 @@ export function grantSeedlingScarf(
   mapId: string,
   at: Date,
 ): Promise<boolean> {
-  return createWardrobeRepo(tx).grant({
+  return grantClothing(tx, {
     userId,
     itemId: SEEDLING_SCARF,
     source: SCARF_SOURCE,

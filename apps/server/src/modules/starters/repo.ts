@@ -1,6 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { mapMembers, users } from '../../db/schema.js';
+import { activeMember } from '../maps/repo.js';
 
 /** Starter pick storage: the `map_members.starter_squishy_id` marker. */
 export interface StartersRepo {
@@ -15,13 +16,6 @@ export interface StartersRepo {
 }
 
 export function createStartersRepo(db: Executor): StartersRepo {
-  const member = (mapId: string, userId: string) =>
-    and(
-      eq(mapMembers.mapId, mapId),
-      eq(mapMembers.userId, userId),
-      eq(mapMembers.status, 'active'),
-    );
-
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createStartersRepo(tx), tx)),
 
@@ -29,7 +23,7 @@ export function createStartersRepo(db: Executor): StartersRepo {
       const [row] = await db
         .select({ userId: mapMembers.userId })
         .from(mapMembers)
-        .where(and(member(mapId, userId), isNull(mapMembers.starterSquishyId)));
+        .where(and(activeMember(mapId, userId), isNull(mapMembers.starterSquishyId)));
       return row !== undefined;
     },
 
@@ -45,7 +39,7 @@ export function createStartersRepo(db: Executor): StartersRepo {
       const updated = await db
         .update(mapMembers)
         .set({ starterSquishyId: squishyId })
-        .where(and(member(mapId, userId), isNull(mapMembers.starterSquishyId)))
+        .where(and(activeMember(mapId, userId), isNull(mapMembers.starterSquishyId)))
         .returning({ userId: mapMembers.userId });
       if (updated.length !== 1) throw new Error('setStarter: membership already has a starter');
     },

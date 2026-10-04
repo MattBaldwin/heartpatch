@@ -189,6 +189,11 @@ export interface MapsRepo {
   /** Active members, owner first, then by join time. */
   listMembers: (mapId: string) => Promise<MemberRow[]>;
   owner: (mapId: string) => Promise<UserRef | null>;
+  /**
+   * A Tutorial Glade's player (its owner, whatever their membership's
+   * status), or null if `mapId` isn't a tutorial map. A plain read.
+   */
+  tutorialPlayerOf: (mapId: string) => Promise<string | null>;
   /** My active multiplayer maps, oldest membership first. */
   listMyMaps: (userId: string) => Promise<MapSummaryRow[]>;
   /**
@@ -244,6 +249,18 @@ export interface MapsTxRepo extends MapsRepo {
   /** `appendGameEvent` in this transaction; call it as the last write. */
   appendEvent: <T extends NewGameEvent['type']>(event: NewGameEvent<T>) => Promise<GameEvent>;
 }
+
+/**
+ * The `map_members` condition for an active member of `mapId`: one player's
+ * membership, or with `userId` left out, every active member. One definition,
+ * so "active member" can't drift between the modules that check it.
+ */
+export const activeMember = (mapId: string, userId?: string) =>
+  and(
+    eq(mapMembers.mapId, mapId),
+    userId === undefined ? undefined : eq(mapMembers.userId, userId),
+    eq(mapMembers.status, 'active'),
+  );
 
 const owners = alias(mapMembers, 'owners');
 const ownerUsers = alias(users, 'owner_users');
@@ -460,13 +477,7 @@ function queries(db: Executor): MapsRepo {
           starterSquishyId: mapMembers.starterSquishyId,
         })
         .from(mapMembers)
-        .where(
-          and(
-            eq(mapMembers.mapId, mapId),
-            eq(mapMembers.userId, userId),
-            eq(mapMembers.status, 'active'),
-          ),
-        )
+        .where(activeMember(mapId, userId))
         .for('no key update');
       return row ?? null;
     },
@@ -475,7 +486,7 @@ function queries(db: Executor): MapsRepo {
       const rows = await db
         .select({ homeSlot: mapMembers.homeSlot })
         .from(mapMembers)
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active')));
+        .where(activeMember(mapId));
       const slots = new Set<number>();
       for (const row of rows) if (row.homeSlot !== null) slots.add(row.homeSlot);
       return { count: rows.length, slots };
@@ -499,7 +510,7 @@ function queries(db: Executor): MapsRepo {
         .innerJoin(users, eq(users.id, mapMembers.userId))
         .leftJoin(keepers, eq(keepers.userId, mapMembers.userId))
         .leftJoin(outfits, and(eq(outfits.userId, mapMembers.userId), eq(outfits.preset, WORN)))
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active')))
+        .where(activeMember(mapId))
         // 'owner' is the enum's first value, so it sorts first.
         .orderBy(asc(mapMembers.role), asc(mapMembers.joinedAt), asc(users.id));
       return rows.map(({ wearing, titleId, ...row }) => ({
@@ -516,6 +527,17 @@ function queries(db: Executor): MapsRepo {
         .innerJoin(users, eq(users.id, mapMembers.userId))
         .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.role, 'owner')));
       return row ?? null;
+    },
+
+    tutorialPlayerOf: async (mapId) => {
+      const [row] = await db
+        .select({ userId: mapMembers.userId })
+        .from(mapMembers)
+        .innerJoin(maps, eq(maps.id, mapMembers.mapId))
+        .where(
+          and(eq(mapMembers.mapId, mapId), eq(mapMembers.role, 'owner'), eq(maps.kind, 'tutorial')),
+        );
+      return row?.userId ?? null;
     },
 
     listMyMaps: async (userId) =>

@@ -25,19 +25,17 @@ for (const [what, path] of [
 /** Everything `@heartpatch/shared/server` exports: secret tables and the code that reads them. */
 const serverModule = await import(serverEntry);
 const serverExports = Object.keys(serverModule);
-/** Server-only, though the public entry exports them (tree-shaking keeps them out). */
-const publicEntryServerOnly = [
-  'checkClothingDrops',
-  'ClothingDropTableSchema',
-  'ClothingDropEntrySchema',
-];
-const bannedWords = [...serverExports, ...publicEntryServerOnly];
+const bannedWords = serverExports;
 // Lore pages are found in play (design doc §16): their titles and words must
 // not be readable in the client before the server sends a found page.
 const lorePages = serverModule.LORE_PAGES ?? [];
 // Secret milestones (#44) show as "???" until earned: their names, goals,
 // titles and ids must only come from the server.
 const secretMilestones = serverModule.SECRET_MILESTONES ?? [];
+// Secret species and their moves (DECISIONS "Secret species are server-only
+// data") are found in play: their ids and names must only come from the server.
+const secretSpecies = serverModule.SECRET_SPECIES ?? [];
+const secretMoves = serverModule.SECRET_MOVES ?? [];
 const bannedText = [
   'SECRET_',
   'placeholder-',
@@ -47,6 +45,7 @@ const bannedText = [
     track.name,
     ...track.tiers.flatMap((tier) => [tier.goal, tier.title.id, tier.title.name]),
   ]),
+  ...[...secretSpecies, ...secretMoves].flatMap((entry) => [entry.id, entry.name]),
 ];
 /** Source files of server-only data, as source maps list them. */
 const bannedSources = [
@@ -54,6 +53,10 @@ const bannedSources = [
   /[\\/]schemas[\\/]data[\\/](clothing-drops|guardian-rules|lore-pages|server-game-data|spawn-rules|spawn-tables)\.ts$/,
   /[\\/]lore[\\/]index\.ts$/,
   /[\\/]shared[\\/]src[\\/]milestones[\\/]index\.ts$/,
+  // The code that reads the secret tables (`@heartpatch/shared/server` exports it).
+  /[\\/]shared[\\/]src[\\/]spawns[\\/]resolve\.ts$/,
+  /[\\/]shared[\\/]src[\\/]territory[\\/]guardians\.ts$/,
+  /[\\/]shared[\\/]src[\\/]hollow[\\/]rescue-guardians\.ts$/,
 ];
 
 const wordPattern = new RegExp(`\\b(${bannedWords.join('|')})\\b`, 'g');
