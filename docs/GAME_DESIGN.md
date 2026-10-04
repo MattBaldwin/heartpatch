@@ -376,7 +376,7 @@ Milestones are long-term goals that reward signature clothing, Patch Coins and t
 | Seasonal | Complete each season's event goals | That season's legendary costume |
 | Secret | Hidden conditions tied to the Lorebook (§16) | Secret items, never listed until found |
 
-**Phase 1 built tracks: see DECISIONS #44** ("Keeper milestones (#44)"). The tiers above are examples; the built ones differ (for example Collector is 3 / 8 / 14 because Phase 1 has about 19 kinds you can befriend), and the Cozy Apron and Squishy Net stay found pieces.
+**Phase 1 built tracks: see DECISIONS #44** ("Keeper milestones (#44)"). The tiers above are examples; the built ones differ (for example Collector is 3 / 8 / 14, sized to the kinds Phase 1 has), and the Cozy Apron and Squishy Net stay found pieces.
 
 - Each tier also grants a **title** shown on the profile card (e.g. "Keeper of the Gap", "Hollow Rescuer").
 - A **Milestones screen** shows progress bars for visible tracks. Secret milestones show as "???" until earned.
