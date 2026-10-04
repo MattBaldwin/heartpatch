@@ -574,6 +574,10 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         name,
         ...(member.role === 'owner' ? [el('span', { class: 'lobby-badge' }, 'Owner')] : []),
       ),
+      // Their milestone title (#44), the profile card's line.
+      ...(member.title
+        ? [el('span', { class: 'lobby-member-title', 'data-testid': 'member-title' }, member.title)]
+        : []),
     );
     if (map.role === 'owner' && !isMe) {
       const who = member.user.username;

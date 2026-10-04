@@ -5,6 +5,8 @@ import { startJobs } from './jobs/boss.js';
 import { createClock } from './lib/time.js';
 import { createHollowConsumer } from './modules/hollow/consumer.js';
 import { createLoreConsumer } from './modules/lore/consumer.js';
+import { createMilestonesConsumer } from './modules/milestones/consumer.js';
+import { createMilestonesService } from './modules/milestones/service.js';
 import type { HollowService } from './modules/hollow/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
 import { createTutorialConsumer } from './modules/tutorial/consumer.js';
@@ -33,6 +35,7 @@ const jobs = await startJobs({
     createRaidsConsumer(),
     createHollowConsumer(hollow),
     createLoreConsumer({ clock }),
+    createMilestonesConsumer({ clock }),
   ],
   // The Hollow Man (#21): night falls on each map at 21:00 map time.
   nightfall: {
@@ -42,6 +45,20 @@ const jobs = await startJobs({
   logger: app.log,
   ...(app.wsHub ? { publish: app.wsHub.publish } : {}),
 });
+// The First Patch for accounts that finished the tutorial before milestones
+// existed (#44). Idempotent, so every boot can run it; it never blocks start.
+createMilestonesService({ db: db.db, clock })
+  .backfillTutorial((userId, err) => {
+    app.log.error({ err, userId }, 'First Patch backfill skipped an account');
+  })
+  .then(
+    (granted) => {
+      if (granted > 0) app.log.info({ granted }, 'backfilled The First Patch milestone');
+    },
+    (err: unknown) => {
+      app.log.error({ err }, 'First Patch backfill failed');
+    },
+  );
 // Closing the app (shutdown or failed start) stops the jobs, then drains the DB pool.
 app.addHook('onClose', async () => {
   await jobs.stop();

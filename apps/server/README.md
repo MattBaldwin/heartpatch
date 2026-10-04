@@ -390,7 +390,7 @@ Patch Coins (design doc §23; issue #45; DECISIONS "Patch Coins and the Boutique
 | `POST /api/v1/boutique/buy` | `{ itemId }` → `{ boutique, wardrobe }`. `NOT_FOUND` if the Boutique never sells it; `CONFLICT` if it isn't on today's racks, is owned already, or there aren't enough coins. Send an `Idempotency-Key` |
 | `POST /api/v1/dev/coins` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): `{ amount }` → 201 `{ coins }` |
 
-**Paying coins, for other modules** (battles and care do; #44's milestones will): call `creditCoins` inside your transaction, after your squishy, inventory and `species_seen` locks and before your events (tech spec §7 step 12). It pays once per `(source, refId)` and applies the daily caps (`COIN_RULES.dailyCaps`; care's coins arrive capped already):
+**Paying coins, for other modules** (battles, care and #44's milestones do): call `creditCoins` inside your transaction, after your squishy, inventory and `species_seen` locks and before your events (tech spec §7 step 12). It pays once per `(source, refId)` and applies the daily caps (`COIN_RULES.dailyCaps`; care's coins arrive capped already):
 
 ```ts
 import { creditCoins } from '../coins/service.js';
@@ -399,6 +399,18 @@ await creditCoins(tx, { source: 'milestone', refId: rewardId, userId, mapId: nul
 ```
 
 It rolls the source's table (a percent chance, then a weighted pick among pieces that can drop on this tile's terrain in the seasons on now, by the map's local date), grants the piece and appends `clothing.found` (public: who and what). At most one piece per `(source, refId)`, ever, so a retried command can't grant twice. `HP_DEV_DROP_CHANCE` (dev and test only) sets every table's chance.
+
+## Keeper milestones
+
+Account-level goals with tiers (design doc §24, #44). Tracks are data: public ones in `MILESTONE_TRACKS` (`@heartpatch/shared`), secret ones in `SECRET_MILESTONES` (`@heartpatch/shared/server`, CLAUDE.md rule 6), both checked by `checkMilestoneData`. A track's progress comes from game events (`{ eventType, where, player, distinct?, scaleBy? }` with the tutorial's predicates) or, for The First Patch, from `users.tutorial_completed_at`.
+
+**The `milestones` event consumer** (`consumer.ts`, every map kind): for each event on a patch with `MILESTONE_RULES.minMembers` active members who had joined by the event (decision F), it adds the progress shared `milestoneCredits` gives (seasonal tracks only in their season, by the patch's local date on the game clock; Gentle's `rewardPercent` scales a tile) and grants every tier the new total reaches. The Tutorial Glade counts nothing, except that its last `tutorial.advanced` grants The First Patch. It writes no game event, so it never takes `maps`. A new consumer starts from seq 0, so play from before milestones existed is counted on its first run.
+
+**Granting tiers** (`grantMilestoneTiers`, in the caller's transaction): every tier's `milestone_rewards` row first (unique per player, track and tier; its id is uuid v5 of the three; by player, track, tier), then each new tier's piece (`clothing_owned`, source `milestone`, `ref_id` = the reward id) and coins (`creditCoins`, source `milestone`, no daily cap). A retried or redelivered event, `GET /milestones` and the boot backfill can all try; only the first writes anything. Lock order (tech spec §7): `event_consumers`, `milestone_progress` (by player, then track), every `milestone_rewards` row, then `coin_balances`: a reward row taken after a coin lock could deadlock with another path granting the same tier. Membership (decision F) and seasons are judged at the event's game time (`created_at` shifted by the game clock's offset), since `joined_at` and season dates use the game clock.
+
+**The First Patch** is granted by the consumer (the Glade's finish, or a finisher's next counted event), lazily by `GET /milestones`, and at boot by `backfillTutorial` (`index.ts`) for accounts that finished before milestones existed.
+
+**API:** `GET /milestones` (tracks, titles, the worn title, `news` not celebrated yet; a secret track not earned is `{ hidden: true }`, never its name, goal or condition), `POST /milestones/seen { ids }`, `POST /milestones/title { titleId | null }` (`FORBIDDEN` for a title not earned, `CONFLICT` without a Keeper). Other members see the worn title on `MapMember.title`.
 
 ## Tutorial
 

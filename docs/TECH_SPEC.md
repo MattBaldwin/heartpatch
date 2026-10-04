@@ -39,8 +39,8 @@ heartpatch/
 │     │  ├─ db/               drizzle schema, migrations, seed
 │     │  ├─ modules/          auth, health, keepers, maps, tutorial, battles, spawns,
 │     │  │                    territory, gathering, inventory, buildings, care, raids,
-│     │  │                    hollow, wardrobe, chat, coins, boutique (milestones
-│     │  │                    come with #44)
+│     │  │                    hollow, wardrobe, chat, coins, boutique, lore,
+│     │  │                    milestones
 │     │  │   └─ <module>/     routes.ts, service.ts, repo.ts, schemas.ts, *.test.ts
 │     │  ├─ ws/               WebSocket hub, channels, message handlers
 │     │  ├─ jobs/             pg-boss: boss, event consumers, nightfall, limits
@@ -132,7 +132,7 @@ Add anything else only with a one-line justification in the PR.
 | `care_log`, `squishy_evolutions` | one row per care action (day counts, coin cap, `coins`); what each squishy became | #19 |
 | `raids` | the raid log, one row per finished challenge on a player's land (`seen_at`) | #16 |
 | `hollow_events`, `hollow_rescues` | one row per map per night; one row per rescue expedition | #21 |
-| `milestone_progress`, `milestone_rewards` | not built yet | #44 |
+| `milestone_progress`, `milestone_rewards`, `keepers.title_id` (migration 0019) | each account's progress per milestone track (hundredths of a step; `kinds` for "kinds of" tracks), written by the `milestones` consumer; one row per tier earned, unique per `(user, milestone, tier)`, whose uuid v5 id is the `ref_id` of its coins and piece (`seen_at` once celebrated); the title worn on the profile card | #44 |
 | `coin_ledger`, `coin_balances` (migration 0018) | every Patch Coin change, unique per `(source, ref_id)`, with the account day for the daily caps; each account's cached balance (its row lock serialises credits and purchases) | #45 |
 | `boutique_stock` | not built: the racks are worked out on read from the player's id and their account-local date (`boutiqueStock`), so there's nothing to store or rotate | #45 |
 | `quick_messages` | Phase 1 quick messages: a preset, emoji or sticker id per row, never typed text; each map keeps its latest `feedLimit` | #23 |
@@ -146,6 +146,7 @@ Add anything else only with a one-line justification in the PR.
 - Auth: session cookie `hp_session` (HttpOnly, Secure, SameSite=Lax, 30-day rolling). CSRF: require header `X-Requested-With: heartpatch` on mutating requests (simple and sufficient with SameSite cookies).
 - **Starter pick:** `POST /maps/:mapId/starter { speciesId }` grants the pick (#99). `MapDetail.needsStarter` (`GET /maps/:mapId`) is true until the player has picked. Patches only; the Tutorial Glade is `NOT_FOUND`.
 - **Patch Coins and the Boutique (#45):** `GET /coins` (the account's balance), `GET /boutique` (today's racks: prices, "owned", the balance, `restocksAt`), `POST /boutique/buy { itemId }` (send an `Idempotency-Key`; replies with the racks and the wardrobe). Account-level, like the wardrobe. A purchase writes no game event. Other modules pay coins only through `creditCoins(tx, { source, refId, … })` in their own transaction.
+- **Keeper milestones (#44):** `GET /milestones` (tracks with progress, earned titles, the worn title, and `news` not celebrated yet; a secret track is `{ hidden: true }` until earned), `POST /milestones/seen { ids }`, `POST /milestones/title { titleId | null }`. Account-level. `MapMember.title` shows a member's worn title to the others.
 - **Read-model additions:** `PublicTile.guardianHint: { count, difficulty } | null` on neutral tiles (#98, worked out on read, never species or levels); `PlayerBattle.rewards` (#97, null while running, after no contest, on a defender's replay and for older battles).
 - **Commands, not state writes:** e.g. `POST /maps/:mapId/tiles/:tileId/attack`, `POST /maps/:mapId/squishies/:id/care` with `{ action: "pet" }`. The server computes outcomes.
 - Errors: `{ error: { code: "TILE_NOT_ADJACENT", message: "Friendly text a kid can read" } }` with proper HTTP status. Codes are a shared enum.
@@ -177,7 +178,7 @@ Add anything else only with a one-line justification in the PR.
   | #43 | `clothing.found`, `outfit.changed` |
   | #23 | `chat.quick` (a quick message id, never text) |
 
-  Not registered yet: `milestone.earned` (#44). A tile's change is sent as `tile.attacked` or `tile.captured`; there is no `tile.updated`.
+  Milestones (#44) write no event: they're account-level, and the client looks for `news` (`GET /milestones`) after the player's own play arrives live. A `milestone.earned` event can replace that look later. A tile's change is sent as `tile.attacked` or `tile.captured`; there is no `tile.updated`.
 - Heartbeat ping every 25 s; iOS suspends background tabs, so always resync on `visibilitychange`.
 - Protocol messages use the reserved `ws.` type prefix: `ws.ready`, `ws.subscribed`, `ws.cursor` (seqs up to here that aren't for this player are skipped, so they're not a gap), `ws.resync` (refetch full state), `ws.error` (shared error codes) and `ws.pong`. Client → server: `subscribe { mapId, afterSeq }`, `unsubscribe`, `ping`. Details: `apps/server/README.md` → "Live sync".
 
@@ -218,13 +219,14 @@ Add anything else only with a one-line justification in the PR.
     8. buildings, then a craft
     9. the Hollow's rows (the night's `hollow_events`, a `hollow_rescues` row)
     10. squishies
-    11. inventory rows (item id order), then `species_seen`
+    11. inventory rows (item id order), then `species_seen`, then the account's `milestone_progress` rows (by player, then track) and `milestone_rewards` (#44)
     12. the account's `coin_balances` row (`creditCoins`, `spendCoins`; #45)
     13. `maps`, last (`appendGameEvent`)
     - Commands that join or leave a map write the member row after `users` (approve's `upsertMember`, depart's `archiveMember`); nothing that takes `lockMember` then takes seats or `users`, so that's safe.
     - **Posting guards** (`setDefenders`) writes `tile_defenders` after the squishy locks. That's safe because the tile row lock (step 6) serialises everyone who writes a tile's defenders.
     - **Chat prune** locks `quick_messages` rows with `FOR UPDATE SKIP LOCKED`. They sit outside the order above and are locked before `maps` (the send's last write). A skipped prune never waits, so it can't deadlock; the next send catches up.
-    - **Patch Coins** are paid inside the transactions that earn them (a battle's finish, care, and #44's milestones) after their squishy, inventory and `species_seen` locks and before their events. A purchase locks only the balance row. Care's `users` lock (step 4) comes first, as before. `lock-order.test.ts` checks both sides for care and battles.
+    - **Patch Coins** are paid inside the transactions that earn them (a battle's finish, care, and #44's milestones) after their squishy, inventory, `species_seen` and milestone locks and before their events. A purchase locks only the balance row. Care's `users` lock (step 4) comes first, as before. `lock-order.test.ts` checks both sides for care and battles.
+    - **Milestones (#44)** take only step 1 (the consumer's position), step 11's milestone rows and step 12, and never `maps` (they write no event). Within one event: the `milestone_progress` rows (by player, then track), then **every** `milestone_rewards` row it grants (by player, track, tier; The First Patch included), and only then the pieces and coins (`grantMilestoneTiers`). The First Patch, granted from `GET /milestones` or the boot backfill, takes its `milestone_rewards` row then `coin_balances`. `lock-order.test.ts` checks each side.
     - **One known exception:** a capture try locks the Heart Charm's inventory row before the team's squishies (XP when it ends the battle). It's safe only because no command locks a squishy and then a Heart Charm row (care never spends one); see DECISIONS "Lock order (Fix PR)".
     - A consumer transaction applies **one event** and takes `maps` at most once, at its end: a batch would hold `maps` from one event's append while the next event's handler locks squishies or tiles, the reverse of every command's order.
   - **Ordering on the wire:** post-commit broadcasts can still leave Node out of order. The client buffers briefly and applies events in `seq` order. Only a gap that persists past a short timeout triggers a replay request.

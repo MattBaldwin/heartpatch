@@ -913,8 +913,274 @@ const SQUISHY: ClothingItem[] = [
   },
 ];
 
+// ── Milestone pieces (design doc §24, #44): signature, account-bound ──────
+// Earned only from Keeper milestones (`data/milestones.ts`), never found,
+// sold or traded, so wearing one shows what you did. The found Cozy Apron
+// and Squishy Net stay found-only (DECISIONS "Patch Coins and the Boutique
+// (#45)"); these are new pieces.
+const MILESTONE: ClothingItem[] = [
+  {
+    id: 'explorers-hat',
+    name: "Explorer's Hat",
+    description: 'A wide brim for squinting at faraway tiles.',
+    slot: 'hat',
+    rarity: 'uncommon',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.1, 0.04], size: [1.6, 0.1, 1.6], color: '#c9a36b' },
+        { shape: 'ellipsoid', at: [0, 0.14, 0.04], size: [0.92, 0.5, 0.92], color: '#c9a36b' },
+        { shape: 'capsule', at: [0, -0.02, 0.04], size: [0.94, 0.12, 0.94], color: '#7a4f2c' },
+      ],
+    },
+  },
+  {
+    id: 'cartographer-cape',
+    name: 'Cartographer Cape',
+    description: 'Every tile you claimed, stitched on in tiny squares.',
+    slot: 'back',
+    rarity: 'rare',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.35, 0.5], size: [1.2, 1.6, 0.2], color: '#7fc8a9' },
+        { shape: 'ellipsoid', at: [-0.25, -0.2, 0.62], size: [0.3, 0.3, 0.06], color: '#ffd166' },
+        { shape: 'ellipsoid', at: [0.25, -0.6, 0.62], size: [0.3, 0.3, 0.06], color: '#a8d8ff' },
+        { shape: 'ellipsoid', at: [0, 0.42, 0], size: [1.1, 0.18, 1.1], color: '#fff1e6' },
+      ],
+    },
+  },
+  {
+    id: 'crown-of-the-gap',
+    name: 'Crown of the Gap',
+    description: "Worn by the kindest keeper in Juniper's Gap.",
+    slot: 'hat',
+    rarity: 'legendary',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'capsule', at: [0, 0.02, 0.04], size: [0.96, 0.22, 0.96], color: '#ffd166' },
+        { shape: 'cone', at: [-0.3, 0.28, -0.2], size: [0.2, 0.32, 0.2], color: '#ffd166' },
+        { shape: 'cone', at: [0, 0.32, -0.34], size: [0.22, 0.38, 0.22], color: '#ffd166' },
+        { shape: 'cone', at: [0.3, 0.28, -0.2], size: [0.2, 0.32, 0.2], color: '#ffd166' },
+        { shape: 'ellipsoid', at: [0, 0.06, -0.47], size: [0.16, 0.16, 0.08], color: '#7fc97f' },
+      ],
+    },
+  },
+  {
+    id: 'collectors-satchel',
+    name: "Collector's Satchel",
+    description: 'A pocket for every new friend’s favourite snack.',
+    slot: 'back',
+    rarity: 'rare',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0.3, -0.3, 0.45], size: [0.7, 0.6, 0.4], color: '#b07f5a' },
+        { shape: 'ellipsoid', at: [0.3, -0.12, 0.47], size: [0.72, 0.24, 0.42], color: '#8a5a3c' },
+        {
+          shape: 'capsule',
+          at: [0, 0.1, 0],
+          size: [0.08, 1.3, 1.1],
+          turn: [0, 0, 35],
+          color: '#8a5a3c',
+        },
+      ],
+    },
+  },
+  {
+    id: 'rainbow-jacket',
+    name: 'Rainbow Jacket',
+    description: 'One stripe for every kind of squishy you befriended.',
+    slot: 'top',
+    rarity: 'epic',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.02, 0], size: [1.12, 1.08, 1.12], color: '#ff8fab' },
+        { shape: 'ellipsoid', at: [0, 0.2, 0], size: [1.14, 0.16, 1.14], color: '#ffd166' },
+        { shape: 'ellipsoid', at: [0, 0.0, 0], size: [1.14, 0.16, 1.14], color: '#9fd88b' },
+        { shape: 'ellipsoid', at: [0, -0.2, 0], size: [1.14, 0.16, 1.14], color: '#7fa8f0' },
+        { shape: 'ellipsoid', at: [0, 0.46, 0], size: [0.74, 0.2, 0.76], color: '#c4a8f0' },
+      ],
+    },
+  },
+  {
+    id: 'evolvers-goggles',
+    name: "Evolver's Goggles",
+    description: 'For watching very closely when someone grows up.',
+    slot: 'hair-accessory',
+    rarity: 'rare',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [-0.32, 0, -0.1], size: [0.5, 0.5, 0.3], color: '#a8e6ff' },
+        { shape: 'ellipsoid', at: [0.32, 0, -0.1], size: [0.5, 0.5, 0.3], color: '#a8e6ff' },
+        { shape: 'capsule', at: [0, 0, 0], size: [1.3, 0.14, 0.14], color: '#b07f5a' },
+      ],
+    },
+  },
+  {
+    id: 'prism-boots',
+    name: 'Prism Boots',
+    description: 'Every step leaves a tiny rainbow behind.',
+    slot: 'shoes',
+    rarity: 'epic',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.1, 0], size: [1.15, 1.2, 1.1], color: '#d6c4ff' },
+        { shape: 'capsule', at: [0, 0.75, 0.15], size: [0.8, 0.9, 0.7], color: '#a8e6ff' },
+        { shape: 'ellipsoid', at: [0, 1.15, 0.15], size: [0.9, 0.2, 0.8], color: '#ffd6f0' },
+      ],
+    },
+  },
+  {
+    id: 'heart-mittens',
+    name: 'Heart Mittens',
+    description: 'Extra soft, for extra gentle pats.',
+    slot: 'held',
+    rarity: 'rare',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0, 0], size: [0.55, 0.62, 0.45], color: '#ff8fab' },
+        { shape: 'ellipsoid', at: [0.22, 0.1, -0.05], size: [0.2, 0.3, 0.2], color: '#ff8fab' },
+        { shape: 'ellipsoid', at: [0, 0.02, -0.23], size: [0.24, 0.22, 0.05], color: '#fff1e6' },
+        { shape: 'ellipsoid', at: [0, -0.32, 0], size: [0.5, 0.14, 0.42], color: '#fff1e6' },
+      ],
+    },
+  },
+  {
+    id: 'hearthkeeper-lantern',
+    name: 'Hearthkeeper Lantern',
+    description: 'Carries a little Hearthfire spark wherever you go.',
+    slot: 'held',
+    rarity: 'rare',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'capsule', at: [0, 0.38, 0], size: [0.12, 0.5, 0.12], color: '#7a4f2c' },
+        { shape: 'ellipsoid', at: [0, -0.05, 0], size: [0.56, 0.66, 0.56], color: '#ffb347' },
+        { shape: 'teardrop', at: [0, -0.02, 0], size: [0.24, 0.34, 0.24], color: '#fff3a8' },
+        { shape: 'cone', at: [0, 0.32, 0], size: [0.5, 0.26, 0.5], color: '#7a4f2c' },
+      ],
+    },
+  },
+  {
+    id: 'ember-cloak',
+    name: 'Ember Cloak',
+    description: 'Warm as a fire on a long night of keeping watch.',
+    slot: 'back',
+    rarity: 'epic',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.35, 0.5], size: [1.25, 1.65, 0.2], color: '#e2603f' },
+        { shape: 'ellipsoid', at: [0, -0.95, 0.52], size: [1.0, 0.4, 0.22], color: '#ffb347' },
+        { shape: 'ellipsoid', at: [0, 0.42, 0], size: [1.1, 0.2, 1.1], color: '#ffd166' },
+      ],
+    },
+  },
+  {
+    id: 'brave-scarf',
+    name: 'Brave Scarf',
+    description: 'For the keeper who found the way through the Hollow.',
+    slot: 'top',
+    rarity: 'uncommon',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, 0.44, 0], size: [1.12, 0.24, 1.12], color: '#ffb347' },
+        { shape: 'ellipsoid', at: [0, 0.34, 0], size: [1.1, 0.16, 1.1], color: '#fff3a8' },
+        { shape: 'capsule', at: [0.24, 0.1, -0.5], size: [0.2, 0.48, 0.1], color: '#ffb347' },
+        { shape: 'capsule', at: [0.36, 0.06, -0.48], size: [0.18, 0.42, 0.1], color: '#fff3a8' },
+      ],
+    },
+  },
+  {
+    id: 'lightbringer-wings',
+    name: 'Lightbringer Wings',
+    description: 'They glow softly, so nobody gets lost in the dark.',
+    slot: 'back',
+    rarity: 'legendary',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        {
+          shape: 'ellipsoid',
+          at: [-0.62, 0.32, 0.6],
+          size: [1.0, 1.2, 0.08],
+          turn: [0, -20, 25],
+          color: '#fff3a8',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.62, 0.32, 0.6],
+          size: [1.0, 1.2, 0.08],
+          turn: [0, 20, -25],
+          color: '#fff3a8',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [-0.5, -0.35, 0.6],
+          size: [0.6, 0.66, 0.08],
+          turn: [0, -20, -20],
+          color: '#ffe0f0',
+        },
+        {
+          shape: 'ellipsoid',
+          at: [0.5, -0.35, 0.6],
+          size: [0.6, 0.66, 0.08],
+          turn: [0, 20, 20],
+          color: '#ffe0f0',
+        },
+      ],
+    },
+  },
+  {
+    // The Halloween track's top tier (design doc §24 "Seasonal"): that
+    // season's legendary costume, only earned in its window.
+    id: 'harvest-moon-costume',
+    name: 'Harvest Moon Costume',
+    description: 'Be a round, glowing moon with a sleepy smile.',
+    slot: 'costume',
+    rarity: 'legendary',
+    season: 'halloween',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.2, 0], size: [0.98, 0.7, 1.0], color: '#ffe8a3' },
+        { shape: 'ellipsoid', at: [0, 0.22, 0.12], size: [1.02, 0.62, 0.92], color: '#ffe8a3' },
+        { shape: 'ellipsoid', at: [-0.3, 0.3, -0.36], size: [0.18, 0.18, 0.08], color: '#f2c96b' },
+        { shape: 'ellipsoid', at: [0.26, -0.2, -0.46], size: [0.22, 0.22, 0.08], color: '#f2c96b' },
+        { shape: 'arc', at: [0, -0.02, -0.5], size: [0.3, 0.1, 0.05], color: '#6b4a7a' },
+      ],
+    },
+  },
+];
+
 /** Every clothing item, checked by `checkClothingData` in tests. */
-export const CLOTHING: ClothingItem[] = [...STARTER, ...EVERYDAY, ...HALLOWEEN, ...SQUISHY];
+export const CLOTHING: ClothingItem[] = [
+  ...STARTER,
+  ...EVERYDAY,
+  ...HALLOWEEN,
+  ...MILESTONE,
+  ...SQUISHY,
+];
 
 /** The catalog by id. */
 export const CLOTHING_BY_ID: ReadonlyMap<string, ClothingItem> = new Map(

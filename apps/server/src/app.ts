@@ -26,6 +26,8 @@ import { createGatheringService } from './modules/gathering/service.js';
 import { inventoryRoutes } from './modules/inventory/routes.js';
 import { createInventoryService } from './modules/inventory/service.js';
 import { loreRoutes } from './modules/lore/routes.js';
+import { milestonesRoutes } from './modules/milestones/routes.js';
+import { createMilestonesService } from './modules/milestones/service.js';
 import { createLoreService } from './modules/lore/service.js';
 import { spawnsRoutes } from './modules/spawns/routes.js';
 import { createSpawnsService } from './modules/spawns/service.js';
@@ -273,6 +275,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         await api.register(
           boutiqueRoutes(createBoutiqueService({ db, clock }), { hooks: authHooks, idempotency }),
+        );
+        // Keeper milestones (#44): the `milestones` consumer counts progress.
+        await api.register(
+          milestonesRoutes(createMilestonesService({ db, clock }), { hooks: authHooks }),
         );
         await api.register(
           careRoutes(createCareService({ db, clock, ...publish }), {

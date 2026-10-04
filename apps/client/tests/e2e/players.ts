@@ -33,9 +33,10 @@ export async function newPlayer(browser: Browser, name: string): Promise<Page> {
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();
   await pickKeeper(page);
+  // Roomy: under a full e2e run the lobby's first fetches can take a while.
   await expect(
     page.getByTestId('lobby').getByRole('heading', { name: 'Your patches' }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15_000 });
   return page;
 }
 

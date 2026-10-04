@@ -25,8 +25,11 @@ export type TutorialAdvance =
   /** Finished the last step: the tutorial is done. */
   | { completed: TutorialStep; next: null };
 
-/** The value at a dot path, or undefined if the path isn't there. */
-function valueAt(payload: unknown, field: string): unknown {
+/**
+ * The value at a dot path, or undefined if the path isn't there. Milestones
+ * (#44) read payloads with it too.
+ */
+export function valueAt(payload: unknown, field: string): unknown {
   let node: unknown = payload;
   for (const key of field.split('.')) {
     if (typeof node !== 'object' || node === null || !Object.hasOwn(node, key)) return undefined;

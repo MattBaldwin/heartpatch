@@ -26,6 +26,7 @@ export function member(n: number, homeSlot: number): MapMember {
     homeSlot,
     joinedAt: '2026-10-02T12:00:00.000Z',
     keeper: base ? { ...defaultKeeperConfig(base), wearing: [] } : null,
+    title: null,
   };
 }
 

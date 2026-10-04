@@ -47,7 +47,7 @@ Module repos (`modules/<name>/repo.ts`) import `Database` / `Transaction` and th
 
 ## Tables (core spine)
 
-Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), `coin_ledger` and `coin_balances` (#45), `care_log`, `squishy_evolutions` plus the squishies' care columns (#19), `raids` plus `map_members.defense_stance` (#16), and `quick_messages` (#23). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
+Only the spine that other tables reference is designed here (tech spec §4, `docs/DECISIONS.md`), plus the map tables from #4, `event_consumers` (#47), `battles` and `idempotency_keys` (#13), `keepers` (#42), `inventories`, `resource_ledger`, `gather_jobs` and `crafts` (#17), `species_seen` plus the `battles.spawn_*` columns (#14), `clothing_owned`, `outfits` and `squishy_accessories` (#43), `coin_ledger` and `coin_balances` (#45), `milestone_progress`, `milestone_rewards` and `keepers.title_id` (#44), `care_log`, `squishy_evolutions` plus the squishies' care columns (#19), `raids` plus `map_members.defense_stance` (#16), and `quick_messages` (#23). Feature tables (`buildings`, other ledgers, …) and extra feature columns arrive with their own issues as new migrations.
 
 ### `users`
 | Column | Type | Notes |
@@ -353,6 +353,30 @@ Starter items are never stored: every account owns them (DECISIONS "Wardrobe (#4
 | `map_id` | uuid, null → maps | The patch it was earned on; set null when the map goes (the coins stay) |
 | `day` | date | The account's local date (`users.time_zone`), for the daily caps. Indexed with `user_id`, `source` |
 | `created_at` | timestamptz | Game clock |
+
+### `milestone_progress`
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` | uuid → users | PK part. Account-level (DECISIONS F); cascade delete |
+| `milestone_id` | text | PK part. A track id from the milestone data (`MILESTONE_TRACKS`, or server-only `SECRET_MILESTONES`) |
+| `progress` | integer | Hundredths of a step (`MILESTONE_UNIT`), so Gentle's half share counts half a tile; `>= 0` (check) |
+| `kinds` | jsonb | For "kinds of" tracks (Collector): the kinds already counted (species ids). `[]` otherwise |
+| `updated_at` | timestamptz | Game clock |
+
+Written only by the `milestones` event consumer, under the row's lock (tech spec §7 step 11). A missing row is no progress.
+
+### `milestone_rewards`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | uuid v5 of `user/milestone/tier` under a fixed namespace; also the `ref_id` of the tier's `coin_ledger` row and `clothing_owned` piece |
+| `user_id` | uuid → users | Cascade delete. Unique with `milestone_id`, `tier`: a tier is granted once |
+| `milestone_id` | text | Track id |
+| `tier` | smallint | 1 for the first tier; `>= 1` (check) |
+| `map_id` | uuid, null → maps | The patch whose play earned it (null for The First Patch); set null when the map goes |
+| `earned_at` | timestamptz | Game clock |
+| `seen_at` | timestamptz, null | Set once the player's client celebrated it. Partial index on unseen rows per player |
+
+`keepers.title_id` (text, null) is the title the player wears on their profile card: a tier's title id they have earned (`POST /milestones/title` checks).
 
 ### `coin_balances`
 | Column | Type | Notes |
