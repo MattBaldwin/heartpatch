@@ -276,6 +276,14 @@ export const BattleRewardsSchema = z.object({
 });
 export type BattleRewards = z.infer<typeof BattleRewardsSchema>;
 
+/**
+ * The patch's time of day where a battle happens (owner decision 2026-10-04):
+ * `night` is the map's night (nightfall to morning, as the Hollow's), `dusk`
+ * the hours just before it. Only for how the arena looks.
+ */
+export const BattleTimeOfDaySchema = z.enum(['day', 'dusk', 'night']);
+export type BattleTimeOfDay = z.infer<typeof BattleTimeOfDaySchema>;
+
 export const PlayerBattleSchema = z.object({
   id: z.uuid(),
   mapId: z.uuid(),
@@ -294,6 +302,15 @@ export const PlayerBattleSchema = z.object({
    * there is then).
    */
   rewards: BattleRewardsSchema.nullable(),
+  /**
+   * Where it happens (owner decision 2026-10-04): a terrain id from the
+   * shared terrain table, which the client draws as the arena. The battle's
+   * tile for a tile battle or a wild squishy's spawn, else the player's home
+   * tile. Set by the server when the battle starts.
+   */
+  terrain: ContentIdSchema,
+  /** The patch's time of day when the battle started, so a night battle looks like night. */
+  timeOfDay: BattleTimeOfDaySchema,
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
 });

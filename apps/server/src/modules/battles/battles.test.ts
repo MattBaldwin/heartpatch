@@ -8,6 +8,8 @@ import {
   GAME_DATA,
   grantedXp,
   GROWTH_RULES,
+  heartSeedOf,
+  MAP_GEN,
   MapResponseSchema,
   replayBattle,
   SquishyResponseSchema,
@@ -24,7 +26,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, users } from '../../db/schema.js';
+import { eq } from 'drizzle-orm';
+import { battles, keepers, sessions, users } from '../../db/schema.js';
 import { KEY_TTL_MS } from '../../lib/idempotency.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -696,6 +699,106 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       // A new battle can start now.
       const next = await pickFight(server, kid, mapId);
       expect(next.id).not.toBe(battle.id);
+    });
+  });
+
+  describe('where it happens (the arena, owner decision 2026-10-04)', () => {
+    const tilesOf = (mapId: string) =>
+      db.query.tiles.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
+
+    /** The player's Heart Seed tile: the middle of their home base. */
+    async function seedTile(mapId: string, who: Player) {
+      const member = await db.query.mapMembers.findFirst({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, who.id)),
+      });
+      const home = (await tilesOf(mapId)).filter((t) => t.homeSlot === member!.homeSlot);
+      const seed = heartSeedOf(home)!;
+      return home.find((t) => t.q === seed.q && t.r === seed.r)!;
+    }
+
+    /** A neutral tile whose terrain isn't the Heart Seed's, so the two can't be mixed up. */
+    async function awayTile(mapId: string, seedTerrain: string) {
+      const away = (await tilesOf(mapId)).find(
+        (t) => t.homeSlot === null && t.terrain !== seedTerrain,
+      );
+      expect(away).toBeDefined();
+      return away!;
+    }
+
+    const wildTeam = () => [{ id: 'wild-1', speciesId: SECRET_IDS[0]!, level: 3 }];
+
+    it('plays a battle with no tile at the Heart Seed, and keeps it on refresh', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId);
+      const seed = await seedTile(mapId, kid);
+      const battle = await pickFight(server, kid, mapId);
+      expect(battle).toMatchObject({ terrain: seed.terrain, timeOfDay: 'day' });
+      expect(GAME_DATA.terrains.map((t) => t.id)).toContain(battle.terrain);
+      expect(await rowOf(battle.id)).toMatchObject({
+        terrain: seed.terrain,
+        timeOfDay: 'day',
+      });
+      // Stored when it started: later in the evening it still looks like the day it began.
+      clock.setTime(Date.parse('2026-10-03T04:00:00Z')); // 10 PM in Denver
+      const got = battleOf(await call(server, 'GET', `/battles/${battle.id}`, kid));
+      expect(got).toMatchObject({ terrain: seed.terrain, timeOfDay: 'day' });
+    });
+
+    it("plays a wild squishy on its spawn tile's terrain, at the patch's time of day", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId);
+      const tile = await awayTile(mapId, (await seedTile(mapId, kid)).terrain);
+      // 10 PM in Denver: after nightfall (9 PM), so the arena is drawn at night.
+      clock.setTime(Date.parse('2026-10-03T04:00:00Z'));
+      const service = createBattlesService({ db, clock: () => clock });
+      const { battle } = await service.startAgainst({ id: kid.id, username: kid.username }, mapId, {
+        squishies: wildTeam(),
+        spawn: { q: tile.q, r: tile.r, window: '2026-10-02/5' },
+      });
+      expect(battle).toMatchObject({ kind: 'wild', terrain: tile.terrain, timeOfDay: 'night' });
+      // The client gets it on every read, through the response schema.
+      const got = battleOf(await call(server, 'GET', `/battles/${battle.id}`, kid));
+      expect(got).toMatchObject({ terrain: tile.terrain, timeOfDay: 'night' });
+    });
+
+    it("plays a tile battle on the tile's terrain, at dusk before nightfall", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId);
+      const tile = await awayTile(mapId, (await seedTile(mapId, kid)).terrain);
+      clock.setTime(Date.parse('2026-10-03T02:00:00Z')); // 8 PM in Denver
+      const service = createBattlesService({ db, clock: () => clock });
+      const { battle } = await service.startTile(
+        { id: kid.id, username: kid.username },
+        mapId,
+        () =>
+          Promise.resolve({
+            kind: 'tile',
+            tile: { q: tile.q, r: tile.r },
+            side: { controller: { type: 'ai', policy: 'guardian' }, squishies: wildTeam() },
+            started: () => Promise.resolve([]),
+          }),
+      );
+      expect(battle).toMatchObject({ kind: 'tile', terrain: tile.terrain, timeOfDay: 'dusk' });
+    });
+
+    it('shows a battle from before arenas were stored on the home terrain, by day', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId);
+      const battle = await pickFight(server, kid, mapId);
+      await db
+        .update(battles)
+        .set({ terrain: null, timeOfDay: null })
+        .where(eq(battles.id, battle.id));
+      const got = battleOf(await call(server, 'GET', `/battles/${battle.id}`, kid));
+      expect(got).toMatchObject({ terrain: MAP_GEN.homeTerrain, timeOfDay: 'day' });
     });
   });
 });

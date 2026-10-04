@@ -93,6 +93,8 @@ function battle(log: BattleEventView[], extra: Partial<PlayerBattle['view']> = {
     ],
     seed: null,
     rewards: null,
+    terrain: 'forest',
+    timeOfDay: 'day',
     startedAt: '2026-10-02T12:00:00.000Z',
     endedAt: null,
   };

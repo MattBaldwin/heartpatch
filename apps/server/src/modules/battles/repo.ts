@@ -9,6 +9,8 @@ import {
   type BattleResult,
   BattleRewardsSchema,
   type BattleRewards,
+  BattleTimeOfDaySchema,
+  type BattleTimeOfDay,
   type BattleSetup,
   type BattleState,
   type BattleStatus,
@@ -44,6 +46,14 @@ export interface BattleRow {
   endedAt: Date | null;
   /** The tile and spawn window a wild squishy came from (#14), or null. */
   spawn: BattleSpawn | null;
+  /** Where it happens (the arena), or null for battles started before it was stored. */
+  arena: BattleArena | null;
+}
+
+/** Where a battle happens: the terrain the client draws, and the patch's time of day then. */
+export interface BattleArena {
+  terrain: string;
+  timeOfDay: BattleTimeOfDay;
 }
 
 /** Where a battle's wild squishy spawned: a tile and spawn window. */
@@ -63,6 +73,7 @@ export interface NewBattle {
   state: BattleState;
   startedAt: Date;
   spawn: BattleSpawn | null;
+  arena: BattleArena;
 }
 
 /** A squishy as the battle service needs it (a `squishies` row). */
@@ -167,7 +178,15 @@ function toRow(row: RawBattleRow): BattleRow {
       row.spawnWindow !== null && row.spawnQ !== null && row.spawnR !== null
         ? { q: row.spawnQ, r: row.spawnR, window: row.spawnWindow }
         : null,
+    arena: arenaOf(row),
   };
+}
+
+/** The stored arena; a row from before it was stored (or a hand-edited one) has none. */
+function arenaOf(row: RawBattleRow): BattleArena | null {
+  const timeOfDay = BattleTimeOfDaySchema.safeParse(row.timeOfDay);
+  if (row.terrain === null || !timeOfDay.success) return null;
+  return { terrain: row.terrain, timeOfDay: timeOfDay.data };
 }
 
 const toSquishy = (row: typeof squishies.$inferSelect): OwnedSquishy => ({
@@ -256,7 +275,7 @@ function queries(db: Executor): BattlesRepo {
       return toSquishy(row);
     },
 
-    insertBattle: async ({ spawn, ...battle }) => {
+    insertBattle: async ({ spawn, arena, ...battle }) => {
       const [row] = await db
         .insert(battles)
         .values({
@@ -266,6 +285,8 @@ function queries(db: Executor): BattlesRepo {
           spawnQ: spawn?.q ?? null,
           spawnR: spawn?.r ?? null,
           spawnWindow: spawn?.window ?? null,
+          terrain: arena.terrain,
+          timeOfDay: arena.timeOfDay,
         })
         .returning();
       if (!row) throw new Error('insertBattle: insert returned no row');

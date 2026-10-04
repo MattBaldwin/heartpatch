@@ -264,6 +264,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       return {
         kind,
         side,
+        tile: { q: tile.q, r: tile.r },
         started: async (startTx, battle) => {
           const attack = await createTerritoryRepo(startTx).insertAttack({
             mapId: map.id,
