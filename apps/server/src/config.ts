@@ -49,6 +49,12 @@ const ConfigSchema = z.object({
   // Dev/test only: every found-clothing drop table's chance, in percent (#43),
   // so a find can be tried without gathering a hundred times. Never in production.
   HP_DEV_DROP_CHANCE: z.coerce.number().int().min(0).max(100).optional(),
+  // `pnpm db:seed` only: `1` lets the seed write to a database that isn't on
+  // this computer (db/seed.ts, `seedTargetRefusal`). Never in production.
+  HP_SEED_ALLOW_REMOTE: z
+    .enum(['0', '1'])
+    .default('0')
+    .transform((v) => v === '1'),
 });
 
 /** Settings only the HTTP server needs; tools like `db/cli.ts` skip these checks. */
@@ -74,6 +80,10 @@ const ServerConfigSchema = ConfigSchema.refine(
   })
   .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_DROP_CHANCE === undefined, {
     path: ['HP_DEV_DROP_CHANCE'],
+    message: 'development and tests only',
+  })
+  .refine((c) => c.NODE_ENV !== 'production' || !c.HP_SEED_ALLOW_REMOTE, {
+    path: ['HP_SEED_ALLOW_REMOTE'],
     message: 'development and tests only',
   });
 

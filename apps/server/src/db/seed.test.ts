@@ -28,28 +28,24 @@ describe('seedTargetRefusal', () => {
   it.each(['localhost:5432', 'LOCALHOST', '127.0.0.1:5432', '[::1]:5432', 'db:5432'])(
     'allows the local database at %s',
     (host) => {
-      expect(seedTargetRefusal(at(host), {})).toBeNull();
+      expect(seedTargetRefusal(at(host), false)).toBeNull();
     },
   );
 
   it.each(['db.example.com', '10.0.0.5:5432', '127.0.0.2', 'play.pumpkinpatchgames.com'])(
     'refuses %s',
     (host) => {
-      expect(seedTargetRefusal(at(host), {})).toMatch(/refusing to seed/);
+      expect(seedTargetRefusal(at(host), false)).toMatch(/refusing to seed/);
     },
   );
 
   it('refuses a URL with no host (a socket path) or no URL at all', () => {
-    expect(seedTargetRefusal('postgres:///heartpatch?host=/tmp', {})).toMatch(/\(no host\)/);
-    expect(seedTargetRefusal('not a url', {})).toMatch(/not a URL/);
+    expect(seedTargetRefusal('postgres:///heartpatch?host=/tmp', false)).toMatch(/\(no host\)/);
+    expect(seedTargetRefusal('not a url', false)).toMatch(/not a URL/);
   });
 
-  it('allows a remote database only with HP_SEED_ALLOW_REMOTE=1', () => {
-    expect(seedTargetRefusal(at('db.example.com'), { HP_SEED_ALLOW_REMOTE: '1' })).toBeNull();
-    expect(
-      seedTargetRefusal(at('db.example.com'), { HP_SEED_ALLOW_REMOTE: 'true' }),
-    ).not.toBeNull();
-    expect(seedTargetRefusal(at('db.example.com'), { HP_SEED_ALLOW_REMOTE: '' })).not.toBeNull();
+  it('allows a remote database only with HP_SEED_ALLOW_REMOTE', () => {
+    expect(seedTargetRefusal(at('db.example.com'), true)).toBeNull();
   });
 });
 

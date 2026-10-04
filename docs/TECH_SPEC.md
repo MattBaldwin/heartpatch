@@ -289,6 +289,7 @@ Add anything else only with a one-line justification in the PR.
 | `HP_DEV_MAP_CREATE_LIMIT_PER_IP` | `500` | dev/test only; raises the per-IP patch-making limit for e2e (Playwright sets it) |
 | `HP_DEV_SQUISHY_GRANTS` | `true` | dev/test only; registers routes that hand a player a squishy and start a battle against a chosen wild squishy (#13), until spawns (#14) and the tutorial's starter exist (Playwright sets it) |
 | `HP_DEV_DROP_CHANCE` | `100` | dev/test only; every found-clothing drop table's chance, in percent (#43), so a gather finds something |
+| `HP_SEED_ALLOW_REMOTE` | `1` | `pnpm db:seed` only; lets the seed write to a database whose host isn't local (localhost, 127.0.0.1, ::1 or the compose service `db`). Refused in production |
 | `HP_SIGNUP_CODE` | random string | required to create an account (family-only signup, Phase 1); checked with a constant-time comparison under the auth rate limit |
 | `HP_TUTORIAL_REQUIRED` | `false` | defaults to `false` when unset; when `false`, new accounts can create/join maps without finishing the tutorial. The tutorial (#24) has shipped; whether to flip it to `true` is decided at first deploy (owner) |
 | `HP_KEEPER_REQUIRED` | `true` | defaults to `true`; creating or joining a map needs a Keeper (#42), so other players always see who's who. `false` only for testing |

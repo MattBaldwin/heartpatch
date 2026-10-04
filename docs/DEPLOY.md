@@ -359,7 +359,7 @@ The checklist for testers is [PLAYTEST.md](PLAYTEST.md). This section is where t
 
 ### On the real server
 
-Testers sign up at `https://play.pumpkinpatchgames.com` with the family code (`HP_SIGNUP_CODE`), like any player. There are no seed accounts there: the seed refuses to run with `NODE_ENV=production`, which the compose file sets, and refuses any database that isn't on the computer running it ("Seed accounts" below). Before inviting anyone, decide `HP_TUTORIAL_REQUIRED` (PLAYTEST.md, "Before inviting testers").
+Testers sign up at `https://play.pumpkinpatchgames.com` with the family code (`HP_SIGNUP_CODE`), like any player. There are no seed accounts there: the seed refuses to run with `NODE_ENV=production`, which the compose file sets. That is the only thing stopping it there (the server's database host, `db`, counts as local), so never override `NODE_ENV` to run the seed on the real server. Before inviting anyone, decide `HP_TUTORIAL_REQUIRED` (PLAYTEST.md, "Before inviting testers").
 
 The frame-rate badge only exists in dev builds, so the performance checks use a local playtest.
 
@@ -388,7 +388,7 @@ This runs the dev build on your computer and plays it on an iPhone or iPad on th
 
 `pnpm db:seed` (`apps/server/src/db/seed.ts`) makes these accounts in a dev database. All of them use the password `squishy-secret`. Running it again adds only what's missing and never resets anyone's progress.
 
-`pnpm db:seed` always runs with `NODE_ENV=development`, so the `NODE_ENV=production` check only protects a seed run inside the server's container. The seed therefore also checks where `DATABASE_URL` points: it only writes to a database on `localhost`, `127.0.0.1` or `::1`, or the compose service `db` (inside a compose network, as `infra/scripts/local-smoke.sh` does), and refuses any other host, so a laptop whose `.env` points at the real database can't fill it with accounts whose password is public. `HP_SEED_ALLOW_REMOTE=1` overrides that for a deliberate remote test database; never use it with the real one.
+`pnpm db:seed` always runs with `NODE_ENV=development`, so the `NODE_ENV=production` check only protects a seed run inside the server's container. The seed therefore also checks where `DATABASE_URL` points: it only writes to a database on `localhost`, `127.0.0.1` or `::1`, or the compose service `db` (inside a compose network, as `infra/scripts/local-smoke.sh` does), and refuses any other host, so a laptop whose `.env` points at a remote database can't fill it with accounts whose password is public. It only looks at the host name: an SSH tunnel that brings the real database to `localhost` passes, and so does a seed run inside the real server's container with `NODE_ENV` overridden. Don't do either. `HP_SEED_ALLOW_REMOTE=1` overrides the check for a deliberate remote test database; never use it with the real one.
 
 | Account | What it's for |
 |---|---|

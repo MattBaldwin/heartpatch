@@ -150,6 +150,20 @@ describe('loadServerConfig', () => {
     );
   });
 
+  it('accepts HP_SEED_ALLOW_REMOTE=1 outside production only', () => {
+    expect(loadConfig({ DATABASE_URL, NODE_ENV: 'development' }).HP_SEED_ALLOW_REMOTE).toBe(false);
+    expect(
+      loadConfig({ DATABASE_URL, NODE_ENV: 'development', HP_SEED_ALLOW_REMOTE: '1' })
+        .HP_SEED_ALLOW_REMOTE,
+    ).toBe(true);
+    expect(() =>
+      loadServerConfig({ DATABASE_URL, HP_SIGNUP_CODE: 'family-code', HP_SEED_ALLOW_REMOTE: '1' }),
+    ).toThrow(/HP_SEED_ALLOW_REMOTE/);
+    expect(() => loadConfig({ DATABASE_URL, HP_SEED_ALLOW_REMOTE: 'true' })).toThrow(
+      /HP_SEED_ALLOW_REMOTE/,
+    );
+  });
+
   it('accepts HP_DEV_NOW outside production only', () => {
     const at = '2026-12-20T20:59:00-05:00';
     expect(

@@ -27,14 +27,12 @@ const LOCAL_DATABASE_HOSTS: ReadonlySet<string> = new Set([
 /**
  * Why the seed must not write to `databaseUrl`, or null when it may.
  * `pnpm db:seed` forces NODE_ENV=development, so the NODE_ENV guard alone
- * wouldn't stop a laptop whose `.env` points at the real database. A remote
- * database needs `HP_SEED_ALLOW_REMOTE=1` in `env`.
+ * wouldn't stop a laptop whose `.env` points at a remote database.
+ * `allowRemote` is `HP_SEED_ALLOW_REMOTE`. On the real server the host is
+ * `db`, so there only NODE_ENV=production stops the seed.
  */
-export function seedTargetRefusal(
-  databaseUrl: string,
-  env: Readonly<Record<string, string | undefined>>,
-): string | null {
-  if (env['HP_SEED_ALLOW_REMOTE'] === '1') return null;
+export function seedTargetRefusal(databaseUrl: string, allowRemote: boolean): string | null {
+  if (allowRemote) return null;
   let host: string;
   try {
     host = new URL(databaseUrl).hostname.toLowerCase();

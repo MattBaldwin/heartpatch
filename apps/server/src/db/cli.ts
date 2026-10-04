@@ -20,7 +20,8 @@ if (command === 'seed' && config.NODE_ENV === 'production') {
   log.fatal('refusing to seed test data with NODE_ENV=production');
   process.exit(1);
 }
-const refusal = command === 'seed' ? seedTargetRefusal(config.DATABASE_URL, process.env) : null;
+const refusal =
+  command === 'seed' ? seedTargetRefusal(config.DATABASE_URL, config.HP_SEED_ALLOW_REMOTE) : null;
 if (refusal !== null) {
   log.fatal(refusal);
   process.exit(1);
