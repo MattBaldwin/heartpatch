@@ -238,10 +238,11 @@ What each setting means is explained in the file itself. In short:
 7. checks the site through Caddy over HTTPS (a warning only: on the first deploy the certificate may still be arriving),
 8. records the version in `.env` and `releases.log`, and deletes images older than the previous release.
 
-**First deploy and migrations 0017–0019 (tutorial, Patch Coins, milestones):** nothing to do, but know what the first start does:
+**First deploy and migrations 0017–0020 (tutorial, Patch Coins, milestones, opening cinematic):** nothing to do, but know what the first start does:
 
 - The `milestones` consumer (and the `lore` one) has no saved position, so it starts at seq 0 and replays every existing game event. Play from before milestones counts toward tracks and can grant tiers, titles and coins on that first run. It's safe to repeat: each tier is granted once.
 - At boot the server grants First Patch to every account that has already finished the tutorial. It runs on every boot and grants nothing the second time.
+- **Migration 0020 (opening cinematic)** adds `users.cinematic_seen_at`, NULL for every existing account. So each existing player sees the roughly 111 s story once at their next login (a long press skips it), and it is marked seen when it ends or is skipped. To suppress it for chosen accounts, run `UPDATE users SET cinematic_seen_at = now() WHERE ...` (e.g. `username = '...'`) on the database.
 
 **Start it:** merge any PR to `main`, or GitHub → **Actions** → **Deploy** → **Run workflow** → `main`.
 
