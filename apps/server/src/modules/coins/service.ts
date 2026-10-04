@@ -3,7 +3,7 @@ import { uuidv7 } from 'uuidv7';
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, type Clock } from '../../lib/time.js';
-import { createCoinsRepo, type CoinsRepo } from './repo.js';
+import { createCoinsRepo } from './repo.js';
 
 /*
  * Patch Coins (design doc §23; issue #45). Earned in play, never bought
@@ -45,8 +45,17 @@ export interface CoinCreditResult {
   balance: number | null;
 }
 
-async function dayOf(repo: CoinsRepo, userId: string, at: Date): Promise<string> {
-  return localDate(at, (await repo.timeZoneOf(userId)) ?? 'UTC');
+/** The account's IANA time zone (`users.time_zone`), or UTC if there's no such user. */
+export async function accountTimeZone(db: Executor, userId: string): Promise<string> {
+  return (await createCoinsRepo(db).timeZoneOf(userId)) ?? 'UTC';
+}
+
+/**
+ * The account's local date at `at` (`YYYY-MM-DD` in `users.time_zone`): the
+ * day that daily caps (coins, care) and the Boutique's racks go by.
+ */
+export async function accountDay(db: Executor, userId: string, at: Date): Promise<string> {
+  return localDate(at, await accountTimeZone(db, userId));
 }
 
 /**
@@ -63,7 +72,7 @@ export async function creditCoins(tx: Executor, credit: CoinCredit): Promise<Coi
   // The balance lock first: retries and parallel credits wait here, one at a time.
   const balance = await repo.lockBalance(credit.userId);
   if (await repo.hasChange(credit.source, credit.refId)) return { credited: 0, balance };
-  const day = await dayOf(repo, credit.userId, credit.at);
+  const day = await accountDay(tx, credit.userId, credit.at);
   const cap = DAILY_CAPS[credit.source];
   const room =
     cap === undefined
@@ -93,7 +102,7 @@ export async function spendCoins(
     refId: spend.refId,
     amount: -spend.amount,
     mapId: null,
-    day: await dayOf(repo, spend.userId, spend.at),
+    day: await accountDay(tx, spend.userId, spend.at),
     at: spend.at,
   });
 }

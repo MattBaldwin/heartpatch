@@ -29,8 +29,8 @@ import type { Executor } from '../../db/client.js';
 import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
-import { localDate, type Clock } from '../../lib/time.js';
-import { creditCoins } from '../coins/service.js';
+import type { Clock } from '../../lib/time.js';
+import { accountDay, creditCoins } from '../coins/service.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
@@ -275,10 +275,6 @@ export function createCareService(options: CareServiceOptions): CareService {
     void options.publish?.(mapId);
   };
 
-  /** The account's day (its time zone), for diminishing returns and the coin cap. */
-  const dayOf = async (repo: CareRepo, userId: string, at: Date) =>
-    localDate(at, (await repo.timeZoneOf(userId)) ?? 'UTC');
-
   /** Everything the care sheets show, read through `repo` (inside or outside a transaction). */
   async function careView(
     repo: CareRepo,
@@ -287,7 +283,8 @@ export function createCareService(options: CareServiceOptions): CareService {
     userId: string,
     at: Date,
   ): Promise<CareListResponse> {
-    const day = await dayOf(repo, userId, at);
+    // The account's day, for diminishing returns and the coin cap.
+    const day = await accountDay(tx, userId, at);
     const rows = await repo.listActive(mapId, userId);
     const ids = rows.map((r) => r.id);
     const [habitats, counts, lastCare, coinsToday, unseen, items] = await Promise.all([
@@ -389,7 +386,7 @@ export function createCareService(options: CareServiceOptions): CareService {
           throw new AppError('CONFLICT', MESSAGES.tooSoon(nameOf(row)));
         }
 
-        const day = await dayOf(repo, user.id, at);
+        const day = await accountDay(tx, user.id, at);
         const today = (await repo.countCareOn([row.id], day)).get(row.id) ?? 0;
         const gain = careGain(action, today, CARE_RULES);
         const coins = careCoins(gain, await repo.coinsOn(user.id, day), CARE_RULES);

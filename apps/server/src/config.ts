@@ -38,9 +38,10 @@ const ConfigSchema = z.object({
   // Patches made per IP per window (maps limits.ts), raised for e2e: every
   // Playwright device project makes patches from one IP. Never in production.
   HP_DEV_MAP_CREATE_LIMIT_PER_IP: z.coerce.number().int().min(1).max(10_000).optional(),
-  // Dev/test only: registers routes that hand a player a squishy and start a
-  // battle against a chosen wild squishy (#13), until spawns (#14) and the
-  // tutorial's starter arrive. Never in production.
+  // Dev/test only: registers routes that hand a player squishies, items,
+  // clothing and coins, start a battle against a chosen wild squishy, make
+  // night fall and jump tutorial steps, for e2e and phone testing. Never in
+  // production.
   HP_DEV_SQUISHY_GRANTS: z
     .enum(['true', 'false'])
     .default('false')

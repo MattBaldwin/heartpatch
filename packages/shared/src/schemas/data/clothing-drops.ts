@@ -6,9 +6,10 @@ import { checkRef, formatDataIssues, type Report } from './issues.js';
 /**
  * Found clothing (design doc §23 "Getting clothing"): a small chance of an
  * item when a player gathers, captures a tile or rescues a squishy from the
- * Hollow. The schema is public; the tables are secret and live in
- * `data/server/clothing-drops.ts` (CLAUDE.md rule 6), so players can't read
- * the odds or which terrain hides what.
+ * Hollow. The tables are secret and live in `data/server/clothing-drops.ts`
+ * (CLAUDE.md rule 6), so players can't read the odds or which terrain hides
+ * what; the schema and its check are exported only from
+ * `@heartpatch/shared/server` too.
  */
 export const ClothingDropEntrySchema = z.strictObject({
   item: ContentIdSchema,

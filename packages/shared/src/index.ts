@@ -23,7 +23,6 @@ export * from './schemas/data/home-base.js';
 export * from './schemas/data/hollow.js';
 export * from './schemas/data/care.js';
 export * from './schemas/data/clothing.js';
-export * from './schemas/data/clothing-drops.js';
 export * from './schemas/data/raids.js';
 export * from './schemas/data/quick-messages.js';
 export * from './schemas/data/starters.js';

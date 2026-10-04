@@ -16,6 +16,7 @@ export * from '../../territory/guardians.js';
 export { GUARDIAN_RULES } from './guardian-rules.js';
 export * from '../../hollow/rescue-guardians.js';
 export { RESCUE_GUARDIANS } from './rescue-guardians.js';
+export * from '../../schemas/data/clothing-drops.js';
 export { CLOTHING_DROPS } from './clothing-drops.js';
 export * from '../../schemas/data/lore-pages.js';
 export * from '../../lore/index.js';

@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import {
   MapResponseSchema,
   MILESTONE_TRACKS,
+  MILESTONE_UNIT,
   MilestonesResponseSchema,
   type MilestonesResponse,
+  type MilestoneTrack,
   type MilestoneTrackView,
 } from '@heartpatch/shared';
 import { SECRET_MILESTONES } from '@heartpatch/shared/server';
@@ -13,7 +15,15 @@ import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { keepers, mapMembers, maps, sessions, users } from '../../db/schema.js';
+import {
+  keepers,
+  mapMembers,
+  maps,
+  milestoneProgress,
+  milestoneRewards,
+  sessions,
+  users,
+} from '../../db/schema.js';
 import { runConsumer } from '../../jobs/consumers.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -368,6 +378,44 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     expect(
       MilestonesResponseSchema.parse(JSON.parse(body)).tracks.filter((t) => t.hidden),
     ).toHaveLength(SECRET_MILESTONES.length);
+  });
+
+  it("shows a revealed secret track's earned tiers only, not its later ones", async () => {
+    const kid = await player();
+    // A secret with a second tier the player hasn't reached (the launch
+    // secrets have one tier each, so this is the case that could leak).
+    const base = SECRET_MILESTONES[0]!;
+    const later = {
+      threshold: 5,
+      goal: 'A later secret goal nobody should read yet.',
+      title: { id: 'later-secret-title', name: 'Later Secret Title' },
+      coins: 10,
+    };
+    const secret: MilestoneTrack = { ...base, tiers: [base.tiers[0]!, later] };
+    await db.insert(milestoneRewards).values({
+      id: milestoneRewardId(kid.id, secret.id, 1),
+      userId: kid.id,
+      milestoneId: secret.id,
+      tier: 1,
+      mapId: null,
+      earnedAt: clock,
+    });
+    await db.insert(milestoneProgress).values({
+      userId: kid.id,
+      milestoneId: secret.id,
+      progress: 3 * MILESTONE_UNIT,
+      updatedAt: clock,
+    });
+
+    const view = await createMilestonesService({ db, tracks: [secret] }).get(kid);
+    const shown = trackOf(view, secret.id);
+    expect(shown?.tiers.map((t) => t.tier)).toEqual([1]);
+    // Not "3 of 5": how near the hidden tier is stays hidden too.
+    expect(shown?.progress).toBe(1);
+    const body = JSON.stringify(view);
+    for (const text of [later.goal, later.title.id, later.title.name]) {
+      expect(body).not.toContain(text);
+    }
   });
 
   it("scales a Gentle capture by its share (DECISIONS 'Territory (#15)')", async () => {
