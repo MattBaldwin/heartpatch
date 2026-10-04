@@ -1,6 +1,6 @@
 import type { DefenseStance, MapRole, PublicKeeper, PublicTile, PvpMode } from '@heartpatch/shared';
 import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
+import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
@@ -253,9 +253,10 @@ export interface MapsTxRepo extends MapsRepo {
 /**
  * The `map_members` condition for an active member of `mapId`: one player's
  * membership, or with `userId` left out, every active member. One definition,
- * so "active member" can't drift between the modules that check it.
+ * so "active member" can't drift between the modules that check it. Either
+ * may be another table's column, for a join (Hollow: a squishy's owner).
  */
-export const activeMember = (mapId: string, userId?: string) =>
+export const activeMember = (mapId: string | AnyPgColumn, userId?: string | AnyPgColumn) =>
   and(
     eq(mapMembers.mapId, mapId),
     userId === undefined ? undefined : eq(mapMembers.userId, userId),

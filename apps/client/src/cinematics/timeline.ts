@@ -123,34 +123,56 @@ export function shotAt(
  * exactly on its key. Keys must be in time order with distinct times.
  */
 export function smoothPath(keys: readonly { t: number; v: number }[], time: number): number {
+  return smoothBy(keys, time, keyT, keyV);
+}
+
+const keyT = (k: { t: number }): number => k.t;
+const keyV = (k: { v: number }): number => k.v;
+
+/**
+ * `smoothPath` over any keys, reading each key's time and value through
+ * `at` and `value`, so a frame's evaluation builds no `{ t, v }` arrays.
+ */
+function smoothBy<K>(
+  keys: readonly K[],
+  time: number,
+  at: (key: K) => number,
+  value: (key: K) => number,
+): number {
   const first = keys[0];
   const last = keys.at(-1);
-  if (!first || !last) return 0;
-  if (time <= first.t) return first.v;
-  if (time >= last.t) return last.v;
+  if (first === undefined || last === undefined) return 0;
+  if (time <= at(first)) return value(first);
+  if (time >= at(last)) return value(last);
   let i = 0;
-  while (i < keys.length - 2 && (keys[i + 1]?.t ?? Infinity) <= time) i += 1;
+  while (i < keys.length - 2) {
+    const next = keys[i + 1];
+    if (next === undefined || at(next) > time) break;
+    i += 1;
+  }
   const a = keys[i];
   const b = keys[i + 1];
-  if (!a || !b) return last.v;
+  if (a === undefined || b === undefined) return value(last);
   const slope = (k: number): number => {
     const p = keys[k - 1];
     const q = keys[k];
     const r = keys[k + 1];
-    if (!p || !q || !r) return 0; // ends ease in and out
-    const d0 = (q.v - p.v) / (q.t - p.t);
-    const d1 = (r.v - q.v) / (r.t - q.t);
+    if (p === undefined || q === undefined || r === undefined) return 0; // ends ease in and out
+    const d0 = (value(q) - value(p)) / (at(q) - at(p));
+    const d1 = (value(r) - value(q)) / (at(r) - at(q));
     if (d0 * d1 <= 0) return 0; // a turn or a hold: stop there
     return 2 / (1 / d0 + 1 / d1);
   };
-  const h = b.t - a.t;
-  const s = (time - a.t) / h;
+  const av = value(a);
+  const bv = value(b);
+  const h = at(b) - at(a);
+  const s = (time - at(a)) / h;
   const s2 = s * s;
   const s3 = s2 * s;
   return (
-    (2 * s3 - 3 * s2 + 1) * a.v +
+    (2 * s3 - 3 * s2 + 1) * av +
     (s3 - 2 * s2 + s) * h * slope(i) +
-    (-2 * s3 + 3 * s2) * b.v +
+    (-2 * s3 + 3 * s2) * bv +
     (s3 - s2) * h * slope(i + 1)
   );
 }
@@ -174,9 +196,28 @@ export function segments<K extends { at: number; cut?: boolean }>(keys: readonly
   return runs;
 }
 
+/**
+ * Runs per key list. The key lists are the cinematic's own data, which never
+ * changes once loaded, so each is split once rather than on every frame.
+ */
+const runsCache = new WeakMap<readonly object[], readonly object[][]>();
+
+function runsOf<K extends { at: number; cut?: boolean }>(keys: readonly K[]): readonly K[][] {
+  // A WeakMap can't type its value by its key, so the runs come back cast.
+  let runs = runsCache.get(keys) as readonly K[][] | undefined;
+  if (!runs) {
+    runs = segments(keys);
+    runsCache.set(keys, runs);
+  }
+  return runs;
+}
+
 /** The run of keys in charge at `local`: the last one that has started. */
-function runAt<K extends { at: number; cut?: boolean }>(keys: readonly K[], local: number): K[] {
-  const runs = segments(keys);
+function runAt<K extends { at: number; cut?: boolean }>(
+  keys: readonly K[],
+  local: number,
+): readonly K[] {
+  const runs = runsOf(keys);
   let current = runs[0] ?? [];
   for (const run of runs) if ((run[0]?.at ?? 0) <= local) current = run;
   return current;
@@ -186,11 +227,48 @@ const along = <K extends { at: number }>(
   run: readonly K[],
   local: number,
   value: (key: K) => number,
-): number =>
-  smoothPath(
-    run.map((k) => ({ t: k.at, v: value(k) })),
-    local,
-  );
+): number => smoothBy(run, local, keyAt, value);
+
+const keyAt = (k: { at: number }): number => k.at;
+
+/** An actor's path without its flicker keys (reduced motion), worked out once per actor. */
+const steadyCache = new WeakMap<CinematicActor, readonly CinematicActorKey[]>();
+
+function steadyPath(actor: CinematicActor): readonly CinematicActorKey[] {
+  let keys = steadyCache.get(actor);
+  if (!keys) {
+    keys = actor.path.filter((k) => k.flash !== true);
+    steadyCache.set(actor, keys);
+  }
+  return keys;
+}
+
+// What each pose field reads from a key, made once (not per frame).
+const CAMERA_PICK = {
+  px: (k: CinematicCameraKey) => k.position[0],
+  py: (k: CinematicCameraKey) => k.position[1],
+  pz: (k: CinematicCameraKey) => k.position[2],
+  tx: (k: CinematicCameraKey) => k.target[0],
+  ty: (k: CinematicCameraKey) => k.target[1],
+  tz: (k: CinematicCameraKey) => k.target[2],
+  fov: (k: CinematicCameraKey) => k.fov ?? CINEMATIC_DEFAULT_FOV,
+} as const;
+
+const ACTOR_PICK = {
+  x: (k: CinematicActorKey) => k.x,
+  y: (k: CinematicActorKey) => k.y ?? 0,
+  z: (k: CinematicActorKey) => k.z,
+  scale: (k: CinematicActorKey) => k.scale ?? 1,
+  yaw: (k: CinematicActorKey) => k.yaw ?? 0,
+  alpha: (k: CinematicActorKey) => k.alpha ?? 1,
+  glow: (k: CinematicActorKey) => k.glow ?? 1,
+} as const;
+
+const MOOD_PICK = {
+  drain: (k: CinematicShot['mood'][number]) => k.drain,
+  night: (k: CinematicShot['mood'][number]) => k.night,
+  glow: (k: CinematicShot['mood'][number]) => k.glow,
+} as const;
 
 /**
  * The camera at `local` seconds into `shot`. With `reducedMotion` the camera
@@ -198,25 +276,24 @@ const along = <K extends { at: number }>(
  */
 export function cameraAt(shot: CinematicShot, local: number, reducedMotion: boolean): CameraPose {
   const run = runAt(shot.camera, local);
-  const fovOf = (k: CinematicCameraKey) => k.fov ?? CINEMATIC_DEFAULT_FOV;
+  const p = CAMERA_PICK;
   if (reducedMotion) {
     const held = run.at(-1);
     if (!held) throw new Error(`shot ${shot.id} has no camera`);
-    return { position: held.position, target: held.target, fov: fovOf(held) };
+    return { position: held.position, target: held.target, fov: p.fov(held) };
   }
-  const v = (pick: (k: CinematicCameraKey) => number) => along(run, local, pick);
   return {
-    position: [v((k) => k.position[0]), v((k) => k.position[1]), v((k) => k.position[2])],
-    target: [v((k) => k.target[0]), v((k) => k.target[1]), v((k) => k.target[2])],
-    fov: v(fovOf),
+    position: [along(run, local, p.px), along(run, local, p.py), along(run, local, p.pz)],
+    target: [along(run, local, p.tx), along(run, local, p.ty), along(run, local, p.tz)],
+    fov: along(run, local, p.fov),
   };
 }
 
 export function moodAt(shot: CinematicShot, local: number): Mood {
   return {
-    drain: clamp01(along(shot.mood, local, (k) => k.drain)),
-    night: clamp01(along(shot.mood, local, (k) => k.night)),
-    glow: clamp01(along(shot.mood, local, (k) => k.glow)),
+    drain: clamp01(along(shot.mood, local, MOOD_PICK.drain)),
+    night: clamp01(along(shot.mood, local, MOOD_PICK.night)),
+    glow: clamp01(along(shot.mood, local, MOOD_PICK.glow)),
   };
 }
 
@@ -231,27 +308,24 @@ export function actorAt(
   reducedMotion: boolean,
   shotDuration: number,
 ): ActorPose | null {
-  const keys = reducedMotion ? actor.path.filter((k) => k.flash !== true) : actor.path;
+  const keys = reducedMotion ? steadyPath(actor) : actor.path;
   const first = keys[0];
   const last = keys.at(-1);
   if (!first || !last) return null;
   const until = keys.length === 1 ? shotDuration : last.at;
   if (local < first.at || local > until) return null;
   const run = runAt(keys, local);
-  const v = (pick: (k: CinematicActorKey) => number) => along(run, local, pick);
+  const p = ACTOR_PICK;
   let lit = true;
   for (const k of keys) if (k.at <= local && k.lit !== undefined) lit = k.lit;
   return {
-    x: v((k) => k.x),
-    y: v((k) => k.y ?? 0),
-    z: v((k) => k.z),
-    scale: Math.max(
-      0,
-      v((k) => k.scale ?? 1),
-    ),
-    yaw: v((k) => k.yaw ?? 0),
-    alpha: clamp01(v((k) => k.alpha ?? 1)),
-    glow: clamp01(v((k) => k.glow ?? 1)),
+    x: along(run, local, p.x),
+    y: along(run, local, p.y),
+    z: along(run, local, p.z),
+    scale: Math.max(0, along(run, local, p.scale)),
+    yaw: along(run, local, p.yaw),
+    alpha: clamp01(along(run, local, p.alpha)),
+    glow: clamp01(along(run, local, p.glow)),
     lit,
   };
 }

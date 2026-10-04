@@ -266,6 +266,16 @@ export default defineConfig(
           ],
         },
       ],
+      // Throws outside a secure context, so on plain http (the LAN playtest) it breaks.
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'crypto',
+          property: 'randomUUID',
+          message:
+            'crypto.randomUUID throws on plain http; use newIdempotencyKey() from net/idempotency-key.ts.',
+        },
+      ],
     },
   },
   {

@@ -105,6 +105,9 @@ const key = (shot: number, actor: string) => `${String(shot)}/${actor}`;
 const poseKey = (p: ActorPose, y: number) =>
   `${p.x.toFixed(3)},${y.toFixed(3)},${p.z.toFixed(3)},${p.scale.toFixed(3)},${p.yaw.toFixed(3)}`;
 
+/** Where the Hollow Man waits, hidden, when no shot has him. */
+const ORIGIN = { x: 0, y: 0, z: 0 } as const;
+
 /** The Heart Seed's own pink (map-scene's `buildHeartSeed`), which its glow scales. */
 const SEED_PINK = Color3.FromHexString('#ff8fb8').toLinearSpace();
 
@@ -347,7 +350,7 @@ export class CinematicScene {
       const { pose, y } = hollow;
       this.#hollow.pose({ x: pose.x, y, z: pose.z }, pose.alpha, pose.scale);
     } else {
-      this.#hollow.pose({ x: 0, y: 0, z: 0 }, 0);
+      this.#hollow.pose(ORIGIN, 0);
     }
     counts.hollow = hollow !== null && hollow.pose.alpha > 0.001;
 

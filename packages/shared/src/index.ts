@@ -52,7 +52,6 @@ export * from './data/hollow.js';
 export * from './hollow/index.js';
 export * from './data/care.js';
 export * from './data/clothing.js';
-export * from './wardrobe/index.js';
 export * from './data/raids.js';
 export * from './data/quick-messages.js';
 export * from './data/starters.js';

@@ -90,6 +90,8 @@ export class CinematicWorld {
   readonly #snowCentres: { x: number; y: number; z: number }[] = [];
   readonly #snowMatrices: Float32Array;
   #snowUploaded = false;
+  /** Scratch for each flake's matrix, reused every frame. */
+  readonly #snowMatrix = Matrix.Identity();
 
   constructor(scene: Scene, world: Cinematic['world']) {
     this.#hexSize = world.hexSize;
@@ -226,7 +228,7 @@ export class CinematicWorld {
     const mesh = this.#snow;
     const centre = this.#snowCentres[Math.floor(this.#snowCentres.length / 2)];
     if (!mesh || !centre) return;
-    const m = Matrix.Identity();
+    const m = this.#snowMatrix;
     for (let i = 0; i < SNOW.flakes; i += 1) {
       // Fixed scatter (golden-ratio steps), so every viewing looks the same.
       const u = (i * 0.618034) % 1;
