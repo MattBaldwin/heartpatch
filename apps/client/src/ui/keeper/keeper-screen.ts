@@ -15,7 +15,7 @@ import { KeeperPreview } from './keeper-preview.js';
 import './keeper.css';
 
 // Picking your Keeper (design doc §23, issue #42): right after signup and
-// before the tutorial (the cinematic, #46, will slot in between), and again
+// before the opening cinematic (#46) and the tutorial, and again
 // any time from Settings, for free. A bottom card for one thumb, with the
 // Keeper in 3D above it. Colours are tried on the device; only "That's me!"
 // talks to the server, which checks every id.

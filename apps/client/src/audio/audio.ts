@@ -26,6 +26,8 @@ export interface AudioDebug {
   readonly engine: 'idle' | 'loading' | 'ready' | 'failed';
   /** The loop wanted for where the player is (day, night or Halloween). */
   readonly track: TrackId;
+  /** The opening cinematic's choice of music (#46), if it has one: a loop, or null for silence. */
+  readonly scored: TrackId | null | undefined;
   /** The loop the engine is playing (null: none, or music off). */
   readonly playing: TrackId | null;
   /** The last cue a screen asked for, whether or not it could sound. */
@@ -41,6 +43,12 @@ export interface GameAudio {
   cue: (name: CueName | null) => void;
   /** Night on the open map (the Hollow layer's dusk, #21): the night loop. */
   setNight: (night: boolean) => void;
+  /**
+   * The opening cinematic (#46) picks the music while it plays: a loop, or
+   * null for silence (the music drops out). `undefined` hands it back to the
+   * usual pick.
+   */
+  setScore: (track: TrackId | null | undefined) => void;
   /** Rows for the lobby's Settings screen: music and sounds. */
   settings: () => Node[];
   readonly debug: AudioDebug;
@@ -107,6 +115,7 @@ export function createAudio(options: AudioOptions = {}): GameAudio {
   const loadEngine = options.loadEngine ?? (() => import('./audio-engine.js'));
   let settings = loadAudioSettings(storage);
   let night = false;
+  let scored: TrackId | null | undefined;
   let engine: Engine | null = null;
   /** The context the engine was made for (a closed context gets a new one). */
   let engineCtx: AudioContext | null = null;
@@ -134,7 +143,7 @@ export function createAudio(options: AudioOptions = {}): GameAudio {
   const syncMusic = () => {
     if (!engine) return;
     const audible = effectiveVolumes(settings).music > 0;
-    engine.setTrack(audible ? wantedTrack() : null);
+    engine.setTrack(audible ? (scored === undefined ? wantedTrack() : scored) : null);
   };
 
   const startEngine = (ctx: AudioContext) => {
@@ -205,6 +214,11 @@ export function createAudio(options: AudioOptions = {}): GameAudio {
       night = next;
       syncMusic();
     },
+    setScore: (track) => {
+      if (track === scored) return;
+      scored = track;
+      syncMusic();
+    },
     settings: () =>
       audioSettingsView({
         current: () => settings,
@@ -218,6 +232,7 @@ export function createAudio(options: AudioOptions = {}): GameAudio {
         state: unlock.state,
         engine: engineState,
         track: wantedTrack(),
+        scored,
         playing: engine?.track ?? null,
         lastCue,
         cues,

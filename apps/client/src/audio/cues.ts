@@ -28,7 +28,15 @@ export type CueName =
   | 'yay'
   | 'aww'
   /** The Hollow Man comes by: a quiet low hush while the music dips. */
-  | 'nightfall';
+  | 'nightfall'
+  /** The opening cinematic (#46): a squishy blooms out of the ground. */
+  | 'bloom'
+  /** The Heartpatch breaks into Heart Seeds: a soft glassy sparkle, never a crash. */
+  | 'shatter'
+  /** A Heart Seed lands at the Keeper's feet. */
+  | 'seed-land'
+  /** The title card. */
+  | 'title';
 
 export const CUE_NAMES: readonly CueName[] = [
   'tick',
@@ -48,10 +56,20 @@ export const CUE_NAMES: readonly CueName[] = [
   'yay',
   'aww',
   'nightfall',
+  'bloom',
+  'shatter',
+  'seed-land',
+  'title',
 ];
 
 /** Cues that dip the music while they play (tech spec §15 "Mix"). */
-export const DUCKING_CUES: ReadonlySet<CueName> = new Set(['nightfall', 'charm', 'evolve', 'yay']);
+export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
+  'nightfall',
+  'charm',
+  'evolve',
+  'yay',
+  'title',
+]);
 
 /** UI cues go on the UI bus; the rest on the SFX bus (both follow the Sounds slider). */
 export const UI_CUES: ReadonlySet<CueName> = new Set(['tick']);

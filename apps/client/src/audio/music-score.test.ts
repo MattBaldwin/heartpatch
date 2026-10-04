@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MUSIC } from './audio-config.js';
 import { loopSeconds, midiToHz, pickTrack, SCORES, type TrackId } from './music-score.js';
 
-const TRACKS: TrackId[] = ['day', 'night', 'halloween'];
+const TRACKS: TrackId[] = ['day', 'night', 'halloween', 'wonder'];
 
 describe('music score', () => {
   it('picks night over Halloween, and Halloween over day', () => {

@@ -42,7 +42,7 @@ describe('cues', () => {
     expect(careCue('evolve')).toBe('evolve');
   });
 
-  it('dips the music for his visit, a new friend, an evolution and a win', () => {
-    expect([...DUCKING_CUES].sort()).toEqual(['charm', 'evolve', 'nightfall', 'yay']);
+  it('dips the music for his visit, a new friend, an evolution, a win and the title card', () => {
+    expect([...DUCKING_CUES].sort()).toEqual(['charm', 'evolve', 'nightfall', 'title', 'yay']);
   });
 });

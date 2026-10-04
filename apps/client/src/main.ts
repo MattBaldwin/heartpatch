@@ -17,6 +17,7 @@ import { combineTileActions } from './map/tile-actions.js';
 import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
+import { createCinematicScreen } from './cinematics/cinematic-screen.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
 import { createLorebook } from './lore/lorebook.js';
 import { createMilestoneCelebration } from './milestones/milestone-celebration.js';
@@ -31,6 +32,7 @@ import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
 import { createTerritoryScreen } from './territory/territory-screen.js';
 import { createTutorialScreen } from './tutorial/tutorial-screen.js';
+import type { PublicUser } from '@heartpatch/shared';
 import './styles.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -461,16 +463,24 @@ const battles = createBattleScreen({
     audio.cue(battleCue(step));
   },
 });
-// Picking a Keeper (#42) comes right after signup, before the tutorial and
-// the lobby; Settings opens it again to change the Keeper for free.
+/** Who is logged in now (a story finishing late must not open another player's lobby). */
+let signedIn: PublicUser | null = null;
+// Picking a Keeper (#42) comes right after signup, then the opening
+// cinematic the first time (#46), then the tutorial and the lobby; Settings
+// opens the picker again to change the Keeper for free.
 const keeper = createKeeperScreen({
   root: document.body,
   showScene,
   invalidate: () => stage?.invalidate(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onReady: (user) => {
-    lobby.setUser(user);
-    tutorial.setUser(user);
+    // The game never waits on the story (decision A): it resolves at once
+    // for anyone who has seen it, or if it can't play.
+    void cinematic.ensure(user).then(() => {
+      if (signedIn?.id !== user.id) return;
+      lobby.setUser(user);
+      tutorial.setUser(user);
+    });
   },
   onEditOpen: () => {
     void battles.setMap(null);
@@ -487,6 +497,33 @@ const keeper = createKeeperScreen({
   onEditClosed: (saved) => {
     if (saved) lobby.showMessage(KEEPER_TEXT.changed);
     else lobby.show();
+  },
+});
+// The opening cinematic, "The Great Scatter" (#46): once by itself after the
+// Keeper pick, and again from Settings. It owns the screen while it plays.
+const cinematic = createCinematicScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  canRender: () => stage !== null,
+  audio,
+  keeper: () => keeper.current,
+  keeperWearing: () => wardrobe.wearing,
+  onReplayOpen: () => {
+    void battles.setMap(null);
+    void inventory.setMap(null);
+    void territory.setMap(null);
+    void hollow.setMap(null);
+    void chat.setMap(null);
+    home.setMap(null);
+    maps.close();
+    catalog.close();
+    care.close();
+    lobby.stepOut();
+  },
+  onReplayClosed: () => {
+    lobby.show();
   },
 });
 // The wardrobe (#43): from the lobby, it owns the whole screen like the
@@ -584,6 +621,7 @@ const lobby = mountLobby(document.body, {
   settings: () => [
     ...audio.settings(),
     ...keeper.settings(),
+    ...cinematic.settings(),
     ...tutorial.settings(),
     ...lorebook.settings(),
   ],
@@ -604,7 +642,9 @@ mountAuth(document.body, {
     lorebook.setUser(user);
     milestones.setUser(user);
     maps.setUser(user);
-    // The lobby and tutorial wait for a Keeper (`onReady` above).
+    signedIn = user;
+    cinematic.setUser(user);
+    // The lobby and tutorial wait for a Keeper and the story (`onReady` above).
     keeper.setUser(user);
     if (!user) {
       lobbyCoins.set(null);
@@ -656,6 +696,7 @@ if (import.meta.env.DEV) {
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,
     keeper: () => keeper.debug,
+    cinematic: () => cinematic.debug,
     catalog: () => catalog.debug,
     inventory: () => inventory.debug,
     territory: () => territory.debug,

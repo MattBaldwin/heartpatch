@@ -161,6 +161,23 @@ export class HollowMan {
     );
   }
 
+  /**
+   * Stands him at `at` (a ground point), `scale` times his size, faded to
+   * `alpha` (0–1; 0 hides him), for a caller that drives him frame by frame
+   * (the opening cinematic, #46). Not for use while a visit plays.
+   */
+  pose(at: { x: number; y: number; z: number }, alpha: number, scale = 1): void {
+    if (this.visiting) return;
+    const visible = alpha > 0.001;
+    this.root.setEnabled(visible);
+    if (!visible) return;
+    this.root.position.set(at.x, at.y, at.z);
+    this.root.scaling.setAll(scale);
+    this.bodyMaterial.alpha = alpha * HOLLOW_MAN.bodyAlpha;
+    // The eyes come in after the body, so he's a shadow first.
+    this.eyeMaterial.alpha = Math.min(1, Math.max(0, alpha * 1.6 - 0.6));
+  }
+
   dispose(): void {
     this.visiting = false;
     this.root.dispose(false, true);

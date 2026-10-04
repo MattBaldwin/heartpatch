@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { uniqueName, visitPatch } from './players.js';
+import { skipCinematic, uniqueName, visitPatch } from './players.js';
 
 /**
  * Picking a Keeper (issue #42): a new account picks one before it can reach
@@ -86,6 +86,8 @@ async function signUp(page: Page, name: string): Promise<void> {
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();
+  // Straight on to the lobby after the pick: the story has its own spec.
+  await skipCinematic(page);
 }
 
 test('a new Keeper is picked before any patch, remembered, and changed for free', async ({

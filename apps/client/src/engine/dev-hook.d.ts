@@ -12,6 +12,7 @@ import type { RaidReportDebug } from '../raids/raid-report.js';
 import type { TerritoryDebug } from '../territory/territory-screen.js';
 import type { TutorialDebug } from '../tutorial/tutorial-screen.js';
 import type { KeeperDebug } from '../ui/keeper/keeper-screen.js';
+import type { CinematicDebug } from '../cinematics/cinematic-screen.js';
 import type { WardrobeDebug } from '../ui/wardrobe/wardrobe-screen.js';
 import type { LorebookDebug } from '../lore/lorebook.js';
 import type { MilestoneCelebrationDebug } from '../milestones/milestone-celebration.js';
@@ -45,6 +46,8 @@ declare global {
       battle?(): BattleDebug | null;
       /** The Keeper picker: mode, the pick shown, the saved Keeper, the preview's hash (#42). */
       keeper?(): KeeperDebug | null;
+      /** The opening cinematic (#46): mode, time, shot, caption, skip and what's on screen, or null. */
+      cinematic?(): CinematicDebug | null;
       /** The open map's bag, gathers and the tile panel's gather action (#17), or null. */
       inventory?(): InventoryDebug | null;
       /** Tries left, squishies on watch and the tile panel's land action (#15), or null. */

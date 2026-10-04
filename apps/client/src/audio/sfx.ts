@@ -295,4 +295,88 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
     });
     return 4;
   },
+
+  bloom: (kit, out, at, pitch, gain) => {
+    // A soft "pomf" out of the ground, then a little rising sparkle.
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at,
+      dur: 0.22,
+      freq: 220 * pitch,
+      to: 520 * pitch,
+      glide: 0.18,
+      gain: gain * 0.5,
+      attack: 0.01,
+    });
+    return Math.max(0.22, chime(kit, out, at + 0.12, 1318 * pitch, [0, 7], 0.06, gain * 0.18));
+  },
+
+  shatter: (kit, out, at, pitch, gain) => {
+    // Style guide §7: no crash. A shimmer of falling glassy notes over a
+    // breathy swell, like a wind chime caught in a gust.
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 1.6,
+      gain: gain * 0.12,
+      filter: 'bandpass',
+      freq: 3000 * pitch,
+      to: 900 * pitch,
+      q: 0.9,
+      attack: 0.05,
+    });
+    const notes = [24, 19, 21, 16, 17, 12, 14, 9, 7];
+    notes.forEach((semis, i) => {
+      const freq = 523 * pitch * 2 ** (semis / 12);
+      tone(kit.ctx, out, {
+        type: 'sine',
+        at: at + i * 0.07,
+        dur: 0.9,
+        freq,
+        gain: gain * 0.14,
+        attack: 0.003,
+      });
+      tone(kit.ctx, out, {
+        type: 'sine',
+        at: at + i * 0.07,
+        dur: 0.3,
+        freq: freq * 2.76,
+        gain: gain * 0.04,
+      });
+    });
+    return notes.length * 0.07 + 0.9;
+  },
+
+  'seed-land': (kit, out, at, pitch, gain) => {
+    // A soft landing thump, then a warm glow swelling up.
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at,
+      dur: 0.25,
+      freq: 180 * pitch,
+      to: 90 * pitch,
+      glide: 0.2,
+      gain: gain * 0.6,
+      attack: 0.004,
+    });
+    tone(kit.ctx, out, {
+      type: 'triangle',
+      at: at + 0.15,
+      dur: 1.4,
+      freq: 392 * pitch,
+      to: 523 * pitch,
+      glide: 1.0,
+      gain: gain * 0.18,
+      attack: 0.5,
+      hold: 0.4,
+      lowpass: 1800,
+    });
+    return 1.55;
+  },
+
+  title: (kit, out, at, pitch, gain) =>
+    // A bright, open fanfare of chimes: hope.
+    Math.max(
+      chime(kit, out, at, 523 * pitch, [0, 7, 12, 16, 19, 24], 0.12, gain * 0.3),
+      chime(kit, out, at + 0.06, 262 * pitch, [0, 12], 0.36, gain * 0.2),
+    ),
 };

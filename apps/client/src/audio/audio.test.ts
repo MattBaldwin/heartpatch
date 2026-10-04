@@ -159,6 +159,21 @@ describe('createAudio', () => {
     expect(audio.debug.track).toBe('halloween');
   });
 
+  it('lets the cinematic pick the music, or silence, then hands it back (#46)', async () => {
+    const { audio, target, engine } = setup();
+    target.tap();
+    await flush();
+    audio.setScore('wonder');
+    audio.setScore('wonder');
+    audio.setScore(null);
+    // Night falling meanwhile keeps the silence.
+    audio.setNight(true);
+    expect(engine.current).toBeNull();
+    audio.setScore(undefined);
+    expect(engine.tracks).toEqual(['day', 'wonder', null, null, 'night']);
+    expect(audio.debug.scored).toBeUndefined();
+  });
+
   it('stops the music when it is switched off, and stays quiet when sounds are off', async () => {
     const { audio, target, engine } = setup({
       stored: JSON.stringify({ music: 0.5, sounds: 0.5, musicOn: false, soundsOn: false }),

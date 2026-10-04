@@ -72,6 +72,10 @@ export const users = pgTable(
     // tutorial run (always one of `STARTERS`, checked by the tutorial). The
     // starter pick on a patch pre-selects it.
     partnerSpeciesId: text('partner_species_id'),
+    // The first time the opening cinematic was watched or skipped (#46,
+    // design doc §25). Set = it never plays by itself again and can be
+    // skipped; replays never move it.
+    cinematicSeenAt: timestamptz('cinematic_seen_at'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
