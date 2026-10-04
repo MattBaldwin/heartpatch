@@ -32,13 +32,18 @@ export const TARGET_ATTRIBUTE = 'data-tutorial-target';
  * Only buttons that finish the step from where they are: a spotlight blocks
  * every other tap, so a step that may need something else first (gathering
  * for a Hearthfire or a habitat) leaves its target unmapped and input open.
+ * The first one on screen wins; a canvas locator is the fallback.
+ *
+ * The gather step walks the tile panel: Gather, its countdown while the
+ * gather runs (nothing to tap, but it shows where Collect will pop up), then
+ * Collect, which finishes the step. The Bag's Collect works too.
  */
-export const TARGET_STAND_INS: Readonly<Partial<Record<HighlightTarget, string>>> = {
-  'resource-node': 'tile-gather',
-  'neighbor-tile': 'tile-claim',
-  'capture-button': 'battle-capture',
-  'care-buttons': 'care-close-up',
-  'defense-stance': 'territory-pick',
+export const TARGET_STAND_INS: Readonly<Partial<Record<HighlightTarget, readonly string[]>>> = {
+  'resource-node': ['tile-collect', 'bag-collect', 'tile-gather', 'tile-gathering'],
+  'neighbor-tile': ['tile-claim'],
+  'capture-button': ['battle-capture'],
+  'defense-stance': ['territory-pick'],
+  'wild-squishy': ['battle-entry'],
 };
 
 /** The visible element at `selector` and its box, or null. */
@@ -63,9 +68,10 @@ export function createHighlightTargets(root: ParentNode = document): HighlightTa
       if (target === 'none') return null;
       const marked = visible(root, `[${TARGET_ATTRIBUTE}="${target}"]`);
       if (marked) return marked;
-      const standIn = TARGET_STAND_INS[target];
-      const stood = standIn ? visible(root, `[data-testid="${standIn}"]`) : null;
-      if (stood) return stood;
+      for (const standIn of TARGET_STAND_INS[target] ?? []) {
+        const stood = visible(root, `[data-testid="${standIn}"]`);
+        if (stood) return stood;
+      }
       const rect = locators.get(target)?.() ?? null;
       return rect ? { rect, element: null } : null;
     },

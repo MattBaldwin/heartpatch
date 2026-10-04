@@ -26,6 +26,7 @@ export const CARE_TEXT = {
   title: 'Care',
   close: 'All done',
   level: (n: number) => `Level ${String(n)}`,
+  growsUp: (n: number, at: number) => `Level ${String(n)} · grows up at Level ${String(at)}`,
   topLevel: 'Top level!',
   xp: (into: number, size: number) => `${String(into)} / ${String(size)} XP`,
   noTreats: 'No Treats',
@@ -36,6 +37,9 @@ export const CARE_TEXT = {
   lessNow: "They're nice and full of love for today!",
   coins: (n: number) => `+${String(n)} Patch ${n === 1 ? 'Coin' : 'Coins'}`,
   infoTitle: 'Growing up',
+  // Why care matters (design doc §7), up front in "Growing up".
+  whyCare: 'Happy squishies learn more from battles and grow up faster!',
+  fades: 'Happiness fades over about a day, so come back and say hi.',
   bonus: (percent: number) =>
     percent > 100
       ? `Battles give ×${String(percent / 100)} XP right now.`
@@ -88,7 +92,7 @@ export interface CareSheetModel {
   readonly xp: number;
   readonly xpLine: string;
   readonly buttons: readonly CareButton[];
-  /** The optional info card (numbers live here, style guide §2). */
+  /** "Growing up": why care matters, then the numbers (style guide §2). */
   readonly info: readonly string[];
 }
 
@@ -120,16 +124,23 @@ export function careSheet(
     return { action: action.id, label, note };
   });
   const toNext = squishy.xpToNext;
+  // Phase 1 forms grow up once, at a level (design doc §8).
+  const growsAt = species.get(squishy.speciesId)?.evolutions[0]?.level;
   return {
     name: squishyName(squishy, species),
     color: blobColor(squishy.speciesId, species),
     mood: moodLine(squishy.mood, CARE_RULES),
     hearts: squishy.contentment / CARE_RULES.maxContentment,
-    level: CARE_TEXT.level(squishy.level),
+    level:
+      growsAt !== undefined && growsAt > squishy.level
+        ? CARE_TEXT.growsUp(squishy.level, growsAt)
+        : CARE_TEXT.level(squishy.level),
     xp: toNext === null ? 1 : Math.min(1, squishy.xpIntoLevel / toNext),
     xpLine: toNext === null ? CARE_TEXT.topLevel : CARE_TEXT.xp(squishy.xpIntoLevel, toNext),
     buttons,
     info: [
+      CARE_TEXT.whyCare,
+      CARE_TEXT.fades,
       CARE_TEXT.bonus(squishy.xpBonusPercent),
       CARE_TEXT.fullLeft(squishy.fullCareLeft),
     ].filter((line) => line !== ''),

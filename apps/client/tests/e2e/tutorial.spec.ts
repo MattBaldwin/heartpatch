@@ -14,7 +14,12 @@ interface TutorialDebug {
   stepId: string | null;
   mapId: string | null;
   line: number;
-  overlay: { spotlightOn: string | null; gate: 'blockAll' | 'spotlight' | 'open' | null };
+  overlay: {
+    target: string | null;
+    spotlightOn: string | null;
+    gate: 'blockAll' | 'spotlight' | 'open' | null;
+    hole: { x: number; y: number; width: number; height: number } | null;
+  };
   sprout: string | null;
 }
 
@@ -290,4 +295,64 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
   const partner = (await hook<{ picked: string | null }>(page, 'starter'))?.picked ?? null;
   expect(partner).toBe(befriended);
   await expect(picker.getByRole('button', { name: /^Choose \w+$/ })).toBeEnabled();
+});
+
+test('the gather step, played for real: tap the tree tile, Gather, wait, Collect', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000); // draws the Glade; CI renders in software
+  const page = await newPlayer(browser, uniqueName('gather'));
+  const bubble = page.getByTestId('tutorial-bubble');
+  const main = bubble.getByTestId('tutorial-main');
+  const readAll = async () => {
+    while ((await main.isVisible()) && (await main.textContent()) === 'Next') await main.tap();
+  };
+  const step = async (id: string) => {
+    await expect.poll(async () => (await debug(page))?.stepId, { timeout: 15_000 }).toBe(id);
+  };
+  const overlay = async () => (await debug(page))?.overlay;
+
+  await page.getByTestId('lobby').getByTestId('tutorial-start').tap();
+  await step('welcome');
+  const run = (await debug(page))?.mapId;
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await expect.poll(() => drawnMap(page), { timeout: 60_000 }).toBe(run);
+  // The home nodes stand on the map: Timber, Emberwood, Stone and the farm plot.
+  expect((await hook<{ homeNodes: number }>(page, 'map'))?.homeNodes).toBe(4);
+  await readAll();
+  await main.tap(); // Got it!
+  await step('plant');
+  await readAll();
+  await main.tap(); // Plant it!
+  await step('gather');
+  await readAll();
+  await main.tap(); // Let's go!
+
+  // Sprout's spotlight lands on the tree tile (a canvas target), and only it takes taps.
+  await expect.poll(async () => (await overlay())?.gate).toBe('spotlight');
+  const hole = (await overlay())?.hole;
+  expect(hole).toBeTruthy();
+  expect((await overlay())?.spotlightOn).toBeNull(); // on the canvas, not a button
+  await page.touchscreen.tap(hole!.x + hole!.width / 2, hole!.y + hole!.height / 2);
+
+  // The tile panel offers Gather, and the spotlight moves onto it.
+  const gather = page.getByTestId('tile-gather');
+  await expect(gather).toBeVisible();
+  await expect.poll(async () => (await overlay())?.spotlightOn).toBe('resource-node');
+  expect(await takesTaps(page, gather)).toBe(true);
+  await gather.tap();
+
+  // Something clearly happens: a countdown in the panel and a chip over the map.
+  await expect(page.getByTestId('tile-gathering')).toContainText('Gathering…');
+  await expect(page.getByTestId('gather-chip')).toContainText('Timber');
+  expect((await hook<{ chip: string | null }>(page, 'inventory'))?.chip).toBe('waiting');
+
+  // The Glade's gather takes 5 seconds; then Collect pops up in the spotlight.
+  const collect = page.getByTestId('tile-collect');
+  await expect(collect).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('gather-chip')).toContainText('ready');
+  await expect.poll(async () => takesTaps(page, collect)).toBe(true);
+  await collect.tap();
+  await step('hearthfire');
+  await expect(page.getByTestId('gather-chip')).toBeHidden();
 });

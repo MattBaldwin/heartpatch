@@ -23,7 +23,9 @@ export const CARE_RULES: CareRules = {
 /** Levels, XP and the care × habitat multiplier (design doc §7–8). Checked by `checkGrowthRules`. */
 export const GROWTH_RULES: GrowthRules = {
   maxLevel: 100, // TUNE:
-  // TUNE: level 2 after one early battle, level 10 after ~20, level 20 after ~45.
+  // TUNE: with battle XP (data/battle.ts `xp`, ~120 a wild win at 1×): level 2
+  // after one battle, level 10 after ~5 wins, level 16 (a starter grows up)
+  // after ~12, level 20 after ~19.
   xpCurve: { perLevel: 20, curve: 5 },
   care: { minPercent: 100, maxPercent: 175 }, // TUNE: design doc §7 [DEFAULT: 1.0× to 1.75×]
   habitat: { onePercent: 135, bothPercent: 175 }, // TUNE: design doc §7 [DEFAULT: up to 1.75×]
