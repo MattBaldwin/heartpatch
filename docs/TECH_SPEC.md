@@ -291,7 +291,7 @@ Add anything else only with a one-line justification in the PR.
 | `HP_DEV_DROP_CHANCE` | `100` | dev/test only; every found-clothing drop table's chance, in percent (#43), so a gather finds something |
 | `HP_SEED_ALLOW_REMOTE` | `true` | `pnpm db:seed` only; lets the seed write to a database whose host isn't local (localhost, 127.0.0.1, ::1 or the compose service `db`). Refused in production |
 | `HP_SIGNUP_CODE` | random string | required to create an account (family-only signup, Phase 1); checked with a constant-time comparison under the auth rate limit |
-| `HP_TUTORIAL_REQUIRED` | `false` | defaults to `false` when unset; when `false`, new accounts can create/join maps without finishing the tutorial. The tutorial (#24) has shipped; whether to flip it to `true` is decided at first deploy (owner) |
+| `HP_TUTORIAL_REQUIRED` | `false` | defaults to `false` when unset; when `false`, new accounts can create/join maps without finishing the tutorial. Production sets `true` (owner decision 2026-10-04, `infra/compose/.env.prod.example`) |
 | `HP_KEEPER_REQUIRED` | `true` | defaults to `true`; creating or joining a map needs a Keeper (#42), so other players always see who's who. `false` only for testing |
 
 Parsed and validated by `apps/server/src/config.ts` (zod); the server refuses to start on invalid config. Keep `.env.example` current.

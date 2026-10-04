@@ -221,7 +221,7 @@ What each setting means is explained in the file itself. In short:
 | `PUBLIC_ORIGIN` | `https://play.pumpkinpatchgames.com` |
 | `LOG_LEVEL` | `info` |
 | `HP_SIGNUP_CODE` | Needed to create an account (family-only signup). Change it if it leaks |
-| `HP_TUTORIAL_REQUIRED` | `false` for now. The tutorial has shipped; whether to flip it to `true` is decided at first deploy (owner) |
+| `HP_TUTORIAL_REQUIRED` | `true`: new accounts finish the tutorial first (owner decision 2026-10-04). Set `false` and restart only if the tutorial misbehaves |
 | `HEARTPATCH_TAG` | Leave empty: `deploy.sh` writes the running version here |
 
 `NODE_ENV=production`, `PORT=3000`, `TRUST_PROXY=true` and `APP_VERSION` are set by the compose file, so they can't be wrong.
@@ -359,7 +359,7 @@ The checklist for testers is [PLAYTEST.md](PLAYTEST.md). This section is where t
 
 ### On the real server
 
-Testers sign up at `https://play.pumpkinpatchgames.com` with the family code (`HP_SIGNUP_CODE`), like any player. There are no seed accounts there: the seed refuses to run with `NODE_ENV=production`, which the compose file sets. That is the only thing stopping it there (the server's database host, `db`, counts as local), so never override `NODE_ENV` to run the seed on the real server. Before inviting anyone, decide `HP_TUTORIAL_REQUIRED` (PLAYTEST.md, "Before inviting testers").
+Testers sign up at `https://play.pumpkinpatchgames.com` with the family code (`HP_SIGNUP_CODE`), like any player. There are no seed accounts there: the seed refuses to run with `NODE_ENV=production`, which the compose file sets. That is the only thing stopping it there (the server's database host, `db`, counts as local), so never override `NODE_ENV` to run the seed on the real server. Before inviting anyone, check `HP_TUTORIAL_REQUIRED=true` (PLAYTEST.md, "Before inviting testers").
 
 The frame-rate badge only exists in dev builds, so the performance checks use a local playtest.
 
