@@ -59,6 +59,8 @@ Only the spine that other tables reference is designed here (tech spec §4, `doc
 | `time_zone` | text, default `'UTC'` | IANA zone from the device at signup, canonicalized by the auth service; account-level daily caps reset at its midnight (design doc §3). The default only covers rows from before #3 |
 | `tutorial_step` | text, null | Current tutorial step id from the tutorial data; null = not started |
 | `tutorial_completed_at` | timestamptz, null | Set on first completion and kept when replaying (unlocks skip, design doc §26) |
+| `partner_species_id` | text, null | The Partner's species: the starter befriended in the latest tutorial run (migration 0017, #24). The starter pick pre-selects it |
+| `cinematic_seen_at` | timestamptz, null | First time the opening cinematic was watched or skipped (migration 0020, #46). Set = it never auto-plays again and can be skipped; replays never move it |
 | `created_at` | timestamptz | |
 
 ### `sessions`

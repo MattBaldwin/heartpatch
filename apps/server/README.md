@@ -435,6 +435,17 @@ The single-player tutorial (design doc §26; tech spec §7) lives in `src/module
 
 **Gameplay on tutorial maps** goes through the real modules. They read `gameplayOverrides(map.kind)` from shared (fast timers, sure capture, scripted opponents, the Hollow Man can't take anything) rather than branching on the map kind themselves. The maps API (`/maps`, `/maps/:id`, invites, admin, leave) doesn't show tutorial maps; only `/maps/:id/view` serves a player's own active run, so the client draws the Tutorial Glade as a normal map. An archived run stays NOT_FOUND.
 
+## Opening cinematic
+
+The opening story (design doc §25; issue #46; DECISIONS "The opening cinematic (#46)") lives in `src/modules/cinematic`. Account-level: `users.cinematic_seen_at` is the first time the player watched it to the end or skipped it (null until then). The server only remembers that; the script and drawing are in the client.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/cinematic` | → `{ cinematic: { seenAt } }`: an ISO time, or null if never seen. Null means play it once; set means skippable and never auto-played |
+| `POST /api/v1/cinematic/seen` | Marks it seen → 200 `{ cinematic: { seenAt } }`. Idempotent: `coalesce` keeps the first time, so a retry or a replay from Settings never moves it |
+
+Both need a session. Only `seen` is rate limited (`modules/cinematic/limits.ts`): 120 per IP and 30 per player per 10 minutes (`// TUNE:` guesses; a family shares one IP). The client marks it once, when the story ends watched or skipped.
+
 ## Workspace source condition
 
 `@heartpatch/shared` resolves to its TypeScript source under the `@heartpatch/source` export condition, and to `dist/` otherwise.
