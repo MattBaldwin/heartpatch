@@ -367,14 +367,16 @@ Milestones are long-term goals that reward signature clothing, Patch Coins and t
 | Track | Example tiers [DEFAULT] | Example rewards |
 |---|---|---|
 | Territory | Capture 10 / 50 / 150 tiles; hold Juniper's Gap tile for 7 days | Explorer's Hat → Cartographer Cape → Crown of the Gap |
-| Collector | Catch 10 / 25 / 50 species; complete an element | Squishy Net → Collector's Satchel → Rainbow Jacket |
-| Evolution | Evolve 5 / 20 squishies; get a rare branch | Evolver's Goggles → Prism Boots |
-| Caretaker | Pet/feed 100 / 500 / 2,000 times; keep 5 squishies at max contentment | Cozy Apron → Heart Mittens |
-| Defender | Win 10 / 50 defenses (only on maps where PvP isn't Off); protect every squishy for 7 nights | Hearthkeeper Lantern → Ember Cloak |
+| Collector | Befriend 3 / 8 / 14 kinds of squishy with a Heart Charm; complete an element | Collector's Satchel → Rainbow Jacket |
+| Evolution | Evolve 1 / 5 / 20 squishies; get a rare branch | Evolver's Goggles → Prism Boots |
+| Caretaker | Pet/feed 100 / 500 / 2,000 times; keep 5 squishies at max contentment | Heart Mittens |
+| Defender | Win 1 / 10 / 50 defenses (only on maps where PvP isn't Off); protect every squishy for 7 nights | Hearthkeeper Lantern → Ember Cloak |
 | Rescuer | Rescue 1 / 10 Hollowed squishies | Brave Scarf → Lightbringer Wings |
 | Friendship | (Phase 2) Gift 10 items; complete 10 fair trades | Friendship Bracelet → Matching outfit sets for both players |
 | Seasonal | Complete each season's event goals | That season's legendary costume |
 | Secret | Hidden conditions tied to the Lorebook (§16) | Secret items, never listed until found |
+
+**Phase 1 built tracks: see DECISIONS #44** ("Keeper milestones (#44)"). The tiers above are examples; the built ones differ (for example Collector is 3 / 8 / 14 because Phase 1 has about 19 kinds you can befriend), and the Cozy Apron and Squishy Net stay found pieces.
 
 - Each tier also grants a **title** shown on the profile card (e.g. "Keeper of the Gap", "Hollow Rescuer").
 - A **Milestones screen** shows progress bars for visible tracks. Secret milestones show as "???" until earned.
@@ -433,7 +435,13 @@ Every new player plays a short solo tutorial before joining or creating a multip
 **Rules**
 - Target length **[DEFAULT: 12–18 minutes]**. Progress is saved after every step; quitting resumes where you left off.
 - Nothing can be lost in the tutorial. The Hollow Man can't take anything here.
-- **Carry-over:** the Seedling Scarf and the "First Patch" milestone are account-level rewards. The Partner is not copied: on every patch the player joins, they pick 1 of 3 starters (§4), and the pick pre-selects their Partner's species once the Partner is stored (DECISIONS "Starter pick").
+- **Carry-over:** the Seedling Scarf and the "First Patch" milestone are account-level rewards. The Partner is not copied: it is stored on the account, and on every patch the player joins they pick 1 of 3 starters (§4) with their Partner's species pre-selected (DECISIONS "The First Patch (#24)").
 - Players can skip the tutorial only after finishing it once (e.g. on a new device), and can replay it any time from Settings.
-- **Tutorial gate is a server setting:** while the tutorial is still being built (and for testing), the operator can let new accounts create or join maps without finishing it. The multiplayer game never waits on the tutorial to be playable. A player who skipped it picks 1 of 3 starters from the starter list (§4) when they join a patch, like everyone else. The tutorial's last steps (Seedling Scarf in the Wardrobe, First Patch milestone) can arrive once those systems exist.
+- **Tutorial gate is a server setting:** while the tutorial is still being built (and for testing), the operator can let new accounts create or join maps without finishing it. The multiplayer game never waits on the tutorial to be playable. A player who skipped it picks 1 of 3 starters from the starter list (§4) when they join a patch, like everyone else. The tutorial's last steps (Seedling Scarf in the Wardrobe, First Patch milestone) are built.
 - Every step is reachable with one hand on an iPhone; text is short and large.
+
+**Built as (#24; DECISIONS "The First Patch (#24)"):**
+- The tutorial has 15 steps. Sprout's `welcome` comes first, and `name-partner` follows `befriend`.
+- **Defend** is posting a guard: the step completes when a squishy goes on watch on the new tile. There is no echo raid and no stance pick.
+- **Nightfall** is a scripted button ("Night falls"); the Hollow Man takes nothing. Moving a squishy into the firelight isn't a beat yet.
+- A Glade friend (a level-5 Pebblesnooze) plays the first battle, and the Glade's wild squishies are the three starters.

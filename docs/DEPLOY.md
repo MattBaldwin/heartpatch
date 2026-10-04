@@ -220,7 +220,7 @@ What each setting means is explained in the file itself. In short:
 | `PUBLIC_ORIGIN` | `https://play.pumpkinpatchgames.com` |
 | `LOG_LEVEL` | `info` |
 | `HP_SIGNUP_CODE` | Needed to create an account (family-only signup). Change it if it leaks |
-| `HP_TUTORIAL_REQUIRED` | `false` until the tutorial ships |
+| `HP_TUTORIAL_REQUIRED` | `false` for now. The tutorial has shipped; whether to flip it to `true` is decided at first deploy (owner) |
 | `HEARTPATCH_TAG` | Leave empty: `deploy.sh` writes the running version here |
 
 `NODE_ENV=production`, `PORT=3000`, `TRUST_PROXY=true` and `APP_VERSION` are set by the compose file, so they can't be wrong.
@@ -237,6 +237,11 @@ What each setting means is explained in the file itself. In short:
 6. on any failure in 4–5, **puts the previous version back** and fails the workflow run so you see a red ❌,
 7. checks the site through Caddy over HTTPS (a warning only: on the first deploy the certificate may still be arriving),
 8. records the version in `.env` and `releases.log`, and deletes images older than the previous release.
+
+**First deploy and migrations 0017–0019 (tutorial, Patch Coins, milestones):** nothing to do, but know what the first start does:
+
+- The `milestones` consumer (and the `lore` one) has no saved position, so it starts at seq 0 and replays every existing game event. Play from before milestones counts toward tracks and can grant tiers, titles and coins on that first run. It's safe to repeat: each tier is granted once.
+- At boot the server grants First Patch to every account that has already finished the tutorial. It runs on every boot and grants nothing the second time.
 
 **Start it:** merge any PR to `main`, or GitHub → **Actions** → **Deploy** → **Run workflow** → `main`.
 
