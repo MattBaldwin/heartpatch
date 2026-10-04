@@ -136,14 +136,10 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **In flight:** this Docs PR; a Chore PR (shared member-lock and on-watch helpers, lock tests); the coordinator's CI split.
-- **Next, by dependency:** #87 placeholder retirement, #84 capture drops, #24 tutorial, #44 milestones, #45 Patch Coins.
+- **In flight:** #46 (opening cinematic), a Chore PR (server code), and this Docs PR.
+- **Remaining Phase 1:** #46, then #27 deploy (the owner's AWS, DNS and secrets steps, per `docs/DEPLOY.md`), then #28 playtest. #5 is closed.
 - **Brief notes:**
-  - **#24:** store the Partner. It must pass `isStarterSpecies`, and the starter pick pre-selects it. Add the Seedling Scarf with the existing `tutorial` `ClothingSource`. The `clothing_owned` unique key is (source, ref_id), so use a per-user deterministic uuid, such as v5 of the userId.
-  - **#44:** the starter pick writes no game event. A "first friend" milestone must read `map_members.starter_squishy_id`, or the pick must append an event.
-  - **#45:** pays out from `care_log.coins` with an account-day idempotency key. Care must never spend a Heart Charm without reordering locks (TECH_SPEC §7).
-  - **#84:** the capture finish is at `battles/service.ts` ~L460–540. Return `clothing.found` with `tile.captured`, or use a consumer.
-  - **#87:** fixtures first, then delete the `placeholder-*` rows.
+  - **Coins (#45):** credits are keyed on `(source, ref_id)`. Care must never spend a Heart Charm without reordering locks (TECH_SPEC §7).
   - **Every new event consumer takes one `maps` lock per event** (TECH_SPEC §7). Don't batch events.
 - **Briefs:** follow §7, plus:
   - reporting with the fallback trigger;
@@ -161,7 +157,7 @@ The supervisor keeps this list current. Remove items as they land.
   - `keeper.spec` timed out once under a full local run.
   - #9's `squishy-gallery.spec.ts:168` (jiggle to idle) should wait on a signal, not on timing.
   - The auth login rate-limit test runs about 2.6 s against a 5 s timeout: raise the timeout, or lower the Argon2 cost in tests.
-- **Docs drift:** possibly closed but still open on GitHub: #5 and #22. Confirm and close.
+- **Docs drift:** #22 may be closed but still open on GitHub. Confirm and close.
 - **Earlier follow-ups still open:**
   - #9: count real draw calls in the "flat draw calls" e2e; NullEngine tests for `SquishyField.move` and `remove`; partial buffer updates; rebase `squishTime`; forward part taps to the body; the crypto ban misses `globalThis.crypto`.
   - #7: a FORBIDDEN resync for map A while the player opens map B lands them in the lobby; a doc comment on `generation`.
@@ -170,12 +166,20 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
-- **Lessons:** lost CI wakes left two finished PRs idle for about an hour (§7 now says to check `get_check_runs`). The CI job hit 30 minutes, so its timeout was raised to 45 and sharding is in progress.
+- **Lessons:**
+  - CI wakes get lost, so sessions check `get_check_runs` themselves before going idle (§7).
+  - Check DECISIONS before copying an issue's text into a brief. #45's "per map" came from the issue and contradicted decision F (the coins are the account's).
 - **Cost so far (USD):**
   - Batch 6: #13 48.88, #42 23.57, #17 36.72, #14 43.98.
   - Batch 7: #18 25.77, #15 23.11, #43 46.62, #19 32.99, #16 17.29, #10 17.19, #12 4.59, #21 58.10, #20 33.19. Fix PR 11.24, audit 1.87.
   - Batch 8–9: #95 10.14, #96 9.22, #94 10.96, #93 1.56, #97 16.73, #98 11.44, #99 29.61, audit 1.9.
+  - Batches 10–12: #102 5.24, #103 10.37, #104 6.31, #105 36.09, #106 32.17, #107 24.81, Docs #101 2.00, audits 2.83 and 2.92. The CI split (#100) was coordinator-made.
   - Supervisor 3: about 28.
   - Big lanes run $25–50; flag above about $35.
 - **Owner questions queued:**
+  - Flip `HP_TUTORIAL_REQUIRED` at launch?
+  - Should battle and capture coins be paid on tutorial maps?
+  - Halloween: judge it in the patch or the account time zone?
+  - Should the milestone member count ignore members who left?
+  - Confirm the #24, #44 and #45 decisions.
   - **AWS:** Matt chose the new AWS experience ("project"), Region us-east-2, profile `heartpatch`. The CLI is installed in supervisor 3's container only. Remote `aws login` was started but the code never arrived. Restart with `aws login --remote --region us-east-2 --profile heartpatch` when he's ready. Agent Toolkit rules go in an uncommitted `CLAUDE.local.md` (his choice). Check Lightsail is available on the new experience, and update DEPLOY.md step 1 for projects (spend limits in AWS Settings rather than root MFA and budgets).
