@@ -2,6 +2,7 @@ import { and, asc, eq, gt } from 'drizzle-orm';
 import type { Database } from '../db/client.js';
 import type { GameEvent } from '../db/game-events.js';
 import { gameEvents, mapMembers, maps } from '../db/schema.js';
+import { activeMember } from '../modules/maps/repo.js';
 
 /** What the WebSocket hub reads. Reads only: the hub never writes game state. */
 export interface WsRepo {
@@ -25,13 +26,7 @@ export function createWsRepo(db: Database): WsRepo {
       const [row] = await db
         .select({ userId: mapMembers.userId })
         .from(mapMembers)
-        .where(
-          and(
-            eq(mapMembers.mapId, mapId),
-            eq(mapMembers.userId, userId),
-            eq(mapMembers.status, 'active'),
-          ),
-        )
+        .where(activeMember(mapId, userId))
         .limit(1);
       return row !== undefined;
     },
@@ -40,7 +35,7 @@ export function createWsRepo(db: Database): WsRepo {
       const rows = await db
         .select({ userId: mapMembers.userId })
         .from(mapMembers)
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active')));
+        .where(activeMember(mapId));
       return new Set(rows.map((r) => r.userId));
     },
 

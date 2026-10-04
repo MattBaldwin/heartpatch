@@ -20,6 +20,7 @@ import {
   tileDefenders,
   tiles,
 } from '../../db/schema.js';
+import { activeMember } from '../maps/repo.js';
 
 /** One player's result for a night, as stored in `hollow_events.outcomes` (checked on read). */
 const StoredOutcomeSchema = z.strictObject({
@@ -175,12 +176,6 @@ export function createHollowTxRepo(tx: Transaction): HollowTxRepo {
 }
 
 function queries(db: Executor): HollowRepo {
-  const activeMember = and(
-    eq(mapMembers.mapId, squishies.mapId),
-    eq(mapMembers.userId, squishies.ownerUserId),
-    eq(mapMembers.status, 'active'),
-  );
-
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createHollowTxRepo(tx), tx)),
 
@@ -257,7 +252,7 @@ function queries(db: Executor): HollowRepo {
       db
         .select({ userId: mapMembers.userId, joinedAt: mapMembers.joinedAt })
         .from(mapMembers)
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.status, 'active')))
+        .where(activeMember(mapId))
         .orderBy(asc(mapMembers.userId)),
 
     homeTiles: async (mapId) => {
@@ -283,7 +278,7 @@ function queries(db: Executor): HollowRepo {
           postOwnerUserId: postTile.ownerUserId,
         })
         .from(squishies)
-        .innerJoin(mapMembers, activeMember)
+        .innerJoin(mapMembers, activeMember(squishies.mapId, squishies.ownerUserId))
         .leftJoin(buildings, eq(buildings.id, squishies.habitatBuildingId))
         .leftJoin(habitatTile, eq(habitatTile.id, buildings.tileId))
         // The post and who holds its tile, not territory's `squishyOnWatch`:
