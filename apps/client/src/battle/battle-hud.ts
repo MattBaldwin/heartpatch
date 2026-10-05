@@ -126,14 +126,14 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     const node = el(
       'div',
       { class: `battle-plate battle-plate-${side}`, 'data-testid': `battle-plate-${side}` },
-      el('div', { class: 'battle-plate-row' }, name, level),
+      el('div', { class: 'battle-plate-row' }, name),
       el(
         'div',
         { class: 'battle-plate-row' },
         el('div', { class: 'battle-energy', role: 'progressbar', 'aria-label': 'Energy' }, bar),
         el('span', { class: 'battle-badges' }, element, feeling),
       ),
-      el('div', { class: 'battle-plate-row battle-plate-foot' }, energy, status),
+      el('div', { class: 'battle-plate-row battle-plate-foot' }, level, energy, status),
       callout,
     );
     return { node, name, level, bar, energy, element, feeling, status, callout, timer: 0 };
