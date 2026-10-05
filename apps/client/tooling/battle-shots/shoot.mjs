@@ -191,14 +191,21 @@ async function openBattle(page, mapId, starterId, moment) {
   if (started.status !== 201 && started.status !== 200) {
     throw new Error(`battle: ${JSON.stringify(started.body)}`);
   }
-  // Reload with the manual clock and the arena override, then visit the patch: the battle resumes.
+  // Reload with the manual clock and the arena override: the game lands back on
+  // the last patch (#160) and the battle resumes. An older build (or a cleared
+  // store) shows the lobby instead, so visit the patch from there if it does.
   await page.goto(`${BASE}/?battle-clock=manual&battle-arena=${moment.arena}&quality=high`, {
     waitUntil: 'load',
   });
   const lobby = page.getByTestId('lobby');
-  await lobby.getByRole('button', { name: /Lantern Hour/ }).click({ timeout: 60_000 });
-  await lobby.getByRole('button', { name: 'Visit patch' }).click({ timeout: 60_000 });
-  await page.getByTestId('battle-hud').waitFor({ timeout: 120_000 });
+  const patchRow = lobby.getByRole('button', { name: /Lantern Hour/ });
+  const hud = page.getByTestId('battle-hud');
+  await hud.or(patchRow).first().waitFor({ timeout: 120_000 });
+  if (await patchRow.isVisible()) {
+    await patchRow.click({ timeout: 60_000 });
+    await lobby.getByRole('button', { name: 'Visit patch' }).click({ timeout: 60_000 });
+  }
+  await hud.waitFor({ timeout: 120_000 });
   await page.waitForSelector('canvas[data-ready="true"]', { timeout: 180_000 });
   await page.waitForFunction(
     () => {
