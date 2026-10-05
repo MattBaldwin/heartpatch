@@ -47,6 +47,13 @@ async function settled(page: Page): Promise<BattleDebug> {
   return (await battleState(page))!;
 }
 
+// Every test opens its own player (newPlayer); a page left mid-battle keeps
+// drawing the arena, which starves the next test's page when rendering is in
+// software. Close them all when the test is done.
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close();
+});
+
 test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', async ({
   browser,
 }) => {
