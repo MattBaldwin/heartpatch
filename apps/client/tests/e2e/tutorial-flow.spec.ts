@@ -41,16 +41,18 @@ const overlay = async (page: Page) => (await debug(page))?.overlay ?? null;
 const drawnMap = async (page: Page) => (await hook<{ id: string }>(page, 'map'))?.id ?? null;
 const slow = { timeout: 30_000 };
 
-/** True if a tap at the centre of `target` (scrolled into view, as a finger would) reaches it. */
+/**
+ * True if a tap at the centre of `target` (scrolled into view, as a finger
+ * would) reaches it. Scrolled in the page itself: Playwright's own scroll
+ * waits for the box to hold still, which a sparkling card never does.
+ */
 async function takesTaps(target: Locator): Promise<boolean> {
   if (!(await target.isVisible())) return false;
-  await target.scrollIntoViewIfNeeded();
-  const box = await target.boundingBox();
-  if (!box) return false;
-  return target.evaluate((node, [x, y]) => node.contains(document.elementFromPoint(x, y)), [
-    box.x + box.width / 2,
-    box.y + box.height / 2,
-  ] as const);
+  return target.evaluate((node) => {
+    node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const box = node.getBoundingClientRect();
+    return node.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+  });
 }
 
 /** The centre of `target` sits inside the spotlight hole. */

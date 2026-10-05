@@ -66,9 +66,10 @@ export const TARGET_STAND_INS: Readonly<Partial<Record<HighlightTarget, readonly
  * Steps that take more than one tap to finish (#140): the fire needs Home,
  * Build, the Hearthfire in the list, then Emberwood and Add fuel. A
  * spotlight would block the rest, so these only guide: Sprout lights and
- * points at the next thing to tap (selectors; the first on screen wins), and
- * every tap stays open. Add fuel once a fire stands, else the Hearthfire in
- * the build list, else Build, else Home, else the tray's handle.
+ * points at the next thing to tap (the first on screen wins), and every
+ * tap stays open. Add fuel once a fire stands, else the Hearthfire in the
+ * build list, else Build, else Home, else the tray's handle. Whole selectors,
+ * unlike the stand-ins' test ids: the build list marks its rows `data-build`.
  */
 export const TARGET_GUIDES: Readonly<Partial<Record<HighlightTarget, readonly string[]>>> = {
   'build-button': [

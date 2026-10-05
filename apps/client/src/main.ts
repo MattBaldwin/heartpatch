@@ -285,7 +285,8 @@ const hollow = createHollowScreen({
     },
   },
   // One card at a time (#129): the morning report waits behind the raid
-  // report, a found lore page and a milestone party.
+  // report, a found lore page and a milestone party. (`lorebook` and
+  // `milestones` are made below; this is only read at render time.)
   otherReportOpen: () =>
     raidReportOpen || lorebook.debug.showing !== null || milestones.debug.showing !== null,
   openBattle: (battle) => {

@@ -49,9 +49,15 @@ export function openSheets(root: ParentNode, except: Element): OpenSheet[] {
   });
 }
 
-/** The sheet drawn uppermost at the middle of `rect` (null: no sheet takes a tap there). */
+/**
+ * The sheet drawn uppermost at the middle of `rect` (null: no sheet takes a
+ * tap there). One sample, at the centre: a sheet whose middle is covered
+ * counts as covered even if a corner of it peeks out (the e2e's no-trap
+ * check reads it the same way).
+ */
 function topSheetAt(open: readonly OpenSheet[], except: Element, rect: Rect): Element | null {
-  const stack = document.elementsFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  const doc = except.ownerDocument;
+  const stack = doc.elementsFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
   for (const hit of stack) {
     if (except.contains(hit)) continue;
     const owner = open.find((s) => s.element.contains(hit));

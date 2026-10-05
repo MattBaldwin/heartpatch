@@ -250,14 +250,20 @@ export function mountTutorialOverlay(
    * tucked chip also sheds its pinned width, so it can grow with its goal.
    */
   function naturalSize(): { width: number; height: number } {
-    const { width, height, maxHeight } = bubble.style;
+    const { width, height, maxHeight, left, right } = bubble.style;
+    // Measured from the left edge: a shrink-to-fit box placed at `left`
+    // only gets the room to its right, which would read narrow and tall.
     bubble.style.width = '';
     bubble.style.height = '';
     bubble.style.maxHeight = '';
+    bubble.style.left = '';
+    bubble.style.right = '';
     const size = { width: bubble.offsetWidth, height: bubble.scrollHeight };
     bubble.style.width = width;
     bubble.style.height = height;
     bubble.style.maxHeight = maxHeight;
+    bubble.style.left = left;
+    bubble.style.right = right;
     return size;
   }
 
@@ -338,7 +344,10 @@ export function mountTutorialOverlay(
   /**
    * The controls and cards the orb keeps clear of, measured once per change
    * to the page (a frame drawn by the scene moves no buttons), so a night
-   * sky or a visit animating under the orb costs no layout per frame.
+   * sky or a visit animating under the orb costs no layout per frame. A
+   * change is a `hidden` or `class` flip, children or a resize (how the
+   * game's sheets and trays move); a control moved by inline style alone
+   * is measured at the next one.
    */
   let pageVersion = 0;
   let measured: { version: number; key: string; rects: Rect[] } | null = null;

@@ -266,11 +266,27 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
   await expect(main).toHaveText('Night falls');
   await main.tap();
   await step('evolve');
+  // The night finds a lore page, and the morning report says the Partner
+  // slept out in the open (no fire on this path): one card at a time, in
+  // whichever order they land, and Sprout waits behind both (#127, #129).
   const card = page.getByTestId('lore-card');
+  const okay = page.getByTestId('hollow-report-ok');
+  const dismissReport = async () => {
+    await expect(okay).toBeVisible({ timeout: 20_000 });
+    await expect(card).toBeHidden();
+    await okay.tap();
+    await expect(okay).toBeHidden();
+  };
+  await expect
+    .poll(async () => (await card.isVisible()) || (await okay.isVisible()), { timeout: 20_000 })
+    .toBe(true);
+  const reportFirst = await okay.isVisible();
+  if (reportFirst) await dismissReport();
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card.getByTestId('lore-title')).toHaveText('Paw Prints by the Fire');
   await card.getByTestId('lore-close').tap();
   await expect(card).toBeHidden();
+  if (!reportFirst) await dismissReport();
 
   // The Seedling Scarf, on in the Wardrobe.
   await jumpTo(page, 'wardrobe');
