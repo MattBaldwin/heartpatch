@@ -12,6 +12,7 @@ import {
   JOBS_STOP_TIMEOUT_MS,
 } from './limits.js';
 import { startNightfall, type NightfallRunner } from './nightfall.js';
+import { ensureQueue } from './queues.js';
 import { createJobsRepo, pgBossOnTransaction } from './repo.js';
 
 /** pg-boss keeps its tables in their own schema, outside Drizzle's migrations. */
@@ -50,11 +51,23 @@ export interface Jobs {
 
 /**
  * Boots pg-boss (tech spec §7, "Scheduled jobs"): one queue per event
- * consumer with the `stately` policy and the map id as `singletonKey`, so at
- * most one job per (consumer, map) is queued and one runs; a worker that
+ * consumer with the `short` policy and the map id as `singletonKey`, so a
+ * burst of wake-ups for one map collapses into one queued job; a worker that
  * applies events with `runConsumer`; the wake-up `appendGameEvent` enqueues
  * inside each command's transaction; the periodic catch-up job; and, given a
  * runner, the Hollow Man's nightfall (`nightfall.ts`).
+ *
+ * Why `short` and not `stately`: `stately` also allows only one *active* job
+ * per key, enforced by a unique index on the job table. pg-boss's fetch only
+ * skips keys it cached as active (refreshed once a minute), so a wake-up
+ * that arrives while that map's job is running gets fetched by an idle
+ * worker, trips the index, and Postgres logs a "duplicate key" error on
+ * every poll until the job ends (the fetch is retried, so nothing is lost,
+ * but the log fills up and the map's next job waits). Nothing here needs
+ * that guarantee: `runConsumer` already serializes the (consumer, map) pair
+ * on the `event_consumers` row lock, so a second job for a running map just
+ * takes its turn, and a wake-up during a run becomes a job of its own, which
+ * is what makes it never lost.
  */
 export async function startJobs(options: JobsOptions): Promise<Jobs> {
   const { db, consumers, logger } = options;
@@ -76,14 +89,15 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
 
   for (const consumer of consumers) {
     const queue = consumerQueue(consumer);
-    await boss.createQueue(queue, {
-      policy: 'stately',
+    await ensureQueue(boss, logger, queue, {
+      // One queued job per map (`job_i1`); an active one never blocks a fetch.
+      policy: 'short',
       retryLimit: CONSUMER_RETRY_LIMIT,
       retryDelay: CONSUMER_RETRY_DELAY_SECONDS,
       retryBackoff: true,
       notify: true,
     });
-    // Several maps at once; one map's jobs never overlap (stately key + row lock).
+    // Several maps at once; one map's events never overlap (`runConsumer`'s row lock).
     await boss.work<WakeUp>(
       queue,
       {
@@ -138,7 +152,7 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
     }
   });
 
-  await boss.createQueue(CATCH_UP_QUEUE, { policy: 'stately' });
+  await ensureQueue(boss, logger, CATCH_UP_QUEUE, { policy: 'short' });
   await boss.work(CATCH_UP_QUEUE, async () => {
     const woken = await catchUp();
     if (woken > 0) logger.info({ woken }, 'woke lagging event consumers');
