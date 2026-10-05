@@ -342,33 +342,42 @@ test('a tap sticks to a button that moves under the finger (a tray mid-slide)', 
   const entry = await inTray(page, 'bag-open');
   // The tray is put at its resting place by hand (its slide would get there
   // anyway, slowly on a software-drawn CI), the finger lands near the
-  // entry's left edge, then the tray jumps on by 120 px to the right under
-  // the resting finger, as the tail of a slide would; then the lift.
+  // entry's left edge, the tray jumps on by 120 px to the right under the
+  // resting finger, as the tail of a slide would, and the finger lifts.
+  // The press must still be a tap at the lift (TAP_MAX_MS, 400 ms): a slow
+  // box can stretch the three round trips past that, and such a press is
+  // rightly left to the browser, so it is pressed again rather than counted.
   const tray = page.locator('.tray.tray-heartpatch');
-  await tray.evaluate((node: HTMLElement) => {
-    node.style.transition = 'none';
-    node.style.transform = 'none';
-  });
-  const box = await restingBox(entry);
-  await page.mouse.move(box.x + 8, box.y + box.height / 2);
-  await page.mouse.down();
-  await tray.evaluate((node: HTMLElement) => {
-    node.style.transform = 'translateX(120px)';
-  });
-  await expect.poll(async () => (await entry.boundingBox())?.x).toBeGreaterThan(box.x + 100);
-  await page.waitForTimeout(80);
-  await page.mouse.up();
-  await tray.evaluate((node: HTMLElement) => {
-    node.style.removeProperty('transform');
-    node.style.removeProperty('transition');
-  });
+  const bag = page.getByTestId('bag');
+  for (let attempt = 1; ; attempt += 1) {
+    await tray.evaluate((node: HTMLElement) => {
+      node.style.transition = 'none';
+      node.style.transform = 'none';
+    });
+    const box = await restingBox(entry);
+    await page.mouse.move(box.x + 8, box.y + box.height / 2);
+    const pressedAt = Date.now();
+    await page.mouse.down();
+    await tray.evaluate((node: HTMLElement) => {
+      node.style.transform = 'translateX(120px)';
+    });
+    await page.mouse.up();
+    const heldMs = Date.now() - pressedAt;
+    expect((await entry.boundingBox())!.x).toBeGreaterThan(box.x + 100);
+    await tray.evaluate((node: HTMLElement) => {
+      node.style.removeProperty('transform');
+      node.style.removeProperty('transition');
+    });
+    if (heldMs <= 300 || (await bag.isVisible())) break;
+    expect(attempt, `a press held ${String(heldMs)} ms is no tap; pressing again`).toBeLessThan(4);
+  }
 
-  await expect(page.getByTestId('bag')).toBeVisible();
+  await expect(bag).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __bagClicks: number }).__bagClicks))
     .toBe(1);
   // One action: the entry shut its tray, as a tap on it does.
   await expect.poll(async () => (await traysState(page))?.open).toBeNull();
-  await realTap(page.getByTestId('bag').getByRole('button', { name: 'Close' }));
+  await realTap(bag.getByRole('button', { name: 'Close' }));
   expect(errors).toEqual([]);
 });
