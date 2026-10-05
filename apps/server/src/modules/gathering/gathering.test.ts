@@ -455,6 +455,48 @@ describe.skipIf(!url)('gathering (needs DATABASE_URL)', () => {
         TUTORIAL_OVERRIDES.gatherSeconds * 1000,
       );
     });
+
+    it('finishes my gathers now through the dev route, which only dev builds have', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const tile = await nodeTile(server, kid, mapId, 'timber');
+      const started = await gatherAt(server, kid, mapId, tile);
+      expect(started.statusCode).toBe(201);
+      const { gather } = GatherResponseSchema.parse(started.json());
+
+      // Not a route at all without HP_DEV_SQUISHY_GRANTS.
+      const missing = await call(server, 'POST', `/maps/${mapId}/dev/gathers/ready`, kid);
+      expect(missing.statusCode).toBe(404);
+      await server.close();
+
+      const config = loadConfig({
+        NODE_ENV: 'test',
+        DATABASE_URL: url!,
+        HP_DEV_SQUISHY_GRANTS: 'true',
+      });
+      app = await buildApp({ config, db, clock: () => clock, logger: false });
+      const dev = app;
+      const ready = await call(dev, 'POST', `/maps/${mapId}/dev/gathers/ready`, kid);
+      expect(ready.statusCode, ready.body).toBe(200);
+      const bag = InventoryResponseSchema.parse(ready.json());
+      // Ready now, and still the same length (started_at moved back with it).
+      expect(bag.gathers.map((g) => g.id)).toEqual([gather.id]);
+      expect(bag.gathers[0]!.readyAt).toBe(clock.toISOString());
+      expect(Date.parse(bag.gathers[0]!.readyAt) - Date.parse(bag.gathers[0]!.startedAt)).toBe(
+        TIMBER.gather!.seconds * 1000,
+      );
+
+      const done = await collect(dev, kid, mapId, gather.id);
+      expect(done.statusCode).toBe(200);
+      expect(CollectResponseSchema.parse(done.json()).granted).toEqual({
+        timber: TIMBER.gather!.quantity,
+      });
+      // Nothing left to move: a second call changes nothing and still answers the bag.
+      const again = await call(dev, 'POST', `/maps/${mapId}/dev/gathers/ready`, kid);
+      expect(again.statusCode).toBe(200);
+      expect(InventoryResponseSchema.parse(again.json()).gathers).toEqual([]);
+    });
   });
 
   describe('seasons (design doc §15)', () => {

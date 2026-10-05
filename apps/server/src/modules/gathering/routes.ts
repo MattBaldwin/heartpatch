@@ -2,6 +2,7 @@ import {
   CollectResponseSchema,
   GatherParamsSchema,
   GatherResponseSchema,
+  InventoryResponseSchema,
   MapIdParamsSchema,
   StartGatherRequestSchema,
 } from '@heartpatch/shared';
@@ -17,6 +18,8 @@ export interface GatheringRoutesOptions {
   hooks: AuthHooks;
   /** `Idempotency-Key` support (`registerIdempotency`). */
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
+  /** Registers the dev-only "finish my gathers" route (`HP_DEV_SQUISHY_GRANTS`; never in production). */
+  devTools?: boolean;
 }
 
 export const gatheringRoutes =
@@ -59,6 +62,19 @@ export const gatheringRoutes =
       async (request) =>
         service.collect(requireUser(request), request.params.mapId, request.params.gatherId),
     );
+
+    if (options.devTools) {
+      // Dev and test only: the player's gathers on the map finish now, so a
+      // phone or an e2e run can try Collect without the real wait.
+      app.post(
+        '/maps/:mapId/dev/gathers/ready',
+        {
+          schema: { params: MapIdParamsSchema, response: { 200: InventoryResponseSchema } },
+          preHandler: [requireAuth, rateLimit('gather')],
+        },
+        async (request) => service.devReady(requireUser(request), request.params.mapId),
+      );
+    }
 
     done();
   };
