@@ -7,6 +7,7 @@ import {
   NIGHTFALL_RETRY_LIMIT,
   NIGHTFALL_SWEEP_CRON,
 } from './limits.js';
+import { ensureQueue } from './queues.js';
 
 /** Finds maps whose nightfall is due, and runs one (the hollow module, #21). */
 export interface NightfallRunner {
@@ -30,10 +31,11 @@ const SWEEP_QUEUE = 'nightfall.sweep';
  * at 21:00 in its own time zone. Rather than one cron per map (zones and
  * daylight saving move it), a sweep every minute asks which maps' latest
  * nightfall hasn't run, and enqueues one `nightfall` job per map and night,
- * keyed `mapId/night` (`stately`: one queued and one running per key). The
- * night's `hollow_events` row is the real guard: a retry, a duplicate or a
- * restart finds it and takes nothing. After downtime the sweep runs the
- * latest missed night once (with only the squishies there at nightfall).
+ * keyed `mapId/night` (`short`: one queued per key; see `boss.ts` for why
+ * not `stately`). The night's `hollow_events` row is the real guard, claimed
+ * first thing in the transaction: a retry, a duplicate or a restart finds it
+ * and takes nothing. After downtime the sweep runs the latest missed night
+ * once (with only the squishies there at nightfall).
  */
 export async function startNightfall(
   boss: PgBoss,
@@ -41,8 +43,8 @@ export async function startNightfall(
   logger: FastifyBaseLogger,
   schedule: boolean,
 ): Promise<{ sweep: () => Promise<number> }> {
-  await boss.createQueue(NIGHTFALL_QUEUE, {
-    policy: 'stately',
+  await ensureQueue(boss, logger, NIGHTFALL_QUEUE, {
+    policy: 'short',
     retryLimit: NIGHTFALL_RETRY_LIMIT,
     retryDelay: NIGHTFALL_RETRY_DELAY_SECONDS,
     retryBackoff: true,
@@ -73,7 +75,7 @@ export async function startNightfall(
     return due.length;
   };
 
-  await boss.createQueue(SWEEP_QUEUE, { policy: 'stately' });
+  await ensureQueue(boss, logger, SWEEP_QUEUE, { policy: 'short' });
   await boss.work(SWEEP_QUEUE, async () => {
     const queued = await sweep();
     if (queued > 0) logger.info({ queued }, 'night fell on maps');
