@@ -321,7 +321,7 @@ Small and cheap on purpose: one server for a few families.
 
 - **`ci.yml`** on every PR. Since PR #100 it has three parts:
   - **`fast`:** format, lint, typecheck, migration check, unit and DB tests, coverage, build and the db scripts.
-  - **`e2e`:** a matrix of `iphone-webkit` / `ipad-webkit` × shard 1/3 (Playwright splits by spec file, so three shards keep the heaviest leg well under the 30 min timeout). Each leg has its own Postgres service container.
+  - **`e2e`:** a matrix of `iphone-webkit` / `ipad-webkit` × group 1–5. The groups are spec-file lists balanced by measured duration (`E2E_GROUPS` in `apps/client/playwright.config.ts`, picked by `HP_E2E_GROUP`), not Playwright's `--shard`, which splits by test count and piled every heavy WebGL spec into one shard. Group 5 is every spec not listed, so a new spec always runs; the config fails the run if a listed spec is missing or the group count doesn't match. Each leg takes about 5–7 min and has its own Postgres service container.
   - **`check`:** an aggregator that is green only when `fast` and every `e2e` leg are. It stays the one status to gate on.
   - Build sessions can't edit `.github/workflows`; the coordinator makes CI changes.
 - **`deploy.yml`** on push to `main`:
