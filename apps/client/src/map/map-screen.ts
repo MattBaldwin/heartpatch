@@ -7,6 +7,7 @@ import {
   type WsEventMessage,
 } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
+import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import {
   createWsClient,
@@ -16,6 +17,8 @@ import {
 } from '../net/ws-client.js';
 import { el } from '../ui/dom.js';
 import { mapApi } from './map-api.js';
+import { AMBIENT } from './map-config.js';
+import { isHalloween } from './map-dressing.js';
 import { MapScene, type MapSceneStats } from './map-scene.js';
 import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
@@ -34,6 +37,12 @@ export interface MapScreenOptions {
   showScene: (build: SceneBuilder | null) => void;
   /** Draws a few frames after a change (`Stage.invalidate`). */
   invalidate: () => void;
+  /** Draws one frame (`Stage.requestFrame`): ambient life paces itself with this. */
+  requestFrame?: () => void;
+  /** The quality tier now: the low tier drops ambient life (motes and motion). */
+  tier?: () => QualityTier;
+  /** Now, for the season by the map's local date (Halloween dressing). */
+  now?: () => Date;
   /** The map closed by itself (e.g. the player was removed): show the lobby with this. */
   onClosed: (message: string) => void;
   api?: { view: (mapId: string) => Promise<MapView> };
@@ -82,6 +91,8 @@ export interface MapScreen {
   /** Back to the default scene; stops live updates. */
   close: () => void;
   setUser: (user: PublicUser | null) => void;
+  /** Night on the map (#21): fireflies, the night backdrop, lanterns glowing. */
+  setNight: (night: boolean) => void;
   readonly debug: MapDebug | null;
 }
 
@@ -98,6 +109,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   let scene3d: MapScene | null = null;
   let ws: WsClient | null = null;
   let selected: Hex | null = null;
+  let night = false;
 
   const hudName = el('span', { class: 'map-hud-name' });
   const hudStatus = el('span', { class: 'map-hud-status', role: 'status' });
@@ -173,12 +185,70 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     },
   });
 
+  /**
+   * Ambient life (the terrain visual pass): sway, water and motes move on the
+   * GPU from one time uniform. While it's live this asks for a frame about 30
+   * times a second (render on demand otherwise stays idle); while it's still
+   * (reduced motion) or off (low tier, slow device) it only checks back now
+   * and then, and the map draws nothing on its own.
+   */
+  const reducedMotion =
+    typeof window.matchMedia === 'function'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)')
+      : null;
+  let ambientFrame = 0;
+  let ambientTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastAmbient = -Infinity;
+  function ambientTick(now: number): void {
+    ambientFrame = 0;
+    ambientTimer = undefined;
+    const s = scene3d;
+    if (!s) return;
+    const changed = s.setAmbient({
+      tier: options.tier?.() ?? 'high',
+      reducedMotion: reducedMotion?.matches ?? false,
+    });
+    if (changed) options.invalidate();
+    if (s.stats.ambient !== 'live') {
+      ambientTimer = setTimeout(() => {
+        ambientTick(performance.now());
+      }, 500); // TUNE: how soon a raised tier or motion setting is noticed
+      return;
+    }
+    if (now - lastAmbient >= AMBIENT.frameMs && s.tick(now)) {
+      lastAmbient = now;
+      options.requestFrame?.();
+    }
+    ambientFrame = requestAnimationFrame(ambientTick);
+  }
+  const startAmbient = (): void => {
+    if (ambientFrame === 0 && ambientTimer === undefined) {
+      ambientFrame = requestAnimationFrame(ambientTick);
+    }
+  };
+  const stopAmbient = (): void => {
+    cancelAnimationFrame(ambientFrame);
+    clearTimeout(ambientTimer);
+    ambientFrame = 0;
+    ambientTimer = undefined;
+  };
+
   /** Builds the map into a fresh scene (on open, and again after a GPU-loss rebuild). */
   const build = (scene: Scene): SceneContent => {
     const state = sync.state;
     if (!state) throw new Error('no map to build');
-    const built = new MapScene(scene, state.view);
+    const now = options.now?.() ?? new Date();
+    const built = new MapScene(scene, state.view, {
+      halloween: isHalloween(state.view.map.timeZone, now),
+    });
+    built.setNight(night);
     scene3d = built;
+    startAmbient();
+    // Another screen (a battle, a close-up) swapped the stage: stop asking for
+    // frames until the map is built again.
+    scene.onDisposeObservable.addOnce(() => {
+      if (scene3d === built) stopAmbient();
+    });
     for (const layer of options.layers ?? []) layer.attach(scene, state.view);
     if (selected) built.select(selected);
     const canvas = scene.getEngine().getRenderingCanvas();
@@ -203,6 +273,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
 
   /** Takes the map off screen (the sync is already closed or about to be). */
   function hideMap(): void {
+    stopAmbient();
     scene3d = null;
     selected = null;
     panel.hide();
@@ -230,6 +301,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       setStatus(liveSocket().status);
     },
     close,
+    setNight: (next) => {
+      night = next;
+      scene3d?.setNight(next);
+      options.invalidate();
+    },
     setUser: (next) => {
       if (next?.id === user?.id) return;
       user = next;
