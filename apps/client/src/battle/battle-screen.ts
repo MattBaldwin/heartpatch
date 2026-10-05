@@ -147,6 +147,16 @@ const MESSAGES = {
   replayNote: 'Just a replay. Nothing changed.',
 } as const;
 
+/**
+ * Dev builds only: `?battle-slowmo=8` plays battles 8× slower, to judge the
+ * choreography frame by frame (and to capture it on a software renderer).
+ */
+function slowmoFactor(): number {
+  if (!import.meta.env.DEV) return 1;
+  const value = Number(new URLSearchParams(window.location.search).get('battle-slowmo'));
+  return Number.isFinite(value) && value >= 1 ? Math.min(value, 50) : 1;
+}
+
 /** "Moonpuff joined your patch!": the squishy the player just befriended. */
 function friendLine(b: PlayerBattle, names: BattleContent): string {
   const wild = b.view.sides[otherSide(b.mySide)];
@@ -156,8 +166,11 @@ function friendLine(b: PlayerBattle, names: BattleContent): string {
 
 export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const api = options.api ?? battleApi;
-  const now = options.now ?? (() => performance.now());
+  const slowmo = slowmoFactor();
+  const now = options.now ?? (() => performance.now() / slowmo);
   const registry = visualRegistry(GAME_DATA);
+  /** `prefers-reduced-motion`: no shake or flashes, gentler moves (read when a battle opens). */
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   let user: PublicUser | null = null;
   let mapId: string | null = null;
@@ -306,7 +319,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const id = window.setTimeout(() => {
       timers.delete(id);
       fn();
-    }, ms);
+    }, ms * slowmo);
     timers.add(id);
   };
   const clearTimers = (): void => {
@@ -422,6 +435,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (!battle) return;
     shown = shownFrom(battle);
     shownLog = battle.view.log.length;
+    scene3d?.restCamera();
     plate('a');
     plate('b');
     if (replaying && battle.view.phase.type !== 'over') {
@@ -461,23 +475,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.setCaption(step.text);
     options.onStep?.(step);
     shown = applyStep(shown, step);
-    if (step.kind === 'swap' && step.to !== null) {
-      const squishy = battle.view.sides[step.side].squishies[step.to];
-      if (squishy) scene3d.sendOut(step.side, squishy.speciesId, squishy.id);
-      if (step.squish) scene3d.play(step.side, step.squish, t);
-    } else if (step.kind === 'tuckered') {
-      scene3d.tuckerOut(step.side, t);
-      const side = step.side;
-      later(PLAYBACK.tuckeredMs * 0.6, () => scene3d?.lieDown(side));
-    } else if (step.squish) {
-      scene3d.play(step.side, step.squish, t);
-    }
-    if (step.kind === 'end' && step.squish) {
-      // A new friend bounces along; anyone else is a little dizzy.
-      const captured =
-        battle.view.phase.type === 'over' && battle.view.phase.result.reason === 'captured';
-      scene3d.play(otherSide(step.side), captured ? 'bounce' : 'wobble', t, 0.6);
-    }
+    // The arena acts it out (choreography.ts): a swap brings out `to` once
+    // the old squishy has hopped away; a new friend bounces along at the end.
+    const incoming =
+      step.kind === 'swap' && step.to !== null
+        ? battle.view.sides[step.side].squishies[step.to]
+        : undefined;
+    scene3d.perform(step, t, {
+      incoming: incoming ? { speciesId: incoming.speciesId, instanceId: incoming.id } : undefined,
+      captured: battle.view.phase.type === 'over' && battle.view.phase.result.reason === 'captured',
+    });
     const reaction = keeperReaction(step, battle.mySide);
     if (reaction && scene3d.hasKeeper) {
       scene3d.cheer(reaction.move, t, reaction.strength);
@@ -554,6 +561,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       keeper: options.keeper?.() ?? null,
       keeperWearing: options.keeperWearing?.() ?? [],
       opponentLook: battle.kind === 'rescue' ? 'shadow' : 'normal',
+      terrain: battle.terrain,
+      timeOfDay: battle.timeOfDay,
+      battleId: battle.id,
+      reducedMotion: reducedMotion.matches,
     });
     lastTier = options.tier();
     for (const side of ['a', 'b'] as const) {
@@ -561,10 +572,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       const squishy = battle.view.sides[side].squishies[slot];
       if (squishy) {
         built.sendOut(side, squishy.speciesId, squishy.id);
-        if ((shown[side].energy[slot] ?? 1) === 0) {
-          built.tuckerOut(side, now());
-          built.lieDown(side);
-        }
+        if ((shown[side].energy[slot] ?? 1) === 0) built.knockedOut(side);
       }
     }
     scene3d = built;

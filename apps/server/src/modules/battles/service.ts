@@ -654,7 +654,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           sides: { a: { controller: { type: 'player' }, squishies: team }, b: opponent.side },
         };
         const state = startBattle(content, setup);
-        const arena = await arenaFor(tx, {
+        const arena = await arenaFor(repo, {
           mapId,
           userId: user.id,
           timeZone: map.timeZone,

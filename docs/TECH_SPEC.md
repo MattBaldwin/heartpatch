@@ -120,6 +120,7 @@ Add anything else only with a one-line justification in the PR.
 | `event_consumers` | each consumer's `last_seq` per map (§7) | #47 |
 | `battles` (seed, action log, result), `idempotency_keys` | battles; stored replies to retried requests | #13 |
 | `battles.rewards` (jsonb, nullable, migration 0015) | what a finished battle granted and the share it paid | #97 |
+| `battles.terrain`, `battles.time_of_day` (text, nullable, migration 0021) | where a battle happens: the terrain id its arena is drawn as and the patch's time of day (`day`, `dusk`, `night`) when it started; null for battles from before | battle overhaul |
 | `map_members.starter_squishy_id` (uuid, nullable, migration 0016) | the squishy a member picked as their starter; the "already picked" marker, kept on rejoin | #99 |
 | `users.partner_species_id` (text, nullable, migration 0017) | the tutorial Partner's species (a starter); the starter pick pre-selects it | #24 |
 | `lore_found` (migration 0017) | lore pages each player has found, one row per page (design doc §16) | #24 |
@@ -151,7 +152,7 @@ Add anything else only with a one-line justification in the PR.
 - **Opening cinematic (#46):** `GET /cinematic`, `POST /cinematic/seen` → `{ cinematic: { seenAt } }` (`seenAt` is an ISO time, or null until seen); account-level, idempotent (coalesce: the first time stays).
 - **Dev routes** (`HP_DEV_SQUISHY_GRANTS`, dev and test only): `POST /dev/coins { amount }` and `POST /tutorial/dev/step { stepId }`.
 - **Full list:** every route with its request and reply is in `apps/server/README.md`.
-- **Read-model additions:** `PublicTile.guardianHint: { count, difficulty } | null` on neutral tiles (#98, worked out on read, never species or levels); `PlayerBattle.rewards` (#97, null while running, after no contest, on a defender's replay and for older battles).
+- **Read-model additions:** `PublicTile.guardianHint: { count, difficulty } | null` on neutral tiles (#98, worked out on read, never species or levels); `PlayerBattle.rewards` (#97, null while running, after no contest, on a defender's replay and for older battles); `PlayerBattle.terrain` and `PlayerBattle.timeOfDay` (battle overhaul: where it happens, set by the server when it starts; the home terrain by day for older battles, DECISIONS "Battles on the tile's terrain").
 - **Commands, not state writes:** e.g. `POST /maps/:mapId/tiles/:tileId/attack`, `POST /maps/:mapId/squishies/:id/care` with `{ action: "pet" }`. The server computes outcomes.
 - Errors: `{ error: { code: "TILE_NOT_ADJACENT", message: "Friendly text a kid can read" } }` with proper HTTP status. Codes are a shared enum.
 - Rate limits: global per-IP limit; tighter limits on auth, care actions and chat, including Phase 1 quick messages and emoji (`chat.quick`). In Phase 1 these limits stand in for owner mute.
@@ -198,6 +199,11 @@ Add anything else only with a one-line justification in the PR.
 - **Assets:** glTF/GLB, Draco or meshopt compression, KTX2 textures. Procedural squishies and Keepers need few textures; environment props are small GLBs. Lazy-load per scene.
 - **Input:** Pointer Events; gestures for pan, pinch, tap, long-press, stroke. Minimum 44×44 pt tap targets. Respect `env(safe-area-inset-*)`.
 - **Offline:** the PWA caches the app shell; gameplay needs a connection, and the UI shows a friendly "reconnecting" state.
+
+### Battles (client)
+- **Arena** (`src/battle/arena*.ts`): a diorama of the battle's terrain (`PlayerBattle.terrain`) at its time of day, built from the map's terrain looks and prop builders (`TERRAIN_LOOKS`, `buildProp`) plus a few arena-only props, a vertex-coloured sky dome, and the stage's own sun and sky light re-tinted. Built once with the scene; props are thin instances, one mesh per kind.
+- **Choreography** (`src/battle/choreography.ts`): a pure timeline from the server's resolved log (the steps of `battle-playback.ts`) to fighter acts, effects, squish moves and camera beats. Fighters hang from rigs (`SquishyField`'s `parent`), so moving one never re-uploads its buffers. Effects are a pool of five thin-instanced unlit meshes with buffers sized up front (`effects.ts`); the camera director (`camera-director.ts`) frames, follows, pushes in and shakes, with a vertical lens shift that keeps the fight above the controls. `prefers-reduced-motion`: no shake, flash, hit-stop or idle bounce, smaller moves.
+- Dev builds take `?battle-slowmo=8` to play battles slower for tuning.
 
 ### Cinematics and tutorial (client)
 - **Cinematic player** (`src/cinematics/`): plays a timeline described in data (`packages/shared/src/data/cinematics/*.ts`): shots with duration, camera path keyframes, scene setup, actor animations, caption text and audio cues. A pure timeline evaluated as a function of time (seekable for tap-to-advance, testable without a renderer), drawn on the shared stage; no video files. Every shot's actors are built and warmed up front, and the player is a lazy-loaded chunk (DECISIONS "The opening cinematic (#46)").

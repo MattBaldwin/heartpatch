@@ -8,12 +8,9 @@ import {
   type Hex,
   type MapLocalTime,
 } from '@heartpatch/shared';
-import { and, eq } from 'drizzle-orm';
-import type { Executor } from '../../db/client.js';
-import { mapMembers, tiles } from '../../db/schema.js';
 import { mapLocalTime } from '../../lib/time.js';
 import { DUSK_MINUTES } from './limits.js';
-import type { BattleArena } from './repo.js';
+import type { BattleArena, BattlesRepo } from './repo.js';
 
 /*
  * Where a battle happens (owner decision 2026-10-04): the terrain the client
@@ -40,34 +37,14 @@ export function arenaTimeOfDay(local: MapLocalTime): BattleTimeOfDay {
  * if neither is found.
  */
 export async function arenaFor(
-  db: Executor,
+  repo: Pick<BattlesRepo, 'tileTerrain' | 'homeTiles'>,
   context: { mapId: string; userId: string; timeZone: string; at: Date; tile: Hex | null },
 ): Promise<BattleArena> {
   const { mapId, userId, tile } = context;
-  const where = tile ?? (await heartSeed(db, mapId, userId));
-  let terrain: string | null = null;
-  if (where) {
-    const [row] = await db
-      .select({ terrain: tiles.terrain })
-      .from(tiles)
-      .where(and(eq(tiles.mapId, mapId), eq(tiles.q, where.q), eq(tiles.r, where.r)));
-    terrain = row?.terrain ?? null;
-  }
+  const where = tile ?? heartSeedOf(await repo.homeTiles(mapId, userId));
+  const terrain = where ? await repo.tileTerrain(mapId, where.q, where.r) : null;
   return {
     terrain: terrain ?? MAP_GEN.homeTerrain,
     timeOfDay: arenaTimeOfDay(mapLocalTime(context.at, context.timeZone)),
   };
-}
-
-/** The player's Heart Seed on the map (the middle of their home base), or null. */
-async function heartSeed(db: Executor, mapId: string, userId: string): Promise<Hex | null> {
-  const home = await db
-    .select({ q: tiles.q, r: tiles.r })
-    .from(tiles)
-    .innerJoin(
-      mapMembers,
-      and(eq(mapMembers.mapId, tiles.mapId), eq(mapMembers.homeSlot, tiles.homeSlot)),
-    )
-    .where(and(eq(tiles.mapId, mapId), eq(mapMembers.userId, userId)));
-  return heartSeedOf(home);
 }

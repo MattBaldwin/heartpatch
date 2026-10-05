@@ -24,7 +24,7 @@ import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { battles, squishies } from '../../db/schema.js';
+import { battles, mapMembers, squishies, tiles } from '../../db/schema.js';
 
 /** A `battles` row with its JSON columns typed (checked on read). */
 export interface BattleRow {
@@ -116,6 +116,10 @@ export interface BattlesRepo {
   }) => Promise<OwnedSquishy>;
 
   insertBattle: (battle: NewBattle) => Promise<BattleRow>;
+  /** A tile's terrain id, or null if the map has no such tile (the arena, `arenaFor`). */
+  tileTerrain: (mapId: string, q: number, r: number) => Promise<string | null>;
+  /** The player's home base tiles on the map (seven, or none before they have one). */
+  homeTiles: (mapId: string, userId: string) => Promise<{ q: number; r: number }[]>;
   findBattle: (battleId: string) => Promise<BattleRow | null>;
   /** Row-locks the battle until commit; every action runs under it. */
   lockBattle: (battleId: string) => Promise<BattleRow | null>;
@@ -292,6 +296,24 @@ function queries(db: Executor): BattlesRepo {
       if (!row) throw new Error('insertBattle: insert returned no row');
       return toRow(row);
     },
+
+    tileTerrain: async (mapId, q, r) => {
+      const [row] = await db
+        .select({ terrain: tiles.terrain })
+        .from(tiles)
+        .where(and(eq(tiles.mapId, mapId), eq(tiles.q, q), eq(tiles.r, r)));
+      return row?.terrain ?? null;
+    },
+
+    homeTiles: (mapId, userId) =>
+      db
+        .select({ q: tiles.q, r: tiles.r })
+        .from(tiles)
+        .innerJoin(
+          mapMembers,
+          and(eq(mapMembers.mapId, tiles.mapId), eq(mapMembers.homeSlot, tiles.homeSlot)),
+        )
+        .where(and(eq(tiles.mapId, mapId), eq(mapMembers.userId, userId))),
 
     findBattle: (battleId) => one(eq(battles.id, battleId)),
 

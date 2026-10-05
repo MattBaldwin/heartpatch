@@ -26,13 +26,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { eq } from 'drizzle-orm';
-import { battles, keepers, sessions, users } from '../../db/schema.js';
+import { keepers, sessions, users } from '../../db/schema.js';
 import { KEY_TTL_MS } from '../../lib/idempotency.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { createBattlesService } from './service.js';
+import { createBattlesRepo } from './repo.js';
+import { createBattlesService, defaultBattleContent, playerBattleView } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -793,12 +793,10 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const mapId = await newMap(server, kid);
       await grant(server, kid, mapId);
       const battle = await pickFight(server, kid, mapId);
-      await db
-        .update(battles)
-        .set({ terrain: null, timeOfDay: null })
-        .where(eq(battles.id, battle.id));
-      const got = battleOf(await call(server, 'GET', `/battles/${battle.id}`, kid));
-      expect(got).toMatchObject({ terrain: MAP_GEN.homeTerrain, timeOfDay: 'day' });
+      const row = await createBattlesRepo(db).findBattle(battle.id);
+      expect(row?.arena).not.toBeNull();
+      const old = playerBattleView(defaultBattleContent(), { ...row!, arena: null });
+      expect(old).toMatchObject({ terrain: MAP_GEN.homeTerrain, timeOfDay: 'day' });
     });
   });
 });
