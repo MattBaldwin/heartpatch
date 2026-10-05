@@ -10,7 +10,9 @@ import {
 } from '@heartpatch/shared';
 import { updateHold } from '../../pwa/update-hold.js';
 import { deviceTimeZone, el, messageOf } from '../dom.js';
+import { forgetPatch, patchToResume, rememberPatch } from './last-patch.js';
 import { lobbyApi } from './lobby-api.js';
+import { joinedSince, listKey, WAITING_POLL_MS } from './lobby-poll.js';
 import '../auth/auth.css';
 import './lobby.css';
 
@@ -28,6 +30,9 @@ const PVP_CHOICES: readonly { mode: PvpMode; label: string; hint: string }[] = [
   { mode: 'on', label: 'Challenges on', hint: 'Claim land from each other, up to 3 tiles a day.' },
   { mode: 'off', label: 'No challenges', hint: 'Everyone teams up. No challenges at all.' },
 ];
+
+/** A press that moves or scrolls the list further than this is a swipe, not a tap (px). */
+const SWIPE_SLOP_PX = 10; // TUNE: about iOS's own tap slop
 
 /** "Works for 6 more days." */
 function codeLifeLeft(iso: string): string {
@@ -59,6 +64,11 @@ export interface Lobby {
   showSettings: () => void;
   /** True while the lobby's panel is up (over the map, or on its own). */
   readonly isOpen: boolean;
+  /**
+   * True while "Make a patch" or "Join a patch" is on screen: a celebration
+   * (the First Patch milestone) waits until the player is done typing.
+   */
+  readonly formOpen: boolean;
 }
 
 export interface LobbyOptions {
@@ -72,6 +82,12 @@ export interface LobbyOptions {
   settings?: () => Node[];
   /** Where the "My patches" button goes over a map (the trays' corner); defaults to `root`. */
   buttonRoot?: HTMLElement;
+  /**
+   * Whether a log-in or reload may land back on the last patch visited
+   * (#160). False while something else opens by itself instead (a tutorial
+   * run going). Defaults to yes.
+   */
+  canResume?: () => Promise<boolean>;
 }
 
 export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby {
@@ -97,15 +113,28 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   let refresh: () => void = () => undefined;
   /** True while the patch list is the screen showing. */
   let onList = false;
+  /** True while a one-field form (make, join) is the screen showing. */
+  let onForm = false;
   /** Bumped by every screen change, so a slow list fetch can't cover a newer screen. */
   let shown = 0;
   /** Set while a one-time password and recovery code are on screen (#47). */
   let releaseUpdates: (() => void) | null = null;
+  /** True from a log-in (or reload) until the first patch list: land on the last patch (#160). */
+  let resumePending = false;
+  /** Asks the server again while a join request waits (#145). */
+  let pollTimer: number | undefined;
+
+  const stopPolling = () => {
+    if (pollTimer !== undefined) window.clearTimeout(pollTimer);
+    pollTimer = undefined;
+  };
 
   const show = (...children: Node[]) => {
+    stopPolling();
     releaseUpdates?.();
     releaseUpdates = null;
     onList = false;
+    onForm = false;
     shown += 1;
     card.replaceChildren(...children);
     panel.hidden = false;
@@ -186,12 +215,89 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     }
 
     if (at !== shown) return;
+    if (resumePending) {
+      resumePending = false;
+      if (await resume(mine, at)) return;
+      if (at !== shown) return;
+    }
+    renderList(mine, message);
+  }
+
+  /**
+   * Lands back on the patch the player was on (#160), as "Visit patch"
+   * would. True if it opened; false leaves the patch list to show.
+   */
+  async function resume(mine: MyMapsResponse, at: number): Promise<boolean> {
+    const who = user;
+    const { onOpen } = options;
+    if (!who || !onOpen) return false;
+    const mapId = patchToResume(who.id, mine.maps);
+    if (mapId === null) return false;
+    const allowed = await (options.canResume?.() ?? Promise.resolve(true)).catch(() => false);
+    if (!allowed || at !== shown || user !== who) return false;
+    try {
+      await onOpen(mapId);
+    } catch {
+      // Gone wobbly: start from the patch list (it says what happened, if anything).
+      forgetPatch(who.id);
+      return false;
+    }
+    panel.hidden = true;
+    openButton.hidden = false;
+    return true;
+  }
+
+  /** While a request waits, looks again every few seconds and redraws on any change (#145). */
+  function pollWhileWaiting(mine: MyMapsResponse, at: number): void {
+    if (mine.requests.length === 0) return;
+    pollTimer = window.setTimeout(() => {
+      pollTimer = undefined;
+      if (at !== shown || panel.hidden || !onList) return;
+      if (document.visibilityState !== 'visible') {
+        // iOS paused us; `visibilitychange` refreshes on the way back.
+        return;
+      }
+      lobbyApi
+        .myMaps()
+        .then((next) => {
+          if (at !== shown || panel.hidden) return;
+          if (listKey(next) === listKey(mine)) {
+            pollWhileWaiting(mine, at);
+            return;
+          }
+          const joined = joinedSince(mine, next)[0];
+          renderList(next, joined === undefined ? undefined : `Yay! You're in ${joined}!`);
+        })
+        .catch(() => {
+          // Offline for a moment: try again on the next beat.
+          if (at === shown) pollWhileWaiting(mine, at);
+        });
+    }, WAITING_POLL_MS);
+  }
+
+  function renderList(mine: MyMapsResponse, message?: string): void {
     const list = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-maps' });
     for (const map of mine.maps) {
       const open = el(
         'button',
         { type: 'button', class: 'lobby-map' },
-        el('span', { class: 'lobby-map-name' }, map.name),
+        el(
+          'span',
+          { class: 'lobby-map-name' },
+          map.name,
+          // Someone is asking to join (#144): say so right on the row.
+          ...(map.pendingRequests > 0
+            ? [
+                el(
+                  'span',
+                  { class: 'lobby-badge lobby-badge-alert', 'data-testid': 'lobby-map-asking' },
+                  map.pendingRequests === 1
+                    ? '1 wants to join!'
+                    : `${String(map.pendingRequests)} want to join!`,
+                ),
+              ]
+            : []),
+        ),
         el(
           'span',
           { class: 'lobby-map-meta' },
@@ -260,6 +366,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       close,
     );
     onList = true;
+    pollWhileWaiting(mine, shown);
   }
 
   function showSettings(): void {
@@ -317,6 +424,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         });
     });
     show(form);
+    onForm = true;
     input.focus();
   }
 
@@ -384,6 +492,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       const visit = button('Visit patch', () => {
         act(status, visit, async () => {
           await onOpen(map.id);
+          if (user) rememberPatch(user.id, map.id);
           panel.hidden = true;
           openButton.hidden = false;
         });
@@ -509,7 +618,15 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
           'aria-checked': String(selected),
           ...(isOwner ? {} : { disabled: '' }),
         },
-        el('span', { class: 'lobby-choice-label' }, choice.label),
+        el(
+          'span',
+          { class: 'lobby-choice-label' },
+          choice.label,
+          // The picked one says so in words too, not only by its border (#146).
+          ...(selected
+            ? [el('span', { class: 'lobby-choice-picked', 'aria-hidden': 'true' }, '✓ Picked')]
+            : []),
+        ),
         el('span', { class: 'lobby-choice-hint' }, choice.hint),
       );
       if (isOwner && !selected) {
@@ -546,6 +663,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
                 yes: 'Leave',
                 onYes: async () => {
                   await lobbyApi.leave(map.id);
+                  if (user) forgetPatch(user.id);
                   await showList(`You left ${map.name}.`);
                 },
                 onNo: () => void showMap(map.id),
@@ -672,6 +790,33 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     releaseUpdates = updateHold.hold();
   }
 
+  // A swipe is never a tap (#146): if the finger moved or the list scrolled
+  // between press and release, the click that follows is dropped before any
+  // button sees it. Browsers usually cancel it themselves; this makes sure a
+  // scroll that starts on "Remove" can't land on it.
+  let press: { x: number; y: number; scroll: number } | null = null;
+  panel.addEventListener(
+    'pointerdown',
+    (e) => {
+      press = { x: e.clientX, y: e.clientY, scroll: panel.scrollTop };
+    },
+    { capture: true, passive: true },
+  );
+  panel.addEventListener(
+    'click',
+    (e) => {
+      const p = press;
+      press = null;
+      if (!p || e.detail === 0) return; // keyboard or assistive tech: always a tap
+      const moved = Math.hypot(e.clientX - p.x, e.clientY - p.y) > SWIPE_SLOP_PX;
+      if (moved || Math.abs(panel.scrollTop - p.scroll) > SWIPE_SLOP_PX) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    },
+    { capture: true },
+  );
+
   openButton.addEventListener('click', () => void showList());
   // iOS pauses background tabs; catch up when the player comes back (tech spec §5).
   document.addEventListener('visibilitychange', () => {
@@ -681,6 +826,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   return {
     setUser: (next) => {
       user = next;
+      resumePending = next !== null;
       if (next) {
         void showList();
       } else {
@@ -720,6 +866,9 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     showSettings,
     get isOpen() {
       return !panel.hidden;
+    },
+    get formOpen() {
+      return !panel.hidden && onForm;
     },
   };
 }

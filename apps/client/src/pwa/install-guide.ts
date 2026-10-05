@@ -5,8 +5,10 @@ import '../ui/auth/auth.css';
 
 // Add to Home Screen guide (issue #26). Safari on iPhone and iPad has no
 // install prompt, so we show the steps in a small card until the player taps
-// "Got it!". It sits under the login card (pwa.css), so a new player signs up
-// first and sees it after. Copy follows docs/STYLE_GUIDE.md.
+// "Got it!". It's a card in the lobby's patch list (#135), not a layer of
+// its own: it never sits under the sign-in card or over Sprout, and it shows
+// once the player is signed in and has somewhere to come back to. Copy
+// follows docs/STYLE_GUIDE.md.
 
 function readSeen(): boolean {
   try {
@@ -43,44 +45,51 @@ function shareIcon(): SVGSVGElement {
   return svg;
 }
 
-export function mountInstallGuide(root: HTMLElement): void {
-  const show = shouldShowInstallGuide(
-    isIosSafari(navigator.userAgent, navigator.maxTouchPoints),
-    {
-      iosStandalone: (navigator as Navigator & { standalone?: boolean }).standalone,
-      standaloneDisplay: window.matchMedia('(display-mode: standalone)').matches,
-    },
-    readSeen(),
-  );
-  if (!show) return;
+export interface InstallGuide {
+  /** The guide for the lobby's patch list, until dismissed; empty when it shouldn't show. */
+  cards: () => Node[];
+}
 
-  const close = el(
-    'button',
-    { type: 'button', class: 'auth-button auth-button-small pwa-guide-close' },
-    'Got it!',
-  );
-  const card = el(
-    'section',
-    {
-      class: 'pwa-guide',
-      role: 'dialog',
-      'aria-modal': 'false',
-      'aria-labelledby': 'pwa-guide-title',
-      'data-testid': 'install-guide',
+export function createInstallGuide(): InstallGuide {
+  const wanted = () =>
+    shouldShowInstallGuide(
+      isIosSafari(navigator.userAgent, navigator.maxTouchPoints),
+      {
+        iosStandalone: (navigator as Navigator & { standalone?: boolean }).standalone,
+        standaloneDisplay: window.matchMedia('(display-mode: standalone)').matches,
+      },
+      readSeen(),
+    );
+  return {
+    cards: () => {
+      if (!wanted()) return [];
+      const close = el(
+        'button',
+        { type: 'button', class: 'auth-button auth-button-small pwa-guide-close' },
+        'Got it!',
+      );
+      const card = el(
+        'section',
+        {
+          class: 'pwa-guide',
+          'aria-labelledby': 'pwa-guide-title',
+          'data-testid': 'install-guide',
+        },
+        el('h2', { class: 'pwa-guide-title', id: 'pwa-guide-title' }, 'Make Heartpatch an app!'),
+        el(
+          'ol',
+          { class: 'pwa-guide-steps' },
+          el('li', {}, 'Tap Share ', shareIcon(), '. No Share? Tap ••• first.'),
+          el('li', {}, 'Pick “Add to Home Screen”.'),
+          el('li', {}, 'Open Heartpatch from your home screen!'),
+        ),
+        close,
+      );
+      close.addEventListener('click', () => {
+        markSeen();
+        card.remove();
+      });
+      return [card];
     },
-    el('h2', { class: 'pwa-guide-title', id: 'pwa-guide-title' }, 'Make Heartpatch an app!'),
-    el(
-      'ol',
-      { class: 'pwa-guide-steps' },
-      el('li', {}, 'Tap Share ', shareIcon(), '. No Share? Tap ••• first.'),
-      el('li', {}, 'Pick “Add to Home Screen”.'),
-      el('li', {}, 'Open Heartpatch from your home screen!'),
-    ),
-    close,
-  );
-  close.addEventListener('click', () => {
-    markSeen();
-    card.remove();
-  });
-  root.append(card);
+  };
 }

@@ -599,6 +599,16 @@ _Stabilizing `main`: three reliability defects fixed at the root._
 - **The dev test hook is installed before the first drawn frame.** The stage marks the canvas `data-ready` on its first `scene.render()`, and specs wait for that before reading `window.__heartpatch`. The hook was installed after the dynamic import of the dev overlay, so under CI load the frame could win and `camera()` read as "not ready" (smoke.spec, one run in five groups). The hook now goes in right after `boot()` resolves, before any further `await`; the first frame is a task away at that point, so `data-ready` implies the hook.
 - **Auth route tests hash nothing.** Argon2 is swapped for a cheap stand-in (`tests/fake-secrets.ts`, via `vi.mock` of `secrets.ts`) in `auth.test.ts` and in the new `auth-rate-limit.test.ts`, which also fakes the window clock (`vi.useFakeTimers` on `Date` only) so the rate-limit tests count attempts and move the window themselves: 30 full-cost Argon2 checks under a parallel `pnpm test` was what timed out, and the recovery test (eight hashes under a 5 s default timeout) was next in line. The real hashing is pinned in `secrets.test.ts` (Argon2id prefix, round trip, wrong secret, a stored value that isn't a hash, the dummy check).
 
+## 2026-10-05 — Bug bash: screens (Fix PR)
+
+_Fixes from the bug bash of 2026-10-05, "screens" lane (#130, #131, #135, #144, #145, #146, #156, #157, #158, #160)._
+
+- **The patch list says who's waiting (#144).** `MapSummary` (`GET /maps`) carries `pendingRequests`, the join requests waiting on the owner, counted in the same query; it's 0 on a row the player doesn't own. The lobby shows "1 wants to join!" on the row. *Why:* the request was only visible inside the patch's detail, so owners never noticed it.
+- **A joiner's lobby asks again every 5 s while a request waits (#145)** (`WAITING_POLL_MS`), only while the patch list is on screen and the page is visible. *Why:* the joiner isn't on the patch's live channel until they're a member, so nothing can push "yes" to them; a reload-free lobby was the ask.
+- **A reload or log-in lands on the last patch visited (#160),** kept per account on the device (`localStorage`), unless a tutorial run opens the Glade by itself. The server still decides whether the patch opens; a patch the player left or was removed from is forgotten.
+- **The Add to Home Screen guide is a card in the patch list (#135),** not a layer of its own, so it never sits under the sign-in card or over Sprout.
+- **Home base tiles are a warm sand up close (#131),** not the map's cream: alone and big under the sun, cream tone-mapped to white and bloomed, and the white "glowing spots" vanished into it. The spots are pink rings with a soft fill.
+
 ## 2026-10-05 — Bug bash: rules polish (Fix PR)
 
 _The bug-bash issues #134, #147, #150, #151, #152 and #153, worked in the "rules-polish" lane._

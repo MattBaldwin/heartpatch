@@ -50,8 +50,8 @@ test('two players on one patch trade quick messages live', async ({ browser }) =
   await visitPatch(ownerLobby);
   await expect(ownerLobby).toBeHidden();
 
-  await friendLobby.getByRole('button', { name: 'Check again' }).tap();
-  await friendLobby.getByRole('button', { name: /Chatter Patch/ }).tap();
+  // The friend's waiting row turns into the patch by itself (#145).
+  await friendLobby.getByRole('button', { name: /Chatter Patch/ }).tap({ timeout: 30_000 });
   await visitPatch(friendLobby);
   await expect(friendLobby).toBeHidden();
 
@@ -93,10 +93,10 @@ test('two players on one patch trade quick messages live', async ({ browser }) =
       ],
     });
 
-  // A reload brings the feed back from the server.
+  // A reload lands back on the patch (#160) and brings the feed back from the server.
   await friend.reload();
-  await friendLobby.getByRole('button', { name: /Chatter Patch/ }).tap();
-  await visitPatch(friendLobby);
+  await expect(friend.getByTestId('map-hud')).toContainText('Chatter Patch', { timeout: 30_000 });
+  await expect(friendLobby).toBeHidden();
   await expect
     .poll(() => chatState(friend), { timeout: 30_000 })
     .toMatchObject({
