@@ -119,19 +119,52 @@ export function affinityMatches(squishy: JobTraits, affinity: GatherAffinity | u
   return (element ? 1 : 0) + (affinity.feelings.includes(squishy.feeling) ? 1 : 0);
 }
 
-/** Gathering speed as a whole percent: 100, or the match's quicker one. */
-export function workSpeedPercent(
+/**
+ * The percent modifiers on a squishy's gathering speed for a resource, each
+ * a whole percent (100 = no change). Today that's its match (100, or the
+ * quicker single or double match); a timed boost (a food, later) joins the
+ * list as data, without touching the maths below.
+ */
+export function workSpeedModifiers(
   squishy: JobTraits,
   resource: string,
   rules: Pick<JobRules, 'affinities' | 'work'>,
-): number {
+): number[] {
   const matches = affinityMatches(
     squishy,
     rules.affinities.find((a) => a.resource === resource),
   );
-  if (matches === 2) return rules.work.match.bothPercent;
-  if (matches === 1) return rules.work.match.onePercent;
-  return 100;
+  const match =
+    matches === 2
+      ? rules.work.match.bothPercent
+      : matches === 1
+        ? rules.work.match.onePercent
+        : 100;
+  return [match];
+}
+
+/**
+ * Whole-percent modifiers combined: each applies to the result so far,
+ * floored at every step (bit-identical maths; 135% then 120% is 162%).
+ */
+export function combinePercents(modifiers: readonly number[]): number {
+  return modifiers.reduce((total, percent) => Math.floor((total * percent) / 100), 100);
+}
+
+/**
+ * Gathering speed as a whole percent: the match and any `extra` modifiers
+ * (`combinePercents`), never below 100.
+ */
+export function workSpeedPercent(
+  squishy: JobTraits,
+  resource: string,
+  rules: Pick<JobRules, 'affinities' | 'work'>,
+  extra: readonly number[] = [],
+): number {
+  return Math.max(
+    100,
+    combinePercents([...workSpeedModifiers(squishy, resource, rules), ...extra]),
+  );
 }
 
 /**

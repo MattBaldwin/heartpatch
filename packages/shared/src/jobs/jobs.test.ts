@@ -12,7 +12,9 @@ import {
   workCycleSeconds,
   workProgress,
   workSource,
+  workSpeedModifiers,
   workSpeedPercent,
+  combinePercents,
   workYield,
 } from './index.js';
 
@@ -125,6 +127,16 @@ describe('gathering speed', () => {
     expect(workSpeedPercent(fireJoy, 'timber', JOB_RULES)).toBe(100);
     expect(workSpeedPercent(leafCozy, 'timber', JOB_RULES)).toBe(135);
     expect(workSpeedPercent(leafBrave, 'timber', JOB_RULES)).toBe(175);
+    expect(workSpeedModifiers(leafCozy, 'timber', JOB_RULES)).toEqual([135]);
+  });
+
+  it('combines a list of whole-percent modifiers, so a timed boost can join later', () => {
+    expect(combinePercents([])).toBe(100);
+    expect(combinePercents([135, 120])).toBe(162);
+    expect(combinePercents([175, 120, 110])).toBe(231);
+    // A food boost (say 120%) on top of a match, never slower than 100%.
+    expect(workSpeedPercent(leafCozy, 'timber', JOB_RULES, [120])).toBe(162);
+    expect(workSpeedPercent(fireJoy, 'timber', JOB_RULES, [80])).toBe(100);
   });
 
   it('stretches the gather time by the cycle percent and shortens it by speed', () => {
