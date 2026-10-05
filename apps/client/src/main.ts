@@ -35,7 +35,8 @@ import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
 import { createTerritoryScreen } from './territory/territory-screen.js';
-import { createTutorialScreen } from './tutorial/tutorial-screen.js';
+import { tutorialApi } from './tutorial/tutorial-api.js';
+import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.js';
 import { el } from './ui/dom.js';
 import type { PublicUser } from '@heartpatch/shared';
 import './styles.css';
@@ -499,10 +500,7 @@ const lorebook = createLorebook({
 // A milestone earned (#44): a little party, but never over a battle, a lore
 // page, the morning report, an evolution's "Whoa!" or the wardrobe (one card
 // at a time, #129).
-// TODO(#129, after the screens lane's PR #167 lands `lobby.formOpen`): add
-// `lobby.formOpen` to `busy` so The First Patch never opens over the lobby's
-// "Make a patch" form; that moves the party after the form in
-// tutorial.spec.ts and tutorial-flow.spec.ts, so change them in the same PR.
+// Nor over a form the player just asked for (the lobby's "Make a patch").
 const milestones = createMilestoneCelebration({
   root: document.body,
   busy: () =>
@@ -510,7 +508,8 @@ const milestones = createMilestoneCelebration({
     lorebook.debug.showing !== null ||
     hollowReportOpen() ||
     (care.debug?.celebrating ?? false) ||
-    (wardrobe.debug?.open ?? false),
+    (wardrobe.debug?.open ?? false) ||
+    lobby.formOpen,
   onChange: () => {
     hollow.otherReportChanged();
   },
@@ -712,8 +711,14 @@ const lobbyCoins = createCoinCounter({
   testId: 'lobby-coins',
   fetchBalance: async () => (await boutiqueApi.coins()).balance,
 });
+// Offline shell, update prompt, Add to Home Screen guide (issue #26). The
+// guide is a card in the patch list (#135).
+const installGuide = import.meta.env.PROD ? startPwa(document.body) : null;
 const lobby = mountLobby(document.body, {
   buttonRoot: trays.slot('top-left'),
+  // A reload lands back on the last patch (#160), unless a tutorial run
+  // going opens the Glade by itself (the same rule the tutorial uses).
+  canResume: async () => !opensByItself(await tutorialApi.state()),
   onOpen: async (mapId) => {
     catalog.close();
     care.close();
@@ -739,7 +744,11 @@ const lobby = mountLobby(document.body, {
     // A page found on this patch while away (a rescue, a capture).
     lorebook.check();
   },
-  listActions: () => [...tutorial.listActions(), ...wardrobe.listActions()],
+  listActions: () => [
+    ...tutorial.listActions(),
+    ...wardrobe.listActions(),
+    ...(installGuide?.cards() ?? []),
+  ],
   listHeader: () => {
     void lobbyCoins.refresh();
     return [lobbyCoins.node];
@@ -801,8 +810,6 @@ mountAuth(document.body, {
     }
   },
 });
-// Offline shell, update prompt, Add to Home Screen guide (issue #26).
-if (import.meta.env.PROD) startPwa(document.body);
 
 await boot(canvas, {
   preference: parseRendererPreference(params.get('renderer')),
@@ -829,9 +836,10 @@ if (import.meta.env.DEV) {
       badge.textContent = 'server: offline';
     });
 
-  const { mountDevOverlay } = await import('./engine/dev-overlay.js');
-  mountDevOverlay(() => stage);
-  // Read-only hook for the Playwright smoke test; dev builds only.
+  // Read-only hook for the Playwright smoke test; dev builds only. Installed
+  // before anything else here awaits: the stage marks the canvas ready on its
+  // first drawn frame, which the tests wait for before reading the hook, and
+  // that frame is only a task away once boot() has resolved.
   window.__heartpatch = {
     renderer: () => stage?.renderer.kind ?? null,
     quality: () => stage?.quality.snapshot ?? null,
@@ -863,4 +871,7 @@ if (import.meta.env.DEV) {
     milestones: () => milestones.debug,
     audio: () => audio.debug,
   };
+
+  const { mountDevOverlay } = await import('./engine/dev-overlay.js');
+  mountDevOverlay(() => stage);
 }

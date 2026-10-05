@@ -3,6 +3,7 @@ import { BATTLE_RULES } from '../battle.js';
 import { GAME_DATA } from '../index.js';
 import { MAP_GEN } from '../map-gen.js';
 import { checkGuardianRules } from '../../schemas/data/guardian-rules.js';
+import { hintForGuardians } from '../../territory/guardians.js';
 import { GUARDIAN_RULES } from './guardian-rules.js';
 import { SECRET_SPECIES } from './secret-species.js';
 
@@ -43,6 +44,18 @@ describe('guardian rules', () => {
     // A guardian team is one battle side.
     for (const tier of GUARDIAN_RULES.strengths) {
       expect(tier.count).toBeLessThanOrEqual(BATTLE_RULES.teamSize);
+    }
+  });
+
+  it('says "easy" for a strength-1 team only, so a level-1 starter can trust it (#162)', () => {
+    const [weakest, ...stronger] = GUARDIAN_RULES.strengths;
+    expect(weakest).toMatchObject({ count: 1, levels: { min: 1, max: 2 } });
+    for (let level = weakest!.levels.min; level <= weakest!.levels.max; level += 1) {
+      expect(hintForGuardians([{ level }], GUARDIAN_RULES)?.difficulty).toBe('easy');
+    }
+    for (const tier of stronger) {
+      const team = Array.from({ length: tier.count }, () => ({ level: tier.levels.min }));
+      expect(hintForGuardians(team, GUARDIAN_RULES)?.difficulty).not.toBe('easy');
     }
   });
 });

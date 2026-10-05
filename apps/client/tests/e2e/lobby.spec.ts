@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
-import { newPlayer } from './players.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** True while a screen holds automatic updates (dev hook, src/pwa/update-hold.ts). */
 const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
@@ -34,8 +34,9 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   await expect(friendLobby.getByTestId('lobby-notice')).toContainText(`${ownerName} just needs`);
   await expect(friendLobby.getByTestId('lobby-waiting')).toContainText('Spooky Glade');
 
-  // The owner sees the request and says yes.
+  // The owner's patch list says someone is waiting (#144), and the owner says yes.
   await ownerLobby.getByRole('button', { name: 'Back to my patches' }).tap();
+  await expect(ownerLobby.getByTestId('lobby-map-asking')).toHaveText('1 wants to join!');
   await ownerLobby.getByRole('button', { name: /Spooky Glade/ }).tap();
   const requests = ownerLobby.getByTestId('lobby-requests');
   await expect(requests).toContainText(`${friendName} wants to join`);
@@ -43,11 +44,41 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   await expect(ownerLobby.getByTestId('lobby-notice')).toContainText(`${friendName} joined`);
   await expect(ownerLobby.getByTestId('lobby-members')).toContainText(friendName);
 
-  // Both see the patch.
-  await friendLobby.getByRole('button', { name: 'Check again' }).tap();
+  // Both see the patch: the friend's waiting row turns into it by itself (#145).
+  await expect(friendLobby.getByTestId('lobby-waiting')).toHaveCount(0, { timeout: 15_000 });
+  await expect(friendLobby.getByTestId('lobby-notice')).toHaveText("Yay! You're in Spooky Glade!");
   await friendLobby.getByRole('button', { name: /Spooky Glade/ }).tap();
   await expect(friendLobby.getByTestId('lobby-members')).toContainText(ownerName);
   await expect(friendLobby.getByTestId('lobby-members')).toContainText(`${friendName} (you)`);
+
+  // The challenge mode picked says so (#146).
+  await expect(
+    ownerLobby.getByRole('radio', { name: /^Gentle/ }).locator('.lobby-choice-picked'),
+  ).toHaveText('✓ Picked');
+  await expect(ownerLobby.getByRole('radio', { name: /^Gentle/ })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+
+  // A swipe that starts on "Remove" scrolls the list; it never taps the button (#146).
+  const remove = ownerLobby
+    .getByTestId('lobby-members')
+    .getByRole('listitem')
+    .filter({ hasText: friendName })
+    .getByRole('button', { name: 'Remove' });
+  await remove.evaluate((button) => {
+    const panel = button.closest<HTMLElement>('.lobby')!;
+    const box = button.getBoundingClientRect();
+    const at = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+    const pointer = { ...at, pointerType: 'touch', isPrimary: true, bubbles: true };
+    button.dispatchEvent(new PointerEvent('pointerdown', pointer));
+    panel.scrollTop += 120;
+    const end = { ...at, clientY: at.clientY - 120 };
+    button.dispatchEvent(new PointerEvent('pointerup', { ...pointer, ...end }));
+    button.dispatchEvent(new MouseEvent('click', { ...end, detail: 1, bubbles: true }));
+  });
+  await expect(ownerLobby.getByRole('heading', { name: 'Spooky Glade' })).toBeVisible();
+  await expect(ownerLobby.getByRole('heading', { name: /^Remove/ })).toHaveCount(0);
 
   // The owner resets the friend's password; the friend logs in with the new one.
   const friendRow = ownerLobby.getByTestId('lobby-members').getByRole('listitem').filter({
@@ -76,4 +107,20 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
 
   await owner.context().close();
   await friend.context().close();
+});
+
+test('a reload lands back on the patch the player was on (#160)', async ({ browser }) => {
+  test.setTimeout(120_000); // a map build; CI renders in software
+  const page = await newPlayer(browser, uniqueName('back'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Return Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.getByTestId('map-hud')).toContainText('Return Patch', { timeout: 30_000 });
+
+  await page.reload();
+  await expect(page.getByTestId('map-hud')).toContainText('Return Patch', { timeout: 30_000 });
+  await expect(lobby).toBeHidden();
+  await page.context().close();
 });

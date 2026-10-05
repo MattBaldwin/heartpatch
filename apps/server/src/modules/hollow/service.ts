@@ -262,15 +262,22 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           b.kind === 'hearthfire' &&
           protectsNight(b.fuelledThrough, tonight),
       );
-      const fireHint =
-        (gameplayOverrides(map.kind)?.hollowManCanTake ?? true) &&
-        firstVisit !== null &&
-        tonight <= firstVisit &&
-        !fireLit;
       const mine = nights.flatMap((n) => {
         const outcome = reportOf(n.outcomes, user.id);
         return outcome ? [{ night: n.night, outcome }] : [];
       });
+      // Last night he came by and let my squishies in the dark be (grace, or
+      // my last friend, owner decision 2026-10-05): the nudge stays on, since
+      // the report says he took nobody and a fire is still the next step.
+      const sparedLastNight =
+        mine[0]?.night === lastNight &&
+        mine[0].outcome.taken === null &&
+        mine[0].outcome.exposed > 0;
+      const fireHint =
+        (gameplayOverrides(map.kind)?.hollowManCanTake ?? true) &&
+        firstVisit !== null &&
+        (tonight <= firstVisit || sparedLastNight) &&
+        !fireLit;
       const takenIds = mine.flatMap((n) => (n.outcome.taken ? [n.outcome.taken] : []));
       const takenRows = new Map((await store.squishiesById(takenIds)).map((s) => [s.id, s]));
       const reports: MorningReport[] = mine.map(({ night, outcome }) => {
@@ -286,6 +293,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
               }
             : null,
           sheltered: outcome.sheltered,
+          exposed: outcome.exposed,
         };
       });
       const speciesIds = new Set([

@@ -499,7 +499,12 @@ async function playTutorial(page: Page): Promise<void> {
   await expect(tutorial).toBeHidden();
   await expect(lobby.getByRole('heading', { name: 'Make a patch' })).toBeVisible();
   await expect(care).toBeHidden();
+  // The party waits while the form the player asked for is on screen
+  // (its first look is 1.5 s after the run ends), and comes once they leave it.
   const party = page.getByTestId('milestone-card');
+  await page.waitForTimeout(2_500);
+  await expect(party).toBeHidden();
+  await tapOn(lobby.getByRole('button', { name: 'Back to my patches' }));
   await expect(party).toBeVisible({ timeout: 20_000 });
   await expect(party.getByTestId('milestone-name')).toHaveText('The First Patch');
   await expect(lore).toBeHidden();

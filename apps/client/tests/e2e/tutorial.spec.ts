@@ -66,7 +66,8 @@ async function topAt(page: Page, target: Locator): Promise<string | null> {
 
 /**
  * Finishing the tutorial earns The First Patch (#44): its celebration card
- * pops up over the lobby a moment later. Tap "Yay!" before going on.
+ * pops up over the lobby a moment later, once the player is off the form
+ * graduation opened (one card at a time, #129). Tap "Yay!" before going on.
  */
 async function celebrateFirstPatch(page: Page): Promise<void> {
   const party = page.getByTestId('milestone-card');
@@ -145,11 +146,12 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   expect((await debug(page))?.status).toBe('completed');
   expect((await debug(page))?.sprout).toBeNull();
   expect(await drawnMap(page)).toBeNull();
-  // Finishing is The First Patch milestone (#44): celebrate it first.
+  // Finishing is The First Patch milestone (#44): it waits behind the form,
+  // and celebrates once the player leaves it.
+  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
   await celebrateFirstPatch(page);
 
   // Replay from Settings; a replay can be skipped.
-  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
   await expect(lobby.getByTestId('tutorial-start')).toBeHidden();
   await lobby.getByTestId('lobby-settings').tap();
   await lobby.getByTestId('tutorial-replay').tap();
@@ -292,9 +294,10 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
     .getByRole('button', { name: 'Make a patch' })
     .tap();
   await expect(page.getByTestId('tutorial')).toBeHidden();
-  await celebrateFirstPatch(page);
   await lobby.getByLabel('Patch name').fill('Partner Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  // The First Patch party waited behind the form; it comes now, alone.
+  await celebrateFirstPatch(page);
   await lobby.getByRole('button', { name: 'Visit patch' }).tap();
 
   // The starter pick opens on the Partner's species; any can still be picked.

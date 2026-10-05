@@ -64,6 +64,10 @@ export const TERRITORY_TEXT = {
   resting: (left: string) => `This land is resting. Ready in ${left}.`,
   noTries: 'No tries left today. Come back tomorrow!',
   pvpOff: 'Challenges are off on this patch.',
+  // The server's own words for a shielded Keeper (territory service), so a tap
+  // here reads the same as a refused challenge would.
+  rivalShielded: 'This Keeper is new here. Their land is safe for now. Try wild land!',
+  tooFar: 'Too far away! Try land next to yours.',
   watchCount: (n: number, max: number) => `On watch: ${String(n)} of ${String(max)}`,
   watchNone: 'Nobody stands watch here yet.',
   pick: 'Pick guards',
@@ -300,6 +304,20 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         break;
       case 'pvp-off':
         children.push(line(TERRITORY_TEXT.pvpOff));
+        break;
+      case 'shielded':
+        children.push(
+          ...(tile.defenders > 0 ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))] : []),
+          line(TERRITORY_TEXT.rivalShielded, 'territory-shielded'),
+        );
+        break;
+      case 'too-far':
+        children.push(
+          ...(tile.ownerUserId !== null && tile.defenders > 0
+            ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))]
+            : []),
+          line(TERRITORY_TEXT.tooFar, 'territory-too-far'),
+        );
         break;
       case 'watch':
         if (picking) {
