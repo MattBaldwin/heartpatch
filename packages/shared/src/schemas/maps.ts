@@ -255,6 +255,12 @@ export const PublicTileSchema = z.object({
   /** How many of the owner's squishies stand watch here (#15). Never which ones. */
   defenders: z.number().int().min(0),
   /**
+   * How many of the owner's squishies are gathering here (squishy jobs,
+   * owner decisions 2026-10-04): 0 or 1. Never which ones. Optional only so
+   * older fixtures parse; the server always sends it.
+   */
+  workers: z.number().int().min(0).optional(),
+  /**
    * Neutral land's guardians today (#15's team for the map-local day), as a
    * count and a difficulty word; null on anyone's land, home bases, and land
    * no table guards. Worked out on read, so it changes with the day.

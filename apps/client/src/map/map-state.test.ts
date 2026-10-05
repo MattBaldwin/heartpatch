@@ -92,6 +92,24 @@ describe('MapState', () => {
     );
   });
 
+  it('follows squishy gatherers from tile to tile, and drops them on capture', () => {
+    const state = new MapState(testView(2));
+    const a = { q: 1, r: 0 };
+    const b = { q: 2, r: 0 };
+    const assigned = (from: object | null, to: object | null, seq: number) =>
+      event('squishy.assigned', { userId: userId(1), from, to }, seq);
+    expect(state.apply(assigned(null, a, 2))).toBe('redraw');
+    expect(state.tileAt(hexKey(a))?.workers).toBe(1);
+    expect(state.apply(assigned(a, b, 3))).toBe('redraw');
+    expect(state.tileAt(hexKey(a))?.workers).toBe(0);
+    expect(state.tileAt(hexKey(b))?.workers).toBe(1);
+    // A team pick moves nobody on the map.
+    expect(state.apply(assigned(null, null, 4))).toBe('none');
+    expect(state.apply(event('squishy.assigned', { userId: userId(1) }, 5))).toBe('resync');
+    state.apply(event('tile.captured', { userId: userId(2), fromUserId: userId(1), ...b }, 6));
+    expect(state.tileAt(hexKey(b))?.workers).toBe(0);
+  });
+
   it('follows battles for land live: cooldown, capture and guards (#15)', () => {
     const view = testView(2);
     // A wild tile next to player 1's home ring.

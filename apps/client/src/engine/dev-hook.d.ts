@@ -17,6 +17,7 @@ import type { WardrobeDebug } from '../ui/wardrobe/wardrobe-screen.js';
 import type { LorebookDebug } from '../lore/lorebook.js';
 import type { MilestoneCelebrationDebug } from '../milestones/milestone-celebration.js';
 import type { StarterDebug } from '../starters/starter-screen.js';
+import type { JobsDebug } from '../squishies/jobs/index.js';
 import type { MapCameraState } from './camera/map-camera.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 
@@ -66,6 +67,8 @@ declare global {
       catalog?(): CatalogDebug | null;
       /** The wardrobe: open, tab, filter, what's tried on and worn, presets, the preview's hash (#43). */
       wardrobe?(): WardrobeDebug | null;
+      /** Squishy jobs: the job board and team picker (open, jobs, team, ready work). */
+      jobs?(): JobsDebug;
       starter?(): StarterDebug | null;
       lore?(): LorebookDebug;
       /** The milestone celebration (#44): the card showing and how many wait. */

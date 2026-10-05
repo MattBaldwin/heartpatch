@@ -148,6 +148,13 @@
       "when": 1791073296318,
       "tag": "0020_cinematic_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791158882553,
+      "tag": "0021_squishy_jobs",
+      "breakpoints": true
     }
   ]
 }

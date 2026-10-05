@@ -131,6 +131,7 @@ function toPublicTile(
     gathering: tile.gathering,
     cooldownUntil: tile.cooldownUntil,
     defenders: tile.defenders,
+    workers: tile.workers,
     guardianHint,
     buildings,
   };

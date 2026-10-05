@@ -42,6 +42,7 @@ import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { grantItems } from '../inventory/service.js';
 import { createCareRepo } from '../care/repo.js';
+import { leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
@@ -157,7 +158,9 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       id: s.id,
       ownerUserId: s.ownerUserId,
       state: s.state,
-      sleepsAt: s.habitat ?? heartSeedOf(homes.get(s.ownerUserId) ?? []),
+      // A gatherer spends the night out on its work tile (owner decisions
+      // 2026-10-04): outside a lit fire's light it's exposed, like anyone.
+      sleepsAt: s.work ?? s.habitat ?? heartSeedOf(homes.get(s.ownerUserId) ?? []),
       post: s.postOwnerUserId === undefined ? null : { tileOwnerUserId: s.postOwnerUserId },
     });
     const outcomes = nightfall(
@@ -182,7 +185,20 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       stored.push({ ...outcome, taken: took ? squishyId : null });
       if (took) taken.push({ userId: outcome.userId, squishyId });
     }
+    // A gatherer taken to the Hollow stops work; what it had ready goes in the bag.
+    const workers = taken.filter((t) => squishyRows.some((s) => s.id === t.squishyId && s.work));
+    const workEvents =
+      workers.length > 0
+        ? await leaveWork(
+            tx,
+            map,
+            workers.map((t) => t.squishyId),
+            'resting',
+            at,
+          )
+        : [];
     await repo.setOutcomes(nightRowId, stored);
+    for (const event of workEvents) await repo.appendEvent(event);
     for (const t of taken) {
       await repo.appendEvent({
         mapId: map.id,

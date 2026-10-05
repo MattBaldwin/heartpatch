@@ -579,7 +579,7 @@ export class MapScene {
       this.homeNode = { userId, tile: homeNodeOf([...this.tiles.values()], userId) };
     }
     const { tile } = this.homeNode;
-    return tile ? tileScreenRect(this.scene, tile, lookOf(tile).height) : null;
+    return tile ? tileScreenRectOf(this.scene, tile) : null;
   }
 
   private tintMesh(slot: number): Mesh {
@@ -934,6 +934,16 @@ export interface ScreenRect {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+}
+
+/**
+ * Where a tile is on screen (CSS pixels, its top at the tile's own height),
+ * or null if the camera can't see it. The one projection for anything drawn
+ * over the map in the DOM: the tutorial's spotlight and squishy jobs'
+ * gatherer badges. Projects with the camera as it is now.
+ */
+export function tileScreenRectOf(scene: Scene, tile: PublicTile): ScreenRect | null {
+  return tileScreenRect(scene, tile, lookOf(tile).height);
 }
 
 /** Scratch vectors for `tileScreenRect`, which runs every drawn frame while followed. */

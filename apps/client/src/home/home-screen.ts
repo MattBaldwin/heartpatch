@@ -64,6 +64,10 @@ export interface HomeScreenOptions {
   onCare?: (mapId: string, squishyId: string) => void;
   /** A squishy itself was tapped: open it up close (#20). */
   onCloseUp?: (mapId: string, squishyId: string) => void;
+  /** "Jobs & team": opens the squishy job board (temporary entry; the trays move it). */
+  onJobs?: (mapId: string) => void;
+  /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
+  showJobs?: (mapId: string) => boolean;
   api?: HomeApi;
 }
 
@@ -123,6 +127,7 @@ export const HOME_TEXT = {
   full: 'Full',
   yours: 'Your buildings',
   friends: 'Your squishies',
+  jobs: '🧺 Jobs & team',
   none: 'Nothing built yet. Tap Build!',
   noSquishies: 'No squishies yet. Befriend one on the map!',
   confirm: (name: string, back: string) =>
@@ -415,6 +420,19 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ? [
                 el('h3', { class: 'home-section-title' }, HOME_TEXT.friends),
                 el('div', { class: 'home-chips', 'data-testid': 'home-friends' }, ...friends),
+              ]
+            : []),
+          ...(friends.length > 0 && options.onJobs && mapId && options.showJobs?.(mapId) !== false
+            ? [
+                row(
+                  button(
+                    HOME_TEXT.jobs,
+                    () => {
+                      if (mapId) options.onJobs?.(mapId);
+                    },
+                    { 'data-testid': 'home-jobs' },
+                  ),
+                ),
               ]
             : []),
           row(
