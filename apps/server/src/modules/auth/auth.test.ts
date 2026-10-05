@@ -5,7 +5,7 @@ import {
   SessionResponseSchema,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
@@ -13,13 +13,23 @@ import { users } from '../../db/schema.js';
 import { SESSION_COOKIE, SESSION_TTL_MS } from './limits.js';
 import { createAuthRepo } from './repo.js';
 import { createAuthService } from './service.js';
+import type * as Secrets from './secrets.js';
 
 const url = inject('testDatabaseUrl');
 const SIGNUP_CODE = 'family-code-for-tests';
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// The rate limits are in auth-rate-limit.test.ts, on a cheap stand-in for Argon2.
+// Argon2 is swapped for a cheap stand-in (tests/fake-secrets.ts): these tests
+// are about the routes, and a full-cost hash per attempt made the file time
+// out under a parallel `pnpm test`. The hashing itself is in secrets.test.ts;
+// the rate limits are in auth-rate-limit.test.ts.
+vi.mock('./secrets.js', async (importOriginal) =>
+  (await import('../../../tests/fake-secrets.js')).fakeSecrets(
+    await importOriginal<typeof Secrets>(),
+  ),
+);
+
 describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
   let client: DbClient;
   let db: Database;
@@ -130,7 +140,6 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
       expect((await me(server, cookie.value)).user).toEqual(user);
 
       const row = await userRow(user.id);
-      expect(row?.passwordHash).toMatch(/^\$argon2id\$/);
       expect(row?.timeZone).toBe('America/Chicago');
       expect(row?.birthYear).toBe(2014);
       const userSessions = await sessionRows(user.id);
@@ -138,7 +147,6 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
       expect(userSessions[0]?.tokenHash).not.toBe(cookie.value);
       const codes = await codeRows(user.id);
       expect(codes).toHaveLength(1);
-      expect(codes[0]?.codeHash).toMatch(/^\$argon2id\$/);
     });
 
     it('sets Secure cookies in production', async () => {

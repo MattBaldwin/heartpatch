@@ -7,21 +7,15 @@ import { createDbClient, type Database, type DbClient } from '../../db/client.js
 import { AUTH_RATE_LIMITS } from './limits.js';
 import type * as Secrets from './secrets.js';
 
-// The limits count attempts, not hashing work, so the Argon2 hashing behind
-// signup, login and recovery is swapped for a cheap stand-in here. With real
-// Argon2 (64 MiB, four lanes, every attempt) the per-IP login test alone is
-// 30 full-cost checks, which blew its timeout whenever other test files were
-// hashing at the same time. `auth.test.ts` keeps the real hashing.
-vi.mock('./secrets.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof Secrets>();
-  const fake = (secret: string) => `plain:${secret}`;
-  return {
-    ...actual,
-    hashSecret: (secret: string) => Promise.resolve(fake(secret)),
-    verifySecret: (hash: string, secret: string) => Promise.resolve(hash === fake(secret)),
-    verifyAgainstDummy: () => Promise.resolve(false as const),
-  };
-});
+// The limits count attempts, not hashing work, so Argon2 is swapped for a
+// cheap stand-in (tests/fake-secrets.ts). With the real thing (64 MiB, four
+// lanes, every attempt) the per-IP login test alone was 30 full-cost checks,
+// which blew its timeout whenever other test files were hashing too.
+vi.mock('./secrets.js', async (importOriginal) =>
+  (await import('../../../tests/fake-secrets.js')).fakeSecrets(
+    await importOriginal<typeof Secrets>(),
+  ),
+);
 
 const url = inject('testDatabaseUrl');
 const SIGNUP_CODE = 'family-code-for-tests';
