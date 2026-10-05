@@ -1,6 +1,48 @@
+import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 
 const isCI = Boolean(process.env['CI']);
+const testDir = './tests/e2e';
+
+/**
+ * CI's e2e groups, one job each per device. Playwright's own --shard splits by
+ * test count in file order, which put every heavy WebGL spec on shard 1 (12 min
+ * on iPad). These are balanced by measured iPad WebKit time instead: about
+ * 4-5 min each on 2 workers, first-session alone being 4.5 min. Rebalance from
+ * the CI list reporter's durations when a group gets slow.
+ *
+ * CI sets HP_E2E_GROUP=<i>/<n>. The last group is every spec not listed here,
+ * so a new spec always runs; a listed spec that no longer exists, or a group
+ * count that doesn't match, fails the run. Unset (local runs) runs everything.
+ */
+const E2E_GROUPS = [
+  ['audio', 'first-session', 'smoke', 'starter', 'wardrobe'],
+  ['auth', 'battle', 'care', 'cinematic', 'hollow'],
+  ['capture', 'close-up', 'inventory', 'keeper', 'keeper-gallery', 'milestones', 'raids'],
+  ['chat', 'home', 'jobs', 'lobby', 'pwa', 'renderer-error', 'territory'],
+];
+
+function e2eGroup(value: string | undefined): { testMatch?: string[]; testIgnore?: string[] } {
+  if (value === undefined || value === '') return {};
+  const listed = E2E_GROUPS.flat();
+  const match = /^(\d+)\/(\d+)$/.exec(value);
+  const index = Number(match?.[1]);
+  const total = Number(match?.[2]);
+  if (!match || total !== E2E_GROUPS.length + 1 || index < 1 || index > total) {
+    throw new Error(`HP_E2E_GROUP=${value}: expected <i>/${String(E2E_GROUPS.length + 1)}`);
+  }
+  const duplicate = listed.find((spec, i) => listed.indexOf(spec) !== i);
+  if (duplicate) throw new Error(`E2E_GROUPS lists ${duplicate}.spec.ts twice`);
+  const missing = listed.filter(
+    (spec) => !existsSync(new URL(`${testDir}/${spec}.spec.ts`, import.meta.url)),
+  );
+  if (missing.length > 0) {
+    throw new Error(`E2E_GROUPS lists missing specs: ${missing.join(', ')}`);
+  }
+  const globs = (specs: string[]) => specs.map((spec) => `**/${spec}.spec.ts`);
+  const group = E2E_GROUPS[index - 1];
+  return group ? { testMatch: globs(group) } : { testIgnore: globs(listed) };
+}
 
 /**
  * Mobile Safari (WebKit) at iPhone and iPad sizes. Environments that can't
@@ -39,10 +81,12 @@ const projects = chromiumPath
     ];
 
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir,
+  ...e2eGroup(process.env['HP_E2E_GROUP']),
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
-  reporter: isCI ? [['github'], ['html', { open: 'never' }]] : 'list',
+  // In CI, list prints every test's duration in the job log (for balancing E2E_GROUPS).
+  reporter: isCI ? [['github'], ['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
