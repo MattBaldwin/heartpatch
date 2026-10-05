@@ -47,8 +47,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'gather',
     goal: 'Gather Timber',
     sproutLines: [
-      'Ooh, trees full of Timber! Tap a tree tile next to your seed, then Gather.',
-      'Here it only takes a few seconds. Out in a real patch, things take longer.',
+      'Ooh, a tree full of Timber! Tap the tree tile by your seed, then Gather.',
+      "Here it's quick! In a real patch it takes longer, so tap Collect when it's ready.",
     ],
     highlightTarget: 'resource-node',
     completeOn: { eventType: 'resource.gathered', actor: 'player', where: [] },
@@ -58,7 +58,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'Light a Hearthfire',
     sproutLines: [
       'A fire keeps squishies safe at night. Open Home and build a Hearthfire!',
-      'Then fuel it with Emberwood. The old forest tile has lots.',
+      'Then gather Emberwood from the old forest tile, and tap Add fuel.',
     ],
     highlightTarget: 'build-button',
     completeOn: { eventType: 'building.fueled', actor: 'player', where: [] },
@@ -67,8 +67,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'first-battle',
     goal: 'Meet a wild squishy',
     sproutLines: [
-      'Wild squishies are peeking out! My friend Pebblesnooze wants to play.',
-      'Tap a tile next to your home, then Battle. Pick a move and see what happens!',
+      'Wild squishies are peeking out! My friend Pebblesnooze will play on your side.',
+      'Tap Find a squishy, then pick a move and see what happens!',
     ],
     highlightTarget: 'wild-squishy',
     completeOn: {
@@ -81,8 +81,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'befriend',
     goal: 'Make a new friend',
     sproutLines: [
-      'Emberbun, Puddlepuff or Thistlepip: which one makes you smile most?',
-      'Battle it, then tap Use Heart Charm. Here it always works!',
+      "Emberbun, Puddlepuff and Thistlepip live here. Let's make one your friend!",
+      'Tap Find a squishy, then Use Heart Charm. Here it always works!',
     ],
     highlightTarget: 'capture-button',
     completeOn: {
@@ -107,10 +107,10 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: 'care',
-    goal: 'Say hello up close',
+    goal: 'Show your Partner some love',
     sproutLines: [
-      'Happy squishies learn faster! Open Home and tap your Partner.',
-      'Pet them, boop them or feed them a treat. Look at that wiggle!',
+      'Happy squishies learn more from battles and grow up faster! Happiness fades over a day.',
+      "Open Home, tap your Partner's name, then Pet, Play or Feed!",
     ],
     highlightTarget: 'care-buttons',
     completeOn: { eventType: 'squishy.cared', actor: 'player', where: [] },
@@ -119,8 +119,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'habitat',
     goal: 'Give them a home',
     sproutLines: [
-      'Every squishy loves a cozy home. Build a habitat at Home.',
-      'Then move your Partner in. The right home helps them grow!',
+      'Every squishy loves a cozy home. Gather more Timber, then Build one at Home.',
+      'Then tap Move in by your Partner. The right home helps them grow!',
     ],
     highlightTarget: 'habitat',
     completeOn: {
@@ -143,8 +143,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'defend',
     goal: 'Guard your new land',
     sproutLines: [
-      'Uh-oh, a shadowy echo is sniffing around your new land!',
-      'Tap your new tile and put a squishy on watch. Your home is always safe.',
+      'New land needs a guard, just in case! Your home is always safe.',
+      'Tap your new tile, then Pick guards. Choose Pebblesnooze and tap Save.',
     ],
     highlightTarget: 'defense-stance',
     completeOn: {
@@ -157,7 +157,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'nightfall',
     goal: 'Watch the night come',
     sproutLines: [
-      "Phew, your guard shooed the echo away! Brrr, now it's getting dark.",
+      "Pebblesnooze is on watch. Brrr, now it's getting dark!",
       "Your fire keeps everyone safe. Tap Night falls when you're ready.",
     ],
     highlightTarget: 'hearthfire',
@@ -168,7 +168,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'One more battle',
     sproutLines: [
       'He stays away from the light! If he ever takes a squishy, you can always rescue them.',
-      'Now, one more battle with your Partner. Something big might happen…',
+      'Tap Find a squishy for one more battle. Something big might happen…',
     ],
     highlightTarget: 'wild-squishy',
     completeOn: { eventType: 'squishy.evolved', actor: 'player', where: [] },
@@ -177,8 +177,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'wardrobe',
     goal: 'Try on your scarf',
     sproutLines: [
-      'Wow! You earned the First Patch and a Seedling Scarf!',
-      'Open the Wardrobe and put it on. So snuggly!',
+      'Wow! You earned a Seedling Scarf!',
+      'Tap Wardrobe, then Tops, and put it on. So snuggly!',
     ],
     highlightTarget: 'wardrobe-button',
     completeOn: { eventType: 'outfit.changed', actor: 'player', where: [] },

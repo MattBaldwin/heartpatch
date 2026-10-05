@@ -1,6 +1,6 @@
-import { findAvoidedWords, GAME_DATA, type Craft } from '@heartpatch/shared';
+import { findAvoidedWords, GAME_DATA, type Craft, type Gather } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { bagItems, bagRecipes, describeItems } from './bag-view.js';
+import { bagItems, bagRecipes, describeItems, gatherChip } from './bag-view.js';
 import { FALLBACK_ICON, itemIcon } from './item-icons.js';
 
 const craft: Craft = {
@@ -57,5 +57,35 @@ describe('bag', () => {
       ...GAME_DATA.resources.flatMap((r) => [r.name, r.description]),
     ];
     for (const line of lines) expect(findAvoidedWords(line), line).toEqual([]);
+  });
+});
+
+describe('gatherChip', () => {
+  const gather = (id: string, resource: string, readyAt: string): Gather => ({
+    id: `0190a8c4-0000-7000-8000-0000000000${id}`,
+    q: 1,
+    r: 0,
+    resource,
+    items: { [resource]: 5 },
+    startedAt: '2026-10-02T12:00:00Z',
+    readyAt,
+  });
+  const now = Date.parse('2026-10-02T12:10:00Z');
+  const msUntil = (iso: string) => Math.max(0, Date.parse(iso) - now);
+  const timber = gather('a1', 'timber', '2026-10-02T12:30:00Z');
+  const stone = gather('a2', 'stone', '2026-10-02T12:20:00Z');
+
+  it('is hidden with nothing gathering', () => {
+    expect(gatherChip([], msUntil)).toBeNull();
+  });
+
+  it('shows the gather ready soonest, and how many more are going', () => {
+    expect(gatherChip([timber, stone], msUntil)).toEqual({ gather: stone, ready: false, more: 1 });
+    expect(gatherChip([timber], msUntil)).toEqual({ gather: timber, ready: false, more: 0 });
+  });
+
+  it('shows a gather that is ready to collect first', () => {
+    const done = gather('a3', 'emberwood', '2026-10-02T12:05:00Z');
+    expect(gatherChip([stone, done], msUntil)).toEqual({ gather: done, ready: true, more: 1 });
   });
 });
