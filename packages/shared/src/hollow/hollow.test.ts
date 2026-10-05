@@ -16,6 +16,7 @@ import {
   lastNightOf,
   minutesUntilNightChange,
   nightfall,
+  mayTakeFrom,
   pickTaken,
   rescueReward,
   shelterOf,
@@ -127,7 +128,7 @@ describe('nightfall', () => {
     }
   });
 
-  it('never takes a protected squishy, and takes at most one per player (every 3-squishy mix)', () => {
+  it('never takes a protected squishy, nor a last friend, and takes at most one per player (every 3-squishy mix)', () => {
     let nights = 0;
     for (const p1 of PLACE_NAMES) {
       for (const p2 of PLACE_NAMES) {
@@ -144,8 +145,9 @@ describe('nightfall', () => {
               true,
             );
             nights += 1;
+            const active = mine.filter((s) => s.state === 'active').length;
             expect(outcome?.exposed).toBe(exposed.length);
-            if (exposed.length === 0) expect(outcome?.taken).toBeNull();
+            if (exposed.length === 0 || !mayTakeFrom(active)) expect(outcome?.taken).toBeNull();
             else expect(exposed.map((s) => s.id)).toContain(outcome?.taken);
           }
         }
@@ -167,33 +169,60 @@ describe('nightfall', () => {
   it('takes nothing from a player in their first-night grace, and still counts the dark', () => {
     const outcomes = nightfall(
       [
-        { userId: A, squishies: [squishy('a1', 'dark-bed')], grace: true },
-        { userId: B, squishies: [squishy('b1', 'dark-bed', B)] },
+        { userId: A, squishies: [squishy('a1', 'dark-bed'), squishy('a2', 'dark-bed')], grace: true },
+        { userId: B, squishies: [squishy('b1', 'dark-bed', B), squishy('b2', 'dark-bed', B)] },
       ],
       SAFE,
       (userId) => userId,
       true,
     );
-    expect(outcomes).toEqual([
-      { userId: A, taken: null, exposed: 1, sheltered: 0 },
-      { userId: B, taken: 'b1', exposed: 1, sheltered: 0 },
-    ]);
+    expect(outcomes[0]).toEqual({ userId: A, taken: null, exposed: 2, sheltered: 0 });
+    expect(outcomes[1]).toMatchObject({ userId: B, exposed: 2, sheltered: 0 });
+    expect(['b1', 'b2']).toContain(outcomes[1]?.taken);
+  });
+
+  it('never takes a player’s last friend, wherever it sleeps (owner decision 2026-10-05)', () => {
+    const fall = (mine: NightSquishy[]) =>
+      nightfall([{ userId: A, squishies: mine }], SAFE, () => 'seed', true)[0];
+    // One friend out in the dark: spared, and the dark still counted.
+    expect(fall([squishy('s1', 'dark-bed')])).toEqual({
+      userId: A,
+      taken: null,
+      exposed: 1,
+      sheltered: 0,
+    });
+    // Friends already in the Hollow don't count as company.
+    expect(fall([squishy('s1', 'homeless'), squishy('s2', 'hollowed')])?.taken).toBeNull();
+    // A second active friend anywhere (even safe at home, or on watch) and he takes one.
+    expect(fall([squishy('s1', 'dark-bed'), squishy('s2', 'safe-bed')])?.taken).toBe('s1');
+    expect(fall([squishy('s1', 'dark-bed'), squishy('s2', 'on-watch')])?.taken).toBe('s1');
+    expect(mayTakeFrom(0)).toBe(false);
+    expect(mayTakeFrom(1)).toBe(false);
+    expect(mayTakeFrom(2)).toBe(true);
   });
 
   it('decides each player alone, from their own squishies', () => {
     const outcomes = nightfall(
       [
         { userId: A, squishies: [squishy('a1', 'dark-bed'), squishy('b1', 'dark-bed', B)] },
-        { userId: B, squishies: [squishy('b2', 'safe-bed', B), squishy('b3', 'on-watch', B)] },
+        {
+          userId: B,
+          squishies: [
+            squishy('b2', 'safe-bed', B),
+            squishy('b3', 'on-watch', B),
+            squishy('b4', 'safe-bed', B),
+          ],
+        },
       ],
       SAFE,
       (userId) => userId,
       true,
     );
     expect(outcomes).toEqual([
-      { userId: A, taken: 'a1', exposed: 1, sheltered: 0 },
+      // A's only friend is kept (b1 isn't theirs; the Hollow Man never takes a last friend).
+      { userId: A, taken: null, exposed: 1, sheltered: 0 },
       // `on-watch` posts are on A's land: B's squishy there went home to a dark bed.
-      { userId: B, taken: 'b3', exposed: 1, sheltered: 1 },
+      { userId: B, taken: 'b3', exposed: 1, sheltered: 2 },
     ]);
   });
 

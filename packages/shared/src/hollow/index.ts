@@ -123,10 +123,23 @@ export interface NightfallOutcome {
 }
 
 /**
+ * "…but never your last friend" (owner decision 2026-10-05, design doc §14):
+ * the Hollow Man takes nothing from a player with fewer than this many
+ * active squishies, so there's always someone to play with, and to go and
+ * rescue the others. A rule the design doc fixes, so a literal, not a tunable.
+ */
+export const LEAST_ACTIVE_TO_TAKE_FROM = 2;
+
+/** True if the Hollow Man may take from a player with this many active squishies. */
+export function mayTakeFrom(activeCount: number): boolean {
+  return activeCount >= LEAST_ACTIVE_TO_TAKE_FROM;
+}
+
+/**
  * One nightfall for every player on a map: at most one squishy per player
- * (design doc §14), never a protected one, and nothing from a player in
- * their first-night grace. `canTake` is false where the
- * Hollow Man takes nothing (`gameplayOverrides(kind).hollowManCanTake`);
+ * (design doc §14), never a protected one, never a player's last active one,
+ * and nothing from a player in their first-night grace. `canTake` is false
+ * where the Hollow Man takes nothing (`gameplayOverrides(kind).hollowManCanTake`);
  * `seedFor` gives each player's secret seed for the night.
  */
 export function nightfall(
@@ -147,9 +160,12 @@ export function nightfall(
     const sheltered = shelters.filter(
       (s) => s.shelter === 'safe' || s.shelter === 'on-watch',
     ).length;
+    // Active anywhere (exposed, safe or on watch): the friends they still have.
+    const active = shelters.filter((s) => s.shelter !== 'hollowed').length;
     return {
       userId,
-      taken: canTake && !grace ? pickTaken(exposed, seedFor(userId)) : null,
+      taken:
+        canTake && !grace && mayTakeFrom(active) ? pickTaken(exposed, seedFor(userId)) : null,
       exposed: exposed.length,
       sheltered,
     };
