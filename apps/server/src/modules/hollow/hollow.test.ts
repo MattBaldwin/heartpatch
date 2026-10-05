@@ -535,6 +535,25 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect((await statusOf(server, kid, mapId)).fireHint).toBe(true);
     });
 
+    it('keeps nudging while he leaves my last friend in the dark, past the grace', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await squishy(mapId, kid);
+      const hollow = hollowService(WEAK_SHADOWS, HOLLOW_RULES);
+      // Grace nights, then a real one: one friend in the dark, spared (owner decision 2026-10-05).
+      for (const night of [TONIGHT, '2026-10-03', '2026-10-04']) {
+        expect(await hollow.runNightfall(mapId, night)).toEqual({ taken: 0 });
+      }
+      clock.setTime(Date.parse('2026-10-05T18:00:00Z')); // noon Oct 5: the grace is over
+      const status = await statusOf(server, kid, mapId);
+      expect(status.reports[0]).toMatchObject({ night: '2026-10-04', taken: null, exposed: 1 });
+      expect(status.fireHint).toBe(true);
+      // A fire lit for tonight ends it.
+      await build(mapId, kid, 'hearthfire', { fuelledThrough: '2026-10-05' });
+      expect((await statusOf(server, kid, mapId)).fireHint).toBe(false);
+    });
+
     it('never nudges on a tutorial map (nothing can be lost there)', async () => {
       const server = await start();
       const kid = await player();

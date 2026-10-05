@@ -11,7 +11,7 @@ export const HOLLOW_TEXT = {
   taken: (name: string) => `He took ${name} to the Hollow. You can rescue them!`,
   home: (name: string) => `He took ${name} to the Hollow, but they're home again!`,
   safe: 'Everyone stayed safe and cozy. Nice planning!',
-  /** Squishies were out in the dark, but he took nobody (first-night grace). */
+  /** Squishies were out in the dark, but he took nobody (first-night grace, or a last friend). */
   spared: 'He came by, but took nobody this time.',
   ok: 'Okay!',
   rescueNamed: (name: string) => `Rescue ${name}!`,

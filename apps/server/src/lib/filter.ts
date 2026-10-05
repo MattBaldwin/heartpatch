@@ -65,11 +65,13 @@ const POTTY_WORDS: readonly {
   { word: 'puke', pattern: pattern`puke` },
   { word: 'barf', pattern: pattern`|barf|` },
   { word: 'pee', pattern: pattern`|pee|` },
-  { word: 'wee', pattern: pattern`|wee wee|` },
-  { word: 'crap', pattern: pattern`|crap|` },
+  { word: 'peepee', pattern: pattern`peepee` },
+  { word: 'weewee', pattern: pattern`weewee` },
+  // A leading boundary only: "Crappy" and "Crapface" count, "Scrappy" doesn't.
+  { word: 'crap', pattern: pattern`|crap` },
   { word: 'dumb', pattern: pattern`|dumb|` },
   { word: 'stupid', pattern: pattern`stupid` },
-  { word: 'loser', pattern: pattern`loser` },
+  { word: 'loser', pattern: pattern`loser`, allow: ['closer'] },
 ];
 
 const pottyDataset = new DataSet<{ originalWord: string }>();

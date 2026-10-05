@@ -28,8 +28,13 @@ describe('checkText', () => {
       'fartface',
       'Booger7',
       'Sir Pee',
+      'PeePee',
+      'WeeWee',
       'crap_pal',
+      'Crappy',
       'Dumb Dumb',
+      'Bu77',
+      'P00p',
     ]) {
       expect(checkText(name, 'name'), name).toEqual({ ok: false, reason: 'potty' });
     }
@@ -45,6 +50,10 @@ describe('checkText', () => {
       'Speedy',
       'Peep',
       'Weevil',
+      'Spooky',
+      'Pookie',
+      'Closer',
+      'Sweet Pea',
     ]) {
       expect(checkText(name, 'name'), name).toEqual({ ok: true });
     }
