@@ -256,14 +256,14 @@ Mutating routes take an `Idempotency-Key`. Every command locks the player's home
 
 | Endpoint | Does |
 |---|---|
-| `GET /api/v1/maps/:mapId/hollow` | → `{ hollow }`: `night` (is it night on the map, minutes until that changes), my `reports` for the last `HOLLOW_RULES.reportNights` nights, my squishies in the Hollow (`hollowed`, plus `speciesDefs` for secret ones I own), today's rescue reward, `fireHint` (until his first visit to me, with no fire of mine lit for tonight) and the server's clock |
+| `GET /api/v1/maps/:mapId/hollow` | → `{ hollow }`: `night` (is it night on the map, minutes until that changes), my `reports` for the last `HOLLOW_RULES.reportNights` nights, my squishies in the Hollow (`hollowed`, plus `speciesDefs` for secret ones I own), today's rescue reward, `fireHint` (until his first visit to me, or while last night he let my squishies in the dark be, with no fire of mine lit for tonight) and the server's clock |
 | `POST /api/v1/maps/:mapId/rescues` | `{ squishyId }` → 201 `{ battle }` (a `rescue` battle), or 200 with the battle already going. My own squishy, in the Hollow (`NOT_FOUND` / `CONFLICT` otherwise), from anywhere on the map; no attempt used. Takes an `Idempotency-Key` |
 | `POST /api/v1/maps/:mapId/dev/nightfall` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): the next night that hasn't come yet falls now → `{ night, taken }`. Pressing it again moves on a night |
 
 **Nightfall** (`service.ts` `runNightfall`, one transaction): claims the night's `hollow_events` row first (`insert … on conflict do nothing`), so a retry, a second job or a restart finds it and does nothing (rule 4); then every active member's squishies are sorted with shared `nightfall()`:
 - where a squishy sleeps is its habitat's tile, or its owner's Heart Seed;
 - it's **safe** inside the tiles lit fires protect that night (`litSafeTiles`, every player's fires, `protectsNight` through the night's date), **on watch** if `isOnWatch` (decision C), else **exposed**;
-- one exposed squishy per player is taken (`state = 'hollowed'`, habitat bed kept), picked with `deriveSeed(mapSeed, 'hollow', night, userId)` (never revealed); none on tutorial maps (`gameplayOverrides(kind).hollowManCanTake`), and none from a player in their first-night grace (nights before `firstHollowNight(joined_at)`: their first `HOLLOW_RULES.graceNights` nightfalls after joining, game clock).
+- one exposed squishy per player is taken (`state = 'hollowed'`, habitat bed kept), picked with `deriveSeed(mapSeed, 'hollow', night, userId)` (never revealed); none on tutorial maps (`gameplayOverrides(kind).hollowManCanTake`), none from a player in their first-night grace (nights before `firstHollowNight(joined_at)`: their first `HOLLOW_RULES.graceNights` nightfalls after joining, game clock), and never a player's last active squishy (`mayTakeFrom`, owner decision 2026-10-05); the night still counts their squishies in the dark (`exposed`).
 Lock order: the night's row, squishies, then `maps` (events).
 
 **The job** (`jobs/nightfall.ts`): a `nightfall.sweep` every minute (and at boot) asks `dueNightfalls()` which maps' latest nightfall hasn't run (maps with an active member who joined before it; map-local time, DST included), and enqueues one `nightfall` job per map and night (`singletonKey: mapId/night`). After downtime only the latest missed night runs.

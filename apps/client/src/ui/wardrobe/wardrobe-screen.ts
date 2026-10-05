@@ -27,6 +27,7 @@ import { MILESTONES_TEXT } from '../../milestones/milestones-view.js';
 import { el, messageOf } from '../dom.js';
 import { KeeperPreview } from '../keeper/keeper-preview.js';
 import { OutfitSync } from './outfit-sync.js';
+import { watchScrollEdges } from './scroll-edges.js';
 import { wardrobeApi, type WardrobeApi } from './wardrobe-api.js';
 import {
   hiddenByCostume,
@@ -225,6 +226,11 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   const saveRow = el('div', { class: 'wardrobe-save', 'data-testid': 'wardrobe-save' });
   saveRow.hidden = true;
   const note = el('p', { class: 'wardrobe-note', role: 'status', 'data-testid': 'wardrobe-note' });
+  // Rows that scroll sideways on a phone fade at the edge with more behind it (#152).
+  const edges = [tabs, rarities, outfits].map(watchScrollEdges);
+  const refreshEdges = () => {
+    for (const e of edges) e.refresh();
+  };
   // Grid rows: header, tabs, rarities, the items (all the room left), the
   // outfits or the save row (one shows at a time), and a note line.
   const card = el(
@@ -486,6 +492,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     renderTabs();
     renderItems();
     renderOutfits();
+    refreshEdges();
   }
 
   // ── Trying things on ──────────────────────────────────────────────────

@@ -22,6 +22,7 @@ const night = (date: string, extra: Partial<MorningReport> = {}): MorningReport 
   night: date,
   taken: null,
   sheltered: 0,
+  exposed: 0,
   ...extra,
 });
 
@@ -39,13 +40,35 @@ describe('the fire hint', () => {
 describe('the morning report', () => {
   it('tells only nights the player has not seen, and only ones with news', () => {
     const reports = [
-      night('2026-10-31', { taken: taken(1) }),
+      night('2026-10-31', { taken: taken(1), exposed: 1 }),
       night('2026-10-30', { sheltered: 2 }),
       night('2026-10-29'), // they had nobody there
+      night('2026-10-28', { exposed: 1 }), // out in the dark, but spared (grace, #134)
     ];
-    expect(unseenReports(reports, null).map((r) => r.night)).toEqual(['2026-10-31', '2026-10-30']);
+    expect(unseenReports(reports, null).map((r) => r.night)).toEqual([
+      '2026-10-31',
+      '2026-10-30',
+      '2026-10-28',
+    ]);
     expect(unseenReports(reports, '2026-10-30').map((r) => r.night)).toEqual(['2026-10-31']);
     expect(unseenReports(reports, '2026-10-31')).toEqual([]);
+  });
+
+  it('says he let them be on a grace night, and asks for a fire (#134)', () => {
+    expect(reportText([night('2026-10-28', { exposed: 1 })], () => '')).toEqual({
+      title: HOLLOW_TEXT.passedBy,
+      lines: [HOLLOW_TEXT.spared, HOLLOW_TEXT.fireHint],
+    });
+    // A fire lit since: no nagging.
+    expect(reportText([night('2026-10-28', { exposed: 1 })], () => '', false).lines).toEqual([
+      HOLLOW_TEXT.spared,
+    ]);
+    // Once someone is taken, that line is the news; the spared night needs no line of its own.
+    const mixed = reportText(
+      [night('2026-10-31', { taken: taken(1), exposed: 1 }), night('2026-10-30', { exposed: 1 })],
+      () => 'Moonpuff',
+    );
+    expect(mixed.lines).toEqual(['He took Moonpuff to the Hollow. You can rescue them!']);
   });
 
   it('always follows "taken to the Hollow" with "you can rescue them"', () => {
