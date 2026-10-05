@@ -17,18 +17,18 @@ const CONTROL_SELECTOR = 'button, input, select, textarea, [role="button"]';
 const BACKDROP_SHARE = 0.8; // TUNE
 
 export interface OpenSheet {
-  readonly element: Element;
+  readonly element: HTMLElement;
   readonly rect: Rect;
 }
 
-function boxOf(element: Element): Rect | null {
+function boxOf(element: Element): { box: Rect; element: HTMLElement } | null {
   if (!(element instanceof HTMLElement) || element.hidden || !element.isConnected) return null;
   if (element.closest('[hidden]') || element.closest('[inert]')) return null;
   const style = getComputedStyle(element);
   if (style.display === 'none' || style.visibility === 'hidden') return null;
   const box = element.getBoundingClientRect();
   if (box.width <= 0 || box.height <= 0) return null;
-  return { x: box.x, y: box.y, width: box.width, height: box.height };
+  return { box: { x: box.x, y: box.y, width: box.width, height: box.height }, element };
 }
 
 /**
@@ -40,8 +40,8 @@ export function openSheets(root: ParentNode, except: Element): OpenSheet[] {
   const open: OpenSheet[] = [];
   for (const element of root.querySelectorAll(SHEET_SELECTOR)) {
     if (except.contains(element)) continue;
-    const rect = boxOf(element);
-    if (rect) open.push({ element, rect });
+    const found = boxOf(element);
+    if (found) open.push({ element: found.element, rect: found.box });
   }
   return open.filter((sheet) => {
     const top = topSheetAt(open, except, sheet.rect);
@@ -95,15 +95,15 @@ export function obstacles(
     }
     if (depth === 0) return;
     for (const child of element.children) {
-      const box = boxOf(child);
-      if (box) card(child, box, depth - 1);
+      const found = boxOf(child);
+      if (found) card(child, found.box, depth - 1);
     }
   };
   for (const sheet of sheets) card(sheet.element, sheet.rect, 2);
   for (const element of root.querySelectorAll(CONTROL_SELECTOR)) {
     if (except.contains(element)) continue;
-    const rect = boxOf(element);
-    if (rect) out.push(rect);
+    const found = boxOf(element);
+    if (found) out.push(found.box);
   }
   return out;
 }

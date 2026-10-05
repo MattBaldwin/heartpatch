@@ -10,7 +10,7 @@ import {
   type Rect,
   type Size,
 } from './overlay-layout.js';
-import { foreignSheets, obstacles, openSheets } from './sheets.js';
+import { foreignSheets, obstacles, openSheets, type OpenSheet } from './sheets.js';
 import type { GraduationChoice, TutorialView } from './tutorial-controller.js';
 import '../ui/auth/auth.css';
 import './tutorial.css';
@@ -280,9 +280,7 @@ export function mountTutorialOverlay(
     const held = waitingFor.length > 0;
     if (!held) peek = false;
     const orb = held && !peek;
-    behind = waitingFor.map(
-      (s) => (s.element as HTMLElement).dataset['testid'] ?? s.element.className,
-    );
+    behind = waitingFor.map((s) => s.element.dataset['testid'] ?? s.element.className);
     overlay.classList.toggle('tutorial-held', orb);
     // Something to read once the sheet closes: the orb glows until then.
     overlay.classList.toggle('tutorial-new', orb && !view.tucked);
@@ -351,7 +349,7 @@ export function mountTutorialOverlay(
    */
   let pageVersion = 0;
   let measured: { version: number; key: string; rects: Rect[] } | null = null;
-  function obstaclesNow(sheets: Parameters<typeof obstacles>[2], viewport: Size): Rect[] {
+  function obstaclesNow(sheets: readonly OpenSheet[], viewport: Size): Rect[] {
     const key = JSON.stringify([viewport, sheets.map((s) => s.rect)]);
     if (measured?.version !== pageVersion || measured.key !== key) {
       measured = { version: pageVersion, key, rects: obstacles(root, overlay, sheets, viewport) };

@@ -18,7 +18,7 @@ describe('foreignSheets (Sprout waits behind sheets, #127)', () => {
   });
 
   it("leaves out the sheet that holds the step's own target", () => {
-    expect(foreignSheets([care, report], careButtons as Element)).toEqual([report]);
+    expect(foreignSheets([care, report], careButtons as HTMLElement)).toEqual([report]);
   });
 
   it('is empty with nothing open', () => {
