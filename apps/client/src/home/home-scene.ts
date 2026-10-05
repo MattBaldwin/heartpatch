@@ -26,6 +26,7 @@ import {
   CORNER,
   DOME,
   meshFrom,
+  NODE_PROPS,
   overlayMaterial,
   placeAt,
   SEGMENTS,
@@ -83,15 +84,6 @@ export interface HomeSceneOptions {
   /** What the Keeper wears (#43): clothing ids. */
   readonly keeperWearing?: readonly string[];
 }
-
-/** Node resources drawn as the map's props in the middle of their tile. */
-const NODE_PROPS: Readonly<Record<string, PropKind>> = {
-  timber: 'tree',
-  stone: 'rock',
-  emberwood: 'old-tree',
-  treats: 'pumpkin',
-  pumpkins: 'pumpkin',
-};
 
 interface Resident {
   readonly handle: SquishyHandle;

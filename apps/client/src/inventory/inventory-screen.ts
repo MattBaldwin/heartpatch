@@ -3,7 +3,7 @@ import { ApiRequestError } from '../net/api.js';
 import type { TileActions } from '../map/map-screen.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
-import { bagItems, bagRecipes, describeItems, itemName } from './bag-view.js';
+import { bagItems, bagRecipes, describeItems, gatherChip, itemName } from './bag-view.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemIcon } from './item-icons.js';
@@ -36,6 +36,8 @@ export interface InventoryDebug {
   readonly bagOpen: boolean;
   /** The tile panel's action right now, if it's showing one of your nodes. */
   readonly tileAction: TileAction['kind'] | null;
+  /** The gathering chip over the map: null while hidden. */
+  readonly chip: 'waiting' | 'ready' | null;
 }
 
 export interface InventoryScreen {
@@ -64,6 +66,10 @@ const TEXT = {
   gives: (what: string) => `Gives ${what}`,
   got: (what: string) => `Yay! ${what}`,
   started: 'Off you go! Come back when it’s ready.',
+  keepsGoing: 'It keeps going while you play!',
+  chipWaiting: (what: string, left: string) => `Gathering ${what}… ready in ${left}`,
+  chipReady: (what: string) => `${what} is ready! Tap to collect`,
+  chipMore: (n: number) => ` (+${String(n)})`,
   craftBusy: 'Busy making something else.',
   devGrant: 'Get stuff (dev)',
 } as const;
@@ -91,6 +97,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   let ticker: number | undefined;
   let panel: { container: HTMLElement; tile: PublicTile } | null = null;
   let shownAction: TileAction | null = null;
+  let shownChip: InventoryDebug['chip'] = null;
 
   // ── Bag button and sheet ──────────────────────────────────────────────
   const open = el(
@@ -100,6 +107,15 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     el('span', { class: 'bag-open-label' }, TEXT.bag),
   );
   open.hidden = true;
+
+  // The gathering chip: a gather takes minutes on a patch, so the map keeps
+  // saying so (and when it's ready) until it's collected. Tap: the Bag.
+  const chip = el('button', {
+    type: 'button',
+    class: 'gather-chip',
+    'data-testid': 'gather-chip',
+  });
+  chip.hidden = true;
 
   const close = el(
     'button',
@@ -123,7 +139,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     recipesBox,
   );
   sheet.hidden = true;
-  options.root.append(open, sheet);
+  options.root.append(open, chip, sheet);
 
   if (options.devTools) {
     const dev = el(
@@ -141,11 +157,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     sheet.append(dev);
   }
 
-  open.addEventListener('click', () => {
+  const openBag = () => {
     sheet.hidden = false;
     render();
     void refresh();
-  });
+  };
+  open.addEventListener('click', openBag);
+  chip.addEventListener('click', openBag);
   close.addEventListener('click', () => {
     sheet.hidden = true;
     say('');
@@ -271,6 +289,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   }
   let bagCountdowns: Countdown[] = [];
   let tileCountdowns: Countdown[] = [];
+  let chipCountdowns: Countdown[] = [];
 
   const countdown = (
     list: Countdown[],
@@ -313,7 +332,9 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
           el('span', { class: 'bag-row-name' }, label),
           clock.msUntil(g.readyAt) > 0
             ? countdown(bagCountdowns, 'span', 'bag-row-wait', g.readyAt, (left) => left)
-            : button(TEXT.collect, () => void collectGather(g.id)),
+            : button(TEXT.collect, () => void collectGather(g.id), {
+                'data-testid': 'bag-collect',
+              }),
         );
       }),
     );
@@ -379,11 +400,18 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
           button(TEXT.gather, () => void startGather(tile), { 'data-testid': 'tile-gather' }),
         );
         break;
-      case 'waiting':
-        container.replaceChildren(
-          countdown(tileCountdowns, 'p', 'tile-action-note', action.gather.readyAt, TEXT.waiting),
+      case 'waiting': {
+        const left = countdown(
+          tileCountdowns,
+          'p',
+          'tile-action-note tile-action-waiting',
+          action.gather.readyAt,
+          TEXT.waiting,
         );
+        left.dataset['testid'] = 'tile-gathering';
+        container.replaceChildren(left, line(TEXT.keepsGoing));
         break;
+      }
       case 'collect':
         container.replaceChildren(
           line(TEXT.gives(describeItems(action.gather.items))),
@@ -405,18 +433,44 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     }
   }
 
+  /** The gathering chip, while something's gathering and the Bag is shut. */
+  function renderChip(): void {
+    chipCountdowns = [];
+    const shown = mapId !== null && state !== null && sheet.hidden;
+    const model = shown && state ? gatherChip(state.gathers, (iso) => clock.msUntil(iso)) : null;
+    shownChip = model ? (model.ready ? 'ready' : 'waiting') : null;
+    chip.hidden = model === null;
+    if (!model) return;
+    const { gather } = model;
+    const what = `${itemIcon(gather.resource)} ${itemName(gather.resource)}`;
+    const more = model.more > 0 ? TEXT.chipMore(model.more) : '';
+    chip.classList.toggle('gather-chip-ready', model.ready);
+    chip.replaceChildren(
+      model.ready
+        ? `${TEXT.chipReady(what)}${more}`
+        : countdown(
+            chipCountdowns,
+            'span',
+            'gather-chip-text',
+            gather.readyAt,
+            (left) => `${TEXT.chipWaiting(what, left)}${more}`,
+          ),
+    );
+  }
+
   function render(): void {
     // The tile panel covers the button's spot and has its own gather buttons.
     open.hidden = mapId === null || panel !== null;
     renderBag();
     renderTile();
+    renderChip();
     syncTicker();
   }
 
   /** One tick: rewrite countdown texts; redraw only when one has finished. */
   function tick(): void {
     let finished = false;
-    for (const c of [...bagCountdowns, ...tileCountdowns]) {
+    for (const c of [...bagCountdowns, ...tileCountdowns, ...chipCountdowns]) {
       const left = clock.msUntil(c.readyAt);
       if (left <= 0) finished = true;
       else c.node.textContent = c.text(formatTimeLeft(left));
@@ -426,7 +480,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
 
   /** Ticks once a second only while a countdown is on screen. */
   function syncTicker(): void {
-    const counting = bagCountdowns.length + tileCountdowns.length > 0;
+    const counting = bagCountdowns.length + tileCountdowns.length + chipCountdowns.length > 0;
     if (counting && ticker === undefined) {
       ticker = window.setInterval(tick, 1000);
     } else if (!counting && ticker !== undefined) {
@@ -477,6 +531,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         seasons: [...state.seasons],
         bagOpen: !sheet.hidden,
         tileAction: shownAction?.kind ?? null,
+        chip: shownChip,
       };
     },
   };

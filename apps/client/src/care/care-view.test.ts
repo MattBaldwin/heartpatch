@@ -84,6 +84,8 @@ describe('careSheet', () => {
     ]);
     expect(model.buttons[0]!.label).toContain('2 Treats');
     expect(model.info).toEqual([
+      CARE_TEXT.whyCare,
+      CARE_TEXT.fades,
       'Battles give ×1.37 XP right now.',
       '2 more extra-special cuddles today.',
     ]);
@@ -115,10 +117,25 @@ describe('careSheet', () => {
     expect(note(5000)).toBeNull();
   });
 
+  it('says when a squishy grows up, until it has', () => {
+    const growing = reply({
+      speciesDefs: [
+        {
+          ...species('moonpuff', 'Moonpuff', '#3b3561'),
+          evolutions: [{ into: 'moonmallow', level: 16 }],
+        },
+        species('moonmallow', 'Moonmallow', '#c9b8ff'),
+      ],
+    });
+    expect(careSheet(squishy(), growing).level).toBe('Level 4 · grows up at Level 16');
+    expect(careSheet(squishy({ level: 16 }), growing).level).toBe('Level 16');
+    expect(careSheet(squishy({ speciesId: 'moonmallow' }), growing).level).toBe('Level 4');
+  });
+
   it('fills the bar at the top level, and says so', () => {
     const model = careSheet(squishy({ level: 100, xpToNext: null }), reply());
     expect(model).toMatchObject({ xp: 1, xpLine: 'Top level!' });
-    expect(careSheet(squishy({ xpBonusPercent: 100 }), reply()).info[0]).toContain('normal XP');
+    expect(careSheet(squishy({ xpBonusPercent: 100 }), reply()).info[2]).toContain('normal XP');
   });
 
   it('uses a nickname when there is one', () => {
@@ -160,6 +177,9 @@ describe('lines', () => {
       CARE_TEXT.coins(2),
       CARE_TEXT.bonus(300),
       CARE_TEXT.bonus(100),
+      CARE_TEXT.whyCare,
+      CARE_TEXT.fades,
+      CARE_TEXT.growsUp(4, 16),
       CARE_TEXT.fullLeft(1),
       CARE_TEXT.evolved('Moonpuff', 'Moonmallow'),
       CARE_TEXT.notHere,

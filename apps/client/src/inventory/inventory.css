@@ -206,3 +206,58 @@
   color: #6b8a3a;
   font-variant-numeric: tabular-nums;
 }
+
+/* The gathering chip: under the map's name at the top, where nothing else
+   sits, so a gather never feels like "nothing happened". Tap: the Bag. */
+.gather-chip {
+  position: fixed;
+  z-index: 3;
+  top: calc(env(safe-area-inset-top) + 108px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  min-height: 44px;
+  padding: 8px 18px;
+  overflow: hidden;
+  border: none;
+  border-radius: 999px;
+  background: #fffafc;
+  box-shadow: 0 4px 14px rgb(107 75 110 / 22%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #6b8a3a;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  animation: gather-chip-pop 0.35s ease-out;
+}
+
+.gather-chip-ready {
+  background: #eaf8dc;
+  color: #2f6b3d;
+}
+
+.gather-chip[hidden] {
+  display: none;
+}
+
+@keyframes gather-chip-pop {
+  from {
+    transform: translateX(-50%) scale(0.6);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gather-chip {
+    animation: none;
+  }
+}

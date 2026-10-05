@@ -78,6 +78,8 @@ const PICK_HEIGHT = 0.25;
 /** Read-only numbers for the dev hook and tests. */
 export interface MapSceneStats {
   readonly tiles: number;
+  /** Resource-node props on home bases (Timber trees, Stone rocks…). */
+  readonly homeNodes: number;
   /** Tiles drawn with a player's tint (home rings included). */
   readonly tinted: number;
   readonly homes: number;
@@ -290,6 +292,10 @@ export class MapScene {
   private readonly buildings: BuildingField;
   /** The soft glow over tiles a lit Hearthfire keeps safe (#18). */
   private readonly safeGlow: Mesh;
+  /** The player's home node the tutorial points at (`homeNodeRect`), until `update`. */
+  private homeNode: { userId: string | null; tile: PublicTile | null } | null = null;
+  /** Resource nodes drawn on home bases (`buildHomeNodes`). */
+  private readonly homeNodes: number;
   private tileMeshes = 0;
   private counts = { tinted: 0, homes: 0, claimedHomes: 0, safeTiles: 0 };
 
@@ -302,6 +308,7 @@ export class MapScene {
     this.buildIsland(view.tiles);
     this.buildTiles(view.tiles);
     this.buildProps(view.tiles);
+    this.homeNodes = buildHomeNodes(scene, view.tiles);
     this.buildGap();
 
     this.tintMaterial = overlayMaterial(scene, 'tint-mat');
@@ -360,6 +367,7 @@ export class MapScene {
     return {
       tiles: this.tiles.size,
       tileMeshes: this.tileMeshes,
+      homeNodes: this.homeNodes,
       ...this.counts,
       keepers: this.keepers.handles.length,
       buildings: this.buildings.stats.buildings,
@@ -378,6 +386,7 @@ export class MapScene {
   /** Redraws ownership and home bases from a fresh view of the same map. */
   update(view: MapView): void {
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
+    this.homeNode = null;
     const slots = slotsByUser(view.members);
     const bySlot = new Map<number, Matrix[]>();
     let tinted = 0;
@@ -482,6 +491,21 @@ export class MapScene {
     const first = hit(PICK_HEIGHT);
     if (!first) return null;
     return hit(lookOf(first).height) ?? first;
+  }
+
+  /**
+   * Where this player's home node is on screen (CSS pixels), for the
+   * tutorial's `resource-node` spotlight: their Timber node if they have one,
+   * else any node on their home base. Null if it isn't in front of the camera.
+   */
+  homeNodeRect(userId: string | null): ScreenRect | null {
+    // Called every drawn frame while the tutorial follows it: ownership only
+    // changes in `update`, so the tile is looked up once per player.
+    if (this.homeNode?.userId !== userId) {
+      this.homeNode = { userId, tile: homeNodeOf([...this.tiles.values()], userId) };
+    }
+    const { tile } = this.homeNode;
+    return tile ? tileScreenRect(this.scene, tile, lookOf(tile).height) : null;
   }
 
   private tintMesh(slot: number): Mesh {
@@ -662,4 +686,94 @@ export class MapScene {
     tree.material = mat;
     tree.freezeWorldMatrix();
   }
+}
+
+// ── Home nodes ────────────────────────────────────────────────────────────
+// Each home base's resource nodes (Timber, Stone, Emberwood, the farm plot),
+// drawn in the middle of their tile as on the Home view, so "tap the tree
+// tile" has a tree to tap. Kept apart from the terrain props above, which
+// skip home tiles.
+
+/** Node resources drawn as props in the middle of their tile (the map and Home). */
+export const NODE_PROPS: Readonly<Record<string, PropKind>> = {
+  timber: 'tree',
+  stone: 'rock',
+  emberwood: 'old-tree',
+  treats: 'pumpkin',
+  pumpkins: 'pumpkin',
+};
+
+/** Draws every home node, one instanced mesh per prop kind; returns how many. */
+function buildHomeNodes(scene: Scene, tiles: readonly PublicTile[]): number {
+  const byKind = new Map<PropKind, Matrix[]>();
+  let count = 0;
+  for (const tile of tiles) {
+    const kind = tile.homeSlot !== null && tile.nodeResource ? NODE_PROPS[tile.nodeResource] : null;
+    if (!kind) continue;
+    const p = hexToWorld(tile, HEX_SIZE);
+    const list = byKind.get(kind) ?? [];
+    list.push(placeAt(p.x, HOME_LOOK.height + DOME * 0.5, p.z));
+    byKind.set(kind, list);
+    count++;
+  }
+  if (count === 0) return 0;
+  const mat = vinyl(scene, 'home-node-mat', { color: '#ffffff' });
+  mat.freeze();
+  for (const [kind, matrices] of byKind) {
+    const { mesh } = buildProp(scene, kind);
+    mesh.name = `home-node-${kind}`;
+    mesh.material = mat;
+    setInstances(mesh, matrices);
+    mesh.freezeWorldMatrix();
+  }
+  return count;
+}
+
+/** This player's home node to point at: Timber first (the tutorial's gather step). */
+export function homeNodeOf(tiles: readonly PublicTile[], userId: string | null): PublicTile | null {
+  if (userId === null) return null;
+  const nodes = tiles.filter(
+    (t) => t.homeSlot !== null && t.ownerUserId === userId && t.nodeResource !== null,
+  );
+  return nodes.find((t) => t.nodeResource === 'timber') ?? nodes[0] ?? null;
+}
+
+/** A box on screen in CSS pixels (the tutorial overlay's `Rect`). */
+export interface ScreenRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Scratch vectors for `tileScreenRect`, which runs every drawn frame while followed. */
+const RIM = new Vector3();
+const PROJECTED = new Vector3();
+
+/**
+ * A tile's box on screen (its rim at height `top`), or null if the camera
+ * can't see it. Its middle is the tile's middle, so a tap there picks the
+ * tile. Projects with the camera as it is now, so it follows pans and zooms.
+ */
+function tileScreenRect(scene: Scene, h: Hex, top: number): ScreenRect | null {
+  const camera = scene.activeCamera;
+  const canvas = scene.getEngine().getRenderingCanvas();
+  if (!camera || !canvas) return null;
+  const box = canvas.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0) return null;
+  const viewport = camera.viewport.toGlobal(box.width, box.height);
+  const transform = camera.getTransformationMatrix();
+  const c = hexToWorld(h, HEX_SIZE);
+  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    RIM.set(c.x + Math.cos(a) * TILE_RADIUS, top, c.z + Math.sin(a) * TILE_RADIUS);
+    const s = Vector3.ProjectToRef(RIM, Matrix.IdentityReadOnly, transform, viewport, PROJECTED);
+    if (s.z < 0 || s.z > 1) return null; // behind the camera or past the far plane
+    x0 = Math.min(x0, s.x);
+    y0 = Math.min(y0, s.y);
+    x1 = Math.max(x1, s.x);
+    y1 = Math.max(y1, s.y);
+  }
+  return { x: box.left + x0, y: box.top + y0, width: x1 - x0, height: y1 - y0 };
 }
