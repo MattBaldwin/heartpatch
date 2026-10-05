@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
-import type { PgBoss, Queue } from 'pg-boss';
+import type { PgBoss, Queue, UpdateQueueOptions } from 'pg-boss';
 
 /**
  * Creates a pg-boss queue with these settings, or brings an existing one up
@@ -17,7 +17,8 @@ export async function ensureQueue(
   boss: PgBoss,
   logger: FastifyBaseLogger,
   name: string,
-  options: Omit<Queue, 'name'> & { policy: NonNullable<Queue['policy']> },
+  // Only what `updateQueue` accepts, so an option it refuses can't fail a boot.
+  options: UpdateQueueOptions & { policy: NonNullable<Queue['policy']> },
 ): Promise<void> {
   const { policy, ...settings } = options;
   const existing = await boss.getQueue(name);
