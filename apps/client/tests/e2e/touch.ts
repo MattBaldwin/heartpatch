@@ -42,7 +42,7 @@ const AT_REST_TIMEOUT_MS = 5_000;
  * a chip still popping up would carry the control away between the press and
  * the lift, and a finger waits for that to end before it lands.
  */
-async function restingBox(
+export async function restingBox(
   locator: Locator,
 ): Promise<{ x: number; y: number; width: number; height: number }> {
   const page = locator.page();

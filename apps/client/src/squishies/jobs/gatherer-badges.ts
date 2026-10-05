@@ -25,8 +25,9 @@ interface Badge {
 }
 
 const labelOf = (count: number) => (count > 1 ? `🧺${String(count)}` : '🧺');
-/** A badge's width before it has been laid out. */
+/** A badge's size before it has been laid out. */
 const BADGE_MIN_WIDTH_PX = 32;
+const BADGE_MIN_HEIGHT_PX = 24;
 
 export function createGathererBadges(root: HTMLElement): GathererBadges {
   let scene: Scene | null = null;
@@ -48,7 +49,10 @@ export function createGathererBadges(root: HTMLElement): GathererBadges {
     const x = rect
       ? Math.round(Math.min(Math.max(rect.x + rect.width / 2, half), window.innerWidth - half))
       : 0;
-    const y = rect ? Math.round(rect.y) : 0;
+    // Hung from the tile's top: a tile straddling the top edge keeps it in view too.
+    const y = rect
+      ? Math.round(Math.max(rect.y, Math.max(badge.node.offsetHeight, BADGE_MIN_HEIGHT_PX)))
+      : 0;
     const at = rect ? `${String(x)},${String(y)}` : 'hidden';
     if (at === badge.at) return;
     badge.at = at;

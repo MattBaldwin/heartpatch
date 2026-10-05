@@ -1,8 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
-import { realTap, realTapAt } from './touch.js';
-import { trayButton } from './trays.js';
+import { realTap, realTapAt, restingBox } from './touch.js';
+import { trayButton, traysState } from './trays.js';
 
 /**
  * Single taps with a held press (touch.ts): down, a short hold, up, the
@@ -306,5 +306,68 @@ test('Home and Bag open on the first tap while a tile panel is open', async ({ b
   await expect(bag).toBeVisible();
   await realTap(bag.getByRole('button', { name: 'Close' }));
   await expect(bag).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('a tap sticks to a button that moves under the finger (a tray mid-slide)', async ({
+  browser,
+}) => {
+  // A kid taps the Bag the moment it appears, while its tray is still
+  // sliding: by the lift the entry has moved on, so the browser's own click
+  // goes to whatever is under the lift (or nowhere, on iOS). The tap sticks
+  // to the button it landed on (ui/sticky-taps.ts): one Bag. The slide is
+  // replayed by hand here (the tray moved while the finger is down), so the
+  // press lands mid-slide on every machine, however fast it draws.
+  test.setTimeout(180_000);
+  const page = await newPlayer(browser, uniqueName('slide'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  await onAPatch(page, 'Quick Patch');
+  const hintOk = page.getByTestId('tray-hint-ok');
+  if (await hintOk.isVisible()) await realTap(hintOk);
+  await page.evaluate(() => {
+    const w = window as unknown as { __bagClicks: number };
+    w.__bagClicks = 0;
+    document.addEventListener(
+      'click',
+      (e) => {
+        const t = e.target instanceof Element ? e.target.closest('[data-testid="bag-open"]') : null;
+        if (t) w.__bagClicks += 1;
+      },
+      true,
+    );
+  });
+
+  const entry = await inTray(page, 'bag-open');
+  // The tray is put at its resting place by hand (its slide would get there
+  // anyway, slowly on a software-drawn CI), the finger lands near the
+  // entry's left edge, then the tray jumps on by 120 px to the right under
+  // the resting finger, as the tail of a slide would; then the lift.
+  const tray = page.locator('.tray.tray-heartpatch');
+  await tray.evaluate((node: HTMLElement) => {
+    node.style.transition = 'none';
+    node.style.transform = 'none';
+  });
+  const box = await restingBox(entry);
+  await page.mouse.move(box.x + 8, box.y + box.height / 2);
+  await page.mouse.down();
+  await tray.evaluate((node: HTMLElement) => {
+    node.style.transform = 'translateX(120px)';
+  });
+  await expect.poll(async () => (await entry.boundingBox())?.x).toBeGreaterThan(box.x + 100);
+  await page.waitForTimeout(80);
+  await page.mouse.up();
+  await tray.evaluate((node: HTMLElement) => {
+    node.style.removeProperty('transform');
+    node.style.removeProperty('transition');
+  });
+
+  await expect(page.getByTestId('bag')).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __bagClicks: number }).__bagClicks))
+    .toBe(1);
+  // One action: the entry shut its tray, as a tap on it does.
+  await expect.poll(async () => (await traysState(page))?.open).toBeNull();
+  await realTap(page.getByTestId('bag').getByRole('button', { name: 'Close' }));
   expect(errors).toEqual([]);
 });

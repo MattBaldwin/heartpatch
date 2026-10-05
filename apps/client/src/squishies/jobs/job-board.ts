@@ -117,7 +117,10 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   const say = (text: string) => {
     note.textContent = text;
   };
+  /** Bumped by every view taken, so a slower refetch can't put an older one back. */
+  let views = 0;
   const setView = (next: JobsView) => {
+    views += 1;
     view = next;
     clock.sync(next.now);
   };
@@ -339,10 +342,11 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   async function refetch(): Promise<void> {
     const id = mapId;
     const mine = ticket;
+    const had = views;
     if (!id) return;
     try {
       const fresh = await api.view(id);
-      if (mine !== ticket || working) return;
+      if (mine !== ticket || working || views !== had) return;
       setView(fresh);
       render();
     } catch (err) {
