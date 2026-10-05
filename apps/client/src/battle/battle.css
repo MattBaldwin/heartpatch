@@ -203,8 +203,9 @@
   border-radius: 999px;
   background: rgb(255 250 240 / 94%);
   box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+  padding: 0;
   font: inherit;
-  font-size: 26px;
+  font-size: 22px;
   line-height: 1;
   color: #8a5f86;
   cursor: pointer;
@@ -245,6 +246,7 @@
 
 .battle-caption {
   margin: 0;
+  padding: 4px var(--hp-pad-x);
   font-size: 17px;
   font-weight: 700;
   line-height: 1.3;
