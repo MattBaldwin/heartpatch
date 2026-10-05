@@ -493,6 +493,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   function renderChip(): void {
     chipCountdowns = [];
     chipReady = null;
+    chip.disabled = working;
     const shown = mapId !== null && state !== null && sheet.hidden;
     if (shown && chipReveal) {
       // What the chip's tap just collected.

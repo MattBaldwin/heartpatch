@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap, realTapAt } from './touch.js';
-import { traysState, type TraySide } from './trays.js';
+import { trayButton } from './trays.js';
 
 /**
  * Single taps with a held press (touch.ts): down, a short hold, up, the
@@ -81,40 +81,9 @@ async function tapOwnNode(page: Page, offering: 'gather' | 'collect' = 'gather')
   );
 }
 
-/** Which tray each entry lives in (ui/trays). */
-const TRAY_OF: Readonly<Record<string, TraySide>> = {
-  'battle-entry': 'adventure',
-  'catalog-open': 'adventure',
-  'battle-dev-grant': 'adventure',
-  'battle-dev-fight': 'adventure',
-  'raid-open': 'adventure',
-  'hollow-open': 'adventure',
-  'home-open': 'heartpatch',
-  'bag-open': 'heartpatch',
-  'jobs-open': 'heartpatch',
-  'team-open': 'heartpatch',
-};
-
-/** Opens a tray with one real tap on its handle (shutting the other first). */
-async function openTrayReal(page: Page, side: TraySide): Promise<void> {
-  await expect.poll(async () => (await traysState(page))?.visible, { timeout: 30_000 }).toBe(true);
-  const open = (await traysState(page))?.open ?? null;
-  if (open === side) return;
-  if (open !== null) {
-    await realTap(page.getByTestId(`tray-handle-${open}`));
-    await expect.poll(async () => (await traysState(page))?.open).toBeNull();
-  }
-  await realTap(page.getByTestId(`tray-handle-${side}`));
-  await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBe(side);
-}
-
 /** The button `testId`, with its tray opened by one real tap on the handle. */
-async function inTray(page: Page, testId: string): Promise<Locator> {
-  const side = TRAY_OF[testId];
-  if (!side) throw new Error(`which tray holds ${testId}?`);
-  await openTrayReal(page, side);
-  return page.getByTestId(testId);
-}
+const inTray = (page: Page, testId: string): Promise<Locator> =>
+  trayButton(page, testId, (handle) => realTap(handle));
 
 /** One real tap on `open` shows `sheet`; one real tap on its Close hides it. */
 async function opensAndCloses(open: Locator, sheet: Locator, close: Locator): Promise<void> {
@@ -300,5 +269,42 @@ test('a battle action lands on one tap', async ({ browser }) => {
   await expect
     .poll(async () => (await hook<{ turn: number }>(page, 'battle'))?.turn, { timeout: 30_000 })
     .not.toBe(turn);
+  expect(errors).toEqual([]);
+});
+
+test('Home and Bag open on the first tap while a tile panel is open', async ({ browser }) => {
+  // #165: before the trays, both buttons left the screen while a tile was
+  // selected, so the first click landed on the map and only the second one
+  // acted. They live in the My Heartpatch tray now and never hide under a
+  // panel: one tap on the handle, one tap on the entry, with the panel open.
+  test.setTimeout(180_000);
+  const page = await newPlayer(browser, uniqueName('open'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  await onAPatch(page, 'Open Patch');
+  const hintOk = page.getByTestId('tray-hint-ok');
+  if (await hintOk.isVisible()) await realTap(hintOk);
+  const panel = page.getByTestId('tile-panel');
+
+  await tapOwnNode(page);
+  await expect(panel).toBeVisible();
+  const homeEntry = await inTray(page, 'home-open');
+  await expect(homeEntry).toBeVisible();
+  await realTap(homeEntry);
+  await expect(page.getByTestId('home')).toBeVisible();
+  expect((await hook<{ open: boolean }>(page, 'home'))?.open).toBe(true);
+  await realTap(page.getByTestId('home-back'));
+  await expect(page.getByTestId('home')).toBeHidden();
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+
+  await tapOwnNode(page);
+  await expect(panel).toBeVisible();
+  const bagEntry = await inTray(page, 'bag-open');
+  await expect(bagEntry).toBeVisible();
+  await realTap(bagEntry);
+  const bag = page.getByTestId('bag');
+  await expect(bag).toBeVisible();
+  await realTap(bag.getByRole('button', { name: 'Close' }));
+  await expect(bag).toBeHidden();
   expect(errors).toEqual([]);
 });

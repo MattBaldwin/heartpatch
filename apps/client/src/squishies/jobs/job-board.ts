@@ -78,6 +78,8 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   let lines = new Map<string, { squishy: JobSquishy; node: HTMLElement }>();
   /** Bumped by every open and close, so a late reply is dropped. */
   let ticket = 0;
+  /** A finished countdown already asked the server once (reset by every render). */
+  let askedAgain = false;
 
   const close = el(
     'button',
@@ -231,6 +233,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   function render(): void {
     window.clearTimeout(ticker);
     ticker = undefined;
+    askedAgain = false;
     const current = view;
     if (!current) {
       list.replaceChildren();
@@ -324,7 +327,8 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       const text = jobLine(squishy, nowMs);
       if (node.textContent !== text) node.textContent = text;
     }
-    if (finished) {
+    if (finished && !askedAgain) {
+      askedAgain = true;
       void refetch();
       return;
     }
@@ -341,9 +345,11 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       if (mine !== ticket || working) return;
       setView(fresh);
       render();
-    } catch {
-      // Nothing to say: the next tick asks again.
-      if (mine === ticket) ticker = window.setTimeout(tick, 1000);
+    } catch (err) {
+      // Said once; the countdown keeps going and the next open asks again.
+      if (mine !== ticket) return;
+      say(messageOf(err));
+      ticker = window.setTimeout(tick, 1000);
     }
   }
 
