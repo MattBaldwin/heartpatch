@@ -95,6 +95,23 @@ describe('server-only data split (tech spec §2)', () => {
     expect(Object.keys(pkg.exports['./server']!)).toEqual(Object.keys(pkg.exports['.']!));
   });
 
+  // The recipe book's hints are public flavour: they must never lean on
+  // spawn tables, secret species or anything else under data/server.
+  it('keeps the recipe book and its data off data/server', () => {
+    const files = [
+      resolve(srcDir, 'recipe-book/index.ts'),
+      resolve(srcDir, 'data/recipe-book.ts'),
+      resolve(srcDir, 'schemas/data/recipe-book.ts'),
+    ];
+    for (const file of files) {
+      expect(readFileSync(file, 'utf8')).not.toMatch(/from\s+['"][^'"]*\/server[/'"]/);
+    }
+    const reachable = [...importGraph(...files)];
+    expect(reachable.filter((file) => file.startsWith(serverDir))).toEqual([]);
+    // Secret species, moves and forms never appear in the book or its hints.
+    expect(secretMentions(reachable)).toEqual([]);
+  });
+
   it('has secret rows to look for', () => {
     expect(server.SERVER_GAME_DATA.secretSpecies.length).toBeGreaterThan(0);
     expect(server.SERVER_GAME_DATA.secretMoves.length).toBeGreaterThan(0);
