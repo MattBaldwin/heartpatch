@@ -335,13 +335,19 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   /**
    * A countdown on screen. Rows and buttons are built only when the data
    * changes; the once-a-second tick only rewrites these texts, so a finger
-   * resting on a button never has it swapped out from under it. When one
-   * reaches zero, the screen redraws once (its button appears).
+   * resting on a button never has it swapped out from under it. The words
+   * are one Text node kept for the countdown's life and rewritten in place
+   * (`data`), never replaced: WebKit pairs a lift with the very node the
+   * finger landed on, which for a label is its Text node, and drops the tap
+   * when that node is gone by the lift (a `textContent` rewrite swaps it; the
+   * gather chip's tap on an iPhone went missing whenever a tick fell inside
+   * the press). When one reaches zero, the screen redraws once (its button
+   * appears).
    */
   interface Countdown {
-    node: HTMLElement;
+    text: Text;
     readyAt: string;
-    text: (left: string) => string;
+    say: (left: string) => string;
   }
   let bagCountdowns: Countdown[] = [];
   let tileCountdowns: Countdown[] = [];
@@ -352,11 +358,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     tag: 'span' | 'p',
     cls: string,
     readyAt: string,
-    text: (left: string) => string,
+    say: (left: string) => string,
   ): HTMLElement => {
-    const node = el(tag, { class: cls }, text(formatTimeLeft(clock.msUntil(readyAt))));
-    list.push({ node, readyAt, text });
-    return node;
+    const text = document.createTextNode(say(formatTimeLeft(clock.msUntil(readyAt))));
+    list.push({ text, readyAt, say });
+    return el(tag, { class: cls }, text);
   };
 
   function renderBag(): void {
@@ -539,7 +545,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     for (const c of [...bagCountdowns, ...tileCountdowns, ...chipCountdowns]) {
       const left = clock.msUntil(c.readyAt);
       if (left <= 0) finished = true;
-      else c.node.textContent = c.text(formatTimeLeft(left));
+      else c.text.data = c.say(formatTimeLeft(left));
     }
     if (finished) render();
   }

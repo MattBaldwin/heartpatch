@@ -29,6 +29,7 @@ export async function newPlayer(browser: Browser, name: string): Promise<Page> {
     ...(baseURL ? { baseURL } : {}),
   });
   const page = await context.newPage();
+  await slowCpu(page);
   await signUp(page, name);
   await pickKeeper(page);
   // Roomy: under a full e2e run the lobby's first fetches can take a while.
@@ -36,6 +37,21 @@ export async function newPlayer(browser: Browser, name: string): Promise<Page> {
     page.getByTestId('lobby').getByRole('heading', { name: 'Your patches' }),
   ).toBeVisible({ timeout: 15_000 });
   return page;
+}
+
+/**
+ * A local stand-in for CI's software-rendered WebKit (about 0.85–2 s a frame
+ * at phone and tablet size): `HP_E2E_CPU_THROTTLE=<n>` slows the page's CPU
+ * n times, through the DevTools protocol, so timing-sensitive specs (taps
+ * under a resting finger, a tray mid-slide) can be tried under load with
+ * `--repeat-each`. Chromium only (`PW_CHROMIUM_EXECUTABLE`); WebKit has no
+ * such knob and ignores it.
+ */
+async function slowCpu(page: Page): Promise<void> {
+  const rate = Number(process.env['HP_E2E_CPU_THROTTLE'] ?? '');
+  if (!(rate > 1) || page.context().browser()?.browserType().name() !== 'chromium') return;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate });
 }
 
 /**

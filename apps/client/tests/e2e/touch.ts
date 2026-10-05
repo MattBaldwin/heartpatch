@@ -78,3 +78,25 @@ export async function realTap(locator: Locator, holdMs = REAL_TAP_HOLD_MS): Prom
   const box = await restingBox(locator);
   await realTapAt(locator.page(), box.x + box.width / 2, box.y + box.height / 2, holdMs);
 }
+
+/**
+ * A real tap whose press lasts until `changed` resolves (the game's own
+ * signal that the control changed under the resting finger: a countdown
+ * ticking), then lifts. Longer than a tap (TAP_MAX_MS), so sticky-taps leaves
+ * it to the browser: what's checked is the browser's own click, which WebKit
+ * pairs with the very node the finger landed on (a label's Text node) and
+ * drops when that node is gone by the lift.
+ */
+export async function realTapThrough(
+  locator: Locator,
+  changed: () => Promise<void>,
+): Promise<void> {
+  await locator.waitFor({ state: 'visible' });
+  await locator.scrollIntoViewIfNeeded();
+  const box = await restingBox(locator);
+  const page = locator.page();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await changed();
+  await page.mouse.up();
+}

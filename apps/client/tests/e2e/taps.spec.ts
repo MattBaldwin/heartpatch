@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
-import { realTap, realTapAt, restingBox } from './touch.js';
+import { realTap, realTapAt, realTapThrough, restingBox } from './touch.js';
 import { trayButton, traysState } from './trays.js';
 
 /**
@@ -206,6 +206,20 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   // A chip still counting down opens the Bag (which refetches, so it learns
   // the gather is done), and nothing is collected by that tap.
   await realTap(chip);
+  await expect(bag).toBeVisible();
+  await realTap(bag.getByRole('button', { name: 'Close' }));
+  await expect(bag).toBeHidden();
+  // The same with the countdown ticking under the resting finger: the press
+  // holds until the chip's words change, then lifts. WebKit drops a tap whose
+  // landing node (a label's Text node) is gone by the lift, which is what a
+  // `textContent` rewrite does; the chip rewrites its Text node in place, so
+  // one tap is one Bag on an iPhone, whichever instant the tick falls in.
+  await realTapThrough(chip, async () => {
+    // Read once the finger is down, so the change waited for falls inside the press.
+    const ticking = (await chip.textContent()) ?? '';
+    expect(ticking).toContain('Gathering');
+    await expect(chip).not.toHaveText(ticking, { timeout: 15_000 });
+  });
   await expect(bag).toBeVisible();
   await realTap(bag.getByRole('button', { name: 'Close' }));
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
