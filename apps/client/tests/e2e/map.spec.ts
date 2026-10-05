@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { draws, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 /** The open map as drawn, from the dev hook (src/map/map-screen.ts `MapDebug`). */
@@ -13,6 +13,10 @@ interface MapDebug {
   claimedHomes: number;
   selected: string | null;
   live: string | null;
+  props: number;
+  propKinds: number;
+  mutedTiles: number;
+  ambient: 'live' | 'still' | 'off';
 }
 
 function mapState(page: Page): Promise<MapDebug | null> {
@@ -149,3 +153,46 @@ async function openPatchDetail(page: Page, name: string): Promise<void> {
   await lobby.getByRole('button', { name: new RegExp(name) }).tap();
   await expect(lobby.getByRole('heading', { name })).toBeVisible();
 }
+
+test('dresses the land, mutes wild land, and keeps ambient life calm', async ({ browser }) => {
+  test.setTimeout(120_000); // shader compiles; CI renders in software
+  const page = await newPlayer(browser, uniqueName('dress'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  // A shader that doesn't compile only logs: catch it here.
+  page.on('console', (msg) => {
+    if (msg.type() === 'error' && /shader|effect|compile/i.test(msg.text()))
+      errors.push(msg.text());
+  });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Leafy Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+
+  // Every terrain is dressed (one mesh per prop kind), and only the player's
+  // home ring and Juniper's Gap are in full colour: the rest is wild.
+  const drawn = (await mapState(page))!;
+  expect(drawn.props).toBeGreaterThan(1000);
+  expect(drawn.propKinds).toBeGreaterThanOrEqual(18);
+  expect(drawn.mutedTiles).toBeGreaterThan(400);
+  expect(drawn.mutedTiles).toBeLessThan(469 - 7);
+
+  // Ambient life runs (or switched itself off on a renderer too slow for it,
+  // as CI's software one can be)...
+  expect(['live', 'off']).toContain(drawn.ambient);
+  // ...and with reduced motion nothing moves, so the map draws nothing at all.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect
+    .poll(async () => (await mapState(page))?.ambient, { timeout: 15_000 })
+    .toMatch(/^(still|off)$/);
+  await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
+  const before = await draws(page);
+  await page.waitForTimeout(1500);
+  expect(await draws(page)).toBe(before);
+  await page.emulateMedia({ reducedMotion: null });
+
+  expect(errors).toEqual([]);
+  await page.context().close();
+});

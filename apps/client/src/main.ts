@@ -260,6 +260,7 @@ const hollow = createHollowScreen({
   layer: {
     setNight: (night) => {
       hollowLayer.setNight(night);
+      maps.setNight(night);
       audio.setNight(night);
     },
     visit: (done) => {
@@ -336,6 +337,8 @@ const maps = createMapScreen({
   root: document.body,
   showScene,
   invalidate: () => stage?.invalidate(),
+  requestFrame: () => stage?.requestFrame(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
     void battles.setMap(null);
     catalog.close();

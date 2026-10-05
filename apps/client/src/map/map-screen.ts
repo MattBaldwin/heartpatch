@@ -9,6 +9,7 @@ import {
   type WsEventMessage,
 } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
+import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import {
   createWsClient,
@@ -20,6 +21,8 @@ import type { GroundPoint } from '../engine/camera/camera-math.js';
 import { el } from '../ui/dom.js';
 import { HEX_SIZE } from './map-config.js';
 import { mapApi } from './map-api.js';
+import { AmbientDriver } from './ambient-driver.js';
+import { isHalloween } from './map-dressing.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
@@ -38,6 +41,12 @@ export interface MapScreenOptions {
   showScene: (build: SceneBuilder | null) => void;
   /** Draws a few frames after a change (`Stage.invalidate`). */
   invalidate: () => void;
+  /** Draws one frame (`Stage.requestFrame`): ambient life paces itself with this. */
+  requestFrame?: () => void;
+  /** The quality tier now: the low tier drops ambient life (motes and motion). */
+  tier?: () => QualityTier;
+  /** Now, for the season by the map's local date (Halloween dressing). */
+  now?: () => Date;
   /** The map closed by itself (e.g. the player was removed): show the lobby with this. */
   onClosed: (message: string) => void;
   api?: { view: (mapId: string) => Promise<MapView> };
@@ -103,6 +112,8 @@ export interface MapScreen {
   /** The map on screen as this player sees it, or null (the recipe book finds their tiles in it). */
   readonly view: MapView | null;
   setUser: (user: PublicUser | null) => void;
+  /** Night on the map (#21): fireflies, the night backdrop, lanterns glowing. */
+  setNight: (night: boolean) => void;
   readonly debug: MapDebug | null;
 }
 
@@ -119,6 +130,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   let scene3d: MapScene | null = null;
   let ws: WsClient | null = null;
   let selected: Hex | null = null;
+  let night = false;
 
   const hudName = el('span', { class: 'map-hud-name' });
   const hudStatus = el('span', { class: 'map-hud-status', role: 'status' });
@@ -194,12 +206,30 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     },
   });
 
+  // Ambient life (the terrain visual pass): see ambient-driver.ts.
+  const ambient = new AmbientDriver({
+    target: () => scene3d,
+    invalidate: options.invalidate,
+    ...(options.requestFrame ? { requestFrame: options.requestFrame } : {}),
+    ...(options.tier ? { tier: options.tier } : {}),
+  });
+
   /** Builds the map into a fresh scene (on open, and again after a GPU-loss rebuild). */
   const build = (scene: Scene): SceneContent => {
     const state = sync.state;
     if (!state) throw new Error('no map to build');
-    const built = new MapScene(scene, state.view);
+    const built = new MapScene(scene, state.view, {
+      halloween: isHalloween(state.view.map.timeZone, options.now?.() ?? new Date()),
+      ...ambient.state,
+    });
+    built.setNight(night);
     scene3d = built;
+    ambient.start();
+    // Another screen (a battle, a close-up) swapped the stage: stop asking for
+    // frames until the map is built again.
+    scene.onDisposeObservable.addOnce(() => {
+      if (scene3d === built) ambient.stop();
+    });
     for (const layer of options.layers ?? []) layer.attach(scene, state.view);
     if (selected) built.select(selected);
     const unregister = options.targets?.register('resource-node', () =>
@@ -228,6 +258,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
 
   /** Takes the map off screen (the sync is already closed or about to be). */
   function hideMap(): void {
+    ambient.stop();
     scene3d = null;
     selected = null;
     panel.hide();
@@ -263,6 +294,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       showTile(state, h);
       const p = hexToWorld(h, HEX_SIZE);
       return { x: p.x, z: p.z };
+    },
+    setNight: (next) => {
+      night = next;
+      scene3d?.setNight(next);
+      options.invalidate();
     },
     setUser: (next) => {
       if (next?.id === user?.id) return;
