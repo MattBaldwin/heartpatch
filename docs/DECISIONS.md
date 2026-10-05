@@ -83,8 +83,8 @@ _Proposed in PR #55; the project owner confirms on merge._
 
 ## 2026-10-02 — Usage, models and supervisor handoff
 
-- **Models (owner decision):** build sessions that write code and reviewers on code PRs use the strongest model (Opus). Docs-only reviews, drift audits and simple content/docs work use **Sonnet 5.5**. *Why:* code reviews have caught real bugs every round; the rest is cheaper without losing much.
-- **#13 (battles) runs on Fable (owner decision, 2026-10-02).** The #13 build session uses Fable; its code reviewers stay on Opus. *Why:* #13 is the most rule-heavy Phase 1 lane and mistakes there are costly to unwind. Fable currently costs about 2.5× Opus per token, so the supervisor flags #13's cost against a higher bar (about $30, not $20) and reports how it compares with the Opus lanes.
+- **Models (owner decision):** *(Code work superseded by "2026-10-05 — Stabilization process and deploy": Fable replaces Opus.)* Build sessions that write code and reviewers on code PRs use the strongest model (Opus). Docs-only reviews, drift audits and simple content/docs work use **Sonnet 5.5**. *Why:* code reviews have caught real bugs every round; the rest is cheaper without losing much.
+- **#13 (battles) runs on Fable (owner decision, 2026-10-02).** *(Superseded 2026-10-05: every code lane runs on Fable.)* The #13 build session uses Fable; its code reviewers stay on Opus. *Why:* #13 is the most rule-heavy Phase 1 lane and mistakes there are costly to unwind. Fable currently costs about 2.5× Opus per token, so the supervisor flags #13's cost against a higher bar (about $30, not $20) and reports how it compares with the Opus lanes.
 - **Fresh supervisor (owner decision):** when the supervisor's context gets large, a new supervisor session takes over with a compact handoff. *Why:* every wake re-reads the whole context, so a long-running supervisor becomes the biggest cost. The process lives in `docs/COORDINATOR.md` so it survives the handoff.
 - **Review loops are capped at 4 rounds** (proposed in PR #63; confirmed 2026-10-03, and a round caused only by merging `main` doesn't count: see "2026-10-03 — Owner decisions") before the build session reports `blocked` to the supervisor, who escalates to the owner if needed; and the supervisor avoids mid-flight scope changes unless they're blocking contracts.
 
@@ -681,7 +681,7 @@ _Proposed in the bug-bash tutorial PR (#127, #128, #129, #139, #140, #154, #163)
 _Owner decisions and process changes from the bug-bash stabilization day. Recorded by the coordinator._
 
 ### Process
-- **Fable (`claude-fable-5-1`) does all build, fix and review work** (owner decision). COORDINATOR.md §6 is updated to match.
+- **Fable (`claude-fable-5-1`) does all build and fix work, and reviews code PRs** (owner decision). It supersedes the 2026-10-02 "Models" decision for code work (Opus) and the #13 exception. Docs-only reviews, drift audits and simple docs work stay on Sonnet 5.5. COORDINATOR.md §6 is updated to match.
 - **Lanes no longer edit this file.** Every pair of open PRs conflicted on its last lines, and each conflict cost a merge of main plus a full CI run. A lane writes its decisions under `## Decisions` in its PR body; the coordinator appends them here after the merge, in the next Docs PR.
 - **A failure that isn't the PR's doesn't block its merge:** a check that is red on main too, or a test the PR doesn't touch that fails across several PRs while a named fix lane owns it. The verdict comment says so.
 - **The lean review:** with the account at its 7-day usage warning, the post-stabilization review runs as three read-only reviewers (story and orphans; look and feel, including art direction and a contact sheet of every species; longevity, with the balance sim) feeding one ranked report. The art bible follows it (owner decision).

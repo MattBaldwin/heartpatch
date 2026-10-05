@@ -67,7 +67,6 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 |---|---|
 | Build sessions that write code; reviewers on code PRs | Fable (`claude-fable-5-1`, owner decision 2026-10-05) |
 | Docs-only PR reviews, drift audits, simple content/docs sessions | Sonnet 5.5 |
-| Exceptions named by the owner (currently: the #13 build session) | Fable |
 
 **Keeping supervisor cost down:**
 - Treat trivial wakes (subscription confirmations, merge echoes) as one-liners.
@@ -173,12 +172,12 @@ The supervisor keeps this list current. Remove items as they land.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
 - **Lessons (2026-10-05):**
-  - **A red main costs every lane.** Each PR re-merged main and re-ran 8–15 min of WebKit CI per merge; the day's eight lanes cost about $650 (taps $154, tutorial $152, battle $108, screens $65, rules $64, flakes $60, tray-fix $40). Fix main first, and fix a timing test by waiting on the game's own state (`still()` in `tests/e2e/layout.ts`), never on time.
+  - **A red main costs every lane.** Each PR re-merged main and re-ran 8–15 min of WebKit CI per merge; the day's seven lanes cost about $650 (taps $154, tutorial $152, battle $108, screens $65, rules $64, flakes $60, tray-fix $40). Fix main first, and fix a timing test by waiting on the game's own state (`still()` in `apps/client/tests/e2e/layout.ts`), never on time.
   - **`docs/DECISIONS.md` is append-only at the bottom, so every pair of open PRs conflicts there.** Lanes now put their decision text under a `## Decisions` heading in the PR body; the coordinator appends it to DECISIONS.md after the merge (in the next Docs PR). Lanes don't edit DECISIONS.md.
   - **A test that waits for the UI to settle can hide the bug it guards.** Keep one test that acts mid-motion (#126's sticky-tap spec fails without the fix).
   - **Split a lane that finds a second root cause** into its own small PR rather than growing the first (#126 grew to 8 review rounds).
   - **Containers can't SSH out** (port 22 is blocked by the egress proxy). AWS work goes through the API; the server's own setup runs as Lightsail's first-boot script.
-- **Lessons:**
+- **Earlier lessons:**
   - CI wakes get lost, so sessions check `get_check_runs` themselves before going idle (§7).
   - Check DECISIONS before copying an issue's text into a brief. #45's "per map" came from the issue and contradicted decision F (the coins are the account's).
 - **Cost so far (USD):**

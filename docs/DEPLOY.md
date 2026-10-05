@@ -104,7 +104,7 @@ Before you start, have:
    - **Platform:** **Linux/Unix**. **Blueprint:** **OS Only** → **Ubuntu 24.04 LTS**. *Why:* LTS gets security updates until 2029; the setup script is written for it.
    - **SSH key pair:** keep the **default** key for the region. You'll download it in step 3.
    - **Network type:** the default (dual-stack) is fine.
-   - **Plan:** the **2 GB RAM** plan. *Why:* Postgres + Node + Caddy fit comfortably, and the setup adds 2 GB of swap as a safety net.
+   - **Plan:** the **2 GB RAM** plan (or 1 GB if a new project refuses 2 GB; see the note under step 1). *Why:* Postgres + Node + Caddy fit comfortably, and the setup adds 2 GB of swap as a safety net.
    - **Name:** `heartpatch`. **Create instance**. It's ready in a minute or two.
 3. **Attach a static IP.** Instance → **Networking** tab → **Attach static IP** (or **Create static IP**) → name it `heartpatch-ip` → **Create**. Write the address down: it's `STATIC_IP` in the rest of this runbook. *Why:* an instance's default public IP changes if it's stopped; the static one never does, and DNS points at it.
 4. **Firewall.** Same **Networking** tab → **IPv4 Firewall**: make sure there are exactly three rules, **SSH (TCP 22)**, **HTTP (TCP 80)** and **HTTPS (TCP 443)**; add HTTPS with **+ Add rule** if it's missing. Do the same under **IPv6 Firewall**. *Why:* 80/443 serve the game (80 only redirects to HTTPS and answers Let's Encrypt's check); 22 is SSH.
@@ -186,7 +186,7 @@ GitHub → the `heartpatch` repo → **Settings** → **Secrets and variables** 
 | `LIGHTSAIL_HOST` | `STATIC_IP` (the address, not the domain name) |
 | `LIGHTSAIL_USER` | `deploy` |
 | `LIGHTSAIL_SSH_KEY` | the whole **private** key, including the `-----BEGIN` and `-----END` lines. On a Mac: `pbcopy < ~/.ssh/heartpatch-deploy`, then paste |
-| `LIGHTSAIL_KNOWN_HOSTS` | the line `server-setup.sh` printed: `STATIC_IP ssh-ed25519 AAAA…` |
+| `LIGHTSAIL_KNOWN_HOSTS` | the line `server-setup.sh` printed: `STATIC_IP ssh-ed25519 AAAA…` (or the `ssh-ed25519` host key from `aws lightsail get-instance-access-details`, prefixed with `STATIC_IP `) |
 
 Then delete the laptop copy of the private deploy key: `rm ~/.ssh/heartpatch-deploy`. *Why:* GitHub keeps it encrypted, and you log in with your own admin key, so a second copy is only something to lose. If it's ever needed again, make a new key and re-run `server-setup.sh` with the new `.pub`.
 
