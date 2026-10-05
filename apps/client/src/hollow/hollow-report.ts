@@ -49,10 +49,15 @@ export function unseenReports(
   );
 }
 
-/** The report card's title and lines for these nights (newest first). */
+/**
+ * The report card's title and lines for these nights (newest first).
+ * `fireHint` is the status's own ("no fire of mine is lit for tonight"), so
+ * a night he let them be asks for a fire only while there isn't one.
+ */
 export function reportText(
   reports: readonly MorningReport[],
   nameOf: (taken: NonNullable<MorningReport['taken']>) => string,
+  fireHint = true,
 ): { title: string; lines: string[] } {
   const taken = reports.flatMap((r) => (r.taken ? [r.taken] : []));
   const title =
@@ -69,7 +74,7 @@ export function reportText(
     // dark and he let them be (first-night grace), which is the moment to
     // say "light a fire" (owner decision 2026-10-03).
     if (reports.some((r) => r.taken === null && r.exposed > 0)) {
-      lines.push(HOLLOW_TEXT.spared, HOLLOW_TEXT.fireHint);
+      lines.push(HOLLOW_TEXT.spared, ...(fireHint ? [HOLLOW_TEXT.fireHint] : []));
     } else {
       lines.push(HOLLOW_TEXT.safe);
     }

@@ -232,7 +232,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const heldBack = options.otherReportOpen?.() ?? false;
     reportBox.hidden = !on || report.length === 0 || visitPlaying || heldBack;
     if (!reportBox.hidden) {
-      const { title, lines } = reportText(report, (t) => nameOf(t));
+      const { title, lines } = reportText(report, (t) => nameOf(t), status?.fireHint ?? true);
       const waiting = report.flatMap((r) => (r.taken?.inHollow ? [r.taken] : []));
       const rescueFirst = waiting[0];
       reportBox.replaceChildren(

@@ -115,7 +115,7 @@ describe('territoryAction', () => {
     expect(shieldUntil({ ownerUserId: null }, view, joined)).toBeNull();
   });
 
-  it('says land that isn’t next to yours is too far, shielded or not', () => {
+  it('says land that isn’t next to yours is too far; a shielded Keeper’s says so even from afar', () => {
     const { view } = setup();
     const far = view.tiles.find((t) => t.q === 0 && t.r === 0)!;
     expect(territoryAction(far, view, ME, status(), NOW).kind).toBe('too-far');
@@ -125,6 +125,9 @@ describe('territoryAction', () => {
     expect(territoryAction(theirs, view, ME, status(), NOW + 365 * 24 * 60 * 60 * 1000).kind).toBe(
       'too-far',
     );
+    // A home base says nothing extra, shield or not: it can never be taken.
+    const theirHome = view.tiles.find((t) => t.ownerUserId === userId(2) && t.homeSlot !== null)!;
+    expect(territoryAction(theirHome, view, ME, status(), joined + 60_000).kind).toBe('none');
   });
 
   it('offers nothing before it knows who you are and your tries', () => {

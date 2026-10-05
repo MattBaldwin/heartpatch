@@ -59,6 +59,10 @@ describe('the morning report', () => {
       title: HOLLOW_TEXT.passedBy,
       lines: [HOLLOW_TEXT.spared, HOLLOW_TEXT.fireHint],
     });
+    // A fire lit since: no nagging.
+    expect(reportText([night('2026-10-28', { exposed: 1 })], () => '', false).lines).toEqual([
+      HOLLOW_TEXT.spared,
+    ]);
     // Once someone is taken, that line is the news; the spared night needs no line of its own.
     const mixed = reportText(
       [night('2026-10-31', { taken: taken(1), exposed: 1 }), night('2026-10-30', { exposed: 1 })],

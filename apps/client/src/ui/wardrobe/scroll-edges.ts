@@ -35,15 +35,26 @@ export function scrollMore(edges: ScrollEdges): string | null {
 
 /**
  * Keeps `data-scroll-more` on a row up to date: on scroll, when its content
- * changes (`refresh`, after a render) and when the window resizes.
+ * changes (`refresh`, after a render) and when the window resizes, until
+ * `dispose` (the wardrobe lives as long as the page, but a reuse may not).
  */
-export function watchScrollEdges(row: HTMLElement): { refresh: () => void } {
+export function watchScrollEdges(row: HTMLElement): {
+  refresh: () => void;
+  dispose: () => void;
+} {
   const refresh = () => {
     const more = scrollMore(scrollEdges(row));
     if (more === null) row.removeAttribute('data-scroll-more');
     else if (row.getAttribute('data-scroll-more') !== more) row.setAttribute('data-scroll-more', more);
   };
-  row.addEventListener('scroll', refresh, { passive: true });
-  window.addEventListener('resize', refresh);
-  return { refresh };
+  const controller = new AbortController();
+  const { signal } = controller;
+  row.addEventListener('scroll', refresh, { passive: true, signal });
+  window.addEventListener('resize', refresh, { signal });
+  return {
+    refresh,
+    dispose: () => {
+      controller.abort();
+    },
+  };
 }
