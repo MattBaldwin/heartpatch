@@ -221,6 +221,12 @@ export function createTutorialScreen(options: TutorialScreenOptions): TutorialSc
         scene = null;
         sprout = null;
       });
+      // A drawn frame may have moved a canvas target (a camera pan or zoom):
+      // the spotlight follows. Frames are drawn on demand, so this is idle
+      // while nothing moves.
+      next.onAfterRenderObservable.add(() => {
+        if (controller?.isOpen) overlay.follow();
+      });
       syncSprout(controller?.isOpen ?? false);
       overlay.relayout();
     },
