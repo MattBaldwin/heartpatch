@@ -221,6 +221,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           gatheringRoutes(createGatheringService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
         // Squishy jobs (owner decisions 2026-10-04): the team, gatherers, the job board.

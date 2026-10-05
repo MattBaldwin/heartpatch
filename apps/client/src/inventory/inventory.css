@@ -173,7 +173,8 @@
 }
 
 /* The gathering chip: under the map's name at the top, where nothing else
-   sits, so a gather never feels like "nothing happened". Tap: the Bag. */
+   sits, so a gather never feels like "nothing happened". Tap while it counts
+   down: the Bag. Tap once it's ready: it collects and shows what came. */
 .gather-chip {
   position: fixed;
   z-index: 3;

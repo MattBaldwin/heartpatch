@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { expectClear, expectRoomyLabels, SCREENS } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
-import { openTray, trayButton, type TraySide } from './trays.js';
+import { openTray, trayButton, traySettled } from './trays.js';
 
 // The owner's rule after two edge-to-edge labels: text never touches a
 // control's edge, and nothing hangs off the screen (style guide §3). Every
@@ -18,17 +18,6 @@ const TRAY_CONTROLS = [
   '.tray-close',
   '.tray-top-left > button',
 ].join(', ');
-
-/**
- * The open tray's slide has ended: ui/trays marks a sliding tray `hp-settling`
- * (tray-state.ts SETTLING) until its transitionend, so a row is never measured
- * mid-slide. No sleep: CI renders in software and a slide can start late.
- */
-async function traySettled(page: Page, side: TraySide): Promise<void> {
-  const tray = page.getByTestId(`tray-${side}`);
-  await expect(tray).toHaveClass(/tray-shown/);
-  await expect(tray).not.toHaveClass(/hp-settling/);
-}
 
 /**
  * Taps `target` to turn the book, then waits until the turn has been drawn
