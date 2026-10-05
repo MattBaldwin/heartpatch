@@ -11,6 +11,8 @@ export const ARENA = {
   halfGap: 2.4, // TUNE
   /** How far the player's squishy sits towards the camera, and the other one away (−z is towards it). */
   depth: 3, // TUNE
+  /** The player's Keeper stands nearly upright under the low battle camera (× its map lean). */
+  keeperLean: 0.3, // TUNE
   /** Each squishy turns to face the other, radians off straight ahead. */
   faceOff: 0.55, // TUNE
 } as const;
@@ -79,7 +81,9 @@ export const CHOREO = {
   /** Hit strength per effectiveness tier (`BATTLE_RULES.effectiveness`). */
   strength: { super: 1.45, good: 1.2, normal: 1, weak: 0.65 } as Readonly<Record<string, number>>, // TUNE
   /** Standing ready to fight: lean in, a little low, light on its toes. */
-  ready: { lean: 0.1, squash: 0.96, bobHz: 1.5, bob: 0.05, sway: 0.05 }, // TUNE
+  ready: { lean: 0.1, squash: 0.96, bobHz: 1.5, bob: 0.05, sway: 0.05, otherPhase: 0.37 }, // TUNE: otherPhase keeps the two out of step
+  /** A fighter left at arm's length (a dash that didn't land) hops home this fast, ms. */
+  returnMs: 320, // TUNE
   camera: {
     /** Push-in on a dash and a capture, on a hit (× strength), and on a flop. */
     followPush: 0.06, // TUNE
@@ -95,6 +99,8 @@ export const CHOREO = {
 /** The battle camera (owner decision 2026-10-04): it frames the fight and follows it. */
 export const BATTLE_CAMERA = {
   fov: 0.78, // TUNE
+  /** Near clip plane: close enough for a push-in, far enough for depth precision. */
+  minZ: 0.3, // TUNE
   /** Tilt down from the horizon: low enough to see the sky behind the fight. */
   pitch: 0.35, // TUNE: about 20°
   /** What must fit on screen, world units: the fight's width and height. */

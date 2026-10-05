@@ -35,7 +35,7 @@ import {
   type ArenaPlan,
 } from './arena-layout.js';
 import { BattleArena, type ArenaStats } from './arena.js';
-import { ARENA, CHOREO } from './battle-config.js';
+import { ARENA, BATTLE_CAMERA, CHOREO } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
 import type { BattleContent } from './battle-view.js';
 import { CameraDirector } from './camera-director.js';
@@ -183,7 +183,7 @@ export class BattleScene {
             z: mine.z + place.offset.z,
             yaw: place.yaw,
             // The battle camera is low now: the Keeper stands nearly upright.
-            lean: place.lean * 0.3,
+            lean: place.lean * ARENA.keeperLean,
             scale: place.scale,
           },
           keeperItems(options.keeperWearing ?? []),
@@ -256,7 +256,7 @@ export class BattleScene {
       fx,
       fz,
       yaw,
-      phase: mine ? 0 : 0.37,
+      phase: mine ? 0 : CHOREO.ready.otherPhase,
       handle: null,
       height: 1,
       radius: 0.5,
@@ -289,6 +289,26 @@ export class BattleScene {
     const [sx, , sz] = handle.params.body.scale;
     rig.height = handle.params.height * ARENA.scale;
     rig.radius = (Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) * ARENA.scale) / 2;
+  }
+
+  /**
+   * Builds every squishy on a side's team once, then puts them away, so a
+   * swap later reuses meshes made now instead of building them mid-turn
+   * (CLAUDE.md rule 8). Call before `sendOut`.
+   */
+  prewarm(side: BattleSideId, team: readonly { speciesId: string; instanceId: string }[]): void {
+    const rig = this.#rigs[side];
+    const look =
+      side === this.#options.mySide ? 'normal' : (this.#options.opponentLook ?? 'normal');
+    const handles: SquishyHandle[] = [];
+    for (const { speciesId, instanceId } of team) {
+      const species = this.#options.content.species.get(speciesId);
+      if (species) handles.push(rig.field.add(species, instanceId, { x: 0, z: 0 }, look));
+    }
+    // Upload builds each batch's mesh; with no instances left it's only switched off.
+    rig.field.flush();
+    for (const handle of handles) rig.field.remove(handle);
+    rig.field.flush();
   }
 
   /** Lying tuckered out already (a battle shown again after a flop). */
@@ -354,7 +374,13 @@ export class BattleScene {
     for (const rig of Object.values(this.#rigs)) {
       if (busy.has(rig.side) || !rig.act) continue;
       if (ACT_END[rig.act.kind] === 'contact') {
-        rig.queue.push({ side: rig.side, kind: 'return', delay: now, ms: 320, strength: 1 });
+        rig.queue.push({
+          side: rig.side,
+          kind: 'return',
+          delay: now,
+          ms: CHOREO.returnMs,
+          strength: 1,
+        });
       }
     }
     this.#advance(now);
@@ -377,8 +403,14 @@ export class BattleScene {
         duration = step.ms * CHOREO.charm.resultAt + 80;
       }
       if (cue.kind === 'trail') {
+        // The dash this step started (already running), or one still queued.
         const queued = rig.queue.find((q) => q.kind === 'dash');
-        const dash = queued ? this.#act(rig, 'dash', queued.delay, queued.ms, 1, rig.pose) : null;
+        const dash =
+          rig.act?.kind === 'dash' && rig.act.start >= now
+            ? rig.act
+            : queued
+              ? this.#act(rig, 'dash', queued.delay, queued.ms, 1, rig.pose)
+              : null;
         path = (t) => this.#centreAt(rig, dash ? actPose(dash, t) : rig.pose);
         duration = cue.strength * 1000;
       }
@@ -595,7 +627,7 @@ export class BattleScene {
       const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
       const shot = this.#director.shot(this.#now, aspect);
       camera.fov = shot.fov;
-      camera.minZ = 0.3;
+      camera.minZ = BATTLE_CAMERA.minZ;
       camera.maxZ = ARENA_STAGE.skyRadius * 2.5;
       camera.position.set(shot.position.x, shot.position.y, shot.position.z);
       camera.setTarget(this.#lookAt.set(shot.target.x, shot.target.y, shot.target.z));

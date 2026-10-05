@@ -523,7 +523,11 @@ export interface StepPlan {
   readonly effects: readonly EffectCue[];
   readonly squish: readonly SquishCue[];
   readonly camera: CameraCue;
-  /** Hit-stop: everything freezes this long when a hit lands, ms. */
+  /**
+   * Hit-stop, ms: when a hit lands, both fighters hold their contact pose
+   * this long before the knockback and follow-through (breathing and the
+   * flash keep going).
+   */
   readonly hitStop: number;
 }
 

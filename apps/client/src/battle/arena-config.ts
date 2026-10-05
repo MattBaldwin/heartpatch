@@ -37,16 +37,11 @@ export interface ArenaSpec {
   readonly water: string | null;
   /** A hint of the terrain in the sky's haze (mixed into the horizon, 0–1 by `hazeMix`). */
   readonly haze: string;
-  /** Little things drifting in the air while nothing else moves; null for none. */
-  readonly motes: ArenaMotes | null;
 }
-
-/** Ambient bits in the air: pollen, falling leaves, glow motes, mist, fireflies (night). */
-export type ArenaMotes = 'pollen' | 'leaves' | 'glow' | 'dust' | 'mist';
 
 const ring = (near: number, far: number): readonly [number, number] => [near, far];
 
-/** Keyed by terrain id (packages/shared/src/data/terrains.ts); `arenaSpecFor` falls back to meadow. */
+/** Keyed by terrain id (packages/shared/src/data/terrains.ts); `arenaPlan` falls back to `FALLBACK_ARENA`. */
 export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
   meadow: {
     props: [
@@ -57,7 +52,6 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     ],
     water: null,
     haze: '#d9f2c4',
-    motes: 'pollen',
   },
   forest: {
     props: [
@@ -68,7 +62,6 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     ],
     water: null,
     haze: '#bfe6c8',
-    motes: 'leaves',
   },
   'old-forest': {
     props: [
@@ -79,7 +72,6 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     ],
     water: null,
     haze: '#a9d4b8',
-    motes: 'glow',
   },
   hills: {
     props: [
@@ -89,7 +81,6 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     ],
     water: null,
     haze: '#f3e4c2',
-    motes: 'dust',
   },
   mountains: {
     props: [
@@ -99,7 +90,6 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     ],
     water: null,
     haze: '#ddd6ec',
-    motes: 'mist',
   },
   lake: {
     ground: '#f2e2b8', // TUNE: a sandy shore; the lake itself is the water behind
@@ -110,7 +100,6 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     ],
     water: '#9fd6f5', // TUNE: the map's lake colour
     haze: '#d6effa',
-    motes: 'mist',
   },
   'pumpkin-fields': {
     props: [
@@ -120,7 +109,6 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     ],
     water: null,
     haze: '#ffe2b0',
-    motes: 'leaves',
   },
   'junipers-gap': {
     props: [
@@ -131,7 +119,6 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     ],
     water: null,
     haze: '#f1dcff',
-    motes: 'glow',
   },
 };
 
@@ -144,8 +131,13 @@ export const ARENA_STAGE = {
   groundRadius: 16, // TUNE
   /** Thickness of the ground disc (its edge shows: it's a little diorama). */
   groundDepth: 0.8, // TUNE
-  /** Props stay this far from the fighters (they never stand in the fight). */
+  /** Props stay this far from the arena's middle (the fight between the fighters). */
   clearRadius: 4, // TUNE
+  /**
+   * And this far from where each fighter stands: its width, a knockback and
+   * a dodge, so nothing ends up under or inside a squishy.
+   */
+  fighterClear: 2.8, // TUNE
   /**
    * Props only stand behind the fighters and to the sides: angles off the
    * camera's line, radians (0 is straight behind, π straight in front).

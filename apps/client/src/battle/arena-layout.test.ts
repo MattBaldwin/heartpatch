@@ -2,7 +2,15 @@ import { TERRAINS } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { TERRAIN_LOOKS } from '../map/map-config.js';
 import { ARENA_MOODS, ARENA_SPECS, ARENA_STAGE } from './arena-config.js';
-import { arenaPlan, arenaProps, arenaSeed, groundColor, skyAt, skyColors } from './arena-layout.js';
+import {
+  arenaPlan,
+  arenaProps,
+  arenaSeed,
+  FIGHTER_HOMES,
+  groundColor,
+  skyAt,
+  skyColors,
+} from './arena-layout.js';
 
 const luminance = (rgb: readonly number[]) =>
   0.2126 * (rgb[0] ?? 0) + 0.7152 * (rgb[1] ?? 0) + 0.0722 * (rgb[2] ?? 0);
@@ -52,6 +60,12 @@ describe('arenaProps', () => {
         for (const p of arenaProps(s, seed)) {
           expect(Math.hypot(p.x, p.z)).toBeGreaterThanOrEqual(ARENA_STAGE.clearRadius);
           expect(Math.hypot(p.x, p.z)).toBeLessThanOrEqual(ARENA_STAGE.groundRadius);
+          // Nothing under or inside a fighter, even knocked back.
+          for (const home of FIGHTER_HOMES) {
+            expect(Math.hypot(p.x - home.x, p.z - home.z)).toBeGreaterThanOrEqual(
+              ARENA_STAGE.fighterClear,
+            );
+          }
           const group = s.props.find((g) => g.kind === p.kind);
           if (!group?.front) {
             // Angle off "straight behind" (+z); never in front of the fighters.

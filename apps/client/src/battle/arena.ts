@@ -11,7 +11,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { Scene } from '@babylonjs/core/scene';
 import type { PropKind } from '../map/map-config.js';
-import { buildProp, placeAt, setInstances, vinyl } from '../map/map-scene.js';
+import { buildProp, painted, placeAt, setInstances, vinyl } from '../map/map-scene.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
 import { ARENA_STAGE, type ArenaPropKind } from './arena-config.js';
 import {
@@ -259,14 +259,14 @@ export class BattleArena {
     this.#materials.push(mat);
     const moon = this.#keep(CreateSphere('arena-moon', { diameter: 7, segments: 16 }, scene));
     moon.material = mat;
-    paint(moon, hexRgb('#fff6d6'));
+    painted(moon, '#fff6d6');
     moon.position.set(-26, 34, 62);
     moon.applyFog = false;
     moon.freezeWorldMatrix();
 
     const star = this.#keep(CreateSphere('arena-stars', { diameter: 0.55, segments: 4 }, scene));
     star.material = mat;
-    paint(star, hexRgb('#fff1b8'));
+    painted(star, '#fff1b8');
     star.applyFog = false;
     const at: Matrix[] = [];
     const d = ARENA_STAGE.skyRadius * 0.9;
@@ -281,14 +281,6 @@ export class BattleArena {
     setInstances(star, at);
     star.freezeWorldMatrix();
   }
-}
-
-function paint(mesh: Mesh, rgb: Rgb): void {
-  const c = linear(rgb);
-  const count = mesh.getTotalVertices();
-  const colors = new Float32Array(count * 4);
-  for (let i = 0; i < count; i++) colors.set([c.r, c.g, c.b, 1], i * 4);
-  mesh.setVerticesData(VertexBuffer.ColorKind, colors);
 }
 
 /** Grass tufts a little deeper than the ground; hills a little lighter. */

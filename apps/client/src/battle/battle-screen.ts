@@ -622,6 +622,14 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     });
     lastTier = options.tier();
     for (const side of ['a', 'b'] as const) {
+      // Every squishy that might come out later is built now, not mid-turn.
+      built.prewarm(
+        side,
+        battle.view.sides[side].squishies.map((s) => ({
+          speciesId: s.speciesId,
+          instanceId: s.id,
+        })),
+      );
       const slot = shown[side].active;
       const squishy = battle.view.sides[side].squishies[slot];
       if (squishy) {

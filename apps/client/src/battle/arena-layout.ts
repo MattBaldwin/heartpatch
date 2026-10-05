@@ -15,6 +15,7 @@ import {
   type ArenaPropKind,
   type ArenaSpec,
 } from './arena-config.js';
+import { ARENA } from './battle-config.js';
 
 // Pure arena maths (owner decision 2026-10-04): which diorama a terrain gets,
 // where its props stand, and the sky's colours. No Babylon, so it's unit
@@ -57,6 +58,12 @@ export interface ArenaPropPlacement {
   readonly color: string | null;
 }
 
+/** Where the two fighters stand (battle-scene.ts): props keep clear of both. */
+export const FIGHTER_HOMES: readonly { x: number; z: number }[] = [
+  { x: -ARENA.halfGap, z: -ARENA.depth },
+  { x: ARENA.halfGap, z: ARENA.depth },
+];
+
 /** A small whole number from a battle id, so one battle always gets the same arena. */
 export function arenaSeed(battleId: string): number {
   let h = 2166136261;
@@ -86,6 +93,9 @@ export function arenaProps(spec: ArenaSpec, seed: number, share = 1): ArenaPropP
       const x = Math.sin(angle) * r;
       const z = Math.cos(angle) * r;
       if (Math.hypot(x, z) < ARENA_STAGE.clearRadius) continue;
+      if (FIGHTER_HOMES.some((h) => Math.hypot(x - h.x, z - h.z) < ARENA_STAGE.fighterClear)) {
+        continue;
+      }
       const [small, big] = group.scale;
       out.push({
         kind: group.kind,
