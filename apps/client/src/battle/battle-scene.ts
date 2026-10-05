@@ -483,6 +483,7 @@ export class BattleScene {
   }
 
   setLod(lod: SquishyLod): void {
+    if (lod === this.#lod) return;
     this.#lod = lod;
     this.#rigs.a.field.setLod(lod);
     this.#rigs.b.field.setLod(lod);
