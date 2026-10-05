@@ -7,6 +7,7 @@ import {
 import { el, messageOf } from '../ui/dom.js';
 import {
   bookOrder,
+  bookTabs,
   bookSpreads,
   freshPages,
   pageView,
@@ -100,8 +101,6 @@ export const RECIPE_BOOK_TEXT = {
   contents: 'Contents',
   make: 'Make',
   build: 'Build at home',
-  tabMake: 'Make',
-  tabBuild: 'Build',
   sealedName: 'A sealed page',
   sealedNote: 'Collect everything it needs and this page opens by itself!',
   stillSealed: (n: number) =>
@@ -547,6 +546,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
       ...(page.isNew ? [el('span', { class: 'rbook-sticker' }, RECIPE_BOOK_TEXT.newTag)] : []),
     ),
     el('h3', { class: 'rbook-name' }, page.name),
+    ...(page.effect ? [el('p', { class: 'rbook-effect' }, page.effect)] : []),
     el('p', { class: 'rbook-flavour' }, page.flavour),
     el('p', { class: 'rbook-meta' }, page.meta),
     el('h4', { class: 'rbook-need' }, RECIPE_BOOK_TEXT.youNeed),
@@ -677,16 +677,9 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
         const p = byKey.get(k);
         return p !== undefined && pred(p);
       });
-    const tabDefs: [string, (p: PageView) => boolean][] = [
-      [RECIPE_BOOK_TEXT.tabMake, (p) => p.section === 'make'],
-      [RECIPE_BOOK_TEXT.tabBuild, (p) => p.section === 'build'],
-      ...[...new Set(all.flatMap((p) => (p.season ? [p.season] : [])))].map(
-        (s): [string, (p: PageView) => boolean] => [s, (p) => p.season === s],
-      ),
-    ];
     tabs.hidden = onCover;
     tabs.replaceChildren(
-      ...tabDefs.flatMap(([label, pred], i) => {
+      ...bookTabs(all).flatMap(({ label, matches: pred, color }) => {
         const target = firstOf(pred);
         if (!target) return [];
         const current = showing.some((k) => {
@@ -697,7 +690,8 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
           'button',
           {
             type: 'button',
-            class: `rbook-tab rbook-tab-${String(i)}${current ? ' rbook-tab-current' : ''}`,
+            class: `rbook-tab${current ? ' rbook-tab-current' : ''}`,
+            style: `background: ${color}`,
             'aria-current': current ? 'page' : 'false',
           },
           label,

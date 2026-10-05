@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bookOrder,
   bookSpreads,
+  bookTabs,
   craftTime,
   findSpot,
   freshPages,
@@ -213,5 +214,33 @@ describe('the book', () => {
     expect(craftTime(300)).toBe('5 min');
     expect(listWords(['a', 'b', 'c'])).toBe('a, b and c');
     expect(listWords(['a', 'b'], 'or')).toBe('a or b');
+  });
+});
+
+describe('ribbon tabs', () => {
+  const views = PAGES.map((p) => pageView(p, ctx()));
+
+  it('come from data: Make, Build and one per season on the pages', () => {
+    expect(bookTabs(views).map((t) => t.label)).toEqual(['Make', 'Build', 'Halloween']);
+    const halloween = bookTabs(views)[2]!;
+    expect(views.filter(halloween.matches).map((p) => p.key)).toEqual([
+      'recipe:pumpkin-treats',
+      'recipe:jack-o-lantern-hearthfire',
+      'building:jack-o-lantern-hearthfire',
+    ]);
+  });
+
+  it('take a new part of the book as a new rule', () => {
+    const tabs = bookTabs(views, [
+      { id: 'food', label: 'Treats & food', color: '#ffd76a', outputs: ['treats'] },
+      { id: 'charms', label: 'Charms', color: '#ff9ab8', outputKinds: ['crafted'] },
+      { id: 'none', label: 'Nothing yet', color: '#fff', outputs: ['no-such-thing'] },
+    ]);
+    expect(tabs.map((t) => t.label)).toEqual(['Treats & food', 'Charms']);
+    expect(views.filter(tabs[0]!.matches).map((p) => p.key)).toEqual(['recipe:pumpkin-treats']);
+  });
+
+  it('leave the effect line empty until something has one', () => {
+    expect(views.every((v) => v.effect === null)).toBe(true);
   });
 });

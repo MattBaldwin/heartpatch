@@ -102,6 +102,13 @@ export interface PageView {
   /** The game's own icon for what it makes. */
   readonly icon: string;
   readonly section: 'make' | 'build';
+  /** What it makes: an item id, or the building's id. */
+  readonly output: string;
+  /**
+   * What it does for squishies ("Loved by Fire squishies · +XP next battle"),
+   * shown under the name when set. Nothing has one yet; foods will.
+   */
+  readonly effect: string | null;
   /** The page's season's name ("Halloween"), or null. */
   readonly season: string | null;
   readonly sealed: boolean;
@@ -166,6 +173,8 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
     flavour: page.description,
     icon: page.output.kind === 'item' ? itemIcon(page.output.resource) : buildingIcon(page.id),
     section: page.kind === 'recipe' ? 'make' : 'build',
+    output: page.output.kind === 'item' ? page.output.resource : page.output.building,
+    effect: null,
     season,
     sealed,
     hint: sealedHint(page.key) ?? BOOK_TEXT.sealed,
@@ -175,6 +184,66 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
     note,
     isNew: !sealed && ctx.unseen.has(page.key),
   };
+}
+
+/**
+ * The book's ribbon tabs, as data: each picks its pages by section, by what
+ * they make (an item's `kind` in the resource table, or exact ids), or makes
+ * one tab per season on the pages. A new part of the book (e.g. "Treats &
+ * food") is a new row here, with no change to the book itself.
+ */
+export interface BookTabRule {
+  readonly id: string;
+  readonly label: string;
+  readonly color: string;
+  readonly section?: PageView['section'];
+  /** Pages whose output item has one of these resource kinds. */
+  readonly outputKinds?: readonly string[];
+  /** Pages that make one of these ids. */
+  readonly outputs?: readonly string[];
+  /** One tab per season found on the pages (labelled with its name). */
+  readonly perSeason?: boolean;
+}
+
+export const BOOK_TABS: readonly BookTabRule[] = [
+  { id: 'make', label: 'Make', color: '#ff9ab8', section: 'make' },
+  { id: 'build', label: 'Build', color: '#ffc94d', section: 'build' },
+  { id: 'season', label: '', color: '#f2a93b', perSeason: true },
+];
+
+const RESOURCE_KINDS = new Map(GAME_DATA.resources.map((r) => [r.id, r.kind]));
+
+export interface BookTab {
+  readonly id: string;
+  readonly label: string;
+  readonly color: string;
+  readonly matches: (page: PageView) => boolean;
+}
+
+/** The tabs this book shows: rules with at least one page, in rule order. */
+export function bookTabs(
+  pages: readonly PageView[],
+  rules: readonly BookTabRule[] = BOOK_TABS,
+): BookTab[] {
+  return rules
+    .flatMap((rule): BookTab[] => {
+      if (rule.perSeason) {
+        const seasons = [...new Set(pages.flatMap((p) => (p.season ? [p.season] : [])))];
+        return seasons.map((s) => ({
+          id: `${rule.id}:${s}`,
+          label: s,
+          color: rule.color,
+          matches: (p) => p.season === s,
+        }));
+      }
+      const matches = (p: PageView) =>
+        (rule.section === undefined || p.section === rule.section) &&
+        (rule.outputKinds === undefined ||
+          rule.outputKinds.includes(RESOURCE_KINDS.get(p.output) ?? '')) &&
+        (rule.outputs === undefined || rule.outputs.includes(p.output));
+      return [{ id: rule.id, label: rule.label, color: rule.color, matches }];
+    })
+    .filter((tab) => pages.some(tab.matches));
 }
 
 /** Open pages whose name or an ingredient's name holds the words typed. Sealed pages stay secret. */
