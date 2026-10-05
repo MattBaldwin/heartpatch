@@ -97,7 +97,8 @@ test('trays hold the controls, and the recipe book makes, seals, searches and fi
   const sealed = await api<{ error: { code: string } }>(page, 'POST', `/maps/${mapId}/crafts`, {
     recipeId: 'jack-o-lantern-hearthfire',
   });
-  expect(sealed.status).toBeGreaterThanOrEqual(400);
+  expect(sealed.status).toBe(403);
+  expect(sealed.body.error.code).toBe('FORBIDDEN');
 
   // Search finds open pages by ingredient, never sealed ones.
   await page.getByTestId('recipe-book-search').tap();

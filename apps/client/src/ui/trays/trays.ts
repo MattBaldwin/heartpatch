@@ -3,6 +3,7 @@ import {
   handleBadge,
   INITIAL_TRAYS,
   newPeeks,
+  SETTLING,
   trayReducer,
   type TrayAction,
   type TrayAlert,
@@ -106,6 +107,16 @@ function defaultStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
 /** How long a badge's line peeks out beside its handle. */
 const PEEK_MS = 4000; // TUNE:
 const SAY_MS = 3200; // TUNE:
+/** If no `transitionend` comes (a transition switched off), the tray settles anyway. */
+const SETTLE_FALLBACK_MS = 450;
+
+/** Writes an attribute only when it changes, so observers aren't woken for nothing. */
+function setAttr(node: Element, name: string, value: string): void {
+  if (node.getAttribute(name) !== value) node.setAttribute(name, value);
+}
+function setHidden(node: HTMLElement, hidden: boolean): void {
+  if (node.hidden !== hidden) node.hidden = hidden;
+}
 
 export function createTrays(options: TraysOptions): Trays {
   const storage = options.storage === undefined ? defaultStorage() : options.storage;
@@ -114,6 +125,8 @@ export function createTrays(options: TraysOptions): Trays {
   let hintKey: string | null = null;
   let peekTimer: number | undefined;
   let sayTimer: number | undefined;
+  /** Just came back on screen: what's already in the trays isn't news. */
+  let quietNext = false;
 
   const slots = new Map<TraySlot, HTMLElement>();
   const slotBox = (name: TraySlot, cls = 'tray-section') => {
@@ -140,6 +153,9 @@ export function createTrays(options: TraysOptions): Trays {
       el('header', { class: 'tray-head' }, el('h2', { class: 'tray-title' }, title), close),
       trayBody,
     );
+    // Shut until opened: out of the tab order and hidden from VoiceOver.
+    tray.setAttribute('inert', '');
+    tray.setAttribute('aria-hidden', 'true');
     const icon = el('span', { class: 'tray-handle-icon' }, strokeIcon(ICONS[which]));
     const badge = el('span', { class: 'tray-badge', 'aria-hidden': 'true' });
     badge.hidden = true;
@@ -168,7 +184,26 @@ export function createTrays(options: TraysOptions): Trays {
         dispatch({ type: 'close' });
       }
     });
-    return { which, title, tray, body: trayBody, handle, icon, badge, peek };
+    // While it slides in, the tray is "settling": the tutorial's spotlight
+    // waits for the button inside to come to rest (highlight-targets.ts).
+    let settleTimer: number | undefined;
+    const settled = () => {
+      window.clearTimeout(settleTimer);
+      tray.classList.remove(SETTLING);
+    };
+    tray.addEventListener('transitionend', (e) => {
+      if (e.target === tray) settled();
+    });
+    const settle = (open: boolean) => {
+      if (!open) {
+        settled();
+        return;
+      }
+      tray.classList.add(SETTLING);
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(settled, SETTLE_FALLBACK_MS);
+    };
+    return { which, title, tray, body: trayBody, handle, icon, badge, peek, settle, shown: false };
   };
 
   const adventure = side('adventure', TRAY_TEXT.adventure, TRAY_TEXT.adventure, [
@@ -264,16 +299,23 @@ export function createTrays(options: TraysOptions): Trays {
     alerts = next;
     for (const s of sides) {
       const { text } = handleBadge(alerts, s.which);
-      s.badge.textContent = text ?? '';
-      s.badge.hidden = text === null || state.open === s.which;
-      s.handle.classList.toggle('tray-handle-news', text !== null && state.open !== s.which);
-      s.handle.setAttribute(
+      if (s.badge.textContent !== (text ?? '')) s.badge.textContent = text ?? '';
+      setHidden(s.badge, text === null || state.open === s.which);
+      const news = text !== null && state.open !== s.which;
+      if (s.handle.classList.contains('tray-handle-news') !== news) {
+        s.handle.classList.toggle('tray-handle-news', news);
+      }
+      setAttr(
+        s.handle,
         'aria-label',
         (state.open === s.which ? TRAY_TEXT.close(s.title) : TRAY_TEXT.open(s.title)) +
           (text === null ? '' : TRAY_TEXT.news(text)),
       );
     }
-    if (fresh.length > 0 && state.visible) showPeeks(fresh);
+    // Back from Home or a battle, the same alerts are still there: no peek.
+    const quiet = quietNext;
+    quietNext = false;
+    if (fresh.length > 0 && state.visible && !quiet) showPeeks(fresh);
   };
   const scheduleAlerts = () => {
     alertFrame ||= requestAnimationFrame(refreshAlerts);
@@ -305,21 +347,25 @@ export function createTrays(options: TraysOptions): Trays {
 
   // ── Drawing ───────────────────────────────────────────────────────────
   function render(): void {
-    layer.hidden = !state.visible;
+    setHidden(layer, !state.visible);
     document.body.classList.toggle('hp-trays-on', state.visible);
     layer.classList.toggle('trays-open', state.open !== null);
-    scrim.hidden = state.open === null;
+    setHidden(scrim, state.open === null);
     for (const s of sides) {
       const open = state.open === s.which;
-      s.tray.classList.toggle('tray-shown', open);
-      s.tray.toggleAttribute('inert', !open);
-      s.tray.setAttribute('aria-hidden', open ? 'false' : 'true');
-      s.handle.classList.toggle('tray-handle-open', open);
-      s.handle.setAttribute('aria-expanded', open ? 'true' : 'false');
-      s.icon.replaceChildren(strokeIcon(open ? ICONS.close : ICONS[s.which]));
-      if (open || state.open !== null) s.peek.hidden = true;
+      if (open !== s.shown) {
+        s.shown = open;
+        s.settle(open);
+        s.tray.classList.toggle('tray-shown', open);
+        s.tray.toggleAttribute('inert', !open);
+        s.tray.setAttribute('aria-hidden', open ? 'false' : 'true');
+        s.handle.classList.toggle('tray-handle-open', open);
+        s.handle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        s.icon.replaceChildren(strokeIcon(open ? ICONS.close : ICONS[s.which]));
+      }
+      if (state.open !== null) setHidden(s.peek, true);
     }
-    hint.hidden = !state.hint;
+    setHidden(hint, !state.hint);
     layer.classList.toggle('trays-hinting', state.hint);
     refreshAlerts();
   }
@@ -327,6 +373,7 @@ export function createTrays(options: TraysOptions): Trays {
   function dispatch(action: TrayAction): void {
     const before = state;
     state = trayReducer(state, action);
+    if (!before.visible && state.visible) quietNext = true;
     if (before.hint && !state.hint && hintKey) {
       try {
         storage?.setItem(hintKey, '1');

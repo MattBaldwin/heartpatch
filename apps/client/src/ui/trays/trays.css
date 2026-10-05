@@ -5,7 +5,13 @@
    mounted later, so they still cover it; sheets (5+) and Sprout (9) too. */
 
 .trays {
-  --tray-width: min(320px, calc(100vw - 76px));
+  /* A handle is sized from its label (plus the shared padding); the open tray
+     leaves room for it, so the handle it carries never leaves the screen. */
+  --tray-handle: 96px;
+  --tray-width: min(
+    320px,
+    calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - var(--tray-handle) - 16px)
+  );
   --tray-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   position: fixed;
   z-index: 4;
@@ -18,6 +24,12 @@
 @media (min-width: 700px) {
   .trays {
     --tray-width: 384px;
+  }
+}
+
+@media (max-width: 359px) {
+  .trays {
+    --tray-handle: 84px;
   }
 }
 
@@ -143,7 +155,7 @@
   width: 100%;
   min-height: 58px;
   margin: 0;
-  padding: 8px 12px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   border: 0;
   border-radius: 18px;
   background: #fff;
@@ -185,6 +197,29 @@
 
 .tray-section > .hollow-hint {
   order: 4;
+}
+
+/* The battle box's buttons have no icon of their own: draw one, like every row. */
+.tray-section > .battle-entry-box > [data-testid='catalog-open']::before,
+.tray-section > .battle-entry-box > .battle-entry::before {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 14px;
+  background: #fbeaf2;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.tray-section > .battle-entry-box > [data-testid='catalog-open']::before {
+  content: '📒';
+}
+
+.tray-section > .battle-entry-box > .battle-entry::before {
+  content: '🔎';
+  background: rgb(255 255 255 / 22%);
 }
 
 /* A feature's icon span (🎒, 🏡…) is the first child; its label the second. */
@@ -239,7 +274,7 @@
 /* Notes in a tray (the Hollow's fire hint) read as a soft line, not a button. */
 .tray-section > p {
   margin: 0;
-  padding: 10px 14px;
+  padding: calc(var(--hp-pad-y) + 2px) var(--hp-pad-x);
   border-radius: 16px;
   background: #fff4dc;
   font-size: 14px;
@@ -301,12 +336,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   box-sizing: border-box;
-  width: 64px;
-  height: 94px;
-  margin-top: -47px;
-  padding: 0;
+  /* As wide as its label needs, never less than the token. */
+  width: max-content;
+  min-width: var(--tray-handle);
+  min-height: 94px;
+  padding: calc(var(--hp-pad-y) + 4px) var(--hp-pad-x);
+  translate: 0 -50%;
   border: 0;
   background: #fffafc;
   box-shadow: 0 6px 16px rgb(74 49 80 / 24%);
@@ -364,8 +401,9 @@
 }
 
 .tray-handle-label {
-  font-size: 11px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
   line-height: 1;
   color: #7a2d55;
 }
@@ -403,33 +441,36 @@
   left: -7px;
 }
 
-/* News glows softly on the handle instead of a banner over the world. */
-.tray-handle-news,
-.trays-hinting .tray-handle {
+/* News glows softly on the handle instead of a banner over the world: a
+   ring on a pseudo-element that only fades (opacity), so it's composited,
+   never repainted, over the map. */
+.tray-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 7px rgb(255 201 77 / 60%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tray-handle-news::after,
+.trays-hinting .tray-handle::after {
   animation: tray-glow 1.6s ease-in-out infinite;
 }
 
 @keyframes tray-glow {
-  0%,
-  100% {
-    box-shadow:
-      0 6px 16px rgb(74 49 80 / 24%),
-      0 0 0 0 rgb(255 201 77 / 0%);
-  }
-
   50% {
-    box-shadow:
-      0 6px 16px rgb(74 49 80 / 24%),
-      0 0 0 7px rgb(255 201 77 / 60%);
+    opacity: 1;
   }
 }
 
 .tray-peek {
   position: absolute;
   top: 55%;
-  max-width: calc(100vw - 100px);
+  max-width: calc(100vw - 2 * var(--tray-handle) - 40px);
   margin: 0;
-  padding: 8px 12px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   border-radius: 14px;
   background: #4a3150;
   box-shadow: 0 6px 14px rgb(74 49 80 / 30%);
@@ -447,11 +488,11 @@
 }
 
 .tray-peek-adventure {
-  left: calc(env(safe-area-inset-left) + 74px);
+  left: calc(env(safe-area-inset-left) + var(--tray-handle) + 10px);
 }
 
 .tray-peek-heartpatch {
-  right: calc(env(safe-area-inset-right) + 74px);
+  right: calc(env(safe-area-inset-right) + var(--tray-handle) + 10px);
 }
 
 /* ── Top corner and little notes ───────────────────────────────────────── */
@@ -466,7 +507,7 @@
 .tray-top-left > button {
   min-height: 48px;
   margin: 0;
-  padding: 0 16px;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 4px);
   box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
   font-size: 15px;
 }
@@ -535,7 +576,7 @@
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  width: min(300px, calc(100vw - 160px));
+  width: min(300px, calc(100vw - 32px));
   transform: translateX(-50%);
   /* A hint, not a wall: only "Got it!" takes taps; the map works around it. */
   pointer-events: none;
@@ -601,11 +642,9 @@
     transition: none;
   }
 
-  .tray-handle-news,
-  .trays-hinting .tray-handle {
+  .tray-handle-news::after,
+  .trays-hinting .tray-handle::after {
     animation: none;
-    box-shadow:
-      0 6px 16px rgb(74 49 80 / 24%),
-      0 0 0 4px rgb(255 201 77 / 75%);
+    opacity: 0.75;
   }
 }

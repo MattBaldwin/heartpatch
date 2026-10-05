@@ -157,6 +157,8 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
   let query = '';
   /** The "New page!" card: which page, or null. */
   let moment: string | null = null;
+  /** The card whose button already took focus. */
+  let momentFocused: string | null = null;
   let say = '';
   let busy = false;
   let generation = 0;
@@ -303,6 +305,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     {
       class: 'rbook',
       role: 'dialog',
+      'aria-modal': 'true',
       'aria-labelledby': 'rbook-title',
       'data-testid': 'recipe-book',
     },
@@ -317,15 +320,18 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
   book.hidden = true;
   options.root.append(book);
 
-  // Swipe to turn a page (a tap's buttons still work: only a real drag turns).
-  let swipeFrom: number | null = null;
+  // Swipe to turn a page (a tap's buttons still work: only a real sideways
+  // drag turns; scrolling a long page up and down never does).
+  let swipeFrom: { x: number; y: number } | null = null;
   stage.addEventListener('pointerdown', (e) => {
-    swipeFrom = e.clientX;
+    swipeFrom = { x: e.clientX, y: e.clientY };
   });
   stage.addEventListener('pointerup', (e) => {
     if (swipeFrom === null) return;
-    const dx = e.clientX - swipeFrom;
+    const dx = e.clientX - swipeFrom.x;
+    const dy = e.clientY - swipeFrom.y;
     swipeFrom = null;
+    if (Math.abs(dx) <= Math.abs(dy)) return;
     if (dx < -50) turn(1);
     else if (dx > 50) turn(-1);
   });
@@ -392,24 +398,32 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     }
   }
 
+  /** Where focus goes back to when the book shuts (VoiceOver, keyboards). */
+  let returnFocus: HTMLElement | null = null;
+
   function openBook(): void {
     if (!mapId) return;
+    returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     book.hidden = false;
     searching = false;
     say = '';
     at = 'cover';
     moment = fresh[0] ?? null;
     render('none');
+    closeButton.focus();
     void Promise.all([options.inventory.refresh(), check()]).then(() => {
       render('none');
     });
   }
 
   function closeBook(): void {
+    const wasOpen = !book.hidden;
     book.hidden = true;
     searching = false;
     moment = null;
     render('none');
+    if (wasOpen && returnFocus?.isConnected && !returnFocus.closest('[inert]')) returnFocus.focus();
+    returnFocus = null;
   }
 
   function goTo(key: string, dir: 1 | -1 | 0): void {
@@ -792,6 +806,11 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
           later,
         ),
       );
+      // A new card: its button takes focus (once), so VoiceOver reads it out.
+      if (momentFocused !== momentPage.key) {
+        momentFocused = momentPage.key;
+        turnTo.focus();
+      }
     }
     entryBadge.textContent = fresh.length > 0 ? String(fresh.length) : '';
   }

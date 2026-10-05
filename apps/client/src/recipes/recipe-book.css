@@ -100,7 +100,8 @@
   gap: 6px;
   min-height: 54px;
   margin-top: -2px;
-  padding: 0 14px 11px;
+  /* The flag's notch eats the bottom: extra room there. */
+  padding: 0 calc(var(--hp-pad-x) + 2px) calc(var(--hp-pad-y) + 3px);
   white-space: nowrap;
   border: 0;
   background: #f6dceb;
@@ -129,7 +130,7 @@
 .rbook-tab {
   flex: none;
   min-height: 44px;
-  padding: 0 14px;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 2px);
   border: 0;
   border-radius: 14px 14px 0 0;
   font: inherit;
@@ -414,7 +415,7 @@
 .rbook-find {
   flex: none;
   min-height: 44px;
-  padding: 0 10px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   border: 0;
   border-radius: 999px;
   background: #fbeaf2;
@@ -477,9 +478,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  width: 100%;
+  /* Padded like every control, with the text still lined up on the page. */
+  box-sizing: border-box;
+  width: calc(100% + 2 * var(--hp-pad-x));
   min-height: 44px;
-  padding: 0;
+  margin-inline: calc(-1 * var(--hp-pad-x));
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 12px;
   border: 0;
   background: none;
   font: inherit;
@@ -669,7 +674,7 @@
 .rbook-nav-btn {
   min-width: 44px;
   min-height: 44px;
-  padding: 0 14px;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 2px);
   border: 0;
   border-radius: 999px;
   background: rgb(255 250 252 / 16%);
@@ -754,7 +759,7 @@
   align-items: center;
   gap: 8px;
   min-height: 50px;
-  padding: 0 12px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   border: 0;
   border-radius: 14px;
   background: #fff;
@@ -817,7 +822,7 @@
 
 .rbook-later {
   min-height: 44px;
-  padding: 0 12px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   border: 0;
   background: none;
   font: inherit;

@@ -4,6 +4,7 @@ import {
   inSeason,
   isPageUnlocked,
   needMoreText,
+  RECIPE_BOOK,
   recipeBookPages,
   recipePageKey,
   shortfall,
@@ -39,7 +40,7 @@ const RECIPES = new Map(GAME_DATA.recipes.map((r) => [r.id, r]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 /** The recipe book (owner decision 2026-10-05), in book order. */
 const BOOK_PAGES = recipeBookPages();
-const BOOK_PAGE_BY_KEY = new Map(BOOK_PAGES.map((p) => [p.key, p]));
+const BOOK_PAGE_BY_KEY = new Map<string, RecipeBookPage>(BOOK_PAGES.map((p) => [p.key, p]));
 
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
@@ -108,7 +109,7 @@ export async function consumeItems(
 
 /** A recipe book page by key (`recipe:<id>`, `building:<id>`), if the book has it. */
 export const recipeBookPage = (key: string): RecipeBookPage | undefined =>
-  BOOK_PAGE_BY_KEY.get(key as RecipeBookPage['key']);
+  BOOK_PAGE_BY_KEY.get(key);
 
 /**
  * Refuses (`FORBIDDEN`) to make a sealed recipe book page: one whose
@@ -122,6 +123,8 @@ export async function requirePageOpen(
   userId: string,
   page: RecipeBookPage,
 ): Promise<void> {
+  // Always-open pages (every Heart Charm, Hearthfire…) skip the ledger read.
+  if (RECIPE_BOOK.alwaysOpen.includes(page.key)) return;
   if (isPageUnlocked(page, await createInventoryRepo(tx).everCollected(userId))) return;
   throw new AppError('FORBIDDEN', MESSAGES.sealed[page.kind]);
 }

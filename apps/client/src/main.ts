@@ -139,7 +139,9 @@ const inventory = createInventoryScreen({
   root: document.body,
   entryRoot: trays.slot('heartpatch'),
   devTools: import.meta.env.DEV,
-  // Something new in the bag may open a recipe book page.
+  // Something new in the bag may open a recipe book page. Gathers and crafts
+  // say so at once; capture drops, rescues and gifts are noticed when the
+  // player is back on the map (`onHudChange`) or opens the book.
   onCollected: () => {
     void recipeBook.check();
   },

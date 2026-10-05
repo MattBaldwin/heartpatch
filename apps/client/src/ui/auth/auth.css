@@ -289,7 +289,7 @@
   align-items: center;
   gap: 12px;
   min-height: 48px;
-  padding: 0 12px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   border: 0;
   border-radius: 14px;
   background: #fbeaf2;

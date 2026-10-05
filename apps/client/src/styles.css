@@ -1,3 +1,10 @@
+/* Shared control padding (style guide §3): text never touches a control's
+   edge. Buttons, pills, chips, tabs and flags pad with these. */
+:root {
+  --hp-pad-x: 12px;
+  --hp-pad-y: 8px;
+}
+
 html,
 body {
   margin: 0;
@@ -27,7 +34,8 @@ body {
 
 .dev-status {
   position: fixed;
-  top: calc(env(safe-area-inset-top) + 8px);
+  /* Dev builds only: bottom-left, clear of the map's corner buttons. */
+  bottom: calc(env(safe-area-inset-bottom) + 8px);
   left: calc(env(safe-area-inset-left) + 8px);
   padding: 4px 10px;
   border-radius: 999px;
@@ -57,6 +65,6 @@ body {
 }
 
 .dev-stats {
-  top: calc(env(safe-area-inset-top) + 36px);
+  bottom: calc(env(safe-area-inset-bottom) + 36px);
   font-variant-numeric: tabular-nums;
 }

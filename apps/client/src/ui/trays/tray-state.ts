@@ -5,6 +5,9 @@
 
 export type TraySide = 'adventure' | 'heartpatch';
 
+/** Class on a tray while it slides in: the tutorial's spotlight skips what's inside. */
+export const SETTLING = 'hp-settling';
+
 export interface TrayState {
   /** The map's HUD is on screen (the trays and their handles). */
   readonly visible: boolean;
