@@ -109,7 +109,10 @@ function defaultStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
 /** How long a badge's line peeks out beside its handle. */
 const PEEK_MS = 4000; // TUNE:
 const SAY_MS = 3200; // TUNE:
-/** If no `transitionend` comes (a transition switched off), the tray settles anyway. */
+/**
+ * If no `transitionend` comes (a transition switched off), the tray settles
+ * anyway. Keep it above the slide in trays.css (`.tray` transform, 280 ms).
+ */
 const SETTLE_FALLBACK_MS = 450;
 
 /** Writes an attribute only when it changes, so observers aren't woken for nothing. */

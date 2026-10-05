@@ -216,10 +216,14 @@
 
 .tray-section > .battle-entry-box > [data-testid='catalog-open']::before {
   content: '📒';
+  /* Decoration only: VoiceOver reads the label, not the emoji (Safari 17.4+). */
+  content: '📒' / '';
 }
 
 .tray-section > .battle-entry-box > .battle-entry::before {
   content: '🔎';
+  /* Decoration only: VoiceOver reads the label, not the emoji (Safari 17.4+). */
+  content: '🔎' / '';
   background: rgb(255 255 255 / 22%);
 }
 

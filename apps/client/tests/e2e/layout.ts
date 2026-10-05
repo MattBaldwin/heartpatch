@@ -6,6 +6,7 @@ import { expect, type Page } from '@playwright/test';
 
 /** Phones and tablets every tray and book layout must fit. */
 export const SCREENS = [
+  { name: 'smallest phone', width: 320, height: 568 },
   { name: 'iPhone SE', width: 375, height: 667 },
   { name: 'iPhone 15', width: 390, height: 844 },
   { name: 'iPhone Pro Max', width: 430, height: 932 },

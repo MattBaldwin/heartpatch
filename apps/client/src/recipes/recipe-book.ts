@@ -409,8 +409,10 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     say = '';
     at = 'cover';
     moment = fresh[0] ?? null;
+    momentFocused = null;
     render('none');
-    closeButton.focus();
+    // The New page! card takes focus when there is one (render focused it).
+    if (!moment) closeButton.focus();
     void Promise.all([options.inventory.refresh(), check()]).then(() => {
       render('none');
     });
@@ -775,6 +777,8 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     searchSheet.hidden = !searching;
     if (searching) renderSearch();
 
+    // A re-render (a refresh landing) rebuilds the card: its focus comes back with it.
+    const cardHadFocus = momentBox.contains(document.activeElement);
     momentBox.replaceChildren();
     const momentPage = moment ? byKey.get(moment) : undefined;
     if (momentPage && !searching) {
@@ -811,7 +815,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
         ),
       );
       // A new card: its button takes focus (once), so VoiceOver reads it out.
-      if (momentFocused !== momentPage.key) {
+      if (cardHadFocus || momentFocused !== momentPage.key) {
         momentFocused = momentPage.key;
         turnTo.focus();
       }
