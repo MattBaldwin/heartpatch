@@ -249,8 +249,11 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   const helper = board.locator(`[data-testid="jobs-row"][data-squishy="${helperId}"]`);
   await realTap(helper.getByRole('button', { name: /Gather/ }));
   await realTap(helper.getByTestId('jobs-picker').getByTestId('jobs-spot').first());
+  // The board takes the server's answer (one round trip; roomy under CI load).
   await expect
-    .poll(async () => (await hook<JobsDebug>(page, 'jobs'))?.board.jobs[helperId])
+    .poll(async () => (await hook<JobsDebug>(page, 'jobs'))?.board.jobs[helperId], {
+      timeout: 15_000,
+    })
     .toBe('gatherer');
   expect((await api(page, 'POST', `/maps/${mapId}/dev/work/ready`)).status).toBe(200);
   await realTap(board.getByRole('button', { name: 'Close' }));

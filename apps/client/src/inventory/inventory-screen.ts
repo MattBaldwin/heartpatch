@@ -337,12 +337,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
    * changes; the once-a-second tick only rewrites these texts, so a finger
    * resting on a button never has it swapped out from under it. The words
    * are one Text node kept for the countdown's life and rewritten in place
-   * (`data`), never replaced: WebKit pairs a lift with the very node the
-   * finger landed on, which for a label is its Text node, and drops the tap
-   * when that node is gone by the lift (a `textContent` rewrite swaps it; the
-   * gather chip's tap on an iPhone went missing whenever a tick fell inside
-   * the press). When one reaches zero, the screen redraws once (its button
-   * appears).
+   * (`data`), never replaced: WebKit pairs a pointer's release with the very
+   * node its press landed on, which for a label is its Text node, and fires
+   * no click when that node is gone by the release (a `textContent` rewrite
+   * swaps it). A trackpad or mouse on an iPad, Safari on a Mac and CI's
+   * mouse all lost the gather chip's click whenever a tick fell inside the
+   * press; a finger on iOS presses and lifts in one go and never did. When
+   * one reaches zero, the screen redraws once (its button appears).
    */
   interface Countdown {
     text: Text;
