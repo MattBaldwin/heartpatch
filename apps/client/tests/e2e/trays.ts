@@ -66,3 +66,14 @@ export async function trayButton(
   await openTray(page, side, tap);
   return page.getByTestId(testId);
 }
+
+/**
+ * The open tray's slide has ended: ui/trays marks a sliding tray `hp-settling`
+ * (tray-state.ts SETTLING) until its transitionend, so a row is never measured
+ * mid-slide. No sleep: CI renders in software and a slide can start late.
+ */
+export async function traySettled(page: Page, side: TraySide): Promise<void> {
+  const tray = page.getByTestId(`tray-${side}`);
+  await expect(tray).toHaveClass(/tray-shown/);
+  await expect(tray).not.toHaveClass(/hp-settling/);
+}

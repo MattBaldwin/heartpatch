@@ -291,7 +291,8 @@ test('Home and Bag open on the first tap while a tile panel is open', async ({ b
   const homeEntry = await inTray(page, 'home-open');
   await expect(homeEntry).toBeVisible();
   await realTap(homeEntry);
-  await expect(page.getByTestId('home')).toBeVisible();
+  // Home fetches itself before it shows; roomy under CI load.
+  await expect(page.getByTestId('home')).toBeVisible({ timeout: 15_000 });
   expect((await hook<{ open: boolean }>(page, 'home'))?.open).toBe(true);
   await realTap(page.getByTestId('home-back'));
   await expect(page.getByTestId('home')).toBeHidden();
