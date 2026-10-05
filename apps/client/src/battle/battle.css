@@ -68,8 +68,13 @@
   gap: 2px 6px;
 }
 
+/* "Lv 30 · 70/70": one short line, so it never wraps on a phone's pill. */
 .battle-plate-foot .battle-plate-level::after {
   content: ' ·';
+}
+
+.battle-plate-foot .battle-plate-energy {
+  white-space: nowrap;
 }
 
 .battle-plate-name {

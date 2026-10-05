@@ -343,6 +343,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       p.bar.style.width = `${String(info.percent)}%`;
       p.bar.classList.toggle('battle-energy-low', info.percent <= 25);
       p.energy.textContent = info.energyText;
+      p.energy.setAttribute('aria-label', `${info.energyText} energy`);
       p.element.textContent = ELEMENT_GLYPH[info.element] ?? '✨';
       p.element.title = ELEMENT_NAMES.get(info.element) ?? info.element;
       p.element.setAttribute('aria-label', p.element.title);

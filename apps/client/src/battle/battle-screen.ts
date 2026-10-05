@@ -418,7 +418,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       element: squishy.element,
       feeling: squishy.feeling,
       percent: energyPercent({ energy, stats: squishy.stats }),
-      energyText: `${String(energy)} / ${String(squishy.stats.hp)} energy`,
+      energyText: `${String(energy)}/${String(squishy.stats.hp)}`,
       status,
     });
   };

@@ -99,9 +99,12 @@ function attack(element, arena, mine, theirs, move) {
       frames: [
         { id: `${element}-anticipation`, at: MOVE_MS * 0.3 },
         { id: `${element}-dash`, at: MOVE_MS * 0.55 },
-        { id: `${element}-impact`, at: MOVE_MS + 60 },
-        { id: `${element}-react`, at: MOVE_MS + 330 },
-        { id: `${element}-settle`, at: MOVE_MS + 700 },
+        // The hit-stop is 120 ms × the hit's strength (up to 1.5): the flash
+        // during it, then the burst and the knockback right after.
+        { id: `${element}-hitstop`, at: MOVE_MS + 60 },
+        { id: `${element}-impact`, at: MOVE_MS + 230 },
+        { id: `${element}-react`, at: MOVE_MS + 400 },
+        { id: `${element}-settle`, at: MOVE_MS + 750 },
       ],
     },
   ];
