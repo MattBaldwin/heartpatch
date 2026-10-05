@@ -50,8 +50,8 @@ test('two players on one patch trade quick messages live', async ({ browser }) =
   await visitPatch(ownerLobby);
   await expect(ownerLobby).toBeHidden();
 
-  await friendLobby.getByRole('button', { name: 'Check again' }).tap();
-  await friendLobby.getByRole('button', { name: /Chatter Patch/ }).tap();
+  // The friend's waiting row turns into the patch by itself (#145).
+  await friendLobby.getByRole('button', { name: /Chatter Patch/ }).tap({ timeout: 30_000 });
   await visitPatch(friendLobby);
   await expect(friendLobby).toBeHidden();
 
