@@ -7,6 +7,7 @@ import { maps } from '../db/schema.js';
 import { backendPid, waitUntilBlockedBy } from '../../tests/lock-waits.js';
 import { PG_BOSS_SCHEMA, startJobs, type Jobs } from './boss.js';
 import { runConsumer, type EventConsumer } from './consumers.js';
+import { CONSUMER_RETRY_LIMIT } from './limits.js';
 import { createJobsRepo } from './repo.js';
 
 const url = inject('testDatabaseUrl');
@@ -347,6 +348,8 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
         // job and a free worker takes it at once (under `stately` it would be
         // refused with a unique-key error until the first job ended).
         await addEvents(mapId, 2);
+        // Two or three jobs, depending on whether the second event's job was
+        // taken before the third event de-duplicated against it.
         await eventually(async () => ((await jobStates(consumer, mapId))['active'] ?? 0) >= 2);
         expect((await position(consumer, mapId)) ?? 0).toBe(0); // the second job waits its turn
       } finally {
@@ -390,6 +393,27 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       expect(Number([...stale][0]!.n)).toBe(0);
       await eventually(async () => (await position(consumer, mapId)) === 2);
       expect(await applied(consumer, mapId)).toEqual([1, 2]);
+    });
+
+    it('brings an existing queue up to date with the retry settings in code', async () => {
+      const consumer = testConsumer();
+      const queue = `event-consumer.${consumer.name}`;
+      const older = new PgBoss({ connectionString: url!, schema: PG_BOSS_SCHEMA, max: 1 });
+      await older.start();
+      await older.createQueue(queue, { policy: 'short', retryLimit: 1, notify: false });
+      await older.stop({ graceful: false });
+
+      jobs = await startJobs({
+        connectionString: url!,
+        db,
+        consumers: [consumer],
+        logger,
+        schedule: false,
+      });
+      const rows = await db.execute<{ retry_limit: number; notify: boolean }>(
+        `select retry_limit, notify from pgboss.queue where name = '${queue}'`,
+      );
+      expect([...rows][0]).toMatchObject({ retry_limit: CONSUMER_RETRY_LIMIT, notify: true });
     });
 
     it('wakes only consumers that read the map kind', async () => {
