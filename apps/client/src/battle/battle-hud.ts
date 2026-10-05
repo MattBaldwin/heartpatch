@@ -85,8 +85,12 @@ export const plateSideOf = (mySide: BattleSideId, side: BattleSideId): 'mine' | 
 
 const CALLOUT_MS = 1100; // TUNE: long enough to read "Super cozy!"
 
-/** The sheet's share of the screen is reserved even while only the caption shows, so the fight never jumps. */
-export const SHEET_SHARE = 0.35;
+/**
+ * The sheet's share of the screen is reserved even while only the caption
+ * shows, so the fight never jumps. Keep it equal to `.battle-sheet`'s
+ * `max-height` in battle.css (35vh): this is what the camera keeps clear.
+ */
+export const SHEET_SHARE = 0.35; // TUNE
 
 /** Little badges for an element and a feeling (vector-free glyphs the system renders crisply). */
 const ELEMENT_GLYPH: Readonly<Record<string, string>> = {
@@ -119,8 +123,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       class: 'battle-plate-energy',
       'data-testid': `battle-energy-${side}`,
     });
-    const element = el('span', { class: 'battle-badge' });
-    const feeling = el('span', { class: 'battle-badge' });
+    const element = el('span', { class: 'battle-badge', role: 'img' });
+    const feeling = el('span', { class: 'battle-badge', role: 'img' });
     const status = el('span', { class: 'battle-plate-status' });
     const callout = el('span', { class: 'battle-callout', role: 'status' });
     const node = el(
@@ -353,6 +357,8 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       p.status.textContent = info.status ?? '';
       p.status.hidden = info.status === null;
       p.node.classList.toggle('battle-plate-tuckered', info.percent === 0);
+      // A longer name or a status chip can grow the pill: measure again.
+      forget();
     },
     setCaption: (text) => {
       caption.textContent = text ?? '';

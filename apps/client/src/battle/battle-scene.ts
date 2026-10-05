@@ -168,11 +168,15 @@ interface SquishCueAt {
 }
 
 const SIDES: readonly BattleSideId[] = ['a', 'b'];
+/** Each fighter's two contact shadows: the whole and a softer inner share. */
+const SHADOW_SHARES: readonly number[] = [1, 0.72];
 
 export class BattleScene {
   readonly content: SceneContent;
   readonly #scene: Scene;
   readonly #options: BattleSceneOptions;
+  /** The mood's contact-shadow stretch, read once (the shadows are written every frame). */
+  readonly #shadowStretch: number;
   readonly #arena: Arena;
   readonly #rigs: Record<BattleSideId, Rig>;
   readonly #keepers: KeeperField;
@@ -214,11 +218,9 @@ export class BattleScene {
     this.#options = options;
     const lowTier = options.tier === 'low';
     this.#instrumentation = new SceneInstrumentation(scene);
-    this.#arena = buildArena(scene, {
-      plan: arenaPlan(options.terrain, options.timeOfDay, arenaSeed(options.battleId)),
-      lowTier,
-      reducedMotion: options.reducedMotion,
-    });
+    const plan = arenaPlan(options.terrain, options.timeOfDay, arenaSeed(options.battleId));
+    this.#shadowStretch = plan.mood.shadowStretch;
+    this.#arena = buildArena(scene, { plan, lowTier, reducedMotion: options.reducedMotion });
 
     const homeOf = (side: BattleSideId) => (side === options.mySide ? HOMES.mine : HOMES.theirs);
     this.#rigs = {
@@ -459,14 +461,20 @@ export class BattleScene {
     for (const cue of plan.squish) this.#squishCues.push({ cue, at: now + cue.delay });
     this.#camera.cue(plan.camera, now);
     // Anyone left at arm's length by a dash that landed nothing hops home.
-    const user2 = step.kind === 'hit' ? null : this.#rigs[other];
+    const bystander = step.kind === 'hit' ? null : this.#rigs[other];
     if (
-      user2 &&
-      user2.act &&
-      user2.act.kind === 'dash' &&
+      bystander &&
+      bystander.act &&
+      bystander.act.kind === 'dash' &&
       !plan.acts.some((a) => a.side === other)
     ) {
-      this.#actCues.push({ rig: user2, kind: 'return', at: now, ms: CHOREO.returnMs, strength: 1 });
+      this.#actCues.push({
+        rig: bystander,
+        kind: 'return',
+        at: now,
+        ms: CHOREO.returnMs,
+        strength: 1,
+      });
     }
   }
 
@@ -516,7 +524,8 @@ export class BattleScene {
     });
     let moving =
       this.#actCues.length > 0 || this.#effectCues.length > 0 || this.#squishCues.length > 0;
-    for (const rig of SIDES.map((s) => this.#rigs[s])) {
+    for (const side of SIDES) {
+      const rig = this.#rigs[side];
       const running = actRunning(rig.act, now);
       let pose: Pose;
       if (
@@ -622,6 +631,8 @@ export class BattleScene {
   #startAct(cue: ActCueAt): void {
     const { rig } = cue;
     if (cue.ms === 0) return; // a swap marker: sendOut ran from the pending swaps
+    // A tuckered-out squishy stays flopped: only a swap moves it (the log
+    // never asks a down squishy to cheer, pop out or return, so nothing is lost).
     if (rig.down && cue.kind !== 'swap-in' && cue.kind !== 'swap-out') return;
     this.#acts += 1;
     if (cue.kind === 'faint') rig.down = true;
@@ -706,7 +717,7 @@ export class BattleScene {
   }
 
   #writeShadows(): void {
-    const stretch = this.#options.reducedMotion ? 1.2 : this.#plan().mood.shadowStretch;
+    const stretch = this.#options.reducedMotion ? 1.2 : this.#shadowStretch;
     const k = this.#arena.keyDir;
     // Shadows fall away from the light: along the key's horizontal direction.
     const alen = Math.hypot(k.x, k.z) || 1;
@@ -716,7 +727,7 @@ export class BattleScene {
     let i = 0;
     for (const side of SIDES) {
       const rig = this.#rigs[side];
-      for (const share of [1, 0.72]) {
+      for (const share of SHADOW_SHARES) {
         const o = i * 16;
         i++;
         const fighter = rig.out;
@@ -750,10 +761,6 @@ export class BattleScene {
       }
     }
     this.#shadows.thinInstanceBufferUpdated('matrix');
-  }
-
-  #plan() {
-    return arenaPlan(this.#options.terrain, this.#options.timeOfDay, 0);
   }
 
   /** Every squishy and Keeper mesh casts into the shadow map (rebuilt after a detail change). */
@@ -792,14 +799,18 @@ export class BattleScene {
       const h = (rig.out?.height ?? 2) * 1.25 + 0.3;
       const home = this.#fit[i++];
       const here = this.#fit[i++];
-      if (home) Object.assign(home, { x: rig.home.x, z: rig.home.z, r, h });
-      if (here)
-        Object.assign(here, {
-          x: rig.root.position.x,
-          z: rig.root.position.z,
-          r,
-          h: h + Math.max(0, rig.pose.lift),
-        });
+      if (home) {
+        home.x = rig.home.x;
+        home.z = rig.home.z;
+        home.r = r;
+        home.h = h;
+      }
+      if (here) {
+        here.x = rig.root.position.x;
+        here.z = rig.root.position.z;
+        here.r = r;
+        here.h = h + Math.max(0, rig.pose.lift);
+      }
     }
     const shot = this.#camera.shot(this.#now, aspect, this.#options.safe(), this.#fit);
     camera.fov = shot.fov;

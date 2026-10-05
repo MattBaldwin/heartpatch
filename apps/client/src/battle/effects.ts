@@ -22,8 +22,9 @@ import {
 // fills slots; each frame copies the live particles' matrices and colours
 // into the same buffers (no meshes, materials, particle systems or arrays
 // made mid-turn). A shape with nothing live is switched off, so effects
-// cost no draw calls between hits. The cores are pushed past white so the
-// stage's bloom picks them up (Lantern Hour's glow).
+// cost no draw calls between hits. The material is unlit, so each particle
+// shows its instance colour as is; the near-white cores sit above the
+// stage's bloom threshold, which is what gives Lantern Hour's glow.
 
 /** Most particles of one shape alive at once; extra spawns replace the oldest. */
 export const POOL_SIZE: Readonly<Record<ParticleShape, number>> = {
@@ -37,9 +38,6 @@ export const POOL_SIZE: Readonly<Record<ParticleShape, number>> = {
   line: 40, // TUNE
   drop: 60, // TUNE
 };
-
-/** How far past white the cores are pushed, so bloom catches them. */
-const GLOW = 1.35; // TUNE
 
 interface Pool {
   readonly mesh: Mesh;
@@ -164,7 +162,9 @@ export class EffectPool {
     const m = new StandardMaterial('fx-mat', scene);
     m.disableLighting = true;
     m.diffuseColor = Color3.Black();
-    m.emissiveColor = new Color3(GLOW, GLOW, GLOW);
+    // Unlit: the shader clamps (emissive + diffuse) to 1 before the instance
+    // colour multiplies in, so white here means "the instance colour, as is".
+    m.emissiveColor = Color3.White();
     m.specularColor = Color3.Black();
     m.fogEnabled = false;
     m.freeze();

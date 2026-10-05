@@ -164,9 +164,10 @@ test('a double tap on the tile chip’s × never starts a battle', async ({ brow
   const x = close.x + close.width / 2;
   const y = close.y + close.height / 2;
   // Two quick taps where the × was (kids do): the chip closes, nothing else happens.
+  // (The second tap lands on whatever is under the × once the chip has
+  // closed, maybe a tile, so only "no battle" is asserted after it.)
   await page.touchscreen.tap(x, y);
   await page.touchscreen.tap(x, y);
-  await expect(panel).toBeHidden();
   await page.waitForTimeout(1500);
   expect(await battleState(page)).toBeNull();
   await expect(page.getByTestId('battle-hud')).toBeHidden();

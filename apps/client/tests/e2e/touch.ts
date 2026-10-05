@@ -32,11 +32,49 @@ export async function realTapAt(
   await page.mouse.up();
 }
 
-/** A real tap (down, hold, up) on the middle of `locator`, scrolled into view first. */
+/** How long a control must hold still before a finger lands on it, in ms. */
+const AT_REST_MS = 80;
+/** How long to wait for a control to stop moving (a tray slide is 280 ms). */
+const AT_REST_TIMEOUT_MS = 5_000;
+
+/**
+ * Where `locator` sits once it has stopped moving: a tray still sliding in or
+ * a chip still popping up would carry the control away between the press and
+ * the lift, and a finger waits for that to end before it lands.
+ */
+export async function restingBox(
+  locator: Locator,
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const page = locator.page();
+  const started = Date.now();
+  let last = await locator.boundingBox();
+  for (;;) {
+    await page.waitForTimeout(AT_REST_MS);
+    const next = await locator.boundingBox();
+    if (
+      last &&
+      next &&
+      last.x === next.x &&
+      last.y === next.y &&
+      last.width === next.width &&
+      last.height === next.height
+    ) {
+      return next;
+    }
+    if (Date.now() - started > AT_REST_TIMEOUT_MS) {
+      throw new Error('realTap: the element kept moving');
+    }
+    last = next;
+  }
+}
+
+/**
+ * A real tap (down, hold, up) on the middle of `locator`, scrolled into view
+ * first and left to come to rest.
+ */
 export async function realTap(locator: Locator, holdMs = REAL_TAP_HOLD_MS): Promise<void> {
   await locator.waitFor({ state: 'visible' });
   await locator.scrollIntoViewIfNeeded();
-  const box = await locator.boundingBox();
-  if (!box) throw new Error('realTap: the element has no box on screen');
+  const box = await restingBox(locator);
   await realTapAt(locator.page(), box.x + box.width / 2, box.y + box.height / 2, holdMs);
 }

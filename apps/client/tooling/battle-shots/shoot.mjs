@@ -6,7 +6,9 @@
 // per device, makes a patch, and for every moment starts a dev battle, reloads
 // the page with `?battle-clock=manual&battle-arena=<terrain>/<time>`, taps the
 // move, and steps the battle clock to the exact frame before each shot. Writes
-// JPEGs and a stats JSON (draw calls per moment) into OUT.
+// JPEGs and a stats JSON (draw calls per moment) into OUT. The default
+// Chromium path is the preinstalled one in the build container; set
+// PW_CHROMIUM_EXECUTABLE elsewhere.
 import { chromium } from '@playwright/test';
 import { GAME_DATA } from '@heartpatch/shared';
 import { mkdir, writeFile } from 'node:fs/promises';

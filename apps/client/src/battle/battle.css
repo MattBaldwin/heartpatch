@@ -224,7 +224,7 @@
   flex-direction: column;
   gap: 10px;
   box-sizing: border-box;
-  max-height: 35vh;
+  max-height: 35vh; /* = SHEET_SHARE in battle-hud.ts: the camera keeps this clear */
   overflow-y: auto;
   padding: 12px calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 14px)
     calc(env(safe-area-inset-left) + 16px);
