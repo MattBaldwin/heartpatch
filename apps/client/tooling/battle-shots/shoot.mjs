@@ -170,11 +170,16 @@ async function endCurrentBattle(page, mapId) {
   });
 }
 
-async function openBattle(page, mapId, moment) {
+async function openBattle(page, mapId, starterId, moment) {
   await endCurrentBattle(page, mapId);
   // The strongest resting squishy goes first: a fresh one at the wanted level.
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/squishies`, moment.mine);
   if (granted.status !== 201) throw new Error(`grant: ${JSON.stringify(granted.body)}`);
+  // It leads the team (the earlier moments' squishies would tie on strength), the starter behind it.
+  const team = await api(page, 'POST', `/maps/${mapId}/team`, {
+    squishyIds: [granted.body.squishy.id, ...(starterId ? [starterId] : [])],
+  });
+  if (team.status !== 200) throw new Error(`team: ${JSON.stringify(team.body)}`);
   const started = await api(page, 'POST', `/maps/${mapId}/dev/battles`, {
     opponent: moment.theirs,
   });
@@ -245,9 +250,11 @@ for (const device of DEVICES) {
     page.on('pageerror', (e) => console.error('[pageerror]', e.message));
     const name = `shot_${Date.now().toString(36)}${device[0]}${reduced ? 'r' : ''}`;
     const mapId = await signUpAndMakePatch(page, name);
+    const care = await api(page, 'GET', `/maps/${mapId}/care`);
+    const starterId = care.body?.squishies?.[0]?.id ?? null;
     for (const moment of moments) {
       const started = Date.now();
-      await openBattle(page, mapId, moment);
+      await openBattle(page, mapId, starterId, moment);
       // Idle: a little way in, so the ready stance and motes are mid-bob.
       const dev = (fn, ms) =>
         page.evaluate(({ fn, ms }) => window.__heartpatch?.battleDev?.()?.[fn](ms), { fn, ms });
