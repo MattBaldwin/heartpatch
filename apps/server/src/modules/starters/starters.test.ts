@@ -405,9 +405,10 @@ describe.skipIf(!url)('starter pick (needs DATABASE_URL)', () => {
       const kid = await player();
       const pal = await player();
       const first = await patch(server, kid);
-      expect(PickStarterResponseSchema.parse((await pick(server, kid, first.id, 'emberbun')).json()).gift).toEqual(
-        { 'heart-charm': 3 },
-      );
+      expect(
+        PickStarterResponseSchema.parse((await pick(server, kid, first.id, 'emberbun')).json())
+          .gift,
+      ).toEqual({ 'heart-charm': 3 });
 
       // A second patch they make, and one they join: a starter each, no charms.
       const second = await patch(server, kid);
@@ -426,7 +427,9 @@ describe.skipIf(!url)('starter pick (needs DATABASE_URL)', () => {
       const roamer = await player();
       await approve(server, pal, theirs.id, await ask(server, roamer, theirs.code));
       const joinedFirst = await pick(server, roamer, theirs.id, 'emberbun');
-      expect(PickStarterResponseSchema.parse(joinedFirst.json()).gift).toEqual({ 'heart-charm': 3 });
+      expect(PickStarterResponseSchema.parse(joinedFirst.json()).gift).toEqual({
+        'heart-charm': 3,
+      });
       expect((await call(server, 'POST', `/maps/${theirs.id}/leave`, roamer)).statusCode).toBe(204);
       const own = await patch(server, roamer);
       const later = await pick(server, roamer, own.id, 'puddlepuff');

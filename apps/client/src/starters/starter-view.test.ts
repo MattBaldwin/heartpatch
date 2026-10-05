@@ -63,7 +63,11 @@ describe('starter screen view', () => {
     expect(giftLine({})).toBeNull();
     const [first] = starterCards();
     expect(giftTitle(first!)).toBe(`${first!.name} is your friend!`);
-    for (const text of [giftLine(STARTERS.firstPickGift), STARTER_TEXT.giftHint, STARTER_TEXT.giftDone]) {
+    for (const text of [
+      giftLine(STARTERS.firstPickGift),
+      STARTER_TEXT.giftHint,
+      STARTER_TEXT.giftDone,
+    ]) {
       expect(findAvoidedWords(text ?? '')).toEqual([]);
     }
   });

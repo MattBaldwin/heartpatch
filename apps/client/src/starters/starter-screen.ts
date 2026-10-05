@@ -111,7 +111,10 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
   );
   // Sprout's gift with the first pick: same card shape, one big button.
   const giftHeading = el('h1', { class: 'auth-title', id: 'starter-gift-title' });
-  const giftText = el('p', { class: 'auth-subtitle starter-subtitle', 'data-testid': 'starter-gift' });
+  const giftText = el('p', {
+    class: 'auth-subtitle starter-subtitle',
+    'data-testid': 'starter-gift',
+  });
   const giftDone = el('button', { type: 'button', class: 'auth-button' }, STARTER_TEXT.giftDone);
   const giftCard = el(
     'div',

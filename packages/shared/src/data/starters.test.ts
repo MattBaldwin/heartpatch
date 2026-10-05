@@ -14,9 +14,9 @@ describe('starters (owner decision 2026-10-03)', () => {
 
   it('rejects a list that is not three different species', () => {
     const gift = STARTERS.firstPickGift;
-    expect(checkStarters({ speciesIds: ['puddlepuff', 'emberbun'], firstPickGift: gift })).not.toEqual(
-      [],
-    );
+    expect(
+      checkStarters({ speciesIds: ['puddlepuff', 'emberbun'], firstPickGift: gift }),
+    ).not.toEqual([]);
     expect(
       checkStarters({ speciesIds: ['puddlepuff', 'puddlepuff', 'emberbun'], firstPickGift: gift }),
     ).not.toEqual([]);
