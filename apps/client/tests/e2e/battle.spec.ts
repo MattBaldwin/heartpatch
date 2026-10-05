@@ -19,7 +19,40 @@ interface BattleDebug {
   pending: number;
   waiting: boolean;
   winner: 'a' | 'b' | 'draw' | null;
-  scene: { squishies: number; meshes: number; instances: number } | null;
+  scene: {
+    squishies: number;
+    meshes: number;
+    instances: number;
+    /** The arena (owner decision 2026-10-05): the battle's terrain and time of day. */
+    arena: {
+      terrain: string;
+      timeOfDay: string;
+      known: boolean;
+      props: number;
+      shadowMap: boolean;
+      lowTier: boolean;
+    };
+    effects: { spawned: number; live: number };
+    /** Dashes, knockbacks and flops played so far. */
+    acts: number;
+    reducedMotion: boolean;
+    drawCalls: number;
+  } | null;
+}
+
+/** The battle as the server sends it (`PlayerBattle`), for where it happens. */
+async function serverBattle(
+  page: Page,
+  id: string,
+): Promise<{ terrain: string; timeOfDay: string }> {
+  const res = await api<{ battle: { terrain: string; timeOfDay: string } }>(
+    page,
+    'GET',
+    `/battles/${id}`,
+  );
+  expect(res.status).toBe(200);
+  const { terrain, timeOfDay } = res.body.battle;
+  return { terrain, timeOfDay };
 }
 
 function battleState(page: Page): Promise<BattleDebug | null> {
@@ -41,8 +74,17 @@ async function openPatch(page: Page, name: string): Promise<void> {
   await expect(lobby).toBeHidden();
 }
 
+// Every test opens its own player (newPlayer); a page left mid-battle keeps
+// drawing the arena, which starves the next test's page when rendering is in
+// software. Close them all when the test is done.
+test.afterEach(async ({ browser }) => {
+  for (const context of browser.contexts()) await context.close();
+});
+
 test('plays a wild battle to the end and resumes it after a refresh', async ({ browser }) => {
-  test.setTimeout(240_000); // five scene builds and a whole log playback; CI renders in software
+  // Five scene builds and a whole log playback, every step drawn frame by
+  // frame with a shadow pass; CI renders in software.
+  test.setTimeout(480_000);
   const name = uniqueName('kid');
   const page = await newPlayer(browser, name);
   const errors: string[] = [];
@@ -78,6 +120,20 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(page.getByTestId('battle-plate-mine')).toContainText('Lv');
   await expect(page.getByTestId('battle-plate-theirs')).toContainText('Lv');
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // It plays on the terrain the server says, as a known arena with props, and
+  // soft shadows unless the governor had stepped the renderer down to the low
+  // tier before the battle was built (CI's software WebKit crawls; the low tier
+  // draws no shadow map by design).
+  const where = await serverBattle(page, battleId);
+  const arena = state.scene!.arena;
+  expect(arena).toMatchObject({ ...where, known: true });
+  expect(arena.props).toBeGreaterThan(0);
+  expect(arena.shadowMap).toBe(!arena.lowTier);
+  // The performance budget (CLAUDE.md rule 8): a settled frame draws under 60 calls.
+  await expect
+    .poll(() => battleState(page).then((s) => s?.scene?.drawCalls ?? 0), { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  expect((await battleState(page))?.scene?.drawCalls).toBeLessThan(60);
 
   // The client can't forge an outcome: the engine's own action shape is refused.
   const forged = await api(page, 'POST', `/battles/${battleId}/actions`, {
@@ -91,6 +147,13 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await page.getByTestId('battle-move').first().tap();
   state = await settled(page);
   expect(state.turn).toBe(1);
+  // The turn was acted out: the fighters moved and effects went off, then died away.
+  expect(state.scene?.acts).toBeGreaterThan(0);
+  expect(state.scene?.effects.spawned).toBeGreaterThan(0);
+  expect(state.scene?.reducedMotion).toBe(false);
+  await expect
+    .poll(() => battleState(page).then((s) => s?.scene?.effects.live), { timeout: 30_000 })
+    .toBe(0);
   await expect(page.getByTestId('battle-caption')).not.toBeEmpty();
   expect(state.shown.mine + state.shown.theirs).toBeLessThan(before.mine + before.theirs);
 
@@ -101,6 +164,7 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(lobby).toBeHidden();
   const resumed = await settled(page);
   expect(resumed).toMatchObject({ id: battleId, turn: 1, status: 'active', shown: state.shown });
+  expect(resumed.scene?.arena).toMatchObject(where);
   await expect(page.getByTestId('battle-caption')).toContainText('Welcome back');
 
   // Play it out: first move every turn until it's over (max turns is 50).
@@ -120,6 +184,15 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(result).toBeVisible();
   await expect(result).toContainText(/Hooray|tuckered|tie/);
   await expect(page.getByTestId('battle-xp')).toContainText(/XP/);
+  // The card fits the phone with its gutters (#133).
+  const card = (await result.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  expect(card.x).toBeGreaterThanOrEqual(16);
+  expect(card.x + card.width).toBeLessThanOrEqual(viewport.width - 16);
+  // Beat a wild squishy without befriending it: the card says how (owner decision 2026-10-04).
+  const nudge = page.getByTestId('battle-nudge');
+  if (over.winner === 'a') await expect(nudge).toContainText('use a Heart Charm');
+  else await expect(nudge).toHaveCount(0);
   await page.getByTestId('battle-done').tap();
   await expect(hud).toBeHidden();
   await expect(page.getByTestId('map-hud')).toContainText('Showdown Patch');
@@ -150,10 +223,12 @@ test('a battle owns the screen: no lobby button mid-battle, none left after the 
   // Mid-battle, "My patches" steps out: the battle is the only screen.
   await (await trayButton(page, 'battle-dev-grant')).tap();
   await expect(page.locator('.battle-entry-note')).toContainText('joined you');
+  // A player who asked for less motion (prefers-reduced-motion) gets the calm arena.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await (await trayButton(page, 'battle-dev-fight')).tap();
   const hud = page.getByTestId('battle-hud');
   await expect(hud).toBeVisible();
-  await settled(page);
+  expect((await settled(page)).scene?.reducedMotion).toBe(true);
   await expect(lobbyButton).toBeHidden();
   await expect(entry).toBeHidden();
 

@@ -23,3 +23,9 @@ export type BattleAction = keyof typeof BATTLE_RATE_LIMITS;
 
 /** Level of a wild squishy the dev route picks a fight with, when none is given. */
 export const DEV_WILD_LEVEL = 3; // TUNE: a fair fight for a fresh squishy
+
+/**
+ * How long before nightfall a battle's arena is drawn at dusk (owner decision
+ * 2026-10-04, presentation only): 7:00 PM with nightfall at 9:00 PM.
+ */
+export const DUSK_MINUTES = 120; // TUNE: judge on the playtest

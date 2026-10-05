@@ -1,4 +1,9 @@
-import type { BattleEventView, BattleSideId, PlayerBattle } from '@heartpatch/shared';
+import type {
+  BattleEventView,
+  BattleSideId,
+  BattleStatusId,
+  PlayerBattle,
+} from '@heartpatch/shared';
 import type { SquishMove } from '../procedural/config.js';
 import { PLAYBACK } from './battle-config.js';
 import {
@@ -42,6 +47,12 @@ export interface PlaybackStep {
   readonly energy: number | null;
   /** For swaps: who comes out. */
   readonly to: number | null;
+  /** For moves and misses: the move used (the arena picks its element's effects). */
+  readonly move: string | null;
+  /** For hits: the effectiveness tier (`super` hits land harder in the arena). */
+  readonly effectiveness: string | null;
+  /** For a status starting or showing again: which one (the arena shows its stars or bubbles). */
+  readonly status: BattleStatusId | null;
   readonly ms: number;
 }
 
@@ -77,7 +88,9 @@ function step(
   slot: number,
   text: string,
   ms: number,
-  extra: Partial<Pick<PlaybackStep, 'callout' | 'squish' | 'energy' | 'to'>> = {},
+  extra: Partial<
+    Pick<PlaybackStep, 'callout' | 'squish' | 'energy' | 'to' | 'move' | 'effectiveness' | 'status'>
+  > = {},
 ): PlaybackStep {
   return {
     kind,
@@ -89,6 +102,9 @@ function step(
     squish: extra.squish ?? null,
     energy: extra.energy ?? null,
     to: extra.to ?? null,
+    move: extra.move ?? null,
+    effectiveness: extra.effectiveness ?? null,
+    status: extra.status ?? null,
   };
 }
 
@@ -118,7 +134,7 @@ export function playbackSteps(
           event.slot,
           `${name(event.side, event.slot)} used ${content.moveName(event.move)}!`,
           PLAYBACK.moveMs,
-          { squish: 'jiggle' },
+          { squish: 'jiggle', move: event.move },
         );
       case 'miss':
         return step(
@@ -127,6 +143,7 @@ export function playbackSteps(
           event.slot,
           `${name(event.side, event.slot)} missed! Oops.`,
           PLAYBACK.missMs,
+          { move: event.move },
         );
       case 'hit':
         return step(
@@ -139,6 +156,7 @@ export function playbackSteps(
             callout: effectivenessLine(event.effectiveness),
             squish: 'wobble',
             energy: event.energy,
+            effectiveness: event.effectiveness,
           },
         );
       case 'heal':
@@ -170,7 +188,7 @@ export function playbackSteps(
           event.slot,
           `${name(event.side, event.slot)} ${STATUS_WORDS[event.status].start}`,
           PLAYBACK.effectMs,
-          { squish: 'jiggle' },
+          { squish: 'jiggle', status: event.status },
         );
       case 'status-skip':
         return step(
@@ -179,6 +197,7 @@ export function playbackSteps(
           event.slot,
           `${name(event.side, event.slot)} ${STATUS_WORDS[event.status].skip}`,
           PLAYBACK.effectMs,
+          { status: event.status },
         );
       case 'status-end':
         return step(

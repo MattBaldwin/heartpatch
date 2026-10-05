@@ -9,6 +9,7 @@ import {
   createBattleContent,
   GAME_DATA,
   gameplayOverrides,
+  MAP_GEN,
   otherSide,
   startBattle,
   TILE_BATTLE_KINDS,
@@ -43,6 +44,7 @@ import { requireMember } from '../maps/members.js';
 import type { MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
+import { arenaFor } from './arena.js';
 import { DEV_WILD_LEVEL } from './limits.js';
 import {
   createBattlesRepo,
@@ -92,6 +94,8 @@ export interface WildEncounterContext {
  */
 export interface TileOpponent {
   kind: Extract<BattleKind, 'tile' | 'rival-tile'>;
+  /** The tile fought over: the arena is drawn as its terrain (owner decision 2026-10-04). */
+  tile: Hex;
   /** Who plays the other side, and with which squishies. */
   side: BattleSideSetup;
   /**
@@ -244,6 +248,8 @@ interface Opponent {
   kind: BattleKind;
   side: BattleSideSetup;
   spawn: BattleSpawn | null;
+  /** Where the battle happens; null for the player's Heart Seed (see `arenaFor`). */
+  tile: Hex | null;
   started?: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
 }
 
@@ -318,6 +324,9 @@ export function playerBattleView(
     seed: row.status === 'active' ? null : row.seed,
     // The player's own rewards; a defender watching the replay doesn't get them.
     rewards: (options.mySide ?? PLAYER_SIDE) === PLAYER_SIDE ? row.rewards : null,
+    // A battle from before arenas were stored plays on the home terrain, by day.
+    terrain: row.arena?.terrain ?? MAP_GEN.homeTerrain,
+    timeOfDay: row.arena?.timeOfDay ?? 'day',
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
   };
@@ -655,6 +664,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           sides: { a: { controller: { type: 'player' }, squishies: team }, b: opponent.side },
         };
         const state = startBattle(content, setup);
+        const arena = await arenaFor(repo, {
+          mapId,
+          userId: user.id,
+          timeZone: map.timeZone,
+          at,
+          tile: opponent.tile,
+        });
         const row = await repo.insertBattle({
           mapId,
           kind: opponent.kind,
@@ -665,6 +681,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           state,
           startedAt: at,
           spawn: opponent.spawn,
+          arena,
         });
         const events = (await opponent.started?.(tx, row)) ?? [];
         // Meeting a squishy fills in its catalog page (design doc §21).
@@ -713,6 +730,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         kind: 'wild',
         side: { controller: { type: 'ai', policy }, squishies: wild },
         spawn: encounter.spawn ?? null,
+        // The tile the wild squishy spawned on; the dev route's has none.
+        tile: encounter.spawn ? { q: encounter.spawn.q, r: encounter.spawn.r } : null,
       });
     });
 
@@ -757,7 +776,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         mapId,
         async (tx, map, at) => {
           const opponent = await prepare.opponent(tx, { map, at });
-          return { kind: 'rescue', ...opponent, spawn: null };
+          // The Hollow has no tile: the rescue sets off from the Heart Seed.
+          return { kind: 'rescue', ...opponent, spawn: null, tile: null };
         },
         prepare.soloTeam,
       ),

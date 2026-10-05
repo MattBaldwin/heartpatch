@@ -1,14 +1,21 @@
-import type { BattleSideId, PlayerBattleAction } from '@heartpatch/shared';
+import { ELEMENTS, FEELINGS, type BattleSideId, type PlayerBattleAction } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
+import type { SafeRegion } from './camera-director.js';
+import { charmButton, noCharmsLine } from './heart-charm.js';
 import './battle.css';
 
-// The battle HUD (tech spec §6: DOM overlay for sharp text and big targets):
-// two energy bars, a caption, callouts, the move buttons, and the result card.
+// The battle HUD (tech spec §6: a DOM overlay for sharp text and big
+// targets; owner decision 2026-10-05: the Storybook Diorama's HUD): compact
+// name and energy pills in the top corners, each over its own squishy, the
+// caption and the moves in a bottom sheet of at most 35% of the screen, and
+// nothing over the fighters. Comic callouts ("Super cozy!") pop under a pill.
 // Words follow docs/STYLE_GUIDE.md: energy, tuckered out, never hurt.
 
 export interface PlateInfo {
   name: string;
-  nature: string;
+  level: number;
+  element: string;
+  feeling: string;
   /** 0–100. */
   percent: number;
   energyText: string;
@@ -21,8 +28,11 @@ export type ControlMode =
       type: 'choose';
       moves: { id: string; name: string }[];
       bench: { slot: number; name: string }[];
-      /** A wild squishy: offer the "Use Heart Charm" button (befriend, style guide §9). */
-      capture: boolean;
+      /**
+       * A wild squishy: the "Use Heart Charm" button (befriend, style guide §9),
+       * always shown with the bag's count (null while it loads); null elsewhere.
+       */
+      capture: { charms: number | null } | null;
     }
   /** Their squishy is tuckered out: pick who comes out. */
   | { type: 'replace'; bench: { slot: number; name: string }[] }
@@ -35,6 +45,8 @@ export interface ResultInfo {
   subtitle: string;
   /** "Moonpuff earned 12 XP" lines. */
   xp: string[];
+  /** One extra hint line ("Weaken a wild squishy, then…"), if any. */
+  nudge?: string;
   done: string;
 }
 
@@ -43,13 +55,15 @@ export interface BattleHud {
   hide: () => void;
   setPlate: (side: 'mine' | 'theirs', info: PlateInfo) => void;
   setCaption: (text: string | null) => void;
-  /** A floating callout ("Super cozy!") over a side's plate. */
+  /** A comic callout ("Super cozy!") under a side's pill. */
   callout: (side: 'mine' | 'theirs', text: string) => void;
   setControls: (mode: ControlMode) => void;
   /** A friendly problem line under the controls (empty to clear). */
   setProblem: (text: string) => void;
   showResult: (info: ResultInfo) => void;
   hideResult: () => void;
+  /** Where the fight may be drawn: under the pills, above the sheet (fractions of the height). */
+  safe: () => SafeRegion;
   readonly visible: boolean;
   dispose: () => void;
 }
@@ -58,6 +72,11 @@ export interface BattleHudOptions {
   onAction: (action: PlayerBattleAction) => void;
   onDone: () => void;
   onLeave: () => void;
+  /**
+   * The Heart Charm button was tapped with none in the bag (as far as the
+   * HUD knows): the screen checks the bag again and explains or goes ahead.
+   */
+  onNoCharms: () => void;
 }
 
 /** Which side a plate shows, for the dev hook and tests. */
@@ -66,27 +85,62 @@ export const plateSideOf = (mySide: BattleSideId, side: BattleSideId): 'mine' | 
 
 const CALLOUT_MS = 1100; // TUNE: long enough to read "Super cozy!"
 
+/**
+ * The sheet's share of the screen is reserved even while only the caption
+ * shows, so the fight never jumps. Keep it equal to `.battle-sheet`'s
+ * `max-height` in battle.css (35vh): this is what the camera keeps clear.
+ */
+export const SHEET_SHARE = 0.35; // TUNE
+
+/** Little badges for an element and a feeling (vector-free glyphs the system renders crisply). */
+const ELEMENT_GLYPH: Readonly<Record<string, string>> = {
+  fire: '🔥',
+  water: '💧',
+  leaf: '🍃',
+  frost: '❄️',
+  spark: '⚡',
+  stone: '🪨',
+  shadow: '🌙',
+  light: '✨',
+};
+const FEELING_GLYPH: Readonly<Record<string, string>> = {
+  joy: '😄',
+  cozy: '☺️',
+  brave: '😤',
+  silly: '🤪',
+  sleepy: '😴',
+  spooky: '👻',
+};
+const ELEMENT_NAMES = new Map<string, string>(ELEMENTS.map((e) => [e.id, e.name]));
+const FEELING_NAMES = new Map<string, string>(FEELINGS.map((f) => [f.id, f.name]));
+
 export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): BattleHud {
   const plate = (side: 'mine' | 'theirs') => {
     const name = el('span', { class: 'battle-plate-name' });
-    const nature = el('span', { class: 'battle-plate-nature' });
+    const level = el('span', { class: 'battle-plate-level' });
     const bar = el('div', { class: 'battle-energy-fill' });
     const energy = el('span', {
       class: 'battle-plate-energy',
       'data-testid': `battle-energy-${side}`,
     });
+    const element = el('span', { class: 'battle-badge', role: 'img' });
+    const feeling = el('span', { class: 'battle-badge', role: 'img' });
     const status = el('span', { class: 'battle-plate-status' });
     const callout = el('span', { class: 'battle-callout', role: 'status' });
     const node = el(
       'div',
       { class: `battle-plate battle-plate-${side}`, 'data-testid': `battle-plate-${side}` },
-      el('div', { class: 'battle-plate-head' }, name, status),
-      nature,
-      el('div', { class: 'battle-energy', role: 'progressbar', 'aria-label': 'Energy' }, bar),
-      energy,
+      el('div', { class: 'battle-plate-row' }, name),
+      el(
+        'div',
+        { class: 'battle-plate-row' },
+        el('div', { class: 'battle-energy', role: 'progressbar', 'aria-label': 'Energy' }, bar),
+        el('span', { class: 'battle-badges' }, element, feeling),
+      ),
+      el('div', { class: 'battle-plate-row battle-plate-foot' }, level, energy, status),
       callout,
     );
-    return { node, name, nature, bar, energy, status, callout, timer: 0 };
+    return { node, name, level, bar, energy, element, feeling, status, callout, timer: 0 };
   };
   const plates = { mine: plate('mine'), theirs: plate('theirs') };
 
@@ -112,26 +166,44 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   });
   result.hidden = true;
 
+  const top = el('div', { class: 'battle-top' }, plates.mine.node, leave, plates.theirs.node);
+  const sheet = el(
+    'section',
+    { class: 'battle-sheet', 'data-testid': 'battle-sheet' },
+    caption,
+    controls,
+    problem,
+  );
+  // The shield takes every touch, drag, pinch and wheel on the fight itself,
+  // so none reaches the canvas and the map camera's gestures underneath: the
+  // director alone moves the battle camera. The controls sit on top of it.
+  const shield = el('div', { class: 'battle-shield', 'data-testid': 'battle-shield' });
   const hud = el(
     'section',
     { class: 'battle-hud', 'data-testid': 'battle-hud', 'aria-label': 'Squishy showdown' },
-    plates.theirs.node,
-    // Mine sits with the controls, like a hand of cards; theirs is up top.
-    el('div', { class: 'battle-bottom' }, plates.mine.node, caption, controls, problem),
-    leave,
+    shield,
+    top,
+    sheet,
     result,
   );
   hud.hidden = true;
   root.append(hud);
+
+  // The safe region is measured at most once per layout change, not per frame.
+  let safe: SafeRegion | null = null;
+  const forget = () => {
+    safe = null;
+  };
+  window.addEventListener('resize', forget);
 
   const button = (
     label: string,
     onClick: () => void,
     extra: { soft?: boolean; testId?: string; small?: boolean } = {},
   ) => {
-    const classes = ['auth-button', 'battle-button'];
-    if (extra.soft) classes.push('auth-button-soft');
-    if (extra.small) classes.push('auth-button-small');
+    const classes = ['battle-button'];
+    if (extra.soft) classes.push('battle-button-soft');
+    if (extra.small) classes.push('battle-button-small');
     const node = el(
       'button',
       {
@@ -153,6 +225,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   const setControls = (mode: ControlMode): void => {
     controls.replaceChildren();
     controls.hidden = mode.type === 'hidden';
+    sheet.dataset['mode'] = mode.type;
     switch (mode.type) {
       case 'choose': {
         const moves = el('div', { class: 'battle-moves' });
@@ -163,13 +236,37 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
               () => {
                 act({ type: 'move', move: move.id });
               },
-              {
-                testId: 'battle-move',
-              },
+              { testId: 'battle-move' },
             ),
           );
         }
         const row = el('div', { class: 'battle-row' });
+        let hint: HTMLElement | null = null;
+        if (mode.capture) {
+          // Always there in a wild battle, so a player learns befriending
+          // exists; with none in the bag it stays, dimmed, and explains.
+          const charm = charmButton(mode.capture.charms);
+          const node = button(
+            charm.label,
+            () => {
+              if (charm.empty) options.onNoCharms();
+              else act({ type: 'capture' });
+            },
+            { small: true, testId: 'battle-capture' },
+          );
+          if (charm.empty) {
+            node.classList.add('battle-button-empty');
+            // Still tappable (not `disabled`): a tap explains, and checks the bag again.
+            hint = el(
+              'p',
+              { class: 'battle-hint', 'data-testid': 'battle-capture-hint' },
+              noCharmsLine(),
+            );
+            node.setAttribute('aria-describedby', 'battle-capture-hint');
+            hint.id = 'battle-capture-hint';
+          }
+          row.append(node);
+        }
         for (const { slot, name } of mode.bench) {
           row.append(
             button(
@@ -178,17 +275,6 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
                 act({ type: 'swap', slot });
               },
               { soft: true, small: true, testId: 'battle-swap' },
-            ),
-          );
-        }
-        if (mode.capture) {
-          row.append(
-            button(
-              'Use Heart Charm',
-              () => {
-                act({ type: 'capture' });
-              },
-              { small: true, testId: 'battle-capture' },
             ),
           );
         }
@@ -222,6 +308,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         );
         row.append(run);
         controls.append(moves, row);
+        if (hint) controls.append(hint);
         break;
       }
       case 'replace': {
@@ -252,6 +339,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   return {
     show: () => {
       hud.hidden = false;
+      forget();
     },
     hide: () => {
       hud.hidden = true;
@@ -260,13 +348,22 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     setPlate: (side, info) => {
       const p = plates[side];
       p.name.textContent = info.name;
-      p.nature.textContent = info.nature;
+      p.level.textContent = `Lv ${String(info.level)}`;
       p.bar.style.width = `${String(info.percent)}%`;
       p.bar.classList.toggle('battle-energy-low', info.percent <= 25);
       p.energy.textContent = info.energyText;
+      p.energy.setAttribute('aria-label', `${info.energyText} energy`);
+      p.element.textContent = ELEMENT_GLYPH[info.element] ?? '✨';
+      p.element.title = ELEMENT_NAMES.get(info.element) ?? info.element;
+      p.element.setAttribute('aria-label', p.element.title);
+      p.feeling.textContent = FEELING_GLYPH[info.feeling] ?? '☺️';
+      p.feeling.title = FEELING_NAMES.get(info.feeling) ?? info.feeling;
+      p.feeling.setAttribute('aria-label', p.feeling.title);
       p.status.textContent = info.status ?? '';
       p.status.hidden = info.status === null;
       p.node.classList.toggle('battle-plate-tuckered', info.percent === 0);
+      // A longer name or a status chip can grow the pill: measure again.
+      forget();
     },
     setCaption: (text) => {
       caption.textContent = text ?? '';
@@ -299,6 +396,9 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           { class: 'battle-xp', 'data-testid': 'battle-xp' },
           ...info.xp.map((line) => el('li', {}, line)),
         ),
+        ...(info.nudge
+          ? [el('p', { class: 'battle-hint', 'data-testid': 'battle-nudge' }, info.nudge)]
+          : []),
         el(
           'div',
           { class: 'auth-actions' },
@@ -311,10 +411,23 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     hideResult: () => {
       result.hidden = true;
     },
+    safe: () => {
+      if (safe) return safe;
+      const h = window.innerHeight || 1;
+      const pillBottom = Math.max(
+        plates.mine.node.getBoundingClientRect().bottom,
+        plates.theirs.node.getBoundingClientRect().bottom,
+      );
+      // The pills aren't laid out yet (hidden): a sensible guess until they are.
+      const top = pillBottom > 0 ? (pillBottom + 10) / h : 0.14;
+      safe = { top: Math.min(0.4, top), bottom: 1 - SHEET_SHARE };
+      return safe;
+    },
     get visible() {
       return !hud.hidden;
     },
     dispose: () => {
+      window.removeEventListener('resize', forget);
       for (const p of Object.values(plates)) window.clearTimeout(p.timer);
       hud.remove();
     },
