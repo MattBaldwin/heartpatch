@@ -171,8 +171,8 @@ test('an empty bag keeps the Heart Charm button, dimmed, says how to craft one, 
   const mapId = await mapIdOf();
   expect(await charmsLeft(page, mapId)).toBe(0);
 
-  // A wild squishy to play with (dev).
-  await page.getByTestId('battle-dev-fight').tap();
+  // A wild squishy to play with (dev; the button lives in the Adventure tray).
+  await (await trayButton(page, 'battle-dev-fight')).tap();
   const hud = page.getByTestId('battle-hud');
   await expect(hud).toBeVisible();
   const start = await settled(page);

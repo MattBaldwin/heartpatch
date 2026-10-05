@@ -111,7 +111,7 @@ export const BATTLE_CAMERA = {
   /** Where it looks: a point at the fighters' feet, between them. */
   aim: { x: 0.35, y: 0.1, z: 0.5 }, // TUNE
   /** Where the aim lands on screen, as a fraction of the height from the top. */
-  feetY: 0.52, // TUNE
+  feetY: 0.56, // TUNE: low enough to use the room above the sheet
   /** The fight's box that must always fit in the safe region: half width and height. */
   fitHalfWidth: 3.9, // TUNE
   fitHeight: 3.6, // TUNE

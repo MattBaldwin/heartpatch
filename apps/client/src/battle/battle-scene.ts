@@ -787,7 +787,8 @@ export class BattleScene {
     let i = 0;
     for (const side of SIDES) {
       const rig = this.#rigs[side];
-      const r = (rig.out?.radius ?? 1) * 1.2 + 0.25;
+      // Ears, tails and a squash all reach past the body; a wide margin keeps every bit on screen (#142).
+      const r = (rig.out?.radius ?? 1) * 1.35 + 0.6;
       const h = (rig.out?.height ?? 2) * 1.25 + 0.3;
       const home = this.#fit[i++];
       const here = this.#fit[i++];

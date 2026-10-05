@@ -18,7 +18,7 @@
 .battle-plate-status[hidden],
 .battle-caption[hidden],
 .battle-controls[hidden],
-.battle-result[hidden] {
+.battle-hud .battle-result[hidden] {
   display: none;
 }
 
@@ -26,7 +26,8 @@
 
 .battle-top {
   position: absolute;
-  top: calc(env(safe-area-inset-top) + 12px);
+  /* Under the account chip in the corner (auth.css), which stays reachable mid-battle. */
+  top: calc(env(safe-area-inset-top) + 58px);
   right: calc(env(safe-area-inset-right) + 12px);
   left: calc(env(safe-area-inset-left) + 12px);
   display: flex;
