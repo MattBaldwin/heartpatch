@@ -277,7 +277,7 @@ test('Home and Bag open on the first tap while a tile panel is open', async ({ b
   // selected, so the first click landed on the map and only the second one
   // acted. They live in the My Heartpatch tray now and never hide under a
   // panel: one tap on the handle, one tap on the entry, with the panel open.
-  test.setTimeout(180_000);
+  test.setTimeout(240_000); // two map builds (Home and back) and two tile sweeps
   const page = await newPlayer(browser, uniqueName('open'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
