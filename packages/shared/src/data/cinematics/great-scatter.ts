@@ -772,13 +772,13 @@ const shot8: CinematicInput['shots'][number] = {
     {
       at: PART.befriend,
       cut: true,
-      position: [HOME.x + 0.2, 1.7, HOME.z - 2.2],
-      target: [HOME.x + 0.75, 0.4, HOME.z + 1.2],
+      position: [HOME.x + 0.6, 1.7, HOME.z - 2.0],
+      target: [HOME.x + 1.05, 0.4, HOME.z + 1.2],
     },
     {
       at: PART.end,
-      position: [HOME.x + 0.35, 1.5, HOME.z - 1.8],
-      target: [HOME.x + 0.8, 0.4, HOME.z + 1.2],
+      position: [HOME.x + 0.65, 1.5, HOME.z - 1.6],
+      target: [HOME.x + 1.05, 0.4, HOME.z + 1.2],
     },
   ],
   // Still drained while you plant and claim (claimed land keeps its colour);
@@ -832,9 +832,9 @@ const shot8: CinematicInput['shots'][number] = {
         // Over to the squishy for a cuddle.
         { at: PART.care, x: CARE_AT.x - 0.6, z: CARE_AT.z - 0.15, scale: KEEPER, yaw: -0.9 },
         { at: PART.befriend, x: CARE_AT.x - 0.6, z: CARE_AT.z - 0.15, scale: KEEPER, yaw: -0.9 },
-        // Then facing the wild one.
-        { at: PART.befriend, x: HOME.x + 0.3, z: HOME.z + 0.5, scale: KEEPER, yaw: -0.4 },
-        { at: PART.end, x: HOME.x + 0.3, z: HOME.z + 0.5, scale: KEEPER, yaw: -0.4 },
+        // Then facing the wild one, beside the fire (not behind it).
+        { at: PART.befriend, x: HOME.x + 0.9, z: HOME.z + 0.35, scale: KEEPER, yaw: -0.3 },
+        { at: PART.end, x: HOME.x + 0.9, z: HOME.z + 0.35, scale: KEEPER, yaw: -0.3 },
       ],
       moves: [
         { at: 1.2, move: 'bounce' },
@@ -893,8 +893,8 @@ const shot8: CinematicInput['shots'][number] = {
       kind: 'joy',
       path: [
         { at: PART.care + 1.4, ...CARE_AT, y: 0.25, scale: 0, glow: 1 },
-        { at: PART.care + 2.1, ...CARE_AT, y: 0.25, scale: 0.75, glow: 0.9 },
-        { at: PART.befriend - 0.6, ...CARE_AT, y: 0.25, scale: 0.6, glow: 0.4 },
+        { at: PART.care + 2.1, ...CARE_AT, y: 0.25, scale: 0.7, glow: 0.4 },
+        { at: PART.befriend - 0.6, ...CARE_AT, y: 0.25, scale: 0.6, glow: 0.2 },
         { at: PART.befriend, ...CARE_AT, y: 0.25, scale: 0.5, glow: 0 },
       ],
     },
@@ -907,9 +907,9 @@ const shot8: CinematicInput['shots'][number] = {
         { at: PART.befriend, ...WILD_AT, scale: SQ, yaw: 0.4 },
         { at: JOINS + 0.6, ...WILD_AT, scale: SQ, yaw: 0.4 },
         // A happy hop over to you.
-        { at: JOINS + 1.4, x: HOME.x + 0.85, z: HOME.z + 0.95, y: 0.25, scale: SQ, yaw: 0.6 },
-        { at: JOINS + 1.8, x: HOME.x + 0.75, z: HOME.z + 0.85, scale: SQ, yaw: 0.6 },
-        { at: PART.end, x: HOME.x + 0.75, z: HOME.z + 0.85, scale: SQ, yaw: 0.6 },
+        { at: JOINS + 1.4, x: HOME.x + 1.15, z: HOME.z + 1.05, y: 0.25, scale: SQ, yaw: 0.2 },
+        { at: JOINS + 1.8, x: HOME.x + 1.1, z: HOME.z + 0.95, scale: SQ, yaw: 0.2 },
+        { at: PART.end, x: HOME.x + 1.1, z: HOME.z + 0.95, scale: SQ, yaw: 0.2 },
       ],
       moves: [
         { at: PART.befriend + 0.6, move: 'jiggle' },
@@ -924,10 +924,10 @@ const shot8: CinematicInput['shots'][number] = {
       id: 'd-charm',
       kind: 'heart-charm',
       path: [
-        { at: TOSS, x: HOME.x + 0.45, z: HOME.z + 0.6, y: 0.45, scale: 0.6, glow: 0.6 },
+        { at: TOSS, x: HOME.x + 1.0, z: HOME.z + 0.5, y: 0.45, scale: 0.6, glow: 0.6 },
         {
           at: TOSS + 0.55,
-          x: HOME.x + 0.85,
+          x: HOME.x + 1.1,
           z: HOME.z + 1.15,
           y: 1.25,
           scale: 1,

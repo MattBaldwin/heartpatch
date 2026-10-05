@@ -64,8 +64,8 @@ export const HOLLOW_ARM = {
 /** His eyes as he reaches: bigger and hotter, never a flash (it eases with the reach). */
 export const EYE_FLARE = {
   scale: 1.45, // TUNE
-  brightness: 2.2, // TUNE: emissive multiplier at full flare
-  color: '#fff3c4', // TUNE: hotter, whiter gold
+  brightness: 1.5, // TUNE: emissive multiplier at full flare (more blows out to white)
+  color: '#ffd45c', // TUNE: a hotter, deeper gold
 } as const;
 
 /** Frames per second of the visit animation. */
