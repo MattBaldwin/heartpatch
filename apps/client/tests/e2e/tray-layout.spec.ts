@@ -13,6 +13,7 @@ const TRAY_CONTROLS = [
   '[data-testid^="tray-handle-"]',
   '.tray-section > button',
   '.tray-section > .battle-entry-box > button',
+  '.tray-jobs .jobs-entry > button',
   '.tray-close',
   '.tray-top-left > button',
 ].join(', ');

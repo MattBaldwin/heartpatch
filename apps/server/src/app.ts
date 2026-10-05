@@ -20,6 +20,8 @@ import { createChatService } from './modules/chat/service.js';
 import { createCareService } from './modules/care/service.js';
 import { createBattlesService } from './modules/battles/service.js';
 import { gatheringRoutes } from './modules/gathering/routes.js';
+import { squishyJobsRoutes } from './modules/jobs/routes.js';
+import { createSquishyJobsService } from './modules/jobs/service.js';
 import { hollowRoutes } from './modules/hollow/routes.js';
 import { createHollowService, type HollowService } from './modules/hollow/service.js';
 import { createGatheringService } from './modules/gathering/service.js';
@@ -219,6 +221,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           gatheringRoutes(createGatheringService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
+          }),
+        );
+        // Squishy jobs (owner decisions 2026-10-04): the team, gatherers, the job board.
+        await api.register(
+          squishyJobsRoutes(createSquishyJobsService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
         await api.register(

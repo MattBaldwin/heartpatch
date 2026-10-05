@@ -512,6 +512,44 @@ export const GAME_EVENTS = {
       messageId: ContentIdSchema,
     }),
   },
+  /**
+   * A player gave one of their squishies a new job (owner decisions
+   * 2026-10-04): `from` / `to` are the work tiles it left and went to, so
+   * members' maps can show where squishies are gathering. Members see only
+   * whose and where: which squishy and which job stay internal (like
+   * `defenders.changed`, never which ones), and nothing it gathers is sent.
+   */
+  'squishy.assigned': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyId: z.uuid(),
+      job: z.enum(['team', 'guard', 'gatherer', 'resting']),
+      from: z.strictObject(coords).nullable(),
+      to: z.strictObject(coords).nullable(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      from: z.object(coords).nullable(),
+      to: z.object(coords).nullable(),
+    }),
+  },
+  /** A player picked their battle team (slot order). Only they hear it (`ownerOnlyView`). */
+  'team.picked': {
+    internal: z.strictObject({ userId: z.uuid(), squishyIds: z.array(z.uuid()) }),
+    public: z.object({ userId: z.uuid(), squishyIds: z.array(z.uuid()) }),
+  },
+  /**
+   * A player's squishy gatherers' finished work went into their bag (a
+   * collect, or a gatherer taken off its tile). How much stays internal.
+   */
+  'work.collected': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      squishyIds: z.array(z.uuid()),
+      items: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid() }),
+  },
 } satisfies Record<string, GameEventSchemas>;
 
 export type GameEventType = keyof typeof GAME_EVENTS;

@@ -145,6 +145,7 @@
    Features' own buttons (Bag, Home, Report…) become rows here. */
 .tray-section > button,
 .tray-section > .battle-entry-box > button,
+.tray-jobs .jobs-entry > button,
 .tray-row {
   position: relative;
   display: flex;
@@ -324,6 +325,14 @@
 
 .tray-section > .battle-entry-box > .battle-row {
   display: flex;
+  gap: 8px;
+}
+
+/* Team and Jobs (squishy jobs) are two rows of My Heartpatch. */
+.tray-section > .tray-jobs,
+.tray-jobs .jobs-entry {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 

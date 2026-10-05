@@ -26,6 +26,8 @@ const TRAY_OF: Readonly<Record<string, TraySide>> = {
   'bag-open': 'heartpatch',
   'recipe-book-open': 'heartpatch',
   'hollow-fire-hint': 'heartpatch',
+  'jobs-open': 'heartpatch',
+  'team-open': 'heartpatch',
 };
 
 export const traysState = (page: Page): Promise<TraysState | null> =>

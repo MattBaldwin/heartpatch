@@ -251,6 +251,7 @@ interface Opponent {
 const MESSAGES = {
   notFound: "We couldn't find that battle.",
   noTeam: 'You need a squishy friend first!',
+  allBusy: 'Everyone is busy with a job! Pick a team first.',
   nobodyAround: 'No wild squishies around right now. Try again soon!',
   over: 'That battle is already over.',
   movedOn: 'The battle moved on. Take another look!',
@@ -614,7 +615,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    * A battle going that can't go on (see `settle`) is ended first, and a new
    * one starts. The opponent is built inside the start transaction, after the
    * team check, so a refused start uses nothing up. `soloTeam` fights when
-   * the player has no active squishy (rescues only).
+   * the player has nobody free (rescues only): all in the Hollow, or, since
+   * squishy jobs, all the rest guarding or gathering.
    */
   const startWith = async (
     user: PublicUser,
@@ -634,9 +636,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         const active = await repo.findActive(mapId, user.id);
         if (active) return { row: active, created: false };
 
-        const listed = await repo.listTeam(mapId, user.id, content.rules.teamSize);
+        // The Glade's tutorial battles keep their team as it was before team
+        // picking: its Glade friend stands watch in a step, and still fights.
+        const listed = await repo.listTeam(mapId, user.id, content.rules.teamSize, {
+          guardsToo: map.kind === 'tutorial',
+        });
         const team = listed.length > 0 ? listed : ((await soloTeam?.(tx)) ?? []);
-        if (team.length === 0) throw new AppError('CONFLICT', MESSAGES.noTeam);
+        if (team.length === 0) {
+          // Squishies on watch or gathering don't battle (owner decisions 2026-10-04).
+          const busy = await repo.hasActiveSquishy(mapId, user.id);
+          throw new AppError('CONFLICT', busy ? MESSAGES.allBusy : MESSAGES.noTeam);
+        }
 
         const at = now();
         const opponent = await opponentFor(tx, map, at);

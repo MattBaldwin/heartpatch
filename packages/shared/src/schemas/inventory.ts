@@ -16,6 +16,7 @@ import { RecipeBookPageKeySchema } from './data/recipe-book.js';
  * Man (#21): `rescue` (Heartdust for bringing a squishy home). The tutorial
  * (#24): `tutorial` (Sprout's little bag at the start of a run). The starter
  * pick: `starter` (Sprout's Heart Charms with the account's first pick).
+ * Squishy jobs: `work` (what squishy gatherers bring in).
  */
 export const ItemChangeReasonSchema = z.enum([
   'gather',
@@ -29,6 +30,8 @@ export const ItemChangeReasonSchema = z.enum([
   'rescue',
   'tutorial',
   'starter',
+  /** Squishy gatherers' work (owner decisions 2026-10-04). */
+  'work',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

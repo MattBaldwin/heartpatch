@@ -115,8 +115,23 @@ export class MapState {
           defenders: 0,
           gathering: null,
           guardianHint: null,
+          // The old owner's gatherer there stopped (squishy jobs).
+          workers: 0,
         });
         return changed ? 'redraw' : 'none';
+      }
+      case 'squishy.assigned': {
+        // A squishy left or started gathering on a tile (squishy jobs): the
+        // tile's gatherer count follows it.
+        const parsed = GAME_EVENTS['squishy.assigned'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const { from, to } = parsed.data;
+        const workers = (at: { q: number; r: number }) => this.byHex.get(hexKey(at))?.workers ?? 0;
+        const left = from
+          ? this.patchTile(from, { workers: Math.max(0, workers(from) - 1) })
+          : false;
+        const came = to ? this.patchTile(to, { workers: workers(to) + 1 }) : false;
+        return left || came ? 'redraw' : 'none';
       }
       case 'defenders.changed': {
         const parsed = GAME_EVENTS['defenders.changed'].public.safeParse(event.data);

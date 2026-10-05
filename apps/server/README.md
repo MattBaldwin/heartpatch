@@ -183,7 +183,7 @@ await repo.transaction(async (repo, tx) => {
 |---|---|
 | `GET /api/v1/maps/:mapId/territory` | → `{ territory }`: tries left today, my new-player shield, my tiles with squishies on watch, my squishies (and the secret species rows among them), and the server's clock |
 | `POST /api/v1/maps/:mapId/attacks` | `{ q, r }` → 201 `{ battle }` (a `tile` or `rival-tile` battle), or 200 with the battle already going. Takes an `Idempotency-Key` |
-| `POST /api/v1/maps/:mapId/defenders` | `{ q, r, squishyIds }` (up to `maxDefenders`, in slot order; `[]` sends everyone home) → `{ territory }`. Only my land outside my home base, only my squishies not in the Hollow and not housed in a habitat (unless already on that tile); a squishy on watch elsewhere moves. Appends `defenders.changed` when it changes |
+| `POST /api/v1/maps/:mapId/defenders` | `{ q, r, squishyIds }` (up to `maxDefenders`, in slot order; `[]` sends everyone home) → `{ territory }`. Only my land outside my home base, only my squishies not in the Hollow and not housed in a habitat (unless already on that tile); a squishy on watch elsewhere moves, and a new guard leaves the team or its work tile (squishy jobs). Appends `defenders.changed` when it changes |
 
 **Raid rules** are `TERRITORY_RULES` (shared, public, `// TUNE:`), all checked on the server in the battle's start transaction, in this order: the tile exists; the target is next to my land, not a home tile, not mine, and not another player's when PvP is Off (`attackTargetProblem`, shared with the client); the tile's cooldown (`cooldownHours` from the last battle **started** on it, by anyone, win or lose); my tries today (`attemptsPerDay` per map-local day; a no-contest doesn't count); and for a rival tile, their new-player shield (`newPlayerShieldHours` from joining), then their daily loss cap (`dailyLossCap[pvpMode]`, counting tiles lost today **plus** challenges against them still going, so two at once can't both get under it). Refusals use nothing up. Lock order: the defender's `map_members` row (`for no key update`, so the cap count is serialized per defender), the tile, then the battle and attempt rows, `maps` last.
 
@@ -196,6 +196,28 @@ await repo.transaction(async (repo, tx) => {
 **Events:** `tile.attacked` (public: who, whose, where, `cooldownUntil`), `tile.captured` (public: new and old owner, where; internal also the kind, terrain, Gentle `rewardPercent` and returned squishies, for found clothing #43 and milestones #44), `defenders.changed` (public: whose and where, and how many; which squishies stays internal). `PublicTile` carries `cooldownUntil` (the latest, may be past) and `defenders` (a count).
 
 **On watch (decision C):** `isOnWatch(squishy, post)` (shared) is true for an active squishy posted on land its owner still holds; the Hollow Man (#21) skips those. A squishy is housed or on watch, not both (owner decision 2026-10-03): posting locks the squishies after the tiles (id order) and refuses a housed one; housing refuses one on watch. One that was both before the rule counts as on watch only (care's XP multiplier skips its habitat).
+
+## Squishy jobs
+
+`src/modules/jobs` (owner decisions 2026-10-04; design doc §6, §12): each squishy has **one job**: on the battle **team** (up to `BATTLE_RULES.teamSize`, in slot order), a **guard** on watch (#15's posts, set from the tile panel), a **gatherer** working a tile of its owner's land on its own, again and again, or **resting** (the default, at home or in a habitat). Giving a squishy a new job takes it off its old one. Stored as `squishies.team_slot`, `work_tile_id`, `work_since` and `work_started_at` (migration 0021); guards stay in `tile_defenders` and habitats in `habitat_building_id`, so existing posts and beds read as jobs with nothing migrated.
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/jobs` | → `JobsView`: my squishies with their job, team slot, post, habitat and gatherer status (what's ready, the next ready time, whether a lit fire keeps the tile safe tonight); `names`; my team in slot order; the tiles a gatherer could work (`spots`); and the server's clock |
+| `POST /api/v1/maps/:mapId/squishies/:squishyId/job` | `{ job: "team" }` (the first free slot; `CONFLICT` when full), `{ job: "gatherer", q, r }` (my tile with a gatherable node, or land outside my home whose terrain yields something; one gatherer per tile; in season; it moves out of its habitat) or `{ job: "resting" }` → `JobsView`. Not for a squishy in the Hollow |
+| `POST /api/v1/maps/:mapId/team` | `{ squishyIds }` (≤ team size, no repeats; `[]` clears) → `JobsView`. Guards and gatherers picked leave their post or tile; someone already on the team may stay while in the Hollow, nobody new joins from there. Appends `team.picked` |
+| `POST /api/v1/maps/:mapId/work/collect` | → `{ granted, items, jobs }`: every finished cycle of my gatherers into the bag (ledger reason `work`, ref the squishy), one transaction; `CONFLICT` "Nothing ready yet" when there's nothing. Appends `work.collected` |
+| `POST /api/v1/maps/:mapId/dev/work/ready` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): each of my gatherers finishes one more cycle now (e2e's short timer) → `JobsView` |
+
+Mutating routes take an `Idempotency-Key`.
+
+**Work is timestamps** (CLAUDE.md rule 4): finished cycles are worked out on read or collect from `work_since` (`workProgress`), capped at `JOB_RULES.work.maxStoredCycles`; a full gatherer waits, and starts again from the collect. A cycle is the source's gather time × `cyclePercent` ÷ the squishy's speed (100, 135 when its element or seasonal species matches the resource, 175 when its feeling does too; `JOB_RULES.affinities`, `// TUNE:`). Each cycle pays what was in season when it finished (`workYield`). **At work** (`squishyAtWork`, the one SQL spelling) means its owner still holds the tile and nobody captured it since it started there: work on land that changed hands stops, and what it hadn't collected is lost, like a Keeper's gather (#17). **Taking one off** (a new job, a habitat, posting it as a guard, the Hollow Man) banks what it had ready (`leaveWork`); a part-done cycle is let go.
+
+**Battles read the team** (`listTeam`, only at the battle start): the picked team in slot order, active members only; with nobody picked (or all in the Hollow), the strongest resting squishies, never guards or gatherers (on the Tutorial Glade, guards still fight, so its battles keep their old team). A player whose squishies are all busy hears "Everyone is busy with a job! Pick a team first." Rescues keep their `soloTeam`.
+
+**Night:** a gatherer spends the night on its work tile, so outside every lit fire's safe tiles it's exposed like any squishy (shared `shelterOf`, unchanged). The job board shows `firelit` for each spot before assigning.
+
+**Events:** `squishy.assigned` (public: whose, and the work tiles it left and went to, so maps keep `PublicTile.workers`; which squishy and which job stay internal), `team.picked` (the team; only the player hears it), `work.collected` (public: who; how much stays internal).
 
 ## Raid log and defense style
 

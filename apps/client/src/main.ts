@@ -11,6 +11,7 @@ import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
+import { createJobs } from './squishies/jobs/index.js';
 import { createChatScreen } from './chat/chat-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { combineTileActions } from './map/tile-actions.js';
@@ -35,6 +36,7 @@ import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
 import { createTerritoryScreen } from './territory/territory-screen.js';
 import { createTutorialScreen } from './tutorial/tutorial-screen.js';
+import { el } from './ui/dom.js';
 import type { PublicUser } from '@heartpatch/shared';
 import './styles.css';
 
@@ -132,6 +134,11 @@ const audio = createAudio();
 // "Adventure" on the left, "My Heartpatch" on the right, with news as badges
 // on their handles. Mounted first, so the lobby and catalog cover it.
 const trays = createTrays({ root: document.body });
+// Team and Jobs go in My Heartpatch (squishy jobs); their row shows itself
+// whenever this box does (on a map), and not on the Tutorial Glade.
+const jobsBox = el('div', { class: 'tray-jobs' });
+jobsBox.hidden = true;
+trays.slot('squishies').append(jobsBox);
 
 // The bag and gathering (#17): a Bag entry in the My Heartpatch tray, and the
 // gather buttons in the tile chip.
@@ -158,6 +165,10 @@ const care = createCareSheet({
     void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
   },
 });
+// Squishy jobs (owner decisions 2026-10-04): the job board and team picker
+// sheets. Temporary entry points the trays will move: home's "Jobs & team",
+// the tile panel's "Send a gatherer", and Team / Jobs by the battle entry.
+const jobs = createJobs({ root: document.body, isGlade: (mapId) => mapId === glade });
 /** Home base is on screen (the close-up returns there, #20). */
 const homeOpen = () => home.debug?.open ?? false;
 // The close-up view (#20): a squishy face to face, with gestures for care.
@@ -295,6 +306,10 @@ const home = createHomeScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
+  onJobs: (mapId) => {
+    void jobs.openJobBoard(mapId);
+  },
+  showJobs: (mapId) => mapId !== glade,
   onOpen: (mapId) => {
     maps.close();
     catalog.close();
@@ -340,6 +355,7 @@ const maps = createMapScreen({
   requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
+    jobs.close();
     void battles.setMap(null);
     catalog.close();
     care.close();
@@ -350,14 +366,22 @@ const maps = createMapScreen({
     home.setMap(null);
     lobby.showMessage(message);
   },
-  tileActions: combineTileActions(inventory.tileActions, home.tileActions, territory.tileActions),
+  tileActions: combineTileActions(
+    inventory.tileActions,
+    home.tileActions,
+    territory.tileActions,
+    jobs.tileActions,
+  ),
   onHudChange: (mapId) => {
     trays.setVisible(mapId !== null);
     recipeBook.setMap(mapId);
+    // Hidden, then shown: the Team and Jobs row checks the map (not on the Glade).
+    jobsBox.hidden = true;
+    jobsBox.hidden = mapId === null;
     // Sprout points at the handles once, on a patch (the Glade has Sprout already).
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
-  layers: [hollowLayer],
+  layers: [hollowLayer, jobs.badges],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
   // A piece of clothing found while playing (#43) shows a little note; night
@@ -474,6 +498,7 @@ const battles = createBattleScreen({
     maps.close();
     catalog.close();
     care.close();
+    jobs.close();
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
@@ -533,6 +558,7 @@ trays.slot('adventure').append(
     },
   }),
 );
+jobs.mountTeamButton(jobsBox, () => maps.debug?.id ?? null);
 /** Who is logged in now (a story finishing late must not open another player's lobby). */
 let signedIn: PublicUser | null = null;
 // Picking a Keeper (#42) comes right after signup, then the opening
@@ -722,6 +748,7 @@ mountAuth(document.body, {
     battles.setUser(user);
     catalog.setUser(user);
     care.setUser(user);
+    jobs.setUser(user);
     closeUp.setUser(user);
     inventory.setUser(user);
     recipeBook.setUser(user);
@@ -801,6 +828,7 @@ if (import.meta.env.DEV) {
     care: () => care.debug,
     closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,
+    jobs: () => jobs.debug,
     starter: () => starters.debug,
     lore: () => lorebook.debug,
     milestones: () => milestones.debug,
