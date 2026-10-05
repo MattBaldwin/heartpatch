@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /** The bag and the tile panel's gather action, from the dev hook (`InventoryDebug`). */
 interface InventoryDebug {
@@ -103,7 +104,7 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await panel.getByRole('button', { name: 'Close' }).tap();
 
   // The bag shows the gather, and crafting uses items up front.
-  await page.getByTestId('bag-open').tap();
+  await (await trayButton(page, 'bag-open')).tap();
   const bag = page.getByTestId('bag');
   await expect(bag).toBeVisible();
   // Nothing gathered yet: only Sprout's Heart Charms.

@@ -118,6 +118,9 @@
     0 12px 40px rgb(107 75 110 / 22%);
   pointer-events: auto;
   cursor: pointer;
+  /* With a spotlight, tutorial-overlay.ts caps the height so Sprout never covers it. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .tutorial[data-bubble='top'] .tutorial-bubble {

@@ -6,6 +6,8 @@ import type { DefenseStance, Raid } from '@heartpatch/shared';
 
 export const RAID_TEXT = {
   open: 'Report',
+  /** Peeks out beside the Adventure handle while a raid is unseen. */
+  news: 'New raid report!',
   title: 'Raid report',
   challenged: 'Someone challenged your patch!',
   quiet: 'All quiet on your patch. Everyone is snug!',

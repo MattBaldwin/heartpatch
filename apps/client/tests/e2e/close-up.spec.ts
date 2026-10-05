@@ -2,6 +2,7 @@ import { CARE_RULES, findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -52,17 +53,17 @@ async function playerWithFriend(page: Page): Promise<void> {
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
-  await page.getByTestId('bag-open').tap();
+  await (await trayButton(page, 'bag-open')).tap();
   await page.getByTestId('bag').getByRole('button', { name: 'Get stuff (dev)' }).tap();
   await slowExpect(page.getByTestId('bag').locator('[data-item="treats"]')).toContainText('10');
   await page.getByTestId('bag').getByRole('button', { name: 'Close' }).tap();
-  await page.getByTestId('battle-dev-grant').tap();
+  await (await trayButton(page, 'battle-dev-grant')).tap();
   await slowExpect(page.locator('.battle-entry-note')).toContainText('joined you');
 }
 
 /** Opens the first squishy up close from its care sheet at home base. */
 async function openFromHome(page: Page): Promise<CloseUpDebug> {
-  await page.getByTestId('home-open').tap();
+  await (await trayButton(page, 'home-open')).tap();
   await expect.poll(() => homeOpen(page), slow).toBe(true);
   await page.getByTestId('home-friends').locator('[data-care-squishy]').first().tap();
   await slowExpect(page.getByTestId('care')).toBeVisible();
@@ -261,7 +262,7 @@ test('celebrates an evolution in the close-up, and Back returns to the map', asy
     if (def) body.catalog.speciesDefs.push(def);
     await route.fulfill({ response, json: body });
   });
-  await page.getByTestId('catalog-open').tap();
+  await (await trayButton(page, 'catalog-open')).tap();
   await page.locator(`[data-care-species="${speciesId}"]`).tap();
   await slowExpect(page.getByTestId('care')).toBeVisible();
 
@@ -312,11 +313,11 @@ test('celebrates an evolution in the close-up, and Back returns to the map', asy
   await page.getByTestId('close-up-back').tap();
   await expect.poll(() => state(page), slow).toBeNull();
   await expect.poll(() => mapOpen(page), slow).toBe(mapId);
-  await slowExpect(page.getByTestId('battle-entry')).toBeVisible();
+  await slowExpect(page.getByTestId('tray-handle-adventure')).toBeVisible();
 
   // Up close again, and it leaves (taken to the Hollow overnight): it says
   // so with the card up, then swoops back to the map by itself.
-  await page.getByTestId('catalog-open').tap();
+  await (await trayButton(page, 'catalog-open')).tap();
   await page.locator(`[data-care-species="${speciesId}"]`).tap();
   await page.getByTestId('care-close-up').tap();
   await expect.poll(async () => (await state(page))?.phase, slow).toBe('here');

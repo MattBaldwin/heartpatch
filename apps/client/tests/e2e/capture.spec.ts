@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /**
  * Wild squishies and the catalog on an iPhone (issue #14): find a wild
@@ -70,7 +71,7 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await expect(note).toContainText(/nearby/);
 
   // The catalog starts with just their starter: no secret squishy shows before it's met.
-  await page.getByTestId('catalog-open').tap();
+  await (await trayButton(page, 'catalog-open')).tap();
   await expect.poll(() => catalogState(page)).toMatchObject({ loading: false, seen: 1, caught: 1 });
   const known = (names: string[]) => names.filter((n) => n !== '???');
   expect(known((await catalogState(page))!.names)).toEqual(['Puddlepuff']);
@@ -79,9 +80,9 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await expect(page.getByTestId('catalog')).toBeHidden();
 
   // A squishy of our own (dev), then the real button finds a wild one.
-  await page.getByTestId('battle-dev-grant').tap();
+  await (await trayButton(page, 'battle-dev-grant')).tap();
   await expect(note).toContainText('joined you');
-  await page.getByTestId('battle-entry').tap();
+  await (await trayButton(page, 'battle-entry')).tap();
   const hud = page.getByTestId('battle-hud');
   await expect(hud).toBeVisible();
   const start = await settled(page);
@@ -115,7 +116,7 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
 
   // Back on the patch: the squishy it met is in the catalog now. (A wild
   // Puddlepuff is already there, as the starter.)
-  await page.getByTestId('catalog-open').tap();
+  await (await trayButton(page, 'catalog-open')).tap();
   await expect.poll(() => catalogState(page).then((c) => c?.loading)).toBe(false);
   const after = (await catalogState(page))!;
   // Whoever spawned (the roster's, or a secret one) now has a name; the rest stay "???".
@@ -130,7 +131,7 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await page.getByTestId('catalog-close').tap();
   if (tried.status === 'active') {
     // The battle waited behind the catalog; the button resumes it.
-    await page.getByTestId('battle-entry').tap();
+    await (await trayButton(page, 'battle-entry')).tap();
     await expect(hud).toBeVisible();
     expect((await settled(page)).id).toBe(start.id);
   }

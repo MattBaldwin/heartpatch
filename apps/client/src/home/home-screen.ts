@@ -46,6 +46,8 @@ import './home.css';
 
 export interface HomeScreenOptions {
   root: HTMLElement;
+  /** Where the entry button goes (a tray over the map, ui/trays); defaults to `root`. */
+  entryRoot?: HTMLElement;
   showScene: (build: SceneBuilder | null) => void;
   /** Draws a few frames after a change (`Stage.invalidate`). */
   invalidate: () => void;
@@ -199,7 +201,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   );
   const overlay = el('div', { class: 'home' }, top, sheet);
   overlay.hidden = true;
-  options.root.append(entry, overlay);
+  (options.entryRoot ?? options.root).append(entry);
+  options.root.append(overlay);
 
   const say = (text: string) => {
     note.textContent = text;
@@ -378,7 +381,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   };
 
   function render(): void {
-    entry.hidden = mapId === null || isOpen || panel !== null;
+    entry.hidden = mapId === null || isOpen;
     overlay.hidden = !isOpen;
     if (!isOpen || !home) {
       body.replaceChildren();

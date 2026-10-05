@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /**
  * The raid report on an iPhone (issue #16): a Report button over my patch
@@ -42,7 +43,7 @@ test('opens the raid report and saves a defense style', async ({ browser }) => {
     .toBe('balanced');
   expect(await raidState(page)).toMatchObject({ raids: 0, unseen: 0, open: false });
 
-  await page.getByTestId('raid-open').tap();
+  await (await trayButton(page, 'raid-open')).tap();
   const sheet = page.getByTestId('raid-report');
   await expect(sheet).toBeVisible();
   await expect(sheet.getByTestId('raid-quiet')).toBeVisible();
