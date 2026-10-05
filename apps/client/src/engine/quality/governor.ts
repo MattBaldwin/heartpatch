@@ -130,6 +130,16 @@ export function stepGovernor(
 
 /** Undo a step that didn't help and hold at this frame rate. */
 /**
+ * The page paused (a hidden tab, an iOS app switch, a device asleep and
+ * back): the frame that spans it is a gap, never a crawling frame, however
+ * many gaps come around one pause. Called on `visibilitychange` and
+ * `pageshow`; a normal frame ends a run as well.
+ */
+export function resumeGovernor(state: GovernorState): GovernorState {
+  return state.crawlFrames === 0 ? state : { ...state, crawlFrames: 0 };
+}
+
+/**
  * Another frame longer than `crawlFrameMs`. Once `crawlFrames` of them come in
  * a row the renderer is crawling (a very weak GPU, software WebGL in CI):
  * every frame is "too long to count", so the windows above never close and

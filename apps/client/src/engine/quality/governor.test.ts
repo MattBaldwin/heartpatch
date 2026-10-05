@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SCALER, type QualityTier, type ScalerConfig } from '../config.js';
-import { initialGovernor, stepGovernor, type GovernorState } from './governor.js';
+import { initialGovernor, resumeGovernor, stepGovernor, type GovernorState } from './governor.js';
 
 const config: ScalerConfig = {
   ...SCALER,
@@ -223,6 +223,33 @@ describe('stepGovernor details', () => {
     s = s0;
     for (let i = 0; i < 10; i++) s = stepGovernor(s, config.maxFrameMs + 1, ctx);
     expect(quality(s)).toEqual(quality(s0));
+  });
+
+  it('treats one huge gap followed by normal frames as a pause: no step-down', () => {
+    // A tab hidden for a minute, an app switch, a device asleep: the frame
+    // that spans it is long, and the frames after it are fine.
+    let s = ready();
+    s = stepGovernor(s, 60_000, ctx);
+    s = windows(s, 12.5, 4);
+    expect(s.tier).toBe('high');
+    expect(s.renderScale).toBe(1);
+    expect(s.crawlFrames).toBe(0);
+  });
+
+  it('a resume (visibilitychange, pageshow) ends a run of crawling frames', () => {
+    // Two long frames, a pause, two more: around a pause they never add up.
+    let s = start();
+    s = stepGovernor(s, 2000, ctx);
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.crawlFrames).toBe(2);
+    s = resumeGovernor(s);
+    expect(s.crawlFrames).toBe(0);
+    expect(resumeGovernor(s)).toBe(s);
+    s = stepGovernor(s, 2000, ctx);
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('high');
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('low');
   });
 
   it('goes to the cheapest tier at one pixel per CSS pixel when every frame crawls', () => {
