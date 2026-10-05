@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { TEST_PASSWORD } from './players.js';
+import { pickKeeper, TEST_PASSWORD } from './players.js';
 
 // The installable app (issue #26), against a production build (`vite preview`,
 // playwright.config.ts): the dev server never registers the service worker.
@@ -176,15 +176,15 @@ test('keeps the shell for offline use, but never the API', async ({
   }
 });
 
-test('shows the Add to Home Screen guide in Safari, after signing up, until dismissed', async ({
+test('shows the Add to Home Screen guide in Safari, in the lobby, until dismissed', async ({
   page,
 }, testInfo) => {
   await page.goto('/');
-  const guide = page.getByTestId('install-guide');
-  await expect(guide.getByRole('heading', { name: 'Make Heartpatch an app!' })).toBeAttached();
-
-  // A new player signs up first: the login card sits over the guide.
+  // Never under the sign-in card (#135): it waits for the lobby.
   const overlay = page.getByTestId('auth-overlay');
+  await expect(overlay.getByRole('heading', { name: 'Welcome to Heartpatch!' })).toBeVisible();
+  await expect(page.getByTestId('install-guide')).toHaveCount(0);
+
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByLabel('Family code').fill(signupCode);
   await overlay
@@ -195,12 +195,25 @@ test('shows the Add to Home Screen guide in Safari, after signing up, until dism
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await overlay.getByRole('button', { name: 'I saved it!' }).tap();
   await expect(overlay).toBeHidden();
+  await pickKeeper(page);
 
+  // A card in the patch list: on top, so a finger on "Got it!" reaches it.
+  const lobby = page.getByTestId('lobby');
+  const guide = lobby.getByTestId('install-guide');
   await expect(guide).toContainText('Add to Home Screen');
-  await guide.getByRole('button', { name: 'Got it!' }).tap();
-  await expect(guide).toHaveCount(0);
+  const close = guide.getByRole('button', { name: 'Got it!' });
+  await close.scrollIntoViewIfNeeded();
+  const reached = await close.evaluate((button) => {
+    const box = button.getBoundingClientRect();
+    return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === button;
+  });
+  expect(reached).toBe(true);
+  await close.tap();
+  await expect(page.getByTestId('install-guide')).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByTestId('auth-user')).toBeVisible();
+  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.getByTestId('install-guide')).toHaveCount(0);
 });

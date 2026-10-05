@@ -7,8 +7,7 @@ html {
   text-size-adjust: 100%;
 }
 
-.pwa-update,
-.pwa-guide {
+.pwa-update {
   position: fixed;
   box-sizing: border-box;
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
@@ -38,30 +37,28 @@ html {
   font-weight: 700;
 }
 
-/* Bottom card, above the home indicator. Over the game, lobby and name chip
-   (z-index 4–5), under the login card (10) so a new player signs up first. */
+/* A card in the lobby's patch list (#135): part of the page, so it never
+   hides under the sign-in card or covers Sprout. */
 .pwa-guide {
-  z-index: 8;
-  right: calc(env(safe-area-inset-right) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 16px);
-  left: calc(env(safe-area-inset-left) + 16px);
-  max-width: 420px;
-  margin: 0 auto;
-  padding: 18px 20px;
-  border-radius: 28px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 2px solid #ecd3e2;
+  border-radius: 20px;
+  background: #fff;
+  color: #4a3150;
 }
 
 .pwa-guide-title {
   margin: 0 0 8px;
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.2;
 }
 
 .pwa-guide-steps {
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   padding-left: 1.4em;
-  font-size: 17px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.45;
 }
 
 .pwa-guide-icon {
@@ -77,23 +74,4 @@ html {
 
 .pwa-guide-close {
   width: 100%;
-}
-
-/* Landscape phones are short: tuck the guide into the corner. */
-@media (orientation: landscape) and (max-height: 500px) {
-  .pwa-guide {
-    left: auto;
-    width: 340px;
-    padding: 12px 16px;
-  }
-
-  .pwa-guide-title {
-    font-size: 19px;
-  }
-
-  .pwa-guide-steps {
-    margin-bottom: 10px;
-    font-size: 16px;
-    line-height: 1.4;
-  }
 }

@@ -62,14 +62,12 @@ test('opens the raid report and saves a defense style', async ({ browser }) => {
   await sheet.getByTestId('raid-done').tap();
   await expect(sheet).toBeHidden();
 
-  // The server kept it: a fresh load reads it back.
+  // The server kept it: a fresh load lands back on the patch (#160) and reads it back.
   await page.reload();
-  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible({
-    timeout: 15_000,
-  });
-  await lobby.getByRole('button', { name: /Report Patch/ }).tap();
-  await visitPatch(lobby);
+  await expect(page.getByTestId('map-hud')).toContainText('Report Patch', { timeout: 30_000 });
   await expect(lobby).toBeHidden();
-  await expect.poll(async () => (await raidState(page))?.stance ?? null).toBe('aggressive');
+  await expect
+    .poll(async () => (await raidState(page))?.stance ?? null, { timeout: 30_000 })
+    .toBe('aggressive');
   expect(errors).toEqual([]);
 });
