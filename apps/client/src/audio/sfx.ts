@@ -179,6 +179,40 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
     return 0.2;
   },
 
+  thwack: (kit, out, at, pitch, gain) => {
+    // A big cartoon bonk (a super or good hit): a deeper thump, a bright slap
+    // and a little "boing" as the squishy springs back. Punchy, never harsh.
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at,
+      dur: 0.26,
+      freq: 300 * pitch,
+      to: 85 * pitch,
+      glide: 0.18,
+      gain: gain * 0.85,
+      attack: 0.002,
+    });
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 0.06,
+      gain: gain * 0.4,
+      filter: 'bandpass',
+      freq: 1800 * pitch,
+      q: 0.8,
+    });
+    tone(kit.ctx, out, {
+      type: 'triangle',
+      at: at + 0.09,
+      dur: 0.22,
+      freq: 330 * pitch,
+      to: 520 * pitch,
+      glide: 0.12,
+      gain: gain * 0.22,
+      vibrato: [18, 0.04],
+    });
+    return 0.32;
+  },
+
   whiff: (kit, out, at, pitch, gain) => {
     noise(kit.ctx, out, kit.noise, {
       at,

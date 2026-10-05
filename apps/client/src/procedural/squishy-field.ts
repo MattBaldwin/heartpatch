@@ -9,6 +9,7 @@ import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { Logger } from '@babylonjs/core/Misc/logger';
 import type { Observer } from '@babylonjs/core/Misc/observable';
+import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Body, VisualRegistry } from '@heartpatch/shared';
 import { bodyArrays, type MeshArrays } from './body-shape.js';
@@ -70,6 +71,12 @@ export interface SquishyFieldOptions<L extends SquishyDetail = SquishyLod> {
   readonly breathing?: boolean;
   /** A soft contact shadow under each squishy. Default on. */
   readonly shadows?: boolean;
+  /**
+   * A node every mesh hangs from (a battle rig): moving it moves the field's
+   * squishies without re-uploading their buffers. Off: meshes stay frozen at
+   * the origin.
+   */
+  readonly parent?: TransformNode;
 }
 
 export interface SquishyFieldStats<L extends SquishyDetail = SquishyLod> {
@@ -133,6 +140,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   readonly #scene: Scene;
   readonly #registry: VisualRegistry;
   readonly #breathing: boolean;
+  readonly #parent: TransformNode | null;
   readonly #material: PBRMaterial;
   readonly #plugin: SquishPlugin | null;
   readonly #batches = new Map<string, Batch>();
@@ -151,6 +159,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#registry = options.registry;
     this.#lod = options.lod;
     this.#breathing = options.breathing ?? true;
+    this.#parent = options.parent ?? null;
 
     const m = new PBRMaterial('squishy-vinyl', scene);
     m.albedoColor = Color3.White(); // per-instance colours multiply this
@@ -165,6 +174,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#plugin = m.shaderLanguage === ShaderLanguage.GLSL ? new SquishPlugin(m) : null;
 
     this.#shadow = (options.shadows ?? true) ? createContactShadowMesh(scene) : null;
+    if (this.#shadow && options.parent) this.#shadow.parent = options.parent;
     this.#beforeRender = scene.onBeforeRenderObservable.add(() => {
       this.flush();
     });
@@ -424,7 +434,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       // Squash and bounce move vertices past the bounds; a handful of meshes
       // isn't worth culling.
       mesh.alwaysSelectAsActiveMesh = true;
-      mesh.freezeWorldMatrix();
+      if (this.#parent) mesh.parent = this.#parent;
+      else mesh.freezeWorldMatrix();
       batch.mesh = mesh;
     }
     mesh.setEnabled(true);

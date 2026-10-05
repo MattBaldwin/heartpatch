@@ -489,6 +489,11 @@ export const battles = pgTable(
     spawnQ: smallint('spawn_q'),
     spawnR: smallint('spawn_r'),
     spawnWindow: text('spawn_window'),
+    // Where it happens (owner decision 2026-10-04): the terrain id the arena
+    // is drawn as, and the patch's time of day (`day`, `dusk`, `night`) when
+    // it started. Null for battles started before they were stored.
+    terrain: text('terrain'),
+    timeOfDay: text('time_of_day'),
   },
   (t) => [
     check(

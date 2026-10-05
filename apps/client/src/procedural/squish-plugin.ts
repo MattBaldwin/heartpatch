@@ -12,7 +12,8 @@ import { SHADOW_LOOK, SQUISH, SQUISH_LOOK_CODE, SQUISH_MOVE_CODE, VINYL } from '
  *
  * Per thin instance (all of one squishy's body and part instances carry the
  * same values, so parts deform with the body and stay stuck on):
- * - `squishOrigin`: the squishy's ground point (xyz) and body height (w).
+ * - `squishOrigin`: the squishy's ground point (xyz, in the mesh's space) and
+ *   body height (w).
  * - `squishMotion`: breathing phase, rate (breaths/s) and amplitude, and the
  *   look (`SQUISH_LOOK_CODE`: normal, or a rescue guardian's shadow look).
  * - `squishEvent`: the current move's start time (s), kind code and strength.
@@ -52,7 +53,10 @@ const VERTEX_WORLDPOS = /* glsl */ `
 #ifdef SQUISH
 {
   float sqH = max(squishOrigin.w, 0.0001);
-  vec3 sqRel = worldPos.xyz - squishOrigin.xyz;
+  // The ground point is in the mesh's space: identity for a field at the
+  // origin, or a battle rig the field hangs from (the field's parent).
+  vec3 sqOrigin = (world * vec4(squishOrigin.xyz, 1.0)).xyz;
+  vec3 sqRel = worldPos.xyz - sqOrigin;
   float sqS = 1.0 + squishMotion.z * sin(6.2831853 * (squishMotion.y * squishTime + squishMotion.x));
   float sqLean = 0.0;
   float sqLift = 0.0;
@@ -86,7 +90,7 @@ const VERTEX_WORLDPOS = /* glsl */ `
   sqRel.xz *= sqSide;
   sqRel.x += sqLean * sqRel.y;
   sqRel.y += sqLift;
-  worldPos.xyz = squishOrigin.xyz + sqRel;
+  worldPos.xyz = sqOrigin + sqRel;
   vSquishLook = squishMotion.w;
   vPositionW = worldPos.xyz;
 #ifdef NORMAL

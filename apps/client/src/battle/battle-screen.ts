@@ -1,22 +1,27 @@
 import type { Scene } from '@babylonjs/core/scene';
 import {
+  BattleTimeOfDaySchema,
   CAPTURABLE_BATTLE_KINDS,
   TILE_BATTLE_KINDS,
   GAME_DATA,
   visualRegistry,
   type BattleSideId,
+  type BattleTimeOfDay,
   type KeeperConfig,
   type PlayerBattle,
   type PlayerBattleAction,
   type PublicUser,
 } from '@heartpatch/shared';
+import { careApi } from '../care/care-api.js';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
+import { inventoryApi } from '../inventory/inventory-api.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
+import { ManualClock, realClock, type BattleClock } from './battle-clock.js';
 import { BREATHING_FRAME_MS, PLAYBACK, RETRY_AFTER_MS } from './battle-config.js';
 import { mountBattleHud, plateSideOf, type BattleHud, type ControlMode } from './battle-hud.js';
 import {
@@ -27,17 +32,17 @@ import {
   type ShownState,
 } from './battle-playback.js';
 import { BattleScene, type BattleSceneStats } from './battle-scene.js';
-import { keeperReaction } from './keeper-reaction.js';
 import { sendAction, type SubmitDeps } from './battle-submit.js';
 import {
   activeOf,
   BattleContent,
   benchOf,
   energyPercent,
-  nameplate,
-  natureLine,
   otherSide,
+  plateName,
 } from './battle-view.js';
+import { BEFRIEND_NUDGE, HEART_CHARM, noCharmsLine } from './heart-charm.js';
+import { keeperReaction } from './keeper-reaction.js';
 
 // The battle screen (#13): starts or resumes a PvE battle, draws it, plays the
 // server's log back step by step, and sends the player's taps as intents. The
@@ -45,6 +50,8 @@ import {
 
 export interface BattleScreenOptions {
   root: HTMLElement;
+  /** Where the "Find a squishy" / "Catalog" entry box goes (a tray hosts it); `root` by default. */
+  entryRoot?: HTMLElement;
   /** Puts a scene on screen: the arena, or the default one (null). */
   showScene: (build: SceneBuilder | null) => void;
   /** Draws a few frames after a change (`Stage.invalidate`). */
@@ -58,8 +65,8 @@ export interface BattleScreenOptions {
   /** The battle screen closed: the caller shows the map again. */
   onClosed: (mapId: string) => void;
   api?: typeof battleApi;
-  /** Wall-clock ms (tests pass a fake). */
-  now?: () => number;
+  /** The battle clock (tests pass a manual one). */
+  clock?: BattleClock;
   /** Dev builds show the dev grant buttons (server `HP_DEV_SQUISHY_GRANTS`). */
   devTools?: boolean;
   /** Opens the squishy catalog for the map on screen ("Catalog" button). */
@@ -75,6 +82,10 @@ export interface BattleScreenOptions {
   keeperWearing?: () => readonly string[];
   /** A step of the log starts playing (sound, #25). */
   onStep?: (step: PlaybackStep) => void;
+  /** Heart Charms in the player's bag on a map (the wild battle's button shows it). */
+  charms?: (mapId: string) => Promise<number>;
+  /** The player's squishies' nicknames on a map, by squishy id (#141). */
+  nicknames?: (mapId: string) => Promise<ReadonlyMap<string, string>>;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -96,6 +107,17 @@ export interface BattleDebug {
   readonly keeperReactions: number;
   /** A raid replay (#16) is playing, not a battle to play. */
   readonly replay: boolean;
+  /** Heart Charms the wild battle's button shows (null until counted, or not a wild battle). */
+  readonly charms: number | null;
+  /** The battle clock now, ms (a manual clock in dev captures). */
+  readonly clock: number;
+}
+
+/** Dev-only controls over the battle clock (`?battle-clock=manual`), for frame-exact captures. */
+export interface BattleDevControls {
+  readonly manual: boolean;
+  set: (t: number) => void;
+  advance: (ms: number) => void;
 }
 
 export interface BattleScreen {
@@ -112,6 +134,8 @@ export interface BattleScreen {
   watch: (start: PlayerBattle, end: PlayerBattle) => void;
   close: () => void;
   readonly debug: BattleDebug | null;
+  /** Dev builds only: the clock controls, or null on the real clock. */
+  readonly dev: BattleDevControls | null;
 }
 
 const MESSAGES = {
@@ -147,6 +171,37 @@ const MESSAGES = {
   replayNote: 'Just a replay. Nothing changed.',
 } as const;
 
+/**
+ * Dev builds only: `?battle-slowmo=8` plays battles 8× slower, to judge the
+ * choreography frame by frame; `?battle-clock=manual` stops the clock so a
+ * capture script can step it (`BattleScreen.dev`). Ignored in production.
+ */
+function devClock(): { clock: BattleClock; manual: ManualClock | null } {
+  if (!import.meta.env.DEV) return { clock: realClock(), manual: null };
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('battle-clock') === 'manual') {
+    const manual = new ManualClock();
+    return { clock: manual, manual };
+  }
+  const value = Number(params.get('battle-slowmo'));
+  const slowmo = Number.isFinite(value) && value >= 1 ? Math.min(value, 50) : 1;
+  return { clock: realClock(slowmo), manual: null };
+}
+
+/**
+ * Dev builds only: `?battle-arena=forest/dusk` draws every battle on that
+ * terrain at that time of day (captures and tuning). The server still says
+ * where a battle really happens; this only changes the picture, in dev.
+ */
+function devArena(): { terrain: string; timeOfDay: BattleTimeOfDay } | null {
+  if (!import.meta.env.DEV) return null;
+  const value = new URLSearchParams(window.location.search).get('battle-arena');
+  if (!value) return null;
+  const [terrain, time] = value.split('/');
+  const timeOfDay = BattleTimeOfDaySchema.safeParse(time);
+  return terrain ? { terrain, timeOfDay: timeOfDay.success ? timeOfDay.data : 'day' } : null;
+}
+
 /** "Moonpuff joined your patch!": the squishy the player just befriended. */
 function friendLine(b: PlayerBattle, names: BattleContent): string {
   const wild = b.view.sides[otherSide(b.mySide)];
@@ -156,8 +211,22 @@ function friendLine(b: PlayerBattle, names: BattleContent): string {
 
 export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const api = options.api ?? battleApi;
-  const now = options.now ?? (() => performance.now());
+  const dev = options.clock ? { clock: options.clock, manual: null } : devClock();
+  const clock = dev.clock;
+  const now = () => clock.now();
   const registry = visualRegistry(GAME_DATA);
+  /** `prefers-reduced-motion`: no shake or flashes, gentler moves (read when a battle opens). */
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const arenaOverride = devArena();
+  const countCharms =
+    options.charms ??
+    ((id: string) => inventoryApi.get(id).then((bag) => bag.items[HEART_CHARM] ?? 0));
+  const listNicknames =
+    options.nicknames ??
+    (async (id: string): Promise<ReadonlyMap<string, string>> => {
+      const { squishies } = await careApi.list(id);
+      return new Map(squishies.flatMap((s) => (s.nickname ? [[s.id, s.nickname] as const] : [])));
+    });
 
   let user: PublicUser | null = null;
   let mapId: string | null = null;
@@ -176,7 +245,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let lastTier: QualityTier | null = null;
   /** A raid replay is on screen (`watch`): no controls, replay words. */
   let replaying = false;
-  const timers = new Set<number>();
+  /** Heart Charms in the bag for the battle on screen (wild battles); null until known. */
+  let charms: number | null = null;
+  /** The player's squishies' nicknames on this map (#141). */
+  let nicknames: ReadonlyMap<string, string> = new Map();
 
   // ── Entry button (shown over the map) ─────────────────────────────────
   const note = el('p', { class: 'battle-entry-note', role: 'status' });
@@ -187,7 +259,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   );
   const entry = el('div', { class: 'battle-entry-box' }, enter, note);
   entry.hidden = true;
-  options.root.append(entry);
+  (options.entryRoot ?? options.root).append(entry);
   const { onCatalog } = options;
   if (onCatalog) {
     const catalog = el(
@@ -293,6 +365,25 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   // ── HUD ───────────────────────────────────────────────────────────────
   const hud: BattleHud = mountBattleHud(options.root, {
     onAction: (action) => void submit(action),
+    onNoCharms: () => {
+      // The bag may have filled since (a craft, a gift): look again first.
+      // Busy while it looks, like a submit: no double taps, and the dev hook
+      // never reports a settled turn before the capture has gone out.
+      const current = battle;
+      if (!current || waiting || queue.length > 0) return;
+      waiting = true;
+      hud.setControls({ type: 'waiting' });
+      void refreshCharms(current).then((count) => {
+        if (battle?.id !== current.id) return;
+        waiting = false;
+        if (count > 0) {
+          void submit({ type: 'capture' });
+        } else {
+          hud.setControls(controlsFor(current));
+          hud.setProblem(noCharmsLine());
+        }
+      });
+    },
     onDone: () => {
       close();
     },
@@ -303,15 +394,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   });
 
   const later = (ms: number, fn: () => void): void => {
-    const id = window.setTimeout(() => {
-      timers.delete(id);
-      fn();
-    }, ms);
-    timers.add(id);
-  };
-  const clearTimers = (): void => {
-    for (const id of timers) window.clearTimeout(id);
-    timers.clear();
+    clock.later(ms, fn);
   };
 
   /** Fills a side's plate from the view, with the energy currently shown. */
@@ -330,8 +413,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         ? 'Tuckered out'
         : null;
     hud.setPlate(plateSideOf(battle.mySide, side), {
-      name: nameplate(content, squishy),
-      nature: natureLine(squishy),
+      name: plateName(content, squishy, side === battle.mySide ? nicknames : undefined),
+      level: squishy.level,
+      element: squishy.element,
+      feeling: squishy.feeling,
       percent: energyPercent({ energy, stats: squishy.stats }),
       energyText: `${String(energy)} / ${String(squishy.stats.hp)} energy`,
       status,
@@ -343,7 +428,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (!names || b.status !== 'active' || replaying) return { type: 'hidden' };
     const bench = benchOf(b, b.mySide).map(({ slot, squishy }) => ({
       slot,
-      name: names.speciesName(squishy.speciesId),
+      name: plateName(names, squishy, nicknames),
     }));
     switch (b.view.phase.type) {
       case 'turn':
@@ -351,7 +436,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           type: 'choose',
           moves: activeOf(b, b.mySide).moves.map((id) => ({ id, name: names.moveName(id) })),
           bench,
-          capture: CAPTURABLE_BATTLE_KINDS.has(b.kind),
+          capture: CAPTURABLE_BATTLE_KINDS.has(b.kind) ? { charms } : null,
         };
       case 'replace':
         return b.view.phase.sides.includes(b.mySide)
@@ -390,7 +475,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       .filter((award) => award.xp > 0)
       .map((award) => {
         const squishy = mine.squishies.find((s) => s.id === award.squishyId);
-        const name = squishy ? names.speciesName(squishy.speciesId) : 'Your squishy';
+        const name = squishy ? plateName(names, squishy, nicknames) : 'Your squishy';
         return `${name} earned ${String(award.xp)} XP!`;
       });
     const outcome =
@@ -414,7 +499,50 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
-    hud.showResult({ ...outcome, xp: lines, done: MESSAGES.done });
+    // Won a wild battle without befriending it: say how (owner decision 2026-10-04).
+    const nudge =
+      b.kind === 'wild' && result?.winner === b.mySide && result.reason !== 'captured'
+        ? BEFRIEND_NUDGE
+        : undefined;
+    hud.showResult({ ...outcome, xp: lines, done: MESSAGES.done, ...(nudge ? { nudge } : {}) });
+  };
+
+  /**
+   * Counts the bag's Heart Charms for a wild battle, then redraws the
+   * buttons if the player can act. A failed count leaves it unknown (the
+   * button still works; the server has the final say).
+   */
+  const refreshCharms = async (b: PlayerBattle): Promise<number> => {
+    if (!CAPTURABLE_BATTLE_KINDS.has(b.kind) || replaying) return charms ?? 0;
+    try {
+      const count = await countCharms(b.mapId);
+      if (battle?.id === b.id) {
+        charms = count;
+        if (!waiting && queue.length === 0 && b.status === 'active') {
+          hud.setControls(controlsFor(battle));
+        }
+      }
+      return count;
+    } catch {
+      return charms ?? 0;
+    }
+  };
+
+  /** The player's nicknames for this map (#141); the plates redraw once they arrive. */
+  const refreshNicknames = (b: PlayerBattle): void => {
+    void listNicknames(b.mapId)
+      .then((names) => {
+        if (battle?.id !== b.id) return;
+        nicknames = names;
+        plate('a');
+        plate('b');
+        if (!waiting && queue.length === 0 && battle.status === 'active') {
+          hud.setControls(controlsFor(battle));
+        }
+      })
+      .catch(() => {
+        // Species names will do.
+      });
   };
 
   /** Everything the log has played: the view is the truth now. */
@@ -422,6 +550,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (!battle) return;
     shown = shownFrom(battle);
     shownLog = battle.view.log.length;
+    scene3d?.restCamera();
     plate('a');
     plate('b');
     if (replaying && battle.view.phase.type !== 'over') {
@@ -461,23 +590,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.setCaption(step.text);
     options.onStep?.(step);
     shown = applyStep(shown, step);
-    if (step.kind === 'swap' && step.to !== null) {
-      const squishy = battle.view.sides[step.side].squishies[step.to];
-      if (squishy) scene3d.sendOut(step.side, squishy.speciesId, squishy.id);
-      if (step.squish) scene3d.play(step.side, step.squish, t);
-    } else if (step.kind === 'tuckered') {
-      scene3d.tuckerOut(step.side, t);
-      const side = step.side;
-      later(PLAYBACK.tuckeredMs * 0.6, () => scene3d?.lieDown(side));
-    } else if (step.squish) {
-      scene3d.play(step.side, step.squish, t);
-    }
-    if (step.kind === 'end' && step.squish) {
-      // A new friend bounces along; anyone else is a little dizzy.
-      const captured =
-        battle.view.phase.type === 'over' && battle.view.phase.result.reason === 'captured';
-      scene3d.play(otherSide(step.side), captured ? 'bounce' : 'wobble', t, 0.6);
-    }
+    // The arena acts it out (choreography.ts): a swap brings out `to` once
+    // the old squishy has hopped away; a new friend bounces along at the end.
+    const incoming =
+      step.kind === 'swap' && step.to !== null
+        ? battle.view.sides[step.side].squishies[step.to]
+        : undefined;
+    scene3d.perform(step, t, {
+      ...(incoming ? { incoming: { speciesId: incoming.speciesId, instanceId: incoming.id } } : {}),
+      captured: battle.view.phase.type === 'over' && battle.view.phase.result.reason === 'captured',
+    });
     const reaction = keeperReaction(step, battle.mySide);
     if (reaction && scene3d.hasKeeper) {
       scene3d.cheer(reaction.move, t, reaction.strength);
@@ -499,6 +621,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     battle = next;
     content = new BattleContent(next);
     queue = playbackSteps(next, content, from);
+    // A capture try spends a charm: count again.
+    if (next.view.log.slice(from).some((e) => e.type === 'capture')) void refreshCharms(next);
     hud.setControls(replaying ? { type: 'hidden' } : { type: 'waiting' });
     if (queue.length === 0) settle();
     else playNext();
@@ -546,35 +670,49 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   // ── Scene ─────────────────────────────────────────────────────────────
   const build = (scene: Scene): SceneContent => {
     if (!battle || !content || !shown) throw new Error('no battle to build');
+    const tier = options.tier();
     const built = new BattleScene(scene, {
       registry,
-      lod: lodFor('closeUp', options.tier()),
+      lod: lodFor('closeUp', tier),
+      tier,
       content,
       mySide: battle.mySide,
       keeper: options.keeper?.() ?? null,
       keeperWearing: options.keeperWearing?.() ?? [],
       opponentLook: battle.kind === 'rescue' ? 'shadow' : 'normal',
+      terrain: arenaOverride?.terrain ?? battle.terrain,
+      timeOfDay: arenaOverride?.timeOfDay ?? battle.timeOfDay,
+      battleId: battle.id,
+      reducedMotion: reducedMotion.matches,
+      safe: () => hud.safe(),
     });
-    lastTier = options.tier();
+    lastTier = tier;
     for (const side of ['a', 'b'] as const) {
+      // Every squishy that might come out later is built now, not mid-turn.
+      built.prewarm(
+        side,
+        battle.view.sides[side].squishies.map((s) => ({
+          speciesId: s.speciesId,
+          instanceId: s.id,
+        })),
+      );
       const slot = shown[side].active;
       const squishy = battle.view.sides[side].squishies[slot];
       if (squishy) {
         built.sendOut(side, squishy.speciesId, squishy.id);
-        if ((shown[side].energy[slot] ?? 1) === 0) {
-          built.tuckerOut(side, now());
-          built.lieDown(side);
-        }
+        if ((shown[side].energy[slot] ?? 1) === 0) built.knockedOut(side);
       }
     }
+    built.update(now());
     scene3d = built;
     return built.content;
   };
 
   /**
-   * Drives motion (render on demand, tech spec §6): every frame while a
-   * squish move plays, at most 30 fps while the squishies only breathe, and
-   * follows the quality governor's tier with the detail level.
+   * Drives motion (render on demand, tech spec §6): every frame while a step
+   * plays or the camera moves, at most 30 fps while the squishies only
+   * breathe and bob, nothing at all when everything is still (reduced
+   * motion), and follows the quality governor's tier with the detail level.
    */
   const tick = (): void => {
     frame = 0;
@@ -591,7 +729,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       s.update(t);
       options.invalidate();
     } else if (t - lastBreathDraw >= BREATHING_FRAME_MS) {
-      // Breathing only: move and draw once per ask, about 30 a second.
+      // Breathing and bobbing only: move and draw once per ask, about 30 a second.
       lastBreathDraw = t;
       if (s.update(t)) options.requestFrame();
     }
@@ -600,7 +738,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
 
   function open(next: PlayerBattle, replay = false): void {
     const wasOpen = battle !== null;
-    clearTimers();
+    clock.clearAll();
     queue = [];
     waiting = false;
     replaying = replay;
@@ -610,6 +748,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     shownLog = next.view.log.length;
     scene3d = null;
     keeperReactions = 0;
+    charms = null;
+    nicknames = new Map();
+    if (!replay) void refreshCharms(next);
+    refreshNicknames(next);
     if (!wasOpen) options.onOpen(next.mapId);
     entry.hidden = true;
     hud.hideResult();
@@ -626,7 +768,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   /** Takes the battle off screen; `returnToMap` hands the screen back to the map. */
   function close(returnToMap = true): void {
     const closedMap = returnToMap ? (battle?.mapId ?? null) : null;
-    clearTimers();
+    clock.clearAll();
     queue = [];
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
@@ -706,6 +848,25 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         scene: scene3d?.stats ?? null,
         keeperReactions,
         replay: replaying,
+        charms,
+        clock: now(),
+      };
+    },
+    get dev(): BattleDevControls | null {
+      const manual = dev.manual;
+      if (!manual) return null;
+      return {
+        manual: true,
+        set: (t) => {
+          manual.set(t);
+          scene3d?.update(manual.now());
+          options.invalidate();
+        },
+        advance: (ms) => {
+          manual.advance(ms);
+          scene3d?.update(manual.now());
+          options.invalidate();
+        },
       };
     },
   };

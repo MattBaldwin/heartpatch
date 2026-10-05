@@ -88,12 +88,17 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   const start = await settled(page);
   expect(start).toMatchObject({ status: 'active', turn: 0 });
 
-  // "Use Heart Charm" is there for a wild squishy, and the bag already has
-  // Sprout's 3 from the first starter pick (owner decision 2026-10-04). One
-  // try: the charm lands on the wild squishy and is spent, whatever it decides.
+  // "Use Heart Charm" is always there for a wild squishy, with the bag's
+  // count, and the bag already has Sprout's 3 from the first starter pick
+  // (owner decisions 2026-10-04). One try: the charm lands on the wild
+  // squishy and is spent, whatever it decides. (An empty bag's dimmed button
+  // and craft hint are covered by heart-charm.test.ts.)
   const charm = page.getByTestId('battle-capture');
   await expect(charm).toBeVisible();
   expect(await charmsLeft(page, mapId)).toBe(3);
+  await expect(charm).toHaveText('Use Heart Charm (3)');
+  await expect(charm).not.toHaveClass(/battle-button-empty/);
+  await expect(page.getByTestId('battle-capture-hint')).toHaveCount(0);
   await charm.tap();
   const tried = await settled(page);
   expect(tried.turn).toBe(1);
@@ -105,6 +110,9 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
     await expect(page.getByTestId('battle-result')).toContainText('A new friend!');
     await page.getByTestId('battle-done').tap();
   } else if (tried.status === 'active') {
+    // The button counts the bag again after a try. (If the wild squishy
+    // tuckered ours out, the player picks who comes out next instead.)
+    if (tried.phase === 'turn') await expect(charm).toHaveText('Use Heart Charm (2)');
     await hud.getByRole('button', { name: 'Back to patch' }).tap();
   } else {
     // A miss costs the turn, and the wild squishy can tucker out our fresh
@@ -135,6 +143,61 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
     await expect(hud).toBeVisible();
     expect((await settled(page)).id).toBe(start.id);
   }
+
+  expect(errors).toEqual([]);
+});
+
+test('an empty bag keeps the Heart Charm button, dimmed, says how to craft one, and works once charms arrive', async ({
+  browser,
+}) => {
+  test.setTimeout(180_000);
+  const page = await newPlayer(browser, uniqueName('empty'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  // Sprout's starter charms come with the first patch only, so a second
+  // patch starts with an empty bag (owner decisions 2026-10-04).
+  const lobby = page.getByTestId('lobby');
+  for (const name of ['First Patch', 'Second Patch']) {
+    if (name !== 'First Patch') await page.getByTestId('lobby-open').tap();
+    await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+    await lobby.getByLabel('Patch name').fill(name);
+    await lobby.getByRole('button', { name: 'Make it!' }).tap();
+    await visitPatch(lobby);
+    await expect(page.getByTestId('map-hud')).toContainText(name);
+  }
+  const mapIdOf = async () => (await hook<{ id: string }>(page, 'map'))?.id ?? '';
+  await expect.poll(mapIdOf).not.toBe('');
+  const mapId = await mapIdOf();
+  expect(await charmsLeft(page, mapId)).toBe(0);
+
+  // A wild squishy to play with (dev).
+  await page.getByTestId('battle-dev-fight').tap();
+  const hud = page.getByTestId('battle-hud');
+  await expect(hud).toBeVisible();
+  const start = await settled(page);
+  expect(start).toMatchObject({ status: 'active', turn: 0, phase: 'turn' });
+
+  const charm = page.getByTestId('battle-capture');
+  await expect(charm).toHaveText('Use Heart Charm (0)');
+  await expect(charm).toHaveClass(/battle-button-empty/);
+  await expect(page.getByTestId('battle-capture-hint')).toContainText(
+    'No Heart Charms! Craft one from',
+  );
+  // A tap explains; nothing is spent and the turn doesn't move.
+  await charm.tap();
+  await expect(hud.locator('.battle-problem')).toContainText('No Heart Charms!');
+  expect(await settled(page)).toMatchObject({ id: start.id, turn: 0 });
+  await expect(charm).toHaveText('Use Heart Charm (0)');
+
+  // A charm arrives (dev): the button looks in the bag again, and the try goes out.
+  expect(
+    (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { 'heart-charm': 1 } })).status,
+  ).toBe(201);
+  await charm.tap();
+  await expect.poll(async () => (await battleState(page))?.turn, { timeout: 30_000 }).toBe(1);
+  await settled(page);
+  await expect.poll(() => charmsLeft(page, mapId)).toBe(0);
 
   expect(errors).toEqual([]);
 });

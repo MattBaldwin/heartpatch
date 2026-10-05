@@ -2,7 +2,7 @@ import type { BattleEventView, PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { findAvoidedWords } from '@heartpatch/shared';
 import { applyStep, playbackSteps, shownFrom } from './battle-playback.js';
-import { BattleContent, benchOf, energyPercent, nameplate, natureLine } from './battle-view.js';
+import { BattleContent, benchOf, energyPercent, natureLine, plateName } from './battle-view.js';
 
 /** A small battle view, with species and moves the public tables don't have. */
 function battle(log: BattleEventView[], extra: Partial<PlayerBattle['view']> = {}): PlayerBattle {
@@ -93,6 +93,8 @@ function battle(log: BattleEventView[], extra: Partial<PlayerBattle['view']> = {
     ],
     seed: null,
     rewards: null,
+    terrain: 'forest',
+    timeOfDay: 'day',
     startedAt: '2026-10-02T12:00:00.000Z',
     endedAt: null,
   };
@@ -245,7 +247,10 @@ describe('view helpers', () => {
   const content = new BattleContent(b);
 
   it('reads names, bench and energy from the view', () => {
-    expect(nameplate(content, b.view.sides.a.squishies[0]!)).toBe('Puff · Lv 7');
+    const puff = b.view.sides.a.squishies[0]!;
+    expect(plateName(content, puff)).toBe('Puff');
+    // A nickname the player gave shows instead of the species name (#141).
+    expect(plateName(content, puff, new Map([[puff.id, 'Pickle']]))).toBe('Pickle');
     expect(natureLine(b.view.sides.a.squishies[0]!)).toBe('Shadow · Sleepy');
     expect(benchOf(b, 'a').map((x) => x.slot)).toEqual([1]);
     expect(benchOf(b, 'b')).toEqual([]);
