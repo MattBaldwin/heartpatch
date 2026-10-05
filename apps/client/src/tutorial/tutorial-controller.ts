@@ -24,6 +24,19 @@ export const STUCK_MESSAGE = 'Hmm, Sprout got a little lost. Try again!';
 export const NAME_FIRST_MESSAGE = 'Pick a name first!';
 
 /**
+ * Failures where the same request may land next time (no connection, a server
+ * hiccup, slow down), as the map screen's resync treats them. Any other answer
+ * (the text filter's VALIDATION_FAILED above all) is about what was sent, so
+ * the same name again can only get the same answer.
+ */
+const RESENDABLE = new Set<string>(['OFFLINE', 'INTERNAL', 'RATE_LIMITED']);
+
+/** Whether "Try again" should send the same request again, or go back to the step. */
+function resendable(err: unknown): boolean {
+  return !(err instanceof ApiRequestError) || RESENDABLE.has(err.code);
+}
+
+/**
  * - `closed`: not on screen.
  * - `loading`: starting, resuming or replaying a run.
  * - `step`: showing the current step.
@@ -244,6 +257,8 @@ export class TutorialController {
       () => {
         this.name(name);
       },
+      // A name the server refused goes back to the box to change, never round again.
+      resendable,
     );
   }
 
@@ -273,9 +288,16 @@ export class TutorialController {
 
   /**
    * Tells the server something that should finish `stepId`, then waits for
-   * `tutorial.advanced` (asking the server if it doesn't come).
+   * `tutorial.advanced` (asking the server if it doesn't come). "Try again"
+   * after a failure sends it again, unless `resend` says the failure was about
+   * the request itself: then it goes back to the step.
    */
-  private send(stepId: string, request: (stepId: string) => Promise<void>, again: () => void) {
+  private send(
+    stepId: string,
+    request: (stepId: string) => Promise<void>,
+    again: () => void,
+    resend: (err: unknown) => boolean = () => true,
+  ) {
     const at = this.generation;
     this.resend = again;
     this.phase = 'waiting';
@@ -289,9 +311,11 @@ export class TutorialController {
         void this.recheck(at);
         return;
       }
+      const sendAgain = resend(err);
       this.fail(messageOf(err), () => {
         this.phase = 'step';
-        again();
+        if (sendAgain) again();
+        else this.emit();
       });
     });
   }

@@ -334,7 +334,20 @@ async function playTutorial(page: Page): Promise<void> {
   await tapOn(bubble.getByTestId('tutorial-name-save'));
   await expect(bubble.getByTestId('tutorial-line')).toHaveText('Pick a name first!');
   await tapOn(main); // Try again
-  await bubble.getByTestId('tutorial-name-input').fill('Sunny');
+  // A name the server's filter refuses: "Try again" brings the box back with
+  // the old name ready to change, rather than sending it round again.
+  const nameInput = bubble.getByTestId('tutorial-name-input');
+  await nameInput.fill('Poopy');
+  await tapOn(bubble.getByTestId('tutorial-name-save'));
+  await expect(bubble.getByTestId('tutorial-line')).toContainText('Try another one');
+  await expect(nameInput).toBeHidden();
+  await tapOn(main); // Try again
+  await expect(nameInput).toBeVisible();
+  await expect(nameInput).toHaveValue('Poopy');
+  expect(
+    await nameInput.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd]),
+  ).toEqual([0, 5]);
+  await nameInput.fill('Sunny');
   await tapOn(bubble.getByTestId('tutorial-name-save'));
   await step('care');
   await reloadAt('care', glade);

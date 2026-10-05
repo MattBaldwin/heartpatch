@@ -390,6 +390,7 @@ export function mountTutorialOverlay(
   });
 
   function render(next: TutorialView): void {
+    const before = view;
     view = next;
     overlay.hidden = next.phase === 'closed';
     if (next.phase === 'closed') return;
@@ -419,6 +420,8 @@ export function mountTutorialOverlay(
       const species = speciesNames.get(next.state.partner.speciesId) ?? '';
       nameInput.placeholder = species;
     }
+    // Back from a name that won't do: the old name is ready to change.
+    if (naming && before?.phase === 'error' && next.phase === 'step') nameInput.select();
     if (next.phase === 'loading') {
       line.textContent = 'One moment…';
       mainButton.hidden = true;
