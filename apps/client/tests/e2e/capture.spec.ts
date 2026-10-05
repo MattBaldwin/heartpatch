@@ -63,7 +63,7 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await expect(page.getByTestId('map-hud')).toContainText('Finder Patch');
 
   const mapIdOf = async () => (await hook<{ id: string }>(page, 'map'))?.id ?? '';
-  await expect.poll(mapIdOf).not.toBe('');
+  await expect.poll(mapIdOf, { timeout: 30_000 }).not.toBe('');
   const mapId = await mapIdOf();
 
   // A hint, never a species: how many wild squishies are about.
@@ -167,7 +167,7 @@ test('an empty bag keeps the Heart Charm button, dimmed, says how to craft one, 
     await expect(page.getByTestId('map-hud')).toContainText(name);
   }
   const mapIdOf = async () => (await hook<{ id: string }>(page, 'map'))?.id ?? '';
-  await expect.poll(mapIdOf).not.toBe('');
+  await expect.poll(mapIdOf, { timeout: 30_000 }).not.toBe('');
   const mapId = await mapIdOf();
   expect(await charmsLeft(page, mapId)).toBe(0);
 

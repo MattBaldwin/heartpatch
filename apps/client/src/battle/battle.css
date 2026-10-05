@@ -328,6 +328,7 @@
 
 .battle-ask {
   margin: 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   font-size: 16px;
   font-weight: 700;
   text-align: center;
@@ -335,7 +336,7 @@
 
 .battle-waiting {
   min-height: 44px;
-  line-height: 44px;
+  line-height: calc(44px - 2 * var(--hp-pad-y));
   color: #8a5f86;
 }
 
@@ -373,6 +374,10 @@
   font-size: 17px;
   font-weight: 600;
   text-align: center;
+}
+
+.battle-xp li {
+  padding: var(--hp-pad-y) var(--hp-pad-x);
 }
 
 /* ── The entry buttons (in the Adventure tray) ─────────────────────── */
