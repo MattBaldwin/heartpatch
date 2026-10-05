@@ -76,7 +76,8 @@ const STYLE: Readonly<
   },
   // Fish jump `range` long, once per 1/speed s, from just under the water.
   fish: {
-    lift: [0.02, 0.03],
+    // From just under the water's surface (`WATER.level`, above the lake's look height).
+    lift: [0.06, 0.07],
     size: [0.9, 1.1],
     mode: DRIFT_MODE.jump,
     range: [0.14, 0.24],

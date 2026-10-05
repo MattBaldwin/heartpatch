@@ -260,7 +260,7 @@ export const FALLBACK_DRESSING: TerrainDressing = TERRAIN_DRESSING['meadow'] ?? 
  */
 export const GROUND = {
   /** The flat middle of a tile as a fraction of the hex; the rest slopes to the shared edge. */
-  plateau: 0.55, // TUNE
+  plateau: 0.7, // TUNE
   /** Brightness noise per ground vertex (±). */
   noise: 0.05, // TUNE
   /** The map's outer edge drops to the island top. */
@@ -269,10 +269,10 @@ export const GROUND = {
     meadow: '#8fcf63', // TUNE: bright spring grass
     forest: '#5fb563', // TUNE
     'old-forest': '#469a64', // TUNE: deep moss
-    hills: '#b9c56b', // TUNE: sunny grassy hills
+    hills: '#a8cf68', // TUNE: sunny grassy hills
     mountains: '#ad9fcb', // TUNE: lavender rock
     lake: '#d9c48c', // TUNE: the sandy bed (and beach where it meets land)
-    'pumpkin-fields': '#d9bd5c', // TUNE: wheat
+    'pumpkin-fields': '#e3c766', // TUNE: wheat
     'junipers-gap': '#dcb2f2', // TUNE
   } as Readonly<Record<string, string>>,
   /** Home tiles: a warm garden path. */
@@ -284,7 +284,7 @@ export const GROUND = {
 /** Lakes' water (terrain pass 2): depth colour, a soft shore with foam, glints. */
 export const WATER = {
   /** Height of the surface: under the land around it, so the shore slopes into it. */
-  level: 0.15, // TUNE
+  level: 0.19, // TUNE
   /** How far the water tucks under the bank past the hex (fraction). */
   reach: 0.08, // TUNE
   deep: { color: '#2f86c9', alpha: 0.88 }, // TUNE
@@ -311,9 +311,9 @@ export const CLAIMED = {
 
 /** Sandy paths from each home's Heart Seed out to neighbouring land. */
 export const PATHS = {
-  color: '#e8cf93', // TUNE
+  color: '#f3e3b4', // TUNE
   /** Width (world units) and how many neighbours each home links to. */
-  width: 0.13, // TUNE
+  width: 0.17, // TUNE
   links: 3, // TUNE
   alpha: 0.9, // TUNE
 } as const;
@@ -323,7 +323,7 @@ export const MAP_LIGHT = {
   sun: '#ffe2b0', // TUNE: golden hour
   sunIntensity: 1.15, // TUNE: times the stage's sun
   /** Colour grade (image processing curves): saturation and a warm lift (hue in degrees, density 0–100). */
-  saturation: 18, // TUNE
+  saturation: 10, // TUNE
   warmHue: 40, // TUNE
   warmDensity: 12, // TUNE
 } as const;
