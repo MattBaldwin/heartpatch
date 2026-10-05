@@ -210,10 +210,12 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   await realTap(bag.getByRole('button', { name: 'Close' }));
   await expect(bag).toBeHidden();
   // The same with the countdown ticking under the resting finger: the press
-  // holds until the chip's words change, then lifts. WebKit drops a tap whose
-  // landing node (a label's Text node) is gone by the lift, which is what a
-  // `textContent` rewrite does; the chip rewrites its Text node in place, so
-  // one tap is one Bag on an iPhone, whichever instant the tick falls in.
+  // holds until the chip's words change, then lifts. WebKit drops a pointer's
+  // click whose landing node (a label's Text node) is gone by the lift, which
+  // is what a `textContent` rewrite does (CI's mouse, an iPad's trackpad,
+  // Safari on a Mac; a finger on iOS presses and lifts in one go); the chip
+  // rewrites its Text node in place, so one tap is one Bag whichever instant
+  // the tick falls in.
   await realTapThrough(chip, async () => {
     // Read once the finger is down, so the change waited for falls inside the press.
     const ticking = (await chip.textContent()) ?? '';
