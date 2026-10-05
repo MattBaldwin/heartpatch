@@ -170,13 +170,14 @@
   color: #2d1b33;
   white-space: nowrap;
   opacity: 0;
-  transform: rotate(-6deg) translateY(8px) scale(0.9);
+  --battle-callout-tilt: -6deg; /* the other side's callout tilts the other way */
+  transform: rotate(var(--battle-callout-tilt)) translateY(8px) scale(0.9);
 }
 
 .battle-plate-theirs .battle-callout {
   right: 8px;
   left: auto;
-  transform: rotate(6deg) translateY(8px) scale(0.9);
+  --battle-callout-tilt: 6deg;
 }
 
 .battle-callout-show {
@@ -186,14 +187,14 @@
 @keyframes battle-callout-pop {
   0% {
     opacity: 0;
-    transform: rotate(-6deg) translateY(8px) scale(0.9);
+    transform: rotate(var(--battle-callout-tilt)) translateY(8px) scale(0.9);
   }
   15% {
     opacity: 1;
-    transform: rotate(-6deg) translateY(-4px) scale(1.1);
+    transform: rotate(var(--battle-callout-tilt)) translateY(-4px) scale(1.1);
   }
   30% {
-    transform: rotate(-6deg) translateY(0) scale(1);
+    transform: rotate(var(--battle-callout-tilt)) translateY(0) scale(1);
   }
   80% {
     opacity: 1;
@@ -430,7 +431,7 @@
   @keyframes battle-callout-still {
     0% {
       opacity: 1;
-      transform: rotate(-6deg);
+      transform: rotate(var(--battle-callout-tilt));
     }
     100% {
       opacity: 0;

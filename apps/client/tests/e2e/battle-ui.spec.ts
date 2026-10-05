@@ -131,7 +131,18 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   expect(state.turn).toBe(1);
 
   // A drag and a wheel across the fight itself (kids poke the squishies) never
-  // move the camera: the HUD's shield keeps the map camera's gestures off the canvas.
+  // reach the canvas, where the map camera listens: the HUD's shield takes them,
+  // and the camera stays where the director put it.
+  await page.evaluate(() => {
+    const game = document.querySelector('#game');
+    const w = window as unknown as { __canvasGestures: number };
+    w.__canvasGestures = 0;
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) {
+      game?.addEventListener(type, () => {
+        w.__canvasGestures += 1;
+      });
+    }
+  });
   const before = await restingCamera(page);
   const mineBox = (await page.getByTestId('battle-plate-mine').boundingBox())!;
   const sheetBox = (await page.getByTestId('battle-sheet').boundingBox())!;
@@ -142,6 +153,9 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   for (let i = 1; i <= 8; i += 1) await page.mouse.move(vw * (0.2 + 0.075 * i), yMid - i * 4);
   await page.mouse.up();
   await page.mouse.wheel(0, 240);
+  expect(
+    await page.evaluate(() => (window as unknown as { __canvasGestures: number }).__canvasGestures),
+  ).toBe(0);
   await page.waitForTimeout(1500); // a fling would have glided by now
   const after = await restingCamera(page);
   expect(after.x).toBeCloseTo(before.x, 2);
