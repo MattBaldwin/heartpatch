@@ -25,6 +25,8 @@ interface Badge {
 }
 
 const labelOf = (count: number) => (count > 1 ? `🧺${String(count)}` : '🧺');
+/** A badge's width before it has been laid out, and the room it keeps from the top. */
+const BADGE_MIN_WIDTH_PX = 32;
 
 export function createGathererBadges(root: HTMLElement): GathererBadges {
   let scene: Scene | null = null;
@@ -32,8 +34,12 @@ export function createGathererBadges(root: HTMLElement): GathererBadges {
 
   const place = (badge: Badge) => {
     const rect = scene ? tileScreenRectOf(scene, badge.tile) : null;
-    const x = rect ? Math.round(rect.x + rect.width / 2) : 0;
-    const y = rect ? Math.round(rect.y) : 0;
+    // A tile half off the edge keeps its badge just inside the screen (#161).
+    const half = Math.max(badge.node.offsetWidth, BADGE_MIN_WIDTH_PX) / 2;
+    const x = rect
+      ? Math.round(Math.min(Math.max(rect.x + rect.width / 2, half), window.innerWidth - half))
+      : 0;
+    const y = rect ? Math.round(Math.max(rect.y, BADGE_MIN_WIDTH_PX)) : 0;
     const at = rect ? `${String(x)},${String(y)}` : 'hidden';
     if (at === badge.at) return;
     badge.at = at;

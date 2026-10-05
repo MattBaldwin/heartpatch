@@ -105,8 +105,10 @@ export function hintLines(s: JobSquishy): string[] {
 
 /** A spot to gather, in words: "🌲 Timber (Forest)". */
 export function spotLabel(spot: WorkSpot): string {
-  const where = spot.from === 'node' ? 'spot' : (TERRAIN_NAMES.get(spot.terrain) ?? 'land');
-  return `${itemIcon(spot.resource)} ${itemName(spot.resource)} (${where})`;
+  const what = `${itemIcon(spot.resource)} ${itemName(spot.resource)}`;
+  // A node is "the Timber spot"; open land says where it is.
+  if (spot.from === 'node') return `${what} spot`;
+  return `${what} on ${TERRAIN_NAMES.get(spot.terrain) ?? 'the land'}`;
 }
 
 /** Everything my gatherers have ready, added up. */

@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap, realTapAt } from './touch.js';
+import { traysState, type TraySide } from './trays.js';
 
 /**
  * Single taps with a held press (touch.ts): down, a short hold, up, the
@@ -19,7 +20,7 @@ interface InventoryDebug {
   items: Record<string, number>;
   gathers: number;
   tileAction: string | null;
-  chip: 'waiting' | 'ready' | null;
+  chip: 'waiting' | 'ready' | 'got' | null;
 }
 interface JobsDebug {
   board: { jobs: Record<string, string> };
@@ -80,6 +81,41 @@ async function tapOwnNode(page: Page, offering: 'gather' | 'collect' = 'gather')
   );
 }
 
+/** Which tray each entry lives in (ui/trays). */
+const TRAY_OF: Readonly<Record<string, TraySide>> = {
+  'battle-entry': 'adventure',
+  'catalog-open': 'adventure',
+  'battle-dev-grant': 'adventure',
+  'battle-dev-fight': 'adventure',
+  'raid-open': 'adventure',
+  'hollow-open': 'adventure',
+  'home-open': 'heartpatch',
+  'bag-open': 'heartpatch',
+  'jobs-open': 'heartpatch',
+  'team-open': 'heartpatch',
+};
+
+/** Opens a tray with one real tap on its handle (shutting the other first). */
+async function openTrayReal(page: Page, side: TraySide): Promise<void> {
+  await expect.poll(async () => (await traysState(page))?.visible, { timeout: 30_000 }).toBe(true);
+  const open = (await traysState(page))?.open ?? null;
+  if (open === side) return;
+  if (open !== null) {
+    await realTap(page.getByTestId(`tray-handle-${open}`));
+    await expect.poll(async () => (await traysState(page))?.open).toBeNull();
+  }
+  await realTap(page.getByTestId(`tray-handle-${side}`));
+  await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBe(side);
+}
+
+/** The button `testId`, with its tray opened by one real tap on the handle. */
+async function inTray(page: Page, testId: string): Promise<Locator> {
+  const side = TRAY_OF[testId];
+  if (!side) throw new Error(`which tray holds ${testId}?`);
+  await openTrayReal(page, side);
+  return page.getByTestId(testId);
+}
+
 /** One real tap on `open` shows `sheet`; one real tap on its Close hides it. */
 async function opensAndCloses(open: Locator, sheet: Locator, close: Locator): Promise<void> {
   await realTap(open);
@@ -95,42 +131,47 @@ test('one real tap opens each sheet and works each button over the map', async (
   page.on('pageerror', (err) => errors.push(err.message));
   await onAPatch(page, 'Tappy Patch');
 
+  // Sprout's first-time hint about the handles, if it's up: "Got it!".
+  const hintOk = page.getByTestId('tray-hint-ok');
+  if (await hintOk.isVisible()) await realTap(hintOk);
+
+  // Each tray opens on one tap of its handle, and each entry inside on one tap.
   const bag = page.getByTestId('bag');
   await opensAndCloses(
-    page.getByTestId('bag-open'),
+    await inTray(page, 'bag-open'),
     bag,
     bag.getByRole('button', { name: 'Close' }),
   );
   await opensAndCloses(
-    page.getByTestId('catalog-open'),
+    await inTray(page, 'catalog-open'),
     page.getByTestId('catalog'),
     page.getByTestId('catalog-close'),
   );
   const team = page.getByTestId('team');
   await opensAndCloses(
-    page.getByTestId('team-open'),
+    await inTray(page, 'team-open'),
     team,
     team.getByRole('button', { name: 'Close' }),
   );
   const jobs = page.getByTestId('jobs');
   await opensAndCloses(
-    page.getByTestId('jobs-open'),
+    await inTray(page, 'jobs-open'),
     jobs,
     jobs.getByRole('button', { name: 'Close' }),
   );
   const chat = page.getByTestId('chat');
   await opensAndCloses(page.getByTestId('chat-open'), chat, page.getByTestId('chat-close'));
   const hollow = page.getByTestId('hollow-sheet');
-  await opensAndCloses(page.getByTestId('hollow-open'), hollow, page.getByTestId('hollow-back'));
+  await opensAndCloses(await inTray(page, 'hollow-open'), hollow, page.getByTestId('hollow-back'));
   const raids = page.getByTestId('raid-report');
   await opensAndCloses(
-    page.getByTestId('raid-open'),
+    await inTray(page, 'raid-open'),
     raids,
     raids.getByRole('button', { name: 'Close' }),
   );
 
   // Home owns the screen: Build opens the list, Cancel comes back, Back to map returns.
-  await realTap(page.getByTestId('home-open'));
+  await realTap(await inTray(page, 'home-open'));
   const home = page.getByTestId('home');
   await expect(home).toBeVisible();
   await realTap(page.getByTestId('home-build'));
@@ -152,7 +193,7 @@ test('one real tap opens each sheet and works each button over the map', async (
 });
 
 test('gathers and collects with one tap each, and the bag fills up', async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000); // two gathers, a job and a map build; CI renders in software
   const page = await newPlayer(browser, uniqueName('coll'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -171,7 +212,7 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   // It finishes (the dev route stands in for the wait). The chip says so once
   // the bag has heard: opening the Bag refetches it.
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
-  await realTap(page.getByTestId('bag-open'));
+  await realTap(await inTray(page, 'bag-open'));
   await expect(bag.getByTestId('bag-collect')).toBeVisible();
   await realTap(bag.getByRole('button', { name: 'Close' }));
   await expect.poll(async () => (await bagState(page))?.chip).toBe('ready');
@@ -199,7 +240,7 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   await expect(bag).toBeVisible();
   await realTap(bag.getByRole('button', { name: 'Close' }));
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
-  await realTap(page.getByTestId('bag-open'));
+  await realTap(await inTray(page, 'bag-open'));
   await realTap(bag.getByRole('button', { name: 'Close' }));
   await expect(chip).toContainText('Tap to collect');
   expect((await bagState(page))?.chip).toBe('ready');
@@ -218,7 +259,7 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   });
   expect(granted.status).toBe(201);
   const helperId = (granted.body as { squishy: { id: string } }).squishy.id;
-  await realTap(page.getByTestId('jobs-open'));
+  await realTap(await inTray(page, 'jobs-open'));
   const board = page.getByTestId('jobs');
   const helper = board.locator(`[data-testid="jobs-row"][data-squishy="${helperId}"]`);
   await realTap(helper.getByRole('button', { name: /Gather/ }));
@@ -228,7 +269,7 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
     .toBe('gatherer');
   expect((await api(page, 'POST', `/maps/${mapId}/dev/work/ready`)).status).toBe(200);
   await realTap(board.getByRole('button', { name: 'Close' }));
-  await realTap(page.getByTestId('jobs-open'));
+  await realTap(await inTray(page, 'jobs-open'));
   const bagBeforeJobs = (await api(page, 'GET', `/maps/${mapId}/inventory`)).body as {
     items: Record<string, number>;
   };
@@ -248,8 +289,8 @@ test('a battle action lands on one tap', async ({ browser }) => {
   page.on('pageerror', (err) => errors.push(err.message));
   await onAPatch(page, 'Showdown Taps');
 
-  await realTap(page.getByTestId('battle-dev-grant'));
-  await realTap(page.getByTestId('battle-dev-fight'));
+  await realTap(await inTray(page, 'battle-dev-grant'));
+  await realTap(await inTray(page, 'battle-dev-fight'));
   const hud = page.getByTestId('battle-hud');
   await expect(hud).toBeVisible({ timeout: 30_000 });
   const move = page.getByTestId('battle-move').first();

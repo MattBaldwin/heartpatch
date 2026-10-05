@@ -308,17 +308,43 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   /**
    * The countdowns move on by themselves while the sheet is open, once a
    * second, changing only their text (no buttons rebuilt under a finger).
+   * When one reaches zero the server has a cycle to hand out (what's ready
+   * is its sum, not the client's), so the board asks for a fresh view once
+   * and redraws: the row says "+5 Timber ready!" and Collect appears (#149).
    */
   function tick(): void {
     window.clearTimeout(ticker);
     ticker = undefined;
     if (lines.size === 0 || sheet.hidden) return;
     const nowMs = clock.now();
+    let finished = false;
     for (const { squishy, node } of lines.values()) {
+      const next = squishy.work?.nextReadyAt ?? null;
+      if (next !== null && Date.parse(next) <= nowMs) finished = true;
       const text = jobLine(squishy, nowMs);
       if (node.textContent !== text) node.textContent = text;
     }
+    if (finished) {
+      void refetch();
+      return;
+    }
     ticker = window.setTimeout(tick, 1000);
+  }
+
+  /** A fresh view from the server, redrawn if the board is still this one. */
+  async function refetch(): Promise<void> {
+    const id = mapId;
+    const mine = ticket;
+    if (!id) return;
+    try {
+      const fresh = await api.view(id);
+      if (mine !== ticket || working) return;
+      setView(fresh);
+      render();
+    } catch {
+      // Nothing to say: the next tick asks again.
+      if (mine === ticket) ticker = window.setTimeout(tick, 1000);
+    }
   }
 
   function closeBoard(): void {
