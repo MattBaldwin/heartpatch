@@ -81,13 +81,16 @@ export function createStartersService(options: StartersServiceOptions): Starters
       const at = now();
       return store.transaction(async (repo, tx) => {
         // Patches only: the Tutorial Glade has its own Partner (#24).
-        await requireMember(tx, user, mapId, ['multiplayer']);
+        const { role } = await requireMember(tx, user, mapId, ['multiplayer']);
         // Lock order: the account, then the member row (as joining and
         // leaving do), then the new squishy, the gift's inventory rows and
         // `species_seen` (tech spec §7). The account lock makes "first pick"
-        // one at a time across all their patches. No game event: no other
-        // member's view changes, and `squishy.captured` belongs to a battle.
+        // one at a time across all their patches. An owner's member row is
+        // the seats row, so they take it first, before the account, as
+        // approving a join does. No game event: no other member's view
+        // changes, and `squishy.captured` belongs to a battle.
         const maps = createMapsRepo(tx);
+        if (role === 'owner') await maps.lockSeats(mapId);
         await maps.lockUser(user.id);
         const member = await maps.lockMember(mapId, user.id);
         if (!member) throw new AppError('NOT_FOUND', MESSAGES.notFound);

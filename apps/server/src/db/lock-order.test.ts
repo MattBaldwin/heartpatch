@@ -687,6 +687,28 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     expect(row?.quantity).toBe(STARTERS.firstPickGift['heart-charm']);
   });
 
+  it("takes the seats row before the account for an owner's pick, as approving a join does (starters `pick`)", async () => {
+    const owner = await player('giftseats');
+    const [map] = await db
+      .insert(maps)
+      .values({ kind: 'multiplayer', name: 'Lock Seats Gift', timeZone: 'UTC', maxPlayers: 4 })
+      .returning({ id: maps.id });
+    const mapId = map!.id;
+    await db.insert(mapMembers).values({ mapId, userId: owner.id, role: 'owner' });
+    // Approve holds the seats lock (the owner's member row), then locks the
+    // joiner's `users` row; here it's the owner's own. An owner's pick that
+    // took `users` before the seats row would deadlock here (40P01).
+    let picked: unknown;
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockSeats(mapId),
+      async () => {
+        picked = await outcome(createStartersService({ db }).pick(owner, mapId, 'emberbun'));
+      },
+      (tx) => createMapsRepo(tx).lockUser(owner.id),
+    );
+    expect(picked).toBe('ok');
+  });
+
   /*
    * Keeper milestones (#44): a consumer transaction takes `event_consumers`,
    * then the track's `milestone_progress` row, then the tier's

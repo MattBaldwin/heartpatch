@@ -213,6 +213,10 @@ export function createStarterScreen(options: StarterScreenOptions): StarterScree
 
   function open(next: string, preselect: string | null): void {
     mapId = next;
+    // A gift card from an earlier pick, still waiting, lets that pick finish.
+    const waiting = giftShown;
+    giftShown = null;
+    waiting?.();
     showGift(null, null);
     // A tutorial graduate starts on their Partner's species (#24).
     picked = preselectedCard(
