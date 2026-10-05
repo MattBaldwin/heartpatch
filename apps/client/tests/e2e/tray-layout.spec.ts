@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { expectClear, expectRoomyLabels, SCREENS } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -29,8 +29,22 @@ async function traySettled(page: Page, side: TraySide): Promise<void> {
   await expect(tray).not.toHaveClass(/hp-settling/);
 }
 
-/** The book has turned to `key` (its state updates in the same task as the DOM). */
-async function expectShowing(page: Page, key: string): Promise<void> {
+/**
+ * Taps `target` to turn the book, then waits until the turn has been drawn
+ * and the book says it shows `key`. Every turn replaces the spread element
+ * (recipe-book.ts render), so a new element proves the tap's click ran, even
+ * when `key` was already on the spread (two-up pairs contents with the first
+ * recipe). WebKit's tap-to-click can land late; measuring before it did
+ * caught the fresh spread at its turn's first keyframe, rotateY(60deg), half
+ * as wide. expectRoomyLabels then waits for the turn to end.
+ */
+async function turnTo(page: Page, target: Locator, key: string): Promise<void> {
+  const spread = await page.getByTestId('recipe-book-spread').elementHandle();
+  await target.tap();
+  await page.waitForFunction(
+    (before) => document.querySelector('[data-testid="recipe-book-spread"]') !== before,
+    spread,
+  );
   await expect
     .poll(async () => (await hook<{ showing: string[] }>(page, 'recipeBook'))?.showing ?? [])
     .toContain(key);
@@ -71,14 +85,13 @@ async function checkBook(page: Page): Promise<void> {
   const later = book.getByRole('button', { name: 'Later' });
   if (await later.isVisible()) await later.tap();
   await expectRoomyLabels(page, '.rbook-open, .rbook-btn');
-  // Each turn: the page is on (WebKit's tap-to-click can land late; measuring
-  // before it did caught the new page at its turn's first keyframe, rotateY(60deg),
-  // half as wide), then expectRoomyLabels waits for the turn to end.
-  await page.getByTestId('recipe-book-cover-open').tap();
-  await expectShowing(page, 'contents');
+  await turnTo(page, page.getByTestId('recipe-book-cover-open'), 'contents');
   await expectRoomyLabels(page, '.rbook-mark, .rbook-tab, .rbook-toc, .rbook-nav-btn');
-  await book.locator('[data-testid="recipe-book-toc"][data-page="recipe:heart-charm"]').tap();
-  await expectShowing(page, 'recipe:heart-charm');
+  await turnTo(
+    page,
+    book.locator('[data-testid="recipe-book-toc"][data-page="recipe:heart-charm"]'),
+    'recipe:heart-charm',
+  );
   await expectRoomyLabels(page, '.rbook-find, .rbook-stamp');
   await page.getByTestId('recipe-book-close').tap();
 }
