@@ -675,3 +675,20 @@ _Proposed in the bug-bash tutorial PR (#127, #128, #129, #139, #140, #154, #163)
 - **Guides, not gates, for steps that take more than one tap** (#140): `TARGET_GUIDES` lights and points at the next thing to tap (for the fire: Add fuel, else Build, else Home, else the My Heartpatch handle) with the gate `guide`, which blocks nothing. Hard stand-ins (`TARGET_STAND_INS`) stay for buttons that finish the step from where they are.
 - **One card at a time, in this order:** a battle, then a found lore page, then a milestone party, then the Hollow's morning report, then Sprout. Each waits on what's visible (`busy` / `otherReportOpen`, re-checked after its fetch) and tells the next in line when it closes (`onChange`), so nothing can deadlock. The tutorial run's end closes a care sheet left on the Glade, and the party waits while the lobby shows a form (`lobby.formOpen`), so The First Patch comes after "Make a patch" is filled in, never over it.
 - **The API client reads empty replies out** (`apiCall` with `schema: null`): a Response left unread is cancelled when collected, which Chromium logs as `net::ERR_ABORTED` on every acknowledge (#163).
+
+## 2026-10-05 — Stabilization process and deploy (supervisor 5)
+
+_Owner decisions and process changes from the bug-bash stabilization day. Recorded by the coordinator._
+
+### Process
+- **Fable (`claude-fable-5-1`) does all build, fix and review work** (owner decision). COORDINATOR.md §6 is updated to match.
+- **Lanes no longer edit this file.** Every pair of open PRs conflicted on its last lines, and each conflict cost a merge of main plus a full CI run. A lane writes its decisions under `## Decisions` in its PR body; the coordinator appends them here after the merge, in the next Docs PR.
+- **A failure that isn't the PR's doesn't block its merge:** a check that is red on main too, or a test the PR doesn't touch that fails across several PRs while a named fix lane owns it. The verdict comment says so.
+- **The lean review:** with the account at its 7-day usage warning, the post-stabilization review runs as three read-only reviewers (story and orphans; look and feel, including art direction and a contact sheet of every species; longevity, with the balance sim) feeding one ranked report. The art bible follows it (owner decision).
+- **The owner approved the battle rebuild's captures as they are** (#170, https://claude.ai/artifact/WKLmkmkNxsdft5WJr2wj8d).
+
+### Deploy on the new AWS experience
+- **The project is called `heartpatch`** (the owner created it for the game; an earlier project is unused), Region us-east-2, CLI profile `heartpatch`. `aws login` gives the owner an `AccountFullAccessRole` session for 12 hours, renewable without the browser for 90 days.
+- **Lightsail limits on a new project:** the instance quota started at 0 on the first project, and the `heartpatch` project refuses the 2 GB plan. The server is the **1 GB plan** (`micro_3_0`, $7/month) with the setup's 2 GB of swap (owner decision). Moving to 2 GB later: snapshot, create a 2 GB instance from it, move the static IP across; no DNS change. Ask AWS support to allow the `small` plan first.
+- **The server is created through the API, not the console:** `create-instances` with a first-boot script that runs `infra/scripts/server-setup.sh` unchanged with the deploy key's public half, then writes `/opt/heartpatch/.env` with a database password generated on the server, a static IP, firewall rules for 22/80/443 on IPv4 and IPv6, and automatic snapshots at 10:00 UTC. The server's SSH host key for `LIGHTSAIL_KNOWN_HOSTS` comes from `get-instance-access-details`, not from a first connection. *Why:* cloud sessions can't open SSH connections, and reading the key from the API is a stronger trust anchor than trust-on-first-use.
+- **DNS:** GoDaddy `play` A → the static IP and AAAA → its IPv6 address. Deploys still go over SSH from GitHub Actions; no AWS credentials live in GitHub or on the server.

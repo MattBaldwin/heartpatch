@@ -65,7 +65,7 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 | Work | Model |
 |---|---|
-| Build sessions that write code; reviewers on code PRs | Opus (strongest) |
+| Build sessions that write code; reviewers on code PRs | Fable (`claude-fable-5-1`, owner decision 2026-10-05) |
 | Docs-only PR reviews, drift audits, simple content/docs sessions | Sonnet 5.5 |
 | Exceptions named by the owner (currently: the #13 build session) | Fable |
 
@@ -112,6 +112,7 @@ Branch issue-{N}-{slug} from latest origin/main. Before every push: pnpm format:
 pnpm test:e2e if client). DB tests: DATABASE_URL against local Postgres 16.
 
 ## Pull request
+Don't edit docs/DECISIONS.md; put new decisions under `## Decisions` in the PR body (the coordinator records them after merge).
 Title `#{N}: <summary>`, `Closes #{N}` (or `Part of #{N}` + what remains), deps with reasons,
 "How to test on iPhone" for client work, "Coordinator notes".
 
@@ -136,8 +137,13 @@ Post the verdict comment summarizing each round. Don't merge.
 
 The supervisor keeps this list current. Remove items as they land.
 
-- **In flight:** #46 (opening cinematic), a Chore PR (server code), and this Docs PR.
-- **Remaining Phase 1:** #46, then #27 deploy (the owner's AWS, DNS and secrets steps, per `docs/DEPLOY.md`), then #28 playtest. #5 is closed.
+- **State (supervisor 5, 2026-10-05 evening):** main `d60573e` after the bug-bash stabilization (#166, #125, #167, #169, #168, #126, #170, #171 merged; #121 closed as superseded by #170). Server live on Lightsail (see DEPLOY.md and DECISIONS 2026-10-05 "Deploy on the new AWS experience"); the owner adds the four GitHub secrets, then runs the Deploy workflow.
+- **In flight:** the taps-flake lane (`fix-taps-gather-flake`: `taps.spec.ts:164` gather → chip → Bag fails intermittently on busier branches' WebKit legs) and the lean full review (three read-only reviewers → one ranked report; feeds the art bible).
+- **Plan after stabilization (owner-approved, in order):** lean review report → owner questions one at a time → **ART BIBLE** mockup (palette, lighting, materials, UI kit, motion, squishy style, Sprout) → visual-upgrade lanes per area, each mockup-first (map/terrain resumes #124 on a fresh session from `83a0aa7`; squishies/close-up; HUD kit, menus, recipe book; cinematic; lobby/onboarding) → **Sprout lane** (she/her, face mockup first, portrait in every bubble, data-driven first-time tips with server-side seen state, an "Ask Sprout" button whose next-best hint the server computes without leaking secrets, she rewrites "See the grey land?") → **food lane** (4–6 foods with recipes, a Feed picker, element/feeling favourites, short boosts, same daily caps, the balance sim must pass).
+- **Remaining Phase 1:** #28 device playtest on the live server. Follow-ups: spotlight relayout on an older iPad; `homeNodeOf` tests; a server capability flag to hide "(dev)" buttons; the #126 round-7 notes landed; move the server to the 2 GB plan when AWS allows it.
+- **Owner working style (supervisor 5 handoff):** explain the technical reasons; ask ONE question at a time with the recommended option first; open screenshots and mockups as they arrive; say when something is testable locally (DEPLOY.md §9). Fable (`claude-fable-5-1`) does all build, fix and review work. Nothing visual is built without an owner-approved mockup or captures first.
+- **Merge gates as practised:** reviewer APPROVE on the exact head; CI green on it; base current, or a merge-only delta verified with `git merge-tree`; squash with `expectedHeadSha`; a verdict comment ending with the Claude Code footer. A check red **on main too**, or a test this PR doesn't touch that fails across several PRs while a fix lane owns it, doesn't block (say so in the verdict comment).
+- **After a merge:** check the other open PRs for conflicts (`git merge-tree --name-only`); delete the lane's own one-shot triggers (`list_triggers` with `recurring:false`, filter by `persistent_session_id`); archive the lane. Never archive a supervisor.
 - **Brief notes:**
   - **Coins (#45):** credits are keyed on `(source, ref_id)`. Care must never spend a Heart Charm without reordering locks (TECH_SPEC §7).
   - **Every new event consumer takes one `maps` lock per event** (TECH_SPEC §7). Don't batch events.
@@ -166,6 +172,12 @@ The supervisor keeps this list current. Remove items as they land.
   - Server hardening: shared `lib/rate-limit.ts`, a loose global per-IP limit, helmet/CSP or a note that Caddy sets the headers.
   - The avoided-words scan over error messages.
   - Each merged PR's "Coordinator notes" list that lane's own follow-ups.
+- **Lessons (2026-10-05):**
+  - **A red main costs every lane.** Each PR re-merged main and re-ran 8–15 min of WebKit CI per merge; the day's eight lanes cost about $650 (taps $154, tutorial $152, battle $108, screens $65, rules $64, flakes $60, tray-fix $40). Fix main first, and fix a timing test by waiting on the game's own state (`still()` in `tests/e2e/layout.ts`), never on time.
+  - **`docs/DECISIONS.md` is append-only at the bottom, so every pair of open PRs conflicts there.** Lanes now put their decision text under a `## Decisions` heading in the PR body; the coordinator appends it to DECISIONS.md after the merge (in the next Docs PR). Lanes don't edit DECISIONS.md.
+  - **A test that waits for the UI to settle can hide the bug it guards.** Keep one test that acts mid-motion (#126's sticky-tap spec fails without the fix).
+  - **Split a lane that finds a second root cause** into its own small PR rather than growing the first (#126 grew to 8 review rounds).
+  - **Containers can't SSH out** (port 22 is blocked by the egress proxy). AWS work goes through the API; the server's own setup runs as Lightsail's first-boot script.
 - **Lessons:**
   - CI wakes get lost, so sessions check `get_check_runs` themselves before going idle (§7).
   - Check DECISIONS before copying an issue's text into a brief. #45's "per map" came from the issue and contradicted decision F (the coins are the account's).
@@ -177,4 +189,4 @@ The supervisor keeps this list current. Remove items as they land.
   - Supervisor 3: about 28.
   - Big lanes run $25–50; flag above about $35.
 - **Owner questions queued:** none open. The tutorial gate, tutorial coins, the Halloween clock, the milestone member count and the #24/#44/#45/#46 confirmations were answered on 2026-10-04 (DECISIONS, "2026-10-04 — Owner decisions").
-  - **AWS:** Matt chose the new AWS experience ("project"), Region us-east-2, profile `heartpatch`. The CLI is installed in supervisor 3's container only. Remote `aws login` was started but the code never arrived. Restart with `aws login --remote --region us-east-2 --profile heartpatch` when he's ready. Agent Toolkit rules go in an uncommitted `CLAUDE.local.md` (his choice). Check Lightsail is available on the new experience, and update DEPLOY.md step 1 for projects (spend limits in AWS Settings rather than root MFA and budgets).
+  - **AWS:** done 2026-10-05 (DECISIONS, "Deploy on the new AWS experience"). A fresh supervisor container needs the network policy to allow `*.signin.aws.amazon.com`, `signin.aws.amazon.com`, `*.amazonaws.com` and `*.api.aws`, then the CLI install and `aws login --remote --region us-east-2 --profile heartpatch` (pipe the pasted code into the waiting process through a FIFO). Agent Toolkit rules live in the uncommitted `CLAUDE.local.md`.

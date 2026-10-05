@@ -74,6 +74,8 @@ Before you start, have:
 
 ## 1. Create an AWS account
 
+> **New AWS experience (projects).** If you signed up with Google or GitHub and created a project, your sign-in is already protected by that provider, and spend limits live in **AWS Settings → Billing** instead of the budget steps below. Set a spend limit of about $25. New projects may start with a Lightsail instance limit of 0, or refuse the 2 GB plan: request a quota increase in Lightsail → Account → Service quotas, or start on the 1 GB plan (DECISIONS 2026-10-05 "Deploy on the new AWS experience"). A coding agent can do steps 2–3 through the AWS API (`aws login --remote`, then `create-instances` with `server-setup.sh` as the first-boot script), then read the host key from `get-instance-access-details`.
+
 **Why:** Lightsail is part of AWS. The account's first login, the **root user**, can do anything, including closing the account, so it gets the strongest protection.
 
 1. Go to <https://aws.amazon.com/> → **Create an AWS Account**. Use an email address you'll keep for years, and a long unique password (store it in your password manager).
