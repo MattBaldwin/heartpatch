@@ -57,6 +57,8 @@ export interface TutorialOverlay {
   render: (view: TutorialView) => void;
   /** Lays out again (the target moved: a resize, a scene change). */
   relayout: () => void;
+  /** Lays out again on the next frame, if anything moved (a scene drew a frame). */
+  follow: () => void;
   readonly debug: TutorialOverlayDebug;
 }
 
@@ -162,6 +164,8 @@ export function mountTutorialOverlay(
   let view: TutorialView | null = null;
   let layout: OverlayLayout | null = null;
   let spotlightOn: string | null = null;
+  /** The layout last put on screen, so an unchanged one touches no DOM. */
+  let drawn = '';
   /** What the main button does right now. */
   let onMain: () => void = () => undefined;
 
@@ -216,6 +220,9 @@ export function mountTutorialOverlay(
       insets: readInsets(probe),
     });
     spotlightOn = found?.element ? target : null;
+    const key = JSON.stringify([layout, spotlightOn]);
+    if (key === drawn) return;
+    drawn = key;
     overlay.dataset['gate'] = layout.gate;
     overlay.dataset['bubble'] = layout.bubble;
 
@@ -239,6 +246,31 @@ export function mountTutorialOverlay(
       arrow.style.top = `${String(layout.arrow.y)}px`;
     }
   }
+
+  /**
+   * Lays out again on the next frame (many calls, one layout): the target
+   * may have moved, appeared or gone (a panel opened, a countdown finished,
+   * the camera panned). Unchanged layouts cost a lookup and no DOM writes.
+   */
+  let queued = false;
+  function follow(): void {
+    if (queued || overlay.hidden) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      relayout();
+    });
+  }
+  // The game's screens show and hide their buttons as you play; the
+  // spotlight moves with them. Our own changes don't count.
+  new MutationObserver((records) => {
+    if (records.some((r) => !overlay.contains(r.target))) follow();
+  }).observe(root, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['hidden', 'class'],
+  });
 
   function render(next: TutorialView): void {
     view = next;
@@ -317,6 +349,7 @@ export function mountTutorialOverlay(
   return {
     render,
     relayout,
+    follow,
     get debug() {
       const hidden = overlay.hidden || !view;
       return {

@@ -341,6 +341,8 @@ const maps = createMapScreen({
     jobs.tileActions,
   ),
   layers: [hollowLayer],
+  // The tutorial's spotlight finds the home node on the map (the gather step).
+  targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
   // A piece of clothing found while playing (#43) shows a little note; night
   // falling and squishies going to or coming back from the Hollow (#21).
   onLiveEvent: (event) => {

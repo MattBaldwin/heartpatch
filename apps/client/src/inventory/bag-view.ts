@@ -4,6 +4,7 @@ import {
   needMoreText,
   shortfall,
   type Craft,
+  type Gather,
   type ItemCounts,
   type Recipe,
 } from '@heartpatch/shared';
@@ -40,6 +41,30 @@ export function describeItems(items: ItemCounts): string {
   return Object.entries(items)
     .map(([id, n]) => `+${String(n)} ${itemIcon(id)} ${itemName(id)}`)
     .join(', ');
+}
+
+/** What the gathering chip over the map shows: one gather, and how many others. */
+export interface GatherChip {
+  /** A gather that's ready to collect, else the one ready soonest. */
+  readonly gather: Gather;
+  readonly ready: boolean;
+  /** Other gathers going on at the same time. */
+  readonly more: number;
+}
+
+/**
+ * The gathering chip (design doc §12): a gather runs for minutes on a patch,
+ * so the map keeps saying so until it's collected. Null when nothing's going.
+ */
+export function gatherChip(
+  gathers: readonly Gather[],
+  msUntil: (iso: string) => number,
+): GatherChip | null {
+  const ready = gathers.find((g) => msUntil(g.readyAt) <= 0);
+  const soonest = [...gathers].sort((a, b) => Date.parse(a.readyAt) - Date.parse(b.readyAt))[0];
+  const gather = ready ?? soonest;
+  if (!gather) return null;
+  return { gather, ready: ready !== undefined, more: gathers.length - 1 };
 }
 
 export type RecipeState =
