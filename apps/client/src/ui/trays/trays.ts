@@ -25,13 +25,7 @@ import './trays.css';
 // short line that peeks out beside the handle).
 
 export type TraySlot =
-  | 'team'
-  | 'battle'
-  | 'adventure'
-  | 'heartpatch'
-  | 'squishies'
-  | 'top-left'
-  | 'top-right';
+  'team' | 'battle' | 'adventure' | 'heartpatch' | 'squishies' | 'top-left' | 'top-right';
 
 export interface TraysOptions {
   root: HTMLElement;
@@ -216,7 +210,12 @@ export function createTrays(options: TraysOptions): Trays {
   });
   const hint = el(
     'div',
-    { class: 'tray-hint', role: 'dialog', 'aria-label': TRAY_TEXT.sprout, 'data-testid': 'tray-hint' },
+    {
+      class: 'tray-hint',
+      role: 'dialog',
+      'aria-label': TRAY_TEXT.sprout,
+      'data-testid': 'tray-hint',
+    },
     el('span', { class: 'tray-hint-sprout', 'aria-hidden': 'true' }),
     el(
       'div',

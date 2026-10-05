@@ -46,8 +46,8 @@ export interface MapScreenOptions {
   tileActions?: TileActions;
   /** Features that draw over the map (the night and the Hollow Man, #21). */
   layers?: readonly MapLayer[];
-  /** The map's HUD came on screen (true) or went away: the side trays follow it (ui/trays). */
-  onHudChange?: (shown: boolean) => void;
+  /** The map's HUD came on screen (its id) or went away (null): the side trays follow it (ui/trays). */
+  onHudChange?: (mapId: string | null) => void;
   /** Every live event the socket delivers, in seq order, after the map saw it (a find, #43). */
   onLiveEvent?: (event: WsEventMessage) => void;
   /**
@@ -100,6 +100,8 @@ export interface MapScreen {
    * glide to, or null when it isn't on the map on screen.
    */
   focus: (h: Hex) => GroundPoint | null;
+  /** The map on screen as this player sees it, or null (the recipe book finds their tiles in it). */
+  readonly view: MapView | null;
   setUser: (user: PublicUser | null) => void;
   readonly debug: MapDebug | null;
 }
@@ -231,7 +233,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     panel.hide();
     options.tileActions?.hide();
     hud.hidden = true;
-    options.onHudChange?.(false);
+    options.onHudChange?.(null);
     options.showScene(null);
   }
 
@@ -251,7 +253,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       options.showScene(build);
       hudName.textContent = state.view.map.name;
       hud.hidden = false;
-      options.onHudChange?.(true);
+      options.onHudChange?.(state.id);
       setStatus(liveSocket().status);
     },
     close,
@@ -268,6 +270,9 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       if (sync.state) close();
       ws?.close();
       ws = null;
+    },
+    get view() {
+      return scene3d ? (sync.state?.view ?? null) : null;
     },
     get debug() {
       const state = sync.state;

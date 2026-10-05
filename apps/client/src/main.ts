@@ -27,6 +27,8 @@ import { boutiqueApi } from './ui/boutique/boutique-api.js';
 import { createCoinCounter } from './ui/coins/coin-counter.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { createTrays, trayRow } from './ui/trays/trays.js';
+import { findSpot } from './recipes/book-model.js';
+import { createRecipeBook } from './recipes/recipe-book.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
@@ -137,6 +139,10 @@ const inventory = createInventoryScreen({
   root: document.body,
   entryRoot: trays.slot('heartpatch'),
   devTools: import.meta.env.DEV,
+  // Something new in the bag may open a recipe book page.
+  onCollected: () => {
+    void recipeBook.check();
+  },
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time
@@ -340,10 +346,11 @@ const maps = createMapScreen({
     lobby.showMessage(message);
   },
   tileActions: combineTileActions(inventory.tileActions, home.tileActions, territory.tileActions),
-  onHudChange: (shown) => {
-    trays.setVisible(shown);
+  onHudChange: (mapId) => {
+    trays.setVisible(mapId !== null);
+    recipeBook.setMap(mapId);
     // Sprout points at the handles once, on a patch (the Glade has Sprout already).
-    if (shown && signedIn && glade === null) trays.offerHint(signedIn.id);
+    if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
   layers: [hollowLayer],
   // The tutorial's spotlight finds the home node on the map (the gather step).
@@ -356,6 +363,26 @@ const maps = createMapScreen({
     chat.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
+  },
+});
+// The Keeper's Recipe Book (owner decision 2026-10-05): from the My
+// Heartpatch tray. "Make it" uses the bag's own crafting; "Find on map" taps
+// the player's nearest tile with the ingredient and glides there.
+const recipeBook = createRecipeBook({
+  root: document.body,
+  entryRoot: trays.slot('heartpatch'),
+  inventory,
+  openHome: () => {
+    void home.open();
+  },
+  spotFor: (resourceId) => {
+    const view = maps.view;
+    return view && signedIn ? findSpot(resourceId, view.tiles, signedIn.id) : null;
+  },
+  showOnMap: (h) => {
+    const point = maps.focus(h);
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (point) stage?.camera.panTo(point, still);
   },
 });
 // The squishy catalog (#14) opens from the button by the battle entry.
@@ -692,6 +719,7 @@ mountAuth(document.body, {
     care.setUser(user);
     closeUp.setUser(user);
     inventory.setUser(user);
+    recipeBook.setUser(user);
     territory.setUser(user);
     hollow.setUser(user);
     chat.setUser(user);
@@ -752,6 +780,7 @@ if (import.meta.env.DEV) {
     invalidate: () => stage?.invalidate(),
     map: () => maps.debug,
     trays: () => trays.debug,
+    recipeBook: () => recipeBook.debug,
     tutorial: () => tutorial.debug,
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,

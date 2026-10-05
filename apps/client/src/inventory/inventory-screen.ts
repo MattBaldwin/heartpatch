@@ -26,6 +26,8 @@ export interface InventoryScreenOptions {
   now?: () => number;
   /** Dev builds show a "get stuff" button (server `HP_DEV_SQUISHY_GRANTS`). */
   devTools?: boolean;
+  /** Something new landed in the bag (a gather or craft collected): the recipe book may open a page. */
+  onCollected?: () => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -47,6 +49,16 @@ export interface InventoryScreen {
   setMap: (mapId: string | null) => Promise<void>;
   setUser: (user: PublicUser | null) => void;
   readonly tileActions: TileActions;
+  /** The bag on screen now (items, crafts, seasons), or null. */
+  readonly bag: InventoryResponse | null;
+  /** Fetches the bag again for the map on screen. */
+  refresh: () => Promise<void>;
+  /**
+   * Starts a craft for the map on screen (the recipe book's "Make it"): the
+   * server checks and takes the items (CLAUDE.md rule 1). Resolves to null
+   * once started, or to a kid-readable line saying why not.
+   */
+  craft: (recipeId: string) => Promise<string | null>;
   readonly debug: InventoryDebug | null;
 }
 
@@ -73,6 +85,8 @@ const TEXT = {
   chipReady: (what: string) => `${what} is ready! Tap to collect`,
   chipMore: (n: number) => ` (+${String(n)})`,
   craftBusy: 'Busy making something else.',
+  justASec: 'Just a sec…',
+  noMap: 'Visit a patch first!',
   devGrant: 'Get stuff (dev)',
 } as const;
 
@@ -155,6 +169,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         const items = await api.dev.grant(id, DEV_ITEMS);
         if (state) state = { ...state, items };
         say(TEXT.got(describeItems(DEV_ITEMS)));
+        options.onCollected?.();
       });
     });
     sheet.append(dev);
@@ -213,29 +228,34 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
    * (already collected, not ready, something changed) refetches, so the
    * buttons match the server again.
    */
+  /** Resolves to null when it ran, or to the line it said about why not. */
   async function act(
     run: (
       mapId: string,
       at: number,
       send: <T>(command: (key: string) => Promise<T>) => Promise<T | null>,
     ) => Promise<void>,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const id = mapId;
-    if (!id || working) return;
+    if (!id) return TEXT.noMap;
+    if (working) return TEXT.justASec;
+    let failure: string | null = null;
     const at = generation;
     working = true;
     render();
     try {
       await run(id, at, (command) => sendCommand(sendDeps, command, () => at === generation));
     } catch (err) {
+      failure = messageOf(err);
       if (at === generation) {
-        say(messageOf(err));
+        say(failure);
         if (err instanceof ApiRequestError && err.code === 'CONFLICT') await refresh();
       }
     } finally {
       working = false;
       if (at === generation) render();
     }
+    return failure;
   }
 
   const startGather = (tile: PublicTile) =>
@@ -252,6 +272,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
       state = { ...state, gathers: state.gathers.filter((g) => g.id !== gatherId) };
       say(TEXT.got(describeItems(res.granted)));
+      options.onCollected?.();
     });
 
   const startCraft = (recipeId: string) =>
@@ -268,6 +289,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
       state = { ...state, crafts: state.crafts.filter((c) => c.id !== craftId) };
       say(TEXT.got(describeItems(res.granted)));
+      options.onCollected?.();
     });
 
   // ── Drawing ───────────────────────────────────────────────────────────
@@ -511,6 +533,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       sheet.hidden = true;
       render();
     },
+    get bag() {
+      return state;
+    },
+    refresh,
+    craft: (recipeId) => startCraft(recipeId),
     tileActions: {
       show: (container, tile) => {
         panel = { container, tile };
