@@ -1,6 +1,7 @@
 import {
   addFuel,
   buildCost,
+  buildingPageKey,
   fuelCost,
   fuelSpace,
   GAME_DATA,
@@ -28,7 +29,13 @@ import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
-import { consumeItems, grantItems, seasonsOn } from '../inventory/service.js';
+import {
+  consumeItems,
+  grantItems,
+  recipeBookPage,
+  requirePageOpen,
+  seasonsOn,
+} from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import {
@@ -296,6 +303,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
           throw new AppError('CONFLICT', MESSAGES.outOfSeason(building.name, season));
         }
+        // A sealed recipe book page can't be built (owner decision 2026-10-05).
+        // Moves, removals and fuel aren't gated.
+        const page = recipeBookPage(buildingPageKey(building.id));
+        if (page) await requirePageOpen(tx, user.id, page);
         const owned = await repo.listOwned(mapId, user.id);
         const tile = checkSpot(home, owned, request);
         if (owned.filter((b) => b.buildingId === building.id).length >= building.maxPerHome) {
