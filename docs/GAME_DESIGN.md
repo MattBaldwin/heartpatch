@@ -202,6 +202,8 @@ Resources vary by terrain, making certain tiles worth fighting over.
 
 Gathering is timer-based (start a gather on an owned node; collect when done), computed from timestamps.
 
+**Recipe book.** Every craft recipe and every building you can put up has a page. A page opens the first time your account has collected everything it needs, on any patch, and stays open. The Heart Charm, the Hearthfire and both habitats are open from the start (the tutorial uses them). A sealed page can't be crafted or built yet and shows a short hint about where its missing pieces turn up (DECISIONS "Recipe book and unlocks").
+
 ## 13. Home base and buildings
 
 The home base is where squishies live, train, play, breed and hang out to be admired.
