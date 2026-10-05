@@ -49,8 +49,10 @@ describe('StickyTaps', () => {
     expect(pressed.clicks).toBe(1);
     expect(other.clicks).toBe(0);
     // The browser's own click goes to the common ancestor, never to `other`
-    // itself; were it to reach `other`, it is no echo of ours.
+    // itself; were it to reach `other`, it is no echo of ours, while one
+    // reaching the pressed button (it captured the pointer) is.
     expect(taps.isEcho(other, 105)).toBe(false);
+    expect(taps.isEcho(pressed, 105)).toBe(true);
   });
 
   it('clicks when the part pressed was swapped out by the lift, even with the lift inside', () => {
