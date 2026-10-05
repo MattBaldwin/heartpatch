@@ -1,0 +1,356 @@
+/* Battle look prototypes: a compact HUD in three skins. Small pills in the top
+   corners, a bottom sheet of at most 35% of the screen, 44pt targets, safe
+   areas; nothing over the fighters. */
+
+.bl-hud {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  font-family: ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, sans-serif;
+  color: #4a3150;
+  pointer-events: none;
+}
+
+.bl-top {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bl-pill {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 196px;
+  min-width: 0;
+  padding: 7px 10px 8px;
+  border-radius: 18px;
+  background: rgb(255 255 255 / 90%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+}
+
+
+.bl-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.bl-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bl-level {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: #8a6a8e;
+}
+
+.bl-badges {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  margin-left: 4px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.bl-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 999px;
+  background: #f6e7f0;
+}
+
+.bl-energy {
+  flex: 1 1 auto;
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: #efe0ea;
+}
+
+.bl-energy-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6fd39a, #4fbf85);
+  transition: width 0.45s ease-out;
+}
+
+.bl-energy[data-low='true'] .bl-energy-fill {
+  background: linear-gradient(90deg, #ffb95c, #f2a93b);
+}
+
+.bl-callout {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 10px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #b8487a;
+  font-size: 15px;
+  font-weight: 900;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(6px) scale(0.9);
+}
+
+.bl-callout-show {
+  opacity: 1;
+  transform: none;
+}
+
+.bl-sheet {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 35vh;
+  padding: 12px 16px calc(env(safe-area-inset-bottom) + 14px);
+  border-radius: 26px 26px 0 0;
+  background: rgb(255 250 246 / 94%);
+  box-shadow: 0 -8px 28px rgb(107 75 110 / 16%);
+  pointer-events: auto;
+}
+
+@media (min-width: 900px) {
+  .bl-sheet {
+    right: auto;
+    left: 50%;
+    width: 560px;
+    transform: translateX(-50%);
+  }
+}
+
+.bl-sheet[data-mode='caption'] {
+  gap: 0;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
+}
+
+.bl-caption {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.bl-actions:empty {
+  display: none;
+}
+
+.bl-moves {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.bl-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.bl-button {
+  min-height: 52px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  background: #ffb3c7;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  color: #5a3a5d;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bl-small {
+  min-height: 44px;
+  font-size: 14px;
+  border-radius: 999px;
+}
+
+.bl-soft {
+  background: #f1e3ee;
+}
+
+/* ── Skin: storybook (A). Cream paper, soft plum type, pastel buttons. ── */
+.bl-hud[data-skin='storybook'] .bl-pill {
+  background: rgb(255 250 240 / 94%);
+  border: 2px solid rgb(255 255 255 / 80%);
+}
+
+.bl-hud[data-skin='storybook'] .bl-sheet {
+  background: linear-gradient(#fffaf1, #fff3e4);
+  border-top: 3px solid #ffd9c2;
+}
+
+.bl-hud[data-skin='storybook'] .bl-button {
+  background: #ffc9d7;
+  box-shadow: 0 3px 0 #f2a4bb;
+}
+
+.bl-hud[data-skin='storybook'] .bl-soft {
+  background: #f6e9df;
+  box-shadow: 0 3px 0 #e2cfc1;
+}
+
+/* ── Skin: comic (B). Chunky, slanted, bold outlines, plum sheet. ── */
+.bl-hud[data-skin='comic'] {
+  color: #2d1b33;
+}
+
+.bl-hud[data-skin='comic'] .bl-pill {
+  border: 3px solid #2d1b33;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 4px 4px 0 #2d1b33;
+  transform: skewX(-6deg);
+}
+
+.bl-hud[data-skin='comic'] .bl-pill > * {
+  transform: skewX(6deg);
+}
+
+.bl-hud[data-skin='comic'] .bl-energy {
+  height: 12px;
+  border: 2px solid #2d1b33;
+  background: #fff;
+}
+
+.bl-hud[data-skin='comic'] .bl-energy-fill {
+  background: linear-gradient(90deg, #7ff0a6, #2fd37a);
+}
+
+.bl-hud[data-skin='comic'] .bl-callout {
+  background: #ffe34d;
+  color: #2d1b33;
+  border: 3px solid #2d1b33;
+  border-radius: 10px;
+  transform: rotate(-6deg) scale(1.05);
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+
+.bl-hud[data-skin='comic'] .bl-sheet {
+  background: #3a2447;
+  border-radius: 22px 22px 0 0;
+  box-shadow:
+    0 -4px 0 #ff7fae,
+    0 -10px 24px rgb(0 0 0 / 25%);
+  color: #fff6fb;
+}
+
+.bl-hud[data-skin='comic'] .bl-caption {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.bl-hud[data-skin='comic'] .bl-button {
+  border: 3px solid #2d1b33;
+  border-radius: 12px;
+  background: #ff7fae;
+  box-shadow: 3px 3px 0 #2d1b33;
+  color: #2d1b33;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 15px;
+}
+
+.bl-hud[data-skin='comic'] .bl-moves .bl-button:nth-child(2) {
+  background: #6fd0ff;
+}
+
+.bl-hud[data-skin='comic'] .bl-moves .bl-button:nth-child(3) {
+  background: #9be36f;
+}
+
+.bl-hud[data-skin='comic'] .bl-moves .bl-button:nth-child(4) {
+  background: #ffd23d;
+}
+
+.bl-hud[data-skin='comic'] .bl-soft {
+  background: #fff;
+}
+
+/* ── Skin: glass (C). Frosted glass, thin white type, warm buttons. ── */
+.bl-hud[data-skin='glass'] {
+  color: #fff;
+}
+
+.bl-hud[data-skin='glass'] .bl-pill {
+  background: rgb(40 24 52 / 42%);
+  border: 1px solid rgb(255 255 255 / 35%);
+  box-shadow: 0 6px 20px rgb(20 10 30 / 25%);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+
+.bl-hud[data-skin='glass'] .bl-level {
+  color: rgb(255 255 255 / 70%);
+}
+
+.bl-hud[data-skin='glass'] .bl-badge {
+  background: rgb(255 255 255 / 18%);
+}
+
+.bl-hud[data-skin='glass'] .bl-energy {
+  background: rgb(255 255 255 / 20%);
+}
+
+.bl-hud[data-skin='glass'] .bl-energy-fill {
+  background: linear-gradient(90deg, #a8ffcf, #5fe39a);
+  box-shadow: 0 0 10px rgb(120 255 190 / 60%);
+}
+
+.bl-hud[data-skin='glass'] .bl-callout {
+  background: rgb(255 255 255 / 92%);
+  color: #7a2d55;
+}
+
+.bl-hud[data-skin='glass'] .bl-sheet {
+  background: rgb(36 22 48 / 55%);
+  border-top: 1px solid rgb(255 255 255 / 30%);
+  box-shadow: 0 -10px 30px rgb(20 10 30 / 30%);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  color: #fff;
+}
+
+.bl-hud[data-skin='glass'] .bl-button {
+  background: linear-gradient(180deg, #ffb27c, #ff8a6a);
+  color: #3a1d2e;
+  box-shadow: 0 6px 16px rgb(255 140 110 / 35%);
+}
+
+.bl-hud[data-skin='glass'] .bl-soft {
+  background: rgb(255 255 255 / 16%);
+  color: #fff;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bl-energy-fill {
+    transition: none;
+  }
+}
