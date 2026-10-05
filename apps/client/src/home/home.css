@@ -15,7 +15,9 @@
 .home-top {
   position: fixed;
   z-index: 5;
-  top: calc(env(safe-area-inset-top) + 12px);
+  /* Under the "Hi, name! Log out" chip (8px from the top, 52px tall), never
+     behind it (#157), whatever the screen width or name length. */
+  top: calc(env(safe-area-inset-top) + 68px);
   left: calc(env(safe-area-inset-left) + 12px);
   right: calc(env(safe-area-inset-right) + 12px);
   box-sizing: border-box;

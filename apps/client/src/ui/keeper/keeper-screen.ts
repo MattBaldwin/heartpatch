@@ -12,6 +12,7 @@ import { lodFor } from '../../procedural/motion.js';
 import { el, messageOf } from '../dom.js';
 import { keeperApi, type KeeperApi } from './keeper-api.js';
 import { KeeperPreview } from './keeper-preview.js';
+import { watchScrollHints } from './scroll-hint.js';
 import './keeper.css';
 
 // Picking your Keeper (design doc §23, issue #42): right after signup and
@@ -183,13 +184,23 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     return node;
   };
 
-  const row = (legend: string, ...buttons: HTMLElement[]) =>
-    el(
-      'fieldset',
-      { class: 'keeper-row' },
-      el('legend', { class: 'keeper-legend' }, legend),
+  /** Stops the scroll hints of the rows on screen (they're rebuilt on open). */
+  let hints = new AbortController();
+
+  /**
+   * One labelled line of choices (#130): the label sits beside the choices,
+   * not above them, so all four rows fit the card with no scrolling on a
+   * phone or iPad.
+   */
+  const row = (legend: string, ...buttons: HTMLElement[]) => {
+    const id = `keeper-row-${legend.toLowerCase()}`;
+    return el(
+      'div',
+      { class: 'keeper-row', role: 'group', 'aria-labelledby': id },
+      el('span', { class: 'keeper-legend', id }, legend),
       el('div', { class: 'keeper-choices' }, ...buttons),
     );
+  };
 
   const swatchRow = (
     legend: string,
@@ -254,6 +265,20 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
       ),
     );
     refresh();
+    hints.abort();
+    hints = new AbortController();
+    const update = watchScrollHints(
+      [
+        { node: rows, axis: 'y' },
+        ...[...rows.querySelectorAll<HTMLElement>('.keeper-choices')].map((node) => ({
+          node,
+          axis: 'x' as const,
+        })),
+      ],
+      hints.signal,
+    );
+    // Measured once the card is on screen (it's hidden while it's built).
+    requestAnimationFrame(update);
   }
 
   const button = (label: string, onClick: () => void, soft = false) => {
@@ -296,6 +321,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     const was = mode;
     mode = null;
     panel.hidden = true;
+    hints.abort();
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
     if (was !== null) options.showScene(null);

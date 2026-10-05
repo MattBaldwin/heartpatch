@@ -54,6 +54,20 @@ export function createCatalogScreen(options: CatalogScreenOptions): CatalogScree
   close.addEventListener('click', () => {
     hide();
   });
+  // An × up top too (#150): a long list shouldn't need scrolling to leave.
+  const closeTop = el(
+    'button',
+    {
+      type: 'button',
+      class: 'catalog-close-top',
+      'aria-label': 'Close',
+      'data-testid': 'catalog-close-top',
+    },
+    '×',
+  );
+  closeTop.addEventListener('click', () => {
+    hide();
+  });
   const panel = el(
     'section',
     {
@@ -65,11 +79,15 @@ export function createCatalogScreen(options: CatalogScreenOptions): CatalogScree
     el(
       'div',
       { class: 'auth-card catalog-card' },
-      el('h1', { class: 'auth-title', id: 'catalog-title' }, 'Squishy Catalog'),
+      el(
+        'div',
+        { class: 'catalog-head' },
+        el('h1', { class: 'auth-title catalog-title', id: 'catalog-title' }, 'Squishy Catalog'),
+        closeTop,
+      ),
       progress,
-      grid,
-      problem,
-      el('div', { class: 'auth-actions' }, close),
+      el('div', { class: 'catalog-scroll' }, grid, problem),
+      el('div', { class: 'auth-actions catalog-actions' }, close),
     ),
   );
   panel.hidden = true;

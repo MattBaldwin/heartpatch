@@ -10,15 +10,16 @@ import type { GuardianRules } from '../../schemas/data/guardian-rules.js';
 export const GUARDIAN_RULES: GuardianRules = {
   windowHours: 24, // TUNE: one guardian team per tile per map-local day
   strengths: [
-    { strength: 1, count: 1, levels: { min: 2, max: 4 } }, // TUNE: next to a home ring, a fresh squishy can win
+    { strength: 1, count: 1, levels: { min: 1, max: 2 } }, // TUNE: owner decision 2026-10-05 (#162): next to a home ring, a level-1 starter can win
     { strength: 2, count: 1, levels: { min: 4, max: 7 } }, // TUNE:
     { strength: 3, count: 2, levels: { min: 6, max: 9 } }, // TUNE:
     { strength: 4, count: 2, levels: { min: 9, max: 13 } }, // TUNE:
     { strength: 5, count: 3, levels: { min: 14, max: 18 } }, // TUNE: Juniper's Gap, the hardest guardians
   ],
-  // Tile panel hint by the team's total level. TUNE: strength 1 and most of 2
-  // read easy, 3 (two at 6–9) tough, 4 mostly very tough, Juniper's Gap always.
-  hint: { easyUpTo: 6, toughUpTo: 19 },
+  // Tile panel hint by the team's total level. TUNE: owner decision 2026-10-05
+  // (#162): only strength 1 (one at 1–2) reads easy; 2 and 3 tough, 4 mostly
+  // very tough, Juniper's Gap always.
+  hint: { easyUpTo: 3, toughUpTo: 19 },
   // Launch roster (#10). Ordinary land (levels 2–13) is guarded by base
   // forms; Juniper's Gap (levels 14–18) by evolved ones, the toughest
   // guardians on the map, even below their own evolution level (a guardian

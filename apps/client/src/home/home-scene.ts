@@ -2,6 +2,7 @@ import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3, type Matrix } from '@babylonjs/core/Maths/math.vector';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
+import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
@@ -20,6 +21,7 @@ import {
 import type { SceneContent } from '../engine/stage.js';
 import { HEX_SIZE, HOME_LOOK, ISLAND, TILE_FILL, type PropKind } from '../map/map-config.js';
 import { loftRoundedHex } from '../map/hex-mesh.js';
+import { linear } from '../map/map-props.js';
 import {
   buildHeartSeed,
   buildProp,
@@ -105,6 +107,7 @@ export class HomeScene {
   readonly #squishies: SquishyField;
   readonly #keepers: KeeperField;
   readonly #spotMarkers: Mesh;
+  readonly #spotFill: Mesh;
   readonly #selection: Mesh;
   readonly #residents = new Map<string, Resident>();
   #home: HomeResponse;
@@ -128,15 +131,29 @@ export class HomeScene {
     });
     this.#keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: options.lod });
 
+    // A glowing pink ring around a soft pink disc (#131): it has to stand
+    // out from the sand-coloured tiles, not melt into them.
     this.#spotMarkers = CreateTorus(
       'home-spots',
-      { diameter: 0.9, thickness: 0.1, tessellation: 32 },
+      { diameter: 0.9, thickness: 0.12, tessellation: 32 },
       scene,
     );
-    this.#spotMarkers.material = overlayMaterial(scene, 'home-spots-mat');
+    const ringMat = overlayMaterial(scene, 'home-spots-mat');
+    ringMat.emissiveColor = linear(HOME_VIEW.spot.ring);
+    this.#spotMarkers.material = ringMat;
     this.#spotMarkers.isPickable = false;
     this.#spotMarkers.alwaysSelectAsActiveMesh = true;
     this.#spotMarkers.setEnabled(false);
+    this.#spotFill = CreateDisc('home-spot-fill', { radius: 0.42, tessellation: 32 }, scene);
+    this.#spotFill.rotation.x = Math.PI / 2;
+    this.#spotFill.bakeCurrentTransformIntoVertices();
+    const fillMat = overlayMaterial(scene, 'home-spot-fill-mat');
+    fillMat.emissiveColor = linear(HOME_VIEW.spot.fill);
+    fillMat.alpha = HOME_VIEW.spot.fillAlpha;
+    this.#spotFill.material = fillMat;
+    this.#spotFill.isPickable = false;
+    this.#spotFill.alwaysSelectAsActiveMesh = true;
+    this.#spotFill.setEnabled(false);
     this.#selection = CreateTorus(
       'home-selection',
       { diameter: 1.4, thickness: 0.09, tessellation: 40 },
@@ -252,12 +269,16 @@ export class HomeScene {
   /** Lights up free spots to tap while placing or moving (empty: off). */
   showSpots(spots: readonly HomeSpot[]): void {
     this.#spots = [...spots];
+    const at = spots.map((s) => this.spotAt(s));
+    setInstances(
+      this.#spotFill,
+      // Above the tile's dome everywhere, or the dome cuts wedges out of it.
+      at.map((p) => placeAt(p.x, this.#ground + DOME * 0.5 * this.#k + 0.01, p.z)),
+      true,
+    );
     setInstances(
       this.#spotMarkers,
-      spots.map((s) => {
-        const at = this.spotAt(s);
-        return placeAt(at.x, this.#ground + 0.03, at.z);
-      }),
+      at.map((p) => placeAt(p.x, this.#ground + 0.03, p.z)),
       true,
     );
   }
@@ -414,7 +435,7 @@ export class HomeScene {
         { corner: CORNER, segments: SEGMENTS, centre: { y: h + DOME } },
       ),
     );
-    tile.material = vinyl(this.#scene, 'home-tiles-mat', HOME_LOOK);
+    tile.material = vinyl(this.#scene, 'home-tiles-mat', { ...HOME_LOOK, ...HOME_VIEW.tile });
     setInstances(
       tile,
       home.tiles.map((t) => {

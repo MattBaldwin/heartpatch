@@ -55,3 +55,18 @@ test('explains form problems in kid-friendly words', async ({ page }) => {
   await expect(overlay.getByTestId('auth-error')).toHaveText(/Names need at least 3/);
   await expect(overlay.getByLabel('Pick a name')).toBeFocused();
 });
+
+test('the welcome card shows no keyboard focus ring before any key is pressed (#158)', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const overlay = page.getByTestId('auth-overlay');
+  const login = overlay.getByRole('button', { name: 'Log in' });
+  await expect(login).toBeVisible();
+  // Focus starts on the card (screen readers read from its title), not a button.
+  await expect(overlay.getByRole('dialog')).toBeFocused();
+  expect(await login.evaluate((b) => b.matches(':focus-visible'))).toBe(false);
+  expect(
+    await page.evaluate(() => document.querySelector(':focus-visible')?.matches('button') ?? false),
+  ).toBe(false);
+});

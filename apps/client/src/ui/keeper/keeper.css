@@ -26,9 +26,12 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  /* The top stays the Keeper's (#130): every row fits under it on a phone,
+     an iPad or a laptop; only the shortest screens scroll the rows. */
   max-height: 58vh;
+  max-height: 58dvh;
   margin: 0 auto;
-  padding: 18px 16px;
+  padding: 16px;
   pointer-events: auto;
 }
 
@@ -41,45 +44,92 @@
   font-size: 16px;
 }
 
+/* An empty error line takes no room (it only shows a problem). */
+.keeper-card .auth-error:empty {
+  display: none;
+}
+
 /* Only the choices scroll; the title and "That's me!" always show. */
 .keeper-rows {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
 }
 
+/* The label beside its choices, so four rows fit where two used to. */
 .keeper-row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
 }
 
 .keeper-legend {
-  padding: 0;
-  margin-bottom: 4px;
+  flex: none;
+  width: 4em;
   font-size: 15px;
   font-weight: 700;
 }
 
-/* One line each, scrolled sideways with a thumb. */
+/* One line each, scrolled sideways with a thumb. A swipe up or down that
+   starts on a choice still scrolls the rows (pan-y), and a row with more to
+   see fades out on that side. */
 .keeper-choices {
   display: flex;
+  flex: 1 1 auto;
   gap: 8px;
-  padding: 2px 2px 6px;
+  min-width: 0;
+  padding: 4px 2px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  touch-action: pan-x pan-y;
   scrollbar-width: none;
 }
 
 .keeper-choices::-webkit-scrollbar {
   display: none;
+}
+
+.keeper-choices[data-more='end'],
+.keeper-rows[data-more='end'] {
+  --keeper-fade: linear-gradient(var(--keeper-fade-dir), #000 calc(100% - 28px), transparent);
+}
+
+.keeper-choices[data-more='start'],
+.keeper-rows[data-more='start'] {
+  --keeper-fade: linear-gradient(var(--keeper-fade-dir), transparent, #000 28px);
+}
+
+.keeper-choices[data-more='both'],
+.keeper-rows[data-more='both'] {
+  --keeper-fade: linear-gradient(
+    var(--keeper-fade-dir),
+    transparent,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent
+  );
+}
+
+.keeper-choices {
+  --keeper-fade-dir: to right;
+}
+
+.keeper-rows {
+  --keeper-fade-dir: to bottom;
+}
+
+.keeper-choices:not([data-more='none']),
+.keeper-rows:not([data-more='none']) {
+  -webkit-mask-image: var(--keeper-fade, none);
+  mask-image: var(--keeper-fade, none);
 }
 
 .keeper-base,
@@ -102,14 +152,16 @@
 .keeper-base {
   flex-direction: column;
   gap: 2px;
-  width: 64px;
-  min-height: 64px;
-  border-radius: 20px;
+  min-width: 64px;
+  min-height: 56px;
+  padding: 2px var(--hp-pad-x);
+  border-radius: 18px;
 }
 
 .keeper-base-name {
   font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .keeper-base[aria-pressed='true'],
@@ -146,4 +198,23 @@
 
 .keeper-actions {
   margin-top: 2px;
+}
+
+/* A phone in a Safari tab: the subtitle gives its room to the rows. */
+@media (max-height: 740px) {
+  .keeper-subtitle {
+    display: none;
+  }
+}
+
+/* The shortest screens: a little more card, a little less Keeper. */
+@media (max-height: 600px) {
+  .keeper-picker {
+    padding-top: calc(env(safe-area-inset-top) + 12px);
+  }
+
+  .keeper-card {
+    max-height: 72vh;
+    max-height: 72dvh;
+  }
 }

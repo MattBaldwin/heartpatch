@@ -33,6 +33,51 @@ export async function settled(page: Page): Promise<void> {
 }
 
 /**
+ * Waits until everything matching `selector` has sat in the same place for
+ * three animation frames running, with no finite animation or transition in
+ * flight. settled() alone isn't enough in CI's WebKit: it has measured an
+ * open tray a few pixels short of its slide, and a fresh page turn at its
+ * first keyframe, after document.getAnimations() reported nothing running.
+ * The boxes themselves can't lie: a slide or turn in progress moves them
+ * between frames, and one that hasn't started yet starts at the next frame.
+ * An element with an endless animation of its own (the tutorial's bobbing
+ * arrow) is left out of the comparison.
+ */
+export async function still(page: Page, selector: string): Promise<void> {
+  await page.evaluate(async (selector) => {
+    const frame = () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    const endless = (a: Animation) => a.effect?.getComputedTiming().iterations === Infinity;
+    const boxes = () =>
+      JSON.stringify(
+        [...document.querySelectorAll(selector)]
+          .filter((el) => !el.getAnimations().some(endless))
+          .map((el) => {
+            const b = el.getBoundingClientRect();
+            return [b.left, b.top, b.right, b.bottom];
+          }),
+      );
+    const moving = () =>
+      document.getAnimations().some((a) => a.playState === 'running' && !endless(a));
+    const deadline = performance.now() + 15_000;
+    let last = boxes();
+    let held = 0;
+    while (performance.now() < deadline) {
+      await frame();
+      const now = boxes();
+      held = now === last && !moving() ? held + 1 : 0;
+      last = now;
+      if (held >= 3) return;
+    }
+    throw new Error(`still moving after 15s: ${selector}`);
+  }, selector);
+}
+
+/**
  * Every visible control matching `selector` keeps its text at least `min`
  * px inside its own box on every side, and sits fully on screen. Badges
  * (`ignore`) may sit on an edge on purpose.
@@ -43,6 +88,7 @@ export async function expectRoomyLabels(
   { min = 8, ignore = '.tray-badge, [data-tray-alert], .rbook-sticker' } = {},
 ): Promise<void> {
   await settled(page);
+  await still(page, selector);
   const problems = await page.evaluate(
     ({ selector, min, ignore }) => {
       const out: string[] = [];
@@ -108,6 +154,7 @@ export async function expectRoomyLabels(
  */
 export async function expectClear(page: Page, bubble: string, targets: string): Promise<void> {
   await settled(page);
+  await still(page, `${bubble}, ${targets}`);
   const result = await page.evaluate(
     ({ bubble, targets }) => {
       const shown = (el: Element) => {

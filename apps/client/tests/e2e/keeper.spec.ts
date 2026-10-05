@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { draws, hook, idle } from './dev-hook.js';
+import { expectRoomyLabels, settled } from './layout.js';
 import { skipCinematic, TEST_PASSWORD, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 
@@ -182,4 +183,58 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
   await expect
     .poll(() => battle().then((b) => b?.keeperReactions ?? 0), { timeout: 30_000 })
     .toBeGreaterThan(0);
+});
+
+test('every row of the picker is reachable on phones, iPads and laptops (#130)', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await signUp(page, uniqueName('rows'));
+  const picker = page.getByTestId('keeper-picker');
+  await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();
+
+  // An iPhone in a Safari tab and as an app, an iPad, two laptops.
+  for (const size of [
+    { width: 393, height: 659 },
+    { width: 390, height: 844 },
+    { width: 1180, height: 820 },
+    { width: 1280, height: 800 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(size);
+    await settled(page);
+    const layout = await page.evaluate(() => {
+      const rows = document.querySelector<HTMLElement>('.keeper-rows')!;
+      return {
+        // All four rows fit: nothing hides below "That's me!".
+        fits: rows.scrollHeight <= rows.clientHeight + 1,
+        // The first choice of each row is what a finger on it touches.
+        reachable: [...rows.querySelectorAll('.keeper-row')].map((row) => {
+          const button = row.querySelector('button')!;
+          const box = button.getBoundingClientRect();
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+          return hit?.closest('button') === button;
+        }),
+        // A swipe up or down that starts on a choice can still scroll the rows.
+        swipe: getComputedStyle(rows.querySelector('.keeper-choices')!).touchAction,
+      };
+    });
+    expect(layout, `${String(size.width)}×${String(size.height)}`).toEqual({
+      fits: true,
+      reachable: [true, true, true, true],
+      swipe: 'pan-x pan-y',
+    });
+    // More Keepers than fit: the row says so (it fades out at the end).
+    await expect(picker.locator('.keeper-choices').first()).toHaveAttribute('data-more', 'end');
+  }
+
+  // Tapping an outfit picks it; it never saves the Keeper by mistake.
+  await picker.getByRole('button', { name: 'Outfit: Pumpkin' }).tap();
+  await expect(picker).toBeVisible();
+  expect((await keeperState(page))!).toMatchObject({
+    mode: 'first',
+    saved: null,
+    picked: { outfit: 'pumpkin' },
+  });
+  await expectRoomyLabels(page, '.keeper-base, .keeper-actions .auth-button');
 });

@@ -255,6 +255,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
             memberCount: 1,
             maxPlayers: MAP_MAX_PLAYERS,
             pvpMode: 'gentle',
+            pendingRequests: 0,
           },
         ],
         requests: [],
@@ -366,6 +367,11 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         (await call(server, 'GET', '/maps', friend)).json(),
       );
       expect(waiting).toEqual({ maps: [], requests: [request] });
+      // The owner's patch list says someone is waiting (#144).
+      const ownerLobby = MyMapsResponseSchema.parse(
+        (await call(server, 'GET', '/maps', owner)).json(),
+      );
+      expect(ownerLobby.maps.map((m) => [m.id, m.pendingRequests])).toEqual([[map.id, 1]]);
       // Not a member yet.
       expect((await call(server, 'GET', `/maps/${map.id}`, friend)).statusCode).toBe(404);
 
@@ -389,8 +395,16 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       ]);
       const lobby = MyMapsResponseSchema.parse((await call(server, 'GET', '/maps', friend)).json());
       expect(lobby.requests).toEqual([]);
-      expect(lobby.maps.map((m) => [m.id, m.role, m.memberCount])).toEqual([[map.id, 'member', 2]]);
+      // A member never sees the count, and once answered there's nothing to count.
+      expect(lobby.maps.map((m) => [m.id, m.role, m.memberCount, m.pendingRequests])).toEqual([
+        [map.id, 'member', 2, 0],
+      ]);
       expect((await getMap(server, map.id, owner)).admin!.requests).toEqual([]);
+      expect(
+        MyMapsResponseSchema.parse((await call(server, 'GET', '/maps', owner)).json()).maps.map(
+          (m) => m.pendingRequests,
+        ),
+      ).toEqual([0]);
 
       // The friend holds home slot 1, and the event says where.
       const row = await mapRow(map.id);

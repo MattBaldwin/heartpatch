@@ -76,7 +76,9 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   const known = (names: string[]) => names.filter((n) => n !== '???');
   expect(known((await catalogState(page))!.names)).toEqual(['Puddlepuff']);
   await expect(page.getByTestId('catalog-progress')).toContainText('Friends 1');
-  await page.getByTestId('catalog-close').tap();
+  // The header's × closes it without scrolling the whole list (#150).
+  await page.getByTestId('catalog-close-top').tap();
+  await expect(page.getByTestId('catalog')).toBeHidden();
   await expect(page.getByTestId('catalog')).toBeHidden();
 
   // A squishy of our own (dev), then the real button finds a wild one.

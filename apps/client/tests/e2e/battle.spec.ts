@@ -144,11 +144,11 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(page.getByTestId('battle-caption')).not.toBeEmpty();
   expect(state.shown.mine + state.shown.theirs).toBeLessThan(before.mine + before.theirs);
 
-  // Refreshing mid-battle resumes it: same battle, same turn, bars where they were.
+  // Refreshing mid-battle resumes it: the reload lands back on the patch
+  // (#160), and the battle picks up where it was (same turn, bars as they were).
   await page.reload();
-  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
-  await openPatch(page, 'Showdown Patch');
-  await expect(hud).toBeVisible({ timeout: 30_000 });
+  await expect(hud).toBeVisible({ timeout: 60_000 });
+  await expect(lobby).toBeHidden();
   const resumed = await settled(page);
   expect(resumed).toMatchObject({ id: battleId, turn: 1, status: 'active', shown: state.shown });
   expect(resumed.scene?.arena).toMatchObject(where);
