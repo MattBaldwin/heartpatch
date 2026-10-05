@@ -42,7 +42,8 @@ export default defineConfig({
   testDir: './tests/e2e',
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
-  reporter: isCI ? [['github'], ['html', { open: 'never' }]] : 'list',
+  // In CI, list prints every test's duration in the job log (for shard balancing).
+  reporter: isCI ? [['github'], ['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
