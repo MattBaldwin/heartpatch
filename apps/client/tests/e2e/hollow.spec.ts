@@ -2,6 +2,7 @@ import { findAvoidedWords, STARTERS } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /**
  * The Hollow Man on an iPhone (issue #21): a new player gets a nudge to light
@@ -55,7 +56,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
     .toMatchObject({ mapId, hollowed: 0, report: [], visits: 0 });
 
   // New here with no fire: a small nudge (unless it's night on the server's clock).
-  const hint = page.getByTestId('hollow-fire-hint');
+  const hint = await trayButton(page, 'hollow-fire-hint');
   if (!(await hollowState(page))!.night) {
     await expect(hint).toBeVisible();
     await expect(hint).toContainText('Light a fire before night falls!');
@@ -81,7 +82,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   const visitsBefore = (await hollowState(page))!.visits;
   expect(await hollowState(page)).toMatchObject({ hollowed: 0, report: [] });
   // The raid report (#16) is open when night falls: the Hollow's report waits its turn.
-  await page.getByTestId('raid-open').tap();
+  await (await trayButton(page, 'raid-open')).tap();
   const raidSheet = page.getByTestId('raid-report');
   await expect(raidSheet).toBeVisible();
   const fell = await api(page, 'POST', `/maps/${mapId}/dev/nightfall`);
@@ -109,7 +110,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await expect(report).toBeHidden();
 
   // The Hollow button: who's waiting there, and a rescue from right here.
-  const open = page.getByTestId('hollow-open');
+  const open = await trayButton(page, 'hollow-open');
   await expect(open).toContainText('1');
   await open.tap();
   const sheet = page.getByTestId('hollow-sheet');

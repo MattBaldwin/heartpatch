@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /**
  * A PvE battle on an iPhone (issue #13): pick a fight, play it to the end,
@@ -58,11 +59,11 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
 
   // Their starter is home already; the dev tools hand out another squishy
   // and a fight against a chosen wild squishy.
-  const entry = page.getByTestId('battle-entry');
+  const entry = await trayButton(page, 'battle-entry');
   await expect(entry).toBeVisible();
-  await page.getByTestId('battle-dev-grant').tap();
+  await (await trayButton(page, 'battle-dev-grant')).tap();
   await expect(page.locator('.battle-entry-note')).toContainText('joined you');
-  await page.getByTestId('battle-dev-fight').tap();
+  await (await trayButton(page, 'battle-dev-fight')).tap();
 
   const hud = page.getByTestId('battle-hud');
   await expect(hud).toBeVisible();
@@ -123,7 +124,7 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(hud).toBeHidden();
   await expect(page.getByTestId('map-hud')).toContainText('Showdown Patch');
   expect(await battleState(page)).toBeNull();
-  await expect(page.getByTestId('battle-entry')).toBeVisible();
+  await expect(await trayButton(page, 'battle-entry')).toBeVisible();
 
   expect(errors).toEqual([]);
 });
@@ -141,15 +142,15 @@ test('a battle owns the screen: no lobby button mid-battle, none left after the 
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.getByTestId('map-hud')).toContainText('Owner Patch');
-  const entry = page.getByTestId('battle-entry');
+  const entry = await trayButton(page, 'battle-entry');
   const lobbyButton = page.getByTestId('lobby-open');
   await expect(entry).toBeVisible();
   await expect(lobbyButton).toBeVisible();
 
   // Mid-battle, "My patches" steps out: the battle is the only screen.
-  await page.getByTestId('battle-dev-grant').tap();
+  await (await trayButton(page, 'battle-dev-grant')).tap();
   await expect(page.locator('.battle-entry-note')).toContainText('joined you');
-  await page.getByTestId('battle-dev-fight').tap();
+  await (await trayButton(page, 'battle-dev-fight')).tap();
   const hud = page.getByTestId('battle-hud');
   await expect(hud).toBeVisible();
   await settled(page);

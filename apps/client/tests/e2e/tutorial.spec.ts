@@ -97,8 +97,15 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   // Near the top of the screen, away from Sprout's bubble at the bottom.
   const width = page.viewportSize()?.width ?? 390;
   expect(await testIdAt(page, width / 2, 160)).toBe('tutorial-blocker');
-  // ...except "Log out": nobody is ever stuck in the tutorial.
+  // ...except "Log out": nobody is ever stuck in the tutorial. Over the map
+  // it's in the Keeper menu in the corner, which takes taps too.
+  const menu = page.getByTestId('keeper-menu');
+  if (await menu.isVisible()) {
+    expect(await takesTaps(page, menu)).toBe(true);
+    await menu.tap();
+  }
   expect(await takesTaps(page, page.getByRole('button', { name: 'Log out' }))).toBe(true);
+  if (await menu.isVisible()) await menu.tap();
   // Sprout joins the scene once the renderer is up.
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   await expect.poll(async () => (await debug(page))?.sprout).toMatch(/^[0-9a-f]{32}$/);

@@ -2,6 +2,7 @@ import { GAME_DATA } from '@heartpatch/shared';
 import { expect as baseExpect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /**
  * A new player's whole first session, end to end (#28's playtest smoke):
@@ -219,7 +220,7 @@ test('first session: signup, Keeper, story, tutorial, a patch with a friend, a c
       });
       expect(dev.status).toBe(201);
     }
-    await page.getByTestId('battle-entry').tap();
+    await (await trayButton(page, 'battle-entry')).tap();
     await expect(page.getByTestId('battle-hud')).toBeVisible({ timeout: 30_000 });
     befriended = await offerCharms(page);
   }

@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { draws, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /** Longer than one wander gap (home-config.ts `WANDER`: 3.5 s ± 1.5 s). */
 const WANDER_EVERY_MS = 5_000;
@@ -90,15 +91,15 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
   await expect.poll(async () => (await mapState(page))?.tiles, { timeout: 30_000 }).toBe(469);
 
   // Stuff to build with, and a squishy friend (dev tools; spawns are #14).
-  await page.getByTestId('bag-open').tap();
+  await (await trayButton(page, 'bag-open')).tap();
   await page.getByTestId('bag').getByRole('button', { name: 'Get stuff (dev)' }).tap();
   await slowExpect(page.getByTestId('bag').locator('[data-item="timber"]')).toContainText('10');
   await page.getByTestId('bag').getByRole('button', { name: 'Close' }).tap();
-  await page.getByTestId('battle-dev-grant').tap();
+  await (await trayButton(page, 'battle-dev-grant')).tap();
   await slowExpect(page.locator('.battle-entry-note')).toContainText('joined you');
 
   // Home: seven tiles up close, the Keeper by the Heart Seed, nothing built yet.
-  await page.getByTestId('home-open').tap();
+  await (await trayButton(page, 'home-open')).tap();
   // Building a scene can take a while on a busy CI runner (software rendering).
   const slow = { timeout: 30_000 };
   await expect.poll(async () => (await homeState(page))?.scene?.tiles, slow).toBe(7);

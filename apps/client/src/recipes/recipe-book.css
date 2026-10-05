@@ -6,7 +6,8 @@
 .rbook {
   position: fixed;
   z-index: 5;
-  inset: calc(env(safe-area-inset-top) + 6px) calc(env(safe-area-inset-right) + 8px)
+  /* Under the corner buttons (My patches, Chat, the Keeper menu), like the trays. */
+  inset: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 8px)
     calc(env(safe-area-inset-bottom) + 6px) calc(env(safe-area-inset-left) + 8px);
   display: flex;
   flex-direction: column;
@@ -34,7 +35,7 @@
 }
 
 .rbook.rbook-two-up {
-  inset: calc(env(safe-area-inset-top) + 28px)
+  inset: calc(env(safe-area-inset-top) + 66px)
     max(calc(env(safe-area-inset-right) + 24px), calc(50vw - 520px))
     calc(env(safe-area-inset-bottom) + 28px)
     max(calc(env(safe-area-inset-left) + 24px), calc(50vw - 520px));

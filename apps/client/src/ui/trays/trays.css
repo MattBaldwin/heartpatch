@@ -529,7 +529,7 @@
 
 .tray-hint {
   position: absolute;
-  top: calc(env(safe-area-inset-top) + 130px);
+  top: calc(env(safe-area-inset-top) + 110px);
   left: 50%;
   display: flex;
   flex-direction: column;
@@ -537,6 +537,12 @@
   gap: 10px;
   width: min(300px, calc(100vw - 160px));
   transform: translateX(-50%);
+  /* A hint, not a wall: only "Got it!" takes taps; the map works around it. */
+  pointer-events: none;
+}
+
+.tray-hint button {
+  pointer-events: auto;
 }
 
 .tray-hint-sprout {

@@ -244,9 +244,9 @@ export function createTrays(options: TraysOptions): Trays {
   const readAlerts = (): TrayAlert[] =>
     sides.flatMap((s) =>
       [...s.tray.querySelectorAll<HTMLElement>('[data-tray-alert]')]
-        .filter((node) => !node.closest('[hidden]') && (node.textContent ?? '').trim() !== '')
+        .filter((node) => !node.closest('[hidden]') && node.textContent.trim() !== '')
         .map((node) => {
-          const n = Number.parseInt(node.textContent ?? '', 10);
+          const n = Number.parseInt(node.textContent, 10);
           const peekText = node.dataset['trayAlert'] ?? '';
           return {
             side: s.which,
@@ -358,7 +358,7 @@ export function createTrays(options: TraysOptions): Trays {
     },
     offerHint: (accountId) => {
       hintKey = HINT_KEY(accountId);
-      let seen = false;
+      let seen: boolean;
       try {
         seen = storage !== null && storage.getItem(hintKey) !== null;
       } catch {

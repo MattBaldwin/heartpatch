@@ -9,6 +9,8 @@ export type HookName =
   | 'quality'
   | 'camera'
   | 'map'
+  | 'trays'
+  | 'recipeBook'
   | 'tutorial'
   | 'updatesHeld'
   | 'battle'
