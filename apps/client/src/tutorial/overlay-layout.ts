@@ -189,8 +189,13 @@ export function placeBubble(spec: {
 
   const candidates: Rect[] = [];
   if (spec.tucked) {
-    // The chip's own place (tutorial.css `.tutorial-tucked`): left side, 38% down.
-    candidates.push({ x, y: Math.round(viewport.height * 0.38), width, height });
+    // The chip's own place (tutorial.css `.tutorial-tucked`): left side, 38%
+    // down; else just above or below the hole, clear of the corner buttons.
+    candidates.push(
+      { x, y: Math.round(viewport.height * 0.38), width, height },
+      { x, y: Math.max(top, hole.y - BUBBLE_MARGIN - height), width, height },
+      { x, y: Math.min(bottom - height, hole.y + hole.height + BUBBLE_MARGIN), width, height },
+    );
   }
   candidates.push(...(spec.prefer === 'top' ? [atTop, atBottom] : [atBottom, atTop]));
   // Beside the hole, on whichever side has more room.

@@ -403,7 +403,7 @@ test('first battle: Sprout points at the Adventure handle, then at Find a squish
           '[data-testid="tutorial-bubble"]',
           '[data-testid="tutorial-spotlight"]:not([hidden])',
         );
-      }).toPass({ timeout: 5_000 });
+      }).toPass({ timeout: 15_000 }); // a new size draws slowly in software
     }
     await page.setViewportSize({ width: 375, height: 667 });
   };

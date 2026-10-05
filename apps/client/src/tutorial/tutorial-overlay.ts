@@ -206,6 +206,20 @@ export function mountTutorialOverlay(
     node.style.height = `${String(rect.height)}px`;
   };
 
+  /**
+   * The bubble's size free of the height the last layout capped it to; a
+   * tucked chip also sheds its pinned width, so it can grow with its goal.
+   */
+  function naturalSize(): { width: number; height: number } {
+    const { width, maxHeight } = bubble.style;
+    if (overlay.classList.contains('tutorial-tucked')) bubble.style.width = '';
+    bubble.style.maxHeight = '';
+    const size = { width: bubble.offsetWidth, height: bubble.scrollHeight };
+    bubble.style.width = width;
+    bubble.style.maxHeight = maxHeight;
+    return size;
+  }
+
   function relayout(): void {
     const step = view?.phase === 'step' || view?.phase === 'waiting' ? view.step : null;
     if (!view || view.phase === 'closed') return;
@@ -218,8 +232,7 @@ export function mountTutorialOverlay(
       talkOnly: step ? step.talkOnly : true,
       viewport,
       insets: readInsets(probe),
-      // Measured as drawn now, so the layout knows how tall Sprout's words are.
-      bubbleSize: { width: bubble.offsetWidth, height: bubble.scrollHeight },
+      bubbleSize: naturalSize(),
       tucked: overlay.classList.contains('tutorial-tucked'),
     });
     spotlightOn = found?.element ? target : null;

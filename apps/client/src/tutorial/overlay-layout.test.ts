@@ -196,4 +196,18 @@ describe('layoutOverlay', () => {
     const layout = layoutOverlay({ target: null, talkOnly: true, viewport, insets });
     expect(layout.bubbleRect).toBeNull();
   });
+
+  it('tucks the chip just above the spotlight, not into the corner buttons', () => {
+    // The handle at 55% of a small phone, and a chip too tall for its 38% spot.
+    const layout = layoutOverlay({
+      target: { x: 0, y: 320, width: 96, height: 94 },
+      talkOnly: false,
+      viewport: { width: 375, height: 667 },
+      insets: { top: 20, right: 0, bottom: 0, left: 0 },
+      bubbleSize: { width: 173, height: 66 },
+      tucked: true,
+    });
+    expect(intersects(layout.bubbleRect!, layout.hole!)).toBe(false);
+    expect(layout.bubbleRect!.y + layout.bubbleRect!.height).toBe(layout.hole!.y - 16);
+  });
 });
