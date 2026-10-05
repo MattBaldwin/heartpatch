@@ -1,0 +1,852 @@
+/* The Keeper's Recipe Book (recipes/recipe-book.ts): warm paper, ink and
+   ribbons in the vinyl-toy palette. A sheet over the map like the Bag (5);
+   full screen inside the safe areas on a phone, a two-page spread on a
+   tablet. Page turns animate transform and opacity only. */
+
+.rbook {
+  position: fixed;
+  z-index: 5;
+  /* Under the corner buttons (My patches, Chat, the Keeper menu), like the trays. */
+  inset: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 8px)
+    calc(env(safe-area-inset-bottom) + 6px) calc(env(safe-area-inset-left) + 8px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border-radius: 28px;
+  background: radial-gradient(circle at 20% 0%, #9a3a6a, #7a2d55 60%);
+  box-shadow: 0 18px 44px rgb(74 49 80 / 42%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.rbook::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 2px dashed rgb(255 214 230 / 42%);
+  border-radius: 23px;
+  pointer-events: none;
+}
+
+.rbook[hidden],
+.rbook [hidden] {
+  display: none !important;
+}
+
+.rbook.rbook-two-up {
+  inset: calc(env(safe-area-inset-top) + 66px)
+    max(calc(env(safe-area-inset-right) + 24px), calc(50vw - 520px))
+    calc(env(safe-area-inset-bottom) + 28px)
+    max(calc(env(safe-area-inset-left) + 24px), calc(50vw - 520px));
+}
+
+.rbook-bar,
+.rbook-tabs,
+.rbook-stage,
+.rbook-nav,
+.rbook-say {
+  position: relative;
+  z-index: 1;
+}
+
+.rbook-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 62px;
+}
+
+.rbook-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 250 252 / 16%);
+  font: inherit;
+  font-size: 22px;
+  color: #fffafc;
+  cursor: pointer;
+}
+
+.rbook-btn-soft {
+  background: #fbeaf2;
+  color: #7a2d55;
+}
+
+.rbook-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 900;
+  color: #ffe9f3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The "Can make now" bookmark: a ribbon hanging from the top edge. */
+.rbook-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  align-self: flex-start;
+  /* Room on both sides of the ✓ and the words (owner, 2026-10-05). */
+  gap: 6px;
+  min-height: 54px;
+  margin-top: -2px;
+  /* The flag's notch eats the bottom: extra room there. */
+  padding: 0 calc(var(--hp-pad-x) + 2px) calc(var(--hp-pad-y) + 3px);
+  white-space: nowrap;
+  border: 0;
+  background: #f6dceb;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  color: #7a2d55;
+  cursor: pointer;
+}
+
+.rbook-mark-on {
+  background: #ffc94d;
+  color: #4a3150;
+}
+
+.rbook-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px;
+  /* Many tabs on a narrow phone scroll sideways rather than squeeze. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rbook-tab {
+  flex: none;
+  min-height: 44px;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 2px);
+  border: 0;
+  border-radius: 14px 14px 0 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  color: #4a3150;
+  opacity: 0.82;
+  transform: translateY(5px);
+  cursor: pointer;
+}
+
+.rbook-tab-current {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── Pages ─────────────────────────────────────────────────────────────── */
+
+.rbook-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  touch-action: pan-y;
+}
+
+.rbook-spread {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.rbook-turn-next {
+  transform-origin: left center;
+  animation: rbook-turn-next 300ms ease-out;
+}
+
+.rbook-turn-prev {
+  transform-origin: right center;
+  animation: rbook-turn-prev 300ms ease-out;
+}
+
+.rbook-two-up .rbook-turn-next,
+.rbook-two-up .rbook-turn-prev {
+  transform-origin: center;
+}
+
+@keyframes rbook-turn-next {
+  from {
+    opacity: 0.2;
+    /* Perspective lives in the turn only: a lasting 3D context skews
+       measurements (and costs a layer) once the page is still. */
+    transform: perspective(1400px) rotateY(60deg);
+  }
+}
+
+@keyframes rbook-turn-prev {
+  from {
+    opacity: 0.2;
+    transform: perspective(1400px) rotateY(-60deg);
+  }
+}
+
+.rbook-page {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  padding: 16px 18px 12px 24px;
+  border-radius: 6px 18px 18px 6px;
+  background: #fff8ec;
+  box-shadow:
+    inset 16px 0 18px -14px rgb(122 45 85 / 35%),
+    0 4px 0 #f2d9a6;
+}
+
+.rbook-page-left {
+  padding: 16px 24px 12px 18px;
+  border-radius: 18px 6px 6px 18px;
+  box-shadow:
+    inset -16px 0 18px -14px rgb(122 45 85 / 35%),
+    0 4px 0 #f2d9a6;
+}
+
+.rbook-page-right {
+  margin-left: 4px;
+}
+
+.rbook-page::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 1.5px dashed rgb(176 127 42 / 32%);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.rbook-page-sealed {
+  background: repeating-linear-gradient(135deg, #fbefdc 0 14px, #f7e6cc 14px 28px);
+}
+
+.rbook-page-number {
+  /* In the flow at the page's foot, so it never sits on a line of text. */
+  flex: none;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #a0721f;
+  text-align: center;
+}
+
+.rbook-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.rbook-section,
+.rbook-need {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a0721f;
+}
+
+.rbook-need {
+  margin-top: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1.5px dashed rgb(176 127 42 / 45%);
+}
+
+.rbook-ribbon {
+  padding: 3px 14px 3px 10px;
+  background: #f2a93b;
+  clip-path: polygon(0 0, 100% 0, 90% 50%, 100% 100%, 0 100%);
+  font-size: 12px;
+  font-weight: 900;
+  color: #4a3150;
+}
+
+.rbook-picture {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-self: center;
+  width: 120px;
+  height: 110px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fdebd2 0 56%, rgb(253 235 210 / 0%) 60%);
+  font-size: 58px;
+  line-height: 1;
+}
+
+.rbook-sticker {
+  position: absolute;
+  top: 2px;
+  right: -14px;
+  padding: 4px 9px;
+  border-radius: 10px;
+  background: #ffc94d;
+  box-shadow: 0 2px 0 #b07f2a;
+  font-size: 13px;
+  font-weight: 900;
+  color: #4a3150;
+  transform: rotate(10deg);
+}
+
+.rbook-name {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 900;
+  line-height: 1.15;
+  color: #7a2d55;
+  text-align: center;
+}
+
+.rbook-effect {
+  align-self: center;
+  margin: 0;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: #eef6e6;
+  font-size: 14px;
+  font-weight: 900;
+  color: #2f6b3d;
+}
+
+.rbook-flavour {
+  margin: 0;
+  font-size: 15px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #6b4b6e;
+  text-align: center;
+}
+
+.rbook-meta {
+  align-self: center;
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #fdf0dc;
+  font-size: 14px;
+  font-weight: 800;
+  color: #6b4b6e;
+}
+
+.rbook-ings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rbook-ing {
+  padding: 5px 0 3px;
+  border-bottom: 1.5px dashed rgb(176 127 42 / 25%);
+}
+
+.rbook-ing-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: 16px;
+}
+
+.rbook-ing-icon {
+  width: 22px;
+  font-size: 18px;
+  text-align: center;
+}
+
+.rbook-qty {
+  margin-left: auto;
+  font-size: 17px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.rbook-qty-ok {
+  color: #2f6b3d;
+}
+
+.rbook-qty-ok::after {
+  content: ' ✓';
+}
+
+.rbook-qty-short {
+  color: #b4532a;
+}
+
+.rbook-where {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 30px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #6b4b6e;
+}
+
+.rbook-where > span {
+  flex: 1;
+}
+
+.rbook-where em {
+  font-style: normal;
+  font-weight: 900;
+  color: #b4532a;
+}
+
+.rbook-find {
+  flex: none;
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 0;
+  border-radius: 999px;
+  background: #fbeaf2;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  color: #7a2d55;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rbook-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.rbook-stamp {
+  min-height: 52px;
+  padding: 0 30px;
+  border: 0;
+  border-radius: 16px;
+  background: #b8487a;
+  box-shadow: 0 4px 0 #7a2d55;
+  outline: 2px dashed rgb(255 255 255 / 55%);
+  outline-offset: -7px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  cursor: pointer;
+}
+
+.rbook-stamp:disabled {
+  background: #f4e2ec;
+  box-shadow: none;
+  outline-color: rgb(122 45 85 / 25%);
+  color: #7a2d55;
+  cursor: default;
+}
+
+.rbook-note,
+.rbook-toc-note {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #6b4b6e;
+  text-align: center;
+}
+
+.rbook-toc-note {
+  margin-top: auto;
+  font-style: italic;
+}
+
+.rbook-toc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Padded like every control, with the text still lined up on the page. */
+  box-sizing: border-box;
+  width: calc(100% + 2 * var(--hp-pad-x));
+  min-height: 44px;
+  margin-inline: calc(-1 * var(--hp-pad-x));
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  color: #4a3150;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rbook-toc-sealed {
+  font-style: italic;
+  color: #8a6b8c;
+}
+
+.rbook-dots {
+  flex: 1;
+  margin: 0 4px;
+  border-bottom: 2px dotted rgb(176 127 42 / 50%);
+  transform: translateY(5px);
+}
+
+.rbook-toc-page {
+  font-weight: 900;
+  color: #7a2d55;
+}
+
+.rbook-new {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #ffc94d;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  color: #4a3150;
+}
+
+.rbook-can {
+  color: #2f6b3d;
+  font-weight: 900;
+}
+
+.rbook-seal-wrap {
+  position: relative;
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 150px;
+}
+
+.rbook-twine {
+  position: absolute;
+  top: 50%;
+  right: -40px;
+  left: -40px;
+  height: 7px;
+  margin-top: -3px;
+  background: #d0578f;
+  box-shadow: 0 2px 0 rgb(122 45 85 / 40%);
+  transform: rotate(-7deg);
+}
+
+.rbook-seal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #e0739f, #b0467a 70%);
+  box-shadow:
+    0 6px 0 #7a2d55,
+    inset 0 0 0 9px rgb(255 255 255 / 14%);
+  font-size: 44px;
+}
+
+.rbook-end {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* ── The cover ─────────────────────────────────────────────────────────── */
+
+.rbook-cover {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 460px;
+  margin: 2px auto 12px;
+  padding: 24px;
+  border-radius: 14px 22px 22px 14px;
+  background: radial-gradient(circle at 30% 20%, #c4528a, #7a2d55 70%);
+  box-shadow:
+    inset 12px 0 0 rgb(0 0 0 / 14%),
+    0 6px 0 #5e2242;
+  color: #fff1f7;
+  text-align: center;
+}
+
+.rbook-cover::before {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border: 2px dashed rgb(255 214 230 / 50%);
+  border-radius: 10px 16px 16px 10px;
+  pointer-events: none;
+}
+
+.rbook-cover-seed {
+  display: grid;
+  place-items: center;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff1f7, #ff7aa2);
+  box-shadow: 0 0 34px 10px rgb(255 154 184 / 45%);
+  font-size: 44px;
+}
+
+.rbook-cover-title {
+  margin: 0;
+  font-size: 31px;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #fff8ec;
+  text-shadow: 0 2px 0 rgb(74 49 80 / 35%);
+}
+
+.rbook-cover-sub {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffd6e6;
+}
+
+.rbook-open {
+  position: relative;
+  min-height: 52px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffc94d;
+  box-shadow: 0 4px 0 #b07f2a;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 900;
+  color: #4a3150;
+  cursor: pointer;
+}
+
+/* ── Nav, search, the New page moment ──────────────────────────────────── */
+
+.rbook-say {
+  min-height: 0;
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffe9f3;
+  text-align: center;
+}
+
+.rbook-say:empty {
+  display: none;
+}
+
+.rbook-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 62px;
+  font-size: 14px;
+  font-weight: 900;
+  color: #ffe9f3;
+}
+
+.rbook-nav-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 2px);
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 250 252 / 16%);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  color: #fffafc;
+  cursor: pointer;
+}
+
+.rbook-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.rbook-search,
+.rbook-moment-wrap:not(:empty) {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 70px 12px 12px;
+  border-radius: 28px;
+  background: rgb(74 49 80 / 40%);
+}
+
+.rbook-moment-wrap:not(:empty) {
+  align-items: center;
+  padding-top: 12px;
+}
+
+.rbook-search-box,
+.rbook-moment {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 440px;
+  padding: 12px;
+  border-radius: 22px;
+  background: #fff8ec;
+  box-shadow: 0 12px 30px rgb(74 49 80 / 35%);
+}
+
+.rbook-search-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rbook-search-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px #f3dbe7;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  color: #4a3150;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.rbook-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.rbook-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 0;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px #f6dceb;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 900;
+  color: #4a3150;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rbook-result-name {
+  flex: 1;
+}
+
+.rbook-moment {
+  max-width: 290px;
+  padding: 18px;
+  align-items: center;
+  text-align: center;
+}
+
+.rbook-moment > p {
+  margin: 0;
+}
+
+.rbook-flutter {
+  font-size: 44px;
+  animation: rbook-flutter 0.9s ease-in-out infinite;
+}
+
+@keyframes rbook-flutter {
+  0%,
+  100% {
+    transform: rotate(-7deg) scale(1);
+  }
+
+  50% {
+    transform: rotate(7deg) scale(1.1);
+  }
+}
+
+.rbook-moment-title {
+  font-size: 25px;
+  font-weight: 900;
+  color: #7a2d55;
+}
+
+.rbook-moment-name {
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.rbook-moment-line {
+  margin-bottom: 6px !important;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rbook-later {
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  color: #b0467a;
+  cursor: pointer;
+}
+
+/* Reduced motion: pages crossfade instead of turning; nothing flutters. */
+@media (prefers-reduced-motion: reduce) {
+  .rbook-turn-next,
+  .rbook-turn-prev {
+    animation: rbook-fade 200ms ease;
+  }
+
+  .rbook-flutter {
+    animation: none;
+  }
+}
+
+@keyframes rbook-fade {
+  from {
+    opacity: 0;
+  }
+}

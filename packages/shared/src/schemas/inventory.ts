@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
+import { RecipeBookPageKeySchema } from './data/recipe-book.js';
 
 // Inventory, gathering and crafting API (design doc §12, §15; tech spec §5).
 // Inventory is per player per map. Timers are timestamps: the server sends
@@ -106,6 +107,17 @@ export const CraftResponseSchema = z.object({
   now: z.iso.datetime(),
 });
 export type CraftResponse = z.infer<typeof CraftResponseSchema>;
+
+/**
+ * `GET /recipe-book` (account-level, owner decision 2026-10-05): the keys of
+ * the recipe book pages this account has opened (`recipe:<id>`,
+ * `building:<id>`), in book order. The pages themselves are public data
+ * (`recipeBookPages`); a sealed page can't be crafted or built.
+ */
+export const RecipeBookResponseSchema = z.object({
+  unlocked: z.array(RecipeBookPageKeySchema),
+});
+export type RecipeBookResponse = z.infer<typeof RecipeBookResponseSchema>;
 
 // ── Dev and test only ──────────────────────────────────────────────────────
 // `HP_DEV_SQUISHY_GRANTS`, refused in production (server config).

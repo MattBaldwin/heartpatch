@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   blockersAround,
   holeFor,
+  intersects,
   layoutOverlay,
   MIN_HOLE,
   SPOTLIGHT_PADDING,
@@ -124,5 +125,89 @@ describe('layoutOverlay', () => {
       insets,
     });
     expect(layout.arrow?.x).toBeGreaterThanOrEqual(28);
+  });
+
+  it('never puts Sprout over the spotlight, wherever the target is (owner rule)', () => {
+    const screens = [
+      { viewport: { width: 375, height: 667 }, insets: { top: 20, right: 0, bottom: 0, left: 0 } },
+      { viewport, insets },
+      {
+        viewport: { width: 820, height: 1180 },
+        insets: { top: 24, right: 0, bottom: 20, left: 0 },
+      },
+      {
+        viewport: { width: 1180, height: 820 },
+        insets: { top: 24, right: 0, bottom: 20, left: 0 },
+      },
+    ];
+    const bubbles = [
+      { size: { width: 460, height: 190 }, tucked: false },
+      { size: { width: 460, height: 320 }, tucked: false }, // a long line, a name box
+      { size: { width: 200, height: 48 }, tucked: true },
+    ];
+    for (const screen of screens) {
+      const { width, height } = screen.viewport;
+      // Targets all over the screen, including tray handles on both edges.
+      for (let y = 0; y < height; y += 37) {
+        for (const target of [
+          { x: 0, y, width: 96, height: 94 },
+          { x: width - 96, y, width: 96, height: 94 },
+          { x: width / 2 - 60, y, width: 120, height: 48 },
+        ]) {
+          for (const { size, tucked } of bubbles) {
+            const layout = layoutOverlay({
+              target,
+              talkOnly: false,
+              ...screen,
+              bubbleSize: size,
+              tucked,
+            });
+            const label = JSON.stringify({ screen: screen.viewport, target, size, tucked });
+            expect(layout.hole, label).not.toBeNull();
+            expect(intersects(layout.bubbleRect!, layout.hole!), label).toBe(false);
+            // And it stays on screen.
+            expect(layout.bubbleRect!.x, label).toBeGreaterThanOrEqual(0);
+            expect(layout.bubbleRect!.y, label).toBeGreaterThanOrEqual(0);
+            expect(layout.bubbleRect!.x + layout.bubbleRect!.width, label).toBeLessThanOrEqual(
+              width,
+            );
+            expect(layout.bubbleRect!.y + layout.bubbleRect!.height, label).toBeLessThanOrEqual(
+              height,
+            );
+          }
+        }
+      }
+    }
+  });
+
+  it('moves the bubble beside a tall target that leaves no room above or below', () => {
+    const layout = layoutOverlay({
+      target: { x: 10, y: 60, width: 120, height: 720 },
+      talkOnly: false,
+      viewport,
+      insets,
+      bubbleSize: { width: 358, height: 160 },
+    });
+    expect(intersects(layout.bubbleRect!, layout.hole!)).toBe(false);
+    expect(layout.bubbleRect!.x).toBeGreaterThan(layout.hole!.x + layout.hole!.width);
+  });
+
+  it('leaves the bubble to the stylesheet when there is no spotlight', () => {
+    const layout = layoutOverlay({ target: null, talkOnly: true, viewport, insets });
+    expect(layout.bubbleRect).toBeNull();
+  });
+
+  it('tucks the chip just above the spotlight, not into the corner buttons', () => {
+    // The handle at 55% of a small phone, and a chip too tall for its 38% spot.
+    const layout = layoutOverlay({
+      target: { x: 0, y: 320, width: 96, height: 94 },
+      talkOnly: false,
+      viewport: { width: 375, height: 667 },
+      insets: { top: 20, right: 0, bottom: 0, left: 0 },
+      bubbleSize: { width: 173, height: 66 },
+      tucked: true,
+    });
+    expect(intersects(layout.bubbleRect!, layout.hole!)).toBe(false);
+    expect(layout.bubbleRect!.y + layout.bubbleRect!.height).toBe(layout.hole!.y - 16);
   });
 });

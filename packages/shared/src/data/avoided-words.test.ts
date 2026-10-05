@@ -6,12 +6,14 @@ import {
 } from '../../tests/fixtures/sample-content.js';
 import { findAvoidedWords, scanPlayerFacingText } from './avoided-words.js';
 import { GAME_DATA } from './index.js';
+import { RECIPE_BOOK } from './recipe-book.js';
 import { SERVER_GAME_DATA } from './server/index.js';
 
 describe('style guide §9: avoided words in player-facing data', () => {
   it('finds none in the shipped data', () => {
     expect(scanPlayerFacingText(GAME_DATA, 'GAME_DATA')).toEqual([]);
     expect(scanPlayerFacingText(SERVER_GAME_DATA, 'SERVER_GAME_DATA')).toEqual([]);
+    expect(scanPlayerFacingText(RECIPE_BOOK, 'RECIPE_BOOK')).toEqual([]);
   });
 
   it('finds none in the test fixtures', () => {

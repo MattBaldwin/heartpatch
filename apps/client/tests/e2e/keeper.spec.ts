@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { draws, hook, idle } from './dev-hook.js';
 import { skipCinematic, TEST_PASSWORD, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /**
  * Picking a Keeper (issue #42): a new account picks one before it can reach
@@ -160,9 +161,9 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
     .toBe(1);
 
   // A dev battle (spawns arrive with #14): the Keeper is in the arena…
-  await page.getByTestId('battle-dev-grant').tap();
+  await (await trayButton(page, 'battle-dev-grant')).tap();
   await expect(page.locator('.battle-entry-note')).toContainText('joined you');
-  await page.getByTestId('battle-dev-fight').tap();
+  await (await trayButton(page, 'battle-dev-fight')).tap();
   await expect(page.getByTestId('battle-hud')).toBeVisible();
   const battle = () =>
     hook<{

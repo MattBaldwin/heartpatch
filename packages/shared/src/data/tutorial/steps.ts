@@ -57,7 +57,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'hearthfire',
     goal: 'Light a Hearthfire',
     sproutLines: [
-      'A fire keeps squishies safe at night. Open Home and build a Hearthfire!',
+      'A fire keeps squishies safe at night. Open My Heartpatch on the right, then Home, and build one!',
       'Then gather Emberwood from the old forest tile, and tap Add fuel.',
     ],
     highlightTarget: 'build-button',
@@ -68,7 +68,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'Meet a wild squishy',
     sproutLines: [
       'Wild squishies are peeking out! My friend Pebblesnooze will play on your side.',
-      'Tap Find a squishy, then pick a move and see what happens!',
+      'Open Adventure on the left, tap Find a squishy, then pick a move!',
     ],
     highlightTarget: 'wild-squishy',
     completeOn: {
@@ -82,7 +82,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'Make a new friend',
     sproutLines: [
       "Emberbun, Puddlepuff and Thistlepip live here. Let's make one your friend!",
-      'Tap Find a squishy, then Use Heart Charm. Here it always works!',
+      'Open Adventure, tap Find a squishy, then Use Heart Charm. Here it always works!',
     ],
     highlightTarget: 'capture-button',
     completeOn: {
@@ -110,7 +110,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'Show your Partner some love',
     sproutLines: [
       'Happy squishies learn more from battles and grow up faster! Happiness fades over a day.',
-      "Open Home, tap your Partner's name, then Pet, Play or Feed!",
+      "Open My Heartpatch, then Home. Tap your Partner's name, then Pet, Play or Feed!",
     ],
     highlightTarget: 'care-buttons',
     completeOn: { eventType: 'squishy.cared', actor: 'player', where: [] },
@@ -119,7 +119,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'habitat',
     goal: 'Give them a home',
     sproutLines: [
-      'Every squishy loves a cozy home. Gather more Timber, then Build one at Home.',
+      'Every squishy loves a cozy home. Gather more Timber, then build one at Home.',
       'Then tap Move in by your Partner. The right home helps them grow!',
     ],
     highlightTarget: 'habitat',
@@ -168,7 +168,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'One more battle',
     sproutLines: [
       'He stays away from the light! If he ever takes a squishy, you can always rescue them.',
-      'Tap Find a squishy for one more battle. Something big might happen…',
+      'Open Adventure and tap Find a squishy for one more battle. Something big might happen…',
     ],
     highlightTarget: 'wild-squishy',
     completeOn: { eventType: 'squishy.evolved', actor: 'player', where: [] },

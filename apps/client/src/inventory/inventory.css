@@ -3,41 +3,6 @@
    (the Battle column takes the bottom right, and grows in dev builds). It
    steps aside while the tile panel, which covers that spot, is open. */
 
-.bag-open {
-  position: fixed;
-  z-index: 4;
-  left: calc(env(safe-area-inset-left) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 84px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border: none;
-  border-radius: 999px;
-  background: #fffafc;
-  box-shadow: 0 4px 14px rgb(107 75 110 / 22%);
-  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
-  color: #7a2d55;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.bag-open:active {
-  transform: scale(0.95);
-}
-
-.bag-open-icon {
-  font-size: 26px;
-  line-height: 1;
-}
-
-.bag-open-label {
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .bag-open[hidden],
 .bag[hidden],
 .bag-section-title[hidden] {
@@ -194,14 +159,14 @@
 }
 
 .tile-panel-actions .bag-action {
-  /* Left side: the Battle column (bottom right) can stack over the panel. */
-  align-self: flex-start;
-  min-width: 140px;
+  /* The tile chip's main action: one big button across the card. */
+  align-self: stretch;
+  min-height: 50px;
 }
 
 .tile-action-note {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   color: #6b8a3a;
   font-variant-numeric: tabular-nums;

@@ -203,6 +203,8 @@ Resources vary by terrain, making certain tiles worth fighting over.
 
 Gathering is timer-based (start a gather on an owned node; collect when done), computed from timestamps.
 
+**Recipe book.** Every craft recipe and every building you can put up has a page. A page opens the first time your account has collected everything it needs, on any patch, and stays open. The Heart Charm, the Hearthfire and both habitats are open from the start (the tutorial uses them). A sealed page can't be crafted or built yet and shows a short hint about where its missing pieces turn up (DECISIONS "Recipe book and unlocks").
+
 **Squishy gatherers.** The Keeper still gathers by hand. On top of that, each squishy given the gatherer job works one more tile of the player's land **on its own, again and again**, until it's moved: a node, or **owned territory** outside the home base, which yields by terrain (forest → Timber, hills and mountains → Stone, old forest → Emberwood, meadow → Treats, pumpkin fields → Pumpkins in season; `JOB_RULES.terrainYields`, **[DEFAULT]**). More squishies and more land mean more resources, which is why capturing squishies and holding territory both matter.
 
 - One gatherer per tile, one job per squishy. A squishy's gather takes about **[DEFAULT: twice]** the Keeper's time per cycle; finished cycles wait to be collected, up to **[DEFAULT: 4]**, then it waits too.

@@ -1,5 +1,6 @@
 import {
   hexKey,
+  hexToWorld,
   type Hex,
   type HighlightTarget,
   type MapView,
@@ -16,7 +17,9 @@ import {
   type WsClientOptions,
   type WsStatus,
 } from '../net/ws-client.js';
+import type { GroundPoint } from '../engine/camera/camera-math.js';
 import { el } from '../ui/dom.js';
+import { HEX_SIZE } from './map-config.js';
 import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
 import { isHalloween } from './map-dressing.js';
@@ -52,6 +55,8 @@ export interface MapScreenOptions {
   tileActions?: TileActions;
   /** Features that draw over the map (the night and the Hollow Man, #21). */
   layers?: readonly MapLayer[];
+  /** The map's HUD came on screen (its id) or went away (null): the side trays follow it (ui/trays). */
+  onHudChange?: (mapId: string | null) => void;
   /** Every live event the socket delivers, in seq order, after the map saw it (a find, #43). */
   onLiveEvent?: (event: WsEventMessage) => void;
   /**
@@ -100,6 +105,14 @@ export interface MapScreen {
   open: (mapId: string) => Promise<void>;
   /** Back to the default scene; stops live updates. */
   close: () => void;
+  /**
+   * Taps a tile for the player ("Find on map" in the recipe book): selects it
+   * and shows its chip. Returns where it is on the ground, for the camera to
+   * glide to, or null when it isn't on the map on screen.
+   */
+  focus: (h: Hex) => GroundPoint | null;
+  /** The map on screen as this player sees it, or null (the recipe book finds their tiles in it). */
+  readonly view: MapView | null;
   setUser: (user: PublicUser | null) => void;
   /** Night on the map (#21): fireflies, the night backdrop, lanterns glowing. */
   setNight: (night: boolean) => void;
@@ -254,6 +267,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     panel.hide();
     options.tileActions?.hide();
     hud.hidden = true;
+    options.onHudChange?.(null);
     options.showScene(null);
   }
 
@@ -273,9 +287,17 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       options.showScene(build);
       hudName.textContent = state.view.map.name;
       hud.hidden = false;
+      options.onHudChange?.(state.id);
       setStatus(liveSocket().status);
     },
     close,
+    focus: (h) => {
+      const state = sync.state;
+      if (!state || !scene3d || !state.tileAt(hexKey(h))) return null;
+      showTile(state, h);
+      const p = hexToWorld(h, HEX_SIZE);
+      return { x: p.x, z: p.z };
+    },
     setNight: (next) => {
       night = next;
       scene3d?.setNight(next);
@@ -287,6 +309,9 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       if (sync.state) close();
       ws?.close();
       ws = null;
+    },
+    get view() {
+      return scene3d ? (sync.state?.view ?? null) : null;
     },
     get debug() {
       const state = sync.state;

@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /**
  * Squishy jobs on an iPhone (owner decisions 2026-10-04): send a squishy to
@@ -55,8 +56,8 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   expect(granted.status).toBe(201);
   const helperId = (granted.body as { squishy: { id: string } }).squishy.id;
 
-  // The job board, from the temporary button by the battle entry.
-  await page.getByTestId('jobs-open').tap();
+  // The job board, from My Heartpatch.
+  await (await trayButton(page, 'jobs-open')).tap();
   const board = page.getByTestId('jobs');
   await expect(board).toBeVisible();
   await expect(board.getByTestId('jobs-row')).toHaveCount(2);
@@ -77,7 +78,7 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   // Its work finishes (the dev short timer), and Collect puts it in the bag.
   expect((await api(page, 'POST', `/maps/${mapId}/dev/work/ready`)).status).toBe(200);
   await board.getByRole('button', { name: 'Close' }).tap();
-  await page.getByTestId('jobs-open').tap();
+  await (await trayButton(page, 'jobs-open')).tap();
   const collect = board.getByTestId('jobs-collect');
   await expect(collect).toBeVisible();
   await collect.tap();
@@ -89,7 +90,7 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   await board.getByRole('button', { name: 'Close' }).tap();
 
   // Pick a team: just the helper (it stops gathering to come along).
-  await page.getByTestId('team-open').tap();
+  await (await trayButton(page, 'team-open')).tap();
   const team = page.getByTestId('team');
   await expect(team).toBeVisible();
   const candidate = team.locator(`[data-testid="team-candidate"][data-squishy="${helperId}"]`);

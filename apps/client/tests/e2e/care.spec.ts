@@ -2,6 +2,7 @@ import { CARE_RULES, findAvoidedWords, moodFor } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
 const slowExpect = expect.configure({ timeout: 30_000 });
@@ -37,11 +38,11 @@ async function playerWithFriend(page: Page): Promise<void> {
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
-  await page.getByTestId('bag-open').tap();
+  await (await trayButton(page, 'bag-open')).tap();
   await page.getByTestId('bag').getByRole('button', { name: 'Get stuff (dev)' }).tap();
   await slowExpect(page.getByTestId('bag').locator('[data-item="treats"]')).toContainText('10');
   await page.getByTestId('bag').getByRole('button', { name: 'Close' }).tap();
-  await page.getByTestId('battle-dev-grant').tap();
+  await (await trayButton(page, 'battle-dev-grant')).tap();
   await slowExpect(page.locator('.battle-entry-note')).toContainText('joined you');
 }
 
@@ -52,7 +53,7 @@ test('cares for a squishy from home base: pet, play and feed', async ({ browser 
   page.on('pageerror', (err) => errors.push(err.message));
   await playerWithFriend(page);
 
-  await page.getByTestId('home-open').tap();
+  await (await trayButton(page, 'home-open')).tap();
   await expect.poll(() => homeOpen(page), slow).toBe(true);
   await page.getByTestId('home-friends').locator('[data-care-squishy]').first().tap();
   const sheet = page.getByTestId('care');
@@ -126,7 +127,7 @@ test('celebrates an evolution once, when the player comes home', async ({ browse
     await route.fulfill({ response, json: body });
   });
 
-  await page.getByTestId('home-open').tap();
+  await (await trayButton(page, 'home-open')).tap();
   const sheet = page.getByTestId('care');
   await slowExpect(sheet).toBeVisible();
   await expect.poll(async () => (await careState(page))?.celebrating, slow).toBe(true);

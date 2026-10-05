@@ -7,6 +7,7 @@ import {
   cameraPosition,
   clampDistance,
   clampTarget,
+  glideAt,
   groundAt,
   releaseVelocity,
   stepInertia,
@@ -35,6 +36,14 @@ interface PointerPos {
 
 /** Longest frame step the fling integrates, so a hitch can't teleport the map. */
 const MAX_INERTIA_DT = 0.1;
+/** How long "Find on map" takes to glide over (seconds). */
+const GLIDE_SECONDS = 0.6; // TUNE:
+
+interface Glide {
+  from: GroundPoint;
+  to: GroundPoint;
+  elapsed: number;
+}
 
 /**
  * Top-down tilted map camera (design doc §20): one-finger pan with inertia,
@@ -48,6 +57,8 @@ export class MapCamera {
   private target: GroundPoint;
   private distance: number;
   private velocity: GroundPoint = ZERO;
+  /** A glide to a spot ("Find on map") in progress, or null. */
+  private glide: Glide | null = null;
   private readonly pointers = new Map<number, PointerPos>();
   private samples: MotionSample[] = [];
   private readonly scratchTarget = new Vector3();
@@ -94,14 +105,31 @@ export class MapCamera {
 
   /** True while the camera needs frames drawn: it moved, or a fling is gliding. */
   get wantsFrame(): boolean {
-    return this.dirty || this.velocity.x !== 0 || this.velocity.z !== 0;
+    return this.dirty || this.glide !== null || this.velocity.x !== 0 || this.velocity.z !== 0;
+  }
+
+  /**
+   * Brings a spot on the map to the middle of the screen ("Find on map"):
+   * a short eased glide, or a jump when `instant` (reduced motion). A finger
+   * on the map takes over at once.
+   */
+  panTo(point: GroundPoint, instant = false): void {
+    this.velocity = ZERO;
+    const to = clampTarget(point, this.bounds);
+    if (instant) {
+      this.glide = null;
+      this.target = to;
+      this.dirty = true;
+      return;
+    }
+    this.glide = { from: this.target, to, elapsed: 0 };
   }
 
   get state(): MapCameraState {
     return {
       target: this.target,
       distance: this.distance,
-      flinging: this.velocity.x !== 0 || this.velocity.z !== 0,
+      flinging: this.glide !== null || this.velocity.x !== 0 || this.velocity.z !== 0,
       bounds: this.bounds,
     };
   }
@@ -144,6 +172,7 @@ export class MapCamera {
     }
     this.pointers.set(e.pointerId, this.localPos(e));
     this.velocity = ZERO; // a touch catches a gliding map
+    this.glide = null;
     this.samples = [];
   };
 
@@ -230,6 +259,13 @@ export class MapCamera {
   }
 
   private tick(dt: number): void {
+    if (this.glide) {
+      const g = this.glide;
+      g.elapsed += Math.min(Math.max(dt, 0), MAX_INERTIA_DT);
+      this.target = glideAt(g.from, g.to, g.elapsed / GLIDE_SECONDS, this.bounds);
+      if (g.elapsed >= GLIDE_SECONDS) this.glide = null;
+      this.dirty = true;
+    }
     if (this.pointers.size === 0 && (this.velocity.x !== 0 || this.velocity.z !== 0)) {
       const next = stepInertia(
         { target: this.target, velocity: this.velocity },

@@ -1,58 +1,6 @@
 /* The raid report (#16): a Report button above Home on the left (44pt+
    targets, safe areas, one-handed), and a sheet like the bag's. */
 
-.raid-open {
-  position: fixed;
-  z-index: 4;
-  left: calc(env(safe-area-inset-left) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 236px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border: none;
-  border-radius: 999px;
-  background: #fffafc;
-  box-shadow: 0 4px 14px rgb(107 75 110 / 22%);
-  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
-  color: #7a2d55;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.raid-open:active {
-  transform: scale(0.95);
-}
-
-.raid-open-icon {
-  font-size: 26px;
-  line-height: 1;
-}
-
-.raid-open-label {
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.raid-open-badge {
-  position: absolute;
-  top: -2px;
-  right: -2px;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  box-sizing: border-box;
-  border-radius: 999px;
-  background: #d0578f;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 22px;
-  text-align: center;
-}
-
 .raid-open[hidden],
 .raid-open-badge[hidden],
 .raid-sheet[hidden] {

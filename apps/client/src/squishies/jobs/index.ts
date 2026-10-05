@@ -14,10 +14,10 @@ import { JOBS_TEXT } from './jobs-view.js';
 import { createTeamPicker, type TeamPicker, type TeamPickerDebug } from './team-picker.js';
 
 // Squishy jobs on the client (owner decisions 2026-10-04): the job board and
-// the team picker, as self-contained sheets. The trays (ui-trays-recipes)
-// open them with `openJobBoard(mapId)` / `openTeamPicker(mapId)`. Until then,
-// two temporary entry points: the tile panel's "Send a gatherer" line
-// (`tileActions`) and a "Team" button by the battle entry (`mountTeamButton`).
+// the team picker, as self-contained sheets (`openJobBoard(mapId)` /
+// `openTeamPicker(mapId)`). Entry points: the tile panel's "Send a gatherer"
+// line (`tileActions`) and the Team and Jobs row (`mountTeamButton`), which
+// main.ts mounts in the My Heartpatch tray.
 
 export interface JobsOptions {
   root: HTMLElement;
@@ -44,8 +44,8 @@ export interface Jobs {
   /** The tile panel's lines: who's gathering here, and "Send a gatherer" on my land. */
   readonly tileActions: TileActions;
   /**
-   * Temporary: puts a "Team" button in `box` (the battle entry), opening the
-   * picker for the map `mapNow` names. The trays move it later.
+   * Puts the Team and Jobs buttons in `box` (a box in the My Heartpatch tray),
+   * opening the sheets for the map `mapNow` names; shown while `box` is.
    */
   mountTeamButton: (box: Element | null, mapNow: () => string | null) => void;
   /** The map layer that puts a 🧺 over tiles with a gatherer (pass it to the map screen). */
