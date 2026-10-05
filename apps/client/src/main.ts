@@ -280,6 +280,7 @@ const home = createHomeScreen({
   onJobs: (mapId) => {
     void jobs.openJobBoard(mapId);
   },
+  showJobs: (mapId) => mapId !== glade,
   onOpen: (mapId) => {
     maps.close();
     catalog.close();
@@ -349,7 +350,6 @@ const maps = createMapScreen({
     wardrobe.liveEvent(event);
     hollow.liveEvent(event);
     chat.liveEvent(event);
-    jobs.badges.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
   },

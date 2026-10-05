@@ -75,6 +75,11 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible({
     timeout: 15_000,
   });
+  const wildHint = page
+    .waitForResponse((res) => /\/api\/v1\/maps\/[^/]+\/wild$/.test(res.url()), {
+      timeout: 30_000,
+    })
+    .catch(() => null);
   await lobby.getByTestId('tutorial-start').tap();
   await expect
     .poll(async () => (await hook<{ stepId: string | null }>(page, 'tutorial'))?.stepId ?? null, {
@@ -83,6 +88,9 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
     .toBe('welcome');
 
   // A returning player goes straight on: here, back into the tutorial run.
+  // The Glade's wild-squishy hint (the battle entry's) lands first: WebKit
+  // reports a request cut off by a reload as a page error.
+  await wildHint;
   await page.reload();
   await expect(page.getByTestId('tutorial-bubble')).toBeVisible({ timeout: 30_000 });
   expect((await story(page))?.seen?.seenAt ?? null).not.toBeNull();

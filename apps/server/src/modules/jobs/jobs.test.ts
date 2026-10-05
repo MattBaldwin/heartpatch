@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   ApiErrorSchema,
   CollectWorkResponseSchema,
@@ -20,10 +21,12 @@ import {
   inventories,
   keepers,
   mapMembers,
+  maps,
   sessions,
   squishies,
   tileAttacks,
   tileDefenders,
+  tiles,
   users,
 } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
@@ -139,11 +142,18 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
   async function squishy(
     mapId: string,
     who: Player,
-    traits: { speciesId?: string; element?: string; feeling?: string; level?: number } = {},
+    traits: {
+      id?: string;
+      speciesId?: string;
+      element?: string;
+      feeling?: string;
+      level?: number;
+    } = {},
   ): Promise<string> {
     const [row] = await db
       .insert(squishies)
       .values({
+        ...(traits.id ? { id: traits.id } : {}),
         mapId,
         ownerUserId: who.id,
         speciesId: traits.speciesId ?? 'puddlepuff',
@@ -453,8 +463,6 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       const assigned = (await eventsOf(mapId)).find((e) => e.type === 'squishy.assigned')!;
       expect(publicViewFor(PUBLIC_VIEWS, assigned as never, { userId: sib.id })).toEqual({
         userId: kid.id,
-        squishyId: a,
-        job: 'gatherer',
         from: null,
         to: { q: forest.q, r: forest.r },
       });
@@ -612,6 +620,14 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       expect(types).toEqual(
         expect.arrayContaining(['defenders.changed', 'work.collected', 'team.picked']),
       );
+      // The team is the player's own: nobody else hears it.
+      const picked = (await eventsOf(mapId)).find((e) => e.type === 'team.picked')!;
+      expect(publicViewFor(PUBLIC_VIEWS, picked as never, { userId: kid.id })).toEqual({
+        userId: kid.id,
+        squishyIds: [worker, guard, idle],
+      });
+      const someoneElse = '0190a000-0000-7000-8000-000000000999';
+      expect(publicViewFor(PUBLIC_VIEWS, picked as never, { userId: someoneElse })).toBeNull();
 
       // Posting a team member as a guard takes it off the team.
       await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
@@ -721,6 +737,28 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       await setTeam(server, kid, mapId, [c]);
       await run(`update squishies set state = 'hollowed' where id = '${c}'`);
       expect(await battleTeam(kid, mapId)).toEqual([b, d, a]);
+    });
+
+    it("keeps the Glade friend on watch in the tutorial's battles (team as before)", async () => {
+      const kid = await player();
+      const [map] = await db
+        .insert(maps)
+        .values({ kind: 'tutorial', name: 'Tutorial Glade', timeZone: 'UTC', maxPlayers: 1 })
+        .returning({ id: maps.id });
+      const mapId = map!.id;
+      await db.insert(mapMembers).values({ mapId, userId: kid.id, role: 'owner' });
+      const [tile] = await db
+        .insert(tiles)
+        .values({ mapId, q: 1, r: 0, terrain: 'meadow', ownerUserId: kid.id })
+        .returning({ id: tiles.id });
+      const [friend, partner] = [
+        await squishy(mapId, kid, { level: 5 }),
+        await squishy(mapId, kid, { level: 2 }),
+      ];
+      await db
+        .insert(tileDefenders)
+        .values({ mapId, tileId: tile!.id, slot: 0, squishyId: friend, assignedAt: clock });
+      expect(await battleTeam(kid, mapId)).toEqual([friend, partner]);
     });
 
     it('says everyone is busy when nobody is free to battle', async () => {
@@ -866,6 +904,32 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         () => service.collect(user, mapId),
         (tx) => lockMap(tx, mapId),
       );
+    });
+
+    it("locks two gatherers' items in item-id order, not squishy order (jobs `collect`)", async () => {
+      const { server, kid, mapId, service, user } = await setup();
+      const forest = await farLand(server, kid, mapId, 'forest');
+      const hills = await farLand(server, kid, mapId, 'hills', [forest]);
+      // The Timber gatherer has the lower id, so grants in squishy order would
+      // take timber before stone: the reverse of item-id order.
+      const [low, high] = [randomUUID(), randomUUID()].sort();
+      await squishy(mapId, kid, { id: low });
+      await squishy(mapId, kid, { id: high });
+      await service.setJob(user, mapId, low!, { job: 'gatherer', q: forest.q, r: forest.r });
+      await service.setJob(user, mapId, high!, { job: 'gatherer', q: hills.q, r: hills.r });
+      await db.insert(inventories).values([
+        { mapId, userId: kid.id, itemId: 'stone', quantity: 1 },
+        { mapId, userId: kid.id, itemId: 'timber', quantity: 1 },
+      ]);
+      later(31 * MINUTE_MS);
+      const row = (item: string) => (tx: Database) =>
+        tx.execute(
+          `select 1 from inventories
+           where map_id = '${mapId}' and user_id = '${kid.id}' and item_id = '${item}' for update`,
+        );
+      // Hold Stone the way a building's cost would (item-id order), then take Timber.
+      await holdThen(row('stone'), () => service.collect(user, mapId), row('timber'));
+      expect(await bag(mapId, kid)).toMatchObject({ stone: 3, timber: 3 });
     });
 
     it("takes the squishy before its owner's inventory rows (jobs `collect`)", async () => {

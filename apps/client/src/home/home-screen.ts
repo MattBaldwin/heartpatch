@@ -66,6 +66,8 @@ export interface HomeScreenOptions {
   onCloseUp?: (mapId: string, squishyId: string) => void;
   /** "Jobs & team": opens the squishy job board (temporary entry; the trays move it). */
   onJobs?: (mapId: string) => void;
+  /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
+  showJobs?: (mapId: string) => boolean;
   api?: HomeApi;
 }
 
@@ -420,7 +422,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                 el('div', { class: 'home-chips', 'data-testid': 'home-friends' }, ...friends),
               ]
             : []),
-          ...(friends.length > 0 && options.onJobs
+          ...(friends.length > 0 && options.onJobs && mapId && options.showJobs?.(mapId) !== false
             ? [
                 row(
                   button(

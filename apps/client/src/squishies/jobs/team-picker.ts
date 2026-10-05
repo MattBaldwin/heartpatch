@@ -50,6 +50,7 @@ export function createTeamPicker(options: TeamPickerOptions): TeamPicker {
     '×',
   );
   const note = el('p', { class: 'jobs-note', role: 'status', 'data-testid': 'team-note' });
+  const hint = el('p', { class: 'jobs-small' }, JOBS_TEXT.teamHint(3));
   const slots = el('ol', { class: 'team-slots', 'data-testid': 'team-slots' });
   const list = el('ul', { class: 'team-list', 'data-testid': 'team-list' });
   const save = el(
@@ -66,7 +67,7 @@ export function createTeamPicker(options: TeamPickerOptions): TeamPicker {
       el('h2', { id: 'team-title' }, JOBS_TEXT.teamTitle),
       close,
     ),
-    el('p', { class: 'jobs-small' }, JOBS_TEXT.teamHint),
+    hint,
     slots,
     note,
     save,
@@ -125,6 +126,7 @@ export function createTeamPicker(options: TeamPickerOptions): TeamPicker {
       list.replaceChildren();
       return;
     }
+    hint.textContent = JOBS_TEXT.teamHint(size());
     const byId = new Map(current.squishies.map((s) => [s.squishy.id, s]));
     slots.replaceChildren(
       ...teamSlots(picked, size()).map((id, i) => {

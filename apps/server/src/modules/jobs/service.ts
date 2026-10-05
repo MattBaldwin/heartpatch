@@ -132,6 +132,30 @@ function addInto(total: ItemCounts, items: ItemCounts): void {
 const tileOf = (t: { q: number; r: number } | null) => (t ? { q: t.q, r: t.r } : null);
 
 /**
+ * Locks every inventory row these grants will touch, per owner (owner id
+ * order) and in item-id order, before any grant: one grant per squishy
+ * would otherwise lock items in squishy order, against everyone else's
+ * item-id order (tech spec §7 step 11). Missing rows are made by the grant.
+ */
+async function lockGrantRows(
+  tx: Executor,
+  mapId: string,
+  grants: readonly { userId: string; items: ItemCounts }[],
+): Promise<void> {
+  const byOwner = new Map<string, Set<string>>();
+  for (const { userId, items } of grants) {
+    const ids = byOwner.get(userId) ?? new Set<string>();
+    for (const id of Object.keys(items)) ids.add(id);
+    byOwner.set(userId, ids);
+  }
+  const inventory = createInventoryRepo(tx);
+  for (const userId of [...byOwner.keys()].sort()) {
+    const ids = [...(byOwner.get(userId) ?? [])].sort();
+    if (ids.length > 0) await inventory.lockItems({ mapId, userId }, ids);
+  }
+}
+
+/**
  * Takes squishies off their work tiles, banking what each had ready into its
  * owner's bag (ledger reason `work`, ref the squishy). The caller has locked
  * these squishies (tech spec §7: squishies, then the inventory rows this
@@ -151,9 +175,16 @@ export async function leaveWork(
   const rows = (await repo.listByIds(squishyIds)).filter((r) => r.workTile !== null);
   const banked = new Map<string, { squishyIds: string[]; items: ItemCounts }>();
   const events: NewGameEvent[] = [];
-  for (const row of rows) {
-    // Nightfall calls this for a squishy it just took: its day's work still counts.
-    const work = workAt(row, map, at, true);
+  // Nightfall calls this for a squishy it just took: its day's work still counts.
+  const works = rows.map((row) => ({ row, work: workAt(row, map, at, true) }));
+  await lockGrantRows(
+    tx,
+    map.id,
+    works.flatMap(({ row, work }) =>
+      work ? [{ userId: row.squishy.ownerUserId, items: work.ready }] : [],
+    ),
+  );
+  for (const { row, work } of works) {
     const owner = row.squishy.ownerUserId;
     if (work && !isEmpty(work.ready)) {
       await grantItems(tx, { mapId: map.id, userId: owner }, work.ready, 'work', row.squishy.id);
@@ -469,6 +500,9 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           );
           if (other) throw new AppError('CONFLICT', MESSAGES.spotTaken(squishyName(other.squishy)));
         } else if (request.job === current) {
+          // Resting already, maybe with a stale work row (its land changed
+          // hands): tidy that away so the one-job checks never read it.
+          if (row.workTile !== null && !row.atWork) await repo.stopWork(row.squishy.id);
           return buildView(tx, repo, map, user.id, at);
         }
 
@@ -594,8 +628,13 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         const owner = { mapId: map.id, userId: user.id };
         const granted: ItemCounts = {};
         const collected: string[] = [];
-        for (const row of rows) {
-          const work = workAt(row, map, at);
+        const works = rows.map((row) => ({ row, work: workAt(row, map, at) }));
+        await lockGrantRows(
+          tx,
+          map.id,
+          works.flatMap(({ work }) => (work ? [{ userId: user.id, items: work.ready }] : [])),
+        );
+        for (const { row, work } of works) {
           if (!work || work.progress.cycles === 0) continue;
           if (!isEmpty(work.ready)) {
             await grantItems(tx, owner, work.ready, 'work', row.squishy.id);

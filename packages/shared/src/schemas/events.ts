@@ -515,8 +515,9 @@ export const GAME_EVENTS = {
   /**
    * A player gave one of their squishies a new job (owner decisions
    * 2026-10-04): `from` / `to` are the work tiles it left and went to, so
-   * members' maps can show where squishies are gathering. Which job it took
-   * is public; nothing it gathers is.
+   * members' maps can show where squishies are gathering. Members see only
+   * whose and where: which squishy and which job stay internal (like
+   * `defenders.changed`, never which ones), and nothing it gathers is sent.
    */
   'squishy.assigned': {
     internal: z.strictObject({
@@ -528,13 +529,11 @@ export const GAME_EVENTS = {
     }),
     public: z.object({
       userId: z.uuid(),
-      squishyId: z.uuid(),
-      job: z.enum(['team', 'guard', 'gatherer', 'resting']),
       from: z.object(coords).nullable(),
       to: z.object(coords).nullable(),
     }),
   },
-  /** A player picked their battle team (slot order). Only they hear it. */
+  /** A player picked their battle team (slot order). Only they hear it (`ownerOnlyView`). */
   'team.picked': {
     internal: z.strictObject({ userId: z.uuid(), squishyIds: z.array(z.uuid()) }),
     public: z.object({ userId: z.uuid(), squishyIds: z.array(z.uuid()) }),

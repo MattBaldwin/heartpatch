@@ -97,11 +97,7 @@ describe('MapState', () => {
     const a = { q: 1, r: 0 };
     const b = { q: 2, r: 0 };
     const assigned = (from: object | null, to: object | null, seq: number) =>
-      event(
-        'squishy.assigned',
-        { userId: userId(1), squishyId: userId(9), job: 'gatherer', from, to },
-        seq,
-      );
+      event('squishy.assigned', { userId: userId(1), from, to }, seq);
     expect(state.apply(assigned(null, a, 2))).toBe('redraw');
     expect(state.tileAt(hexKey(a))?.workers).toBe(1);
     expect(state.apply(assigned(a, b, 3))).toBe('redraw');

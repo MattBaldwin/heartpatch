@@ -51,6 +51,11 @@ export interface JobBoard {
   readonly debug: JobBoardDebug;
 }
 
+/** Its work tile's resource is out of season (Pumpkins after Halloween): it finds nothing. */
+function outOfSeason(view: JobsView, work: NonNullable<JobSquishy['work']>): boolean {
+  return view.spots.some((s) => s.q === work.q && s.r === work.r && !s.inSeason);
+}
+
 /** A little colour blob for a squishy (CSSOM, so the CSP needs no inline styles). */
 export function blobFor(s: JobSquishy): HTMLElement {
   const blob = el('span', { class: 'jobs-blob', 'aria-hidden': 'true' });
@@ -69,6 +74,8 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   let wantSpot: { q: number; r: number } | null = null;
   let working = false;
   let ticker: number | undefined;
+  /** Each gatherer's job line, so the countdown updates its text and nothing else. */
+  let lines = new Map<string, { squishy: JobSquishy; node: HTMLElement }>();
   /** Bumped by every open and close, so a late reply is dropped. */
   let ticket = 0;
 
@@ -238,6 +245,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       list.replaceChildren(el('li', { class: 'jobs-empty' }, JOBS_TEXT.empty));
       return;
     }
+    lines = new Map();
     list.replaceChildren(
       ...current.squishies.map((s) => {
         const name = nameOf(current, s);
@@ -277,17 +285,40 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
             'data-job': s.job,
           },
           el('div', { class: 'jobs-head' }, blobFor(s), el('strong', { class: 'jobs-name' }, name)),
-          el('p', { class: 'jobs-line' }, jobLine(s, nowMs)),
+          lineFor(s, nowMs),
           el('ul', { class: 'jobs-hints' }, ...hintLines(s).map((h) => el('li', {}, h))),
           ...(s.work && !s.work.firelit ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.dark)] : []),
+          ...(s.work && outOfSeason(current, s.work)
+            ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.outOfSeason)]
+            : []),
           picking === s.squishy.id ? spotPicker(s, current) : actions,
         );
       }),
     );
-    // The countdowns move on by themselves while the sheet is open (once a second at most).
-    if (current.squishies.some((s) => s.work && !s.work.full)) {
-      ticker = window.setTimeout(render, 1000);
+    tick();
+  }
+
+  /** A squishy's job line, remembered so the countdown can update it alone. */
+  function lineFor(s: JobSquishy, nowMs: number): HTMLElement {
+    const node = el('p', { class: 'jobs-line' }, jobLine(s, nowMs));
+    if (s.work && !s.work.full) lines.set(s.squishy.id, { squishy: s, node });
+    return node;
+  }
+
+  /**
+   * The countdowns move on by themselves while the sheet is open, once a
+   * second, changing only their text (no buttons rebuilt under a finger).
+   */
+  function tick(): void {
+    window.clearTimeout(ticker);
+    ticker = undefined;
+    if (lines.size === 0 || sheet.hidden) return;
+    const nowMs = clock.now();
+    for (const { squishy, node } of lines.values()) {
+      const text = jobLine(squishy, nowMs);
+      if (node.textContent !== text) node.textContent = text;
     }
+    ticker = window.setTimeout(tick, 1000);
   }
 
   function closeBoard(): void {

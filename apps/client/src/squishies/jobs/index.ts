@@ -90,11 +90,14 @@ export function createJobs(options: JobsOptions): Jobs {
   const glade = (mapId: string) => options.isGlade?.(mapId) ?? false;
 
   const jobs: Jobs = {
+    // Never on the Tutorial Glade: its steps keep their own flow.
     openJobBoard: (mapId, spot) => {
+      if (glade(mapId)) return Promise.resolve();
       picker.close();
       return board.open(mapId, spot);
     },
     openTeamPicker: (mapId) => {
+      if (glade(mapId)) return Promise.resolve();
       board.close();
       return picker.open(mapId);
     },

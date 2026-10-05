@@ -88,8 +88,15 @@ export interface BattlesRepo {
    * Who fights for the player (owner decisions 2026-10-04): their picked
    * team in slot order (active ones only), or, with nobody picked, their
    * strongest resting squishies (never guards or gatherers), at most `limit`.
+   * `guardsToo` (the Tutorial Glade): squishies on watch still fight, so the
+   * tutorial's battles keep the team they had before team picking.
    */
-  listTeam: (mapId: string, userId: string, limit: number) => Promise<TeamSquishyRow[]>;
+  listTeam: (
+    mapId: string,
+    userId: string,
+    limit: number,
+    options?: { guardsToo?: boolean },
+  ) => Promise<TeamSquishyRow[]>;
   /** Does the player have a squishy that isn't in the Hollow (busy ones too)? */
   hasActiveSquishy: (mapId: string, userId: string) => Promise<boolean>;
   /** Row-locks the squishies until commit (XP is written under it, care's `applyXp`). */
@@ -206,7 +213,7 @@ function queries(db: Executor): BattlesRepo {
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createBattlesTxRepo(tx), tx)),
 
-    listTeam: async (mapId, userId, limit) => {
+    listTeam: async (mapId, userId, limit, options = {}) => {
       const columns = {
         id: squishies.id,
         speciesId: squishies.speciesId,
@@ -219,7 +226,7 @@ function queries(db: Executor): BattlesRepo {
         eq(squishies.mapId, mapId),
         eq(squishies.ownerUserId, userId),
         eq(squishies.state, 'active'),
-        not(squishyOnWatch()),
+        options.guardsToo ? undefined : not(squishyOnWatch()),
         not(squishyAtWork()),
       );
       const picked = await db

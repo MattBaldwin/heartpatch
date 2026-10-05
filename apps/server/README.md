@@ -210,11 +210,11 @@ Mutating routes take an `Idempotency-Key`.
 
 **Work is timestamps** (CLAUDE.md rule 4): finished cycles are worked out on read or collect from `work_since` (`workProgress`), capped at `JOB_RULES.work.maxStoredCycles`; a full gatherer waits, and starts again from the collect. A cycle is the source's gather time × `cyclePercent` ÷ the squishy's speed (100, 135 when its element or seasonal species matches the resource, 175 when its feeling does too; `JOB_RULES.affinities`, `// TUNE:`). Each cycle pays what was in season when it finished (`workYield`). **At work** (`squishyAtWork`, the one SQL spelling) means its owner still holds the tile and nobody captured it since it started there: work on land that changed hands stops, and what it hadn't collected is lost, like a Keeper's gather (#17). **Taking one off** (a new job, a habitat, posting it as a guard, the Hollow Man) banks what it had ready (`leaveWork`); a part-done cycle is let go.
 
-**Battles read the team** (`listTeam`, only at the battle start): the picked team in slot order, active members only; with nobody picked (or all in the Hollow), the strongest resting squishies, never guards or gatherers. A player whose squishies are all busy hears "Everyone is busy with a job! Pick a team first." Rescues keep their `soloTeam`.
+**Battles read the team** (`listTeam`, only at the battle start): the picked team in slot order, active members only; with nobody picked (or all in the Hollow), the strongest resting squishies, never guards or gatherers (on the Tutorial Glade, guards still fight, so its battles keep their old team). A player whose squishies are all busy hears "Everyone is busy with a job! Pick a team first." Rescues keep their `soloTeam`.
 
 **Night:** a gatherer spends the night on its work tile, so outside every lit fire's safe tiles it's exposed like any squishy (shared `shelterOf`, unchanged). The job board shows `firelit` for each spot before assigning.
 
-**Events:** `squishy.assigned` (public: whose, which, the job, and the work tiles it left and went to, so maps keep `PublicTile.workers`), `team.picked` (the team; only the player hears it), `work.collected` (public: who; how much stays internal).
+**Events:** `squishy.assigned` (public: whose, and the work tiles it left and went to, so maps keep `PublicTile.workers`; which squishy and which job stay internal), `team.picked` (the team; only the player hears it), `work.collected` (public: who; how much stays internal).
 
 ## Raid log and defense style
 

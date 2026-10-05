@@ -34,7 +34,7 @@ export const JOBS_TEXT = {
   save: 'Save team',
   saved: 'Team saved! Off to adventure!',
   emptySlot: 'Tap a squishy',
-  teamHint: 'Pick up to 3 for battles. Tap a slot to take one off.',
+  teamHint: (size: number) => `Pick up to ${String(size)} for battles. Tap a slot to take one off.`,
   emptyTeamNote: 'No team? Your strongest resting squishies go.',
   teamButton: 'Team',
   jobsButton: 'Jobs',
@@ -47,7 +47,7 @@ export const JOBS_TEXT = {
   leavesWatch: 'Leaves watch',
   stopsGathering: 'Stops gathering',
   inHollow: 'In the Hollow',
-  outOfSeason: 'Not in season',
+  outOfSeason: 'Out of season, so nothing to find here. Give them a new job!',
 } as const;
 
 /** "1st", "2nd", "3rd". */
