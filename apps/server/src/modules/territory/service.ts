@@ -36,6 +36,8 @@ import type {
   StartResult,
   TileBattlePort,
 } from '../battles/service.js';
+import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createTerritoryRepo, type DefenderRow, type TerritoryTileRow } from './repo.js';
@@ -379,7 +381,17 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           before.length === request.squishyIds.length &&
           before.every((d, i) => d.id === request.squishyIds[i]);
         if (same) return false;
-        await repo.replaceDefenders(map.id, tile.id, request.squishyIds, now());
+        const at = now();
+        await repo.replaceDefenders(map.id, tile.id, request.squishyIds, at);
+        // One job at a time (owner decisions 2026-10-04): a new guard leaves
+        // the team or its work tile (banking what it had ready).
+        const jobEvents = await leaveForWatch(
+          tx,
+          map,
+          user.id,
+          request.squishyIds.filter((id) => !here.has(id)),
+          at,
+        );
         // One event per tile whose guards changed: this one, and any they left.
         const changedTiles = [tile, ...leaving.flatMap((t) => locked.get(t.id) ?? [])];
         for (const changedTile of changedTiles) {
@@ -400,12 +412,43 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
             },
           });
         }
+        for (const event of jobEvents) await repo.appendEvent(event);
         return true;
       });
       if (changed) published(map.id);
       return status(db, user, map);
     },
   };
+}
+
+/**
+ * Squishies just posted on watch leave their other job: off the team, or
+ * off their work tile with what they had ready banked (jobs' `leaveWork`).
+ * They're locked already (after the tiles); returns the events to append.
+ */
+async function leaveForWatch(
+  tx: Executor,
+  map: MapRow,
+  userId: string,
+  squishyIds: readonly string[],
+  at: Date,
+): Promise<NewGameEvent[]> {
+  const jobs = createSquishyJobsRepo(tx);
+  const rows = await jobs.listByIds(squishyIds);
+  const events: NewGameEvent[] = [];
+  for (const row of rows) {
+    if (row.teamSlot === null) continue;
+    await jobs.setTeamSlot(row.squishy.id, null);
+    events.push({
+      mapId: map.id,
+      type: 'squishy.assigned',
+      actorUserId: userId,
+      payload: { userId, squishyId: row.squishy.id, job: 'guard', from: null, to: null },
+    });
+  }
+  const working = rows.filter((r) => r.workTile !== null).map((r) => r.squishy.id);
+  if (working.length > 0) events.push(...(await leaveWork(tx, map, working, 'guard', at)));
+  return events;
 }
 
 /**

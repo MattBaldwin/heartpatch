@@ -152,8 +152,15 @@
     {
       "idx": 21,
       "version": "7",
-      "when": 1791155900875,
-      "tag": "0021_battle_arena",
+      "when": 1791158882553,
+      "tag": "0021_squishy_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791169786177,
+      "tag": "0022_battle_arena",
       "breakpoints": true
     }
   ]

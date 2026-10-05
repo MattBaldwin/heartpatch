@@ -19,6 +19,7 @@ import {
 } from '../../db/schema.js';
 import { keeperColumns } from '../keepers/repo.js';
 import { titleName } from '../milestones/tracks.js';
+import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 import { WORN, wornOf } from '../wardrobe/repo.js';
 
@@ -376,6 +377,13 @@ function queries(db: Executor): MapsRepo {
             join ${squishies} on ${squishies.id} = ${tileDefenders.squishyId}
             where ${tileDefenders.tileId} = ${tiles.id}
               and ${squishyOnWatch()}
+              and ${squishies.state} = 'active'
+          )::int`.mapWith(Number),
+          // Squishy gatherers at work here (jobs' `squishyAtWork`), not in the Hollow.
+          workers: sql<number>`(
+            select count(*) from ${squishies}
+            where ${squishies.workTileId} = ${tiles.id}
+              and ${squishyAtWork()}
               and ${squishies.state} = 'active'
           )::int`.mapWith(Number),
         })

@@ -1,6 +1,6 @@
 {
-  "id": "656b1640-042a-414d-a4e3-164c9ddaeb1b",
-  "prevId": "732deddd-7908-429a-81a7-c6af3b00c078",
+  "id": "b95dc8dc-6eb9-41b6-a5f4-4ddd9ebfbff8",
+  "prevId": "656b1640-042a-414d-a4e3-164c9ddaeb1b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -117,6 +117,18 @@
         },
         "spawn_window": {
           "name": "spawn_window",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "terrain": {
+          "name": "terrain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "time_of_day": {
+          "name": "time_of_day",
           "type": "text",
           "primaryKey": false,
           "notNull": false

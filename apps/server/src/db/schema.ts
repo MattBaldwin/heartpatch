@@ -303,9 +303,34 @@ export const squishies = pgTable(
     contentmentAtLastCare: integer('contentment_at_last_care').notNull().default(0),
     lastCaredAt: timestamptz('last_cared_at'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
+    // Squishy jobs (owner decisions 2026-10-04): one job at a time. Its place
+    // on its owner's battle team (0 first), or null.
+    teamSlot: smallint('team_slot'),
+    // A squishy gatherer: the tile it works (its owner's), when the current
+    // count of cycles started (moves on at each collect) and when it was
+    // assigned (work on land that changed hands since then stops). Finished
+    // cycles are worked out on read (CLAUDE.md rule 4). Guards stay in
+    // `tile_defenders`; resting is none of these.
+    workTileId: uuid('work_tile_id').references(() => tiles.id, { onDelete: 'set null' }),
+    workSince: timestamptz('work_since'),
+    workStartedAt: timestamptz('work_started_at'),
   },
   (t) => [
     index('squishies_habitat_building_id_idx').on(t.habitatBuildingId),
+    // One squishy per team slot per player per map.
+    uniqueIndex('squishies_team_slot_key')
+      .on(t.mapId, t.ownerUserId, t.teamSlot)
+      .where(sql`${t.teamSlot} is not null`),
+    index('squishies_work_tile_id_idx')
+      .on(t.workTileId)
+      .where(sql`${t.workTileId} is not null`),
+    check('squishies_team_slot_range', sql`${t.teamSlot} between 0 and 5`),
+    // On the team or gathering, never both (guards are kept apart by the commands).
+    check('squishies_one_job', sql`${t.teamSlot} is null or ${t.workTileId} is null`),
+    check(
+      'squishies_work_times',
+      sql`${t.workTileId} is null or (${t.workSince} is not null and ${t.workStartedAt} is not null)`,
+    ),
     foreignKey({
       name: 'squishies_owner_member_fk',
       columns: [t.mapId, t.ownerUserId],

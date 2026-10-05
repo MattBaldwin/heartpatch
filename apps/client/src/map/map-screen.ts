@@ -71,6 +71,8 @@ export interface MapLayer {
    * says when.
    */
   attach: (scene: Scene, view: MapView) => void;
+  /** The map redrew from a newer view (a live event, or a resync's refetch). */
+  update?: (view: MapView) => void;
 }
 
 /** A feature's buttons in the tile panel. */
@@ -184,6 +186,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     socket: liveSocket,
     onRedraw: (state) => {
       scene3d?.update(state.view);
+      for (const layer of options.layers ?? []) layer.update?.(state.view);
       if (selected) showTile(state, selected);
       options.invalidate();
     },
