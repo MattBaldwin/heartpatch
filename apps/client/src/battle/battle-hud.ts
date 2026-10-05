@@ -174,9 +174,14 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     controls,
     problem,
   );
+  // The shield takes every touch, drag, pinch and wheel on the fight itself,
+  // so none reaches the canvas and the map camera's gestures underneath: the
+  // director alone moves the battle camera. The controls sit on top of it.
+  const shield = el('div', { class: 'battle-shield', 'data-testid': 'battle-shield' });
   const hud = el(
     'section',
     { class: 'battle-hud', 'data-testid': 'battle-hud', 'aria-label': 'Squishy showdown' },
+    shield,
     top,
     sheet,
     result,

@@ -85,6 +85,8 @@ export interface BattleSceneStats {
   readonly reducedMotion: boolean;
   /** Draw calls in the last frame drawn (0 before the first). */
   readonly drawCalls: number;
+  /** Where the camera is (the dev hook: a gesture on the fight must not move it). */
+  readonly camera: { x: number; y: number; z: number } | null;
   /** The current step's clock: what is playing and how far in, ms (the dev hook). */
   readonly playing: { kind: PlaybackStep['kind']; at: number } | null;
 }
@@ -268,8 +270,9 @@ export class BattleScene {
     );
 
     // The stage's camera is the map camera with no input reaching it (the
-    // HUD sits over the canvas): the director's shot is written into it just
-    // before each render (camera matrices are worked out after `onBeforeRender`).
+    // HUD's shield sits over the canvas, so its gesture handlers never fire):
+    // the director's shot is written into it just before each render (camera
+    // matrices are worked out after `onBeforeRender`).
     this.#beforeRender = scene.onBeforeRenderObservable.add(() => {
       this.#frame();
     });
@@ -594,6 +597,7 @@ export class BattleScene {
       down: (this.#rigs.a.down ? 1 : 0) + (this.#rigs.b.down ? 1 : 0),
       reducedMotion: this.#options.reducedMotion,
       drawCalls: this.#drawCalls,
+      camera: this.#cameraStat(),
       playing: this.#playing
         ? { kind: this.#playing.kind, at: this.#now - this.#playing.start }
         : null,
@@ -602,6 +606,13 @@ export class BattleScene {
 
   get hasKeeper(): boolean {
     return this.#keeper !== null;
+  }
+
+  #cameraStat(): { x: number; y: number; z: number } | null {
+    const cam = this.#scene.activeCamera;
+    if (!cam) return null;
+    const { x, y, z } = cam.position;
+    return { x, y, z };
   }
 
   dispose(): void {

@@ -14,6 +14,15 @@
   pointer-events: none;
 }
 
+/* Under every control: the fight itself takes touches, drags, pinches and
+   wheels so the canvas (and the map camera's gestures) never sees them. */
+.battle-shield {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
 .battle-hud[hidden],
 .battle-plate-status[hidden],
 .battle-caption[hidden],

@@ -24,10 +24,32 @@ interface BattleDebug {
   pending: number;
   waiting: boolean;
   charms: number | null;
-  scene: { squishies: number } | null;
+  scene: { squishies: number; camera: Point3 | null } | null;
+}
+
+interface Point3 {
+  x: number;
+  y: number;
+  z: number;
 }
 
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
+
+/** Where the camera sits once the director has stopped moving it (after a beat). */
+async function restingCamera(page: Page): Promise<Point3> {
+  await expect
+    .poll(
+      async () => {
+        const a = (await battleState(page))?.scene?.camera;
+        await page.waitForTimeout(300);
+        const b = (await battleState(page))?.scene?.camera;
+        return !!a && !!b && Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 1e-3;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  return (await battleState(page))!.scene!.camera!;
+}
 
 async function settled(page: Page): Promise<BattleDebug> {
   await expect
@@ -100,6 +122,24 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   await realTap(page.getByTestId('battle-move').first());
   state = await settled(page);
   expect(state.turn).toBe(1);
+
+  // A drag and a wheel across the fight itself (kids poke the squishies) never
+  // move the camera: the HUD's shield keeps the map camera's gestures off the canvas.
+  const before = await restingCamera(page);
+  const mineBox = (await page.getByTestId('battle-plate-mine').boundingBox())!;
+  const sheetBox = (await page.getByTestId('battle-sheet').boundingBox())!;
+  const yMid = (mineBox.y + mineBox.height + sheetBox.y) / 2;
+  const vw = page.viewportSize()!.width;
+  await page.mouse.move(vw * 0.2, yMid);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i += 1) await page.mouse.move(vw * (0.2 + 0.075 * i), yMid - i * 4);
+  await page.mouse.up();
+  await page.mouse.wheel(0, 240);
+  await page.waitForTimeout(1500); // a fling would have glided by now
+  const after = await restingCamera(page);
+  expect(after.x).toBeCloseTo(before.x, 2);
+  expect(after.y).toBeCloseTo(before.y, 2);
+  expect(after.z).toBeCloseTo(before.z, 2);
 
   // One mouse click (a laptop) on Swap, if someone is on the bench and we can still act.
   if (state.phase === 'turn' && (await page.getByTestId('battle-swap').count()) > 0) {
