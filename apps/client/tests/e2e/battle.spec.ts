@@ -162,7 +162,8 @@ test('a battle owns the screen: no lobby button mid-battle, none left after the 
   await expect(hud).toBeHidden();
   await expect(page.getByTestId('map-hud')).toContainText('Owner Patch');
   await expect(lobbyButton).toBeVisible();
-  await expect(entry).toBeVisible();
+  await expect(await trayButton(page, 'battle-entry')).toBeVisible();
+  await page.keyboard.press('Escape');
   expect(await battleState(page)).toBeNull();
 
   // Visiting the patch again from the lobby resumes the battle, and the
@@ -180,7 +181,9 @@ test('a battle owns the screen: no lobby button mid-battle, none left after the 
   await lobbyButton.tap();
   await lobby.getByTestId('tutorial-start').tap();
   await expect(page.getByTestId('tutorial-bubble')).toBeVisible({ timeout: 30_000 });
-  await expect(entry).toBeVisible({ timeout: 30_000 });
+  // In the Adventure tray (Sprout is talking, so the tray stays shut).
+  await expect(page.getByTestId('tray-handle-adventure')).toBeVisible({ timeout: 30_000 });
+  await expect(entry).toBeAttached();
   await page.getByTestId('tutorial-bubble').getByRole('button', { name: 'Later' }).tap();
   await expect(page.getByTestId('tutorial')).toBeHidden();
   await lobby.getByTestId('lobby-close').tap();

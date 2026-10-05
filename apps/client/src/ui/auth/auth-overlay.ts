@@ -103,7 +103,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     {
       type: 'button',
       class: 'auth-chip-toggle',
-      'aria-label': 'Menu: Wardrobe, Settings and Log out',
+      'aria-label': 'Keeper menu',
       'aria-expanded': 'false',
       'data-testid': 'keeper-menu',
     },

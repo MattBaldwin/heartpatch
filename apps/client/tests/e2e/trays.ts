@@ -33,12 +33,13 @@ export const traysState = (page: Page): Promise<TraysState | null> =>
 
 /** Opens one tray (shutting the other first). */
 export async function openTray(page: Page, side: TraySide): Promise<void> {
-  await expect.poll(async () => (await traysState(page))?.visible).toBe(true);
+  // Roomy: the map builds first, and CI renders in software.
+  await expect.poll(async () => (await traysState(page))?.visible, { timeout: 30_000 }).toBe(true);
   const open = (await traysState(page))?.open ?? null;
   if (open === side) return;
   if (open !== null) await page.getByTestId(`tray-handle-${open}`).tap();
   await page.getByTestId(`tray-handle-${side}`).tap();
-  await expect.poll(async () => (await traysState(page))?.open).toBe(side);
+  await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBe(side);
 }
 
 /** The button `testId` in its tray, with the tray open. */
