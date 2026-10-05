@@ -279,27 +279,39 @@ export const AMBIENT = {
    * all) or paused in a debugger. Shorter ones count, however slow.
    */
   ignoreGapMs: 1000, // TUNE
-  /** The lake's gentle bob (world units) and glint strength. */
-  water: { bob: 0.012, glint: 0.14 }, // TUNE
+  /**
+   * The lake's gentle bob (world units) and glint strength. Keep `bob` under
+   * the territory tint's lift above the tile (`TINT_LIFT`, 0.012 in
+   * map-scene.ts), or wave crests poke through the tint on owned lakes.
+   */
+  water: { bob: 0.008, glint: 0.14 }, // TUNE
 } as const;
 
+/** Every kind of mote, in drawing order. */
+export const MOTE_KINDS = ['pollen', 'leaves', 'fireflies', 'sparkles', 'bats', 'fog'] as const;
+export type MoteKind = (typeof MOTE_KINDS)[number];
+
 /** Motes over the map: how many per tile of their terrain, and the most of each. */
-export const MOTES = {
+export const MOTES: Readonly<Record<MoteKind, { perTile: number; max: number; color: string }>> = {
   pollen: { perTile: 0.35, max: 70, color: '#fff6cf' }, // TUNE: daylight, over meadows and flowers
   leaves: { perTile: 0.3, max: 40, color: '#f2b26b' }, // TUNE: daylight, drifting down in forests
   fireflies: { perTile: 0.4, max: 90, color: '#f4ffa8' }, // TUNE: night, over meadows, forests and lakes
   sparkles: { perTile: 4, max: 40, color: '#ffd8ff' }, // TUNE: Juniper's Gap, day and night
   bats: { perTile: 0.06, max: 9, color: '#ffffff' }, // TUNE: Halloween, over the woods and peaks
   fog: { perTile: 0.5, max: 36, color: '#ece4ff' }, // TUNE: Halloween, low land
-} as const;
+};
 
 /** Halloween dressing (season on, map-local date): jack-o'-lanterns and the dusk glow. */
 export const HALLOWEEN = {
   /** Share of pumpkins that grin. */
   lanterns: 0.4, // TUNE
-  /** A jack-o'-lantern's glow by day and at night. */
+  /** A jack-o'-lantern's glow colour (sRGB), by day and at night. Not muted on wild land: a lit lantern glows anywhere. */
+  glowColor: '#ff9a3c', // TUNE
   glow: { day: 0.06, night: 0.32 }, // TUNE
 } as const;
+
+/** Juniper's Gap's crystals glow softly, day and night (sRGB colour, strength). */
+export const CRYSTAL_GLOW = { color: '#e6b8ff', strength: 0.35 } as const; // TUNE
 
 /**
  * The soft backdrop under the island (instead of a flat clear colour): a

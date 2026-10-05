@@ -1,14 +1,14 @@
 import { hexToWorld, type PublicTile } from '@heartpatch/shared';
 import type { QualityTier } from '../engine/config.js';
-import { AMBIENT, MOTES, TERRAIN_LOOKS } from './map-config.js';
+import { AMBIENT, MOTES, TERRAIN_LOOKS, type MoteKind } from './map-config.js';
+
+export type { MoteKind } from './map-config.js';
 import { hash01 } from './map-layout.js';
 
 // Pure ambient-life layout (no Babylon), so it's unit-tested: where the
 // drifting motes start and how each one moves, and whether ambient life runs
 // at all. The motion itself is a pure function of one time uniform in the
 // shader (terrain-plugin.ts), so the CPU does nothing per frame.
-
-export type MoteKind = keyof typeof MOTES;
 
 /** How a mote moves in the shader (`terrainDrift.x`): see terrain-plugin.ts. */
 export const DRIFT_MODE = {

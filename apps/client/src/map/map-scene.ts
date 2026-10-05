@@ -33,6 +33,7 @@ import { AmbientJudge, ambientMode, moteShare, type AmbientMode } from './ambien
 import { loftRoundedHex, type MeshArrays, type ProfileRing } from './hex-mesh.js';
 import { MapAmbient, type AmbientStats } from './map-ambient.js';
 import {
+  CRYSTAL_GLOW,
   FALLBACK_LOOK,
   HALLOWEEN,
   HEX_SIZE,
@@ -127,6 +128,9 @@ export interface MapSceneStats {
 export interface MapSceneOptions {
   /** Halloween is on for this map (shared `activeSeasons`, map-local date). */
   readonly halloween?: boolean;
+  /** The quality tier and reduced motion to start with (`setAmbient` follows changes). */
+  readonly tier?: QualityTier;
+  readonly reducedMotion?: boolean;
 }
 
 function lookOf(tile: PublicTile): TerrainLook {
@@ -311,6 +315,13 @@ export class MapScene {
       halloween: this.halloween,
       islandRadius: mapRadius(view.tiles, HEX_SIZE) + ISLAND.margin,
     });
+    // Start as the tier and motion setting say, so nothing shows for a frame
+    // that would then be hidden (drifting motes under reduced motion).
+    const tier = options.tier ?? 'high';
+    this.mode = this.animated
+      ? ambientMode({ tier, reducedMotion: options.reducedMotion === true, slow: false })
+      : 'off';
+    this.share = moteShare(tier);
     this.applyAmbient();
 
     this.tintMaterial = overlayMaterial(scene, 'tint-mat');
@@ -393,14 +404,21 @@ export class MapScene {
    * How ambient life runs: the quality tier and the player's reduced-motion
    * setting. True when what's drawn changed (draw a frame).
    */
-  setAmbient(state: { tier: QualityTier; reducedMotion: boolean }): boolean {
-    const mode = this.animated ? ambientMode({ ...state, slow: this.judge.slow }) : 'off';
-    const share = moteShare(state.tier);
+  setAmbient(tier: QualityTier, reducedMotion: boolean): boolean {
+    const mode = this.animated
+      ? ambientMode({ tier, reducedMotion, slow: this.judge.slow })
+      : 'off';
+    const share = moteShare(tier);
     if (mode === this.mode && share === this.share) return false;
     this.mode = mode;
     this.share = share;
     this.applyAmbient();
     return true;
+  }
+
+  /** How ambient life runs now (cheap: the ambient driver reads it every frame). */
+  get ambientMode(): AmbientMode {
+    return this.mode;
   }
 
   /**
@@ -775,10 +793,10 @@ export class MapScene {
       const kind = byKind.get(kindName);
       if (!kind) continue;
       if (kindName === 'jack-o-lantern') {
-        this.lanternMat = glowing('lantern-mat', '#ff9a3c', HALLOWEEN.glow.day);
+        this.lanternMat = glowing('lantern-mat', HALLOWEEN.glowColor, HALLOWEEN.glow.day);
         mesh.material = this.lanternMat;
       } else if (kindName === 'crystal') {
-        mesh.material = glowing('crystal-mat', '#e6b8ff', 0.35); // TUNE
+        mesh.material = glowing('crystal-mat', CRYSTAL_GLOW.color, CRYSTAL_GLOW.strength);
       } else {
         mesh.material = propMat;
       }
@@ -813,7 +831,7 @@ export class MapScene {
     this.ambient.set({ night: this.night, mode: this.mode, share: this.share });
     if (this.lanternMat) {
       const glow = this.night ? HALLOWEEN.glow.night : HALLOWEEN.glow.day;
-      this.lanternMat.emissiveColor = linear('#ff9a3c').scale(glow);
+      this.lanternMat.emissiveColor = linear(HALLOWEEN.glowColor).scale(glow);
     }
   }
 

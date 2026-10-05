@@ -19,7 +19,7 @@ import {
   type MoteKind,
 } from './ambient-layout.js';
 import { hash01 } from './map-layout.js';
-import { HEX_SIZE, MOTES, SKY_BACKDROP } from './map-config.js';
+import { HEX_SIZE, MOTE_KINDS, MOTES, SKY_BACKDROP } from './map-config.js';
 import { linear, merged, painted } from './map-props.js';
 import { attachTerrainPlugin, DRIFT_ATTRIBUTE, type TerrainClock } from './terrain-plugin.js';
 
@@ -210,8 +210,7 @@ export class MapAmbient {
     options: { halloween: boolean; islandRadius: number },
   ) {
     this.halloween = options.halloween;
-    const kinds = Object.keys(MOTES) as MoteKind[];
-    for (const kind of kinds) {
+    for (const kind of MOTE_KINDS) {
       if (HALLOWEEN_ONLY.has(kind) && !options.halloween) continue;
       const motes = motesFor(kind, tiles, HEX_SIZE);
       if (motes.length === 0) continue;

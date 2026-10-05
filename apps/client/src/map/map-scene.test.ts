@@ -53,6 +53,32 @@ describe('MapScene', () => {
     }
   });
 
+  it('keeps the triangles drawn near what the map drew before its dressing', () => {
+    // About 570k on this 4-player map before the terrain visual pass; small
+    // parts use few segments so twice the props cost about a fifth more.
+    for (const halloween of [false, true]) {
+      const { scene } = build(testView(4), { halloween });
+      let triangles = 0;
+      for (const m of scene.meshes as Mesh[]) {
+        if (!m.isEnabled()) continue;
+        triangles += (m.getTotalIndices() / 3) * (m.hasThinInstances ? m.thinInstanceCount : 1);
+      }
+      expect(triangles).toBeLessThan(720_000);
+    }
+  });
+
+  it('starts still under reduced motion and off on the low tier, before any frame', () => {
+    expect(build(testView(1), { reducedMotion: true }).map.stats).toMatchObject({
+      ambient: 'still',
+      motes: { sparkles: expect.any(Number) as number },
+    });
+    expect(build(testView(1), { reducedMotion: true }).map.stats.motes.pollen).toBeUndefined();
+    expect(build(testView(1), { tier: 'low' }).map.stats).toMatchObject({
+      ambient: 'off',
+      motes: {},
+    });
+  });
+
   it('dresses the map with many kinds of prop, one mesh per kind', () => {
     const { scene, map } = build();
     expect(map.stats.props).toBeGreaterThan(1000);
@@ -145,22 +171,22 @@ describe('MapScene', () => {
 
   it('runs ambient life by tier and reduced motion, asking for frames only while live', () => {
     const { map } = build();
-    expect(map.setAmbient({ tier: 'high', reducedMotion: false })).toBe(false);
+    expect(map.setAmbient('high', false)).toBe(false);
     expect(map.stats.ambient).toBe('live');
     expect(map.tick(1000)).toBe(true);
 
     // Reduced motion: still. Nothing drifts and nothing asks for frames.
-    expect(map.setAmbient({ tier: 'high', reducedMotion: true })).toBe(true);
+    expect(map.setAmbient('high', true)).toBe(true);
     expect(map.stats.ambient).toBe('still');
     expect(map.stats.motes.pollen ?? 0).toBe(0);
     expect(map.tick(2000)).toBe(false);
 
     // Medium: live with fewer motes; low: off, no motes at all.
-    map.setAmbient({ tier: 'high', reducedMotion: false });
+    map.setAmbient('high', false);
     const all = map.stats.motes.pollen ?? 0;
-    map.setAmbient({ tier: 'medium', reducedMotion: false });
+    map.setAmbient('medium', false);
     expect(map.stats.motes.pollen ?? 0).toBeLessThan(all);
-    map.setAmbient({ tier: 'low', reducedMotion: false });
+    map.setAmbient('low', false);
     expect(map.stats.ambient).toBe('off');
     expect(Object.keys(map.stats.motes)).toEqual([]);
     expect(map.tick(3000)).toBe(false);

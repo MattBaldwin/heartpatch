@@ -18,7 +18,7 @@ import {
 } from '../net/ws-client.js';
 import { el } from '../ui/dom.js';
 import { mapApi } from './map-api.js';
-import { AMBIENT } from './map-config.js';
+import { AmbientDriver } from './ambient-driver.js';
 import { isHalloween } from './map-dressing.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
@@ -193,69 +193,29 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     },
   });
 
-  /**
-   * Ambient life (the terrain visual pass): sway, water and motes move on the
-   * GPU from one time uniform. While it's live this asks for a frame about 30
-   * times a second (render on demand otherwise stays idle); while it's still
-   * (reduced motion) or off (low tier, slow device) it only checks back now
-   * and then, and the map draws nothing on its own.
-   */
-  const reducedMotion =
-    typeof window.matchMedia === 'function'
-      ? window.matchMedia('(prefers-reduced-motion: reduce)')
-      : null;
-  let ambientFrame = 0;
-  let ambientTimer: ReturnType<typeof setTimeout> | undefined;
-  let lastAmbient = -Infinity;
-  function ambientTick(now: number): void {
-    ambientFrame = 0;
-    ambientTimer = undefined;
-    const s = scene3d;
-    if (!s) return;
-    const changed = s.setAmbient({
-      tier: options.tier?.() ?? 'high',
-      reducedMotion: reducedMotion?.matches ?? false,
-    });
-    if (changed) options.invalidate();
-    if (s.stats.ambient !== 'live') {
-      ambientTimer = setTimeout(() => {
-        ambientTick(performance.now());
-      }, 500); // TUNE: how soon a raised tier or motion setting is noticed
-      return;
-    }
-    if (now - lastAmbient >= AMBIENT.frameMs && s.tick(now)) {
-      lastAmbient = now;
-      options.requestFrame?.();
-    }
-    ambientFrame = requestAnimationFrame(ambientTick);
-  }
-  const startAmbient = (): void => {
-    if (ambientFrame === 0 && ambientTimer === undefined) {
-      ambientFrame = requestAnimationFrame(ambientTick);
-    }
-  };
-  const stopAmbient = (): void => {
-    cancelAnimationFrame(ambientFrame);
-    clearTimeout(ambientTimer);
-    ambientFrame = 0;
-    ambientTimer = undefined;
-  };
+  // Ambient life (the terrain visual pass): see ambient-driver.ts.
+  const ambient = new AmbientDriver({
+    target: () => scene3d,
+    invalidate: options.invalidate,
+    ...(options.requestFrame ? { requestFrame: options.requestFrame } : {}),
+    ...(options.tier ? { tier: options.tier } : {}),
+  });
 
   /** Builds the map into a fresh scene (on open, and again after a GPU-loss rebuild). */
   const build = (scene: Scene): SceneContent => {
     const state = sync.state;
     if (!state) throw new Error('no map to build');
-    const now = options.now?.() ?? new Date();
     const built = new MapScene(scene, state.view, {
-      halloween: isHalloween(state.view.map.timeZone, now),
+      halloween: isHalloween(state.view.map.timeZone, options.now?.() ?? new Date()),
+      ...ambient.state,
     });
     built.setNight(night);
     scene3d = built;
-    startAmbient();
+    ambient.start();
     // Another screen (a battle, a close-up) swapped the stage: stop asking for
     // frames until the map is built again.
     scene.onDisposeObservable.addOnce(() => {
-      if (scene3d === built) stopAmbient();
+      if (scene3d === built) ambient.stop();
     });
     for (const layer of options.layers ?? []) layer.attach(scene, state.view);
     if (selected) built.select(selected);
@@ -285,7 +245,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
 
   /** Takes the map off screen (the sync is already closed or about to be). */
   function hideMap(): void {
-    stopAmbient();
+    ambient.stop();
     scene3d = null;
     selected = null;
     panel.hide();

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { AmbientJudge, ambientMode, moteShare, motesFor, type MoteKind } from './ambient-layout.js';
-import { AMBIENT, HEX_SIZE, MOTES } from './map-config.js';
+import { AmbientJudge, ambientMode, moteShare, motesFor } from './ambient-layout.js';
+import { AMBIENT, HEX_SIZE, MOTE_KINDS, MOTES } from './map-config.js';
 import { testView } from './test-view.js';
 
 const { tiles } = testView();
-const KINDS = Object.keys(MOTES) as MoteKind[];
+const KINDS = MOTE_KINDS;
 
 describe('motesFor', () => {
   it('is the same on every call', () => {

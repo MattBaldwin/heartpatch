@@ -35,6 +35,14 @@ export function merged(name: string, parts: Mesh[]): Mesh {
   return mesh;
 }
 
+/** Sphere segments by diameter (world units). TUNE */
+export function sphereSegments(diameter: number): number {
+  if (diameter >= 0.25) return 10;
+  if (diameter >= 0.18) return 7;
+  if (diameter >= 0.08) return 5;
+  return 3;
+}
+
 /** A built prop: its mesh, and its contact shadow's diameter (0: none, e.g. on water). */
 export interface BuiltProp {
   mesh: Mesh;
@@ -58,8 +66,10 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
     if (turn) m.rotation.set(turn.x ?? 0, turn.y ?? 0, turn.z ?? 0);
     return m;
   };
-  const sphere = (d: number, segments = 10) =>
-    CreateSphere(`${kind}-part`, { diameter: d, segments }, scene);
+  // Fewer segments for smaller parts: a tiny bloom drawn on hundreds of
+  // tiles needn't be as round as a canopy (triangles cost on mobile GPUs).
+  const sphere = (d: number) =>
+    CreateSphere(`${kind}-part`, { diameter: d, segments: sphereSegments(d) }, scene);
   const cylinder = (h: number, top: number, bottom: number, tessellation = 10) =>
     CreateCylinder(
       `${kind}-part`,
@@ -159,8 +169,8 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
           painted(at(sphere(0.16), 0, 0.07, 0), '#6fc47f'),
           painted(at(sphere(0.13), 0.07, 0.06, 0.03), '#7dd08a'),
           painted(at(sphere(0.12), -0.06, 0.055, -0.02), '#74c985'),
-          painted(at(sphere(0.03, 6), 0.03, 0.13, 0.05), '#ff7fa8'),
-          painted(at(sphere(0.03, 6), -0.05, 0.1, 0.05), '#ff7fa8'),
+          painted(at(sphere(0.03), 0.03, 0.13, 0.05), '#ff7fa8'),
+          painted(at(sphere(0.03), -0.05, 0.1, 0.05), '#ff7fa8'),
         ],
         0.2,
       );
@@ -191,10 +201,11 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         const z = Math.sin(a) * 0.045;
         const h = 0.09 + 0.025 * i;
         parts.push(painted(at(cylinder(h, 0.01, 0.012, 5), x, h / 2, z), '#7cc56c'));
-        parts.push(painted(at(sphere(0.06, 8), x, h, z, 1, 0.55, 1), color));
-        parts.push(painted(at(sphere(0.025, 6), x, h + 0.015, z), '#fff6d8'));
+        // Blooms are seen from above: a soft disc and a dot read as a flower.
+        parts.push(painted(at(cylinder(0.018, 0.065, 0.05, 7), x, h, z), color));
+        parts.push(painted(at(cylinder(0.012, 0.022, 0.022, 5), x, h + 0.012, z), '#fff6d8'));
       });
-      parts.push(painted(at(sphere(0.07, 6), 0, 0.012, 0, 1.3, 0.35, 1), '#86d27c'));
+      parts.push(painted(at(cylinder(0.012, 0.09, 0.1, 7), 0, 0.006, 0), '#86d27c'));
       return done(parts, 0.12);
     }
     case 'mushroom':
@@ -202,9 +213,8 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         [
           painted(at(cylinder(0.06, 0.035, 0.045), 0, 0.03, 0), '#fff4e6'),
           painted(at(sphere(0.11), 0, 0.065, 0, 1, 0.6, 1), '#ff6f7d'),
-          painted(at(sphere(0.022, 6), 0.025, 0.09, 0.01), '#ffffff'),
-          painted(at(sphere(0.02, 6), -0.02, 0.088, 0.025), '#ffffff'),
-          painted(at(sphere(0.018, 6), -0.01, 0.092, -0.028), '#ffffff'),
+          painted(at(sphere(0.022), 0.025, 0.09, 0.01), '#ffffff'),
+          painted(at(sphere(0.02), -0.02, 0.088, 0.025), '#ffffff'),
         ],
         0.09,
       );
@@ -213,8 +223,8 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         [
           painted(at(cylinder(0.012, 0.17, 0.17, 14), 0, 0.006, 0), '#7fcf8a'),
           painted(at(cylinder(0.012, 0.1, 0.1, 12), 0.12, 0.004, 0.06), '#8fd994'),
-          painted(at(sphere(0.045, 8), 0.03, 0.025, 0.02, 1, 0.8, 1), '#ffb3d1'),
-          painted(at(sphere(0.02, 6), 0.03, 0.04, 0.02), '#fff1a8'),
+          painted(at(sphere(0.045), 0.03, 0.025, 0.02, 1, 0.8, 1), '#ffb3d1'),
+          painted(at(sphere(0.02), 0.03, 0.04, 0.02), '#fff1a8'),
         ],
         0,
       );
@@ -259,7 +269,7 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         [
           painted(at(cylinder(0.48, 0.06, 0.46), 0, 0.24, 0), '#b3a6cf'),
           painted(at(cylinder(0.16, 0.05, 0.21), 0, 0.4, 0), '#ffffff'),
-          painted(at(sphere(0.08, 8), 0, 0.48, 0, 1, 0.6, 1), '#ffffff'),
+          painted(at(sphere(0.08), 0, 0.48, 0, 1, 0.6, 1), '#ffffff'),
         ],
         0.3,
       );
@@ -317,7 +327,7 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
             at(cylinder(0.012, 0.045, 0.045, 3), 0.045, 0.1, 0.118, 1, 1, 1, { x: Math.PI / 2 }),
             '#ffe08a',
           ),
-          painted(at(sphere(0.1, 8), 0, 0.055, 0.112, 1, 0.32, 0.25), '#ffe08a'),
+          painted(at(sphere(0.1), 0, 0.055, 0.112, 1, 0.32, 0.25), '#ffe08a'),
         ],
         0.18,
       );
