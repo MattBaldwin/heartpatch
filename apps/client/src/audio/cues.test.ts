@@ -39,6 +39,9 @@ describe('cues', () => {
     expect(battleCue({ kind: 'end', squish: 'bounce' })).toBe('yay');
     expect(battleCue({ kind: 'end', squish: null })).toBe('aww');
     expect(battleCue({ kind: 'hit', squish: 'jiggle' })).toBe('bonk');
+    expect(battleCue({ kind: 'hit', squish: 'wobble', effectiveness: 'weak' })).toBe('bonk');
+    expect(battleCue({ kind: 'hit', squish: 'wobble', effectiveness: 'super' })).toBe('thwack');
+    expect(battleCue({ kind: 'hit', squish: 'wobble', effectiveness: 'good' })).toBe('thwack');
   });
 
   it('maps touches up close and care moments', () => {

@@ -18,7 +18,7 @@ interface TutorialDebug {
   overlay: {
     target: string | null;
     spotlightOn: string | null;
-    gate: 'blockAll' | 'spotlight' | 'open' | null;
+    gate: 'blockAll' | 'spotlight' | 'guide' | 'open' | null;
     hole: { x: number; y: number; width: number; height: number } | null;
   };
   sprout: string | null;
@@ -66,7 +66,8 @@ async function topAt(page: Page, target: Locator): Promise<string | null> {
 
 /**
  * Finishing the tutorial earns The First Patch (#44): its celebration card
- * pops up over the lobby a moment later. Tap "Yay!" before going on.
+ * pops up over the lobby a moment later, once the player is off the form
+ * graduation opened (one card at a time, #129). Tap "Yay!" before going on.
  */
 async function celebrateFirstPatch(page: Page): Promise<void> {
   const party = page.getByTestId('milestone-card');
@@ -145,11 +146,12 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   expect((await debug(page))?.status).toBe('completed');
   expect((await debug(page))?.sprout).toBeNull();
   expect(await drawnMap(page)).toBeNull();
-  // Finishing is The First Patch milestone (#44): celebrate it first.
+  // Finishing is The First Patch milestone (#44): it waits behind the form,
+  // and celebrates once the player leaves it.
+  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
   await celebrateFirstPatch(page);
 
   // Replay from Settings; a replay can be skipped.
-  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
   await expect(lobby.getByTestId('tutorial-start')).toBeHidden();
   await lobby.getByTestId('lobby-settings').tap();
   await lobby.getByTestId('tutorial-replay').tap();
@@ -264,11 +266,27 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
   await expect(main).toHaveText('Night falls');
   await main.tap();
   await step('evolve');
+  // The night finds a lore page, and the morning report says the Partner
+  // slept out in the open (no fire on this path): one card at a time, in
+  // whichever order they land, and Sprout waits behind both (#127, #129).
   const card = page.getByTestId('lore-card');
+  const okay = page.getByTestId('hollow-report-ok');
+  const dismissReport = async () => {
+    await expect(okay).toBeVisible({ timeout: 20_000 });
+    await expect(card).toBeHidden();
+    await okay.tap();
+    await expect(okay).toBeHidden();
+  };
+  await expect
+    .poll(async () => (await card.isVisible()) || (await okay.isVisible()), { timeout: 20_000 })
+    .toBe(true);
+  const reportFirst = await okay.isVisible();
+  if (reportFirst) await dismissReport();
   await expect(card).toBeVisible({ timeout: 20_000 });
   await expect(card.getByTestId('lore-title')).toHaveText('Paw Prints by the Fire');
   await card.getByTestId('lore-close').tap();
   await expect(card).toBeHidden();
+  if (!reportFirst) await dismissReport();
 
   // The Seedling Scarf, on in the Wardrobe.
   await jumpTo(page, 'wardrobe');
@@ -292,9 +310,10 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
     .getByRole('button', { name: 'Make a patch' })
     .tap();
   await expect(page.getByTestId('tutorial')).toBeHidden();
-  await celebrateFirstPatch(page);
   await lobby.getByLabel('Patch name').fill('Partner Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  // The First Patch party waited behind the form; it comes now, alone.
+  await celebrateFirstPatch(page);
   await lobby.getByRole('button', { name: 'Visit patch' }).tap();
 
   // The starter pick opens on the Partner's species; any can still be picked.

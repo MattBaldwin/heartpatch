@@ -5,6 +5,7 @@ import type { WsClientOptions } from '../net/ws-client.js';
 import {
   ADVANCE_CHECK_MS,
   ADVANCE_CHECKS_BEFORE_RETRY,
+  NAME_FIRST_MESSAGE,
   STUCK_MESSAGE,
   TutorialController,
   type GraduationChoice,
@@ -357,8 +358,12 @@ describe('TutorialController', () => {
     t.controller.name('Sunny'); // Sprout hasn't finished talking
     expect(t.calls).toEqual(['state']);
     t.controller.nextLine();
-    t.controller.name('   '); // nothing typed
+    // Save with nothing typed: a nudge, not silence (#154), and no request.
+    t.controller.name('   ');
+    expect(t.controller.view).toMatchObject({ phase: 'error', message: NAME_FIRST_MESSAGE });
     expect(t.calls).toEqual(['state']);
+    t.controller.retry();
+    expect(t.controller.view.phase).toBe('step');
 
     // Too long: refused here, with the close-up's words, before any request.
     t.controller.name('x'.repeat(17));

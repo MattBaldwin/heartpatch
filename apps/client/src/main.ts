@@ -143,6 +143,8 @@ const trays = createTrays({ root: document.body });
 const jobsBox = el('div', { class: 'tray-jobs' });
 jobsBox.hidden = true;
 trays.slot('squishies').append(jobsBox);
+/** The map whose HUD is on screen (null between maps): the Team and Jobs row follows it (#132). */
+let hudMapId: string | null = null;
 
 // The bag and gathering (#17): a Bag entry in the My Heartpatch tray, and the
 // gather buttons in the tile chip.
@@ -287,12 +289,18 @@ const hollow = createHollowScreen({
       return hollowLayer.debug;
     },
   },
-  otherReportOpen: () => raidReportOpen,
+  // One card at a time (#129): the morning report waits behind the raid
+  // report, a found lore page and a milestone party. (`lorebook` and
+  // `milestones` are made below; this is only read at render time.)
+  otherReportOpen: () =>
+    raidReportOpen || lorebook.debug.showing !== null || milestones.debug.showing !== null,
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
   },
   devTools: import.meta.env.DEV,
 });
+/** The Hollow's morning report is on screen (it opens by itself; others wait). */
+const hollowReportOpen = () => (hollow.debug?.report.length ?? 0) > 0;
 // Quick messages (#23): a Chat button over a multiplayer map, with presets,
 // emoji and squishy stickers, and little bubbles when someone says something.
 const chat = createChatScreen({ root: document.body, entryRoot: trays.slot('top-right') });
@@ -377,6 +385,7 @@ const maps = createMapScreen({
     jobs.tileActions,
   ),
   onHudChange: (mapId) => {
+    hudMapId = mapId;
     trays.setVisible(mapId !== null);
     recipeBook.setMap(mapId);
     // Hidden, then shown: the Team and Jobs row checks the map (not on the Glade).
@@ -456,6 +465,9 @@ const tutorial = createTutorialScreen({
       void hollow.setMap(null);
       void chat.setMap(null);
       home.setMap(null);
+      // A care sheet left open on the Glade (an evolution's "Whoa!") would
+      // sit over the lobby's forms (#129).
+      care.close();
       maps.close();
       lobby.show();
     },
@@ -482,18 +494,39 @@ const tutorial = createTutorialScreen({
   },
 });
 // Found lore pages (design doc §16). Mounted after the tutorial, so its card
-// sits over Sprout's layer.
-const lorebook = createLorebook({ root: document.body });
-// A milestone earned (#44): a little party, but never over a battle or a
-// lore page (one card at a time).
+// sits over Sprout's layer. One card at a time (#129): a page waits behind a
+// battle, a milestone party and the morning report, and tells the report
+// when it's gone.
+const lorebook = createLorebook({
+  root: document.body,
+  busy: () => battles.debug !== null || milestones.debug.showing !== null || hollowReportOpen(),
+  onChange: () => {
+    hollow.otherReportChanged();
+  },
+});
+// A milestone earned (#44): a little party, but never over a battle, a lore
+// page, the morning report, an evolution's "Whoa!" or the wardrobe (one card
+// at a time, #129).
+// Nor over a form the player just asked for (the lobby's "Make a patch").
 const milestones = createMilestoneCelebration({
   root: document.body,
-  busy: () => battles.debug !== null || lorebook.debug.showing !== null,
+  busy: () =>
+    battles.debug !== null ||
+    lorebook.debug.showing !== null ||
+    hollowReportOpen() ||
+    (care.debug?.celebrating ?? false) ||
+    (wardrobe.debug?.open ?? false) ||
+    lobby.formOpen,
+  onChange: () => {
+    hollow.otherReportChanged();
+  },
 });
 // Battles (#13) own the whole screen: the map and the lobby's button step
 // out while one is open, and the map comes back after.
 const battles = createBattleScreen({
   root: document.body,
+  // Find a squishy and the Catalog live in the Adventure tray.
+  entryRoot: trays.slot('battle'),
   showScene,
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
@@ -545,11 +578,6 @@ const battles = createBattleScreen({
     audio.cue(battleCue(step));
   },
 });
-// Find a squishy and the Catalog go in the Adventure tray. The battle screen
-// builds them (battle lane), so the box moves in here.
-// TODO(battle lane): pass an `entryRoot` option instead once it exists.
-const battleEntry = document.querySelector('[data-testid="battle-entry"]')?.parentElement;
-if (battleEntry) trays.slot('battle').append(battleEntry);
 // Claiming starts from a tile: this row says how (territory, #15).
 trays.slot('adventure').append(
   trayRow({
@@ -562,7 +590,7 @@ trays.slot('adventure').append(
     },
   }),
 );
-jobs.mountTeamButton(jobsBox, () => maps.debug?.id ?? null);
+jobs.mountTeamButton(jobsBox, () => hudMapId);
 /** Who is logged in now (a story finishing late must not open another player's lobby). */
 let signedIn: PublicUser | null = null;
 // Picking a Keeper (#42) comes right after signup, then the opening
@@ -829,6 +857,7 @@ if (import.meta.env.DEV) {
     tutorial: () => tutorial.debug,
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,
+    battleDev: () => battles.dev,
     keeper: () => keeper.debug,
     cinematic: () => cinematic.debug,
     catalog: () => catalog.debug,

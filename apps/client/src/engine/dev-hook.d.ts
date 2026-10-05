@@ -1,5 +1,5 @@
 import type { AudioDebug } from '../audio/audio.js';
-import type { BattleDebug } from '../battle/battle-screen.js';
+import type { BattleDebug, BattleDevControls } from '../battle/battle-screen.js';
 import type { HollowDebug } from '../hollow/hollow-screen.js';
 import type { HomeDebug } from '../home/home-screen.js';
 import type { InventoryDebug } from '../inventory/inventory-screen.js';
@@ -51,6 +51,8 @@ declare global {
       updatesHeld?(): boolean;
       /** The open battle as shown (turn, phase, bar energies, pending steps), or null. */
       battle?(): BattleDebug | null;
+      /** The battle clock's controls under `?battle-clock=manual` (captures), else null. */
+      battleDev?(): BattleDevControls | null;
       /** The Keeper picker: mode, the pick shown, the saved Keeper, the preview's hash (#42). */
       keeper?(): KeeperDebug | null;
       /** The opening cinematic (#46): mode, time, shot, caption, skip and what's on screen, or null. */

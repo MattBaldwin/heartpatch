@@ -1,6 +1,9 @@
-/* Battle screen overlays (tech spec §6): energy plates at the top, the caption
-   and move buttons at the bottom, the result card in the middle. 44pt+
-   targets, safe areas; above the map HUD (3), below the lobby (4). */
+/* The battle HUD (tech spec §6; owner decision 2026-10-05: the Storybook
+   Diorama's HUD): compact cream pills in the top corners, each over its own
+   squishy, a bottom sheet of at most 35% of the screen for the caption and
+   the moves, the result card in the middle. 44pt+ targets, safe areas, the
+   shared padding tokens (--hp-pad-x/-y) so text never touches an edge.
+   Above the map HUD (3), below the lobby (4). */
 
 .battle-hud {
   position: fixed;
@@ -11,111 +14,170 @@
   pointer-events: none;
 }
 
+/* Under every control: the fight itself takes touches, drags, pinches and
+   wheels so the canvas (and the map camera's gestures) never sees them. */
+.battle-shield {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+}
+
 .battle-hud[hidden],
 .battle-plate-status[hidden],
 .battle-caption[hidden],
 .battle-controls[hidden],
-.battle-result[hidden] {
+.battle-hud .battle-result[hidden] {
   display: none;
 }
 
-.battle-plate {
+/* ── Top: the pills and the leave button ───────────────────────────── */
+
+.battle-top {
   position: absolute;
+  /* Under the account chip in the corner (auth.css), which stays reachable mid-battle. */
+  top: calc(env(safe-area-inset-top) + 58px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  left: calc(env(safe-area-inset-left) + 12px);
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: min(60vw, 260px);
-  padding: 8px 14px 10px;
-  border-radius: 20px;
-  background: rgb(255 255 255 / 88%);
-  box-shadow: 0 4px 14px rgb(107 75 110 / 12%);
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.battle-plate-theirs {
-  top: calc(env(safe-area-inset-top) + 64px);
-  left: calc(env(safe-area-inset-left) + 16px);
-}
-
-/* Mine sits at the bottom right, their squishy at the top right: like a
-   card game, each plate is across from its squishy, never over it. */
-.battle-plate-mine {
+.battle-plate {
   position: relative;
-  align-self: flex-end;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 200px;
+  min-width: 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 18px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+  pointer-events: auto;
 }
 
 .battle-plate-tuckered {
-  opacity: 0.75;
+  opacity: 0.8;
 }
 
-.battle-plate-head {
+.battle-plate-row {
   display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.battle-plate-foot {
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 8px;
+  gap: 2px 6px;
+}
+
+/* "Lv 30 · 70/70": one short line, so it never wraps on a phone's pill. */
+.battle-plate-foot .battle-plate-level::after {
+  content: ' ·';
+}
+
+.battle-plate-foot .battle-plate-energy {
+  white-space: nowrap;
 }
 
 .battle-plate-name {
   overflow: hidden;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.battle-plate-status {
+.battle-plate-level {
   flex: none;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: #f6dceb;
   font-size: 12px;
   font-weight: 700;
-  color: #7a2d55;
+  color: #8a6a8e;
 }
 
-.battle-plate-nature {
-  font-size: 13px;
-  color: #7d6380;
+.battle-badges {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.battle-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #f6e7f0;
 }
 
 .battle-energy {
+  flex: 1 1 auto;
   overflow: hidden;
-  height: 12px;
-  margin-top: 4px;
+  height: 10px;
   border-radius: 999px;
-  background: #f4e2ec;
+  background: #efe0ea;
 }
 
 .battle-energy-fill {
   height: 100%;
   border-radius: 999px;
-  background: #6fbf8f;
+  background: linear-gradient(90deg, #6fd39a, #4fbf85);
   transition: width 0.45s ease-out;
 }
 
 .battle-energy-low {
-  background: #f2a93b;
+  background: linear-gradient(90deg, #ffb95c, #f2a93b);
 }
 
 .battle-plate-energy {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: #6b4b6e;
 }
 
+.battle-plate-status {
+  flex: none;
+  padding: 1px var(--hp-pad-y);
+  border-radius: 999px;
+  background: #f6dceb;
+  font-size: 11px;
+  font-weight: 700;
+  color: #7a2d55;
+}
+
+/* Saturday Morning Smackdown's comic callout: bold, outlined, a little tilted. */
 .battle-callout {
   position: absolute;
-  top: -22px;
-  left: 12px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: #b8487a;
+  top: calc(100% + 6px);
+  left: 8px;
+  z-index: 1;
+  padding: 5px var(--hp-pad-x);
+  border: 3px solid #2d1b33;
+  border-radius: 10px;
+  background: #ffe34d;
   font-size: 17px;
-  font-weight: 800;
-  color: #fff;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: #2d1b33;
+  white-space: nowrap;
   opacity: 0;
-  transform: translateY(8px) scale(0.9);
+  --battle-callout-tilt: -6deg; /* the other side's callout tilts the other way */
+  transform: rotate(var(--battle-callout-tilt)) translateY(8px) scale(0.9);
+}
+
+.battle-plate-theirs .battle-callout {
+  right: 8px;
+  left: auto;
+  --battle-callout-tilt: 6deg;
 }
 
 .battle-callout-show {
@@ -125,46 +187,78 @@
 @keyframes battle-callout-pop {
   0% {
     opacity: 0;
-    transform: translateY(8px) scale(0.9);
+    transform: rotate(var(--battle-callout-tilt)) translateY(8px) scale(0.9);
   }
   15% {
     opacity: 1;
-    transform: translateY(-4px) scale(1.08);
+    transform: rotate(var(--battle-callout-tilt)) translateY(-4px) scale(1.1);
   }
   30% {
-    transform: translateY(0) scale(1);
+    transform: rotate(var(--battle-callout-tilt)) translateY(0) scale(1);
   }
   80% {
     opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translateY(-10px) scale(1);
+    transform: rotate(-6deg) translateY(-10px) scale(1);
   }
 }
 
-.battle-bottom {
+.battle-leave {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 999px;
+  background: rgb(255 250 240 / 94%);
+  box-shadow: 0 4px 14px rgb(107 75 110 / 14%);
+  padding: 0;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  color: #8a5f86;
+  cursor: pointer;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+
+/* ── Bottom sheet: the caption and the moves ───────────────────────── */
+
+.battle-sheet {
   position: absolute;
-  right: calc(env(safe-area-inset-right) + 16px);
-  /* Sits above the "My patches" button in the bottom corner. */
-  bottom: calc(env(safe-area-inset-bottom) + 84px);
-  left: calc(env(safe-area-inset-left) + 16px);
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 420px;
-  margin: 0 auto;
+  box-sizing: border-box;
+  max-height: 35vh; /* = SHEET_SHARE in battle-hud.ts: the camera keeps this clear */
+  overflow-y: auto;
+  padding: 12px calc(env(safe-area-inset-right) + 16px) calc(env(safe-area-inset-bottom) + 14px)
+    calc(env(safe-area-inset-left) + 16px);
+  border-top: 3px solid #ffd9c2;
+  border-radius: 26px 26px 0 0;
+  background: linear-gradient(rgb(255 250 241 / 96%), rgb(255 243 228 / 96%));
+  box-shadow: 0 -8px 28px rgb(107 75 110 / 16%);
   pointer-events: auto;
+}
+
+@media (min-width: 900px) {
+  .battle-sheet {
+    right: auto;
+    left: 50%;
+    width: 560px;
+    transform: translateX(-50%);
+  }
 }
 
 .battle-caption {
   margin: 0;
-  padding: 10px 16px;
-  border-radius: 18px;
-  background: rgb(255 255 255 / 92%);
-  box-shadow: 0 4px 14px rgb(107 75 110 / 12%);
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.3;
   text-align: center;
 }
@@ -189,23 +283,75 @@
 }
 
 .battle-button {
-  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  min-height: 52px;
+  padding: var(--hp-pad-y) 14px;
+  border: 0;
+  border-radius: 16px;
+  background: #ffc9d7;
+  box-shadow: 0 3px 0 #f2a4bb;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  color: #5a3a5d;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.battle-button:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #f2a4bb;
+}
+
+.battle-button-small {
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.battle-button-soft {
+  background: #f6e9df;
+  box-shadow: 0 3px 0 #e2cfc1;
+}
+
+.battle-button-soft:active {
+  box-shadow: 0 1px 0 #e2cfc1;
+}
+
+/* The Heart Charm button with an empty bag: still there, dimmed, and it
+   explains how to make one (owner decision 2026-10-04). */
+.battle-button-empty {
+  opacity: 0.55;
+}
+
+.battle-hint {
+  margin: 0;
+  padding: 6px var(--hp-pad-x);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 85%);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  color: #6b4b6e;
 }
 
 .battle-ask {
   margin: 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   font-size: 16px;
   font-weight: 700;
   text-align: center;
 }
 
 .battle-waiting {
-  min-height: 52px;
-  line-height: 52px;
+  min-height: 44px;
+  line-height: calc(44px - 2 * var(--hp-pad-y));
   color: #8a5f86;
 }
 
 .battle-problem {
+  margin: 0;
   text-align: center;
 }
 
@@ -213,25 +359,9 @@
   display: none;
 }
 
-.battle-leave {
-  position: absolute;
-  top: calc(env(safe-area-inset-top) + 64px);
-  right: calc(env(safe-area-inset-right) + 16px);
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 88%);
-  font: inherit;
-  font-size: 26px;
-  line-height: 1;
-  color: #8a5f86;
-  cursor: pointer;
-  touch-action: manipulation;
-  pointer-events: auto;
-}
+/* ── The result card ───────────────────────────────────────────────── */
 
-.battle-result {
+.battle-hud .battle-result {
   position: absolute;
   top: 50%;
   right: calc(env(safe-area-inset-right) + 16px);
@@ -239,6 +369,8 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Not the card's 100%: with both edges pinned that ran off the screen (#133). */
+  width: auto;
   max-width: 360px;
   margin: 0 auto;
   transform: translateY(-50%);
@@ -254,19 +386,17 @@
   text-align: center;
 }
 
-/* The entry buttons over the map, bottom right (the lobby button is bottom
-   left). Under the tile panel (3), which can reach down over this corner and
-   must stay tappable; above the canvas. */
+.battle-xp li {
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+}
+
+/* ── The entry buttons (in the Adventure tray) ─────────────────────── */
+
 .battle-entry-box {
-  position: fixed;
-  z-index: 2;
-  right: calc(env(safe-area-inset-right) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 16px);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-  max-width: calc(100vw - 180px);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
 }
 
@@ -276,7 +406,7 @@
 
 .battle-entry-note {
   margin: 0;
-  padding: 6px 12px;
+  padding: 6px var(--hp-pad-x);
   border-radius: 14px;
   background: rgb(255 255 255 / 88%);
   font-size: 14px;
@@ -287,4 +417,25 @@
 
 .battle-entry-note:empty {
   display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .battle-energy-fill {
+    transition: none;
+  }
+
+  .battle-callout-show {
+    animation: battle-callout-still 1.1s steps(1, end) forwards;
+  }
+
+  @keyframes battle-callout-still {
+    0% {
+      opacity: 1;
+      transform: rotate(var(--battle-callout-tilt));
+    }
+    100% {
+      opacity: 0;
+      transform: rotate(-6deg);
+    }
+  }
 }

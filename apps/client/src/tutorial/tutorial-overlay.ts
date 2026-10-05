@@ -1,7 +1,16 @@
 import { GAME_DATA, NICKNAME_MAX_LENGTH, type HighlightTarget } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
 import type { HighlightTargets } from './highlight-targets.js';
-import { layoutOverlay, type Insets, type OverlayLayout, type Rect } from './overlay-layout.js';
+import {
+  layoutOverlay,
+  placeOrb,
+  union,
+  type Insets,
+  type OverlayLayout,
+  type Rect,
+  type Size,
+} from './overlay-layout.js';
+import { foreignSheets, obstacles, openSheets, type OpenSheet } from './sheets.js';
 import type { GraduationChoice, TutorialView } from './tutorial-controller.js';
 import '../ui/auth/auth.css';
 import './tutorial.css';
@@ -11,6 +20,14 @@ import './tutorial.css';
 // Plain DOM and CSS over the canvas, so it costs no render passes: the dim is
 // one element's box-shadow and nothing animates but the arrow's bob.
 // Chrome copy follows docs/STYLE_GUIDE.md; Sprout's lines come from the data.
+//
+// Sprout waits its turn (#127, #128, #139): while a sheet that isn't the
+// step's own target is open (sheets.ts), the layer gates nothing and the
+// bubble shrinks to a small orb clear of the sheet, so no tap meant for the
+// sheet ever lands on Sprout and no sheet is ever stuck under a blocker. The
+// bubble opens again by itself once the sheet closes; a tap on the orb peeks
+// at it sooner, laid out clear of the sheet, and a tap on the read bubble (or
+// its button) tucks it back into the orb.
 
 export interface TutorialOverlayActions {
   nextLine: () => void;
@@ -51,6 +68,10 @@ export interface TutorialOverlayDebug {
   readonly spotlightOn: string | null;
   readonly hole: Rect | null;
   readonly gate: OverlayLayout['gate'] | null;
+  /** Sprout is waiting behind an open sheet (the orb). */
+  readonly held: boolean;
+  /** The sheets it waits behind (their `data-testid`s, or class names). */
+  readonly sheets: readonly string[];
 }
 
 export interface TutorialOverlay {
@@ -164,6 +185,12 @@ export function mountTutorialOverlay(
   let view: TutorialView | null = null;
   let layout: OverlayLayout | null = null;
   let spotlightOn: string | null = null;
+  /** Sprout is waiting behind these open sheets (sheets.ts). */
+  let behind: string[] = [];
+  /** The player tapped the orb: the bubble shows over the sheet until it's put away. */
+  let peek = false;
+  /** The step the bubble last showed, so a new step closes a peek. */
+  let shownStep: string | null = null;
   /** The layout last put on screen, so an unchanged one touches no DOM. */
   let drawn = '';
   /** What the main button does right now. */
@@ -174,13 +201,25 @@ export function mountTutorialOverlay(
     onMain();
   });
   // Tap the bubble to read on (style guide §6: "tap to continue"), or to
-  // open it again when it's tucked away.
+  // open it again when it's tucked away or waiting behind a sheet.
   bubble.addEventListener('click', (event) => {
+    if (overlay.classList.contains('tutorial-held')) {
+      peek = true;
+      relayout();
+      return;
+    }
     if (overlay.classList.contains('tutorial-tucked')) {
       actions.untuck();
       return;
     }
     if (event.target instanceof HTMLButtonElement || event.target instanceof HTMLInputElement) {
+      return;
+    }
+    // A peek that has been read: tapping it puts it back into the orb.
+    const step = view?.step;
+    if (peek && step && (view?.line ?? 0) >= step.lines.length - 1) {
+      peek = false;
+      relayout();
       return;
     }
     actions.nextLine();
@@ -211,12 +250,20 @@ export function mountTutorialOverlay(
    * tucked chip also sheds its pinned width, so it can grow with its goal.
    */
   function naturalSize(): { width: number; height: number } {
-    const { width, maxHeight } = bubble.style;
-    if (overlay.classList.contains('tutorial-tucked')) bubble.style.width = '';
+    const { width, height, maxHeight, left, right } = bubble.style;
+    // Measured from the left edge: a shrink-to-fit box placed at `left`
+    // only gets the room to its right, which would read narrow and tall.
+    bubble.style.width = '';
+    bubble.style.height = '';
     bubble.style.maxHeight = '';
+    bubble.style.left = '';
+    bubble.style.right = '';
     const size = { width: bubble.offsetWidth, height: bubble.scrollHeight };
     bubble.style.width = width;
+    bubble.style.height = height;
     bubble.style.maxHeight = maxHeight;
+    bubble.style.left = left;
+    bubble.style.right = right;
     return size;
   }
 
@@ -226,23 +273,42 @@ export function mountTutorialOverlay(
     const target = step?.target ?? 'none';
     const found = step ? targets.find(target) : null;
     const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const insets = readInsets(probe);
+    // Sprout waits behind any sheet that isn't the step's own target.
+    const sheets = openSheets(root, overlay);
+    const waitingFor = foreignSheets(sheets, found?.element ?? null);
+    const held = waitingFor.length > 0;
+    if (!held) peek = false;
+    const orb = held && !peek;
+    behind = waitingFor.map((s) => s.element.dataset['testid'] ?? s.element.className);
+    overlay.classList.toggle('tutorial-held', orb);
+    // Something to read once the sheet closes: the orb glows until then.
+    overlay.classList.toggle('tutorial-new', orb && !view.tucked);
+    overlay.classList.toggle('tutorial-tucked', !held && view.tucked);
     layout = layoutOverlay({
-      target: found?.rect ?? null,
-      // While loading or showing an error, only Sprout's bubble takes taps.
-      talkOnly: step ? step.talkOnly : true,
+      target: held ? null : (found?.rect ?? null),
+      // While loading or showing an error, only Sprout's bubble takes taps;
+      // behind a sheet, nothing is gated at all.
+      talkOnly: held ? false : step ? step.talkOnly : true,
       viewport,
-      insets: readInsets(probe),
+      insets,
       bubbleSize: naturalSize(),
       tucked: overlay.classList.contains('tutorial-tucked'),
+      soft: found?.soft ?? false,
+      avoid: held && peek ? union(waitingFor.map((s) => s.rect)) : null,
     });
-    spotlightOn = found?.element ? target : null;
-    const key = JSON.stringify([layout, spotlightOn]);
+    spotlightOn = !held && found?.element ? target : null;
+    const orbRect = orb
+      ? placeOrb({ viewport, insets, obstacles: obstaclesNow(waitingFor, viewport) })
+      : null;
+    const key = JSON.stringify([layout, spotlightOn, orbRect, peek]);
     if (key === drawn) return;
     drawn = key;
     overlay.dataset['gate'] = layout.gate;
     overlay.dataset['bubble'] = layout.bubble;
-    // With a spotlight the layout places the bubble clear of it; otherwise CSS does.
-    const at = layout.bubbleRect;
+    // With a spotlight the layout places the bubble clear of it; the orb
+    // goes where the sheet isn't; otherwise CSS does.
+    const at = orbRect ?? layout.bubbleRect;
     bubble.style.left = at ? `${String(at.x)}px` : '';
     bubble.style.top = at ? `${String(at.y)}px` : '';
     bubble.style.width = at ? `${String(at.width)}px` : '';
@@ -250,6 +316,7 @@ export function mountTutorialOverlay(
     bubble.style.bottom = at ? 'auto' : '';
     bubble.style.margin = at ? '0' : '';
     bubble.style.maxHeight = at ? `${String(at.height)}px` : '';
+    bubble.style.height = orbRect ? `${String(orbRect.height)}px` : '';
 
     spotlight.hidden = layout.hole === null;
     if (layout.hole) place(spotlight, layout.hole);
@@ -273,6 +340,24 @@ export function mountTutorialOverlay(
   }
 
   /**
+   * The controls and cards the orb keeps clear of, measured once per change
+   * to the page (a frame drawn by the scene moves no buttons), so a night
+   * sky or a visit animating under the orb costs no layout per frame. A
+   * change is a `hidden` or `class` flip, children or a resize (how the
+   * game's sheets and trays move); a control moved by inline style alone
+   * is measured at the next one.
+   */
+  let pageVersion = 0;
+  let measured: { version: number; key: string; rects: Rect[] } | null = null;
+  function obstaclesNow(sheets: readonly OpenSheet[], viewport: Size): Rect[] {
+    const key = JSON.stringify([viewport, sheets.map((s) => s.rect)]);
+    if (measured?.version !== pageVersion || measured.key !== key) {
+      measured = { version: pageVersion, key, rects: obstacles(root, overlay, sheets, viewport) };
+    }
+    return measured.rects;
+  }
+
+  /**
    * Lays out again on the next frame (many calls, one layout): the target
    * may have moved, appeared or gone (a panel opened, a countdown finished,
    * the camera panned). Unchanged layouts cost a lookup and no DOM writes.
@@ -293,7 +378,10 @@ export function mountTutorialOverlay(
     follow();
   }).observe(bubble);
   new MutationObserver((records) => {
-    if (records.some((r) => !overlay.contains(r.target))) follow();
+    if (records.some((r) => !overlay.contains(r.target))) {
+      pageVersion += 1;
+      follow();
+    }
   }).observe(root, {
     subtree: true,
     childList: true,
@@ -318,7 +406,12 @@ export function mountTutorialOverlay(
     goal.hidden = !step?.goal;
     mainButton.hidden = false;
     mainButton.disabled = false;
-    overlay.classList.toggle('tutorial-tucked', next.tucked);
+    // A new step (or a run starting over) ends a peek at the old one.
+    const stepKey = step ? `${step.id}:${next.state?.mapId ?? ''}` : null;
+    if (stepKey !== shownStep || next.tucked) {
+      shownStep = stepKey;
+      peek = false;
+    }
     const naming = step?.action === 'name' && lastLine && next.phase !== 'error';
     nameForm.hidden = !naming;
     nameSave.disabled = next.phase === 'waiting';
@@ -372,8 +465,12 @@ export function mountTutorialOverlay(
     relayout();
   }
 
-  window.addEventListener('resize', relayout);
-  window.visualViewport?.addEventListener('resize', relayout);
+  const resized = () => {
+    pageVersion += 1;
+    relayout();
+  };
+  window.addEventListener('resize', resized);
+  window.visualViewport?.addEventListener('resize', resized);
 
   return {
     render,
@@ -386,6 +483,8 @@ export function mountTutorialOverlay(
         spotlightOn: hidden ? null : spotlightOn,
         hole: hidden ? null : (layout?.hole ?? null),
         gate: hidden ? null : (layout?.gate ?? null),
+        held: !hidden && overlay.classList.contains('tutorial-held'),
+        sheets: hidden ? [] : behind,
       };
     },
   };

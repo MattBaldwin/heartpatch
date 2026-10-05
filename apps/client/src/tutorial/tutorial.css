@@ -178,6 +178,52 @@
   background: #fff;
 }
 
+/* A guide (#140): the next thing to tap is lit and pointed at, but nothing
+   is dimmed or blocked, because the step takes more than one tap. */
+.tutorial[data-gate='guide'] .tutorial-spotlight {
+  box-shadow: 0 0 0 4px rgb(255 231 154 / 90%);
+}
+
+/* Sprout waits behind an open sheet (#127, #128, #139): a small glowing orb
+   at the screen's edge, clear of the sheet, that gates nothing. It glows
+   brighter while Sprout has something new to say; tap it to peek. */
+.tutorial.tutorial-held .tutorial-bubble {
+  box-sizing: border-box;
+  width: 48px;
+  height: 48px;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fffbe0, #ffd76a 55%, #f2a93b);
+  box-shadow:
+    0 0 0 3px #fffafc,
+    0 0 14px 4px rgb(255 215 106 / 55%);
+}
+
+.tutorial.tutorial-held .tutorial-bubble > *,
+.tutorial.tutorial-held .tutorial-arrow {
+  display: none;
+}
+
+.tutorial.tutorial-held.tutorial-new .tutorial-bubble {
+  animation: tutorial-glow 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes tutorial-glow {
+  from {
+    box-shadow:
+      0 0 0 3px #fffafc,
+      0 0 14px 4px rgb(255 215 106 / 55%);
+  }
+
+  to {
+    box-shadow:
+      0 0 0 3px #fffafc,
+      0 0 22px 9px rgb(255 215 106 / 85%);
+  }
+}
+
 /* A gameplay step's bubble, tucked into a little chip at the side so it
    never covers the buttons the step is about. Tap it to read Sprout again. */
 .tutorial.tutorial-tucked .tutorial-bubble {
@@ -205,7 +251,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tutorial-arrow {
+  .tutorial-arrow,
+  .tutorial.tutorial-held.tutorial-new .tutorial-bubble {
     animation: none;
   }
 

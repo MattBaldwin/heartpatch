@@ -38,7 +38,10 @@ test('earn The First Patch, celebrate it, then see it and wear its title', async
   await choices.getByRole('button', { name: 'Make a patch' }).tap();
   await expect.poll(() => tutorial(page).then((t) => t?.status)).toBe('completed');
 
-  // The milestone consumer grants it a moment later, and the party starts.
+  // The milestone consumer grants it a moment later; the party waits behind
+  // the "Make a patch" form graduation opened (one card at a time, #129) and
+  // starts once the player leaves it.
+  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
   const party = page.getByTestId('milestone-card');
   await expect(party).toBeVisible({ timeout: 20_000 });
   await expect(party.getByTestId('milestone-name')).toHaveText('The First Patch');
@@ -48,7 +51,6 @@ test('earn The First Patch, celebrate it, then see it and wear its title', async
   await expect(party).toBeHidden();
 
   // The prize arrived: 20 Patch Coins on the patch list.
-  await lobby.getByRole('button', { name: 'Back to my patches' }).tap();
   await expect(lobby.getByTestId('lobby-coins')).toContainText('20');
 
   // The Milestones screen, from the Wardrobe.

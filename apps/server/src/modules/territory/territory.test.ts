@@ -64,6 +64,7 @@ interface Tile {
   q: number;
   r: number;
   ownerUserId: string | null;
+  terrain: string;
   homeSlot: number | null;
   guardianStrength: number | null;
 }
@@ -280,6 +281,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(res.statusCode, res.body).toBe(201);
       const battle = battleOf(res);
       expect(battle.kind).toBe('tile');
+      // It plays on the claimed tile's own terrain (owner decision 2026-10-04).
+      expect(battle.terrain).toBe(target!.terrain);
       // The guardians are played by the engine's guardian AI; their ids say nothing.
       expect(battle.view.sides.b.controller).toEqual({ type: 'ai', policy: 'guardian' });
       expect(battle.view.sides.b.squishies.map((s) => s.id)).toEqual(
