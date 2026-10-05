@@ -78,6 +78,8 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   let lines = new Map<string, { squishy: JobSquishy; node: HTMLElement }>();
   /** Bumped by every open and close, so a late reply is dropped. */
   let ticket = 0;
+  /** A finished countdown already asked the server once (reset by every render). */
+  let askedAgain = false;
 
   const close = el(
     'button',
@@ -115,7 +117,10 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   const say = (text: string) => {
     note.textContent = text;
   };
+  /** Bumped by every view taken, so a slower refetch can't put an older one back. */
+  let views = 0;
   const setView = (next: JobsView) => {
+    views += 1;
     view = next;
     clock.sync(next.now);
   };
@@ -231,6 +236,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   function render(): void {
     window.clearTimeout(ticker);
     ticker = undefined;
+    askedAgain = false;
     const current = view;
     if (!current) {
       list.replaceChildren();
@@ -308,17 +314,47 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   /**
    * The countdowns move on by themselves while the sheet is open, once a
    * second, changing only their text (no buttons rebuilt under a finger).
+   * When one reaches zero the server has a cycle to hand out (what's ready
+   * is its sum, not the client's), so the board asks for a fresh view once
+   * and redraws: the row says "+5 Timber ready!" and Collect appears (#149).
    */
   function tick(): void {
     window.clearTimeout(ticker);
     ticker = undefined;
     if (lines.size === 0 || sheet.hidden) return;
     const nowMs = clock.now();
+    let finished = false;
     for (const { squishy, node } of lines.values()) {
+      const next = squishy.work?.nextReadyAt ?? null;
+      if (next !== null && Date.parse(next) <= nowMs) finished = true;
       const text = jobLine(squishy, nowMs);
       if (node.textContent !== text) node.textContent = text;
     }
+    if (finished && !askedAgain) {
+      askedAgain = true;
+      void refetch();
+      return;
+    }
     ticker = window.setTimeout(tick, 1000);
+  }
+
+  /** A fresh view from the server, redrawn if the board is still this one. */
+  async function refetch(): Promise<void> {
+    const id = mapId;
+    const mine = ticket;
+    const had = views;
+    if (!id) return;
+    try {
+      const fresh = await api.view(id);
+      if (mine !== ticket || working || views !== had) return;
+      setView(fresh);
+      render();
+    } catch (err) {
+      // Said once; the countdown keeps going and the next open asks again.
+      if (mine !== ticket) return;
+      say(messageOf(err));
+      ticker = window.setTimeout(tick, 1000);
+    }
   }
 
   function closeBoard(): void {

@@ -25,15 +25,34 @@ interface Badge {
 }
 
 const labelOf = (count: number) => (count > 1 ? `🧺${String(count)}` : '🧺');
+/** A badge's size before it has been laid out. */
+const BADGE_MIN_WIDTH_PX = 32;
+const BADGE_MIN_HEIGHT_PX = 24;
 
 export function createGathererBadges(root: HTMLElement): GathererBadges {
   let scene: Scene | null = null;
   const badges = new Map<HexKey, Badge>();
 
   const place = (badge: Badge) => {
-    const rect = scene ? tileScreenRectOf(scene, badge.tile) : null;
-    const x = rect ? Math.round(rect.x + rect.width / 2) : 0;
-    const y = rect ? Math.round(rect.y) : 0;
+    const seen = scene ? tileScreenRectOf(scene, badge.tile) : null;
+    // A tile the camera can't see, or that sits wholly off the screen, shows
+    // no badge; one half off the edge keeps its badge just inside (#161).
+    const rect =
+      seen &&
+      seen.x + seen.width > 0 &&
+      seen.x < window.innerWidth &&
+      seen.y + seen.height > 0 &&
+      seen.y < window.innerHeight
+        ? seen
+        : null;
+    const half = Math.max(badge.node.offsetWidth, BADGE_MIN_WIDTH_PX) / 2;
+    const x = rect
+      ? Math.round(Math.min(Math.max(rect.x + rect.width / 2, half), window.innerWidth - half))
+      : 0;
+    // Hung from the tile's top: a tile straddling the top edge keeps it in view too.
+    const y = rect
+      ? Math.round(Math.max(rect.y, Math.max(badge.node.offsetHeight, BADGE_MIN_HEIGHT_PX)))
+      : 0;
     const at = rect ? `${String(x)},${String(y)}` : 'hidden';
     if (at === badge.at) return;
     badge.at = at;

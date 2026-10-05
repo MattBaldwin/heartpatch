@@ -46,8 +46,8 @@ function e2eGroup(value: string | undefined): { testMatch?: string[]; testIgnore
 
 /**
  * Mobile Safari (WebKit) at iPhone and iPad sizes. Environments that can't
- * install WebKit can set PW_CHROMIUM_EXECUTABLE to run the same viewports in
- * a local Chromium instead (CI always uses WebKit).
+ * install WebKit can set PW_CHROMIUM_EXECUTABLE to run the same two viewports,
+ * plus a laptop-sized window, in a local Chromium instead (CI always uses WebKit).
  */
 const chromiumPath = process.env['PW_CHROMIUM_EXECUTABLE'];
 
@@ -70,6 +70,26 @@ const projects = chromiumPath
         name: 'iphone-chromium',
         use: {
           ...devices['iPhone 15'],
+          browserName: 'chromium' as const,
+          launchOptions: { executablePath: chromiumPath },
+        },
+      },
+      {
+        name: 'ipad-chromium',
+        use: {
+          ...devices['iPad Pro 11'],
+          browserName: 'chromium' as const,
+          launchOptions: { executablePath: chromiumPath },
+        },
+      },
+      {
+        // A laptop browser (the owner's playtests): a mouse on a big window.
+        // Touch stays on so the specs' `tap()` calls work here too.
+        name: 'desktop-chromium',
+        use: {
+          ...devices['Desktop Chrome'],
+          viewport: { width: 1440, height: 900 },
+          hasTouch: true,
           browserName: 'chromium' as const,
           launchOptions: { executablePath: chromiumPath },
         },

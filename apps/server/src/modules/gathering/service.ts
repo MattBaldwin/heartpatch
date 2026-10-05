@@ -6,6 +6,7 @@ import {
   gatherYield,
   type CollectResponse,
   type GatherResponse,
+  type InventoryResponse,
   type PublicUser,
   type StartGatherRequest,
 } from '@heartpatch/shared';
@@ -14,7 +15,7 @@ import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
-import { grantItems, seasonsOn, toGather } from '../inventory/service.js';
+import { createInventoryService, grantItems, seasonsOn, toGather } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createGatheringRepo, type GatherRow } from './repo.js';
@@ -49,6 +50,12 @@ export interface GatheringService {
   start: (user: PublicUser, mapId: string, at: StartGatherRequest) => Promise<GatherResponse>;
   /** Puts a finished gather in the bag. */
   collect: (user: PublicUser, mapId: string, gatherId: string) => Promise<CollectResponse>;
+  /**
+   * Dev and test only (`HP_DEV_SQUISHY_GRANTS`): the player's gathers on this
+   * map finish now, so Collect can be tried without the wait. Returns the bag
+   * as `GET /inventory` does.
+   */
+  devReady: (user: PublicUser, mapId: string) => Promise<InventoryResponse>;
 }
 
 export interface GatheringServiceOptions {
@@ -177,6 +184,15 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
       });
       published(mapId);
       return result;
+    },
+
+    devReady: async (user, mapId) => {
+      const at = now();
+      await store.transaction(async (repo, tx) => {
+        await requireMember(tx, user, mapId);
+        await repo.makeReady(mapId, user.id, at);
+      });
+      return createInventoryService({ db, clock: now }).get(user, mapId);
     },
   };
 }

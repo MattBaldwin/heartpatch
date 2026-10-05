@@ -4,7 +4,7 @@ import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPi
 import type { Scene } from '@babylonjs/core/scene';
 import { LIGHTING, SCALER, TIER_SETTINGS, type QualityTier } from '../config.js';
 import { hardwareScalingFor } from '../dpr.js';
-import { initialGovernor, stepGovernor, type GovernorState } from './governor.js';
+import { initialGovernor, resumeGovernor, stepGovernor, type GovernorState } from './governor.js';
 
 /**
  * Tone mapping, FXAA and bloom with 8-bit targets and no MSAA (tech spec §6
@@ -50,6 +50,7 @@ export class RenderQuality {
   private state: GovernorState;
   private appliedTier: QualityTier | null = null;
   private appliedScale = 0;
+  private readonly stop = new AbortController();
 
   constructor(scene: Scene, camera: Camera, tier: QualityTier) {
     this.scene = scene;
@@ -57,6 +58,14 @@ export class RenderQuality {
     this.state = initialGovernor(tier, SCALER);
     this.pipeline = createPostProcessing(scene, camera);
     this.apply();
+    // A frame spanning a pause (tab hidden, app switch, device asleep) is a
+    // gap, never a crawling frame (governor `crawl`), however many come
+    // around the pause.
+    const resume = () => {
+      this.state = resumeGovernor(this.state);
+    };
+    document.addEventListener('visibilitychange', resume, { signal: this.stop.signal });
+    window.addEventListener('pageshow', resume, { signal: this.stop.signal });
   }
 
   /**
@@ -96,6 +105,7 @@ export class RenderQuality {
   }
 
   dispose(): void {
+    this.stop.abort();
     this.pipeline.dispose();
   }
 

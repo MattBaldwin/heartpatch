@@ -60,8 +60,16 @@ export interface ScalerConfig {
   maxRaiseAfterMs: number;
   /** A drop within this long after a raise counts as flapping. */
   flapWindowMs: number;
-  /** Frame gaps longer than this (tab hidden, debugger) are ignored. */
+  /** Frame gaps longer than this (tab hidden, debugger) are ignored by the frame-rate windows. */
   maxFrameMs: number;
+  /**
+   * A run of `crawlFrames` consecutive frames each longer than `crawlFrameMs`
+   * is no pause: the renderer itself is crawling (a very weak GPU, software
+   * WebGL), too slow for any window to ever close. Quality goes to the
+   * cheapest tier at one render pixel per CSS pixel at once.
+   */
+  crawlFrameMs: number;
+  crawlFrames: number;
   /** Step a tier down after this long pinned at the floor and still slow. */
   tierDropAfterMs: number;
   /** "Still slow" for the tier governor. */
@@ -98,6 +106,8 @@ export const SCALER: Readonly<ScalerConfig> = {
   maxRaiseAfterMs: 30_000, // TUNE
   flapWindowMs: 2000, // TUNE
   maxFrameMs: 250, // TUNE
+  crawlFrameMs: 1000, // TUNE: a whole second per frame is never a shader compile hiccup
+  crawlFrames: 3, // TUNE
   tierDropAfterMs: 3000, // TUNE
   tierDropBelowFps: 50, // TUNE
   graceMs: 2000, // TUNE

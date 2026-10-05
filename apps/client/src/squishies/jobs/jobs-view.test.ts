@@ -103,8 +103,8 @@ describe('job lines', () => {
       workerId: null,
       firelit: false,
     };
-    expect(spotLabel(spot)).toBe('🪵 Timber (Forest)');
-    expect(spotLabel({ ...spot, from: 'node' })).toBe('🪵 Timber (spot)');
+    expect(spotLabel(spot)).toBe('🪵 Timber on Forest');
+    expect(spotLabel({ ...spot, from: 'node' })).toBe('🪵 Timber spot');
   });
 });
 

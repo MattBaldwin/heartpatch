@@ -128,7 +128,8 @@ Resources, gathering and crafting (design doc §12, §15; issue #17) live in `sr
 | `GET /api/v1/maps/:mapId/inventory` | → `{ items, gathers, crafts, seasons, now }`: the bag, my gathers on land I still own, my craft on the go, the season ids on today (map-local date), and the server's clock, which the client counts down on |
 | `POST /api/v1/maps/:mapId/gathers` | `{ q, r }` → 201 `{ gather, now }` (a `gather_jobs` row) and `gather.started`. Only on a tile I own with a node (`FORBIDDEN` / `CONFLICT` otherwise), one active gather per node, seasonal nodes only in season. Tutorial maps use `gameplayOverrides(map.kind).gatherSeconds` |
 | `POST /api/v1/maps/:mapId/gathers/:gatherId/collect` | → `{ granted, items, now }` once `ready_at` has passed; grants and appends `resource.gathered` in one transaction |
-| `POST /api/v1/maps/:mapId/crafts` | `{ recipeId }` → 201 `{ craft, items, now }`. Uses the inputs up front (`consumeItems`); one craft at a time; seasonal recipes only in season (leftover seasonal items stay as keepsakes); a sealed recipe book page is `FORBIDDEN` (below) |
+| `POST /api/v1/maps/:mapId/dev/gathers/ready` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): my gathers on this map finish now (Collect without the wait; each keeps its length) → the bag, as `GET /inventory` |
+| `POST /api/v1/maps/:mapId/crafts` | `{ recipeId }` → 201 `{ craft, items, now }`. Uses the inputs up front (`consumeItems`); one craft at a time; seasonal recipes only in season (leftover seasonal items stay as keepsakes) |
 | `POST /api/v1/maps/:mapId/crafts/:craftId/collect` | → `{ granted, items, now }`; appends `item.crafted` |
 | `GET /api/v1/recipe-book` | → `{ unlocked }`: the recipe book page keys (`recipe:<id>`, `building:<id>`) this account has opened, in book order. Account-level |
 | `POST /api/v1/maps/:mapId/dev/items` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): `{ items: { "heart-charm": 3 } }` → 201 `{ items }` |
