@@ -6,6 +6,7 @@ import {
   InventoryResponseSchema,
   ItemsResponseSchema,
   MapIdParamsSchema,
+  RecipeBookResponseSchema,
   StartCraftRequestSchema,
 } from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
@@ -43,6 +44,16 @@ export const inventoryRoutes =
         preHandler: requireAuth,
       },
       async (request) => service.get(requireUser(request), request.params.mapId),
+    );
+
+    // The recipe book (owner decision 2026-10-05): account-level, like `/lore`.
+    app.get(
+      '/recipe-book',
+      {
+        schema: { response: { 200: RecipeBookResponseSchema } },
+        preHandler: requireAuth,
+      },
+      async (request) => service.recipeBook(requireUser(request)),
     );
 
     app.post(

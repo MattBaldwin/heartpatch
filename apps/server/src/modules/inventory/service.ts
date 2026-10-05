@@ -2,8 +2,12 @@ import {
   activeSeasons,
   GAME_DATA,
   inSeason,
+  isPageUnlocked,
   needMoreText,
+  recipeBookPages,
+  recipePageKey,
   shortfall,
+  unlockedPageKeys,
   type Craft,
   type Gather,
   type CraftResponse,
@@ -12,6 +16,8 @@ import {
   type ItemChangeReason,
   type ItemCounts,
   type PublicUser,
+  type RecipeBookPage,
+  type RecipeBookResponse,
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
@@ -31,6 +37,9 @@ import { createInventoryRepo, type CraftRow, type ItemOwner } from './repo.js';
 const ITEMS = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
 const RECIPES = new Map(GAME_DATA.recipes.map((r) => [r.id, r]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
+/** The recipe book (owner decision 2026-10-05), in book order. */
+const BOOK_PAGES = recipeBookPages();
+const BOOK_PAGE_BY_KEY = new Map(BOOK_PAGES.map((p) => [p.key, p]));
 
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
@@ -41,6 +50,10 @@ const MESSAGES = {
   collected: 'Already collected!',
   notReady: 'Not ready yet. Check back soon!',
   outOfSeason: (season: string) => `That recipe only works around ${season}!`,
+  sealed: {
+    recipe: 'That recipe page is still sealed! Collect everything it needs first.',
+    building: 'That building page is still sealed! Collect everything it needs first.',
+  },
 } as const;
 
 /** Checks ids against the shared resource table and amounts are whole and positive. */
@@ -93,6 +106,26 @@ export async function consumeItems(
   await repo.subtract(owner, items, { reason, refId });
 }
 
+/** A recipe book page by key (`recipe:<id>`, `building:<id>`), if the book has it. */
+export const recipeBookPage = (key: string): RecipeBookPage | undefined =>
+  BOOK_PAGE_BY_KEY.get(key as RecipeBookPage['key']);
+
+/**
+ * Refuses (`FORBIDDEN`) to make a sealed recipe book page: one whose
+ * ingredients this account hasn't all collected yet, on any map (owner
+ * decision 2026-10-05). Reads the ledger inside the caller's transaction and
+ * takes no row locks, so it adds nothing to the lock order. Call it before
+ * anything is spent.
+ */
+export async function requirePageOpen(
+  tx: Executor,
+  userId: string,
+  page: RecipeBookPage,
+): Promise<void> {
+  if (isPageUnlocked(page, await createInventoryRepo(tx).everCollected(userId))) return;
+  throw new AppError('FORBIDDEN', MESSAGES.sealed[page.kind]);
+}
+
 /** Season ids on today on a map (its local date, design doc §15). */
 export function seasonsOn(at: Date, timeZone: string): string[] {
   return activeSeasons(GAME_DATA.seasons, localDate(at, timeZone)).map((s) => s.id);
@@ -125,6 +158,8 @@ export interface InventoryService {
   collectCraft: (user: PublicUser, mapId: string, craftId: string) => Promise<CollectResponse>;
   /** Dev/test only: items for the player. */
   devGrant: (user: PublicUser, mapId: string, items: ItemCounts) => Promise<ItemCounts>;
+  /** The recipe book pages this account has opened (account-level). */
+  recipeBook: (user: PublicUser) => Promise<RecipeBookResponse>;
 }
 
 export interface InventoryServiceOptions {
@@ -173,6 +208,8 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
             const season = SEASON_NAMES.get(recipe.season ?? '') ?? 'its season';
             throw new AppError('CONFLICT', MESSAGES.outOfSeason(season));
           }
+          const page = recipeBookPage(recipePageKey(recipe.id));
+          if (page) await requirePageOpen(tx, user.id, page);
           if ((await repo.listActiveCrafts(owner)).length > 0) {
             throw new AppError('CONFLICT', MESSAGES.busy);
           }
@@ -231,6 +268,11 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
         await grantItems(tx, owner, items, 'dev-grant');
         return repo.list(owner);
       });
+    },
+
+    recipeBook: async (user) => {
+      const open = unlockedPageKeys(BOOK_PAGES, await store.everCollected(user.id));
+      return { unlocked: BOOK_PAGES.filter((p) => open.has(p.key)).map((p) => p.key) };
     },
   };
 }

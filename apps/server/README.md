@@ -128,11 +128,14 @@ Resources, gathering and crafting (design doc §12, §15; issue #17) live in `sr
 | `GET /api/v1/maps/:mapId/inventory` | → `{ items, gathers, crafts, seasons, now }`: the bag, my gathers on land I still own, my craft on the go, the season ids on today (map-local date), and the server's clock, which the client counts down on |
 | `POST /api/v1/maps/:mapId/gathers` | `{ q, r }` → 201 `{ gather, now }` (a `gather_jobs` row) and `gather.started`. Only on a tile I own with a node (`FORBIDDEN` / `CONFLICT` otherwise), one active gather per node, seasonal nodes only in season. Tutorial maps use `gameplayOverrides(map.kind).gatherSeconds` |
 | `POST /api/v1/maps/:mapId/gathers/:gatherId/collect` | → `{ granted, items, now }` once `ready_at` has passed; grants and appends `resource.gathered` in one transaction |
-| `POST /api/v1/maps/:mapId/crafts` | `{ recipeId }` → 201 `{ craft, items, now }`. Uses the inputs up front (`consumeItems`); one craft at a time; seasonal recipes only in season (leftover seasonal items stay as keepsakes) |
+| `POST /api/v1/maps/:mapId/crafts` | `{ recipeId }` → 201 `{ craft, items, now }`. Uses the inputs up front (`consumeItems`); one craft at a time; seasonal recipes only in season (leftover seasonal items stay as keepsakes); a sealed recipe book page is `FORBIDDEN` (below) |
 | `POST /api/v1/maps/:mapId/crafts/:craftId/collect` | → `{ granted, items, now }`; appends `item.crafted` |
+| `GET /api/v1/recipe-book` | → `{ unlocked }`: the recipe book page keys (`recipe:<id>`, `building:<id>`) this account has opened, in book order. Account-level |
 | `POST /api/v1/maps/:mapId/dev/items` | **Dev/test only** (`HP_DEV_SQUISHY_GRANTS`): `{ items: { "heart-charm": 3 } }` → 201 `{ items }` |
 
 Mutating routes take an `Idempotency-Key` (below), so a retried collect can't grant twice.
+
+**Recipe book (owner decision 2026-10-05).** Pages are the shared `recipeBookPages()` (every recipe, then every buildable building). A page opens once the account has collected every ingredient at least once, on any map: `InventoryRepo.everCollected(userId)` is the distinct `item_id`s of the account's positive `resource_ledger` rows (any reason), joined through `map_members` so the `(map_id, user_id)` index serves it. `RECIPE_BOOK.alwaysOpen` (Heart Charm, Hearthfire, both habitats) is open from the start. `requirePageOpen(tx, userId, page)` refuses a sealed page with `FORBIDDEN` before anything is spent; the craft start and building placement call it inside their transaction. It takes no row locks. Moving, removing and fuelling buildings aren't gated.
 
 **For other modules** (captures spend Heart Charms, buildings spend Timber): move items only with these, inside your own transaction, before your game event:
 
@@ -214,7 +217,7 @@ Building on a home base (design doc §11, §13–14; issue #18) lives in `src/mo
 | Endpoint | Does |
 |---|---|
 | `GET /api/v1/maps/:mapId/home` | → `HomeResponse`: my home tiles, buildings (with fuel and residents), active squishies, `speciesDefs` for secret species I own, my bag, today's seasons, `tonight` and `now` |
-| `POST /api/v1/maps/:mapId/buildings` | `{ buildingId, q, r, spot }` → 201 `HomeResponse`. My home tile only (`FORBIDDEN`), a free spot, within `maxPerHome`, seasonal ones in season; pays with `consumeItems(…, 'build')` in the same transaction; `building.placed` |
+| `POST /api/v1/maps/:mapId/buildings` | `{ buildingId, q, r, spot }` → 201 `HomeResponse`. My home tile only (`FORBIDDEN`), an open recipe book page (`FORBIDDEN` while sealed), a free spot, within `maxPerHome`, seasonal ones in season; pays with `consumeItems(…, 'build')` in the same transaction; `building.placed` |
 | `POST /api/v1/maps/:mapId/buildings/:buildingId/move` | `{ q, r, spot }` → `HomeResponse`; `building.moved` (no event if it didn't move) |
 | `POST /api/v1/maps/:mapId/buildings/:buildingId/remove` | → `{ refund, home }`: its refund percent of what it cost plus unburned fuel (`grantItems(…, 'build-refund')`); residents move out; `building.removed` |
 | `POST /api/v1/maps/:mapId/buildings/:buildingId/fuel` | `{ nights }` → `HomeResponse`. Fires only; adds what fits (up to `maxFuelNights` from tonight) and charges `consumeItems(…, 'fuel')` for that; `CONFLICT` when full; `building.fueled` |
