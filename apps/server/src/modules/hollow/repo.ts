@@ -20,6 +20,7 @@ import {
   tileDefenders,
   tiles,
 } from '../../db/schema.js';
+import { squishyAtWork } from '../jobs/repo.js';
 import { activeMember } from '../maps/repo.js';
 
 /** One player's result for a night, as stored in `hollow_events.outcomes` (checked on read). */
@@ -58,6 +59,8 @@ export interface NightSquishyRow {
   habitat: { q: number; r: number } | null;
   /** Who owns the tile it stands watch on, if it's posted; `undefined` if it isn't. */
   postOwnerUserId: string | null | undefined;
+  /** The tile it works as a gatherer (it spends the night there), or null. */
+  work: { q: number; r: number } | null;
 }
 
 export interface RescueRow {
@@ -267,6 +270,7 @@ function queries(db: Executor): HollowRepo {
     nightSquishies: async (mapId) => {
       const habitatTile = alias(tiles, 'habitat_tile');
       const postTile = alias(tiles, 'post_tile');
+      const workTile = alias(tiles, 'night_work_tile');
       const rows = await db
         .select({
           id: squishies.id,
@@ -276,6 +280,10 @@ function queries(db: Executor): HollowRepo {
           habitatR: habitatTile.r,
           posted: tileDefenders.squishyId,
           postOwnerUserId: postTile.ownerUserId,
+          // A gatherer still at work (jobs' `squishyAtWork`) sleeps on its tile.
+          atWork: squishyAtWork(),
+          workQ: workTile.q,
+          workR: workTile.r,
         })
         .from(squishies)
         .innerJoin(mapMembers, activeMember(squishies.mapId, squishies.ownerUserId))
@@ -286,6 +294,7 @@ function queries(db: Executor): HollowRepo {
         // rule plus `state`), so nightfall stays a pure step over plain rows.
         .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))
         .leftJoin(postTile, eq(postTile.id, tileDefenders.tileId))
+        .leftJoin(workTile, eq(workTile.id, squishies.workTileId))
         .where(eq(squishies.mapId, mapId))
         .orderBy(asc(squishies.id))
         // Locked until commit, so a squishy can't be moved into or out of a
@@ -301,6 +310,7 @@ function queries(db: Executor): HollowRepo {
         habitat:
           r.habitatQ !== null && r.habitatR !== null ? { q: r.habitatQ, r: r.habitatR } : null,
         postOwnerUserId: r.posted === null ? undefined : r.postOwnerUserId,
+        work: r.atWork && r.workQ !== null && r.workR !== null ? { q: r.workQ, r: r.workR } : null,
       }));
     },
 

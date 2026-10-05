@@ -251,6 +251,7 @@ interface Opponent {
 const MESSAGES = {
   notFound: "We couldn't find that battle.",
   noTeam: 'You need a squishy friend first!',
+  allBusy: 'Everyone is busy with a job! Pick a team first.',
   nobodyAround: 'No wild squishies around right now. Try again soon!',
   over: 'That battle is already over.',
   movedOn: 'The battle moved on. Take another look!',
@@ -636,7 +637,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
 
         const listed = await repo.listTeam(mapId, user.id, content.rules.teamSize);
         const team = listed.length > 0 ? listed : ((await soloTeam?.(tx)) ?? []);
-        if (team.length === 0) throw new AppError('CONFLICT', MESSAGES.noTeam);
+        if (team.length === 0) {
+          // Squishies on watch or gathering don't battle (owner decisions 2026-10-04).
+          const busy = await repo.hasActiveSquishy(mapId, user.id);
+          throw new AppError('CONFLICT', busy ? MESSAGES.allBusy : MESSAGES.noTeam);
+        }
 
         const at = now();
         const opponent = await opponentFor(tx, map, at);

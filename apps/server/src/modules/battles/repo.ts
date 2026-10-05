@@ -18,11 +18,13 @@ import {
   type FeelingId,
   type OwnedSquishy,
 } from '@heartpatch/shared';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, not } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { battles, squishies } from '../../db/schema.js';
+import { squishyAtWork } from '../jobs/repo.js';
+import { squishyOnWatch } from '../territory/repo.js';
 
 /** A `battles` row with its JSON columns typed (checked on read). */
 export interface BattleRow {
@@ -83,10 +85,13 @@ export interface BattlesRepo {
   transaction: <T>(fn: (repo: BattlesTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
 
   /**
-   * The player's active squishies on the map, strongest first, at most `limit`
-   * (team picking is a later feature).
+   * Who fights for the player (owner decisions 2026-10-04): their picked
+   * team in slot order (active ones only), or, with nobody picked, their
+   * strongest resting squishies (never guards or gatherers), at most `limit`.
    */
   listTeam: (mapId: string, userId: string, limit: number) => Promise<TeamSquishyRow[]>;
+  /** Does the player have a squishy that isn't in the Hollow (busy ones too)? */
+  hasActiveSquishy: (mapId: string, userId: string) => Promise<boolean>;
   /** Row-locks the squishies until commit (XP is written under it, care's `applyXp`). */
   lockSquishies: (ids: readonly string[]) => Promise<void>;
   /**
@@ -202,14 +207,49 @@ function queries(db: Executor): BattlesRepo {
     transaction: (fn) => withTransaction(db, (tx) => fn(createBattlesTxRepo(tx), tx)),
 
     listTeam: async (mapId, userId, limit) => {
-      const rows = await db
-        .select({
-          id: squishies.id,
-          speciesId: squishies.speciesId,
-          level: squishies.level,
-          element: squishies.element,
-          feeling: squishies.feeling,
-        })
+      const columns = {
+        id: squishies.id,
+        speciesId: squishies.speciesId,
+        level: squishies.level,
+        element: squishies.element,
+        feeling: squishies.feeling,
+      };
+      // Only the battle start reads the team (it's stored in the battle's setup).
+      const mine = and(
+        eq(squishies.mapId, mapId),
+        eq(squishies.ownerUserId, userId),
+        eq(squishies.state, 'active'),
+        not(squishyOnWatch()),
+        not(squishyAtWork()),
+      );
+      const picked = await db
+        .select(columns)
+        .from(squishies)
+        .where(and(mine, isNotNull(squishies.teamSlot)))
+        .orderBy(asc(squishies.teamSlot))
+        .limit(limit);
+      // Nobody picked (or all picked are away): the strongest resting ones, so
+      // a new player is never stuck.
+      const rows =
+        picked.length > 0
+          ? picked
+          : await db
+              .select(columns)
+              .from(squishies)
+              .where(mine)
+              .orderBy(desc(squishies.level), asc(squishies.createdAt), asc(squishies.id))
+              .limit(limit);
+      // Content ids are plain text in the database; check them on the way out.
+      return rows.map((r) => ({
+        ...r,
+        element: ElementIdSchema.parse(r.element),
+        feeling: FeelingIdSchema.parse(r.feeling),
+      }));
+    },
+
+    hasActiveSquishy: async (mapId, userId) => {
+      const [row] = await db
+        .select({ id: squishies.id })
         .from(squishies)
         .where(
           and(
@@ -218,14 +258,8 @@ function queries(db: Executor): BattlesRepo {
             eq(squishies.state, 'active'),
           ),
         )
-        .orderBy(desc(squishies.level), asc(squishies.createdAt), asc(squishies.id))
-        .limit(limit);
-      // Content ids are plain text in the database; check them on the way out.
-      return rows.map((r) => ({
-        ...r,
-        element: ElementIdSchema.parse(r.element),
-        feeling: FeelingIdSchema.parse(r.feeling),
-      }));
+        .limit(1);
+      return row !== undefined;
     },
 
     lockSquishies: async (ids) => {

@@ -26,6 +26,8 @@ export const ItemChangeReasonSchema = z.enum([
   'care',
   'rescue',
   'tutorial',
+  /** Squishy gatherers' work (owner decisions 2026-10-04). */
+  'work',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
