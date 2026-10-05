@@ -723,6 +723,10 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
       class: `rbook-spread${motion === 'none' ? '' : ` rbook-turn-${motion}`}`,
       'data-testid': 'recipe-book-spread',
     });
+    // Turned: a still page keeps no animation (and no 3D layer).
+    spread.addEventListener('animationend', (e) => {
+      if (e.target === spread) spread.classList.remove('rbook-turn-next', 'rbook-turn-prev');
+    });
     if (onCover) {
       spread.append(cover());
     } else {

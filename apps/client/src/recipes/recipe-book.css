@@ -153,7 +153,6 @@
   display: flex;
   flex: 1;
   min-height: 0;
-  perspective: 1400px;
   touch-action: pan-y;
 }
 
@@ -181,14 +180,16 @@
 @keyframes rbook-turn-next {
   from {
     opacity: 0.2;
-    transform: rotateY(60deg);
+    /* Perspective lives in the turn only: a lasting 3D context skews
+       measurements (and costs a layer) once the page is still. */
+    transform: perspective(1400px) rotateY(60deg);
   }
 }
 
 @keyframes rbook-turn-prev {
   from {
     opacity: 0.2;
-    transform: rotateY(-60deg);
+    transform: perspective(1400px) rotateY(-60deg);
   }
 }
 
