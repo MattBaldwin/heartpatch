@@ -30,6 +30,7 @@ interface BattleDebug {
       known: boolean;
       props: number;
       shadowMap: boolean;
+      lowTier: boolean;
     };
     effects: { spawned: number; live: number };
     /** Dashes, knockbacks and flops played so far. */
@@ -119,10 +120,15 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(page.getByTestId('battle-plate-mine')).toContainText('Lv');
   await expect(page.getByTestId('battle-plate-theirs')).toContainText('Lv');
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  // It plays on the terrain the server says, as a known arena with props and soft shadows.
+  // It plays on the terrain the server says, as a known arena with props, and
+  // soft shadows unless the governor had stepped the renderer down to the low
+  // tier before the battle was built (CI's software WebKit crawls; the low tier
+  // draws no shadow map by design).
   const where = await serverBattle(page, battleId);
-  expect(state.scene?.arena).toMatchObject({ ...where, known: true, shadowMap: true });
-  expect(state.scene?.arena.props).toBeGreaterThan(0);
+  const arena = state.scene!.arena;
+  expect(arena).toMatchObject({ ...where, known: true });
+  expect(arena.props).toBeGreaterThan(0);
+  expect(arena.shadowMap).toBe(!arena.lowTier);
   // The performance budget (CLAUDE.md rule 8): a settled frame draws under 60 calls.
   await expect
     .poll(() => battleState(page).then((s) => s?.scene?.drawCalls ?? 0), { timeout: 30_000 })

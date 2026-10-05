@@ -56,6 +56,8 @@ export interface ArenaStats {
   /** Meshes the arena draws (its draw calls). */
   readonly meshes: number;
   readonly shadowMap: boolean;
+  /** Built for the low tier (fewer props, no shadow map). */
+  readonly lowTier: boolean;
 }
 
 export interface Arena {
@@ -443,6 +445,7 @@ export function buildArena(scene: Scene, options: ArenaOptions): Arena {
       props: props.length,
       meshes: meshes.filter((m) => m.isEnabled()).length,
       shadowMap: shadows !== null,
+      lowTier: options.lowTier,
     },
     key,
     keyDir,

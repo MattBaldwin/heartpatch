@@ -86,7 +86,13 @@ describe('BattleScene', () => {
     expect(battle.stats).toMatchObject({
       squishies: 2,
       keeper: true,
-      arena: { terrain: 'mountains', timeOfDay: 'dusk', known: true, shadowMap: true },
+      arena: {
+        terrain: 'mountains',
+        timeOfDay: 'dusk',
+        known: true,
+        shadowMap: true,
+        lowTier: false,
+      },
       down: 0,
     });
     expect(battle.stats.arena.props).toBeGreaterThan(0);
@@ -100,7 +106,7 @@ describe('BattleScene', () => {
     const high = build('forest').battle.stats.arena.props;
     const { scene, battle } = build('forest', false, 'low');
     expect(battle.stats.arena.props).toBeLessThan(high);
-    expect(battle.stats.arena.shadowMap).toBe(false);
+    expect(battle.stats.arena).toMatchObject({ shadowMap: false, lowTier: true });
     expect(scene.getMeshByName('arena-stars')).toBeNull();
     const night = new Scene(engine);
     night.activeCamera = new TargetCamera('cam', Vector3.Zero(), night);
