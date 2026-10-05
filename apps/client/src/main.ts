@@ -143,6 +143,8 @@ const trays = createTrays({ root: document.body });
 const jobsBox = el('div', { class: 'tray-jobs' });
 jobsBox.hidden = true;
 trays.slot('squishies').append(jobsBox);
+/** The map whose HUD is on screen (null between maps): the Team and Jobs row follows it (#132). */
+let hudMapId: string | null = null;
 
 // The bag and gathering (#17): a Bag entry in the My Heartpatch tray, and the
 // gather buttons in the tile chip.
@@ -383,6 +385,7 @@ const maps = createMapScreen({
     jobs.tileActions,
   ),
   onHudChange: (mapId) => {
+    hudMapId = mapId;
     trays.setVisible(mapId !== null);
     recipeBook.setMap(mapId);
     // Hidden, then shown: the Team and Jobs row checks the map (not on the Glade).
@@ -522,6 +525,8 @@ const milestones = createMilestoneCelebration({
 // out while one is open, and the map comes back after.
 const battles = createBattleScreen({
   root: document.body,
+  // Find a squishy and the Catalog live in the Adventure tray.
+  entryRoot: trays.slot('battle'),
   showScene,
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
@@ -573,11 +578,6 @@ const battles = createBattleScreen({
     audio.cue(battleCue(step));
   },
 });
-// Find a squishy and the Catalog go in the Adventure tray. The battle screen
-// builds them (battle lane), so the box moves in here.
-// TODO(battle lane): pass an `entryRoot` option instead once it exists.
-const battleEntry = document.querySelector('[data-testid="battle-entry"]')?.parentElement;
-if (battleEntry) trays.slot('battle').append(battleEntry);
 // Claiming starts from a tile: this row says how (territory, #15).
 trays.slot('adventure').append(
   trayRow({
@@ -590,7 +590,7 @@ trays.slot('adventure').append(
     },
   }),
 );
-jobs.mountTeamButton(jobsBox, () => maps.debug?.id ?? null);
+jobs.mountTeamButton(jobsBox, () => hudMapId);
 /** Who is logged in now (a story finishing late must not open another player's lobby). */
 let signedIn: PublicUser | null = null;
 // Picking a Keeper (#42) comes right after signup, then the opening
@@ -857,6 +857,7 @@ if (import.meta.env.DEV) {
     tutorial: () => tutorial.debug,
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,
+    battleDev: () => battles.dev,
     keeper: () => keeper.debug,
     cinematic: () => cinematic.debug,
     catalog: () => catalog.debug,

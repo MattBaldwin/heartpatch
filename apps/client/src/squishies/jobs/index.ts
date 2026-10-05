@@ -174,7 +174,8 @@ export function createJobs(options: JobsOptions): Jobs {
         if (id && !glade(id)) void jobs.openJobBoard(id);
       });
       box.prepend(row);
-      // Not on the Tutorial Glade: shown again whenever the battle entry is.
+      // Not on the Tutorial Glade: shown again whenever the box is (back from
+      // a battle, #132), judged by the map the caller says is on screen now.
       const refresh = () => {
         const id = mapNow();
         row.hidden = id === null || glade(id);

@@ -68,9 +68,16 @@ export class BattleContent {
   }
 }
 
-/** What the player sees over an energy bar: "Moonpuff · Lv 8". */
-export function nameplate(content: BattleContent, squishy: BattleSquishyView): string {
-  return `${content.speciesName(squishy.speciesId)} · Lv ${String(squishy.level)}`;
+/**
+ * The name on a squishy's pill: its nickname where the player gave one (#141:
+ * the name shown everywhere else), else its species name.
+ */
+export function plateName(
+  content: BattleContent,
+  squishy: Pick<BattleSquishyView, 'id' | 'speciesId'>,
+  nicknames: ReadonlyMap<string, string> = new Map(),
+): string {
+  return nicknames.get(squishy.id) ?? content.speciesName(squishy.speciesId);
 }
 
 const ELEMENT_NAMES = new Map(ELEMENTS.map((e) => [e.id, e.name]));

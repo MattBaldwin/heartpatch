@@ -21,6 +21,8 @@ export type CueName =
   /** Battles. */
   | 'whoosh'
   | 'bonk'
+  /** A super or good hit lands (owner decision 2026-10-04: action-cartoon battles). */
+  | 'thwack'
   | 'whiff'
   | 'sleepy'
   | 'pop'
@@ -56,6 +58,7 @@ export const CUE_NAMES: readonly CueName[] = [
   'evolve',
   'whoosh',
   'bonk',
+  'thwack',
   'whiff',
   'sleepy',
   'pop',
@@ -91,12 +94,15 @@ export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
 export const UI_CUES: ReadonlySet<CueName> = new Set(['tick']);
 
 /** A battle step as it plays (`battle-screen`'s playback). */
-export function battleCue(step: Pick<PlaybackStep, 'kind' | 'squish'>): CueName | null {
+export function battleCue(
+  step: Pick<PlaybackStep, 'kind' | 'squish'> & Partial<Pick<PlaybackStep, 'effectiveness'>>,
+): CueName | null {
   switch (step.kind) {
     case 'move':
       return 'whoosh';
     case 'hit':
-      return 'bonk';
+      // A big one thwacks; an ordinary or weak one is the soft bonk.
+      return step.effectiveness === 'super' || step.effectiveness === 'good' ? 'thwack' : 'bonk';
     case 'miss':
     case 'forfeit':
       return 'whiff';
