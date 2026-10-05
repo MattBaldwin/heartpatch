@@ -590,3 +590,13 @@ _The owner's playtest note of 2026-10-04 ("visually very cluttered… slide-out 
 - **Sprout's first-time hint** points at both handles once per account, on a patch (the Glade has Sprout already); opening a tray or "Got it!" answers it.
 - **"Find on map"** selects the tile and glides the camera there (`MapCamera.panTo`, a 0.6 s ease-out; a jump with reduced motion; a finger takes over at once).
 - **The tutorial follows the controls.** A button in a shut tray isn't spotlighted (it's hidden, not gone); its tray's handle stands in, so Sprout points at the handle first and then at the button inside. Sprout's lines say where things are now ("Open Adventure on the left, tap Find a squishy…").
+
+## 2026-10-05 — Bug bash: screens (Fix PR)
+
+_Fixes from the bug bash of 2026-10-05, "screens" lane (#130, #131, #135, #144, #145, #146, #156, #157, #158, #160)._
+
+- **The patch list says who's waiting (#144).** `MapSummary` (`GET /maps`) carries `pendingRequests`, the join requests waiting on the owner, counted in the same query; it's 0 on a row the player doesn't own. The lobby shows "1 wants to join!" on the row. *Why:* the request was only visible inside the patch's detail, so owners never noticed it.
+- **A joiner's lobby asks again every 5 s while a request waits (#145)** (`WAITING_POLL_MS`), only while the patch list is on screen and the page is visible. *Why:* the joiner isn't on the patch's live channel until they're a member, so nothing can push "yes" to them; a reload-free lobby was the ask.
+- **A reload or log-in lands on the last patch visited (#160),** kept per account on the device (`localStorage`), unless a tutorial run opens the Glade by itself. The server still decides whether the patch opens; a patch the player left or was removed from is forgotten.
+- **The Add to Home Screen guide is a card in the patch list (#135),** not a layer of its own, so it never sits under the sign-in card or over Sprout.
+- **Home base tiles are a warm sand up close (#131),** not the map's cream: alone and big under the sun, cream tone-mapped to white and bloomed, and the white "glowing spots" vanished into it. The spots are pink rings with a soft fill.

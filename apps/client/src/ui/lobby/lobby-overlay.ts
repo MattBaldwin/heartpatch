@@ -64,6 +64,11 @@ export interface Lobby {
   showSettings: () => void;
   /** True while the lobby's panel is up (over the map, or on its own). */
   readonly isOpen: boolean;
+  /**
+   * True while "Make a patch" or "Join a patch" is on screen: a celebration
+   * (the First Patch milestone) waits until the player is done typing.
+   */
+  readonly formOpen: boolean;
 }
 
 export interface LobbyOptions {
@@ -108,6 +113,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   let refresh: () => void = () => undefined;
   /** True while the patch list is the screen showing. */
   let onList = false;
+  /** True while a one-field form (make, join) is the screen showing. */
+  let onForm = false;
   /** Bumped by every screen change, so a slow list fetch can't cover a newer screen. */
   let shown = 0;
   /** Set while a one-time password and recovery code are on screen (#47). */
@@ -127,6 +134,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     releaseUpdates?.();
     releaseUpdates = null;
     onList = false;
+    onForm = false;
     shown += 1;
     card.replaceChildren(...children);
     panel.hidden = false;
@@ -273,7 +281,23 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       const open = el(
         'button',
         { type: 'button', class: 'lobby-map' },
-        el('span', { class: 'lobby-map-name' }, map.name),
+        el(
+          'span',
+          { class: 'lobby-map-name' },
+          map.name,
+          // Someone is asking to join (#144): say so right on the row.
+          ...(map.pendingRequests > 0
+            ? [
+                el(
+                  'span',
+                  { class: 'lobby-badge lobby-badge-alert', 'data-testid': 'lobby-map-asking' },
+                  map.pendingRequests === 1
+                    ? '1 wants to join!'
+                    : `${String(map.pendingRequests)} want to join!`,
+                ),
+              ]
+            : []),
+        ),
         el(
           'span',
           { class: 'lobby-map-meta' },
@@ -400,6 +424,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         });
     });
     show(form);
+    onForm = true;
     input.focus();
   }
 
@@ -841,6 +866,9 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     showSettings,
     get isOpen() {
       return !panel.hidden;
+    },
+    get formOpen() {
+      return !panel.hidden && onForm;
     },
   };
 }

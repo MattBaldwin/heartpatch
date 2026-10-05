@@ -34,8 +34,9 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   await expect(friendLobby.getByTestId('lobby-notice')).toContainText(`${ownerName} just needs`);
   await expect(friendLobby.getByTestId('lobby-waiting')).toContainText('Spooky Glade');
 
-  // The owner sees the request and says yes.
+  // The owner's patch list says someone is waiting (#144), and the owner says yes.
   await ownerLobby.getByRole('button', { name: 'Back to my patches' }).tap();
+  await expect(ownerLobby.getByTestId('lobby-map-asking')).toHaveText('1 wants to join!');
   await ownerLobby.getByRole('button', { name: /Spooky Glade/ }).tap();
   const requests = ownerLobby.getByTestId('lobby-requests');
   await expect(requests).toContainText(`${friendName} wants to join`);

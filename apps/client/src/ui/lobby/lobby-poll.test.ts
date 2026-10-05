@@ -12,6 +12,7 @@ const map = (id: string, name: string, memberCount = 1) =>
     memberCount,
     maxPlayers: 4,
     pvpMode: 'gentle',
+    pendingRequests: 0,
   }) as MyMapsResponse['maps'][number];
 const request = (id: string, mapName: string) => ({
   id,
