@@ -25,6 +25,10 @@ import './hollow.css';
 
 export interface HollowScreenOptions {
   root: HTMLElement;
+  /** Where the entry button goes (a tray over the map, ui/trays); defaults to `root`. */
+  entryRoot?: HTMLElement;
+  /** Where the fire hint goes (the My Heartpatch tray); defaults to `root`. */
+  hintRoot?: HTMLElement;
   /** Draws the night and the Hollow Man on the map (`map-screen` layer). */
   layer: Pick<HollowLayer, 'setNight' | 'visit' | 'debug'>;
   /** A rescue battle started (or one going came back): the battle screen takes over. */
@@ -115,7 +119,11 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     el('span', { class: 'hollow-open-icon', 'aria-hidden': 'true' }, '🌙'),
     el('span', { class: 'hollow-open-label' }, HOLLOW_TEXT.open),
   );
-  const badge = el('span', { class: 'hollow-open-badge', 'aria-hidden': 'true' });
+  const badge = el('span', {
+    class: 'hollow-open-badge',
+    'aria-hidden': 'true',
+    'data-tray-alert': HOLLOW_TEXT.news,
+  });
   openButton.append(badge);
   openButton.hidden = true;
   openButton.addEventListener('click', () => {
@@ -128,7 +136,13 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   // owner decision 2026-10-03). It never takes taps, so it can't get in the way.
   const hint = el(
     'p',
-    { class: 'hollow-hint', role: 'status', 'data-testid': 'hollow-fire-hint' },
+    {
+      class: 'hollow-hint',
+      role: 'status',
+      'data-testid': 'hollow-fire-hint',
+      // A nudge on the My Heartpatch handle until the first fire is lit.
+      'data-tray-alert': HOLLOW_TEXT.fireHint,
+    },
     el('span', { 'aria-hidden': 'true' }, '🔥 '),
     HOLLOW_TEXT.fireHint,
   );
@@ -148,7 +162,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     'data-testid': 'hollow-sheet',
   });
   sheet.hidden = true;
-  options.root.append(openButton, hint, reportBox, sheet);
+  (options.entryRoot ?? options.root).append(openButton);
+  (options.hintRoot ?? options.root).append(hint);
+  options.root.append(reportBox, sheet);
 
   const speciesName = (speciesId: string): string | undefined => {
     const species: Species | undefined =

@@ -11,7 +11,7 @@ import { COMMAND_RETRY_MS, sendCommand } from './send-command.js';
 import { tileAction, type TileAction } from './tile-action.js';
 import './inventory.css';
 
-// The bag and gathering (#17, design doc §12): a Bag button over the map that
+// The bag and gathering (#17, design doc §12): a Bag entry in the My Heartpatch tray that
 // opens a sheet of items (big numbers, pictures) and recipes, and the
 // gather / collect button inside the map's tile panel. Timers are the
 // server's timestamps; the screen only counts down to them on the game clock
@@ -19,6 +19,8 @@ import './inventory.css';
 
 export interface InventoryScreenOptions {
   root: HTMLElement;
+  /** Where the entry button goes (a tray over the map, ui/trays); defaults to `root`. */
+  entryRoot?: HTMLElement;
   api?: InventoryApi;
   /** Device wall clock in ms (tests pass a fake). */
   now?: () => number;
@@ -139,7 +141,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     recipesBox,
   );
   sheet.hidden = true;
-  options.root.append(open, chip, sheet);
+  (options.entryRoot ?? options.root).append(open);
+  options.root.append(chip, sheet);
 
   if (options.devTools) {
     const dev = el(
@@ -459,8 +462,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   }
 
   function render(): void {
-    // The tile panel covers the button's spot and has its own gather buttons.
-    open.hidden = mapId === null || panel !== null;
+    open.hidden = mapId === null;
     renderBag();
     renderTile();
     renderChip();

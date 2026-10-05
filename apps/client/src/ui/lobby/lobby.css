@@ -28,10 +28,6 @@
 }
 
 .lobby-open {
-  position: fixed;
-  z-index: 4;
-  left: calc(env(safe-area-inset-left) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 16px);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
 }
 

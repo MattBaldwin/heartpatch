@@ -17,6 +17,7 @@ import type { WardrobeDebug } from '../ui/wardrobe/wardrobe-screen.js';
 import type { LorebookDebug } from '../lore/lorebook.js';
 import type { MilestoneCelebrationDebug } from '../milestones/milestone-celebration.js';
 import type { StarterDebug } from '../starters/starter-screen.js';
+import type { TraysDebug } from '../ui/trays/trays.js';
 import type { MapCameraState } from './camera/map-camera.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 
@@ -38,6 +39,8 @@ declare global {
        * Only the game page has it (not dev pages like the squishy gallery).
        */
       map?(): MapDebug | null;
+      /** The side trays over the map: shown, which is open, the hint, the handles' badges. */
+      trays?(): TraysDebug;
       /** The tutorial's step, spotlight and Sprout (#47), or null when logged out. */
       tutorial?(): TutorialDebug | null;
       /** True while a screen holds automatic updates (pwa/update-hold.ts). */

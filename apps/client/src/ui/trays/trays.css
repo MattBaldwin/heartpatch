@@ -1,0 +1,605 @@
+/* The side trays over the map (ui/trays/trays.ts). The world stays
+   full-screen: two handles at thumb height, trays that slide from the edges
+   (transform only, so a slide never re-lays out the page), safe areas, 44pt+
+   targets. Above the map's own overlays (3); the lobby and catalog (4) are
+   mounted later, so they still cover it; sheets (5+) and Sprout (9) too. */
+
+.trays {
+  --tray-width: min(320px, calc(100vw - 76px));
+  --tray-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  position: fixed;
+  z-index: 4;
+  inset: 0;
+  pointer-events: none;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+@media (min-width: 700px) {
+  .trays {
+    --tray-width: 384px;
+  }
+}
+
+.trays[hidden],
+.trays [hidden] {
+  display: none !important;
+}
+
+.trays > * {
+  pointer-events: auto;
+}
+
+.tray-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgb(74 49 80 / 14%);
+  cursor: default;
+}
+
+/* ── Trays ─────────────────────────────────────────────────────────────── */
+
+.tray {
+  position: absolute;
+  /* Under the corner buttons (My patches, Chat, the Keeper menu), which stay usable. */
+  top: calc(env(safe-area-inset-top) + 66px);
+  bottom: calc(env(safe-area-inset-bottom) + 8px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: var(--tray-width);
+  background: #fffafc;
+  box-shadow: 0 10px 30px rgb(74 49 80 / 24%);
+  transition:
+    transform 280ms var(--tray-ease),
+    visibility 0s linear 280ms;
+  visibility: hidden;
+  will-change: transform;
+}
+
+.tray-adventure {
+  left: 0;
+  padding-left: env(safe-area-inset-left);
+  border-radius: 0 28px 28px 0;
+  transform: translateX(-100%);
+}
+
+.tray-heartpatch {
+  right: 0;
+  padding-right: env(safe-area-inset-right);
+  border-radius: 28px 0 0 28px;
+  transform: translateX(100%);
+}
+
+.tray.tray-shown {
+  transform: none;
+  visibility: visible;
+  transition:
+    transform 280ms var(--tray-ease),
+    visibility 0s;
+}
+
+.tray-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 12px 6px 20px;
+}
+
+.tray-title {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 900;
+  color: #7a2d55;
+}
+
+.tray-close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: #fbeaf2;
+  color: #7a2d55;
+  cursor: pointer;
+}
+
+.tray-body {
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 4px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tray-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tray-section:empty {
+  display: none;
+}
+
+/* Every entry in a tray is one big row: icon, words, maybe a badge.
+   Features' own buttons (Bag, Home, Report…) become rows here. */
+.tray-section > button,
+.tray-section > .battle-entry-box > button,
+.tray-row {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 58px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px #f6dceb;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  color: #4a3150;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.tray-section > button:active,
+.tray-row:active {
+  transform: scale(0.98);
+}
+
+.tray-section > button:disabled {
+  opacity: 0.6;
+}
+
+/* Rows in a sensible order, whichever feature mounted first. */
+.tray-section > [data-testid='tray-claim'] {
+  order: -1;
+}
+
+.tray-section > .home-open {
+  order: 1;
+}
+
+.tray-section > .recipe-book-open {
+  order: 2;
+}
+
+.tray-section > .bag-open {
+  order: 3;
+}
+
+.tray-section > .hollow-hint {
+  order: 4;
+}
+
+/* A feature's icon span (🎒, 🏡…) is the first child; its label the second. */
+.tray-section > button > span:first-child,
+.tray-row-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  border-radius: 14px;
+  background: #fbeaf2;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.tray-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tray-row-label {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.tray-row-sub {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b4b6e;
+}
+
+/* A feature's count badge sits at the row's end. */
+.tray-section [data-tray-alert] {
+  position: static;
+  margin-left: auto;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #ffc94d;
+  color: #4a3150;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 26px;
+  text-align: center;
+}
+
+/* Notes in a tray (the Hollow's fire hint) read as a soft line, not a button. */
+.tray-section > p {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: #fff4dc;
+  font-size: 14px;
+  font-weight: 800;
+  color: #6b3f12;
+}
+
+.tray-section > p[data-tray-alert] {
+  min-width: 0;
+  height: auto;
+  line-height: 1.35;
+  text-align: left;
+}
+
+/* The battle entry (Find a squishy, Catalog) is one box of buttons. */
+.tray-section > .battle-entry-box {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  max-width: none;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.tray-section > .battle-entry-box > .battle-entry {
+  order: -1;
+  min-height: 68px;
+  background: #b8487a;
+  box-shadow: 0 4px 0 #7a2d55;
+  color: #fff;
+  font-size: 18px;
+}
+
+.tray-section > .battle-entry-box > .battle-entry-note {
+  order: -1;
+  margin: -2px 6px 0;
+  padding: 0;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 800;
+  color: #6b4b6e;
+}
+
+.tray-section > .battle-entry-box > .battle-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Handles ───────────────────────────────────────────────────────────── */
+
+.tray-handle {
+  position: absolute;
+  top: 55%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  box-sizing: border-box;
+  width: 64px;
+  height: 94px;
+  margin-top: -47px;
+  padding: 0;
+  border: 0;
+  background: #fffafc;
+  box-shadow: 0 6px 16px rgb(74 49 80 / 24%);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 280ms var(--tray-ease);
+}
+
+@media (orientation: landscape) {
+  .tray-handle {
+    top: 50%;
+  }
+}
+
+.tray-handle-adventure {
+  left: env(safe-area-inset-left);
+  border-radius: 0 26px 26px 0;
+}
+
+.tray-handle-heartpatch {
+  right: env(safe-area-inset-right);
+  border-radius: 26px 0 0 26px;
+}
+
+/* An open tray carries its handle along on its edge, so the same tap shuts
+   it; the other handle steps aside (the tray covers its side anyway). */
+.trays-open .tray-handle:not(.tray-handle-open) {
+  visibility: hidden;
+}
+
+.tray-handle-adventure.tray-handle-open {
+  transform: translateX(var(--tray-width));
+}
+
+.tray-handle-heartpatch.tray-handle-open {
+  transform: translateX(calc(-1 * var(--tray-width)));
+}
+
+.tray-handle-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #fff;
+}
+
+.tray-handle-adventure .tray-handle-icon {
+  background: #8a5f86;
+}
+
+.tray-handle-heartpatch .tray-handle-icon {
+  background: #b8487a;
+}
+
+.tray-handle-label {
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  color: #7a2d55;
+}
+
+.tray-icon {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tray-badge {
+  position: absolute;
+  top: -7px;
+  display: grid;
+  place-items: center;
+  min-width: 25px;
+  height: 25px;
+  box-sizing: border-box;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #ffc94d;
+  box-shadow: 0 0 0 2.5px #fffafc;
+  font-size: 13px;
+  font-weight: 900;
+  color: #4a3150;
+}
+
+.tray-handle-adventure .tray-badge {
+  right: -7px;
+}
+
+.tray-handle-heartpatch .tray-badge {
+  left: -7px;
+}
+
+/* News glows softly on the handle instead of a banner over the world. */
+.tray-handle-news,
+.trays-hinting .tray-handle {
+  animation: tray-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes tray-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 6px 16px rgb(74 49 80 / 24%),
+      0 0 0 0 rgb(255 201 77 / 0%);
+  }
+
+  50% {
+    box-shadow:
+      0 6px 16px rgb(74 49 80 / 24%),
+      0 0 0 7px rgb(255 201 77 / 60%);
+  }
+}
+
+.tray-peek {
+  position: absolute;
+  top: 55%;
+  max-width: calc(100vw - 100px);
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #4a3150;
+  box-shadow: 0 6px 14px rgb(74 49 80 / 30%);
+  font-size: 14px;
+  font-weight: 800;
+  color: #fffafc;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+@media (orientation: landscape) {
+  .tray-peek {
+    top: 50%;
+  }
+}
+
+.tray-peek-adventure {
+  left: calc(env(safe-area-inset-left) + 74px);
+}
+
+.tray-peek-heartpatch {
+  right: calc(env(safe-area-inset-right) + 74px);
+}
+
+/* ── Top corner and little notes ───────────────────────────────────────── */
+
+/* "My patches" in the top-left corner. */
+.tray-top-left {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: calc(env(safe-area-inset-left) + 12px);
+}
+
+.tray-top-left > button {
+  min-height: 48px;
+  margin: 0;
+  padding: 0 16px;
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  font-size: 15px;
+}
+
+/* Chat sits left of the Keeper menu (the auth chip, top right). */
+.tray-top-right {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: calc(env(safe-area-inset-right) + 64px);
+  display: flex;
+  gap: 8px;
+}
+
+.tray-top-right:empty {
+  display: none;
+}
+
+.tray-top-right > button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 250 252 / 94%);
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
+  font-size: 22px;
+  color: #7a2d55;
+  cursor: pointer;
+}
+
+/* An icon button: the words are for VoiceOver (it keeps its aria-label). */
+.tray-top-right > button > span + span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.tray-say {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 120px);
+  left: 50%;
+  max-width: calc(100vw - 48px);
+  margin: 0;
+  padding: 11px 18px;
+  border-radius: 999px;
+  background: #4a3150;
+  box-shadow: 0 8px 20px rgb(74 49 80 / 35%);
+  font-size: 15px;
+  font-weight: 800;
+  color: #fffafc;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.tray-hint {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 130px);
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(300px, calc(100vw - 160px));
+  transform: translateX(-50%);
+}
+
+.tray-hint-sprout {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fffbe0, #ffd76a 55%, #f2a93b);
+  box-shadow: 0 0 30px 10px rgb(255 215 106 / 60%);
+}
+
+.tray-hint-bubble {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 14px 16px 16px;
+  border-radius: 24px;
+  background: #fffafc;
+  box-shadow: 0 10px 30px rgb(74 49 80 / 30%);
+  text-align: center;
+}
+
+.tray-hint-who {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #b0467a;
+}
+
+.tray-hint-line {
+  margin: 6px 0 12px;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+/* Reduced motion: trays fade in place instead of sliding; nothing pulses. */
+@media (prefers-reduced-motion: reduce) {
+  .tray,
+  .tray.tray-shown {
+    opacity: 0;
+    transform: none;
+    transition:
+      opacity 180ms ease,
+      visibility 0s linear 180ms;
+  }
+
+  .tray.tray-shown {
+    opacity: 1;
+    transition:
+      opacity 180ms ease,
+      visibility 0s;
+  }
+
+  .tray-handle {
+    transition: none;
+  }
+
+  .tray-handle-news,
+  .trays-hinting .tray-handle {
+    animation: none;
+    box-shadow:
+      0 6px 16px rgb(74 49 80 / 24%),
+      0 0 0 4px rgb(255 201 77 / 75%);
+  }
+}

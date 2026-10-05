@@ -3,41 +3,6 @@
    (#21); the sheet is a bottom card like the Hollow's; bubbles float near the
    top, under the map name, and never block taps. */
 
-.chat-open {
-  position: fixed;
-  z-index: 4;
-  left: calc(env(safe-area-inset-left) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 388px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border: none;
-  border-radius: 999px;
-  background: #fff6e8;
-  box-shadow: 0 4px 14px rgb(122 74 30 / 22%);
-  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
-  color: #7a4a1e;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.chat-open:active {
-  transform: scale(0.95);
-}
-
-.chat-open-icon {
-  font-size: 26px;
-  line-height: 1;
-}
-
-.chat-open-label {
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .chat-open[hidden],
 .chat-sheet[hidden] {
   display: none;

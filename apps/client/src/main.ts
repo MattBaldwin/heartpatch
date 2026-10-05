@@ -26,6 +26,7 @@ import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { boutiqueApi } from './ui/boutique/boutique-api.js';
 import { createCoinCounter } from './ui/coins/coin-counter.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
+import { createTrays, trayRow } from './ui/trays/trays.js';
 import { startPwa } from './pwa/pwa.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
@@ -125,9 +126,18 @@ const chatFor = (mapId: string): string | null => (mapId === glade ? null : mapI
 // the engine. Screens report moments; the audio module picks the sound.
 const audio = createAudio();
 
-// The bag and gathering (#17): a Bag button over a multiplayer map, and the
-// gather buttons in its tile panel.
-const inventory = createInventoryScreen({ root: document.body, devTools: import.meta.env.DEV });
+// The map's controls live in two side trays (owner decision 2026-10-04):
+// "Adventure" on the left, "My Heartpatch" on the right, with news as badges
+// on their handles. Mounted first, so the lobby and catalog cover it.
+const trays = createTrays({ root: document.body });
+
+// The bag and gathering (#17): a Bag entry in the My Heartpatch tray, and the
+// gather buttons in the tile chip.
+const inventory = createInventoryScreen({
+  root: document.body,
+  entryRoot: trays.slot('heartpatch'),
+  devTools: import.meta.env.DEV,
+});
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time
 // the player is back from the battle that caused it, or opens their home.
@@ -212,6 +222,7 @@ let raidReportOpen = false;
 // on my land while I was away, my defense style, and replays in the battle screen.
 const raidReport = createRaidReport({
   root: document.body,
+  entryRoot: trays.slot('adventure'),
   watch: (replay) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) {
       battles.watch(replay.start, replay.end);
@@ -235,6 +246,8 @@ const territory = withRaidReport(
 const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
 const hollow = createHollowScreen({
   root: document.body,
+  entryRoot: trays.slot('adventure'),
+  hintRoot: trays.slot('heartpatch'),
   // The night loop plays while it's night on the map, and his visit hushes it.
   layer: {
     setNight: (night) => {
@@ -258,12 +271,13 @@ const hollow = createHollowScreen({
 });
 // Quick messages (#23): a Chat button over a multiplayer map, with presets,
 // emoji and squishy stickers, and little bubbles when someone says something.
-const chat = createChatScreen({ root: document.body });
+const chat = createChatScreen({ root: document.body, entryRoot: trays.slot('top-right') });
 // The home base (#18): a Home button over a multiplayer map opens the
 // player's home tiles up close, where they build, fuel the fire and house
 // squishies. Like battles, it owns the screen while open.
 const home = createHomeScreen({
   root: document.body,
+  entryRoot: trays.slot('heartpatch'),
   onProblem: (message) => {
     lobby.showMessage(message);
   },
@@ -326,6 +340,11 @@ const maps = createMapScreen({
     lobby.showMessage(message);
   },
   tileActions: combineTileActions(inventory.tileActions, home.tileActions, territory.tileActions),
+  onHudChange: (shown) => {
+    trays.setVisible(shown);
+    // Sprout points at the handles once, on a patch (the Glade has Sprout already).
+    if (shown && signedIn && glade === null) trays.offerHint(signedIn.id);
+  },
   layers: [hollowLayer],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
@@ -465,6 +484,23 @@ const battles = createBattleScreen({
     audio.cue(battleCue(step));
   },
 });
+// Find a squishy and the Catalog go in the Adventure tray. The battle screen
+// builds them (battle lane), so the box moves in here.
+// TODO(battle lane): pass an `entryRoot` option instead once it exists.
+const battleEntry = document.querySelector('[data-testid="battle-entry"]')?.parentElement;
+if (battleEntry) trays.slot('battle').append(battleEntry);
+// Claiming starts from a tile: this row says how (territory, #15).
+trays.slot('adventure').append(
+  trayRow({
+    icon: '🚩',
+    label: 'Claim land',
+    sub: 'Tap land next to yours',
+    testId: 'tray-claim',
+    onTap: () => {
+      trays.say('Tap land next to yours, then Claim!');
+    },
+  }),
+);
 /** Who is logged in now (a story finishing late must not open another player's lobby). */
 let signedIn: PublicUser | null = null;
 // Picking a Keeper (#42) comes right after signup, then the opening
@@ -590,6 +626,7 @@ const lobbyCoins = createCoinCounter({
   fetchBalance: async () => (await boutiqueApi.coins()).balance,
 });
 const lobby = mountLobby(document.body, {
+  buttonRoot: trays.slot('top-left'),
   onOpen: async (mapId) => {
     catalog.close();
     care.close();
@@ -628,7 +665,27 @@ const lobby = mountLobby(document.body, {
     ...lorebook.settings(),
   ],
 });
+/** A row in the Keeper menu (the corner of the map). */
+const menuRow = (icon: string, label: string, onTap: () => void): HTMLButtonElement => {
+  const row = document.createElement('button');
+  row.type = 'button';
+  row.append(
+    Object.assign(document.createElement('span'), { textContent: icon, ariaHidden: 'true' }),
+    label,
+  );
+  row.addEventListener('click', onTap);
+  return row;
+};
 mountAuth(document.body, {
+  // Over the map, the rare things live in the Keeper menu in the corner.
+  menu: () => [
+    menuRow('👗', 'Wardrobe', () => {
+      wardrobe.open();
+    }),
+    menuRow('⚙️', 'Settings', () => {
+      lobby.showSettings();
+    }),
+  ],
   onChange: (user) => {
     battles.setUser(user);
     catalog.setUser(user);
@@ -694,6 +751,7 @@ if (import.meta.env.DEV) {
     idle: () => stage?.idle ?? false,
     invalidate: () => stage?.invalidate(),
     map: () => maps.debug,
+    trays: () => trays.debug,
     tutorial: () => tutorial.debug,
     updatesHeld: () => updateHold.held,
     battle: () => battles.debug,

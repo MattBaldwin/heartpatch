@@ -54,17 +54,16 @@
 .tile-panel {
   position: fixed;
   z-index: 3;
-  left: calc(env(safe-area-inset-left) + 16px);
-  right: calc(env(safe-area-inset-right) + 16px);
-  /* Sits above the "My patches" button in the bottom corner. */
-  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  left: calc(env(safe-area-inset-left) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
   box-sizing: border-box;
-  max-width: 420px;
+  max-width: 470px;
   margin: 0 auto;
-  padding: 14px 16px 16px 20px;
+  padding: 12px;
   border-radius: 24px;
   background: #fffafc;
-  box-shadow: 0 8px 24px rgb(107 75 110 / 18%);
+  box-shadow: 0 10px 30px rgb(74 49 80 / 28%);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   color: #4a3150;
 }
@@ -80,9 +79,43 @@
   gap: 8px;
 }
 
+.tile-panel-names {
+  flex: 1;
+  min-width: 0;
+}
+
 .tile-panel-title {
   margin: 0;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.tile-panel-info {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 999px;
+  background: #f6e3ee;
+  font: inherit;
   font-size: 20px;
+  font-weight: 900;
+  font-style: italic;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.tile-panel-details {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: #fff1f7;
+}
+
+.tile-panel-details[hidden] {
+  display: none;
 }
 
 .tile-panel-close {
@@ -101,17 +134,22 @@
 }
 
 .tile-panel-owner {
-  margin: 4px 0 0;
-  font-size: 17px;
+  margin: 2px 0 0;
+  font-size: 14px;
   font-weight: 700;
+  color: #6b4b6e;
 }
 
 .tile-panel-about,
 .tile-panel-resource,
 .tile-panel-guardians {
-  margin: 6px 0 0;
-  font-size: 16px;
+  margin: 4px 0 0;
+  font-size: 15px;
   line-height: 1.35;
+}
+
+.tile-panel-about:first-child {
+  margin-top: 0;
 }
 
 .tile-panel-resource {
