@@ -60,6 +60,11 @@ test('earns Patch Coins from care, then buys a piece in the Boutique', async ({ 
   await expect.poll(async () => (await shopState(page))?.loaded, slow).toBe(true);
   const first = (await shopState(page))!;
   expect(first).toMatchObject({ open: true, balance: 1, owned: [] });
+  // The racks scroll inside the card, clear of the footer line (#151).
+  const footerTop = (await shop.locator('.boutique-footer').boundingBox())!.y;
+  const racks = (await shop.locator('.boutique-racks').boundingBox())!;
+  expect(racks.y + racks.height).toBeLessThanOrEqual(footerTop + 0.5);
+  await expect(page.getByTestId('boutique-note')).toBeInViewport();
   const itemId = first.daily[0]!;
   await shop.locator(`[data-item="${itemId}"]`).tap();
   // The Keeper tries it on, and the sheet says kindly it's not affordable yet.

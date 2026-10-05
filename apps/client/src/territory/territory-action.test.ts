@@ -2,17 +2,19 @@ import {
   findAvoidedWords,
   hexKey,
   hexNeighbors,
+  TERRITORY_RULES,
   type MapView,
   type PublicTile,
   type TerritoryStatus,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
-import { territoryAction } from './territory-action.js';
+import { shieldUntil, territoryAction } from './territory-action.js';
 import { TERRITORY_TEXT } from './territory-screen.js';
 
 const ME = userId(1);
-const NOW = Date.parse('2026-10-02T12:00:00.000Z');
+// Three days after everyone joined (test-view), so nobody's new-player shield is on.
+const NOW = Date.parse('2026-10-05T12:00:00.000Z');
 
 const status = (over: Partial<TerritoryStatus> = {}): TerritoryStatus => ({
   attemptsLeft: 7,
@@ -81,7 +83,51 @@ describe('territoryAction', () => {
     const theirHome = view.tiles.find((t) => t.ownerUserId === userId(2))!;
     expect(territoryAction(theirHome, view, ME, status(), NOW).kind).toBe('none');
     const far = view.tiles.find((t) => t.q === 0 && t.r === 0)!;
-    expect(territoryAction(far, view, ME, status(), NOW).kind).toBe('none');
+    expect(territoryAction(far, view, ME, status(), NOW).kind).toBe('too-far');
+  });
+
+  it('explains a new Keeper’s shield on their land instead of offering Challenge (#147)', () => {
+    const { view, tile } = setup(() => ({ ownerUserId: userId(2), defenders: 1 }));
+    const joined = Date.parse(view.members[1]!.joinedAt);
+    const shieldMs = TERRITORY_RULES.newPlayerShieldHours * 60 * 60 * 1000;
+    const ends = new Date(joined + shieldMs).toISOString();
+    // They joined today: shielded, with the moment the server's shield ends.
+    expect(territoryAction(tile, view, ME, status(), joined + 60_000)).toEqual({
+      kind: 'shielded',
+      until: ends,
+    });
+    expect(shieldUntil(tile, view, joined + 60_000)).toBe(ends);
+    // The shield beats a resting tile: the land can't be challenged either way.
+    const resting = setup(() => ({
+      ownerUserId: userId(2),
+      cooldownUntil: new Date(joined + 120_000).toISOString(),
+    }));
+    expect(territoryAction(resting.tile, resting.view, ME, status(), joined + 60_000).kind).toBe(
+      'shielded',
+    );
+    // Once it's over, Challenge is back.
+    expect(territoryAction(tile, view, ME, status(), joined + shieldMs).kind).toBe('challenge');
+    expect(shieldUntil(tile, view, joined + shieldMs)).toBeNull();
+    // Challenges off still wins: there's nothing to shield from.
+    const off = { ...view, map: { ...view.map, pvpMode: 'off' as const } };
+    expect(territoryAction(tile, off, ME, status(), joined + 60_000).kind).toBe('pvp-off');
+    // Wild land has no shield.
+    expect(shieldUntil({ ownerUserId: null }, view, joined)).toBeNull();
+  });
+
+  it('says land that isn’t next to yours is too far; a shielded Keeper’s says so even from afar', () => {
+    const { view } = setup();
+    const far = view.tiles.find((t) => t.q === 0 && t.r === 0)!;
+    expect(territoryAction(far, view, ME, status(), NOW).kind).toBe('too-far');
+    const theirs = { ...far, ownerUserId: userId(2) };
+    const joined = Date.parse(view.members[1]!.joinedAt);
+    expect(territoryAction(theirs, view, ME, status(), joined + 60_000).kind).toBe('shielded');
+    expect(territoryAction(theirs, view, ME, status(), NOW + 365 * 24 * 60 * 60 * 1000).kind).toBe(
+      'too-far',
+    );
+    // A home base says nothing extra, shield or not: it can never be taken.
+    const theirHome = view.tiles.find((t) => t.ownerUserId === userId(2) && t.homeSlot !== null)!;
+    expect(territoryAction(theirHome, view, ME, status(), joined + 60_000).kind).toBe('none');
   });
 
   it('offers nothing before it knows who you are and your tries', () => {

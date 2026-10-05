@@ -410,6 +410,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
       const button = actionButton(b.action);
       button.replaceChildren(
         b.label,
+        ...(b.sub ? [el('span', { class: 'care-action-sub' }, b.sub)] : []),
         ...(b.note ? [el('span', { class: 'care-action-note' }, b.note)] : []),
       );
     }

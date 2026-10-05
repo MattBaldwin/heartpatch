@@ -84,6 +84,16 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
     .toBe(false);
   await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
   const visitsBefore = (await hollowState(page))!.visits;
+  // The quiet nights still teach (#134): the squishy was out in the dark and
+  // he let it be, so the morning report says so and asks for a fire.
+  const graceReport = page.getByTestId('hollow-report');
+  await expect(graceReport).toBeVisible();
+  await expect(graceReport).toContainText('took nobody this time');
+  await expect(graceReport).toContainText('Light a fire before night falls!');
+  expect(findAvoidedWords((await graceReport.textContent()) ?? '')).toEqual([]);
+  expect(await hollowState(page)).toMatchObject({ hollowed: 0 });
+  await page.getByTestId('hollow-report-ok').tap();
+  await expect(graceReport).toBeHidden();
   expect(await hollowState(page)).toMatchObject({ hollowed: 0, report: [] });
   // The raid report (#16) is open when night falls: the Hollow's report waits its turn.
   await (await trayButton(page, 'raid-open')).tap();

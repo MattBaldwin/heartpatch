@@ -2,7 +2,10 @@
    for racks of things to get with Patch Coins. Reuses the wardrobe's chips,
    item cards and rarity colours (../wardrobe/wardrobe.css). */
 
-.boutique-card {
+/* Header, restock line, the racks (all the room left, scrolling), the footer.
+   Two classes, so this wins over .wardrobe-card's six rows whichever
+   stylesheet loads last (wardrobe.css loads after this one, #151). */
+.wardrobe-card.boutique-card {
   position: relative;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
@@ -72,8 +75,10 @@
 
 .boutique-footer {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 8px;
+  min-height: 44px;
 }
 
 .boutique-footer .wardrobe-note {

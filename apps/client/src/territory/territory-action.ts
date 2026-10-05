@@ -1,5 +1,6 @@
 import {
   attackTargetProblem,
+  TERRITORY_RULES,
   type MapView,
   type PublicTile,
   type TerritoryStatus,
@@ -23,12 +24,16 @@ export type TerritoryAction =
   | { readonly kind: 'no-tries' }
   /** Someone's land, but challenges are off on this map. */
   | { readonly kind: 'pvp-off' }
+  /** A new Keeper's land: nobody can challenge it until then (design doc §11). */
+  | { readonly kind: 'shielded'; readonly until: string }
+  /** Land that isn't next to yours (wild or someone's): nothing to do from here. */
+  | { readonly kind: 'too-far' }
   /** Your land outside your home base: pick who stands watch. */
   | { readonly kind: 'watch'; readonly squishyIds: readonly string[] };
 
 export function territoryAction(
   tile: PublicTile,
-  view: Pick<MapView, 'tiles' | 'map'>,
+  view: Pick<MapView, 'tiles' | 'map' | 'members'>,
   me: string | null,
   status: TerritoryStatus | null,
   now: number,
@@ -41,7 +46,13 @@ export function territoryAction(
     return { kind: 'watch', squishyIds: post?.squishyIds ?? [] };
   }
   if (problem === 'pvp-off') return { kind: 'pvp-off' };
-  if (problem !== null) return { kind: 'none' };
+  // A home base can never be taken: the tile's info says so already.
+  if (problem === 'home') return { kind: 'none' };
+  // A new Keeper's shield is the rule the server checks (territory service),
+  // from the same public facts: when they joined, and the shield's length.
+  const shield = shieldUntil(tile, view, now);
+  if (shield !== null) return { kind: 'shielded', until: shield };
+  if (problem === 'too-far') return { kind: 'too-far' };
   if (tile.cooldownUntil !== null && Date.parse(tile.cooldownUntil) > now) {
     return { kind: 'resting', until: tile.cooldownUntil };
   }
@@ -49,4 +60,23 @@ export function territoryAction(
   return tile.ownerUserId === null
     ? { kind: 'claim', attemptsLeft: status.attemptsLeft }
     : { kind: 'challenge', attemptsLeft: status.attemptsLeft };
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * When the new-player shield on this tile's owner ends (ISO), while it's on;
+ * null for wild land, an unknown owner, or a shield that's over. Mirrors the
+ * server's check (`joinedAt + newPlayerShieldHours`), never a rule of its own.
+ */
+export function shieldUntil(
+  tile: Pick<PublicTile, 'ownerUserId'>,
+  view: Pick<MapView, 'members'>,
+  now: number,
+): string | null {
+  if (tile.ownerUserId === null) return null;
+  const owner = view.members.find((m) => m.user.id === tile.ownerUserId);
+  if (!owner) return null;
+  const until = Date.parse(owner.joinedAt) + TERRITORY_RULES.newPlayerShieldHours * HOUR_MS;
+  return until > now ? new Date(until).toISOString() : null;
 }

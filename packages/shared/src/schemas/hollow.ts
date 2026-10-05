@@ -25,6 +25,12 @@ export const MorningReportSchema = z.object({
     .nullable(),
   /** My squishies kept safe that night: by a lit fire, or standing watch. */
   sheltered: z.number().int().min(0),
+  /**
+   * My squishies left in the dark that night, the taken one included. More
+   * than none with nobody taken means he let them be (first-night grace):
+   * the report says so and nudges for a fire, so the quiet nights still teach.
+   */
+  exposed: z.number().int().min(0),
 });
 export type MorningReport = z.infer<typeof MorningReportSchema>;
 

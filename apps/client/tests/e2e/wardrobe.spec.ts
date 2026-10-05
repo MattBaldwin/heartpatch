@@ -68,6 +68,12 @@ test('tries clothes on, filters, layers a costume and saves an outfit', async ({
     expect.arrayContaining(['sunny-cap', 'cozy-sweater', 'puddle-boots', 'tiny-bow']),
   );
   expect(first).toMatchObject({ tab: 'hat', trying: [], wearing: [], shown: ['sunny-cap'] });
+  // The tab row is longer than a phone or an iPad: it fades at the right edge
+  // to show it scrolls (#152), and at the left once it has.
+  const tabs = wardrobe(page).locator('.wardrobe-tabs');
+  await expect(tabs).toHaveAttribute('data-scroll-more', 'right');
+  await tab(page, 'Squishy').scrollIntoViewIfNeeded();
+  await expect(tabs).toHaveAttribute('data-scroll-more', /left/);
 
   // A tap tries it on at once, and the server keeps it.
   await item(page, 'Sunny Cap').tap();
