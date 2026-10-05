@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { expectClear, expectRoomyLabels, SCREENS } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
-import { openTray, trayButton } from './trays.js';
+import { openTray, trayButton, type TraySide } from './trays.js';
 
 // The owner's rule after two edge-to-edge labels: text never touches a
 // control's edge, and nothing hangs off the screen (style guide §3). Every
@@ -18,11 +18,29 @@ const TRAY_CONTROLS = [
   '.tray-top-left > button',
 ].join(', ');
 
+/**
+ * The open tray's slide has ended: ui/trays marks a sliding tray `hp-settling`
+ * (tray-state.ts SETTLING) until its transitionend, so a row is never measured
+ * mid-slide. No sleep: CI renders in software and a slide can start late.
+ */
+async function traySettled(page: Page, side: TraySide): Promise<void> {
+  const tray = page.getByTestId(`tray-${side}`);
+  await expect(tray).toHaveClass(/tray-shown/);
+  await expect(tray).not.toHaveClass(/hp-settling/);
+}
+
+/** The book has turned to `key` (its state updates in the same task as the DOM). */
+async function expectShowing(page: Page, key: string): Promise<void> {
+  await expect
+    .poll(async () => (await hook<{ showing: string[] }>(page, 'recipeBook'))?.showing ?? [])
+    .toContain(key);
+}
+
 async function checkTrays(page: Page): Promise<void> {
   await expectRoomyLabels(page, '[data-testid^="tray-handle-"], .tray-top-left > button');
   for (const side of ['adventure', 'heartpatch'] as const) {
     await openTray(page, side);
-    await page.waitForTimeout(350); // the slide settles
+    await traySettled(page, side);
     await expectRoomyLabels(page, TRAY_CONTROLS);
   }
   await page.keyboard.press('Escape');
@@ -53,11 +71,14 @@ async function checkBook(page: Page): Promise<void> {
   const later = book.getByRole('button', { name: 'Later' });
   if (await later.isVisible()) await later.tap();
   await expectRoomyLabels(page, '.rbook-open, .rbook-btn');
+  // Each turn: the page is on (WebKit's tap-to-click can land late; measuring
+  // before it did caught the new page at its turn's first keyframe, rotateY(60deg),
+  // half as wide), then expectRoomyLabels waits for the turn to end.
   await page.getByTestId('recipe-book-cover-open').tap();
-  await page.waitForTimeout(350);
+  await expectShowing(page, 'contents');
   await expectRoomyLabels(page, '.rbook-mark, .rbook-tab, .rbook-toc, .rbook-nav-btn');
   await book.locator('[data-testid="recipe-book-toc"][data-page="recipe:heart-charm"]').tap();
-  await page.waitForTimeout(350);
+  await expectShowing(page, 'recipe:heart-charm');
   await expectRoomyLabels(page, '.rbook-find, .rbook-stamp');
   await page.getByTestId('recipe-book-close').tap();
 }
