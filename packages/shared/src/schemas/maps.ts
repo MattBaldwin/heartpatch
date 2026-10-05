@@ -132,6 +132,8 @@ export const MapSummarySchema = z.object({
   memberCount: z.number().int(),
   maxPlayers: z.number().int(),
   pvpMode: PvpModeSchema,
+  /** Join requests waiting for an answer (#144): the owner's to see; 0 for everyone else. */
+  pendingRequests: z.number().int().nonnegative(),
 });
 export type MapSummary = z.infer<typeof MapSummarySchema>;
 

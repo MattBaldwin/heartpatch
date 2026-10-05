@@ -36,7 +36,8 @@ import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
 import { createTerritoryScreen } from './territory/territory-screen.js';
-import { createTutorialScreen } from './tutorial/tutorial-screen.js';
+import { tutorialApi } from './tutorial/tutorial-api.js';
+import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.js';
 import { el } from './ui/dom.js';
 import type { PublicUser } from '@heartpatch/shared';
 import './styles.css';
@@ -686,8 +687,14 @@ const lobbyCoins = createCoinCounter({
   testId: 'lobby-coins',
   fetchBalance: async () => (await boutiqueApi.coins()).balance,
 });
+// Offline shell, update prompt, Add to Home Screen guide (issue #26). The
+// guide is a card in the patch list (#135).
+const installGuide = import.meta.env.PROD ? startPwa(document.body) : null;
 const lobby = mountLobby(document.body, {
   buttonRoot: trays.slot('top-left'),
+  // A reload lands back on the last patch (#160), unless a tutorial run
+  // going opens the Glade by itself (the same rule the tutorial uses).
+  canResume: async () => !opensByItself(await tutorialApi.state()),
   onOpen: async (mapId) => {
     catalog.close();
     care.close();
@@ -713,7 +720,11 @@ const lobby = mountLobby(document.body, {
     // A page found on this patch while away (a rescue, a capture).
     lorebook.check();
   },
-  listActions: () => [...tutorial.listActions(), ...wardrobe.listActions()],
+  listActions: () => [
+    ...tutorial.listActions(),
+    ...wardrobe.listActions(),
+    ...(installGuide?.cards() ?? []),
+  ],
   listHeader: () => {
     void lobbyCoins.refresh();
     return [lobbyCoins.node];
@@ -775,8 +786,6 @@ mountAuth(document.body, {
     }
   },
 });
-// Offline shell, update prompt, Add to Home Screen guide (issue #26).
-if (import.meta.env.PROD) startPwa(document.body);
 
 await boot(canvas, {
   preference: parseRendererPreference(params.get('renderer')),

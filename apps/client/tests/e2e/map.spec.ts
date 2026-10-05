@@ -120,8 +120,7 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
     .poll(() => mapState(owner), { timeout: 15_000 })
     .toMatchObject({ tinted: 14, claimedHomes: 2 });
 
-  // The friend sees both home bases.
-  await friendLobby.getByRole('button', { name: 'Check again' }).tap();
+  // The friend's waiting row turns into the patch by itself (#145); they see both home bases.
   await openPatch(friend, 'Moonlit Patch');
   await expect
     .poll(() => mapState(friend), { timeout: 30_000 })
