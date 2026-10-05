@@ -32,7 +32,13 @@ export type PropKind =
   | 'snow-peak'
   | 'crystal'
   | 'hay-bale'
-  | 'jack-o-lantern';
+  | 'jack-o-lantern'
+  // Ground clutter and claimed-land flourishes (terrain pass 2).
+  | 'tuft'
+  | 'clover'
+  | 'pebbles'
+  | 'petals'
+  | 'lantern';
 
 export interface TerrainLook {
   /** Top colour, sRGB hex. */
@@ -103,10 +109,12 @@ export interface DressingItem {
   readonly edge?: boolean;
   /** At most one per tile (a dock, a log). */
   readonly single?: boolean;
+  /** How many grow together in one clump (fewest, most); one by default. */
+  readonly clump?: readonly [number, number];
 }
 
 export interface TerrainDressing {
-  /** Fewest and most props per tile. */
+  /** Fewest and most clumps per tile (each clump is one kind, `DressingItem.clump` strong). */
   readonly count: readonly [number, number];
   /** The first spot always picks from these (a mountain's peak), if set. */
   readonly lead?: readonly DressingItem[];
@@ -115,6 +123,11 @@ export interface TerrainDressing {
   readonly tints: readonly string[];
   /** Colour jitter between tiles of this terrain (fraction of brightness), and height jitter (world units). */
   readonly jitter: { readonly color: number; readonly height: number };
+  /** Tiny ground clutter scattered over the whole tile (tufts, clover, pebbles, petals). */
+  readonly clutter: {
+    readonly count: readonly [number, number];
+    readonly items: readonly DressingItem[];
+  };
 }
 
 const item = (
@@ -133,84 +146,101 @@ const PLAIN = ['#ffffff', '#f6f2fb', '#fff8ef']; // TUNE
  */
 export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
   meadow: {
-    count: [2, 4],
+    count: [2, 3],
     items: [
-      item('flowers', 4, [1.1, 1.5]),
-      item('grass', 4, [1.1, 1.5]),
-      item('mushroom', 1, [1, 1.3]),
-      item('bush', 1, [0.8, 1]),
+      item('flowers', 4, [1.1, 1.5], { clump: [2, 4] }),
+      item('grass', 4, [1.1, 1.5], { clump: [2, 4] }),
+      item('mushroom', 1, [1, 1.3], { clump: [2, 3] }),
+      item('bush', 1, [0.8, 1], { clump: [1, 2] }),
     ],
     tints: PLAIN,
     jitter: { color: 0.05, height: 0.012 },
+    clutter: {
+      count: [8, 12],
+      items: [item('tuft', 4), item('clover', 3), item('petals', 3), item('pebbles', 1)],
+    },
   },
   forest: {
     count: [2, 4],
     items: [
-      item('tree', 5),
-      item('pine', 3, [0.85, 1.2]),
-      item('tall-tree', 2, [0.85, 1.1]),
+      item('tree', 5, [0.85, 1.15], { clump: [1, 3] }),
+      item('pine', 3, [0.85, 1.2], { clump: [2, 3] }),
+      item('tall-tree', 2, [0.85, 1.1], { clump: [1, 2] }),
       item('stump', 1, [0.9, 1.1]),
-      item('mushroom', 1, [1, 1.2]),
+      item('mushroom', 1, [1, 1.2], { clump: [2, 3] }),
     ],
     tints: LEAFY,
     jitter: { color: 0.05, height: 0.012 },
+    clutter: { count: [6, 9], items: [item('tuft', 3), item('clover', 2), item('pebbles', 1)] },
   },
   'old-forest': {
     count: [2, 3],
     items: [
-      item('old-tree', 5, [0.9, 1.15]),
-      item('pine', 2, [1, 1.3]),
+      item('old-tree', 5, [0.9, 1.15], { clump: [1, 2] }),
+      item('pine', 2, [1, 1.3], { clump: [2, 3] }),
       item('log', 1, [0.8, 1], { single: true }),
-      item('mushroom', 2, [1, 1.35]),
+      item('mushroom', 2, [1, 1.35], { clump: [2, 4] }),
     ],
     tints: ['#ffffff', '#e4efe8', '#eef6e6', '#dfe8ee'],
     jitter: { color: 0.05, height: 0.012 },
+    clutter: { count: [6, 9], items: [item('tuft', 2), item('clover', 2), item('pebbles', 1)] },
   },
   hills: {
     count: [2, 3],
     items: [
-      item('rock', 4),
-      item('bush', 3, [0.9, 1.2]),
-      item('grass', 2, [1.1, 1.4]),
-      item('flowers', 1, [1, 1.3]),
+      item('rock', 4, [0.85, 1.15], { clump: [1, 3] }),
+      item('bush', 3, [0.9, 1.2], { clump: [1, 3] }),
+      item('grass', 2, [1.1, 1.4], { clump: [2, 3] }),
+      item('flowers', 1, [1, 1.3], { clump: [2, 3] }),
     ],
     tints: ['#ffffff', '#f5efe6', '#eef5e6', '#fbf4ea'],
     jitter: { color: 0.05, height: 0.02 },
+    clutter: { count: [7, 10], items: [item('tuft', 3), item('pebbles', 3), item('petals', 1)] },
   },
   mountains: {
     count: [1, 3],
     lead: [item('peak', 1), item('snow-peak', 2, [0.9, 1.1])],
-    items: [item('pine', 3, [0.7, 0.95]), item('rock', 2, [0.7, 0.9])],
+    items: [
+      item('pine', 3, [0.7, 0.95], { clump: [2, 3] }),
+      item('rock', 2, [0.7, 0.9], { clump: [1, 3] }),
+    ],
     tints: ['#ffffff', '#f2eefb', '#f8f4ff'],
     jitter: { color: 0.04, height: 0.025 },
+    clutter: { count: [4, 7], items: [item('pebbles', 3), item('tuft', 1)] },
   },
   lake: {
     count: [1, 3],
     items: [
-      item('lily-pad', 5, [1.1, 1.5]),
-      item('reeds', 3, [1, 1.3], { edge: true }),
+      item('lily-pad', 5, [1.1, 1.5], { clump: [2, 3] }),
+      item('reeds', 3, [1, 1.3], { edge: true, clump: [1, 2] }),
       item('stones', 1, [1, 1.2]),
       item('dock', 0.6, [1, 1], { edge: true, single: true }),
     ],
     tints: PLAIN,
     // Water stays level: no height jitter.
     jitter: { color: 0.03, height: 0 },
+    clutter: { count: [0, 0], items: [] },
   },
   'pumpkin-fields': {
     count: [2, 4],
     items: [
-      item('pumpkin', 6, [0.75, 1.2]),
+      item('pumpkin', 6, [0.75, 1.2], { clump: [2, 4] }),
       item('hay-bale', 1, [0.85, 1], { single: true }),
-      item('grass', 1, [1.1, 1.4]),
+      item('grass', 1, [1.1, 1.4], { clump: [2, 3] }),
     ],
     tints: ['#ffffff', '#fff1dc', '#ffe8d2', '#fff8e6'],
     jitter: { color: 0.05, height: 0.012 },
+    clutter: { count: [6, 9], items: [item('tuft', 3), item('clover', 1), item('pebbles', 1)] },
   },
   'junipers-gap': {
     count: [2, 3],
-    items: [item('crystal', 3, [1, 1.4]), item('flowers', 2, [1.1, 1.4])],
+    items: [
+      item('crystal', 3, [1, 1.4], { clump: [1, 3] }),
+      item('flowers', 2, [1.1, 1.4], { clump: [2, 3] }),
+    ],
     tints: ['#ffffff', '#fbeaff', '#eef0ff'],
     jitter: { color: 0.03, height: 0 },
+    clutter: { count: [6, 9], items: [item('petals', 3), item('clover', 1)] },
   },
 };
 
@@ -220,7 +250,83 @@ export const FALLBACK_DRESSING: TerrainDressing = TERRAIN_DRESSING['meadow'] ?? 
   items: [],
   tints: ['#ffffff'],
   jitter: { color: 0, height: 0 },
+  clutter: { count: [0, 0], items: [] },
 };
+
+/**
+ * The ground (terrain pass 2): one continuous surface. Its colours are the
+ * map's own, richer than `TERRAIN_LOOKS` (which the cinematic and battle
+ * arenas also use). A lake's ground is its sandy bed, under the water.
+ */
+export const GROUND = {
+  /** The flat middle of a tile as a fraction of the hex; the rest slopes to the shared edge. */
+  plateau: 0.55, // TUNE
+  /** Brightness noise per ground vertex (±). */
+  noise: 0.05, // TUNE
+  /** The map's outer edge drops to the island top. */
+  skirtTo: -0.02,
+  colors: {
+    meadow: '#8fcf63', // TUNE: bright spring grass
+    forest: '#5fb563', // TUNE
+    'old-forest': '#469a64', // TUNE: deep moss
+    hills: '#b9c56b', // TUNE: sunny grassy hills
+    mountains: '#ad9fcb', // TUNE: lavender rock
+    lake: '#d9c48c', // TUNE: the sandy bed (and beach where it meets land)
+    'pumpkin-fields': '#d9bd5c', // TUNE: wheat
+    'junipers-gap': '#dcb2f2', // TUNE
+  } as Readonly<Record<string, string>>,
+  /** Home tiles: a warm garden path. */
+  home: '#f2dca8', // TUNE
+  /** A lake's bed sits this low; its water is at `WATER.level`. */
+  lakeBed: 0.04, // TUNE
+} as const;
+
+/** Lakes' water (terrain pass 2): depth colour, a soft shore with foam, glints. */
+export const WATER = {
+  /** Height of the surface: under the land around it, so the shore slopes into it. */
+  level: 0.15, // TUNE
+  /** How far the water tucks under the bank past the hex (fraction). */
+  reach: 0.08, // TUNE
+  deep: { color: '#2f86c9', alpha: 0.88 }, // TUNE
+  shallow: { color: '#8fe0ee', alpha: 0.42 }, // TUNE
+  foam: '#ffffff', // TUNE
+} as const;
+
+/**
+ * Claimed land (owner decision 2026-10-05): every tile is in full colour;
+ * owned land reads by a warm glow, a soft border around the whole territory
+ * (never between its own tiles), and flourishes (flowers and lanterns).
+ */
+export const CLAIMED = {
+  /** The glow over each owned tile: alpha in the middle and at the edge. */
+  glow: { fill: 0.14, edge: 0.22 }, // TUNE
+  /** The border band: opacity at the territory's edge and its width (fraction of the hex). */
+  border: { alpha: 0.85, width: 0.2 }, // TUNE
+  /** Flourishes per owned tile: a lantern's chance, and flower clumps. */
+  lanternChance: 0.55, // TUNE
+  flowerClumps: [1, 2] as const, // TUNE
+  /** A lantern's warm glow. */
+  lanternGlow: { color: '#ffc46b', day: 0.35, night: 1.1 }, // TUNE
+} as const;
+
+/** Sandy paths from each home's Heart Seed out to neighbouring land. */
+export const PATHS = {
+  color: '#e8cf93', // TUNE
+  /** Width (world units) and how many neighbours each home links to. */
+  width: 0.13, // TUNE
+  links: 3, // TUNE
+  alpha: 0.9, // TUNE
+} as const;
+
+/** The map's light (terrain pass 2): a warm golden sun and a gentle warm grade. */
+export const MAP_LIGHT = {
+  sun: '#ffe2b0', // TUNE: golden hour
+  sunIntensity: 1.15, // TUNE: times the stage's sun
+  /** Colour grade (image processing curves): saturation and a warm lift (hue in degrees, density 0–100). */
+  saturation: 18, // TUNE
+  warmHue: 40, // TUNE
+  warmDensity: 12, // TUNE
+} as const;
 
 /**
  * How far each prop kind's top sways (world units at its top, before scale),
@@ -238,22 +344,6 @@ export const PROP_SWAY: Readonly<Partial<Record<PropKind, { tip: number; top: nu
   'lily-pad': { tip: 0, top: 0.02 }, // bobs with the water instead
 };
 
-/**
- * Wild land (no owner) is drawn soft and grey-ish; claimed land is in full
- * colour (Sprout: "See the grey land? … the color comes back"). `saturation`
- * is the share of colour kept, `shade` dims it a little (grey that keeps its
- * brightness reads as white once tone-mapped), and `wash` mixes towards the
- * soft `tint`. Enough colour stays that each terrain still reads.
- */
-export const MUTED = {
-  saturation: 0.5,
-  shade: 0.88,
-  wash: 0.1,
-  tint: '#d9d3e2',
-  /** The island under the tiles is never owned: muted this much (0–1), so it doesn't outline grey tiles in bright green. */
-  island: 0.6,
-} as const; // TUNE
-
 /** Ambient life: when it runs, and how busy it is per quality tier. */
 export const AMBIENT = {
   /**
@@ -263,6 +353,8 @@ export const AMBIENT = {
   frameMs: 29, // TUNE
   /** Share of the motes drawn on each tier; low drops motes and motion (and draws nothing while idle). */
   motes: { high: 1, medium: 0.5, low: 0 }, // TUNE
+  /** Share of the ground clutter drawn on each tier (it doesn't move, so low keeps some). */
+  clutter: { high: 1, medium: 0.6, low: 0.35 }, // TUNE
   /**
    * If most ambient frames arrive further apart than this (ms; about
    * 18 fps), ambient life switches off for this visit: the device needs its
@@ -277,15 +369,26 @@ export const AMBIENT = {
   /** How often the quality tier is looked at again (it has no change event), ms. */
   checkMs: 500, // TUNE
   /**
-   * The lake's gentle bob (world units) and glint strength. Keep `bob` under
-   * the territory tint's lift above the tile (`TINT_LIFT`, 0.012 in
-   * map-scene.ts), or wave crests poke through the tint on owned lakes.
+   * The lake's gentle bob (world units), glint strength and shore foam
+   * strength. Keep `bob` under the overlays' lift above the ground
+   * (`OVERLAY_LIFT` in map-scene.ts), or wave crests poke through them.
    */
-  water: { bob: 0.008, glint: 0.14 }, // TUNE
+  water: { bob: 0.008, glint: 0.16, foam: 0.55 }, // TUNE
 } as const;
 
 /** Every kind of mote, in drawing order. */
-export const MOTE_KINDS = ['pollen', 'leaves', 'fireflies', 'sparkles', 'bats', 'fog'] as const;
+export const MOTE_KINDS = [
+  'pollen',
+  'leaves',
+  'fireflies',
+  'sparkles',
+  'bats',
+  'fog',
+  'butterflies',
+  'birds',
+  'fish',
+  'bunnies',
+] as const;
 export type MoteKind = (typeof MOTE_KINDS)[number];
 
 /** Motes over the map: how many per tile of their terrain, and the most of each. */
@@ -296,6 +399,10 @@ export const MOTES: Readonly<Record<MoteKind, { perTile: number; max: number; co
   sparkles: { perTile: 4, max: 40, color: '#ffd8ff' }, // TUNE: Juniper's Gap, day and night
   bats: { perTile: 0.06, max: 9, color: '#ffffff' }, // TUNE: Halloween, over the woods and peaks
   fog: { perTile: 0.5, max: 36, color: '#ece4ff' }, // TUNE: Halloween, low land
+  butterflies: { perTile: 0.25, max: 40, color: '#ffffff' }, // TUNE: daylight, over meadows and flowers
+  birds: { perTile: 0.02, max: 7, color: '#ffffff' }, // TUNE: daylight, high over the land
+  fish: { perTile: 0.5, max: 24, color: '#ffffff' }, // TUNE: jumping in the lakes, day and night
+  bunnies: { perTile: 0.03, max: 8, color: '#ffffff' }, // TUNE: daylight, hopping in meadows
 };
 
 /** Halloween dressing (season on, map-local date): jack-o'-lanterns and the dusk glow. */

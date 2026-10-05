@@ -3,6 +3,7 @@ import { Constants } from '@babylonjs/core/Engines/constants';
 import { Material } from '@babylonjs/core/Materials/material';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { ColorCurves } from '@babylonjs/core/Materials/colorCurves';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
@@ -21,6 +22,7 @@ import {
   type MapView,
   KEEPER_DATA,
   type PublicTile,
+  type WorldPoint,
 } from '@heartpatch/shared';
 import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
 import { MAP_BUILDING_SCALE, SAFE_GLOW } from '../home/home-config.js';
@@ -33,22 +35,44 @@ import { AmbientJudge, ambientMode, moteShare, type AmbientMode } from './ambien
 import { loftRoundedHex, type MeshArrays, type ProfileRing } from './hex-mesh.js';
 import { MapAmbient, type AmbientStats } from './map-ambient.js';
 import {
+  AMBIENT,
+  CLAIMED,
   CRYSTAL_GLOW,
   FALLBACK_LOOK,
+  GROUND,
   HALLOWEEN,
   HEX_SIZE,
   HOME_LOOK,
   ISLAND,
-  MUTED,
+  MAP_LIGHT,
+  PATHS,
   PLAYER_COLORS,
   PROP_SWAY,
   TERRAIN_LOOKS,
   TILE_FILL,
-  TINT,
+  WATER,
   type PropKind,
   type TerrainLook,
 } from './map-config.js';
-import { dressTile, hexRgb, isMuted, muteRgb, tileColor, tileJitter } from './map-dressing.js';
+import {
+  clutterTile,
+  dressTile,
+  flourishTile,
+  hexRgb,
+  tileColor,
+  tileJitter,
+  type DressingPlacement,
+} from './map-dressing.js';
+import { Ground, type Rgb } from './ground-mesh.js';
+import {
+  hexOverlay,
+  homePaths,
+  joinArrays,
+  pathRibbon,
+  territoryBorder,
+  type Surface,
+} from './ground-overlay.js';
+import { waterMesh } from './water-mesh.js';
 import {
   findHomeBases,
   hash01,
@@ -57,24 +81,28 @@ import {
   slotsByUser,
   tintSlot,
 } from './map-layout.js';
-import { buildProp, linear, merged, painted } from './map-props.js';
-import { AMBIENT_ATTRIBUTE, attachTerrainPlugin, TerrainClock } from './terrain-plugin.js';
+import { buildProp, linear, merged, painted, type BuiltProp } from './map-props.js';
+import {
+  AMBIENT_ATTRIBUTE,
+  attachTerrainPlugin,
+  SHORE_ATTRIBUTE,
+  TerrainClock,
+} from './terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
 
 // Prop builders moved to map-props.ts; re-exported here, where other screens
 // (home, cinematic, battle) import them from.
 export { buildProp, merged, painted, type BuiltProp } from './map-props.js';
 
-// The world map (#7): instanced hex tiles, territory tint, home bases,
-// Juniper's Gap and props, drawn from the server's map view. One draw call per
-// terrain, per player tint and per prop kind, however many tiles (CLAUDE.md
-// rule 8). No textures: soft edges and baked contact shadows are vertex alpha.
-// The terrain visual pass adds per-tile colour and height wobble, wild land
-// drawn muted, many more props, Halloween dressing and ambient life (sway,
-// water, motes), all moved on the GPU by one time uniform (terrain-plugin.ts).
+// The world map (#7), drawn from the server's map view: one continuous ground
+// (terrain pass 2: no hex pucks), lakes' water, territory glows and borders,
+// home bases, Juniper's Gap, props in clumps, ground clutter, paths, and
+// ambient life. One draw call per prop kind, however many tiles (CLAUDE.md
+// rule 8). No textures: colour and soft edges are vertex colour and alpha.
+// Everything that moves does so on the GPU from one time uniform
+// (terrain-plugin.ts).
 
-const TILE_RADIUS = HEX_SIZE * TILE_FILL;
-/** Rounded-top profile shared by tiles and the tint laid over them (top at y = 0). */
+/** Rounded-top hex tile profile, still used by Home and the cinematic (top at y = 0). */
 export const DOME = 0.035; // TUNE
 export const BEVEL = 0.07; // TUNE
 export const TOP_RINGS: readonly ProfileRing[] = [
@@ -86,8 +114,20 @@ export const TOP_RINGS: readonly ProfileRing[] = [
 ];
 export const CORNER = 0.2; // TUNE: corner rounding, fraction of the radius
 export const SEGMENTS = 3;
-/** Tint floats this far above the tile so it never z-fights. */
-const TINT_LIFT = 0.012;
+/** Contact shadows only under props at least this wide (diameter, world units). */
+const MIN_SHADOW = 0.15; // TUNE
+/** #117's tile locator measures tiles at this radius. */
+const TILE_RADIUS = HEX_SIZE * TILE_FILL;
+/** Overlays (territory, selection, safe glow, paths) float this far above the ground so they never z-fight. */
+const OVERLAY_LIFT = 0.012;
+/** The selection ring: a bright band just inside the tile's edge. */
+const SELECTION_RINGS = [
+  { scale: 0.8, alpha: 0 },
+  { scale: 0.9, alpha: 0.95 },
+  { scale: 0.99, alpha: 0.95 },
+  { scale: 1.05, alpha: 0 },
+] as const;
+
 /** Highest a tap can land, for the first guess when picking a tile. */
 const PICK_HEIGHT = 0.25;
 
@@ -100,7 +140,7 @@ export interface MapSceneStats {
   readonly tinted: number;
   readonly homes: number;
   readonly claimedHomes: number;
-  /** Meshes drawing tiles: one per terrain look in use, plus home tiles. */
+  /** Meshes drawing tiles: the one continuous ground. */
   readonly tileMeshes: number;
   /** Keepers standing at their home bases (#42). */
   readonly keepers: number;
@@ -114,9 +154,10 @@ export interface MapSceneStats {
   /** Dressing props on the map, and how many kinds (one draw call each). */
   readonly props: number;
   readonly propKinds: number;
-  /** Tiles drawn muted (wild land nobody owns), and the props on them. */
-  readonly mutedTiles: number;
-  readonly mutedProps: number;
+  /** Ground clutter drawn (tufts, clover, pebbles, petals): a share on lower tiers. */
+  readonly clutter: number;
+  /** Claimed-land flourishes (lanterns, flowers). */
+  readonly flourishes: number;
   /** Halloween dressing is on (season, map-local date). */
   readonly halloween: boolean;
   readonly night: boolean;
@@ -141,28 +182,46 @@ function lookOf(tile: PublicTile): TerrainLook {
 /** sRGB (0–1) to linear, as Babylon's `toLinearSpace` does. */
 const toLinear = (v: number): number => Math.pow(v, 2.2);
 
-/** Height of a tile's top: its look's, plus its own small wobble (none on home tiles). */
+/** A linear-RGB colour from sRGB hex. */
+const rgbOf = (hex: string): Rgb => {
+  const [r, g, b] = hexRgb(hex).map(toLinear);
+  return [r ?? 0, g ?? 0, b ?? 0];
+};
+
+/** Height of a tile's flat middle in the ground: its look's plus its wobble; a lake's bed; home flat. */
+function groundHeightOf(tile: PublicTile): number {
+  if (tile.homeSlot !== null) return HOME_LOOK.height;
+  if (tile.terrain === 'lake') return GROUND.lakeBed;
+  return lookOf(tile).height + tileJitter(tile, tile.terrain).height;
+}
+
+/** A tile's ground colour (linear): the map's own palette, wobbled a little per tile. */
+function groundColorOf(tile: PublicTile): Rgb {
+  if (tile.homeSlot !== null) return rgbOf(GROUND.home);
+  const hex = GROUND.colors[tile.terrain] ?? GROUND.colors['meadow'] ?? '#8fcf63';
+  const [r, g, b] = tileColor(hex, tileJitter(tile, tile.terrain)).map(toLinear);
+  return [r ?? 0, g ?? 0, b ?? 0];
+}
+
+/** Height a tile's things stand on: the water's surface on a lake, else its ground. */
 function topOf(tile: PublicTile): number {
-  const look = lookOf(tile);
-  return tile.homeSlot !== null ? look.height : look.height + tileJitter(tile, tile.terrain).height;
+  return tile.terrain === 'lake' && tile.homeSlot === null ? WATER.level : groundHeightOf(tile);
 }
 
-/** One instanced tile mesh and the tiles it draws, for recolouring when ownership changes. */
-interface TileGroup {
-  readonly mesh: Mesh;
-  readonly look: TerrainLook;
-  readonly tiles: PublicTile[];
-  readonly colors: Float32Array;
-  readonly muted: boolean[];
-}
-
-/** One prop kind's instances, for re-muting when ownership changes. */
-interface PropGroup {
-  readonly mesh: Mesh;
-  /** Each instance's tile key. */
-  readonly tiles: HexKey[];
-  /** `terrainAmbient` per instance: sway, phase, muted, bob. */
-  readonly ambient: Float32Array;
+/** The ground, with the water's surface over lakes: what props and overlays stand on. */
+function surfaceOver(ground: Ground, tiles: ReadonlyMap<HexKey, PublicTile>): Surface {
+  const lake = (h: Hex) => {
+    const t = tiles.get(hexKey(h));
+    return t !== undefined && t.terrain === 'lake' && t.homeSlot === null;
+  };
+  return {
+    heightAt: (p) => {
+      const y = ground.heightAt(p);
+      if (y === null) return null;
+      return lake(worldToHex(p, HEX_SIZE)) ? Math.max(y, WATER.level) : y;
+    },
+    tileHeight: (h) => (lake(h) ? WATER.level : ground.tileHeight(h)),
+  };
 }
 
 export function vinyl(
@@ -257,43 +316,52 @@ export function buildHeartSeed(scene: Scene): Mesh {
 
 /**
  * Builds and updates the map in one Babylon scene. Terrain never changes
- * within a map (Phase 1), so tiles are built once; ownership and home bases
- * are redrawn by `update` whenever the map view changes.
+ * within a map (Phase 1), so the ground, water and dressing are built once;
+ * ownership, home bases and claimed-land flourishes are redrawn by `update`
+ * whenever the map view changes.
  */
 export class MapScene {
   readonly bounds: Bounds;
   private readonly scene: Scene;
   private readonly tiles = new Map<HexKey, PublicTile>();
-  private readonly tintMeshes: Mesh[] = [];
-  private readonly tintMaterial: StandardMaterial;
+  /** The continuous ground (terrain pass 2) and the surface overlays and props stand on. */
+  private readonly ground: Ground;
+  private readonly surface: Surface;
+  private readonly overlayMat: StandardMaterial;
+  /** Each slot's territory glow and border, rebuilt when its land changes. */
+  private readonly territory = new Map<number, { key: string; mesh: Mesh }>();
   private readonly seedMesh: Mesh;
   private readonly plotMesh: Mesh;
-  private readonly selection: Mesh;
+  private selection: Mesh | null = null;
   /** Each member's Keeper by their Heart Seed (design doc §23). Low detail; never animates here. */
   private readonly keepers: KeeperField;
   /** Fires and habitats on home bases (#18), at map scale. */
   private readonly buildings: BuildingField;
-  /** The soft glow over tiles a lit Hearthfire keeps safe (#18). */
-  private readonly safeGlow: Mesh;
+  /** The soft glow over tiles a lit Hearthfire keeps safe (#18), rebuilt when that set changes. */
+  private safeGlow: { key: string; mesh: Mesh | null } = { key: '', mesh: null };
   /** The player's home node the tutorial points at (`homeNodeRect`), until `update`. */
   private homeNode: { userId: string | null; tile: PublicTile | null } | null = null;
   /** Resource nodes drawn on home bases (`buildHomeNodes`). */
   private readonly homeNodes: number;
-  private tileMeshes = 0;
-  private counts = { tinted: 0, homes: 0, claimedHomes: 0, safeTiles: 0 };
+  private counts = { tinted: 0, homes: 0, claimedHomes: 0, safeTiles: 0, flourishes: 0 };
   /** Ambient time: every terrain material reads it (terrain-plugin.ts). */
   private readonly clock = new TerrainClock();
   private readonly halloween: boolean;
-  private readonly tileGroups: TileGroup[] = [];
-  private readonly propGroups: PropGroup[] = [];
   private propCount = 0;
-  /** Glowing props whose glow changes at night (jack-o'-lanterns). */
+  private propKinds = 0;
+  /** Ground clutter meshes and their full instance counts (a tier draws a share). */
+  private readonly clutter: { mesh: Mesh; count: number }[] = [];
+  /** Claimed-land flourishes (lanterns, flowers), one mesh per kind, refilled by `update`. */
+  private readonly flourishes = new Map<PropKind, Mesh>();
+  /** Glowing props whose glow changes at night (jack-o'-lanterns, claimed lanterns). */
   private lanternMat: PBRMaterial | null = null;
+  private claimedLanternMat: PBRMaterial | null = null;
   private readonly ambient: MapAmbient;
   /** False under WebGPU: the terrain plugin is GLSL only, so nothing moves there. */
   private readonly animated: boolean;
   private night = false;
   private mode: AmbientMode = 'live';
+  private tier: QualityTier = 'high';
   private share = 1;
   private readonly judge = new AmbientJudge();
   /** Wall-clock ms at ambient-time zero (the first `tick`). */
@@ -305,10 +373,30 @@ export class MapScene {
     scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
     this.bounds = mapBounds(view.tiles, HEX_SIZE);
+    this.warmLight();
+
+    this.ground = new Ground(
+      view.tiles.map((t) => ({
+        q: t.q,
+        r: t.r,
+        height: groundHeightOf(t),
+        color: groundColorOf(t),
+      })),
+      { size: HEX_SIZE, plateau: GROUND.plateau, noise: GROUND.noise, skirtTo: GROUND.skirtTo },
+    );
+    this.surface = surfaceOver(this.ground, this.tiles);
+    this.overlayMat = overlayMaterial(scene, 'ground-overlay-mat');
+    // Overlays lie on slopes either way up; draw both faces.
+    this.overlayMat.backFaceCulling = false;
 
     this.buildIsland(view.tiles);
-    this.animated = this.buildTiles(view.tiles);
+    this.buildGround(view.tiles);
+    // Under WebGPU the terrain plugin isn't attached (GLSL only): nothing moves.
+    this.propMat();
+    this.animated = this.propPlugin !== null;
     this.buildProps(view.tiles);
+    this.buildClutter(view.tiles);
+    this.buildPaths(view.tiles);
     this.homeNodes = buildHomeNodes(scene, view.tiles);
     this.buildGap();
     this.ambient = new MapAmbient(scene, view.tiles, this.clock, {
@@ -317,69 +405,29 @@ export class MapScene {
     });
     // Start as the tier and motion setting say, so nothing shows for a frame
     // that would then be hidden (drifting motes under reduced motion).
-    const tier = options.tier ?? 'high';
+    this.tier = options.tier ?? 'high';
     this.mode = this.animated
-      ? ambientMode({ tier, reducedMotion: options.reducedMotion === true, slow: false })
+      ? ambientMode({ tier: this.tier, reducedMotion: options.reducedMotion === true, slow: false })
       : 'off';
-    this.share = moteShare(tier);
-    this.applyAmbient();
+    this.share = moteShare(this.tier);
 
-    this.tintMaterial = overlayMaterial(scene, 'tint-mat');
     this.seedMesh = buildHeartSeed(scene);
     this.plotMesh = CreateTorus('home-plot', { diameter: 0.34, thickness: 0.05 }, scene);
     this.plotMesh.material = vinyl(scene, 'home-plot-mat', { color: '#f3dcb0' });
     this.plotMesh.isPickable = false;
     this.plotMesh.alwaysSelectAsActiveMesh = true;
 
-    this.selection = meshFrom(
-      scene,
-      'selection',
-      loftRoundedHex(
-        TILE_RADIUS,
-        [
-          { scale: 0.78, y: TINT_LIFT * 2, alpha: 0 },
-          { scale: 0.9, y: TINT_LIFT * 2, alpha: 0.95 },
-          { scale: 1.02, y: TINT_LIFT * 2, alpha: 0.95 },
-          { scale: 1.08, y: TINT_LIFT * 2, alpha: 0 },
-        ],
-        { corner: CORNER, segments: SEGMENTS, rgb: [1, 1, 1] },
-      ),
-    );
-    this.selection.material = overlayMaterial(scene, 'selection-mat');
-    this.selection.alwaysSelectAsActiveMesh = false;
-    this.selection.setEnabled(false);
-
     // No contact shadows: map props have none either, and Keepers are tiny here.
     this.keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: 'low', shadows: false });
     this.buildings = new BuildingField(scene);
-    this.safeGlow = meshFrom(
-      scene,
-      'safe-glow',
-      loftRoundedHex(
-        TILE_RADIUS,
-        [
-          { scale: 0.5, y: DOME * 0.75, alpha: SAFE_GLOW.fill },
-          { scale: 0.8, y: DOME * 0.25, alpha: SAFE_GLOW.fill },
-          { scale: 0.92, y: -BEVEL * 0.25, alpha: SAFE_GLOW.edge },
-          { scale: 1, y: -BEVEL, alpha: 0 },
-        ],
-        {
-          corner: CORNER,
-          segments: SEGMENTS,
-          centre: { y: DOME, alpha: SAFE_GLOW.fill },
-          rgb: [...SAFE_GLOW.rgb],
-        },
-      ),
-    );
-    this.safeGlow.material = overlayMaterial(scene, 'safe-glow-mat');
-    this.safeGlow.setEnabled(false);
     this.update(view);
+    this.applyAmbient();
   }
 
   get stats(): MapSceneStats {
     return {
       tiles: this.tiles.size,
-      tileMeshes: this.tileMeshes,
+      tileMeshes: 1,
       homeNodes: this.homeNodes,
       ...this.counts,
       keepers: this.keepers.handles.length,
@@ -387,10 +435,9 @@ export class MapScene {
       litFires: this.buildings.stats.lit,
       keepersWearing: this.keepers.handles.map((h) => h.params.worn),
       props: this.propCount,
-      propKinds: this.propGroups.length,
-      mutedTiles: this.tileGroups.reduce((n, g) => n + g.muted.filter(Boolean).length, 0),
-      mutedProps: this.propGroups.reduce(
-        (n, g) => n + g.ambient.filter((v, i) => i % 4 === 2 && v === 1).length,
+      propKinds: this.propKinds,
+      clutter: this.clutter.reduce(
+        (n, c) => n + (c.mesh.isEnabled() ? c.mesh.thinInstanceCount : 0),
         0,
       ),
       halloween: this.halloween,
@@ -409,8 +456,9 @@ export class MapScene {
       ? ambientMode({ tier, reducedMotion, slow: this.judge.slow })
       : 'off';
     const share = moteShare(tier);
-    if (mode === this.mode && share === this.share) return false;
+    if (mode === this.mode && tier === this.tier) return false;
     this.mode = mode;
+    this.tier = tier;
     this.share = share;
     this.applyAmbient();
     return true;
@@ -459,24 +507,23 @@ export class MapScene {
   /** Redraws ownership and home bases from a fresh view of the same map. */
   update(view: MapView): void {
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
-    this.recolour();
     this.homeNode = null;
     const slots = slotsByUser(view.members);
-    const bySlot = new Map<number, Matrix[]>();
+    const bySlot = new Map<number, PublicTile[]>();
     let tinted = 0;
     for (const tile of this.tiles.values()) {
       const slot = tintSlot(tile, slots);
       if (slot === null) continue;
-      const p = hexToWorld(tile, HEX_SIZE);
       let list = bySlot.get(slot);
       if (!list) bySlot.set(slot, (list = []));
-      list.push(placeAt(p.x, topOf(tile) + TINT_LIFT, p.z));
+      list.push(tile);
       tinted++;
     }
-    const highest = Math.max(this.tintMeshes.length - 1, ...bySlot.keys());
-    for (let slot = 0; slot <= highest; slot++) {
-      setInstances(this.tintMesh(slot), bySlot.get(slot) ?? [], true);
+    // Each territory's warm glow and soft border, rebuilt only when its land changed.
+    for (const slot of new Set([...this.territory.keys(), ...bySlot.keys()])) {
+      this.drawTerritory(slot, bySlot.get(slot) ?? []);
     }
+    const flourishes = this.drawFlourishes([...bySlot.values()].flat());
 
     const homes = findHomeBases([...this.tiles.values()]);
     const seeds: Matrix[] = [];
@@ -518,36 +565,39 @@ export class MapScene {
         lit: building.lit,
         x: at.x,
         z: at.z,
-        y: topOf(tile) + DOME * 0.5,
+        y: this.surface.heightAt(at) ?? topOf(tile),
         scale: HEX_SIZE * MAP_BUILDING_SCALE,
       })),
     );
-    const safe: Matrix[] = [];
-    for (const key of mapSafeTiles(view)) {
-      const tile = this.tiles.get(key);
-      if (!tile) continue;
-      const p = hexToWorld(tile, HEX_SIZE);
-      safe.push(placeAt(p.x, topOf(tile) + TINT_LIFT * 1.5, p.z));
-    }
-    setInstances(this.safeGlow, safe, true);
+    const safe = [...mapSafeTiles(view)]
+      .map((key) => this.tiles.get(key))
+      .filter((t): t is PublicTile => t !== undefined);
+    this.drawSafeGlow(safe);
     this.counts = {
       tinted,
       homes: homes.length,
       claimedHomes: seeds.length,
       safeTiles: safe.length,
+      flourishes,
     };
   }
 
-  /** Rings the selected tile, or clears the ring (null). */
+  /** Rings the selected tile (following the ground), or clears the ring (null). */
   select(h: Hex | null): void {
+    this.selection?.dispose();
+    this.selection = null;
     const tile = h ? this.tiles.get(hexKey(h)) : undefined;
-    if (!tile) {
-      this.selection.setEnabled(false);
-      return;
-    }
-    const p = hexToWorld(tile, HEX_SIZE);
-    this.selection.position.set(p.x, topOf(tile), p.z);
-    this.selection.setEnabled(true);
+    if (!tile) return;
+    this.selection = meshFrom(
+      this.scene,
+      'selection',
+      hexOverlay([tile], this.surface, SELECTION_RINGS, {
+        size: HEX_SIZE,
+        lift: OVERLAY_LIFT * 2,
+        rgb: [1, 1, 1],
+      }),
+    );
+    this.selection.material = this.overlayMat;
   }
 
   /** The tile under a point on the canvas (CSS pixels from its top left), if any. */
@@ -582,36 +632,136 @@ export class MapScene {
     return tile ? tileScreenRect(this.scene, tile, lookOf(tile).height) : null;
   }
 
-  private tintMesh(slot: number): Mesh {
-    for (let s = this.tintMeshes.length; s <= slot; s++) {
-      const color = linear(PLAYER_COLORS[s % PLAYER_COLORS.length] ?? '#ffffff');
-      const mesh = meshFrom(
-        this.scene,
-        `tint-${String(s)}`,
-        loftRoundedHex(
-          TILE_RADIUS,
-          [
-            { scale: 0.5, y: DOME * 0.75, alpha: TINT.fill },
-            { scale: 0.8, y: DOME * 0.25, alpha: TINT.fill },
-            { scale: 0.92, y: -BEVEL * 0.25, alpha: TINT.edge },
-            { scale: 0.98, y: -BEVEL * 0.7, alpha: TINT.edge * 0.6 },
-            { scale: 1, y: -BEVEL, alpha: 0 },
-          ],
-          {
-            corner: CORNER,
-            segments: SEGMENTS,
-            centre: { y: DOME, alpha: TINT.fill },
-            rgb: [color.r, color.g, color.b],
-          },
-        ),
-      );
-      mesh.material = this.tintMaterial;
-      mesh.setEnabled(false);
-      this.tintMeshes.push(mesh);
+  /** The map's warm golden light and gentle warm grade (this scene only). */
+  private warmLight(): void {
+    const sun = this.scene.getLightByName('sun');
+    if (sun) {
+      sun.diffuse = Color3.FromHexString(MAP_LIGHT.sun);
+      sun.intensity *= MAP_LIGHT.sunIntensity;
     }
-    const mesh = this.tintMeshes[slot];
-    if (!mesh) throw new Error(`no tint mesh for slot ${String(slot)}`);
-    return mesh;
+    const ip = this.scene.imageProcessingConfiguration;
+    const curves = new ColorCurves();
+    curves.globalSaturation = MAP_LIGHT.saturation;
+    curves.highlightsHue = MAP_LIGHT.warmHue;
+    curves.highlightsDensity = MAP_LIGHT.warmDensity;
+    ip.colorCurves = curves;
+    ip.colorCurvesEnabled = true;
+  }
+
+  /** A territory's glow and border; rebuilt only when its tiles changed. */
+  private drawTerritory(slot: number, owned: readonly PublicTile[]): void {
+    const key = owned.map(hexKey).sort().join(';');
+    const current = this.territory.get(slot);
+    if (current?.key === key) return;
+    current?.mesh.dispose();
+    this.territory.delete(slot);
+    if (owned.length === 0) return;
+    const c = linear(PLAYER_COLORS[slot % PLAYER_COLORS.length] ?? '#ffffff');
+    const rgb = [c.r, c.g, c.b] as const;
+    const glow = hexOverlay(
+      owned,
+      this.surface,
+      [
+        { scale: 0.6, alpha: CLAIMED.glow.fill },
+        { scale: 1, alpha: CLAIMED.glow.edge },
+      ],
+      { size: HEX_SIZE, lift: OVERLAY_LIFT, rgb, centreAlpha: CLAIMED.glow.fill },
+    );
+    const border = territoryBorder(owned, this.surface, {
+      size: HEX_SIZE,
+      lift: OVERLAY_LIFT * 1.5,
+      rgb,
+      width: CLAIMED.border.width,
+      alpha: CLAIMED.border.alpha,
+    });
+    const mesh = meshFrom(this.scene, `territory-${String(slot)}`, joinArrays(glow, border));
+    mesh.material = this.overlayMat;
+    this.territory.set(slot, { key, mesh });
+  }
+
+  /** The safe glow over tiles lit fires keep safe; rebuilt only when that set changed. */
+  private drawSafeGlow(tiles: readonly PublicTile[]): void {
+    const key = tiles.map(hexKey).sort().join(';');
+    if (this.safeGlow.key === key) return;
+    this.safeGlow.mesh?.dispose();
+    this.safeGlow = { key, mesh: null };
+    if (tiles.length === 0) return;
+    const mesh = meshFrom(
+      this.scene,
+      'safe-glow',
+      hexOverlay(
+        tiles,
+        this.surface,
+        [
+          { scale: 0.7, alpha: SAFE_GLOW.fill },
+          { scale: 0.92, alpha: SAFE_GLOW.edge },
+          { scale: 1, alpha: 0 },
+        ],
+        {
+          size: HEX_SIZE,
+          lift: OVERLAY_LIFT * 1.2,
+          rgb: [...SAFE_GLOW.rgb],
+          centreAlpha: SAFE_GLOW.fill,
+        },
+      ),
+    );
+    mesh.material = this.overlayMat;
+    this.safeGlow.mesh = mesh;
+  }
+
+  /** Lanterns and flowers on claimed land (not home tiles or water); returns how many. */
+  private drawFlourishes(owned: readonly PublicTile[]): number {
+    const byKind = new Map<PropKind, Matrix[]>();
+    const turn = new Quaternion();
+    for (const tile of owned) {
+      if (tile.homeSlot !== null || tile.terrain === 'lake') continue;
+      for (const prop of flourishTile(tile, HEX_SIZE)) {
+        Quaternion.RotationYawPitchRollToRef(prop.turn, 0, 0, turn);
+        const list = byKind.get(prop.kind) ?? [];
+        list.push(
+          placeAt(
+            prop.at.x,
+            this.surface.heightAt(prop.at) ?? topOf(tile),
+            prop.at.z,
+            new Vector3(prop.scale, prop.scale, prop.scale),
+            turn.clone(),
+          ),
+        );
+        byKind.set(prop.kind, list);
+      }
+    }
+    let count = 0;
+    for (const kind of ['lantern', 'flowers'] as const) {
+      let mesh = this.flourishes.get(kind);
+      const matrices = byKind.get(kind) ?? [];
+      if (!mesh && matrices.length === 0) continue;
+      if (!mesh) {
+        mesh = buildProp(this.scene, kind).mesh;
+        mesh.name = `claimed-${kind}`;
+        if (kind === 'lantern') {
+          this.claimedLanternMat = vinyl(this.scene, 'claimed-lantern-mat', { color: '#ffffff' });
+          mesh.material = this.claimedLanternMat;
+          this.applyLanternGlow();
+        } else {
+          mesh.material = this.propMat();
+        }
+        this.flourishes.set(kind, mesh);
+      }
+      setInstances(mesh, matrices, true);
+      count += matrices.length;
+    }
+    return count;
+  }
+
+  private propMaterial: PBRMaterial | null = null;
+  private propPlugin: unknown = null;
+  /** The shared prop material (vertex colours, sway and bob from the terrain plugin). */
+  private propMat(): PBRMaterial {
+    if (!this.propMaterial) {
+      this.propMaterial = vinyl(this.scene, 'prop-mat', { color: '#ffffff' });
+      this.propPlugin = attachTerrainPlugin(this.propMaterial, this.clock);
+    }
+    return this.propMaterial;
   }
 
   private buildIsland(tiles: readonly PublicTile[]): void {
@@ -633,12 +783,6 @@ export class MapScene {
       color: ISLAND.color,
       roughness: 0.85,
     });
-    // Softened like wild land (part way), since nobody ever owns the island.
-    const green = hexRgb(ISLAND.color);
-    const soft = muteRgb(green);
-    mat.albedoColor = new Color3(
-      ...green.map((v, i) => toLinear(v + ((soft[i] ?? v) - v) * MUTED.island)),
-    );
     for (const m of [island, rim]) {
       m.material = mat;
       m.isPickable = false;
@@ -647,172 +791,66 @@ export class MapScene {
   }
 
   /**
-   * One mesh per terrain look (plus home tiles), each drawing all its tiles
-   * at once. Each tile carries its own colour (a small wobble, muted on wild
-   * land) and height wobble in its instance data. True if the terrain plugin
-   * runs here (GLSL), so ambient life can move.
+   * The continuous ground (one mesh, one draw call) and the lakes' water.
    */
-  private buildTiles(tiles: readonly PublicTile[]): boolean {
-    const groups = new Map<TerrainLook, { key: string; tiles: PublicTile[] }>();
-    for (const tile of tiles) {
-      const look = lookOf(tile);
-      let group = groups.get(look);
-      if (!group) {
-        group = { key: tile.homeSlot !== null ? 'home' : tile.terrain, tiles: [] };
-        groups.set(look, group);
-      }
-      group.tiles.push(tile);
-    }
-    let animated = true;
-    for (const [look, group] of groups) {
-      const h = look.height;
-      const mesh = meshFrom(
-        this.scene,
-        `tiles-${group.key}`,
-        loftRoundedHex(
-          TILE_RADIUS,
-          [...TOP_RINGS.map((r) => ({ scale: r.scale, y: r.y + h })), { scale: 1, y: 0 }],
-          { corner: CORNER, segments: SEGMENTS, centre: { y: h + DOME } },
-        ),
-      );
-      // White albedo: each tile's colour comes from its instance colour.
-      const mat = vinyl(this.scene, `tiles-${group.key}-mat`, { ...look, color: '#ffffff' });
-      if (look.glow > 0) mat.emissiveColor = linear(look.color).scale(look.glow);
-      const plugin = attachTerrainPlugin(mat, this.clock, { water: group.key === 'lake' });
-      if (!plugin) animated = false;
-      mesh.material = mat;
-      // Height wobble scales the tile, so its top lands at `topOf(tile)`.
-      setInstances(
-        mesh,
-        group.tiles.map((tile) => {
-          const p = hexToWorld(tile, HEX_SIZE);
-          return placeAt(p.x, 0, p.z, new Vector3(1, (topOf(tile) + DOME) / (h + DOME), 1));
-        }),
-      );
-      const colors = new Float32Array(group.tiles.length * 4);
-      mesh.thinInstanceSetBuffer('color', colors, 4, false);
-      mesh.freezeWorldMatrix();
-      this.tileGroups.push({
-        mesh,
-        look,
-        tiles: group.tiles,
-        colors,
-        muted: group.tiles.map(() => false),
-      });
-    }
-    this.tileMeshes = groups.size;
-    this.recolour(true);
-    return animated;
-  }
+  private buildGround(tiles: readonly PublicTile[]): void {
+    const mesh = meshFrom(this.scene, 'ground', this.ground.mesh());
+    mesh.hasVertexAlpha = false;
+    const mat = vinyl(this.scene, 'ground-mat', {
+      ...FALLBACK_LOOK,
+      color: '#ffffff',
+      roughness: 0.85,
+    });
+    mat.freeze();
+    mesh.material = mat;
+    mesh.freezeWorldMatrix();
 
-  /** Recolours tiles and props whose wildness changed (all of them with `force`). */
-  private recolour(force = false): void {
-    if (this.tileGroups.length === 0) return;
-    const wild = new Map<HexKey, boolean>();
-    for (const group of this.tileGroups) {
-      let changed = false;
-      for (const [i, stale] of group.tiles.entries()) {
-        const key = hexKey(stale);
-        const tile = this.tiles.get(key) ?? stale;
-        const muted = isMuted(tile);
-        wild.set(key, muted);
-        if (!force && group.muted[i] === muted) continue;
-        group.muted[i] = muted;
-        changed = true;
-        const c =
-          tile.homeSlot !== null
-            ? tileColor(group.look.color, { brightness: 1, warmth: 0, height: 0 }, muted)
-            : tileColor(group.look.color, tileJitter(tile, tile.terrain), muted);
-        group.colors.set([...c.map(toLinear), 1], i * 4);
-      }
-      if (changed) group.mesh.thinInstanceBufferUpdated('color');
-    }
-    for (const group of this.propGroups) {
-      let changed = false;
-      for (const [i, key] of group.tiles.entries()) {
-        const muted = wild.get(key) === true ? 1 : 0;
-        if (group.ambient[i * 4 + 2] === muted) continue;
-        group.ambient[i * 4 + 2] = muted;
-        changed = true;
-      }
-      if (changed) group.mesh.thinInstanceBufferUpdated(AMBIENT_ATTRIBUTE);
-    }
+    const lakes = tiles.filter((t) => t.terrain === 'lake');
+    if (lakes.length === 0) return;
+    const water = waterMesh(lakes, {
+      size: HEX_SIZE,
+      level: WATER.level,
+      reach: WATER.reach,
+      deep: { color: rgbOf(WATER.deep.color), alpha: WATER.deep.alpha },
+      shallow: { color: rgbOf(WATER.shallow.color), alpha: WATER.shallow.alpha },
+    });
+    const waterSurface = meshFrom(this.scene, 'water', water);
+    waterSurface.setVerticesData(SHORE_ATTRIBUTE, water.shore, false, 1);
+    const waterMat = vinyl(this.scene, 'water-mat', { color: '#ffffff' });
+    waterMat.roughness = 0.15;
+    waterMat.transparencyMode = Material.MATERIAL_ALPHABLEND;
+    attachTerrainPlugin(waterMat, this.clock, { water: true });
+    waterSurface.material = waterMat;
+    waterSurface.freezeWorldMatrix();
   }
 
   /**
-   * Dressing for every terrain tile (map-dressing.ts): one thin-instanced
-   * mesh per prop kind, each instance with its colour multiplier and its
-   * sway, phase, muted and bob values (terrain-plugin.ts).
+   * Dressing for every terrain tile (map-dressing.ts), in clumps: one
+   * thin-instanced mesh per prop kind, each instance with its colour
+   * multiplier and its sway, phase and bob values (terrain-plugin.ts). Props
+   * stand on the ground's surface, wherever on the tile they are.
    */
   private buildProps(tiles: readonly PublicTile[]): void {
-    type Kind = { matrices: Matrix[]; tints: number[]; ambient: number[]; tiles: HexKey[] };
-    const byKind = new Map<PropKind, Kind>();
     const shadows: Matrix[] = [];
-    const meshes = new Map<PropKind, { mesh: Mesh; shadow: number }>();
-    const turn = new Quaternion();
-    for (const tile of tiles) {
-      if (tile.homeSlot !== null) continue;
-      const top = topOf(tile);
-      const key = hexKey(tile);
-      for (const prop of dressTile(tile, tile.terrain, HEX_SIZE, { halloween: this.halloween })) {
-        let built = meshes.get(prop.kind);
-        if (!built) {
-          built = buildProp(this.scene, prop.kind);
-          meshes.set(prop.kind, built);
+    const placed = this.placeAll(
+      tiles.flatMap((tile) =>
+        tile.homeSlot !== null
+          ? []
+          : dressTile(tile, tile.terrain, HEX_SIZE, { halloween: this.halloween }).map((p) => ({
+              tile,
+              p,
+            })),
+      ),
+      (kind, built, at, scale, y) => {
+        // Only props big enough to cast a soft shadow get one (not tufts or flowers).
+        if (built.shadow >= MIN_SHADOW) {
+          const d = built.shadow * scale;
+          shadows.push(placeAt(at.x, y + 0.004, at.z, new Vector3(d, 1, d)));
         }
-        Quaternion.RotationYawPitchRollToRef(prop.turn, 0, 0, turn);
-        const s = new Vector3(prop.scale, prop.scale, prop.scale);
-        let kind = byKind.get(prop.kind);
-        if (!kind)
-          byKind.set(prop.kind, (kind = { matrices: [], tints: [], ambient: [], tiles: [] }));
-        kind.matrices.push(placeAt(prop.at.x, top + DOME * 0.5, prop.at.z, s, turn.clone()));
-        kind.tints.push(...hexRgb(prop.tint).map(toLinear), 1);
-        const sway = PROP_SWAY[prop.kind];
-        // terrainAmbient: sway coefficient (tip / top²), phase, muted (set by recolour), bob.
-        kind.ambient.push(
-          sway ? sway.tip / (sway.top * sway.top) : 0,
-          hash01(Math.round(prop.at.x * 100), Math.round(prop.at.z * 100), 5) * Math.PI * 2,
-          0,
-          prop.kind === 'lily-pad' ? 1 : 0,
-        );
-        kind.tiles.push(key);
-        if (built.shadow > 0) {
-          const d = built.shadow * prop.scale;
-          // Just over the dome's crown, so no part of the disc dips under the tile
-          // top (it doesn't write depth, so the slight float off-centre never shows).
-          shadows.push(placeAt(prop.at.x, top + DOME + 0.004, prop.at.z, new Vector3(d, 1, d)));
-        }
-      }
-    }
-    const propMat = vinyl(this.scene, 'prop-mat', { color: '#ffffff' });
-    attachTerrainPlugin(propMat, this.clock);
-    // Jack-o'-lanterns and Juniper's crystals glow softly (lanterns brighter at night).
-    const glowing = (name: string, color: string, glow: number): PBRMaterial => {
-      const m = vinyl(this.scene, name, { color: '#ffffff' });
-      m.emissiveColor = linear(color).scale(glow);
-      attachTerrainPlugin(m, this.clock);
-      return m;
-    };
-    this.propCount = 0;
-    for (const [kindName, { mesh }] of meshes) {
-      const kind = byKind.get(kindName);
-      if (!kind) continue;
-      if (kindName === 'jack-o-lantern') {
-        this.lanternMat = glowing('lantern-mat', HALLOWEEN.glowColor, HALLOWEEN.glow.day);
-        mesh.material = this.lanternMat;
-      } else if (kindName === 'crystal') {
-        mesh.material = glowing('crystal-mat', CRYSTAL_GLOW.color, CRYSTAL_GLOW.strength);
-      } else {
-        mesh.material = propMat;
-      }
-      setInstances(mesh, kind.matrices);
-      mesh.thinInstanceSetBuffer('color', new Float32Array(kind.tints), 4, true);
-      const ambient = new Float32Array(kind.ambient);
-      mesh.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, ambient, 4, false);
-      mesh.freezeWorldMatrix();
-      this.propGroups.push({ mesh, tiles: kind.tiles, ambient });
-      this.propCount += kind.matrices.length;
-    }
+      },
+    );
+    this.propCount = placed.instances;
+    this.propKinds = placed.kinds;
 
     // Baked soft contact shadows: one round, vertex-alpha disc per prop.
     const shadow = meshFrom(
@@ -820,7 +858,7 @@ export class MapScene {
       'prop-shadows',
       loftRoundedHex(1, [{ scale: 1, y: 0, alpha: 0 }], {
         corner: Math.sqrt(3) / 2, // fully rounded: a circle
-        segments: 6,
+        segments: 3,
         centre: { y: 0, alpha: 0.35 }, // TUNE
         rgb: [0.42, 0.29, 0.43],
       }),
@@ -830,21 +868,143 @@ export class MapScene {
     shadow.freezeWorldMatrix();
   }
 
-  /** Pushes night, mode and the tier's share into the motes, backdrop and lanterns. */
+  /**
+   * Tiny ground clutter (tufts, clover, pebbles, petals) on every land tile,
+   * thin-instanced per kind. Instances are shuffled, so a tier's share
+   * (`CLUTTER_SHARE`) thins them evenly over the whole map.
+   */
+  private buildClutter(tiles: readonly PublicTile[]): void {
+    const items = tiles.flatMap((tile) =>
+      tile.homeSlot !== null || tile.terrain === 'lake'
+        ? []
+        : clutterTile(tile, tile.terrain, HEX_SIZE).map((p) => ({ tile, p })),
+    );
+    items.sort(
+      (a, b) =>
+        hash01(Math.round(a.p.at.x * 100), Math.round(a.p.at.z * 100), 13) -
+        hash01(Math.round(b.p.at.x * 100), Math.round(b.p.at.z * 100), 13),
+    );
+    const placed = this.placeAll(items, () => undefined, 'clutter');
+    for (const mesh of placed.meshes) this.clutter.push({ mesh, count: mesh.thinInstanceCount });
+  }
+
+  /**
+   * Places props on the surface, one thin-instanced mesh per kind (named
+   * `prefix-kind` when a prefix is given), with colour and `terrainAmbient`
+   * per instance. `each` sees every placement (for shadows).
+   */
+  private placeAll(
+    items: readonly { tile: PublicTile; p: DressingPlacement }[],
+    each: (kind: PropKind, built: BuiltProp, at: WorldPoint, scale: number, y: number) => void,
+    prefix?: string,
+  ): { instances: number; kinds: number; meshes: Mesh[] } {
+    type Kind = { matrices: Matrix[]; tints: number[]; ambient: number[] };
+    const byKind = new Map<PropKind, Kind>();
+    const meshes = new Map<PropKind, BuiltProp>();
+    const turn = new Quaternion();
+    for (const { tile, p } of items) {
+      let built = meshes.get(p.kind);
+      if (!built) {
+        built = buildProp(this.scene, p.kind);
+        if (prefix) built.mesh.name = `${prefix}-${p.kind}`;
+        meshes.set(p.kind, built);
+      }
+      const y = this.surface.heightAt(p.at) ?? topOf(tile);
+      Quaternion.RotationYawPitchRollToRef(p.turn, 0, 0, turn);
+      let kind = byKind.get(p.kind);
+      if (!kind) byKind.set(p.kind, (kind = { matrices: [], tints: [], ambient: [] }));
+      kind.matrices.push(
+        placeAt(p.at.x, y, p.at.z, new Vector3(p.scale, p.scale, p.scale), turn.clone()),
+      );
+      kind.tints.push(...hexRgb(p.tint).map(toLinear), 1);
+      const sway = PROP_SWAY[p.kind];
+      // terrainAmbient: sway coefficient (tip / top²), phase, (unused), bob with the water.
+      kind.ambient.push(
+        sway ? sway.tip / (sway.top * sway.top) : 0,
+        hash01(Math.round(p.at.x * 100), Math.round(p.at.z * 100), 5) * Math.PI * 2,
+        0,
+        p.kind === 'lily-pad' ? 1 : 0,
+      );
+      each(p.kind, built, p.at, p.scale, y);
+    }
+    // Jack-o'-lanterns and Juniper's crystals glow softly (lanterns brighter at night).
+    const glowing = (name: string, color: string, glow: number): PBRMaterial => {
+      const m = vinyl(this.scene, name, { color: '#ffffff' });
+      m.emissiveColor = linear(color).scale(glow);
+      attachTerrainPlugin(m, this.clock);
+      return m;
+    };
+    let instances = 0;
+    const out: Mesh[] = [];
+    for (const [kindName, { mesh }] of meshes) {
+      const kind = byKind.get(kindName);
+      if (!kind) continue;
+      if (kindName === 'jack-o-lantern') {
+        this.lanternMat = glowing('lantern-mat', HALLOWEEN.glowColor, HALLOWEEN.glow.day);
+        mesh.material = this.lanternMat;
+      } else if (kindName === 'crystal') {
+        mesh.material = glowing('crystal-mat', CRYSTAL_GLOW.color, CRYSTAL_GLOW.strength);
+      } else {
+        mesh.material = this.propMat();
+      }
+      setInstances(mesh, kind.matrices);
+      mesh.thinInstanceSetBuffer('color', new Float32Array(kind.tints), 4, true);
+      mesh.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, new Float32Array(kind.ambient), 4, true);
+      mesh.freezeWorldMatrix();
+      instances += kind.matrices.length;
+      out.push(mesh);
+    }
+    return { instances, kinds: out.length, meshes: out };
+  }
+
+  /** Sandy paths from each home's Heart Seed out to a few neighbouring tiles. */
+  private buildPaths(tiles: readonly PublicTile[]): void {
+    const routes = homePaths(tiles, HEX_SIZE, PATHS.links);
+    if (routes.length === 0) return;
+    const c = linear(PATHS.color);
+    const parts = routes.map((route) =>
+      pathRibbon(route, this.surface, {
+        size: HEX_SIZE,
+        lift: OVERLAY_LIFT * 0.5,
+        rgb: [c.r, c.g, c.b],
+        width: PATHS.width,
+        alpha: PATHS.alpha,
+      }),
+    );
+    const mesh = meshFrom(this.scene, 'paths', parts.reduce(joinArrays));
+    mesh.material = this.overlayMat;
+    mesh.freezeWorldMatrix();
+  }
+
+  /** Pushes night, mode and the tier's share into the motes, clutter, backdrop and lanterns. */
   private applyAmbient(): void {
     if (this.judge.slow && this.mode === 'live') this.mode = 'off';
     this.ambient.set({ night: this.night, mode: this.mode, share: this.share });
+    const tierShare = AMBIENT.clutter[this.tier];
+    for (const { mesh, count } of this.clutter) {
+      // Hidden by disabling, never by a count of 0 (see map-ambient.ts).
+      const n = Math.round(count * tierShare);
+      mesh.thinInstanceCount = Math.max(1, n);
+      mesh.setEnabled(n > 0);
+    }
     if (this.lanternMat) {
       const glow = this.night ? HALLOWEEN.glow.night : HALLOWEEN.glow.day;
       this.lanternMat.emissiveColor = linear(HALLOWEEN.glowColor).scale(glow);
     }
+    this.applyLanternGlow();
+  }
+
+  private applyLanternGlow(): void {
+    if (!this.claimedLanternMat) return;
+    const glow = this.night ? CLAIMED.lanternGlow.night : CLAIMED.lanternGlow.day;
+    this.claimedLanternMat.emissiveColor = linear(CLAIMED.lanternGlow.color).scale(glow);
   }
 
   /** Juniper's Gap landmark (design doc §2): a glowing tree on the centre tile. */
   private buildGap(): void {
     const centre = this.tiles.get(hexKey({ q: 0, r: 0 }));
     if (centre?.terrain !== 'junipers-gap') return;
-    const h = topOf(centre) + DOME * 0.5;
+    const h = topOf(centre);
     const part = (m: Mesh, y: number, hex: string, sy = 1): Mesh => {
       m.position.y = y;
       m.scaling.y = sy;
@@ -877,12 +1037,6 @@ export class MapScene {
     tree.freezeWorldMatrix();
   }
 }
-
-// ── Home nodes ────────────────────────────────────────────────────────────
-// Each home base's resource nodes (Timber, Stone, Emberwood, the farm plot),
-// drawn in the middle of their tile as on the Home view, so "tap the tree
-// tile" has a tree to tap. Kept apart from the terrain props above, which
-// skip home tiles.
 
 /** Node resources drawn as props in the middle of their tile (the map and Home). */
 export const NODE_PROPS: Readonly<Record<string, PropKind>> = {

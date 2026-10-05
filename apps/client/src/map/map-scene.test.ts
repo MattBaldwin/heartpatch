@@ -33,29 +33,31 @@ describe('MapScene', () => {
     return { scene, map, mesh, instances };
   }
 
-  it('draws every tile with one instanced mesh per terrain look', () => {
+  it('draws all the land as one continuous ground (one draw call), with water over the lakes', () => {
     const { scene, map } = build();
-    const tileMeshes = scene.meshes.filter((m) => m.name.startsWith('tiles-')) as Mesh[];
     expect(map.stats.tiles).toBe(469);
-    expect(tileMeshes).toHaveLength(map.stats.tileMeshes);
-    // 8 terrains plus home tiles, however many tiles there are.
-    expect(tileMeshes.length).toBeLessThanOrEqual(9);
-    expect(tileMeshes.reduce((n, m) => n + m.thinInstanceCount, 0)).toBe(469);
-    expect(scene.getMeshByName('tiles-home')).toBeTruthy();
+    expect(map.stats.tileMeshes).toBe(1);
+    const ground = scene.getMeshByName('ground') as Mesh | null;
+    // Shared corners and edge middles are one vertex (13 per tile unshared, plus the edge skirt).
+    expect(ground?.getTotalVertices() ?? 0).toBeGreaterThan(469 * 4);
+    expect(ground?.getTotalVertices() ?? 0).toBeLessThan(469 * 14);
+    expect(scene.meshes.filter((m) => m.name.startsWith('tiles-'))).toEqual([]);
+    expect(scene.getMeshByName('water')?.isVerticesDataPresent('terrainShore')).toBe(true);
   });
 
   it('keeps the whole map to a few dozen meshes (draw calls)', () => {
-    // About 30 before the terrain visual pass; its props, motes and backdrop
-    // add one each per kind, however many tiles.
+    // About 30 before the terrain visual passes; props, clutter, motes and
+    // the backdrop add one each per kind, however many tiles.
     for (const halloween of [false, true]) {
       const { scene } = build(testView(4), { halloween });
-      expect(scene.meshes.filter((m) => m.isEnabled()).length).toBeLessThan(55);
+      expect(scene.meshes.filter((m) => m.isEnabled()).length).toBeLessThan(70);
     }
   });
 
   it('keeps the triangles drawn near what the map drew before its dressing', () => {
-    // About 570k on this 4-player map before the terrain visual pass; small
-    // parts use few segments so twice the props cost about a fifth more.
+    // About 570k on this 4-player map before the terrain visual passes; small
+    // parts and clutter use few triangles, so several times the props cost
+    // about half as much again.
     for (const halloween of [false, true]) {
       const { scene } = build(testView(4), { halloween });
       let triangles = 0;
@@ -63,7 +65,7 @@ describe('MapScene', () => {
         if (!m.isEnabled()) continue;
         triangles += (m.getTotalIndices() / 3) * (m.hasThinInstances ? m.thinInstanceCount : 1);
       }
-      expect(triangles).toBeLessThan(720_000);
+      expect(triangles).toBeLessThan(950_000);
     }
   });
 
@@ -113,6 +115,11 @@ describe('MapScene', () => {
       'crystal',
       'hay-bale',
       'jack-o-lantern',
+      'tuft',
+      'clover',
+      'pebbles',
+      'petals',
+      'lantern',
     ];
     for (const kind of kinds) {
       const { mesh, shadow } = buildProp(scene, kind);
@@ -121,28 +128,36 @@ describe('MapScene', () => {
     }
   });
 
-  it('draws wild land muted, and brings the colour back as land is claimed', () => {
-    const { map } = build(testView(1));
-    const muted = map.stats.mutedTiles;
-    const mutedProps = () => map.stats.mutedProps;
-    const before = mutedProps();
-    // Everything but the home ring and the Gap is wild.
-    expect(muted).toBe(469 - 7 - 7);
-    expect(before).toBeGreaterThan(0);
-    // Someone claims a forest tile: it and its trees come back in colour.
+  it('scatters ground clutter, and draws less of it on lower tiers', () => {
+    const { map } = build();
+    const all = map.stats.clutter;
+    expect(all).toBeGreaterThan(map.stats.props);
+    map.setAmbient('medium', false);
+    expect(map.stats.clutter).toBeLessThan(all);
+    map.setAmbient('low', false);
+    expect(map.stats.clutter).toBeGreaterThan(0);
+    expect(map.stats.clutter).toBeLessThan(all / 2);
+  });
+
+  it('gives claimed land a glow, a border round the territory and flourishes', () => {
+    const { map, mesh } = build(testView(1));
+    const one = mesh('territory-0')!.getTotalVertices();
+    expect(one).toBeGreaterThan(0);
+    // The home ring is home tiles: no flourishes there.
+    expect(map.stats.flourishes).toBe(0);
+    // Someone claims a forest tile: flourishes appear and the territory grows.
     const view = testView(1);
     const forest = view.tiles.find((t) => t.terrain === 'forest' && t.homeSlot === null)!;
-    const claimed = {
+    map.update({
       ...view,
       tiles: view.tiles.map((t) => (t === forest ? { ...t, ownerUserId: userId(1) } : t)),
-    };
-    map.update(claimed);
-    expect(map.stats.mutedTiles).toBe(muted - 1);
-    expect(mutedProps()).toBeLessThan(before);
-    // Lost again: muted again.
+    });
+    expect(map.stats.flourishes).toBeGreaterThan(0);
+    expect(mesh('territory-0')!.getTotalVertices()).toBeGreaterThan(one);
+    // Lost again: gone again.
     map.update(testView(1));
-    expect(map.stats.mutedTiles).toBe(muted);
-    expect(mutedProps()).toBe(before);
+    expect(map.stats.flourishes).toBe(0);
+    expect(mesh('territory-0')!.getTotalVertices()).toBe(one);
   });
 
   it("dresses for Halloween only while it's on", () => {
@@ -193,21 +208,22 @@ describe('MapScene', () => {
   });
 
   it('tints each player’s land in their slot colour', () => {
-    const { map, instances } = build(testView(1));
+    const { map, mesh } = build(testView(1));
     expect(map.stats.tinted).toBe(7);
-    expect(instances('tint-0')).toBe(7);
+    expect(mesh('territory-0')).toBeTruthy();
+    expect(mesh('territory-1')).toBeNull();
 
     map.update(testView(2));
     expect(map.stats.tinted).toBe(14);
-    expect(instances('tint-0')).toBe(7);
-    expect(instances('tint-1')).toBe(7);
+    expect(mesh('territory-0')).toBeTruthy();
+    expect(mesh('territory-1')).toBeTruthy();
   });
 
   it('clears a leaver’s tint when their land goes wild', () => {
-    const { map, instances } = build(testView(2));
+    const { map, mesh } = build(testView(2));
     map.update(testView(1));
     expect(map.stats.tinted).toBe(7);
-    expect(instances('tint-1')).toBe(0);
+    expect(mesh('territory-1')).toBeNull();
   });
 
   it('leaves tiles owned by someone outside the member list untinted', () => {
@@ -277,9 +293,9 @@ describe('MapScene', () => {
     const view = testView(1);
     const { map, mesh } = build(view);
     map.select(view.tiles[10]!);
-    expect(mesh('selection')!.isEnabled()).toBe(true);
+    expect(mesh('selection')?.getTotalVertices()).toBeGreaterThan(0);
     map.select(null);
-    expect(mesh('selection')!.isEnabled()).toBe(false);
+    expect(mesh('selection')).toBeNull();
   });
 
   it('puts Juniper’s Gap’s tree on the centre tile', () => {

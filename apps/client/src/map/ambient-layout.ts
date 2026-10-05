@@ -17,6 +17,10 @@ export const DRIFT_MODE = {
   firefly: 2,
   orbit: 3,
   float: 4,
+  flutter: 5,
+  cross: 6,
+  jump: 7,
+  hop: 8,
 } as const;
 
 /** One mote: where it hangs and how it drifts. */
@@ -36,6 +40,10 @@ const TERRAINS_FOR: Readonly<Record<MoteKind, readonly string[]>> = {
   sparkles: ['junipers-gap'],
   bats: ['forest', 'old-forest', 'mountains'],
   fog: ['lake', 'meadow'],
+  butterflies: ['meadow', 'hills', 'junipers-gap', 'pumpkin-fields'],
+  birds: ['meadow', 'forest', 'old-forest', 'hills', 'mountains', 'lake', 'pumpkin-fields'],
+  fish: ['lake'],
+  bunnies: ['meadow', 'hills'],
 };
 
 /** How each kind floats: height above its tile, size, and its drift. TUNE: all of it. */
@@ -51,6 +59,36 @@ const STYLE: Readonly<
     }
   >
 > = {
+  butterflies: {
+    lift: [0.15, 0.4],
+    size: [0.9, 1.15],
+    mode: DRIFT_MODE.flutter,
+    range: [0.2, 0.4],
+    speed: [0.35, 0.6],
+  },
+  // A bird flies straight across `range` world units, once per 1/speed s.
+  birds: {
+    lift: [1.6, 2.4],
+    size: [1, 1.3],
+    mode: DRIFT_MODE.cross,
+    range: [7, 11],
+    speed: [0.04, 0.06],
+  },
+  // Fish jump `range` long, once per 1/speed s, from just under the water.
+  fish: {
+    lift: [0.02, 0.03],
+    size: [0.9, 1.1],
+    mode: DRIFT_MODE.jump,
+    range: [0.14, 0.24],
+    speed: [0.12, 0.25],
+  },
+  bunnies: {
+    lift: [0, 0.005],
+    size: [1, 1.2],
+    mode: DRIFT_MODE.hop,
+    range: [0.18, 0.32],
+    speed: [0.25, 0.4],
+  },
   pollen: {
     lift: [0.18, 0.5],
     size: [0.03, 0.045],
@@ -102,6 +140,10 @@ const SALT: Readonly<Record<MoteKind, number>> = {
   sparkles: 130,
   bats: 140,
   fog: 150,
+  butterflies: 160,
+  birds: 170,
+  fish: 180,
+  bunnies: 190,
 };
 
 /**

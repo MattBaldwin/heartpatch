@@ -35,6 +35,17 @@ const WHEN: Readonly<Record<MoteKind, { day: boolean; night: boolean; drifts: bo
   sparkles: { day: true, night: true, drifts: false },
   bats: { day: true, night: true, drifts: true },
   fog: { day: true, night: true, drifts: false },
+  butterflies: { day: true, night: false, drifts: true },
+  birds: { day: true, night: false, drifts: true },
+  fish: { day: true, night: true, drifts: true },
+  bunnies: { day: true, night: false, drifts: true },
+};
+
+/** Kinds that come in a few colours, one per mote (sRGB). TUNE */
+const HUES: Partial<Record<MoteKind, readonly string[]>> = {
+  leaves: ['#f2b26b', '#f6d37a', '#e88f6a', '#f4a3a8'],
+  butterflies: ['#ffb4d6', '#ffe27a', '#a9d8ff', '#c9a7ff', '#ffffff'],
+  fish: ['#ff9f5a', '#ffc46b', '#f7f2e8'],
 };
 const HALLOWEEN_ONLY: ReadonlySet<MoteKind> = new Set(['bats', 'fog']);
 
@@ -166,6 +177,78 @@ function moteMesh(scene: Scene, kind: MoteKind): Mesh {
         ),
       ]);
     }
+    case 'butterflies': {
+      // Two wings in x (the shader beats them), a dark little body.
+      const wing = (side: number) => {
+        const w = CreateCylinder(
+          'wing',
+          { height: 0.004, diameter: 0.045, tessellation: 6 },
+          scene,
+        );
+        w.position.set(side * 0.022, 0, 0);
+        w.scaling.set(1, 1, 1.25);
+        return painted(w, '#ffffff');
+      };
+      return merged('mote-butterflies', [
+        wing(1),
+        wing(-1),
+        painted(
+          CreateCylinder('body', { height: 0.035, diameter: 0.008, tessellation: 4 }, scene),
+          '#4a3a52',
+        ),
+      ]);
+    }
+    case 'birds': {
+      // A simple gull-wing shape in soft white, flying along +z.
+      const wing = (side: number) => {
+        const w = CreateCylinder('wing', { height: 0.01, diameter: 0.12, tessellation: 3 }, scene);
+        w.position.set(side * 0.05, 0.01, 0);
+        w.scaling.set(1, 1, 0.45);
+        w.rotation.z = side * 0.25;
+        return painted(w, '#fbf7f2');
+      };
+      return merged('mote-birds', [
+        wing(1),
+        wing(-1),
+        painted(
+          (() => {
+            const b = CreateSphere('bird', { diameter: 0.04, segments: 4 }, scene);
+            b.scaling.set(0.8, 0.8, 1.6);
+            return b;
+          })(),
+          '#f1ebe4',
+        ),
+      ]);
+    }
+    case 'fish': {
+      // A little fish along +z: body and tail fin.
+      const body = CreateSphere('fish', { diameter: 0.05, segments: 5 }, scene);
+      body.scaling.set(0.55, 0.7, 1.4);
+      const tail = CreateCylinder(
+        'tail',
+        { height: 0.004, diameter: 0.04, tessellation: 3 },
+        scene,
+      );
+      tail.position.set(0, 0, -0.04);
+      tail.rotation.z = Math.PI / 2;
+      return merged('mote-fish', [painted(body, '#ffffff'), painted(tail, '#ffffff')]);
+    }
+    case 'bunnies': {
+      // A round white bunny facing +z: body, head, ears and a pink nose.
+      const part = (d: number, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) => {
+        const p = CreateSphere('bunny', { diameter: d, segments: 5 }, scene);
+        p.position.set(x, y, z);
+        p.scaling.set(sx, sy, sz);
+        return p;
+      };
+      return merged('mote-bunnies', [
+        painted(part(0.07, 0, 0.035, 0, 1, 0.9, 1.15), '#fbf6f0'),
+        painted(part(0.045, 0, 0.07, 0.035), '#fbf6f0'),
+        painted(part(0.018, 0.011, 0.105, 0.03, 0.6, 1.8, 0.6), '#fbf6f0'),
+        painted(part(0.018, -0.011, 0.105, 0.03, 0.6, 1.8, 0.6), '#fbf6f0'),
+        painted(part(0.01, 0, 0.072, 0.058), '#ff9fb8'),
+      ]);
+    }
     case 'fog':
       return softDisc(scene, 'mote-fog', [
         [0.18, 0.32],
@@ -221,9 +304,10 @@ export class MapAmbient {
       const { matrices, drift } = moteBuffers(motes);
       mesh.thinInstanceSetBuffer('matrix', matrices, 16, true);
       mesh.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, drift, 4, true);
-      // Leaves come in autumn colours, one per leaf.
-      if (kind === 'leaves') {
-        const hues = ['#f2b26b', '#f6d37a', '#e88f6a', '#f4a3a8'].map(linear);
+      // Leaves, butterflies and fish come in a few colours, one each.
+      const palette = HUES[kind];
+      if (palette) {
+        const hues = palette.map(linear);
         const colors = new Float32Array(motes.length * 4);
         motes.forEach((mote, i) => {
           const c =

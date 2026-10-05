@@ -7,17 +7,18 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { DRIFT_MODE } from './ambient-layout.js';
-import { AMBIENT, MUTED } from './map-config.js';
+import { AMBIENT, WATER } from './map-config.js';
 
 /**
  * Ambient life for the map's terrain (the terrain visual pass), all on the
  * GPU from one time uniform, so the CPU does nothing per frame:
  *
- * - Props (`terrainAmbient` per thin instance: sway, phase, muted, bob): tops
- *   sway in a soft breeze (the higher the vertex, the more), lily pads bob
- *   with the water, and props on wild land are drawn muted, like their tile.
- * - Water (`water` option, the lake tiles): the top bobs in slow waves and
- *   soft glints drift across it.
+ * - Props (`terrainAmbient` per thin instance: sway, phase, unused, bob):
+ *   tops sway in a soft breeze (the higher the vertex, the more) and lily
+ *   pads bob with the water.
+ * - Water (`water` option, the lakes): the surface bobs in slow waves, soft
+ *   glints drift across it, and foam laps at the shore (`terrainShore` per
+ *   vertex).
  * - Motes (`terrainDrift` per thin instance: mode, phase, range, speed):
  *   pollen and sparkles wander, leaves tumble down, fireflies blink, bats
  *   circle and flap, fog and clouds float (`DRIFT_MODE`).
@@ -29,6 +30,8 @@ import { AMBIENT, MUTED } from './map-config.js';
 
 export const AMBIENT_ATTRIBUTE = 'terrainAmbient';
 export const DRIFT_ATTRIBUTE = 'terrainDrift';
+/** Water vertices: 0 in open water, 1 where it meets land (the foam). */
+export const SHORE_ATTRIBUTE = 'terrainShore';
 
 /** The one clock every terrain material reads: seconds of ambient time. */
 export class TerrainClock {
@@ -40,7 +43,10 @@ const num = (n: number) => (Number.isInteger(n) ? `${n}.0` : String(n));
 const VERTEX_DEFINITIONS = /* glsl */ `
 #ifdef TERRAIN_SWAY
 attribute vec4 terrainAmbient;
-varying float vTerrainMute;
+#endif
+#ifdef TERRAIN_SHORE
+attribute float terrainShore;
+varying float vTerrainShore;
 #endif
 #ifdef TERRAIN_DRIFT
 attribute vec4 terrainDrift;
@@ -48,8 +54,8 @@ attribute vec4 terrainDrift;
 `;
 
 const FRAGMENT_DEFINITIONS = /* glsl */ `
-#ifdef TERRAIN_SWAY
-varying float vTerrainMute;
+#ifdef TERRAIN_SHORE
+varying float vTerrainShore;
 #endif
 `;
 
@@ -68,7 +74,6 @@ const VERTEX_WORLDPOS = /* glsl */ `
   );
   worldPos.xz += tsK * tsWave;
   worldPos.y += terrainAmbient.w * terrainWater.x * ${WAVE('worldPos')};
-  vTerrainMute = terrainAmbient.z;
   vPositionW = worldPos.xyz;
 }
 #endif
@@ -79,6 +84,9 @@ const VERTEX_WORLDPOS = /* glsl */ `
   worldPos.y += twTop * terrainWater.x * ${WAVE('worldPos')};
   vPositionW = worldPos.xyz;
 }
+#endif
+#ifdef TERRAIN_SHORE
+vTerrainShore = terrainShore;
 #endif
 #ifdef TERRAIN_DRIFT
 {
@@ -109,25 +117,51 @@ const VERTEX_WORLDPOS = /* glsl */ `
     float tdC = cos(tdT);
     float tdS = sin(tdT);
     tdLocal.xz = vec2(tdC * tdLocal.x - tdS * tdLocal.z, tdS * tdLocal.x + tdC * tdLocal.z);
-  } else {
+  } else if (tdMode < ${num(DRIFT_MODE.float)} + 0.5) {
     tdOff = tdR * vec3(sin(tdT * 0.31), 0.0, cos(tdT * 0.27 + 1.3));
     tdScale = 0.9 + 0.1 * sin(tdT * 0.7);
+  } else if (tdMode < ${num(DRIFT_MODE.flutter)} + 0.5) {
+    // A butterfly: a lazy wander, wings beating, turning as it goes.
+    tdOff = tdR * vec3(sin(tdT * 0.6), 0.35 * sin(tdT * 1.7) + 0.2 * abs(sin(tdT * 3.1)), cos(tdT * 0.47 + 0.8));
+    tdLocal.x *= 0.25 + 0.75 * abs(sin(terrainTime * 13.0 + terrainDrift.y * 3.0));
+    float tdC = cos(tdT * 0.6);
+    float tdS = sin(tdT * 0.6);
+    tdLocal.xz = vec2(tdC * tdLocal.x - tdS * tdLocal.z, tdS * tdLocal.x + tdC * tdLocal.z);
+  } else if (tdMode < ${num(DRIFT_MODE.cross)} + 0.5) {
+    // A bird crossing the whole map in a straight line (its phase is its heading), flapping.
+    float tdF = fract(tdT);
+    float tdH = terrainDrift.y;
+    tdOff = vec3(cos(tdH), 0.0, sin(tdH)) * (tdF - 0.5) * tdR + vec3(0.0, 0.08 * sin(tdF * 25.0), 0.0);
+    tdLocal.x *= 0.5 + 0.5 * abs(sin(terrainTime * 8.0 + tdH * 4.0));
+    float tdA = tdH - 1.5707963;
+    float tdC = cos(tdA);
+    float tdS = sin(tdA);
+    tdLocal.xz = vec2(tdC * tdLocal.x - tdS * tdLocal.z, tdS * tdLocal.x + tdC * tdLocal.z);
+    tdScale = smoothstep(0.0, 0.06, tdF) * (1.0 - smoothstep(0.94, 1.0, tdF));
+  } else if (tdMode < ${num(DRIFT_MODE.jump)} + 0.5) {
+    // A fish: hidden under the water, then one quick arc out and back in.
+    float tdF = fract(tdT);
+    float tdU = clamp(tdF / 0.12, 0.0, 1.0);
+    float tdH = terrainDrift.y;
+    tdOff = vec3(cos(tdH), 0.0, sin(tdH)) * (tdU - 0.5) * tdR + vec3(0.0, 0.16 * sin(3.14159265 * tdU), 0.0);
+    float tdA = tdH - 1.5707963;
+    float tdC = cos(tdA);
+    float tdS = sin(tdA);
+    // Nose up on the way out, down on the way in.
+    float tdP = (0.5 - tdU) * 1.6;
+    tdLocal.yz = vec2(cos(tdP) * tdLocal.y + sin(tdP) * tdLocal.z, -sin(tdP) * tdLocal.y + cos(tdP) * tdLocal.z);
+    tdLocal.xz = vec2(tdC * tdLocal.x - tdS * tdLocal.z, tdS * tdLocal.x + tdC * tdLocal.z);
+    tdScale = tdF < 0.12 ? 1.0 : 0.0;
+  } else {
+    // A bunny hopping round a little loop.
+    tdOff = tdR * vec3(cos(tdT), 0.0, sin(tdT)) + vec3(0.0, 0.05 * abs(sin(terrainTime * 4.5 + terrainDrift.y)), 0.0);
+    float tdC = cos(tdT);
+    float tdS = sin(tdT);
+    tdLocal.xz = vec2(tdC * tdLocal.x - tdS * tdLocal.z, tdS * tdLocal.x + tdC * tdLocal.z);
   }
   worldPos = finalWorld * vec4(tdLocal * tdScale, 1.0);
   worldPos.xyz += tdOff;
   vPositionW = worldPos.xyz;
-}
-#endif
-`;
-
-// Muting works on the albedo, so muted props keep their light and shade.
-const FRAGMENT_BEFORE_LIGHTS = /* glsl */ `
-#ifdef TERRAIN_SWAY
-{
-  float tmL = dot(surfaceAlbedo, vec3(0.2126, 0.7152, 0.0722));
-  vec3 tmC = mix(vec3(tmL), surfaceAlbedo, terrainMute.w) * terrainMuteMix.y;
-  tmC = mix(tmC, terrainMute.rgb, terrainMuteMix.x);
-  surfaceAlbedo = mix(surfaceAlbedo, tmC, vTerrainMute);
 }
 #endif
 `;
@@ -141,6 +175,16 @@ const FRAGMENT_BEFORE_FOG = /* glsl */ `
     * sin((twP.x + twP.y) * 4.0 + terrainTime * 0.7);
   finalColor.rgb += terrainWater.y * smoothstep(0.6, 0.98, twG) * twUp;
   finalColor.rgb *= 1.0 + 0.05 * sin(twP.x * 2.1 + twP.y * 1.7 + terrainTime * 0.8) * twUp;
+}
+#endif
+#ifdef TERRAIN_SHORE
+{
+  // Foam where the water meets land: a soft band that laps in and out.
+  vec2 tfP = vPositionW.xz;
+  float tfLap = 0.5 + 0.5 * sin(terrainTime * 1.4 + (tfP.x + tfP.y) * 5.0);
+  float tfFoam = smoothstep(0.55 + 0.25 * tfLap, 1.0, vTerrainShore);
+  finalColor.rgb = mix(finalColor.rgb, terrainFoam.rgb, tfFoam * terrainFoam.a);
+  finalColor.a = max(finalColor.a, tfFoam * terrainFoam.a);
 }
 #endif
 `;
@@ -164,13 +208,14 @@ export function attachTerrainPlugin(
 export class TerrainPlugin extends MaterialPluginBase {
   private readonly clock: TerrainClock;
   private readonly water: boolean;
-  private readonly muteTint = Color3.FromHexString(MUTED.tint).toLinearSpace();
+  private readonly foam = Color3.FromHexString(WATER.foam).toLinearSpace();
 
   constructor(material: Material, clock: TerrainClock, options: TerrainPluginOptions = {}) {
     super(material, 'Terrain', 210, {
       TERRAIN_SWAY: false,
       TERRAIN_WATER: false,
       TERRAIN_DRIFT: false,
+      TERRAIN_SHORE: false,
     });
     this.clock = clock;
     this.water = options.water === true;
@@ -189,11 +234,13 @@ export class TerrainPlugin extends MaterialPluginBase {
     defines['TERRAIN_SWAY'] = mesh.isVerticesDataPresent(AMBIENT_ATTRIBUTE);
     defines['TERRAIN_DRIFT'] = mesh.isVerticesDataPresent(DRIFT_ATTRIBUTE);
     defines['TERRAIN_WATER'] = this.water;
+    defines['TERRAIN_SHORE'] = mesh.isVerticesDataPresent(SHORE_ATTRIBUTE);
   }
 
   override getAttributes(attributes: string[], _scene: Scene, mesh: AbstractMesh): void {
     if (mesh.isVerticesDataPresent(AMBIENT_ATTRIBUTE)) attributes.push(AMBIENT_ATTRIBUTE);
     if (mesh.isVerticesDataPresent(DRIFT_ATTRIBUTE)) attributes.push(DRIFT_ATTRIBUTE);
+    if (mesh.isVerticesDataPresent(SHORE_ATTRIBUTE)) attributes.push(SHORE_ATTRIBUTE);
   }
 
   override getUniforms(): {
@@ -204,22 +251,19 @@ export class TerrainPlugin extends MaterialPluginBase {
     return {
       ubo: [
         { name: 'terrainTime', size: 1, type: 'float' },
-        { name: 'terrainMuteMix', size: 2, type: 'vec2' },
         { name: 'terrainWater', size: 2, type: 'vec2' },
-        { name: 'terrainMute', size: 4, type: 'vec4' },
+        { name: 'terrainFoam', size: 4, type: 'vec4' },
       ],
       vertex: 'uniform float terrainTime;\nuniform vec2 terrainWater;',
-      fragment:
-        'uniform float terrainTime;\nuniform vec2 terrainMuteMix;\nuniform vec2 terrainWater;\nuniform vec4 terrainMute;',
+      fragment: 'uniform float terrainTime;\nuniform vec2 terrainWater;\nuniform vec4 terrainFoam;',
     };
   }
 
   override bindForSubMesh(uniformBuffer: UniformBuffer): void {
     uniformBuffer.updateFloat('terrainTime', this.clock.time);
-    uniformBuffer.updateFloat2('terrainMuteMix', MUTED.wash, MUTED.shade);
     uniformBuffer.updateFloat2('terrainWater', AMBIENT.water.bob, AMBIENT.water.glint);
-    const t = this.muteTint;
-    uniformBuffer.updateFloat4('terrainMute', t.r, t.g, t.b, MUTED.saturation);
+    const f = this.foam;
+    uniformBuffer.updateFloat4('terrainFoam', f.r, f.g, f.b, AMBIENT.water.foam);
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {
@@ -232,7 +276,6 @@ export class TerrainPlugin extends MaterialPluginBase {
     if (shaderType === 'fragment') {
       return {
         CUSTOM_FRAGMENT_DEFINITIONS: FRAGMENT_DEFINITIONS,
-        CUSTOM_FRAGMENT_BEFORE_LIGHTS: FRAGMENT_BEFORE_LIGHTS,
         CUSTOM_FRAGMENT_BEFORE_FOG: FRAGMENT_BEFORE_FOG,
       };
     }

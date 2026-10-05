@@ -37,9 +37,9 @@ export function merged(name: string, parts: Mesh[]): Mesh {
 
 /** Sphere segments by diameter (world units). TUNE */
 export function sphereSegments(diameter: number): number {
-  if (diameter >= 0.25) return 10;
-  if (diameter >= 0.18) return 7;
-  if (diameter >= 0.08) return 5;
+  if (diameter >= 0.25) return 8;
+  if (diameter >= 0.18) return 6;
+  if (diameter >= 0.08) return 4;
   return 3;
 }
 
@@ -169,8 +169,8 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
           painted(at(sphere(0.16), 0, 0.07, 0), '#6fc47f'),
           painted(at(sphere(0.13), 0.07, 0.06, 0.03), '#7dd08a'),
           painted(at(sphere(0.12), -0.06, 0.055, -0.02), '#74c985'),
-          painted(at(sphere(0.03), 0.03, 0.13, 0.05), '#ff7fa8'),
-          painted(at(sphere(0.03), -0.05, 0.1, 0.05), '#ff7fa8'),
+          painted(at(cylinder(0.025, 0.03, 0.03, 4), 0.03, 0.13, 0.05), '#ff7fa8'),
+          painted(at(cylinder(0.025, 0.03, 0.03, 4), -0.05, 0.1, 0.05), '#ff7fa8'),
         ],
         0.2,
       );
@@ -182,7 +182,7 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         const h = 0.11 + 0.03 * ((i * 7) % 3);
         blades.push(
           painted(
-            at(cylinder(h, 0, 0.035, 5), Math.cos(a) * 0.025, h / 2, Math.sin(a) * 0.025, 1, 1, 1, {
+            at(cylinder(h, 0, 0.035, 4), Math.cos(a) * 0.025, h / 2, Math.sin(a) * 0.025, 1, 1, 1, {
               x: Math.sin(a) * lean,
               z: -Math.cos(a) * lean,
             }),
@@ -200,12 +200,12 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         const x = Math.cos(a) * 0.045;
         const z = Math.sin(a) * 0.045;
         const h = 0.09 + 0.025 * i;
-        parts.push(painted(at(cylinder(h, 0.01, 0.012, 5), x, h / 2, z), '#7cc56c'));
+        parts.push(painted(at(cylinder(h, 0.01, 0.012, 4), x, h / 2, z), '#7cc56c'));
         // Blooms are seen from above: a soft disc and a dot read as a flower.
-        parts.push(painted(at(cylinder(0.018, 0.065, 0.05, 7), x, h, z), color));
-        parts.push(painted(at(cylinder(0.012, 0.022, 0.022, 5), x, h + 0.012, z), '#fff6d8'));
+        parts.push(painted(at(cylinder(0.018, 0.065, 0.05, 5), x, h, z), color));
+        parts.push(painted(at(cylinder(0.012, 0.022, 0.022, 4), x, h + 0.012, z), '#fff6d8'));
       });
-      parts.push(painted(at(cylinder(0.012, 0.09, 0.1, 7), 0, 0.006, 0), '#86d27c'));
+      parts.push(painted(at(cylinder(0.012, 0.09, 0.1, 6), 0, 0.006, 0), '#86d27c'));
       return done(parts, 0.12);
     }
     case 'mushroom':
@@ -213,8 +213,8 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         [
           painted(at(cylinder(0.06, 0.035, 0.045), 0, 0.03, 0), '#fff4e6'),
           painted(at(sphere(0.11), 0, 0.065, 0, 1, 0.6, 1), '#ff6f7d'),
-          painted(at(sphere(0.022), 0.025, 0.09, 0.01), '#ffffff'),
-          painted(at(sphere(0.02), -0.02, 0.088, 0.025), '#ffffff'),
+          painted(at(cylinder(0.01, 0.022, 0.022, 4), 0.025, 0.093, 0.01), '#ffffff'),
+          painted(at(cylinder(0.01, 0.02, 0.02, 4), -0.02, 0.091, 0.025), '#ffffff'),
         ],
         0.09,
       );
@@ -223,8 +223,8 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         [
           painted(at(cylinder(0.012, 0.17, 0.17, 14), 0, 0.006, 0), '#7fcf8a'),
           painted(at(cylinder(0.012, 0.1, 0.1, 12), 0.12, 0.004, 0.06), '#8fd994'),
-          painted(at(sphere(0.045), 0.03, 0.025, 0.02, 1, 0.8, 1), '#ffb3d1'),
-          painted(at(sphere(0.02), 0.03, 0.04, 0.02), '#fff1a8'),
+          painted(at(cylinder(0.02, 0.05, 0.04, 5), 0.03, 0.02, 0.02), '#ffb3d1'),
+          painted(at(cylinder(0.01, 0.02, 0.02, 4), 0.03, 0.035, 0.02), '#fff1a8'),
         ],
         0,
       );
@@ -313,6 +313,74 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         ],
         0.18,
       );
+    // Ground clutter: thousands of these, so a handful of triangles each.
+    case 'tuft': {
+      const blades: Mesh[] = [];
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        blades.push(
+          painted(
+            at(
+              cylinder(0.07, 0, 0.022, 3),
+              Math.cos(a) * 0.012,
+              0.035,
+              Math.sin(a) * 0.012,
+              1,
+              1,
+              1,
+              {
+                x: Math.sin(a) * 0.35,
+                z: -Math.cos(a) * 0.35,
+              },
+            ),
+            i === 1 ? '#7cc56c' : '#94d67c',
+          ),
+        );
+      }
+      return done(blades, 0);
+    }
+    case 'clover':
+      return done(
+        [0, 1, 2].map((i) => {
+          const a = (i / 3) * Math.PI * 2;
+          return painted(
+            at(cylinder(0.006, 0.026, 0.026, 4), Math.cos(a) * 0.014, 0.006, Math.sin(a) * 0.014),
+            i === 0 ? '#5fb85a' : '#6cc566',
+          );
+        }),
+        0,
+      );
+    case 'pebbles':
+      return done(
+        [
+          painted(at(cylinder(0.014, 0.03, 0.036, 5), 0, 0.007, 0), '#cdc5b8'),
+          painted(at(cylinder(0.012, 0.022, 0.028, 5), 0.035, 0.006, 0.012), '#bdb3a6'),
+        ],
+        0,
+      );
+    case 'petals':
+      return done(
+        [
+          painted(at(cylinder(0.006, 0.022, 0.022, 5), 0, 0.02, 0), '#ffb1cf'),
+          painted(at(cylinder(0.006, 0.02, 0.02, 5), 0.03, 0.016, 0.01), '#fff0a0'),
+          painted(at(cylinder(0.006, 0.02, 0.02, 5), -0.012, 0.018, 0.028), '#ffffff'),
+        ],
+        0,
+      );
+    case 'lantern':
+      // A little lantern on a post, lit warm: claimed land's flourish. Its material glows.
+      return done(
+        [
+          painted(at(cylinder(0.22, 0.018, 0.024, 6), 0, 0.11, 0), '#8a6a50'),
+          painted(
+            at(cylinder(0.012, 0.07, 0.07, 6), 0.03, 0.215, 0, 1, 1, 1, { z: Math.PI / 2 }),
+            '#8a6a50',
+          ),
+          painted(at(cylinder(0.05, 0.035, 0.045, 6), 0.06, 0.18, 0), '#ffd27a'),
+          painted(at(cylinder(0.02, 0.0, 0.055, 6), 0.06, 0.215, 0), '#6b4d3a'),
+        ],
+        0.12,
+      );
     case 'jack-o-lantern':
       // A grinning pumpkin; its material glows (brighter at night).
       return done(
@@ -327,7 +395,10 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
             at(cylinder(0.012, 0.045, 0.045, 3), 0.045, 0.1, 0.118, 1, 1, 1, { x: Math.PI / 2 }),
             '#ffe08a',
           ),
-          painted(at(sphere(0.1), 0, 0.055, 0.112, 1, 0.32, 0.25), '#ffe08a'),
+          painted(
+            at(cylinder(0.012, 0.1, 0.1, 6), 0, 0.055, 0.118, 1, 1, 0.32, { x: Math.PI / 2 }),
+            '#ffe08a',
+          ),
         ],
         0.18,
       );

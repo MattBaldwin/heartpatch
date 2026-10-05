@@ -1,14 +1,8 @@
-import {
-  activeSeasons,
-  GAME_DATA,
-  hexToWorld,
-  type Hex,
-  type PublicTile,
-} from '@heartpatch/shared';
+import { activeSeasons, GAME_DATA, hexToWorld, type Hex } from '@heartpatch/shared';
 import {
   FALLBACK_DRESSING,
   HALLOWEEN,
-  MUTED,
+  CLAIMED,
   TERRAIN_DRESSING,
   type DressingItem,
   type PropKind,
@@ -17,9 +11,10 @@ import {
 import { hash01, type PropPlacement } from './map-layout.js';
 
 // Pure terrain dressing (no Babylon), so it's unit-tested: which props grow
-// on a tile and where, each tile's small colour and height wobble, whether
-// it's drawn muted (wild land), and whether Halloween is on. Every choice is
-// hash-seeded from the tile, so every device draws the same patch.
+// on a tile and where (in clumps), its ground clutter, the flourishes on
+// claimed land, each tile's small colour and height wobble, and whether
+// Halloween is on. Every choice is hash-seeded from the tile, so every device
+// draws the same patch.
 
 /** A dressing prop: a placement plus its colour multiplier. */
 export interface DressingPlacement extends PropPlacement {
@@ -48,10 +43,12 @@ function pick(items: readonly DressingItem[], roll: number): DressingItem | unde
 }
 
 /**
- * Props for one tile: a hash-seeded count, mix and spots, spread around the
- * middle so they don't poke over the edge. Edge items (reeds, the dock) sit
- * near the rim facing out. Juniper's Gap's centre tile keeps its middle clear
- * for the glowing tree. Home tiles get none (the caller skips them).
+ * Props for one tile, in natural clumps: a hash-seeded number of clumps, each
+ * one kind with `DressingItem.clump` members huddled around its spot, spread
+ * around the middle so they stay on the tile. Edge items (reeds, the dock)
+ * sit near the rim facing out. A lead (a mountain's peak) stands alone in the
+ * middle. Juniper's Gap's centre tile keeps its middle clear for the glowing
+ * tree. Home tiles get none (the caller skips them).
  */
 export function dressTile(
   tile: Hex,
@@ -82,26 +79,120 @@ export function dressTile(
     let spread: number;
     if (it.edge === true) spread = 0.46 + 0.08 * roll;
     else if (lead || count === 1) spread = 0.1 * roll;
-    else spread = 0.26 + 0.16 * roll;
+    else spread = 0.24 + 0.14 * roll;
     if (clearMiddle) spread = Math.max(spread, 0.42);
-    const lantern = options.halloween && it.kind === 'pumpkin';
-    const kind: PropKind =
-      lantern && hash01(q, r, 70 + i) < HALLOWEEN.lanterns ? 'jack-o-lantern' : it.kind;
     const [lo, hi] = it.scale;
     const tint = dressing.tints[Math.floor(hash01(q, r, 60 + i) * dressing.tints.length)];
-    props.push({
-      kind,
-      at: {
-        x: centre.x + Math.cos(angle) * spread * size,
-        z: centre.z + Math.sin(angle) * spread * size,
-      },
-      scale: lo + (hi - lo) * hash01(q, r, 20 + i),
-      // Edge items face outwards (their +z points away from the middle).
-      turn: it.edge === true ? Math.PI / 2 - angle : hash01(q, r, 30 + i) * Math.PI * 2,
-      tint: tint ?? '#ffffff',
-    });
+    const [cMin, cMax] = lead || it.single === true ? [1, 1] : (it.clump ?? [1, 1]);
+    const members = cMin + Math.floor(hash01(q, r, 80 + i) * (cMax - cMin + 1));
+    const spot = {
+      x: centre.x + Math.cos(angle) * spread * size,
+      z: centre.z + Math.sin(angle) * spread * size,
+    };
+    for (let m = 0; m < members; m++) {
+      const salt = 200 + i * 16 + m;
+      // The first member on the spot, the rest huddled around it.
+      const off = m === 0 ? 0 : (0.09 + 0.06 * hash01(q, r, salt)) * size; // TUNE
+      const a = hash01(q, r, salt + 7) * Math.PI * 2;
+      const at = { x: spot.x + Math.cos(a) * off, z: spot.z + Math.sin(a) * off };
+      // Keep the clump on its tile.
+      const dx = at.x - centre.x;
+      const dz = at.z - centre.z;
+      const d = Math.hypot(dx, dz);
+      const limit = (it.edge === true ? 0.56 : 0.52) * size;
+      // …and out of Juniper's Gap's middle, where the glowing tree stands.
+      const floor = clearMiddle ? 0.42 * size : 0;
+      if (d > limit || (d < floor && d > 0)) {
+        const to = d > limit ? limit : floor;
+        at.x = centre.x + (dx / d) * to;
+        at.z = centre.z + (dz / d) * to;
+      }
+      const lantern =
+        options.halloween && it.kind === 'pumpkin' && hash01(q, r, salt + 3) < HALLOWEEN.lanterns;
+      props.push({
+        kind: lantern ? 'jack-o-lantern' : it.kind,
+        at,
+        // Clump members a little smaller than their leader, for a natural look.
+        scale: (lo + (hi - lo) * hash01(q, r, salt + 11)) * (m === 0 ? 1 : 0.8),
+        // Edge items face outwards (their +z points away from the middle).
+        turn: it.edge === true ? Math.PI / 2 - angle : hash01(q, r, salt + 13) * Math.PI * 2,
+        tint: tint ?? '#ffffff',
+      });
+    }
   }
   return props;
+}
+
+/**
+ * Tiny ground clutter over the whole tile (tufts, clover, pebbles, petals):
+ * many small instances, out to near the edge since the ground is continuous
+ * now. None on home tiles or water (the caller skips them).
+ */
+export function clutterTile(tile: Hex, terrain: string, size: number): DressingPlacement[] {
+  const { clutter, tints } = dressingOf(terrain);
+  const { q, r } = tile;
+  const [min, max] = clutter.count;
+  const count = min + Math.floor(hash01(q, r, 300) * (max - min + 1));
+  const centre = hexToWorld(tile, size);
+  const out: DressingPlacement[] = [];
+  for (let i = 0; i < count; i++) {
+    const it = pick(clutter.items, hash01(q, r, 310 + i));
+    if (!it) continue;
+    // Even spread over the hex's area (square root for uniform density). TUNE
+    const d = Math.sqrt(hash01(q, r, 330 + i)) * 0.82 * size;
+    const a = hash01(q, r, 350 + i) * Math.PI * 2;
+    const [lo, hi] = it.scale;
+    out.push({
+      kind: it.kind,
+      at: { x: centre.x + Math.cos(a) * d, z: centre.z + Math.sin(a) * d },
+      scale: lo + (hi - lo) * hash01(q, r, 370 + i),
+      turn: hash01(q, r, 390 + i) * Math.PI * 2,
+      tint: tints[Math.floor(hash01(q, r, 410 + i) * tints.length)] ?? '#ffffff',
+    });
+  }
+  return out;
+}
+
+/**
+ * Flourishes on a claimed tile (owner decision 2026-10-05): sometimes a
+ * glowing lantern on a post, and a clump or two of flowers, so owned land
+ * looks tended. Hash-seeded per tile: the same flourishes every time it's
+ * owned. None on water.
+ */
+export function flourishTile(tile: Hex, size: number): DressingPlacement[] {
+  const { q, r } = tile;
+  const centre = hexToWorld(tile, size);
+  const out: DressingPlacement[] = [];
+  const at = (salt: number, spread: number) => {
+    const a = hash01(q, r, salt) * Math.PI * 2;
+    return { x: centre.x + Math.cos(a) * spread * size, z: centre.z + Math.sin(a) * spread * size };
+  };
+  if (hash01(q, r, 500) < CLAIMED.lanternChance) {
+    out.push({
+      kind: 'lantern',
+      at: at(501, 0.5),
+      scale: 1,
+      turn: hash01(q, r, 502) * Math.PI * 2,
+      tint: '#ffffff',
+    });
+  }
+  const [min, max] = CLAIMED.flowerClumps;
+  const clumps = min + Math.floor(hash01(q, r, 510) * (max - min + 1));
+  for (let i = 0; i < clumps; i++) {
+    const spot = at(520 + i, 0.3 + 0.2 * hash01(q, r, 530 + i));
+    for (let m = 0; m < 3; m++) {
+      const a = hash01(q, r, 540 + i * 4 + m) * Math.PI * 2;
+      const off = m === 0 ? 0 : 0.08 * size;
+      out.push({
+        kind: 'flowers',
+        at: { x: spot.x + Math.cos(a) * off, z: spot.z + Math.sin(a) * off },
+        scale: 1.1 + 0.3 * hash01(q, r, 560 + i * 4 + m),
+        turn: a,
+        tint: '#ffffff',
+      });
+    }
+  }
+  return out;
 }
 
 /** A tile's small wobble from its terrain's look: brightness, warmth and height. */
@@ -129,11 +220,6 @@ export function tileJitter(tile: Hex, terrain: string): TileJitter {
   };
 }
 
-/** True when a tile is drawn muted: wild land nobody owns. Juniper's Gap always glows in colour. */
-export function isMuted(tile: Pick<PublicTile, 'ownerUserId' | 'terrain'>): boolean {
-  return tile.ownerUserId === null && tile.terrain !== 'junipers-gap';
-}
-
 export type Rgb = readonly [number, number, number];
 
 /** sRGB hex (`#rrggbb`) to 0–1 components. */
@@ -142,21 +228,8 @@ export function hexRgb(hex: string): Rgb {
   return [((n >> 16) & 0xff) / 255, ((n >> 8) & 0xff) / 255, (n & 0xff) / 255];
 }
 
-const LUMA: Rgb = [0.2126, 0.7152, 0.0722];
-
-/** Soft and grey-ish: keeps `MUTED.saturation` of the colour, dims it by `MUTED.shade`, then washes towards `MUTED.tint`. */
-export function muteRgb(c: Rgb): Rgb {
-  const l = c[0] * LUMA[0] + c[1] * LUMA[1] + c[2] * LUMA[2];
-  const tint = hexRgb(MUTED.tint);
-  const out = c.map((v, i) => {
-    const grey = (l + (v - l) * MUTED.saturation) * MUTED.shade;
-    return grey + ((tint[i] ?? grey) - grey) * MUTED.wash;
-  });
-  return [out[0] ?? 0, out[1] ?? 0, out[2] ?? 0];
-}
-
-/** The colour a tile is drawn in (sRGB 0–1): its look's colour, wobbled, and muted on wild land. */
-export function tileColor(lookColor: string, jitter: TileJitter, muted: boolean): Rgb {
+/** The colour a tile is drawn in (sRGB 0–1): its ground colour, wobbled. */
+export function tileColor(lookColor: string, jitter: TileJitter): Rgb {
   const [r, g, b] = hexRgb(lookColor);
   const clamp = (v: number) => Math.min(1, Math.max(0, v));
   const wobbled: Rgb = [
@@ -164,7 +237,7 @@ export function tileColor(lookColor: string, jitter: TileJitter, muted: boolean)
     clamp(g * jitter.brightness),
     clamp(b * jitter.brightness * (1 - jitter.warmth)),
   ];
-  return muted ? muteRgb(wobbled) : wobbled;
+  return wobbled;
 }
 
 /** Today's date in `timeZone` as `YYYY-MM-DD` (the device's own zone if that one is unknown). */
