@@ -91,3 +91,28 @@ describe('Ground', () => {
     }
   });
 });
+
+describe('Ground winding', () => {
+  it('faces every ground triangle up (anticlockwise from above), so none is culled', () => {
+    const mesh = new Ground(patch(), OPTIONS).mesh();
+    const at = (i: number) => ({
+      x: mesh.positions[i * 3] ?? 0,
+      y: mesh.positions[i * 3 + 1] ?? 0,
+      z: mesh.positions[i * 3 + 2] ?? 0,
+    });
+    let up = 0;
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      const [a, b, c] = [
+        at(mesh.indices[t] ?? 0),
+        at(mesh.indices[t + 1] ?? 0),
+        at(mesh.indices[t + 2] ?? 0),
+      ];
+      const area = (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z);
+      // Skirt walls stand upright (no area seen from above); every other triangle faces up.
+      if (Math.abs(area) < 1e-9) continue;
+      expect(area).toBeGreaterThan(0);
+      up++;
+    }
+    expect(up).toBe(8 * 24);
+  });
+});

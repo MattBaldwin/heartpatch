@@ -131,8 +131,10 @@ export class Ground {
     };
     for (const [key, pts] of this.points) {
       for (const [a, b, c] of triangles(pts)) {
-        // Wound so Babylon's computed normals face up (as hex-mesh.ts does).
-        indices.push(vertex(a), vertex(c), vertex(b));
+        // Anticlockwise seen from above, so Babylon's computed normals face up
+        // (as hex-mesh.ts winds its tops).
+        if (upward(a, b, c)) indices.push(vertex(a), vertex(b), vertex(c));
+        else indices.push(vertex(a), vertex(c), vertex(b));
       }
       // A skirt where the map ends: edges with no neighbour drop to the island.
       const tile = this.tiles.get(key);
@@ -226,6 +228,11 @@ function triangles(pts: TilePoints): [Point, Point, Point][] {
     out.push([i1, m, k1]);
   }
   return out;
+}
+
+/** True when abc runs anticlockwise seen from above (x east, z north). */
+export function upward(a: WorldPoint, b: WorldPoint, c: WorldPoint): boolean {
+  return (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z) > 0;
 }
 
 /** Height at `p` inside triangle abc (seen from above), or null if `p` is outside it. */

@@ -1,6 +1,6 @@
 import { HEX_DIRECTIONS, hexKey, hexToWorld, type Hex, type HexKey } from '@heartpatch/shared';
 import type { MeshArrays } from './hex-mesh.js';
-import type { Rgb } from './ground-mesh.js';
+import { upward, type Rgb } from './ground-mesh.js';
 
 // The lakes' water (terrain pass 2): one surface over every lake tile at the
 // water level, deep and dark in the middle of a lake, shallow and clear at
@@ -74,7 +74,10 @@ export function waterMesh(lakes: readonly Hex[], options: WaterOptions): WaterMe
     for (let i = 0; i < 12; i++) {
       const a = ring[i];
       const b = ring[(i + 1) % 12];
-      if (a !== undefined && b !== undefined) indices.push(centre, b, a);
+      if (a === undefined || b === undefined) continue;
+      const at = (i: number) => ({ x: positions[i * 3] ?? 0, z: positions[i * 3 + 2] ?? 0 });
+      if (upward(at(centre), at(a), at(b))) indices.push(centre, a, b);
+      else indices.push(centre, b, a);
     }
   }
   for (const s of shore) {
