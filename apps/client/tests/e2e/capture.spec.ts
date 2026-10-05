@@ -102,7 +102,8 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   await charm.tap();
   const tried = await settled(page);
   expect(tried.turn).toBe(1);
-  await expect.poll(() => charmsLeft(page, mapId)).toBe(2);
+  // 30s: the charm throw is still playing (slow frames in software GL starve the page's fetch).
+  await expect.poll(() => charmsLeft(page, mapId), { timeout: 30_000 }).toBe(2);
   const caught = tried.reason === 'captured';
 
   if (caught) {
