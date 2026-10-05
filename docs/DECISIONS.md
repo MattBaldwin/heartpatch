@@ -609,3 +609,10 @@ _The owner's answer, through the coordinator, to the bug bash's P1: a Lv1 starte
 - **Strength-1 guardians are level 1–2, and "easy" means strength 1 only** (`GUARDIAN_RULES`: `levels {1, 2}`, `hint.easyUpTo: 3`, both `// TUNE:`). The old band (total level up to 6) called a Lv4 Mossmuffin "easy" next to a Lv1 Puddlepuff. In a counter-matchup a lone squishy still loses at any level by design (the matrices), so "easy" is honest about levels, not matchups.
 - **Follow-up after Halloween (option C):** raise `BATTLE_RULES.stats.hpFlat` (10 → about 20) so a level-1 squishy has about 22 energy and every battle runs a hit longer, then re-run `pnpm sim` and re-pin `growth-pace.test.ts`. Not now: it re-tunes every fight in the game.
 
+## 2026-10-05 — Owner decision: mild potty words stay out of names (#155)
+
+_The owner's answer, through the coordinator: "Mr Poop Butt" was accepted as a Partner's name and showed on every screen._
+
+- **Player-chosen names (usernames, nicknames, outfit names) refuse mild potty words** (`POTTY_WORDS` in `apps/server/src/lib/filter.ts`, `// TUNE:`): poop, butt, fart, booger, puke, barf, pee, crap, dumb, stupid, loser and the like (the English profanity set already holds the ruder ones). Checked like the rest of the name filter: NFKC, leetspeak and look-alikes through obscenity's transformers, and again with separators squashed, so "B_u_t_t" counts. Everyday words that hold one are whitelisted or bounded ("Butterfly", "Button", "Saturday", "Scrappy", "Peekaboo", "Dumbo" stay fine). The answer is its own reason (`potty`) with a kid-friendly line: "Let's keep names sweet, not stinky! Try another one."
+- **Messages don't get the list.** Phase 1 chat is preset ids, so no free text exists; if it ever does, a potty word in a sentence is a different question from one on a name tag. The server stays the only filter (CLAUDE.md rule 9).
+
