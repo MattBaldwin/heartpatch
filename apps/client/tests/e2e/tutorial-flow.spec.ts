@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, skipCinematic, TEST_PASSWORD, uniqueName } from './players.js';
 import { realTap, realTapAt } from './touch.js';
 
@@ -69,11 +69,20 @@ async function inHole(page: Page, target: Locator): Promise<boolean> {
  * No tutorial blocker sits on any button of an open sheet, unless the step's
  * spotlight hole is inside that very sheet (a spotlight on the care sheet's
  * buttons gates the care sheet on purpose). While Sprout waits behind a
- * sheet there are no blockers at all.
+ * sheet there are no blockers at all. Polled: the layer follows a sheet
+ * opening on its next animation frame, which a busy page can hold for a
+ * moment; a real trap stays put and fails.
  */
 async function expectNoTrap(page: Page): Promise<void> {
+  await expect.poll(() => trappedButtons(page), slow).toEqual([]);
   const state = await overlay(page);
-  const trapped = await page.evaluate((hole) => {
+  if (state?.held) await expect(page.getByTestId('tutorial-blocker')).toHaveCount(0);
+}
+
+/** The buttons of open, uncovered sheets that a tutorial blocker sits on (see expectNoTrap). */
+async function trappedButtons(page: Page): Promise<string[]> {
+  const state = await overlay(page);
+  return page.evaluate((hole) => {
     const out: string[] = [];
     const visible = (el: Element) => {
       const box = el.getBoundingClientRect();
@@ -105,8 +114,6 @@ async function expectNoTrap(page: Page): Promise<void> {
     }
     return out;
   }, state?.hole ?? null);
-  expect(trapped, JSON.stringify(state)).toEqual([]);
-  if (state?.held) await expect(page.getByTestId('tutorial-blocker')).toHaveCount(0);
 }
 
 /** Sprout's bubble shares no area with any visible button outside the tutorial layer (#139). */
@@ -227,6 +234,9 @@ async function playTutorial(page: Page): Promise<void> {
   await expect(main).toHaveText("Let's go!");
   await tapOn(main);
   await expect.poll(async () => (await overlay(page))?.gate).toBe('spotlight');
+  // Picking a tile needs the scene drawn and the camera's arrival glide over
+  // (the spotlight moves with the tile until then).
+  await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
   const hole = (await overlay(page))?.hole;
   expect(hole).toBeTruthy();
   await realTapAt(page, hole!.x + hole!.width / 2, hole!.y + hole!.height / 2);
