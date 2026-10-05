@@ -10,7 +10,7 @@ import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import { Scene } from '@babylonjs/core/scene';
-import type { PropKind } from '../map/map-config.js';
+import { CRYSTAL_GLOW, HALLOWEEN, type PropKind } from '../map/map-config.js';
 import { buildProp, painted, placeAt, setInstances, vinyl } from '../map/map-scene.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
 import { ARENA_STAGE, type ArenaPropKind } from './arena-config.js';
@@ -35,13 +35,9 @@ import { buildArenaProp } from './arena-props.js';
 // night, a moon and stars. The stage's sun and sky light are re-tinted for
 // the time of day; no post-process is added (CLAUDE.md rule 8).
 
-const MAP_PROPS: ReadonlySet<string> = new Set<PropKind>([
-  'tree',
-  'old-tree',
-  'rock',
-  'peak',
-  'pumpkin',
-]);
+/** Props the arena builds itself (arena-props.ts); every other kind is the map's (`buildProp`). */
+const ARENA_ONLY: ReadonlySet<string> = new Set<ArenaPropKind>(['glow-tree', 'mound']);
+const isMapProp = (kind: PropKind | ArenaPropKind): kind is PropKind => !ARENA_ONLY.has(kind);
 
 /** Read-only numbers for the dev hook (Playwright asserts on these, not pixels). */
 export interface ArenaStats {
@@ -185,7 +181,7 @@ export class BattleArena {
     const turn = new Quaternion();
     for (const p of placements) {
       const color = p.color ?? defaultColor(p.kind, ground);
-      const key = MAP_PROPS.has(p.kind) ? p.kind : `${p.kind}:${color}`;
+      const key = isMapProp(p.kind) ? p.kind : `${p.kind}:${color}`;
       let group = byKey.get(key);
       if (!group) byKey.set(key, (group = { kind: p.kind, color, at: [] }));
       Quaternion.RotationYawPitchRollToRef(p.turn, 0, 0, turn);
@@ -193,19 +189,26 @@ export class BattleArena {
     }
     const propMat = vinyl(scene, 'arena-prop-mat', { color: '#ffffff' });
     this.#materials.push(propMat);
-    let glowMat: PBRMaterial | null = null;
+    const glowing = (name: string, color: string, glow: number): PBRMaterial => {
+      const m = vinyl(scene, name, { color: '#ffffff' });
+      m.emissiveColor = linear(hexRgb(color)).scale(glow);
+      this.#materials.push(m);
+      return m;
+    };
     for (const group of byKey.values()) {
-      const built = MAP_PROPS.has(group.kind)
-        ? buildProp(scene, group.kind as PropKind)
-        : buildArenaProp(scene, group.kind as ArenaPropKind, group.color);
+      const kind = group.kind;
+      const built = isMapProp(kind)
+        ? buildProp(scene, kind)
+        : buildArenaProp(scene, kind, group.color);
       const mesh = this.#keep(built.mesh);
-      if (group.kind === 'glow-tree') {
-        if (!glowMat) {
-          glowMat = vinyl(scene, 'arena-glow-mat', { color: '#ffffff' });
-          glowMat.emissiveColor = linear(hexRgb('#f3b6ff')).scale(0.45); // TUNE: the glowing valley
-          this.#materials.push(glowMat);
-        }
-        mesh.material = glowMat;
+      // Glowing props glow as they do on the map: lanterns brighter at night.
+      if (kind === 'glow-tree') {
+        mesh.material = glowing('arena-glow-mat', '#f3b6ff', 0.45); // TUNE: the glowing valley
+      } else if (kind === 'jack-o-lantern') {
+        const glow = plan.mood.night ? HALLOWEEN.glow.night : HALLOWEEN.glow.day;
+        mesh.material = glowing('arena-lantern-mat', HALLOWEEN.glowColor, glow);
+      } else if (kind === 'crystal') {
+        mesh.material = glowing('arena-crystal-mat', CRYSTAL_GLOW.color, CRYSTAL_GLOW.strength);
       } else {
         mesh.material = propMat;
       }
@@ -283,9 +286,8 @@ export class BattleArena {
   }
 }
 
-/** Grass tufts a little deeper than the ground; hills a little lighter. */
+/** Hill mounds a little lighter than the ground. */
 function defaultColor(kind: PropKind | ArenaPropKind, ground: Rgb): string {
-  if (kind === 'tuft') return rgbHex(mixRgb(ground, hexRgb('#4f9a62'), 0.35));
   if (kind === 'mound') return rgbHex(mixRgb(ground, hexRgb('#ffffff'), 0.08));
   return '#ffffff';
 }

@@ -9,8 +9,12 @@ import type { PropKind } from '../map/map-config.js';
  * is composed into an arena. Every number is a first guess for the playtest.
  */
 
-/** Arena-only props, drawn by `arena-props.ts` (the map has no use for them). */
-export type ArenaPropKind = 'tuft' | 'flower' | 'reed' | 'mushroom' | 'glow-tree' | 'mound';
+/**
+ * Arena-only props, drawn by `arena-props.ts`: the Gap's big tree and hill
+ * mounds, which the map has no use for. Everything else is the map's own
+ * (`buildProp`).
+ */
+export type ArenaPropKind = 'glow-tree' | 'mound';
 
 /** A group of props, scattered on a ring around the fight (behind it and to the sides). */
 export interface ArenaPropGroup {
@@ -22,10 +26,10 @@ export interface ArenaPropGroup {
   readonly scale: readonly [number, number];
   /**
    * Also in front of the fighters (between them and the camera): small things
-   * only, like grass tufts. Default: only behind and to the sides.
+   * only, like grass and flowers. Default: only behind and to the sides.
    */
   readonly front?: boolean;
-  /** Colour for arena-only props (mounds, tufts); the terrain's by default. Map props keep theirs. */
+  /** Colour for hill mounds; the terrain's by default. Map props keep theirs. */
   readonly color?: string;
 }
 
@@ -41,24 +45,30 @@ export interface ArenaSpec {
 
 const ring = (near: number, far: number): readonly [number, number] => [near, far];
 
-/** Keyed by terrain id (packages/shared/src/data/terrains.ts); `arenaPlan` falls back to `FALLBACK_ARENA`. */
+/**
+ * Keyed by terrain id (packages/shared/src/data/terrains.ts); `arenaPlan`
+ * falls back to `FALLBACK_ARENA`. Scales are against the map prop's own size
+ * (a map tree is about 0.5 tall; a squishy here is about 3).
+ */
 export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
   meadow: {
     props: [
-      { kind: 'tree', count: 4, ring: ring(11, 15), scale: [4.5, 6] }, // TUNE
+      { kind: 'tree', count: 3, ring: ring(11, 15), scale: [4.5, 6] }, // TUNE
+      { kind: 'bush', count: 4, ring: ring(7, 12), scale: [4, 5.5] }, // TUNE
       { kind: 'rock', count: 3, ring: ring(7, 11), scale: [3, 4.5] }, // TUNE
-      { kind: 'flower', count: 18, ring: ring(4.5, 12), scale: [0.8, 1.2], front: true }, // TUNE
-      { kind: 'tuft', count: 22, ring: ring(4, 13), scale: [0.8, 1.3], front: true }, // TUNE
+      { kind: 'flowers', count: 18, ring: ring(4.5, 12), scale: [2.2, 3], front: true }, // TUNE
+      { kind: 'grass', count: 22, ring: ring(4, 13), scale: [2.2, 3.2], front: true }, // TUNE
     ],
     water: null,
     haze: '#d9f2c4',
   },
   forest: {
     props: [
-      { kind: 'tree', count: 14, ring: ring(8, 15), scale: [5, 7] }, // TUNE
-      { kind: 'tree', count: 6, ring: ring(13.5, 15.5), scale: [7, 9] }, // TUNE: a treeline behind
-      { kind: 'mushroom', count: 6, ring: ring(5, 9), scale: [0.9, 1.4] }, // TUNE
-      { kind: 'tuft', count: 16, ring: ring(4, 12), scale: [0.8, 1.2], front: true }, // TUNE
+      { kind: 'tree', count: 10, ring: ring(8, 15), scale: [5, 7] }, // TUNE
+      { kind: 'pine', count: 8, ring: ring(12, 15.5), scale: [6, 8] }, // TUNE: a treeline behind
+      { kind: 'stump', count: 2, ring: ring(6, 9), scale: [4, 5] }, // TUNE
+      { kind: 'mushroom', count: 6, ring: ring(5, 9), scale: [4, 5.5] }, // TUNE
+      { kind: 'grass', count: 16, ring: ring(4, 12), scale: [2.2, 3], front: true }, // TUNE
     ],
     water: null,
     haze: '#bfe6c8',
@@ -67,7 +77,8 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     props: [
       { kind: 'old-tree', count: 10, ring: ring(8, 15), scale: [5.5, 7.5] }, // TUNE
       { kind: 'old-tree', count: 5, ring: ring(13.5, 15.5), scale: [8, 10] }, // TUNE
-      { kind: 'mushroom', count: 10, ring: ring(4.5, 10), scale: [1, 1.6] }, // TUNE
+      { kind: 'log', count: 2, ring: ring(6, 9), scale: [4, 5] }, // TUNE
+      { kind: 'mushroom', count: 10, ring: ring(4.5, 10), scale: [4.5, 6.5] }, // TUNE
       { kind: 'rock', count: 3, ring: ring(6, 10), scale: [3, 4] }, // TUNE
     ],
     water: null,
@@ -77,15 +88,19 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     props: [
       { kind: 'mound', count: 7, ring: ring(12, 16), scale: [3.5, 5.5] }, // TUNE: rolling hills
       { kind: 'rock', count: 8, ring: ring(6, 13), scale: [3.5, 6] }, // TUNE
-      { kind: 'tuft', count: 14, ring: ring(4, 12), scale: [0.8, 1.2], front: true }, // TUNE
+      { kind: 'stones', count: 4, ring: ring(5, 10), scale: [4, 5] }, // TUNE
+      { kind: 'bush', count: 3, ring: ring(7, 12), scale: [4, 5] }, // TUNE
+      { kind: 'grass', count: 14, ring: ring(4, 12), scale: [2.2, 3], front: true }, // TUNE
     ],
     water: null,
     haze: '#f3e4c2',
   },
   mountains: {
     props: [
-      { kind: 'peak', count: 6, ring: ring(12.5, 15.5), scale: [8, 12] }, // TUNE
+      { kind: 'snow-peak', count: 5, ring: ring(12.5, 15.5), scale: [8, 11] }, // TUNE
+      { kind: 'peak', count: 3, ring: ring(11, 14), scale: [7, 9] }, // TUNE
       { kind: 'rock', count: 9, ring: ring(6, 12), scale: [3.5, 6] }, // TUNE
+      { kind: 'pine', count: 3, ring: ring(9, 13), scale: [5, 6.5] }, // TUNE
       { kind: 'mound', count: 4, ring: ring(10, 14), scale: [3, 4.5], color: '#b9adcf' }, // TUNE
     ],
     water: null,
@@ -94,8 +109,9 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
   lake: {
     ground: '#f2e2b8', // TUNE: a sandy shore; the lake itself is the water behind
     props: [
-      { kind: 'reed', count: 16, ring: ring(6.5, 10), scale: [1, 1.6] }, // TUNE
+      { kind: 'reeds', count: 16, ring: ring(6.5, 10), scale: [3, 4] }, // TUNE
       { kind: 'rock', count: 5, ring: ring(6, 10), scale: [3, 4.5] }, // TUNE
+      { kind: 'stones', count: 3, ring: ring(5, 8), scale: [4, 5] }, // TUNE
       { kind: 'tree', count: 4, ring: ring(13.5, 15.5), scale: [5, 6.5] }, // TUNE: the far shore
     ],
     water: '#9fd6f5', // TUNE: the map's lake colour
@@ -103,9 +119,11 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
   },
   'pumpkin-fields': {
     props: [
-      { kind: 'pumpkin', count: 22, ring: ring(5.5, 14), scale: [3.5, 6] }, // TUNE
+      { kind: 'pumpkin', count: 18, ring: ring(5.5, 14), scale: [3.5, 6] }, // TUNE
+      { kind: 'jack-o-lantern', count: 4, ring: ring(6, 12), scale: [4, 5] }, // TUNE
+      { kind: 'hay-bale', count: 3, ring: ring(8, 13), scale: [3.5, 4.5] }, // TUNE
       { kind: 'tree', count: 3, ring: ring(13.5, 15.5), scale: [5, 6.5] }, // TUNE
-      { kind: 'tuft', count: 14, ring: ring(4, 12), scale: [0.8, 1.2], front: true }, // TUNE
+      { kind: 'grass', count: 14, ring: ring(4, 12), scale: [2.2, 3], front: true }, // TUNE
     ],
     water: null,
     haze: '#ffe2b0',
@@ -113,7 +131,8 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
   'junipers-gap': {
     props: [
       { kind: 'glow-tree', count: 1, ring: ring(10, 10), scale: [1, 1] }, // TUNE: the Gap's tree
-      { kind: 'flower', count: 20, ring: ring(4.5, 12), scale: [0.9, 1.3], front: true }, // TUNE
+      { kind: 'crystal', count: 6, ring: ring(6, 12), scale: [4.5, 6.5] }, // TUNE
+      { kind: 'flowers', count: 20, ring: ring(4.5, 12), scale: [2.4, 3.2], front: true }, // TUNE
       { kind: 'rock', count: 4, ring: ring(7, 12), scale: [3, 4] }, // TUNE
       { kind: 'mound', count: 5, ring: ring(12, 16), scale: [3, 4.5], color: '#d5b8f5' }, // TUNE
     ],
