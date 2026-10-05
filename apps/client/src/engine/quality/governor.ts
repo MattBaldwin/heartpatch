@@ -30,7 +30,11 @@ export interface GovernorState {
   readonly tier: QualityTier;
   /** The tier the player started on; recovery never goes above it. */
   readonly ceiling: QualityTier;
-  /** Fraction of the DPR-capped resolution we render at, in [floor, 1]. */
+  /**
+   * Fraction of the DPR-capped resolution we render at, in [floor, 1]; after
+   * `crawl` it can sit below the tier's floor, at one render pixel per CSS
+   * pixel, until the raises lift it.
+   */
   readonly renderScale: number;
   readonly elapsedMs: number;
   readonly windowMs: number;
@@ -103,12 +107,12 @@ export function stepGovernor(
 ): GovernorState {
   const { config } = ctx;
   if (!(frameMs > 0)) return state;
-  if (frameMs > config.maxFrameMs) {
-    // A pause (hidden tab, debugger, one shader compile) says nothing about
-    // the frame rate; a run of them says the renderer is crawling.
-    return frameMs > config.crawlFrameMs ? crawl(state, ctx) : state;
-  }
+  if (frameMs > config.crawlFrameMs) return crawl(state, ctx);
+  // Any shorter frame ends a run of crawling frames (they must be consecutive).
   if (state.crawlFrames > 0) state = { ...state, crawlFrames: 0 };
+  // A pause (hidden tab, debugger, one shader compile) says nothing about
+  // the frame rate.
+  if (frameMs > config.maxFrameMs) return state;
 
   const elapsedMs = state.elapsedMs + frameMs;
   if (elapsedMs < config.graceMs) return { ...state, elapsedMs };
@@ -128,7 +132,6 @@ export function stepGovernor(
   return decide(closed, (windowFrames * 1000) / windowMs, windowMs, ctx);
 }
 
-/** Undo a step that didn't help and hold at this frame rate. */
 /**
  * The page paused (a hidden tab, an iOS app switch, a device asleep and
  * back): the frame that spans it is a gap, never a crawling frame, however
@@ -175,6 +178,7 @@ function crawl(s: GovernorState, ctx: GovernorContext): GovernorState {
   };
 }
 
+/** Undo a step that didn't help and hold at this frame rate. */
 function holdAtCap(
   s: GovernorState,
   fps: number,

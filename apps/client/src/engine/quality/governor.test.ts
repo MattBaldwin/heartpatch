@@ -236,6 +236,38 @@ describe('stepGovernor details', () => {
     expect(s.crawlFrames).toBe(0);
   });
 
+  it('a shorter frame between crawling frames ends the run: they must be consecutive', () => {
+    let s = start();
+    s = stepGovernor(s, 2000, ctx);
+    s = stepGovernor(s, 500, ctx); // long, but not a crawling frame
+    s = stepGovernor(s, 2000, ctx);
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('high');
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('low');
+  });
+
+  it('crawl forgets a probe and a cap, so nothing puts the pixels back later', () => {
+    // Mid-probe (a cut being judged) and holding at a cap: a crawl is a
+    // different world; the raises decide what comes back.
+    const probing: GovernorState = {
+      ...ready(),
+      renderScale: 0.9,
+      probe: { baselineFps: 40, scaleBefore: 0.95 },
+      cap: { fps: 30, heldMs: 0, holdMs: 20_000 },
+    };
+    let s = probing;
+    for (let i = 0; i < config.crawlFrames; i++) s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('low');
+    expect(s.renderScale).toBe(0.5);
+    expect(s.probe).toBeNull();
+    expect(s.cap).toBeNull();
+    expect(s.settleWindows).toBe(1);
+    // The first window after the change is judged on nothing it inherited.
+    s = windows(s, 12.5, 2);
+    expect(s.renderScale).toBe(0.5);
+  });
+
   it('a resume (visibilitychange, pageshow) ends a run of crawling frames', () => {
     // Two long frames, a pause, two more: around a pause they never add up.
     let s = start();
