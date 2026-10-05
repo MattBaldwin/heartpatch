@@ -196,9 +196,27 @@ export function emit(e: Emit): Particle[] {
     case 'charge': {
       // Wind-up: the element gathers around the attacker.
       if (!look.chargeAura) break;
-      const base = { x: e.at.x, y: e.at.y - h * 0.35, z: e.at.z };
-      burst(n(10), glow ? 'halo' : fx.shape, fx.colors, 'swirl', 1.0, 1.6, 0, 0.16 * h, 430, base);
-      if (glow) burst(n(5), 'star', [fx.core, '#ffffff'], 'swirl', 1.0, 1.6, 0, 0.1 * h, 430, base);
+      // Bits of the element rise from a ring around the attacker's feet.
+      const count = n(14);
+      for (let i = 0; i < count; i++) {
+        const a = TAU * ((i + r(i, 1) * 0.5) / count);
+        const rr = h * (0.55 + 0.25 * r(i, 2));
+        add({
+          shape: glow && i % 2 === 0 ? 'halo' : fx.shape,
+          color: pick(fx.colors, i),
+          born: e.now + r(i, 3) * 160,
+          life: 520 * (0.8 + 0.4 * r(i, 4)),
+          motion: 'rise',
+          origin: { x: e.at.x + Math.cos(a) * rr, y: e.at.y - h * 0.45, z: e.at.z + Math.sin(a) * rr * 0.8 - 0.3 },
+          vx: 0,
+          vy: 1.6 + r(i, 5),
+          vz: 0,
+          gravity: 0,
+          size: 0.15 * h * (0.8 + 0.5 * r(i, 6)) * sz,
+          seed: r(i, 9),
+        });
+      }
+      if (glow) burst(n(5), 'star', [fx.core, '#ffffff'], 'rise', 0.6, 1.8, 0, 0.1 * h, 520, { x: e.at.x, y: e.at.y - h * 0.3, z: e.at.z - h * 0.5 });
       break;
     }
     case 'trail': {

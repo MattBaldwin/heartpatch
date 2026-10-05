@@ -464,7 +464,9 @@ export function buildArena(
     const water = keep(CreateCylinder('look-water', { diameter: r * 1.6, height: 0.1, tessellation: 64 }, scene));
     water.position.set(0, 0.02, STAGE.waterFrom + r * 0.8);
     const tinted = mixRgb(hexRgb(spec.water), tint, tintK);
-    const mat = vinyl(scene, 'look-water-mat', { color: rgbHex(tinted), height: 0, roughness: 0.12, clearCoat: true, glow: 0.06, prop: null, propsPerTile: [0, 0] });
+    const mat = vinyl(scene, 'look-water-mat', { color: rgbHex(tinted), height: 0, roughness: 0.38, clearCoat: false, glow: 0, prop: null, propsPerTile: [0, 0] });
+    // A low grazing camera sees the whole sky in a glossy pool; keep it a soft blue, not a white band.
+    mat.environmentIntensity = 0.35;
     materials.push(mat);
     water.material = mat;
     water.freezeWorldMatrix();
