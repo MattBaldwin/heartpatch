@@ -73,6 +73,25 @@ function extraProp(scene: Scene, kind: CinematicProp): Mesh {
   ]);
 }
 
+/** One tile of a ground look, centred on the origin (instanced per tile). */
+export function groundTileMesh(
+  scene: Scene,
+  name: string,
+  ground: CinematicGround,
+  radius: number,
+): Mesh {
+  const h = GROUND_LOOKS[ground].height;
+  return meshFrom(
+    scene,
+    name,
+    loftRoundedHex(
+      radius,
+      [...TOP_RINGS.map((r) => ({ scale: r.scale, y: r.y + h })), { scale: 1, y: 0 }],
+      { corner: CORNER, segments: SEGMENTS, centre: { y: h + DOME } },
+    ),
+  );
+}
+
 export interface WorldStats {
   readonly tiles: number;
   readonly groundMeshes: number;
@@ -165,16 +184,7 @@ export class CinematicWorld {
     }
     for (const [ground, matrices] of byGround) {
       const look: TerrainLook = GROUND_LOOKS[ground];
-      const h = look.height;
-      const mesh = meshFrom(
-        scene,
-        `cinematic-tiles-${ground}`,
-        loftRoundedHex(
-          radius,
-          [...TOP_RINGS.map((r) => ({ scale: r.scale, y: r.y + h })), { scale: 1, y: 0 }],
-          { corner: CORNER, segments: SEGMENTS, centre: { y: h + DOME } },
-        ),
-      );
+      const mesh = groundTileMesh(scene, `cinematic-tiles-${ground}`, ground, radius);
       // Not frozen: the drain and the night change image-processing uniforms each frame.
       const mat = vinyl(scene, `cinematic-tiles-${ground}-mat`, look);
       mesh.material = mat;
@@ -208,6 +218,11 @@ export class CinematicWorld {
     }
 
     this.stats = { tiles: this.#tiles.size, groundMeshes: byGround.size, props: propCount };
+  }
+
+  /** The ground painted on a tile, if it's in the world. */
+  groundOf(key: HexKey): CinematicGround | undefined {
+    return this.#tiles.get(key);
   }
 
   /** The top of the ground at a point (0 off the tiles). */

@@ -35,6 +35,10 @@
   pointer-events: auto;
 }
 
+.starter-card[hidden] {
+  display: none;
+}
+
 .starter-card .auth-title {
   font-size: 24px;
 }

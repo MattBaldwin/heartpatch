@@ -32,6 +32,8 @@ export interface ActorPose {
   readonly yaw: number;
   readonly alpha: number;
   readonly glow: number;
+  /** The Hollow Man's arms (0 hanging, 1 reaching). */
+  readonly reach: number;
   readonly lit: boolean;
 }
 
@@ -262,6 +264,7 @@ const ACTOR_PICK = {
   yaw: (k: CinematicActorKey) => k.yaw ?? 0,
   alpha: (k: CinematicActorKey) => k.alpha ?? 1,
   glow: (k: CinematicActorKey) => k.glow ?? 1,
+  reach: (k: CinematicActorKey) => k.reach ?? 0,
 } as const;
 
 const MOOD_PICK = {
@@ -326,9 +329,57 @@ export function actorAt(
     yaw: along(run, local, p.yaw),
     alpha: clamp01(along(run, local, p.alpha)),
     glow: clamp01(along(run, local, p.glow)),
+    reach: clamp01(along(run, local, p.reach)),
     lit,
   };
 }
+
+/** How a claimed tile pops up as it turns colourful, and how fast. */
+export const CLAIM_POP = {
+  seconds: 0.45, // TUNE
+  /** Size at the start, and the little overshoot at the middle. */
+  from: 0.55, // TUNE
+  overshoot: 1.1, // TUNE
+} as const;
+
+/**
+ * A claimed tile's size `local` seconds into its shot (0 before its claim):
+ * it grows in with a little bounce, or just appears for reduced motion.
+ */
+export function claimScale(claimAt: number, local: number, reducedMotion: boolean): number {
+  if (local < claimAt) return 0;
+  const s = (local - claimAt) / CLAIM_POP.seconds;
+  if (reducedMotion || s >= 1) return 1;
+  // Up past full size by the middle, then settling back to it.
+  const { from, overshoot } = CLAIM_POP;
+  return s < 0.5
+    ? from + (overshoot - from) * Math.sin((s / 0.5) * (Math.PI / 2))
+    : overshoot + (1 - overshoot) * Math.sin(((s - 0.5) / 0.5) * (Math.PI / 2));
+}
+
+/**
+ * The camera's shake offset at `local` (world units, added to its position
+ * and target): a quick wobble that dies away over each shake's seconds.
+ * None for reduced motion. A pure function of time, like everything else.
+ */
+export function shakeAt(shot: CinematicShot, local: number, reducedMotion: boolean): Vec3 {
+  if (reducedMotion) return NO_SHAKE;
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (const shake of shot.shakes) {
+    const s = local - shake.at;
+    if (s < 0 || s >= shake.seconds) continue;
+    const fade = 1 - s / shake.seconds;
+    const amp = shake.strength * fade * fade;
+    x += amp * Math.sin(s * 47.1);
+    y += amp * 0.7 * Math.sin(s * 59.3 + 1.3);
+    z += amp * 0.5 * Math.sin(s * 37.7 + 2.1);
+  }
+  return x === 0 && y === 0 && z === 0 ? NO_SHAKE : [x, y, z];
+}
+
+const NO_SHAKE: Vec3 = [0, 0, 0];
 
 // ── Captions, taps and moments ──────────────────────────────────────────
 
