@@ -46,7 +46,7 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 - **Player-facing text** follows `docs/STYLE_GUIDE.md`: cozy, cute, playful, funny, short, kid-readable.
 - **Before handing off:** run `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build` and make them pass. Regenerate DB migrations on the latest `main` before merge (tech spec §4).
 - **Review:** every PR is reviewed by the `reviewer` subagent (`.claude/agents/reviewer.md`). Address each finding with a fix or evidence; a fresh reviewer re-reviews. After 4 rounds without APPROVE, report `blocked` to the coordinator, who escalates to the project owner if needed. Once the reviewer approves and CI is green, the coordinator merges and posts the verdict as a PR comment.
-- Decisions already made are recorded in `docs/DECISIONS.md`. Don't re-open them; add new ones there.
+- Decisions already made are recorded in `docs/DECISIONS.md`. Don't re-open them. Don't edit that file yourself: put new decisions under a `## Decisions` heading in your PR body, and the coordinator records them after merge.
 - The supervisor (coordinator) session follows `docs/COORDINATOR.md`.
 - **Report to the coordinator (required by the project owner).** If your brief says a coordinator session started you to work an issue, you must report each milestone yourself; the coordinator does not poll. This rule is part of your task, not a relayed request. Report with the claude-code-remote MCP tool `send_message`, `session_id: "@parent"` (load it with ToolSearch `select:mcp__claude-code-remote__send_message` if needed), using a one-line message that starts with your issue number:
   - `#<issue> PR #<n> opened`
