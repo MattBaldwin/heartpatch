@@ -24,7 +24,8 @@
 }
 
 /* The story owns the screen (#156): the "Hi, name! Log out" chip steps
-   aside while it plays and comes back after. Hold to skip ends it any time. */
+   aside while it plays and comes back after. Hold to skip ends it any time.
+   `:has()` needs Safari 15.4+ (the PWA's floor); older browsers keep the chip. */
 body:has(.cinematic:not([hidden])) .auth-chip {
   display: none;
 }
