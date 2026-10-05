@@ -1,10 +1,11 @@
+import { PgBoss } from 'pg-boss';
 import pino from 'pino';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { createDbClient, type Database, type DbClient } from '../db/client.js';
 import { appendGameEvent, appendRawGameEvent } from '../db/game-events.js';
 import { maps } from '../db/schema.js';
 import { backendPid, waitUntilBlockedBy } from '../../tests/lock-waits.js';
-import { startJobs, type Jobs } from './boss.js';
+import { PG_BOSS_SCHEMA, startJobs, type Jobs } from './boss.js';
 import { runConsumer, type EventConsumer } from './consumers.js';
 import { createJobsRepo } from './repo.js';
 
@@ -34,7 +35,12 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
 
   /** A consumer with a fresh name, so tests never see each other's positions. */
   function testConsumer(
-    options: { failOnSeq?: number; delayMs?: number } = {},
+    options: {
+      failOnSeq?: number;
+      delayMs?: number;
+      /** Hold this event's transaction open (one map's) until the promise settles. */
+      holdAt?: { mapId: string; seq: number; until: Promise<void> };
+    } = {},
   ): EventConsumer & { failOnSeq: number | undefined } {
     const consumer = {
       name: `test-${String(process.pid)}-${String((counter += 1))}`,
@@ -50,6 +56,9 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
           `insert into consumer_test_log values ('${consumer.name}', '${event.mapId}', ${String(event.seq)})`,
         );
         if (options.delayMs) await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+        if (options.holdAt?.mapId === event.mapId && options.holdAt.seq === event.seq) {
+          await options.holdAt.until;
+        }
       },
     };
     return consumer;
@@ -246,6 +255,24 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       return Number([...rows][0]!.n);
     }
 
+    /** The map's jobs on the consumer's queue, counted by state. */
+    async function jobStates(
+      consumer: EventConsumer,
+      mapId: string,
+    ): Promise<Record<string, number>> {
+      const rows = await db.execute<{ state: string; n: string }>(
+        `select state, count(*) as n from pgboss.job where name = 'event-consumer.${consumer.name}' and singleton_key = '${mapId}' group by state`,
+      );
+      return Object.fromEntries([...rows].map((r) => [r.state, Number(r.n)]));
+    }
+
+    async function queuePolicy(name: string): Promise<string | undefined> {
+      const rows = await db.execute<{ policy: string }>(
+        `select policy from pgboss.queue where name = '${name}'`,
+      );
+      return [...rows][0]?.policy;
+    }
+
     it('enqueues the wake-up inside the command transaction', async () => {
       const consumer = testConsumer();
       // Asserts on pgboss.job rows (any state), not on delivery timing.
@@ -284,6 +311,85 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
         }
       });
       expect(await jobsFor(consumer, mapId)).toBe(1);
+    });
+
+    // The CI Postgres log used to fill with `duplicate key value violates
+    // unique constraint "job_common_i3"` for `event-consumer.tutorial`: with
+    // the `stately` policy, the wake-up for a tap that landed while the map's
+    // job was running was fetched by an idle worker and tripped the
+    // one-active-per-key index, on every poll until the job ended. With
+    // `short` that wake-up is simply a second job for the map, taken right
+    // away; `runConsumer`'s row lock makes the two take turns.
+    it('takes a wake-up that arrives mid-run as a job of its own: nothing lost or doubled', async () => {
+      let release = (): void => {};
+      const until = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const mapId = await newMap();
+      // Holds this map's first event only: the boot catch-up also runs the
+      // consumer over every earlier map in the database.
+      const consumer = testConsumer({ holdAt: { mapId, seq: 1, until } });
+      jobs = await startJobs({
+        connectionString: url!,
+        db,
+        consumers: [consumer],
+        logger,
+        schedule: false,
+      });
+
+      try {
+        // The first event's wake-up: its job starts and holds at event 1.
+        await addEvents(mapId, 1);
+        await eventually(async () => (await jobStates(consumer, mapId))['active'] === 1);
+        expect(await applied(consumer, mapId)).toEqual([]); // held open, not committed
+
+        // Two more while it runs. Their wake-up is queued beside the running
+        // job and a free worker takes it at once (under `stately` it would be
+        // refused with a unique-key error until the first job ended).
+        await addEvents(mapId, 2);
+        await eventually(async () => ((await jobStates(consumer, mapId))['active'] ?? 0) >= 2);
+        expect((await position(consumer, mapId)) ?? 0).toBe(0); // the second job waits its turn
+      } finally {
+        release(); // also on a failed assertion, or `stop()` would wait on the held job
+      }
+      await eventually(async () => (await position(consumer, mapId)) === 3);
+      expect(await applied(consumer, mapId)).toEqual([1, 2, 3]);
+      // Every job for the map finished; none stuck queued, retrying or failed.
+      await eventually(async () => {
+        const states = await jobStates(consumer, mapId);
+        return Object.keys(states).every((state) => state === 'completed');
+      });
+    });
+
+    it('recreates a queue that an older build left with another policy', async () => {
+      const consumer = testConsumer();
+      const queue = `event-consumer.${consumer.name}`;
+      const mapId = await newMap();
+      // An older build: the queue with the policy it had, and a wake-up on it.
+      const older = new PgBoss({ connectionString: url!, schema: PG_BOSS_SCHEMA, max: 1 });
+      await older.start();
+      await older.createQueue(queue, { policy: 'stately' });
+      await older.send(queue, { mapId }, { singletonKey: mapId });
+      await older.stop({ graceful: false });
+      expect(await queuePolicy(queue)).toBe('stately');
+      await addEvents(mapId, 2); // nothing running: these lag until a catch-up
+
+      // pg-boss keeps a queue's policy for good, so startJobs drops and
+      // recreates it; the boot catch-up then wakes the lagging map anyway.
+      jobs = await startJobs({
+        connectionString: url!,
+        db,
+        consumers: [consumer],
+        logger,
+        schedule: false,
+      });
+      expect(await queuePolicy(queue)).toBe('short');
+      const stale = await db.execute<{ n: string }>(
+        `select count(*) as n from pgboss.job where name = '${queue}' and policy = 'stately'`,
+      );
+      expect(Number([...stale][0]!.n)).toBe(0);
+      await eventually(async () => (await position(consumer, mapId)) === 2);
+      expect(await applied(consumer, mapId)).toEqual([1, 2]);
     });
 
     it('wakes only consumers that read the map kind', async () => {
@@ -349,8 +455,8 @@ describe.skipIf(!url)('event consumers (needs DATABASE_URL)', () => {
       });
       await eventually(() => Promise.resolve(ran.length > 0));
       expect(ran[0]).toBe(`${mapId}/2026-10-31`);
-      // Keyed by map and night (`stately`: at most one queued and one running per
-      // key); the night's `hollow_events` row makes any repeat a no-op.
+      // Keyed by map and night (`short`: at most one queued per key); the
+      // night's `hollow_events` row makes any repeat a no-op.
       expect(await jobs.nightfallSweep()).toBe(1);
       const rows = await db.execute<{ n: string }>(
         `select count(*) as n from pgboss.job where name = 'nightfall' and singleton_key = '${mapId}/2026-10-31'`,

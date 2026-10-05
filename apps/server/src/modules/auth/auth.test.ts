@@ -10,7 +10,7 @@ import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import { users } from '../../db/schema.js';
-import { AUTH_RATE_LIMITS, SESSION_COOKIE, SESSION_TTL_MS } from './limits.js';
+import { SESSION_COOKIE, SESSION_TTL_MS } from './limits.js';
 import { createAuthRepo } from './repo.js';
 import { createAuthService } from './service.js';
 
@@ -19,6 +19,7 @@ const SIGNUP_CODE = 'family-code-for-tests';
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// The rate limits are in auth-rate-limit.test.ts, on a cheap stand-in for Argon2.
 describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
   let client: DbClient;
   let db: Database;
@@ -218,32 +219,6 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
       const row = await userRow(user.id);
       expect(['America/New_York', 'US/Eastern']).toContain(row?.timeZone);
     });
-
-    it('rate limits guessing the family code per IP', async () => {
-      const server = await start();
-      const { max } = AUTH_RATE_LIMITS.signup.perIp;
-      for (let i = 0; i < max; i += 1) {
-        const res = await post(server, '/auth/signup', signupBody({ signupCode: `guess-${i}` }));
-        expect(res.statusCode).toBe(403);
-      }
-      const limited = await post(server, '/auth/signup', signupBody());
-      expect(limited.statusCode).toBe(429);
-      expect(errorOf(limited).code).toBe('RATE_LIMITED');
-      expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
-
-      const otherIp = await post(server, '/auth/signup', signupBody(), {
-        remoteAddress: '203.0.113.9',
-      });
-      expect(otherIp.statusCode).toBe(201);
-    });
-
-    it('takes a raised per-IP signup limit from dev config (e2e)', async () => {
-      const server = await start({ HP_DEV_SIGNUP_LIMIT_PER_IP: '50' });
-      const { max } = AUTH_RATE_LIMITS.signup.perIp;
-      for (let i = 0; i <= max; i += 1) {
-        expect((await post(server, '/auth/signup', signupBody())).statusCode).toBe(201);
-      }
-    });
   });
 
   describe('login and logout', () => {
@@ -293,53 +268,6 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
       await db.insert(users).values({ username, passwordHash: 'not-a-hash', birthYear: 2014 });
       const res = await post(server, '/auth/login', { username, password: 'not-a-hash' });
       expect(res.statusCode).toBe(401);
-    });
-
-    // A dozen full-cost Argon2 hashes and checks, one after another.
-    it(
-      'rate limits wrong passwords per username, even from new IPs',
-      { timeout: 30_000 },
-      async () => {
-        const server = await start();
-        const { body } = await signup(server);
-        const { max } = AUTH_RATE_LIMITS.login.perUsername;
-        for (let i = 0; i < max; i += 1) {
-          const res = await post(
-            server,
-            '/auth/login',
-            { username: body.username, password: `wrong-${i}` },
-            { remoteAddress: `198.51.100.${i + 1}` },
-          );
-          expect(res.statusCode).toBe(401);
-        }
-        // Locked for now, even with the right password.
-        const limited = await post(server, '/auth/login', {
-          username: body.username,
-          password: body.password,
-        });
-        expect(limited.statusCode).toBe(429);
-        expect(errorOf(limited).message).toMatch(/break/);
-
-        // Other players aren't affected.
-        const other = await signup(server);
-        const ok = await post(server, '/auth/login', {
-          username: other.body.username,
-          password: other.body.password,
-        });
-        expect(ok.statusCode).toBe(200);
-      },
-    );
-
-    // 30 full-cost Argon2 checks (64 MiB each) on 4 libuv threads: ~2-3 s on CI.
-    it('rate limits login attempts per IP across usernames', { timeout: 30_000 }, async () => {
-      const server = await start();
-      const { max } = AUTH_RATE_LIMITS.login.perIp;
-      const attempts = Array.from({ length: max }, (_, i) =>
-        post(server, '/auth/login', { username: `nobody_${i}`, password: 'nope' }),
-      );
-      for (const res of await Promise.all(attempts)) expect(res.statusCode).toBe(401);
-      const limited = await post(server, '/auth/login', { username: 'nobody_x', password: 'x' });
-      expect(limited.statusCode).toBe(429);
     });
   });
 
@@ -439,28 +367,6 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
         post(server, '/auth/recover', { username: body.username, recoveryCode, newPassword });
       const results = await Promise.all([attempt('first-new-pass'), attempt('second-new-pass')]);
       expect(results.map((r) => r.statusCode).sort()).toEqual([200, 401]);
-    });
-
-    it('rejects a wrong code and rate limits guesses per username', async () => {
-      const server = await start();
-      const { body } = await signup(server);
-      const { max } = AUTH_RATE_LIMITS.recover.perUsername;
-      for (let i = 0; i < max; i += 1) {
-        const res = await post(
-          server,
-          '/auth/recover',
-          { username: body.username, recoveryCode: 'ABCD-EFGH-JKMN', newPassword: 'new-secret!' },
-          { remoteAddress: `192.0.2.${i + 1}` },
-        );
-        expect(res.statusCode).toBe(401);
-        expect(errorOf(res).message).toMatch(/recovery code/);
-      }
-      const limited = await post(server, '/auth/recover', {
-        username: body.username,
-        recoveryCode: 'ABCD-EFGH-JKMN',
-        newPassword: 'new-secret!',
-      });
-      expect(limited.statusCode).toBe(429);
     });
   });
 

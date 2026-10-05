@@ -705,9 +705,10 @@ if (import.meta.env.DEV) {
       badge.textContent = 'server: offline';
     });
 
-  const { mountDevOverlay } = await import('./engine/dev-overlay.js');
-  mountDevOverlay(() => stage);
-  // Read-only hook for the Playwright smoke test; dev builds only.
+  // Read-only hook for the Playwright smoke test; dev builds only. Installed
+  // before anything else here awaits: the stage marks the canvas ready on its
+  // first drawn frame, which the tests wait for before reading the hook, and
+  // that frame is only a task away once boot() has resolved.
   window.__heartpatch = {
     renderer: () => stage?.renderer.kind ?? null,
     quality: () => stage?.quality.snapshot ?? null,
@@ -737,4 +738,7 @@ if (import.meta.env.DEV) {
     milestones: () => milestones.debug,
     audio: () => audio.debug,
   };
+
+  const { mountDevOverlay } = await import('./engine/dev-overlay.js');
+  mountDevOverlay(() => stage);
 }
