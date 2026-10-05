@@ -4,12 +4,15 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap, realTapAt } from './touch.js';
 
 /**
- * Single taps, the way a finger does them (touch.ts): down, a short hold, up.
- * Every control over the map and in its sheets must work on the first tap,
- * on an iPhone and an iPad (both device projects run this file). The owner's
- * playtest of 2026-10-05 found taps needing two tries and Collect not
- * working; these are the regression tests for that. Checked through the dev
- * hook and the API, never pixels.
+ * Single taps with a held press (touch.ts): down, a short hold, up, the
+ * browser hit-testing both ends. Every control over the map and in its sheets
+ * must do what its label says on the first tap, on an iPhone and an iPad
+ * (both device projects run this file). The owner's playtest of 2026-10-05
+ * found taps needing two tries and Collect not working; these are the
+ * regression tests for that. Checked through the dev hook and the API, never
+ * pixels. The press is the primary pointer, so iOS's own touch-to-click
+ * synthesis is not what's under test here; a control rebuilt or moved under a
+ * resting finger is.
  */
 
 interface InventoryDebug {
@@ -49,21 +52,32 @@ async function tapOwnNode(page: Page, offering: 'gather' | 'collect' = 'gather')
   // Let the map settle first: picking a tile needs the scene drawn and the
   // camera's arrival glide over (both slow under software rendering in CI).
   await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
+  const panel = page.getByTestId('tile-panel');
   const box = (await page.locator('#game').boundingBox())!;
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   for (const radius of [40, 60, 80, 100, 130]) {
     for (let step = 0; step < 12; step++) {
       const angle = (step * Math.PI) / 6;
+      // The panel from the last tap would swallow a tap landing on it (it
+      // covers the lower half of a phone's screen): close it first, as a
+      // player would.
+      if (await panel.isVisible()) {
+        await realTap(panel.getByRole('button', { name: 'Close' }));
+        await expect(panel).toBeHidden();
+      }
       await realTapAt(page, cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
       await expect
-        .poll(async () => (await bagState(page))?.tileAction, { timeout: 2000 })
+        .poll(async () => (await bagState(page))?.tileAction, { timeout: 1000 })
         .not.toBeNull()
         .catch(() => undefined);
       if ((await bagState(page))?.tileAction === offering) return;
     }
   }
-  throw new Error('no node of ours near the Heart Seed');
+  const map = await hook<{ selected: string | null; tiles: number; draws: number }>(page, 'map');
+  throw new Error(
+    `no node of ours near the Heart Seed (map ${JSON.stringify(map)}, bag ${JSON.stringify(await bagState(page))}, canvas ${JSON.stringify(box)})`,
+  );
 }
 
 /** One real tap on `open` shows `sheet`; one real tap on its Close hides it. */
@@ -172,18 +186,30 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   expect(afterTile).toBeGreaterThan(before);
   expect((await bagState(page))?.tileAction).toBe('gather');
 
-  // Again, this time collecting from the chip's Bag ("Tap to collect").
+  // Again, this time from the chip: "ready! Tap to collect" collects on that
+  // one tap and shows what came, then goes away.
   await realTap(panel.getByTestId('tile-gather'));
   await expect.poll(async () => (await bagState(page))?.gathers).toBe(1);
   await realTap(panel.getByRole('button', { name: 'Close' }));
-  expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
-  await realTap(page.getByTestId('gather-chip'));
+  const chip = page.getByTestId('gather-chip');
+  await expect(chip).toContainText('Gathering');
+  // A chip still counting down opens the Bag (which refetches, so it learns
+  // the gather is done), and nothing is collected by that tap.
+  await realTap(chip);
   await expect(bag).toBeVisible();
-  await realTap(bag.getByTestId('bag-collect'));
-  await expect(page.getByTestId('bag-note')).toContainText('Yay!');
+  await realTap(bag.getByRole('button', { name: 'Close' }));
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
+  await realTap(page.getByTestId('bag-open'));
+  await realTap(bag.getByRole('button', { name: 'Close' }));
+  await expect(chip).toContainText('Tap to collect');
+  expect((await bagState(page))?.chip).toBe('ready');
+  await realTap(chip);
+  await expect(chip).toContainText('Yay!');
+  expect((await bagState(page))?.chip).toBe('got');
+  await expect(bag).toBeHidden();
   await expect.poll(async () => (await bagState(page))?.gathers).toBe(0);
   expect(itemTotal((await bagState(page))!.items)).toBeGreaterThan(afterTile);
-  await realTap(bag.getByRole('button', { name: 'Close' }));
+  await expect(chip).toBeHidden({ timeout: 10_000 });
 
   // A squishy gatherer's work: the job board's Collect, one tap.
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/squishies`, {

@@ -193,20 +193,27 @@ function queries(db: Executor): GatheringRepo {
     },
 
     makeReady: async (mapId, userId, at) => {
+      const mine = and(
+        eq(gatherJobs.mapId, mapId),
+        eq(gatherJobs.userId, userId),
+        eq(gatherJobs.status, 'active'),
+        gt(gatherJobs.readyAt, at),
+      );
+      // Rows of one kind lock in id order (tech spec §7), before the update.
+      const rows = await db
+        .select({ id: gatherJobs.id })
+        .from(gatherJobs)
+        .where(mine)
+        .orderBy(asc(gatherJobs.id))
+        .for('update');
+      if (rows.length === 0) return 0;
       const moved = await db
         .update(gatherJobs)
         .set({
           startedAt: sql`${gatherJobs.startedAt} - (${gatherJobs.readyAt} - ${at.toISOString()}::timestamptz)`,
           readyAt: at,
         })
-        .where(
-          and(
-            eq(gatherJobs.mapId, mapId),
-            eq(gatherJobs.userId, userId),
-            eq(gatherJobs.status, 'active'),
-            gt(gatherJobs.readyAt, at),
-          ),
-        )
+        .where(mine)
         .returning({ id: gatherJobs.id });
       return moved.length;
     },

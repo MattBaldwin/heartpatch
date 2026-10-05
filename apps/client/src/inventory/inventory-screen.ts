@@ -36,8 +36,8 @@ export interface InventoryDebug {
   readonly bagOpen: boolean;
   /** The tile panel's action right now, if it's showing one of your nodes. */
   readonly tileAction: TileAction['kind'] | null;
-  /** The gathering chip over the map: null while hidden. */
-  readonly chip: 'waiting' | 'ready' | null;
+  /** The gathering chip over the map: null while hidden; `got` while it shows what a tap collected. */
+  readonly chip: 'waiting' | 'ready' | 'got' | null;
 }
 
 export interface InventoryScreen {
@@ -74,6 +74,9 @@ const TEXT = {
   devGrant: 'Get stuff (dev)',
 } as const;
 
+/** How long the chip shows what a tap just collected before it moves on. */
+const CHIP_REVEAL_MS = 2500; // TUNE: long enough to read "Yay! +5 Timber", short enough not to nag
+
 /** Things a dev build hands out to try crafting without waiting. */
 const DEV_ITEMS: ItemCounts = {
   timber: 10,
@@ -98,6 +101,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   let panel: { container: HTMLElement; tile: PublicTile } | null = null;
   let shownAction: TileAction | null = null;
   let shownChip: InventoryDebug['chip'] = null;
+  /** The gather the chip offers to collect on tap (null while it only counts down). */
+  let chipReady: string | null = null;
+  /** What the chip's own tap just collected, shown on the chip for a moment. */
+  let chipReveal: string | null = null;
+  let chipRevealTimer: number | undefined;
 
   // ── Bag button and sheet ──────────────────────────────────────────────
   const open = el(
@@ -109,7 +117,9 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   open.hidden = true;
 
   // The gathering chip: a gather takes minutes on a patch, so the map keeps
-  // saying so (and when it's ready) until it's collected. Tap: the Bag.
+  // saying so until it's collected. Tap while it counts down: the Bag. Tap
+  // once it says "ready! Tap to collect": it collects, and shows what came
+  // (one tap does what the label says; the owner's playtest of 2026-10-05).
   const chip = el('button', {
     type: 'button',
     class: 'gather-chip',
@@ -163,7 +173,10 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     void refresh();
   };
   open.addEventListener('click', openBag);
-  chip.addEventListener('click', openBag);
+  chip.addEventListener('click', () => {
+    if (chipReady) void collectGather(chipReady, 'chip');
+    else openBag();
+  });
   close.addEventListener('click', () => {
     sheet.hidden = true;
     say('');
@@ -243,13 +256,31 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       say(TEXT.started);
     });
 
-  const collectGather = (gatherId: string) =>
+  const collectGather = (gatherId: string, from: 'panel' | 'chip' = 'panel') =>
     act(async (id, at, send) => {
       const res = await send((key) => api.collectGather(id, gatherId, key));
       if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
       state = { ...state, gathers: state.gathers.filter((g) => g.id !== gatherId) };
-      say(TEXT.got(describeItems(res.granted)));
+      const got = TEXT.got(describeItems(res.granted));
+      say(got);
+      if (from === 'chip') revealOnChip(got);
     });
+
+  /** The chip shows what its tap collected for a moment, then moves on. */
+  const revealOnChip = (text: string) => {
+    chipReveal = text;
+    window.clearTimeout(chipRevealTimer);
+    chipRevealTimer = window.setTimeout(() => {
+      chipRevealTimer = undefined;
+      chipReveal = null;
+      render();
+    }, CHIP_REVEAL_MS);
+  };
+  const clearChipReveal = () => {
+    window.clearTimeout(chipRevealTimer);
+    chipRevealTimer = undefined;
+    chipReveal = null;
+  };
 
   const startCraft = (recipeId: string) =>
     act(async (id, at, send) => {
@@ -436,12 +467,22 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   /** The gathering chip, while something's gathering and the Bag is shut. */
   function renderChip(): void {
     chipCountdowns = [];
+    chipReady = null;
     const shown = mapId !== null && state !== null && sheet.hidden;
+    if (shown && chipReveal) {
+      // What the chip's tap just collected.
+      shownChip = 'got';
+      chip.hidden = false;
+      chip.classList.add('gather-chip-ready');
+      chip.replaceChildren(chipReveal);
+      return;
+    }
     const model = shown && state ? gatherChip(state.gathers, (iso) => clock.msUntil(iso)) : null;
     shownChip = model ? (model.ready ? 'ready' : 'waiting') : null;
     chip.hidden = model === null;
     if (!model) return;
     const { gather } = model;
+    if (model.ready) chipReady = gather.id;
     const what = `${itemIcon(gather.resource)} ${itemName(gather.resource)}`;
     const more = model.more > 0 ? TEXT.chipMore(model.more) : '';
     chip.classList.toggle('gather-chip-ready', model.ready);
@@ -496,6 +537,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       mapId = next;
       state = null;
       sheet.hidden = true;
+      clearChipReveal();
       say('');
       render();
       if (next) await refresh();
@@ -507,6 +549,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       mapId = null;
       state = null;
       sheet.hidden = true;
+      clearChipReveal();
       render();
     },
     tileActions: {

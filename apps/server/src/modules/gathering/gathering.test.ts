@@ -477,6 +477,10 @@ describe.skipIf(!url)('gathering (needs DATABASE_URL)', () => {
       });
       app = await buildApp({ config, db, clock: () => clock, logger: false });
       const dev = app;
+      // Someone outside the patch can't see it, as with every map route.
+      const stranger = await player();
+      const hidden = await call(dev, 'POST', `/maps/${mapId}/dev/gathers/ready`, stranger);
+      expect(hidden.statusCode).toBe(404);
       const ready = await call(dev, 'POST', `/maps/${mapId}/dev/gathers/ready`, kid);
       expect(ready.statusCode, ready.body).toBe(200);
       const bag = InventoryResponseSchema.parse(ready.json());
