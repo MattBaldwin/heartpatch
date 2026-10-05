@@ -258,7 +258,8 @@
   justify-content: center;
   gap: 2px;
   min-height: 60px;
-  padding: var(--hp-pad-y) var(--hp-pad-x);
+  /* The emoji's box rises a pixel above its line: 2 px over the token keeps 8 px. */
+  padding: calc(var(--hp-pad-y) + 2px) var(--hp-pad-x);
   border-radius: 22px;
   font-size: 17px;
   line-height: 1.15;
