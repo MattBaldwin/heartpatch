@@ -20,6 +20,8 @@ export const ADVANCE_CHECKS_BEFORE_RETRY = 4; // TUNE: guess
 
 /** Shown when the server never moved on (its step engine may be busy). */
 export const STUCK_MESSAGE = 'Hmm, Sprout got a little lost. Try again!';
+/** Save tapped with nothing typed on the naming step (#154). */
+export const NAME_FIRST_MESSAGE = 'Pick a name first!';
 
 /**
  * - `closed`: not on screen.
@@ -222,15 +224,14 @@ export class TutorialController {
     const state = this.state;
     const partner = state?.partner;
     if (step?.action !== 'name' || !state?.mapId || !partner) return;
-    // Checked the way the close-up checks a name (the server filters it too).
+    // Checked the way the close-up checks a name (the server filters it too);
+    // an empty box gets a nudge, like any other name that won't do.
     const checked = checkNickname(nickname);
     if (!checked.ok) {
-      if (nickname.trim() !== '') {
-        this.fail(checked.why, () => {
-          this.phase = 'step';
-          this.emit();
-        });
-      }
+      this.fail(nickname.trim() === '' ? NAME_FIRST_MESSAGE : checked.why, () => {
+        this.phase = 'step';
+        this.emit();
+      });
       return;
     }
     const { name } = checked;

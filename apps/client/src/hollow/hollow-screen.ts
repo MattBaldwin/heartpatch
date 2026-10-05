@@ -41,9 +41,10 @@ export interface HollowScreenOptions {
   /** Dev builds: a button that makes night fall now. */
   devTools?: boolean;
   /**
-   * Another morning report is on screen (#16's raid report): the Hollow's
-   * card and list wait their turn, so the player sees one thing at a time.
-   * Call `otherReportClosed` when it goes away.
+   * Another card is on screen (#16's raid report, a found lore page, a
+   * milestone party): the Hollow's report and list wait their turn, so the
+   * player sees one thing at a time (#129). Call `otherReportChanged` when
+   * it opens or goes away.
    */
   otherReportOpen?: () => boolean;
 }
@@ -70,7 +71,7 @@ export interface HollowScreen {
   setUser: (user: PublicUser | null) => void;
   /** A live event on the open map (`map-screen`'s `onLiveEvent`). */
   liveEvent: (event: WsEventMessage) => void;
-  /** The other morning report opened or closed (see `otherReportOpen`). */
+  /** Another card opened or closed (see `otherReportOpen`). */
   otherReportChanged: () => void;
   readonly debug: HollowDebug | null;
 }
@@ -106,6 +107,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   let note = '';
   /** His visit is playing: the report waits until he has faded away. */
   let visitPlaying = false;
+  /** Another card was holding the report back at the last render. */
+  let heldBackBefore = false;
   let nightTimer: ReturnType<typeof setTimeout> | undefined;
 
   const openButton = el(
@@ -230,6 +233,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     hint.hidden = !on || status?.fireHint !== true || status.night.isNight;
 
     const heldBack = options.otherReportOpen?.() ?? false;
+    heldBackBefore = heldBack;
     reportBox.hidden = !on || report.length === 0 || visitPlaying || heldBack;
     if (!reportBox.hidden) {
       const { title, lines } = reportText(report, (t) => nameOf(t));
@@ -452,7 +456,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     },
 
     otherReportChanged: () => {
-      render();
+      // Only a change redraws: a redraw rebuilds the report's buttons, and a
+      // card waiting behind it asks again every few seconds.
+      if ((options.otherReportOpen?.() ?? false) !== heldBackBefore) render();
     },
 
     liveEvent: (event) => {

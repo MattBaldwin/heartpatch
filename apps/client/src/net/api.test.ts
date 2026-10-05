@@ -54,8 +54,21 @@ describe('apiCall', () => {
     });
   });
 
-  it('returns null for empty replies', async () => {
+  it('returns null for empty replies, reading the body out first (#163)', async () => {
     const fake = fakeFetch(204, undefined);
     expect(await apiCall('/auth/logout', { method: 'POST', schema: null }, fake.impl)).toBeNull();
+    // A reply left unread is cancelled when its Response is collected, which
+    // Chromium logs as net::ERR_ABORTED on every acknowledge.
+    let read = false;
+    const reply = new Response(null, { status: 204 });
+    reply.arrayBuffer = () => {
+      read = true;
+      return Promise.resolve(new ArrayBuffer(0));
+    };
+    const watched = (() => Promise.resolve(reply)) as typeof fetch;
+    expect(
+      await apiCall('/tutorial/acknowledge', { method: 'POST', schema: null }, watched),
+    ).toBeNull();
+    expect(read).toBe(true);
   });
 });

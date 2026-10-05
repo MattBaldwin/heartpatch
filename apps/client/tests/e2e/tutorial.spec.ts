@@ -18,7 +18,7 @@ interface TutorialDebug {
   overlay: {
     target: string | null;
     spotlightOn: string | null;
-    gate: 'blockAll' | 'spotlight' | 'open' | null;
+    gate: 'blockAll' | 'spotlight' | 'guide' | 'open' | null;
     hole: { x: number; y: number; width: number; height: number } | null;
   };
   sprout: string | null;

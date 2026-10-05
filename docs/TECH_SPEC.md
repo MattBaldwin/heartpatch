@@ -206,7 +206,7 @@ Add anything else only with a one-line justification in the PR.
 ### Cinematics and tutorial (client)
 - **Cinematic player** (`src/cinematics/`): plays a timeline described in data (`packages/shared/src/data/cinematics/*.ts`): shots with duration, camera path keyframes, scene setup, actor animations, caption text and audio cues. A pure timeline evaluated as a function of time (seekable for tap-to-advance, testable without a renderer), drawn on the shared stage; no video files. Every shot's actors are built and warmed up front, and the player is a lazy-loaded chunk (DECISIONS "The opening cinematic (#46)").
 - Target 60 fps, acceptable floor 30. Captions are DOM overlay text. Support skip (after first view or long-press), tap-to-advance captions, and `prefers-reduced-motion` (gentler camera moves).
-- **Tutorial UI layer** (`src/tutorial/`): highlights a target (spotlight mask over the canvas or DOM element), shows Sprout's speech bubble and an arrow, and blocks unrelated input during each step.
+- **Tutorial UI layer** (`src/tutorial/`): highlights a target (spotlight mask over the canvas or DOM element), shows Sprout's speech bubble and an arrow, and blocks unrelated input while Sprout talks or spotlights a target. It waits its turn behind any open sheet (DECISIONS "Sprout waits its turn").
 
 ## 7. Server architecture
 

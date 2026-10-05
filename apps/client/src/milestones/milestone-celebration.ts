@@ -19,6 +19,8 @@ export interface MilestoneCelebrationOptions {
    * look waits and tries again, so cards come one at a time.
    */
   busy?: () => boolean;
+  /** A card opened or closed (so the next sheet in line can take its turn). */
+  onChange?: () => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -100,6 +102,7 @@ export function createMilestoneCelebration(
   const showNext = () => {
     showing = queue.shift() ?? null;
     card.hidden = showing === null;
+    options.onChange?.();
     if (!showing) return;
     name.textContent = showing.trackName;
     title.textContent = `“${showing.reward.title.name}”`;
@@ -121,27 +124,36 @@ export function createMilestoneCelebration(
     showNext();
   });
 
+  /** Looks again in a moment (one wait at a time). */
+  const later = () => {
+    if (retrying) return;
+    retrying = true;
+    setTimer(() => {
+      retrying = false;
+      void look();
+    }, BUSY_RETRY_MS);
+  };
+
   const look = async (): Promise<void> => {
     const who = user;
     if (!who) return;
     if (busy()) {
-      if (!retrying) {
-        retrying = true;
-        setTimer(() => {
-          retrying = false;
-          void look();
-        }, BUSY_RETRY_MS);
-      }
+      later();
       return;
     }
     try {
       const { news } = await api.get();
       if (user?.id !== who.id) return;
       const fresh = freshNews(news, queued);
-      if (fresh.length === 0) return;
       for (const n of fresh) queued.add(n.id);
       queue.push(...fresh);
-      if (!showing) showNext();
+      if (showing || queue.length === 0) return;
+      // Something opened while the news was on its way (a battle, a page): wait again.
+      if (busy()) {
+        later();
+        return;
+      }
+      showNext();
     } catch {
       // Offline: the next check finds it.
     }
@@ -166,6 +178,7 @@ export function createMilestoneCelebration(
       showing = null;
       queued = new Set();
       card.hidden = true;
+      options.onChange?.();
       // Anything earned while away (a raid held overnight, a backfilled First Patch).
       if (next) void look();
     },
