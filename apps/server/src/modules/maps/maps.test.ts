@@ -436,6 +436,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
           'q',
           'r',
           'terrain',
+          'workers',
         ].sort(),
       );
       expect(view.tiles.filter((t) => t.ownerUserId === friend.id)).toHaveLength(7);

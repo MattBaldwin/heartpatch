@@ -27,7 +27,8 @@ export type HookName =
   | 'lore'
   | 'milestones'
   | 'chat'
-  | 'audio';
+  | 'audio'
+  | 'jobs';
 
 type HookWindow = { __heartpatch?: Partial<Record<string, () => unknown>> };
 

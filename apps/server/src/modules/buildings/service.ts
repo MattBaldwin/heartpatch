@@ -29,6 +29,8 @@ import { AppError } from '../../lib/errors.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { consumeItems, grantItems, seasonsOn } from '../inventory/service.js';
+import { leaveWork } from '../jobs/service.js';
+import type { MapRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import {
@@ -241,6 +243,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       at: Date;
       local: MapLocalTime;
       timeZone: string;
+      mapKind: MapRow['kind'];
       home: HomeTileRow[];
     }) => Promise<T>,
   ): Promise<T> {
@@ -257,6 +260,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           at,
           local: mapLocalTime(at, map.timeZone),
           timeZone: map.timeZone,
+          mapKind: map.kind,
           home,
         });
       });
@@ -412,7 +416,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       }),
 
     house: (user, mapId, squishyId, habitatRowId) =>
-      command(user, mapId, async ({ repo, tx, at, timeZone }) => {
+      command(user, mapId, async ({ repo, tx, at, timeZone, mapKind }) => {
         let habitat: { row: BuildingRow; name: string; capacity: number } | null = null;
         if (habitatRowId !== null) {
           const row = await lockMine(repo, mapId, user.id, habitatRowId);
@@ -440,6 +444,19 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             throw new AppError('CONFLICT', MESSAGES.habitatFull(habitat.name));
           }
           await repo.setHabitat(squishy.id, habitatRowId);
+          // A gatherer moving in stops work (housed or working, not both;
+          // owner decisions 2026-10-04); what it had ready goes in the bag.
+          const jobEvents =
+            habitatRowId === null
+              ? []
+              : await leaveWork(
+                  tx,
+                  { id: mapId, kind: mapKind, timeZone },
+                  [squishy.id],
+                  'resting',
+                  at,
+                );
+          for (const event of jobEvents) await repo.appendEvent(event);
           await repo.appendEvent({
             mapId,
             type: 'squishy.housed',

@@ -159,6 +159,9 @@ Tiles are written once, from `generateMap`, when the map is created.
 | `contentment_at_last_care` | integer, default 0 | 0–100 (check): contentment right after the last care action (#19) |
 | `last_cared_at` | timestamptz, null | When. Today's contentment is worked out from these two on read (shared `contentmentAt`), so nothing ticks |
 | `created_at` | timestamptz | |
+| `team_slot` | smallint, null | Squishy jobs (migration 0021): its place on its owner's battle team, 0 first (check 0–5; unique per map and owner) |
+| `work_tile_id` | uuid → tiles, null | A gatherer's work tile; `ON DELETE SET NULL`. Never with `team_slot` (check `squishies_one_job`) |
+| `work_since`, `work_started_at` | timestamptz, null | Set with `work_tile_id` (check): where counting finished cycles starts (moves on at each collect), and when it started there (work on land captured since then stops) |
 
 `level` and `xp` change only through care's `applyXp` (#19): `xp` is the total, and a squishy that joined above level 1 counts from its level's XP. Stats come from the species and level (`statsAtLevel`); individual variance, care history and accessories columns are added by their feature issues.
 
