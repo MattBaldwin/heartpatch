@@ -26,7 +26,15 @@ export async function settled(page: Page): Promise<void> {
         .getAnimations()
         .every(
           (a) => a.playState !== 'running' || a.effect?.getComputedTiming().iterations === Infinity,
-        ),
+        ) &&
+      // A tray says so itself while it slides (`hp-settling`, cleared on
+      // transitionend or its fallback), and an open one rests at its own
+      // place: WebKit in CI has reported no running animation with the
+      // slide still a few pixels short.
+      document.querySelector('.hp-settling') === null &&
+      [...document.querySelectorAll<HTMLElement>('.tray.tray-shown')].every(
+        (tray) => getComputedStyle(tray).transform === 'none',
+      ),
     undefined,
     { timeout: 15_000 },
   );
