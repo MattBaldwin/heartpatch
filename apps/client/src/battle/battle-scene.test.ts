@@ -122,6 +122,26 @@ describe('BattleScene', () => {
     expect(battle.stats.squishies).toBe(2);
   });
 
+  it('builds the benches again after a detail change, so a later swap still makes no meshes', () => {
+    const { scene, battle } = build();
+    battle.prewarm('a', [
+      { speciesId: 'puddlepuff', instanceId: 'mine-1' },
+      { speciesId: 'emberbun', instanceId: 'mine-2' },
+    ]);
+    battle.sendOut('a', 'puddlepuff', 'mine-1');
+    battle.sendOut('b', 'fuzzbolt', 'wild-1');
+    battle.setLod('high');
+    battle.update(0);
+    scene.render();
+    const meshes = scene.meshes.length;
+    battle.perform(step('swap', 'a', { slot: 0, to: 1, ms: 700 }), 1000, {
+      incoming: { speciesId: 'emberbun', instanceId: 'mine-2' },
+    });
+    for (let t = 1000; t <= 2000; t += 50) battle.update(t);
+    scene.render();
+    expect(scene.meshes.length).toBe(meshes);
+  });
+
   it('lays a tuckered-out squishy down and keeps it there', () => {
     const { battle } = build();
     battle.sendOut('a', 'puddlepuff', 'mine-1');

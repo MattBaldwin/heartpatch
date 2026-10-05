@@ -29,6 +29,7 @@ import { ARENA_STAGE } from './arena-config.js';
 import {
   arenaPlan,
   arenaSeed,
+  FIGHTER_HOMES,
   groundColor,
   mixRgb,
   rgbHex,
@@ -150,6 +151,8 @@ export class BattleScene {
   readonly #projection = new Matrix();
   readonly #dust: string;
   #cameraHook: Observer<Scene> | null = null;
+  /** Each side's team, for building its meshes again after a detail change (`prewarm`). */
+  readonly #teams = new Map<BattleSideId, readonly { speciesId: string; instanceId: string }[]>();
   /** The battle clock at the last `update` (the camera hook poses for it). */
   #now = 0;
   #lod: SquishyLod;
@@ -216,10 +219,9 @@ export class BattleScene {
   /** Where a side's squishy stands: mine at the front left, theirs across. */
   #rig(side: BattleSideId): Rig {
     const mine = side === this.#options.mySide;
-    const home = {
-      x: mine ? -ARENA.halfGap : ARENA.halfGap,
-      z: mine ? -ARENA.depth : ARENA.depth,
-    };
+    // The player's at the front left, the other across (the arena keeps props clear of both).
+    const [front, back] = FIGHTER_HOMES;
+    const home = (mine ? front : back) ?? { x: 0, z: 0 };
     const dx = -2 * home.x;
     const dz = -2 * home.z;
     const len = Math.hypot(dx, dz) || 1;
@@ -298,6 +300,7 @@ export class BattleScene {
    */
   prewarm(side: BattleSideId, team: readonly { speciesId: string; instanceId: string }[]): void {
     const rig = this.#rigs[side];
+    this.#teams.set(side, team);
     const look =
       side === this.#options.mySide ? 'normal' : (this.#options.opponentLook ?? 'normal');
     const handles: SquishyHandle[] = [];
@@ -484,6 +487,8 @@ export class BattleScene {
     this.#rigs.a.field.setLod(lod);
     this.#rigs.b.field.setLod(lod);
     this.#keepers.setLod(lod);
+    // A new detail level drops every mesh: build the benches again now, not at the next swap.
+    for (const [side, team] of this.#teams) this.prewarm(side, team);
   }
 
   get stats(): BattleSceneStats {

@@ -68,7 +68,10 @@ export const CHOREO = {
     /** The dash itself, fraction of the move step; the rest is the brace at arm's length. */
     travel: 0.26, // TUNE
   },
-  /** Everything freezes this long when a hit lands (hit-stop), ms; longer for a super hit. */
+  /**
+   * Hit-stop, ms (longer for a super hit): when a hit lands, both fighters
+   * hold their contact pose this long before the knockback.
+   */
   hitStop: 90, // TUNE: a few frames
   knockback: { distance: 0.9 }, // TUNE
   dodge: { side: 0.9 }, // TUNE
