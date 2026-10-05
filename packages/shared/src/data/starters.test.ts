@@ -13,8 +13,22 @@ describe('starters (owner decision 2026-10-03)', () => {
   });
 
   it('rejects a list that is not three different species', () => {
-    expect(checkStarters({ speciesIds: ['puddlepuff', 'emberbun'] })).not.toEqual([]);
-    expect(checkStarters({ speciesIds: ['puddlepuff', 'puddlepuff', 'emberbun'] })).not.toEqual([]);
+    const gift = STARTERS.firstPickGift;
+    expect(
+      checkStarters({ speciesIds: ['puddlepuff', 'emberbun'], firstPickGift: gift }),
+    ).not.toEqual([]);
+    expect(
+      checkStarters({ speciesIds: ['puddlepuff', 'puddlepuff', 'emberbun'], firstPickGift: gift }),
+    ).not.toEqual([]);
+  });
+
+  it("gives Sprout's 3 Heart Charms with the first pick, all real items (owner decision 2026-10-04)", () => {
+    expect(STARTERS.firstPickGift).toEqual({ 'heart-charm': 3 });
+    const items = new Set(GAME_DATA.resources.map((r) => r.id));
+    for (const id of Object.keys(STARTERS.firstPickGift)) expect(items.has(id), id).toBe(true);
+    expect(
+      checkStarters({ speciesIds: STARTERS.speciesIds, firstPickGift: { 'heart-charm': 0 } }),
+    ).not.toEqual([]);
   });
 
   it('includes Puddlepuff (design doc §4)', () => {

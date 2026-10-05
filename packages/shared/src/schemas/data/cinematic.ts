@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { HexSchema } from '../../hex/index.js';
+import { hexKey, hexSpiral, HexSchema } from '../../hex/index.js';
 import { findAvoidedWords } from '../../data/avoided-words.js';
 import type { GameData } from './game-data.js';
 import type { KeeperData } from './keepers.js';
@@ -69,7 +69,10 @@ export type CinematicMusic = z.infer<typeof CinematicMusicSchema>;
 /**
  * Who is on screen. Every kind is drawn with the game's own procedural
  * builders: squishies, Keepers (`player-keeper` is the player's own), the
- * Hollow Man, Heart Seeds, Hearthfires, and the Heart Seeds' shards.
+ * Hollow Man, Heart Seeds, Hearthfires, and the Heart Seeds' shards. "Your
+ * part" adds a tossed `heart-charm`, a puff of `hearts` rising from where it
+ * stands (care, a new friend), and `joy`: a squishy's glow as a little warm
+ * light, which the Hollow Man pulls out in the Scatter and care brings back.
  */
 export const CinematicActorKindSchema = z.enum([
   'squishy',
@@ -79,6 +82,9 @@ export const CinematicActorKindSchema = z.enum([
   'heart-seed',
   'hearthfire',
   'shards',
+  'heart-charm',
+  'hearts',
+  'joy',
 ]);
 export type CinematicActorKind = z.infer<typeof CinematicActorKindSchema>;
 
@@ -98,8 +104,13 @@ export const CinematicActorKeySchema = z.strictObject({
   yaw: z.number().optional(),
   /** See-through-ness (the Hollow Man). 0–1, default 1. */
   alpha: z.number().min(0).max(1).optional(),
-  /** Glow (Heart Seeds, shards). 0–1, default 1. */
+  /** Glow (Heart Seeds, shards, Heart Charms, hearts, joy). 0–1, default 1. */
   glow: z.number().min(0).max(1).optional(),
+  /**
+   * The Hollow Man's long arms, 0 (hanging) to 1 (reaching out and down);
+   * his eyes flare with it. Default 0.
+   */
+  reach: z.number().min(0).max(1).optional(),
   /** Hearthfires: lit or out. Default lit. */
   lit: z.boolean().optional(),
   /**
@@ -129,6 +140,18 @@ export const CinematicActorSchema = z.strictObject({
 });
 export type CinematicActor = z.infer<typeof CinematicActorSchema>;
 
+/** A world tile the Keeper claims at `at`. */
+export const CinematicClaimSchema = z.strictObject({ at: TimeSchema, hex: HexSchema });
+export type CinematicClaim = z.infer<typeof CinematicClaimSchema>;
+
+/** A camera shake: `strength` world units at its start, gone after `seconds`. */
+export const CinematicShakeSchema = z.strictObject({
+  at: TimeSchema,
+  seconds: z.number().positive().max(2),
+  strength: z.number().positive().max(0.3),
+});
+export type CinematicShake = z.infer<typeof CinematicShakeSchema>;
+
 export const CinematicShotSchema = z.strictObject({
   id: ContentIdSchema,
   /** For the dev hook and the PR's shot list; never shown. */
@@ -146,6 +169,13 @@ export const CinematicShotSchema = z.strictObject({
   dissolves: z.array(TimeSchema).default([]),
   /** The title card comes up at this time and stays to the end. */
   titleAt: TimeSchema.optional(),
+  /**
+   * Land the Keeper claims ("Your part"): from `at`, this world tile keeps its
+   * colour however drained the shot is, popping up one by one. Only in this shot.
+   */
+  claims: z.array(CinematicClaimSchema).default([]),
+  /** Short camera shakes (the Heartpatch breaking). None for reduced motion. */
+  shakes: z.array(CinematicShakeSchema).default([]),
 });
 export type CinematicShot = z.infer<typeof CinematicShotSchema>;
 
@@ -197,8 +227,11 @@ export const CAPTION_READING = {
   maxWords: 12, // TUNE
 } as const;
 
-/** The whole cinematic stays under about two minutes (design doc §25). */
-export const CINEMATIC_MAX_SECONDS = 120;
+/**
+ * The whole cinematic stays under two and a half minutes (design doc §25;
+ * raised from 120 s for "Your part", coordinator decision 2026-10-04).
+ */
+export const CINEMATIC_MAX_SECONDS = 150;
 
 export const wordsIn = (text: string): number => text.split(/\s+/).filter(Boolean).length;
 
@@ -223,13 +256,26 @@ function checkOrdered(
 function checkShot(
   shot: CinematicShot,
   s: number,
-  refs: { species: ReadonlySet<string>; keeperBases: ReadonlySet<string> },
+  refs: {
+    species: ReadonlySet<string>;
+    keeperBases: ReadonlySet<string>;
+    tiles: ReadonlySet<string>;
+  },
   report: Report,
 ): void {
   const at: Path = ['shots', s];
   checkOrdered(shot.camera, shot.duration, [...at, 'camera'], report);
   checkOrdered(shot.mood, shot.duration, [...at, 'mood'], report);
   checkOrdered(shot.cues, shot.duration, [...at, 'cues'], report);
+  checkOrdered(shot.claims, shot.duration, [...at, 'claims'], report);
+  checkOrdered(shot.shakes, shot.duration, [...at, 'shakes'], report);
+  const claimed = new Set<string>();
+  shot.claims.forEach((claim, i) => {
+    const key = hexKey(claim.hex);
+    if (!refs.tiles.has(key)) report([...at, 'claims', i, 'hex'], 'not a tile of the world');
+    if (claimed.has(key)) report([...at, 'claims', i, 'hex'], 'claimed twice');
+    claimed.add(key);
+  });
   if (shot.titleAt !== undefined && shot.titleAt > shot.duration) {
     report([...at, 'titleAt'], 'after the shot ends');
   }
@@ -268,6 +314,9 @@ function checkShot(
     } else if (actor.species !== undefined || actor.shadow !== undefined) {
       report([...path, 'species'], 'only squishies have a species');
     }
+    if (actor.kind !== 'hollow-man' && actor.path.some((k) => k.reach !== undefined)) {
+      report([...path, 'path'], 'only the Hollow Man reaches');
+    }
     if (actor.kind === 'keeper') {
       if (actor.keeperBase === undefined) report([...path, 'keeperBase'], 'a Keeper needs a base');
       checkRef(refs.keeperBases, 'Keeper base', actor.keeperBase, [...path, 'keeperBase'], report);
@@ -280,21 +329,24 @@ function checkShot(
 /**
  * Checks a cinematic against the game data: every squishy is a public
  * species, every Keeper of old a real base, keys in time order inside their
- * shot, captions short, kind and up long enough to read, and the whole
- * thing under two minutes. Returns readable issues (empty when fine).
+ * shot, claimed land on the world's tiles, captions short, kind and up long
+ * enough to read, and the whole thing under `CINEMATIC_MAX_SECONDS`. Returns readable issues (empty when fine).
  */
 export function checkCinematic(
   input: unknown,
   gameData: Pick<GameData, 'species'>,
   keeperData: Pick<KeeperData, 'bases'>,
 ): string[] {
-  const refs = {
-    species: new Set(gameData.species.map((s) => s.id)),
-    keeperBases: new Set(keeperData.bases.map((b) => b.id)),
-  };
   const schema = CinematicSchema.superRefine((data, ctx) => {
     const report: Report = (path, message) => {
       ctx.addIssue({ code: 'custom', path, message });
+    };
+    const refs = {
+      species: new Set(gameData.species.map((s) => s.id)),
+      keeperBases: new Set(keeperData.bases.map((b) => b.id)),
+      tiles: new Set(
+        data.world.regions.flatMap((r) => hexSpiral(r.center, r.radius).map((h) => hexKey(h))),
+      ),
     };
     checkUniqueIds('shots', data.shots, report);
     data.shots.forEach((shot, s) => {

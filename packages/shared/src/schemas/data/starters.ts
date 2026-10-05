@@ -10,7 +10,15 @@ import { formatDataIssues } from './issues.js';
 
 /** Exactly three public, base-form species with three different elements (`starters.test.ts`). */
 export const StarterDataSchema = z
-  .strictObject({ speciesIds: z.array(ContentIdSchema).length(3) })
+  .strictObject({
+    speciesIds: z.array(ContentIdSchema).length(3),
+    /**
+     * Sprout's gift with the account's very first starter pick (owner
+     * decision 2026-10-04): items into that patch's bag, once per account,
+     * so a new player can befriend a squishy on day one.
+     */
+    firstPickGift: z.record(ContentIdSchema, z.number().int().positive()),
+  })
   .refine((data) => new Set(data.speciesIds).size === data.speciesIds.length, {
     message: 'Starter species must be different.',
     path: ['speciesIds'],

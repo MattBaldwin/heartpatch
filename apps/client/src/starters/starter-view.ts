@@ -1,4 +1,4 @@
-import { GAME_DATA, STARTERS, type Species } from '@heartpatch/shared';
+import { GAME_DATA, STARTERS, type ItemCounts, type Species } from '@heartpatch/shared';
 
 // What the "Choose your friend!" screen shows (owner decision 2026-10-03):
 // the three starters from shared data, as kid-readable cards. Pure, so the
@@ -11,6 +11,9 @@ export const STARTER_TEXT = {
   choose: 'Choose',
   choosing: 'One moment…',
   loadFailed: 'We couldn’t reach your patch. Check your connection and try again!',
+  /** After the account's first pick, with Sprout's gift (owner decision 2026-10-04). */
+  giftHint: 'Offer one to a wild squishy to make a new friend!',
+  giftDone: 'Let’s go!',
 } as const;
 
 /** One starter's card. */
@@ -79,4 +82,30 @@ export function preselectedCard(
   speciesId: string | null,
 ): StarterCard | null {
   return cards.find((c) => c.speciesId === speciesId) ?? null;
+}
+
+/** The gift card's heading: "Puddlepuff is your friend!" */
+export function giftTitle(picked: Pick<StarterCard, 'name'>): string {
+  return `${picked.name} is your friend!`;
+}
+
+const itemNames = new Map(GAME_DATA.resources.map((r) => [r.id, r.name]));
+
+/**
+ * What Sprout tucked into the bag with the account's first pick, in one
+ * kid-readable line ("Sprout tucked 3 Heart Charms in your Bag!"), or null
+ * when there's no gift (any later pick).
+ */
+export function giftLine(gift: ItemCounts): string | null {
+  const parts = Object.entries(gift)
+    .filter(([, n]) => n > 0)
+    .map(([id, n]) => {
+      const name = itemNames.get(id) ?? id;
+      // "Treats" is already plural.
+      return `${String(n)} ${n === 1 || name.endsWith('s') ? name : `${name}s`}`;
+    });
+  if (parts.length === 0) return null;
+  const list =
+    parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1) ?? ''}`;
+  return `Sprout tucked ${list ?? ''} in your Bag!`;
 }
