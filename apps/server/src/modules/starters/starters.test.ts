@@ -397,7 +397,7 @@ describe.skipIf(!url)('starter pick (needs DATABASE_URL)', () => {
       // The bag reads them back (#17's inventory).
       const bag = await call(server, 'GET', `/maps/${mapId}/inventory`, kid);
       expect(bag.statusCode, bag.body).toBe(200);
-      expect((bag.json() as { items: Record<string, number> }).items['heart-charm']).toBe(3);
+      expect(bag.json<{ items: Record<string, number> }>().items['heart-charm']).toBe(3);
     });
 
     it('gives nothing on a second patch, or to an account that picked before', async () => {

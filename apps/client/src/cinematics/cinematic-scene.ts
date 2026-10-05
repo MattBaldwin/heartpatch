@@ -26,13 +26,16 @@ import type { KeeperItem } from '../procedural/keeper/keeper-items.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
 import { ACTOR_SIZE, DRAIN, NIGHT_LIGHT, SEED_GLOW, SKY } from './cinematic-config.js';
 import { CinematicWorld } from './cinematic-world.js';
+import { ClaimLayer } from './claim-layer.js';
 import { SeedShards } from './seed-shards.js';
+import { StoryEffects } from './story-effects.js';
 import {
   actorAt,
   createTimeline,
   cameraAt,
   moodAt,
   movesBetween,
+  shakeAt,
   shotAt,
   type ActorPose,
   type CameraPose,
@@ -79,6 +82,16 @@ export interface CinematicSceneStats {
   readonly litFires: number;
   readonly drain: number;
   readonly tiles: number;
+  /** "Your part": claimed tiles in colour, Heart Charms, hearts and joy lights on screen. */
+  readonly claimed: number;
+  readonly charms: number;
+  readonly hearts: number;
+  readonly joy: number;
+  /** How far the Hollow Man reaches (0–1), and his eyes' flare (0 for reduced motion). */
+  readonly reach: number;
+  readonly flare: number;
+  /** The camera's shake right now, world units (0 for reduced motion). */
+  readonly shake: number;
 }
 
 type Entry =
@@ -121,6 +134,8 @@ export class CinematicScene {
   readonly #buildings: BuildingField;
   readonly #hollow: HollowMan;
   readonly #shards: SeedShards;
+  readonly #effects: StoryEffects;
+  readonly #claims: ClaimLayer;
   readonly #entries = new Map<string, Entry>();
   readonly #sun: DirectionalLight | null;
   readonly #base: { sun: number; environment: number };
@@ -137,6 +152,8 @@ export class CinematicScene {
   #counts = { squishies: 0, shadow: 0, keepers: 0, mine: false, hollow: false, seeds: 0 };
   #shardsOn = false;
   #litFires = 0;
+  #reach = { reach: 0, flare: 0 };
+  #shake = 0;
 
   constructor(scene: Scene, options: CinematicSceneOptions) {
     this.#scene = scene;
@@ -150,11 +167,20 @@ export class CinematicScene {
     });
     this.#keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: options.lod });
     this.#buildings = new BuildingField(scene);
-    this.#hollow = new HollowMan(scene);
-    // Heart Seeds and their shards keep their colour through the drain: the
-    // story's hope. Same tone mapping as the stage, no curves or vignette.
+    // Heart Seeds and their shards, claimed land, hearts, joy and the Hollow
+    // Man's eyes keep their colour through the drain: the story's hope (and
+    // his glare). Same tone mapping as the stage, no curves or vignette.
     const hope = new ImageProcessingConfiguration();
+    this.#hollow = new HollowMan(scene, { eyeImageProcessing: hope });
     this.#shards = new SeedShards(scene, hope);
+    const most = (kind: CinematicActor['kind']) =>
+      Math.max(0, ...cinematic.shots.map((s) => s.actors.filter((a) => a.kind === kind).length));
+    this.#effects = new StoryEffects(scene, hope, {
+      charms: most('heart-charm'),
+      puffs: most('hearts'),
+      joy: most('joy'),
+    });
+    this.#claims = new ClaimLayer(scene, cinematic, this.#world, hope);
 
     const species = new Map(GAME_DATA.species.map((s) => [s.id, s]));
     const firstBase = KEEPER_DATA.bases[0];
@@ -281,8 +307,20 @@ export class CinematicScene {
     }
     this.#t = t;
     this.#shot = index;
-    this.#camera = cameraAt(shot, local, reducedMotion);
+    const camera = cameraAt(shot, local, reducedMotion);
+    const [sx, sy, sz] = shakeAt(shot, local, reducedMotion);
+    this.#shake = Math.hypot(sx, sy, sz);
+    this.#camera =
+      this.#shake === 0
+        ? camera
+        : {
+            fov: camera.fov,
+            position: [camera.position[0] + sx, camera.position[1] + sy, camera.position[2] + sz],
+            target: [camera.target[0] + sx, camera.target[1] + sy, camera.target[2] + sz],
+          };
     this.#applyMood(moodAt(shot, local));
+    this.#claims.apply(index, local, reducedMotion);
+    this.#effects.begin();
 
     const counts = { squishies: 0, shadow: 0, keepers: 0, mine: false, hollow: false, seeds: 0 };
     const fires: BuildingPlacement[] = [];
@@ -341,16 +379,28 @@ export class CinematicScene {
               });
             } else if (actor.kind === 'shards') {
               shards = { pose, s: local - (actor.path[0]?.at ?? 0) };
+            } else if (actor.kind === 'heart-charm') {
+              this.#effects.charm({ ...pose, y });
+            } else if (actor.kind === 'hearts') {
+              const s = local - (actor.path[0]?.at ?? 0);
+              this.#effects.puff({ x: pose.x, y, z: pose.z, s, glow: pose.glow });
+            } else if (actor.kind === 'joy') {
+              this.#effects.joy({ ...pose, y });
             }
         }
       }
     }
 
+    this.#effects.end();
     if (hollow) {
       const { pose, y } = hollow;
-      this.#hollow.pose({ x: pose.x, y, z: pose.z }, pose.alpha, pose.scale);
+      // His eyes flare as he reaches, but never for reduced motion (no flashes).
+      const flare = reducedMotion ? 0 : pose.reach;
+      this.#hollow.pose({ x: pose.x, y, z: pose.z }, pose.alpha, pose.scale, pose.reach, flare);
+      this.#reach = { reach: pose.reach, flare };
     } else {
       this.#hollow.pose(ORIGIN, 0);
+      this.#reach = { reach: 0, flare: 0 };
     }
     counts.hollow = hollow !== null && hollow.pose.alpha > 0.001;
 
@@ -362,7 +412,10 @@ export class CinematicScene {
     }
     this.#shardsOn = shards !== null && shards.pose.glow > 0.001;
 
-    const firesKey = fires.map((f) => `${f.x},${f.z},${String(f.lit)}`).join('|');
+    // A Hearthfire can grow in ("Your part"), so its size is part of the key.
+    const firesKey = fires
+      .map((f) => `${f.x},${f.z},${(f.scale ?? 1).toFixed(3)},${String(f.lit)}`)
+      .join('|');
     if (firesKey !== this.#fires) {
       this.#fires = firesKey;
       this.#buildings.set(fires);
@@ -477,6 +530,10 @@ export class CinematicScene {
       litFires: this.#litFires,
       drain: this.#mood.drain,
       tiles: this.#world.stats.tiles,
+      claimed: this.#claims.shown,
+      ...this.#effects.counts,
+      ...this.#reach,
+      shake: this.#shake,
     };
   }
 
