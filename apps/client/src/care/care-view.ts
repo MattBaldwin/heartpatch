@@ -103,7 +103,13 @@ export interface SquishyFace {
 export function squishyFace(visual: Pick<SpeciesVisual, 'parts' | 'palette'>): SquishyFace {
   const has = (part: string) => visual.parts.includes(part);
   return {
-    eyes: has('happy-eyes') ? 'happy' : has('sleepy-eyes') ? 'sleepy' : has('oval-eyes') ? 'oval' : 'dot',
+    eyes: has('happy-eyes')
+      ? 'happy'
+      : has('sleepy-eyes')
+        ? 'sleepy'
+        : has('oval-eyes')
+          ? 'oval'
+          : 'dot',
     mouth: has('open-mouth') ? 'open' : has('cat-mouth') ? 'cat' : 'smile',
     blush: has('blush-cheeks'),
     belly: has('belly-patch') ? (visual.palette[1] ?? null) : null,

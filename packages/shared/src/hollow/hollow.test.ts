@@ -169,7 +169,11 @@ describe('nightfall', () => {
   it('takes nothing from a player in their first-night grace, and still counts the dark', () => {
     const outcomes = nightfall(
       [
-        { userId: A, squishies: [squishy('a1', 'dark-bed'), squishy('a2', 'dark-bed')], grace: true },
+        {
+          userId: A,
+          squishies: [squishy('a1', 'dark-bed'), squishy('a2', 'dark-bed')],
+          grace: true,
+        },
         { userId: B, squishies: [squishy('b1', 'dark-bed', B), squishy('b2', 'dark-bed', B)] },
       ],
       SAFE,

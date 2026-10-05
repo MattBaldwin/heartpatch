@@ -45,7 +45,8 @@ export function watchScrollEdges(row: HTMLElement): {
   const refresh = () => {
     const more = scrollMore(scrollEdges(row));
     if (more === null) row.removeAttribute('data-scroll-more');
-    else if (row.getAttribute('data-scroll-more') !== more) row.setAttribute('data-scroll-more', more);
+    else if (row.getAttribute('data-scroll-more') !== more)
+      row.setAttribute('data-scroll-more', more);
   };
   const controller = new AbortController();
   const { signal } = controller;

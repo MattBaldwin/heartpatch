@@ -57,7 +57,12 @@ export function createCatalogScreen(options: CatalogScreenOptions): CatalogScree
   // An × up top too (#150): a long list shouldn't need scrolling to leave.
   const closeTop = el(
     'button',
-    { type: 'button', class: 'catalog-close-top', 'aria-label': 'Close', 'data-testid': 'catalog-close-top' },
+    {
+      type: 'button',
+      class: 'catalog-close-top',
+      'aria-label': 'Close',
+      'data-testid': 'catalog-close-top',
+    },
     '×',
   );
   closeTop.addEventListener('click', () => {

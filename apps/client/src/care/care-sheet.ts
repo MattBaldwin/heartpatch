@@ -384,7 +384,13 @@ function squishyFaceNode(): { node: SVGSVGElement; set: (face: SquishyFace) => v
     svg.append(node);
     return node;
   };
-  const belly = part('ellipse', { cx: '44', cy: '58', rx: '18', ry: '12', class: 'care-face-belly' });
+  const belly = part('ellipse', {
+    cx: '44',
+    cy: '58',
+    rx: '18',
+    ry: '12',
+    class: 'care-face-belly',
+  });
   const cheeks = [
     part('circle', { cx: '22', cy: '44', r: '5', class: 'care-face-blush' }),
     part('circle', { cx: '66', cy: '44', r: '5', class: 'care-face-blush' }),

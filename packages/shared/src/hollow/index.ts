@@ -164,8 +164,7 @@ export function nightfall(
     const active = shelters.filter((s) => s.shelter !== 'hollowed').length;
     return {
       userId,
-      taken:
-        canTake && !grace && mayTakeFrom(active) ? pickTaken(exposed, seedFor(userId)) : null,
+      taken: canTake && !grace && mayTakeFrom(active) ? pickTaken(exposed, seedFor(userId)) : null,
       exposed: exposed.length,
       sheltered,
     };

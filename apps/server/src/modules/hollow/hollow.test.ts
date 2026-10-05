@@ -430,7 +430,9 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(
         await hollowService(WEAK_SHADOWS, HOLLOW_RULES).runNightfall(mapId, '2026-10-04'),
       ).toEqual({ taken: 1 });
-      expect((await Promise.all(mine.map(stateOf))).filter((s) => s === 'hollowed')).toHaveLength(1);
+      expect((await Promise.all(mine.map(stateOf))).filter((s) => s === 'hollowed')).toHaveLength(
+        1,
+      );
       expect(await stateOf(theirs)).toBe('active');
     });
 

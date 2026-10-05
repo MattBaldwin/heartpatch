@@ -25,7 +25,9 @@ describe('scrollEdges (#152)', () => {
       right: false,
     });
     // Scrolled to within a pixel of the end counts as the end.
-    expect(scrollEdges({ scrollLeft: 509.4, scrollWidth: 900, clientWidth: 390 }).right).toBe(false);
+    expect(scrollEdges({ scrollLeft: 509.4, scrollWidth: 900, clientWidth: 390 }).right).toBe(
+      false,
+    );
   });
 
   it('spells the sides for the stylesheet', () => {
