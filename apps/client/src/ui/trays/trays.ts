@@ -66,7 +66,9 @@ export const TRAY_TEXT = {
   news: (n: string) => `, ${n} new`,
   closeTray: 'Close',
   sprout: 'Sprout',
-  hint: 'Ooh, look at the edges! Adventures are on the left. Your Heartpatch is on the right.',
+  /** Sprout's first-time hint, one half pointing at each handle. */
+  hintLeft: 'Adventures are on the left.',
+  hintRight: 'Your Heartpatch is on the right!',
   gotIt: 'Got it!',
 } as const;
 
@@ -237,12 +239,14 @@ export function createTrays(options: TraysOptions): Trays {
   // teach one thing at a time; trays must be obvious).
   const hintOk = el(
     'button',
-    { type: 'button', class: 'auth-button', 'data-testid': 'tray-hint-ok' },
+    { type: 'button', class: 'tray-hint-ok', 'data-testid': 'tray-hint-ok' },
     TRAY_TEXT.gotIt,
   );
   hintOk.addEventListener('click', () => {
     dispatch({ type: 'dismiss-hint' });
   });
+  // Small and clear of both handles (owner, 2026-10-05: Sprout never covers
+  // what it's pointing at); each half of the line points at its own handle.
   const hint = el(
     'div',
     {
@@ -251,14 +255,25 @@ export function createTrays(options: TraysOptions): Trays {
       'aria-label': TRAY_TEXT.sprout,
       'data-testid': 'tray-hint',
     },
+    // Room for Sprout's portrait later; a glowing orb for now.
     el('span', { class: 'tray-hint-sprout', 'aria-hidden': 'true' }),
     el(
-      'div',
-      { class: 'tray-hint-bubble' },
-      el('p', { class: 'tray-hint-who' }, TRAY_TEXT.sprout),
-      el('p', { class: 'tray-hint-line' }, TRAY_TEXT.hint),
-      hintOk,
+      'p',
+      { class: 'tray-hint-line' },
+      el(
+        'span',
+        { class: 'tray-hint-left' },
+        el('span', { class: 'tray-hint-arrow', 'aria-hidden': 'true' }, '‹'),
+        ` ${TRAY_TEXT.hintLeft}`,
+      ),
+      el(
+        'span',
+        { class: 'tray-hint-right' },
+        `${TRAY_TEXT.hintRight} `,
+        el('span', { class: 'tray-hint-arrow', 'aria-hidden': 'true' }, '›'),
+      ),
     ),
+    hintOk,
   );
   hint.hidden = true;
 

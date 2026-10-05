@@ -80,3 +80,39 @@ export async function expectRoomyLabels(
   expect(problems.checked, `nothing on screen matched ${selector}`).toBeGreaterThan(0);
   expect(problems.out).toEqual([]);
 }
+
+/**
+ * Sprout never covers what it's pointing at (owner, 2026-10-05): the
+ * visible element matching `bubble` shares no area with any visible
+ * element matching `targets`.
+ */
+export async function expectClear(page: Page, bubble: string, targets: string): Promise<void> {
+  const result = await page.evaluate(
+    ({ bubble, targets }) => {
+      const shown = (el: Element) => {
+        const box = el.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+      };
+      const b = [...document.querySelectorAll(bubble)].find(shown);
+      if (!b) return { found: false, hits: [] as string[], targets: 0 };
+      const a = b.getBoundingClientRect();
+      const hits: string[] = [];
+      const list = [...document.querySelectorAll(targets)].filter(shown);
+      for (const t of list) {
+        const r = t.getBoundingClientRect();
+        const overlap =
+          a.left < r.right && r.left < a.right && a.top < r.bottom && r.top < a.bottom;
+        if (overlap) {
+          hits.push(
+            `${(t as HTMLElement).dataset['testid'] ?? t.className} ${JSON.stringify([r.left, r.top, r.right, r.bottom].map(Math.round))} under ${JSON.stringify([a.left, a.top, a.right, a.bottom].map(Math.round))}`,
+          );
+        }
+      }
+      return { found: true, hits, targets: list.length };
+    },
+    { bubble, targets },
+  );
+  expect(result.found, `nothing on screen matched ${bubble}`).toBe(true);
+  expect(result.targets, `nothing on screen matched ${targets}`).toBeGreaterThan(0);
+  expect(result.hits).toEqual([]);
+}

@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
+import { expectClear } from './layout.js';
 import { newPlayer, TEST_PASSWORD, uniqueName } from './players.js';
 
 // The tutorial layer (#47) and The First Patch (#24). Asserts on signals from
@@ -387,8 +388,30 @@ test('first battle: Sprout points at the Adventure handle, then at Find a squish
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
   await expect.poll(() => drawnMap(page), { timeout: 60_000 }).toBe(run);
   await jumpTo(page, 'first-battle');
+  // Sprout never covers the handle it's talking about: talking, then tucked,
+  // on a small phone and an iPad both ways round (owner, 2026-10-05).
+  const sproutClear = async () => {
+    for (const size of [
+      { width: 375, height: 667 },
+      { width: 820, height: 1180 },
+      { width: 1180, height: 820 },
+    ]) {
+      await page.setViewportSize(size);
+      await expect(async () => {
+        await expectClear(
+          page,
+          '[data-testid="tutorial-bubble"]',
+          '[data-testid="tutorial-spotlight"]:not([hidden])',
+        );
+      }).toPass({ timeout: 5_000 });
+    }
+    await page.setViewportSize({ width: 375, height: 667 });
+  };
+  await expect.poll(async () => (await overlay())?.spotlightOn).toBe('wild-squishy');
+  await sproutClear();
   while ((await main.isVisible()) && (await main.textContent()) === 'Next') await main.tap();
   if (await main.isVisible()) await main.tap(); // Let's go!
+  await sproutClear();
 
   // The tray is shut: the spotlight is on its handle, which takes the tap.
   const handle = page.getByTestId('tray-handle-adventure');

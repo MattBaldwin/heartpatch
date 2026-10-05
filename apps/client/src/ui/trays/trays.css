@@ -570,54 +570,98 @@
 
 .tray-hint {
   position: absolute;
-  top: calc(env(safe-area-inset-top) + 110px);
+  /* Upper middle: under the map's name and the Keeper menu, well above both
+     handles (they sit at 50–55% of the height), so it never covers them. */
+  top: calc(env(safe-area-inset-top) + 112px);
   left: 50%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  width: min(300px, calc(100vw - 32px));
+  align-items: stretch;
+  gap: var(--hp-pad-y);
+  box-sizing: border-box;
+  width: min(65vw, 300px);
+  padding: var(--hp-pad-y) var(--hp-pad-x) var(--hp-pad-x);
+  border-radius: 20px;
+  background: #fffafc;
+  box-shadow:
+    0 0 0 2.5px #ffe79a,
+    0 8px 22px rgb(74 49 80 / 24%);
   transform: translateX(-50%);
   /* A hint, not a wall: only "Got it!" takes taps; the map works around it. */
   pointer-events: none;
+}
+
+/* A short landscape screen: keep it between the handles instead. */
+@media (max-height: 520px) {
+  .tray-hint {
+    width: min(
+      300px,
+      calc(
+        100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 2 * var(--tray-handle) -
+          48px
+      )
+    );
+  }
 }
 
 .tray-hint button {
   pointer-events: auto;
 }
 
+/* Sprout peeks over the bubble's corner: the slot for a portrait later. */
 .tray-hint-sprout {
-  width: 56px;
-  height: 56px;
+  position: absolute;
+  top: -12px;
+  left: -10px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #fffbe0, #ffd76a 55%, #f2a93b);
-  box-shadow: 0 0 30px 10px rgb(255 215 106 / 60%);
-}
-
-.tray-hint-bubble {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 14px 16px 16px;
-  border-radius: 24px;
-  background: #fffafc;
-  box-shadow: 0 10px 30px rgb(74 49 80 / 30%);
-  text-align: center;
-}
-
-.tray-hint-who {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #b0467a;
+  box-shadow: 0 0 12px 3px rgb(255 215 106 / 60%);
 }
 
 .tray-hint-line {
-  margin: 6px 0 12px;
-  font-size: 17px;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 14px;
   font-weight: 800;
-  line-height: 1.35;
+  line-height: 1.3;
+  color: #4a3150;
+}
+
+.tray-hint-left {
+  text-align: left;
+}
+
+.tray-hint-right {
+  text-align: right;
+}
+
+.tray-hint-arrow {
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  color: #b8487a;
+}
+
+.tray-hint-ok {
+  align-self: center;
+  min-height: 44px;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 6px);
+  border: 0;
+  border-radius: 999px;
+  background: #b8487a;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fffafc;
+  touch-action: manipulation;
+}
+
+.tray-hint-ok:focus-visible {
+  outline: 3px solid #ffc94d;
+  outline-offset: 2px;
 }
 
 /* Reduced motion: trays fade in place instead of sliding; nothing pulses. */

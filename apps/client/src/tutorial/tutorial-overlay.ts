@@ -218,6 +218,9 @@ export function mountTutorialOverlay(
       talkOnly: step ? step.talkOnly : true,
       viewport,
       insets: readInsets(probe),
+      // Measured as drawn now, so the layout knows how tall Sprout's words are.
+      bubbleSize: { width: bubble.offsetWidth, height: bubble.scrollHeight },
+      tucked: overlay.classList.contains('tutorial-tucked'),
     });
     spotlightOn = found?.element ? target : null;
     const key = JSON.stringify([layout, spotlightOn]);
@@ -225,6 +228,15 @@ export function mountTutorialOverlay(
     drawn = key;
     overlay.dataset['gate'] = layout.gate;
     overlay.dataset['bubble'] = layout.bubble;
+    // With a spotlight the layout places the bubble clear of it; otherwise CSS does.
+    const at = layout.bubbleRect;
+    bubble.style.left = at ? `${String(at.x)}px` : '';
+    bubble.style.top = at ? `${String(at.y)}px` : '';
+    bubble.style.width = at ? `${String(at.width)}px` : '';
+    bubble.style.right = at ? 'auto' : '';
+    bubble.style.bottom = at ? 'auto' : '';
+    bubble.style.margin = at ? '0' : '';
+    bubble.style.maxHeight = at ? `${String(at.height)}px` : '';
 
     spotlight.hidden = layout.hole === null;
     if (layout.hole) place(spotlight, layout.hole);
@@ -263,6 +275,10 @@ export function mountTutorialOverlay(
   }
   // The game's screens show and hide their buttons as you play; the
   // spotlight moves with them. Our own changes don't count.
+  // Sprout's words changed size: place the bubble again (same layout, no writes).
+  new ResizeObserver(() => {
+    follow();
+  }).observe(bubble);
   new MutationObserver((records) => {
     if (records.some((r) => !overlay.contains(r.target))) follow();
   }).observe(root, {

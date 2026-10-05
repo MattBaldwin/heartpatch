@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
-import { expectRoomyLabels, SCREENS } from './layout.js';
+import { expectClear, expectRoomyLabels, SCREENS } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { openTray, trayButton } from './trays.js';
 
@@ -71,8 +71,22 @@ test('text never touches a control’s edge, on phones and iPads', async ({ brow
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  const hint = page.getByTestId('tray-hint-ok');
-  if (await hint.isVisible()) await hint.tap();
+
+  // Sprout's first-visit hint stays small and clear of both handles it points at.
+  await expect(page.getByTestId('tray-hint')).toBeVisible();
+  for (const screen of SCREENS) {
+    await test.step(`${screen.name}: Sprout's hint`, async () => {
+      await page.setViewportSize({ width: screen.width, height: screen.height });
+      await page.waitForTimeout(300);
+      await expectClear(page, '[data-testid="tray-hint"]', '[data-testid^="tray-handle-"]');
+      await expectRoomyLabels(page, '[data-testid="tray-hint-ok"]');
+      const hint = (await page.getByTestId('tray-hint').boundingBox())!;
+      // Compact on a phone (owner: about 65% of the width at most).
+      if (screen.width < 600) expect(hint.width).toBeLessThanOrEqual(screen.width * 0.66);
+    });
+  }
+  await page.getByTestId('tray-hint-ok').tap();
+  await expect(page.getByTestId('tray-hint')).toBeHidden();
 
   for (const screen of SCREENS) {
     await test.step(screen.name, async () => {
