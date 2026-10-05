@@ -74,7 +74,9 @@ async function openPatch(page: Page, name: string): Promise<void> {
 }
 
 test('plays a wild battle to the end and resumes it after a refresh', async ({ browser }) => {
-  test.setTimeout(240_000); // five scene builds and a whole log playback; CI renders in software
+  // Five scene builds and a whole log playback, every step drawn frame by
+  // frame with a shadow pass; CI renders in software.
+  test.setTimeout(480_000);
   const name = uniqueName('kid');
   const page = await newPlayer(browser, name);
   const errors: string[] = [];
