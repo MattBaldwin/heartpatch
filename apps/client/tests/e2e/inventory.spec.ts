@@ -81,9 +81,16 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
     )
     .toBe(469);
 
-  // The bag starts empty, on the server's season (the dev server runs on today's date).
+  // The bag starts with just Sprout's Heart Charms from the first starter pick
+  // (owner decision 2026-10-04), on the server's season (the dev server runs
+  // on today's date).
   const state = await bagState(page);
-  expect(state).toMatchObject({ items: {}, gathers: 0, crafts: 0, bagOpen: false });
+  expect(state).toMatchObject({
+    items: { 'heart-charm': 3 },
+    gathers: 0,
+    crafts: 0,
+    bagOpen: false,
+  });
 
   // Gather on one of our home nodes: the panel counts down on the server clock.
   await findOwnNode(page);
@@ -99,7 +106,9 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await page.getByTestId('bag-open').tap();
   const bag = page.getByTestId('bag');
   await expect(bag).toBeVisible();
-  await expect(bag.getByTestId('bag-items')).toContainText('Your bag is empty');
+  // Nothing gathered yet: only Sprout's Heart Charms.
+  await expect.poll(async () => (await bagState(page))?.items).toEqual({ 'heart-charm': 3 });
+  await expect(bag.locator('[data-item="heart-charm"]')).toContainText('3');
   await expect(bag.getByTestId('bag-gathers')).toContainText(/\d/);
   await bag.getByRole('button', { name: 'Get stuff (dev)' }).tap();
   await expect.poll(async () => (await bagState(page))?.items['timber']).toBe(10);

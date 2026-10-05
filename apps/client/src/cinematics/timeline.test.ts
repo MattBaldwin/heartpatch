@@ -1,4 +1,5 @@
 import {
+  CINEMATIC_MAX_SECONDS,
   CinematicSchema,
   OPENING_CINEMATIC,
   type Cinematic,
@@ -10,6 +11,8 @@ import {
   actorAt,
   cameraAt,
   captionAt,
+  CLAIM_POP,
+  claimScale,
   createTimeline,
   cuesBetween,
   moodAt,
@@ -17,6 +20,7 @@ import {
   musicAt,
   nextStop,
   segments,
+  shakeAt,
   shotAt,
   smoothPath,
   titleAt,
@@ -267,9 +271,9 @@ describe('timeline: captions, taps and moments', () => {
 describe('the opening cinematic', () => {
   const opening = createTimeline(OPENING_CINEMATIC);
 
-  it('runs under two minutes, and every tap gets closer to the end', () => {
+  it('runs under two and a half minutes, and every tap gets closer to the end', () => {
     expect(opening.total).toBeGreaterThanOrEqual(90);
-    expect(opening.total).toBeLessThanOrEqual(120);
+    expect(opening.total).toBeLessThanOrEqual(CINEMATIC_MAX_SECONDS);
     let t = 0;
     let taps = 0;
     while (t < opening.total) {
@@ -301,5 +305,73 @@ describe('the opening cinematic', () => {
   it('has the title card at the end', () => {
     expect(opening.titleAt).not.toBeNull();
     expect(opening.total - opening.titleAt!).toBeGreaterThan(3);
+  });
+});
+
+describe('"Your part" and the Scatter (owner decisions 2026-10-04)', () => {
+  const opening = createTimeline(OPENING_CINEMATIC);
+  const shot = (id: string) => OPENING_CINEMATIC.shots.find((s) => s.id === id)!;
+
+  it('pops claimed land up with a little bounce, or just shows it for reduced motion', () => {
+    expect(claimScale(5, 4.9, false)).toBe(0);
+    expect(claimScale(5, 4.9, true)).toBe(0);
+    expect(claimScale(5, 5, false)).toBeCloseTo(CLAIM_POP.from);
+    expect(claimScale(5, 5 + CLAIM_POP.seconds / 2, false)).toBeCloseTo(CLAIM_POP.overshoot);
+    expect(claimScale(5, 5 + CLAIM_POP.seconds, false)).toBe(1);
+    // Reduced motion: no growing, no overshoot, the colour is just there.
+    for (const s of [0, 0.1, 0.2, 0.3]) expect(claimScale(5, 5 + s, true)).toBe(1);
+  });
+
+  it('shakes the camera briefly as the Heartpatch breaks, and never for reduced motion', () => {
+    const scatter = shot('great-scatter');
+    const [shake] = scatter.shakes;
+    expect(shake).toBeDefined();
+    const size = (local: number, reduced: boolean) =>
+      Math.hypot(...shakeAt(scatter, local, reduced));
+    expect(size(shake!.at - 0.1, false)).toBe(0);
+    expect(size(shake!.at + 0.05, false)).toBeGreaterThan(0);
+    expect(size(shake!.at + 0.05, false)).toBeLessThanOrEqual(shake!.strength * 1.5);
+    expect(size(shake!.at + shake!.seconds, false)).toBe(0);
+    for (let t = 0; t <= scatter.duration; t += 0.05) expect(size(t, true)).toBe(0);
+    // Nothing else in the story shakes.
+    const shaking = OPENING_CINEMATIC.shots.filter((s) => s.shakes.length > 0).map((s) => s.id);
+    expect(shaking).toEqual(['great-scatter']);
+  });
+
+  it('raises his arms to reach as the Heartpatch breaks, with or without reduced motion', () => {
+    const scatter = shot('great-scatter');
+    const hollow = scatter.actors.find((a) => a.kind === 'hollow-man')!;
+    const breaks = scatter.cues.find((c) => c.cue === 'shatter')!.at;
+    for (const reduced of [false, true]) {
+      expect(actorAt(hollow, 0.5, reduced, scatter.duration)?.reach).toBeLessThan(0.5);
+      expect(actorAt(hollow, breaks, reduced, scatter.duration)?.reach).toBeCloseTo(1);
+    }
+    // Squishies, Keepers and the rest never reach.
+    for (const s of OPENING_CINEMATIC.shots) {
+      for (const a of s.actors.filter((x) => x.kind !== 'hollow-man')) {
+        expect(actorAt(a, a.path[0]!.at, false, s.duration)?.reach ?? 0).toBe(0);
+      }
+    }
+  });
+
+  it('flickers him only with flash keys, which reduced motion drops', () => {
+    for (const id of ['hollow-man', 'great-scatter']) {
+      const s = shot(id);
+      const hollow = s.actors.find((a) => a.kind === 'hollow-man')!;
+      // Under reduced motion his fade never dips and comes back (no flicker).
+      let dipped = false;
+      let last = -1;
+      for (let t = 0; t <= s.duration; t += 0.05) {
+        const alpha = actorAt(hollow, t, true, s.duration)?.alpha ?? 0;
+        if (alpha < last - 1e-6) dipped = true;
+        if (dipped) expect(alpha).toBeLessThanOrEqual(last + 1e-6);
+        last = alpha;
+      }
+    }
+  });
+
+  it('plays its cues in the story: the sting, the cold wind, a toss and a new friend', () => {
+    const cues = cuesBetween(opening, -1, opening.total).map((c) => c.cue);
+    for (const cue of ['hollow-sting', 'cold-wind', 'charm', 'yay']) expect(cues).toContain(cue);
   });
 });

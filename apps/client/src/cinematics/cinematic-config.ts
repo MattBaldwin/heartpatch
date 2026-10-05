@@ -106,3 +106,37 @@ export const SNOW = {
 
 /** Heart Seed glow: emissive at glow 0 and at glow 1 (multiplies its pink). */
 export const SEED_GLOW = { min: 0.25, max: 1.3 } as const; // TUNE
+
+/**
+ * "Your part" and the Scatter's little effects (owner decision 2026-10-04):
+ * the tossed Heart Charm, puffs of hearts, and joy (a squishy's glow as a
+ * warm light).
+ */
+export const STORY_EFFECTS = {
+  charm: {
+    /** World units across at actor scale 1. */
+    size: 0.24, // TUNE
+    color: '#ff7fae', // TUNE: Heart Charm pink
+    ring: '#ffd166', // TUNE: a little gold ring
+    /** Emissive at glow 0 and glow 1 (multiplies its pink). */
+    glow: [0.15, 0.9], // TUNE
+  },
+  puff: {
+    count: 7, // TUNE
+    /** How long one heart takes to rise and fade. */
+    seconds: 2.2, // TUNE
+    rise: 0.9, // TUNE
+    spread: 0.32, // TUNE
+    size: 0.12, // TUNE
+    color: '#ff8fb8', // TUNE
+  },
+  joy: {
+    color: '#ffd98a', // TUNE: warm gold, like firelight
+    /** Diameters at actor scale 1: a bright core inside a soft halo. */
+    core: 0.45, // TUNE
+    halo: 1.0, // TUNE
+  },
+} as const;
+
+/** Claimed land ("Your part"): sits a hair above its grey tile, a hair wider. */
+export const CLAIMED_TILE = { lift: 0.006, widen: 1.012 } as const; // TUNE

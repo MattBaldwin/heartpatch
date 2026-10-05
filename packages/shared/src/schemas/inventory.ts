@@ -13,7 +13,9 @@ import { ContentIdSchema } from './data/common.js';
  * `build` (a building's cost), `fuel` (Emberwood into a Hearthfire) and
  * `build-refund` (what comes back when a building is taken down). The Hollow
  * Man (#21): `rescue` (Heartdust for bringing a squishy home). The tutorial
- * (#24): `tutorial` (Sprout's little bag at the start of a run).
+ * (#24): `tutorial` (Sprout's little bag at the start of a run). The starter
+ * pick: `starter` (Sprout's Heart Charms with the account's first pick).
+ * Squishy jobs: `work` (what squishy gatherers bring in).
  */
 export const ItemChangeReasonSchema = z.enum([
   'gather',
@@ -26,6 +28,7 @@ export const ItemChangeReasonSchema = z.enum([
   'care',
   'rescue',
   'tutorial',
+  'starter',
   /** Squishy gatherers' work (owner decisions 2026-10-04). */
   'work',
 ]);
