@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_QUALITY_TIER } from '../config.js';
 import {
+  crawlRenderScale,
   higherTier,
   isQualityTier,
   lowerTier,
@@ -60,6 +61,24 @@ describe('renderScaleFloor', () => {
   it('keeps every effective pixel ratio at 1.4x or more on 2x screens', () => {
     for (const tier of ['high', 'medium', 'low'] as const) {
       expect(renderScaleFloor(tier, 2) * 2).toBeGreaterThanOrEqual(1.4);
+    }
+  });
+});
+
+describe('crawlRenderScale', () => {
+  it('is one render pixel per CSS pixel, under the DPR cap, never above 1', () => {
+    expect(crawlRenderScale(2)).toBe(0.5);
+    expect(crawlRenderScale(3)).toBe(0.5); // the DPR cap is 2
+    expect(crawlRenderScale(1.5)).toBeCloseTo(2 / 3);
+    expect(crawlRenderScale(1)).toBe(1);
+    expect(crawlRenderScale(Number.NaN)).toBe(1);
+  });
+
+  it('is never above a tier floor', () => {
+    for (const tier of ['high', 'medium', 'low'] as const) {
+      for (const dpr of [1, 1.25, 1.5, 2, 3]) {
+        expect(crawlRenderScale(dpr)).toBeLessThanOrEqual(renderScaleFloor(tier, dpr));
+      }
     }
   });
 });

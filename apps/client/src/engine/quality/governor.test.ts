@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SCALER, type QualityTier, type ScalerConfig } from '../config.js';
-import { initialGovernor, stepGovernor, type GovernorState } from './governor.js';
+import { initialGovernor, resumeGovernor, stepGovernor, type GovernorState } from './governor.js';
 
 const config: ScalerConfig = {
   ...SCALER,
@@ -208,8 +208,107 @@ describe('stepGovernor details', () => {
 
   it('ignores long gaps such as a hidden tab', () => {
     const s0 = ready();
-    expect(stepGovernor(s0, 5000, ctx)).toBe(s0);
+    const quality = ({ tier, renderScale }: GovernorState) => ({ tier, renderScale });
+    expect(quality(stepGovernor(s0, 5000, ctx))).toEqual(quality(s0));
     expect(stepGovernor(s0, 0, ctx)).toBe(s0);
     expect(stepGovernor(s0, Number.NaN, ctx)).toBe(s0);
+    // A pause now and then between normal frames is still a pause.
+    let s = s0;
+    for (let i = 0; i < 5; i++) {
+      s = stepGovernor(s, 5000, ctx);
+      s = windows(s, 12.5, 1);
+    }
+    expect(quality(s)).toEqual(quality(s0));
+    // A long frame that is not pause-long (a shader compile) is ignored too.
+    s = s0;
+    for (let i = 0; i < 10; i++) s = stepGovernor(s, config.maxFrameMs + 1, ctx);
+    expect(quality(s)).toEqual(quality(s0));
+  });
+
+  it('treats one huge gap followed by normal frames as a pause: no step-down', () => {
+    // A tab hidden for a minute, an app switch, a device asleep: the frame
+    // that spans it is long, and the frames after it are fine.
+    let s = ready();
+    s = stepGovernor(s, 60_000, ctx);
+    s = windows(s, 12.5, 4);
+    expect(s.tier).toBe('high');
+    expect(s.renderScale).toBe(1);
+    expect(s.crawlFrames).toBe(0);
+  });
+
+  it('a shorter frame between crawling frames ends the run: they must be consecutive', () => {
+    let s = start();
+    s = stepGovernor(s, 2000, ctx);
+    s = stepGovernor(s, 500, ctx); // long, but not a crawling frame
+    s = stepGovernor(s, 2000, ctx);
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('high');
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('low');
+  });
+
+  it('crawl forgets a probe and a cap, so nothing puts the pixels back later', () => {
+    // Mid-probe (a cut being judged) and holding at a cap: a crawl is a
+    // different world; the raises decide what comes back.
+    const probing: GovernorState = {
+      ...ready(),
+      renderScale: 0.9,
+      probe: { baselineFps: 40, scaleBefore: 0.95 },
+      cap: { fps: 30, heldMs: 0, holdMs: 20_000 },
+    };
+    let s = probing;
+    for (let i = 0; i < config.crawlFrames; i++) s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('low');
+    expect(s.renderScale).toBe(0.5);
+    expect(s.probe).toBeNull();
+    expect(s.cap).toBeNull();
+    expect(s.settleWindows).toBe(1);
+    // The first window after the change is judged on nothing it inherited.
+    s = windows(s, 12.5, 2);
+    expect(s.renderScale).toBe(0.5);
+  });
+
+  it('a resume (visibilitychange, pageshow) ends a run of crawling frames', () => {
+    // Two long frames, a pause, two more: around a pause they never add up.
+    let s = start();
+    s = stepGovernor(s, 2000, ctx);
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.crawlFrames).toBe(2);
+    s = resumeGovernor(s);
+    expect(s.crawlFrames).toBe(0);
+    expect(resumeGovernor(s)).toBe(s);
+    s = stepGovernor(s, 2000, ctx);
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('high');
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('low');
+  });
+
+  it('goes to the cheapest tier at one pixel per CSS pixel when every frame crawls', () => {
+    // A software renderer, or a very weak GPU: nothing above would ever fire,
+    // each frame is too long to count, so no window closes. Three in a row is
+    // the renderer, not a pause.
+    let s = start();
+    for (let i = 0; i < config.crawlFrames - 1; i++) s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('high');
+    expect(s.renderScale).toBe(1);
+    s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('low');
+    expect(s.renderScale).toBe(0.5); // one render pixel per CSS pixel on a 2x screen
+    // At the bottom it stays there, quietly.
+    for (let i = 0; i < config.crawlFrames; i++) s = stepGovernor(s, 2000, ctx);
+    expect(s.tier).toBe('low');
+    expect(s.renderScale).toBe(0.5);
+    // A 1x screen is never scaled, as ever.
+    const one = stepGovernor({ ...start(), crawlFrames: config.crawlFrames - 1 }, 2000, {
+      ...ctx,
+      devicePixelRatio: 1,
+    });
+    expect(one.tier).toBe('low');
+    expect(one.renderScale).toBe(1);
+    // Back at speed, the usual raises apply: full resolution first, then the tier.
+    const { state } = simulate(s, { gpuMs: 2 }, 120_000);
+    expect(state.renderScale).toBe(1);
+    expect(state.tier).toBe('high');
   });
 });

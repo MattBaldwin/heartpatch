@@ -26,6 +26,7 @@ import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
 import { mountLobby } from './ui/lobby/lobby-overlay.js';
 import { boutiqueApi } from './ui/boutique/boutique-api.js';
 import { createCoinCounter } from './ui/coins/coin-counter.js';
+import { installStickyTaps } from './ui/sticky-taps.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
 import { createTrays, trayRow } from './ui/trays/trays.js';
 import { findSpot } from './recipes/book-model.js';
@@ -51,6 +52,8 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
     e.preventDefault();
   });
 }
+// A tap sticks to the button it landed on, even one still sliding in (ui/sticky-taps.ts).
+installStickyTaps(document);
 
 const params = new URLSearchParams(window.location.search);
 // `?quality=` and `?renderer=webgpu` (opt-in, tech spec §6) stand in for the settings screen.

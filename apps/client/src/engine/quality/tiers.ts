@@ -32,6 +32,15 @@ export function higherTier(tier: QualityTier, ceiling: QualityTier): QualityTier
 }
 
 /**
+ * The render scale for a crawling renderer (governor `crawl`): one render
+ * pixel per CSS pixel, the sharpness bound the tier floors also respect, with
+ * the tiers' own extra margin given up. Never above 1.
+ */
+export function crawlRenderScale(devicePixelRatio: number): number {
+  return Math.min(1, MIN_EFFECTIVE_PIXEL_RATIO / cappedPixelRatio(devicePixelRatio));
+}
+
+/**
  * Lowest render scale (fraction of the DPR-capped resolution) for a tier on a
  * screen. Never below one render pixel per CSS pixel, so a 1x desktop screen
  * is never scaled at all.
