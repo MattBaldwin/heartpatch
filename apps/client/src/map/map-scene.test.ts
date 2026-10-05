@@ -5,9 +5,9 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { hexToWorld, type MapView } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { HEX_SIZE } from './map-config.js';
+import { HEX_SIZE, type PropKind } from './map-config.js';
 import { findHomeBases } from './map-layout.js';
-import { MapScene } from './map-scene.js';
+import { buildProp, MapScene, type MapSceneOptions } from './map-scene.js';
 import { testView, userId } from './test-view.js';
 
 describe('MapScene', () => {
@@ -22,9 +22,9 @@ describe('MapScene', () => {
     for (const scene of [...engine.scenes]) scene.dispose();
   });
 
-  function build(view: MapView = testView(1)) {
+  function build(view: MapView = testView(1), options: MapSceneOptions = {}) {
     const scene = new Scene(engine);
-    const map = new MapScene(scene, view);
+    const map = new MapScene(scene, view, options);
     const mesh = (name: string) => scene.getMeshByName(name) as Mesh | null;
     const instances = (name: string) => {
       const m = mesh(name);
@@ -45,8 +45,151 @@ describe('MapScene', () => {
   });
 
   it('keeps the whole map to a few dozen meshes (draw calls)', () => {
-    const { scene } = build(testView(4));
-    expect(scene.meshes.filter((m) => m.isEnabled()).length).toBeLessThan(30);
+    // About 30 before the terrain visual pass; its props, motes and backdrop
+    // add one each per kind, however many tiles.
+    for (const halloween of [false, true]) {
+      const { scene } = build(testView(4), { halloween });
+      expect(scene.meshes.filter((m) => m.isEnabled()).length).toBeLessThan(55);
+    }
+  });
+
+  it('keeps the triangles drawn near what the map drew before its dressing', () => {
+    // About 570k on this 4-player map before the terrain visual pass; small
+    // parts use few segments so twice the props cost about a fifth more.
+    for (const halloween of [false, true]) {
+      const { scene } = build(testView(4), { halloween });
+      let triangles = 0;
+      for (const m of scene.meshes as Mesh[]) {
+        if (!m.isEnabled()) continue;
+        triangles += (m.getTotalIndices() / 3) * (m.hasThinInstances ? m.thinInstanceCount : 1);
+      }
+      expect(triangles).toBeLessThan(720_000);
+    }
+  });
+
+  it('starts still under reduced motion and off on the low tier, before any frame', () => {
+    expect(build(testView(1), { reducedMotion: true }).map.stats).toMatchObject({
+      ambient: 'still',
+      motes: { sparkles: expect.any(Number) as number },
+    });
+    expect(build(testView(1), { reducedMotion: true }).map.stats.motes.pollen).toBeUndefined();
+    expect(build(testView(1), { tier: 'low' }).map.stats).toMatchObject({
+      ambient: 'off',
+      motes: {},
+    });
+  });
+
+  it('dresses the map with many kinds of prop, one mesh per kind', () => {
+    const { scene, map } = build();
+    expect(map.stats.props).toBeGreaterThan(1000);
+    expect(map.stats.propKinds).toBeGreaterThanOrEqual(18);
+    for (const kind of ['flowers', 'grass', 'lily-pad', 'reeds', 'pine', 'snow-peak', 'crystal']) {
+      const mesh = scene.getMeshByName(kind) as Mesh | null;
+      expect(mesh?.thinInstanceCount ?? 0, kind).toBeGreaterThan(0);
+    }
+  });
+
+  it('builds every prop kind (the battle arenas use these too)', () => {
+    const scene = new Scene(engine);
+    const kinds: PropKind[] = [
+      'tree',
+      'old-tree',
+      'rock',
+      'peak',
+      'pumpkin',
+      'pine',
+      'tall-tree',
+      'stump',
+      'log',
+      'bush',
+      'grass',
+      'flowers',
+      'mushroom',
+      'lily-pad',
+      'reeds',
+      'stones',
+      'dock',
+      'snow-peak',
+      'crystal',
+      'hay-bale',
+      'jack-o-lantern',
+    ];
+    for (const kind of kinds) {
+      const { mesh, shadow } = buildProp(scene, kind);
+      expect(mesh.getTotalVertices(), kind).toBeGreaterThan(0);
+      expect(shadow, kind).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('draws wild land muted, and brings the colour back as land is claimed', () => {
+    const { map } = build(testView(1));
+    const muted = map.stats.mutedTiles;
+    const mutedProps = () => map.stats.mutedProps;
+    const before = mutedProps();
+    // Everything but the home ring and the Gap is wild.
+    expect(muted).toBe(469 - 7 - 7);
+    expect(before).toBeGreaterThan(0);
+    // Someone claims a forest tile: it and its trees come back in colour.
+    const view = testView(1);
+    const forest = view.tiles.find((t) => t.terrain === 'forest' && t.homeSlot === null)!;
+    const claimed = {
+      ...view,
+      tiles: view.tiles.map((t) => (t === forest ? { ...t, ownerUserId: userId(1) } : t)),
+    };
+    map.update(claimed);
+    expect(map.stats.mutedTiles).toBe(muted - 1);
+    expect(mutedProps()).toBeLessThan(before);
+    // Lost again: muted again.
+    map.update(testView(1));
+    expect(map.stats.mutedTiles).toBe(muted);
+    expect(mutedProps()).toBe(before);
+  });
+
+  it("dresses for Halloween only while it's on", () => {
+    const off = build(testView(1), { halloween: false });
+    expect(off.map.stats.halloween).toBe(false);
+    expect(off.mesh('jack-o-lantern')).toBeNull();
+    expect(off.map.stats.motes.bats ?? 0).toBe(0);
+    expect(off.map.stats.motes.fog ?? 0).toBe(0);
+
+    const on = build(testView(1), { halloween: true });
+    expect(on.map.stats.halloween).toBe(true);
+    expect(on.instances('jack-o-lantern')).toBeGreaterThan(0);
+    expect(on.map.stats.motes.bats ?? 0).toBeGreaterThan(0);
+    expect(on.map.stats.motes.fog ?? 0).toBeGreaterThan(0);
+  });
+
+  it('swaps daytime motes for fireflies at night', () => {
+    const { map } = build();
+    expect(map.stats.motes.pollen ?? 0).toBeGreaterThan(0);
+    expect(map.stats.motes.fireflies ?? 0).toBe(0);
+    map.setNight(true);
+    expect(map.stats).toMatchObject({ night: true });
+    expect(map.stats.motes.pollen ?? 0).toBe(0);
+    expect(map.stats.motes.fireflies ?? 0).toBeGreaterThan(0);
+  });
+
+  it('runs ambient life by tier and reduced motion, asking for frames only while live', () => {
+    const { map } = build();
+    expect(map.setAmbient('high', false)).toBe(false);
+    expect(map.stats.ambient).toBe('live');
+    expect(map.tick(1000)).toBe(true);
+
+    // Reduced motion: still. Nothing drifts and nothing asks for frames.
+    expect(map.setAmbient('high', true)).toBe(true);
+    expect(map.stats.ambient).toBe('still');
+    expect(map.stats.motes.pollen ?? 0).toBe(0);
+    expect(map.tick(2000)).toBe(false);
+
+    // Medium: live with fewer motes; low: off, no motes at all.
+    map.setAmbient('high', false);
+    const all = map.stats.motes.pollen ?? 0;
+    map.setAmbient('medium', false);
+    expect(map.stats.motes.pollen ?? 0).toBeLessThan(all);
+    map.setAmbient('low', false);
+    expect(map.stats.ambient).toBe('off');
+    expect(Object.keys(map.stats.motes)).toEqual([]);
+    expect(map.tick(3000)).toBe(false);
   });
 
   it('tints each player’s land in their slot colour', () => {
