@@ -201,7 +201,7 @@
   overflow: auto;
   overscroll-behavior: contain;
   box-sizing: border-box;
-  padding: 16px 18px 30px 24px;
+  padding: 16px 18px 12px 24px;
   border-radius: 6px 18px 18px 6px;
   background: #fff8ec;
   box-shadow:
@@ -210,7 +210,7 @@
 }
 
 .rbook-page-left {
-  padding: 16px 24px 30px 18px;
+  padding: 16px 24px 12px 18px;
   border-radius: 18px 6px 6px 18px;
   box-shadow:
     inset -16px 0 18px -14px rgb(122 45 85 / 35%),
@@ -235,10 +235,9 @@
 }
 
 .rbook-page-number {
-  position: absolute;
-  right: 0;
-  bottom: 9px;
-  left: 0;
+  /* In the flow at the page's foot, so it never sits on a line of text. */
+  flex: none;
+  margin-top: 4px;
   font-size: 12px;
   font-weight: 900;
   color: #a0721f;
