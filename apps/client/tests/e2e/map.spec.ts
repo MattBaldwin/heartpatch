@@ -15,7 +15,8 @@ interface MapDebug {
   live: string | null;
   props: number;
   propKinds: number;
-  mutedTiles: number;
+  tileMeshes: number;
+  clutter: number;
   ambient: 'live' | 'still' | 'off';
 }
 
@@ -154,7 +155,7 @@ async function openPatchDetail(page: Page, name: string): Promise<void> {
   await expect(lobby.getByRole('heading', { name })).toBeVisible();
 }
 
-test('dresses the land, mutes wild land, and keeps ambient life calm', async ({ browser }) => {
+test('dresses the land in full colour, and keeps ambient life calm', async ({ browser }) => {
   test.setTimeout(120_000); // shader compiles; CI renders in software
   const page = await newPlayer(browser, uniqueName('dress'));
   const errors: string[] = [];
@@ -171,13 +172,13 @@ test('dresses the land, mutes wild land, and keeps ambient life calm', async ({ 
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
 
-  // Every terrain is dressed (one mesh per prop kind), and only the player's
-  // home ring and Juniper's Gap are in full colour: the rest is wild.
+  // One continuous ground, every terrain dressed (one mesh per prop kind)
+  // with ground clutter on top (terrain passes 1 and 2).
   const drawn = (await mapState(page))!;
+  expect(drawn.tileMeshes).toBe(1);
   expect(drawn.props).toBeGreaterThan(1000);
   expect(drawn.propKinds).toBeGreaterThanOrEqual(18);
-  expect(drawn.mutedTiles).toBeGreaterThan(400);
-  expect(drawn.mutedTiles).toBeLessThan(469 - 7);
+  expect(drawn.clutter).toBeGreaterThan(1000);
 
   // Ambient life runs (or switched itself off on a renderer too slow for it,
   // as CI's software one can be)...
