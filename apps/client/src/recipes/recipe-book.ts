@@ -839,7 +839,12 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
 
   return {
     setMap: (next) => {
-      if (next === mapId) return;
+      if (next === mapId) {
+        // Back on the same map (after a battle, a rescue): something new may
+        // have landed in the bag meanwhile.
+        if (next) void check();
+        return;
+      }
       generation += 1;
       mapId = next;
       if (next === null) closeBook();
