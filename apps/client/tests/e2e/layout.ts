@@ -14,6 +14,24 @@ export const SCREENS = [
 ] as const;
 
 /**
+ * Waits until nothing is sliding, turning or fading (every finite CSS
+ * animation and transition has finished): a page turn's rotateY or a tray
+ * mid-slide squeezes what's measured. Endless ones (a handle's glow) don't count.
+ */
+export async function settled(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      document
+        .getAnimations()
+        .every(
+          (a) => a.playState !== 'running' || a.effect?.getComputedTiming().iterations === Infinity,
+        ),
+    undefined,
+    { timeout: 15_000 },
+  );
+}
+
+/**
  * Every visible control matching `selector` keeps its text at least `min`
  * px inside its own box on every side, and sits fully on screen. Badges
  * (`ignore`) may sit on an edge on purpose.
@@ -23,6 +41,7 @@ export async function expectRoomyLabels(
   selector: string,
   { min = 8, ignore = '.tray-badge, [data-tray-alert], .rbook-sticker' } = {},
 ): Promise<void> {
+  await settled(page);
   const problems = await page.evaluate(
     ({ selector, min, ignore }) => {
       const out: string[] = [];
@@ -87,6 +106,7 @@ export async function expectRoomyLabels(
  * element matching `targets`.
  */
 export async function expectClear(page: Page, bubble: string, targets: string): Promise<void> {
+  await settled(page);
   const result = await page.evaluate(
     ({ bubble, targets }) => {
       const shown = (el: Element) => {
