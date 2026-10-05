@@ -4,10 +4,10 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { hexToWorld, type MapView } from '@heartpatch/shared';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HEX_SIZE } from './map-config.js';
 import { findHomeBases } from './map-layout.js';
-import { MapScene } from './map-scene.js';
+import { MapScene, tileScreenRectOf } from './map-scene.js';
 import { testView, userId } from './test-view.js';
 
 describe('MapScene', () => {
@@ -142,5 +142,28 @@ describe('MapScene', () => {
   it('puts Juniper’s Gap’s tree on the centre tile', () => {
     const { mesh } = build();
     expect(mesh('junipers-gap-tree')).toBeTruthy();
+  });
+  it('projects a tile to the screen for DOM overlays, and nothing behind the camera', () => {
+    const { scene } = build();
+    const view = testView(1);
+    const middle = view.tiles.find((t) => t.q === 0 && t.r === 0)!;
+    const camera = new TargetCamera('test', new Vector3(0, 40, -40), scene);
+    camera.setTarget(Vector3.Zero());
+    scene.activeCamera = camera;
+    // NullEngine has no canvas: give it a phone-sized box to project onto.
+    const box = { left: 0, top: 0, width: 400, height: 800 };
+    vi.spyOn(scene.getEngine(), 'getRenderingCanvas').mockReturnValue({
+      getBoundingClientRect: () => box,
+    } as unknown as HTMLCanvasElement);
+    scene.render();
+    const rect = tileScreenRectOf(scene, middle);
+    expect(rect).not.toBeNull();
+    expect(rect!.width).toBeGreaterThan(0);
+    // The middle tile under a camera looking at the middle sits mid-screen.
+    expect(rect!.x + rect!.width / 2).toBeCloseTo(200, 0);
+    camera.position = new Vector3(0, 40, 40);
+    camera.setTarget(new Vector3(0, 40, 80));
+    scene.render();
+    expect(tileScreenRectOf(scene, middle)).toBeNull();
   });
 });
