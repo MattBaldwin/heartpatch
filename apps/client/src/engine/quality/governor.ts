@@ -1,5 +1,5 @@
 import type { QualityTier, ScalerConfig } from '../config.js';
-import { higherTier, lowerTier, renderScaleFloor } from './tiers.js';
+import { crawlRenderScale, higherTier, lowerTier, renderScaleFloor } from './tiers.js';
 
 /**
  * Dynamic resolution and quality-tier governor, as a pure reducer over frame
@@ -56,6 +56,8 @@ export interface GovernorState {
   readonly tierGoodMs: number;
   readonly tierRaiseAfterMs: number;
   readonly sinceTierRaiseMs: number | null;
+  /** Consecutive frames longer than `crawlFrameMs` so far (see `crawl`). */
+  readonly crawlFrames: number;
 }
 
 export interface GovernorContext {
@@ -83,6 +85,7 @@ export function initialGovernor(tier: QualityTier, config: ScalerConfig): Govern
     tierGoodMs: 0,
     tierRaiseAfterMs: config.tierRaiseAfterMs,
     sinceTierRaiseMs: null,
+    crawlFrames: 0,
   };
 }
 
@@ -99,7 +102,13 @@ export function stepGovernor(
   ctx: GovernorContext,
 ): GovernorState {
   const { config } = ctx;
-  if (!(frameMs > 0) || frameMs > config.maxFrameMs) return state;
+  if (!(frameMs > 0)) return state;
+  if (frameMs > config.maxFrameMs) {
+    // A pause (hidden tab, debugger, one shader compile) says nothing about
+    // the frame rate; a run of them says the renderer is crawling.
+    return frameMs > config.crawlFrameMs ? crawl(state, ctx) : state;
+  }
+  if (state.crawlFrames > 0) state = { ...state, crawlFrames: 0 };
 
   const elapsedMs = state.elapsedMs + frameMs;
   if (elapsedMs < config.graceMs) return { ...state, elapsedMs };
@@ -120,6 +129,42 @@ export function stepGovernor(
 }
 
 /** Undo a step that didn't help and hold at this frame rate. */
+/**
+ * Another frame longer than `crawlFrameMs`. Once `crawlFrames` of them come in
+ * a row the renderer is crawling (a very weak GPU, software WebGL in CI):
+ * every frame is "too long to count", so the windows above never close and
+ * nothing would ever change. Go straight to the cheapest tier at one render
+ * pixel per CSS pixel (a tier at a time would mean a shader rebuild, and more
+ * crawling frames, per step); the usual raises bring quality back if the
+ * slowness passes.
+ */
+function crawl(s: GovernorState, ctx: GovernorContext): GovernorState {
+  const { config, devicePixelRatio } = ctx;
+  const crawlFrames = s.crawlFrames + 1;
+  if (crawlFrames < config.crawlFrames) return { ...s, crawlFrames };
+  let tier = s.tier;
+  for (let cheaper = lowerTier(tier); cheaper !== null; cheaper = lowerTier(cheaper)) {
+    tier = cheaper;
+  }
+  const renderScale = roundScale(crawlRenderScale(devicePixelRatio));
+  if (tier === s.tier && renderScale === s.renderScale) return { ...s, crawlFrames: 0 };
+  return {
+    ...s,
+    tier,
+    renderScale,
+    crawlFrames: 0,
+    settleWindows: 1,
+    probe: null,
+    tierProbe: null,
+    cap: null,
+    goodMs: 0,
+    tierGoodMs: 0,
+    slowAtFloorMs: 0,
+    sinceRaiseMs: null,
+    sinceTierRaiseMs: null,
+  };
+}
+
 function holdAtCap(
   s: GovernorState,
   fps: number,
