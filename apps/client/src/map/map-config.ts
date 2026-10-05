@@ -288,7 +288,7 @@ export const WATER = {
   /** How far the water tucks under the bank past the hex (fraction). */
   reach: 0.08, // TUNE
   deep: { color: '#2f86c9', alpha: 0.88 }, // TUNE
-  shallow: { color: '#8fe0ee', alpha: 0.42 }, // TUNE
+  shallow: { color: '#a5e6ee', alpha: 0.22 }, // TUNE
   foam: '#ffffff', // TUNE
 } as const;
 
@@ -373,7 +373,7 @@ export const AMBIENT = {
    * strength. Keep `bob` under the overlays' lift above the ground
    * (`OVERLAY_LIFT` in map-scene.ts), or wave crests poke through them.
    */
-  water: { bob: 0.008, glint: 0.16, foam: 0.55 }, // TUNE
+  water: { bob: 0.008, glint: 0.16, foam: 0.4 }, // TUNE
 } as const;
 
 /** Every kind of mote, in drawing order. */
