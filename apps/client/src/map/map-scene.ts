@@ -437,6 +437,11 @@ export class MapScene {
     return true;
   }
 
+  /** The page was hidden: the time away isn't a slow frame (`AmbientJudge.skip`). */
+  skipPace(): void {
+    this.judge.skip();
+  }
+
   /** Night on the map (#21): fireflies instead of pollen, the night backdrop, lanterns glow brighter. */
   setNight(night: boolean): void {
     if (night === this.night) return;

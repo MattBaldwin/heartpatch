@@ -15,6 +15,8 @@ export interface AmbientTarget {
   readonly ambientMode: AmbientMode;
   /** Moves ambient time to `now` (ms); true when a frame should be drawn. */
   tick(now: number): boolean;
+  /** The page was hidden: don't count the time away as a slow frame. */
+  skipPace(): void;
 }
 
 export interface AmbientDriverOptions {
@@ -36,9 +38,6 @@ export interface MotionQuery {
   addEventListener(type: 'change', listener: () => void): void;
 }
 
-/** How often the tier is looked at again (it has no change event). */
-const CHECK_MS = 500; // TUNE
-
 export class AmbientDriver {
   private readonly options: AmbientDriverOptions;
   private readonly media: AmbientDriverOptions['reducedMotion'];
@@ -58,6 +57,12 @@ export class AmbientDriver {
     this.media?.addEventListener('change', () => {
       if (this.running) this.check();
     });
+    // No frames arrive while the page is hidden: that gap isn't slowness.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) this.options.target()?.skipPace();
+      });
+    }
   }
 
   /** What a new scene should start with, so nothing shows that it would hide a frame later. */
@@ -70,7 +75,7 @@ export class AmbientDriver {
     this.running = true;
     this.timer ??= setInterval(() => {
       this.check();
-    }, CHECK_MS);
+    }, AMBIENT.checkMs);
     this.check();
   }
 

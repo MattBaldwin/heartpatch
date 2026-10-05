@@ -171,14 +171,17 @@ export function moteShare(tier: QualityTier): number {
 
 /**
  * Watches how often ambient frames actually arrive. Ambient life asks for
- * one about every 33 ms; when the device can't keep up (frames on average
- * further apart than `maxFrameGapMs`, GPU or main thread alike), it says
- * "slow" and stays slow for this visit, so the map keeps its frame budget for
- * the player's own taps and drags. The first `graceMs` (shader compiles,
- * uploads) and long gaps (a hidden tab) don't count.
+ * one about every 33 ms; when the device can't keep up (most frames in a
+ * window of `judgeFrames` further apart than `maxFrameGapMs`, GPU or main
+ * thread alike), it says "slow" and stays slow for this visit, so the map
+ * keeps its frame budget for the player's own taps and drags. A majority, not
+ * an average: one hitch (a shader compiling) never switches it off, and a
+ * renderer that takes a second a frame is caught within a few frames. The
+ * first `graceMs` (shader compiles, uploads) don't count, and `skip` drops
+ * the gap over a hidden page (no frames at all).
  */
 export class AmbientJudge {
-  private sum = 0;
+  private slowFrames = 0;
   private frames = 0;
   private start: number | null = null;
   private last: number | null = null;
@@ -191,16 +194,19 @@ export class AmbientJudge {
     const last = this.last;
     this.last = now;
     if (last === null || now - this.start < AMBIENT.graceMs) return false;
-    const gap = now - last;
-    if (gap > AMBIENT.ignoreGapMs) return false;
-    this.sum += gap;
     this.frames += 1;
-    if (this.frames >= AMBIENT.judgeFrames) {
-      this.slowNow = this.sum / this.frames > AMBIENT.maxFrameGapMs;
-      this.sum = 0;
+    if (now - last > AMBIENT.maxFrameGapMs) this.slowFrames += 1;
+    if (this.slowFrames * 2 > AMBIENT.judgeFrames) this.slowNow = true;
+    else if (this.frames >= AMBIENT.judgeFrames) {
+      this.slowFrames = 0;
       this.frames = 0;
     }
     return this.slowNow;
+  }
+
+  /** The page was hidden: the next frame starts a new gap, not one spanning the time away. */
+  skip(): void {
+    this.last = null;
   }
 
   get slow(): boolean {

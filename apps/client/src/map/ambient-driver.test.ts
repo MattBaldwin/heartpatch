@@ -18,6 +18,7 @@ class FakeScene implements AmbientTarget {
     this.ticks++;
     return true;
   }
+  skipPace(): void {}
 }
 
 /** A controllable reduced-motion media query. */

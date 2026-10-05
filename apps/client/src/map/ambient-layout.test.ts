@@ -90,6 +90,26 @@ describe('AmbientJudge', () => {
     for (let i = 0; i < 10; i++) {
       t = feed(judge, 33, 30, t);
       t += 5000;
+      judge.skip(); // back from a hidden page
+    }
+    expect(judge.slow).toBe(false);
+  });
+
+  it('catches a renderer that takes a second a frame within a few frames (software GL)', () => {
+    const judge = new AmbientJudge();
+    const t = feed(judge, 33, Math.ceil(AMBIENT.graceMs / 33) + 1);
+    expect(judge.slow).toBe(false);
+    // (The first of these still lands 33 ms after the last smooth frame.)
+    feed(judge, 1200, Math.floor(AMBIENT.judgeFrames / 2) + 2, t);
+    expect(judge.slow).toBe(true);
+  });
+
+  it('shrugs off a single hitch (a shader compiling) on a smooth device', () => {
+    const judge = new AmbientJudge();
+    let t = feed(judge, 33, Math.ceil(AMBIENT.graceMs / 33) + 1);
+    for (let i = 0; i < 20; i++) {
+      t = feed(judge, 1500, 1, t);
+      t = feed(judge, 33, 30, t);
     }
     expect(judge.slow).toBe(false);
   });

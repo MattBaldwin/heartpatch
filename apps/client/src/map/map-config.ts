@@ -264,21 +264,18 @@ export const AMBIENT = {
   /** Share of the motes drawn on each tier; low drops motes and motion (and draws nothing while idle). */
   motes: { high: 1, medium: 0.5, low: 0 }, // TUNE
   /**
-   * If ambient frames arrive further apart than this on average (ms; about
+   * If most ambient frames arrive further apart than this (ms; about
    * 18 fps), ambient life switches off for this visit: the device needs its
    * frame budget for the player's own taps and drags. iOS Low Power Mode's
    * 30 fps cap (33 ms) stays under it.
    */
   maxFrameGapMs: 55, // TUNE
-  /** Ambient frames averaged before judging `maxFrameGapMs`. */
-  judgeFrames: 20, // TUNE
+  /** The window of ambient frames judged at a time (more than half slow: off). */
+  judgeFrames: 10, // TUNE
   /** Not judged in the first moments after the map opens (shader compiles, uploads). */
   graceMs: 2000, // TUNE
-  /**
-   * A gap longer than this isn't counted: the page was hidden (no frames at
-   * all) or paused in a debugger. Shorter ones count, however slow.
-   */
-  ignoreGapMs: 1000, // TUNE
+  /** How often the quality tier is looked at again (it has no change event), ms. */
+  checkMs: 500, // TUNE
   /**
    * The lake's gentle bob (world units) and glint strength. Keep `bob` under
    * the territory tint's lift above the tile (`TINT_LIFT`, 0.012 in
