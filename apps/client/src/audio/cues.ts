@@ -4,7 +4,8 @@ import type { CloseUpTouch } from '../close-up/close-up-view.js';
 // Which sound goes with which moment (#25). Screens report what happened
 // (a battle step, a touch, a care squish); this maps it to a cue, so the
 // screens never know about sound. Style guide §7: soft, round and bouncy;
-// spooky is a low hush, never a sting.
+// spooky is a low hush. The one exception is the opening cinematic's low
+// rumbling sting as the Hollow Man reaches (owner decision 2026-10-04).
 
 export type CueName =
   /** UI: any button. */
@@ -33,8 +34,15 @@ export type CueName =
   | 'nightfall'
   /** The opening cinematic (#46): a squishy blooms out of the ground. */
   | 'bloom'
+  /**
+   * The Hollow Man reaches for the Heartpatch, eyes flaring: a low rumbling
+   * sting (owner decision 2026-10-04, "spooky-tense"). Never a scream or a crash.
+   */
+  | 'hollow-sting'
   /** The Heartpatch breaks into Heart Seeds: a soft glassy sparkle, never a crash. */
   | 'shatter'
+  /** The cold wind that blows the joy and the squishies away across the land. */
+  | 'cold-wind'
   /** A Heart Seed lands at the Keeper's feet. */
   | 'seed-land'
   /** The title card. */
@@ -60,7 +68,9 @@ export const CUE_NAMES: readonly CueName[] = [
   'aww',
   'nightfall',
   'bloom',
+  'hollow-sting',
   'shatter',
+  'cold-wind',
   'seed-land',
   'title',
 ];
@@ -73,6 +83,7 @@ export function isCueName(name: string): name is CueName {
 /** Cues that dip the music while they play (tech spec §15 "Mix"). */
 export const DUCKING_CUES: ReadonlySet<CueName> = new Set([
   'nightfall',
+  'hollow-sting',
   'charm',
   'evolve',
   'yay',

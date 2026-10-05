@@ -619,8 +619,8 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     let picking: Promise<unknown> | undefined;
     let leaving: Promise<unknown> | undefined;
     // Another member-row locker (a challenge against this player) holds the
-    // row; the pick queues on it first, then leaving, which already holds the
-    // seats lock and the player's `users` row. The pick takes nothing after
+    // row; the pick takes the player's `users` row and queues on it, then
+    // leaving queues on `users` behind the pick. The pick takes nothing after
     // the member row that leaving holds (its new squishy's foreign keys only
     // key-share `maps` and the member row), so both finish. A pick that locked
     // the player's `users` row after the member row would deadlock (40P01).
@@ -649,6 +649,64 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     // The pick committed first; leaving keeps its marker on the archived row.
     expect(owned).toHaveLength(1);
     expect(membership).toEqual({ status: 'removed', starter: owned[0]!.id });
+  });
+
+  it("takes the account before its member row, as joining and leaving do (starters `pick`, Sprout's gift)", async () => {
+    const owner = await player('giftowner');
+    const kid = await player('giftpicker');
+    const [map] = await db
+      .insert(maps)
+      .values({ kind: 'multiplayer', name: 'Lock Gift', timeZone: 'UTC', maxPlayers: 4 })
+      .returning({ id: maps.id });
+    const mapId = map!.id;
+    await db.insert(mapMembers).values([
+      { mapId, userId: owner.id, role: 'owner' },
+      { mapId, userId: kid.id, role: 'member' },
+    ]);
+    // Leaving (or an approve) holds the player's `users` row, then writes
+    // their member row. The pick queues on `users` first, holding nothing, so
+    // both finish; a pick that locked its member row before `users` would
+    // deadlock here (40P01).
+    let picked: unknown;
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockUser(kid.id),
+      async () => {
+        picked = await outcome(createStartersService({ db }).pick(kid, mapId, 'puddlepuff'));
+      },
+      (tx) =>
+        tx
+          .update(mapMembers)
+          .set({ defenseStance: 'defensive' })
+          .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, kid.id))),
+    );
+    expect(picked).toBe('ok');
+    const [row] = await db
+      .select({ quantity: inventories.quantity })
+      .from(inventories)
+      .where(and(eq(inventories.mapId, mapId), eq(inventories.userId, kid.id)));
+    expect(row?.quantity).toBe(STARTERS.firstPickGift['heart-charm']);
+  });
+
+  it("takes the seats row before the account for an owner's pick, as approving a join does (starters `pick`)", async () => {
+    const owner = await player('giftseats');
+    const [map] = await db
+      .insert(maps)
+      .values({ kind: 'multiplayer', name: 'Lock Seats Gift', timeZone: 'UTC', maxPlayers: 4 })
+      .returning({ id: maps.id });
+    const mapId = map!.id;
+    await db.insert(mapMembers).values({ mapId, userId: owner.id, role: 'owner' });
+    // Approve holds the seats lock (the owner's member row), then locks the
+    // joiner's `users` row; here it's the owner's own. An owner's pick that
+    // took `users` before the seats row would deadlock here (40P01).
+    let picked: unknown;
+    await holdThen(
+      (tx) => createMapsRepo(tx).lockSeats(mapId),
+      async () => {
+        picked = await outcome(createStartersService({ db }).pick(owner, mapId, 'emberbun'));
+      },
+      (tx) => createMapsRepo(tx).lockUser(owner.id),
+    );
+    expect(picked).toBe('ok');
   });
 
   /*

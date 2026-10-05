@@ -88,23 +88,16 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   expect(start).toMatchObject({ status: 'active', turn: 0 });
 
   // "Use Heart Charm" is always there for a wild squishy, with the bag's
-  // count (owner decision 2026-10-04). With an empty bag it stays, dimmed,
-  // says how to craft one, and a tap explains; nothing changes.
+  // count, and the bag already has Sprout's 3 from the first starter pick
+  // (owner decisions 2026-10-04). One try: the charm lands on the wild
+  // squishy and is spent, whatever it decides. (An empty bag's dimmed button
+  // and craft hint are covered by heart-charm.test.ts.)
   const charm = page.getByTestId('battle-capture');
   await expect(charm).toBeVisible();
-  await expect(charm).toHaveText('Use Heart Charm (0)');
-  await expect(charm).toHaveClass(/battle-button-empty/);
-  await expect(page.getByTestId('battle-capture-hint')).toContainText('Craft one from');
-  await charm.tap();
-  await expect(hud.locator('.battle-problem')).toContainText('No Heart Charms!');
-  expect(await settled(page)).toMatchObject({ id: start.id, status: 'active', turn: 0 });
-
-  // Three charms in the bag (dev), then one try: the charm lands on the wild
-  // squishy and is spent, whatever it decides.
-  expect(
-    (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { 'heart-charm': 3 } })).status,
-  ).toBe(201);
-  // The button looks in the bag again when tapped, so the new charms work.
+  expect(await charmsLeft(page, mapId)).toBe(3);
+  await expect(charm).toHaveText('Use Heart Charm (3)');
+  await expect(charm).not.toHaveClass(/battle-button-empty/);
+  await expect(page.getByTestId('battle-capture-hint')).toHaveCount(0);
   await charm.tap();
   const tried = await settled(page);
   expect(tried.turn).toBe(1);
@@ -116,6 +109,8 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
     await expect(page.getByTestId('battle-result')).toContainText('A new friend!');
     await page.getByTestId('battle-done').tap();
   } else if (tried.status === 'active') {
+    // The button counts the bag again after a try.
+    await expect(charm).toHaveText('Use Heart Charm (2)');
     await hud.getByRole('button', { name: 'Back to patch' }).tap();
   } else {
     // A miss costs the turn, and the wild squishy can tucker out our fresh

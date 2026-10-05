@@ -3,7 +3,8 @@ import { noise, tone } from './synth.js';
 
 // The sound effects (#25), each a tiny synth recipe: squishy squeaks and
 // giggles, boops, pops and chimes (style guide §7: soft, round and bouncy).
-// The Hollow Man's arrival is a low, quiet hush, never a sting. `pitch` and
+// The Hollow Man's arrival on the map is a low, quiet hush; only the opening
+// cinematic has a low rumbling sting as he reaches (owner decision 2026-10-04). `pitch` and
 // `gain` carry the per-play variation, so repeats never sound copied.
 
 export interface SfxKit {
@@ -343,6 +344,74 @@ export const RECIPES: Readonly<Record<CueName, Recipe>> = {
       attack: 0.01,
     });
     return Math.max(0.22, chime(kit, out, at + 0.12, 1318 * pitch, [0, 7], 0.06, gain * 0.18));
+  },
+
+  'hollow-sting': (kit, out, at, pitch, gain) => {
+    // Spooky-tense (owner decision 2026-10-04): a low rumble that swells up
+    // under two close, uneasy low notes, then sinks away. Felt more than
+    // heard: no scream, no crash, nothing sudden (a short attack, not a hit).
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 2.2,
+      gain: gain * 0.22,
+      filter: 'lowpass',
+      freq: 140 * pitch,
+      to: 90 * pitch,
+      q: 1.2,
+      attack: 0.35,
+    });
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at,
+      dur: 2.2,
+      freq: 49 * pitch,
+      to: 41 * pitch,
+      glide: 2.0,
+      gain: gain * 0.45,
+      attack: 0.3,
+      hold: 0.6,
+      vibrato: [7, 0.03],
+    });
+    // A minor second, low and soft: unease, not a shriek.
+    for (const semis of [0, 1]) {
+      tone(kit.ctx, out, {
+        type: 'triangle',
+        at: at + 0.15,
+        dur: 1.8,
+        freq: 110 * pitch * 2 ** (semis / 12),
+        gain: gain * 0.12,
+        attack: 0.4,
+        hold: 0.5,
+        lowpass: 600,
+      });
+    }
+    return 2.2;
+  },
+
+  'cold-wind': (kit, out, at, pitch, gain) => {
+    // A cold gust: airy noise sweeping high to low, with a thin whistle on top.
+    noise(kit.ctx, out, kit.noise, {
+      at,
+      dur: 2.6,
+      gain: gain * 0.16,
+      filter: 'bandpass',
+      freq: 2200 * pitch,
+      to: 500 * pitch,
+      q: 1.4,
+      attack: 0.4,
+    });
+    tone(kit.ctx, out, {
+      type: 'sine',
+      at: at + 0.2,
+      dur: 2.0,
+      freq: 1180 * pitch,
+      to: 820 * pitch,
+      glide: 1.8,
+      gain: gain * 0.03,
+      attack: 0.5,
+      vibrato: [5, 0.02],
+    });
+    return 2.6;
   },
 
   shatter: (kit, out, at, pitch, gain) => {

@@ -1,7 +1,7 @@
 import {
   MapIdParamsSchema,
   PickStarterRequestSchema,
-  SquishyResponseSchema,
+  PickStarterResponseSchema,
 } from '@heartpatch/shared';
 import type { FastifyPluginCallback } from 'fastify';
 import type { Idempotency } from '../../lib/idempotency.js';
@@ -31,18 +31,18 @@ export const startersRoutes =
         schema: {
           params: MapIdParamsSchema,
           body: PickStarterRequestSchema,
-          response: { 201: SquishyResponseSchema },
+          response: { 201: PickStarterResponseSchema },
         },
         preHandler: [requireAuth, limit('pick'), idempotency.preHandler],
         onSend: idempotency.onSend,
       },
       async (request, reply) => {
-        const squishy = await service.pick(
+        const picked = await service.pick(
           requireUser(request),
           request.params.mapId,
           request.body.speciesId,
         );
-        return reply.code(201).send({ squishy });
+        return reply.code(201).send(picked);
       },
     );
 

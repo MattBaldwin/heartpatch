@@ -9,6 +9,8 @@ import type { StarterData } from '../schemas/data/starters.js';
  */
 export const STARTERS: StarterData = {
   speciesIds: ['emberbun', 'puddlepuff', 'thistlepip'],
+  // TUNE: three tries at befriending a wild squishy before they can craft more.
+  firstPickGift: { 'heart-charm': 3 },
 };
 
 /** True if `speciesId` is one of the starters. */

@@ -64,10 +64,12 @@ The tiny glowing spirit of your Heart Seed. Upbeat, curious, easily delighted, a
 - Celebrates the player, not itself.
 
 ### The Hollow Man
-Tall, flickering silhouette, glowing eyes. Spooky, never gory.
-- He **never speaks**, never threatens, never chases on screen.
+**Spooky-tense** (owner decision 2026-10-04, replacing "spooky stays soft"): a tall, thin, dark silhouette with a ragged cloak, long reaching arms and glowing eyes. A little scary, never gory, and fine for ages 10–17.
+- He **never speaks**, never threatens, never chases on screen, and never rushes at the camera. No jump-scares, no mouth, no claws, no blood.
 - Present it through what changes around him: colour drains, music drops out, firelight flickers, squishies huddle.
-- He hesitates at light and noise, and fades away. Players should feel "I can protect them," not fear.
+- When he wants something, he reaches for it with his long arms and his eyes flare. In the opening story he pulls the glow (joy) out of the squishies as little lights, and a cold wind scatters them; a low rumbling sting and a short camera shake mark the Heartpatch breaking. That's the most frightening he ever gets.
+- **Reduced motion:** no shake, no flicker, no flash, and his eyes don't flare.
+- On the map he hesitates at light and noise, and fades away. Players should feel "I can protect them," not fear.
 - Taken squishies turn grey and drift away gently; text always reminds the player they can be rescued.
 
 ### The forest chihuahuas
@@ -89,7 +91,7 @@ Sincere, expressive, never mean. Feelings drive personality: Joy bounces, Cozy s
 
 ## 7. Visual and audio feel
 
-Visuals follow design doc §19 (soft vinyl toy, glossy, rounded, never pixelated). Audio follows tech spec §15. Sounds are soft, round and bouncy: squeaks, boops, pops, chimes. Spooky moments use quiet, low drones and silence, not stings or screams.
+Visuals follow design doc §19 (soft vinyl toy, glossy, rounded, never pixelated). Audio follows tech spec §15. Sounds are soft, round and bouncy: squeaks, boops, pops, chimes. Spooky moments use quiet, low drones and silence, not screams. The one sting is the opening story's low rumble as the Hollow Man reaches for the Heartpatch (§5).
 
 ## 8. Safety checklist for content
 
