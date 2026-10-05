@@ -152,7 +152,8 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   await page.mouse.down();
   for (let i = 1; i <= 8; i += 1) await page.mouse.move(vw * (0.2 + 0.075 * i), yMid - i * 4);
   await page.mouse.up();
-  await page.mouse.wheel(0, 240);
+  // A wheel too, where there is one (mobile WebKit has no mouse wheel).
+  if (!test.info().project.use.isMobile) await page.mouse.wheel(0, 240);
   expect(
     await page.evaluate(() => (window as unknown as { __canvasGestures: number }).__canvasGestures),
   ).toBe(0);
