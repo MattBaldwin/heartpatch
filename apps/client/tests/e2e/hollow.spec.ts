@@ -33,6 +33,10 @@ const battleState = (page: Page) =>
 test('night falls, the Hollow Man visits, and a rescue sets off', async ({ browser }) => {
   test.setTimeout(180_000); // map and arena builds; CI renders in software
   const page = await newPlayer(browser, uniqueName('hollow'));
+  // The map's ambient life (swaying trees, drifting motes) keeps a fast
+  // renderer drawing; reduced motion holds it still, so "the map stops
+  // drawing when he's gone" is about his visit alone.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
   // A shader that doesn't compile only logs (the shadow look, owner decision 7).
