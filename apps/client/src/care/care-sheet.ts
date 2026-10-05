@@ -88,12 +88,14 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   const xpFill = el('div', { class: 'care-meter-fill care-xp' });
   const xpBar = el('div', { class: 'care-meter', 'aria-hidden': 'true' }, xpFill);
   const xpLine = el('p', { class: 'care-xp-line' });
-  const actions = el('div', { class: 'care-actions' });
+  // The tutorial's care step spotlights these (Feed, Pet, Play).
+  const actions = el('div', { class: 'care-actions', 'data-tutorial-target': 'care-buttons' });
   const note = el('p', { class: 'care-note', role: 'status', 'data-testid': 'care-note' });
   const infoList = el('ul', { class: 'care-info' });
   const info = el(
     'details',
-    { class: 'care-details' },
+    // Open from the start: it's where care is explained (the playtest missed it).
+    { class: 'care-details', open: '', 'data-testid': 'care-details' },
     el('summary', {}, CARE_TEXT.infoTitle),
     infoList,
   );

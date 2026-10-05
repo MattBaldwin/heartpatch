@@ -1,6 +1,7 @@
 import {
   hexKey,
   type Hex,
+  type HighlightTarget,
   type MapView,
   type PublicTile,
   type PublicUser,
@@ -16,7 +17,7 @@ import {
 } from '../net/ws-client.js';
 import { el } from '../ui/dom.js';
 import { mapApi } from './map-api.js';
-import { MapScene, type MapSceneStats } from './map-scene.js';
+import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
 import { listenForTaps } from './tap-detector.js';
@@ -44,6 +45,13 @@ export interface MapScreenOptions {
   layers?: readonly MapLayer[];
   /** Every live event the socket delivers, in seq order, after the map saw it (a find, #43). */
   onLiveEvent?: (event: WsEventMessage) => void;
+  /**
+   * Where the tutorial's spotlight finds things drawn on the map
+   * (`TutorialScreen.targets`): the player's home node, for the gather step.
+   */
+  targets?: {
+    register: (target: HighlightTarget, locate: () => ScreenRect | null) => () => void;
+  };
 }
 
 /** A feature that adds to the map's scene (#21: night lighting and the Hollow Man). */
@@ -181,6 +189,10 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     scene3d = built;
     for (const layer of options.layers ?? []) layer.attach(scene, state.view);
     if (selected) built.select(selected);
+    const unregister = options.targets?.register('resource-node', () =>
+      built.homeNodeRect(user?.id ?? null),
+    );
+    if (unregister) scene.onDisposeObservable.addOnce(unregister);
     const canvas = scene.getEngine().getRenderingCanvas();
     if (canvas) {
       const stop = new AbortController();
