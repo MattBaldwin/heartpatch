@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Ground, type GroundTile } from './ground-mesh.js';
 
 const SIZE = 0.65;
-const OPTIONS = { size: SIZE, plateau: 0.55, noise: 0, skirtTo: 0 };
+const OPTIONS = { size: SIZE, plateau: 0.55, noise: 0, skirtTo: 0, rim: 0.2 };
 
 /** A small patch: a ring of meadow round a mountain, with a lake to the east. */
 function patch(): GroundTile[] {

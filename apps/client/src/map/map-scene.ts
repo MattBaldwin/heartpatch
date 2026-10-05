@@ -382,7 +382,13 @@ export class MapScene {
         height: groundHeightOf(t),
         color: groundColorOf(t),
       })),
-      { size: HEX_SIZE, plateau: GROUND.plateau, noise: GROUND.noise, skirtTo: GROUND.skirtTo },
+      {
+        size: HEX_SIZE,
+        plateau: GROUND.plateau,
+        noise: GROUND.noise,
+        skirtTo: GROUND.skirtTo,
+        rim: GROUND.rim,
+      },
     );
     this.surface = surfaceOver(this.ground, this.tiles);
     this.overlayMat = overlayMaterial(scene, 'ground-overlay-mat');
@@ -658,6 +664,7 @@ export class MapScene {
     if (owned.length === 0) return;
     const c = linear(PLAYER_COLORS[slot % PLAYER_COLORS.length] ?? '#ffffff');
     const rgb = [c.r, c.g, c.b] as const;
+    const warm = linear(CLAIMED.glowColor);
     const glow = hexOverlay(
       owned,
       this.surface,
@@ -665,7 +672,12 @@ export class MapScene {
         { scale: 0.6, alpha: CLAIMED.glow.fill },
         { scale: 1, alpha: CLAIMED.glow.edge },
       ],
-      { size: HEX_SIZE, lift: OVERLAY_LIFT, rgb, centreAlpha: CLAIMED.glow.fill },
+      {
+        size: HEX_SIZE,
+        lift: OVERLAY_LIFT,
+        rgb: [warm.r, warm.g, warm.b],
+        centreAlpha: CLAIMED.glow.fill,
+      },
     );
     const border = territoryBorder(owned, this.surface, {
       size: HEX_SIZE,
@@ -796,12 +808,12 @@ export class MapScene {
   private buildGround(tiles: readonly PublicTile[]): void {
     const mesh = meshFrom(this.scene, 'ground', this.ground.mesh());
     mesh.hasVertexAlpha = false;
+    // Not frozen: night changes the light, and a frozen material wouldn't see it.
     const mat = vinyl(this.scene, 'ground-mat', {
       ...FALLBACK_LOOK,
       color: '#ffffff',
       roughness: 0.85,
     });
-    mat.freeze();
     mesh.material = mat;
     mesh.freezeWorldMatrix();
 
@@ -811,6 +823,7 @@ export class MapScene {
       size: HEX_SIZE,
       level: WATER.level,
       reach: WATER.reach,
+      isTile: (h) => this.tiles.has(hexKey(h)),
       deep: { color: rgbOf(WATER.deep.color), alpha: WATER.deep.alpha },
       shallow: { color: rgbOf(WATER.shallow.color), alpha: WATER.shallow.alpha },
     });

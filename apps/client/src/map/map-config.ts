@@ -265,6 +265,8 @@ export const GROUND = {
   noise: 0.05, // TUNE
   /** The map's outer edge drops to the island top. */
   skirtTo: -0.02,
+  /** Past the map's edge the ground rises towards this (a bank round edge lakes). */
+  rim: 0.22, // TUNE
   colors: {
     meadow: '#8fcf63', // TUNE: bright spring grass
     forest: '#5fb563', // TUNE
@@ -298,8 +300,9 @@ export const WATER = {
  * (never between its own tiles), and flourishes (flowers and lanterns).
  */
 export const CLAIMED = {
-  /** The glow over each owned tile: alpha in the middle and at the edge. */
-  glow: { fill: 0.14, edge: 0.22 }, // TUNE
+  /** The warm glow over each owned tile (sRGB) and its alpha in the middle and at the edge; the border is the player's colour. */
+  glowColor: '#ffd98a', // TUNE
+  glow: { fill: 0.16, edge: 0.24 }, // TUNE
   /** The border band: opacity at the territory's edge and its width (fraction of the hex). */
   border: { alpha: 0.85, width: 0.2 }, // TUNE
   /** Flourishes per owned tile: a lantern's chance, and flower clumps. */
@@ -311,11 +314,11 @@ export const CLAIMED = {
 
 /** Sandy paths from each home's Heart Seed out to neighbouring land. */
 export const PATHS = {
-  color: '#f3e3b4', // TUNE
+  color: '#d6b97e', // TUNE
   /** Width (world units) and how many neighbours each home links to. */
   width: 0.17, // TUNE
   links: 3, // TUNE
-  alpha: 0.9, // TUNE
+  alpha: 0.8, // TUNE
 } as const;
 
 /** The map's light (terrain pass 2): a warm golden sun and a gentle warm grade. */

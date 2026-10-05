@@ -37,6 +37,11 @@ export interface GroundOptions {
   readonly noise: number;
   /** Where the map's outer edge drops to (the island top). */
   readonly skirtTo: number;
+  /**
+   * Past the map's edge the ground blends towards land this high (never
+   * lower than the tile itself), so a lake on the edge keeps a bank round it.
+   */
+  readonly rim: number;
 }
 
 /** One tile's 13 ground points: centre, plateau ring (6) and outer ring (corner, mid, … ×6). */
@@ -166,8 +171,10 @@ export class Ground {
       const d = HEX_DIRECTIONS[((dir % 6) + 6) % 6];
       return d ? this.tiles.get(hexKey({ q: t.q + d.q, r: t.r + d.r })) : undefined;
     };
+    // Past the edge: land at `rim` (at least the tile's own height), in the tile's colour.
+    const beyond: GroundTile = { ...t, height: Math.max(t.height, this.options.rim) };
     const blend = (tiles: readonly (GroundTile | undefined)[]) => {
-      const present = tiles.filter((x): x is GroundTile => x !== undefined);
+      const present = tiles.map((x) => x ?? beyond);
       return {
         y: present.reduce((s, x) => s + x.height, 0) / present.length,
         color: average(present.map((x) => x.color)),

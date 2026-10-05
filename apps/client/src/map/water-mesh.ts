@@ -13,6 +13,8 @@ export interface WaterOptions {
   readonly level: number;
   /** The water reaches this far past the hex (fraction), tucking under the bank. */
   readonly reach: number;
+  /** Is there a tile (land) at this hex? Water never reaches out past the map's edge. */
+  readonly isTile: (h: Hex) => boolean;
   /** Linear colours and alphas: the middle of a lake, and its shore. */
   readonly deep: { readonly color: Rgb; readonly alpha: number };
   readonly shallow: { readonly color: Rgb; readonly alpha: number };
@@ -49,9 +51,17 @@ export function waterMesh(lakes: readonly Hex[], options: WaterOptions): WaterMe
     index.set(key, i);
     return i;
   };
-  const lakeAt = (h: Hex, dir: number): boolean => {
+  const neighbour = (h: Hex, dir: number): Hex | null => {
     const d = HEX_DIRECTIONS[((dir % 6) + 6) % 6];
-    return d !== undefined && isLake.has(hexKey({ q: h.q + d.q, r: h.r + d.r }));
+    return d ? { q: h.q + d.q, r: h.r + d.r } : null;
+  };
+  const lakeAt = (h: Hex, dir: number): boolean => {
+    const n = neighbour(h, dir);
+    return n !== null && isLake.has(hexKey(n));
+  };
+  const tileAt = (h: Hex, dir: number): boolean => {
+    const n = neighbour(h, dir);
+    return n !== null && options.isTile(n);
   };
   for (const h of lakes) {
     const c = hexToWorld(h, size);
@@ -63,13 +73,16 @@ export function waterMesh(lakes: readonly Hex[], options: WaterOptions): WaterMe
       // Corner k touches directions k and k + 1; the middle of edge k, direction k + 1.
       const cornerShore = lakeAt(h, k) && lakeAt(h, k + 1) ? 0 : 1;
       const midShore = lakeAt(h, k + 1) ? 0 : 1;
-      // Out past the hex only where the edge meets land, so lakes never overlap.
-      const r = (s: number) => size * (s > 0 ? 1 + reach : 1);
+      // Out past the hex only onto land, so lakes never overlap and never
+      // hang over the map's edge.
+      const cornerOut = cornerShore > 0 && tileAt(h, k) && tileAt(h, k + 1);
+      const midOut = midShore > 0 && tileAt(h, k + 1);
+      const r = (out: boolean) => size * (out ? 1 + reach : 1);
       ring.push(
-        vertex(c.x + Math.cos(a) * r(cornerShore), c.z + Math.sin(a) * r(cornerShore), cornerShore),
+        vertex(c.x + Math.cos(a) * r(cornerOut), c.z + Math.sin(a) * r(cornerOut), cornerShore),
       );
       const mid = { x: (Math.cos(a) + Math.cos(b)) / 2, z: (Math.sin(a) + Math.sin(b)) / 2 };
-      ring.push(vertex(c.x + mid.x * r(midShore), c.z + mid.z * r(midShore), midShore));
+      ring.push(vertex(c.x + mid.x * r(midOut), c.z + mid.z * r(midOut), midShore));
     }
     for (let i = 0; i < 12; i++) {
       const a = ring[i];
