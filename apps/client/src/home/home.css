@@ -2,41 +2,6 @@
    the Home button sits bottom left above the Bag; inside, every control is
    in the bottom sheet, and the title and fire status sit at the top. */
 
-.home-open {
-  position: fixed;
-  z-index: 4;
-  left: calc(env(safe-area-inset-left) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 160px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border: none;
-  border-radius: 999px;
-  background: #fffafc;
-  box-shadow: 0 4px 14px rgb(107 75 110 / 22%);
-  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
-  color: #7a2d55;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.home-open:active {
-  transform: scale(0.95);
-}
-
-.home-open-icon {
-  font-size: 26px;
-  line-height: 1;
-}
-
-.home-open-label {
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .home-open[hidden],
 .home[hidden] {
   display: none;

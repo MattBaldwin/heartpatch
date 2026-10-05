@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /**
  * The wardrobe (#43): trying clothes on, rarity filters, costumes, outfit
@@ -203,7 +204,7 @@ test('other players see the outfit on the map, live', async ({ browser }) => {
   const ownerLobby = owner.getByTestId('lobby');
   await ownerLobby.getByRole('button', { name: /Fashion Patch/ }).tap();
   await visitPatch(ownerLobby);
-  await owner.getByTestId('home-open').tap();
+  await (await trayButton(owner, 'home-open')).tap();
   await expect
     .poll(
       async () =>

@@ -1,4 +1,5 @@
 import type { HighlightTarget } from '@heartpatch/shared';
+import { SETTLING } from '../ui/trays/tray-state.js';
 import type { Rect } from './overlay-layout.js';
 
 // Finds a step's highlight target on screen (HighlightTargetSchema in
@@ -38,19 +39,29 @@ export const TARGET_ATTRIBUTE = 'data-tutorial-target';
  * The gather step walks the tile panel: Gather, its countdown while the
  * gather runs (nothing to tap, but it shows where Collect will pop up), then
  * Collect, which finishes the step. The Bag's Collect works too.
+ *
+ * Buttons that live in a side tray (ui/trays) are hidden while it's shut, so
+ * the tray's handle stands in after them: Sprout points at the handle, and
+ * once the tray has slid all the way open (it's "settling" until then), at
+ * the button inside. The tray settling stops with a class change, which lays
+ * the overlay out again.
  */
 export const TARGET_STAND_INS: Readonly<Partial<Record<HighlightTarget, readonly string[]>>> = {
   'resource-node': ['tile-collect', 'bag-collect', 'tile-gather', 'tile-gathering'],
   'neighbor-tile': ['tile-claim'],
   'capture-button': ['battle-capture'],
   'defense-stance': ['territory-pick'],
-  'wild-squishy': ['battle-entry'],
+  'wild-squishy': ['battle-entry', 'tray-handle-adventure'],
 };
 
 /** The visible element at `selector` and its box, or null. */
 function visible(root: ParentNode, selector: string): { rect: Rect; element: Element } | null {
   const element = root.querySelector(selector);
   if (!(element instanceof HTMLElement) || element.hidden || !element.isConnected) return null;
+  // In a shut tray: laid out off screen, but not showing.
+  if (element.closest('[inert]') || getComputedStyle(element).visibility === 'hidden') return null;
+  // In a tray still sliding in: not where it will rest yet.
+  if (element.closest(`.${SETTLING}`)) return null;
   const box = element.getBoundingClientRect();
   if (box.width <= 0 || box.height <= 0) return null;
   return { rect: { x: box.x, y: box.y, width: box.width, height: box.height }, element };

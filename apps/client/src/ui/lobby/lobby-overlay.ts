@@ -55,6 +55,8 @@ export interface Lobby {
    * whole stage (a battle). `hide` brings the button back.
    */
   stepOut: () => void;
+  /** Opens the Settings screen (the Keeper menu over the map). */
+  showSettings: () => void;
   /** True while the lobby's panel is up (over the map, or on its own). */
   readonly isOpen: boolean;
 }
@@ -68,6 +70,8 @@ export interface LobbyOptions {
   listHeader?: () => Node[];
   /** Rows on the Settings screen (the tutorial's replay, #47). */
   settings?: () => Node[];
+  /** Where the "My patches" button goes over a map (the trays' corner); defaults to `root`. */
+  buttonRoot?: HTMLElement;
 }
 
 export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby {
@@ -85,7 +89,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     'My patches',
   );
   openButton.hidden = true;
-  root.append(panel, openButton);
+  root.append(panel);
+  (options.buttonRoot ?? root).append(openButton);
 
   let user: PublicUser | null = null;
   /** Which screen to come back to after a refresh. */
@@ -712,6 +717,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       panel.hidden = true;
       openButton.hidden = true;
     },
+    showSettings,
     get isOpen() {
       return !panel.hidden;
     },

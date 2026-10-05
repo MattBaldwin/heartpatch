@@ -2,7 +2,7 @@ import { ItemCountsSchema, type ItemChangeReason, type ItemCounts } from '@heart
 import { and, asc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { crafts, inventories, resourceLedger } from '../../db/schema.js';
+import { crafts, inventories, mapMembers, resourceLedger } from '../../db/schema.js';
 
 /** Whose bag: inventory is per player per map. */
 export interface ItemOwner {
@@ -38,6 +38,12 @@ export interface InventoryRepo {
 
   /** The player's items with a quantity above 0. */
   list: (owner: ItemOwner) => Promise<ItemCounts>;
+  /**
+   * Item ids this account has ever received (any positive `resource_ledger`
+   * row, any reason) on any map it has joined: the recipe book's "collected".
+   * Takes no row locks.
+   */
+  everCollected: (userId: string) => Promise<Set<string>>;
   /**
    * Row-locks these items (`FOR UPDATE`, in id order so two consumers never
    * deadlock) and returns what the player has of each. Missing rows are 0.
@@ -99,6 +105,25 @@ function queries(db: Executor): InventoryRepo {
           .from(inventories)
           .where(and(ownedBy(owner), gt(inventories.quantity, 0)))
           .orderBy(asc(inventories.itemId)),
+      ),
+
+    // Through map_members, so the ledger's (map_id, user_id) index serves
+    // each of the account's maps; left maps still count (rows are kept).
+    everCollected: async (userId) =>
+      new Set(
+        (
+          await db
+            .selectDistinct({ itemId: resourceLedger.itemId })
+            .from(mapMembers)
+            .innerJoin(
+              resourceLedger,
+              and(
+                eq(resourceLedger.mapId, mapMembers.mapId),
+                eq(resourceLedger.userId, mapMembers.userId),
+              ),
+            )
+            .where(and(eq(mapMembers.userId, userId), gt(resourceLedger.delta, 0)))
+        ).map((r) => r.itemId),
       ),
 
     lockItems: async (owner, itemIds) => {

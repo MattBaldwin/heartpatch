@@ -65,11 +65,19 @@ function firstIssue(error: { issues: { path: PropertyKey[]; message: string }[] 
 export interface AuthOverlayOptions {
   /** Called whenever the player logs in or out. */
   onChange?: (user: PublicUser | null) => void;
+  /**
+   * Over the map the chip folds into a Keeper menu in the corner (owner
+   * decision 2026-10-04): these rows sit above "Log out" in it.
+   */
+  menu?: () => Node[];
 }
 
 /**
  * Shows the welcome / sign-up / log-in screens until the player is logged in,
- * then a small "Hi, name!" chip with a log-out button.
+ * then a small "Hi, name!" chip with a log-out button. While the map's trays
+ * are up (`hp-trays-on` on the body), the chip is a round Keeper button that
+ * opens a little menu; it stays above Sprout's layer, so "Log out" is always
+ * reachable.
  */
 export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): void {
   const overlay = el('div', { class: 'auth-overlay', 'data-testid': 'auth-overlay' });
@@ -89,9 +97,39 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     { type: 'button', class: 'auth-button auth-button-small' },
     'Log out',
   );
-  const chip = el('div', { class: 'auth-chip' }, chipName, chipStatus, logoutButton);
+  const menuRows = el('div', { class: 'auth-chip-menu', role: 'group' });
+  const menuToggle = el(
+    'button',
+    {
+      type: 'button',
+      class: 'auth-chip-toggle',
+      'aria-label': 'Keeper menu',
+      'aria-expanded': 'false',
+      'data-testid': 'keeper-menu',
+    },
+    el('span', { class: 'auth-chip-face', 'aria-hidden': 'true' }),
+  );
+  const chip = el(
+    'div',
+    { class: 'auth-chip' },
+    menuToggle,
+    el('div', { class: 'auth-chip-body' }, chipName, chipStatus, menuRows, logoutButton),
+  );
   chip.hidden = true;
   root.append(overlay, chip);
+
+  const setMenu = (open: boolean) => {
+    chip.classList.toggle('auth-chip-open', open);
+    menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    menuRows.replaceChildren(...(open ? (options.menu?.() ?? []) : []));
+  };
+  menuToggle.addEventListener('click', () => {
+    setMenu(!chip.classList.contains('auth-chip-open'));
+  });
+  // A row opened something: the menu folds away.
+  menuRows.addEventListener('click', (e) => {
+    if (e.target instanceof Element && e.target.closest('button')) setMenu(false);
+  });
 
   /** Set while a recovery code is on screen: no update may reload it away. */
   let releaseUpdates: (() => void) | null = null;
@@ -105,6 +143,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     card.replaceChildren(...children);
     overlay.hidden = false;
     chip.hidden = true;
+    setMenu(false);
   };
 
   const signedIn = (user: PublicUser) => {

@@ -1,10 +1,12 @@
 import { el } from '../ui/dom.js';
 import type { TileInfo } from './tile-info.js';
 
-// The tile info panel: a bottom sheet over the map (tech spec §6, DOM overlay).
-// Information, plus an actions slot other features fill (gathering, #17).
-// Claiming arrives with its own issue, and home bases never offer it (design
-// doc §11).
+// The tile chip: a compact card at the bottom of the map when a tile is
+// tapped (tech spec §6, DOM overlay; owner decision 2026-10-04: the world
+// stays immersive). The name, who it belongs to, its guardians, and the 1–3
+// actions features put in its slot (gathering #17, home #18, territory #15).
+// The longer words (what the land is like, what grows there) fold behind an
+// (i) button. Home bases never offer Claim (design doc §11).
 
 export interface TilePanel {
   show: (info: TileInfo) => void;
@@ -19,6 +21,32 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
   const owner = el('p', { class: 'tile-panel-owner', 'data-testid': 'tile-panel-owner' });
   const about = el('p', { class: 'tile-panel-about' });
   const resource = el('p', { class: 'tile-panel-resource' });
+  const details = el(
+    'div',
+    { class: 'tile-panel-details', id: 'tile-panel-details', 'data-testid': 'tile-panel-details' },
+    about,
+    resource,
+  );
+  details.hidden = true;
+  const info = el(
+    'button',
+    {
+      type: 'button',
+      class: 'tile-panel-info',
+      'aria-label': 'More about this land',
+      'aria-controls': 'tile-panel-details',
+      'aria-expanded': 'false',
+      'data-testid': 'tile-panel-info',
+    },
+    'i',
+  );
+  const setDetails = (open: boolean) => {
+    details.hidden = !open;
+    info.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  info.addEventListener('click', () => {
+    setDetails(info.getAttribute('aria-expanded') !== 'true');
+  });
   const guardians = el('p', {
     class: 'tile-panel-guardians',
     'data-testid': 'tile-panel-guardians',
@@ -38,11 +66,15 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
       role: 'dialog',
       'aria-labelledby': 'tile-panel-title',
     },
-    el('div', { class: 'tile-panel-head' }, title, close),
-    owner,
-    about,
-    resource,
+    el(
+      'div',
+      { class: 'tile-panel-head' },
+      el('div', { class: 'tile-panel-names' }, title, owner),
+      info,
+      close,
+    ),
     guardians,
+    details,
     actions,
   );
   panel.hidden = true;
@@ -62,6 +94,7 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
     },
     hide: () => {
       panel.hidden = true;
+      setDetails(false);
     },
     get open() {
       return !panel.hidden;

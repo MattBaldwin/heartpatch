@@ -3,6 +3,7 @@ import {
   cameraBasis,
   cameraPosition,
   clampDistance,
+  glideAt,
   clampTarget,
   groundAt,
   releaseVelocity,
@@ -196,5 +197,26 @@ describe('wheelZoomFactor', () => {
   it('zooms out for positive deltas and back in symmetrically', () => {
     expect(wheelZoomFactor(100, 1.15)).toBeCloseTo(1.15);
     expect(wheelZoomFactor(100, 1.15) * wheelZoomFactor(-100, 1.15)).toBeCloseTo(1);
+  });
+});
+
+describe('gliding to a spot', () => {
+  const from = { x: 0, z: 0 };
+  const to = { x: 8, z: -4 };
+
+  it('starts where it was and ends on the spot', () => {
+    expect(glideAt(from, to, 0, bounds)).toEqual(from);
+    expect(glideAt(from, to, 1, bounds)).toEqual(to);
+    expect(glideAt(from, to, 2, bounds)).toEqual(to);
+  });
+
+  it('eases out: past halfway at the halfway mark', () => {
+    const half = glideAt(from, to, 0.5, bounds);
+    expect(half.x).toBeGreaterThan(4);
+    expect(half.x).toBeLessThan(8);
+  });
+
+  it('never leaves the map', () => {
+    expect(glideAt(from, { x: 50, z: 50 }, 1, bounds)).toEqual({ x: 10, z: 8 });
   });
 });

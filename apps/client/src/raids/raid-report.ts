@@ -16,6 +16,8 @@ import './raids.css';
 
 export interface RaidReportOptions {
   root: HTMLElement;
+  /** Where the entry button goes (a tray over the map, ui/trays); defaults to `root`. */
+  entryRoot?: HTMLElement;
   /** Plays a raid's replay in the battle screen. */
   watch: (replay: RaidReplay) => void;
   api?: RaidsApi;
@@ -54,7 +56,12 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
   let note = '';
 
   // ── Report button and sheet ───────────────────────────────────────────
-  const badge = el('span', { class: 'raid-open-badge', 'aria-hidden': 'true' });
+  // Unseen raids glow on the Adventure handle (ui/trays) instead of opening over the map.
+  const badge = el('span', {
+    class: 'raid-open-badge',
+    'aria-hidden': 'true',
+    'data-tray-alert': RAID_TEXT.news,
+  });
   const button = el(
     'button',
     {
@@ -92,7 +99,8 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
       changed(!sheet.hidden);
     }).observe(sheet, { attributes: true, attributeFilter: ['hidden'] });
   }
-  options.root.append(button, sheet);
+  (options.entryRoot ?? options.root).append(button);
+  options.root.append(sheet);
 
   button.addEventListener('click', () => {
     show();
@@ -123,7 +131,7 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
       const fresh = await api.report(id);
       if (at !== generation) return;
       report = fresh;
-      if (openIfNew && fresh.unseen > 0) show();
+      if (openIfNew && fresh.unseen > 0 && !options.entryRoot) show();
     } catch (err) {
       if (at === generation) note = messageOf(err);
     }

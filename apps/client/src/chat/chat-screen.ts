@@ -31,6 +31,8 @@ import './chat.css';
 
 export interface ChatScreenOptions {
   root: HTMLElement;
+  /** Where the entry button goes (a tray over the map, ui/trays); defaults to `root`. */
+  entryRoot?: HTMLElement;
   api?: ChatApi;
   /** Device wall clock in ms (tests pass a fake). */
   now?: () => number;
@@ -126,7 +128,8 @@ export function createChatScreen(options: ChatScreenOptions): ChatScreen {
     el('div', { class: 'auth-actions' }, closeButton),
   );
   sheet.hidden = true;
-  options.root.append(openButton, bubbleBox, sheet);
+  (options.entryRoot ?? options.root).append(openButton);
+  options.root.append(bubbleBox, sheet);
 
   // The picker never changes: built once from shared data.
   const pickButtons: HTMLButtonElement[] = [];

@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
+import { expectClear } from './layout.js';
 import { newPlayer, TEST_PASSWORD, uniqueName } from './players.js';
 
 // The tutorial layer (#47) and The First Patch (#24). Asserts on signals from
@@ -97,8 +98,15 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   // Near the top of the screen, away from Sprout's bubble at the bottom.
   const width = page.viewportSize()?.width ?? 390;
   expect(await testIdAt(page, width / 2, 160)).toBe('tutorial-blocker');
-  // ...except "Log out": nobody is ever stuck in the tutorial.
+  // ...except "Log out": nobody is ever stuck in the tutorial. Over the map
+  // it's in the Keeper menu in the corner, which takes taps too.
+  const menu = page.getByTestId('keeper-menu');
+  if (await menu.isVisible()) {
+    expect(await takesTaps(page, menu)).toBe(true);
+    await menu.tap();
+  }
   expect(await takesTaps(page, page.getByRole('button', { name: 'Log out' }))).toBe(true);
+  if (await menu.isVisible()) await menu.tap();
   // Sprout joins the scene once the renderer is up.
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   await expect.poll(async () => (await debug(page))?.sprout).toMatch(/^[0-9a-f]{32}$/);
@@ -355,4 +363,66 @@ test('the gather step, played for real: tap the tree tile, Gather, wait, Collect
   await collect.tap();
   await step('hearthfire');
   await expect(page.getByTestId('gather-chip')).toBeHidden();
+});
+
+test('first battle: Sprout points at the Adventure handle, then at Find a squishy inside', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000); // draws the Glade; CI renders in software
+  const page = await newPlayer(browser, uniqueName('tray'));
+  const bubble = page.getByTestId('tutorial-bubble');
+  const main = bubble.getByTestId('tutorial-main');
+  const overlay = async () => (await debug(page))?.overlay;
+  const inHole = async (target: Locator) => {
+    const hole = (await overlay())?.hole;
+    const box = await target.boundingBox();
+    if (!hole || !box) return false;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    return cx >= hole.x && cx <= hole.x + hole.width && cy >= hole.y && cy <= hole.y + hole.height;
+  };
+
+  await page.getByTestId('lobby').getByTestId('tutorial-start').tap();
+  await expect.poll(async () => (await debug(page))?.stepId, { timeout: 15_000 }).toBe('welcome');
+  const run = (await debug(page))?.mapId;
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await expect.poll(() => drawnMap(page), { timeout: 60_000 }).toBe(run);
+  await jumpTo(page, 'first-battle');
+  // Sprout never covers the handle it's talking about: talking, then tucked,
+  // on a small phone and an iPad both ways round (owner, 2026-10-05).
+  const sproutClear = async () => {
+    for (const size of [
+      { width: 375, height: 667 },
+      { width: 820, height: 1180 },
+      { width: 1180, height: 820 },
+    ]) {
+      await page.setViewportSize(size);
+      await expect(async () => {
+        await expectClear(
+          page,
+          '[data-testid="tutorial-bubble"]',
+          '[data-testid="tutorial-spotlight"]:not([hidden])',
+        );
+      }).toPass({ timeout: 15_000 }); // a new size draws slowly in software
+    }
+    await page.setViewportSize({ width: 375, height: 667 });
+  };
+  await expect.poll(async () => (await overlay())?.spotlightOn).toBe('wild-squishy');
+  await sproutClear();
+  while ((await main.isVisible()) && (await main.textContent()) === 'Next') await main.tap();
+  if (await main.isVisible()) await main.tap(); // Let's go!
+  await sproutClear();
+
+  // The tray is shut: the spotlight is on its handle, which takes the tap.
+  const handle = page.getByTestId('tray-handle-adventure');
+  await expect.poll(async () => (await overlay())?.gate).toBe('spotlight');
+  expect((await overlay())?.spotlightOn).toBe('wild-squishy');
+  await expect.poll(() => inHole(handle)).toBe(true);
+  expect(await takesTaps(page, handle)).toBe(true);
+  await handle.tap();
+
+  // Once the tray has slid open, the spotlight rests on Find a squishy, which takes taps.
+  const entry = page.getByTestId('battle-entry');
+  await expect.poll(() => inHole(entry), { timeout: 10_000 }).toBe(true);
+  await expect.poll(() => takesTaps(page, entry)).toBe(true);
 });

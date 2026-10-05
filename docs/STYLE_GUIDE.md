@@ -26,6 +26,7 @@ Applies to every client PR.
 
 1. **Teach one thing at a time.** Every mechanic is introduced by the tutorial or a first-time Sprout tip before the player needs it.
 2. **Big, obvious controls.** Minimum 44×44 pt tap targets. All game controls reachable one-handed on iPhone.
+   Text never touches a control's edge: buttons, pills, chips, tabs and flags pad with the shared tokens (`--hp-pad-x` 12 px, `--hp-pad-y` 8 px in `apps/client/src/styles.css`), and nothing hangs off the screen at any width from 320 px up (`tray-layout.spec.ts` checks it).
 3. **No hidden essentials.** Every gesture (stroke to pet, pinch to tickle, long-press) has a visible button alternative.
 4. **Show, then tell.** Effectiveness callouts, colour, motion and sound before text. Detail is opt-in.
 5. **Always a next step.** Every screen makes the obvious next action obvious; no dead ends.

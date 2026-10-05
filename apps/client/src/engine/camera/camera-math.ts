@@ -198,3 +198,21 @@ export function releaseVelocity(
 export function wheelZoomFactor(deltaPx: number, perHundredPx: number): number {
   return Math.pow(perHundredPx, deltaPx / 100);
 }
+
+/**
+ * Where a glide to another spot on the map is at `progress` (0…1): eased out
+ * (fast, then settling), clamped to the map. Used by "Find on map".
+ */
+export function glideAt(
+  from: GroundPoint,
+  to: GroundPoint,
+  progress: number,
+  bounds: Bounds,
+): GroundPoint {
+  const t = Math.min(Math.max(progress, 0), 1);
+  const eased = 1 - (1 - t) ** 3;
+  return clampTarget(
+    { x: from.x + (to.x - from.x) * eased, z: from.z + (to.z - from.z) * eased },
+    bounds,
+  );
+}
