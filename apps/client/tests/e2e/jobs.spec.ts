@@ -21,6 +21,7 @@ interface JobsDebug {
     note: string;
   };
   team: { open: boolean; picked: string[]; saved: string[]; note: string };
+  badges: number;
 }
 
 interface BattleBody {
@@ -70,6 +71,8 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   await picker.getByTestId('jobs-spot').first().tap();
   await expect.poll(async () => (await jobsState(page))?.board.jobs[helperId]).toBe('gatherer');
   await expect(helper).toContainText('Next in');
+  // Live on the map: a 🧺 over the tile it works (a DOM badge from the map's projection).
+  await expect.poll(async () => (await jobsState(page))?.badges, { timeout: 15_000 }).toBe(1);
 
   // Its work finishes (the dev short timer), and Collect puts it in the bag.
   expect((await api(page, 'POST', `/maps/${mapId}/dev/work/ready`)).status).toBe(200);
@@ -97,6 +100,8 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   await expect(team.getByTestId('team-note')).toContainText('Team saved!');
   expect(findAvoidedWords((await team.textContent()) ?? '')).toEqual([]);
   await team.getByRole('button', { name: 'Close' }).tap();
+  // It left its tile for the team, so its badge went too.
+  await expect.poll(async () => (await jobsState(page))?.badges, { timeout: 15_000 }).toBe(0);
 
   // The next battle brings exactly the picked team.
   const fight = await api(page, 'POST', `/maps/${mapId}/dev/battles`, {

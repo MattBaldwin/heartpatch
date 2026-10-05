@@ -199,3 +199,23 @@
   font-size: 15px;
   font-weight: 700;
 }
+
+/* The 🧺 over a tile where a squishy gathers: placed with the map's tile
+   projection, under every panel and sheet, never in the way of a tap. */
+.gatherer-badge {
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgb(255 250 252 / 90%);
+  box-shadow: 0 2px 6px rgb(107 75 110 / 25%);
+  font-size: 16px;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.gatherer-badge[hidden] {
+  display: none;
+}

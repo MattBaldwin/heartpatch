@@ -7,6 +7,7 @@ import {
 } from '@heartpatch/shared';
 import type { TileActions } from '../../map/map-screen.js';
 import { el } from '../../ui/dom.js';
+import { createGathererBadges, type GathererBadges } from './gatherer-badges.js';
 import { createJobBoard, type JobBoard, type JobBoardDebug } from './job-board.js';
 import type { JobsApi } from './jobs-api.js';
 import { JOBS_TEXT } from './jobs-view.js';
@@ -30,6 +31,8 @@ export interface JobsOptions {
 export interface JobsDebug {
   readonly board: JobBoardDebug;
   readonly team: TeamPickerDebug;
+  /** Gatherer badges on screen over the map. */
+  readonly badges: number;
 }
 
 export interface Jobs {
@@ -45,6 +48,8 @@ export interface Jobs {
    * picker for the map `mapNow` names. The trays move it later.
    */
   mountTeamButton: (box: Element | null, mapNow: () => string | null) => void;
+  /** The map layer that puts a 🧺 over tiles with a gatherer (pass it to the map screen). */
+  readonly badges: GathererBadges;
   readonly isOpen: boolean;
   readonly debug: JobsDebug;
 }
@@ -80,6 +85,7 @@ export function createJobs(options: JobsOptions): Jobs {
     root: options.root,
     ...(options.api ? { api: options.api } : {}),
   });
+  const badges = createGathererBadges(options.root);
   let userId: string | null = null;
   const glade = (mapId: string) => options.isGlade?.(mapId) ?? false;
 
@@ -173,11 +179,12 @@ export function createJobs(options: JobsOptions): Jobs {
       new MutationObserver(refresh).observe(box, { attributes: true, attributeFilter: ['hidden'] });
       refresh();
     },
+    badges,
     get isOpen() {
       return board.isOpen || picker.isOpen;
     },
     get debug() {
-      return { board: board.debug, team: picker.debug };
+      return { board: board.debug, team: picker.debug, badges: badges.shown };
     },
   };
   installed = jobs;
