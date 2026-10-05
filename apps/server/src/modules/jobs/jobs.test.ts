@@ -9,7 +9,6 @@ import {
   type JobsView,
   type PublicTile,
 } from '@heartpatch/shared';
-import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -21,13 +20,10 @@ import {
   inventories,
   keepers,
   mapMembers,
-  maps,
-  resourceLedger,
   sessions,
   squishies,
   tileAttacks,
   tileDefenders,
-  tiles,
   users,
 } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
@@ -86,19 +82,17 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       .returning({ id: users.id });
     await db.insert(keepers).values({ userId: user!.id, ...TEST_KEEPER });
     const { token, tokenHash } = newSessionToken();
-    await db
-      .insert(sessions)
-      .values({
-        userId: user!.id,
-        tokenHash,
-        expiresAt: new Date(Date.parse(START) + 365 * DAY_MS),
-      });
+    await db.insert(sessions).values({
+      userId: user!.id,
+      tokenHash,
+      expiresAt: new Date(Date.parse(START) + 365 * DAY_MS),
+    });
     return { id: user!.id, username, token };
   }
 
   function call(
     server: FastifyInstance,
-    method: 'GET' | 'POST' | 'PUT',
+    method: 'GET' | 'POST',
     path: string,
     who: Player | null,
     payload?: object,
@@ -114,6 +108,17 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
   }
 
   const errorOf = (res: LightMyRequestResponse) => ApiErrorSchema.parse(res.json()).error;
+
+  /** Hand-edits rows this test made itself (plain SQL with its own ids, as gathering's tests do). */
+  const run = (statement: string) => db.execute(statement);
+
+  const tileIdAt = async (mapId: string, at: { q: number; r: number }) =>
+    (await db.query.tiles.findFirst({
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.q, at.q), eq(t.r, at.r)),
+    }))!.id;
+
+  const squishyRow = (id: string) =>
+    db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, id) });
 
   async function newMap(server: FastifyInstance, who: Player): Promise<string> {
     const res = await call(server, 'POST', '/maps', who, {
@@ -169,10 +174,10 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         home.every((h) => hexDistance(h, t) >= 4),
     );
     expect(far).toBeDefined();
-    await db
-      .update(tiles)
-      .set({ ownerUserId: who.id, terrain, nodeResource: null })
-      .where(and(eq(tiles.mapId, mapId), eq(tiles.q, far!.q), eq(tiles.r, far!.r)));
+    await run(
+      `update tiles set owner_user_id = '${who.id}', terrain = '${terrain}', node_resource = null
+       where id = '${await tileIdAt(mapId, far!)}'`,
+    );
     return { ...far!, ownerUserId: who.id, terrain, nodeResource: null };
   }
 
@@ -197,10 +202,10 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
     squishyId: string,
     body: object,
     headers = {},
-  ) => call(server, 'PUT', `/maps/${mapId}/squishies/${squishyId}/job`, who, body, headers);
+  ) => call(server, 'POST', `/maps/${mapId}/squishies/${squishyId}/job`, who, body, headers);
 
   const setTeam = (server: FastifyInstance, who: Player, mapId: string, ids: string[]) =>
-    call(server, 'PUT', `/maps/${mapId}/team`, who, { squishyIds: ids });
+    call(server, 'POST', `/maps/${mapId}/team`, who, { squishyIds: ids });
 
   const collect = (server: FastifyInstance, who: Player, mapId: string, headers = {}) =>
     call(server, 'POST', `/maps/${mapId}/work/collect`, who, undefined, headers);
@@ -210,10 +215,9 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
   const bag = async (mapId: string, who: Player) =>
     Object.fromEntries(
       (
-        await db
-          .select({ itemId: inventories.itemId, quantity: inventories.quantity })
-          .from(inventories)
-          .where(and(eq(inventories.mapId, mapId), eq(inventories.userId, who.id)))
+        await db.query.inventories.findMany({
+          where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, who.id)),
+        })
       ).map((r) => [r.itemId, r.quantity]),
     );
 
@@ -247,36 +251,29 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         await squishy(mapId, kid),
       ];
       const land = await farLand(server, kid, mapId, 'meadow');
-      const [landRow] = await db
-        .select({ id: tiles.id })
-        .from(tiles)
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.q, land.q), eq(tiles.r, land.r)));
+      const landRow = { id: await tileIdAt(mapId, land) };
       // Posted and housed the way #15 and #18 stored them before jobs existed.
       await db
         .insert(tileDefenders)
-        .values({ mapId, tileId: landRow!.id, slot: 0, squishyId: guard, assignedAt: clock });
+        .values({ mapId, tileId: landRow.id, slot: 0, squishyId: guard, assignedAt: clock });
       const home = (await tilesOf(server, kid, mapId)).find(
         (t) => t.ownerUserId === kid.id && t.homeSlot !== null,
       )!;
-      const [homeRow] = await db
-        .select({ id: tiles.id })
-        .from(tiles)
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.q, home.q), eq(tiles.r, home.r)));
+      const homeRow = { id: await tileIdAt(mapId, home) };
       const [habitat] = await db
         .insert(buildings)
         .values({
           mapId,
           ownerUserId: kid.id,
-          tileId: homeRow!.id,
+          tileId: homeRow.id,
           buildingId: 'cozy-meadow',
           kind: 'habitat',
           spot: 3,
         })
         .returning({ id: buildings.id });
-      await db
-        .update(squishies)
-        .set({ habitatBuildingId: habitat!.id })
-        .where(eq(squishies.id, housed));
+      await run(
+        `update squishies set habitat_building_id = '${habitat!.id}' where id = '${housed}'`,
+      );
 
       const view = await jobs(server, kid, mapId);
       expect(jobOf(view, guard)).toMatchObject({ job: 'guard', post: { q: land.q, r: land.r } });
@@ -355,14 +352,11 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         nextReadyAt: new Date(clock.getTime() + cycle * 1000).toISOString(),
       });
 
-      const ledger = await db
-        .select({
-          reason: resourceLedger.reason,
-          refId: resourceLedger.refId,
-          delta: resourceLedger.delta,
+      const ledger = (
+        await db.query.resourceLedger.findMany({
+          where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
         })
-        .from(resourceLedger)
-        .where(and(eq(resourceLedger.mapId, mapId), eq(resourceLedger.userId, kid.id)));
+      ).map(({ reason, refId, delta }) => ({ reason, refId, delta }));
       expect(ledger).toEqual([{ reason: 'work', refId: pet, delta: 5 * cap }]);
       const types = (await eventsOf(mapId)).map((e) => e.type);
       expect(types.filter((t) => t === 'work.collected')).toHaveLength(1);
@@ -483,7 +477,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         work: null,
       });
       expect((await bag(mapId, kid))['timber']).toBe(5);
-      const [row] = await db.select().from(squishies).where(eq(squishies.id, pet));
+      const row = await squishyRow(pet);
       expect(row).toMatchObject({ workTileId: null, workSince: null, workStartedAt: null });
     });
 
@@ -492,28 +486,22 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       const node = await homeNode(server, kid, mapId, 'timber');
-      const [nodeRow] = await db
-        .select({ id: tiles.id })
-        .from(tiles)
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.q, node.q), eq(tiles.r, node.r)));
+      const nodeRow = { id: await tileIdAt(mapId, node) };
       const [habitat] = await db
         .insert(buildings)
         .values({
           mapId,
           ownerUserId: kid.id,
-          tileId: nodeRow!.id,
+          tileId: nodeRow.id,
           buildingId: 'cozy-meadow',
           kind: 'habitat',
           spot: 2,
         })
         .returning({ id: buildings.id });
       const pet = await squishy(mapId, kid);
-      await db
-        .update(squishies)
-        .set({ habitatBuildingId: habitat!.id })
-        .where(eq(squishies.id, pet));
+      await run(`update squishies set habitat_building_id = '${habitat!.id}' where id = '${pet}'`);
       await setJob(server, kid, mapId, pet, { job: 'gatherer', q: node.q, r: node.r });
-      const [row] = await db.select().from(squishies).where(eq(squishies.id, pet));
+      const row = await squishyRow(pet);
       expect(row?.habitatBuildingId).toBeNull();
       const housed = (await eventsOf(mapId)).find((e) => e.type === 'squishy.housed');
       expect(housed?.payload).toMatchObject({
@@ -544,10 +532,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       await setJob(server, kid, mapId, pet, { job: 'gatherer', q: forest.q, r: forest.r });
       later(70 * MINUTE_MS);
       // A capture of that tile, recorded the way #15 does, and the land back again.
-      const [tileRow] = await db
-        .select({ id: tiles.id })
-        .from(tiles)
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.q, forest.q), eq(tiles.r, forest.r)));
+      const tileRow = { id: await tileIdAt(mapId, forest) };
       await db.insert(mapMembers).values({ mapId, userId: rival.id, role: 'member' });
       const [battle] = await db
         .insert(battles)
@@ -566,7 +551,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         .returning({ id: battles.id });
       await db.insert(tileAttacks).values({
         mapId,
-        tileId: tileRow!.id,
+        tileId: tileRow.id,
         attackerUserId: rival.id,
         defenderUserId: kid.id,
         battleId: battle!.id,
@@ -619,7 +604,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       for (const id of [worker, guard, idle]) expect(jobOf(view, id).job).toBe('team');
       expect(jobOf(view, guard).post).toBeNull();
       expect(
-        await db.select().from(tileDefenders).where(eq(tileDefenders.squishyId, guard)),
+        await db.query.tileDefenders.findMany({ where: (t, { eq }) => eq(t.squishyId, guard) }),
       ).toEqual([]);
       // The gatherer's finished cycle went in the bag on the way.
       expect((await bag(mapId, kid))['timber']).toBe(2);
@@ -667,7 +652,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       await setJob(server, kid, mapId, ids[3]!, { job: 'team' });
       expect((await jobs(server, kid, mapId)).team).toEqual([ids[0], ids[3], ids[2]]);
 
-      await db.update(squishies).set({ state: 'hollowed' }).where(eq(squishies.id, ids[1]!));
+      await run(`update squishies set state = 'hollowed' where id = '${ids[1]!}'`);
       const away = await setJob(server, kid, mapId, ids[1]!, { job: 'team' });
       expect(errorOf(away).message).toBe('Puddlepuff is in the Hollow. Rescue them first!');
       expect(errorOf(await setTeam(server, kid, mapId, [ids[1]!])).code).toBe('CONFLICT');
@@ -687,15 +672,12 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
     async function battleTeam(kid: Player, mapId: string) {
       const service = createBattlesService({ db, clock: () => clock });
       const { battle } = await service.startAgainst(
-        { id: kid.id, username: kid.username } as never,
+        { id: kid.id, username: kid.username },
         mapId,
         wild as never,
       );
-      const [row] = await db
-        .select({ setup: battles.setup })
-        .from(battles)
-        .where(eq(battles.id, battle.id));
-      await db.update(battles).set({ status: 'finished' }).where(eq(battles.id, battle.id));
+      const row = await db.query.battles.findFirst({ where: (t, { eq }) => eq(t.id, battle.id) });
+      await run(`update battles set status = 'finished' where id = '${battle.id}'`);
       return (row!.setup as { a: { squishies: { id: string }[] } }).a.squishies.map((s) => s.id);
     }
 
@@ -703,14 +685,14 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
-      const [weak, mid, strong] = [
+      // The strongest (level 9) sits out: the picked team goes, in its order.
+      const [weak, , strong] = [
         await squishy(mapId, kid, { level: 2 }),
         await squishy(mapId, kid, { level: 4 }),
         await squishy(mapId, kid, { level: 9 }),
       ];
       await setTeam(server, kid, mapId, [weak, strong]);
       expect(await battleTeam(kid, mapId)).toEqual([weak, strong]);
-      void mid;
     });
 
     it('falls back to the strongest resting squishies, never guards or gatherers', async () => {
@@ -734,11 +716,10 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       });
       await setJob(server, kid, mapId, worker, { job: 'gatherer', q: forest.q, r: forest.r });
       expect(await battleTeam(kid, mapId)).toEqual([b, d, a]);
-      void c;
 
       // A team whose members are all in the Hollow falls back too.
       await setTeam(server, kid, mapId, [c]);
-      await db.update(squishies).set({ state: 'hollowed' }).where(eq(squishies.id, c));
+      await run(`update squishies set state = 'hollowed' where id = '${c}'`);
       expect(await battleTeam(kid, mapId)).toEqual([b, d, a]);
     });
 
@@ -761,20 +742,17 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       // Past the first-night grace.
-      await db
-        .update(mapMembers)
-        .set({ joinedAt: new Date('2026-09-01T12:00:00Z') })
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, kid.id)));
+      await run(
+        `update map_members set joined_at = '2026-09-01T12:00:00Z'
+         where map_id = '${mapId}' and user_id = '${kid.id}'`,
+      );
       const node = await homeNode(server, kid, mapId, 'timber');
-      const [nodeRow] = await db
-        .select({ id: tiles.id })
-        .from(tiles)
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.q, node.q), eq(tiles.r, node.r)));
+      const nodeRow = { id: await tileIdAt(mapId, node) };
       // A lit fire on the home base keeps home safe tonight.
       await db.insert(buildings).values({
         mapId,
         ownerUserId: kid.id,
-        tileId: nodeRow!.id,
+        tileId: nodeRow.id,
         buildingId: 'hearthfire',
         kind: 'hearthfire',
         spot: 1,
@@ -802,14 +780,10 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         battles: createBattlesService({ db, clock: () => clock }),
       });
       expect(await hollow.runNightfall(mapId, '2026-10-02')).toEqual({ taken: 1 });
-      const [taken] = await db.select().from(squishies).where(eq(squishies.id, outside));
+      const taken = await squishyRow(outside);
       expect(taken).toMatchObject({ state: 'hollowed', workTileId: null });
       for (const id of [inside, home]) {
-        const [row] = await db
-          .select({ state: squishies.state })
-          .from(squishies)
-          .where(eq(squishies.id, id));
-        expect(row?.state).toBe('active');
+        expect((await squishyRow(id))?.state).toBe('active');
       }
       // Its day's work went home with the morning: 15 h at 30 min a cycle, capped.
       expect((await bag(mapId, kid))['timber']).toBe(2 * JOB_RULES.work.maxStoredCycles);
@@ -827,40 +801,36 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
     ): Promise<void> {
       let running: Promise<unknown> | undefined;
       await db.transaction(async (tx) => {
-        await tx.execute(sql`set local lock_timeout = '10s'`);
-        await first(tx as never);
+        await tx.execute(`set local lock_timeout = '10s'`);
+        await first(tx);
         const pid = await backendPid(tx);
         running = command();
         await waitUntilBlockedBy(db, pid);
-        await then(tx as never);
+        await then(tx);
       });
       await running;
     }
 
-    const lockRow = (tx: Database, table: typeof squishies | typeof tiles, id: string) =>
-      tx.select({ id: table.id }).from(table).where(eq(table.id, id)).for('update');
+    // Plain SQL with ids this test made itself (module tests don't build queries).
+    const lockRow = (tx: Database, table: 'squishies' | 'tiles', id: string) =>
+      tx.execute(`select 1 from ${table} where id = '${id}' for update`);
     const lockMap = (tx: Database, mapId: string) =>
-      tx.select({ id: maps.id }).from(maps).where(eq(maps.id, mapId)).for('no key update');
+      tx.execute(`select 1 from maps where id = '${mapId}' for no key update`);
     const lockMember = (tx: Database, mapId: string, userId: string) =>
-      tx
-        .select({ userId: mapMembers.userId })
-        .from(mapMembers)
-        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)))
-        .for('update');
+      tx.execute(
+        `select 1 from map_members where map_id = '${mapId}' and user_id = '${userId}' for update`,
+      );
 
     async function setup() {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
       const node = await homeNode(server, kid, mapId, 'timber');
-      const [tileRow] = await db
-        .select({ id: tiles.id })
-        .from(tiles)
-        .where(and(eq(tiles.mapId, mapId), eq(tiles.q, node.q), eq(tiles.r, node.r)));
+      const tileRow = { id: await tileIdAt(mapId, node) };
       const pet = await squishy(mapId, kid);
       const service = createSquishyJobsService({ db, clock: () => clock });
       const user = { id: kid.id, username: kid.username } as never;
-      return { server, kid, mapId, node, tileId: tileRow!.id, pet, service, user };
+      return { server, kid, mapId, node, tileId: tileRow.id, pet, service, user };
     }
 
     it('takes the member row before the tile (jobs `setJob`)', async () => {
@@ -868,16 +838,16 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       await holdThen(
         (tx) => lockMember(tx, mapId, kid.id),
         () => service.setJob(user, mapId, pet, { job: 'gatherer', q: node.q, r: node.r }),
-        (tx) => lockRow(tx, tiles, tileId),
+        (tx) => lockRow(tx, 'tiles', tileId),
       );
     });
 
     it('takes the tile before the squishy (jobs `setJob`)', async () => {
       const { mapId, node, tileId, pet, service, user } = await setup();
       await holdThen(
-        (tx) => lockRow(tx, tiles, tileId),
+        (tx) => lockRow(tx, 'tiles', tileId),
         () => service.setJob(user, mapId, pet, { job: 'gatherer', q: node.q, r: node.r }),
-        (tx) => lockRow(tx, squishies, pet),
+        (tx) => lockRow(tx, 'squishies', pet),
       );
     });
 
@@ -886,13 +856,13 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       await service.setJob(user, mapId, pet, { job: 'gatherer', q: node.q, r: node.r });
       later(31 * MINUTE_MS);
       await holdThen(
-        (tx) => lockRow(tx, tiles, tileId),
+        (tx) => lockRow(tx, 'tiles', tileId),
         () => service.collect(user, mapId),
-        (tx) => lockRow(tx, squishies, pet),
+        (tx) => lockRow(tx, 'squishies', pet),
       );
       later(31 * MINUTE_MS);
       await holdThen(
-        (tx) => lockRow(tx, squishies, pet),
+        (tx) => lockRow(tx, 'squishies', pet),
         () => service.collect(user, mapId),
         (tx) => lockMap(tx, mapId),
       );
@@ -905,20 +875,13 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       await db.insert(inventories).values({ mapId, userId: kid.id, itemId: 'timber', quantity: 1 });
       later(31 * MINUTE_MS);
       await holdThen(
-        (tx) => lockRow(tx, squishies, pet),
+        (tx) => lockRow(tx, 'squishies', pet),
         () => service.collect(user, mapId),
         (tx) =>
-          tx
-            .select({ itemId: inventories.itemId })
-            .from(inventories)
-            .where(
-              and(
-                eq(inventories.mapId, mapId),
-                eq(inventories.userId, kid.id),
-                eq(inventories.itemId, 'timber'),
-              ),
-            )
-            .for('update'),
+          tx.execute(
+            `select 1 from inventories
+             where map_id = '${mapId}' and user_id = '${kid.id}' and item_id = 'timber' for update`,
+          ),
       );
       expect((await bag(mapId, kid))['timber']).toBe(6);
     });

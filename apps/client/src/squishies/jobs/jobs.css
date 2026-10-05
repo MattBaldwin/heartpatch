@@ -1,0 +1,201 @@
+/* Squishy jobs (owner decisions 2026-10-04): the job board and the team
+   picker. Sheets like the bag's, over the map or home base (z-index 6, with
+   the care sheet), 44pt+ targets, safe areas, one-handed. */
+
+.jobs-sheet {
+  position: fixed;
+  z-index: 6;
+  left: calc(env(safe-area-inset-left) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  box-sizing: border-box;
+  max-width: 460px;
+  max-height: calc(100dvh - env(safe-area-inset-top) - 72px);
+  margin: 0 auto;
+  padding: 14px 16px 18px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 24px;
+  background: #fffafc;
+  box-shadow: 0 8px 28px rgb(107 75 110 / 24%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.jobs-sheet[hidden],
+.jobs-collect[hidden],
+.jobs-entry[hidden] {
+  display: none;
+}
+
+.jobs-sheet h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.jobs-note {
+  margin: 6px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #2f6b3d;
+}
+
+.jobs-note:empty {
+  display: none;
+}
+
+.jobs-collect {
+  width: 100%;
+  min-height: 48px;
+  margin: 6px 0 4px;
+}
+
+.jobs-list,
+.jobs-hints,
+.jobs-spots,
+.team-list,
+.team-slots {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jobs-row {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: #fff1f7;
+}
+
+.jobs-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jobs-blob {
+  display: inline-block;
+  flex: none;
+  width: 26px;
+  height: 22px;
+  border-radius: 50% 50% 45% 45%;
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 12%);
+}
+
+.jobs-name {
+  font-size: 18px;
+}
+
+.jobs-line {
+  margin: 4px 0;
+  font-size: 15px;
+}
+
+.jobs-hints li,
+.jobs-small {
+  font-size: 13px;
+  color: #7a5d80;
+}
+
+.jobs-safe {
+  margin: 2px 0;
+  font-size: 13px;
+  color: #2f6b3d;
+}
+
+.jobs-dark {
+  margin: 2px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b4bb0;
+}
+
+.jobs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.jobs-action {
+  flex: 1 1 0;
+  min-width: 88px;
+  min-height: 44px;
+  padding: 6px 8px;
+  font-size: 15px;
+}
+
+.jobs-picker {
+  margin-top: 6px;
+}
+
+.jobs-spot {
+  margin: 6px 0;
+}
+
+.jobs-spot .jobs-action {
+  width: 100%;
+}
+
+.team-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.team-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 72px;
+  border: 2px dashed #e3b8d3;
+  border-radius: 18px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.team-candidate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  background: #fff1f7;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.team-candidate:disabled {
+  opacity: 0.55;
+}
+
+.team-chosen {
+  border-color: #d9579b;
+  background: #ffe2f0;
+}
+
+.team-candidate-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.tile-workers {
+  margin: 4px 0;
+  font-size: 15px;
+  font-weight: 700;
+}

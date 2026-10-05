@@ -228,6 +228,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           squishyJobsRoutes(createSquishyJobsService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
         await api.register(

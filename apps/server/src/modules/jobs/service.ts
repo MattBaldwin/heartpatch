@@ -204,6 +204,8 @@ export interface SquishyJobsService {
   setTeam: (user: PublicUser, mapId: string, request: SetTeamRequest) => Promise<JobsView>;
   /** Puts everything my gatherers have ready in my bag. */
   collect: (user: PublicUser, mapId: string) => Promise<CollectWorkResponse>;
+  /** Dev/test only: each of my gatherers finishes one more cycle now (a short timer for e2e). */
+  devReady: (user: PublicUser, mapId: string) => Promise<JobsView>;
 }
 
 export interface SquishyJobsServiceOptions {
@@ -312,6 +314,7 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     });
     return {
       squishies,
+      names: Object.fromEntries(rows.map((r) => [r.squishy.id, squishyName(r.squishy)])),
       team,
       spots,
       rules: { teamSize: BATTLE_RULES.teamSize, maxStoredCycles: JOB_RULES.work.maxStoredCycles },
@@ -615,6 +618,19 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           items: await createInventoryRepo(tx).list(owner),
           jobs: await buildView(tx, repo, map, user.id, at),
         };
+      }),
+
+    devReady: (user, mapId) =>
+      command(user, mapId, async ({ repo, tx, map, at }) => {
+        const working = (await repo.listMine(map.id, user.id)).filter((r) => r.atWork);
+        const { rows } = await lockJobs(repo, working);
+        for (const row of rows) {
+          const work = workAt(row, map, at);
+          if (!work || !row.workSince) continue;
+          const since = row.workSince.getTime() - work.cycleSeconds * 1000;
+          await repo.moveWorkSince(row.squishy.id, new Date(since));
+        }
+        return buildView(tx, repo, map, user.id, at);
       }),
   };
 }

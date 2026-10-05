@@ -18,6 +18,8 @@ export interface SquishyJobsRoutesOptions {
   hooks: AuthHooks;
   /** `Idempotency-Key` support (`registerIdempotency`). */
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
+  /** Registers the dev-only short timer (`HP_DEV_SQUISHY_GRANTS`; never in production). */
+  devTools?: boolean;
 }
 
 /** Squishy jobs: the job board, one squishy's job, the team, and collecting work. */
@@ -38,7 +40,7 @@ export const squishyJobsRoutes =
       async (request) => service.view(requireUser(request), request.params.mapId),
     );
 
-    app.put(
+    app.post(
       '/maps/:mapId/squishies/:squishyId/job',
       {
         schema: {
@@ -58,7 +60,7 @@ export const squishyJobsRoutes =
         ),
     );
 
-    app.put(
+    app.post(
       '/maps/:mapId/team',
       {
         schema: {
@@ -81,6 +83,18 @@ export const squishyJobsRoutes =
       },
       async (request) => service.collect(requireUser(request), request.params.mapId),
     );
+
+    if (options.devTools) {
+      // Dev and test only: every gatherer finishes one more cycle now (e2e's short timer).
+      app.post(
+        '/maps/:mapId/dev/work/ready',
+        {
+          schema: { params: MapIdParamsSchema, response: { 200: JobsViewSchema } },
+          preHandler: [requireAuth, rateLimit('jobs')],
+        },
+        async (request) => service.devReady(requireUser(request), request.params.mapId),
+      );
+    }
 
     done();
   };

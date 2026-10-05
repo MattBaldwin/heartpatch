@@ -11,6 +11,7 @@ import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
 import { createCareSheet } from './care/care-sheet.js';
+import { createJobs } from './squishies/jobs/index.js';
 import { createChatScreen } from './chat/chat-screen.js';
 import { createCloseUpScreen, type CloseUpFrom } from './close-up/close-up-screen.js';
 import { combineTileActions } from './map/tile-actions.js';
@@ -140,6 +141,10 @@ const care = createCareSheet({
     void closeUp.open(mapId, squishyId, homeOpen() ? 'home' : 'map');
   },
 });
+// Squishy jobs (owner decisions 2026-10-04): the job board and team picker
+// sheets. Temporary entry points the trays will move: home's "Jobs & team",
+// the tile panel's "Send a gatherer", and Team / Jobs by the battle entry.
+const jobs = createJobs({ root: document.body, isGlade: (mapId) => mapId === glade });
 /** Home base is on screen (the close-up returns there, #20). */
 const homeOpen = () => home.debug?.open ?? false;
 // The close-up view (#20): a squishy face to face, with gestures for care.
@@ -272,6 +277,9 @@ const home = createHomeScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
+  onJobs: (mapId) => {
+    void jobs.openJobBoard(mapId);
+  },
   onOpen: (mapId) => {
     maps.close();
     catalog.close();
@@ -315,6 +323,7 @@ const maps = createMapScreen({
   showScene,
   invalidate: () => stage?.invalidate(),
   onClosed: (message) => {
+    jobs.close();
     void battles.setMap(null);
     catalog.close();
     care.close();
@@ -325,7 +334,12 @@ const maps = createMapScreen({
     home.setMap(null);
     lobby.showMessage(message);
   },
-  tileActions: combineTileActions(inventory.tileActions, home.tileActions, territory.tileActions),
+  tileActions: combineTileActions(
+    inventory.tileActions,
+    home.tileActions,
+    territory.tileActions,
+    jobs.tileActions,
+  ),
   layers: [hollowLayer],
   // A piece of clothing found while playing (#43) shows a little note; night
   // falling and squishies going to or coming back from the Hollow (#21).
@@ -421,6 +435,7 @@ const battles = createBattleScreen({
     maps.close();
     catalog.close();
     care.close();
+    jobs.close();
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
@@ -463,6 +478,8 @@ const battles = createBattleScreen({
     audio.cue(battleCue(step));
   },
 });
+// Temporary (squishy jobs): Team and Jobs buttons by the battle entry; the trays move them.
+jobs.mountTeamButton(document.querySelector('.battle-entry-box'), () => maps.debug?.id ?? null);
 /** Who is logged in now (a story finishing late must not open another player's lobby). */
 let signedIn: PublicUser | null = null;
 // Picking a Keeper (#42) comes right after signup, then the opening
@@ -631,6 +648,7 @@ mountAuth(document.body, {
     battles.setUser(user);
     catalog.setUser(user);
     care.setUser(user);
+    jobs.setUser(user);
     closeUp.setUser(user);
     inventory.setUser(user);
     territory.setUser(user);
@@ -707,6 +725,7 @@ if (import.meta.env.DEV) {
     care: () => care.debug,
     closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,
+    jobs: () => jobs.debug,
     starter: () => starters.debug,
     lore: () => lorebook.debug,
     milestones: () => milestones.debug,
