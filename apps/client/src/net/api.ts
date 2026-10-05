@@ -65,7 +65,12 @@ export async function apiCall<T>(
       throw new ApiRequestError(parsed.data.error.code, parsed.data.error.message);
     throw new ApiRequestError('INTERNAL', DEFAULT_ERROR_MESSAGES.INTERNAL);
   }
-  if (options.schema === null) return null;
+  if (options.schema === null) {
+    // Read the (empty) body out anyway: a reply left unread is cancelled when
+    // its Response is collected, and Chromium logs that as net::ERR_ABORTED.
+    await res.arrayBuffer();
+    return null;
+  }
   return options.schema.parse(await res.json());
 }
 

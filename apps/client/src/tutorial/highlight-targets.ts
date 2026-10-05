@@ -19,11 +19,19 @@ import type { Rect } from './overlay-layout.js';
 /** The on-screen rect of a canvas target, or null if it isn't visible. */
 export type TargetLocator = () => Rect | null;
 
+export interface FoundTarget {
+  readonly rect: Rect;
+  /** The element, when it's a DOM target (null for a canvas one). */
+  readonly element: Element | null;
+  /** A guide (`TARGET_GUIDES`): the next thing to tap, not what finishes the step. */
+  readonly soft: boolean;
+}
+
 export interface HighlightTargets {
   /** A scene registers where a canvas target is; returns an unregister. */
   register: (target: HighlightTarget, locate: TargetLocator) => () => void;
-  /** The target's rect, the element if it's a DOM one, or null if it isn't on screen. */
-  find: (target: HighlightTarget) => { rect: Rect; element: Element | null } | null;
+  /** The target on screen, or null if it isn't. */
+  find: (target: HighlightTarget) => FoundTarget | null;
 }
 
 export const TARGET_ATTRIBUTE = 'data-tutorial-target';
@@ -54,6 +62,25 @@ export const TARGET_STAND_INS: Readonly<Partial<Record<HighlightTarget, readonly
   'wild-squishy': ['battle-entry', 'tray-handle-adventure'],
 };
 
+/**
+ * Steps that take more than one tap to finish (#140): the fire needs Home,
+ * Build, the Hearthfire in the list, then Emberwood and Add fuel. A
+ * spotlight would block the rest, so these only guide: Sprout lights and
+ * points at the next thing to tap (the first on screen wins), and every
+ * tap stays open. Add fuel once a fire stands, else the Hearthfire in the
+ * build list, else Build, else Home, else the tray's handle. Whole selectors,
+ * unlike the stand-ins' test ids: the build list marks its rows `data-build`.
+ */
+export const TARGET_GUIDES: Readonly<Partial<Record<HighlightTarget, readonly string[]>>> = {
+  'build-button': [
+    '[data-testid="home-fuel"]',
+    '[data-build="hearthfire"]',
+    '[data-testid="home-build"]',
+    '[data-testid="home-open"]',
+    '[data-testid="tray-handle-heartpatch"]',
+  ],
+};
+
 /** The visible element at `selector` and its box, or null. */
 function visible(root: ParentNode, selector: string): { rect: Rect; element: Element } | null {
   const element = root.querySelector(selector);
@@ -79,13 +106,17 @@ export function createHighlightTargets(root: ParentNode = document): HighlightTa
     find: (target) => {
       if (target === 'none') return null;
       const marked = visible(root, `[${TARGET_ATTRIBUTE}="${target}"]`);
-      if (marked) return marked;
+      if (marked) return { ...marked, soft: false };
       for (const standIn of TARGET_STAND_INS[target] ?? []) {
         const stood = visible(root, `[data-testid="${standIn}"]`);
-        if (stood) return stood;
+        if (stood) return { ...stood, soft: false };
+      }
+      for (const guide of TARGET_GUIDES[target] ?? []) {
+        const next = visible(root, guide);
+        if (next) return { ...next, soft: true };
       }
       const rect = locators.get(target)?.() ?? null;
-      return rect ? { rect, element: null } : null;
+      return rect ? { rect, element: null, soft: false } : null;
     },
   };
 }

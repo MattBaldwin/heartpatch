@@ -5,7 +5,10 @@ import {
   intersects,
   layoutOverlay,
   MIN_HOLE,
+  ORB_SIZE,
+  placeOrb,
   SPOTLIGHT_PADDING,
+  union,
   type Rect,
 } from './overlay-layout.js';
 
@@ -180,6 +183,54 @@ describe('layoutOverlay', () => {
     }
   });
 
+  it('only guides at a target that takes more than one tap (#140): lit, pointed at, never gated', () => {
+    const layout = layoutOverlay({
+      target: { x: 294, y: 417, width: 96, height: 94 },
+      talkOnly: false,
+      viewport,
+      insets,
+      soft: true,
+    });
+    expect(layout.gate).toBe('guide');
+    expect(layout.hole).not.toBeNull();
+    expect(layout.arrow).not.toBeNull();
+    expect(layout.blockers).toEqual([]);
+    expect(intersects(layout.bubbleRect!, layout.hole!)).toBe(false);
+  });
+
+  it('peeks over a bottom sheet from the top, clear of it, gating nothing', () => {
+    // The Hollow's morning report: a card at the foot of the screen.
+    const report: Rect = { x: 16, y: 560, width: 358, height: 200 };
+    const layout = layoutOverlay({
+      target: null,
+      talkOnly: false,
+      viewport,
+      insets,
+      bubbleSize: { width: 358, height: 260 },
+      avoid: report,
+    });
+    expect(layout.gate).toBe('open');
+    expect(layout.blockers).toEqual([]);
+    expect(layout.hole).toBeNull();
+    expect(layout.bubbleRect).not.toBeNull();
+    expect(intersects(layout.bubbleRect!, report)).toBe(false);
+    expect(layout.bubble).toBe('top');
+  });
+
+  it('peeks over a sheet that fills the phone from the far edge, never shrunk away', () => {
+    const care: Rect = { x: 0, y: 0, width: 390, height: 844 };
+    const layout = layoutOverlay({
+      target: null,
+      talkOnly: false,
+      viewport,
+      insets,
+      bubbleSize: { width: 358, height: 260 },
+      avoid: care,
+    });
+    expect(layout.bubbleRect?.height).toBe(260);
+    expect(layout.bubbleRect?.y).toBe(insets.top + 16);
+  });
+
   it('moves the bubble beside a tall target that leaves no room above or below', () => {
     const layout = layoutOverlay({
       target: { x: 10, y: 60, width: 120, height: 720 },
@@ -209,5 +260,70 @@ describe('layoutOverlay', () => {
     });
     expect(intersects(layout.bubbleRect!, layout.hole!)).toBe(false);
     expect(layout.bubbleRect!.y + layout.bubbleRect!.height).toBe(layout.hole!.y - 16);
+  });
+});
+
+describe('placeOrb (Sprout waiting behind a sheet, #139)', () => {
+  const screen = { viewport, insets };
+  const onScreen = (orb: Rect) => {
+    expect(orb.width).toBe(ORB_SIZE);
+    expect(orb.height).toBe(ORB_SIZE);
+    expect(orb.x).toBeGreaterThanOrEqual(insets.left);
+    expect(orb.y).toBeGreaterThanOrEqual(insets.top);
+    expect(orb.x + orb.width).toBeLessThanOrEqual(viewport.width - insets.right);
+    expect(orb.y + orb.height).toBeLessThanOrEqual(viewport.height - insets.bottom);
+  };
+
+  it('takes the top-left corner when nothing is there', () => {
+    const orb = placeOrb({ ...screen, obstacles: [] });
+    onScreen(orb);
+    expect(orb).toEqual({ x: 8, y: insets.top + 8, width: ORB_SIZE, height: ORB_SIZE });
+  });
+
+  it('keeps clear of every control and card on screen', () => {
+    // The map's corner buttons, the tile chip at the bottom, both tray handles.
+    const obstacles: Rect[] = [
+      { x: 12, y: 50, width: 150, height: 56 },
+      { x: 330, y: 50, width: 48, height: 48 },
+      { x: 12, y: 700, width: 366, height: 132 },
+      { x: 0, y: 417, width: 96, height: 94 },
+      { x: 294, y: 417, width: 96, height: 94 },
+    ];
+    const orb = placeOrb({ ...screen, obstacles });
+    onScreen(orb);
+    for (const o of obstacles) expect(intersects(orb, o), JSON.stringify(orb)).toBe(false);
+  });
+
+  it('covers as little as it can when a sheet fills the phone', () => {
+    const card: Rect = { x: 16, y: 60, width: 358, height: 760 };
+    const buttons: Rect[] = [
+      { x: 36, y: 330, width: 100, height: 100 },
+      { x: 36, y: 640, width: 318, height: 56 },
+    ];
+    const orb = placeOrb({ ...screen, obstacles: [card, ...buttons] });
+    onScreen(orb);
+    for (const b of buttons) expect(intersects(orb, b), JSON.stringify(orb)).toBe(false);
+  });
+
+  it('stays inside the safe area on a wide screen', () => {
+    const orb = placeOrb({
+      viewport: { width: 1180, height: 820 },
+      insets: { top: 24, right: 44, bottom: 20, left: 44 },
+      obstacles: [{ x: 44, y: 24, width: 200, height: 80 }],
+    });
+    expect(orb.x).toBeGreaterThanOrEqual(44);
+    expect(intersects(orb, { x: 44, y: 24, width: 200, height: 80 })).toBe(false);
+  });
+});
+
+describe('union', () => {
+  it('is the smallest rect holding every rect, or null for none', () => {
+    expect(union([])).toBeNull();
+    expect(
+      union([
+        { x: 10, y: 20, width: 30, height: 40 },
+        { x: 0, y: 50, width: 20, height: 20 },
+      ]),
+    ).toEqual({ x: 0, y: 20, width: 40, height: 50 });
   });
 });

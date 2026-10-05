@@ -155,17 +155,18 @@ test('first session: signup, Keeper, story, tutorial, a patch with a friend, a c
     .tap();
   await expect(page.getByTestId('tutorial')).toBeHidden();
   expect((await tutorial(page))?.status).toBe('completed');
-  // The First Patch milestone (#44) celebrates over the lobby.
-  const party = page.getByTestId('milestone-card');
-  await expect(party).toBeVisible({ timeout: 20_000 });
-  await expect(party.getByTestId('milestone-name')).toHaveText('The First Patch');
-  await party.getByTestId('milestone-yay').tap();
-  await expect(party).toBeHidden();
 
   // Graduation opened "Make a patch".
   await lobby.getByLabel('Patch name').fill('First Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await expect(lobby.getByRole('heading', { name: 'First Patch' })).toBeVisible();
+  // The First Patch milestone (#44) celebrates over the lobby, once the
+  // form the player asked for is done with (one card at a time, #129).
+  const party = page.getByTestId('milestone-card');
+  await expect(party).toBeVisible({ timeout: 20_000 });
+  await expect(party.getByTestId('milestone-name')).toHaveText('The First Patch');
+  await party.getByTestId('milestone-yay').tap();
+  await expect(party).toBeHidden();
   const code = (await lobby.getByTestId('lobby-invite-code').textContent()) ?? '';
   expect(code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
 

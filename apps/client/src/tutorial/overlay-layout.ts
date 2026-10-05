@@ -38,9 +38,11 @@ const BUBBLE_MIN_WIDTH = 180; // TUNE
 /**
  * - `blockAll`: nothing behind the overlay takes input (Sprout is just talking).
  * - `spotlight`: only the hole takes input; the rest is blocked.
+ * - `guide`: the hole is lit and the arrow points, but nothing is blocked: the
+ *   target is only the next thing to tap, not what finishes the step (#140).
  * - `open`: nothing is blocked (the target isn't on screen, so never trap the player).
  */
-export type GateMode = 'blockAll' | 'spotlight' | 'open';
+export type GateMode = 'blockAll' | 'spotlight' | 'guide' | 'open';
 
 export interface OverlayLayout {
   readonly gate: GateMode;
@@ -111,6 +113,16 @@ export function layoutOverlay(spec: {
   bubbleSize?: Size;
   /** Tucked away into a small chip (a gameplay step after "Let's go!"). */
   tucked?: boolean;
+  /**
+   * The target only guides (a step that needs more than one tap, like
+   * building then fuelling a fire): lit and pointed at, never gated.
+   */
+  soft?: boolean;
+  /**
+   * The open sheet Sprout is peeking over (no target while it waits): the
+   * bubble keeps clear of it where it can, and never covers it whole.
+   */
+  avoid?: Rect | null;
 }): OverlayLayout {
   const { viewport, insets } = spec;
   const whole: Rect = { x: 0, y: 0, width: viewport.width, height: viewport.height };
@@ -118,12 +130,31 @@ export function layoutOverlay(spec: {
 
   if (!hole) {
     const gate: GateMode = spec.talkOnly ? 'blockAll' : 'open';
+    // A peek over a sheet: the bigger gap beside it (the top when it's a
+    // toss-up, since a sheet keeps its buttons at its foot).
+    const avoid = spec.avoid;
+    const below = Math.max(
+      0,
+      avoid ? viewport.height - insets.bottom - (avoid.y + avoid.height) : 0,
+    );
+    const above = Math.max(0, avoid ? avoid.y - insets.top : 0);
+    const peek = avoid
+      ? placeBubble({
+          hole: avoid,
+          prefer: below > above ? 'bottom' : 'top',
+          viewport,
+          insets,
+          size: spec.bubbleSize ?? { width: BUBBLE_MAX_WIDTH, height: 200 },
+          tucked: false,
+          shrink: false,
+        })
+      : null;
     return {
       gate,
       hole: null,
       blockers: gate === 'blockAll' ? [whole] : [],
-      bubble: 'bottom',
-      bubbleRect: null,
+      bubble: peek && peek.y + peek.height / 2 < viewport.height / 2 ? 'top' : 'bottom',
+      bubbleRect: peek,
       arrow: null,
     };
   }
@@ -146,10 +177,11 @@ export function layoutOverlay(spec: {
     insets.left + ARROW_MARGIN,
     viewport.width - insets.right - ARROW_MARGIN,
   );
+  const soft = spec.soft ?? false;
   return {
-    gate: 'spotlight',
+    gate: soft ? 'guide' : 'spotlight',
     hole,
-    blockers: blockersAround(hole, viewport),
+    blockers: soft ? [] : blockersAround(hole, viewport),
     bubble,
     bubbleRect,
     arrow:
@@ -172,6 +204,8 @@ export function placeBubble(spec: {
   insets: Insets;
   size: Size;
   tucked: boolean;
+  /** When nothing fits whole: shrink into the bigger gap (default), or take the preferred edge whole. */
+  shrink?: boolean;
 }): Rect {
   const { hole, viewport, insets, size } = spec;
   const left = insets.left + BUBBLE_MARGIN;
@@ -197,7 +231,13 @@ export function placeBubble(spec: {
       { x, y: Math.min(bottom - height, hole.y + hole.height + BUBBLE_MARGIN), width, height },
     );
   }
-  candidates.push(...(spec.prefer === 'top' ? [atTop, atBottom] : [atBottom, atTop]));
+  // Its usual place at the bottom whenever it fits there whole, so it covers
+  // the corner buttons only when the target leaves no other room.
+  candidates.push(
+    ...(spec.prefer === 'top' && intersects(atBottom, hole)
+      ? [atTop, atBottom]
+      : [atBottom, atTop]),
+  );
   // Beside the hole, on whichever side has more room.
   const roomLeft = hole.x - BUBBLE_MARGIN - left;
   const roomRight = right - (hole.x + hole.width + BUBBLE_MARGIN);
@@ -216,6 +256,7 @@ export function placeBubble(spec: {
   }
   const fits = candidates.find((c) => !intersects(c, hole));
   if (fits) return fits;
+  if (spec.shrink === false) return spec.prefer === 'top' ? atTop : atBottom;
   // Nowhere fits whole: the bigger gap above or below the hole, and the
   // bubble scrolls inside it (tutorial-overlay.ts caps its height).
   const above = hole.y - BUBBLE_MARGIN - top;
@@ -223,4 +264,79 @@ export function placeBubble(spec: {
   return above >= below
     ? { x, y: top, width, height: Math.max(0, above) }
     : { x, y: hole.y + hole.height + BUBBLE_MARGIN, width, height: Math.max(0, below) };
+}
+
+/** Sprout's orb while a sheet is open (tutorial.css `.tutorial-held`). */
+export const ORB_SIZE = 48;
+/** Room between the orb and the screen edge or the safe area. */
+const ORB_MARGIN = 8;
+
+/** How much of `a` lies inside `b`, in square pixels. */
+function overlap(a: Rect, b: Rect): number {
+  const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
+/**
+ * Where Sprout's orb sits while it waits for a sheet to close (#139): a spot
+ * at the screen's edge clear of every obstacle (the sheet's card, every
+ * button on screen), trying the corners first and then down each side. If
+ * nothing is clear (a sheet that fills the phone), the spot it covers least.
+ */
+export function placeOrb(spec: {
+  viewport: Size;
+  insets: Insets;
+  obstacles: readonly Rect[];
+  size?: number;
+}): Rect {
+  const { viewport, insets } = spec;
+  const size = spec.size ?? ORB_SIZE;
+  const left = insets.left + ORB_MARGIN;
+  const right = viewport.width - insets.right - ORB_MARGIN - size;
+  const top = insets.top + ORB_MARGIN;
+  const at = (x: number, y: number): Rect => ({
+    x,
+    y: Math.min(Math.max(y, top), viewport.height - insets.bottom - ORB_MARGIN - size),
+    width: size,
+    height: size,
+  });
+  // The corners, then the sides at the chip's own height (38%), then a
+  // little above and below it, never as low as the tray handles (55%).
+  const corner = at(left, top);
+  const candidates = [
+    at(right, top),
+    ...[0.38, 0.24, 0.3, 0.14].flatMap((share) => [
+      at(left, Math.round(viewport.height * share)),
+      at(right, Math.round(viewport.height * share)),
+    ]),
+  ];
+  let best = corner;
+  let least = Number.POSITIVE_INFINITY;
+  for (const candidate of [corner, ...candidates]) {
+    const covered = spec.obstacles.reduce((sum, o) => sum + overlap(candidate, o), 0);
+    if (covered === 0) return candidate;
+    if (covered < least) {
+      least = covered;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+/** The smallest rect holding all of `rects` (null for none). */
+export function union(rects: readonly Rect[]): Rect | null {
+  const first = rects[0];
+  if (!first) return null;
+  let x0 = first.x;
+  let y0 = first.y;
+  let x1 = first.x + first.width;
+  let y1 = first.y + first.height;
+  for (const r of rects) {
+    x0 = Math.min(x0, r.x);
+    y0 = Math.min(y0, r.y);
+    x1 = Math.max(x1, r.x + r.width);
+    y1 = Math.max(y1, r.y + r.height);
+  }
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
 }
