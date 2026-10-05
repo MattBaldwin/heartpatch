@@ -16,6 +16,7 @@ import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
+import { inventoryApi } from '../inventory/inventory-api.js';
 import { battleApi } from './battle-api.js';
 import { BREATHING_FRAME_MS, PLAYBACK, RETRY_AFTER_MS } from './battle-config.js';
 import { mountBattleHud, plateSideOf, type BattleHud, type ControlMode } from './battle-hud.js';
@@ -29,6 +30,7 @@ import {
 import { BattleScene, type BattleSceneStats } from './battle-scene.js';
 import { keeperReaction } from './keeper-reaction.js';
 import { sendAction, type SubmitDeps } from './battle-submit.js';
+import { BEFRIEND_NUDGE, HEART_CHARM, noCharmsLine } from './heart-charm.js';
 import {
   activeOf,
   BattleContent,
@@ -75,6 +77,13 @@ export interface BattleScreenOptions {
   keeperWearing?: () => readonly string[];
   /** A step of the log starts playing (sound, #25). */
   onStep?: (step: PlaybackStep) => void;
+  /**
+   * Where the "Find a squishy" / "Catalog" entry box goes (a tray can host
+   * it); `root` by default.
+   */
+  entryRoot?: HTMLElement;
+  /** Heart Charms in the player's bag on a map (the wild battle's button shows it). */
+  charms?: (mapId: string) => Promise<number>;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -96,6 +105,8 @@ export interface BattleDebug {
   readonly keeperReactions: number;
   /** A raid replay (#16) is playing, not a battle to play. */
   readonly replay: boolean;
+  /** Heart Charms the wild battle's button shows (null until counted, or not a wild battle). */
+  readonly charms: number | null;
 }
 
 export interface BattleScreen {
@@ -189,6 +200,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let lastTier: QualityTier | null = null;
   /** A raid replay is on screen (`watch`): no controls, replay words. */
   let replaying = false;
+  /** Heart Charms in the bag for the battle on screen (wild battles); null until known. */
+  let charms: number | null = null;
+  const countCharms =
+    options.charms ??
+    ((id: string) => inventoryApi.get(id).then((bag) => bag.items[HEART_CHARM] ?? 0));
   const timers = new Set<number>();
 
   // ── Entry button (shown over the map) ─────────────────────────────────
@@ -200,7 +216,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   );
   const entry = el('div', { class: 'battle-entry-box' }, enter, note);
   entry.hidden = true;
-  options.root.append(entry);
+  (options.entryRoot ?? options.root).append(entry);
   const { onCatalog } = options;
   if (onCatalog) {
     const catalog = el(
@@ -306,6 +322,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   // ── HUD ───────────────────────────────────────────────────────────────
   const hud: BattleHud = mountBattleHud(options.root, {
     onAction: (action) => void submit(action),
+    onNoCharms: () => {
+      // The bag may have filled since (a craft, a gift): look again first.
+      const current = battle;
+      if (!current) return;
+      void refreshCharms(current).then((count) => {
+        if (battle?.id !== current.id) return;
+        if (count > 0) void submit({ type: 'capture' });
+        else hud.setProblem(noCharmsLine());
+      });
+    },
     onDone: () => {
       close();
     },
@@ -364,7 +390,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           type: 'choose',
           moves: activeOf(b, b.mySide).moves.map((id) => ({ id, name: names.moveName(id) })),
           bench,
-          capture: CAPTURABLE_BATTLE_KINDS.has(b.kind),
+          capture: CAPTURABLE_BATTLE_KINDS.has(b.kind) ? { charms } : null,
         };
       case 'replace':
         return b.view.phase.sides.includes(b.mySide)
@@ -427,7 +453,33 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
-    hud.showResult({ ...outcome, xp: lines, done: MESSAGES.done });
+    // Won a wild battle without befriending it: say how (owner decision 2026-10-04).
+    const nudge =
+      b.kind === 'wild' && result?.winner === b.mySide && result.reason !== 'captured'
+        ? BEFRIEND_NUDGE
+        : undefined;
+    hud.showResult({ ...outcome, xp: lines, done: MESSAGES.done, ...(nudge ? { nudge } : {}) });
+  };
+
+  /**
+   * Counts the bag's Heart Charms for a wild battle, then redraws the
+   * buttons if the player can act. A failed count leaves it unknown (the
+   * button still works; the server has the final say).
+   */
+  const refreshCharms = async (b: PlayerBattle): Promise<number> => {
+    if (!CAPTURABLE_BATTLE_KINDS.has(b.kind) || replaying) return charms ?? 0;
+    try {
+      const count = await countCharms(b.mapId);
+      if (battle?.id === b.id) {
+        charms = count;
+        if (!waiting && queue.length === 0 && b.status === 'active') {
+          hud.setControls(controlsFor(battle));
+        }
+      }
+      return count;
+    } catch {
+      return charms ?? 0;
+    }
   };
 
   /** Everything the log has played: the view is the truth now. */
@@ -506,6 +558,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     battle = next;
     content = new BattleContent(next);
     queue = playbackSteps(next, content, from);
+    // A capture try spends a charm: count again.
+    if (next.view.log.slice(from).some((e) => e.type === 'capture')) void refreshCharms(next);
     hud.setControls(replaying ? { type: 'hidden' } : { type: 'waiting' });
     if (queue.length === 0) settle();
     else playNext();
@@ -618,6 +672,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     shownLog = next.view.log.length;
     scene3d = null;
     keeperReactions = 0;
+    charms = null;
+    if (!replay) void refreshCharms(next);
     if (!wasOpen) options.onOpen(next.mapId);
     entry.hidden = true;
     hud.hideResult();
@@ -714,6 +770,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         scene: scene3d?.stats ?? null,
         keeperReactions,
         replay: replaying,
+        charms,
       };
     },
   };

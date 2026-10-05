@@ -87,12 +87,16 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   const start = await settled(page);
   expect(start).toMatchObject({ status: 'active', turn: 0 });
 
-  // "Use Heart Charm" is there for a wild squishy. With an empty bag the
-  // server says so kindly (#17's line) and nothing changes.
+  // "Use Heart Charm" is always there for a wild squishy, with the bag's
+  // count (owner decision 2026-10-04). With an empty bag it stays, dimmed,
+  // says how to craft one, and a tap explains; nothing changes.
   const charm = page.getByTestId('battle-capture');
   await expect(charm).toBeVisible();
+  await expect(charm).toHaveText('Use Heart Charm (0)');
+  await expect(charm).toHaveClass(/battle-button-empty/);
+  await expect(page.getByTestId('battle-capture-hint')).toContainText('Craft one from');
   await charm.tap();
-  await expect(hud.locator('.battle-problem')).toContainText('Heart Charm');
+  await expect(hud.locator('.battle-problem')).toContainText('No Heart Charms!');
   expect(await settled(page)).toMatchObject({ id: start.id, status: 'active', turn: 0 });
 
   // Three charms in the bag (dev), then one try: the charm lands on the wild
@@ -100,6 +104,7 @@ test('finds a wild squishy, offers a Heart Charm, and fills in the catalog', asy
   expect(
     (await api(page, 'POST', `/maps/${mapId}/dev/items`, { items: { 'heart-charm': 3 } })).status,
   ).toBe(201);
+  // The button looks in the bag again when tapped, so the new charms work.
   await charm.tap();
   const tried = await settled(page);
   expect(tried.turn).toBe(1);

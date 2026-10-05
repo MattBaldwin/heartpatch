@@ -288,3 +288,24 @@
 .battle-entry-note:empty {
   display: none;
 }
+
+/* The Heart Charm button with an empty bag: still there, dimmed, and it
+   explains how to make one (owner decision 2026-10-04). */
+.battle-button-empty {
+  opacity: 0.55;
+}
+
+.battle-hint {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  color: #6b4b6e;
+}
+
+.battle-controls .battle-hint {
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 85%);
+}

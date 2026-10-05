@@ -1,5 +1,6 @@
 import type { BattleSideId, PlayerBattleAction } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
+import { charmButton, noCharmsLine } from './heart-charm.js';
 import './battle.css';
 
 // The battle HUD (tech spec §6: DOM overlay for sharp text and big targets):
@@ -21,8 +22,11 @@ export type ControlMode =
       type: 'choose';
       moves: { id: string; name: string }[];
       bench: { slot: number; name: string }[];
-      /** A wild squishy: offer the "Use Heart Charm" button (befriend, style guide §9). */
-      capture: boolean;
+      /**
+       * A wild squishy: the "Use Heart Charm" button (befriend, style guide §9),
+       * always shown with the bag's count (null while it loads); null elsewhere.
+       */
+      capture: { charms: number | null } | null;
     }
   /** Their squishy is tuckered out: pick who comes out. */
   | { type: 'replace'; bench: { slot: number; name: string }[] }
@@ -35,6 +39,8 @@ export interface ResultInfo {
   subtitle: string;
   /** "Moonpuff earned 12 XP" lines. */
   xp: string[];
+  /** One extra hint line ("Weaken a wild squishy, then…"), if any. */
+  nudge?: string;
   done: string;
 }
 
@@ -58,6 +64,11 @@ export interface BattleHudOptions {
   onAction: (action: PlayerBattleAction) => void;
   onDone: () => void;
   onLeave: () => void;
+  /**
+   * The Heart Charm button was tapped with none in the bag (as far as the
+   * HUD knows): the screen checks the bag again and explains or goes ahead.
+   */
+  onNoCharms: () => void;
 }
 
 /** Which side a plate shows, for the dev hook and tests. */
@@ -181,16 +192,31 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
             ),
           );
         }
+        let hint: HTMLElement | null = null;
         if (mode.capture) {
-          row.append(
-            button(
-              'Use Heart Charm',
-              () => {
-                act({ type: 'capture' });
-              },
-              { small: true, testId: 'battle-capture' },
-            ),
+          // Always there in a wild battle, so a player learns befriending
+          // exists; with none in the bag it stays, dimmed, and explains.
+          const charm = charmButton(mode.capture.charms);
+          const node = button(
+            charm.label,
+            () => {
+              if (charm.empty) options.onNoCharms();
+              else act({ type: 'capture' });
+            },
+            { small: true, testId: 'battle-capture' },
           );
+          if (charm.empty) {
+            node.classList.add('battle-button-empty');
+            // Still tappable (not `disabled`): a tap explains, and checks the bag again.
+            hint = el(
+              'p',
+              { class: 'battle-hint', 'data-testid': 'battle-capture-hint' },
+              noCharmsLine(),
+            );
+            node.setAttribute('aria-describedby', 'battle-capture-hint');
+            hint.id = 'battle-capture-hint';
+          }
+          row.append(node);
         }
         // Forgiving (style guide §3): running away asks first.
         const run = button(
@@ -222,6 +248,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         );
         row.append(run);
         controls.append(moves, row);
+        if (hint) controls.append(hint);
         break;
       }
       case 'replace': {
@@ -299,6 +326,9 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           { class: 'battle-xp', 'data-testid': 'battle-xp' },
           ...info.xp.map((line) => el('li', {}, line)),
         ),
+        ...(info.nudge
+          ? [el('p', { class: 'battle-hint', 'data-testid': 'battle-nudge' }, info.nudge)]
+          : []),
         el(
           'div',
           { class: 'auth-actions' },

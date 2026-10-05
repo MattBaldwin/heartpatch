@@ -42,7 +42,8 @@ async function serverBattle(
     `/battles/${id}`,
   );
   expect(res.status).toBe(200);
-  return res.body.battle;
+  const { terrain, timeOfDay } = res.body.battle;
+  return { terrain, timeOfDay };
 }
 
 function battleState(page: Page): Promise<BattleDebug | null> {
@@ -152,6 +153,10 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(result).toBeVisible();
   await expect(result).toContainText(/Hooray|tuckered|tie/);
   await expect(page.getByTestId('battle-xp')).toContainText(/XP/);
+  // Beat a wild squishy without befriending it: the card says how (owner decision 2026-10-04).
+  const nudge = page.getByTestId('battle-nudge');
+  if (over.winner === 'a') await expect(nudge).toContainText('use a Heart Charm');
+  else await expect(nudge).toHaveCount(0);
   await page.getByTestId('battle-done').tap();
   await expect(hud).toBeHidden();
   await expect(page.getByTestId('map-hud')).toContainText('Showdown Patch');
