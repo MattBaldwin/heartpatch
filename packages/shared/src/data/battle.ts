@@ -45,11 +45,11 @@ export const BATTLE_RULES: BattleRules = {
     rarity: { common: 100, uncommon: 85, rare: 70, epic: 55, legendary: 40, secret: 40 },
   },
 
-  // TUNE: a wild win (levels 2–6, ~4 on average) pays ~120 XP, so a level-1
-  // starter grows up (level 16, 1,425 XP) after ~12–13 wins at 1× care, ~9 at
-  // a new starter's 137%, ~5 at the 3× cap; Thistlepip (18) after ~15 at 1×.
-  // Later forms keep their ratio: rare (22) ~23 wins, legendary (30) ~42.
-  // Pinned by `growth-pace.test.ts`.
+  // TUNE: a wild win (levels 2–6, 4 on average) pays ~120 XP, so a level-1
+  // starter grows up (level 16, 1,425 XP) after ~12 wins at 1× care, ~9 at a
+  // new starter's 137%, ~7 at full care (1.75×), ~4 at the 3× cap; Thistlepip
+  // (18) after ~15 / 11 / 9 / 5. Later forms keep their ratio: rare (22) ~22
+  // wins at 1×, epic (26) ~31, legendary (30) ~40. Pinned by `growth-pace.test.ts`.
   xp: { perOpponentLevel: 20, winMultiplier: 1.5, minimum: 20 },
 
   // TUNE: every policy. Wild squishies play for fun; guardians and the

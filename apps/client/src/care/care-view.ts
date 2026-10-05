@@ -39,6 +39,7 @@ export const CARE_TEXT = {
   infoTitle: 'Growing up',
   // Why care matters (design doc §7), up front in "Growing up".
   whyCare: 'Happy squishies learn more from battles and grow up faster!',
+  // CARE_RULES.hoursFullToBaseline (24, `// TUNE:`): reword if it moves far from a day.
   fades: 'Happiness fades over about a day, so come back and say hi.',
   bonus: (percent: number) =>
     percent > 100

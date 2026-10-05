@@ -292,6 +292,8 @@ export class MapScene {
   private readonly buildings: BuildingField;
   /** The soft glow over tiles a lit Hearthfire keeps safe (#18). */
   private readonly safeGlow: Mesh;
+  /** The player's home node the tutorial points at (`homeNodeRect`), until `update`. */
+  private homeNode: { userId: string | null; tile: PublicTile | null } | null = null;
   /** Resource nodes drawn on home bases (`buildHomeNodes`). */
   private readonly homeNodes: number;
   private tileMeshes = 0;
@@ -384,6 +386,7 @@ export class MapScene {
   /** Redraws ownership and home bases from a fresh view of the same map. */
   update(view: MapView): void {
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
+    this.homeNode = null;
     const slots = slotsByUser(view.members);
     const bySlot = new Map<number, Matrix[]>();
     let tinted = 0;
@@ -496,8 +499,13 @@ export class MapScene {
    * else any node on their home base. Null if it isn't in front of the camera.
    */
   homeNodeRect(userId: string | null): ScreenRect | null {
-    const node = homeNodeOf([...this.tiles.values()], userId);
-    return node ? tileScreenRect(this.scene, node, lookOf(node).height) : null;
+    // Called every drawn frame while the tutorial follows it: ownership only
+    // changes in `update`, so the tile is looked up once per player.
+    if (this.homeNode?.userId !== userId) {
+      this.homeNode = { userId, tile: homeNodeOf([...this.tiles.values()], userId) };
+    }
+    const { tile } = this.homeNode;
+    return tile ? tileScreenRect(this.scene, tile, lookOf(tile).height) : null;
   }
 
   private tintMesh(slot: number): Mesh {
@@ -738,6 +746,10 @@ export interface ScreenRect {
   readonly height: number;
 }
 
+/** Scratch vectors for `tileScreenRect`, which runs every drawn frame while followed. */
+const RIM = new Vector3();
+const PROJECTED = new Vector3();
+
 /**
  * A tile's box on screen (its rim at height `top`), or null if the camera
  * can't see it. Its middle is the tile's middle, so a tap there picks the
@@ -752,14 +764,11 @@ function tileScreenRect(scene: Scene, h: Hex, top: number): ScreenRect | null {
   const viewport = camera.viewport.toGlobal(box.width, box.height);
   const transform = camera.getTransformationMatrix();
   const c = hexToWorld(h, HEX_SIZE);
-  const points: Vector3[] = [];
+  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
   for (let i = 0; i < 6; i++) {
     const a = (i * Math.PI) / 3;
-    points.push(new Vector3(c.x + Math.cos(a) * TILE_RADIUS, top, c.z + Math.sin(a) * TILE_RADIUS));
-  }
-  let [x0, y0, x1, y1] = [Infinity, Infinity, -Infinity, -Infinity];
-  for (const point of points) {
-    const s = Vector3.Project(point, Matrix.IdentityReadOnly, transform, viewport);
+    RIM.set(c.x + Math.cos(a) * TILE_RADIUS, top, c.z + Math.sin(a) * TILE_RADIUS);
+    const s = Vector3.ProjectToRef(RIM, Matrix.IdentityReadOnly, transform, viewport, PROJECTED);
     if (s.z < 0 || s.z > 1) return null; // behind the camera or past the far plane
     x0 = Math.min(x0, s.x);
     y0 = Math.min(y0, s.y);

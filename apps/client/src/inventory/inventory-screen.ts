@@ -114,7 +114,6 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     type: 'button',
     class: 'gather-chip',
     'data-testid': 'gather-chip',
-    'aria-live': 'polite',
   });
   chip.hidden = true;
 
@@ -438,16 +437,16 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   function renderChip(): void {
     chipCountdowns = [];
     const shown = mapId !== null && state !== null && sheet.hidden;
-    const now = shown && state ? gatherChip(state.gathers, (iso) => clock.msUntil(iso)) : null;
-    shownChip = now ? (now.ready ? 'ready' : 'waiting') : null;
-    chip.hidden = now === null;
-    if (!now) return;
-    const { gather } = now;
+    const model = shown && state ? gatherChip(state.gathers, (iso) => clock.msUntil(iso)) : null;
+    shownChip = model ? (model.ready ? 'ready' : 'waiting') : null;
+    chip.hidden = model === null;
+    if (!model) return;
+    const { gather } = model;
     const what = `${itemIcon(gather.resource)} ${itemName(gather.resource)}`;
-    const more = now.more > 0 ? TEXT.chipMore(now.more) : '';
-    chip.classList.toggle('gather-chip-ready', now.ready);
+    const more = model.more > 0 ? TEXT.chipMore(model.more) : '';
+    chip.classList.toggle('gather-chip-ready', model.ready);
     chip.replaceChildren(
-      now.ready
+      model.ready
         ? `${TEXT.chipReady(what)}${more}`
         : countdown(
             chipCountdowns,
