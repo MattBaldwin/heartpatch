@@ -1,14 +1,14 @@
 /* The squishy catalog (#14). Cards and buttons come from ../ui/auth/auth.css;
    this file lays out the grid. Over the map, like the lobby (z 4); 44pt+
-   targets, safe areas. */
+   targets, safe areas. The card fills the screen and only the grid scrolls,
+   so its header × and bottom Close stay put however long the list (#150). */
 
 .catalog {
   position: fixed;
   inset: 0;
   z-index: 4;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  display: flex;
+  box-sizing: border-box;
   padding: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 16px)
     calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 16px);
   background: rgb(253 232 240 / 70%);
@@ -24,6 +24,55 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 100%;
+}
+
+.catalog-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.catalog-head .catalog-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  text-align: left;
+}
+
+/* The round × (like a tray's close): 44pt, text well inside its edge. */
+.catalog-close-top {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fbeaf2;
+  font: inherit;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  color: #7a2d55;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.catalog-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
+
+.catalog-actions {
+  flex: none;
+  margin-top: 0;
 }
 
 .catalog-progress {

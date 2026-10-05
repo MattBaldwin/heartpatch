@@ -40,8 +40,10 @@
   height: 96px;
 }
 
-/* A soft vinyl blob in the species' colour (the close-up view, #20, draws the real squishy). */
+/* A soft vinyl blob in the species' colour, with its face (the close-up view,
+   #20, draws the real squishy). */
 .care-blob {
+  position: relative;
   width: 88px;
   height: 78px;
   border-radius: 50% 50% 46% 46% / 58% 58% 42% 42%;
@@ -50,6 +52,33 @@
     inset -8px -10px 0 rgb(0 0 0 / 12%),
     inset 8px 8px 0 rgb(255 255 255 / 35%);
   transform-origin: 50% 100%;
+}
+
+.care-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.care-face-ink {
+  fill: #3a2a40;
+}
+
+.care-face-stroke {
+  fill: none;
+  stroke: #3a2a40;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.care-face-blush {
+  fill: #ff9ab8;
+  opacity: 0.75;
+}
+
+.care-face-belly {
+  opacity: 0.9;
 }
 
 .care-sparkles {
@@ -216,12 +245,31 @@
 
 .care-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 8px;
 }
 
-.care-action {
-  min-height: 52px;
+/* A rounded tile, not a pill: "Feed" with its Treats under it fits on one
+   line each at 320 px (#153); text keeps the shared padding from the edge. */
+.care-actions .care-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 60px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 22px;
+  font-size: 17px;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.care-action-sub {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.9;
 }
 
 .care-details {

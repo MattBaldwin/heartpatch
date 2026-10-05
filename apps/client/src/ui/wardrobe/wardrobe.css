@@ -75,6 +75,29 @@
   display: none;
 }
 
+/* A row with more chips past an edge fades out there, so a cut-off chip
+   reads as "slide me", not as the end (#152; scroll-edges.ts sets it). */
+[data-scroll-more='right'] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+
+[data-scroll-more='left'] {
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+
+[data-scroll-more='left right'] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent
+  );
+  mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+}
+
 .wardrobe-chip {
   flex: none;
   display: inline-flex;

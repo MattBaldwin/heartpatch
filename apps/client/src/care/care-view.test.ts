@@ -1,6 +1,7 @@
 import {
   CARE_RULES,
   findAvoidedWords,
+  GAME_DATA,
   type CareListResponse,
   type CareSquishy,
   type Species,
@@ -9,6 +10,8 @@ import { describe, expect, it } from 'vitest';
 import {
   CARE_TEXT,
   careDoneLine,
+  faceFor,
+  squishyFace,
   careSheet,
   evolutionLine,
   nextReadyIn,
@@ -82,7 +85,10 @@ describe('careSheet', () => {
       ['pet', null],
       ['play', null],
     ]);
-    expect(model.buttons[0]!.label).toContain('2 Treats');
+    // The cost sits under a short label, so the round button fits it (#153).
+    expect(model.buttons[0]!.label).toBe('🍪 Feed');
+    expect(model.buttons[0]!.sub).toBe('2 Treats');
+    expect(model.buttons.slice(1).map((b) => b.sub)).toEqual([null, null]);
     expect(model.info).toEqual([
       CARE_TEXT.whyCare,
       CARE_TEXT.fades,
@@ -186,5 +192,39 @@ describe('lines', () => {
       ...CARE_RULES.moods.map((m) => m.line),
     ];
     expect(texts.flatMap((t) => findAvoidedWords(t))).toEqual([]);
+  });
+});
+
+describe('squishyFace (#153)', () => {
+  it('reads the species’ eye and mouth parts, cheeks and tummy', () => {
+    expect(
+      squishyFace({
+        parts: ['dot-eyes', 'open-mouth', 'blush-cheeks', 'belly-patch'],
+        palette: ['#8ec9f5', '#e6f5ff'],
+      }),
+    ).toEqual({ eyes: 'dot', mouth: 'open', blush: true, belly: '#e6f5ff' });
+    expect(squishyFace({ parts: ['happy-eyes', 'cat-mouth'], palette: ['#fff'] })).toEqual({
+      eyes: 'happy',
+      mouth: 'cat',
+      blush: false,
+      belly: null,
+    });
+    expect(squishyFace({ parts: ['sleepy-eyes'], palette: [] }).eyes).toBe('sleepy');
+    expect(squishyFace({ parts: ['oval-eyes', 'belly-patch'], palette: ['#abc'] })).toMatchObject({
+      eyes: 'oval',
+      mouth: 'smile',
+      belly: null,
+    });
+  });
+
+  it('gives every public species a face, and a plain one to a stranger', () => {
+    const species = new Map(GAME_DATA.species.map((s) => [s.id, s]));
+    for (const s of GAME_DATA.species) expect(faceFor(s.id, species)).toBeTruthy();
+    expect(faceFor('nobody', species)).toEqual({
+      eyes: 'dot',
+      mouth: 'smile',
+      blush: false,
+      belly: null,
+    });
   });
 });

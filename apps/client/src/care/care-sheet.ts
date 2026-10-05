@@ -9,8 +9,10 @@ import {
   careDoneLine,
   careSheet,
   evolutionLine,
+  faceFor,
   nextReadyIn,
   speciesById,
+  type SquishyFace,
 } from './care-view.js';
 import './care.css';
 
@@ -73,7 +75,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   /** Bumped on every open, close and user change, so a late reply is dropped. */
   let ticket = 0;
 
-  const blob = el('div', { class: 'care-blob', 'aria-hidden': 'true' });
+  const face = squishyFaceNode();
+  const blob = el('div', { class: 'care-blob', 'aria-hidden': 'true' }, face.node);
   const sparkles = el(
     'div',
     { class: 'care-sparkles', 'aria-hidden': 'true' },
@@ -192,6 +195,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     const now = serverNow();
     const model = careSheet(squishy, reply, now);
     blob.style.background = model.color;
+    face.set(faceFor(squishy.speciesId, speciesById(reply)));
     name.textContent = model.name;
     mood.textContent = model.mood;
     heartsFill.style.width = `${String(Math.round(model.hearts * 100))}%`;
@@ -204,6 +208,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
           'button',
           { type: 'button', class: 'auth-button care-action', 'data-care': b.action },
           b.label,
+          ...(b.sub ? [el('span', { class: 'care-action-sub' }, b.sub)] : []),
           ...(b.note ? [el('span', { class: 'care-action-note' }, b.note)] : []),
         );
         button.disabled = working || b.note !== null;
@@ -358,6 +363,68 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
         squishes,
         note: note.textContent,
       };
+    },
+  };
+}
+
+const SVG = 'http://www.w3.org/2000/svg';
+
+/**
+ * The blob's face (#153): eyes, mouth, cheeks and a tummy patch as one small
+ * inline SVG, swapped per species. Drawn once; `set` shows the right parts.
+ */
+function squishyFaceNode(): { node: SVGSVGElement; set: (face: SquishyFace) => void } {
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', '0 0 88 78');
+  svg.setAttribute('class', 'care-face');
+  svg.setAttribute('aria-hidden', 'true');
+  const part = (tag: string, attrs: Record<string, string>): SVGElement => {
+    const node = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+    svg.append(node);
+    return node;
+  };
+  const belly = part('ellipse', { cx: '44', cy: '58', rx: '18', ry: '12', class: 'care-face-belly' });
+  const cheeks = [
+    part('circle', { cx: '22', cy: '44', r: '5', class: 'care-face-blush' }),
+    part('circle', { cx: '66', cy: '44', r: '5', class: 'care-face-blush' }),
+  ];
+  const eyes: Record<SquishyFace['eyes'], SVGElement[]> = {
+    dot: [
+      part('circle', { cx: '32', cy: '35', r: '3.5', class: 'care-face-ink' }),
+      part('circle', { cx: '56', cy: '35', r: '3.5', class: 'care-face-ink' }),
+    ],
+    oval: [
+      part('ellipse', { cx: '32', cy: '35', rx: '3.5', ry: '5', class: 'care-face-ink' }),
+      part('ellipse', { cx: '56', cy: '35', rx: '3.5', ry: '5', class: 'care-face-ink' }),
+    ],
+    happy: [
+      part('path', { d: 'M26 37 q6 -8 12 0', class: 'care-face-stroke' }),
+      part('path', { d: 'M50 37 q6 -8 12 0', class: 'care-face-stroke' }),
+    ],
+    sleepy: [
+      part('path', { d: 'M26 35 q6 4 12 0', class: 'care-face-stroke' }),
+      part('path', { d: 'M50 35 q6 4 12 0', class: 'care-face-stroke' }),
+    ],
+  };
+  const mouths: Record<SquishyFace['mouth'], SVGElement> = {
+    smile: part('path', { d: 'M38 46 q6 6 12 0', class: 'care-face-stroke' }),
+    open: part('ellipse', { cx: '44', cy: '48', rx: '4', ry: '3', class: 'care-face-ink' }),
+    cat: part('path', { d: 'M37 46 q3.5 5 7 0 q3.5 5 7 0', class: 'care-face-stroke' }),
+  };
+  const show = (node: SVGElement, on: boolean) => {
+    node.setAttribute('visibility', on ? 'visible' : 'hidden');
+  };
+  return {
+    node: svg,
+    set: (face) => {
+      show(belly, face.belly !== null);
+      if (face.belly !== null) belly.setAttribute('fill', face.belly);
+      for (const c of cheeks) show(c, face.blush);
+      for (const [kind, nodes] of Object.entries(eyes)) {
+        for (const n of nodes) show(n, kind === face.eyes);
+      }
+      for (const [kind, n] of Object.entries(mouths)) show(n, kind === face.mouth);
     },
   };
 }

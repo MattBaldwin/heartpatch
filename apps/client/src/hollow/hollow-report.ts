@@ -11,6 +11,8 @@ export const HOLLOW_TEXT = {
   taken: (name: string) => `He took ${name} to the Hollow. You can rescue them!`,
   home: (name: string) => `He took ${name} to the Hollow, but they're home again!`,
   safe: 'Everyone stayed safe and cozy. Nice planning!',
+  /** Squishies were out in the dark, but he took nobody (first-night grace). */
+  spared: 'He came by, but took nobody this time.',
   ok: 'Okay!',
   rescueNamed: (name: string) => `Rescue ${name}!`,
   open: 'Hollow',
@@ -31,13 +33,19 @@ export const HOLLOW_TEXT = {
   waiting: ', waiting in the Hollow',
 } as const;
 
-/** Reports worth telling (someone taken, or someone kept safe) newer than `seenNight`, newest first. */
+/**
+ * Reports worth telling (someone taken, kept safe, or left out and spared)
+ * newer than `seenNight`, newest first. A night with nobody of mine there
+ * says nothing.
+ */
 export function unseenReports(
   reports: readonly MorningReport[],
   seenNight: string | null,
 ): MorningReport[] {
   return reports.filter(
-    (r) => (seenNight === null || r.night > seenNight) && (r.taken !== null || r.sheltered > 0),
+    (r) =>
+      (seenNight === null || r.night > seenNight) &&
+      (r.taken !== null || r.sheltered > 0 || r.exposed > 0),
   );
 }
 
@@ -56,7 +64,16 @@ export function reportText(
   const lines = taken.map((t) =>
     t.inHollow ? HOLLOW_TEXT.taken(nameOf(t)) : HOLLOW_TEXT.home(nameOf(t)),
   );
-  if (lines.length === 0) lines.push(HOLLOW_TEXT.safe);
+  if (lines.length === 0) {
+    // Nobody taken: either everyone was sheltered, or some were out in the
+    // dark and he let them be (first-night grace), which is the moment to
+    // say "light a fire" (owner decision 2026-10-03).
+    if (reports.some((r) => r.taken === null && r.exposed > 0)) {
+      lines.push(HOLLOW_TEXT.spared, HOLLOW_TEXT.fireHint);
+    } else {
+      lines.push(HOLLOW_TEXT.safe);
+    }
+  }
   return { title, lines };
 }
 

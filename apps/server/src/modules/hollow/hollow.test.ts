@@ -475,6 +475,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
           night: TONIGHT,
           taken: { squishyId: taken, speciesId: SECRET.id, nickname: null, inHollow: true },
           sheltered: 0,
+          exposed: 1,
         },
       ]);
       expect(mine.hollowed.map((s) => s.id)).toEqual([taken]);
@@ -486,7 +487,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       });
 
       const theirs = await statusOf(server, kid, mapId);
-      expect(theirs.reports).toEqual([{ night: TONIGHT, taken: null, sheltered: 1 }]);
+      expect(theirs.reports).toEqual([{ night: TONIGHT, taken: null, sheltered: 1, exposed: 0 }]);
       expect(theirs.hollowed).toEqual([]);
       expect(theirs.speciesDefs).toEqual([]);
       // Nothing about the other player's squishies, seeds or shadows.

@@ -6,8 +6,9 @@ import { openTray, trayButton } from './trays.js';
 
 // The owner's rule after two edge-to-edge labels: text never touches a
 // control's edge, and nothing hangs off the screen (style guide §3). Every
-// tray handle and row, the Keeper menu, the tile chip and the recipe book's
-// controls, on a small phone, a big phone and an iPad both ways round.
+// tray handle and row, the Keeper menu, the tile chip, the catalog's and the
+// care sheet's controls and the recipe book's, on a small phone, a big phone
+// and an iPad both ways round.
 
 const TRAY_CONTROLS = [
   '[data-testid^="tray-handle-"]',
@@ -46,6 +47,30 @@ async function checkTileChip(page: Page): Promise<void> {
   await panel.getByRole('button', { name: 'Close' }).tap();
 }
 
+/**
+ * The catalog's header × and, from a friend's card, the care sheet's round
+ * buttons ("Feed" with its Treats under it) and its × (#150, #153).
+ */
+async function checkCatalogAndCare(page: Page): Promise<void> {
+  await (await trayButton(page, 'catalog-open')).tap();
+  const catalog = page.getByTestId('catalog');
+  await expect(catalog).toBeVisible();
+  await expect(catalog.locator('[data-care-species]').first()).toBeVisible({ timeout: 15_000 });
+  await expectRoomyLabels(page, '.catalog-close-top, [data-testid="catalog-close"]');
+  // The × is in the header, on screen without scrolling the list.
+  const close = (await page.getByTestId('catalog-close-top').boundingBox())!;
+  expect(close.y + close.height).toBeLessThan(page.viewportSize()!.height / 2);
+  await catalog.locator('[data-care-species]').first().tap();
+  const care = page.getByTestId('care');
+  await expect(care).toBeVisible();
+  await expect(care.locator('[data-care="feed"]')).toBeVisible();
+  await expectRoomyLabels(page, '.care-actions .care-action, [data-testid="care-close"]');
+  await care.getByTestId('care-close').tap();
+  await expect(care).toBeHidden();
+  await page.getByTestId('catalog-close-top').tap();
+  await expect(catalog).toBeHidden();
+}
+
 async function checkBook(page: Page): Promise<void> {
   await (await trayButton(page, 'recipe-book-open')).tap();
   const book = page.getByTestId('recipe-book');
@@ -63,7 +88,7 @@ async function checkBook(page: Page): Promise<void> {
 }
 
 test('text never touches a control’s edge, on phones and iPads', async ({ browser }) => {
-  test.setTimeout(240_000); // five screens; CI renders in software
+  test.setTimeout(300_000); // six screens; CI renders in software
   const page = await newPlayer(browser, uniqueName('room'));
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -96,6 +121,7 @@ test('text never touches a control’s edge, on phones and iPads', async ({ brow
       await checkTrays(page);
       await checkKeeperMenu(page);
       await checkTileChip(page);
+      await checkCatalogAndCare(page);
       await checkBook(page);
     });
   }

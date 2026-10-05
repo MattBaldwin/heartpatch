@@ -6,6 +6,7 @@ import {
   type CareResult,
   type CareSquishy,
   type Species,
+  type SpeciesVisual,
 } from '@heartpatch/shared';
 
 /*
@@ -77,9 +78,42 @@ export function blobColor(speciesId: string, species: ReadonlyMap<string, Specie
 
 export interface CareButton {
   readonly action: string;
+  /** One or two words with its icon ("🍪 Feed"), so it fits a round button (#153). */
   readonly label: string;
+  /** What it costs, under the label ("3 Treats"), or null. */
+  readonly sub: string | null;
   /** Why it can't be tapped now, or null. */
   readonly note: string | null;
+}
+
+/** The little face on the care sheet's blob, from the species' parts (#153). */
+export interface SquishyFace {
+  readonly eyes: 'dot' | 'oval' | 'happy' | 'sleepy';
+  readonly mouth: 'smile' | 'open' | 'cat';
+  readonly blush: boolean;
+  /** A lighter tummy patch, in the palette's second colour. */
+  readonly belly: string | null;
+}
+
+/**
+ * What the sheet's blob should wear for a face, so it reads as the squishy
+ * and not a plain circle: the species' eye and mouth parts (the close-up view
+ * draws the real one in 3D).
+ */
+export function squishyFace(visual: Pick<SpeciesVisual, 'parts' | 'palette'>): SquishyFace {
+  const has = (part: string) => visual.parts.includes(part);
+  return {
+    eyes: has('happy-eyes') ? 'happy' : has('sleepy-eyes') ? 'sleepy' : has('oval-eyes') ? 'oval' : 'dot',
+    mouth: has('open-mouth') ? 'open' : has('cat-mouth') ? 'cat' : 'smile',
+    blush: has('blush-cheeks'),
+    belly: has('belly-patch') ? (visual.palette[1] ?? null) : null,
+  };
+}
+
+/** The face for a species id (a plain one for a species the client doesn't know). */
+export function faceFor(speciesId: string, species: ReadonlyMap<string, Species>): SquishyFace {
+  const visual = species.get(speciesId)?.visual;
+  return squishyFace(visual ?? { parts: [], palette: [] });
 }
 
 export interface CareSheetModel {
@@ -112,17 +146,15 @@ export function careSheet(
     const costs = Object.entries(action.cost ?? {});
     const short = costs.some(([id, n]) => (reply.items[id] ?? 0) < n);
     const treats = action.cost?.['treats'];
-    const label =
-      treats === undefined
-        ? `${ACTION_ICONS[action.id] ?? '💗'} ${action.name}`
-        : `${ACTION_ICONS[action.id] ?? '💗'} ${action.name} (${CARE_TEXT.treats(reply.items['treats'] ?? 0)})`;
+    const label = `${ACTION_ICONS[action.id] ?? '💗'} ${action.name}`;
+    const sub = treats === undefined ? null : CARE_TEXT.treats(reply.items['treats'] ?? 0);
     const note =
       readyAt !== undefined && Date.parse(readyAt) > now
         ? CARE_TEXT.wait
         : short
           ? CARE_TEXT.noTreats
           : null;
-    return { action: action.id, label, note };
+    return { action: action.id, label, sub, note };
   });
   const toNext = squishy.xpToNext;
   // Phase 1 forms grow up once, at a level (design doc §8).

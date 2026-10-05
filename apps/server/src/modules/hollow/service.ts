@@ -286,6 +286,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
               }
             : null,
           sheltered: outcome.sheltered,
+          exposed: outcome.exposed,
         };
       });
       const speciesIds = new Set([
