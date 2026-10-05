@@ -13,6 +13,15 @@ export const HOME_VIEW = {
   keeper: { scale: 0.7, offset: { x: 1.1, z: -0.7 }, lean: 0.12 }, // TUNE
   /** How far squishies wander from their habitat's spot, world units. */
   wanderRadius: 0.95, // TUNE
+  /**
+   * The home tiles up close (#131). The map's cream (`HOME_LOOK`) reads
+   * because the map tints it with the player's colour; here it's alone and
+   * big under the sun, so it tone-maps to white and blooms. A warm sand,
+   * matte, stays below the bloom threshold and lets the spots glow.
+   */
+  tile: { color: '#efd2a8', roughness: 0.85 }, // TUNE
+  /** The glowing spots while placing or moving (#131): sRGB, and how see-through. */
+  spot: { ring: '#f0437f', fill: '#ffd1e3', fillAlpha: 0.55 }, // TUNE
 } as const;
 
 /** Spots inside a tile: sub-hex size as a fraction of the tile's hex size. */

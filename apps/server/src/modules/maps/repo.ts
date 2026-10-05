@@ -78,6 +78,8 @@ export interface MapSummaryRow {
   memberCount: number;
   maxPlayers: number;
   pvpMode: PvpMode;
+  /** Join requests waiting on the owner (#144); 0 unless this row is the owner's. */
+  pendingRequests: number;
 }
 
 export interface JoinRequestRow {
@@ -271,6 +273,13 @@ const ownerUsers = alias(users, 'owner_users');
 const activeMemberCount = sql<number>`(
   select count(*)::int from ${mapMembers} as m
   where m.map_id = ${maps.id} and m.status = 'active'
+)`;
+
+/** Join requests waiting on the owner, for the owner's own rows only (#144). */
+const pendingRequestCount = sql<number>`(
+  select case when ${mapMembers.role} = 'owner' then count(*)::int else 0 end
+  from ${joinRequests} as r
+  where r.map_id = ${maps.id} and r.status = 'pending'
 )`;
 
 export function createMapsRepo(db: Executor): MapsRepo {
@@ -559,6 +568,7 @@ function queries(db: Executor): MapsRepo {
           memberCount: activeMemberCount,
           maxPlayers: maps.maxPlayers,
           pvpMode: maps.pvpMode,
+          pendingRequests: pendingRequestCount,
         })
         .from(mapMembers)
         .innerJoin(maps, eq(maps.id, mapMembers.mapId))

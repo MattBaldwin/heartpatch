@@ -87,6 +87,10 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     role: 'dialog',
     'aria-modal': 'true',
     'aria-labelledby': 'auth-title',
+    // Focus moves to the card, not a button (#158): a screen reader starts
+    // at the title and Tab reaches the buttons, but nobody sees a keyboard
+    // focus ring on a button they never tabbed to.
+    tabindex: '-1',
   });
   overlay.append(card);
 
@@ -144,6 +148,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     overlay.hidden = false;
     chip.hidden = true;
     setMenu(false);
+    card.focus({ preventScroll: true });
   };
 
   const signedIn = (user: PublicUser) => {
@@ -259,7 +264,6 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
       ...(notice ? [el('p', { class: 'auth-error', role: 'alert' }, notice)] : []),
       el('div', { class: 'auth-actions' }, login, signup),
     );
-    login.focus();
   }
 
   function showLogin(): void {
@@ -399,7 +403,6 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     );
     // Shown once: an automatic update must not reload it away (#47).
     releaseUpdates = updateHold.hold();
-    done.focus();
   }
 
   authApi
