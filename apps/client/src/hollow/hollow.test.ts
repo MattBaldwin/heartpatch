@@ -122,8 +122,8 @@ describe('the Hollow Man on the map', () => {
     const { scene, layer } = stage();
     const man = scene.getTransformNodeByName('hollow-man')!;
     expect(man.isEnabled()).toBe(false);
-    // Two draw calls: his body and his eyes.
-    expect(scene.meshes.filter((m) => m.name.startsWith('hollow-man'))).toHaveLength(2);
+    // Three draw calls: his body, both arms (thin instances of one mesh) and his eyes.
+    expect(scene.meshes.filter((m) => m.name.startsWith('hollow-man'))).toHaveLength(3);
     expect(scene.animatables).toHaveLength(0);
 
     expect(layer.visit()).toBe(true);

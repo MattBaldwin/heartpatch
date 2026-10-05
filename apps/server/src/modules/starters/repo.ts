@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { mapMembers, users } from '../../db/schema.js';
 import { activeMember } from '../maps/repo.js';
@@ -11,6 +11,12 @@ export interface StartersRepo {
   needsStarter: (mapId: string, userId: string) => Promise<boolean>;
   /** The player's tutorial Partner species (`users.partner_species_id`), or null. */
   partnerSpecies: (userId: string) => Promise<string | null>;
+  /**
+   * True if the account has picked a starter on any patch before (a marker on
+   * any of its memberships, archived ones too): Sprout's first-pick gift is
+   * for the very first only.
+   */
+  pickedBefore: (userId: string) => Promise<boolean>;
   /** Records the pick on the membership; throws if it already has one (a backstop to the lock). */
   setStarter: (mapId: string, userId: string, squishyId: string) => Promise<void>;
 }
@@ -33,6 +39,15 @@ export function createStartersRepo(db: Executor): StartersRepo {
         .from(users)
         .where(eq(users.id, userId));
       return row?.speciesId ?? null;
+    },
+
+    pickedBefore: async (userId) => {
+      const [row] = await db
+        .select({ mapId: mapMembers.mapId })
+        .from(mapMembers)
+        .where(and(eq(mapMembers.userId, userId), isNotNull(mapMembers.starterSquishyId)))
+        .limit(1);
+      return row !== undefined;
     },
 
     setStarter: async (mapId, userId, squishyId) => {
