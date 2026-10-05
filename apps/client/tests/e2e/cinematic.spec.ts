@@ -71,6 +71,13 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   const second = (await story(page))!;
   expect(second.t).toBeGreaterThan(first.t);
   await expect(caption).toHaveText(second.caption!);
+  // The caption sits inside the 16px gutters, and the account chip steps
+  // aside while the story plays (#156).
+  const box = (await caption.boundingBox())!;
+  const width = page.viewportSize()!.width;
+  expect(box.x).toBeGreaterThanOrEqual(16 - 0.5);
+  expect(box.x + box.width).toBeLessThanOrEqual(width - 16 + 0.5);
+  await expect(page.getByTestId('auth-user')).toBeHidden();
 
   // Drawn with the game's own squishies and world.
   await expect
@@ -83,6 +90,7 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   await holdCinematic(page);
   await expect(cinematic).toBeHidden();
   expect((await story(page))?.ended).toBe('skipped');
+  await expect(page.getByTestId('auth-user')).toBeVisible();
   await expect.poll(() => seenOnServer(page), SLOW).not.toBeNull();
 
   // Then the tutorial (optional on the dev server) and the lobby.

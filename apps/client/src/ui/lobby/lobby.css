@@ -184,8 +184,20 @@
 }
 
 .lobby-choice-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   font-size: 17px;
   font-weight: 700;
+}
+
+.lobby-choice-picked {
+  padding: 2px var(--hp-pad-x);
+  border-radius: 999px;
+  background: #b8487a;
+  font-size: 13px;
+  color: #fff;
 }
 
 .lobby-choice-hint {

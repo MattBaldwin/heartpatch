@@ -2,7 +2,7 @@
    rounded captions (style guide §6), the title card, a cream veil for the
    dissolves, Skip (once seen) and "Hold to skip" (always). 44pt+ targets and
    safe areas. Over the lobby (4) like the Keeper picker (7), under the
-   install guide (8), the tutorial (9) and the "Log out" chip (10). */
+   install guide (8), the tutorial (9); the "Log out" chip (10) steps aside while it plays. */
 
 .cinematic {
   position: fixed;
@@ -23,6 +23,12 @@
   display: none;
 }
 
+/* The story owns the screen (#156): the "Hi, name! Log out" chip steps
+   aside while it plays and comes back after. Hold to skip ends it any time. */
+body:has(.cinematic:not([hidden])) .auth-chip {
+  display: none;
+}
+
 .cinematic-veil {
   position: absolute;
   inset: 0;
@@ -35,7 +41,9 @@
   position: absolute;
   left: 50%;
   bottom: calc(env(safe-area-inset-bottom) + 88px);
-  width: min(92vw, 640px);
+  /* Inside the 16px gutters and safe areas, padding included (#156). */
+  box-sizing: border-box;
+  width: min(calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)), 640px);
   margin: 0;
   padding: 16px 22px;
   transform: translate(-50%, 8px);

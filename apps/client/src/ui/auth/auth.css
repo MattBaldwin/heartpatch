@@ -36,6 +36,11 @@
   box-shadow: 0 12px 40px rgb(107 75 110 / 18%);
 }
 
+.auth-card:focus {
+  /* Focused only to start reading there (#158); it isn't a control. */
+  outline: none;
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;

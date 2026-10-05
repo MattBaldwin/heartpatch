@@ -110,6 +110,10 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
     'Build a Hearthfire to keep everyone safe at night!',
   );
   expect((await homeState(page))?.scene).toMatchObject({ keeper: true, buildings: 0 });
+  // The title and fire status sit clear of the "Hi, name! Log out" chip (#157).
+  const header = (await page.locator('.home-top').boundingBox())!;
+  const chip = (await page.locator('.auth-chip').boundingBox())!;
+  expect(header.y).toBeGreaterThanOrEqual(chip.y + chip.height);
 
   // Build a Hearthfire: pick it, and the free spots light up.
   await sheet.getByTestId('home-build').tap();
