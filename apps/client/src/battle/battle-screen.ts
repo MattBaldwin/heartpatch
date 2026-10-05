@@ -324,12 +324,21 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     onAction: (action) => void submit(action),
     onNoCharms: () => {
       // The bag may have filled since (a craft, a gift): look again first.
+      // Busy while it looks, like a submit: no double taps, and the dev hook
+      // never reports a settled turn before the capture has gone out.
       const current = battle;
-      if (!current) return;
+      if (!current || waiting || queue.length > 0) return;
+      waiting = true;
+      hud.setControls({ type: 'waiting' });
       void refreshCharms(current).then((count) => {
         if (battle?.id !== current.id) return;
-        if (count > 0) void submit({ type: 'capture' });
-        else hud.setProblem(noCharmsLine());
+        waiting = false;
+        if (count > 0) {
+          void submit({ type: 'capture' });
+        } else {
+          hud.setControls(controlsFor(current));
+          hud.setProblem(noCharmsLine());
+        }
       });
     },
     onDone: () => {
