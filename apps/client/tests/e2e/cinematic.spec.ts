@@ -25,6 +25,13 @@ const SLOW = { timeout: 30_000 };
 
 const story = (page: Page) => hook<CinematicDebug>(page, 'cinematic');
 
+/**
+ * WebKit's page error for an in-flight API fetch that a navigation aborts
+ * (on CI it reads "…/localhost:5173/api/v1/maps/<id>/wild due to access
+ * control checks.").
+ */
+const ABORTED_FETCH = /\/api\/v1\/\S* due to access control checks\.?$/;
+
 const seenOnServer = async (page: Page) =>
   (await api<{ cinematic: { seenAt: string | null } }>(page, 'GET', '/cinematic')).body.cinematic
     .seenAt;
@@ -32,7 +39,15 @@ const seenOnServer = async (page: Page) =>
 test('a new player sees the story after their Keeper, then the tutorial', async ({ page }) => {
   test.setTimeout(180_000); // builds the story's world; CI renders in software
   const errors: string[] = [];
-  page.on('pageerror', (err) => errors.push(err.message));
+  // WebKit reports a fetch the reload below aborts (the battle HUD's
+  // `/maps/<id>/wild` hint, already caught by the app) as a page error. Only
+  // that message, and only while reloading, is let through; every other error
+  // stays fatal.
+  let reloading = false;
+  page.on('pageerror', (err) => {
+    if (reloading && ABORTED_FETCH.test(err.message)) return;
+    errors.push(err.message);
+  });
   await signUp(page, uniqueName('story'));
   expect(await seenOnServer(page)).toBeNull();
 
@@ -75,11 +90,6 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible({
     timeout: 15_000,
   });
-  const wildHint = page
-    .waitForResponse((res) => /\/api\/v1\/maps\/[^/]+\/wild$/.test(res.url()), {
-      timeout: 30_000,
-    })
-    .catch(() => null);
   await lobby.getByTestId('tutorial-start').tap();
   await expect
     .poll(async () => (await hook<{ stepId: string | null }>(page, 'tutorial'))?.stepId ?? null, {
@@ -88,10 +98,9 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
     .toBe('welcome');
 
   // A returning player goes straight on: here, back into the tutorial run.
-  // The Glade's wild-squishy hint (the battle entry's) lands first: WebKit
-  // reports a request cut off by a reload as a page error.
-  await wildHint;
+  reloading = true;
   await page.reload();
+  reloading = false;
   await expect(page.getByTestId('tutorial-bubble')).toBeVisible({ timeout: 30_000 });
   expect((await story(page))?.seen?.seenAt ?? null).not.toBeNull();
   await expect(cinematic).toBeHidden();
