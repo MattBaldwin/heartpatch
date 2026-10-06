@@ -201,15 +201,15 @@ Resources vary by terrain, making certain tiles worth fighting over.
 
 **Seasonal resources** (special uses, see §15): Pumpkins, Witch Dust, Magic Fallen Leaves, Turkey Feathers, Presents, Fireworks.
 
-Gathering is timer-based (start a gather on an owned node; collect when done), computed from timestamps.
+Gathering is timer-based (start a gather on an owned node; when it's done it goes straight into your bag), computed from timestamps.
 
-**Recipe book.** Every craft recipe and every building you can put up has a page. A page opens the first time your account has collected everything it needs, on any patch, and stays open. The Heart Charm, the Hearthfire and both habitats are open from the start (the tutorial uses them). A sealed page can't be crafted or built yet and shows a short hint about where its missing pieces turn up (DECISIONS "Recipe book and unlocks").
+**Recipe book.** Every craft recipe and every building you can put up has a page. A page opens the first time your account has collected everything it needs, on any patch, and stays open. The Heart Charm, the Hearthfire and both habitats are open from the start (the tutorial uses them). A sealed page can't be crafted or built yet and shows a short hint about where its missing pieces turn up (DECISIONS "Recipe book and unlocks"). One thing cooks at a time per patch; the book shows what's cooking with a countdown, and it pops into your bag when it's done.
 
 **Squishy gatherers.** The Keeper still gathers by hand. On top of that, each squishy given the gatherer job works one more tile of the player's land **on its own, again and again**, until it's moved: a node, or **owned territory** outside the home base, which yields by terrain (forest → Timber, hills and mountains → Stone, old forest → Emberwood, meadow → Treats, pumpkin fields → Pumpkins in season; `JOB_RULES.terrainYields`, **[DEFAULT]**). More squishies and more land mean more resources, which is why capturing squishies and holding territory both matter.
 
-- One gatherer per tile, one job per squishy. A squishy's gather takes about **[DEFAULT: twice]** the Keeper's time per cycle; finished cycles wait to be collected, up to **[DEFAULT: 4]**, then it waits too.
+- One gatherer per tile, one job per squishy. A squishy's gather takes about **[DEFAULT: twice]** the Keeper's time per cycle; finished cycles go into the bag by themselves; if nobody visits, up to **[DEFAULT: 4]** wait, then it naps until you're back.
 - **Matches gather faster**, like the habitat match (§7): a squishy whose element (or a Halloween squishy, for Pumpkins) matches the resource is 1.35× as quick, and 1.75× when its feeling matches too (Leaf/Brave → Timber, Stone/Sleepy → Stone, Fire/Cozy → Emberwood, Light or Spark/Joy → Glimmer, Water/Silly → Treats, Shadow or Halloween/Spooky → Pumpkins; **[DEFAULT]**). The job board shows each squishy's best jobs: "Great at gathering Timber 🌲", "Strong fighter 💪".
-- Taking a gatherer off its tile puts what it had ready in the bag; a half-done gather is let go. Work on land that changes hands stops, and what wasn't collected is lost, as with the Keeper's own gathers.
+- Taking a gatherer off its tile puts what it had ready in the bag; a half-done gather is let go. If its land changes hands, what it finished before then still goes in the bag; the unfinished cycle is lost, as with the Keeper's own gathers.
 - **Night risk:** a gatherer spends the night on its tile, so outside a lit Hearthfire's safe radius it's exposed to the Hollow Man like any squishy outside the firelight (§14). The job board warns before assigning.
 
 ## 13. Home base and buildings
@@ -318,7 +318,7 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 
 ## 21. Retention loops
 
-- **Daily:** tend and feed squishies, refuel Hearthfires before nightfall, check the morning Hollow Man report, collect gathered resources.
+- **Daily:** tend and feed squishies, refuel Hearthfires before nightfall, check the morning Hollow Man report, and see what your gatherers brought home.
 - **Session:** capture tiles, battle, capture wild squishies, build and upgrade.
 - **Long-term:** Keeper milestones and signature clothing (§24); complete the catalog (including seasonal and secret squishies), rare evolutions, hybrids, Lorebook pages.
 - **Seasonal:** new squishies, resources and events every holiday; keepsakes build anticipation.
@@ -432,7 +432,7 @@ Every new player plays a short solo tutorial before joining or creating a multip
 **Steps [DEFAULT]** — each is a short goal with a highlighted target and one or two lines from Sprout:
 
 1. **Plant your Heart Seed.** Tap the glowing spot → your home base grows from the ground with color spreading outward. *Teaches: home base can never be taken.*
-2. **Gather.** Collect Timber and Emberwood from nearby nodes (tutorial timers take seconds, not minutes). *Teaches: resources and timers.*
+2. **Gather.** Gather Timber from a nearby node; it pops into your bag when it's ready (tutorial timers take seconds, not minutes). *Teaches: resources and timers.*
 3. **Light your first Hearthfire.** Build it, fuel it, see the warm safe radius on the map. *Teaches: fires keep squishies safe.*
 4. **Meet a wild squishy.** A friendly wild squishy wanders up. **First battle** (scripted to be winnable) introduces moves and one clear example of element and feeling effectiveness ("Super cozy!").
 5. **Capture it.** Use a Heart Charm (capture is guaranteed here). *Teaches: befriending.* Then the player meets their **Partner**: the starter pick from §4 (1 of 3), named by the player. Exact beats are #24's.
