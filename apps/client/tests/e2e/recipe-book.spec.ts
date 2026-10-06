@@ -144,7 +144,7 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
   // runs on today's date, inside the 2026 window).
   const mapId = (await mapState(page))!.id;
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
-    items: { pumpkins: 1, timber: 2 },
+    items: { pumpkins: 1, timber: 2, treats: 1 },
   });
   expect(granted.status).toBe(201);
 
@@ -157,14 +157,17 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
     await page.getByTestId('recipe-book-cover-open').tap();
     await toc(key).tap();
   };
+  // The Pumpkins open a new page: its "New page!" card turns to it.
   await (await trayButton(page, 'recipe-book-open')).tap();
   await expect
     .poll(async () => (await bookState(page))?.unlocked ?? [])
     .toContain('recipe:pumpkin-treats');
-  await page.getByTestId('recipe-book-close').tap();
+  await page.getByTestId('recipe-book-new-turn').tap();
+  await expect
+    .poll(async () => (await bookState(page))?.showing)
+    .toContain('recipe:pumpkin-treats');
 
   // Make Pumpkin Treats.
-  await openBookAt('recipe:pumpkin-treats');
   await expect(cooking).toBeHidden();
   const treats = book.locator('article[data-page="recipe:pumpkin-treats"]');
   await treats.getByTestId('recipe-book-make').tap();
@@ -194,11 +197,11 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
   expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
   await openBookAt('recipe:heart-charm');
   await expect(toast).toContainText('+3 Treats');
-  await expect.poll(async () => (await bagState(page))?.items['treats']).toBe(3);
+  await expect.poll(async () => (await bagState(page))?.items['treats']).toBe(4);
   await expect.poll(async () => (await bagState(page))?.crafts).toBe(0);
   await expect(cooking).toBeHidden();
 
-  // The pot is free: make the Heart Charm (it needs a Treat, which just landed).
+  // The pot is free: make the Heart Charm.
   await expect(charm.getByTestId('recipe-book-make')).toBeEnabled();
   await charm.getByTestId('recipe-book-make').tap();
   await expect(cooking).toContainText('Your pot is busy making Heart Charm…');
@@ -240,6 +243,8 @@ test('a craft started elsewhere shows up when Make it is refused', async ({ brow
   await expect
     .poll(async () => (await bookState(page))?.unlocked ?? [])
     .toContain('recipe:pumpkin-treats');
+  // The Pumpkins' new page can wait.
+  await page.getByTestId('recipe-book-new-page').getByRole('button', { name: 'Later' }).tap();
   await page.getByTestId('recipe-book-cover-open').tap();
   await book.locator('[data-testid="recipe-book-toc"][data-page="recipe:heart-charm"]').tap();
   const make = book
