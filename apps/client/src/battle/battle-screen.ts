@@ -162,7 +162,7 @@ const MESSAGES = {
   resultRescued: 'Welcome home!',
   rescuedSub: 'Your friend is back from the Hollow!',
   done: 'Back to patch',
-  replayStart: 'Replay! Someone challenged your patch.',
+  replayStart: 'Replay! Someone challenged your land.',
   replayHeld: 'Your squishies held on!',
   replayScooted: 'They scooted home!',
   replayLost: 'They won this one.',

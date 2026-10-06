@@ -1,16 +1,16 @@
 import type { DefenseStance, Raid } from '@heartpatch/shared';
 
-// Player-facing words for the raid report (#16; style guide §2, §6, §9):
+// Player-facing words for the challenge report (#16; style guide §2, §6, §9):
 // calm and reassuring, never shaming. A challenge is "Someone challenged your
-// patch!", the stance is the "Defense style" (Bold, Careful, Balanced).
+// land!", the stance is the "Defense style" (Bold, Careful, Balanced).
 
 export const RAID_TEXT = {
   open: 'Report',
   /** Peeks out beside the Adventure handle while a raid is unseen. */
-  news: 'New raid report!',
-  title: 'Raid report',
-  challenged: 'Someone challenged your patch!',
-  quiet: 'All quiet on your patch. Everyone is snug!',
+  news: 'New challenge report!',
+  title: 'Challenge report',
+  challenged: 'Someone challenged your land!',
+  quiet: 'All quiet on your land. Everyone is snug!',
   fresh: 'New!',
   watch: 'Watch',
   gotIt: 'Got it!',

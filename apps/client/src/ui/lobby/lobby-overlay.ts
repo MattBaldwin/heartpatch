@@ -434,7 +434,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       title: 'Make a patch',
       subtitle: 'Your own corner of the world, for up to 4 Keepers.',
       label: 'Patch name',
-      hint: 'Something cozy, like "Pumpkin Hollow".',
+      hint: 'Something cozy, like "Pumpkin Meadow".',
       input: { type: 'text', maxlength: '24', autocomplete: 'off' },
       submitLabel: 'Make it!',
       submit: async (name) => {

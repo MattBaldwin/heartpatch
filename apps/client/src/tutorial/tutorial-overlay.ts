@@ -31,7 +31,7 @@ import './tutorial.css';
 // its button) tucks it back into the orb. An open side tray is a sheet too.
 //
 // The tucked chip never covers a sheet the step is using either (a tray on
-// the step's way, like My Heartpatch while Sprout points at Home): it docks
+// the step's way, like My Home while Sprout points at Home): it docks
 // into the same orb clear of that sheet, while the spotlight carries on; a
 // tap on it opens the bubble as the chip's does. A tray's handle, standing in
 // while its tray slides in, owns that tray (sheets.ts `foreignSheets`).

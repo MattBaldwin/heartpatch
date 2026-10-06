@@ -286,7 +286,7 @@ test('a battle action lands on one tap', async ({ browser }) => {
 test('Home and Bag open on the first tap while a tile panel is open', async ({ browser }) => {
   // #165: before the trays, both buttons left the screen while a tile was
   // selected, so the first click landed on the map and only the second one
-  // acted. They live in the My Heartpatch tray now and never hide under a
+  // acted. They live in the My Home tray now and never hide under a
   // panel: one tap on the handle, one tap on the entry, with the panel open.
   test.setTimeout(240_000); // two map builds (Home and back) and two tile sweeps
   const page = await newPlayer(browser, uniqueName('open'));

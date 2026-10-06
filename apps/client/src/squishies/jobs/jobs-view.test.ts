@@ -62,7 +62,7 @@ describe('job lines', () => {
     expect(jobLine(squishy(1, { job: 'guard', post: { q: 0, r: 0 } }), NOW)).toBe('On watch 🛡️');
     const away = squishy(1);
     away.squishy.state = 'hollowed';
-    expect(jobLine(away, NOW)).toBe('In the Hollow. Rescue them soon!');
+    expect(jobLine(away, NOW)).toBe('In the Hollow. You can rescue them!');
   });
 
   it("shows a gatherer's next ready time and what's waiting", () => {

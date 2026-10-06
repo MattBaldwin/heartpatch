@@ -61,7 +61,7 @@ export const TERRAINS: Terrain[] = [
   {
     id: 'junipers-gap',
     name: "Juniper's Gap",
-    description: 'The glowing valley where every squishy was born.',
+    description: 'The valley where the Heartpatch once glowed.',
     weight: 0, // only placed at the map centre
     nodeChance: 100, // TUNE: the richest land
     nodeResources: ['glimmer', 'emberwood', 'stone', 'timber'],

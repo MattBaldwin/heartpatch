@@ -85,7 +85,7 @@ export function workLine(work: WorkStatus, nowMs: number): string {
 
 /** The squishy's job, in a few words. */
 export function jobLine(s: JobSquishy, nowMs: number): string {
-  if (s.squishy.state !== 'active') return `${JOBS_TEXT.inHollow}. Rescue them soon!`;
+  if (s.squishy.state !== 'active') return `${JOBS_TEXT.inHollow}. You can rescue them!`;
   switch (s.job) {
     case 'team':
       return `On the team (${ordinal((s.teamSlot ?? 0) + 1)}) ⚔️`;
