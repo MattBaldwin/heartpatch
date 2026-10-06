@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import {
   BASELINE_RULES,
-  CAPPED_BEFRIEND_RULES,
+  UNCAPPED_BEFRIEND_RULES,
   CURRENT_RULES,
   PROGRESSION_CONFIG,
 } from './progression-config.js';
@@ -26,7 +26,7 @@ const outDir = resolve(values.out);
 const started = performance.now();
 const data = modelData();
 const runs: ProgressionRun[] = [];
-for (const rules of [BASELINE_RULES, CURRENT_RULES, CAPPED_BEFRIEND_RULES]) {
+for (const rules of [BASELINE_RULES, CURRENT_RULES, UNCAPPED_BEFRIEND_RULES]) {
   for (const seats of PROGRESSION_CONFIG.seats) {
     for (const kid of PROGRESSION_CONFIG.kids) {
       runs.push(runProgression(data, PROGRESSION_CONFIG, rules, kid, seats));

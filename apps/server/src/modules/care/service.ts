@@ -63,7 +63,7 @@ const speciesOf = (id: string): Species | undefined =>
  * secret species), then the server-only ones into secret forms. The target
  * of a secret one is never sent before it happens (CLAUDE.md rule 6).
  */
-const EVOLUTION_STEPS: readonly EvolutionStep[] = [
+export const EVOLUTION_STEPS: readonly EvolutionStep[] = [
   ...[...GAME_DATA.species, ...SERVER_GAME_DATA.secretSpecies].flatMap((s) =>
     s.evolutions.map((e) => ({ from: s.id, into: e.into, level: e.level })),
   ),

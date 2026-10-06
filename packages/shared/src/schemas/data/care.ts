@@ -136,6 +136,13 @@ export const GrowthRulesSchema = z
     }),
     /** Care × habitat never goes below 100% (neglect costs nothing) or above this. */
     capPercent: z.number().int().min(100).max(1000),
+    /**
+     * A befriended squishy joins at most this many levels below its
+     * species' first evolution, so it still grows up by training. Species
+     * that never evolve keep their battle level. Optional: left out, every
+     * befriended squishy keeps its battle level.
+     */
+    befriendBelowEvolution: z.number().int().min(1).max(99).optional(),
   })
   .superRefine((rules, ctx) => {
     if (rules.habitat.bothPercent < rules.habitat.onePercent) {

@@ -1,4 +1,4 @@
-import { findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
+import { findAvoidedWords, GAME_DATA, TERRITORY_RULES } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -94,7 +94,9 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(() => territoryState(page)).toMatchObject({ attemptsLeft: 10, onWatch: 0 });
+  await expect
+    .poll(() => territoryState(page))
+    .toMatchObject({ attemptsLeft: TERRITORY_RULES.attemptsPerDay, onWatch: 0 });
 
   // A strong squishy from the dev route, next to their level-1 starter.
   const mapId = (await mapState(page))!.id;
@@ -158,7 +160,9 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   await expect(page.getByTestId('care')).toBeHidden();
 
   // Back on the map: one try used, and the same spot is ours to guard now.
-  await expect.poll(() => territoryState(page)).toMatchObject({ attemptsLeft: 9 });
+  await expect
+    .poll(() => territoryState(page))
+    .toMatchObject({ attemptsLeft: TERRITORY_RULES.attemptsPerDay - 1 });
   await expect
     .poll(async () => {
       await tapCanvas(page, spot.x, spot.y);

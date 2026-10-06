@@ -27,12 +27,6 @@ export interface ProgressionRules {
   readonly growth: GrowthRules;
   readonly spawn: SpawnRules;
   readonly attemptsPerDay: number;
-  /**
-   * The level a befriended squishy joins at: its battle level (the game
-   * today), or at most one below its species' first evolution (design
-   * option (a) for the owner, 2026-10-06).
-   */
-  readonly befriend: 'battle-level' | 'below-evolution';
 }
 
 export interface ProgressionConfig {
@@ -89,14 +83,16 @@ export const CURRENT_RULES: ProgressionRules = {
   growth: GROWTH_RULES,
   spawn: SPAWN_RULES,
   attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
-  befriend: 'battle-level',
 };
 
-/** The shipped data, with a befriended squishy joining below its evolution (owner option (a)). */
-export const CAPPED_BEFRIEND_RULES: ProgressionRules = {
+/**
+ * The shipped data without the befriend cap (`befriendBelowEvolution`): a
+ * befriended squishy keeps its battle level. Kept to show what the cap does.
+ */
+export const UNCAPPED_BEFRIEND_RULES: ProgressionRules = {
   ...CURRENT_RULES,
-  label: 'now, option (a)',
-  befriend: 'below-evolution',
+  label: 'now, no befriend cap',
+  growth: { ...GROWTH_RULES, befriendBelowEvolution: undefined },
 };
 
 /**
@@ -106,8 +102,11 @@ export const CAPPED_BEFRIEND_RULES: ProgressionRules = {
  */
 export const BASELINE_RULES: ProgressionRules = {
   label: 'before',
-  growth: { ...GROWTH_RULES, xpCurve: { perLevel: 20, curve: 5 } },
+  growth: {
+    ...GROWTH_RULES,
+    xpCurve: { perLevel: 20, curve: 5 },
+    befriendBelowEvolution: undefined,
+  },
   spawn: { ...SPAWN_RULES, levels: { min: 2, max: 6 }, partnerOffset: undefined },
   attemptsPerDay: 10,
-  befriend: 'battle-level',
 };

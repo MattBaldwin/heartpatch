@@ -6,6 +6,7 @@ import {
   createBattleContent,
   JoinMapResponseSchema,
   GAME_DATA,
+  GROWTH_RULES,
   hexKey,
   hexNeighbors,
   MapResponseSchema,
@@ -308,6 +309,40 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       // The battle meets the same level.
       const fight = await battles.startWild(kid, mapId, { tile: tiles[0]! });
       expect(fight.battle.view.sides.b.squishies[0]!.level).toBe(scaled[0]!.level);
+    });
+
+    it('befriends a Partner-level squishy one level below its first evolution', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patchWithSquishy(server, kid);
+      const picked = await call(server, 'POST', `/maps/${mapId}/starter`, kid, {
+        speciesId: STARTERS.speciesIds[0],
+      });
+      expect(picked.statusCode, picked.body).toBe(201);
+      const member = await db.query.mapMembers.findFirst({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+      });
+      await db.execute(
+        `update squishies set level = 60 where id = ${id(member!.starterSquishyId!)}`,
+      );
+      const { battles } = services();
+      const { battle } = await battles.startWild(kid, mapId);
+      const wild = battle.view.sides.b.squishies[0]!;
+      expect(wild.level).toBeGreaterThanOrEqual(58);
+      await capture(battles, kid, battle);
+      const firstEvolution = Math.min(
+        ...SERVER_GAME_DATA.secretEvolutions
+          .filter((e) => e.from === SECRET_WILD)
+          .map((e) => e.level),
+        ...(SERVER_GAME_DATA.secretSpecies.find((s) => s.id === SECRET_WILD)?.evolutions ?? []).map(
+          (e) => e.level,
+        ),
+      );
+      expect(firstEvolution).toBeLessThan(58);
+      const friend = (await squishiesOf(mapId, kid)).find((s) => s.speciesId === SECRET_WILD);
+      expect(friend).toMatchObject({
+        level: firstEvolution - GROWTH_RULES.befriendBelowEvolution!,
+      });
     });
 
     it('looks on a picked tile in reach, and refuses tiles too far away', async () => {

@@ -39,4 +39,7 @@ export const GROWTH_RULES: GrowthRules = {
   care: { minPercent: 100, maxPercent: 175 }, // TUNE: design doc §7 [DEFAULT: 1.0× to 1.75×]
   habitat: { onePercent: 135, bothPercent: 175 }, // TUNE: design doc §7 [DEFAULT: up to 1.75×]
   capPercent: 300, // TUNE: design doc §7 [DEFAULT: 3×]
+  // TUNE: owner decision 2026-10-06: a befriended squishy joins at most one
+  // level below its first evolution, so it grows up by training, not by catch.
+  befriendBelowEvolution: 1,
 };

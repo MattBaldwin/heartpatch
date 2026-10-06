@@ -13,6 +13,7 @@ import {
 } from './contentment.js';
 import {
   addXp,
+  befriendedLevel,
   carePercent,
   evolutionAt,
   grantedXp,
@@ -272,6 +273,30 @@ describe('levels', () => {
   it('shows progress through the level, and none past the top', () => {
     expect(xpProgress({ level: 2, xp: 40 }, PLAIN)).toEqual({ intoLevel: 15, toNext: 35 });
     expect(xpProgress({ level: 100, xp: 1e6 }, PLAIN).toNext).toBeNull();
+  });
+});
+
+describe('befriendedLevel (owner decision 2026-10-06)', () => {
+  const steps = [
+    { from: 'puff', into: 'mallow', level: 16 },
+    { from: 'puff', into: 'secret-puff', level: 20 },
+    { from: 'mallow', into: 'cloud', level: 32 },
+  ];
+  const cap = { befriendBelowEvolution: 1 };
+
+  it('joins at most one below its first evolution', () => {
+    expect(befriendedLevel('puff', 40, steps, cap)).toBe(15);
+    expect(befriendedLevel('puff', 15, steps, cap)).toBe(15);
+    expect(befriendedLevel('puff', 6, steps, cap)).toBe(6);
+  });
+
+  it('keeps the battle level for a species that never evolves, or without a cap', () => {
+    expect(befriendedLevel('cloud', 40, steps, cap)).toBe(40);
+    expect(befriendedLevel('puff', 40, steps, {})).toBe(40);
+  });
+
+  it('is on in the shipped data', () => {
+    expect(GROWTH_RULES.befriendBelowEvolution).toBe(1);
   });
 });
 

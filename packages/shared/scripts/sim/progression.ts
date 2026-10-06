@@ -1,6 +1,12 @@
 import { createBattleContent, type BattleContent } from '../../src/battle/content.js';
 import { autoplayBattle } from '../../src/battle/engine.js';
-import { addXp, evolutionAt, grantedXp, type EvolutionStep } from '../../src/care/growth.js';
+import {
+  addXp,
+  befriendedLevel,
+  evolutionAt,
+  grantedXp,
+  type EvolutionStep,
+} from '../../src/care/growth.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GAME_DATA } from '../../src/data/index.js';
 import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
@@ -28,8 +34,8 @@ import type { KidProfile, ProgressionConfig, ProgressionRules } from './progress
  *
  * Befriending: after a won wild battle a kid befriends that squishy (up to
  * `befriendsPerDay`) when it's stronger than their weakest friend, and it
- * takes that friend's place on the team. It joins at its battle level, or
- * just below its first evolution with the rules' `befriend: 'below-evolution'`.
+ * takes that friend's place on the team, at the level the growth rules give
+ * it (`befriendedLevel`: below its first evolution with the shipped cap).
  *
  * Not modelled (see `MODEL_LIMITS`): care and habitat changes, gathering, the
  * Hollow Man, the capture roll itself (a win stands in for a befriend), and
@@ -181,23 +187,6 @@ function grant(
     }
   }
   return partnerXp;
-}
-
-/**
- * The level a befriended squishy joins at: its battle level, or with
- * `befriend: 'below-evolution'` at most one below its first evolution.
- */
-function befriendLevel(
-  data: ModelData,
-  rules: ProgressionRules,
-  speciesId: string,
-  level: number,
-): number {
-  if (rules.befriend === 'battle-level') return level;
-  const first = data.evolutions
-    .filter((e) => e.from === speciesId)
-    .reduce((low, e) => Math.min(low, e.level), Infinity);
-  return first === Infinity ? level : Math.min(level, first - 1);
 }
 
 /**
@@ -354,7 +343,12 @@ export function runProgression(
         const { won, xp } = play(data, kid, config, opponent, seed);
         partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp);
         if (won && befriended < profile.befriendsPerDay) {
-          const level = befriendLevel(data, rules, spawn.speciesId, spawn.level);
+          const level = befriendedLevel(
+            spawn.speciesId,
+            spawn.level,
+            data.evolutions,
+            rules.growth,
+          );
           if (
             befriend(kid, {
               id: `friend-${String(day)}-${String(i)}`,

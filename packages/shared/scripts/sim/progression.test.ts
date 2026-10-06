@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BASELINE_RULES,
-  CAPPED_BEFRIEND_RULES,
+  UNCAPPED_BEFRIEND_RULES,
   CURRENT_RULES,
   PROGRESSION_CONFIG,
   type ProgressionConfig,
@@ -60,11 +60,11 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
     ]);
   });
 
-  it('keeps befriended squishies below their evolution with option (a)', () => {
-    const run = runProgression(data, SMALL, CAPPED_BEFRIEND_RULES, engaged!, 4);
-    const uncapped = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4);
-    const friends = (r: typeof run) => r.kids[0]!.days.at(-1)!.levels.slice(1);
-    expect(Math.max(...friends(run))).toBeLessThan(Math.max(...friends(uncapped)));
+  it('keeps befriended squishies below their evolution with the shipped cap', () => {
+    const capped = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4);
+    const uncapped = runProgression(data, SMALL, UNCAPPED_BEFRIEND_RULES, engaged!, 4);
+    const friends = (r: typeof capped) => r.kids[0]!.days.at(-1)!.levels.slice(1);
+    expect(Math.max(...friends(capped))).toBeLessThan(Math.max(...friends(uncapped)));
   });
 });
 
