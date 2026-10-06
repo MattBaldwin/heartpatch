@@ -15,7 +15,7 @@ import './trays.css';
 // The map's controls live in two trays that slide out from the screen's
 // edges (owner decision 2026-10-04), so the world stays full-screen:
 // "Adventure" on the left (team, finding and befriending squishies, land,
-// raids, the Hollow) and "My Heartpatch" on the right (home, building, the
+// raids, the Hollow) and "My Home" on the right (home, building, the
 // recipe book, the bag, squishies' jobs). Each handle is a big labelled tab at
 // thumb height; news shows as a glowing badge on it instead of a banner.
 //
@@ -59,8 +59,8 @@ export interface Trays {
 // Player-facing text (style guide §2, §6).
 export const TRAY_TEXT = {
   adventure: 'Adventure',
-  heartpatch: 'My Heartpatch',
-  heartpatchShort: 'Heartpatch',
+  heartpatch: 'My Home',
+  heartpatchShort: 'Home',
   open: (name: string) => `Open ${name}`,
   close: (name: string) => `Close ${name}`,
   news: (n: string) => `, ${n} new`,
@@ -68,7 +68,7 @@ export const TRAY_TEXT = {
   sprout: 'Sprout',
   /** Sprout's first-time hint, one half pointing at each handle. */
   hintLeft: 'Adventures are on the left.',
-  hintRight: 'Your Heartpatch is on the right!',
+  hintRight: 'Your home is on the right!',
   gotIt: 'Got it!',
 } as const;
 

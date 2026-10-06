@@ -265,7 +265,7 @@ async function playTutorial(page: Page): Promise<void> {
   await expect(main).toBeVisible();
   await expect(main).toHaveText('Next');
 
-  // #140: "Light a Hearthfire" guides without blocking: the My Heartpatch
+  // #140: "Light a Hearthfire" guides without blocking: the My Home
   // handle is lit and pointed at, then Home inside, then Build at home.
   await readAll();
   await expect.poll(async () => (await overlay(page))?.gate).toBe('guide');

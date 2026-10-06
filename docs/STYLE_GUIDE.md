@@ -110,13 +110,17 @@ Player-facing words for game actions. The code can use technical names; the UI u
 | Mechanic (code) | Say in the UI |
 |---|---|
 | attack a tile | **Claim** (neutral tile), **Challenge** (rival tile) |
-| raid on your tile | **"Someone challenged your patch!"** |
+| raid on your tile | **"Someone challenged your land!"** (the sheet is the **Challenge report**) |
 | battle | **Battle** or **Squishy showdown** |
 | squishy at 0 HP | **Tuckered out** |
 | damage / HP | **Energy** (the bar), "lost some energy" |
 | capture | **Befriend** (button: "Use Heart Charm") |
 | hollowed | **Taken to the Hollow** (always followed by "you can rescue them!") |
 | defense stance | **Defense style** (Bold, Careful, Balanced) |
+| the lore's glowing field; the game | **Heartpatch**: only for the story ("The Heartpatch shattered") and the game's name. Never a place the player owns |
+| a map (one shared world, up to 4 players) | **patch** ("Make a patch", "Join a patch", "Your patches") |
+| tiles a player owns | **land** ("Claim some land", "Someone challenged your land!") |
+| a player's home base, and its tray | **home** (the right-hand tray is **My Home**: "Your home is on the right!") |
 
 ### Avoided words
 One list, so tests can scan the **player-facing string fields** in data files (names, descriptions, lines, captions; not keys like `baseStats.attack`). Don't use these in player-facing text:

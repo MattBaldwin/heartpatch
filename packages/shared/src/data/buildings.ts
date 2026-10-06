@@ -64,7 +64,7 @@ export const BUILDINGS: Building[] = [
     id: 'training-grounds',
     kind: 'training-grounds',
     name: 'Training Grounds',
-    description: 'Squishies practise their best moves here, a little every hour.',
+    description: 'Squishies practice their best moves here, a little every hour.',
     maxPerHome: 1, // TUNE:
     levels: [
       { cost: { timber: 8, stone: 8 }, capacity: 2, xpPerHour: 5 }, // TUNE:

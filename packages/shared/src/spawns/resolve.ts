@@ -24,6 +24,11 @@ export interface SpawnInput {
   readonly seed: Seed;
   readonly terrain: string;
   readonly window: SpawnWindow;
+  /**
+   * The player's Partner's level, when they have one. With the rules'
+   * `partnerOffset`, the wild squishy's level follows it.
+   */
+  readonly partnerLevel?: number | null;
 }
 
 export interface SpawnData {
@@ -32,6 +37,8 @@ export interface SpawnData {
   readonly species: ReadonlyMap<string, Species>;
   readonly seasons: readonly Season[];
   readonly rules: SpawnRules;
+  /** The top level a squishy can reach (`GROWTH_RULES.maxLevel`): Partner-scaled levels stop there. */
+  readonly maxLevel: number;
 }
 
 /** The window's time of day, judged at its middle (spawn rules `timesOfDay`). */
@@ -71,6 +78,25 @@ export function resolveWildSpawn(input: SpawnInput, data: SpawnData): WildSpawn 
   if (entries.length === 0) return null;
 
   const { species } = rng.weighted(entries);
-  const level = rng.int(data.rules.levels.min, data.rules.levels.max);
-  return { speciesId: species, level };
+  return {
+    speciesId: species,
+    level: wildLevel(rng, input.partnerLevel ?? null, data.rules, data.maxLevel),
+  };
+}
+
+/**
+ * The level roll: the Partner's level plus `partnerOffset` when both exist,
+ * else `levels`. Always one roll, so which species a tile has never depends
+ * on who's looking.
+ */
+function wildLevel(
+  rng: Rng,
+  partnerLevel: number | null,
+  rules: SpawnRules,
+  maxLevel: number,
+): number {
+  const offset = rules.partnerOffset;
+  if (!offset || partnerLevel === null) return rng.int(rules.levels.min, rules.levels.max);
+  const level = partnerLevel + rng.int(offset.min, offset.max);
+  return Math.max(rules.levels.min, Math.min(maxLevel, level));
 }

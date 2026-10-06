@@ -34,7 +34,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'Plant your Heart Seed',
     sproutLines: [
       "See that glowing spot? That's where your Heart Seed wants to grow.",
-      'Plant it, and your home grows right here. Nobody can ever take a home!',
+      'Plant it, and your home grows right here. Your home is always safe, no matter what!',
     ],
     highlightTarget: 'heart-seed',
     completeOn: {
@@ -57,7 +57,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'hearthfire',
     goal: 'Light a Hearthfire',
     sproutLines: [
-      'A fire keeps squishies safe at night. Open My Heartpatch on the right, then Home, and build one!',
+      'A fire keeps squishies safe at night. Open My Home on the right, then Home, and build one!',
       'Then gather Emberwood from the old forest tile, and tap Add fuel.',
     ],
     highlightTarget: 'build-button',
@@ -109,8 +109,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'care',
     goal: 'Show your Partner some love',
     sproutLines: [
-      'Happy squishies learn more from battles and grow up faster! Happiness fades over a day.',
-      "Open My Heartpatch, then Home. Tap your Partner's name, then Pet, Play or Feed!",
+      'Happy squishies learn more and grow up faster! Visit them often.',
+      "Open My Home, then Home. Tap your Partner's name, then Pet, Play or Feed!",
     ],
     highlightTarget: 'care-buttons',
     completeOn: { eventType: 'squishy.cared', actor: 'player', where: [] },
@@ -133,7 +133,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'territory',
     goal: 'Claim some land',
     sproutLines: [
-      'See the grey land? Tap a tile next to yours and tap Claim.',
+      'See the gray land? Tap a tile next to yours and tap Claim.',
       'Win against its guardian and the color comes back. More land, more friends!',
     ],
     highlightTarget: 'neighbor-tile',
@@ -158,7 +158,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'Watch the night come',
     sproutLines: [
       "Pebblesnooze is on watch. Brrr, now it's getting dark!",
-      "Your fire keeps everyone safe. Tap Night falls when you're ready.",
+      "Your fire keeps everyone safe from the Hollow Man. Tap Night falls when you're ready.",
     ],
     highlightTarget: 'hearthfire',
     completeOn: { eventType: 'hollow.nightfall', actor: 'anyone', where: [] },
@@ -167,7 +167,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'evolve',
     goal: 'One more battle',
     sproutLines: [
-      'He stays away from the light! If he ever takes a squishy, you can always rescue them.',
+      'The Hollow Man stays away from the light! If he ever takes a squishy, you can always rescue them.',
       'Open Adventure and tap Find a squishy for one more battle. Something big might happen…',
     ],
     highlightTarget: 'wild-squishy',

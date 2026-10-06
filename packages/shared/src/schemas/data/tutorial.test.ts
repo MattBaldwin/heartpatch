@@ -43,6 +43,16 @@ describe('checkTutorialData', () => {
     }
   });
 
+  it('names the Hollow Man before Sprout ever calls him "he"', () => {
+    const lines = TUTORIAL_DATA.steps.flatMap((s) => s.sproutLines);
+    const named = lines.join(' ').indexOf('Hollow Man');
+    expect(named).toBeGreaterThanOrEqual(0);
+    for (const line of lines) {
+      const he = line.search(/\b(he|him|his)\b/i);
+      if (he >= 0) expect(lines.join(' ').indexOf(line) + he).toBeGreaterThan(named);
+    }
+  });
+
   it('names duplicate steps and engine-only or unknown completion events', () => {
     const data = copy();
     data.steps[1]!.id = 'welcome';

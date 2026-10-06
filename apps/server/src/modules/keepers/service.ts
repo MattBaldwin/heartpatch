@@ -27,8 +27,8 @@ export interface KeepersServiceOptions {
 // Kid-readable messages (style guide §6), one per field a config can get wrong.
 const MESSAGES: Readonly<Record<keyof KeeperConfig, string>> = {
   base: "We don't know that Keeper. Pick one from the list!",
-  hairColor: "We don't know that hair colour. Pick another one!",
-  eyeColor: "We don't know that eye colour. Pick another one!",
+  hairColor: "We don't know that hair color. Pick another one!",
+  eyeColor: "We don't know that eye color. Pick another one!",
   outfit: "We don't know that outfit. Pick another one!",
   hairstyle: "We don't know that hair style. Pick another one!",
 };

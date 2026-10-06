@@ -31,7 +31,7 @@ export const JOB_RULES: JobRules = {
     { resource: 'emberwood', icon: '🔥', elements: ['fire'], feelings: ['cozy'], seasons: [] },
     {
       resource: 'glimmer',
-      icon: '✨',
+      icon: '💎',
       elements: ['light', 'spark'],
       feelings: ['joy'],
       seasons: [],

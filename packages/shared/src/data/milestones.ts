@@ -35,7 +35,7 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
     tiers: [
       {
         threshold: 1,
-        goal: 'Finish your first day with Sprout.',
+        goal: 'Finish the tutorial with Sprout.',
         title: { id: 'sprouts-friend', name: "Sprout's Friend" },
         coins: 20, // TUNE
       },
@@ -285,7 +285,7 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
       {
         threshold: 40,
         goal: 'Do 40 Halloween things.',
-        title: { id: 'harvest-moon', name: 'Harvest Moon' },
+        title: { id: 'harvest-moon', name: 'Moonlit Pumpkin' },
         coins: 100,
         clothing: 'harvest-moon-costume',
       },

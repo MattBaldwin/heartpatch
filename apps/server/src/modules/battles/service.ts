@@ -1,6 +1,8 @@
 import {
   applyBattleAction,
   BattleRuleError,
+  battleXpPercent,
+  befriendedLevel,
   CAPTURABLE_BATTLE_KINDS,
   CARE_RULES,
   ClientBattleViewSchema,
@@ -9,6 +11,7 @@ import {
   createBattleContent,
   GAME_DATA,
   gameplayOverrides,
+  GROWTH_RULES,
   MAP_GEN,
   otherSide,
   startBattle,
@@ -37,7 +40,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
 import type { Clock } from '../../lib/time.js';
-import { applyXp, appendGrowthEvents, type Growth } from '../care/service.js';
+import { applyXp, appendGrowthEvents, EVOLUTION_STEPS, type Growth } from '../care/service.js';
 import { creditCoins } from '../coins/service.js';
 import { consumeItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
@@ -515,13 +518,29 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // Base battle XP × care and habitat, levels and evolution (#19's
     // `applyXp`), under the squishy locks (the order above).
     await repo.lockSquishies(awards.map((a) => a.squishyId));
+    // The daily falloff (owner decision 2026-10-06): a squishy that has
+    // already won `fullWinsPerDay` battles today gets a share of the XP.
+    const wins = await repo.winsToday(
+      row.mapId,
+      row.playerUserId,
+      awards.map((a) => a.squishyId),
+      at,
+    );
+    for (const award of awards) {
+      award.xp = Math.floor(
+        (award.xp * battleXpPercent(wins.get(award.squishyId) ?? 0, GROWTH_RULES)) / 100,
+      );
+    }
     const grown: Growth[] = [];
     for (const award of awards) {
+      if (award.xp <= 0) continue;
       const growth = await applyXp(tx, award.squishyId, award.xp, at);
       if (growth) grown.push(growth);
     }
     // Befriended (design doc §6): the wild squishy joins the player as it was
-    // in the battle, and the catalog marks the species caught.
+    // in the battle, but below its first evolution (owner decision
+    // 2026-10-06, `GROWTH_RULES.befriendBelowEvolution`), and the catalog
+    // marks the species caught.
     let captured: OwnedSquishy | null = null;
     if (result.reason === 'captured' && result.winner === PLAYER_SIDE) {
       const wild = state.sides[otherSide(PLAYER_SIDE)];
@@ -533,7 +552,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         speciesId: friend.speciesId,
         element: friend.element,
         feeling: friend.feeling,
-        level: friend.level,
+        level: befriendedLevel(friend.speciesId, friend.level, EVOLUTION_STEPS, GROWTH_RULES),
         contentment: CARE_RULES.startContentment,
         at,
       });

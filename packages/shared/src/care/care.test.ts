@@ -13,6 +13,8 @@ import {
 } from './contentment.js';
 import {
   addXp,
+  battleXpPercent,
+  befriendedLevel,
   carePercent,
   evolutionAt,
   grantedXp,
@@ -186,32 +188,132 @@ describe('the XP multiplier (design doc §7)', () => {
 });
 
 describe('levels', () => {
+  /** A plain curve with no knees, so these tests don't move when data is tuned. */
+  const PLAIN = { maxLevel: 100, xpCurve: { perLevel: 20, curve: 5 } };
+  /** The same curve with knees at 16 and 30. */
+  const KNEED = {
+    maxLevel: 100,
+    xpCurve: {
+      perLevel: 20,
+      curve: 5,
+      knees: [
+        { level: 16, steep: 500 },
+        { level: 30, steep: 1500 },
+      ],
+    },
+  };
+
+  it('follows the plain curve', () => {
+    expect(xpForLevel(1, PLAIN)).toBe(0);
+    expect(xpForLevel(2, PLAIN)).toBe(25);
+    expect(xpForLevel(5, PLAIN)).toBe(160);
+    expect(xpForLevel(10, PLAIN)).toBe(585);
+    expect(levelForXp(0, PLAIN)).toBe(1);
+    expect(levelForXp(24, PLAIN)).toBe(1);
+    expect(levelForXp(25, PLAIN)).toBe(2);
+    expect(levelForXp(584, PLAIN)).toBe(9);
+    expect(levelForXp(10_000_000, PLAIN)).toBe(PLAIN.maxLevel);
+  });
+
+  it('adds steep × (L − knee)² past each knee, and nothing up to it', () => {
+    for (const level of [1, 2, 10, 16]) {
+      expect(xpForLevel(level, KNEED)).toBe(xpForLevel(level, PLAIN));
+    }
+    expect(xpForLevel(17, KNEED)).toBe(xpForLevel(17, PLAIN) + 500);
+    expect(xpForLevel(20, KNEED)).toBe(xpForLevel(20, PLAIN) + 500 * 16);
+    expect(xpForLevel(30, KNEED)).toBe(xpForLevel(30, PLAIN) + 500 * 196);
+    expect(xpForLevel(32, KNEED)).toBe(xpForLevel(32, PLAIN) + 500 * 256 + 1500 * 4);
+    // Past the top level, the top level's XP.
+    expect(xpForLevel(120, KNEED)).toBe(xpForLevel(100, KNEED));
+    expect(levelForXp(xpForLevel(31, KNEED) - 1, KNEED)).toBe(30);
+    expect(levelForXp(xpForLevel(31, KNEED), KNEED)).toBe(31);
+  });
+
   it('follows the XP curve in data', () => {
-    expect(xpForLevel(1, GROWTH_RULES)).toBe(0);
-    expect(xpForLevel(2, GROWTH_RULES)).toBe(25);
-    expect(xpForLevel(5, GROWTH_RULES)).toBe(160);
-    expect(xpForLevel(10, GROWTH_RULES)).toBe(585);
-    expect(levelForXp(0, GROWTH_RULES)).toBe(1);
-    expect(levelForXp(24, GROWTH_RULES)).toBe(1);
-    expect(levelForXp(25, GROWTH_RULES)).toBe(2);
-    expect(levelForXp(584, GROWTH_RULES)).toBe(9);
-    expect(levelForXp(10_000_000, GROWTH_RULES)).toBe(GROWTH_RULES.maxLevel);
+    // TUNE pins (data/care.ts): a change to the curve shows up here.
+    expect(xpForLevel(2, GROWTH_RULES)).toBe(40);
+    expect(xpForLevel(16, GROWTH_RULES)).toBe(4_800);
+    expect(xpForLevel(20, GROWTH_RULES)).toBe(15_600);
+    expect(xpForLevel(30, GROWTH_RULES)).toBe(115_400);
+    expect(xpForLevel(40, GROWTH_RULES)).toBe(469_200);
+    expect(xpForLevel(100, GROWTH_RULES)).toBe(11_076_000);
+    expect(levelForXp(xpForLevel(100, GROWTH_RULES) * 2, GROWTH_RULES)).toBe(GROWTH_RULES.maxLevel);
+    // Every level costs more than the one before it.
+    for (let level = 2; level < GROWTH_RULES.maxLevel; level++) {
+      const step = xpForLevel(level + 1, GROWTH_RULES) - xpForLevel(level, GROWTH_RULES);
+      expect(step).toBeGreaterThan(
+        xpForLevel(level, GROWTH_RULES) - xpForLevel(level - 1, GROWTH_RULES),
+      );
+    }
   });
 
   it('levels up, several at once if the XP is there', () => {
-    expect(addXp({ level: 1, xp: 0 }, 30, GROWTH_RULES)).toEqual({ level: 2, xp: 30 });
-    expect(addXp({ level: 1, xp: 20 }, 160, GROWTH_RULES)).toEqual({ level: 5, xp: 180 });
+    expect(addXp({ level: 1, xp: 0 }, 30, PLAIN)).toEqual({ level: 2, xp: 30 });
+    expect(addXp({ level: 1, xp: 20 }, 160, PLAIN)).toEqual({ level: 5, xp: 180 });
   });
 
   it('counts from its level for a squishy that joined above level 1, and never goes down', () => {
     // A befriended level-5 squishy with no XP yet.
-    expect(addXp({ level: 5, xp: 0 }, 10, GROWTH_RULES)).toEqual({ level: 5, xp: 170 });
-    expect(addXp({ level: 5, xp: 0 }, 0, GROWTH_RULES).level).toBe(5);
+    expect(addXp({ level: 5, xp: 0 }, 10, PLAIN)).toEqual({ level: 5, xp: 170 });
+    expect(addXp({ level: 5, xp: 0 }, 0, PLAIN).level).toBe(5);
+  });
+
+  it('keeps a squishy levelled on a gentler curve at its level when the curve steepens', () => {
+    // A level-40 squishy whose stored XP is the plain curve's level 40.
+    const before = { level: 40, xp: xpForLevel(40, PLAIN) };
+    expect(levelForXp(before.xp, KNEED)).toBeLessThan(40);
+    expect(xpProgress(before, KNEED)).toEqual({
+      intoLevel: 0,
+      toNext: xpForLevel(41, KNEED) - xpForLevel(40, KNEED),
+    });
+    // Its next XP counts from the steeper curve's level 40: still level 40, never lower.
+    expect(addXp(before, 0, KNEED)).toEqual({ level: 40, xp: xpForLevel(40, KNEED) });
+    expect(addXp(before, 100, KNEED)).toEqual({ level: 40, xp: xpForLevel(40, KNEED) + 100 });
   });
 
   it('shows progress through the level, and none past the top', () => {
-    expect(xpProgress({ level: 2, xp: 40 }, GROWTH_RULES)).toEqual({ intoLevel: 15, toNext: 35 });
-    expect(xpProgress({ level: 100, xp: 1e6 }, GROWTH_RULES).toNext).toBeNull();
+    expect(xpProgress({ level: 2, xp: 40 }, PLAIN)).toEqual({ intoLevel: 15, toNext: 35 });
+    expect(xpProgress({ level: 100, xp: 1e6 }, PLAIN).toNext).toBeNull();
+  });
+});
+
+describe('battleXpPercent (owner decision 2026-10-06)', () => {
+  const rules = { battleXpFalloff: { fullWinsPerDay: 7, afterPercent: 10 } };
+
+  it("pays in full until the day's wins reach the limit, then a share", () => {
+    expect(battleXpPercent(0, rules)).toBe(100);
+    expect(battleXpPercent(6, rules)).toBe(100);
+    expect(battleXpPercent(7, rules)).toBe(10);
+    expect(battleXpPercent(30, rules)).toBe(10);
+    expect(battleXpPercent(30, {})).toBe(100);
+  });
+
+  it('is on in the shipped data', () => {
+    expect(GROWTH_RULES.battleXpFalloff).toEqual({ fullWinsPerDay: 7, afterPercent: 10 });
+  });
+});
+
+describe('befriendedLevel (owner decision 2026-10-06)', () => {
+  const steps = [
+    { from: 'puff', into: 'mallow', level: 16 },
+    { from: 'puff', into: 'secret-puff', level: 20 },
+    { from: 'mallow', into: 'cloud', level: 32 },
+  ];
+  const cap = { befriendBelowEvolution: 1 };
+
+  it('joins at most one below its first evolution', () => {
+    expect(befriendedLevel('puff', 40, steps, cap)).toBe(15);
+    expect(befriendedLevel('puff', 15, steps, cap)).toBe(15);
+    expect(befriendedLevel('puff', 6, steps, cap)).toBe(6);
+  });
+
+  it('keeps the battle level for a species that never evolves, or without a cap', () => {
+    expect(befriendedLevel('cloud', 40, steps, cap)).toBe(40);
+    expect(befriendedLevel('puff', 40, steps, {})).toBe(40);
+  });
+
+  it('is on in the shipped data', () => {
+    expect(GROWTH_RULES.befriendBelowEvolution).toBe(1);
   });
 });
 

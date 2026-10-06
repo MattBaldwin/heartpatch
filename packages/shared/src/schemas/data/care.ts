@@ -103,12 +103,22 @@ export const GrowthRulesSchema = z
     /** Squishies stop levelling here (evolution levels go up to 100). */
     maxLevel: z.number().int().min(2).max(100),
     /**
-     * Total XP to reach level L is `perLevel × (L − 1) + curve × (L − 1)²`:
-     * early levels come quickly, later ones take longer.
+     * Total XP to reach level L is `perLevel × (L − 1) + curve × (L − 1)²`,
+     * plus `steep × (L − level)²` for each knee below L: early levels come
+     * quickly, later ones take longer, and each knee makes the climb past it
+     * steeper still. No knees (the default) is the plain curve.
      */
     xpCurve: z.strictObject({
       perLevel: z.number().int().min(1),
       curve: z.number().int().min(0),
+      knees: z
+        .array(
+          z.strictObject({
+            level: z.number().int().min(2).max(100),
+            steep: z.number().int().min(0),
+          }),
+        )
+        .optional(),
     }),
     /** Care multiplier: `minPercent` at no contentment up to `maxPercent` when full. */
     care: z.strictObject({
@@ -126,6 +136,24 @@ export const GrowthRulesSchema = z
     }),
     /** Care × habitat never goes below 100% (neglect costs nothing) or above this. */
     capPercent: z.number().int().min(100).max(1000),
+    /**
+     * A befriended squishy joins at most this many levels below its
+     * species' first evolution, so it still grows up by training. Species
+     * that never evolve keep their battle level. Optional: left out, every
+     * befriended squishy keeps its battle level.
+     */
+    befriendBelowEvolution: z.number().int().min(1).max(99).optional(),
+    /**
+     * Battle XP falls off per squishy per map-local day: full XP while it has
+     * won fewer than `fullWinsPerDay` battles today, then `afterPercent` of
+     * it. Optional: left out, every battle pays in full.
+     */
+    battleXpFalloff: z
+      .strictObject({
+        fullWinsPerDay: z.number().int().min(1),
+        afterPercent: z.number().int().min(0).max(100),
+      })
+      .optional(),
   })
   .superRefine((rules, ctx) => {
     if (rules.habitat.bothPercent < rules.habitat.onePercent) {
