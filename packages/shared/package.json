@@ -22,7 +22,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "sim": "tsx scripts/sim/cli.ts",
-    "sim:progression": "tsx scripts/sim/progression-cli.ts"
+    "sim:progression": "tsx scripts/sim/progression-cli.ts",
+    "sim:map-fill": "tsx scripts/sim/map-fill-cli.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"

@@ -1,0 +1,151 @@
+import { TERRITORY_RULES } from '../../src/data/territory.js';
+import type { TerritoryRules } from '../../src/schemas/data/territory.js';
+import type { PvpMode } from '../../src/schemas/maps.js';
+
+/**
+ * Map-fill model settings (`pnpm sim:map-fill`): how fast kids colour in a
+ * patch, and what land that misses you (owner decision 2026-10-06, design
+ * review Q2) gives back when someone stops playing. Like the other sims, it
+ * only reads game data and reports; it never changes a table.
+ */
+
+/** How one kind of kid looks after their land. */
+export interface MapFillKid {
+  readonly id: string;
+  /**
+   * Win chance (%) of a claim by guardian strength, 1 first (the last is
+   * Juniper's Gap). `pnpm sim:progression` has both kids winning nearly every
+   * try at 5 attempts a day, so these only shape the Gap and the order.
+   */
+  readonly winPercent: readonly number[];
+  /** Days of the week (1–7) the kid plays. */
+  readonly playDays: readonly number[];
+  /** Whether the kid taps Visit (tends all their land) on a play day when some land misses them. */
+  readonly visits: boolean;
+}
+
+export interface MapFillRules {
+  readonly label: string;
+  readonly attemptsPerDay: number;
+  readonly pvpMode: PvpMode;
+  /** Null: land never fades (the shipped game before this change). */
+  readonly tending: TerritoryRules['tending'] | null;
+}
+
+/** One kid in a scenario: their kind, and the day they stop playing (null: never). */
+export interface Seat {
+  readonly kid: MapFillKid;
+  readonly stopsAfterDay: number | null;
+}
+
+export interface MapFillScenario {
+  readonly id: string;
+  readonly title: string;
+  /** Map seats (`MAP_GEN.layouts`); empty seats' home rings are never claimed. */
+  readonly mapSeats: number;
+  readonly seats: readonly Seat[];
+}
+
+export const ENGAGED: MapFillKid = {
+  id: 'engaged',
+  winPercent: [100, 100, 95, 85, 50], // TUNE: guess, see winPercent
+  playDays: [1, 2, 3, 4, 5, 6, 7],
+  visits: true,
+};
+
+export const CASUAL: MapFillKid = {
+  id: 'casual',
+  winPercent: [100, 95, 85, 70, 40], // TUNE: guess, see winPercent
+  playDays: [1, 2, 3, 4, 5, 6, 7], // the progression model's casual kid plays every day
+  visits: true,
+};
+
+/** A casual kid who only plays three days a week: the hardest case for keeping land. */
+export const PART_TIME: MapFillKid = {
+  ...CASUAL,
+  id: 'part-time',
+  playDays: [1, 3, 5], // TUNE: Mon, Wed, Fri
+};
+
+/** When the idle kid in the "stops playing" scenarios walks away. */
+export const STOPS_AFTER_DAY = 30;
+
+export const MAP_FILL_CONFIG = {
+  rootSeed: 'heartpatch-map-fill-v1',
+  mapSeed: 'heartpatch-progression-map-1', // the progression model's map
+  days: 75,
+  /** Days away the "stops playing" tables show. */
+  awayDays: [3, 7, 14, 21, 30, 45],
+} as const;
+
+export const NO_FADING: MapFillRules = {
+  label: 'never fades',
+  attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
+  pvpMode: 'gentle',
+  tending: null,
+};
+
+export const FADING_GENTLE: MapFillRules = {
+  label: 'fades, Gentle',
+  attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
+  pvpMode: 'gentle',
+  tending: TERRITORY_RULES.tending,
+};
+
+export const FADING_ON: MapFillRules = { ...FADING_GENTLE, label: 'fades, On', pvpMode: 'on' };
+
+export const MAP_FILL_RULES: readonly MapFillRules[] = [NO_FADING, FADING_GENTLE, FADING_ON];
+
+const playing = (kid: MapFillKid): Seat => ({ kid, stopsAfterDay: null });
+const stopping = (kid: MapFillKid): Seat => ({ kid, stopsAfterDay: STOPS_AFTER_DAY });
+
+export const MAP_FILL_SCENARIOS: readonly MapFillScenario[] = [
+  {
+    id: 'engaged-2',
+    title: '2 engaged kids, 2 seats',
+    mapSeats: 2,
+    seats: [playing(ENGAGED), playing(ENGAGED)],
+  },
+  {
+    id: 'casual-2',
+    title: '2 casual kids, 2 seats',
+    mapSeats: 2,
+    seats: [playing(CASUAL), playing(CASUAL)],
+  },
+  {
+    id: 'part-time-2',
+    title: '2 part-time kids (3 days a week), 2 seats',
+    mapSeats: 2,
+    seats: [playing(PART_TIME), playing(PART_TIME)],
+  },
+  {
+    id: 'engaged-4',
+    title: '2 engaged kids, 4 seats',
+    mapSeats: 4,
+    seats: [playing(ENGAGED), playing(ENGAGED)],
+  },
+  {
+    id: 'casual-4',
+    title: '2 casual kids, 4 seats',
+    mapSeats: 4,
+    seats: [playing(CASUAL), playing(CASUAL)],
+  },
+  {
+    id: 'engaged-stops',
+    title: `2 engaged kids, 2 seats; one stops after day ${String(STOPS_AFTER_DAY)}`,
+    mapSeats: 2,
+    seats: [playing(ENGAGED), stopping(ENGAGED)],
+  },
+  {
+    id: 'casual-stops',
+    title: `2 casual kids, 2 seats; one stops after day ${String(STOPS_AFTER_DAY)}`,
+    mapSeats: 2,
+    seats: [playing(CASUAL), stopping(CASUAL)],
+  },
+  {
+    id: 'four-one-stops',
+    title: `4 kids (engaged, casual, part-time, casual), 4 seats; the last stops after day ${String(STOPS_AFTER_DAY)}`,
+    mapSeats: 4,
+    seats: [playing(ENGAGED), playing(CASUAL), playing(PART_TIME), stopping(CASUAL)],
+  },
+];

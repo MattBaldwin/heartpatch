@@ -60,7 +60,7 @@ heartpatch/
 │     │  │                    capture chance, fuel nights, spawn windows)
 │     │  ├─ hex/ mapgen/      axial coords, neighbors, distance, BFS; seeded map generator
 │     │  └─ rng/              seeded RNG
-│     ├─ scripts/sim/         balance simulator (`pnpm sim`, #12); progression model (`pnpm sim:progression`)
+│     ├─ scripts/sim/         balance simulator (`pnpm sim`, #12); progression model (`pnpm sim:progression`); map-fill model (`pnpm sim:map-fill`)
 │     └─ tests/
 ├─ infra/
 │  ├─ docker/                 Dockerfiles
