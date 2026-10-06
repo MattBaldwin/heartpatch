@@ -375,13 +375,11 @@ describe('TutorialController', () => {
     expect(t.controller.view.phase).toBe('step');
     expect(t.calls).toEqual(['state']);
 
-    t.failAcknowledge(new ApiRequestError('VALIDATION_FAILED', "Let's pick a different name!"));
+    // A lost reply: "Try again" sends the same name with the same key.
+    t.failAcknowledge(new ApiRequestError('OFFLINE', "We can't reach the patch right now."));
     t.controller.name('  Sunny ');
     await settle();
-    expect(t.controller.view).toMatchObject({
-      phase: 'error',
-      message: "Let's pick a different name!",
-    });
+    expect(t.controller.view.phase).toBe('error');
     t.failAcknowledge(null);
     t.controller.retry();
     expect(t.controller.view.phase).toBe('waiting');
@@ -394,6 +392,60 @@ describe('TutorialController', () => {
 
     t.serverAdvances(advanced('name-partner', 'care'), state({ stepId: 'care', partner: PARTNER }));
     expect(t.controller.view.step?.id).toBe('care');
+  });
+
+  it('goes back to the name box when the server refuses a name, without sending it again', async () => {
+    const t = setup(state({ stepId: 'name-partner', partner: PARTNER }));
+    await t.controller.open();
+    t.controller.nextLine();
+    const names = () => t.calls.filter((c) => c.startsWith('name:'));
+
+    t.failAcknowledge(
+      new ApiRequestError(
+        'VALIDATION_FAILED',
+        "Let's keep names sweet, not stinky! Try another one.",
+      ),
+    );
+    t.controller.name('Stinky');
+    await settle();
+    expect(t.controller.view).toMatchObject({
+      phase: 'error',
+      message: "Let's keep names sweet, not stinky! Try another one.",
+    });
+    t.controller.retry();
+    await settle();
+    // Back on the naming step (the box shows again), and nothing was re-sent.
+    expect(t.controller.view).toMatchObject({ phase: 'step', message: null });
+    expect(t.controller.view.step?.action).toBe('name');
+    expect(names()).toEqual([`name:${MAP}:${PARTNER.squishyId}:Stinky`]);
+    expect(t.timers).toEqual([]);
+
+    // A clean name goes through, with its own key.
+    t.failAcknowledge(null);
+    t.controller.name('Sunny');
+    expect(t.controller.view.phase).toBe('waiting');
+    expect(names()).toEqual([
+      `name:${MAP}:${PARTNER.squishyId}:Stinky`,
+      `name:${MAP}:${PARTNER.squishyId}:Sunny`,
+    ]);
+    expect(new Set(t.keys).size).toBe(2);
+    t.serverAdvances(advanced('name-partner', 'care'), state({ stepId: 'care', partner: PARTNER }));
+    expect(t.controller.view.step?.id).toBe('care');
+  });
+
+  it('sends a name again after a server hiccup or a slow-down, with the same key', async () => {
+    for (const code of ['INTERNAL', 'RATE_LIMITED'] as const) {
+      const t = setup(state({ stepId: 'name-partner', partner: PARTNER }));
+      await t.controller.open();
+      t.controller.nextLine();
+      t.failAcknowledge(new ApiRequestError(code, 'Oops!'));
+      t.controller.name('Sunny');
+      await settle();
+      t.controller.retry();
+      await settle();
+      expect(t.calls.filter((c) => c.startsWith('name:'))).toHaveLength(2);
+      expect(new Set(t.keys).size).toBe(1);
+    }
   });
 
   it('names the Partner on plain http, where crypto.randomUUID throws', async () => {
