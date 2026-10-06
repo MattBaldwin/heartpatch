@@ -219,10 +219,10 @@ The home base is where squishies live, train, play, breed and hang out to be adm
 
 - **Hearthfire:** projects a safe radius (in tiles) against the Hollow Man; burns one night of Emberwood at each nightfall and stores several nights of fuel (§14).
 - **Habitats:** tagged by element/feeling (e.g. Frost Grotto, Cozy Meadow, Ember Den, Glimmer Cave). Each has capacity. Matching squishies get the habitat multiplier. A housed squishy can't stand watch on a tile (§14).
-- **Training Grounds:** passive XP trickle for assigned squishies (small).
+- **Training Grounds:** passive XP trickle for assigned squishies (small): a **Train** job on the job board, **[DEFAULT: 5 XP an hour, room for 2]** (level 2: 8 an hour, room for 3), at most **[DEFAULT: 24 h]** waiting, landing by itself like gathered things. Plain XP: no care bonus, and it isn't a battle win, so the daily battle-XP falloff doesn't apply. A trainee sleeps at home, so a lit fire keeps it safe (owner decision 2026-10-06).
 - **Play areas and decorations:** raise Harmony (Phase 3) and give squishies cute idle behavior.
 - **Nursery** (Phase 3), **Noise buildings** (bells, drums, squishy choir) for extra Hollow Man deterrence.
-- Buildings are placed on a grid within home-base tiles; upgrade levels increase capacity/radius.
+- Buildings are placed on a grid within home-base tiles; upgrade levels increase capacity/radius. **Upgrade** on a building's card pays the next level's cost and raises it at once: Hearthfire level 2 reaches 2 tiles, level 3 reaches 3 and needs Glimmer; habitats and Training Grounds get more room. Taking one down gives back half of everything spent on it, upgrades included.
 
 ## 14. The Hollow Man
 
