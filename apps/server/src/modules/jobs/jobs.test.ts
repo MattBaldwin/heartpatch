@@ -852,6 +852,13 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       );
       expect(roomier.trainingGrounds).toEqual({ id, capacity: 3, used: 3 });
       expect(jobOf(roomier, c).training?.xpPerHour).toBe(8);
+      // Full at the top level: no upgrade to suggest.
+      const d = await squishy(mapId, kid);
+      const top = await setJob(server, kid, mapId, d, { job: 'training' });
+      expect(top.statusCode).toBe(409);
+      expect(errorOf(top).message).toBe(
+        'The Training Grounds are full! Give someone else a turn first.',
+      );
     });
 
     it('lands its XP when it changes job, and never battles while training', async () => {

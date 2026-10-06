@@ -88,6 +88,9 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     '×',
   );
   const note = el('p', { class: 'jobs-note', role: 'status', 'data-testid': 'jobs-note' });
+  /** Why Train is switched off, while there are no Training Grounds yet. */
+  const trainHint = el('p', { class: 'jobs-hint', 'data-testid': 'jobs-train-hint' });
+  trainHint.hidden = true;
   const list = el('ul', { class: 'jobs-list', 'data-testid': 'jobs-list' });
   const sheet = el(
     'section',
@@ -99,6 +102,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       close,
     ),
     note,
+    trainHint,
     list,
   );
   sheet.hidden = true;
@@ -240,6 +244,8 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       return;
     }
     lines = new Map();
+    trainHint.textContent = JOBS_TEXT.noGrounds;
+    trainHint.hidden = current.trainingGrounds !== null || current.squishies.length === 0;
     list.replaceChildren(
       ...current.squishies.map((s) => {
         const name = nameOf(current, s);
@@ -264,7 +270,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
           // one (or when it's full) the server says so in a friendly line.
           button(
             `🎯 ${JOBS_TEXT.train}`,
-            () => void assign(s, { job: 'training' }, `${name} is off to practice!`),
+            () => void assign(s, { job: 'training' }, JOBS_TEXT.offToTrain(name)),
             { 'data-job': 'training' },
           ),
           button(
@@ -273,9 +279,13 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
             { 'data-job': 'resting' },
           ),
         );
+        // Train needs Training Grounds with room (the server checks again).
+        const grounds = current.trainingGrounds;
+        const noRoom = grounds === null || grounds.used >= grounds.capacity;
         for (const b of actions.querySelectorAll('button')) {
           const job = b.getAttribute('data-job');
           if (away || (job !== 'gatherer' && job === s.job)) b.disabled = true;
+          if (job === 'training' && noRoom) b.disabled = true;
         }
         return el(
           'li',

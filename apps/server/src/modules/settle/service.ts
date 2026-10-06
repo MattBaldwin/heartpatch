@@ -1,4 +1,10 @@
-import type { ItemCounts, Landed, PublicUser, SettleResponse } from '@heartpatch/shared';
+import {
+  jobOf,
+  type ItemCounts,
+  type Landed,
+  type PublicUser,
+  type SettleResponse,
+} from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
@@ -82,8 +88,18 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
           jobs.listMine(map.id, user.id),
         ]);
         const workersBefore = mine.filter((r) => r.workTile !== null);
+        // Only squishies whose one job is training: a row an older server
+        // left half-changed (posted or teamed without clearing it) earns nothing.
         const traineesBefore = mine.filter(
-          (r) => r.training !== null && r.squishy.state === 'active',
+          (r) =>
+            r.training !== null &&
+            r.squishy.state === 'active' &&
+            jobOf({
+              teamSlot: r.teamSlot,
+              atWork: r.atWork,
+              onWatch: r.onWatch,
+              training: true,
+            }) === 'training',
         );
         const tileIds = new Set<string>();
         for (const g of gathersBefore) tileIds.add(g.tileId);

@@ -20,6 +20,7 @@ import { lodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
 import { WANDER } from './home-config.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
+import { JOBS_TEXT } from '../squishies/jobs/jobs-view.js';
 import { homeApi, type HomeApi } from './home-api.js';
 import { HomeScene, type HomeSceneStats } from './home-scene.js';
 import {
@@ -140,7 +141,7 @@ export const HOME_TEXT = {
   train: 'Train',
   stop: 'Stop',
   practicing: (level: number) => `Practicing · Level ${String(level)}`,
-  trained: (name: string) => `${name} is off to practice!`,
+  trained: JOBS_TEXT.offToTrain,
   stopped: (name: string) => `${name} stopped for a rest.`,
   upgrade: '⬆️ Upgrade',
   upgradeNow: 'Upgrade!',

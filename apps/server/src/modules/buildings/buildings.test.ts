@@ -882,6 +882,43 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
     });
   });
 
+  describe('upgrading Training Grounds with trainees (review round 1)', () => {
+    it('pays the old rate up to the upgrade and the new rate after it', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const { plain } = await homeTiles(server, kid, mapId);
+      const grounds = await placed(server, kid, mapId, {
+        buildingId: 'training-grounds',
+        ...plain,
+        spot: 1,
+      });
+      const pal = await squishy(mapId, kid);
+      await call(server, 'POST', `/maps/${mapId}/squishies/${pal}/job`, kid, { job: 'training' });
+
+      // 10 h at level 1 (5 an hour) lands at the upgrade as 50 XP, not 80.
+      clock.setTime(clock.getTime() + 10 * 60 * 60 * 1000);
+      const up = await call(server, 'POST', `/maps/${mapId}/buildings/${grounds.id}/upgrade`, kid);
+      expect(up.statusCode, up.body).toBe(200);
+      expect(
+        (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pal) }))?.xp,
+      ).toBe(50);
+      // The bill, then the training that landed, then the level it reached.
+      const types = (await eventsOf(mapId)).slice(-3).map((e) => e.type);
+      expect(types).toEqual(['building.upgraded', 'squishy.trained', 'squishy.leveled']);
+
+      // 2 h more at level 2 (8 an hour): the next settle pays 16.
+      clock.setTime(clock.getTime() + 2 * 60 * 60 * 1000);
+      const settled = await call(server, 'POST', `/maps/${mapId}/settle`, kid);
+      expect(settled.statusCode).toBe(200);
+      expect(
+        (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pal) }))?.xp,
+      ).toBe(66);
+      await reconciled(mapId, kid.id);
+    });
+  });
+
   describe('habitats', () => {
     it('houses your own active squishies up to capacity, and moves them out', async () => {
       const server = await start();

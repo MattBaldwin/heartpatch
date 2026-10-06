@@ -318,7 +318,8 @@ export const squishies = pgTable(
     // practices at, and when the current count of XP started (moves on at
     // each settle). XP is worked out on read (shared `trainingProgress`;
     // CLAUDE.md rule 4). One job at a time is kept by the commands, as with
-    // guards, so the previous release can run beside this schema.
+    // guards (no check across columns, so the previous release's writes never
+    // fail); settle pays only a squishy whose one job is training.
     trainingBuildingId: uuid('training_building_id').references(() => buildings.id, {
       onDelete: 'set null',
     }),

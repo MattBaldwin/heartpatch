@@ -78,6 +78,7 @@ const MESSAGES = {
   notReady: 'Nothing ready yet. Check back soon!',
   noGrounds: 'Build Training Grounds at home first!',
   groundsFull: 'The Training Grounds are full! Upgrade them for more room.',
+  groundsFullTop: 'The Training Grounds are full! Give someone else a turn first.',
 } as const;
 
 const SPECIES = new Map(
@@ -630,7 +631,10 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           const level = grounds ? trainingLevelOf(grounds) : null;
           if (!grounds || !level) throw new AppError('CONFLICT', MESSAGES.noGrounds);
           if ((await repo.countTrainees(grounds.id)) >= level.capacity) {
-            throw new AppError('CONFLICT', MESSAGES.groundsFull);
+            // Only suggest an upgrade when there's a level to upgrade to.
+            const top =
+              grounds.level >= (TRAINING_GROUNDS.get(grounds.buildingId)?.levels.length ?? 1);
+            throw new AppError('CONFLICT', top ? MESSAGES.groundsFullTop : MESSAGES.groundsFull);
           }
         } else if (request.job === current) {
           // Resting already, maybe with a stale work row (its land changed

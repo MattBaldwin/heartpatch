@@ -396,14 +396,16 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           }
         }
         const movedOut = await repo.moveOutAll(row.id);
-        // Trainees land what they earned first, then stop (owner decision 2026-10-06).
         const trainees = await repo.lockTrainees(row.id);
-        const training =
-          trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, true) : null;
-        await repo.deleteBuilding(row.id);
+        // Inventory rows before `species_seen` (tech spec §7 step 11): the
+        // refund first, then trainees land what they earned (an evolution
+        // writes `species_seen`) and stop, then the building goes.
         if (Object.keys(refund).length > 0) {
           await grantItems(tx, { mapId, userId: user.id }, refund, 'build-refund', row.id);
         }
+        const training =
+          trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, true) : null;
+        await repo.deleteBuilding(row.id);
         await repo.appendEvent({
           mapId,
           type: 'building.removed',
@@ -454,8 +456,17 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         const building = requireBuildingData(row.buildingId);
         const cost = upgradeCost(building, row.level);
         if (!cost) throw new AppError('CONFLICT', MESSAGES.topLevel(building.name));
+        // Trainees (squishies, step 10) are locked before the cost's inventory
+        // rows (step 11).
+        const trainees =
+          building.kind === 'training-grounds' ? await repo.lockTrainees(row.id) : [];
         // Short of anything: CONFLICT ("You need 2 more Glimmer first!"), nothing changes.
         await consumeItems(tx, { mapId, userId: user.id }, cost, 'upgrade', row.id);
+        // Training XP is worked out from the level, so the whole XP earned at
+        // the old rate lands before the level changes; only the part of a
+        // point still in progress (minutes) carries on at the new rate.
+        const training =
+          trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, false) : null;
         const level = row.level + 1;
         await repo.setLevel(row.id, level);
         await repo.appendEvent({
@@ -469,6 +480,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             cost,
           },
         });
+        for (const event of training?.events ?? []) await repo.appendEvent(event);
         return homeView(repo, tx, mapId, user.id, at, timeZone);
       }),
 
