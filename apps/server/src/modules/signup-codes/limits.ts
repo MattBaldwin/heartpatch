@@ -16,6 +16,8 @@ export const SIGNUP_CODE_RULES = {
   listedForMs: 28 * DAY_MS, // TUNE: guess
   /** At most this many on a list. */
   listMax: 20, // TUNE: guess
+  /** The operator's list (every maker's codes) shows at most this many. */
+  operatorListMax: 500,
 } as const;
 
 export const SIGNUP_CODE_RATE_LIMITS = {

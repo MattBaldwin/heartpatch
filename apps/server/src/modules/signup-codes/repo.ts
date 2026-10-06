@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { withTransaction, type Executor } from '../../db/client.js';
-import { inviteCodes, mapMembers, maps, signupCodes, users } from '../../db/schema.js';
+import { mapMembers, maps, signupCodes, users } from '../../db/schema.js';
 
 export interface SignupCodeRow {
   id: string;
@@ -9,14 +9,6 @@ export interface SignupCodeRow {
   maxUses: number;
   useCount: number;
   createdAt: Date;
-  expiresAt: Date;
-  revokedAt: Date | null;
-}
-
-export interface InviteRow {
-  id: string;
-  mapId: string;
-  createdByUserId: string;
   expiresAt: Date;
   revokedAt: Date | null;
 }
@@ -63,8 +55,6 @@ export interface SignupCodesRepo {
   revoke: (id: string, createdBy: string | undefined, now: Date) => Promise<boolean>;
   /** Whether the player owns a multiplayer patch they're still active in. */
   ownsPatch: (userId: string) => Promise<boolean>;
-  /** A patch invite by its normalized code, live or not (for the right message). */
-  findInvite: (code: string) => Promise<InviteRow | null>;
   /** Sets who brought a new account in. */
   setAttribution: (
     userId: string,
@@ -197,22 +187,6 @@ export function createSignupCodesRepo(db: Executor): SignupCodesRepo {
         )
         .limit(1);
       return row !== undefined;
-    },
-
-    findInvite: async (code) => {
-      const [row] = await db
-        .select({
-          id: inviteCodes.id,
-          mapId: inviteCodes.mapId,
-          createdByUserId: inviteCodes.createdByUserId,
-          expiresAt: inviteCodes.expiresAt,
-          revokedAt: inviteCodes.revokedAt,
-        })
-        .from(inviteCodes)
-        .innerJoin(maps, eq(maps.id, inviteCodes.mapId))
-        .where(and(eq(inviteCodes.code, code), eq(maps.kind, 'multiplayer')))
-        .limit(1);
-      return row ?? null;
     },
 
     setAttribution: async (userId, attribution) => {

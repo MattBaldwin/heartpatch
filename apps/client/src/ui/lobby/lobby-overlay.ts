@@ -557,7 +557,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
           () => {
             act(status, stop, async () => {
               await lobbyApi.revokeInvite(map.id);
-              await showMap(map.id, 'Code turned off. Nobody new can ask to join.');
+              await showMap(map.id, 'Code turned off. Nobody new can use it.');
             });
           },
           { soft: true, small: true },

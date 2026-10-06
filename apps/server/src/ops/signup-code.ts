@@ -38,7 +38,7 @@ function positiveInt(flag: string, raw: string | undefined, max: number): number
   return n;
 }
 
-if (command !== 'list' && !(command === 'create' || command === 'revoke')) {
+if (!command || !['create', 'list', 'revoke'].includes(command)) {
   log.fatal(USAGE);
   process.exit(2);
 }

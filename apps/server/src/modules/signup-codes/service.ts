@@ -17,9 +17,9 @@ import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import type { Clock } from '../../lib/time.js';
 import { safeEqual } from '../auth/secrets.js';
-import { createMapsRepo } from '../maps/repo.js';
+import { createMapsRepo, type InviteRow } from '../maps/repo.js';
 import { SIGNUP_CODE_RULES } from './limits.js';
-import { createSignupCodesRepo, type InviteRow, type SignupCodeRow } from './repo.js';
+import { createSignupCodesRepo, type SignupCodeRow } from './repo.js';
 
 /**
  * A code that passed the sign-up check: the operator's `HP_SIGNUP_CODE`
@@ -182,12 +182,12 @@ export function createSignupCodesService(options: SignupCodesServiceOptions): Si
         }
         case 'invite': {
           const code = normalizeSignupCode(input);
-          const invite = await store.findInvite(code);
+          const maps = createMapsRepo(db);
+          const invite = await maps.findInviteByCode(code);
           const problem = inviteProblem(invite, at);
           if (problem || !invite) throw new AppError('FORBIDDEN', problem ?? MESSAGES.badCode);
           // A courtesy check so nobody makes an account to wait on a full
           // patch; the transaction checks again, and approval under lock.
-          const maps = createMapsRepo(db);
           const map = await maps.findMap(invite.mapId);
           if (map && (await maps.activeHomeSlots(invite.mapId)).count >= map.maxPlayers) {
             throw new AppError('CONFLICT', MESSAGES.patchFull);
@@ -217,10 +217,10 @@ export function createSignupCodesService(options: SignupCodesServiceOptions): Si
           break;
         }
         case 'invite': {
-          const invite = await repo.findInvite(pass.code);
+          const maps = createMapsRepo(tx);
+          const invite = await maps.findInviteByCode(pass.code);
           const problem = inviteProblem(invite, at);
           if (problem || !invite) throw new AppError('FORBIDDEN', problem ?? MESSAGES.badCode);
-          const maps = createMapsRepo(tx);
           const map = await maps.findMap(invite.mapId);
           if (!map) throw new Error(`redeem: invite ${invite.id} has no map`);
           if ((await maps.activeHomeSlots(invite.mapId)).count >= map.maxPlayers) {
@@ -296,8 +296,7 @@ export function createSignupCodesService(options: SignupCodesServiceOptions): Si
         undefined,
         at,
         new Date(at.getTime() - SIGNUP_CODE_RULES.listedForMs),
-        // The operator sees everything recent, not one owner's handful.
-        500,
+        SIGNUP_CODE_RULES.operatorListMax,
       );
       const makers = await store.usernames(
         rows.flatMap((r) => (r.createdByUserId === null ? [] : [r.createdByUserId])),

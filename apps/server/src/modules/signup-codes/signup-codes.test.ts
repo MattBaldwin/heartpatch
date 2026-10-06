@@ -17,7 +17,9 @@ import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import { keepers, sessions, users } from '../../db/schema.js';
 import { AUTH_RATE_LIMITS, SESSION_COOKIE } from '../auth/limits.js';
+import { createAuthRepo } from '../auth/repo.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { createAuthService } from '../auth/service.js';
 import type * as Secrets from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from '../maps/limits.js';
 import { SIGNUP_CODE_RATE_LIMITS, SIGNUP_CODE_RULES } from './limits.js';
@@ -476,6 +478,35 @@ describe.skipIf(!url)('family signup codes (needs DATABASE_URL)', () => {
         });
         expect(made).toBeUndefined();
       }
+    });
+  });
+
+  describe('a code that stops working mid-sign-up', () => {
+    it('rolls the account back when the invite is turned off after the check', async () => {
+      const server = await start();
+      const me = await owner(server);
+      const passes = createSignupCodesService({ db, bootstrapCode: undefined, clock: () => clock });
+      const auth = createAuthService({
+        repo: createAuthRepo(db),
+        now: () => clock,
+        passes: {
+          check: passes.check,
+          // The owner turns the invite off between the check and the account's transaction.
+          redeem: async (tx, pass, userId) => {
+            const off = await call(server, 'POST', `/maps/${me.mapId}/invite/revoke`, me);
+            expect(off.statusCode).toBe(204);
+            return passes.redeem(tx, pass, userId);
+          },
+        },
+      });
+      const username = newName();
+      await expect(
+        auth.signup({ ...signupBody(me.invite, username), signupCode: me.invite }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN', message: MESSAGES.revoked });
+      const made = await db.query.users.findFirst({
+        where: (u, { eq }) => eq(u.username, username),
+      });
+      expect(made).toBeUndefined();
     });
   });
 

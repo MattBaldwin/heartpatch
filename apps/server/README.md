@@ -85,12 +85,17 @@ Maps (players say "patches") live in `src/modules/maps` (issue #4; design doc §
 | `POST /api/v1/maps/:mapId/pvp-mode` | Owner: `{ pvpMode: on \| gentle \| off }`, appends `map.updated` when it changes |
 | `POST /api/v1/maps/:mapId/members/:userId/reset-password` | Owner: → `{ user, temporaryPassword, recoveryCode }` (`no-store`), only if every multiplayer map the member is in is this owner's (decision D) |
 
-**Seats:** `MAP_MAX_PLAYERS` (4). Commands that add or remove members take the per-map seats lock first (`lockSeats`: the owner's `map_members` row, `FOR NO KEY UPDATE`), so two approvals racing for the last seat can't both win; a partial unique index on `(map_id, home_slot)` for active members backs it up. **Tutorial gate:** with `HP_TUTORIAL_REQUIRED=true`, creating a map or asking to join needs `users.tutorial_completed_at`. Rate limits are in `modules/maps/limits.ts`.
+**Seats:** `MAP_MAX_PLAYERS` (4). Commands that add or remove members take the per-map seats lock first (`lockSeats`: the owner's `map_members` row, `FOR NO KEY UPDATE`), so two approvals racing for the last seat can't both win; a partial unique index on `(map_id, home_slot)` for active members backs it up. **Tutorial gate:** with `HP_TUTORIAL_REQUIRED=true`, creating a map or asking to join needs `users.tutorial_completed_at`. A patch invite typed at sign-up files the join request before either gate, so approving waits (409) until the joiner has a Keeper and, where required, the tutorial. Rate limits are in `modules/maps/limits.ts`.
 
-**Text filter:** run every piece of player-typed text through `assertAllowedText(text, 'name' | 'message')` from `lib/filter.ts` before storing it (tech spec §9). It throws `VALIDATION_FAILED` with a kid-readable message. `checkText` returns the verdict without throwing.
+**Family codes** (#195, `modules/signup-codes`):
+
+| Endpoint | Notes |
+|---|---|
 | `GET /api/v1/signup-codes` | Patch owner: → `{ codes, liveMax }`, their family codes (live first, then ones made in the last 28 days) with uses, expiry and who used them. Never the code itself |
 | `POST /api/v1/signup-codes` | Patch owner: `{ label }` → 201 `{ code, signupCode }` (`no-store`), shown once. At most 3 live per owner (409 past it); needs a patch they own |
 | `POST /api/v1/signup-codes/:codeId/revoke` | The code's maker: → 204. Accounts made with it stay |
+
+**Text filter:** run every piece of player-typed text through `assertAllowedText(text, 'name' | 'message')` from `lib/filter.ts` before storing it (tech spec §9). It throws `VALIDATION_FAILED` with a kid-readable message. `checkText` returns the verdict without throwing.
 
 **Operator reset** (tech spec §9): `docker compose exec server node dist/ops/reset-password.js <username>` (locally `pnpm --filter @heartpatch/server ops:reset-password <username>`) sets a temporary password, revokes sessions and prints a new recovery code. Never exposed over HTTP.
 
