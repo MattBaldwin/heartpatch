@@ -33,7 +33,9 @@
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   gap: 6px;
-  height: min(55vh, 520px);
+  /* At least 420px, so a short screen (Safari's bars showing) still has a
+     whole row of clothes, but always under the Keeper's top 96px. */
+  height: min(max(55vh, 420px), 520px, calc(100% - 96px)); /* TUNE */
   margin: 0 auto;
   padding: 12px 12px 8px;
   pointer-events: auto;

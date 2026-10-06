@@ -242,9 +242,11 @@ test('from a patch, Done goes back to that patch, via the Boutique and Milestone
   const hint = page.getByTestId('tray-hint-ok');
   if (await hint.isVisible()) await hint.tap();
 
-  // The owner's iPhone and an iPad on its side (the projects' own sizes are taller).
+  // The owner's iPhone, a small one in Safari with its bars showing, and an
+  // iPad on its side.
   for (const screen of [
     { width: 390, height: 844 },
+    { width: 375, height: 600 },
     { width: 1180, height: 820 },
   ]) {
     await test.step(`${String(screen.width)}×${String(screen.height)}`, async () => {
@@ -277,6 +279,9 @@ test('from a patch, Done goes back to that patch, via the Boutique and Milestone
         [box.x + box.width / 2, box.y + box.height / 2] as const,
       );
       expect(onTop).toBe('wardrobe-done');
+      // The clothes keep at least a whole row, however short the screen.
+      const items = (await wardrobe(page).getByTestId('wardrobe-items').boundingBox())!;
+      expect(items.height).toBeGreaterThanOrEqual(64);
 
       // Into the Boutique and Milestones and back: still the wardrobe.
       await wardrobe(page).getByTestId('wardrobe-boutique').tap();
