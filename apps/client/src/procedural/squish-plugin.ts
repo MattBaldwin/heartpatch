@@ -107,8 +107,10 @@ const VERTEX_WORLDPOS = /* glsl */ `
   worldPos.xyz = sqOrigin + sqRel;
   vSquishLook = squishMotion.w;
   vSquishFinish = squishEvent.w;
-  // Body-relative position in body heights, so sparkle flecks stick to the vinyl.
-  vSquishLocal = (worldPos.xyz - sqOrigin) / sqH;
+  // The mesh's own position, before its instance matrix, squash, lean,
+  // bounce and turn: sparkle flecks and the rainbow rim stick to the vinyl
+  // however the squishy moves (the body's units are about its height).
+  vSquishLocal = positionUpdated;
   vPositionW = worldPos.xyz;
 #ifdef NORMAL
   vNormalW = normalize(vNormalW * vec3(1.0 / sqSide, 1.0 / sqS, 1.0 / sqSide));

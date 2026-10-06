@@ -1339,9 +1339,10 @@ export const PARTS: Part[] = [
  * by `checkGameData`.
  */
 export const ART_RULES: ArtRules = {
-  defaultInk: '#3b2a3f', // soft plum, warmer than black
+  defaultInk: '#3b2a3f', // TUNE: soft plum, warmer than black
   minInkContrast: 4.5,
-  facePatchWidth: 0.3,
+  lightnessVariation: 0.06, // TUNE: the client's per-squishy lightness wobble
+  facePatchWidth: 0.3, // TUNE
   finishByRarity: {
     common: 'vinyl',
     uncommon: 'vinyl',
@@ -1351,7 +1352,7 @@ export const ART_RULES: ArtRules = {
     secret: 'iridescent',
   },
   glowByElement: { light: 'body', fire: 'accent' },
-  evolutionScale: [1.2, 1.4],
+  evolutionScale: { min: 1.2, max: 1.4 }, // TUNE
   feelingFaces: {
     sleepy: [['sleepy-eyes']],
     joy: [['happy-eyes']],

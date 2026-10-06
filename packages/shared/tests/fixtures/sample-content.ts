@@ -155,7 +155,7 @@ export const FIXTURE_SPECIES: Species[] = [
     baseStats: { hp: 60, attack: 35, defense: 60, speed: 20 },
     moves: ['fixture-rock-a-bye', 'fixture-pebble-puff'],
     evolutions: [],
-    visual: { body: 'pebble', palette: ['#a39e93'], parts: ['sleepy-eyes', 'tiny-smile'] },
+    visual: { body: 'pebble', palette: ['#ada89d'], parts: ['sleepy-eyes', 'tiny-smile'] },
     habitatPreferences: { elements: ['stone'], feelings: ['sleepy'] },
   },
   // Battle engine fixtures (#11).

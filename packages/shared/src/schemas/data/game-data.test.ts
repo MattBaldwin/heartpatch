@@ -279,6 +279,35 @@ describe('checkGameData', () => {
     ]);
   });
 
+  it('reports an unknown head body and an attack part with no part in its slot', () => {
+    const problems = problemsAfter((d) => {
+      d.species[0]!.visual.head = { body: 'cube', size: 1, forward: 0, up: 0.5 };
+      d.species[0]!.visual.attackPart = 'tail';
+    });
+    expect(problems).toEqual([
+      'species["fixture-puddlepuff"].visual.head.body: unknown head body "cube"',
+      'species["fixture-puddlepuff"].visual.attackPart: no part in the tail slot to attack with',
+    ]);
+  });
+
+  it('holds every species to the art rules', () => {
+    const problems = problemsAfter((d) => {
+      d.species[0]!.visual.palette = ['#3d3550'];
+      d.species[0]!.visual.finish = 'sparkle';
+    });
+    expect(problems).toEqual([
+      'species["fixture-puddlepuff"].visual.ink: face ink #3b2a3f on #3d3550 is down to 1.09:1 across squishies; faces need at least 4.5:1 (set visual.ink)',
+      'species["fixture-puddlepuff"].visual.finish: common squishies use the "vinyl" finish, not "sparkle"',
+    ]);
+  });
+
+  it('checks the art rules themselves name real parts', () => {
+    const problems = problemsAfter((d) => {
+      d.artRules.feelingFaces.joy = [['happy-eyes', 'jolly-eyes']];
+    });
+    expect(problems).toEqual(['artRules.feelingFaces.joy[0][1]: unknown part "jolly-eyes"']);
+  });
+
   it('reports duplicate and malformed bodies and parts', () => {
     const problems = problemsAfter((d) => {
       d.bodies.push({ ...d.bodies[0]! });

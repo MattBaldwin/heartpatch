@@ -49,7 +49,7 @@ A kid should name a squishy from its shadow alone (the catalog's unseen cards wi
 
 - **[checked]** An evolution is **×1.2–1.4** the size of the form it grows from and adds **at least one new sticking-out part**. It keeps the base's colour family and signature, so the family resemblance is obvious.
 - Grown-up proportions: the head shrinks against the torso (Flurrypup's head is 1.1× its torso's height, Blusterpup's 0.88×), limbs lengthen (stance 0.15 → 0.45), and the stance gets readier (sit → stand → upright).
-- Evolutions are one rarity step up (a rule, already true in the data), so they usually also gain a material tier (§1.4).
+- Most evolutions are one rarity step up (Thunderpuff → Thunderplume stays legendary), so they usually also gain a material tier (§1.4).
 
 ### 1.4 Rarity material tiers
 
@@ -58,7 +58,7 @@ All tiers are the same shared vinyl (§4) plus a per-instance code in the squish
 | Tier | Who **[checked]** | Look | Cost |
 |---|---|---|---|
 | Vinyl | common, uncommon, rare | glossy clearcoat + rim (today's look) | — |
-| **Sparkle** | epic | tiny white flecks in the vinyl that twinkle as the view turns | ~12 ALU per fragment (a 3D cell hash), only on sparkly instances |
+| **Sparkle** | epic | tiny white flecks in the vinyl that twinkle as the view turns; they sit in each mesh's own space, so they stay put as the squishy breathes, bounces and turns | ~12 ALU per fragment (a 3D cell hash), only on sparkly instances |
 | **Iridescent** | legendary, secret | sparkle **plus** a rainbow rim that shifts with view angle | ~20 ALU per fragment |
 | **Glow** | Light (whole squishy), Fire (its flames, the `accent` parts); others may opt in (Glowgourd's lantern body) | lit from inside: albedo added back as emission, so it reads at dusk and night | ~3 ALU |
 
@@ -91,7 +91,7 @@ Seasonal lines may keep their season's colour (Gourdon is an orange pumpkin) but
 |---|---|---|
 | Sleepy | `sleepy-eyes` | closed, drowsy arcs |
 | Joy | `happy-eyes` | ^ ^ |
-| Silly | `dot-eyes` + `open-mouth` | wide-eyed, giggling |
+| Silly | `dot-eyes` (or grown-up `sharp-eyes`) + `open-mouth` | wide-eyed, giggling |
 | Cozy | `oval-eyes` (or grown-up `sharp-eyes`) + `blush-cheeks` | soft and rosy |
 | Brave | `brave-brows` (new) + `oval-eyes`, `dot-eyes` or grown-up `sharp-eyes` | determined, never cross |
 | Spooky | `spooky-eyes` (new, tall and glinty) | "boo!" |
@@ -100,7 +100,7 @@ Idle animations (Silly spins, Sleepy nods off, Brave puffs up) add to this in th
 
 ### 1.7 Faces: ink chosen per species by contrast
 
-- **[checked]** Face ink (eyes, brows, mouth) contrasts with the body colour at **at least 4.5:1** (WCAG relative luminance), and with any large patch on the face (a belly patch).
+- **[checked]** Face ink (eyes, brows, mouth) contrasts with the body colour at **at least 4.5:1** (WCAG relative luminance), and with any large patch on the face (a belly patch). The check holds at both ends of each squishy's ±6% lightness variation (`artRules.lightnessVariation`, which the client also draws with).
 - The default ink is soft plum `#3b2a3f`. Dark bodies (Candlekit, Wickwhisker, Nookling, Upsybat) set `visual.ink` to cream `#fff4dc`: big cream eyes on a dark body read as cute and a little spooky, with the white glint still on top.
 - Every squishy keeps its eye glint (the highlight that makes it look alive).
 
@@ -122,7 +122,7 @@ Shared data shapes this chapter adds (all additive; no id is renamed or removed,
 
 ### 1.10 Roster
 
-Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 the base's size.
+Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 the base's size, inside the ×1.2–1.4 rule.
 
 | Line | Element · Feeling | Body plan | Baby | Grown up | Pose · attack part |
 |---|---|---|---|---|---|

@@ -16,13 +16,18 @@ export const ArtRulesSchema = z.strictObject({
   defaultInk: HexColorSchema,
   /** Minimum WCAG contrast between face ink and what it sits on. */
   minInkContrast: z.number().min(1).max(21),
+  /**
+   * Each squishy's colours vary by up to this much lightness (±, a fraction);
+   * the client draws with it, and contrast holds at both ends.
+   */
+  lightnessVariation: z.number().min(0).max(0.3),
   /** Face patterns at least this wide (relative to body height) count as part of the face. */
   facePatchWidth: z.number().min(0).max(1.5),
   finishByRarity: z.record(RaritySchema, FinishSchema),
   /** Elements that must glow, and how. Other species may opt in. */
   glowByElement: z.partialRecord(ElementIdSchema, GlowSchema),
-  /** An evolution's size over its base's: [min, max]. */
-  evolutionScale: z.tuple([z.number().min(1), z.number().min(1)]),
+  /** An evolution's size over its base's. */
+  evolutionScale: z.strictObject({ min: z.number().min(1), max: z.number().min(1) }),
   /** Each feeling's face kit: every group lists parts, and a species needs one part from each. */
   feelingFaces: z.record(FeelingIdSchema, z.array(z.array(ContentIdSchema).min(1)).min(1)),
 });
@@ -42,22 +47,37 @@ function fifthRoot(x: number): number {
   return y;
 }
 
-function luminance(hex: string): number {
+function luminance([r, g, b]: Rgb): number {
   // sRGB to linear: ((c + 0.055) / 1.055)^2.4, written as v² · (v^(1/5))².
   const lin = (c: number) => {
     if (c <= 0.04045) return c / 12.92;
     const v = (c + 0.055) / 1.055;
-    const r = fifthRoot(v);
-    return v * v * r * r;
+    const root = fifthRoot(v);
+    return v * v * root * root;
   };
-  const [r, g, b] = rgbOf(hex);
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function ratioOf(a: Rgb, b: Rgb): number {
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
 /** WCAG contrast ratio between two `#rrggbb` colours (1 to 21). */
 export function contrastRatio(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-  return (hi + 0.05) / (lo + 0.05);
+  return ratioOf(rgbOf(a), rgbOf(b));
+}
+
+/** The lowest contrast between `ink` and `body` as the body's lightness varies by ±`variation`. */
+export function worstContrast(ink: string, body: string, variation: number): number {
+  const scaled = (k: number): Rgb => {
+    const [r, g, b] = rgbOf(body);
+    const clamp = (c: number) => Math.min(1, c * k);
+    return [clamp(r), clamp(g), clamp(b)];
+  };
+  const i = rgbOf(ink);
+  return Math.min(ratioOf(i, scaled(1 - variation)), ratioOf(i, scaled(1 + variation)));
 }
 
 export type HueFamily =
@@ -123,10 +143,16 @@ export function dominantPart(visual: SpeciesVisual, registry: VisualRegistry): s
 }
 
 /** The palette colour a part takes (missing colours fall back to the one before). */
+const PALETTE_INDEX: Readonly<Partial<Record<Part['color'], number>>> = {
+  primary: 0,
+  secondary: 1,
+  accent: 2,
+  detail: 3,
+};
+
 function roleColor(visual: SpeciesVisual, role: Part['color']): string | null {
-  const order = ['primary', 'secondary', 'accent', 'detail'] as const;
-  const i = order.indexOf(role as (typeof order)[number]);
-  if (i < 0) return null;
+  const i = PALETTE_INDEX[role];
+  if (i === undefined) return null;
   for (let k = i; k >= 0; k--) {
     const c = visual.palette[k];
     if (c) return c;
@@ -167,11 +193,11 @@ export function checkSpeciesArt(
       if (c) behind.push(c);
     }
     for (const c of behind) {
-      const ratio = contrastRatio(ink, c);
+      const ratio = worstContrast(ink, c, rules.lightnessVariation);
       if (ratio < rules.minInkContrast) {
         report(
           [...at, 'ink'],
-          `face ink ${ink} on ${c} is ${ratio.toFixed(2)}:1; faces need at least ${rules.minInkContrast}:1 (set visual.ink)`,
+          `face ink ${ink} on ${c} is down to ${ratio.toFixed(2)}:1 across squishies; faces need at least ${rules.minInkContrast}:1 (set visual.ink)`,
         );
       }
     }
@@ -230,7 +256,7 @@ export function checkRosterArt(
       if (!into || into.id === s.id || rootOf(s.id) === into.id || line.has(into.id)) continue;
       line.set(into.id, rootOf(s.id));
       const ratio = (into.visual.size ?? 1) / (s.visual.size ?? 1);
-      const [min, max] = rules.evolutionScale;
+      const { min, max } = rules.evolutionScale;
       if (ratio < min - 1e-9 || ratio > max + 1e-9) {
         report(
           [table, j, 'visual', 'size'],
@@ -267,4 +293,17 @@ export function checkRosterArt(
     }
     if (!other) seen.set(key, { id: s.id, line: mine });
   });
+}
+
+/** Every part a feeling's face kit names exists in the registry. */
+export function checkArtRules(rules: ArtRules, registry: VisualRegistry, report: Report): void {
+  for (const [feeling, groups] of Object.entries(rules.feelingFaces)) {
+    groups.forEach((group, i) => {
+      group.forEach((id, j) => {
+        if (!registry.parts.has(id)) {
+          report(['artRules', 'feelingFaces', feeling, i, j], `unknown part "${id}"`);
+        }
+      });
+    });
+  }
 }

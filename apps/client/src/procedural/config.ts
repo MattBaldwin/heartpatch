@@ -19,8 +19,8 @@ export const FIXED_COLORS = {
 
 /** Per-squishy variation, seeded from the instance id. */
 export const VARIATION = {
-  /** Overall lightness change, as a fraction (±). */
-  lightness: 0.06, // TUNE
+  /** Overall lightness change, as a fraction (±); face contrast is checked at both ends. */
+  lightness: ART_RULES.lightnessVariation,
   /** Warm/cool shift moved between red and blue, 0–1 sRGB (±). */
   warmth: 0.025, // TUNE
   /** Placement wobble for single and paired parts, in degrees (±). */

@@ -1,6 +1,6 @@
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { GAME_DATA, visualRegistry, type BattleTimeOfDay } from '@heartpatch/shared';
+import { BattleTimeOfDaySchema, GAME_DATA, visualRegistry } from '@heartpatch/shared';
 import { BattleScene } from '../../battle/battle-scene.js';
 import { BattleContent } from '../../battle/battle-view.js';
 import { boot } from '../../engine/boot.js';
@@ -31,7 +31,7 @@ const tier = pickInitialTier(params.get('quality'));
 const registry = visualRegistry(GAME_DATA);
 const speciesId = params.get('species') ?? GAME_DATA.species[0]?.id ?? '';
 const terrain = params.get('terrain') ?? 'meadow';
-const timeOfDay = (params.get('time') ?? 'day') as BattleTimeOfDay;
+const timeOfDay = BattleTimeOfDaySchema.safeParse(params.get('time')).data ?? 'day';
 const silhouette = params.has('silhouette');
 
 /** The player's-side squishy in every shot (cropped out of the sheet). */
@@ -118,7 +118,7 @@ function frame(): void {
 }
 requestAnimationFrame(frame);
 
-(window as unknown as { __roster: unknown }).__roster = {
+window.__roster = {
   ready: () => frames > 20,
   stats: () => battle?.stats ?? null,
 };

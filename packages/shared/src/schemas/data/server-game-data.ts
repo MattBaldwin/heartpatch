@@ -5,7 +5,7 @@ import { checkRef, checkUniqueIds, formatDataIssues, type Report } from './issue
 import { MoveSchema } from './moves.js';
 import { SpawnTableSchema } from './spawn-tables.js';
 import { SpeciesSchema } from './species.js';
-import { checkSpeciesArt } from './art-rules.js';
+import { checkRosterArt, checkSpeciesArt } from './art-rules.js';
 import { checkSpeciesVisual, visualRegistry } from './visuals.js';
 
 /**
@@ -114,6 +114,20 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
     });
 
     const pairs = new Set<string>();
+    // The secret lines grow up by the same rules as the public ones (once
+    // their ids are sound: a clash with a public id is reported above).
+    if (!data.secretSpecies.some((s) => publicSpecies.has(s.id)))
+      checkRosterArt(
+        'secretSpecies',
+        data.secretSpecies.map((s) => ({
+          ...s,
+          evolutions: data.secretEvolutions.filter((e) => e.from === s.id),
+        })),
+        visuals,
+        gameData.artRules,
+        report,
+      );
+
     data.secretEvolutions.forEach((evo, i) => {
       checkRef(species, 'species', evo.from, ['secretEvolutions', i, 'from'], report);
       if (publicSpecies.has(evo.into)) {

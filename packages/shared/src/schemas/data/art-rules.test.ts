@@ -7,6 +7,7 @@ import {
   dominantPart,
   hueFamily,
 } from './art-rules.js';
+import type { ElementId } from './elements.js';
 import type { SpeciesVisual } from './species.js';
 import { visualRegistry } from './visuals.js';
 
@@ -14,7 +15,7 @@ const registry = visualRegistry({ bodies: BODIES, parts: PARTS });
 
 interface Row {
   id: string;
-  element: 'water' | 'fire' | 'light' | 'shadow' | 'spark' | 'leaf';
+  element: ElementId;
   feeling: 'silly' | 'cozy' | 'joy' | 'sleepy' | 'brave' | 'spooky';
   rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
   visual: SpeciesVisual;

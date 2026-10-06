@@ -10,7 +10,7 @@ import { ResourceSchema } from './resources.js';
 import { SeasonSchema } from './seasons.js';
 import { SpeciesSchema } from './species.js';
 import { TerrainSchema } from './terrains.js';
-import { ArtRulesSchema, checkRosterArt, checkSpeciesArt } from './art-rules.js';
+import { ArtRulesSchema, checkArtRules, checkRosterArt, checkSpeciesArt } from './art-rules.js';
 import { BodySchema, checkSpeciesVisual, PartSchema, visualRegistry } from './visuals.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Path, type Report } from './issues.js';
 
@@ -118,6 +118,7 @@ export const GameDataSchema = z
       });
     });
 
+    checkArtRules(data.artRules, visuals, report);
     checkRosterArt('species', data.species, visuals, data.artRules, report);
 
     // Evolution chains must end: no species can evolve back into itself.

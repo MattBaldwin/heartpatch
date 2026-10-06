@@ -424,7 +424,7 @@ export const SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'pebble',
-      palette: ['#a39b8f', '#e9e3d9', '#7a6cb8', '#837a6d'],
+      palette: ['#aaa296', '#e9e3d9', '#7a6cb8', '#837a6d'],
       parts: [
         'sleepy-eyes',
         'smirk',
@@ -1036,7 +1036,7 @@ export const SPECIES: Species[] = [
     evolutions: [{ into: 'thunderplume', level: 30 }], // TUNE:
     visual: {
       body: 'orb',
-      palette: ['#8f9ac4', '#eef1ff', '#ffd23f'],
+      palette: ['#96a1ca', '#eef1ff', '#ffd23f'],
       parts: ['oval-eyes', 'brave-brows', 'cat-mouth', 'cloud-crown', 'nub-wings', 'bolt-tail'],
       finish: 'iridescent',
       stance: 0.35,
@@ -1057,7 +1057,7 @@ export const SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'bean',
-      palette: ['#8a96c6', '#eef1ff', '#ffcc00', '#c9d1ff'],
+      palette: ['#93a0cc', '#eef1ff', '#ffcc00', '#c9d1ff'],
       parts: ['sharp-eyes', 'brave-brows', 'beak', 'storm-crest', 'big-wings', 'tail-feathers'],
       size: 1.3,
       finish: 'iridescent',

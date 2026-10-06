@@ -12,6 +12,10 @@ export type Mat4 = readonly number[];
 
 const FRONT: Vec3 = [0, 0, -1];
 
+/** Legs lean out at most this far (radians) and sink at most this share into the body. */
+const MAX_LEG_SPLAY = (60 * Math.PI) / 180;
+const MAX_LEG_SINK = 0.8;
+
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const scaled = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 const len = (a: Vec3) => Math.hypot(a[0], a[1], a[2]);
@@ -89,8 +93,10 @@ export function partMatrix(
   if (part.slot === 'legs') {
     // Legs grow straight down to the ground from wherever they join, leaning
     // out by `splay`, so a torso's stance sets their length.
-    y = normalize(add([0, -1, 0], scaled(outwards, Math.tan(placement.splay))));
-    span = f.point[1] / -y[1] / (1 - part.sink);
+    // Splay and sink are capped so a leg always has a finite length.
+    const splay = Math.min(Math.abs(placement.splay), MAX_LEG_SPLAY) * Math.sign(placement.splay);
+    y = normalize(add([0, -1, 0], scaled(outwards, Math.tan(splay))));
+    span = f.point[1] / -y[1] / (1 - Math.min(part.sink, MAX_LEG_SINK));
     let front = flatten(FRONT, y);
     if (len(front) < 1e-3) front = [0, 0, -1];
     z = normalize(front);
