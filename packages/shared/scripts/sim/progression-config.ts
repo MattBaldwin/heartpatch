@@ -17,6 +17,8 @@ export interface KidProfile {
   readonly battlesPerDay: number;
   /** The care × habitat XP multiplier their squishies keep, as a percent (100–300). */
   readonly xpPercent: number;
+  /** Wild squishies befriended a day at most (each replaces the weakest friend). */
+  readonly befriendsPerDay: number;
 }
 
 /** The rules the model plays by: the shipped data, or a baseline to compare against. */
@@ -25,6 +27,12 @@ export interface ProgressionRules {
   readonly growth: GrowthRules;
   readonly spawn: SpawnRules;
   readonly attemptsPerDay: number;
+  /**
+   * The level a befriended squishy joins at: its battle level (the game
+   * today), or at most one below its species' first evolution (design
+   * option (a) for the owner, 2026-10-06).
+   */
+  readonly befriend: 'battle-level' | 'below-evolution';
 }
 
 export interface ProgressionConfig {
@@ -62,8 +70,8 @@ export const PROGRESSION_CONFIG: ProgressionConfig = {
   // 7 battles); engaged: five sessions (about 25). Casual keeps care up with
   // one matching habitat (≈1.5 × 1.35); engaged keeps everyone at the 3× cap.
   kids: [
-    { id: 'casual', battlesPerDay: 7, xpPercent: 200 },
-    { id: 'engaged', battlesPerDay: 25, xpPercent: 300 },
+    { id: 'casual', battlesPerDay: 7, xpPercent: 200, befriendsPerDay: 1 },
+    { id: 'engaged', battlesPerDay: 25, xpPercent: 300, befriendsPerDay: 2 },
   ],
   partner: 'emberbun',
   teammates: ['pebblesnooze', 'fuzzbolt'],
@@ -81,6 +89,14 @@ export const CURRENT_RULES: ProgressionRules = {
   growth: GROWTH_RULES,
   spawn: SPAWN_RULES,
   attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
+  befriend: 'battle-level',
+};
+
+/** The shipped data, with a befriended squishy joining below its evolution (owner option (a)). */
+export const CAPPED_BEFRIEND_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'now, option (a)',
+  befriend: 'below-evolution',
 };
 
 /**
@@ -93,4 +109,5 @@ export const BASELINE_RULES: ProgressionRules = {
   growth: { ...GROWTH_RULES, xpCurve: { perLevel: 20, curve: 5 } },
   spawn: { ...SPAWN_RULES, levels: { min: 2, max: 6 }, partnerOffset: undefined },
   attemptsPerDay: 10,
+  befriend: 'battle-level',
 };

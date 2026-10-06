@@ -45,12 +45,9 @@ export const BATTLE_RULES: BattleRules = {
     rarity: { common: 100, uncommon: 85, rare: 70, epic: 55, legendary: 40, secret: 40 },
   },
 
-  // TUNE: a win pays 20 × the opponents' levels × 1.5. Wild squishies match
-  // the Partner's level (spawn rules `partnerOffset`), so a wild win pays
-  // about 30 × its level: a level-1 starter grows up (level 16) after ~22
-  // wins at 1× care, ~13 at full care (1.75×), ~8 at the 3× cap; Thistlepip
-  // (18) after ~29 / 17 / 11. The XP curve's knees (data/care.ts) slow
-  // everything past 16 and 30. Pinned by `growth-pace.test.ts`.
+  // TUNE: a win pays 20 × the opponents' levels × 1.5 (×1 on a loss). How
+  // fast that grows a squishy is pinned by `growth-pace.test.ts` (server
+  // side, with the spawn rules) and `pnpm sim:progression`.
   xp: { perOpponentLevel: 20, winMultiplier: 1.5, minimum: 20 },
 
   // TUNE: every policy. Wild squishies play for fun; guardians and the

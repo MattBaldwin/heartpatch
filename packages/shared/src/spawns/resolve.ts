@@ -1,3 +1,4 @@
+import { GROWTH_RULES } from '../data/care.js';
 import { activeSeasons } from '../data/season-windows.js';
 import { Rng, type Seed } from '../rng/index.js';
 import type { Season } from '../schemas/data/seasons.js';
@@ -30,9 +31,6 @@ export interface SpawnInput {
    */
   readonly partnerLevel?: number | null;
 }
-
-/** The highest level a squishy can be (`BattleSquishySetup.level`). */
-const TOP_LEVEL = 100;
 
 export interface SpawnData {
   readonly tables: readonly SpawnTable[];
@@ -91,5 +89,5 @@ function wildLevel(rng: Rng, partnerLevel: number | null, rules: SpawnRules): nu
   const offset = rules.partnerOffset;
   if (!offset || partnerLevel === null) return rng.int(rules.levels.min, rules.levels.max);
   const level = partnerLevel + rng.int(offset.min, offset.max);
-  return Math.max(rules.levels.min, Math.min(TOP_LEVEL, level));
+  return Math.max(rules.levels.min, Math.min(GROWTH_RULES.maxLevel, level));
 }

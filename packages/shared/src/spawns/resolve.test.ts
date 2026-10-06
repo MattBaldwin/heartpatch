@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FIXTURE_SPECIES } from '../../tests/fixtures/sample-content.js';
+import { GROWTH_RULES } from '../data/care.js';
 import { SEASONS } from '../data/seasons.js';
 import { SPAWN_RULES } from '../data/server/spawn-rules.js';
 import { deriveSeed } from '../rng/index.js';
@@ -99,20 +100,27 @@ describe('resolveWildSpawn', () => {
       }
     });
 
-    it('stays within levels.min and 100', () => {
+    it('stays within levels.min and the top level', () => {
+      const top = GROWTH_RULES.maxLevel;
       for (const q of tiles) {
         expect(at(q, 1)!.level).toBeGreaterThanOrEqual(RULES.levels.min);
-        expect(at(q, 100)!.level).toBeLessThanOrEqual(100);
+        expect(at(q, top)!.level).toBeLessThanOrEqual(top);
       }
-      expect(new Set(tiles.map((q) => at(q, 100)!.level))).toContain(100);
+      expect(new Set(tiles.map((q) => at(q, top)!.level))).toContain(top);
     });
 
     it('rolls the plain levels without a Partner, or without partnerOffset', () => {
       const plainRules: SpawnRules = { ...OFFSET_RULES, partnerOffset: undefined };
+      const plain = [RULES.levels.min, RULES.levels.max];
+      const seen = new Set<number>();
       for (const q of tiles) {
-        expect(at(q, null)!.level).toBeLessThanOrEqual(RULES.levels.max);
-        expect(at(q, 30, plainRules)!.level).toBeLessThanOrEqual(RULES.levels.max);
+        for (const level of [at(q, null)!.level, at(q, 30, plainRules)!.level]) {
+          expect(level).toBeGreaterThanOrEqual(plain[0]!);
+          expect(level).toBeLessThanOrEqual(plain[1]!);
+          seen.add(level);
+        }
       }
+      expect([...seen].sort((a, b) => a - b)).toEqual([3, 4, 5]);
     });
   });
 

@@ -26,9 +26,23 @@ import type { KidProfile, ProgressionConfig, ProgressionRules } from './progress
  * real growth rules, so the model follows the data: the XP curve, battle XP,
  * guardian and spawn rules, map size and the daily attempts.
  *
- * Not modelled: captures after day 1, care and habitat changes, gathering,
- * the Hollow Man, and challenging the other kid once neutral land runs out.
+ * Befriending: after a won wild battle a kid befriends that squishy (up to
+ * `befriendsPerDay`) when it's stronger than their weakest friend, and it
+ * takes that friend's place on the team. It joins at its battle level, or
+ * just below its first evolution with the rules' `befriend: 'below-evolution'`.
+ *
+ * Not modelled (see `MODEL_LIMITS`): care and habitat changes, gathering, the
+ * Hollow Man, the capture roll itself (a win stands in for a befriend), and
+ * challenging the other kid once neutral land runs out.
  */
+
+/** What the model leaves out, for the report. */
+export const MODEL_LIMITS = [
+  'care and habitat stay at one multiplier per kid',
+  'a won wild battle stands in for a successful Heart Charm',
+  'no gathering, crafting or the Hollow Man',
+  'no challenges between the two kids once neutral land runs out',
+] as const;
 
 /** One squishy on a kid's team. */
 interface Member {
@@ -169,6 +183,39 @@ function grant(
   return partnerXp;
 }
 
+/**
+ * The level a befriended squishy joins at: its battle level, or with
+ * `befriend: 'below-evolution'` at most one below its first evolution.
+ */
+function befriendLevel(
+  data: ModelData,
+  rules: ProgressionRules,
+  speciesId: string,
+  level: number,
+): number {
+  if (rules.befriend === 'battle-level') return level;
+  const first = data.evolutions
+    .filter((e) => e.from === speciesId)
+    .reduce((low, e) => Math.min(low, e.level), Infinity);
+  return first === Infinity ? level : Math.min(level, first - 1);
+}
+
+/**
+ * Puts a newly befriended squishy in its weakest friend's place (never the
+ * Partner's) when it's stronger. Returns whether it joined the team.
+ */
+function befriend(kid: Kid, friend: { id: string; speciesId: string; level: number }): boolean {
+  let weakest = 1;
+  for (let m = 2; m < kid.team.length; m++) {
+    if ((kid.team[m]?.level ?? 0) < (kid.team[weakest]?.level ?? 0)) weakest = m;
+  }
+  const current = kid.team[weakest];
+  if (!current || friend.level <= current.level) return false;
+  // Joins counting from its level (`addXp`), like a befriended squishy on the server.
+  kid.team[weakest] = { ...friend, xp: 0 };
+  return true;
+}
+
 /** The team's estimated win chance (%) against each guardian strength today. */
 function estimateOdds(
   data: ModelData,
@@ -284,6 +331,7 @@ export function runProgression(
       };
       const land = tiles.filter((t) => owner.get(hexKey(t)) === k);
       const wild = profile.battlesPerDay - (tileBattles[k] ?? 0);
+      let befriended = 0;
       for (let i = 0; i < wild; i++) {
         const hour = WILD_HOURS[i % WILD_HOURS.length] as number;
         const window = spawnWindowAt({ date, hour }, rules.spawn.windowHours);
@@ -303,8 +351,20 @@ export function runProgression(
           squishies: [{ id: 'wild-1', speciesId: spawn.speciesId, level: spawn.level }],
         };
         const seed = deriveSeed(config.rootSeed, 'wild-battle', profile.id, k, day, i);
-        const { xp } = play(data, kid, config, opponent, seed);
+        const { won, xp } = play(data, kid, config, opponent, seed);
         partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp);
+        if (won && befriended < profile.befriendsPerDay) {
+          const level = befriendLevel(data, rules, spawn.speciesId, spawn.level);
+          if (
+            befriend(kid, {
+              id: `friend-${String(day)}-${String(i)}`,
+              speciesId: spawn.speciesId,
+              level,
+            })
+          ) {
+            befriended += 1;
+          }
+        }
       }
       const left = neutralLeft();
       records[k]?.push({
@@ -329,4 +389,61 @@ export function runProgression(
     neutral: neutralTiles.length,
     kids: kids.map((kid, k) => ({ profile, slot: kid.slot, days: records[k] ?? [] })),
   };
+}
+
+/** One row of the wild-odds table: a team and its win rate (%) by wild level offset. */
+export interface WildOddsRow {
+  readonly team: string;
+  readonly odds: readonly { offset: number; percent: number }[];
+}
+
+/**
+ * How often a team beats a wild base form at the Partner's level plus each
+ * offset, `games` engine games per cell (base forms in turn, the kid on
+ * `kidPolicy`, the wild side on `wild`).
+ */
+export function wildOdds(
+  data: ModelData,
+  config: ProgressionConfig,
+  offsets: readonly number[],
+  games: number,
+): WildOddsRow[] {
+  const evolved = new Set(data.evolutions.map((e) => e.into));
+  const bases = GAME_DATA.species.filter((s) => !s.season && !evolved.has(s.id));
+  const teams = [
+    { partner: 'emberbun', level: 10, friends: 5 },
+    { partner: 'hearthbun', level: 30, friends: 5 },
+    { partner: 'hearthbun', level: 30, friends: 25 },
+  ];
+  return teams.map(({ partner, level, friends }) => {
+    const kid: Kid = {
+      profile: { id: 'odds', battlesPerDay: 0, xpPercent: 100, befriendsPerDay: 0 },
+      slot: 0,
+      team: [
+        { id: 'partner', speciesId: partner, level, xp: 0 },
+        ...config.teammates.map((speciesId, i) => ({
+          id: `friend-${String(i + 1)}`,
+          speciesId,
+          level: friends,
+          xp: 0,
+        })),
+      ],
+    };
+    return {
+      team: `${partner} ${String(level)} + friends at ${String(friends)}`,
+      odds: offsets.map((offset) => {
+        let wins = 0;
+        for (let i = 0; i < games; i++) {
+          const species = bases[i % bases.length] as Species;
+          const opponent: BattleSideSetup = {
+            controller: { type: 'ai', policy: 'wild' },
+            squishies: [{ id: 'wild-1', speciesId: species.id, level: level + offset }],
+          };
+          const seed = deriveSeed(config.rootSeed, 'wild-odds', partner, level, friends, offset, i);
+          if (play(data, kid, config, opponent, seed).won) wins += 1;
+        }
+        return { offset, percent: Math.floor((wins * 100) / games) };
+      }),
+    };
+  });
 }

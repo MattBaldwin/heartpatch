@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   BASELINE_RULES,
+  CAPPED_BEFRIEND_RULES,
   CURRENT_RULES,
   PROGRESSION_CONFIG,
   type ProgressionConfig,
 } from './progression-config.js';
 import { gapWin, renderProgression, summarise } from './progression-report.js';
-import { modelData, runProgression } from './progression.js';
+import { modelData, runProgression, wildOdds } from './progression.js';
 
 /** A short run: the same model, a few days and a small odds estimate. */
 const SMALL: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 6, estimateGames: 4 };
@@ -45,6 +46,34 @@ describe('runProgression', () => {
     const now = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4).kids[0]!.days[0]!;
     expect(before.tileBattles).toBe(BASELINE_RULES.attemptsPerDay);
     expect(now.tileBattles).toBe(CURRENT_RULES.attemptsPerDay);
+  });
+});
+
+describe('headline numbers (a short run, so data changes show up here)', () => {
+  it("pins each kid's Partner level by day under the shipped rules", () => {
+    const levels = [casual!, engaged!].map((kid) =>
+      runProgression(data, SMALL, CURRENT_RULES, kid, 4).kids[0]!.days.map((d) => d.partnerLevel),
+    );
+    expect(levels).toEqual([
+      [8, 12, 15, 17, 18, 19],
+      [22, 26, 30, 33, 34, 36],
+    ]);
+  });
+
+  it('keeps befriended squishies below their evolution with option (a)', () => {
+    const run = runProgression(data, SMALL, CAPPED_BEFRIEND_RULES, engaged!, 4);
+    const uncapped = runProgression(data, SMALL, CURRENT_RULES, engaged!, 4);
+    const friends = (r: typeof run) => r.kids[0]!.days.at(-1)!.levels.slice(1);
+    expect(Math.max(...friends(run))).toBeLessThan(Math.max(...friends(uncapped)));
+  });
+});
+
+describe('wildOdds', () => {
+  it('gives a win rate for every team and offset, the same each time', () => {
+    const odds = wildOdds(data, SMALL, [-2, 1], 4);
+    expect(odds).toEqual(wildOdds(data, SMALL, [-2, 1], 4));
+    expect(odds).toHaveLength(3);
+    for (const row of odds) expect(row.odds.map((o) => o.offset)).toEqual([-2, 1]);
   });
 });
 

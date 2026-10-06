@@ -31,7 +31,7 @@ export const SpawnRulesSchema = z.strictObject({
     .refine((l) => l.min <= l.max, { message: 'min must not be more than max', path: ['max'] }),
   /**
    * Wild levels follow the player's Partner: its level plus a roll in this
-   * range (both inclusive), kept within `levels.min` and 100. Optional: left
+   * range (both inclusive), kept within `levels.min` and the top level (`GROWTH_RULES.maxLevel`). Optional: left
    * out, or for a player without a Partner, levels roll in `levels`.
    */
   partnerOffset: z

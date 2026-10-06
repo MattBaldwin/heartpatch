@@ -2,7 +2,13 @@ import { addXp, grantedXp, xpForLevel } from '../../src/care/growth.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
 import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
 import type { ProgressionConfig, ProgressionRules } from './progression-config.js';
-import type { DayRecord, KidRun, ProgressionRun } from './progression.js';
+import {
+  MODEL_LIMITS,
+  type DayRecord,
+  type KidRun,
+  type ProgressionRun,
+  type WildOddsRow,
+} from './progression.js';
 
 /** Days the tables show. */
 const SHOWN_DAYS = [1, 2, 3, 4, 5, 7, 10, 14, 21, 26, 30, 40, 50, 60];
@@ -108,7 +114,7 @@ function markdownTable(head: readonly string[], rows: readonly (readonly string[
 export function renderProgression(
   runs: readonly ProgressionRun[],
   config: ProgressionConfig,
-  info: { seconds: number },
+  info: { seconds: number; odds?: readonly WildOddsRow[] },
 ): string {
   const summaries = runs.map((run) => summarise(run, config));
   const ruleSets = [...new Set(runs.map((r) => r.rules))];
@@ -116,6 +122,8 @@ export function renderProgression(
     '# Progression model',
     '',
     `Two kids of one kind share a map; every battle is played by the real engine. ${String(config.days)} days from ${config.startDate}, kids: ${config.kids.map((k) => `${k.id} (${String(k.battlesPerDay)} battles a day, ${String(k.xpPercent)} % XP)`).join(', ')}. A kid tries the best-odds tile next to their land while its odds are ${String(config.tryTileAt)} % or better and attempts are left, then fights wild squishies. Gap ready: the team wins Juniper's Gap ${String(config.readyAt)} % of the time. Run took ${info.seconds.toFixed(1)} s.`,
+    '',
+    `Kids befriend up to ${config.kids.map((k) => `${String(k.befriendsPerDay)} (${k.id})`).join(' / ')} wild squishies a day when one is stronger than their weakest friend. Not modelled: ${MODEL_LIMITS.join('; ')}. Team-strength milestones (Big and Bouncy, Gap ready, land full) depend on these and are estimates.`,
     '',
     '## Milestones by day',
     '',
@@ -182,6 +190,20 @@ export function renderProgression(
         }),
     ),
   ];
+  if (info.odds) {
+    const offsets = info.odds[0]?.odds.map((o) => o.offset) ?? [];
+    lines.push(
+      '',
+      "## Wild fights at the Partner's level",
+      '',
+      "Team win rate (%) against base-form wild squishies at the Partner's level plus each offset.",
+      '',
+      markdownTable(
+        ['Team', ...offsets.map((o) => `wild ${o >= 0 ? '+' : ''}${String(o)}`)],
+        info.odds.map((row) => [row.team, ...row.odds.map((o) => String(o.percent))]),
+      ),
+    );
+  }
   for (const rules of ruleSets) {
     for (const seats of config.seats) {
       const these = runs.filter((r) => r.rules === rules && r.seats === seats);

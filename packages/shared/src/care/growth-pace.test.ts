@@ -72,6 +72,12 @@ describe('growth pace', () => {
     expect(wins(GROWTH_RULES.capPercent)).toEqual({ emberbun: 8, puddlepuff: 8, thistlepip: 11 });
   });
 
+  it('keeps rarer evolutions slower, more so past the knee', () => {
+    const at = (level: number) => winsToReach(level, 100);
+    // Evolution levels by rarity (species.ts): common 16 … legendary 30.
+    expect([16, 18, 22, 26, 30].map(at)).toEqual([22, 29, 62, 114, 178]);
+  });
+
   it('makes each level past the knees take more wins than the last (at 2×)', () => {
     const perLevel = [16, 20, 25, 30, 40, 60, 80, 99].map((from) =>
       winsToReach(from + 1, 200, from),
