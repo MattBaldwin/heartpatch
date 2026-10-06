@@ -94,6 +94,13 @@ describe('what a gatherer works', () => {
     ).toMatchObject({ resource: 'stone', from: 'land' });
     expect(
       workSource(
+        { terrain: 'mountains', nodeResource: null, homeSlot: null },
+        resources,
+        JOB_RULES,
+      ),
+    ).toEqual({ resource: 'glimmer', quantity: 1, seconds: 90 * 60, from: 'land' });
+    expect(
+      workSource(
         { terrain: 'pumpkin-fields', nodeResource: null, homeSlot: null },
         resources,
         JOB_RULES,

@@ -521,14 +521,15 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ...buildRows(current).map(({ building, icon, needs, option }) => {
               let action: Node;
               if (option.kind === 'ready' || option.kind === 'short') {
-                action = button(
+                const build = button(
                   HOME_TEXT.build,
                   () => {
                     setMode({ kind: 'placing', buildingId: building.id });
                   },
                   { 'data-build': building.id },
                 );
-                if (option.kind === 'short') (action as HTMLButtonElement).disabled = true;
+                if (option.kind === 'short') build.disabled = true;
+                action = build;
               } else if (option.kind === 'craft' && options.onRecipeBook) {
                 action = button(
                   HOME_TEXT.recipeBook,

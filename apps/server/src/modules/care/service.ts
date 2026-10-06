@@ -190,9 +190,15 @@ export async function applyXp(
   const repo = createCareRepo(tx);
   const row = await repo.lockSquishy(squishyId);
   if (!row) return null;
-  const habitat = habitatOf(await habitatTagsFor(repo, [row]), row);
   const multiplier =
-    options.plain === true ? 100 : xpMultiplier(contentmentOf(row, at), habitat, row, GROWTH_RULES);
+    options.plain === true
+      ? 100
+      : xpMultiplier(
+          contentmentOf(row, at),
+          habitatOf(await habitatTagsFor(repo, [row]), row),
+          row,
+          GROWTH_RULES,
+        );
   const xp = grantedXp(baseXp, multiplier);
   const next = addXp({ level: row.level, xp: row.xp }, xp, GROWTH_RULES);
 

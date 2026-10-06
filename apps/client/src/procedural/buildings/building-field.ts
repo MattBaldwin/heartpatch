@@ -153,7 +153,8 @@ export class BuildingField {
     this.#models.clear();
     this.#body.dispose();
     this.#glow.dispose();
-    this.#pool.dispose();
+    // The pool owns its overlay material, so it goes too.
+    this.#pool.dispose(false, true);
   }
 }
 
