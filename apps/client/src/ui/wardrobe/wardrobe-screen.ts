@@ -219,14 +219,9 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     MILESTONES_TEXT.open,
   );
   // "Done" shares the title's row, at the top right like the Boutique's and
-  // Milestones' "Back": the other chips wrap below it, never past it.
-  const header = el(
-    'div',
-    { class: 'wardrobe-header' },
-    title,
-    done,
-    el('div', { class: 'wardrobe-header-chips' }, goals, shop, turn),
-  );
+  // Milestones' "Back": the other chips get one sliding row below it.
+  const headerChips = el('div', { class: 'wardrobe-header-chips' }, goals, shop, turn);
+  const header = el('div', { class: 'wardrobe-header' }, title, done, headerChips);
   const tabs = el('div', { class: 'wardrobe-tabs', role: 'tablist' });
   const rarities = el('div', { class: 'wardrobe-rarities' });
   const list = el('div', { class: 'wardrobe-items', 'data-testid': 'wardrobe-items' });
@@ -235,7 +230,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   saveRow.hidden = true;
   const note = el('p', { class: 'wardrobe-note', role: 'status', 'data-testid': 'wardrobe-note' });
   // Rows that scroll sideways on a phone fade at the edge with more behind it (#152).
-  const edges = [tabs, rarities, outfits].map(watchScrollEdges);
+  const edges = [headerChips, tabs, rarities, outfits].map(watchScrollEdges);
   const refreshEdges = () => {
     for (const e of edges) e.refresh();
   };

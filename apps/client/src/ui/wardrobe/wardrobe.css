@@ -54,15 +54,7 @@
   text-align: left;
 }
 
-/* The wardrobe's own chips get a row of their own under the title and
-   "Done", so "Done" stays in the top corner at any width. */
-.wardrobe-header-chips {
-  display: flex;
-  flex: 1 1 100%;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
+.wardrobe-header-chips,
 .wardrobe-tabs,
 .wardrobe-rarities,
 .wardrobe-outfits,
@@ -77,11 +69,20 @@
   scrollbar-width: none;
 }
 
+.wardrobe-header-chips::-webkit-scrollbar,
 .wardrobe-tabs::-webkit-scrollbar,
 .wardrobe-rarities::-webkit-scrollbar,
 .wardrobe-outfits::-webkit-scrollbar,
 .wardrobe-spots::-webkit-scrollbar {
   display: none;
+}
+
+/* The wardrobe's own chips get one row of their own under the title and
+   "Done", sliding sideways like the tabs on a narrow phone: "Done" stays in
+   the top corner and the header is two rows at any width. */
+.wardrobe-header-chips {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 /* A row with more chips past an edge fades out there, so a cut-off chip
