@@ -760,7 +760,6 @@ _Playtest bug (owner, iPhone): "When clicking on your account and going to outfi
 - **Follow-ups, not regressions:** on a landscape phone (844×390, 667×375) the clothes list is still zero rows (on `main` too); a landscape media query could hide the outfits row or let the card's rows scroll. On a 320×568 phone the space above the card for the Keeper drops to about 152 px, about the same as the picker's; tune the preview camera if the Keeper looks clipped on an SE-size phone.
 - **Recipe-book e2e (test only):** "a finished craft lands by itself" no longer races its own 30 s craft. It records every text the landed pop-up shows (`window.__landedToasts`, a MutationObserver installed before Make it) and asserts the treats arrived and "+3 Treats" was shown, instead of racing the pop-up's 3.2 s life. The "pot is busy" checks between Make it and the dev call could still hit the 30 s on a very slow runner; worth an issue if that shard flakes.
 
-
 ## 2026-10-06 — Words: My Home, patch and land (#181)
 
 _Owner decision of 2026-10-06 (design review Q4). Proposed in #181, recorded by the coordinator after merge. Text only: no layout, logic or step-order changes._
@@ -790,7 +789,7 @@ _Owner decisions of 2026-10-06 (design review Q1 and Q2), plus the owner's later
 
 ## 2026-10-06 — Owner design-review answers
 
-_The owner's answers to "Questions for the owner" from the 2026-10-05 design review, given 2026-10-06 and recorded by the docs lane. Q1 and Q2 are in "The level curve and wild levels (#182)" and Q4 in "Words: My Home, patch and land (#181)"._
+_The owner's answers to "Questions for the owner" (a Claude artifact: https://claude.ai/artifact/CBbJkMKBbGwpho7pNaqo1v) from the 2026-10-05 design review, given 2026-10-06 and recorded by the docs lane. Q1 and Q2 are in "The level curve and wild levels (#182)" and Q4 in "Words: My Home, patch and land (#181)"._
 
 - **Q3: ship building upgrades and sinks.** Building upgrades and resource sinks ship (lane in progress).
 - **Q5, squishy art: a full roster redesign.** The first mockup was rejected as "too similar and too babyish"; the second was approved the same day. The rule from mockup 2:
