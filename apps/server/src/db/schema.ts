@@ -314,6 +314,15 @@ export const squishies = pgTable(
     workTileId: uuid('work_tile_id').references(() => tiles.id, { onDelete: 'set null' }),
     workSince: timestamptz('work_since'),
     workStartedAt: timestamptz('work_started_at'),
+    // Training Grounds (owner decision 2026-10-06): the Training Grounds it
+    // practices at, and when the current count of XP started (moves on at
+    // each settle). XP is worked out on read (shared `trainingProgress`;
+    // CLAUDE.md rule 4). One job at a time is kept by the commands, as with
+    // guards, so the previous release can run beside this schema.
+    trainingBuildingId: uuid('training_building_id').references(() => buildings.id, {
+      onDelete: 'set null',
+    }),
+    trainingSince: timestamptz('training_since'),
   },
   (t) => [
     index('squishies_habitat_building_id_idx').on(t.habitatBuildingId),
@@ -324,6 +333,13 @@ export const squishies = pgTable(
     index('squishies_work_tile_id_idx')
       .on(t.workTileId)
       .where(sql`${t.workTileId} is not null`),
+    index('squishies_training_building_id_idx')
+      .on(t.trainingBuildingId)
+      .where(sql`${t.trainingBuildingId} is not null`),
+    check(
+      'squishies_training_since',
+      sql`${t.trainingBuildingId} is null or ${t.trainingSince} is not null`,
+    ),
     check('squishies_team_slot_range', sql`${t.teamSlot} between 0 and 5`),
     // On the team or gathering, never both (guards are kept apart by the commands).
     check('squishies_one_job', sql`${t.teamSlot} is null or ${t.workTileId} is null`),

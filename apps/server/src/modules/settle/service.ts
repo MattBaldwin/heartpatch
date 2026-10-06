@@ -12,7 +12,7 @@ import {
   grantItems,
   lockGrantRows,
 } from '../inventory/service.js';
-import { bankableWork } from '../jobs/service.js';
+import { bankableWork, landTraining, squishyName } from '../jobs/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
@@ -27,7 +27,9 @@ import { createSettleRepo } from './repo.js';
  * at `JOB_RULES.work.maxStoredCycles`; a full gatherer starts again from the
  * settle). One transaction (rule 7), the same ledger rows and events a
  * Collect wrote (`item.crafted`, `resource.gathered`, `work.collected`), and
- * a gather's roll for found clothing. Settling twice, or from two phones at
+ * a gather's roll for found clothing. Training Grounds XP lands here too
+ * (owner decision 2026-10-06: `squishy.trained`, plain XP per hour, capped at
+ * `JOB_RULES.training.maxHours`). Settling twice, or from two phones at
  * once, banks each thing once: the member row lock runs settles one at a
  * time, and each row is re-read under its lock.
  */
@@ -75,10 +77,14 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         const jobs = createSquishyJobsRepo(tx);
 
         // What might be due, read unlocked; each is read again under its lock.
-        const [gathersBefore, workersBefore] = await Promise.all([
+        const [gathersBefore, mine] = await Promise.all([
           gathering.listToSettle(map.id, user.id),
-          jobs.listMine(map.id, user.id).then((rows) => rows.filter((r) => r.workTile !== null)),
+          jobs.listMine(map.id, user.id),
         ]);
+        const workersBefore = mine.filter((r) => r.workTile !== null);
+        const traineesBefore = mine.filter(
+          (r) => r.training !== null && r.squishy.state === 'active',
+        );
         const tileIds = new Set<string>();
         for (const g of gathersBefore) tileIds.add(g.tileId);
         for (const w of workersBefore) if (w.workTile) tileIds.add(w.workTile.id);
@@ -86,7 +92,10 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         await jobs.lockTiles([...tileIds].sort());
         const gathers = await gathering.lockToSettle(gathersBefore.map((g) => g.id));
         const crafts = await inventory.lockActiveCrafts(owner);
-        await jobs.lockSquishies(workersBefore.map((w) => w.squishy.id));
+        // Gatherers and trainees together, in id order (tech spec §7).
+        await jobs.lockSquishies(
+          [...new Set([...workersBefore, ...traineesBefore].map((r) => r.squishy.id))].sort(),
+        );
         // A work tile that moved since the first read wasn't locked: next time.
         const lockedTile = (id: string | undefined) => id !== undefined && tileIds.has(id);
         const workers = (await jobs.listByIds(workersBefore.map((w) => w.squishy.id))).filter(
@@ -158,6 +167,21 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
           if (banked) workedIds.push(row.squishy.id);
         }
 
+        // Trainees: XP lands (levels, evolutions) and the count moves on.
+        const training = await landTraining(
+          tx,
+          map,
+          traineesBefore.map((r) => r.squishy.id),
+          at,
+          false,
+        );
+        const names = new Map(mine.map((r) => [r.squishy.id, squishyName(r.squishy)]));
+        const trained = training.trained.map((t) => ({
+          squishyId: t.squishyId,
+          name: names.get(t.squishyId) ?? 'Your squishy',
+          xp: t.xp,
+        }));
+
         // Gathers' grants are in: mark them collected and roll for clothing.
         for (const gather of banking) {
           events.push(await bankGather(tx, gathering, gather, at, { granted: true }));
@@ -172,13 +196,14 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
             payload: { userId: user.id, squishyIds: workedIds, items: worked },
           });
         }
+        events.push(...training.events);
         for (const event of events) await repo.appendEvent(event);
 
         const bag = await createInventoryService({ db: tx, clock: () => at }).get(user, mapId);
         const next = due.length === 0 ? null : new Date(Math.min(...due)).toISOString();
-        return { ...bag, landed, nextAt: next };
+        return { ...bag, landed, trained, nextAt: next };
       });
-      if (result.landed.length > 0) void options.publish?.(mapId);
+      if (result.landed.length > 0 || result.trained.length > 0) void options.publish?.(mapId);
       return result;
     },
   };

@@ -287,7 +287,12 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     expect(opened).not.toContain('building:jack-o-lantern-hearthfire');
 
     await craftAndCollect(server, kid, mapId, 'jack-o-lantern-hearthfire');
-    expect(await book(server, kid)).toEqual(recipeBookPages().map((p) => p.key));
+    // Every page but the Training Grounds, which needs Stone this kid hasn't gathered.
+    expect(await book(server, kid)).toEqual(
+      recipeBookPages()
+        .map((p) => p.key)
+        .filter((key) => key !== 'building:training-grounds'),
+    );
     const tile = await plainHomeTile(server, kid, mapId);
     const res = await place(server, kid, mapId, {
       buildingId: 'jack-o-lantern-hearthfire',

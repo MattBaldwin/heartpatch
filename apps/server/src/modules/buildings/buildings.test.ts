@@ -4,6 +4,9 @@ import {
   GAME_DATA,
   HOME_BASE_RULES,
   HomeResponseSchema,
+  hexKey,
+  hexSpiral,
+  JOB_RULES,
   MapResponseSchema,
   MapViewSchema,
   RemoveBuildingResponseSchema,
@@ -340,13 +343,6 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(second.statusCode).toBe(409);
       expect(errorOf(second).message).toBe('Your home already has all the Hearthfire it can hold!');
 
-      const notYet = await place(server, kid, mapId, {
-        buildingId: 'training-grounds',
-        q: plain.q,
-        r: plain.r,
-        spot: 1,
-      });
-      expect(notYet.statusCode).toBe(409);
       const unknown = await place(server, kid, mapId, {
         buildingId: 'castle',
         q: plain.q,
@@ -724,6 +720,165 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         lit: true,
         nightsLeft: 1,
       });
+    });
+  });
+
+  describe('upgrades (owner decision 2026-10-06)', () => {
+    const upgrade = (server: FastifyInstance, who: Player, mapId: string, id: string) =>
+      call(server, 'POST', `/maps/${mapId}/buildings/${id}/upgrade`, who);
+
+    it('raises a Hearthfire a level, pays in the same transaction, and its light reaches further', async () => {
+      const server = await start();
+      const [kid, friend] = [await player(), await player()];
+      const mapId = await newMap(server, kid);
+      await join(server, kid, friend, mapId);
+      await give(mapId, kid, { timber: 35, stone: 30, emberwood: 1 });
+      const { seed, tiles } = await homeTiles(server, kid, mapId);
+      const fire = await placed(server, kid, mapId, { buildingId: 'hearthfire', ...seed, spot: 1 });
+      await fuel(server, kid, mapId, fire.id, 1);
+
+      const res = await upgrade(server, kid, mapId, fire.id);
+      expect(res.statusCode, res.body).toBe(200);
+      const after = HomeResponseSchema.parse(res.json());
+      expect(after.buildings.find((b) => b.id === fire.id)).toMatchObject({
+        level: 2,
+        safeRadius: 2,
+        lit: true,
+        nightsLeft: 1,
+      });
+      expect(after.items).toMatchObject({ timber: 20, stone: 15 });
+      const ledger = await reconciled(mapId, kid.id);
+      expect(
+        ledger
+          .filter((l) => l.reason === 'upgrade')
+          .map((l) => [l.itemId, l.delta, l.refId])
+          .sort(),
+      ).toEqual([
+        ['stone', -10, fire.id],
+        ['timber', -10, fire.id],
+      ]);
+
+      // Members see the new level and radius; the bill stays internal.
+      const event = (await eventsOf(mapId)).at(-1)!;
+      expect(event).toMatchObject({
+        type: 'building.upgraded',
+        payload: { fromLevel: 1, cost: { timber: 10, stone: 10 } },
+      });
+      expect(publicViewFor(PUBLIC_VIEWS, event, { userId: friend.id })).toMatchObject({
+        userId: kid.id,
+        building: { id: fire.id, level: 2, safeRadius: 2 },
+      });
+      const shown = (await view(server, friend, mapId)).tiles.find(
+        (t) => t.q === seed.q && t.r === seed.r,
+      )!;
+      expect(shown.buildings[0]).toMatchObject({ level: 2, safeRadius: 2 });
+
+      // Nightfall's safe tiles follow the level: every tile within 2 of the fire.
+      const fires = (await createBuildingsRepo(db).listOnMap(mapId)).filter(
+        (b) => b.kind === 'hearthfire',
+      );
+      const safe = litSafeTiles(fires, () => tiles, mapLocalTime(clock, ZONE));
+      expect([...safe].sort()).toEqual(hexSpiral(seed, 2).map(hexKey).sort());
+    });
+
+    it('needs Glimmer for level 3, changes nothing when short, and stops at the top', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, { timber: 35, stone: 30 });
+      const { seed } = await homeTiles(server, kid, mapId);
+      const fire = await placed(server, kid, mapId, { buildingId: 'hearthfire', ...seed, spot: 1 });
+      expect((await upgrade(server, kid, mapId, fire.id)).statusCode).toBe(200);
+
+      const short = await upgrade(server, kid, mapId, fire.id);
+      expect(short.statusCode).toBe(409);
+      expect(errorOf(short).message).toMatch(/Glimmer/);
+      const still = await home(server, kid, mapId);
+      expect(still.buildings[0]).toMatchObject({ level: 2, safeRadius: 2 });
+      expect(still.items).toMatchObject({ timber: 20, stone: 15 });
+
+      await give(mapId, kid, { glimmer: 2 });
+      const top = await upgrade(server, kid, mapId, fire.id);
+      expect(top.statusCode).toBe(200);
+      expect(HomeResponseSchema.parse(top.json()).buildings[0]).toMatchObject({
+        level: 3,
+        safeRadius: 3,
+      });
+      const past = await upgrade(server, kid, mapId, fire.id);
+      expect(past.statusCode).toBe(409);
+      expect(errorOf(past).message).toBe('Your Hearthfire is as big as it gets!');
+
+      // Taking it down gives back half of everything spent on it, upgrades included.
+      const removed = await call(server, 'POST', `/maps/${mapId}/buildings/${fire.id}/remove`, kid);
+      expect(RemoveBuildingResponseSchema.parse(removed.json()).refund).toEqual({
+        timber: 17,
+        stone: 15,
+        glimmer: 1,
+      });
+      await reconciled(mapId, kid.id);
+    });
+
+    it('gives a habitat more room, and only upgrades your own buildings', async () => {
+      const server = await start();
+      const [kid, friend] = [await player(), await player()];
+      const mapId = await newMap(server, kid);
+      await join(server, kid, friend, mapId);
+      await give(mapId, kid, PLENTY);
+      await give(mapId, friend, PLENTY);
+      const { plain } = await homeTiles(server, kid, mapId);
+      const den = await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 1 });
+      expect(den.capacity).toBe(3);
+      expect((await upgrade(server, friend, mapId, den.id)).statusCode).toBe(404);
+      const res = await upgrade(server, kid, mapId, den.id);
+      expect(HomeResponseSchema.parse(res.json()).buildings[0]).toMatchObject({
+        level: 2,
+        capacity: 5,
+      });
+      // The Jack-o'-Lantern Hearthfire has one level only.
+      expect(building('jack-o-lantern-hearthfire').levels).toHaveLength(1);
+    });
+  });
+
+  describe('Training Grounds (owner decision 2026-10-06)', () => {
+    it('builds, shows its trainees, and lands their XP when taken down', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const { plain } = await homeTiles(server, kid, mapId);
+      const grounds = await placed(server, kid, mapId, {
+        buildingId: 'training-grounds',
+        ...plain,
+        spot: 1,
+      });
+      expect(grounds).toMatchObject({ kind: 'training-grounds', capacity: 2, residents: 0 });
+
+      const pal = await squishy(mapId, kid);
+      const assign = await call(server, 'POST', `/maps/${mapId}/squishies/${pal}/job`, kid, {
+        job: 'training',
+      });
+      expect(assign.statusCode, assign.body).toBe(200);
+      const trainingHome = await home(server, kid, mapId);
+      expect(trainingHome.buildings[0]).toMatchObject({ residents: 1 });
+      expect(trainingHome.squishies).toEqual([
+        expect.objectContaining({ id: pal, trainingId: grounds.id, habitatId: null }),
+      ]);
+
+      // Two hours at 5 XP an hour, then it's taken down: the 10 XP land first.
+      clock.setTime(clock.getTime() + 2 * 60 * 60 * 1000);
+      const removed = await call(
+        server,
+        'POST',
+        `/maps/${mapId}/buildings/${grounds.id}/remove`,
+        kid,
+      );
+      expect(removed.statusCode, removed.body).toBe(200);
+      const row = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pal) });
+      expect(row).toMatchObject({ xp: 10, trainingBuildingId: null, trainingSince: null });
+      const events = (await eventsOf(mapId)).slice(-2);
+      expect(events.map((e) => e.type)).toEqual(['building.removed', 'squishy.trained']);
+      expect(events[1]!.payload).toEqual({ userId: kid.id, trained: [{ squishyId: pal, xp: 10 }] });
+      expect(JOB_RULES.training.maxHours).toBe(24);
     });
   });
 

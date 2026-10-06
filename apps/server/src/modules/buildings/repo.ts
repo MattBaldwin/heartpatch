@@ -6,7 +6,7 @@ import {
   type ElementId,
   type FeelingId,
 } from '@heartpatch/shared';
-import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { squishyOnWatch } from '../territory/repo.js';
@@ -52,6 +52,8 @@ export interface HomeSquishyRow {
   level: number;
   state: 'active' | 'hollowed';
   habitatBuildingId: string | null;
+  /** The Training Grounds it practices at, or null (owner decision 2026-10-06). */
+  trainingBuildingId: string | null;
 }
 
 /**
@@ -80,6 +82,8 @@ export interface BuildingsRepo {
   insertBuilding: (building: NewBuilding) => Promise<BuildingRow>;
   moveBuilding: (buildingRowId: string, to: { tileId: string; spot: number }) => Promise<void>;
   setFuel: (buildingRowId: string, fuelledThrough: string, at: Date) => Promise<void>;
+  /** Raises a building to `level` (an upgrade). */
+  setLevel: (buildingRowId: string, level: number) => Promise<void>;
   deleteBuilding: (buildingRowId: string) => Promise<void>;
   /** Deletes all of a player's buildings on a map (they left); residents move out. */
   deleteOwned: (mapId: string, userId: string) => Promise<number>;
@@ -98,6 +102,8 @@ export interface BuildingsRepo {
   setHabitat: (squishyId: string, habitatBuildingId: string | null) => Promise<void>;
   /** Moves everyone out of a habitat; returns who. */
   moveOutAll: (buildingRowId: string) => Promise<string[]>;
+  /** Locks the squishies practicing at a Training Grounds, in id order; returns their ids. */
+  lockTrainees: (buildingRowId: string) => Promise<string[]>;
 }
 
 /** The repo inside `transaction`: the only place it can write game events. */
@@ -132,6 +138,7 @@ const squishyColumns = {
   level: squishies.level,
   state: squishies.state,
   habitatBuildingId: squishies.habitatBuildingId,
+  trainingBuildingId: squishies.trainingBuildingId,
 };
 
 // Text columns are checked on read, so a hand-edited row fails loudly.
@@ -224,15 +231,20 @@ function queries(db: Executor): BuildingsRepo {
         .where(eq(buildings.id, buildingRowId));
     },
 
+    setLevel: async (buildingRowId, level) => {
+      await db.update(buildings).set({ level }).where(eq(buildings.id, buildingRowId));
+    },
+
     deleteBuilding: async (buildingRowId) => {
       await db.delete(buildings).where(eq(buildings.id, buildingRowId));
     },
 
     deleteOwned: async (mapId, userId) => {
       const owned = and(eq(buildings.mapId, mapId), eq(buildings.ownerUserId, userId));
-      // Tech spec §7 "Lock order": the buildings, then their residents in id
-      // order. Deleting them moves the residents out through the foreign key
-      // (`ON DELETE SET NULL`), a bare multi-row UPDATE that locks in scan order.
+      // Tech spec §7 "Lock order": the buildings, then their residents and
+      // trainees in id order. Deleting them moves those out through the
+      // foreign keys (`ON DELETE SET NULL`), bare multi-row UPDATEs that lock
+      // in scan order.
       await db
         .select({ id: buildings.id })
         .from(buildings)
@@ -243,9 +255,15 @@ function queries(db: Executor): BuildingsRepo {
         .select({ id: squishies.id })
         .from(squishies)
         .where(
-          inArray(
-            squishies.habitatBuildingId,
-            db.select({ id: buildings.id }).from(buildings).where(owned),
+          or(
+            inArray(
+              squishies.habitatBuildingId,
+              db.select({ id: buildings.id }).from(buildings).where(owned),
+            ),
+            inArray(
+              squishies.trainingBuildingId,
+              db.select({ id: buildings.id }).from(buildings).where(owned),
+            ),
           ),
         )
         .orderBy(asc(squishies.id))
@@ -311,5 +329,15 @@ function queries(db: Executor): BuildingsRepo {
         .map((r) => r.id)
         .sort();
     },
+
+    lockTrainees: async (buildingRowId) =>
+      (
+        await db
+          .select({ id: squishies.id })
+          .from(squishies)
+          .where(eq(squishies.trainingBuildingId, buildingRowId))
+          .orderBy(asc(squishies.id))
+          .for('no key update')
+      ).map((r) => r.id),
   };
 }

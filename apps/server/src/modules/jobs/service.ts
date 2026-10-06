@@ -9,6 +9,7 @@ import {
   jobOf,
   teamProblem,
   tonightOf,
+  trainingProgress,
   workCycleSeconds,
   workProgress,
   workSource,
@@ -25,6 +26,7 @@ import {
   type SetJobRequest,
   type SetTeamRequest,
   type SquishyJobId,
+  type TrainingStatus,
   type WorkSource,
   type WorkStatus,
 } from '@heartpatch/shared';
@@ -34,7 +36,8 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
-import { createBuildingsRepo } from '../buildings/repo.js';
+import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
+import { applyXp, growthEvents, type Growth } from '../care/service.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { grantItems, lockGrantRows, seasonsOn } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
@@ -55,7 +58,9 @@ import {
  * off its old one. A gatherer's work is timestamps (CLAUDE.md rule 4):
  * finished cycles are worked out when someone looks or collects, capped,
  * so an idle gatherer costs nothing. Taking one off its tile banks what it
- * had ready; a part-done cycle is let go.
+ * had ready; a part-done cycle is let go. Training at the Training Grounds
+ * (owner decision 2026-10-06) works the same way: XP per hour from a
+ * timestamp, capped, landing at each settle and when it stops training.
  */
 
 // Kid-readable messages (style guide §6).
@@ -71,6 +76,8 @@ const MESSAGES = {
   teamFull: 'Your team is full! Take someone off first.',
   changed: 'Something just changed. Try again!',
   notReady: 'Nothing ready yet. Check back soon!',
+  noGrounds: 'Build Training Grounds at home first!',
+  groundsFull: 'The Training Grounds are full! Upgrade them for more room.',
 } as const;
 
 const SPECIES = new Map(
@@ -79,7 +86,7 @@ const SPECIES = new Map(
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 
 /** What to call one of my squishies in a message: its nickname, else its species. */
-const squishyName = (s: Pick<OwnedSquishy, 'nickname' | 'speciesId'>): string =>
+export const squishyName = (s: Pick<OwnedSquishy, 'nickname' | 'speciesId'>): string =>
   s.nickname ?? SPECIES.get(s.speciesId)?.name ?? 'Your squishy';
 
 /** The job rules' view of a squishy: element, feeling, and its species' season. */
@@ -121,6 +128,84 @@ function workAt(row: JobRow, map: JobMap, at: Date, justTaken = false) {
     seasonsAtFor(map.timeZone),
   );
   return { tile: row.workTile, source, speedPercent, cycleSeconds, progress, ready };
+}
+
+/** Training Grounds levels by content id (owner decision 2026-10-06). */
+const TRAINING_GROUNDS = new Map(
+  GAME_DATA.buildings.flatMap((b) => (b.kind === 'training-grounds' ? [[b.id, b] as const] : [])),
+);
+
+/** A Training Grounds row's level data (room and XP per hour), or null for other buildings. */
+export function trainingLevelOf(
+  row: Pick<BuildingRow, 'buildingId' | 'level'>,
+): { capacity: number; xpPerHour: number } | null {
+  const grounds = TRAINING_GROUNDS.get(row.buildingId);
+  return grounds?.levels[Math.min(row.level, grounds.levels.length) - 1] ?? null;
+}
+
+/** A trainee's XP at `at`: how much per hour, and what's waiting to land. Null if it isn't training. */
+export function trainingAt(row: Pick<JobRow, 'training'>, at: Date) {
+  const training = row.training;
+  if (!training) return null;
+  const level = trainingLevelOf({ buildingId: training.buildingId, level: training.level });
+  if (!level) return null;
+  const progress = trainingProgress(
+    training.since.getTime(),
+    at.getTime(),
+    level.xpPerHour,
+    JOB_RULES,
+  );
+  return { buildingRowId: training.buildingRowId, xpPerHour: level.xpPerHour, progress };
+}
+
+/**
+ * Lands what trainees earned (plain XP, levels and evolutions through
+ * `applyXp`) and either moves their count on (`stop: false`, a settle) or
+ * ends their training (`stop: true`: a new job, the Hollow, the Training
+ * Grounds taken down). The caller has locked these squishies (tech spec §7).
+ * Returns what landed per squishy and the events to append after the
+ * caller's own writes: `squishy.trained` per owner, then growth events.
+ */
+export async function landTraining(
+  tx: Executor,
+  map: Pick<JobMap, 'id'>,
+  squishyIds: readonly string[],
+  at: Date,
+  stop: boolean,
+): Promise<{ trained: { squishyId: string; ownerUserId: string; xp: number }[]; events: NewGameEvent[] }> {
+  const repo = createSquishyJobsRepo(tx);
+  const rows = (await repo.listByIds(squishyIds)).filter((r) => r.training !== null);
+  const trained: { squishyId: string; ownerUserId: string; xp: number }[] = [];
+  const growths: Growth[] = [];
+  for (const row of rows) {
+    const training = trainingAt(row, at);
+    const xp = training?.progress.xp ?? 0;
+    if (xp > 0) {
+      const growth = await applyXp(tx, row.squishy.id, xp, at, { plain: true });
+      if (growth) growths.push(growth);
+      trained.push({ squishyId: row.squishy.id, ownerUserId: row.squishy.ownerUserId, xp });
+    }
+    if (stop) await repo.stopTraining(row.squishy.id);
+    else if (training && xp > 0) {
+      // The next count starts here; a full one starts again now.
+      await repo.moveTrainingSince(row.squishy.id, new Date(training.progress.nextSinceMs));
+    }
+  }
+  const byOwner = new Map<string, { squishyId: string; xp: number }[]>();
+  for (const t of trained) {
+    byOwner.set(t.ownerUserId, [
+      ...(byOwner.get(t.ownerUserId) ?? []),
+      { squishyId: t.squishyId, xp: t.xp },
+    ]);
+  }
+  const events: NewGameEvent[] = [...byOwner].map(([userId, list]) => ({
+    mapId: map.id,
+    type: 'squishy.trained',
+    actorUserId: userId,
+    payload: { userId, trained: list },
+  }));
+  events.push(...growthEvents(growths));
+  return { trained, events };
 }
 
 const isEmpty = (items: ItemCounts) => Object.keys(items).length === 0;
@@ -275,10 +360,11 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     userId: string,
     at: Date,
   ): Promise<JobsView> => {
-    const [rows, owned, safe] = await Promise.all([
+    const [rows, owned, safe, buildings] = await Promise.all([
       repo.listMine(map.id, userId),
       repo.listOwnedTiles(map.id, userId),
       firelitTiles(tx, repo, map, at),
+      createBuildingsRepo(tx).listOwned(map.id, userId),
     ]);
     const seasons = new Set(seasonsOn(at, map.timeZone));
     const workers = new Map<string, string>();
@@ -302,15 +388,30 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         firelit: safe.has(hexKey(work.tile)),
       };
       const onWatch = row.onWatch && row.squishy.state === 'active';
+      const training = trainingAt(row, at);
+      const trainingStatus: TrainingStatus | null = training && {
+        buildingId: training.buildingRowId,
+        xpPerHour: training.xpPerHour,
+        xpReady: training.progress.xp,
+        full: training.progress.full,
+      };
       return {
         squishy: row.squishy,
-        job: jobOf({ teamSlot: row.teamSlot, atWork: work !== null, onWatch }),
+        job: jobOf({
+          teamSlot: row.teamSlot,
+          atWork: work !== null,
+          onWatch,
+          training: training !== null,
+        }),
         teamSlot: row.teamSlot,
         post: onWatch ? tileOf(row.post) : null,
         habitatId: row.habitatBuildingId,
         work: status,
+        training: trainingStatus,
       };
     });
+    const grounds = buildings.find((b) => trainingLevelOf(b) !== null);
+    const groundsLevel = grounds ? trainingLevelOf(grounds) : null;
     const team = rows
       .filter((r) => r.teamSlot !== null)
       .sort((a, b) => (a.teamSlot ?? 0) - (b.teamSlot ?? 0))
@@ -339,6 +440,14 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
       names: Object.fromEntries(rows.map((r) => [r.squishy.id, squishyName(r.squishy)])),
       team,
       spots,
+      trainingGrounds:
+        grounds && groundsLevel
+          ? {
+              id: grounds.id,
+              capacity: groundsLevel.capacity,
+              used: rows.filter((r) => r.training?.buildingRowId === grounds.id).length,
+            }
+          : null,
       rules: { teamSize: BATTLE_RULES.teamSize, maxStoredCycles: JOB_RULES.work.maxStoredCycles },
       now: at.toISOString(),
     };
@@ -432,6 +541,9 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     }
     const working = rows.filter((r) => r.workTile !== null).map((r) => r.squishy.id);
     if (working.length > 0) events.push(...(await leaveWork(tx, map, working, job, at)));
+    // Trainees land what they earned and stop (owner decision 2026-10-06).
+    const training = rows.filter((r) => r.training !== null).map((r) => r.squishy.id);
+    if (training.length > 0) events.push(...(await landTraining(tx, map, training, at, true)).events);
     return events;
   };
 
@@ -454,7 +566,21 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         const target =
           request.job === 'gatherer' ? await repo.tileAt(map.id, request.q, request.r) : null;
         if (request.job === 'gatherer' && !target) throw new AppError('NOT_FOUND', MESSAGES.noTile);
-        const { rows, tiles } = await lockJobs(repo, [before], target ? [target.id] : []);
+        // My Training Grounds: its tile is locked with the others, so taking
+        // it down (which locks every home tile first) can't race this.
+        const groundsBefore =
+          request.job === 'training'
+            ? ((await createBuildingsRepo(tx).listOwned(map.id, user.id)).find(
+                (b) => trainingLevelOf(b) !== null,
+              ) ?? null)
+            : null;
+        if (request.job === 'training' && !groundsBefore) {
+          throw new AppError('CONFLICT', MESSAGES.noGrounds);
+        }
+        const extraTiles = [target?.id, groundsBefore?.tileId].filter(
+          (id): id is string => id !== undefined,
+        );
+        const { rows, tiles } = await lockJobs(repo, [before], extraTiles);
         const [row] = rows;
         if (!row) throw new AppError('NOT_FOUND', MESSAGES.noSquishy);
         const name = squishyName(row.squishy);
@@ -463,6 +589,7 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           teamSlot: row.teamSlot,
           atWork: row.atWork,
           onWatch: row.onWatch,
+          training: row.training !== null,
         });
 
         let source: WorkSource | null = null;
@@ -490,6 +617,17 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
               r.workTile?.id === workTile?.id,
           );
           if (other) throw new AppError('CONFLICT', MESSAGES.spotTaken(squishyName(other.squishy)));
+        } else if (request.job === 'training') {
+          if (current === 'training') return buildView(tx, repo, map, user.id, at);
+          // Read again under the tile lock: still mine, and room for one more.
+          const grounds = (await createBuildingsRepo(tx).listOwned(map.id, user.id)).find(
+            (b) => b.id === groundsBefore?.id,
+          );
+          const level = grounds ? trainingLevelOf(grounds) : null;
+          if (!grounds || !level) throw new AppError('CONFLICT', MESSAGES.noGrounds);
+          if ((await repo.countTrainees(grounds.id)) >= level.capacity) {
+            throw new AppError('CONFLICT', MESSAGES.groundsFull);
+          }
         } else if (request.job === current) {
           // Resting already, maybe with a stale work row (its land changed
           // hands): bank what it finished before then (owner decision
@@ -534,6 +672,10 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
             });
           }
           await repo.startWork(row.squishy.id, workTile.id, at);
+        }
+        // A trainee keeps its habitat bed: it sleeps at home, like a team member.
+        if (request.job === 'training' && groundsBefore) {
+          await repo.startTraining(row.squishy.id, groundsBefore.id, at);
         }
         // A worker leaving work already said so (`leaveWork`); say the rest.
         if (!events.some((e) => e.type === 'squishy.assigned')) {
