@@ -1,4 +1,4 @@
-import { SPECIES } from '@heartpatch/shared';
+import { BODIES, PartShapeSchema, SPECIES } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { draws, idle } from './dev-hook.js';
 
@@ -157,8 +157,20 @@ test('draw calls stay flat as squishies multiply (shared geometry, thin instance
   const twice = await openGallery(page, `?still&count=${String(once.squishies * 2)}`);
   expect(twice.squishies).toBe(once.squishies * 2);
   expect(twice.meshes).toBe(once.meshes);
-  expect(twice.meshes).toBeLessThanOrEqual(16);
+  // The gallery shows every body kind, so its ceiling is the registry's: one
+  // draw call per body kind and per part primitive, plus the contact
+  // shadows, never one per squishy (CLAUDE.md rule 8, ART_BIBLE appendix).
+  expect(twice.meshes).toBeLessThanOrEqual(BODIES.length + PartShapeSchema.options.length + 1);
   expect(twice.instances).toBe(once.instances * 2);
+});
+
+test("a map's worth of different squishies stays within 16 draw calls", async ({ page }) => {
+  test.setTimeout(120_000);
+  // The first 12 species in roster order, all different: more variety than
+  // a kid's patch shows at once.
+  const map = await openGallery(page, '?still&count=12');
+  expect(map.squishies).toBe(12);
+  expect(map.meshes).toBeLessThanOrEqual(16);
 });
 
 test('tapping a squishy jiggles it, then the still scene goes idle again', async ({ page }) => {

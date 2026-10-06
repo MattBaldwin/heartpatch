@@ -31,7 +31,7 @@ export const VARIATION = {
   breathAmplitude: { min: 0.022, max: 0.032 }, // TUNE
   /** Scattered pattern pieces stay at least this far apart, in degrees. */
   scatterSpacingDeg: 18, // TUNE
-  /** Placement tries per scattered piece before it's left out. */
+  /** Placement tries per scattered piece before it settles for a crowded spot. */
   scatterTries: 8,
 } as const;
 
