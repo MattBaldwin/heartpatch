@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ContentIdSchema, DisplayNameSchema } from './common.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Report } from './issues.js';
 import { HexColorSchema } from './species.js';
+import { PartShapeSchema } from './visuals.js';
 
 // Keepers: the character each player shows up as (design doc §23), in the
 // squishies' soft vinyl-toy style (§19). Bases and palettes are data, so a
@@ -28,22 +29,36 @@ export const WARDROBE_SLOTS = [
 export const WardrobeSlotSchema = z.enum(WARDROBE_SLOTS);
 export type WardrobeSlot = z.infer<typeof WardrobeSlotSchema>;
 
+/** A point or size in head units (radii from the head's centre, or head diameters). */
+const HeadVecSchema = z.tuple([z.number(), z.number(), z.number()]);
+
 /**
- * Hairstyles; each has one builder in the client (`procedural/keeper/`), the
- * same way part shapes do. A new hairstyle needs a builder; a new base using
- * an existing one is a data entry.
+ * One primitive of a hairstyle, in head units: `at` is its centre in head
+ * radii from the head's centre (+y up, −z the face), `size` is in head
+ * diameters, `turn` is degrees (pitch, yaw, roll).
  */
-export const HairstyleSchema = z.enum([
-  'bob',
-  'spiky',
-  'pigtails',
-  'bun',
-  'curly',
-  'long',
-  'swoop',
-  'puff',
-]);
-export type Hairstyle = z.infer<typeof HairstyleSchema>;
+export const HairPieceSchema = z.strictObject({
+  shape: PartShapeSchema,
+  at: HeadVecSchema,
+  size: HeadVecSchema,
+  turn: HeadVecSchema.optional(),
+});
+export type HairPiece = z.infer<typeof HairPieceSchema>;
+
+/**
+ * A hairstyle any Keeper can wear: primitives on the head, scaled to each
+ * base's head, so a new style is a data entry, not engine code (CLAUDE.md
+ * rule 5). Ids are stored in `keepers` rows: never rename or remove one.
+ */
+export const KeeperHairstyleSchema = z.strictObject({
+  id: ContentIdSchema,
+  name: DisplayNameSchema,
+  /** How far the hair reaches above and around the head (head radii), for the hat socket. */
+  volume: z.strictObject({ top: z.number().min(1).max(2), width: z.number().min(1).max(1.6) }),
+  /** Drawn with thin instances, so pieces cost vertices, not draw calls. */
+  pieces: z.array(HairPieceSchema).min(1).max(16),
+});
+export type KeeperHairstyle = z.infer<typeof KeeperHairstyleSchema>;
 
 export const KeeperEyesSchema = z.enum(['round', 'oval', 'happy', 'sleepy']);
 export type KeeperEyes = z.infer<typeof KeeperEyesSchema>;
@@ -95,7 +110,8 @@ export const KeeperBaseSchema = z.strictObject({
   skin: HexColorSchema,
   body: KeeperBodySchema,
   face: KeeperFaceSchema,
-  hairstyle: HairstyleSchema,
+  /** The hairstyle it starts with (an id in the hairstyles below). */
+  hairstyle: ContentIdSchema,
   /** The colours the base starts with (ids in the palettes below). */
   hairColor: ContentIdSchema,
   eyeColor: ContentIdSchema,
@@ -125,6 +141,7 @@ export type OutfitPalette = z.infer<typeof OutfitPaletteSchema>;
 
 const KeeperDataObjectSchema = z.strictObject({
   bases: z.array(KeeperBaseSchema).min(1),
+  hairstyles: z.array(KeeperHairstyleSchema).min(1),
   hairColors: z.array(KeeperSwatchSchema).min(1),
   eyeColors: z.array(KeeperSwatchSchema).min(1),
   outfits: z.array(OutfitPaletteSchema).min(1),
@@ -132,7 +149,9 @@ const KeeperDataObjectSchema = z.strictObject({
 export type KeeperData = z.infer<typeof KeeperDataObjectSchema>;
 
 /**
- * A player's Keeper (design doc §23): a base plus their colour picks.
+ * A player's Keeper (design doc §23): a base plus their colour picks, and
+ * optionally a hairstyle; without one the base's own style shows, so Keepers
+ * saved before styles could be picked look exactly as they did.
  * Account-level (tech spec §4) and stored server-side (`keepers`); the server
  * also checks every id against `KEEPER_DATA` (`keeperConfigProblem`).
  * Clothing is the wardrobe's (#43): see `PublicKeeperSchema`.
@@ -142,6 +161,7 @@ export const KeeperConfigSchema = z.strictObject({
   hairColor: ContentIdSchema,
   eyeColor: ContentIdSchema,
   outfit: ContentIdSchema,
+  hairstyle: ContentIdSchema.optional(),
 });
 export type KeeperConfig = z.infer<typeof KeeperConfigSchema>;
 
@@ -168,13 +188,16 @@ export function checkKeeperData(input: unknown): string[] {
       ctx.addIssue({ code: 'custom', path, message });
     };
     checkUniqueIds('bases', data.bases, report);
+    checkUniqueIds('hairstyles', data.hairstyles, report);
     checkUniqueIds('hairColors', data.hairColors, report);
     checkUniqueIds('eyeColors', data.eyeColors, report);
     checkUniqueIds('outfits', data.outfits, report);
     const hair = ids(data.hairColors);
     const eyes = ids(data.eyeColors);
     const outfits = ids(data.outfits);
+    const styles = ids(data.hairstyles);
     data.bases.forEach((base, i) => {
+      checkRef(styles, 'hairstyle', base.hairstyle, ['bases', i, 'hairstyle'], report);
       checkRef(hair, 'hair colour', base.hairColor, ['bases', i, 'hairColor'], report);
       checkRef(eyes, 'eye colour', base.eyeColor, ['bases', i, 'eyeColor'], report);
       checkRef(outfits, 'outfit', base.outfit, ['bases', i, 'outfit'], report);
@@ -196,10 +219,13 @@ export function keeperConfigProblem(
   if (!data.hairColors.some((c) => c.id === config.hairColor)) return 'hairColor';
   if (!data.eyeColors.some((c) => c.id === config.eyeColor)) return 'eyeColor';
   if (!data.outfits.some((o) => o.id === config.outfit)) return 'outfit';
+  if (config.hairstyle !== undefined && !data.hairstyles.some((h) => h.id === config.hairstyle)) {
+    return 'hairstyle';
+  }
   return null;
 }
 
-/** A base with the colours it starts with. */
+/** A base with the colours it starts with (and its own hairstyle: none is set). */
 export function defaultKeeperConfig(base: KeeperBase): KeeperConfig {
   return {
     base: base.id,

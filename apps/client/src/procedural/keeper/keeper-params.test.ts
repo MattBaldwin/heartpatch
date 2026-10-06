@@ -110,6 +110,37 @@ describe('keeperParams', () => {
     expect(p.pieces.length).toBeGreaterThan(0);
   });
 
+  it('wears any hairstyle on any base; the base’s own draws as it always did', () => {
+    const pip = BASES[0]!;
+    const own = keeperParams(defaultKeeperConfig(pip), KEEPER_DATA);
+    // Picking the base's own style is the same Keeper as picking none.
+    const same = keeperParams(
+      { ...defaultKeeperConfig(pip), hairstyle: pip.hairstyle },
+      KEEPER_DATA,
+    );
+    expect(same.pieces).toEqual(own.pieces);
+    expect(same.sockets).toEqual(own.sockets);
+    const hashes = new Set<string>();
+    for (const style of KEEPER_DATA.hairstyles) {
+      const p = keeperParams({ ...defaultKeeperConfig(pip), hairstyle: style.id }, KEEPER_DATA);
+      expect(p.missing).toEqual([]);
+      expect(piecesOf(p, 'hair')).toHaveLength(style.pieces.length);
+      hashes.add(JSON.stringify(piecesOf(p, 'hair')));
+      // Only the hair changes: same face and outfit.
+      expect(piecesOf(p, 'face')).toEqual(piecesOf(own, 'face'));
+      expect(piecesOf(p, 'outfit')).toEqual(piecesOf(own, 'outfit'));
+    }
+    expect(hashes.size).toBe(KEEPER_DATA.hairstyles.length);
+  });
+
+  it('draws an unknown hairstyle as the base’s own, and reports it', () => {
+    const pip = BASES[0]!;
+    const own = keeperParams(defaultKeeperConfig(pip), KEEPER_DATA);
+    const p = keeperParams({ ...defaultKeeperConfig(pip), hairstyle: 'mohawk' }, KEEPER_DATA);
+    expect(p.missing).toEqual(['mohawk']);
+    expect(p.pieces).toEqual(own.pieces);
+  });
+
   // Pinned so a change to the build (which would change every player's
   // Keeper) is a deliberate one. The e2e test checks the same hash in WebKit.
   it('keeps its build stable', () => {
@@ -165,6 +196,33 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       // Backpacks behind (+z), held items in the right hand (+x).
       for (const piece of where('back')) expect(piece.at[2]).toBeGreaterThan(0);
       for (const piece of where('held')) expect(piece.at[0]).toBeGreaterThan(0);
+    }
+  });
+
+  it('sits hats and hair accessories on every hairstyle, on every base', () => {
+    for (const base of BASES) {
+      for (const style of KEEPER_DATA.hairstyles) {
+        const config = { ...defaultKeeperConfig(base), hairstyle: style.id };
+        const bare = keeperParams(config, KEEPER_DATA);
+        const p = keeperParams(config, KEEPER_DATA, [
+          ...itemFor('hat'),
+          ...itemFor('hair-accessory'),
+        ]);
+        const top = head(bare);
+        const at = `${base.id} ${style.id}`;
+        // The hat rests on the hair: above the face, over the top of the head.
+        expect(lowest(piecesOf(p, 'hat')), at).toBeGreaterThan(top.at[1]);
+        expect(highest(piecesOf(p, 'hat')), at).toBeGreaterThan(bare.height);
+        // At or above the top of the head (a crew cut's hat rests right on it).
+        expect(bare.sockets.hat.anchors[0]![1], at).toBeGreaterThanOrEqual(
+          top.at[1] + top.size[1] / 2 - 1e-9,
+        );
+        // Not floating: the hat socket is inside the hair's top.
+        expect(bare.sockets.hat.anchors[0]![1], at).toBeLessThan(bare.height);
+        for (const piece of piecesOf(p, 'hair-accessory')) {
+          expect(Math.abs(piece.at[1] - top.at[1]), at).toBeLessThan(top.size[1]);
+        }
+      }
     }
   });
 

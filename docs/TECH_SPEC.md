@@ -125,6 +125,7 @@ Add anything else only with a one-line justification in the PR.
 | `users.partner_species_id` (text, nullable, migration 0017) | the tutorial Partner's species (a starter); the starter pick pre-selects it | #24 |
 | `lore_found` (migration 0017) | lore pages each player has found, one row per page (design doc §16) | #24 |
 | `keepers` | each account's Keeper | #42 |
+| `keepers.hairstyle` (text, nullable, migration 0023) | the hairstyle the player picked; null for the base's own style (every Keeper saved before styles could be picked) | Keeper hair styles PR |
 | `inventories`, `resource_ledger`, `gather_jobs`, `crafts` | bag, every change to it, gathers and crafts | #17 |
 | `species_seen` | the catalog, per map | #14 |
 | `buildings` | home-base buildings, Hearthfire `fuelled_through` | #18 |

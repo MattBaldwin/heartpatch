@@ -15,20 +15,31 @@ export const keeperColumns = {
   hairColor: keepers.hairColor,
   eyeColor: keepers.eyeColor,
   outfit: keepers.outfit,
+  hairstyle: keepers.hairstyle,
 };
+
+/** A stored row as a config: no hairstyle (null) means the base's own. */
+export function keeperFromRow({
+  hairstyle,
+  ...rest
+}: Omit<KeeperConfig, 'hairstyle'> & { hairstyle: string | null }): KeeperConfig {
+  return hairstyle === null ? rest : { ...rest, hairstyle };
+}
 
 export function createKeepersRepo(db: Executor): KeepersRepo {
   return {
     find: async (userId) => {
       const [row] = await db.select(keeperColumns).from(keepers).where(eq(keepers.userId, userId));
-      return row ?? null;
+      return row ? keeperFromRow(row) : null;
     },
 
     save: async (userId, config, at) => {
+      // Saving without a hairstyle goes back to the base's own (null).
+      const row = { ...config, hairstyle: config.hairstyle ?? null };
       await db
         .insert(keepers)
-        .values({ userId, ...config, createdAt: at, updatedAt: at })
-        .onConflictDoUpdate({ target: keepers.userId, set: { ...config, updatedAt: at } });
+        .values({ userId, ...row, createdAt: at, updatedAt: at })
+        .onConflictDoUpdate({ target: keepers.userId, set: { ...row, updatedAt: at } });
     },
   };
 }

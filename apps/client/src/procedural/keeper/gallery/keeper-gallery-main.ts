@@ -36,7 +36,9 @@ import '../../gallery/gallery.css';
  * `?each=hat` (one Keeper per catalog item in that slot, to judge them side
  * by side; `?each=all` for every Keeper item), `?count=40` (stress test,
  * colours vary), `?base=wren`, `?view=closeup`, `?yaw=180` (turn them
- * round), plus the main page's `?quality=` and `?renderer=webgpu`.
+ * round), `?hair=all` (every hairstyle on each base shown, a row per base;
+ * `?hair=crew-cut` puts one style on every Keeper; with `?base=pip,rowan`
+ * for a few bases), plus the main page's `?quality=` and `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The Keeper gallery is dev-only');
@@ -55,7 +57,9 @@ const view: SquishyView = params.get('view') === 'closeup' ? 'closeUp' : 'map';
 const data = KEEPER_DATA;
 
 const baseParam = params.get('base');
-const bases = baseParam ? data.bases.filter((b) => b.id === baseParam) : data.bases;
+const baseIds = baseParam?.split(',');
+const bases = baseIds ? data.bases.filter((b) => baseIds.includes(b.id)) : data.bases;
+const hairParam = params.get('hair');
 /** `?each=<slot>`: the catalog items shown one per Keeper. */
 const eachParam = params.get('each');
 const each = eachParam
@@ -65,25 +69,32 @@ const requested = Number(params.get('count'));
 const count =
   Number.isInteger(requested) && requested > 0
     ? Math.min(requested, 200)
-    : each.length > 0
-      ? each.length
-      : view === 'closeUp'
-        ? 1
-        : bases.length;
+    : hairParam === 'all'
+      ? bases.length * data.hairstyles.length
+      : each.length > 0
+        ? each.length
+        : view === 'closeUp'
+          ? 1
+          : bases.length;
 /** Base defaults first; past the end, colours cycle so repeats look different. */
-const configs: KeeperConfig[] = Array.from({ length: count }, (_, i) => {
-  const base = bases[i % bases.length];
-  if (!base) throw new Error('no Keeper bases');
-  if (i < bases.length) return defaultKeeperConfig(base);
-  const pick = (rows: readonly { id: string }[], k: number) =>
-    rows[(i * k) % rows.length]?.id ?? '';
-  return {
-    base: base.id,
-    hairColor: pick(data.hairColors, 3),
-    eyeColor: pick(data.eyeColors, 5),
-    outfit: pick(data.outfits, 7),
-  };
-});
+const configs: KeeperConfig[] =
+  hairParam === 'all'
+    ? bases.flatMap((b) =>
+        data.hairstyles.map((h) => ({ ...defaultKeeperConfig(b), hairstyle: h.id })),
+      )
+    : Array.from({ length: count }, (_, i) => {
+        const base = bases[i % bases.length];
+        if (!base) throw new Error('no Keeper bases');
+        if (i < bases.length) return defaultKeeperConfig(base);
+        const pick = (rows: readonly { id: string }[], k: number) =>
+          rows[(i * k) % rows.length]?.id ?? '';
+        return {
+          base: base.id,
+          hairColor: pick(data.hairColors, 3),
+          eyeColor: pick(data.eyeColors, 5),
+          outfit: pick(data.outfits, 7),
+        };
+      }).map((c) => (hairParam ? { ...c, hairstyle: hairParam } : c));
 
 /** The starter set (an item in every slot but costume) plus the Ghost Sheet. */
 const STAND_INS = keeperItems([...STARTER_CLOTHING, 'ghost-sheet']);

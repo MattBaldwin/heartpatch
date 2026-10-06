@@ -1,0 +1,1 @@
+ALTER TABLE "keepers" ADD COLUMN "hairstyle" text;
