@@ -74,7 +74,9 @@ export function contrastRatio(a: string, b: string): number {
 /**
  * The lowest contrast between `ink` and `body` across squishies: the body's
  * lightness varies by ±`lightness` and its warmth by ±`warmth` (the client's
- * per-squishy wobble), so every corner is checked.
+ * per-squishy wobble), so every corner is checked. Luminance is very slightly
+ * curved in the warmth shift, so the corners are the extremes to within
+ * about 1e-4 at today's ±0.025.
  */
 export function worstContrast(
   ink: string,

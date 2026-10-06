@@ -18,7 +18,8 @@ import '../../styles.css';
  *
  * Query flags: `?species=puddlepuff` (default the first species),
  * `?terrain=meadow`, `?time=day|dusk|night`, `?quality=`, and `?silhouette`
- * (only the squishies, on white, for silhouette sheets).
+ * (only the squishies, on white, for silhouette sheets), `?motion` (idle
+ * animation on, to check how the vinyl looks while fighters move).
  */
 
 if (!import.meta.env.DEV) throw new Error('The roster sheet is dev-only');
@@ -33,6 +34,7 @@ const speciesId = params.get('species') ?? GAME_DATA.species[0]?.id ?? '';
 const terrain = params.get('terrain') ?? 'meadow';
 const timeOfDay = BattleTimeOfDaySchema.safeParse(params.get('time')).data ?? 'day';
 const silhouette = params.has('silhouette');
+const motion = params.has('motion');
 
 /** The player's-side squishy in every shot (cropped out of the sheet). */
 const REFERENCE = params.get('reference') ?? 'pebblesnooze';
@@ -69,7 +71,7 @@ await boot(canvas, {
           terrain,
           timeOfDay,
           battleId: `roster-${terrain}-${timeOfDay}`,
-          reducedMotion: true,
+          reducedMotion: !motion,
           safe: () => ({ top: 0.12, bottom: 0.62 }),
         });
         // A fixed reference on the player's side keeps the camera's framing

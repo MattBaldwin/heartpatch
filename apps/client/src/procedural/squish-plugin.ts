@@ -109,10 +109,15 @@ const VERTEX_WORLDPOS = /* glsl */ `
   vSquishFinish = squishEvent.w;
   // The mesh's own position, before its instance matrix, squash, lean,
   // bounce and turn, so sparkle flecks and the rainbow rim stick to the
-  // vinyl however the squishy moves. Scaled by the instance's own axes and
-  // divided by the squishy's height, so every mesh (body, head, a thin horn,
-  // a long tail) measures in body heights and flecks match in size.
-  vec3 sqAxes = vec3(length(finalWorld[0].xyz), length(finalWorld[1].xyz), length(finalWorld[2].xyz));
+  // vinyl however the squishy moves. Scaled by the instance's own axes (the
+  // thin-instance matrix only, not the battle rig's animated squash above
+  // it) and divided by the squishy's height, so every mesh (body, head, a
+  // thin horn, a long tail) measures in body heights and flecks match in size.
+#ifdef INSTANCES
+  vec3 sqAxes = vec3(length(world0.xyz), length(world1.xyz), length(world2.xyz));
+#else
+  vec3 sqAxes = vec3(1.0);
+#endif
   vSquishLocal = positionUpdated * sqAxes / sqH;
   vPositionW = worldPos.xyz;
 #ifdef NORMAL
