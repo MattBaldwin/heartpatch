@@ -143,14 +143,5 @@ export function partMatrix(
     x = scaled(x, -1);
     y = scaled(y, -1);
   }
-  return [
-    ...scaled(x, width),
-    0,
-    ...scaled(y, span),
-    0,
-    ...scaled(z, thickness),
-    0,
-    ...centre,
-    1,
-  ];
+  return [...scaled(x, width), 0, ...scaled(y, span), 0, ...scaled(z, thickness), 0, ...centre, 1];
 }
