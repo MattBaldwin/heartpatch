@@ -150,7 +150,6 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
 
   const book = page.getByTestId('recipe-book');
   const cooking = book.getByTestId('recipe-book-cooking');
-  const toast = page.getByTestId('landed-toast');
   const toc = (key: string) => book.locator(`[data-testid="recipe-book-toc"][data-page="${key}"]`);
   const openBookAt = async (key: string) => {
     await (await trayButton(page, 'recipe-book-open')).tap();
@@ -166,6 +165,23 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
   await expect
     .poll(async () => (await bookState(page))?.showing)
     .toContain('recipe:pumpkin-treats');
+
+  // Every line the "landed" pop-up shows, kept: it shows for a few seconds,
+  // and on a slow software-rendered iPad the 30-second craft can land by
+  // itself (the bag's own timer) before the dev route below finishes it.
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { __landedToasts: string[] }).__landedToasts = seen;
+    const node = document.querySelector('[data-testid="landed-toast"]');
+    if (!node) throw new Error('landed-toast is not mounted');
+    new MutationObserver(() => {
+      if (node.textContent) seen.push(node.textContent);
+    }).observe(node, { childList: true, characterData: true, subtree: true });
+  });
+  const landedToasts = () =>
+    page.evaluate(() =>
+      (window as unknown as { __landedToasts: string[] }).__landedToasts.join(' | '),
+    );
 
   // Make Pumpkin Treats.
   await expect(cooking).toBeHidden();
@@ -191,14 +207,15 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
   await expect(cooking).toBeVisible();
   await book.getByTestId('recipe-book-can-make').tap();
 
-  // Time passes (the dev route finishes the craft now): reopening the book
-  // settles, and the Treats land with a pop-up, no Collect tap.
+  // Time passes (the dev route finishes the craft now, if the bag's timer
+  // hasn't already): reopening the book settles, and the Treats land with a
+  // pop-up, no Collect tap.
   await page.getByTestId('recipe-book-close').tap();
   expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
   await openBookAt('recipe:heart-charm');
-  await expect(toast).toContainText('+3 Treats');
   await expect.poll(async () => (await bagState(page))?.items['treats']).toBe(4);
   await expect.poll(async () => (await bagState(page))?.crafts).toBe(0);
+  await expect.poll(landedToasts).toContain('+3 Treats');
   await expect(cooking).toBeHidden();
 
   // The pot is free: make the Heart Charm.

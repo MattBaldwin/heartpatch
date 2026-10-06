@@ -223,3 +223,84 @@ test('other players see the outfit on the map, live', async ({ browser }) => {
   await owner.context().close();
   await friend.context().close();
 });
+
+test('from a patch, Done goes back to that patch, via the Boutique and Milestones', async ({
+  browser,
+}) => {
+  test.setTimeout(180_000); // a map build per screen; CI renders in software
+  const page = await newPlayer(browser, uniqueName('exit'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Dress-up Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  const mapId = async () => (await hook<{ id: string }>(page, 'map'))?.id ?? null;
+  await expect.poll(mapId, { timeout: 60_000 }).not.toBeNull();
+  const patch = await mapId();
+  const hint = page.getByTestId('tray-hint-ok');
+  if (await hint.isVisible()) await hint.tap();
+
+  // The owner's iPhone, a small one in Safari with its bars showing, and an
+  // iPad on its side.
+  for (const screen of [
+    { width: 390, height: 844 },
+    { width: 375, height: 600 },
+    { width: 1180, height: 820 },
+  ]) {
+    await test.step(`${String(screen.width)}×${String(screen.height)}`, async () => {
+      await page.setViewportSize(screen);
+      // The Wardrobe from the Keeper menu, over the map.
+      await page.getByTestId('keeper-menu').tap();
+      await page
+        .locator('.auth-chip-menu')
+        .getByRole('button', { name: /Wardrobe/ })
+        .tap();
+      await expect(wardrobe(page)).toBeVisible();
+      await expect.poll(async () => (await wardrobeState(page))?.loaded).toBe(true);
+      expect(await mapId()).toBeNull();
+
+      // "Done" is big, on screen, in the top row and on top of everything there.
+      const done = wardrobe(page).getByTestId('wardrobe-done');
+      const box = (await done.boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(screen.width);
+      expect(box.y + box.height).toBeLessThanOrEqual(screen.height);
+      for (const chip of ['wardrobe-milestones', 'wardrobe-boutique', 'wardrobe-turn']) {
+        const other = (await wardrobe(page).getByTestId(chip).boundingBox())!;
+        expect(box.y + box.height, `${chip} sits below Done`).toBeLessThanOrEqual(other.y);
+      }
+      const onTop = await page.evaluate(
+        ([x, y]) =>
+          document.elementFromPoint(x, y)?.closest('[data-testid]')?.getAttribute('data-testid'),
+        [box.x + box.width / 2, box.y + box.height / 2] as const,
+      );
+      expect(onTop).toBe('wardrobe-done');
+      // The clothes keep at least a whole row, even on a short phone held upright.
+      const items = (await wardrobe(page).getByTestId('wardrobe-items').boundingBox())!;
+      expect(items.height).toBeGreaterThanOrEqual(64);
+
+      // Into the Boutique and Milestones and back: still the wardrobe.
+      await wardrobe(page).getByTestId('wardrobe-boutique').tap();
+      await expect(page.getByTestId('boutique')).toBeVisible();
+      await page.getByTestId('boutique-back').tap();
+      await expect(done).toBeVisible();
+      await wardrobe(page).getByTestId('wardrobe-milestones').tap();
+      await expect(page.getByTestId('milestones')).toBeVisible();
+      await page.getByTestId('milestones-back').tap();
+      await expect(done).toBeVisible();
+
+      // Done: the same patch, not the patch list.
+      await done.tap();
+      await expect(wardrobe(page)).toBeHidden();
+      await expect.poll(mapId, { timeout: 60_000 }).toBe(patch);
+      await expect(lobby).toBeHidden();
+      expect((await wardrobeState(page))?.open).toBe(false);
+    });
+  }
+  expect(errors).toEqual([]);
+  await page.context().close();
+});

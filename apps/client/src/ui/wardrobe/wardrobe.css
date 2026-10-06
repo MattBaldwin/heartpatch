@@ -33,7 +33,9 @@
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   gap: 6px;
-  height: min(55vh, 520px);
+  /* At least 420px, so a short screen (Safari's bars showing) still has a
+     whole row of clothes, but always under the Keeper's top 96px. */
+  height: min(max(55vh, 420px), 520px, calc(100% - 96px)); /* TUNE */
   margin: 0 auto;
   padding: 12px 12px 8px;
   pointer-events: auto;
@@ -46,7 +48,7 @@
   gap: 8px;
 }
 
-/* On a narrow phone the chips drop to a second row rather than squash the title. */
+/* The title takes the row's room; only "Done" shares it. */
 .wardrobe-header .auth-title {
   flex: 1 1 120px;
   min-width: 0;
@@ -54,6 +56,7 @@
   text-align: left;
 }
 
+.wardrobe-header-chips,
 .wardrobe-tabs,
 .wardrobe-rarities,
 .wardrobe-outfits,
@@ -68,11 +71,20 @@
   scrollbar-width: none;
 }
 
+.wardrobe-header-chips::-webkit-scrollbar,
 .wardrobe-tabs::-webkit-scrollbar,
 .wardrobe-rarities::-webkit-scrollbar,
 .wardrobe-outfits::-webkit-scrollbar,
 .wardrobe-spots::-webkit-scrollbar {
   display: none;
+}
+
+/* The wardrobe's own chips get one row of their own under the title and
+   "Done", sliding sideways like the tabs on a narrow phone: "Done" stays in
+   the top corner and the header is two rows at any width. */
+.wardrobe-header-chips {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 /* A row with more chips past an edge fades out there, so a cut-off chip

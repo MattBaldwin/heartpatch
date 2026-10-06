@@ -59,7 +59,7 @@ export interface WardrobeScreenOptions {
   keeper: () => KeeperConfig | null;
   /** The wardrobe is taking the screen: put the map and lobby away. */
   onOpen: () => void;
-  /** It closed: bring the lobby back. */
+  /** "Done" (or the tutorial) closed it: go back where it was opened. Not on logout. */
   onClosed: () => void;
   api?: WardrobeApi;
   /** The Boutique's calls (#45); tests swap them. */
@@ -218,7 +218,10 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     { type: 'button', class: 'wardrobe-chip', 'data-testid': 'wardrobe-milestones' },
     MILESTONES_TEXT.open,
   );
-  const header = el('div', { class: 'wardrobe-header' }, title, goals, shop, turn, done);
+  // "Done" shares the title's row, at the top right like the Boutique's and
+  // Milestones' "Back": the other chips get one sliding row below it.
+  const headerChips = el('div', { class: 'wardrobe-header-chips' }, goals, shop, turn);
+  const header = el('div', { class: 'wardrobe-header' }, title, done, headerChips);
   const tabs = el('div', { class: 'wardrobe-tabs', role: 'tablist' });
   const rarities = el('div', { class: 'wardrobe-rarities' });
   const list = el('div', { class: 'wardrobe-items', 'data-testid': 'wardrobe-items' });
@@ -227,7 +230,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
   saveRow.hidden = true;
   const note = el('p', { class: 'wardrobe-note', role: 'status', 'data-testid': 'wardrobe-note' });
   // Rows that scroll sideways on a phone fade at the edge with more behind it (#152).
-  const edges = [tabs, rarities, outfits].map(watchScrollEdges);
+  const edges = [headerChips, tabs, rarities, outfits].map(watchScrollEdges);
   const refreshEdges = () => {
     for (const e of edges) e.refresh();
   };
@@ -629,7 +632,8 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     void load();
   }
 
-  function close(): void {
+  /** Closes it; `back` goes back where it was opened (not on a logout). */
+  function close(back = true): void {
     if (!isOpen) return;
     boutique.close();
     milestones.close();
@@ -640,7 +644,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
     options.showScene(null);
-    options.onClosed();
+    if (back) options.onClosed();
   }
 
   turn.addEventListener('click', () => {
@@ -648,7 +652,9 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     render();
     showLook(false);
   });
-  done.addEventListener('click', close);
+  done.addEventListener('click', () => {
+    close();
+  });
   shop.addEventListener('click', () => {
     closeSave();
     card.hidden = true;
@@ -692,7 +698,8 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
     setUser: (next) => {
       if (next?.id === user?.id) return;
       session += 1;
-      close();
+      // Logged out (or in as someone else): nothing to go back to.
+      close(false);
       user = next;
       outfit.reset();
       boutique.reset();
@@ -703,7 +710,9 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
       if (next) void load();
     },
     open,
-    close,
+    close: () => {
+      close();
+    },
     listActions: () => {
       if (!user) return [];
       const button = el(
