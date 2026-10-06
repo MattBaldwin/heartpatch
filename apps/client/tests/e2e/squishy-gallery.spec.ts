@@ -22,6 +22,7 @@ interface Look {
 /** The dev-only hooks from gallery-main.ts (typed in gallery-hook.d.ts, which this project can't see). */
 interface GalleryHook {
   stats(): Stats | null;
+  expectedInstances(): number;
   shown(): string[];
   coverage(): {
     bodies: string[];
@@ -161,13 +162,20 @@ test('draw calls stay flat as squishies multiply (shared geometry, thin instance
   // draw call per body kind and per part primitive, plus the contact
   // shadows, never one per squishy (CLAUDE.md rule 8, ART_BIBLE appendix).
   expect(twice.meshes).toBeLessThanOrEqual(BODIES.length + PartShapeSchema.options.length + 1);
-  expect(twice.instances).toBe(once.instances * 2);
+  // Every piece of every squishy is a thin instance, and nothing else is: the
+  // count is exactly what the squishies' own params call for. (Not exactly
+  // twice: a scatter can leave out a crowded piece, per instance id.)
+  const expected = await page.evaluate(() =>
+    (window as Hooks).__heartpatchGallery!.expectedInstances(),
+  );
+  expect(twice.instances).toBe(expected);
+  expect(twice.instances).toBeGreaterThan(once.instances * 1.9);
 });
 
-test("a map's worth of different squishies stays within 16 draw calls", async ({ page }) => {
+test('the first 12 roster species (9 body kinds) stay within 16 draw calls', async ({ page }) => {
   test.setTimeout(120_000);
-  // The first 12 species in roster order, all different: more variety than
-  // a kid's patch shows at once.
+  // A smoke test of a crowded patch, not a guarantee: 12 species chosen to
+  // cover more body kinds would draw more (one per body kind on screen).
   const map = await openGallery(page, '?still&count=12');
   expect(map.squishies).toBe(12);
   expect(map.meshes).toBeLessThanOrEqual(16);

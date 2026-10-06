@@ -215,7 +215,6 @@ Sprout (she/her) is "the tiny glowing spirit of your Heart Seed". Proposal for t
 
   About **+19% frame time** for the same scene on a CPU renderer, which is mostly vertex work. A phone GPU handles vertex work far faster, so I expect the real cost to be small, but it is not measured on a device yet: confirm 60 fps (recent iPhone) and 30 fps (older iPad) on the devices during #28. If a crowded map needs it, a later lane can add a `tiny` detail level (fewer rings on limbs and chain pieces).
 - **What the tests guard** (`squishy-gallery.spec.ts`):
-  - The gallery shows every body kind at once, so its ceiling is the registry's: `BODIES.length + 5 part primitives + 1 shadow mesh` (20 today). Doubling the squishies must not add a single draw call or change the count per squishy.
-  - A map's worth of different squishies (the first 12 roster species) stays within the old **16** draw calls, the real-world budget.
-  - A scatter layout always places all its pieces (a crowded piece takes its last spot), so every squishy of a species has the same parts and the same instance count.
+  - The gallery shows every body kind at once, so its ceiling is the registry's: `BODIES.length` + the part primitives + 1 shadow mesh (20 today). Doubling the squishies must not add a single draw call, and every piece of every squishy is one thin instance (the count matches what their params call for).
+  - The first 12 roster species (9 body kinds, 15 draw calls) stay within the old **16**: a smoke test of a crowded patch, not a guarantee, since 12 species picked for variety could cover 13 body kinds (19 draw calls).
 - Material tiers, ink and fog opt-out add **no** draw calls, meshes, materials or textures (§1.4).

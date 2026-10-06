@@ -242,26 +242,23 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
     const out: PartPlacement[] = [];
     const spacing = VARIATION.scatterSpacingDeg * VARIATION.scatterSpacingDeg;
     for (let i = 0; i < layout.count; i++) {
-      // Every squishy of a species gets all `count` pieces: a piece that finds
-      // no clear spot in its tries takes its last one, a little crowded.
-      let a = 0;
-      let u = 0;
       for (let attempt = 0; attempt < VARIATION.scatterTries; attempt++) {
-        a = part.around + wobble(rng, layout.aroundRange);
-        u = Math.max(-80, Math.min(80, part.up + wobble(rng, layout.upRange)));
+        const a = part.around + wobble(rng, layout.aroundRange);
+        const u = Math.max(-80, Math.min(80, part.up + wobble(rng, layout.upRange)));
         const clear = placed.every((p) => (p.a - a) * (p.a - a) + (p.u - u) * (p.u - u) >= spacing);
-        if (clear) break;
+        if (!clear) continue;
+        placed.push({ a, u });
+        const pieceScale = 1 + wobble(rng, part.jitter);
+        out.push({
+          around: a * DEG,
+          up: u * DEG,
+          size: [size[0] * pieceScale, size[1] * pieceScale, size[2] * pieceScale],
+          tilt,
+          splay: 0,
+          side: 0,
+        });
+        break;
       }
-      placed.push({ a, u });
-      const pieceScale = 1 + wobble(rng, part.jitter);
-      out.push({
-        around: a * DEG,
-        up: u * DEG,
-        size: [size[0] * pieceScale, size[1] * pieceScale, size[2] * pieceScale],
-        tilt,
-        splay: 0,
-        side: 0,
-      });
     }
     return out;
   }
