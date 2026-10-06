@@ -447,16 +447,38 @@ test('first battle: Sprout points at the Adventure handle, then at Find a squish
   expect((await overlay())?.spotlightOn).toBe('wild-squishy');
   await expect.poll(() => inHole(handle)).toBe(true);
   expect(await takesTaps(page, handle)).toBe(true);
+  // Every frame of the slide: the tray is on the step's way, so Sprout never
+  // waits behind it (its handle stands in for it until it has slid open).
+  await page.evaluate(() => {
+    const w = window as unknown as {
+      __heldFrames?: number;
+      __heartpatch?: { tutorial?: () => { overlay: { held: boolean } } | null };
+    };
+    w.__heldFrames = 0;
+    const sample = () => {
+      if (w.__heartpatch?.tutorial?.()?.overlay.held) w.__heldFrames! += 1;
+      if (w.__heldFrames !== undefined) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
   await handle.tap();
 
   // Once the tray has slid open, the spotlight rests on Find a squishy, which takes taps.
   const entry = page.getByTestId('battle-entry');
   await expect.poll(() => inHole(entry), { timeout: 10_000 }).toBe(true);
   await expect.poll(() => takesTaps(page, entry)).toBe(true);
-  // The tray is on the step's way, so the spotlight stays; the tucked chip
-  // keeps off the tray (docked into the orb when it would cover it).
+  const heldFrames = await page.evaluate(() => {
+    const w = window as unknown as { __heldFrames?: number };
+    const n = w.__heldFrames;
+    delete w.__heldFrames;
+    return n;
+  });
+  expect(heldFrames).toBe(0);
+  // The spotlight stays; the tucked chip, which would cover the tray on this
+  // small phone, docks into the orb clear of it.
   await expect(async () => {
     expect((await overlay())?.spotlightOn).toBe('wild-squishy');
+    expect((await overlay())?.docked).toBe(true);
     const [chip, panel] = [
       await bubble.boundingBox(),
       await page.getByTestId('tray-adventure').boundingBox(),

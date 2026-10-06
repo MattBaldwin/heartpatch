@@ -325,19 +325,6 @@ export function placeOrb(spec: {
 }
 
 /**
- * Where the tucked chip sits when the stylesheet places it (tutorial.css
- * `.tutorial-tucked`: the left edge, 38% down), for a step with no spotlight.
- */
-export function tuckedChip(viewport: Size, insets: Insets, size: Size): Rect {
-  return {
-    x: insets.left + 8,
-    y: Math.round(viewport.height * 0.38),
-    width: size.width,
-    height: size.height,
-  };
-}
-
-/**
  * The tucked chip never covers a sheet the step is using (a tray on the
  * step's route, the care sheet): if `chip` overlaps one of the `sheets`'
  * cards, it docks into Sprout's orb at a spot clear of them and of the

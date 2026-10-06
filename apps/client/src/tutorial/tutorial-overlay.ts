@@ -5,7 +5,6 @@ import {
   dockChip,
   layoutOverlay,
   placeOrb,
-  tuckedChip,
   union,
   type Insets,
   type OverlayLayout,
@@ -33,8 +32,9 @@ import './tutorial.css';
 //
 // The tucked chip never covers a sheet the step is using either (a tray on
 // the step's way, like My Heartpatch while Sprout points at Home): it docks
-// into the same orb clear of that sheet, while the spotlight and arrow carry
-// on; a tap on it opens the bubble as the chip's does.
+// into the same orb clear of that sheet, while the spotlight carries on; a
+// tap on it opens the bubble as the chip's does. A tray's handle, standing in
+// while its tray slides in, owns that tray (sheets.ts `foreignSheets`).
 
 export interface TutorialOverlayActions {
   nextLine: () => void;
@@ -314,11 +314,12 @@ export function mountTutorialOverlay(
     });
     spotlightOn = !held && found?.element ? target : null;
     // The sheets the step is using (the target is in them): the chip keeps off them too.
+    // (A target in a sheet always has a hole, so the layout placed the chip.)
     const using = tucked ? sheets.filter((s) => !waitingFor.includes(s)) : [];
     const dockRect =
-      using.length > 0
+      using.length > 0 && layout.bubbleRect
         ? dockChip({
-            chip: layout.bubbleRect ?? tuckedChip(viewport, insets, size),
+            chip: layout.bubbleRect,
             sheets: sheetCards(using, viewport),
             viewport,
             insets,
