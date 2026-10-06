@@ -62,7 +62,7 @@
   touch-action: pan-y;
 }
 
-/* The label beside its choices, so four rows fit where two used to. */
+/* The label beside its choices, so five rows fit where two used to. */
 .keeper-row {
   display: flex;
   flex: none;

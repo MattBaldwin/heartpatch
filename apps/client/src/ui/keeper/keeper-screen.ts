@@ -206,7 +206,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
 
   /**
    * One labelled line of choices (#130): the label sits beside the choices,
-   * not above them, so all four rows fit the card with no scrolling on a
+   * not above them, so all five rows fit the card with no scrolling on a
    * phone or iPad.
    */
   const row = (legend: string, ...buttons: HTMLElement[]) => {

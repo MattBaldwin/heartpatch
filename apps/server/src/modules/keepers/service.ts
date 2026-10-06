@@ -30,7 +30,7 @@ const MESSAGES: Readonly<Record<keyof KeeperConfig, string>> = {
   hairColor: "We don't know that hair colour. Pick another one!",
   eyeColor: "We don't know that eye colour. Pick another one!",
   outfit: "We don't know that outfit. Pick another one!",
-  hairstyle: "We don't know that hairstyle. Pick another one!",
+  hairstyle: "We don't know that hair style. Pick another one!",
 };
 
 export function createKeepersService(options: KeepersServiceOptions): KeepersService {
