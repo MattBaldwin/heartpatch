@@ -1,5 +1,5 @@
 // The two side trays over the map (owner decision 2026-10-04): "Adventure" on
-// the left, "My Heartpatch" on the right. Pure state, so the rules are tested
+// the left, "My Home" on the right. Pure state, so the rules are tested
 // without a DOM: at most one tray open, nothing opens while the map is off
 // screen, and opening a tray answers the first-time hint.
 
@@ -51,7 +51,7 @@ export function trayReducer(state: TrayState, action: TrayAction): TrayState {
   }
 }
 
-/** Something on a tray that wants the player's eye (a new raid report, a friend in the Hollow). */
+/** Something on a tray that wants the player's eye (a new challenge report, a friend in the Hollow). */
 export interface TrayAlert {
   readonly side: TraySide;
   /** How many (a raid count); 1 for a nudge with no number. */

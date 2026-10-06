@@ -27,7 +27,7 @@ export interface HollowScreenOptions {
   root: HTMLElement;
   /** Where the entry button goes (a tray over the map, ui/trays); defaults to `root`. */
   entryRoot?: HTMLElement;
-  /** Where the fire hint goes (the My Heartpatch tray); defaults to `root`. */
+  /** Where the fire hint goes (the My Home tray); defaults to `root`. */
   hintRoot?: HTMLElement;
   /** Draws the night and the Hollow Man on the map (`map-screen` layer). */
   layer: Pick<HollowLayer, 'setNight' | 'visit' | 'debug'>;
@@ -143,7 +143,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       class: 'hollow-hint',
       role: 'status',
       'data-testid': 'hollow-fire-hint',
-      // A nudge on the My Heartpatch handle until the first fire is lit.
+      // A nudge on the My Home handle until the first fire is lit.
       'data-tray-alert': HOLLOW_TEXT.fireHint,
     },
     el('span', { 'aria-hidden': 'true' }, '🔥 '),

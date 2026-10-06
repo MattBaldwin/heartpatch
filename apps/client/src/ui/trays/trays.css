@@ -332,7 +332,7 @@
   gap: 8px;
 }
 
-/* Team and Jobs (squishy jobs) are two rows of My Heartpatch. */
+/* Team and Jobs (squishy jobs) are two rows of My Home. */
 .tray-section > .tray-jobs,
 .tray-jobs .jobs-entry {
   display: flex;

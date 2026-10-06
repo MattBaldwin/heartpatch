@@ -268,7 +268,7 @@ const EVERYDAY: ClothingItem[] = [
   {
     id: 'rainbow-scarf',
     name: 'Rainbow Scarf',
-    description: 'Every colour, all at once, all wrapped up.',
+    description: 'Every color, all at once, all wrapped up.',
     slot: 'top',
     rarity: 'uncommon',
     sources: ['found', 'boutique'],
@@ -752,7 +752,7 @@ const HALLOWEEN: ClothingItem[] = [
   {
     id: 'squishy-onesie',
     name: 'Squishy Onesie',
-    description: 'Dress up as your favourite squishy, ears and all.',
+    description: 'Dress up as your favorite squishy, ears and all.',
     slot: 'costume',
     rarity: 'legendary',
     season: 'halloween',
@@ -955,7 +955,7 @@ const MILESTONE: ClothingItem[] = [
   {
     id: 'crown-of-the-gap',
     name: 'Crown of the Gap',
-    description: "Worn by the kindest keeper in Juniper's Gap.",
+    description: "Worn by the kindest Keeper in Juniper's Gap.",
     slot: 'hat',
     rarity: 'legendary',
     sources: ['milestone'],
@@ -973,7 +973,7 @@ const MILESTONE: ClothingItem[] = [
   {
     id: 'collectors-satchel',
     name: "Collector's Satchel",
-    description: 'A pocket for every new friend’s favourite snack.',
+    description: 'A pocket for every new friend’s favorite snack.',
     slot: 'back',
     rarity: 'rare',
     sources: ['milestone'],
@@ -1095,7 +1095,7 @@ const MILESTONE: ClothingItem[] = [
   {
     id: 'brave-scarf',
     name: 'Brave Scarf',
-    description: 'For the keeper who found the way through the Hollow.',
+    description: 'For the Keeper who found the way through the Hollow.',
     slot: 'top',
     rarity: 'uncommon',
     sources: ['milestone'],

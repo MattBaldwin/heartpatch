@@ -19,7 +19,7 @@ import { COMMAND_RETRY_MS, sendCommand } from './send-command.js';
 import { tileAction, type TileAction } from './tile-action.js';
 import './inventory.css';
 
-// The bag and gathering (#17, design doc §12): a Bag entry in the My Heartpatch tray that
+// The bag and gathering (#17, design doc §12): a Bag entry in the My Home tray that
 // opens a sheet of items (big numbers, pictures) and recipes, and the
 // Gather button inside the map's tile panel. Timers are the server's
 // timestamps; the screen only counts down to them on the game clock and asks

@@ -31,7 +31,7 @@ import './recipe-book.css';
 
 export interface RecipeBookOptions {
   root: HTMLElement;
-  /** Where the "Recipe book" entry goes (the My Heartpatch tray); defaults to `root`. */
+  /** Where the "Recipe book" entry goes (the My Home tray); defaults to `root`. */
   entryRoot?: HTMLElement;
   api?: RecipeBookApi;
   /** The bag's own calls (its crafting path, items, crafts on the go and seasons). */
@@ -170,7 +170,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
   let busy = false;
   let generation = 0;
 
-  // ── Entry in the My Heartpatch tray ───────────────────────────────────
+  // ── Entry in the My Home tray ───────────────────────────────────
   const entryBadge = el('span', {
     class: 'recipe-book-badge',
     'aria-hidden': 'true',
