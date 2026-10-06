@@ -32,6 +32,8 @@ export const ItemChangeReasonSchema = z.enum([
   'starter',
   /** Squishy gatherers' work (owner decisions 2026-10-04). */
   'work',
+  /** Raising a building a level (owner decision 2026-10-06). */
+  'upgrade',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
@@ -90,6 +92,11 @@ export type Landed = z.infer<typeof LandedSchema>;
  */
 export const SettleResponseSchema = InventoryResponseSchema.extend({
   landed: z.array(LandedSchema),
+  /**
+   * Training Grounds XP that landed (owner decision 2026-10-06), per
+   * squishy, with its name (only mine, as `JobsView.names`) for the pop-up.
+   */
+  trained: z.array(z.object({ squishyId: z.uuid(), name: z.string(), xp: z.number().int().min(1) })),
   nextAt: z.iso.datetime().nullable(),
 });
 export type SettleResponse = z.infer<typeof SettleResponseSchema>;

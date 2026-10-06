@@ -5,8 +5,8 @@ import type { Building } from './buildings.js';
 // tile, take-down refunds and when nightfall is. Data, so tuning them is a
 // data edit (CLAUDE.md rule 5).
 
-/** Building kinds a player can put up today. Training Grounds arrive with their XP (#19). */
-export const BuildableKindSchema = z.enum(['hearthfire', 'habitat']);
+/** Building kinds a player can put up today (Training Grounds: owner decision 2026-10-06). */
+export const BuildableKindSchema = z.enum(['hearthfire', 'habitat', 'training-grounds']);
 export type BuildableKind = z.infer<typeof BuildableKindSchema>;
 
 export const HomeBaseRulesSchema = z.strictObject({

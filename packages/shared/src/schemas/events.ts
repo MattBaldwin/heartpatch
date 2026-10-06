@@ -343,6 +343,21 @@ export const GAME_EVENTS = {
     }),
     public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
   },
+  /**
+   * A player raised one of their buildings a level (owner decision
+   * 2026-10-06): a fire's light reaches further, a habitat or Training
+   * Grounds has more room. Members see the new level (and radius); the bill
+   * stays internal.
+   */
+  'building.upgraded': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      building: PlacedBuildingStrictSchema,
+      fromLevel: z.number().int().min(1),
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
+  },
   /** A squishy moved into a habitat, or out of one (`habitatId` null) (#18). */
   'squishy.housed': {
     internal: z.strictObject({
@@ -523,7 +538,7 @@ export const GAME_EVENTS = {
     internal: z.strictObject({
       userId: z.uuid(),
       squishyId: z.uuid(),
-      job: z.enum(['team', 'guard', 'gatherer', 'resting']),
+      job: z.enum(['team', 'guard', 'gatherer', 'training', 'resting']),
       from: z.strictObject(coords).nullable(),
       to: z.strictObject(coords).nullable(),
     }),
@@ -532,6 +547,20 @@ export const GAME_EVENTS = {
       from: z.object(coords).nullable(),
       to: z.object(coords).nullable(),
     }),
+  },
+  /**
+   * Training Grounds XP landed (owner decision 2026-10-06): a settle, or a
+   * squishy leaving training. Who and how much stays internal, like
+   * `work.collected`; levels and evolutions follow as their own events.
+   */
+  'squishy.trained': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      trained: z
+        .array(z.strictObject({ squishyId: z.uuid(), xp: z.number().int().min(1) }))
+        .min(1),
+    }),
+    public: z.object({ userId: z.uuid() }),
   },
   /** A player picked their battle team (slot order). Only they hear it (`ownerOnlyView`). */
   'team.picked': {

@@ -30,8 +30,8 @@ describe('recipe book pages', () => {
       ...GAME_DATA.recipes.map((r) => `recipe:${r.id}`),
       ...buildable.map((b) => `building:${b.id}`),
     ]);
-    // Training Grounds aren't buildable yet, so they have no page.
-    expect(PAGES.some((p) => p.id === 'training-grounds')).toBe(false);
+    // Training Grounds are buildable now (owner decision 2026-10-06), so they have a page.
+    expect(PAGES.some((p) => p.key === 'building:training-grounds')).toBe(true);
   });
 
   it('copies ingredients, timing, season and output from the data', () => {
