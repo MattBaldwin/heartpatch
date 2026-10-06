@@ -28,12 +28,12 @@ import { assertAllowedText } from '../../lib/filter.js';
 import { newSeed } from '../../lib/rng.js';
 import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
+import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings, removeMemberBuildings } from '../buildings/service.js';
 import { createKeepersRepo } from '../keepers/repo.js';
 import { starterPick } from '../starters/service.js';
 import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
-import { seedHomeRingNodes } from './home-ring.js';
 import { requireMember } from './members.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
@@ -66,6 +66,8 @@ export interface MapsService {
 
 export interface MapsServiceOptions {
   db: Executor;
+  /** Where the home-ring top-up reports homes with no room yet (`app.log`). */
+  log?: HomeRingLog;
   /** `HP_TUTORIAL_REQUIRED`: creating or joining needs a finished tutorial. */
   tutorialRequired: boolean;
   /** `HP_KEEPER_REQUIRED`: creating or joining needs a Keeper (#42). */
@@ -346,7 +348,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // Older maps get their seasonal home nodes first (a write, so outside
       // the read-only snapshot); a member check runs again inside it.
       await requireViewer(db, user, mapId);
-      await seedHomeRingNodes(db, mapId);
+      // A building moved out of the way is a live event for everyone else.
+      if (await seedHomeRingNodes(db, mapId, now(), options.log)) published(mapId);
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();

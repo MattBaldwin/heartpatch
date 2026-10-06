@@ -74,7 +74,7 @@ Maps (players say "patches") live in `src/modules/maps` (issue #4; design doc §
 | `GET /api/v1/maps` | → `{ maps, requests }`: my maps and my unanswered join requests |
 | `POST /api/v1/maps` | Name + IANA zone → 201 `{ map }`. Generates the map once (`generateMap` for `max_players` seats, secret seed), stores every tile, gives the owner home slot 0, makes the first invite code, appends `map.created` — one transaction |
 | `GET /api/v1/maps/:mapId` | → `{ map }` (members; `admin` with the code and pending requests for the owner) |
-| `GET /api/v1/maps/:mapId/view` | → `MapView`: map, members, public tiles (no seed, no guardian strength) and `seq`, all from one read-only `repeatable read` snapshot (`repo.snapshot`), so the view holds every event up to `seq` and none after. Before the snapshot it tops up any home ring missing a `homeRingNodes` node (`seedHomeRingNodes`, owner decision 2026-10-06): a one-time write per older patch that appends no game event |
+| `GET /api/v1/maps/:mapId/view` | → `MapView`: map, members, public tiles (no seed, no guardian strength) and `seq`, all from one read-only `repeatable read` snapshot (`repo.snapshot`), so the view holds every event up to `seq` and none after. Before the snapshot it tops up any home ring missing a `homeRingNodes` node (`seedHomeRingNodes`, owner decision 2026-10-06): a one-time write per older patch. When no bare ring tile has a free middle, the building there moves to a side spot on the same tile first and `building.moved` is appended; homes with no room at all wait and are logged once |
 | `POST /api/v1/maps/join` | `{ code }` → 201 `{ request }` (200 with the existing one if already pending) |
 | `POST /api/v1/maps/:mapId/invite` | Owner: a fresh code (7 days); the old one stops working |
 | `POST /api/v1/maps/:mapId/invite/revoke` | Owner: → 204, no live code |
@@ -249,7 +249,7 @@ Building on a home base (design doc §11, §13–14; issue #18) lives in `src/mo
 
 | Endpoint | Does |
 |---|---|
-| `GET /api/v1/maps/:mapId/home` | → `HomeResponse`: my home tiles, buildings (with fuel and residents), active squishies, `speciesDefs` for secret species I own, my bag, today's seasons, `tonight` and `now`. Runs the same one-time home-ring top-up as the map view first (`seedHomeRingNodes`, no game event) |
+| `GET /api/v1/maps/:mapId/home` | → `HomeResponse`: my home tiles, buildings (with fuel and residents), active squishies, `speciesDefs` for secret species I own, my bag, today's seasons, `tonight` and `now`. Runs the same one-time home-ring top-up as the map view first (`seedHomeRingNodes`) |
 | `POST /api/v1/maps/:mapId/buildings` | `{ buildingId, q, r, spot }` → 201 `HomeResponse`. My home tile only (`FORBIDDEN`), an open recipe book page (`FORBIDDEN` while sealed), a free spot, within `maxPerHome`, seasonal ones in season; pays with `consumeItems(…, 'build')` in the same transaction; `building.placed` |
 | `POST /api/v1/maps/:mapId/buildings/:buildingId/move` | `{ q, r, spot }` → `HomeResponse`; `building.moved` (no event if it didn't move) |
 | `POST /api/v1/maps/:mapId/buildings/:buildingId/remove` | → `{ refund, home }`: its refund percent of everything spent on it, upgrades included, plus unburned fuel (`grantItems(…, 'build-refund')`); residents move out; trainees land their XP and stop (`landTraining`); `building.removed` |

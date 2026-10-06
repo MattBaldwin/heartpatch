@@ -108,7 +108,9 @@ export interface HomeRingTileRow {
   r: number;
   homeSlot: number;
   nodeResource: string | null;
-  middleTaken: boolean;
+  ownerUserId: string | null;
+  /** Building spots in use on the tile (0 is the middle). */
+  takenSpots: number[];
 }
 
 export interface PendingRequestRow {
@@ -163,8 +165,8 @@ export interface MapsRepo {
    */
   listTiles: (mapId: string) => Promise<TileViewRow[]>;
   /**
-   * Every home tile on the map, with whether a building stands on its middle
-   * spot (`seedHomeRingNodes`). `lock` row-locks the tiles in id order first
+   * Every home tile on the map, with the building spots in use on it
+   * (`seedHomeRingNodes`). `lock` row-locks the tiles in id order first
    * (tech spec §7, step 6), as building placement does.
    */
   listHomeRingTiles: (mapId: string, lock?: boolean) => Promise<HomeRingTileRow[]>;
@@ -399,14 +401,19 @@ function queries(db: Executor): MapsRepo {
           homeSlot: tiles.homeSlot,
           nodeResource: tiles.nodeResource,
           // Spelled out: a one-table select drops column qualifiers in sql``.
-          middleTaken: sql<boolean>`exists (
-            select 1 from ${buildings} b where b.tile_id = ${tiles}.id and b.spot = 0
+          ownerUserId: tiles.ownerUserId,
+          takenSpots: sql<number[]>`array(
+            select b.spot from ${buildings} b where b.tile_id = ${tiles}.id order by b.spot
           )`,
         })
         .from(tiles)
         .where(where)
         .orderBy(asc(tiles.q), asc(tiles.r));
-      return rows.map((row) => ({ ...row, homeSlot: row.homeSlot ?? 0 }));
+      return rows.map((row) => ({
+        ...row,
+        homeSlot: row.homeSlot ?? 0,
+        takenSpots: row.takenSpots.map(Number),
+      }));
     },
 
     addHomeNode: async (tileId, resource) => {

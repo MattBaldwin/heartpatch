@@ -36,6 +36,10 @@ import {
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS, MAP_RATE_LIMITS } from './limits.js';
+import { homeRingWaiting } from '../buildings/home-ring.js';
+import { litSafeTiles } from '../buildings/hearthfire.js';
+import { createBuildingsRepo } from '../buildings/repo.js';
+import { mapLocalTime } from '../../lib/time.js';
 import { tileGuardians } from '../territory/service.js';
 import { createMapsRepo } from './repo.js';
 import { createMapsService } from './service.js';
@@ -829,62 +833,110 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(after.seq).toBe(3);
     });
 
-    it('gives an older map its seasonal home nodes when it is next read (owner decision 2026-10-06)', async () => {
+    /** A map made before the seasonal nodes joined the home ring, and slot 0's bare ring tiles. */
+    async function olderMap() {
       const server = await start();
       const { owner, map } = await mapWith(server, 0);
-      const SEASONAL = ['pumpkins', 'magic-fallen-leaves'];
-      // A map made before the seasonal nodes joined the home ring.
       await db.execute(
         `update tiles set node_resource = null where map_id = '${map.id}'
            and home_slot is not null and node_resource in ('pumpkins', 'magic-fallen-leaves')`,
       );
-      const free = (await tilesOf(map.id)).filter(
-        (t) => t.homeSlot === 0 && t.nodeResource === null,
-      );
-      // The Heart Seed tile and the two free ring tiles; a fire stands in the middle of one.
-      expect(free).toHaveLength(3);
       const homeTiles = (await tilesOf(map.id)).filter((t) => t.homeSlot === 0);
       const seedTile = homeTiles.find(
         (t) =>
           t.q * 7 === homeTiles.reduce((n, h) => n + h.q, 0) &&
           t.r * 7 === homeTiles.reduce((n, h) => n + h.r, 0),
       )!;
-      const [built, open] = free.filter((t) => t.id !== seedTile.id);
-      await db.insert(buildings).values({
-        mapId: map.id,
-        ownerUserId: owner.id,
-        tileId: built!.id,
-        buildingId: 'hearthfire',
-        kind: 'hearthfire',
-        spot: 0,
-      });
-
+      const bare = homeTiles.filter((t) => t.nodeResource === null && t.id !== seedTile.id);
+      expect(bare).toHaveLength(2);
+      const build = (tileId: string, spot: number, buildingId = 'cozy-meadow') =>
+        db
+          .insert(buildings)
+          .values({
+            mapId: map.id,
+            ownerUserId: owner.id,
+            tileId,
+            buildingId,
+            kind: buildingId === 'hearthfire' ? 'hearthfire' : 'habitat',
+            spot,
+            ...(buildingId === 'hearthfire' ? { fuelledThrough: '2099-01-01' } : {}),
+          })
+          .returning({ id: buildings.id });
       const view = async () =>
         MapViewSchema.parse((await call(server, 'GET', `/maps/${map.id}/view`, owner)).json());
-      const nodesOf = (v: Awaited<ReturnType<typeof view>>, slot: number) =>
-        v.tiles.filter((t) => t.homeSlot === slot).map((t) => t.nodeResource);
+      const nodeAt = (v: Awaited<ReturnType<typeof view>>, t: { q: number; r: number }) =>
+        v.tiles.find((x) => x.q === t.q && x.r === t.r)?.nodeResource ?? null;
+      return { server, owner, map, seedTile, bare, build, view, nodeAt };
+    }
 
+    it('gives an older map its seasonal home nodes when it is next read (owner decision 2026-10-06)', async () => {
+      const { map, seedTile, bare, view, nodeAt } = await olderMap();
       const first = await view();
-      // Every other home has both again; this one gets Pumpkins on the tile
-      // without a building, and its leaf pile waits for a free middle.
-      for (const slot of [1, 2, 3])
-        expect(nodesOf(first, slot)).toEqual(expect.arrayContaining(SEASONAL));
-      const mine = first.tiles.filter((t) => t.homeSlot === 0);
-      expect(mine.find((t) => t.q === open!.q && t.r === open!.r)?.nodeResource).toBe('pumpkins');
-      expect(mine.find((t) => t.q === built!.q && t.r === built!.r)?.nodeResource).toBeNull();
-      expect(mine.find((t) => t.q === seedTile.q && t.r === seedTile.r)?.nodeResource).toBeNull();
-      // Stored, so reading again changes nothing (and the seq stays put).
+      for (const slot of [0, 1, 2, 3]) {
+        expect(first.tiles.filter((t) => t.homeSlot === slot).map((t) => t.nodeResource)).toEqual(
+          expect.arrayContaining(['pumpkins', 'magic-fallen-leaves']),
+        );
+      }
+      expect(bare.map((t) => nodeAt(first, t)).sort()).toEqual(['magic-fallen-leaves', 'pumpkins']);
+      expect(nodeAt(first, seedTile)).toBeNull();
+      // Stored, so reading again changes nothing, and no event was needed.
       const again = await view();
       expect(again.tiles).toEqual(first.tiles);
       expect(again.seq).toBe(first.seq);
+      expect((await eventsOf(map.id)).map((e) => e.type)).not.toContain('building.moved');
+    });
 
-      // Moving the fire away frees the middle: the leaf pile turns up there.
-      await db.execute(`delete from buildings where tile_id = '${built!.id}'`);
-      const home = await call(server, 'GET', `/maps/${map.id}/home`, owner);
-      expect(home.statusCode).toBe(200);
-      expect((await tilesOf(map.id)).find((t) => t.id === built!.id)?.nodeResource).toBe(
-        'magic-fallen-leaves',
-      );
+    it('moves a building in the way to a side spot on its own tile, once, with an event', async () => {
+      const { map, bare, build, view, nodeAt } = await olderMap();
+      // A fire in the middle of both bare ring tiles, a meadow beside one.
+      const [fire] = await build(bare[0]!.id, 0, 'hearthfire');
+      const [meadow] = await build(bare[1]!.id, 0);
+      await build(bare[1]!.id, 1);
+      const rows = () => createBuildingsRepo(db).listOnMap(map.id);
+      const before = await rows();
+      const safe = (list: typeof before) =>
+        [
+          ...litSafeTiles(
+            list,
+            () => bare.map((t) => ({ q: t.q, r: t.r })),
+            mapLocalTime(new Date(), 'America/Chicago'),
+          ),
+        ].sort();
+
+      // Two players open the patch at once: one top-up, not two.
+      const [a, b] = await Promise.all([view(), view()]);
+      const after = await rows();
+      expect(after.find((r) => r.id === fire!.id)).toMatchObject({
+        tileId: bare[0]!.id,
+        spot: 1,
+        level: 1,
+        fuelledThrough: '2099-01-01',
+      });
+      // Spot 1 was taken on the meadow's tile, so it goes to spot 2.
+      expect(after.find((r) => r.id === meadow!.id)).toMatchObject({
+        tileId: bare[1]!.id,
+        spot: 2,
+      });
+      expect(after).toHaveLength(before.length);
+      // The fire still reaches as far: its light is measured from its tile.
+      expect(safe(after)).toEqual(safe(before));
+      for (const v of [a, b]) {
+        expect(bare.map((t) => nodeAt(v, t)).sort()).toEqual(['magic-fallen-leaves', 'pumpkins']);
+      }
+      const moved = (await eventsOf(map.id)).filter((e) => e.type === 'building.moved');
+      expect(moved).toHaveLength(2);
+      expect(payloadOf('building.moved', moved[0]!.payload).from.spot).toBe(0);
+      // Read again: nothing moves twice.
+      await view();
+      expect((await eventsOf(map.id)).filter((e) => e.type === 'building.moved')).toHaveLength(2);
+    });
+
+    it('lets a node wait when every bare ring tile is full of buildings', async () => {
+      const { bare, build, view, nodeAt } = await olderMap();
+      for (const t of bare) for (let spot = 0; spot <= 6; spot++) await build(t.id, spot);
+      const v = await view();
+      for (const t of bare) expect(nodeAt(v, t)).toBeNull();
+      expect(homeRingWaiting().get(v.map.id)).toBe(2);
     });
 
     it('reads the map, members, tiles and seq from one snapshot', async () => {

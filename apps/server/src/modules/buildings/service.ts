@@ -41,7 +41,7 @@ import {
 import { landTraining, leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
-import { seedHomeRingNodes } from '../maps/home-ring.js';
+import { seedHomeRingNodes, type HomeRingLog } from './home-ring.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import {
   createBuildingsRepo,
@@ -127,6 +127,8 @@ export interface BuildingsService {
 
 export interface BuildingsServiceOptions {
   db: Executor;
+  /** Where the home-ring top-up reports homes with no room yet (`app.log`). */
+  log?: HomeRingLog;
   clock?: Clock;
   /** Live sync (`wsHub.publish`), called after commit. Never rejects. */
   publish?: (mapId: string) => Promise<void>;
@@ -322,7 +324,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     home: async (user, mapId) => {
       const { map } = await requireMember(db, user, mapId);
       // An older map's home ring gets its seasonal nodes (owner decision 2026-10-06).
-      await seedHomeRingNodes(db, mapId);
+      if (await seedHomeRingNodes(db, mapId, now(), options.log)) published(mapId);
       return homeView(store, db, mapId, user.id, now(), map.timeZone);
     },
 
