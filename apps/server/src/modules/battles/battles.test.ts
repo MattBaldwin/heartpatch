@@ -603,6 +603,34 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
     });
   });
 
+  describe('daily XP falloff (owner decision 2026-10-06)', () => {
+    it("pays full XP for a squishy's first wins of the day, then a share", async () => {
+      const falloff = GROWTH_RULES.battleXpFalloff!;
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const squishy = await grant(server, kid, mapId, { speciesId: SECRET_IDS[1], level: 20 });
+      const granted: number[] = [];
+      for (let i = 0; i <= falloff.fullWinsPerDay; i++) {
+        const battle = await pickFight(server, kid, mapId, {
+          opponent: { speciesId: SECRET_IDS[0], level: 3 },
+        });
+        const over = await playOut(server, kid, battle);
+        if (over.view.phase.type !== 'over') throw new Error('not over');
+        expect(over.view.phase.result.winner).toBe('a');
+        const base = over.view.phase.result.xp.find((x) => x.squishyId === squishy.id)!.xp;
+        const row = (await rowOf(battle.id))!;
+        const paid = (row.rewards as { xp: { squishyId: string; xp: number }[] }).xp.find(
+          (x) => x.squishyId === squishy.id,
+        )!.xp;
+        const percent = i < falloff.fullWinsPerDay ? 100 : falloff.afterPercent;
+        expect(paid).toBe(newSquishyXp(Math.floor((base * percent) / 100)));
+        granted.push(paid);
+      }
+      expect(granted.at(-1)).toBeLessThan(granted[0]!);
+    });
+  });
+
   describe('teams (swap and replace)', () => {
     it('swaps on the bench, and asks who comes out when one is tuckered out', async () => {
       const server = await start();

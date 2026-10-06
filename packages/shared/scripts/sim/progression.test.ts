@@ -56,7 +56,7 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
     );
     expect(levels).toEqual([
       [8, 12, 15, 17, 18, 19],
-      [22, 26, 30, 33, 34, 36],
+      [14, 18, 20, 21, 22, 23],
     ]);
   });
 

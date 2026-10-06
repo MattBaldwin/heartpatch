@@ -143,6 +143,17 @@ export const GrowthRulesSchema = z
      * befriended squishy keeps its battle level.
      */
     befriendBelowEvolution: z.number().int().min(1).max(99).optional(),
+    /**
+     * Battle XP falls off per squishy per map-local day: full XP while it has
+     * won fewer than `fullWinsPerDay` battles today, then `afterPercent` of
+     * it. Optional: left out, every battle pays in full.
+     */
+    battleXpFalloff: z
+      .strictObject({
+        fullWinsPerDay: z.number().int().min(1),
+        afterPercent: z.number().int().min(0).max(100),
+      })
+      .optional(),
   })
   .superRefine((rules, ctx) => {
     if (rules.habitat.bothPercent < rules.habitat.onePercent) {

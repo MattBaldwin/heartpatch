@@ -96,6 +96,16 @@ export const UNCAPPED_BEFRIEND_RULES: ProgressionRules = {
 };
 
 /**
+ * The shipped data without the daily battle-XP falloff (`battleXpFalloff`).
+ * Kept to show what the falloff does.
+ */
+export const NO_FALLOFF_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'now, no XP falloff',
+  growth: { ...GROWTH_RULES, battleXpFalloff: undefined },
+};
+
+/**
  * The rules before the 2026-10-06 balance pass (owner decisions on design
  * review Q1 and Q2): no knee on the XP curve, wild levels 2–6 for everyone and
  * 10 tile attempts a day. Kept so the report can show before and after.
@@ -106,6 +116,7 @@ export const BASELINE_RULES: ProgressionRules = {
     ...GROWTH_RULES,
     xpCurve: { perLevel: 20, curve: 5 },
     befriendBelowEvolution: undefined,
+    battleXpFalloff: undefined,
   },
   spawn: { ...SPAWN_RULES, levels: { min: 2, max: 6 }, partnerOffset: undefined },
   attemptsPerDay: 10,

@@ -166,3 +166,17 @@ export function befriendedLevel(
   if (first === null) return battleLevel;
   return Math.max(1, Math.min(battleLevel, first - below));
 }
+
+/**
+ * The share (%) of a battle's XP a squishy gets, given how many battles it
+ * has already won today (this one not counted): full until it has won
+ * `fullWinsPerDay`, then `afterPercent`.
+ */
+export function battleXpPercent(
+  winsToday: number,
+  rules: Pick<GrowthRules, 'battleXpFalloff'>,
+): number {
+  const falloff = rules.battleXpFalloff;
+  if (!falloff || winsToday < falloff.fullWinsPerDay) return 100;
+  return falloff.afterPercent;
+}

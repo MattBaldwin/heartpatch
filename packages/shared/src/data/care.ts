@@ -42,4 +42,8 @@ export const GROWTH_RULES: GrowthRules = {
   // TUNE: owner decision 2026-10-06: a befriended squishy joins at most one
   // level below its first evolution, so it grows up by training, not by catch.
   befriendBelowEvolution: 1,
+  // TUNE: owner decision 2026-10-06 (design review, engaged kids): full battle
+  // XP for a squishy's first 7 wins of the map-local day, then 10%. A casual
+  // kid (about 7 battles a day) never reaches it; `pnpm sim:progression`.
+  battleXpFalloff: { fullWinsPerDay: 7, afterPercent: 10 },
 };

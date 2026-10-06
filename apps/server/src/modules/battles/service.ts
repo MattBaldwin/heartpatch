@@ -1,6 +1,7 @@
 import {
   applyBattleAction,
   BattleRuleError,
+  battleXpPercent,
   befriendedLevel,
   CAPTURABLE_BATTLE_KINDS,
   CARE_RULES,
@@ -517,8 +518,22 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // Base battle XP × care and habitat, levels and evolution (#19's
     // `applyXp`), under the squishy locks (the order above).
     await repo.lockSquishies(awards.map((a) => a.squishyId));
+    // The daily falloff (owner decision 2026-10-06): a squishy that has
+    // already won `fullWinsPerDay` battles today gets a share of the XP.
+    const wins = await repo.winsToday(
+      row.mapId,
+      row.playerUserId,
+      awards.map((a) => a.squishyId),
+      at,
+    );
+    for (const award of awards) {
+      award.xp = Math.floor(
+        (award.xp * battleXpPercent(wins.get(award.squishyId) ?? 0, GROWTH_RULES)) / 100,
+      );
+    }
     const grown: Growth[] = [];
     for (const award of awards) {
+      if (award.xp <= 0) continue;
       const growth = await applyXp(tx, award.squishyId, award.xp, at);
       if (growth) grown.push(growth);
     }

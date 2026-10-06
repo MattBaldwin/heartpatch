@@ -20,11 +20,11 @@ import {
   type FeelingId,
   type OwnedSquishy,
 } from '@heartpatch/shared';
-import { and, asc, desc, eq, inArray, isNotNull, not } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, not, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { battles, mapMembers, squishies, tiles } from '../../db/schema.js';
+import { battles, mapMembers, maps, squishies, tiles } from '../../db/schema.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 
@@ -110,6 +110,17 @@ export interface BattlesRepo {
   ) => Promise<TeamSquishyRow[]>;
   /** Does the player have a squishy that isn't in the Hollow (busy ones too)? */
   hasActiveSquishy: (mapId: string, userId: string) => Promise<boolean>;
+  /**
+   * How many finished battles each of `squishyIds` joined and won for the
+   * player on this map on `at`'s map-local day (the daily battle-XP
+   * falloff, `GROWTH_RULES.battleXpFalloff`). Missing ids won none.
+   */
+  winsToday: (
+    mapId: string,
+    userId: string,
+    squishyIds: readonly string[],
+    at: Date,
+  ) => Promise<Map<string, number>>;
   /** Row-locks the squishies until commit (XP is written under it, care's `applyXp`). */
   lockSquishies: (ids: readonly string[]) => Promise<void>;
   /**
@@ -290,6 +301,33 @@ function queries(db: Executor): BattlesRepo {
         )
         .limit(1);
       return row !== undefined;
+    },
+
+    winsToday: async (mapId, userId, squishyIds, at) => {
+      const wins = new Map<string, number>();
+      if (squishyIds.length === 0) return wins;
+      const rows = await db
+        .select({ result: battles.result })
+        .from(battles)
+        .innerJoin(maps, eq(maps.id, battles.mapId))
+        .where(
+          and(
+            eq(battles.mapId, mapId),
+            eq(battles.playerUserId, userId),
+            eq(battles.status, 'finished'),
+            // The player is always side `a` (battles service, `PLAYER_SIDE`).
+            sql`${battles.result} ->> 'winner' = 'a'`,
+            sql`(${battles.endedAt} at time zone ${maps.timeZone})::date = (${at.toISOString()}::timestamptz at time zone ${maps.timeZone})::date`,
+          ),
+        );
+      const wanted = new Set(squishyIds);
+      for (const row of rows) {
+        for (const award of ResultSchema.parse(row.result).xp) {
+          if (award.side !== 'a' || !wanted.has(award.squishyId)) continue;
+          wins.set(award.squishyId, (wins.get(award.squishyId) ?? 0) + 1);
+        }
+      }
+      return wins;
     },
 
     lockSquishies: async (ids) => {

@@ -2,6 +2,7 @@ import { createBattleContent, type BattleContent } from '../../src/battle/conten
 import { autoplayBattle } from '../../src/battle/engine.js';
 import {
   addXp,
+  battleXpPercent,
   befriendedLevel,
   evolutionAt,
   grantedXp,
@@ -56,6 +57,8 @@ interface Member {
   speciesId: string;
   level: number;
   xp: number;
+  /** Battles it joined and won today (the daily XP falloff). */
+  winsToday: number;
 }
 
 interface Kid {
@@ -171,11 +174,16 @@ function grant(
   kid: Kid,
   rules: ProgressionRules,
   xp: ReadonlyMap<string, number>,
+  won: boolean,
 ): number {
   let partnerXp = 0;
   for (const member of kid.team) {
-    const base = xp.get(member.id);
-    if (base === undefined) continue;
+    const engine = xp.get(member.id);
+    if (engine === undefined) continue;
+    // The daily falloff, as the battles service applies it: on the base XP,
+    // from the wins before this battle.
+    const base = Math.floor((engine * battleXpPercent(member.winsToday, rules.growth)) / 100);
+    if (won) member.winsToday += 1;
     const gained = grantedXp(base, kid.profile.xpPercent);
     if (member === kid.team[0]) partnerXp += gained;
     const next = addXp(member, gained, rules.growth);
@@ -201,7 +209,7 @@ function befriend(kid: Kid, friend: { id: string; speciesId: string; level: numb
   const current = kid.team[weakest];
   if (!current || friend.level <= current.level) return false;
   // Joins counting from its level (`addXp`), like a befriended squishy on the server.
-  kid.team[weakest] = { ...friend, xp: 0 };
+  kid.team[weakest] = { ...friend, xp: 0, winsToday: 0 };
   return true;
 }
 
@@ -247,10 +255,10 @@ export function runProgression(
     profile,
     slot,
     team: [
-      { id: 'partner', speciesId: config.partner, level: 1, xp: 0 },
+      { id: 'partner', speciesId: config.partner, level: 1, xp: 0, winsToday: 0 },
       ...config.teammates.map((speciesId, i) => {
         const level = config.teammateLevel;
-        return { id: `friend-${String(i + 1)}`, speciesId, level, xp: 0 };
+        return { id: `friend-${String(i + 1)}`, speciesId, level, xp: 0, winsToday: 0 };
       }),
     ],
   }));
@@ -266,6 +274,7 @@ export function runProgression(
     const date = dateOf(config, day);
     const guardianWindow = spawnWindowAt({ date, hour: 12 }, GUARDIAN_RULES.windowHours);
     const odds = kids.map((kid) => estimateOdds(data, kid, config, guardianWindow, day));
+    for (const kid of kids) for (const member of kid.team) member.winsToday = 0;
     const tileBattles = kids.map(() => 0);
     const partnerXp = kids.map(() => 0);
     const triedToday = new Set<HexKey>();
@@ -304,7 +313,7 @@ export function runProgression(
           squishies: guardians,
         };
         const { won, xp } = play(data, kid, config, opponent, seed);
-        partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp);
+        partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp, won);
         tileBattles[k] = (tileBattles[k] ?? 0) + 1;
         if (won) owner.set(hexKey(t), k);
       });
@@ -341,7 +350,7 @@ export function runProgression(
         };
         const seed = deriveSeed(config.rootSeed, 'wild-battle', profile.id, k, day, i);
         const { won, xp } = play(data, kid, config, opponent, seed);
-        partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp);
+        partnerXp[k] = (partnerXp[k] ?? 0) + grant(data, kid, rules, xp, won);
         if (won && befriended < profile.befriendsPerDay) {
           const level = befriendedLevel(
             spawn.speciesId,
@@ -414,12 +423,13 @@ export function wildOdds(
       profile: { id: 'odds', battlesPerDay: 0, xpPercent: 100, befriendsPerDay: 0 },
       slot: 0,
       team: [
-        { id: 'partner', speciesId: partner, level, xp: 0 },
+        { id: 'partner', speciesId: partner, level, xp: 0, winsToday: 0 },
         ...config.teammates.map((speciesId, i) => ({
           id: `friend-${String(i + 1)}`,
           speciesId,
           level: friends,
           xp: 0,
+          winsToday: 0,
         })),
       ],
     };

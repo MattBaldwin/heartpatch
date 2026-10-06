@@ -13,6 +13,7 @@ import {
 } from './contentment.js';
 import {
   addXp,
+  battleXpPercent,
   befriendedLevel,
   carePercent,
   evolutionAt,
@@ -273,6 +274,22 @@ describe('levels', () => {
   it('shows progress through the level, and none past the top', () => {
     expect(xpProgress({ level: 2, xp: 40 }, PLAIN)).toEqual({ intoLevel: 15, toNext: 35 });
     expect(xpProgress({ level: 100, xp: 1e6 }, PLAIN).toNext).toBeNull();
+  });
+});
+
+describe('battleXpPercent (owner decision 2026-10-06)', () => {
+  const rules = { battleXpFalloff: { fullWinsPerDay: 7, afterPercent: 10 } };
+
+  it("pays in full until the day's wins reach the limit, then a share", () => {
+    expect(battleXpPercent(0, rules)).toBe(100);
+    expect(battleXpPercent(6, rules)).toBe(100);
+    expect(battleXpPercent(7, rules)).toBe(10);
+    expect(battleXpPercent(30, rules)).toBe(10);
+    expect(battleXpPercent(30, {})).toBe(100);
+  });
+
+  it('is on in the shipped data', () => {
+    expect(GROWTH_RULES.battleXpFalloff).toEqual({ fullWinsPerDay: 7, afterPercent: 10 });
   });
 });
 
