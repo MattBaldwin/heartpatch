@@ -1,4 +1,4 @@
-import { GAME_DATA } from '@heartpatch/shared';
+import { GAME_DATA, TERRITORY_RULES } from '@heartpatch/shared';
 import { expect as baseExpect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { holdCinematic, newPlayer, pickKeeper, signUp, uniqueName, visitPatch } from './players.js';
@@ -229,7 +229,9 @@ test('first session: signup, Keeper, story, tutorial, a patch with a friend, a c
   await expect.poll(team).toBe(3);
 
   // Claim wild land next to home from its guardians.
-  await expect.poll(() => territoryState(page)).toMatchObject({ attemptsLeft: 10 });
+  await expect
+    .poll(() => territoryState(page))
+    .toMatchObject({ attemptsLeft: TERRITORY_RULES.attemptsPerDay });
   const spot = await findTile(page, 'claim');
   await page.getByTestId('tile-claim').tap();
   const hud = page.getByTestId('battle-hud');
@@ -244,7 +246,9 @@ test('first session: signup, Keeper, story, tutorial, a patch with a friend, a c
   await expect(page.getByTestId('battle-result')).toContainText('This land is yours!');
   await page.getByTestId('battle-done').tap();
   await expect(hud).toBeHidden();
-  await expect.poll(() => territoryState(page)).toMatchObject({ attemptsLeft: 9 });
+  await expect
+    .poll(() => territoryState(page))
+    .toMatchObject({ attemptsLeft: TERRITORY_RULES.attemptsPerDay - 1 });
   await expect
     .poll(async () => {
       await tapCanvas(page, spot.x, spot.y);

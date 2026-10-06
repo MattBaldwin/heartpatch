@@ -3,6 +3,7 @@ import {
   BATTLE_RULES,
   BattleResponseSchema,
   CARE_RULES,
+  contentmentAt,
   createBattleContent,
   CurrentBattleResponseSchema,
   GAME_DATA,
@@ -600,6 +601,89 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       expect(row.result).toEqual(result);
       expect(row.log).toEqual(over.view.log);
       expect(over.seed).toBe(row.seed);
+    });
+  });
+
+  describe('daily XP falloff (owner decision 2026-10-06)', () => {
+    const falloff = GROWTH_RULES.battleXpFalloff!;
+
+    /** One dev battle against `opponent`; the XP each squishy was paid and the engine's base. */
+    async function fight(
+      server: FastifyInstance,
+      who: Player,
+      mapId: string,
+      opponent: { speciesId: string; level: number },
+    ) {
+      const battle = await pickFight(server, who, mapId, { opponent });
+      const over = await playOut(server, who, battle);
+      if (over.view.phase.type !== 'over') throw new Error('not over');
+      const { result } = over.view.phase;
+      const row = (await rowOf(battle.id))!;
+      const paid = new Map(
+        (row.rewards as { xp: { squishyId: string; xp: number }[] }).xp.map((x) => [
+          x.squishyId,
+          x.xp,
+        ]),
+      );
+      const base = new Map(result.xp.map((x) => [x.squishyId, x.xp]));
+      return { winner: result.winner, paid, base };
+    }
+    /**
+     * XP a squishy granted at `GRANTED` (no care since, no habitat) gets for
+     * `base` now: contentment slides down as the test clock moves on.
+     */
+    const GRANTED = new Date('2026-10-02T12:00:00Z');
+    const paidNow = (base: number) =>
+      grantedXp(
+        base,
+        xpMultiplier(
+          contentmentAt(
+            { contentment: CARE_RULES.startContentment, lastCaredAt: GRANTED },
+            clock,
+            CARE_RULES,
+          ),
+          null,
+          { element: 'light', feeling: 'cozy' },
+          GROWTH_RULES,
+        ),
+      );
+    const full = (base: number) => paidNow(base);
+    const share = (base: number) => paidNow(Math.floor((base * falloff.afterPercent) / 100));
+    const weak = { speciesId: SECRET_IDS[0]!, level: 3 };
+
+    it('counts only wins a squishy came out for, and starts again at map-local midnight', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const lead = await grant(server, kid, mapId, { speciesId: SECRET_IDS[1], level: 20 });
+      const bench = await grant(server, kid, mapId, { speciesId: SECRET_IDS[1], level: 20 });
+      const team = (ids: string[]) =>
+        call(server, 'POST', `/maps/${mapId}/team`, kid, { squishyIds: ids });
+      expect((await team([lead.id, bench.id])).statusCode).toBe(200);
+
+      // A loss doesn't count: the lead comes out and loses to a much stronger squishy.
+      const lost = await fight(server, kid, mapId, { speciesId: SECRET_IDS[0]!, level: 90 });
+      expect(lost.winner).toBe('b');
+      // All the wins before the limit pay in full; the bench never comes out.
+      for (let i = 0; i < falloff.fullWinsPerDay; i++) {
+        const won = await fight(server, kid, mapId, weak);
+        expect(won.winner).toBe('a');
+        expect(won.paid.get(lead.id)).toBe(full(won.base.get(lead.id)!));
+        expect(won.base.has(bench.id)).toBe(false);
+      }
+      // Past the limit, the lead gets the share, still on Oct 2 in Denver (23:59).
+      clock.setTime(Date.parse('2026-10-03T05:59:00Z'));
+      const tired = await fight(server, kid, mapId, weak);
+      expect(tired.paid.get(lead.id)).toBe(share(tired.base.get(lead.id)!));
+      // The squishy that sat on the bench has won nothing today: full XP.
+      expect((await team([bench.id])).statusCode).toBe(200);
+      const fresh = await fight(server, kid, mapId, weak);
+      expect(fresh.paid.get(bench.id)).toBe(full(fresh.base.get(bench.id)!));
+      // Midnight in Denver (06:00 UTC): the lead's count starts again.
+      clock.setTime(Date.parse('2026-10-03T06:00:00Z'));
+      expect((await team([lead.id])).statusCode).toBe(200);
+      const morning = await fight(server, kid, mapId, weak);
+      expect(morning.paid.get(lead.id)).toBe(full(morning.base.get(lead.id)!));
     });
   });
 

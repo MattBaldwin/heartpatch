@@ -4,17 +4,18 @@ import { GROWTH_RULES } from '../data/care.js';
 import { SPAWN_RULES } from '../data/server/spawn-rules.js';
 import { SPECIES } from '../data/species.js';
 import { STARTERS } from '../data/starters.js';
-import { addXp, grantedXp } from './growth.js';
+import { addXp, grantedXp, xpForLevel } from './growth.js';
 
-// How fast a squishy grows up (coordinator tuning, 2026-10-04): a player's
-// starter, picked at level 1, first evolves after about 12–15 wild wins at 1×
-// care, with rarer forms proportionally slower. XP is linear in the care ×
-// habitat multiplier, so full care (1.75×) gives 7–9 and the 3× cap 4–5.
-// Pins `BATTLE_RULES.xp` against `GROWTH_RULES.xpCurve` and the evolution
-// levels, so a change to any of them shows up here.
+// How fast a squishy grows up (owner decisions 2026-10-06, design review Q1
+// and Q2). Wild squishies match the Partner's level (spawn rules
+// `partnerOffset`), so a win pays about 30 × its level, and the curve does
+// the pacing: a starter grows up after about 22 wild wins at 1× care, and
+// past the knees at 16 and 30 each level takes more wins than the last.
+// Pins `BATTLE_RULES.xp` and `SPAWN_RULES.partnerOffset` against
+// `GROWTH_RULES.xpCurve` and the evolution levels, so a change to any of
+// them shows up here. `pnpm sim:progression` turns this into days.
 
-/** A wild opponent of the average spawn level. */
-const WILD_LEVEL = (SPAWN_RULES.levels.min + SPAWN_RULES.levels.max) / 2;
+const OFFSET = SPAWN_RULES.partnerOffset ?? { min: 0, max: 0 };
 
 /** Base XP for beating one wild squishy (the battle engine's `xpAwards`). */
 function wildWinXp(level: number): number {
@@ -22,12 +23,19 @@ function wildWinXp(level: number): number {
   return Math.max(minimum, Math.floor(perOpponentLevel * level * winMultiplier));
 }
 
-/** Wild wins a level-1 squishy needs to reach `level` at `multiplier` percent. */
-function winsToReach(level: number, multiplier: number): number {
-  let state = { level: 1, xp: 0 };
+/** The wild squishy a Partner at `level` meets on its `win`-th win: offsets in turn. */
+function wildLevel(partner: number, win: number): number {
+  const span = OFFSET.max - OFFSET.min + 1;
+  return Math.max(SPAWN_RULES.levels.min, partner + OFFSET.min + (win % span));
+}
+
+/** Wild wins a squishy at level `from` needs to reach `level` at `multiplier` percent. */
+function winsToReach(level: number, multiplier: number, from = 1): number {
+  let state = { level: from, xp: xpForLevel(from, GROWTH_RULES) };
   let wins = 0;
   while (state.level < level) {
-    state = addXp(state, grantedXp(wildWinXp(WILD_LEVEL), multiplier), GROWTH_RULES);
+    const xp = grantedXp(wildWinXp(wildLevel(state.level, wins)), multiplier);
+    state = addXp(state, xp, GROWTH_RULES);
     wins += 1;
   }
   return wins;
@@ -40,29 +48,40 @@ function evolvesAt(speciesId: string): number {
 }
 
 describe('growth pace', () => {
-  it('grows a level-1 starter up after 12–15 wild wins at 1× care', () => {
+  it('matches wild squishies to the Partner: −2 to +1 levels', () => {
+    expect(OFFSET).toEqual({ min: -2, max: 1 });
+  });
+
+  it('grows a level-1 starter up after 22–29 wild wins at 1× care', () => {
     const wins = Object.fromEntries(
       STARTERS.speciesIds.map((id) => [id, winsToReach(evolvesAt(id), 100)]),
     );
-    expect(wins).toEqual({ emberbun: 12, puddlepuff: 12, thistlepip: 15 });
+    expect(wins).toEqual({ emberbun: 22, puddlepuff: 22, thistlepip: 29 });
   });
 
-  it('grows a starter up faster with care: 7–9 wins at full care, 4–5 at the cap', () => {
+  it('grows a starter up faster with care: 13–17 wins at full care, 8–11 at the cap', () => {
     const wins = (percent: number) =>
       Object.fromEntries(
         STARTERS.speciesIds.map((id) => [id, winsToReach(evolvesAt(id), percent)]),
       );
     expect(wins(GROWTH_RULES.care.maxPercent)).toEqual({
-      emberbun: 7,
-      puddlepuff: 7,
-      thistlepip: 9,
+      emberbun: 13,
+      puddlepuff: 13,
+      thistlepip: 17,
     });
-    expect(wins(GROWTH_RULES.capPercent)).toEqual({ emberbun: 4, puddlepuff: 4, thistlepip: 5 });
+    expect(wins(GROWTH_RULES.capPercent)).toEqual({ emberbun: 8, puddlepuff: 8, thistlepip: 11 });
   });
 
-  it('keeps rarer evolutions proportionally slower', () => {
+  it('keeps rarer evolutions slower, more so past the knee', () => {
     const at = (level: number) => winsToReach(level, 100);
     // Evolution levels by rarity (species.ts): common 16 … legendary 30.
-    expect([16, 18, 22, 26, 30].map(at)).toEqual([12, 15, 22, 31, 40]);
+    expect([16, 18, 22, 26, 30].map(at)).toEqual([22, 29, 62, 114, 178]);
+  });
+
+  it('makes each level past the knees take more wins than the last (at 2×)', () => {
+    const perLevel = [16, 20, 25, 30, 40, 60, 80, 99].map((from) =>
+      winsToReach(from + 1, 200, from),
+    );
+    expect(perLevel).toEqual([2, 5, 8, 10, 25, 39, 46, 51]);
   });
 });

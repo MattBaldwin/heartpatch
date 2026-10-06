@@ -63,13 +63,23 @@ export function grantedXp(baseXp: number, multiplier: number): number {
   return Math.floor((Math.max(0, baseXp) * multiplier) / 100);
 }
 
-/** Total XP a squishy needs to be `level` (level 1 is 0). */
+/**
+ * Total XP a squishy needs to be `level` (level 1 is 0). Past each of the
+ * curve's knees, every level also costs `steep × (L − knee)²` more in total.
+ */
 export function xpForLevel(
   level: number,
   rules: Pick<GrowthRules, 'xpCurve' | 'maxLevel'>,
 ): number {
-  const steps = Math.max(0, Math.min(level, rules.maxLevel) - 1);
-  return rules.xpCurve.perLevel * steps + rules.xpCurve.curve * steps * steps;
+  const { perLevel, curve, knees = [] } = rules.xpCurve;
+  const capped = Math.min(level, rules.maxLevel);
+  const steps = Math.max(0, capped - 1);
+  let xp = perLevel * steps + curve * steps * steps;
+  for (const knee of knees) {
+    const past = Math.max(0, capped - knee.level);
+    xp += knee.steep * past * past;
+  }
+  return xp;
 }
 
 /** The level `xp` total XP reaches, up to `maxLevel`. */
@@ -134,4 +144,39 @@ export function evolutionAt(
     if (!best || step.level < best.level) best = step;
   }
   return best;
+}
+
+/**
+ * The level a befriended squishy joins at: its battle level, but at most
+ * `befriendBelowEvolution` below its species' first evolution (the lowest
+ * level in `steps` from it). A species that never evolves keeps its level.
+ */
+export function befriendedLevel(
+  speciesId: string,
+  battleLevel: number,
+  steps: readonly EvolutionStep[],
+  rules: Pick<GrowthRules, 'befriendBelowEvolution'>,
+): number {
+  const below = rules.befriendBelowEvolution;
+  if (below === undefined) return battleLevel;
+  let first: number | null = null;
+  for (const step of steps) {
+    if (step.from === speciesId && (first === null || step.level < first)) first = step.level;
+  }
+  if (first === null) return battleLevel;
+  return Math.max(1, Math.min(battleLevel, first - below));
+}
+
+/**
+ * The share (%) of a battle's XP a squishy gets, given how many battles it
+ * has already won today (this one not counted): full until it has won
+ * `fullWinsPerDay`, then `afterPercent`.
+ */
+export function battleXpPercent(
+  winsToday: number,
+  rules: Pick<GrowthRules, 'battleXpFalloff'>,
+): number {
+  const falloff = rules.battleXpFalloff;
+  if (!falloff || winsToday < falloff.fullWinsPerDay) return 100;
+  return falloff.afterPercent;
 }

@@ -207,7 +207,9 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
   const attacksOf = (mapId: string) =>
     db.query.tileAttacks.findMany({
       where: (t, { eq }) => eq(t.mapId, mapId),
-      orderBy: (t, { asc }) => [asc(t.startedAt)],
+      // Ids are uuidv7 (time-ordered), so attacks started on the same test
+      // clock still come back in the order they were made.
+      orderBy: (t, { asc }) => [asc(t.startedAt), asc(t.id)],
     });
   const piecesOf = (userId: string) =>
     db.query.clothingOwned.findMany({ where: (t, { eq }) => eq(t.userId, userId) });

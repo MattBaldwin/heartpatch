@@ -1,6 +1,6 @@
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import type { Executor } from '../../db/client.js';
-import { battles, maps, speciesSeen, tiles } from '../../db/schema.js';
+import { battles, mapMembers, maps, speciesSeen, squishies, tiles } from '../../db/schema.js';
 
 /** What spawning needs to know about a map. `seed` is secret (tech spec §8). */
 export interface SpawnMapRow {
@@ -55,6 +55,11 @@ export interface SpawnsRepo {
   /** The player befriended one. Keeps the first time (and marks it seen if somehow it wasn't). */
   markCaught: (mapId: string, userId: string, speciesId: string, at: Date) => Promise<void>;
   listSeen: (mapId: string, userId: string) => Promise<SeenRow[]>;
+  /**
+   * The level of the player's Partner on this map (the starter they picked,
+   * `map_members.starter_squishy_id`), or null if they have none.
+   */
+  partnerLevel: (mapId: string, userId: string) => Promise<number | null>;
 }
 
 export function createSpawnsRepo(db: Executor): SpawnsRepo {
@@ -123,5 +128,14 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
         .from(speciesSeen)
         .where(and(eq(speciesSeen.mapId, mapId), eq(speciesSeen.userId, userId)))
         .orderBy(asc(speciesSeen.firstSeenAt), asc(speciesSeen.speciesId)),
+
+    partnerLevel: async (mapId, userId) => {
+      const [row] = await db
+        .select({ level: squishies.level })
+        .from(mapMembers)
+        .innerJoin(squishies, eq(squishies.id, mapMembers.starterSquishyId))
+        .where(and(eq(mapMembers.mapId, mapId), eq(mapMembers.userId, userId)));
+      return row?.level ?? null;
+    },
   };
 }

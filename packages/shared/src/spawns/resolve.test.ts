@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FIXTURE_SPECIES } from '../../tests/fixtures/sample-content.js';
+import { GROWTH_RULES } from '../data/care.js';
 import { SEASONS } from '../data/seasons.js';
 import { SPAWN_RULES } from '../data/server/spawn-rules.js';
 import { deriveSeed } from '../rng/index.js';
@@ -37,6 +38,7 @@ const data = (over: Partial<SpawnData> = {}): SpawnData => ({
   species: new Map(FIXTURE_SPECIES.map((s) => [s.id, s])),
   seasons: SEASONS,
   rules: RULES,
+  maxLevel: GROWTH_RULES.maxLevel,
   ...over,
 });
 
@@ -71,6 +73,56 @@ describe('resolveWildSpawn', () => {
       expect(spawn!.level).toBeGreaterThanOrEqual(3);
       expect(spawn!.level).toBeLessThanOrEqual(5);
     }
+  });
+
+  describe('levels that follow the Partner', () => {
+    const OFFSET_RULES: SpawnRules = { ...RULES, partnerOffset: { min: -2, max: 1 } };
+    const at = (q: number, partnerLevel: number | null, rules = OFFSET_RULES) =>
+      resolveWildSpawn(
+        {
+          seed: deriveSeed('map-seed', 'spawn', q, 0, window('2026-10-02').id),
+          terrain: 'forest',
+          window: window('2026-10-02'),
+          partnerLevel,
+        },
+        data({ rules }),
+      );
+    const tiles = Array.from({ length: 80 }, (_, q) => q);
+
+    it('rolls the Partner’s level −2 to +1, every one of them', () => {
+      const levels = new Set(tiles.map((q) => at(q, 30)!.level));
+      expect([...levels].sort((a, b) => a - b)).toEqual([28, 29, 30, 31]);
+    });
+
+    it('never changes which species a tile has', () => {
+      for (const q of tiles) {
+        expect(at(q, 30)?.speciesId).toBe(at(q, null)?.speciesId);
+        expect(at(q, 70)?.speciesId).toBe(at(q, 2)?.speciesId);
+      }
+    });
+
+    it('stays within levels.min and the top level', () => {
+      const top = GROWTH_RULES.maxLevel;
+      for (const q of tiles) {
+        expect(at(q, 1)!.level).toBeGreaterThanOrEqual(RULES.levels.min);
+        expect(at(q, top)!.level).toBeLessThanOrEqual(top);
+      }
+      expect(new Set(tiles.map((q) => at(q, top)!.level))).toContain(top);
+    });
+
+    it('rolls the plain levels without a Partner, or without partnerOffset', () => {
+      const plainRules: SpawnRules = { ...OFFSET_RULES, partnerOffset: undefined };
+      const plain = [RULES.levels.min, RULES.levels.max];
+      const seen = new Set<number>();
+      for (const q of tiles) {
+        for (const level of [at(q, null)!.level, at(q, 30, plainRules)!.level]) {
+          expect(level).toBeGreaterThanOrEqual(plain[0]!);
+          expect(level).toBeLessThanOrEqual(plain[1]!);
+          seen.add(level);
+        }
+      }
+      expect([...seen].sort((a, b) => a - b)).toEqual([3, 4, 5]);
+    });
   });
 
   it('leaves some tiles empty at the spawn chance, and the presence roll ignores the tables', () => {
