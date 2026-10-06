@@ -19,7 +19,6 @@ import {
   type MapDetail,
 } from '@heartpatch/shared';
 import { GUARDIAN_RULES, hintForGuardians } from '@heartpatch/shared/server';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -32,7 +31,6 @@ import {
   mapMembers,
   maps,
   sessions,
-  tiles,
   users,
 } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -836,16 +834,10 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       const { owner, map } = await mapWith(server, 0);
       const SEASONAL = ['pumpkins', 'magic-fallen-leaves'];
       // A map made before the seasonal nodes joined the home ring.
-      await db
-        .update(tiles)
-        .set({ nodeResource: null })
-        .where(
-          and(
-            eq(tiles.mapId, map.id),
-            isNotNull(tiles.homeSlot),
-            inArray(tiles.nodeResource, SEASONAL),
-          ),
-        );
+      await db.execute(
+        `update tiles set node_resource = null where map_id = '${map.id}'
+           and home_slot is not null and node_resource in ('pumpkins', 'magic-fallen-leaves')`,
+      );
       const free = (await tilesOf(map.id)).filter(
         (t) => t.homeSlot === 0 && t.nodeResource === null,
       );
@@ -887,7 +879,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(again.seq).toBe(first.seq);
 
       // Moving the fire away frees the middle: the leaf pile turns up there.
-      await db.delete(buildings).where(eq(buildings.tileId, built!.id));
+      await db.execute(`delete from buildings where tile_id = '${built!.id}'`);
       const home = await call(server, 'GET', `/maps/${map.id}/home`, owner);
       expect(home.statusCode).toBe(200);
       expect((await tilesOf(map.id)).find((t) => t.id === built!.id)?.nodeResource).toBe(

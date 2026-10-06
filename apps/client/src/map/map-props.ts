@@ -313,6 +313,39 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         ],
         0.18,
       );
+    case 'pumpkin-patch':
+      // A big carved pumpkin with two little ones, so it reads apart from the farm plot.
+      return done(
+        [
+          painted(at(sphere(0.26), 0, 0.1, 0, 1.25, 0.82, 1.25), '#ff8a2a'),
+          painted(at(cylinder(0.08, 0.025, 0.04), 0, 0.22, 0), '#5f9a46'),
+          painted(
+            at(cylinder(0.014, 0.06, 0.06, 3), -0.06, 0.13, 0.155, 1, 1, 1, { x: Math.PI / 2 }),
+            '#ffe08a',
+          ),
+          painted(
+            at(cylinder(0.014, 0.06, 0.06, 3), 0.06, 0.13, 0.155, 1, 1, 1, { x: Math.PI / 2 }),
+            '#ffe08a',
+          ),
+          painted(at(sphere(0.13), 0, 0.07, 0.148, 1, 0.32, 0.25), '#ffe08a'),
+          painted(at(sphere(0.13), 0.2, 0.05, -0.08, 1.2, 0.8, 1.2), '#ffa64d'),
+          painted(at(sphere(0.11), -0.19, 0.04, -0.1, 1.2, 0.8, 1.2), '#ff9a3c'),
+          painted(at(sphere(0.1), 0.05, 0.02, 0.2, 1.6, 0.25, 0.9, { y: 0.5 }), '#6aa84f'),
+        ],
+        0.3,
+      );
+    case 'leaf-pile':
+      // A crunchy heap of autumn leaves, with a few on top.
+      return done(
+        [
+          painted(at(sphere(0.3), 0, 0.03, 0, 1.2, 0.42, 1.1), '#e8913a'),
+          painted(at(sphere(0.18), -0.07, 0.08, 0.03, 1, 0.5, 1), '#d9542f'),
+          painted(at(sphere(0.16), 0.08, 0.08, -0.03, 1, 0.5, 1), '#f2c14e'),
+          painted(at(sphere(0.12), 0.01, 0.12, 0.06, 1.3, 0.3, 0.8, { y: 0.6 }), '#c4562e'),
+          painted(at(sphere(0.1), -0.02, 0.14, -0.05, 1.4, 0.3, 0.7, { y: -0.4 }), '#ffd166'),
+        ],
+        0.22,
+      );
     case 'jack-o-lantern':
       // A grinning pumpkin; its material glows (brighter at night).
       return done(
