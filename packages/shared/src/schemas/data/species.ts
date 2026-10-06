@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ContentIdSchema, DescriptionSchema, DisplayNameSchema, RaritySchema } from './common.js';
 import { ElementIdSchema, FeelingIdSchema } from './elements.js';
+import { PartSlotSchema } from './visuals.js';
 
 const statValue = z.number().int().min(1).max(255);
 
@@ -21,6 +22,10 @@ export const EvolutionSchema = z.strictObject({
   level: z.number().int().min(2).max(100),
 });
 export type Evolution = z.infer<typeof EvolutionSchema>;
+
+/** How a squishy stands (ART_BIBLE §1.2), for battle animation. */
+export const PoseSchema = z.enum(['sit', 'stand', 'upright', 'slither', 'hover']);
+export type Pose = z.infer<typeof PoseSchema>;
 
 /** Rarity material tiers (ART_BIBLE §1.4). */
 export const FinishSchema = z.enum(['vinyl', 'sparkle', 'iridescent']);
@@ -45,7 +50,7 @@ export const HexColorSchema = z
 export const SpeciesVisualSchema = z.strictObject({
   body: ContentIdSchema,
   palette: z.array(HexColorSchema).min(1).max(4),
-  parts: z.array(ContentIdSchema).max(8),
+  parts: z.array(ContentIdSchema).max(12),
   /** Overall scale; an evolution is ×1.2–1.4 its base (ART_BIBLE §1.3). Defaults to 1. */
   size: z.number().min(0.5).max(2).optional(),
   /** Face ink (eyes, brows, mouth); defaults to `artRules.defaultInk`. Chosen for contrast with the body. */
@@ -54,6 +59,25 @@ export const SpeciesVisualSchema = z.strictObject({
   finish: FinishSchema.optional(),
   /** Lit from inside: the whole squishy, or only its `accent` parts (flames). */
   glow: GlowSchema.optional(),
+  /**
+   * A separate head (ART_BIBLE §1.2): a registry body sitting on the torso,
+   * `size` times the torso's height, moved `forward` and `up` (fractions of
+   * the torso's height). Face, ears, horns, crown and mane go on it.
+   */
+  head: z
+    .strictObject({
+      body: ContentIdSchema,
+      size: z.number().min(0.3).max(2),
+      forward: z.number().min(-0.6).max(0.8),
+      up: z.number().min(0).max(1.4),
+    })
+    .optional(),
+  /** Lifts the torso off the ground (a fraction of its height); legs grow to reach the ground, or it hovers. */
+  stance: z.number().min(0).max(1.2).optional(),
+  /** How it stands, for battle animation (the battle-feel lane). */
+  pose: PoseSchema.optional(),
+  /** The slot a move animation swings, stomps or flares (tail, arms, horns…). */
+  attackPart: PartSlotSchema.optional(),
 });
 export type SpeciesVisual = z.infer<typeof SpeciesVisualSchema>;
 

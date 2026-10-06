@@ -15,7 +15,8 @@ import '../../styles.css';
  * screenshot every species the way a kid sees it in a fight.
  *
  * Query flags: `?species=puddlepuff` (default the first species),
- * `?terrain=meadow`, `?time=day|dusk|night`, `?quality=`.
+ * `?terrain=meadow`, `?time=day|dusk|night`, `?quality=`, and `?silhouette`
+ * (only the squishies, on white, for silhouette sheets).
  */
 
 if (!import.meta.env.DEV) throw new Error('The roster sheet is dev-only');
@@ -29,6 +30,7 @@ const registry = visualRegistry(GAME_DATA);
 const speciesId = params.get('species') ?? GAME_DATA.species[0]?.id ?? '';
 const terrain = params.get('terrain') ?? 'meadow';
 const timeOfDay = (params.get('time') ?? 'day') as BattleTimeOfDay;
+const silhouette = params.has('silhouette');
 
 /** The player's-side squishy in every shot (cropped out of the sheet). */
 const REFERENCE = params.get('reference') ?? 'pebblesnooze';
@@ -88,6 +90,15 @@ await boot(canvas, {
 });
 
 function frame(): void {
+  if (stage && battle && silhouette) {
+    const { scene } = stage;
+    scene.fogEnabled = false;
+    scene.clearColor.set(1, 1, 1, 1);
+    scene.imageProcessingConfiguration.isEnabled = false;
+    for (const mesh of scene.meshes) {
+      if (!mesh.name.startsWith('squishy-')) mesh.setEnabled(false);
+    }
+  }
   if (stage && battle) {
     battle.update(performance.now());
     stage.invalidate();

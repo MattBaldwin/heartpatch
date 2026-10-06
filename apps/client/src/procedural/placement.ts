@@ -50,21 +50,74 @@ function lean(a: Vec3, b: Vec3, angle: number): Vec3 {
   return normalize(add(scaled(a, Math.cos(angle)), scaled(b, Math.sin(angle))));
 }
 
-/** The matrix that takes a unit-box part primitive to its place on the body. */
+/** Turns unit `v` about the vertical axis by `angle` (a serpent's side-to-side swing). */
+function yawed(v: Vec3, angle: number): Vec3 {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return [v[0] * c + v[2] * s, v[1], -v[0] * s + v[2] * c];
+}
+
+/** Bends unit `v` towards straight up (positive) or down by `angle`. */
+function pitched(v: Vec3, angle: number): Vec3 {
+  let towards = flatten([0, angle >= 0 ? 1 : -1, 0], v);
+  if (len(towards) < 1e-6) return v;
+  towards = normalize(towards);
+  return lean(v, towards, Math.abs(angle));
+}
+
+/**
+ * The matrix that takes a unit-box part primitive to its place on the body.
+ * `offset` moves the host (a torso standing on legs, or a head on the torso)
+ * from the squishy's ground point.
+ */
 export function partMatrix(
   body: Body,
   bodyScale: Vec3,
-  part: Pick<PartParams, 'surface' | 'sink' | 'lift' | 'flip'>,
+  part: Pick<PartParams, 'surface' | 'sink' | 'lift' | 'flip'> & { readonly slot?: string },
   placement: PartPlacement,
+  offset: Vec3 = [0, 0, 0],
 ): Mat4 {
-  const f = surfaceFrame(body, bodyScale, placement.around, placement.up);
+  const local = surfaceFrame(body, bodyScale, placement.around, placement.up);
+  const f = { ...local, point: add(local.point, offset) };
   const outwards = scaled(f.side, placement.side);
   const [width, length, thickness] = placement.size;
   let x: Vec3;
   let y: Vec3;
   let z: Vec3;
   let centre: Vec3;
-  if (part.surface) {
+  let span = length;
+  if (part.slot === 'legs') {
+    // Legs grow straight down to the ground from wherever they join, leaning
+    // out by `splay`, so a torso's stance sets their length.
+    y = normalize(add([0, -1, 0], scaled(outwards, Math.tan(placement.splay))));
+    span = f.point[1] / -y[1] / (1 - part.sink);
+    let front = flatten(FRONT, y);
+    if (len(front) < 1e-3) front = [0, 0, -1];
+    z = normalize(front);
+    x = cross(y, z);
+    centre = add(f.point, scaled(y, span / 2 - part.sink * span));
+  } else if (placement.chain) {
+    // A chain: piece `index` follows the ones before it, bending and swinging.
+    const { index, step, curl, wave, shrink } = placement.chain;
+    const start = normalize(lean(f.normal, f.towardsTop, placement.tilt));
+    let pieceLen = length; // walk back to the first piece's length
+    for (let k = 0; k < index; k++) pieceLen /= shrink;
+    let dir = start;
+    let c = add(f.point, scaled(dir, pieceLen * (0.5 - part.sink)));
+    const swing = [0, 1, 0, -1];
+    for (let k = 1; k <= index; k++) {
+      const next = pieceLen * shrink;
+      dir = pitched(yawed(start, wave * (swing[k % 4] ?? 0)), curl * k);
+      c = add(c, scaled(dir, (step * (pieceLen + next)) / 2));
+      pieceLen = next;
+    }
+    y = dir;
+    let front = flatten(FRONT, y);
+    if (len(front) < 1e-3) front = flatten(scaled(f.towardsTop, -1), y);
+    z = normalize(front);
+    x = cross(y, z);
+    centre = c;
+  } else if (part.surface) {
     // Lies on the surface facing out; `splay` turns its top outwards.
     z = f.normal;
     y = lean(f.towardsTop, outwards, placement.splay);
@@ -93,7 +146,7 @@ export function partMatrix(
   return [
     ...scaled(x, width),
     0,
-    ...scaled(y, length),
+    ...scaled(y, span),
     0,
     ...scaled(z, thickness),
     0,

@@ -2,6 +2,7 @@ import {
   deriveSeed,
   hashString,
   Rng,
+  HEAD_SLOTS,
   SURFACE_SLOTS,
   type Body,
   type Finish,
@@ -9,6 +10,7 @@ import {
   type Part,
   type PartShape,
   type PartSlot,
+  type Pose,
   type SpeciesVisual,
   type VisualRegistry,
 } from '@heartpatch/shared';
@@ -48,12 +50,22 @@ export interface PartPlacement {
   readonly splay: number;
   /** Which way "outwards" is: −1 left, 1 right, 0 a centred or scattered part. */
   readonly side: -1 | 0 | 1;
+  /** A piece of a `chain` layout: its index, and the chain's step, curl and wave (radians) and shrink. */
+  readonly chain?: {
+    readonly index: number;
+    readonly step: number;
+    readonly curl: number;
+    readonly wave: number;
+    readonly shrink: number;
+  };
 }
 
 export interface PartParams {
   readonly id: string;
   readonly slot: PartSlot;
   readonly shape: PartShape;
+  /** Sits on the head (face, ears, horns, crown, mane) or the torso. */
+  readonly host: 'body' | 'head';
   /** Lies flat on the body instead of sticking out. */
   readonly surface: boolean;
   readonly color: Rgb;
@@ -78,9 +90,21 @@ export interface SquishyParams {
     readonly color: Rgb;
     readonly glow: boolean;
   };
+  /** A separate head on the torso, or null when the body is head and torso in one. */
+  readonly head: {
+    readonly id: string;
+    readonly scale: Vec3;
+    /** Where the head's ground point sits, relative to the squishy's ground point. */
+    readonly offset: Vec3;
+  } | null;
+  /** How far the torso stands off the ground (legs reach down to it), world units. */
+  readonly lift: number;
   /** Rarity material tier (ART_BIBLE §1.4) for the body and sticking-out parts. */
   readonly finish: Finish;
-  /** World height of this squishy's body. */
+  /** How it stands and what a move animation swings (the battle-feel lane). */
+  readonly pose: Pose;
+  readonly attackPart: PartSlot | null;
+  /** World height of this squishy, from the ground to the top of its torso or head. */
   readonly height: number;
   readonly parts: readonly PartParams[];
   readonly motion: {
@@ -164,6 +188,55 @@ function placementsFor(part: Part, height: number, rng: Rng): PartPlacement[] {
   const splay = (part.splay ?? 0) * DEG;
   const { layout } = part;
 
+  if (layout.kind === 'ring' || layout.kind === 'row') {
+    const out: PartPlacement[] = [];
+    for (let i = 0; i < layout.count; i++) {
+      const a =
+        layout.kind === 'ring'
+          ? part.around - layout.spread + ((i + 0.5) * 2 * layout.spread) / layout.count
+          : part.around;
+      const u =
+        layout.kind === 'row'
+          ? part.up + ((layout.to - part.up) * i) / (layout.count - 1)
+          : part.up;
+      out.push({ around: a * DEG, up: u * DEG, size, tilt, splay: 0, side: 0 });
+    }
+    return out;
+  }
+  if (layout.kind === 'quad') {
+    const front = part.around * DEG;
+    const back = (180 - part.around) * DEG;
+    const u = part.up * DEG;
+    return [
+      { around: -front, up: u, size, tilt, splay, side: -1 },
+      { around: front, up: u, size, tilt, splay, side: 1 },
+      { around: -back, up: u, size, tilt, splay, side: -1 },
+      { around: back, up: u, size, tilt, splay, side: 1 },
+    ];
+  }
+  if (layout.kind === 'chain') {
+    const out: PartPlacement[] = [];
+    let k = 1;
+    for (let i = 0; i < layout.count; i++) {
+      out.push({
+        around: part.around * DEG,
+        up: part.up * DEG,
+        size: [size[0] * k, size[1] * k, size[2] * k],
+        tilt,
+        splay: 0,
+        side: 0,
+        chain: {
+          index: i,
+          step: layout.step,
+          curl: layout.curl * DEG,
+          wave: layout.wave * DEG,
+          shrink: layout.shrink,
+        },
+      });
+      k *= layout.shrink;
+    }
+    return out;
+  }
   if (layout.kind === 'scatter') {
     const placed: { a: number; u: number }[] = [];
     const out: PartPlacement[] = [];
@@ -208,6 +281,7 @@ function glintFor(eye: PartParams, white: Rgb, height: number): PartParams {
     id: `${eye.id}-glint`,
     slot: eye.slot,
     shape: 'ellipsoid',
+    host: eye.host,
     surface: true,
     color: white,
     sink: 0,
@@ -255,6 +329,25 @@ export function squishyParams(
   // Parts scale with the species' size, not this squishy's proportions, so
   // a slightly taller squishy doesn't get taller eyes.
   const partHeight = body.height * size;
+  const lift = (visual.stance ?? 0) * partHeight;
+
+  // A separate head: face, ears, horns, crown and mane scale with it.
+  let head: SquishyParams['head'] = null;
+  let headHeight = partHeight;
+  if (visual.head) {
+    const headBody = registry.bodies.get(visual.head.body);
+    if (!headBody) missing.push(visual.head.body);
+    else {
+      headHeight = visual.head.size * partHeight;
+      const k = headHeight / headBody.height;
+      head = {
+        id: headBody.id,
+        scale: [k, k, k],
+        offset: [0, lift + visual.head.up * partHeight, -visual.head.forward * partHeight],
+      };
+    }
+  }
+  const headSlots: ReadonlySet<PartSlot> = new Set(head ? HEAD_SLOTS : []);
   const colors = paletteColors(visual.palette, visual.ink, stream('colors'));
 
   const parts: PartParams[] = [];
@@ -265,10 +358,13 @@ export function squishyParams(
       continue;
     }
     // Each part has its own stream, so adding a part never moves the others.
+    const host = headSlots.has(part.slot) ? 'head' : 'body';
+    const hostHeight = host === 'head' ? headHeight : partHeight;
     const params: PartParams = {
       id: part.id,
       slot: part.slot,
       shape: part.shape,
+      host,
       surface: surfaceSlots.has(part.slot),
       color: colors[part.color],
       sink: part.sink ?? 0,
@@ -277,10 +373,10 @@ export function squishyParams(
       glow:
         !surfaceSlots.has(part.slot) &&
         (visual.glow === 'body' || (visual.glow === 'accent' && part.color === 'accent')),
-      placements: placementsFor(part, partHeight, stream(`part:${part.id}`)),
+      placements: placementsFor(part, hostHeight, stream(`part:${part.id}`)),
     };
     parts.push(params);
-    if (part.highlight) parts.push(glintFor(params, colors.white, partHeight));
+    if (part.highlight) parts.push(glintFor(params, colors.white, hostHeight));
   }
 
   const motion = stream('motion');
@@ -288,8 +384,12 @@ export function squishyParams(
     speciesId: species.id,
     instanceId,
     body: { id: body.id, scale, color: colors.primary, glow: visual.glow === 'body' },
+    head,
+    lift,
     finish: visual.finish ?? 'vinyl',
-    height: body.height * scale[1],
+    pose: visual.pose ?? 'sit',
+    attackPart: visual.attackPart ?? null,
+    height: Math.max(lift + body.height * scale[1], head ? head.offset[1] + headHeight : 0),
     parts,
     motion: {
       phase: motion.next(),

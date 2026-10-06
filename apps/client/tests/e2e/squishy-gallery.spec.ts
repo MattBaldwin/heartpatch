@@ -54,7 +54,7 @@ const GOLDEN_LOOK: Look = {
     parts: ['dot-eyes', 'smile', 'round-ears', 'spots'],
   },
 };
-const GOLDEN_HASH = '126b1077d330d830ffaa427a5be36a55';
+const GOLDEN_HASH = '5654119afb5e849d771236b7e645fd4d';
 /** A roster species to repeat across the scene (any species works). */
 const GOLDEN_SPECIES = SPECIES[0]!.id;
 

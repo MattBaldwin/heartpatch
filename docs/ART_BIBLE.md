@@ -2,7 +2,7 @@
 
 > How Heartpatch **looks and moves**. `GAME_DESIGN.md` §19 sets the direction (soft vinyl toys, procedural, never pixelated); `STYLE_GUIDE.md` covers words. This file pins the numbers and rules every visual lane builds against, so the squishies, the world and the UI read as one game. Reviewers check client PRs against it.
 >
-> **Status:** draft for owner approval (art-bible lane, 2026-10-06). The squishy chapter comes with a prototype roster and contact sheets; the other chapters are the plan the visual-upgrade lanes build mockup-first (COORDINATOR.md "Plan after stabilization").
+> **Status:** draft for owner approval (art-bible lane, 2026-10-06; mockup 2). The squishy chapter comes with a prototype vertical slice (6 lines) and contact sheets; the other chapters are the plan the visual-upgrade lanes build mockup-first (COORDINATOR.md "Plan after stabilization").
 
 **The one rule:** squishies are the stars. Everything else (land, sky, props, UI) is softer, calmer and lower-contrast than they are, and nothing in a scene is allowed to change a squishy's own colours.
 
@@ -12,41 +12,44 @@
 
 ## 1. Squishy style
 
-### 1.1 Cute, never fierce
+### 1.1 Babies are cute; evolutions grow up
 
-Squishies are collectible vinyl toys: round, glossy, chunky, a little clumsy. Even Brave squishies look *determined*, never angry: brows tilt up in the middle, mouths stay small, horns and spikes are soft-tipped cones. No teeth, claws, scars, red eyes or narrowed eyes. Spooky squishies say "boo!" and giggle.
+Squishies are collectible vinyl toys, and they come in every shape a toy shelf does. A line starts as a **baby** and **grows up** when it evolves, the way a kid's favourite creature lines do.
 
-Everything is procedural and data-driven (CLAUDE.md rule 5): a body from the body registry, up to 8 parts from the part registry, a palette of up to 4 colours, and the fields below. Adding a species is a data entry; `checkGameData` enforces every rule marked **[checked]**.
+- **Base forms are baby-cute:** a big head on a small body, round eyes, stubby limbs, a soft little mouth.
+- **Evolutions grow up:** a smaller head compared to the body, longer limbs, a more upright or ready stance; a confident face (determined brows, narrower `sharp-eyes`, a smirk, small soft fang nubs); and bigger signature features (horns, spikes, crests, manes, wings).
+- **Fierce means cool and strong, never scary or mean.** No blood, gore, scars, claws drawn to hurt, or angry red eyes. Fangs are small, soft and white; spikes are rounded cones. A 10-year-old should want to collect every form.
 
-### 1.2 Silhouettes
+Everything is procedural and data-driven (CLAUDE.md rule 5): a torso from the body registry, an optional head, up to 12 parts from the part registry, a palette of up to 4 colours, and the fields below. Adding a species is a data entry; `checkGameData` enforces every rule marked **[checked]**.
 
-A kid should name a squishy from its shadow alone (the catalog's unseen cards will be dark silhouettes of the real body).
+### 1.2 Body plans and silhouettes
 
-- **13 bodies** (7 today + 6 new). Each line picks the body that tells its story first: a droplet for a water squishy, a snowman for a frost squishy, a candle for a candle cat.
+A kid should name a squishy from its shadow alone (the catalog's unseen cards will be dark silhouettes of the real body). Each line differs in **body plan**, not just in the stickers on a blob.
 
-| Body | Shape | New? | Used by |
-|---|---|---|---|
-| `drop` | droplet with a soft point | | Puddlepuff |
-| `pebble` | wide, flat, soft-boxy stone | | Pebblesnooze, Bubbletub |
-| `bun` | wide loaf | | Emberbun, Mossmuffin |
-| `blob` | the classic round toy | | Fuzzbolt, Nookling |
-| `bean` | upright jelly bean | | Flurrypup, Upsybat |
-| `pear` | narrow top, wide bottom | | Thistlepip |
-| `pumpkin` | grooved pumpkin | | Gourdon |
-| `tall` | a candle or pillar, 1.4× taller than wide | ✓ | Candlekit |
-| `mochi` | squat dumpling with a soft peak (gem, cloud) | ✓ | Glimmerock, Thunderpuff |
-| `tiered` | two stacked balls (snowman) | ✓ | Snoozicle |
-| `star` | puffy five-point star, standing | ✓ | Fizzlepop |
-| `ghost` | rounded top, scalloped hem | ✓ | Glowboo |
-| `orb` | near-perfect sphere | ✓ | Dawndrop |
+**Building blocks** (all on the existing five primitives, so no new geometry kinds):
 
-- **[checked] No two species lines share body + dominant part + hue family.** The *dominant part* is the line's biggest sticking-out part (by silhouette area: width × length); the *hue family* is the body colour's family (red, orange, yellow, green, cyan, blue, purple, pink, or white, dark and neutral for very light, very dark and greyish colours). Each line also gets a **signature part** a kid can point at: a water curl, a nightcap, a flame, a crest of crystals, a thistle crown, a cloud.
-- At most two lines share a body, and when they do they differ in hue family *and* dominant part (Fuzzbolt the yellow lightning cat vs Nookling the indigo long-eared bunny).
+| Block | Data | Examples |
+|---|---|---|
+| Torso | a registry body (`blob`, `barrel`, `tall`, `pear`, `orb`, …) | a barrel for four-legged animals, a tall body for a cactus knight or a candle |
+| Head | `visual.head`: a registry body, its size against the torso, and where it sits | big heads on babies, smaller heads on grown-ups |
+| Stance | `visual.stance`: how far the torso stands off the ground | short legs, long legs, or hovering when there are none |
+| Legs | `legs` slot, `quad` (four) or `pair` (two) layout; legs grow to reach the ground | stubby pup legs, a wolf's long legs, biped feet |
+| Arms | `arms` slot | stubby arms, strong arms, leaf arms |
+| Tails and long bodies | `chain` layout: pieces that step, bend and swing side to side | a wiggly tadpole tail, a sea serpent's body, a flame tail, a spiked tail |
+| Spines and rings | `row` (up the back) and `ring` (around) layouts | back spikes, fin rows, manes, crests, tail feathers |
+| Spike coats | `scatter` over the whole body | a burr ball |
+| Wings and fins | flattened teardrops | stubby wings, big thunderbird wings |
 
-### 1.3 Evolutions: bigger, sparklier
+**Body plans** in the slice: quadruped (Flurrypup → Blusterpup), biped with arms (Emberbun → Hearthbun), serpentine (Puddlepuff → Splashmallow), flier (Thunderpuff → Thunderplume), spiky ball → spiky knight (Thistlepip → Bristlebloom), and an object (Candlekit the candle → Wickwhisker the lantern cat). The remaining lines get plans from the same kit: plants and food shapes (Mossmuffin, Gourdon), finned swimmers (Bubbletub), clouds and crystals (Glimmerock), ghosts (Glowboo).
 
-- **[checked]** An evolution is **×1.2–1.4** the size of the form it grows from, and adds **at least one new sticking-out part** (a new silhouette, not a darker tint). It keeps the base's body, signature part and colour family, so the family resemblance is obvious.
-- Evolutions are one rarity step up (a rule, already true in the data), so they usually also gain a material tier (§1.4): Glimmerock → Glittercrag starts to sparkle, Dawndrop → Dazzledrop gains an iridescent rim.
+- **[checked] No two species lines share body + dominant part + hue family.** The *dominant part* is the line's biggest sticking-out part apart from legs (by silhouette area); the *hue family* is the body colour's family (red, orange, yellow, green, cyan, blue, purple, pink, or white, dark and neutral).
+- **Pose and attack part** (for the battle-feel lane): every line names how it stands (`pose`: sit, stand, upright, slither, hover) and the slot a move animation drives (`attackPart`: a tail to swing, arms to punch, wings to flap, spikes to puff). **[checked]** the attack part's slot exists on the species.
+
+### 1.3 Evolutions grow up
+
+- **[checked]** An evolution is **×1.2–1.4** the size of the form it grows from and adds **at least one new sticking-out part**. It keeps the base's colour family and signature, so the family resemblance is obvious.
+- Grown-up proportions: the head shrinks against the torso (Flurrypup's head is 1.1× its torso's height, Blusterpup's 0.88×), limbs lengthen (stance 0.15 → 0.45), and the stance gets readier (sit → stand → upright).
+- Evolutions are one rarity step up (a rule, already true in the data), so they usually also gain a material tier (§1.4).
 
 ### 1.4 Rarity material tiers
 
@@ -89,8 +92,8 @@ Seasonal lines may keep their season's colour (Gourdon is an orange pumpkin) but
 | Sleepy | `sleepy-eyes` | closed, drowsy arcs |
 | Joy | `happy-eyes` | ^ ^ |
 | Silly | `dot-eyes` + `open-mouth` | wide-eyed, giggling |
-| Cozy | `oval-eyes` + `blush-cheeks` | soft and rosy |
-| Brave | `brave-brows` (new) + `oval-eyes` or `dot-eyes` | determined, never cross |
+| Cozy | `oval-eyes` (or grown-up `sharp-eyes`) + `blush-cheeks` | soft and rosy |
+| Brave | `brave-brows` (new) + `oval-eyes`, `dot-eyes` or grown-up `sharp-eyes` | determined, never cross |
 | Spooky | `spooky-eyes` (new, tall and glinty) | "boo!" |
 
 Idle animations (Silly spins, Sleepy nods off, Brave puffs up) add to this in the close-up view; the face alone must carry it in battle and on the map.
@@ -109,40 +112,26 @@ The squishy material opts out of scene fog, so a blue Puddlepuff stays blue in a
 
 Shared data shapes this chapter adds (all additive; no id is renamed or removed, and no rule changes):
 
-- **Bodies:** optional `waist` (`at`, `depth`, `width`: a snowman pinch), `points` (`count`, `depth`: a standing star) and `hem` (`count`, `depth`: a ghost's scalloped edge) on `BodySchema`; six new body ids.
-- **Parts:** a new `brows` slot (a face slot, lies on the surface); 26 new part ids using the existing five primitives (no new geometry builder, so no new part draw call).
-- **Species visual:** optional `ink` (hex), `finish` (`vinyl` | `sparkle` | `iridescent`) and `glow` (`body` | `accent`).
-- **Art rules:** a new `artRules` table in `GAME_DATA` (default ink, minimum contrast, finish by rarity, glow by element, evolution growth range, feeling face kits), validated by zod and enforced by `checkGameData`.
-- **Visual-only species edits:** body, palette, parts, size, ink, finish and glow for all 36 public species and the two secret ones. Ids, names, elements, feelings, rarities, moves, stats, evolution levels and spawn tables are untouched.
+- **Bodies:** optional `waist`, `points` and `hem` on `BodySchema`; new body ids (`tall`, `mochi`, `tiered`, `star`, `ghost`, `orb`, `barrel`).
+- **Part slots:** `brows`, `legs`, `arms`, `back`, `spikes`, `mane`, `fangs`. `HEAD_SLOTS` says which slots sit on the head when a species has one.
+- **Part layouts:** `ring`, `row`, `quad` and `chain`, next to `single`, `pair` and `scatter`. New parts use the existing five primitives.
+- **Species visual:** optional `ink`, `finish`, `glow`, `head`, `stance`, `pose` and `attackPart`; up to 12 parts (was 8).
+- **Art rules:** a new `artRules` table in `GAME_DATA`, validated by zod and enforced by `checkGameData`.
+- **Visual-only species edits.** Ids, names, elements, feelings, rarities, moves, stats, evolution levels and spawn tables are untouched.
 - **Golden hashes:** `paramsHash` covers every visual field, so the pinned squishy hashes (`params.test.ts` and the gallery e2e) change once, on purpose.
 
-### 1.10 Roster
+### 1.10 Vertical slice (mockup 2)
 
-The prototype roster (base → evolution). Size is the evolution's scale.
+| Line | Element · Feeling | Body plan | Base (baby) | Evolution (grown up) | Attack part |
+|---|---|---|---|---|---|
+| Flurrypup → Blusterpup | Frost · Brave | quadruped | chibi pup: big round head, stubby legs, floppy ears, curly tail | frost wolf: smaller head, long legs, sharp eyes, smirk and fangs, alert ears, icicle mane, spiked tail (×1.3, sparkle) | tail |
+| Emberbun → Hearthbun | Fire · Cozy | biped with arms | fire bunny: big head, stubby arms and feet, flame tuft | fire brawler: upright, strong arms, swept-back ears, flame mane and flame tail (×1.3) | arms |
+| Puddlepuff → Splashmallow | Water · Silly | serpentine | droplet tadpole with a wiggly tail | sea serpent: a long swinging body, fin row, toothy grin (×1.3) | tail |
+| Thunderpuff → Thunderplume | Spark · Brave | flier | hovering storm-cloud chick | thunderbird: big yellow wings, beak, storm crest, tail feathers (×1.3) | wings |
+| Thistlepip → Bristlebloom | Leaf · Brave | spiky | burr ball on little feet | thistle knight: tall cactus body, thistle crown, back spines, leaf arms (×1.25) | spikes → arms |
+| Candlekit → Wickwhisker | Fire · Spooky | object → quadruped | candle cat | lantern cat: four long legs, flame mane, whisker flames, flame tail, fangs (×1.25) | crown → tail |
 
-| Line | Element · Feeling | Rarity | Body | Signature → evolution adds | Colour | Ink | Tier |
-|---|---|---|---|---|---|---|---|
-| Puddlepuff → Splashmallow | Water · Silly | common → uncommon | drop | water curl → back fin, bubble tail (×1.3) | sky blue | plum | — |
-| Pebblesnooze → Boulderdoze | Stone · Sleepy | common → uncommon | pebble | lilac nightcap → crag nubs (×1.35) | warm grey | plum | — |
-| Emberbun → Hearthbun | Fire · Cozy | common → uncommon | bun | flame tuft → three-flame crown, ears (×1.3) | peach-orange | plum | glow flames |
-| Snoozicle → Drowsiberg | Frost · Sleepy | common → uncommon | tiered | pointy ears → icicle crown (×1.3) | icy white | plum | — |
-| Fuzzbolt → Frizzbolt | Spark · Silly | common → uncommon | blob | lightning ears → frizzy spark crest (×1.3) | lemon yellow | plum | — |
-| Fizzlepop → Zingaling | Spark · Joy | uncommon → rare | star | little wings → antennae (×1.3) | gold | plum | — |
-| Bubbletub → Bubbletide | Water · Cozy | uncommon → rare | pebble | bubble crown → back fin (×1.3) | teal | plum | — |
-| Thistlepip → Bristlebloom | Leaf · Brave | uncommon → rare | pear | purple thistle crown → leaf wings (×1.25) | leaf green | plum | — |
-| Flurrypup → Blusterpup | Frost · Brave | rare → epic | bean | floppy ears → big fluff tail (×1.3) | frost blue | plum | sparkle |
-| Glimmerock → Glittercrag | Stone · Joy | rare → epic | mochi | crystal crown → crystal spines (×1.35) | gem lilac | plum | sparkle |
-| Nookling → Snugglenook | Shadow · Cozy | uncommon → rare | blob | long ears → big fluff tail (×1.25) | indigo | cream | — |
-| Mossmuffin → Mossquilt | Leaf · Cozy | rare → epic | bun | moss muffin cap → fern tail, ears (×1.35) | muffin tan + moss | plum | sparkle |
-| Dawndrop → Dazzledrop | Light · Joy | epic → legendary | orb | halo of sun rays → glowing wings (×1.3) | cream-gold | plum | glow; sparkle → iridescent |
-| Thunderpuff → Thunderplume | Spark · Brave | legendary | mochi | storm-cloud puffs, bolt tail → yellow plume wings (×1.3) | storm slate | plum | iridescent |
-| Gourdon → Glowgourd | Leaf · Silly | common → uncommon | pumpkin | stem and leaf → leaf ears, glowing body (×1.3) | pumpkin orange | plum | Glowgourd glows |
-| Glowboo → Brightboo | Light · Spooky | rare → epic | ghost | scalloped hem → little wings, wisp tail (×1.3) | moon white | plum | glow; sparkle |
-| Upsybat → Topsywing | Shadow · Silly | uncommon → rare | bean | bat wings → big bat wings, curly tail (×1.25) | night purple | cream | — |
-| Candlekit → Wickwhisker | Fire · Spooky | uncommon → rare | tall | wick flame → whisker flames (×1.25) | candle-cat plum | cream | glow flames |
-| *Heartlet → Heartbloom (secret)* | Light · Cozy | secret | blob | little wings → leaf sprout (×1.3) | heart pink | plum | glow; iridescent |
-
----
+The other 12 lines keep mockup 1's look until the owner approves this slice; then they get body plans from the same kit.
 
 ## 2. Palette
 
@@ -196,6 +185,13 @@ Sprout (she/her) is "the tiny glowing spirit of your Heart Seed". Proposal for t
 
 ## Appendix: performance budget
 
-- Draw calls per squishy field stay **one per body kind on screen + one per part primitive (5) + one contact-shadow mesh**, whatever the number of squishies. A battle shows at most 2 bodies, as today. A map showing every body at once could reach 13 + 5 + 1 = 19 draw calls instead of 13; a typical map shows far fewer.
-- Material tiers, ink and fog opt-out add **no** draw calls, meshes, materials or textures. Their cost is fragment ALU on the squishies' own pixels only (§1.4).
-- New bodies are the same lat/long grid at each LOD (low 14 rings, high 32, hero 48), so triangle counts per squishy don't change.
+- **Draw calls** per squishy field stay **one per body kind on screen + one per part primitive (5) + one contact-shadow mesh**, however many squishies there are. Every new part uses the existing primitives, so body plans add no part draw calls. A head adds its body kind to the field: a battle fighter is at most **7** draw calls (torso, head, 5 primitives), up from 6.
+- **Triangles** grow with the extra pieces. Measured on the slice (base and evolution):
+
+| Detail level | Used for | Current | Mockup 2 |
+|---|---|---|---|
+| high (32 rings) | battle, care, wardrobe | 7.5k–12.7k per squishy | 10.5k–21.9k per squishy |
+| low (14 rings) | map | 1.5k–2.8k per squishy | 2.2k–4.7k per squishy |
+
+  Two fighters in a battle draw under 50k squishy triangles; 50 squishies on the map about 235k (was about 125k). Both should fit a recent iPhone at 60 fps and an older iPad at 30 fps; that is an estimate to confirm on the devices (the dev roster page and the gallery's `?count=50` stress test). If the governor drops a tier, the map's `low` level is already in use; a later lane can add a `tiny` level (fewer rings for limbs and chain pieces) for crowded maps.
+- Material tiers, ink and fog opt-out add **no** draw calls, meshes, materials or textures (§1.4).

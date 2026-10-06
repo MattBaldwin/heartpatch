@@ -116,7 +116,7 @@ function partsOf(visual: SpeciesVisual, registry: VisualRegistry): Part[] {
 export function dominantPart(visual: SpeciesVisual, registry: VisualRegistry): string {
   let best: Part | null = null;
   for (const part of partsOf(visual, registry)) {
-    if (surface.has(part.slot)) continue;
+    if (surface.has(part.slot) || part.slot === 'legs') continue;
     if (!best || part.size[0] * part.size[1] > best.size[0] * best.size[1]) best = part;
   }
   return best?.id ?? 'none';

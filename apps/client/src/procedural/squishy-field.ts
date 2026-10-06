@@ -393,19 +393,32 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       squishy.instances.push({ batch, instance });
     };
 
-    const bodyBatch = this.#batch(
-      `body:${body.id}`,
-      (lod) => orientTriangles(bodyArrays(body, LOD[lod].bodyRings)),
-      true,
-    );
+    const bodyBatchOf = (shape: Body) =>
+      this.#batch(
+        `body:${shape.id}`,
+        (lod) => orientTriangles(bodyArrays(shape, LOD[lod].bodyRings)),
+        true,
+      );
     const [sx, sy, sz] = params.body.scale;
     const glow = (on: boolean) => (on ? FINISH_CODE.glow : 0);
+    const torsoAt: [number, number, number] = [0, params.lift, 0];
     attach(
-      bodyBatch,
-      Matrix.Scaling(sx, sy, sz),
+      bodyBatchOf(body),
+      Matrix.Scaling(sx, sy, sz).multiply(Matrix.Translation(...torsoAt)),
       linear(params.body.color),
       tier + glow(params.body.glow),
     );
+    // A separate head: one more instance in its body kind's batch.
+    const headBody = params.head ? this.#registry.bodies.get(params.head.id) : undefined;
+    if (params.head && headBody) {
+      const [hx, hy, hz] = params.head.scale;
+      attach(
+        bodyBatchOf(headBody),
+        Matrix.Scaling(hx, hy, hz).multiply(Matrix.Translation(...params.head.offset)),
+        linear(params.body.color),
+        tier + glow(params.body.glow),
+      );
+    }
 
     for (const part of params.parts) {
       const batch = this.#batch(
@@ -416,8 +429,12 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       const color = linear(part.color);
       // Faces and patterns stay plain vinyl; sticking-out parts share the body's tier.
       const finish = (part.surface ? 0 : tier) + glow(part.glow);
+      const onHead = part.host === 'head' && params.head && headBody;
+      const hostBody = onHead ? headBody : body;
+      const hostScale = onHead ? params.head.scale : params.body.scale;
+      const hostAt = onHead ? params.head.offset : torsoAt;
       for (const p of part.placements) {
-        const local = Matrix.FromArray(partMatrix(body, params.body.scale, part, p));
+        const local = Matrix.FromArray(partMatrix(hostBody, hostScale, part, p, hostAt));
         attach(batch, local, color, finish, part.slot === 'eyes');
       }
     }
