@@ -135,10 +135,6 @@
   color: #4a3150;
 }
 
-.rbook-cooking-ready {
-  background: #ffe08a;
-}
-
 .rbook-cooking-icon {
   flex: none;
   font-size: 24px;
@@ -148,13 +144,6 @@
   flex: 1;
   min-width: 0;
   font-variant-numeric: tabular-nums;
-}
-
-.rbook-cooking .rbook-stamp {
-  flex: none;
-  min-height: 44px;
-  padding: 0 var(--hp-pad-x);
-  font-size: 16px;
 }
 
 .rbook-tabs {

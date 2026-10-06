@@ -2,7 +2,6 @@ import type { JobSquishy, JobsView, WorkSpot, WorkStatus } from '@heartpatch/sha
 import { describe, expect, it } from 'vitest';
 import { workableByMe } from './index.js';
 import {
-  anythingReady,
   hintLines,
   jobLine,
   nameOf,
@@ -69,10 +68,10 @@ describe('job lines', () => {
   it("shows a gatherer's next ready time and what's waiting", () => {
     expect(workLine(work(), NOW)).toBe('Gathering 🪵 Timber. Next in 12:30.');
     expect(workLine(work({ readyCycles: 1, ready: { timber: 5 } }), NOW)).toBe(
-      'Gathering 🪵 Timber. +5 🪵 Timber ready! Next in 12:30.',
+      'Gathering 🪵 Timber. +5 🪵 Timber on its way to your bag! Next in 12:30.',
     );
     expect(workLine(work({ full: true, nextReadyAt: null }), NOW)).toBe(
-      'Gathering 🪵 Timber. Full! Time to collect.',
+      'Gathering 🪵 Timber. Basket full! It empties into your bag soon.',
     );
   });
 
@@ -108,7 +107,7 @@ describe('job lines', () => {
   });
 });
 
-describe('collecting', () => {
+describe('what’s waiting', () => {
   it('adds up everything waiting', () => {
     const view = {
       squishies: [
@@ -121,8 +120,6 @@ describe('collecting', () => {
       ],
     } satisfies Pick<JobsView, 'squishies'>;
     expect(readyTotal(view)).toEqual({ timber: 15, stone: 2 });
-    expect(anythingReady(view)).toBe(true);
-    expect(anythingReady({ squishies: [squishy(1)] })).toBe(false);
   });
 });
 

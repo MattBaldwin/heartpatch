@@ -18,7 +18,8 @@ import { createInventoryRepo } from '../inventory/repo.js';
 import { createInventoryService, grantItems, seasonsOn, toGather } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
-import { createGatheringRepo, type GatherRow } from './repo.js';
+import type { NewGameEvent } from '../../db/game-events.js';
+import { createGatheringRepo, type GatherRow, type GatheringRepo } from './repo.js';
 
 /*
  * Gathering on resource nodes (#17, design doc §12). A gather is two
@@ -44,6 +45,67 @@ const MESSAGES = {
   notReady: 'Not ready yet. Check back soon!',
   outOfSeason: (name: string, season: string) => `${name} only turn up around ${season}!`,
 } as const;
+
+/**
+ * What happens to a gather when it's settled (owner decision 2026-10-06:
+ * finished things go straight into the bag). `bank`: it finished while its
+ * tile was still the gatherer's, so it goes in their bag, even if the land
+ * changed hands since. `lose`: the land changed hands before it finished
+ * (or was left), so it's let go. `wait`: still going.
+ */
+export function gatherFate(
+  gather: Pick<GatherRow, 'userId' | 'readyAt'> & {
+    tileOwner: string | null;
+    lostAt: Date | null;
+  },
+  at: Date,
+): 'bank' | 'lose' | 'wait' {
+  if (gather.lostAt !== null) return gather.readyAt <= gather.lostAt ? 'bank' : 'lose';
+  if (gather.tileOwner !== gather.userId) return 'lose';
+  return gather.readyAt <= at ? 'bank' : 'wait';
+}
+
+/**
+ * Banks a finished gather into its gatherer's bag, inside the caller's
+ * transaction: the items (ledger reason `gather`), the row marked collected,
+ * a roll for found clothing (#43). The caller has locked the tile, the
+ * gather and (with other grants) the inventory rows. `granted`: the caller
+ * already granted the items (settle grants everything before any roll, whose
+ * `clothing.found` takes `maps`). Returns the `resource.gathered` event to
+ * append last, as a Collect did.
+ */
+export async function bankGather(
+  tx: Executor,
+  repo: Pick<GatheringRepo, 'endGather'>,
+  gather: GatherRow,
+  at: Date,
+  options: { granted?: boolean } = {},
+): Promise<NewGameEvent<'resource.gathered'>> {
+  const owner = { mapId: gather.mapId, userId: gather.userId };
+  if (!options.granted) await grantItems(tx, owner, gather.items, 'gather', gather.id);
+  await repo.endGather(gather.id, { status: 'collected', at });
+  await rollFoundDrop(tx, {
+    source: 'gather',
+    refId: gather.id,
+    userId: gather.userId,
+    mapId: gather.mapId,
+    tileId: gather.tileId,
+    at,
+  });
+  return {
+    mapId: gather.mapId,
+    type: 'resource.gathered',
+    actorUserId: gather.userId,
+    payload: {
+      gatherId: gather.id,
+      userId: gather.userId,
+      q: gather.q,
+      r: gather.r,
+      resource: gather.resource,
+      items: gather.items,
+    },
+  };
+}
 
 export interface GatheringService {
   /** Starts gathering the node on a tile the player owns. */
@@ -92,10 +154,21 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
             throw new AppError('CONFLICT', MESSAGES.outOfSeason(resource.name, season));
           }
 
-          const running = await repo.findActiveOnTile(tile.id);
-          if (running?.userId === user.id) throw new AppError('CONFLICT', MESSAGES.already);
-          // Left behind by a previous owner: the node is the new owner's now.
-          if (running) await repo.endGather(running.id, { status: 'lost', at });
+          // The node's gather still going: a finished one goes in its
+          // gatherer's bag first (no Collect, owner decision 2026-10-06), even
+          // a previous owner's that finished before the land changed hands.
+          // Lock order (tech spec §7): the tile, the gather, inventory, `maps`.
+          const found = await repo.findActiveOnTile(tile.id);
+          const running = found && (await repo.lockGather(found.id));
+          const banked: NewGameEvent[] = [];
+          if (running?.status === 'active') {
+            const lostAt = await repo.capturedSince(tile.id, running.startedAt);
+            const fate = gatherFate({ ...running, tileOwner: tile.ownerUserId, lostAt }, at);
+            if (fate === 'wait') throw new AppError('CONFLICT', MESSAGES.already);
+            if (fate === 'bank') banked.push(await bankGather(tx, repo, running, at));
+            // Left behind by a previous owner, unfinished: the node is the new owner's now.
+            else await repo.endGather(running.id, { status: 'lost', at });
+          }
 
           const seconds = gatherSeconds(resource, gameplayOverrides(map.kind));
           const gather = await repo.insertGather({
@@ -107,6 +180,7 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
             startedAt: at,
             readyAt: new Date(at.getTime() + seconds * 1000),
           });
+          for (const event of banked) await repo.appendEvent(event);
           await repo.appendEvent({
             mapId,
             type: 'gather.started',
@@ -152,30 +226,7 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
         if (gather.readyAt > at) throw new AppError('CONFLICT', MESSAGES.notReady);
 
         // Lock order: tile, gather, inventory rows, then `maps` via appendEvent.
-        await grantItems(tx, owner, gather.items, 'gather', gather.id);
-        await repo.endGather(gather.id, { status: 'collected', at });
-        // A little luck: maybe a piece of clothing turned up too (#43).
-        await rollFoundDrop(tx, {
-          source: 'gather',
-          refId: gather.id,
-          userId: user.id,
-          mapId,
-          tileId: gather.tileId,
-          at,
-        });
-        await repo.appendEvent({
-          mapId,
-          type: 'resource.gathered',
-          actorUserId: user.id,
-          payload: {
-            gatherId: gather.id,
-            userId: user.id,
-            q: gather.q,
-            r: gather.r,
-            resource: gather.resource,
-            items: gather.items,
-          },
-        });
+        await repo.appendEvent(await bankGather(tx, repo, gather, at));
         return {
           granted: gather.items,
           items: await createInventoryRepo(tx).list(owner),

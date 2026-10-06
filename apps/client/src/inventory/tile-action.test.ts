@@ -52,7 +52,7 @@ describe('tileAction', () => {
     expect(after.kind === 'gather' && after.yields['witch-dust']).toBeFalsy();
   });
 
-  it('waits, then collects, on the game clock', () => {
+  it('waits, then lands in the bag by itself, on the game clock', () => {
     const going = gather('2026-10-02T12:05:00Z');
     expect(tileAction(tile({}), me, { gathers: [going], seasons: [] }, NOW)).toEqual({
       kind: 'waiting',
@@ -60,7 +60,7 @@ describe('tileAction', () => {
     });
     expect(
       tileAction(tile({}), me, { gathers: [going], seasons: [] }, Date.parse(going.readyAt)),
-    ).toEqual({ kind: 'collect', gather: going });
+    ).toEqual({ kind: 'landing', gather: going });
   });
 
   it('lets pumpkin patches sleep outside Halloween', () => {

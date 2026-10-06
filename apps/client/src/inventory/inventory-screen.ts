@@ -10,6 +10,7 @@ import {
   describeItems,
   gatherChip,
   itemName,
+  landedText,
 } from './bag-view.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
@@ -20,9 +21,12 @@ import './inventory.css';
 
 // The bag and gathering (#17, design doc §12): a Bag entry in the My Heartpatch tray that
 // opens a sheet of items (big numbers, pictures) and recipes, and the
-// gather / collect button inside the map's tile panel. Timers are the
-// server's timestamps; the screen only counts down to them on the game clock
-// and asks the server to do everything (CLAUDE.md rule 1).
+// Gather button inside the map's tile panel. Timers are the server's
+// timestamps; the screen only counts down to them on the game clock and asks
+// the server to do everything (CLAUDE.md rule 1). Finished crafts, gathers
+// and gatherers' cycles go straight into the bag (owner decision 2026-10-06):
+// the screen asks the server to settle when a map opens, when the app comes
+// back, and when the server says the next thing is due, and pops up what landed.
 
 export interface InventoryScreenOptions {
   root: HTMLElement;
@@ -33,7 +37,7 @@ export interface InventoryScreenOptions {
   now?: () => number;
   /** Dev builds show a "get stuff" button (server `HP_DEV_SQUISHY_GRANTS`). */
   devTools?: boolean;
-  /** Something new landed in the bag (a gather or craft collected): the recipe book may open a page. */
+  /** Something new landed in the bag (a gather or craft finished): the recipe book may open a page. */
   onCollected?: () => void;
 }
 
@@ -47,8 +51,12 @@ export interface InventoryDebug {
   readonly bagOpen: boolean;
   /** The tile panel's action right now, if it's showing one of your nodes. */
   readonly tileAction: TileAction['kind'] | null;
-  /** The gathering chip over the map: null while hidden; `got` while it shows what a tap collected. */
-  readonly chip: 'waiting' | 'ready' | 'got' | null;
+  /** The gathering chip over the map: null while hidden; `ready` for the moment before it lands. */
+  readonly chip: 'waiting' | 'ready' | null;
+  /** The "it landed!" pop-up's words while it shows, else null. */
+  readonly toast: string | null;
+  /** Settles so far that put something in the bag. */
+  readonly landings: number;
 }
 
 export interface InventoryScreen {
@@ -58,7 +66,7 @@ export interface InventoryScreen {
   readonly tileActions: TileActions;
   /** The bag on screen now (items, crafts, seasons), or null. */
   readonly bag: InventoryResponse | null;
-  /** Fetches the bag again for the map on screen. */
+  /** Settles the map on screen (banks what finished, owner decision 2026-10-06) and reads the bag again. */
   refresh: () => Promise<void>;
   /**
    * Starts a craft for the map on screen (the recipe book's "Make it"): the
@@ -66,8 +74,6 @@ export interface InventoryScreen {
    * once started, or to a kid-readable line saying why not.
    */
   craft: (recipeId: string) => Promise<string | null>;
-  /** Collects a finished craft (the recipe book's Collect), like the Bag's. Null once collected, or why not. */
-  collectCraft: (craftId: string) => Promise<string | null>;
   /** Ms until an ISO time on the server's clock (0 once it's passed), for countdowns. */
   msUntil: (iso: string) => number;
   readonly debug: InventoryDebug | null;
@@ -83,7 +89,6 @@ const TEXT = {
   makingTitle: 'Cooking',
   gatherTitle: 'Gathering',
   gather: 'Gather',
-  collect: 'Collect',
   make: 'Make',
   waiting: (left: string) => `Gathering… ready in ${left}`,
   making: (name: string, left: string) => `Making ${name}… ${left}`,
@@ -91,19 +96,23 @@ const TEXT = {
   busyDone: "Someone's gathering here.",
   gives: (what: string) => `Gives ${what}`,
   got: (what: string) => `Yay! ${what}`,
-  started: 'Off you go! Come back when it’s ready.',
+  started: 'Off you go! It pops into your bag when it’s ready.',
   keepsGoing: 'It keeps going while you play!',
+  landing: 'Ready! Into your bag it goes…',
+  readyNow: 'Ready!',
   chipWaiting: (what: string, left: string) => `Gathering ${what}… ready in ${left}`,
-  chipReady: (what: string) => `${what} is ready! Tap to collect`,
+  chipReady: (what: string) => `${what} is ready!`,
   chipMore: (n: number) => ` (+${String(n)})`,
-  craftBusy: 'Your pot is busy! Collect first.',
+  craftBusy: 'Your pot is busy… it’s nearly done!',
   justASec: 'Just a sec…',
   noMap: 'Visit a patch first!',
   devGrant: 'Get stuff (dev)',
 } as const;
 
-/** How long the chip shows what a tap just collected before it moves on. */
-const CHIP_REVEAL_MS = 2500; // TUNE: long enough to read "Yay! +5 Timber", short enough not to nag
+/** How long the "it landed!" pop-up stays. */
+const TOAST_MS = 3200; // TUNE: long enough to read "🪵 +5 Timber!", short enough not to nag
+/** A settle asks a moment after the server's `nextAt`, so it has surely finished by the server's clock. */
+const SETTLE_SLACK_MS = 400; // TUNE: covers the clock sync's rounding and a slow request
 
 /** Things a dev build hands out to try crafting without waiting. */
 const DEV_ITEMS: ItemCounts = {
@@ -129,11 +138,10 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   let panel: { container: HTMLElement; tile: PublicTile } | null = null;
   let shownAction: TileAction | null = null;
   let shownChip: InventoryDebug['chip'] = null;
-  /** The gather the chip offers to collect on tap (null while it only counts down). */
-  let chipReady: string | null = null;
-  /** What the chip's own tap just collected, shown on the chip for a moment. */
-  let chipReveal: string | null = null;
-  let chipRevealTimer: number | undefined;
+  /** The one settle waiting for the next thing to finish (the server's `nextAt`). */
+  let settleTimer: number | undefined;
+  let toastTimer: number | undefined;
+  let landings = 0;
 
   // ── Bag button and sheet ──────────────────────────────────────────────
   const open = el(
@@ -145,9 +153,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   open.hidden = true;
 
   // The gathering chip: a gather takes minutes on a patch, so the map keeps
-  // saying so until it's collected. Tap while it counts down: the Bag. Tap
-  // once it says "ready! Tap to collect": it collects, and shows what came
-  // (one tap does what the label says; the owner's playtest of 2026-10-05).
+  // saying so until it lands in the bag, then it's gone. A tap opens the Bag.
   const chip = el('button', {
     type: 'button',
     class: 'gather-chip',
@@ -181,8 +187,16 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     recipesBox,
   );
   sheet.hidden = true;
+  // The "it landed!" pop-up: one cheerful line for everything that just
+  // went into the bag, wherever the player is looking (the book included).
+  const toast = el('p', {
+    class: 'landed-toast',
+    role: 'status',
+    'data-testid': 'landed-toast',
+  });
+  toast.hidden = true;
   (options.entryRoot ?? options.root).append(open);
-  options.root.append(chip, sheet);
+  options.root.append(chip, sheet, toast);
 
   if (options.devTools) {
     const dev = el(
@@ -207,10 +221,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     void refresh();
   };
   open.addEventListener('click', openBag);
-  chip.addEventListener('click', () => {
-    if (chipReady) void collectGather(chipReady, 'chip');
-    else openBag();
-  });
+  chip.addEventListener('click', openBag);
   close.addEventListener('click', () => {
     sheet.hidden = true;
     say('');
@@ -231,20 +242,77 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     return true;
   };
 
+  /** When the server last said the next thing finishes (its `nextAt`; gatherers' cycles included). */
+  let serverNextAt: string | null = null;
+
   async function refresh(): Promise<void> {
     const id = mapId;
     const at = generation;
     if (!id) return;
     try {
-      const fresh = await api.get(id);
+      const { landed, nextAt, ...fresh } = await api.settle(id);
       if (at !== generation) return;
       clock.sync(fresh.now);
       state = fresh;
+      serverNextAt = nextAt;
+      if (landed.length > 0) {
+        landings += 1;
+        showToast(landedText(landed));
+        options.onCollected?.();
+      }
       render();
+      scheduleSettle();
     } catch (err) {
       if (at === generation) say(messageOf(err));
     }
   }
+
+  /**
+   * One settle, timed for the next thing to finish: the server's `nextAt`,
+   * or a craft or gather started since. Never sooner than the slack, so a
+   * clock a few ms apart can't make it ask in a loop.
+   */
+  function scheduleSettle(): void {
+    window.clearTimeout(settleTimer);
+    settleTimer = undefined;
+    if (!mapId || !state) return;
+    const due = [
+      ...(serverNextAt ? [serverNextAt] : []),
+      ...state.crafts.map((c) => c.readyAt),
+      ...state.gathers.map((g) => g.readyAt),
+    ].map((iso) => clock.msUntil(iso));
+    if (due.length === 0) return;
+    const wait = Math.min(...due) + SETTLE_SLACK_MS;
+    settleTimer = window.setTimeout(() => {
+      settleTimer = undefined;
+      void refresh();
+    }, wait);
+  }
+
+  const showToast = (text: string) => {
+    if (text === '') return;
+    toast.textContent = text;
+    toast.hidden = false;
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(hideToast, TOAST_MS);
+  };
+  const hideToast = () => {
+    window.clearTimeout(toastTimer);
+    toastTimer = undefined;
+    toast.hidden = true;
+    toast.textContent = '';
+  };
+  const stopSettling = () => {
+    window.clearTimeout(settleTimer);
+    settleTimer = undefined;
+    serverNextAt = null;
+    hideToast();
+  };
+
+  // Back from another app or a locked screen: things may have finished meanwhile.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && mapId) void refresh();
+  });
 
   const sendDeps = {
     newKey: newIdempotencyKey,
@@ -254,8 +322,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
 
   /**
    * Runs one command for the map on screen, one at a time. A `CONFLICT`
-   * (already collected, not ready, something changed) refetches, so the
-   * buttons match the server again.
+   * (still cooking, something changed) settles and refetches, so the buttons
+   * match the server again.
    */
   /** Resolves to null when it ran, or to the line it said about why not. */
   async function act(
@@ -290,53 +358,29 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   const startGather = (tile: PublicTile) =>
     act(async (id, at, send) => {
       const res = await send((key) => api.gather(id, { q: tile.q, r: tile.r }, key));
-      if (!res || !apply(at, { now: res.now })) return;
-      state = state && { ...state, gathers: [...state.gathers, res.gather] };
+      if (!res || !state || !apply(at, { now: res.now })) return;
+      // A finished gather on this node went in the bag as this one started.
+      const banked = state.gathers.some((g) => g.q === tile.q && g.r === tile.r);
+      state = {
+        ...state,
+        gathers: [...state.gathers.filter((g) => g.q !== tile.q || g.r !== tile.r), res.gather],
+      };
       say(TEXT.started);
+      scheduleSettle();
+      if (banked) void refresh();
     });
-
-  const collectGather = (gatherId: string, from: 'panel' | 'chip' = 'panel') =>
-    act(async (id, at, send) => {
-      const res = await send((key) => api.collectGather(id, gatherId, key));
-      if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
-      state = { ...state, gathers: state.gathers.filter((g) => g.id !== gatherId) };
-      const got = TEXT.got(describeItems(res.granted));
-      say(got);
-      if (from === 'chip') revealOnChip(got);
-      options.onCollected?.();
-    });
-
-  /** The chip shows what its tap collected for a moment, then moves on. */
-  const revealOnChip = (text: string) => {
-    chipReveal = text;
-    window.clearTimeout(chipRevealTimer);
-    chipRevealTimer = window.setTimeout(() => {
-      chipRevealTimer = undefined;
-      chipReveal = null;
-      render();
-    }, CHIP_REVEAL_MS);
-  };
-  const clearChipReveal = () => {
-    window.clearTimeout(chipRevealTimer);
-    chipRevealTimer = undefined;
-    chipReveal = null;
-  };
 
   const startCraft = (recipeId: string) =>
     act(async (id, at, send) => {
       const res = await send((key) => api.craft(id, recipeId, key));
       if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
-      state = { ...state, crafts: [...state.crafts, res.craft] };
+      // A finished craft went in the bag first (the server frees the pot), so
+      // the one just started is the only one cooking.
+      const banked = state.crafts.length > 0;
+      state = { ...state, crafts: [res.craft] };
       say('');
-    });
-
-  const collectCraft = (craftId: string) =>
-    act(async (id, at, send) => {
-      const res = await send((key) => api.collectCraft(id, craftId, key));
-      if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
-      state = { ...state, crafts: state.crafts.filter((c) => c.id !== craftId) };
-      say(TEXT.got(describeItems(res.granted)));
-      options.onCollected?.();
+      scheduleSettle();
+      if (banked) options.onCollected?.();
     });
 
   // ── Drawing ───────────────────────────────────────────────────────────
@@ -411,15 +455,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
           el('span', { class: 'bag-row-name' }, label),
           clock.msUntil(g.readyAt) > 0
             ? countdown(bagCountdowns, 'span', 'bag-row-wait', g.readyAt, (left) => left)
-            : button(TEXT.collect, () => void collectGather(g.id), {
-                'data-testid': 'bag-collect',
-              }),
+            : el('span', { class: 'bag-row-wait' }, TEXT.readyNow),
         );
       }),
     );
 
-    // Every craft on the go, whatever its recipe or season, with its Collect:
-    // the one place that always offers it (the recipe book shows it too).
+    // Every craft on the go, whatever its recipe or season (the recipe book
+    // shows the one cooking too); a finished one lands by itself.
     craftsTitle.hidden = state.crafts.length === 0;
     craftsBox.replaceChildren(
       ...bagCrafts(state.crafts).map(({ craft, name, icon }) =>
@@ -431,41 +473,40 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
             ? countdown(bagCountdowns, 'span', 'bag-row-wait', craft.readyAt, (left) =>
                 TEXT.making(name, left),
               )
-            : button(TEXT.collect, () => void collectCraft(craft.id), {
-                'data-testid': 'bag-craft-collect',
-              }),
+            : el('span', { class: 'bag-row-wait' }, TEXT.readyNow),
         ),
       ),
     );
 
+    // Only a craft still cooking keeps the pot busy: a finished one is
+    // banked as the next one starts (the server frees the pot).
+    const cooking = state.crafts.filter((c) => clock.msUntil(c.readyAt) > 0);
     recipesBox.replaceChildren(
-      ...bagRecipes(state.items, state.crafts, state.seasons).map(
-        ({ recipe, icon, cost, state: s }) => {
-          let action: Node;
-          if (s.kind === 'ready') {
-            action = button(TEXT.make, () => void startCraft(recipe.id), {
-              'data-recipe': recipe.id,
-            });
-          } else {
-            action = el(
-              'span',
-              { class: 'bag-row-note' },
-              s.kind === 'busy' ? TEXT.craftBusy : s.note,
-            );
-          }
-          return el(
-            'li',
-            { class: 'bag-row', 'data-recipe-row': recipe.id },
-            el(
-              'span',
-              { class: 'bag-row-name' },
-              `${icon} ${recipe.name}`,
-              el('span', { class: 'bag-row-cost' }, cost),
-            ),
-            action,
+      ...bagRecipes(state.items, cooking, state.seasons).map(({ recipe, icon, cost, state: s }) => {
+        let action: Node;
+        if (s.kind === 'ready') {
+          action = button(TEXT.make, () => void startCraft(recipe.id), {
+            'data-recipe': recipe.id,
+          });
+        } else {
+          action = el(
+            'span',
+            { class: 'bag-row-note' },
+            s.kind === 'busy' ? TEXT.craftBusy : s.note,
           );
-        },
-      ),
+        }
+        return el(
+          'li',
+          { class: 'bag-row', 'data-recipe-row': recipe.id },
+          el(
+            'span',
+            { class: 'bag-row-name' },
+            `${icon} ${recipe.name}`,
+            el('span', { class: 'bag-row-cost' }, cost),
+          ),
+          action,
+        );
+      }),
     );
   }
 
@@ -503,14 +544,12 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         container.replaceChildren(left, line(TEXT.keepsGoing));
         break;
       }
-      case 'collect':
-        container.replaceChildren(
-          line(TEXT.gives(describeItems(action.gather.items))),
-          button(TEXT.collect, () => void collectGather(action.gather.id), {
-            'data-testid': 'tile-collect',
-          }),
-        );
+      case 'landing': {
+        const landing = line(TEXT.landing);
+        landing.dataset['testid'] = 'tile-landing';
+        container.replaceChildren(line(TEXT.gives(describeItems(action.gather.items))), landing);
         break;
+      }
       case 'sleeping':
         container.replaceChildren(line(action.note));
         break;
@@ -527,23 +566,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   /** The gathering chip, while something's gathering and the Bag is shut. */
   function renderChip(): void {
     chipCountdowns = [];
-    chipReady = null;
     chip.disabled = working;
     const shown = mapId !== null && state !== null && sheet.hidden;
-    if (shown && chipReveal) {
-      // What the chip's tap just collected.
-      shownChip = 'got';
-      chip.hidden = false;
-      chip.classList.add('gather-chip-ready');
-      chip.replaceChildren(chipReveal);
-      return;
-    }
     const model = shown && state ? gatherChip(state.gathers, (iso) => clock.msUntil(iso)) : null;
     shownChip = model ? (model.ready ? 'ready' : 'waiting') : null;
     chip.hidden = model === null;
     if (!model) return;
     const { gather } = model;
-    if (model.ready) chipReady = gather.id;
     const what = `${itemIcon(gather.resource)} ${itemName(gather.resource)}`;
     const more = model.more > 0 ? TEXT.chipMore(model.more) : '';
     chip.classList.toggle('gather-chip-ready', model.ready);
@@ -597,7 +626,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       mapId = next;
       state = null;
       sheet.hidden = true;
-      clearChipReveal();
+      stopSettling();
       say('');
       render();
       if (next) await refresh();
@@ -609,7 +638,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       mapId = null;
       state = null;
       sheet.hidden = true;
-      clearChipReveal();
+      stopSettling();
       render();
     },
     get bag() {
@@ -617,7 +646,6 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     },
     refresh,
     craft: (recipeId) => startCraft(recipeId),
-    collectCraft: (craftId) => collectCraft(craftId),
     msUntil: (iso) => clock.msUntil(iso),
     tileActions: {
       show: (container, tile) => {
@@ -642,6 +670,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         bagOpen: !sheet.hidden,
         tileAction: shownAction?.kind ?? null,
         chip: shownChip,
+        toast: toast.hidden ? null : toast.textContent,
+        landings,
       };
     },
   };

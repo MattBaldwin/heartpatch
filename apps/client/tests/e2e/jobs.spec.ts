@@ -7,7 +7,7 @@ import { trayButton } from './trays.js';
 /**
  * Squishy jobs on an iPhone (owner decisions 2026-10-04): send a squishy to
  * gather from the job board, let its work finish (the dev short timer) and
- * collect it; then pick a team and see it fight in the next battle.
+ * land in the bag by itself; then pick a team and see it fight in the next battle.
  * Checked through the dev hook and the API, never pixels or timing.
  */
 
@@ -75,17 +75,20 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   // Live on the map: a 🧺 over the tile it works (a DOM badge from the map's projection).
   await expect.poll(async () => (await jobsState(page))?.badges, { timeout: 15_000 }).toBe(1);
 
-  // Its work finishes (the dev short timer), and Collect puts it in the bag.
+  // Its work finishes (the dev short timer) and goes straight into the bag
+  // when the board opens again (owner decision 2026-10-06): no Collect.
+  const total = async () => {
+    const bag = await api(page, 'GET', `/maps/${mapId}/inventory`);
+    const items = (bag.body as { items: Record<string, number> }).items;
+    return Object.values(items).reduce((a, b) => a + b, 0);
+  };
+  const before = await total();
   expect((await api(page, 'POST', `/maps/${mapId}/dev/work/ready`)).status).toBe(200);
   await board.getByRole('button', { name: 'Close' }).tap();
   await (await trayButton(page, 'jobs-open')).tap();
-  const collect = board.getByTestId('jobs-collect');
-  await expect(collect).toBeVisible();
-  await collect.tap();
-  await expect(board.getByTestId('jobs-note')).toContainText('+');
-  const bag = await api(page, 'GET', `/maps/${mapId}/inventory`);
-  const items = (bag.body as { items: Record<string, number> }).items;
-  expect(Object.values(items).reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+  await expect(page.getByTestId('landed-toast')).toContainText('+');
+  await expect.poll(total).toBeGreaterThan(before);
+  await expect(board.getByRole('button', { name: /Collect/ })).toHaveCount(0);
   expect(findAvoidedWords((await board.textContent()) ?? '')).toEqual([]);
   await board.getByRole('button', { name: 'Close' }).tap();
 

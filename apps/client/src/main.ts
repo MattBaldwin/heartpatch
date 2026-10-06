@@ -174,7 +174,13 @@ const care = createCareSheet({
 // Squishy jobs (owner decisions 2026-10-04): the job board and team picker
 // sheets. Temporary entry points the trays will move: home's "Jobs & team",
 // the tile panel's "Send a gatherer", and Team / Jobs by the battle entry.
-const jobs = createJobs({ root: document.body, isGlade: (mapId) => mapId === glade });
+const jobs = createJobs({
+  root: document.body,
+  isGlade: (mapId) => mapId === glade,
+  // Finished work goes straight to the bag (owner decision 2026-10-06): the
+  // board settles the map on screen (the bag's) before it reads its view.
+  settle: () => inventory.refresh(),
+});
 /** Home base is on screen (the close-up returns there, #20). */
 const homeOpen = () => home.debug?.open ?? false;
 // The close-up view (#20): a squishy face to face, with gestures for care.

@@ -44,6 +44,23 @@ export function describeItems(items: ItemCounts): string {
     .join(', ');
 }
 
+/**
+ * The pop-up when things land in the bag (owner decision 2026-10-06):
+ * "🍪 +3 Treats!" or "🪵 +5 Timber, 🍪 +3 Treats!", everything that landed
+ * at once added up. Empty when nothing did.
+ */
+export function landedText(landed: readonly { items: ItemCounts }[]): string {
+  const total: ItemCounts = {};
+  for (const { items } of landed) {
+    for (const [id, n] of Object.entries(items)) total[id] = (total[id] ?? 0) + n;
+  }
+  const parts = Object.entries(total)
+    .filter(([, n]) => n > 0)
+    .sort(([a], [b]) => (ORDER.get(a) ?? Infinity) - (ORDER.get(b) ?? Infinity))
+    .map(([id, n]) => `${itemIcon(id)} +${String(n)} ${itemName(id)}`);
+  return parts.length === 0 ? '' : `${parts.join(', ')}!`;
+}
+
 /** What the gathering chip over the map shows: one gather, and how many others. */
 export interface GatherChip {
   /** A gather that's ready to collect, else the one ready soonest. */

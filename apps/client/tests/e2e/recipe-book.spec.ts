@@ -15,7 +15,7 @@ interface RecipeBookDebug {
   fresh: string[];
   canMakeOnly: boolean;
   searching: boolean;
-  cooking: 'making' | 'ready' | null;
+  cooking: 'making' | null;
 }
 
 const bookState = (page: Page) => hook<RecipeBookDebug>(page, 'recipeBook');
@@ -122,12 +122,13 @@ test('trays hold the controls, and the recipe book makes, seals, searches and fi
 });
 
 // The owner's playtest of 2026-10-06: "Make it" said "You're already making
-// something! Collect it first." with no Collect anywhere on the page. The
-// book now shows what's cooking, counts down, and collects it itself.
-test('the recipe book shows what’s cooking, collects it, then makes the next one', async ({
+// something! Collect it first." with no Collect anywhere. Now the book shows
+// what's cooking with a countdown, and a finished craft goes straight into
+// the bag with a pop-up, so the next Make it just works.
+test('the recipe book shows what’s cooking, and a finished craft lands by itself', async ({
   browser,
 }) => {
-  test.setTimeout(150_000); // shader compiles, and Pumpkin Treats really cook for 30 s
+  test.setTimeout(120_000); // shader compiles; CI renders in software
   const page = await newPlayer(browser, uniqueName('pot'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -143,71 +144,71 @@ test('the recipe book shows what’s cooking, collects it, then makes the next o
   // runs on today's date, inside the 2026 window).
   const mapId = (await mapState(page))!.id;
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
-    items: { pumpkins: 2, timber: 2, treats: 1 },
+    items: { pumpkins: 1, timber: 2 },
   });
   expect(granted.status).toBe(201);
 
   const book = page.getByTestId('recipe-book');
   const cooking = book.getByTestId('recipe-book-cooking');
-  const turnTo = async (key: string) => {
+  const toast = page.getByTestId('landed-toast');
+  const toc = (key: string) => book.locator(`[data-testid="recipe-book-toc"][data-page="${key}"]`);
+  const openBookAt = async (key: string) => {
+    await (await trayButton(page, 'recipe-book-open')).tap();
     await page.getByTestId('recipe-book-cover-open').tap();
-    await book.locator(`[data-testid="recipe-book-toc"][data-page="${key}"]`).tap();
+    await toc(key).tap();
   };
   await (await trayButton(page, 'recipe-book-open')).tap();
   await expect
     .poll(async () => (await bookState(page))?.unlocked ?? [])
     .toContain('recipe:pumpkin-treats');
+  await page.getByTestId('recipe-book-close').tap();
+
+  // Make Pumpkin Treats.
+  await openBookAt('recipe:pumpkin-treats');
   await expect(cooking).toBeHidden();
-  await turnTo('recipe:pumpkin-treats');
   const treats = book.locator('article[data-page="recipe:pumpkin-treats"]');
   await treats.getByTestId('recipe-book-make').tap();
   await expect.poll(async () => (await bagState(page))?.crafts).toBe(1);
 
-  // Another page: the pot is busy, so Make it waits, and says why.
+  // On another page: the pot is busy, with a countdown, so Make it waits.
   await expect(cooking).toBeVisible();
-  await expect(cooking).toContainText('Making Pumpkin Treats…');
+  await expect(cooking).toContainText('Your pot is busy making Pumpkin Treats…');
   expect((await bookState(page))?.cooking).toBe('making');
-  await book.getByTestId('recipe-book-next').tap();
-  await expect
-    .poll(async () => (await bookState(page))?.showing)
-    .not.toContain('recipe:pumpkin-treats');
   await page.getByTestId('recipe-book-close').tap();
-  await (await trayButton(page, 'recipe-book-open')).tap();
-  await turnTo('recipe:heart-charm');
+  await openBookAt('recipe:heart-charm');
   const charm = book.locator('article[data-page="recipe:heart-charm"]');
-  await expect(cooking).toContainText('Making Pumpkin Treats…');
+  await expect(cooking).toContainText('Pumpkin Treats');
   await expect(charm.getByTestId('recipe-book-make')).toBeDisabled();
-  await expect(charm).toContainText('Your pot is busy! Collect first.');
+  await expect(charm).toContainText('Your pot is busy… almost there!');
   expect(findAvoidedWords((await cooking.textContent()) ?? '')).toEqual([]);
-  // "Can make now" hides what the busy pot can't make.
+  await expect(book.getByRole('button', { name: /Collect/ })).toHaveCount(0);
+  // "Can make now" hides what the busy pot can't make; the strip stays.
   await book.getByTestId('recipe-book-can-make').tap();
-  await expect(
-    book.locator('[data-testid="recipe-book-toc"][data-page="recipe:heart-charm"]'),
-  ).toHaveCount(0);
+  await expect(toc('recipe:heart-charm')).toHaveCount(0);
   await expect(cooking).toBeVisible();
   await book.getByTestId('recipe-book-can-make').tap();
 
-  // Ready on the server's clock: the strip turns into Collect (no dev route
-  // finishes a craft early, so this waits on the game's own signal).
-  const collect = cooking.getByTestId('recipe-book-collect');
-  await expect(collect).toBeVisible({ timeout: 45_000 });
-  await expect(cooking).toContainText('Pumpkin Treats is ready!');
-  await collect.tap();
-  await expect(page.getByTestId('recipe-book-say')).toContainText('Yay! +3');
+  // Time passes (the dev route finishes the craft now): reopening the book
+  // settles, and the Treats land with a pop-up, no Collect tap.
+  await page.getByTestId('recipe-book-close').tap();
+  expect((await api(page, 'POST', `/maps/${mapId}/dev/crafts/ready`)).status).toBe(200);
+  await openBookAt('recipe:heart-charm');
+  await expect(toast).toContainText('+3 Treats');
+  await expect.poll(async () => (await bagState(page))?.items['treats']).toBe(3);
+  await expect.poll(async () => (await bagState(page))?.crafts).toBe(0);
   await expect(cooking).toBeHidden();
-  await expect.poll(async () => (await bagState(page))?.items['treats']).toBe(4);
 
-  // The pot is free: make the Heart Charm.
-  await book.locator('[data-testid="recipe-book-toc"][data-page="recipe:heart-charm"]').tap();
+  // The pot is free: make the Heart Charm (it needs a Treat, which just landed).
   await expect(charm.getByTestId('recipe-book-make')).toBeEnabled();
   await charm.getByTestId('recipe-book-make').tap();
-  await expect(cooking).toContainText('Making Heart Charm…');
+  await expect(cooking).toContainText('Your pot is busy making Heart Charm…');
   await expect.poll(async () => (await bagState(page))?.crafts).toBe(1);
   await page.getByTestId('recipe-book-close').tap();
 
-  // The Bag lists it under Cooking too.
+  // The Bag lists it under Cooking, with no Collect.
   await (await trayButton(page, 'bag-open')).tap();
   await expect(page.getByTestId('bag-crafts')).toContainText('Making Heart Charm');
+  await expect(page.getByTestId('bag').getByRole('button', { name: /Collect/ })).toHaveCount(0);
   await page.getByTestId('bag').getByRole('button', { name: 'Close' }).tap();
 
   expect(errors).toEqual([]);
@@ -254,8 +255,8 @@ test('a craft started elsewhere shows up when Make it is refused', async ({ brow
 
   // The server says no (CLAUDE.md rule 1); the book re-reads the bag and shows it.
   await make.tap();
-  await expect(page.getByTestId('recipe-book-say')).toContainText('already making something');
-  await expect(book.getByTestId('recipe-book-cooking')).toContainText('Making Pumpkin Treats…');
+  await expect(page.getByTestId('recipe-book-say')).toContainText('still cooking');
+  await expect(book.getByTestId('recipe-book-cooking')).toContainText('Pumpkin Treats');
   await expect(make).toBeDisabled();
   expect((await bagState(page))?.crafts).toBe(1);
 

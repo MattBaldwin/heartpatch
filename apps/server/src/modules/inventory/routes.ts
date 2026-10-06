@@ -89,6 +89,16 @@ export const inventoryRoutes =
     );
 
     if (options.devGrants) {
+      // Dev and test only: the player's crafts finish now, so a phone or an
+      // e2e run sees one land in the bag without the real wait.
+      app.post(
+        '/maps/:mapId/dev/crafts/ready',
+        {
+          schema: { params: MapIdParamsSchema, response: { 200: InventoryResponseSchema } },
+          preHandler: [requireAuth, rateLimit('dev')],
+        },
+        async (request) => service.devCraftsReady(requireUser(request), request.params.mapId),
+      );
       app.post(
         '/maps/:mapId/dev/items',
         {

@@ -27,6 +27,12 @@ export interface JobRow {
   workSince: Date | null;
   /** It works a tile its owner still holds, untouched since it started (`squishyAtWork`). */
   atWork: boolean;
+  /**
+   * When its work tile was first captured after it started there, or null:
+   * cycles finished before then still go in its owner's bag (owner decision
+   * 2026-10-06); only the unfinished one is lost.
+   */
+  lostAt: Date | null;
   /** Its watch post as stored (maybe on land that changed hands). */
   post: { tileId: string; q: number; r: number } | null;
   /** It stands watch (`squishyOnWatch`). */
@@ -142,6 +148,12 @@ function queries(db: Executor): SquishyJobsRepo {
         teamSlot: squishies.teamSlot,
         workSince: squishies.workSince,
         atWork: squishyAtWork(),
+        lostAt: sql<Date | null>`(
+          select min(${tileAttacks.endedAt}) from ${tileAttacks}
+          where ${tileAttacks.tileId} = ${squishies.workTileId}
+            and ${tileAttacks.outcome} = 'captured'
+            and ${tileAttacks.endedAt} > ${squishies.workStartedAt}
+        )`.mapWith(tileAttacks.endedAt),
         onWatch: squishyOnWatch(),
         workTileId: workTile.id,
         workQ: workTile.q,
@@ -190,6 +202,7 @@ function queries(db: Executor): SquishyJobsRepo {
           },
     workSince: r.workSince,
     atWork: r.atWork,
+    lostAt: r.lostAt,
     post:
       r.postTileId === null || r.postQ === null || r.postR === null
         ? null

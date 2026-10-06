@@ -33,7 +33,7 @@ export const BOOK_TEXT = {
   stillNeed: (list: string) => `Still need ${list}`,
   comesBack: (season: string) => `Comes back at ${season}!`,
   sealed: 'Collect something new to open this page.',
-  potBusy: 'Your pot is busy! Collect first.',
+  potBusy: 'Your pot is busy… almost there!',
 } as const;
 
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
@@ -135,9 +135,9 @@ export interface BookContext {
   /** Open pages the player hasn't looked at yet. */
   readonly unseen: ReadonlySet<string>;
   /**
-   * A craft is on the go or waiting to be collected on this patch
-   * (`InventoryResponse.crafts` isn't empty): the server makes one thing at a
-   * time, so no recipe page can be made until it's collected.
+   * A craft is still cooking on this patch: the server makes one thing at a
+   * time, so no recipe page can be made until it's done. A finished one goes
+   * in the bag by itself (owner decision 2026-10-06) and frees the pot.
    */
   readonly potBusy: boolean;
 }
@@ -197,25 +197,17 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
   };
 }
 
-/** What's cooking, for the strip across the top of the book. */
-export interface CookingView extends BagCraft {
-  readonly ready: boolean;
-}
-
 /**
- * The craft the book shows: one that's ready to collect, else the one ready
- * soonest. The server allows one per patch, but the bag's list is what it
- * says, so any number is drawn safely. Ready is only for display: the server
- * decides when Collect works (CLAUDE.md rule 1). Null when nothing's cooking.
+ * What's cooking, for the strip across the top of the book: the craft still
+ * going that's ready soonest. The server allows one per patch, but the bag's
+ * list is what it says, so any number is drawn safely. A finished one isn't
+ * shown: it's on its way into the bag. Null when nothing's cooking.
  */
 export function cookingView(
   crafts: readonly Craft[],
   msUntil: (iso: string) => number,
-): CookingView | null {
-  const list = bagCrafts(crafts);
-  const shown = list.find((c) => msUntil(c.craft.readyAt) <= 0) ?? list[0];
-  if (!shown) return null;
-  return { ...shown, ready: msUntil(shown.craft.readyAt) <= 0 };
+): BagCraft | null {
+  return bagCrafts(crafts).find((c) => msUntil(c.craft.readyAt) > 0) ?? null;
 }
 
 /**

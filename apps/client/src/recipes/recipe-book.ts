@@ -4,7 +4,6 @@ import {
   type InventoryResponse,
   type PublicUser,
 } from '@heartpatch/shared';
-import { describeItems } from '../inventory/bag-view.js';
 import { formatTimeLeft } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
@@ -40,7 +39,6 @@ export interface RecipeBookOptions {
     readonly bag: InventoryResponse | null;
     refresh: () => Promise<void>;
     craft: (recipeId: string) => Promise<string | null>;
-    collectCraft: (craftId: string) => Promise<string | null>;
     /** Ms until an ISO time on the server's clock. */
     msUntil: (iso: string) => number;
   };
@@ -66,8 +64,8 @@ export interface RecipeBookDebug {
   readonly fresh: readonly string[];
   readonly canMakeOnly: boolean;
   readonly searching: boolean;
-  /** The "what's cooking" strip: counting down, offering Collect, or hidden. */
-  readonly cooking: 'making' | 'ready' | null;
+  /** The "what's cooking" strip: counting down, or hidden. */
+  readonly cooking: 'making' | null;
 }
 
 export interface RecipeBook {
@@ -133,10 +131,7 @@ export const RECIPE_BOOK_TEXT = {
   morePages: 'More pages to find',
   morePagesLine: 'New pages appear when you collect new things. Some only bloom in their season!',
   newTag: 'New!',
-  cooking: (name: string, left: string) => `Making ${name}… ${left}`,
-  cooked: (name: string) => `${name} is ready!`,
-  collect: 'Collect',
-  got: (what: string) => `Yay! ${what}`,
+  cooking: (name: string, left: string) => `Your pot is busy making ${name}… ${left}`,
 } as const;
 
 const PAGES = recipeBookPages();
@@ -313,9 +308,10 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
   const momentBox = el('div', { class: 'rbook-moment-wrap' });
 
   // What's cooking (the owner's playtest of 2026-10-06): the server makes one
-  // thing at a time per patch, so while something cooks the book says what,
-  // counts down on the server's clock, and turns into Collect when it's
-  // ready. Built only when what it shows changes; the tick rewrites its words.
+  // thing at a time per patch, so while something cooks the book says what
+  // and counts down on the server's clock; when it's done it goes into the
+  // bag by itself and the strip goes. Built only when what it shows changes;
+  // the tick rewrites its words.
   const cookingBox = el('div', { class: 'rbook-cooking', 'data-testid': 'recipe-book-cooking' });
   cookingBox.hidden = true;
 
@@ -368,7 +364,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
       bag: bag?.items ?? {},
       seasons: new Set(bag?.seasons ?? []),
       unseen: new Set(fresh),
-      potBusy: (bag?.crafts.length ?? 0) > 0,
+      potBusy: (bag?.crafts ?? []).some((c) => options.inventory.msUntil(c.readyAt) > 0),
     };
     return PAGES.map((p) => pageView(p, ctx));
   };
@@ -686,25 +682,22 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
 
   /** The strip's countdown words: one Text node rewritten in place (`data`), never replaced (DECISIONS, Fix PR #173). */
   let cookingCountdown: { text: Text; readyAt: string; name: string } | null = null;
-  /** What the strip is built for (`<craft id>:<ready>`), so other redraws leave it alone. */
+  /** The craft the strip is built for, so other redraws leave it alone. */
   let cookingShown: string | null = null;
-  let cookingCollect: HTMLButtonElement | null = null;
   let cookingTicker: number | undefined;
 
   function renderCooking(): void {
     const bag = options.inventory.bag;
     const view =
       book.hidden || !bag ? null : cookingView(bag.crafts, (iso) => options.inventory.msUntil(iso));
-    const key = view ? `${view.craft.id}:${String(view.ready)}` : null;
+    const key = view?.craft.id ?? null;
     if (key !== cookingShown) {
       cookingShown = key;
       cookingCountdown = null;
-      cookingCollect = null;
       cookingBox.hidden = view === null;
-      cookingBox.classList.toggle('rbook-cooking-ready', view?.ready ?? false);
       if (!view) {
         cookingBox.replaceChildren();
-      } else if (!view.ready) {
+      } else {
         const text = document.createTextNode(
           RECIPE_BOOK_TEXT.cooking(
             view.name,
@@ -716,25 +709,8 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
           el('span', { class: 'rbook-cooking-icon', 'aria-hidden': 'true' }, view.icon),
           el('span', { class: 'rbook-cooking-text' }, text),
         );
-      } else {
-        const { craft, name } = view;
-        const collect = el(
-          'button',
-          { type: 'button', class: 'rbook-stamp', 'data-testid': 'recipe-book-collect' },
-          RECIPE_BOOK_TEXT.collect,
-        );
-        collect.addEventListener('click', () => {
-          collectCraft(craft.id, describeItems(craft.items));
-        });
-        cookingCollect = collect;
-        cookingBox.replaceChildren(
-          el('span', { class: 'rbook-cooking-icon', 'aria-hidden': 'true' }, view.icon),
-          el('span', { class: 'rbook-cooking-text' }, RECIPE_BOOK_TEXT.cooked(name)),
-          collect,
-        );
       }
     }
-    if (cookingCollect) cookingCollect.disabled = busy;
     // Tick once a second only while the strip counts down.
     if (cookingCountdown && cookingTicker === undefined) {
       cookingTicker = window.setInterval(tickCooking, 1000);
@@ -744,7 +720,10 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     }
   }
 
-  /** One tick: rewrite the words; once it's ready, redraw (Collect appears, on the server's clock). */
+  /**
+   * One tick: rewrite the words; once it's done, redraw: the strip goes and
+   * Make it wakes up (the bag's settle puts it in the bag, with its pop-up).
+   */
   function tickCooking(): void {
     if (!cookingCountdown) return;
     const left = options.inventory.msUntil(cookingCountdown.readyAt);
@@ -754,25 +733,6 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
         cookingCountdown.name,
         formatTimeLeft(left),
       );
-  }
-
-  /** The strip's Collect: the bag's own collect call; the server decides (CLAUDE.md rule 1). */
-  function collectCraft(craftId: string, what: string): void {
-    busy = true;
-    render('none');
-    const ticket = generation;
-    void options.inventory
-      .collectCraft(craftId)
-      .then((failure) => {
-        if (ticket === generation) say = failure ?? RECIPE_BOOK_TEXT.got(what);
-      })
-      .catch((err: unknown) => {
-        if (ticket === generation) say = messageOf(err);
-      })
-      .finally(() => {
-        busy = false;
-        if (ticket === generation) render('none');
-      });
   }
 
   function render(motion: 'none' | 'next' | 'prev'): void {
@@ -1018,12 +978,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
         fresh: [...fresh],
         canMakeOnly,
         searching,
-        cooking:
-          cookingShown === null
-            ? null
-            : cookingCountdown
-              ? ('making' as const)
-              : ('ready' as const),
+        cooking: cookingShown === null ? null : ('making' as const),
       };
     },
   };

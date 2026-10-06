@@ -120,7 +120,7 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   expect((await bagState(page))?.items['timber']).toBe(8);
   await expect(bag.getByTestId('bag-crafts')).toContainText('Making Heart Charm');
   await expect(bag.locator('[data-recipe-row="heart-charm"]')).toContainText(
-    'Your pot is busy! Collect first.',
+    'Your pot is busy… it’s nearly done!',
   );
 
   // Kid-friendly words only (style guide §9).

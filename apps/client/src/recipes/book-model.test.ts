@@ -107,7 +107,7 @@ describe('a busy pot', () => {
     expect(view('recipe:pumpkin-treats', treats).canMake).toBe(true);
     const busy = view('recipe:pumpkin-treats', { ...treats, potBusy: true });
     expect(busy.canMake).toBe(false);
-    expect(busy.note).toBe('Your pot is busy! Collect first.');
+    expect(busy.note).toBe('Your pot is busy… almost there!');
     expect(findAvoidedWords(busy.note ?? '')).toEqual([]);
   });
 
@@ -147,29 +147,22 @@ describe('what’s cooking', () => {
     expect(cookingView([], msUntil)).toBeNull();
   });
 
-  it('counts down until ready, then offers Collect', () => {
+  it('shows a craft while it cooks, and lets go once it’s done (it lands by itself)', () => {
     const making = craft('01', 'pumpkin-treats', '2026-10-06T12:00:45Z', { treats: 3 });
-    expect(cookingView([making], msUntil)).toMatchObject({
-      name: 'Pumpkin Treats',
-      ready: false,
-    });
-    const ready = cookingView([making], () => 0);
-    expect(ready).toMatchObject({ name: 'Pumpkin Treats', ready: true });
-    expect(ready?.craft.id).toBe(making.id);
+    expect(cookingView([making], msUntil)).toMatchObject({ name: 'Pumpkin Treats' });
+    expect(cookingView([making], () => 0)).toBeNull();
   });
 
-  it('shows a ready one first, else the soonest', () => {
+  it('shows the one still cooking that’s ready soonest', () => {
     const later = craft('02', 'heart-charm', '2026-10-06T12:05:00Z', { 'heart-charm': 1 });
     const sooner = craft('03', 'heart-charm', '2026-10-06T12:01:00Z', { 'heart-charm': 1 });
     const done = craft('04', 'heart-charm', '2026-10-06T12:00:10Z', { 'heart-charm': 1 });
-    expect(cookingView([later, sooner], msUntil)?.craft.id).toBe(sooner.id);
-    expect(cookingView([later, done, sooner], msUntil)).toMatchObject({ ready: true });
-    expect(cookingView([later, done, sooner], msUntil)?.craft.id).toBe(done.id);
+    expect(cookingView([later, done, sooner], msUntil)?.craft.id).toBe(sooner.id);
   });
 
   it('names a craft from a recipe that’s gone by what it makes', () => {
-    const old = craft('05', 'old-recipe', '2026-10-06T12:00:00Z', { treats: 2 });
-    expect(cookingView([old], msUntil)).toMatchObject({ name: 'Treats', ready: true });
+    const old = craft('05', 'old-recipe', '2026-10-06T12:10:00Z', { treats: 2 });
+    expect(cookingView([old], msUntil)).toMatchObject({ name: 'Treats' });
   });
 });
 

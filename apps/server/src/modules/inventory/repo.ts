@@ -65,6 +65,10 @@ export interface InventoryRepo {
   lockCraft: (craftId: string) => Promise<CraftRow | null>;
   /** The player's crafts that haven't been collected yet, oldest first. */
   listActiveCrafts: (owner: ItemOwner) => Promise<CraftRow[]>;
+  /** Row-locks the player's uncollected crafts in id order until commit (at most one: `crafts_one_active_key`). */
+  lockActiveCrafts: (owner: ItemOwner) => Promise<CraftRow[]>;
+  /** Dev and test only: the player's crafts still going finish at `at` (`started_at` moves back too). */
+  makeCraftsReady: (owner: ItemOwner, at: Date) => Promise<number>;
   markCraftCollected: (craftId: string, at: Date) => Promise<void>;
 }
 
@@ -203,6 +207,48 @@ function queries(db: Executor): InventoryRepo {
           )
           .orderBy(asc(crafts.startedAt), asc(crafts.id))
       ).map(toCraft),
+
+    lockActiveCrafts: async (owner) =>
+      (
+        await db
+          .select()
+          .from(crafts)
+          .where(
+            and(
+              eq(crafts.mapId, owner.mapId),
+              eq(crafts.userId, owner.userId),
+              isNull(crafts.collectedAt),
+            ),
+          )
+          .orderBy(asc(crafts.id))
+          .for('update')
+      ).map(toCraft),
+
+    makeCraftsReady: async (owner, at) => {
+      const going = and(
+        eq(crafts.mapId, owner.mapId),
+        eq(crafts.userId, owner.userId),
+        isNull(crafts.collectedAt),
+        gt(crafts.readyAt, at),
+      );
+      // Rows of one kind lock in id order (tech spec §7), before the update.
+      const rows = await db
+        .select({ id: crafts.id })
+        .from(crafts)
+        .where(going)
+        .orderBy(asc(crafts.id))
+        .for('update');
+      if (rows.length === 0) return 0;
+      const moved = await db
+        .update(crafts)
+        .set({
+          startedAt: sql`${crafts.startedAt} - (${crafts.readyAt} - ${at.toISOString()}::timestamptz)`,
+          readyAt: at,
+        })
+        .where(going)
+        .returning({ id: crafts.id });
+      return moved.length;
+    },
 
     markCraftCollected: async (craftId, at) => {
       await db.update(crafts).set({ collectedAt: at }).where(eq(crafts.id, craftId));

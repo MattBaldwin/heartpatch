@@ -23,7 +23,6 @@
 }
 
 .jobs-sheet[hidden],
-.jobs-collect[hidden],
 .jobs-entry[hidden] {
   display: none;
 }
@@ -42,12 +41,6 @@
 
 .jobs-note:empty {
   display: none;
-}
-
-.jobs-collect {
-  width: 100%;
-  min-height: 48px;
-  margin: 6px 0 4px;
 }
 
 .jobs-list,

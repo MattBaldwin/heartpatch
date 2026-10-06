@@ -8,7 +8,8 @@ import {
 } from '@heartpatch/shared';
 
 // What the tile panel offers on a tile (design doc §12): gather on your own
-// node, wait, or collect. Pure, so every case is unit-tested; the server
+// node, or wait while it gathers; a finished gather goes straight into the
+// bag (owner decision 2026-10-06). Pure, so every case is unit-tested; the server
 // still decides (CLAUDE.md rule 1), this only says what to show.
 
 export type TileAction =
@@ -18,8 +19,8 @@ export type TileAction =
   | { readonly kind: 'gather'; readonly yields: ItemCounts }
   /** Your gather is still going. */
   | { readonly kind: 'waiting'; readonly gather: Gather }
-  /** Your gather is done. */
-  | { readonly kind: 'collect'; readonly gather: Gather }
+  /** Your gather is done and on its way into your bag (the next settle banks it). */
+  | { readonly kind: 'landing'; readonly gather: Gather }
   /** Your seasonal node, sleeping until its season. */
   | { readonly kind: 'sleeping'; readonly note: string }
   /** Someone else's node, being gathered. */
@@ -42,7 +43,7 @@ export function tileAction(
   const mine = state.gathers.find((g) => g.q === tile.q && g.r === tile.r);
   if (mine) {
     return Date.parse(mine.readyAt) <= now
-      ? { kind: 'collect', gather: mine }
+      ? { kind: 'landing', gather: mine }
       : { kind: 'waiting', gather: mine };
   }
   const seasons = new Set(state.seasons);
