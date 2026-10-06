@@ -77,13 +77,19 @@ export const squishyAtWork = (
  * gathers finished before then still go in the bag. Both are columns of the
  * outer query.
  */
-export const firstCaptureSince = (tileId: AnyPgColumn, since: AnyPgColumn) =>
-  sql<Date | null>`(
-    select min(${tileAttacks.endedAt}) from ${tileAttacks}
-    where ${tileAttacks.tileId} = ${tileId}
-      and ${tileAttacks.outcome} = 'captured'
-      and ${tileAttacks.endedAt} > ${since}
+export const firstCaptureSince = (tileId: AnyPgColumn, since: AnyPgColumn) => {
+  // Outer columns written `"table"."column"` and the subquery's table aliased,
+  // so `tile_id` / `started_at` can never bind to `tile_attacks`' own columns.
+  const outer = (column: AnyPgColumn) =>
+    sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+  const attack = (column: AnyColumn) => sql`land_capture.${sql.identifier(column.name)}`;
+  return sql<Date | null>`(
+    select min(${attack(tileAttacks.endedAt)}) from ${tileAttacks} as land_capture
+    where ${attack(tileAttacks.tileId)} = ${outer(tileId)}
+      and ${attack(tileAttacks.outcome)} = 'captured'
+      and ${attack(tileAttacks.endedAt)} > ${outer(since)}
   )`.mapWith(tileAttacks.endedAt);
+};
 
 /**
  * Squishy job storage. Plain queries; the service decides the rules and

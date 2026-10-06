@@ -492,8 +492,11 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           if (other) throw new AppError('CONFLICT', MESSAGES.spotTaken(squishyName(other.squishy)));
         } else if (request.job === current) {
           // Resting already, maybe with a stale work row (its land changed
-          // hands): tidy that away so the one-job checks never read it.
-          if (row.workTile !== null && !row.atWork) await repo.stopWork(row.squishy.id);
+          // hands): bank what it finished before then (owner decision
+          // 2026-10-06), then tidy it away so the one-job checks never read it.
+          if (row.workTile !== null && !row.atWork) {
+            await append(repo, await leaveWork(tx, map, [row.squishy.id], 'resting', at));
+          }
           return buildView(tx, repo, map, user.id, at);
         }
 

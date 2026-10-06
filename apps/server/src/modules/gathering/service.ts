@@ -159,11 +159,10 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
           // a previous owner's that finished before the land changed hands.
           // Lock order (tech spec §7): the tile, the gather, inventory, `maps`.
           const found = await repo.findActiveOnTile(tile.id);
-          const running = found && (await repo.lockGather(found.id));
+          const [running] = found ? await repo.lockToSettle([found.id]) : [];
           const banked: NewGameEvent[] = [];
           if (running?.status === 'active') {
-            const lostAt = await repo.capturedSince(tile.id, running.startedAt);
-            const fate = gatherFate({ ...running, tileOwner: tile.ownerUserId, lostAt }, at);
+            const fate = gatherFate(running, at);
             if (fate === 'wait') throw new AppError('CONFLICT', MESSAGES.already);
             if (fate === 'bank') banked.push(await bankGather(tx, repo, running, at));
             // Left behind by a previous owner, unfinished: the node is the new owner's now.

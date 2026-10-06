@@ -378,14 +378,20 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       const res = await send((key) => api.gather(id, { q: tile.q, r: tile.r }, key));
       if (!res || !state || !apply(at, { now: res.now })) return;
       // A finished gather on this node went in the bag as this one started.
-      const banked = state.gathers.some((g) => g.q === tile.q && g.r === tile.r);
+      const banked = state.gathers.find((g) => g.q === tile.q && g.r === tile.r);
       state = {
         ...state,
         gathers: [...state.gathers.filter((g) => g.q !== tile.q || g.r !== tile.r), res.gather],
       };
       say(TEXT.started);
       scheduleSettle();
-      if (banked) void refresh();
+      if (banked) {
+        // The server banked it (the reply has no bag): say so, and read the bag again.
+        landings += 1;
+        showToast(landedText([banked]));
+        options.onCollected?.();
+        void refresh();
+      }
     });
 
   const startCraft = (recipeId: string) =>
@@ -394,11 +400,15 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       if (!res || !state || !apply(at, { now: res.now, items: res.items })) return;
       // A finished craft went in the bag first (the server frees the pot), so
       // the one just started is the only one cooking.
-      const banked = state.crafts.length > 0;
+      const banked = state.crafts;
       state = { ...state, crafts: [res.craft] };
       say('');
       scheduleSettle();
-      if (banked) options.onCollected?.();
+      if (banked.length > 0) {
+        landings += 1;
+        showToast(landedText(banked));
+        options.onCollected?.();
+      }
     });
 
   // ── Drawing ───────────────────────────────────────────────────────────

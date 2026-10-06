@@ -2,7 +2,7 @@ import { ItemCountsSchema, type ItemCounts } from '@heartpatch/shared';
 import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { gatherJobs, tileAttacks, tiles } from '../../db/schema.js';
+import { gatherJobs, tiles } from '../../db/schema.js';
 import { firstCaptureSince } from '../jobs/repo.js';
 
 /** A tile as gathering needs it (read only: tiles belong to the maps module). */
@@ -71,8 +71,6 @@ export interface GatheringRepo {
   listToSettle: (mapId: string, userId: string) => Promise<SettleGatherRow[]>;
   /** Row-locks these gathers in id order until commit and reads them again. */
   lockToSettle: (gatherIds: readonly string[]) => Promise<SettleGatherRow[]>;
-  /** When the tile was first captured after `since`, or null. */
-  capturedSince: (tileId: string, since: Date) => Promise<Date | null>;
   /** Ends an active gather; false if it had already ended. */
   endGather: (
     gatherId: string,
@@ -237,20 +235,6 @@ function queries(db: Executor): GatheringRepo {
           .orderBy(asc(gatherJobs.id))
           .for('update', { of: gatherJobs })
       ).map(toSettle);
-    },
-
-    capturedSince: async (tileId, since) => {
-      const [row] = await db
-        .select({ at: sql<Date | null>`min(${tileAttacks.endedAt})`.mapWith(tileAttacks.endedAt) })
-        .from(tileAttacks)
-        .where(
-          and(
-            eq(tileAttacks.tileId, tileId),
-            eq(tileAttacks.outcome, 'captured'),
-            gt(tileAttacks.endedAt, since),
-          ),
-        );
-      return row?.at ?? null;
     },
 
     endGather: async (gatherId, end) => {

@@ -583,6 +583,54 @@ describe.skipIf(!url)(
       expect((await call(server, 'POST', `/maps/${mapId}/settle`, null)).statusCode).toBe(401);
     });
 
+    describe('the old banking points keep what finished before the land changed hands', () => {
+      /** A gatherer works far land for two cycles, then a rival captures it, and time goes on. */
+      async function capturedGatherer() {
+        const server = await start();
+        const [kid, rival] = [await player(), await player()];
+        const mapId = await newMap(server, kid);
+        await db.insert(mapMembers).values({ mapId, userId: rival.id, role: 'member' });
+        const forest = await farLand(server, kid, mapId, 'forest');
+        const pet = await squishy(mapId, kid);
+        await setJob(server, kid, mapId, pet, { job: 'gatherer', q: forest.q, r: forest.r });
+        const view = await jobs(server, kid, mapId);
+        const cycle = jobOf(view, pet).work!.cycleSeconds * 1000;
+        const one = view.spots.find((t) => t.q === forest.q && t.r === forest.r)!.quantity;
+        later(2 * cycle + 1000);
+        await capture(mapId, await tileIdAt(mapId, forest), kid, rival);
+        const seenBefore = (await eventsOf(mapId)).length;
+        later(5 * cycle);
+        return { server, kid, mapId, pet, one, seenBefore };
+      }
+
+      for (const job of ['resting', 'team'] as const) {
+        it(`banks exactly the cycles before the capture when it’s given a new job (${job})`, async () => {
+          const { server, kid, mapId, pet, one, seenBefore } = await capturedGatherer();
+          const res = await setJob(server, kid, mapId, pet, { job });
+          expect(res.statusCode).toBe(200);
+          expect((await bag(mapId, kid))['timber']).toBe(2 * one);
+          const after = (await eventsOf(mapId)).slice(seenBefore);
+          const collected = after.filter((e) => e.type === 'work.collected');
+          expect(collected).toHaveLength(1);
+          expect(collected[0]?.payload).toEqual({
+            userId: kid.id,
+            squishyIds: [pet],
+            items: { timber: 2 * one },
+          });
+          // It wasn't shown working on the map any more, so no "left its tile" either.
+          expect(
+            after.filter(
+              (e) =>
+                e.type === 'squishy.assigned' &&
+                (e.payload as { squishyId: string; job: string }).job !== 'team',
+            ),
+          ).toEqual([]);
+          // Banked once: settling after finds nothing more.
+          expect((await settle(server, kid, mapId)).landed).toEqual([]);
+        });
+      }
+    });
+
     describe('lock order (tech spec §7)', () => {
       /** Holds `first`, runs `command`, and once it waits, takes `then` too (a deadlock fails fast). */
       async function holdThen(
