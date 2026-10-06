@@ -5,5 +5,6 @@ export const HOME_BASE_RULES: HomeBaseRules = {
   spotsPerTile: 7,
   nightfallMinute: 21 * 60, // TUNE: design doc §14 default, 9:00 PM map time
   removeRefundPercent: 50, // TUNE:
-  buildableKinds: ['hearthfire', 'habitat'],
+  // Training Grounds: owner decision 2026-10-06.
+  buildableKinds: ['hearthfire', 'habitat', 'training-grounds'],
 };

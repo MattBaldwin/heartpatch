@@ -110,6 +110,16 @@ export const buildingsRoutes =
     );
 
     app.post(
+      '/maps/:mapId/buildings/:buildingId/upgrade',
+      {
+        schema: { params: BuildingParamsSchema, response: { 200: HomeResponseSchema } },
+        ...commandHooks,
+      },
+      async (request) =>
+        service.upgrade(requireUser(request), request.params.mapId, request.params.buildingId),
+    );
+
+    app.post(
       '/maps/:mapId/squishies/:squishyId/habitat',
       {
         schema: {

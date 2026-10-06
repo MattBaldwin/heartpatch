@@ -3,6 +3,7 @@ import {
   BASELINE_RULES,
   UNCAPPED_BEFRIEND_RULES,
   CURRENT_RULES,
+  NO_TRAINING_RULES,
   PROGRESSION_CONFIG,
   type ProgressionConfig,
 } from './progression-config.js';
@@ -55,9 +56,26 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
       runProgression(data, SMALL, CURRENT_RULES, kid, 4).kids[0]!.days.map((d) => d.partnerLevel),
     );
     expect(levels).toEqual([
-      [8, 12, 15, 17, 18, 19],
-      [14, 18, 20, 21, 22, 23],
+      [9, 13, 16, 18, 18, 19],
+      [15, 18, 20, 21, 22, 23],
     ]);
+  });
+
+  it('moves no target by more than a day with Training Grounds (owner decision 2026-10-06)', () => {
+    // A 30-day run, as the brief's targets are on days 14 and 30.
+    const month: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 30, estimateGames: 4 };
+    for (const kid of [casual!, engaged!]) {
+      const now = summarise(runProgression(data, month, CURRENT_RULES, kid, 4), month);
+      const without = summarise(runProgression(data, month, NO_TRAINING_RULES, kid, 4), month);
+      for (const key of ['evolves', 'bigAndBouncy', 'gapReady'] as const) {
+        expect(Math.abs((now[key] ?? 0) - (without[key] ?? 0))).toBeLessThanOrEqual(1);
+      }
+      // A day's lead is at most a level or so on days 14 and 30.
+      for (const day of [14, 30]) {
+        expect((now.level[day] ?? 0) - (without.level[day] ?? 0)).toBeLessThanOrEqual(1);
+      }
+    }
+    expect(CURRENT_RULES.training).toEqual({ slots: 3, xpPerDay: 192 });
   });
 
   it('keeps befriended squishies below their evolution with the shipped cap', () => {

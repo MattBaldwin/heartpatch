@@ -390,6 +390,36 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       ]);
     });
 
+    it('gives a Heart Snack in full for 3 Heartdust, outside the day and with no coins', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const id = await squishy(mapId, kid);
+      // Three full cuddles first: the day's extra-special ones are used up.
+      for (const action of ['pet', 'play', 'pet']) {
+        later();
+        await cared(server, kid, mapId, id, action);
+      }
+      later();
+      const short = await care(server, kid, mapId, id, 'heart-snack');
+      expect(short.statusCode).toBe(409);
+      expect(errorOf(short).message).toContain('Heartdust');
+
+      await give(mapId, kid, { heartdust: 4 });
+      const snack = await cared(server, kid, mapId, id, 'heart-snack');
+      expect(snack.result).toMatchObject({ contentmentGained: 25, full: true, coins: 0 });
+      expect(snack.items['heartdust']).toBe(1);
+      // It doesn't count toward the day: the next pet is still a 4th (half) one.
+      later();
+      const pet = await cared(server, kid, mapId, id, 'pet');
+      expect(pet.result).toMatchObject({ contentmentGained: 5, full: false });
+      expect(await one(server, kid, mapId, id)).toMatchObject({ caredToday: 4, fullCareLeft: 0 });
+      const ledger = await db.query.resourceLedger.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.reason, 'care')),
+      });
+      expect(ledger).toEqual([expect.objectContaining({ itemId: 'heartdust', delta: -3 })]);
+    });
+
     it('replays a retried care action instead of caring twice', async () => {
       const server = await start();
       const kid = await player();

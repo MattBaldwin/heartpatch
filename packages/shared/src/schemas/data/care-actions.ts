@@ -8,7 +8,8 @@ import {
 
 /**
  * A care action (design doc §7). Care actions are data so a new one needs no
- * engine change; Phase 1 ships feed, pet and play (docs/DECISIONS.md).
+ * engine change; Phase 1 ships feed, pet and play (docs/DECISIONS.md) and
+ * the Heart Snack (owner decision 2026-10-06).
  */
 export const CareActionSchema = z.strictObject({
   id: ContentIdSchema,
@@ -23,5 +24,11 @@ export const CareActionSchema = z.strictObject({
    */
   cooldownSeconds: z.number().int().positive(),
   cost: ResourceCostSchema.optional(),
+  /**
+   * A rare treat (the Heart Snack): always gives its full contentment, isn't
+   * counted toward the day's diminishing returns and earns no Patch Coins,
+   * so spending Heartdust is never wasted on a well-loved day.
+   */
+  outsideDailyCare: z.literal(true).optional(),
 });
 export type CareAction = z.infer<typeof CareActionSchema>;

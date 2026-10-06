@@ -23,6 +23,7 @@ import {
   removeRefund,
   safeTiles,
   spentOn,
+  upgradeCost,
   spotOffset,
   tonightOf,
   type MapLocalTime,
@@ -190,6 +191,16 @@ describe('building costs and refunds', () => {
     expect(removeRefund(fire, 1, { removeRefundPercent: 0 })).toEqual({});
   });
 
+  it('costs the next level to upgrade, and nothing past the top', () => {
+    expect(upgradeCost(fire, 1)).toEqual({ timber: 10, stone: 10 });
+    expect(upgradeCost(fire, 2)).toEqual({ timber: 20, stone: 15, glimmer: 2 });
+    expect(upgradeCost(fire, 3)).toBeNull();
+    expect(upgradeCost(lantern, 1)).toBeNull();
+    expect(upgradeCost(building('cozy-meadow'), 1)).toEqual({ timber: 8, stone: 4 });
+    // What an upgraded building cost in all is what a take-down refunds from.
+    expect(spentOn(fire, 3)).toEqual({ timber: 35, stone: 30, glimmer: 2 });
+  });
+
   it('always gives the carved pumpkin back whole', () => {
     expect(removeRefund(lantern, 1, RULES)).toEqual({ 'jack-o-lantern-hearthfire': 1 });
   });
@@ -211,12 +222,23 @@ describe('home-base data', () => {
     );
   });
 
-  it('lets players build fires and habitats, not Training Grounds yet', () => {
+  it('lets players build fires, habitats and Training Grounds', () => {
     expect(BUILDINGS.filter((b) => isBuildable(RULES, b)).map((b) => b.id)).toEqual([
       'hearthfire',
       'jack-o-lantern-hearthfire',
       'ember-den',
       'cozy-meadow',
+      'training-grounds',
     ]);
+  });
+
+  it('allows one Training Grounds per home (the Train job picks "my" Training Grounds)', () => {
+    expect(building('training-grounds').maxPerHome).toBe(1);
+  });
+
+  it('names the carved pumpkin apart from the fire built from it', () => {
+    const item = GAME_DATA.resources.find((r) => r.id === 'jack-o-lantern-hearthfire');
+    expect(item?.name).toBe("Jack-o'-Lantern");
+    expect(lantern.name).toBe("Jack-o'-Lantern Hearthfire");
   });
 });

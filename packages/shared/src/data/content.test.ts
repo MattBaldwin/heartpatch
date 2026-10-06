@@ -11,8 +11,8 @@ import { SECRET_MOVES, SECRET_SPECIES } from './server/secret-species.js';
 import { SPAWN_TABLES } from './server/spawn-tables.js';
 
 describe('decisions encoded in data (docs/DECISIONS.md)', () => {
-  it('has exactly the feed, pet and play care actions', () => {
-    expect(CARE_ACTIONS.map((c) => c.id)).toEqual(['feed', 'pet', 'play']);
+  it('has the feed, pet and play care actions, plus the Heart Snack', () => {
+    expect(CARE_ACTIONS.map((c) => c.id)).toEqual(['feed', 'pet', 'play', 'heart-snack']);
   });
 
   it('lets a Hearthfire store up to 5 nights of Emberwood', () => {

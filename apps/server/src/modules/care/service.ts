@@ -177,19 +177,28 @@ export interface Growth {
  * base, design doc §7), then levels from the XP curve and Phase 1 evolution
  * to the single next form at its level (design doc §8). Writes no events:
  * call `appendGrowthEvents` after the caller's own event. Null if there's no
- * such squishy.
+ * such squishy. `plain`: grant `baseXp` as it is, with no care or habitat
+ * multiplier (Training Grounds XP, owner decision 2026-10-06: XP per hour).
  */
 export async function applyXp(
   tx: Executor,
   squishyId: string,
   baseXp: number,
   at: Date,
+  options: { plain?: boolean } = {},
 ): Promise<Growth | null> {
   const repo = createCareRepo(tx);
   const row = await repo.lockSquishy(squishyId);
   if (!row) return null;
-  const habitat = habitatOf(await habitatTagsFor(repo, [row]), row);
-  const multiplier = xpMultiplier(contentmentOf(row, at), habitat, row, GROWTH_RULES);
+  const multiplier =
+    options.plain === true
+      ? 100
+      : xpMultiplier(
+          contentmentOf(row, at),
+          habitatOf(await habitatTagsFor(repo, [row]), row),
+          row,
+          GROWTH_RULES,
+        );
   const xp = grantedXp(baseXp, multiplier);
   const next = addXp({ level: row.level, xp: row.xp }, xp, GROWTH_RULES);
 
@@ -241,9 +250,15 @@ export async function appendGrowthEvents(
   appendEvent: AppendEvent,
   growths: readonly Growth[],
 ): Promise<void> {
+  for (const event of growthEvents(growths)) await appendEvent(event);
+}
+
+/** The `squishy.leveled` and `squishy.evolved` events for what `applyXp` did, in order. */
+export function growthEvents(growths: readonly Growth[]): NewGameEvent[] {
+  const events: NewGameEvent[] = [];
   for (const g of growths) {
     if (g.level > g.fromLevel) {
-      await appendEvent({
+      events.push({
         mapId: g.mapId,
         type: 'squishy.leveled',
         actorUserId: g.ownerUserId,
@@ -257,7 +272,7 @@ export async function appendGrowthEvents(
       });
     }
     for (const evolution of g.evolutions) {
-      await appendEvent({
+      events.push({
         mapId: g.mapId,
         type: 'squishy.evolved',
         actorUserId: g.ownerUserId,
@@ -265,6 +280,7 @@ export async function appendGrowthEvents(
       });
     }
   }
+  return events;
 }
 
 export function createCareService(options: CareServiceOptions): CareService {

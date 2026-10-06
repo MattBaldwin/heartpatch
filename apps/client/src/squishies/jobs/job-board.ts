@@ -88,6 +88,9 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     '×',
   );
   const note = el('p', { class: 'jobs-note', role: 'status', 'data-testid': 'jobs-note' });
+  /** Why Train is switched off, while there are no Training Grounds yet. */
+  const trainHint = el('p', { class: 'jobs-hint', 'data-testid': 'jobs-train-hint' });
+  trainHint.hidden = true;
   const list = el('ul', { class: 'jobs-list', 'data-testid': 'jobs-list' });
   const sheet = el(
     'section',
@@ -99,6 +102,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       close,
     ),
     note,
+    trainHint,
     list,
   );
   sheet.hidden = true;
@@ -240,6 +244,10 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       return;
     }
     lines = new Map();
+    const tg = current.trainingGrounds;
+    const tgFull = tg !== null && tg.used >= tg.capacity;
+    trainHint.textContent = tg === null ? JOBS_TEXT.noGrounds : JOBS_TEXT.groundsFull;
+    trainHint.hidden = (tg !== null && !tgFull) || current.squishies.length === 0;
     list.replaceChildren(
       ...current.squishies.map((s) => {
         const name = nameOf(current, s);
@@ -260,15 +268,26 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
             },
             { 'data-job': 'gatherer' },
           ),
+          // Owner decision 2026-10-06: practice at the Training Grounds. Without
+          // one (or when it's full) the server says so in a friendly line.
+          button(
+            `🎯 ${JOBS_TEXT.train}`,
+            () => void assign(s, { job: 'training' }, JOBS_TEXT.offToTrain(name)),
+            { 'data-job': 'training' },
+          ),
           button(
             `💤 ${JOBS_TEXT.rest}`,
             () => void assign(s, { job: 'resting' }, `${name} is having a rest.`),
             { 'data-job': 'resting' },
           ),
         );
+        // Train needs Training Grounds with room (the server checks again).
+        const grounds = current.trainingGrounds;
+        const noRoom = grounds === null || grounds.used >= grounds.capacity;
         for (const b of actions.querySelectorAll('button')) {
           const job = b.getAttribute('data-job');
           if (away || (job !== 'gatherer' && job === s.job)) b.disabled = true;
+          if (job === 'training' && noRoom) b.disabled = true;
         }
         return el(
           'li',

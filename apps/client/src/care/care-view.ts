@@ -8,6 +8,8 @@ import {
   type Species,
   type SpeciesVisual,
 } from '@heartpatch/shared';
+import { itemName } from '../inventory/bag-view.js';
+import { itemIcon } from '../inventory/item-icons.js';
 
 /*
  * The care sheet's model (#19, design doc §7–8): one squishy's mood, level
@@ -20,6 +22,7 @@ const DONE_LINES: Readonly<Record<string, string>> = {
   feed: 'Nom nom! What a yummy treat.',
   pet: 'So soft! They wiggle happily.',
   play: 'Boop! Giggles all around.',
+  'heart-snack': 'Mmm! They feel so loved.',
 };
 
 // Player-facing text (style guide §2, §6, §9).
@@ -31,6 +34,11 @@ export const CARE_TEXT = {
   topLevel: 'Top level!',
   xp: (into: number, size: number) => `${String(into)} / ${String(size)} XP`,
   noTreats: 'No Treats',
+  // A rare treat (`outsideDailyCare`, the Heart Snack, owner decision 2026-10-06).
+  treatLine: (name: string) =>
+    `A ${name} tastes like a big hug. It always counts, even after today's cuddles!`,
+  have: (icon: string, have: number, need: number, item: string) =>
+    `${icon} ${String(have)}/${String(need)} ${item}`,
   treats: (n: number) => `${String(n)} ${n === 1 ? 'Treat' : 'Treats'}`,
   wait: 'Just a sec…',
   done: DONE_LINES,
@@ -57,7 +65,12 @@ export const CARE_TEXT = {
   notHere: "That friend isn't here right now. Say hi to this one!",
 } as const;
 
-const ACTION_ICONS: Readonly<Record<string, string>> = { feed: '🍪', pet: '🤚', play: '✨' };
+const ACTION_ICONS: Readonly<Record<string, string>> = {
+  feed: '🍪',
+  pet: '🤚',
+  play: '✨',
+  'heart-snack': '💖',
+};
 
 /** Every species the sheet may need to name or colour: public plus the reply's secret rows. */
 export function speciesById(reply: Pick<CareListResponse, 'speciesDefs'>): Map<string, Species> {
@@ -82,8 +95,10 @@ export interface CareButton {
   readonly label: string;
   /** What it costs, under the label ("3 Treats"), or null. */
   readonly sub: string | null;
-  /** Why it can't be tapped now, or null. */
+  /** Why it can't be tapped now (empty: just switched off), or null. */
   readonly note: string | null;
+  /** A rare treat (`outsideDailyCare`): drawn as the special button. */
+  readonly special: boolean;
 }
 
 /** The little face on the care sheet's blob, from the species' parts (#153). */
@@ -133,6 +148,8 @@ export interface CareSheetModel {
   readonly xp: number;
   readonly xpLine: string;
   readonly buttons: readonly CareButton[];
+  /** Under the buttons while a rare treat shows ("A Heart Snack tastes like…"), else null. */
+  readonly treat: string | null;
   /** "Growing up": why care matters, then the numbers (style guide §2). */
   readonly info: readonly string[];
 }
@@ -147,21 +164,38 @@ export function careSheet(
   now = Date.parse(reply.now),
 ): CareSheetModel {
   const species = speciesById(reply);
-  const buttons = GAME_DATA.careActions.map((action): CareButton => {
+  // A rare treat shows once the bag has any of what it costs (one Heartdust
+  // from a rescue), so it's taught when it's in reach (style guide §3.1).
+  const actions = GAME_DATA.careActions.filter(
+    (action) =>
+      action.outsideDailyCare !== true ||
+      Object.keys(action.cost ?? {}).some((id) => (reply.items[id] ?? 0) > 0),
+  );
+  const buttons = actions.map((action): CareButton => {
     const readyAt = squishy.nextCareAt[action.id];
     const costs = Object.entries(action.cost ?? {});
     const short = costs.some(([id, n]) => (reply.items[id] ?? 0) < n);
+    const special = action.outsideDailyCare === true;
     const treats = action.cost?.['treats'];
     const label = `${ACTION_ICONS[action.id] ?? '💗'} ${action.name}`;
-    const sub = treats === undefined ? null : CARE_TEXT.treats(reply.items['treats'] ?? 0);
+    const sub = special
+      ? costs
+          .map(([id, n]) => CARE_TEXT.have(itemIcon(id), reply.items[id] ?? 0, n, itemName(id)))
+          .join(' ')
+      : treats === undefined
+        ? null
+        : CARE_TEXT.treats(reply.items['treats'] ?? 0);
     const note =
       readyAt !== undefined && Date.parse(readyAt) > now
         ? CARE_TEXT.wait
         : short
-          ? CARE_TEXT.noTreats
+          ? special
+            ? '' // its have/need already says why
+            : CARE_TEXT.noTreats
           : null;
-    return { action: action.id, label, sub, note };
+    return { action: action.id, label, sub, note, special };
   });
+  const treat = actions.find((a) => a.outsideDailyCare === true);
   const toNext = squishy.xpToNext;
   // Phase 1 forms grow up once, at a level (design doc §8).
   const growsAt = species.get(squishy.speciesId)?.evolutions[0]?.level;
@@ -177,6 +211,7 @@ export function careSheet(
     xp: toNext === null ? 1 : Math.min(1, squishy.xpIntoLevel / toNext),
     xpLine: toNext === null ? CARE_TEXT.topLevel : CARE_TEXT.xp(squishy.xpIntoLevel, toNext),
     buttons,
+    treat: treat ? CARE_TEXT.treatLine(treat.name) : null,
     info: [
       CARE_TEXT.whyCare,
       CARE_TEXT.fades,

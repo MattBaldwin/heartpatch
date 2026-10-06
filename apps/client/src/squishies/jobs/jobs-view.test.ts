@@ -35,6 +35,7 @@ function squishy(n: number, over: Partial<JobSquishy> = {}): JobSquishy {
     post: null,
     habitatId: null,
     work: null,
+    training: null,
     ...over,
   };
 }
@@ -59,6 +60,10 @@ describe('job lines', () => {
     expect(jobLine(squishy(1), NOW)).toBe('Resting at home 💤');
     expect(jobLine(squishy(1, { habitatId: id(9) }), NOW)).toBe('Resting in a habitat 🏡');
     expect(jobLine(squishy(1, { job: 'team', teamSlot: 1 }), NOW)).toBe('On the team (2nd) ⚔️');
+    expect(jobLine(squishy(1, { job: 'training' }), NOW)).toBe(
+      'Practicing at the Training Grounds 🎯',
+    );
+    expect(teamCost(squishy(1, { job: 'training' }))).toBe('Stops training');
     expect(jobLine(squishy(1, { job: 'guard', post: { q: 0, r: 0 } }), NOW)).toBe('On watch 🛡️');
     const away = squishy(1);
     away.squishy.state = 'hollowed';

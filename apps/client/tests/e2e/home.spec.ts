@@ -136,6 +136,18 @@ test('builds and fuels a Hearthfire, houses a squishy, and shows the safe glow',
   await slowExpect(page.getByTestId('home-fire')).toHaveText('Your fire is lit: 2 nights left.');
   expect((await homeState(page))?.items['emberwood']).toBe(8);
 
+  // Upgrade (owner decision 2026-10-06): the sheet says what level 2 does and
+  // what it costs as have/need chips; short of Timber and Stone, it waits.
+  await sheet.getByTestId('home-upgrade').tap();
+  await slowExpect(sheet.getByTestId('home-upgrade-line')).toHaveText(
+    'Its light will reach 2 tiles. Squishies out there stay safe at night!',
+  );
+  await slowExpect(sheet.locator('.home-reach-map')).toBeVisible();
+  await slowExpect(sheet.locator('.home-need')).toHaveText(['🪵 5/10', '🪨 5/10']);
+  await slowExpect(sheet.getByTestId('home-upgrade-confirm')).toBeDisabled();
+  await sheet.getByRole('button', { name: 'Not now' }).tap();
+  expect((await homeState(page))?.mode).toBe('selected');
+
   // A Cozy Meadow, and the squishy moves in.
   await sheet.getByTestId('home-done').tap();
   await sheet.getByTestId('home-build').tap();

@@ -169,6 +169,13 @@
       "when": 1791256631907,
       "tag": "0023_keeper_hairstyle",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791312871571,
+      "tag": "0024_training_grounds",
+      "breakpoints": true
     }
   ]
 }

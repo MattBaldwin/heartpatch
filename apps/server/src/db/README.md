@@ -162,6 +162,8 @@ Tiles are written once, from `generateMap`, when the map is created.
 | `team_slot` | smallint, null | Squishy jobs (migration 0021): its place on its owner's battle team, 0 first (check 0–5; unique per map and owner) |
 | `work_tile_id` | uuid → tiles, null | A gatherer's work tile; `ON DELETE SET NULL`. Never with `team_slot` (check `squishies_one_job`) |
 | `work_since`, `work_started_at` | timestamptz, null | Set with `work_tile_id` (check): where counting finished cycles starts (moves on at each collect), and when it started there (work on land captured since then stops) |
+| `training_building_id` | uuid → buildings, null | The Training Grounds it practices at (owner decision 2026-10-06); `ON DELETE SET NULL`. One job at a time is kept by the commands, as for guards (no check across columns) |
+| `training_since` | timestamptz, null | Where counting Training Grounds XP starts (moves on at each settle); set whenever `training_building_id` is (check `squishies_training_since`) |
 
 `level` and `xp` change only through care's `applyXp` (#19): `xp` is the total, and a squishy that joined above level 1 counts from its level's XP. Stats come from the species and level (`statsAtLevel`); individual variance, care history and accessories columns are added by their feature issues.
 

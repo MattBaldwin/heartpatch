@@ -98,9 +98,12 @@ export const RESOURCES: Resource[] = [
     kind: 'crafted',
   },
   {
+    // The carved pumpkin you build a Jack-o'-Lantern Hearthfire from. Its id
+    // stays (bags hold it); only the name differs from the building's, so
+    // the build sheet doesn't read "to build X you need X".
     id: 'jack-o-lantern-hearthfire',
-    name: "Jack-o'-Lantern Hearthfire",
-    description: 'A grinning, extra-bright fire. The Hollow Man really does not like it.',
+    name: "Jack-o'-Lantern",
+    description: 'A carved, grinning pumpkin. Build it into a Hearthfire at home!',
     kind: 'crafted',
   },
 ];

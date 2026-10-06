@@ -124,13 +124,14 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 
 **XP gained = battle XP × care multiplier × habitat multiplier**
 
-- **Care multiplier.** Care actions (**feed, pet, play**) raise **contentment** (0–100). Contentment decays slowly over real time **[DEFAULT: ~24h from full to baseline]**. Multiplier **[DEFAULT: 1.0× to 1.75×]**. A new squishy starts at contentment **[DEFAULT: 50]** ("Feeling okay!"), not at the baseline.
+- **Care multiplier.** Care actions (**feed, pet, play**, and the rare Heart Snack below) raise **contentment** (0–100). Contentment decays slowly over real time **[DEFAULT: ~24h from full to baseline]**. Multiplier **[DEFAULT: 1.0× to 1.75×]**. A new squishy starts at contentment **[DEFAULT: 50]** ("Feeling okay!"), not at the baseline.
 - **Habitat multiplier.** Habitats carry element and feeling tags. A squishy housed in a matching habitat gets **[DEFAULT: up to 1.75×]**. A mismatch gives 1.0×. A squishy is either housed in a habitat or standing watch (§14), not both.
 - **Floor of 1.0×.** Neglect never weakens or sickens a squishy; it only means no bonus. Combat alone always advances a squishy, just more slowly.
 - **Cap.** Combined multiplier capped at **[DEFAULT: 3×]**.
 - **Implementation:** no ticking simulation. Store `contentment` and `lastCaredAt`; compute current contentment lazily from elapsed time on read. Care can't be tap-spammed: each squishy's returns shrink as the day's actions pile up (below), and the server ignores a repeat of the same action within about 10 seconds so one stroke counts once.
 - **Diminishing returns:** the first **[DEFAULT: 3]** care actions per squishy per day give full contentment; later ones give less (50%, then 25%, then 10%). Patch Coins from care are capped per account per day **[DEFAULT: 10]**, and only full-value actions earn one. Attentive play is rewarded without turning care into a chore that favours whoever has the most screen time.
-- **Why three actions:** each maps to close-up gestures (§20): drag a treat → **feed**, stroke → **pet**, tap to boop or pinch to tickle → **play**. Each also has a visible button. This keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
+- **Heart Snack (rare treat).** A care button that costs **[DEFAULT: 3]** Heartdust and adds **[DEFAULT: 25]** contentment. It always counts in full, sits outside the day's diminishing returns and earns no Patch Coins, so Heartdust from rescues has a use (owner decision 2026-10-06).
+- **Why three everyday actions:** each maps to close-up gestures (§20): drag a treat → **feed**, stroke → **pet**, tap to boop or pinch to tickle → **play**. Each also has a visible button. This keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
 - **Levels and pace.** Levels go up to 100. Wild squishies match the player's Partner at **[DEFAULT: −2 to +1]** of its level, so wild fights stay a fair match as it grows. The XP curve steepens past level 16 (when starters grow up) and again past 30, so 30–100 is a long tail rather than a first-week sprint. A befriended squishy joins at most **[DEFAULT: 1]** level below its first evolution, so it grows up by training rather than by being caught. Battle XP tires out over a day: each squishy gets full XP for its first **[DEFAULT: 7]** wins of the map-local day, then **[DEFAULT: 10%]**, so playing all day doesn't race far ahead (owner decisions 2026-10-06). `pnpm sim:progression` shows the pace day by day.
 - Care history (a rolling score over the squishy's life) feeds evolution odds (§8).
 
@@ -194,10 +195,10 @@ Resources vary by terrain, making certain tiles worth fighting over.
 | Resource | Source | Use |
 |---|---|---|
 | Timber | Forest | Basic building |
-| Stone | Hills, mountains | Basic building |
+| Stone | Hills, Stone nodes | Basic building |
 | Emberwood | Old forest | Hearthfire fuel (nightly upkeep) |
-| Glimmer | Mountains, caves | Advanced habitats, decorations |
-| Heartdust | Rescuing Hollowed squishies, events | Nurseries, evolution boosters (rare) |
+| Glimmer | Mountains, caves | Hearthfire level 3, advanced habitats, decorations |
+| Heartdust | Rescuing Hollowed squishies, events | Heart Snack (care), nurseries, evolution boosters (rare) |
 | Treats | Grown on farm plots | Feeding squishies, raising care |
 
 **Seasonal resources** (special uses, see §15): Pumpkins, Witch Dust, Magic Fallen Leaves, Turkey Feathers, Presents, Fireworks.
@@ -206,7 +207,7 @@ Gathering is timer-based (start a gather on an owned node; when it's done it goe
 
 **Recipe book.** Every craft recipe and every building you can put up has a page. A page opens the first time your account has collected everything it needs, on any patch, and stays open. The Heart Charm, the Hearthfire and both habitats are open from the start (the tutorial uses them). A sealed page can't be crafted or built yet and shows a short hint about where its missing pieces turn up (DECISIONS "Recipe book and unlocks"). One thing cooks at a time per patch; the book shows what's cooking with a countdown, and it pops into your bag when it's done.
 
-**Squishy gatherers.** The Keeper still gathers by hand. On top of that, each squishy given the gatherer job works one more tile of the player's land **on its own, again and again**, until it's moved: a node, or **owned territory** outside the home base, which yields by terrain (forest → Timber, hills and mountains → Stone, old forest → Emberwood, meadow → Treats, pumpkin fields → Pumpkins in season; `JOB_RULES.terrainYields`, **[DEFAULT]**). More squishies and more land mean more resources, which is why capturing squishies and holding territory both matter.
+**Squishy gatherers.** The Keeper still gathers by hand. On top of that, each squishy given the gatherer job works one more tile of the player's land **on its own, again and again**, until it's moved: a node, or **owned territory** outside the home base, which yields by terrain (forest → Timber, hills → Stone, mountains → Glimmer (slowly), old forest → Emberwood, meadow → Treats, pumpkin fields → Pumpkins in season; `JOB_RULES.terrainYields`, **[DEFAULT]**). More squishies and more land mean more resources, which is why capturing squishies and holding territory both matter.
 
 - One gatherer per tile, one job per squishy. A squishy's gather takes about **[DEFAULT: twice]** the Keeper's time per cycle; finished cycles go into the bag by themselves; if nobody visits, up to **[DEFAULT: 4]** wait, then it naps until you're back.
 - **Matches gather faster**, like the habitat match (§7): a squishy whose element (or a Halloween squishy, for Pumpkins) matches the resource is 1.35× as quick, and 1.75× when its feeling matches too (Leaf/Brave → Timber, Stone/Sleepy → Stone, Fire/Cozy → Emberwood, Light or Spark/Joy → Glimmer, Water/Silly → Treats, Shadow or Halloween/Spooky → Pumpkins; **[DEFAULT]**). The job board shows each squishy's best jobs: "Great at gathering Timber 🌲", "Strong fighter 💪".
@@ -219,10 +220,10 @@ The home base is where squishies live, train, play, breed and hang out to be adm
 
 - **Hearthfire:** projects a safe radius (in tiles) against the Hollow Man; burns one night of Emberwood at each nightfall and stores several nights of fuel (§14).
 - **Habitats:** tagged by element/feeling (e.g. Frost Grotto, Cozy Meadow, Ember Den, Glimmer Cave). Each has capacity. Matching squishies get the habitat multiplier. A housed squishy can't stand watch on a tile (§14).
-- **Training Grounds:** passive XP trickle for assigned squishies (small).
+- **Training Grounds:** passive XP trickle for assigned squishies (small): a **Train** job on the job board, **[DEFAULT: 5 XP an hour, room for 2]** (level 2: 8 an hour, room for 3), at most **[DEFAULT: 24 h]** waiting, landing by itself like gathered things. Plain XP: no care bonus, and it isn't a battle win, so the daily battle-XP falloff doesn't apply. A trainee sleeps at home, so a lit fire keeps it safe (owner decision 2026-10-06).
 - **Play areas and decorations:** raise Harmony (Phase 3) and give squishies cute idle behavior.
 - **Nursery** (Phase 3), **Noise buildings** (bells, drums, squishy choir) for extra Hollow Man deterrence.
-- Buildings are placed on a grid within home-base tiles; upgrade levels increase capacity/radius.
+- Buildings are placed on a grid within home-base tiles; upgrade levels increase capacity/radius. **Upgrade** on a building's card pays the next level's cost and raises it at once: Hearthfire level 2 reaches 2 tiles, level 3 reaches 3 and needs Glimmer; habitats and Training Grounds get more room. Taking one down gives back half of everything spent on it, upgrades included.
 
 ## 14. The Hollow Man
 

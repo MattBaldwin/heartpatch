@@ -20,6 +20,7 @@ import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import {
   battles,
+  buildings,
   inventories,
   keepers,
   mapMembers,
@@ -445,6 +446,50 @@ describe.skipIf(!url)(
       expect(after).toMatchObject({ readyCycles: 0, full: false });
       expect(Date.parse(after.nextReadyAt!)).toBe(clock.getTime() + work.cycleSeconds * 1000);
       expect(settled.nextAt).toBe(after.nextReadyAt);
+    });
+
+    it('lands Training Grounds XP by itself, carrying part of a point, capped at a day', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const node = await homeNode(server, kid, mapId, 'timber');
+      await db.insert(buildings).values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: await tileIdAt(mapId, node),
+        buildingId: 'training-grounds',
+        kind: 'training-grounds',
+        spot: 2,
+      });
+      const pet = await squishy(mapId, kid, { level: 1 });
+      const assigned = await setJob(server, kid, mapId, pet, { job: 'training' });
+      expect(assigned.statusCode, assigned.body).toBe(200);
+      expect((await settle(server, kid, mapId)).trained).toEqual([]);
+
+      // 90 minutes at 5 an hour: 7 whole XP, and 6 minutes carry on.
+      later(90 * MINUTE_MS);
+      const first = await settle(server, kid, mapId);
+      expect(first.trained).toEqual([{ squishyId: pet, name: 'Puddlepuff', xp: 7 }]);
+      expect(first.landed).toEqual([]);
+      later(6 * MINUTE_MS);
+      expect((await settle(server, kid, mapId)).trained).toEqual([
+        { squishyId: pet, name: 'Puddlepuff', xp: 1 },
+      ]);
+      expect(
+        (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pet) }))?.xp,
+      ).toBe(8);
+
+      // Away for 30 hours: only a day's worth lands, then it starts again from now.
+      later(30 * 60 * MINUTE_MS);
+      const capped = await settle(server, kid, mapId);
+      expect(capped.trained).toEqual([
+        { squishyId: pet, name: 'Puddlepuff', xp: 5 * JOB_RULES.training.maxHours },
+      ]);
+      expect((await settle(server, kid, mapId)).trained).toEqual([]);
+      const row = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pet) });
+      expect(row).toMatchObject({ xp: 128, level: 3, trainingSince: new Date(clock) });
+      const types = (await eventsOf(mapId)).map((e) => e.type);
+      expect(types.slice(-2)).toEqual(['squishy.trained', 'squishy.leveled']);
     });
 
     it('keeps what finished before the land changed hands, and lets the rest go', async () => {

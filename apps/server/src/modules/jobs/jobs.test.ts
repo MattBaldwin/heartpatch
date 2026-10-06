@@ -3,7 +3,9 @@ import {
   ApiErrorSchema,
   CollectWorkResponseSchema,
   hexDistance,
+  GROWTH_RULES,
   JOB_RULES,
+  xpForLevel,
   JobsViewSchema,
   MapResponseSchema,
   MapViewSchema,
@@ -678,6 +680,19 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
     });
   });
 
+  /** Who a wild battle would take for this player (and leaves the battle finished). */
+  async function battleTeamOf(kid: Player, mapId: string) {
+    const service = createBattlesService({ db, clock: () => clock });
+    const { battle } = await service.startAgainst({ id: kid.id, username: kid.username }, mapId, {
+      squishies: [
+        { id: 'wild-1', speciesId: 'puddlepuff', level: 3, element: 'water', feeling: 'silly' },
+      ],
+    } as never);
+    const row = await db.query.battles.findFirst({ where: (t, { eq }) => eq(t.id, battle.id) });
+    await run(`update battles set status = 'finished' where id = '${battle.id}'`);
+    return (row!.setup as { a: { squishies: { id: string }[] } }).a.squishies.map((s) => s.id);
+  }
+
   describe('battles use the team', () => {
     const wild = {
       squishies: [
@@ -771,6 +786,196 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       await expect(battleTeam(kid, mapId)).rejects.toThrow(
         'Everyone is busy with a job! Pick a team first.',
       );
+    });
+  });
+
+  describe('training (owner decision 2026-10-06)', () => {
+    const HOUR_MS = 60 * MINUTE_MS;
+
+    /** Builds the player's Training Grounds straight in the table, at `level`. */
+    async function grounds(server: FastifyInstance, who: Player, mapId: string, level = 1) {
+      const node = await homeNode(server, who, mapId, 'timber');
+      const [row] = await db
+        .insert(buildings)
+        .values({
+          mapId,
+          ownerUserId: who.id,
+          tileId: await tileIdAt(mapId, node),
+          buildingId: 'training-grounds',
+          kind: 'training-grounds',
+          level,
+          spot: 2,
+        })
+        .returning({ id: buildings.id });
+      return row!.id;
+    }
+
+    it('needs Training Grounds with room, and shows trainees on the board', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const [a, b, c] = [
+        await squishy(mapId, kid),
+        await squishy(mapId, kid),
+        await squishy(mapId, kid),
+      ];
+      const none = await setJob(server, kid, mapId, a, { job: 'training' });
+      expect(none.statusCode).toBe(409);
+      expect(errorOf(none).message).toBe('Build Training Grounds at home first!');
+
+      const id = await grounds(server, kid, mapId);
+      expect((await setJob(server, kid, mapId, a, { job: 'training' })).statusCode).toBe(200);
+      const res = await setJob(server, kid, mapId, b, { job: 'training' });
+      const view = JobsViewSchema.parse(res.json());
+      expect(jobOf(view, b)).toMatchObject({
+        job: 'training',
+        training: { buildingId: id, xpPerHour: 5, xpReady: 0, full: false },
+      });
+      expect(view.trainingGrounds).toEqual({ id, capacity: 2, used: 2 });
+      const full = await setJob(server, kid, mapId, c, { job: 'training' });
+      expect(full.statusCode).toBe(409);
+      expect(errorOf(full).message).toBe(
+        'The Training Grounds are full! Upgrade them for more room.',
+      );
+      // Training again is a no-op.
+      expect((await setJob(server, kid, mapId, a, { job: 'training' })).statusCode).toBe(200);
+      const assigned = (await eventsOf(mapId)).filter((e) => e.type === 'squishy.assigned');
+      expect(assigned.map((e) => (e.payload as { job: string }).job)).toEqual([
+        'training',
+        'training',
+      ]);
+
+      // A level-2 Training Grounds has room for 3 and gives 8 XP an hour.
+      await run(`update buildings set level = 2 where id = '${id}'`);
+      const roomier = JobsViewSchema.parse(
+        (await setJob(server, kid, mapId, c, { job: 'training' })).json(),
+      );
+      expect(roomier.trainingGrounds).toEqual({ id, capacity: 3, used: 3 });
+      expect(jobOf(roomier, c).training?.xpPerHour).toBe(8);
+      // Full at the top level: no upgrade to suggest.
+      const d = await squishy(mapId, kid);
+      const top = await setJob(server, kid, mapId, d, { job: 'training' });
+      expect(top.statusCode).toBe(409);
+      expect(errorOf(top).message).toBe(
+        'The Training Grounds are full! Give someone else a turn first.',
+      );
+    });
+
+    it('lands its XP when it changes job, and never battles while training', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grounds(server, kid, mapId);
+      const [trainee, other] = [
+        await squishy(mapId, kid, { level: 9 }),
+        await squishy(mapId, kid, { level: 2 }),
+      ];
+      await setJob(server, kid, mapId, trainee, { job: 'training' });
+      expect(await battleTeamOf(kid, mapId)).toEqual([other]);
+
+      later(3 * HOUR_MS);
+      expect(jobOf(await jobs(server, kid, mapId), trainee).training?.xpReady).toBe(15);
+      // A squishy made at level 9 counts from that level's XP (shared `addXp`).
+      const before = xpForLevel(9, GROWTH_RULES);
+      const res = await setTeam(server, kid, mapId, [trainee]);
+      expect(res.statusCode).toBe(200);
+      expect(jobOf(JobsViewSchema.parse(res.json()), trainee)).toMatchObject({
+        job: 'team',
+        training: null,
+      });
+      expect(await squishyRow(trainee)).toMatchObject({
+        xp: before + 15,
+        trainingBuildingId: null,
+        trainingSince: null,
+      });
+      const trained = (await eventsOf(mapId)).find((e) => e.type === 'squishy.trained')!;
+      expect(trained.payload).toEqual({
+        userId: kid.id,
+        trained: [{ squishyId: trainee, xp: 15 }],
+      });
+      // How much stays internal.
+      expect(publicViewFor(PUBLIC_VIEWS, trained as never, { userId: kid.id })).toEqual({
+        userId: kid.id,
+      });
+    });
+
+    it('lands its XP when it is posted on watch, and stops training', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grounds(server, kid, mapId);
+      const hills = await farLand(server, kid, mapId, 'hills');
+      const trainee = await squishy(mapId, kid, { level: 1 });
+      await setJob(server, kid, mapId, trainee, { job: 'training' });
+      later(2 * HOUR_MS);
+      const post = await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: hills.q,
+        r: hills.r,
+        squishyIds: [trainee],
+      });
+      expect(post.statusCode, post.body).toBe(200);
+      expect(await squishyRow(trainee)).toMatchObject({
+        xp: 10,
+        trainingBuildingId: null,
+        trainingSince: null,
+      });
+      expect(jobOf(await jobs(server, kid, mapId), trainee).job).toBe('guard');
+      const trained = (await eventsOf(mapId)).find((e) => e.type === 'squishy.trained')!;
+      expect(trained.payload).toEqual({
+        userId: kid.id,
+        trained: [{ squishyId: trainee, xp: 10 }],
+      });
+    });
+
+    it('sleeps at home: safe by a lit fire, exposed when it is out', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await run(
+        `update map_members set joined_at = '2026-09-01T12:00:00Z'
+         where map_id = '${mapId}' and user_id = '${kid.id}'`,
+      );
+      await grounds(server, kid, mapId);
+      const hills = await farLand(server, kid, mapId, 'hills');
+      const [trainee, guard] = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      await setJob(server, kid, mapId, trainee, { job: 'training' });
+      await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: hills.q,
+        r: hills.r,
+        squishyIds: [guard],
+      });
+      const hollow = createHollowService({
+        db,
+        clock: () => clock,
+        battles: createBattlesService({ db, clock: () => clock }),
+      });
+
+      // A lit fire at home: the trainee sleeps safe.
+      const node = await homeNode(server, kid, mapId, 'stone');
+      await db.insert(buildings).values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: await tileIdAt(mapId, node),
+        buildingId: 'hearthfire',
+        kind: 'hearthfire',
+        spot: 1,
+        fuelledThrough: '2026-10-02',
+      });
+      clock.setTime(Date.parse('2026-10-03T03:00:00Z')); // 9 PM in Denver
+      expect(await hollow.runNightfall(mapId, '2026-10-02')).toEqual({ taken: 0 });
+
+      // The next night the fire is out: the trainee is the only one exposed.
+      clock.setTime(Date.parse('2026-10-04T03:00:00Z'));
+      expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 1 });
+      const taken = await squishyRow(trainee);
+      expect(taken).toMatchObject({
+        state: 'hollowed',
+        trainingBuildingId: null,
+        trainingSince: null,
+      });
+      // Its training up to then landed first: 24 h capped at 5 an hour, on top
+      // of its level-5 start.
+      expect(taken!.xp).toBe(xpForLevel(5, GROWTH_RULES) + 5 * JOB_RULES.training.maxHours);
     });
   });
 

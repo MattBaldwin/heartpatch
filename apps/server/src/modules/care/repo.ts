@@ -1,14 +1,20 @@
 import {
   ElementIdSchema,
   FeelingIdSchema,
+  GAME_DATA,
   type ElementId,
   type FeelingId,
 } from '@heartpatch/shared';
-import { and, asc, desc, eq, gt, inArray, isNull, max, sql, sum } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, max, notInArray, sql, sum } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { squishyOnWatch } from '../territory/repo.js';
 import { buildings, careLog, squishies, squishyEvolutions } from '../../db/schema.js';
+
+/** Care actions outside the day's diminishing returns (`outsideDailyCare`, the Heart Snack). */
+const OUTSIDE_DAILY_CARE = GAME_DATA.careActions
+  .filter((a) => a.outsideDailyCare === true)
+  .map((a) => a.id);
 
 /** A squishy as care and growth need it (a `squishies` row). */
 export interface CareSquishyRow {
@@ -72,7 +78,7 @@ export interface CareRepo {
   /** The content id of each habitat building (`buildings.building_id`), by row id. */
   habitatBuildingIds: (buildingRowIds: readonly string[]) => Promise<Map<string, string>>;
 
-  /** Care actions per squishy on `day`. */
+  /** Care actions on each squishy on `day` that count toward diminishing returns. */
   countCareOn: (squishyIds: readonly string[], day: string) => Promise<Map<string, number>>;
   /** When each action was last done on each squishy since `since` (`squishyId` → action → when). */
   lastCare: (squishyIds: readonly string[], since: Date) => Promise<Map<string, Map<string, Date>>>;
@@ -174,7 +180,16 @@ function queries(db: Executor): CareRepo {
       const rows = await db
         .select({ squishyId: careLog.squishyId, n: sql<number>`count(*)::int` })
         .from(careLog)
-        .where(and(inArray(careLog.squishyId, [...squishyIds]), eq(careLog.day, day)))
+        .where(
+          and(
+            inArray(careLog.squishyId, [...squishyIds]),
+            eq(careLog.day, day),
+            // A rare treat (the Heart Snack) isn't part of the day's count.
+            OUTSIDE_DAILY_CARE.length > 0
+              ? notInArray(careLog.action, OUTSIDE_DAILY_CARE)
+              : undefined,
+          ),
+        )
         .groupBy(careLog.squishyId);
       return new Map(rows.map((r) => [r.squishyId, r.n]));
     },

@@ -10,7 +10,9 @@ import {
   inSeason,
   isBuildable,
   isReservedSpot,
+  jobOf,
   removeRefund,
+  upgradeCost,
   type Building,
   type HomeResponse,
   type ItemCounts,
@@ -36,7 +38,7 @@ import {
   requirePageOpen,
   seasonsOn,
 } from '../inventory/service.js';
-import { leaveWork } from '../jobs/service.js';
+import { landTraining, leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
@@ -55,7 +57,9 @@ import {
  * (CLAUDE.md rule 7). Hearthfire fuel is a date (tech spec §7): adding fuel
  * moves `fuelled_through`, and lit / nights left are worked out on read, so
  * nothing ticks (rule 4). Habitats house the player's own active squishies,
- * up to their capacity.
+ * up to their capacity. Upgrades (owner decision 2026-10-06) pay the next
+ * level's cost and raise the level in one transaction; a fire's safe radius
+ * follows its level everywhere (`safeRadiusOf`).
  */
 
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
@@ -81,6 +85,7 @@ const MESSAGES = {
   inHollow: 'That squishy is in the Hollow right now. Rescue them first!',
   habitatFull: (name: string) => `The ${name} is full! Try another home.`,
   onWatch: (name: string) => `Bring ${name} home from watch first!`,
+  topLevel: (name: string) => `Your ${name} is as big as it gets!`,
 } as const;
 
 /** What to call one of my squishies in a message: its nickname, else its species. */
@@ -108,6 +113,8 @@ export interface BuildingsService {
     buildingRowId: string,
     nights: number,
   ) => Promise<HomeResponse>;
+  /** Raises one of my buildings a level, paying the next level's cost. */
+  upgrade: (user: PublicUser, mapId: string, buildingRowId: string) => Promise<HomeResponse>;
   /** Moves one of my squishies into a habitat, or out (null). */
   house: (
     user: PublicUser,
@@ -141,19 +148,24 @@ const placed = (row: BuildingRow, local: MapLocalTime): PlacedBuilding => ({
   r: row.r,
 });
 
+/**
+ * One of my buildings as I see it. `residents`: squishies living in it (a
+ * habitat) or practicing at it (Training Grounds).
+ */
 function toMyBuilding(row: BuildingRow, local: MapLocalTime, residents: number): MyBuilding {
   const building = BUILDING_DATA.get(row.buildingId);
   const fire = building?.kind === 'hearthfire' ? building : null;
-  const habitat = building?.kind === 'habitat' ? building : null;
+  const roomy = building?.kind === 'habitat' || building?.kind === 'training-grounds';
   const level = Math.min(row.level, building?.levels.length ?? 1);
+  const step = roomy ? building.levels[level - 1] : undefined;
   return {
     ...placed(row, local),
     nightsLeft: fire
       ? hearthfireState(row.fuelledThrough, local, HOME_BASE_RULES).nightsLeft
       : null,
     fuelSpace: fire ? fuelSpace(fire, row.fuelledThrough, local, HOME_BASE_RULES) : null,
-    capacity: habitat ? (habitat.levels[level - 1]?.capacity ?? 0) : null,
-    residents: habitat ? residents : null,
+    capacity: roomy ? (step && 'capacity' in step ? step.capacity : 0) : null,
+    residents: roomy ? residents : null,
   };
 }
 
@@ -202,7 +214,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         nodeResource: t.nodeResource,
       })),
       buildings: buildings.map((b) =>
-        toMyBuilding(b, local, squishies.filter((s) => s.habitatBuildingId === b.id).length),
+        toMyBuilding(
+          b,
+          local,
+          squishies.filter((s) => s.habitatBuildingId === b.id || s.trainingBuildingId === b.id)
+            .length,
+        ),
       ),
       squishies: active.map((s) => ({
         id: s.id,
@@ -212,6 +229,13 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         nickname: s.nickname,
         level: s.level,
         habitatId: s.habitatBuildingId,
+        trainingId: s.trainingBuildingId,
+        job: jobOf({
+          teamSlot: s.teamSlot,
+          atWork: s.atWork,
+          onWatch: s.onWatch,
+          training: s.trainingBuildingId !== null,
+        }),
       })),
       speciesDefs,
       items,
@@ -379,10 +403,16 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           }
         }
         const movedOut = await repo.moveOutAll(row.id);
-        await repo.deleteBuilding(row.id);
+        const trainees = await repo.lockTrainees(row.id);
+        // Inventory rows before `species_seen` (tech spec §7 step 11): the
+        // refund first, then trainees land what they earned (an evolution
+        // writes `species_seen`) and stop, then the building goes.
         if (Object.keys(refund).length > 0) {
           await grantItems(tx, { mapId, userId: user.id }, refund, 'build-refund', row.id);
         }
+        const training =
+          trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, true) : null;
+        await repo.deleteBuilding(row.id);
         await repo.appendEvent({
           mapId,
           type: 'building.removed',
@@ -394,9 +424,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             q: row.q,
             r: row.r,
             refund,
-            movedOut,
+            movedOut: [...new Set([...movedOut, ...trainees])].sort(),
           },
         });
+        for (const event of training?.events ?? []) await repo.appendEvent(event);
         return { refund, home: await homeView(repo, tx, mapId, user.id, at, timeZone) };
       }),
 
@@ -423,6 +454,40 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             fuelledThrough,
           },
         });
+        return homeView(repo, tx, mapId, user.id, at, timeZone);
+      }),
+
+    upgrade: (user, mapId, buildingRowId) =>
+      command(user, mapId, async ({ repo, tx, at, local, timeZone }) => {
+        const row = await lockMine(repo, mapId, user.id, buildingRowId);
+        const building = requireBuildingData(row.buildingId);
+        const cost = upgradeCost(building, row.level);
+        if (!cost) throw new AppError('CONFLICT', MESSAGES.topLevel(building.name));
+        // Trainees (squishies, step 10) are locked before the cost's inventory
+        // rows (step 11).
+        const trainees =
+          building.kind === 'training-grounds' ? await repo.lockTrainees(row.id) : [];
+        // Short of anything: CONFLICT ("You need 2 more Glimmer first!"), nothing changes.
+        await consumeItems(tx, { mapId, userId: user.id }, cost, 'upgrade', row.id);
+        // Training XP is worked out from the level, so the whole XP earned at
+        // the old rate lands before the level changes; only the part of a
+        // point still in progress (minutes) carries on at the new rate.
+        const training =
+          trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, false) : null;
+        const level = row.level + 1;
+        await repo.setLevel(row.id, level);
+        await repo.appendEvent({
+          mapId,
+          type: 'building.upgraded',
+          actorUserId: user.id,
+          payload: {
+            userId: user.id,
+            building: placed({ ...row, level }, local),
+            fromLevel: row.level,
+            cost,
+          },
+        });
+        for (const event of training?.events ?? []) await repo.appendEvent(event);
         return homeView(repo, tx, mapId, user.id, at, timeZone);
       }),
 

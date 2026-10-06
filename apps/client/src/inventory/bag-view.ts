@@ -61,6 +61,14 @@ export function landedText(landed: readonly { items: ItemCounts }[]): string {
   return parts.length === 0 ? '' : `${parts.join(', ')}!`;
 }
 
+/**
+ * The pop-up's line for Training Grounds XP that landed (owner decision
+ * 2026-10-06): "🎯 Pebblesnooze trained: +60 XP!", one per squishy.
+ */
+export function trainedText(trained: readonly { name: string; xp: number }[]): string {
+  return trained.map((t) => `🎯 ${t.name} trained: +${String(t.xp)} XP!`).join(' ');
+}
+
 /** What the gathering chip over the map shows: one gather, and how many others. */
 export interface GatherChip {
   /** A gather that's ready to collect, else the one ready soonest. */

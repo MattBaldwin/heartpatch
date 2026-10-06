@@ -3,7 +3,7 @@ import { and, asc, eq, getTableName, inArray, isNotNull, sql, type AnyColumn } f
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { squishies, tileAttacks, tileDefenders, tiles } from '../../db/schema.js';
+import { buildings, squishies, tileAttacks, tileDefenders, tiles } from '../../db/schema.js';
 import { squishyOnWatch } from '../territory/repo.js';
 
 /** A tile as the job board needs it. */
@@ -37,6 +37,12 @@ export interface JobRow {
   post: { tileId: string; q: number; r: number } | null;
   /** It stands watch (`squishyOnWatch`). */
   onWatch: boolean;
+  /**
+   * The Training Grounds it practices at (owner decision 2026-10-06), with
+   * that building's content id and level, and when the current count of XP
+   * started; null when it isn't training.
+   */
+  training: { buildingRowId: string; buildingId: string; level: number; since: Date } | null;
 }
 
 /**
@@ -121,6 +127,12 @@ export interface SquishyJobsRepo {
   /** The next cycle count starts here (after a collect). */
   moveWorkSince: (squishyId: string, since: Date) => Promise<void>;
   stopWork: (squishyId: string) => Promise<void>;
+  startTraining: (squishyId: string, buildingRowId: string, at: Date) => Promise<void>;
+  /** The next XP count starts here (after a settle). */
+  moveTrainingSince: (squishyId: string, since: Date) => Promise<void>;
+  stopTraining: (squishyId: string) => Promise<void>;
+  /** How many squishies practice at this Training Grounds, any state. */
+  countTrainees: (buildingRowId: string) => Promise<number>;
   /** Off its watch post; returns the tile it left, if it had one. */
   leavePost: (squishyId: string) => Promise<string | null>;
 }
@@ -132,6 +144,7 @@ export interface SquishyJobsTxRepo extends SquishyJobsRepo {
 
 const workTile = alias(tiles, 'job_work_tile');
 const postTile = alias(tiles, 'job_post_tile');
+const trainingBuilding = alias(buildings, 'job_training_building');
 
 const tileColumns = {
   id: tiles.id,
@@ -181,11 +194,16 @@ function queries(db: Executor): SquishyJobsRepo {
         postTileId: postTile.id,
         postQ: postTile.q,
         postR: postTile.r,
+        trainingRowId: trainingBuilding.id,
+        trainingContentId: trainingBuilding.buildingId,
+        trainingLevel: trainingBuilding.level,
+        trainingSince: squishies.trainingSince,
       })
       .from(squishies)
       .leftJoin(workTile, eq(workTile.id, squishies.workTileId))
       .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))
-      .leftJoin(postTile, eq(postTile.id, tileDefenders.tileId));
+      .leftJoin(postTile, eq(postTile.id, tileDefenders.tileId))
+      .leftJoin(trainingBuilding, eq(trainingBuilding.id, squishies.trainingBuildingId));
 
   type Raw = Awaited<ReturnType<ReturnType<typeof selectJobs>['execute']>>[number];
   const toJob = (r: Raw): JobRow => ({
@@ -224,6 +242,18 @@ function queries(db: Executor): SquishyJobsRepo {
         ? null
         : { tileId: r.postTileId, q: r.postQ, r: r.postR },
     onWatch: r.onWatch,
+    training:
+      r.trainingRowId === null ||
+      r.trainingContentId === null ||
+      r.trainingLevel === null ||
+      r.trainingSince === null
+        ? null
+        : {
+            buildingRowId: r.trainingRowId,
+            buildingId: r.trainingContentId,
+            level: r.trainingLevel,
+            since: r.trainingSince,
+          },
   });
 
   return {
@@ -329,6 +359,32 @@ function queries(db: Executor): SquishyJobsRepo {
         .update(squishies)
         .set({ workTileId: null, workSince: null, workStartedAt: null })
         .where(eq(squishies.id, squishyId));
+    },
+
+    startTraining: async (squishyId, buildingRowId, at) => {
+      await db
+        .update(squishies)
+        .set({ trainingBuildingId: buildingRowId, trainingSince: at })
+        .where(eq(squishies.id, squishyId));
+    },
+
+    moveTrainingSince: async (squishyId, since) => {
+      await db.update(squishies).set({ trainingSince: since }).where(eq(squishies.id, squishyId));
+    },
+
+    stopTraining: async (squishyId) => {
+      await db
+        .update(squishies)
+        .set({ trainingBuildingId: null, trainingSince: null })
+        .where(eq(squishies.id, squishyId));
+    },
+
+    countTrainees: async (buildingRowId) => {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(squishies)
+        .where(eq(squishies.trainingBuildingId, buildingRowId));
+      return row?.n ?? 0;
     },
 
     leavePost: async (squishyId) => {

@@ -9,6 +9,7 @@ import {
   jobHintText,
   jobOf,
   teamProblem,
+  trainingProgress,
   workCycleSeconds,
   workProgress,
   workSource,
@@ -61,12 +62,14 @@ describe('job rules data', () => {
 
 describe('one job at a time', () => {
   it('reads one job from the stored facts', () => {
-    expect(jobOf({ teamSlot: null, atWork: false, onWatch: false })).toBe('resting');
-    expect(jobOf({ teamSlot: 0, atWork: false, onWatch: false })).toBe('team');
-    expect(jobOf({ teamSlot: null, atWork: true, onWatch: false })).toBe('gatherer');
-    expect(jobOf({ teamSlot: null, atWork: false, onWatch: true })).toBe('guard');
+    const none = { teamSlot: null, atWork: false, onWatch: false, training: false };
+    expect(jobOf(none)).toBe('resting');
+    expect(jobOf({ ...none, teamSlot: 0 })).toBe('team');
+    expect(jobOf({ ...none, atWork: true })).toBe('gatherer');
+    expect(jobOf({ ...none, onWatch: true })).toBe('guard');
+    expect(jobOf({ ...none, training: true })).toBe('training');
     // A watch post is what nightfall and the map count, so it wins a stale row.
-    expect(jobOf({ teamSlot: 1, atWork: true, onWatch: true })).toBe('guard');
+    expect(jobOf({ teamSlot: 1, atWork: true, onWatch: true, training: true })).toBe('guard');
   });
 
   it('keeps a team within the team size, each squishy once', () => {
@@ -89,6 +92,13 @@ describe('what a gatherer works', () => {
     expect(
       workSource({ terrain: 'hills', nodeResource: null, homeSlot: null }, resources, JOB_RULES),
     ).toMatchObject({ resource: 'stone', from: 'land' });
+    expect(
+      workSource(
+        { terrain: 'mountains', nodeResource: null, homeSlot: null },
+        resources,
+        JOB_RULES,
+      ),
+    ).toEqual({ resource: 'glimmer', quantity: 1, seconds: 90 * 60, from: 'land' });
     expect(
       workSource(
         { terrain: 'pumpkin-fields', nodeResource: null, homeSlot: null },
@@ -240,5 +250,44 @@ describe('job hints', () => {
     expect(jobHintText({ kind: 'fighter' }, resources)).toBe('Strong fighter 💪');
     expect(jobHintText({ kind: 'speedy' }, resources)).toBe('Speedy fighter ⚡');
     expect(jobHintText({ kind: 'guard' }, resources)).toBe('Sturdy guard 🛡️');
+  });
+});
+
+describe('Training Grounds XP (owner decision 2026-10-06)', () => {
+  const HOUR = 60 * 60 * 1000;
+  const rules = { training: { maxHours: 24 } };
+
+  it('pays whole XP per hour, carrying part of a point over', () => {
+    expect(trainingProgress(0, 0, 5, rules)).toEqual({ xp: 0, full: false, nextSinceMs: 0 });
+    // 5 an hour: one XP every 12 minutes. 30 minutes gives 2, and 6 minutes carry on.
+    expect(trainingProgress(0, HOUR / 2, 5, rules)).toEqual({
+      xp: 2,
+      full: false,
+      nextSinceMs: (2 * HOUR) / 5,
+    });
+    expect(trainingProgress(0, 3 * HOUR, 8, rules).xp).toBe(24);
+    // A clock that went backwards pays nothing.
+    expect(trainingProgress(HOUR, 0, 5, rules)).toEqual({ xp: 0, full: false, nextSinceMs: HOUR });
+  });
+
+  it('never pays one point twice, however often it is settled', () => {
+    let since = 0;
+    let total = 0;
+    let last = 0;
+    for (let now = 0; now <= 10 * HOUR; now += 7 * 60 * 1000 + 13) {
+      const step = trainingProgress(since, now, 8, rules);
+      total += step.xp;
+      since = step.nextSinceMs;
+      last = now;
+    }
+    // Settling every few minutes pays what one settle at the end would.
+    expect(total).toBe(trainingProgress(0, last, 8, rules).xp);
+  });
+
+  it('stops after maxHours, and starts again from the settle', () => {
+    const full = trainingProgress(0, 30 * HOUR, 5, rules);
+    expect(full).toEqual({ xp: 120, full: true, nextSinceMs: 30 * HOUR });
+    expect(trainingProgress(0, 24 * HOUR, 5, rules)).toMatchObject({ xp: 120, full: true });
+    expect(JOB_RULES.training.maxHours).toBe(24);
   });
 });

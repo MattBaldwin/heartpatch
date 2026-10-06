@@ -51,6 +51,14 @@ export const homeApi = {
       headers: { 'idempotency-key': key },
     }),
 
+  /** Raises a building a level (owner decision 2026-10-06). */
+  upgrade: (mapId: string, buildingId: string, key: string): Promise<HomeResponse> =>
+    apiCallFor(`/maps/${mapId}/buildings/${buildingId}/upgrade`, {
+      method: 'POST',
+      schema: HomeResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
   house: (
     mapId: string,
     squishyId: string,

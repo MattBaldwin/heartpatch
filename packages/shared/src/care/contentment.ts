@@ -58,26 +58,41 @@ export interface CareGain {
   readonly percent: number;
   /** Still within the day's full-value actions (decision G). */
   readonly full: boolean;
+  /**
+   * Counts toward the day's diminishing returns and the care coin cap. False
+   * for a rare treat (`outsideDailyCare`, the Heart Snack).
+   */
+  readonly counts: boolean;
 }
 
 /**
  * Diminishing returns (design doc §7, decision G): the first
  * `fullActionsPerDay` care actions on a squishy each day give their full
  * contentment; later ones give `falloffPercents` of it, the last repeating.
- * `actionsToday` counts every care action on this squishy earlier today.
+ * `actionsToday` counts every counted care action on this squishy earlier
+ * today. A rare treat (`outsideDailyCare`) always gives its full contentment
+ * and isn't counted.
  */
 export function careGain(
-  action: Pick<CareAction, 'contentment'>,
+  action: Pick<CareAction, 'contentment' | 'outsideDailyCare'>,
   actionsToday: number,
   rules: Pick<CareRules, 'fullActionsPerDay' | 'falloffPercents'>,
 ): CareGain {
+  if (action.outsideDailyCare === true) {
+    return { contentment: action.contentment, percent: 100, full: true, counts: false };
+  }
   const past = actionsToday - rules.fullActionsPerDay;
-  if (past < 0) return { contentment: action.contentment, percent: 100, full: true };
+  if (past < 0) return { contentment: action.contentment, percent: 100, full: true, counts: true };
   const percent =
     rules.falloffPercents[Math.min(past, rules.falloffPercents.length - 1)] ??
     rules.falloffPercents.at(-1) ??
     0;
-  return { contentment: Math.floor((action.contentment * percent) / 100), percent, full: false };
+  return {
+    contentment: Math.floor((action.contentment * percent) / 100),
+    percent,
+    full: false,
+    counts: true,
+  };
 }
 
 /** Contentment after a care action at `now` that adds `gain`, capped at full. */
@@ -91,14 +106,15 @@ export function contentmentAfterCare(
 }
 
 /**
- * Patch Coins a care action earns: full-value actions only, and never past
- * the account's daily cap (`coinsToday` is what care already earned today).
+ * Patch Coins a care action earns: counted full-value actions only (a rare
+ * treat earns none), and never past the account's daily cap (`coinsToday` is
+ * what care already earned today).
  */
 export function careCoins(
-  gain: Pick<CareGain, 'full'>,
+  gain: Pick<CareGain, 'full' | 'counts'>,
   coinsToday: number,
   rules: Pick<CareRules, 'coinsPerFullAction' | 'dailyCoinCap'>,
 ): number {
-  if (!gain.full) return 0;
+  if (!gain.full || !gain.counts) return 0;
   return Math.max(0, Math.min(rules.coinsPerFullAction, rules.dailyCoinCap - coinsToday));
 }
