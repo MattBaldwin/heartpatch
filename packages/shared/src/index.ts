@@ -63,6 +63,7 @@ export * from './data/milestones.js';
 export * from './data/cinematics/index.js';
 export * from './data/recipe-book.js';
 export * from './data/jobs.js';
+export * from './data/app-version.js';
 export * from './jobs/index.js';
 export * from './boutique/index.js';
 export * from './tutorial/index.js';

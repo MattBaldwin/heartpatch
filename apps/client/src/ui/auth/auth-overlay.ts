@@ -70,6 +70,8 @@ export interface AuthOverlayOptions {
    * decision 2026-10-04): these rows sit above "Log out" in it.
    */
   menu?: () => Node[];
+  /** Under the name in that menu, e.g. the game's version (#198). */
+  menuHead?: () => Node[];
 }
 
 /**
@@ -101,6 +103,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     { type: 'button', class: 'auth-button auth-button-small' },
     'Log out',
   );
+  const menuHead = el('div', { class: 'auth-chip-head' });
   const menuRows = el('div', { class: 'auth-chip-menu', role: 'group' });
   const menuToggle = el(
     'button',
@@ -117,7 +120,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     'div',
     { class: 'auth-chip' },
     menuToggle,
-    el('div', { class: 'auth-chip-body' }, chipName, chipStatus, menuRows, logoutButton),
+    el('div', { class: 'auth-chip-body' }, chipName, menuHead, chipStatus, menuRows, logoutButton),
   );
   chip.hidden = true;
   root.append(overlay, chip);
@@ -125,6 +128,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
   const setMenu = (open: boolean) => {
     chip.classList.toggle('auth-chip-open', open);
     menuToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    menuHead.replaceChildren(...(open ? (options.menuHead?.() ?? []) : []));
     menuRows.replaceChildren(...(open ? (options.menu?.() ?? []) : []));
   };
   menuToggle.addEventListener('click', () => {
