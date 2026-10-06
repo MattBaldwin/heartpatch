@@ -707,3 +707,9 @@ _Proposed in #173; recorded by the coordinator after merge._
 - **Countdown words are one Text node rewritten in place** (`inventory-screen.ts`, `Countdown.text.data`), never replaced, so the node under a resting pointer survives the tick. Rule for any tappable with live text: rewrite the Text node's `data`; `textContent` on the element swaps it.
 - **The spec presses through a tick** (`touch.ts` `realTapThrough`): a press that holds until the chip's words change under the pointer (the game's own signal, no sleep), then lifts, must open the Bag. Deterministic in WebKit before and after the fix; the held taps (down, ~120 ms, up) stay as they were.
 - **`HP_E2E_CPU_THROTTLE=<n>`** (`players.ts`) slows the page's CPU n× through CDP in Chromium only, a local stand-in for CI's WebKit for `--repeat-each` runs; 4× matched CI's pace on this spec (1.7 min on `ipad-chromium`), 6× blew the iPad test's budget.
+
+## 2026-10-05 — Tutorial naming after a refused name (Fix PR #175)
+
+_Proposed in #175; recorded by the coordinator after merge._
+
+- **On the tutorial's naming step, Try again re-sends only after `OFFLINE`, `INTERNAL` or `RATE_LIMITED`** (the map resync's retryable set). Any other refusal, such as the text filter's `VALIDATION_FAILED`, returns to the name box with the old name selected, so a kid can never get stuck re-sending a name the server will always refuse.
