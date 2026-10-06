@@ -28,6 +28,7 @@ import { boutiqueApi } from './ui/boutique/boutique-api.js';
 import { createCoinCounter } from './ui/coins/coin-counter.js';
 import { installStickyTaps } from './ui/sticky-taps.js';
 import { createWardrobeScreen } from './ui/wardrobe/wardrobe-screen.js';
+import { wardrobeBackTo, wardrobeFrom, type WardrobeFrom } from './ui/wardrobe/wardrobe-return.js';
 import { createTrays, trayRow } from './ui/trays/trays.js';
 import { findSpot } from './recipes/book-model.js';
 import { createRecipeBook } from './recipes/recipe-book.js';
@@ -145,6 +146,8 @@ jobsBox.hidden = true;
 trays.slot('squishies').append(jobsBox);
 /** The map whose HUD is on screen (null between maps): the Team and Jobs row follows it (#132). */
 let hudMapId: string | null = null;
+/** The patch of the battle on screen (its map is put away meanwhile). */
+let battleMapId: string | null = null;
 
 // The bag and gathering (#17): a Bag entry in the My Heartpatch tray, and the
 // gather buttons in the tile chip.
@@ -531,7 +534,8 @@ const battles = createBattleScreen({
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
-  onOpen: () => {
+  onOpen: (mapId) => {
+    battleMapId = mapId;
     maps.close();
     catalog.close();
     care.close();
@@ -654,8 +658,21 @@ const cinematic = createCinematicScreen({
     lobby.show();
   },
 });
-// The wardrobe (#43): from the lobby, it owns the whole screen like the
-// Keeper picker, and brings the lobby back when done.
+/**
+ * The patch the player is on: its map, or the home base, close-up or battle
+ * that put the map away for a moment. Null in the lobby.
+ */
+function patchOnScreen(): string | null {
+  if (hudMapId !== null) return hudMapId;
+  if (homeOpen()) return home.debug?.mapId ?? null;
+  if (closeUp.isOpen) return closeUp.debug?.mapId ?? null;
+  return battles.debug !== null ? battleMapId : null;
+}
+/** Where the wardrobe was opened, so "Done" goes back there. */
+let wardrobeOpenedFrom: WardrobeFrom = null;
+// The wardrobe (#43): it owns the whole screen like the Keeper picker, and
+// "Done" goes back where it was opened: the patch (from the Keeper menu),
+// the Glade (the tutorial's wardrobe step) or the lobby.
 const wardrobe = createWardrobeScreen({
   root: document.body,
   showScene,
@@ -663,32 +680,42 @@ const wardrobe = createWardrobeScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   onOpen: () => {
+    // Before anything is put away: the map's HUD goes with it.
+    wardrobeOpenedFrom = wardrobeFrom({ lobbyOpen: lobby.isOpen, patch: patchOnScreen(), glade });
     void battles.setMap(null);
     void inventory.setMap(null);
+    void territory.setMap(null);
+    void hollow.setMap(null);
+    void chat.setMap(null);
     home.setMap(null);
     maps.close();
     catalog.close();
+    care.close();
+    jobs.close();
     lobby.stepOut();
   },
   onClosed: () => {
-    // Opened by the tutorial's wardrobe step: back to the Glade.
-    const run = glade;
-    if (run === null) {
+    const mapId = wardrobeBackTo(wardrobeOpenedFrom, glade);
+    wardrobeOpenedFrom = null;
+    if (mapId === null) {
       lobby.show();
       return;
     }
-    maps.open(run).then(
+    maps.open(mapId).then(
       () => {
-        home.setMap(run);
-        void inventory.setMap(run);
-        void territory.setMap(run);
-        void hollow.setMap(run);
-        void battles.setMap(run);
+        home.setMap(mapId);
+        void inventory.setMap(mapId);
+        void territory.setMap(mapId);
+        void hollow.setMap(mapId);
+        void chat.setMap(chatFor(mapId));
+        // A battle left for the wardrobe resumes.
+        void battles.setMap(mapId);
       },
-      () => {
-        lobby.show();
+      (err: unknown) => {
+        lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
       },
     );
+    lobby.hide();
   },
   devTools: import.meta.env.DEV,
 });

@@ -54,6 +54,15 @@
   text-align: left;
 }
 
+/* The wardrobe's own chips get a row of their own under the title and
+   "Done", so "Done" stays in the top corner at any width. */
+.wardrobe-header-chips {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .wardrobe-tabs,
 .wardrobe-rarities,
 .wardrobe-outfits,
