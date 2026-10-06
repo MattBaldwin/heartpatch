@@ -185,6 +185,18 @@ window.__heartpatch = {
 
 window.__heartpatchGallery = {
   stats: () => (stage && stage.draws > 0 ? (field?.stats ?? null) : null),
+  // Each squishy's own params: its body, head and every part piece, plus its
+  // contact shadow. A scatter can leave out a crowded piece, so squishies of
+  // one species can differ by a piece or two.
+  expectedInstances: () =>
+    handles().reduce(
+      (sum, h) =>
+        sum +
+        2 +
+        (h.params.head ? 1 : 0) +
+        h.params.parts.reduce((n, part) => n + part.placements.length, 0),
+      0,
+    ),
   shown: () => handles().map((h) => h.params.speciesId),
   coverage: () => {
     const shown = handles().map((h) => h.params);

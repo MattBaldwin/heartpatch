@@ -3,7 +3,8 @@ import type { Vec3 } from './params.js';
 
 /**
  * The parametric vinyl-toy body (design doc §19): a superellipsoid with a
- * taper, a soft peak, a flattened bottom and optional pumpkin lobes. Points
+ * taper, a soft peak, a flattened bottom, and optional pumpkin lobes, a
+ * snowman waist, star points and a ghost's scalloped hem (ART_BIBLE §1.2). Points
  * are addressed by `around` (radians from the face, positive towards +x) and
  * `up` (−π/2 bottom to π/2 top), the same angles parts are placed with.
  *
@@ -21,6 +22,40 @@ const POLE_LIMIT = Math.PI / 2 - 1e-3;
 const EPS = 1e-4;
 
 export function surfacePoint(body: Body, around: number, up: number): Vec3 {
+  const [x, yc, z, cu] = rawPoint(body, around, up);
+  let y: number;
+  if (body.points) {
+    // Stretch the star back to [0, height], standing on its two lower points.
+    // The lowest sliver is flattened, so the points' tips are flat feet
+    // that every detail level puts exactly on the ground.
+    const [low, high] = starSpan(body);
+    const feet = low + STAR_FEET * (high - low);
+    y = Math.max(0, ((yc - feet) / (high - feet)) * body.height);
+  } else {
+    y = body.height / 2 + yc;
+  }
+  if (body.hem) {
+    // The hem lifts the bottom band between little feet. The lift fades
+    // linearly to nothing at the band's top, so the band never folds, and
+    // with distance from the middle, so the bottom's middle stays put.
+    const band = body.height * HEM_BAND;
+    if (y < band) {
+      const feet = Math.pow(0.5 + 0.5 * Math.cos(body.hem.count * around), 2);
+      const lift = body.hem.depth * body.height * (1 - feet) * cu * cu * cu;
+      y += lift * (1 - y / band);
+    }
+  }
+  return [x, y, z];
+}
+
+/** The share of a star's height flattened into feet. */
+const STAR_FEET = 0.03;
+
+/** The bottom share of a body a hem's scallops reach into. */
+const HEM_BAND = 0.35;
+
+/** x, y from the body's middle, z, and the ring's width factor at (around, up). */
+function rawPoint(body: Body, around: number, up: number): [number, number, number, number] {
   // Squareness 0 → exponent 1 (an ellipsoid); 1 → 0.5 (a soft box).
   const e = 1 / (1 + body.squareness);
   // The bottom half squares off more, so the squishy sits flat.
@@ -36,11 +71,47 @@ export function surfacePoint(body: Body, around: number, up: number): Vec3 {
     const groove = 0.5 - 0.5 * Math.cos(body.lobes.count * around);
     radial *= 1 - body.lobes.depth * groove * cu;
   }
-  const x = (body.width / 2) * cu * spow(Math.sin(around), e) * radial;
+  if (body.waist) {
+    const k = (yn - body.waist.at) / body.waist.width;
+    radial *= 1 - body.waist.depth * Math.exp(-k * k);
+  }
+  let x = (body.width / 2) * cu * spow(Math.sin(around), e) * radial;
   const z = -(body.depth / 2) * cu * spow(Math.cos(around), e) * radial;
   const peakLift = body.peak > 0 && yn > 0 ? 1 + body.peak * 0.25 * yn * yn : 1;
-  const y = (body.height / 2) * (1 + yn * peakLift);
-  return [x, y, z];
+  let yc = (body.height / 2) * yn * peakLift;
+  if (body.points) {
+    // A standing star: pull the outline in between points, measured in the
+    // front (x, y) plane with a point straight up.
+    const { count, depth } = body.points;
+    const phi = Math.atan2(x / (body.width / 2), yc / (body.height / 2));
+    const bump = Math.pow(0.5 + 0.5 * Math.cos(count * phi), 2);
+    const k = 1 - depth * (1 - bump);
+    x *= k;
+    yc *= k;
+  }
+  return [x, yc, z, cu];
+}
+
+const spans = new WeakMap<Body, readonly [number, number]>();
+
+/** A star's lowest and highest y (from the middle), found once per body on a fine grid. */
+function starSpan(body: Body): readonly [number, number] {
+  const known = spans.get(body);
+  if (known) return known;
+  let low = Infinity;
+  let high = -Infinity;
+  const steps = 256;
+  for (let i = 0; i <= steps; i++) {
+    const up = -Math.PI / 2 + (Math.PI * i) / steps;
+    for (let j = 0; j < steps; j++) {
+      const yc = rawPoint(body, (2 * Math.PI * j) / steps, up)[1];
+      if (yc < low) low = yc;
+      if (yc > high) high = yc;
+    }
+  }
+  const span = [low, high] as const;
+  spans.set(body, span);
+  return span;
 }
 
 function sub(a: Vec3, b: Vec3): Vec3 {

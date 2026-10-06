@@ -15,6 +15,7 @@ import type { Body, VisualRegistry } from '@heartpatch/shared';
 import { bodyArrays, type MeshArrays } from './body-shape.js';
 import {
   CONTACT_SHADOW,
+  FINISH_CODE,
   LOD,
   SHADOW_LOOK,
   SQUISH_LOOK_CODE,
@@ -96,6 +97,8 @@ interface Instance {
   readonly color: readonly [number, number, number, number];
   /** `SQUISH_LOOK_CODE` for this instance (eyes differ from the body). */
   readonly look: number;
+  /** `FINISH_CODE` sum for this instance: its material tier, plus glow. */
+  readonly finish: number;
 }
 
 interface Squishy {
@@ -169,6 +172,9 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     m.clearCoat.isEnabled = true;
     m.clearCoat.intensity = VINYL.clearCoatIntensity;
     m.clearCoat.roughness = VINYL.clearCoatRoughness;
+    // Squishies are the stars: scene fog (the battle arena's haze) never
+    // washes out their colours (ART_BIBLE §1.8).
+    m.fogEnabled = false;
     this.#material = m;
     // GLSL only (see squish-plugin.ts): under WebGPU squishies render still.
     this.#plugin = m.shaderLanguage === ShaderLanguage.GLSL ? new SquishPlugin(m) : null;
@@ -361,7 +367,14 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     squishy.origin = [ground.x, ground.y, ground.z, params.height * scale];
 
     const shadow = squishy.handle.look === 'shadow';
-    const attach = (batch: Batch, local: Matrix, color: Instance['color'], eyes = false) => {
+    const tier = FINISH_CODE[params.finish];
+    const attach = (
+      batch: Batch,
+      local: Matrix,
+      color: Instance['color'],
+      finish: number,
+      eyes = false,
+    ) => {
       const look = !shadow
         ? SQUISH_LOOK_CODE.normal
         : eyes
@@ -373,19 +386,39 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         // Without the shader (opt-in WebGPU) the look is baked into the colour.
         color: shadow && !this.#plugin ? shadowColor(color, eyes) : color,
         look,
+        finish,
       };
       batch.instances.push(instance);
       batch.dirty = true;
       squishy.instances.push({ batch, instance });
     };
 
-    const bodyBatch = this.#batch(
-      `body:${body.id}`,
-      (lod) => orientTriangles(bodyArrays(body, LOD[lod].bodyRings)),
-      true,
-    );
+    const bodyBatchOf = (shape: Body) =>
+      this.#batch(
+        `body:${shape.id}`,
+        (lod) => orientTriangles(bodyArrays(shape, LOD[lod].bodyRings)),
+        true,
+      );
     const [sx, sy, sz] = params.body.scale;
-    attach(bodyBatch, Matrix.Scaling(sx, sy, sz), linear(params.body.color));
+    const glow = (on: boolean) => (on ? FINISH_CODE.glow : 0);
+    const torsoAt: [number, number, number] = [0, params.lift, 0];
+    attach(
+      bodyBatchOf(body),
+      Matrix.Scaling(sx, sy, sz).multiply(Matrix.Translation(...torsoAt)),
+      linear(params.body.color),
+      tier + glow(params.body.glow),
+    );
+    // A separate head: one more instance in its body kind's batch.
+    const headBody = params.head ? this.#registry.bodies.get(params.head.id) : undefined;
+    if (params.head && headBody) {
+      const [hx, hy, hz] = params.head.scale;
+      attach(
+        bodyBatchOf(headBody),
+        Matrix.Scaling(hx, hy, hz).multiply(Matrix.Translation(...params.head.offset)),
+        linear(params.body.color),
+        tier + glow(params.body.glow),
+      );
+    }
 
     for (const part of params.parts) {
       const batch = this.#batch(
@@ -394,9 +427,15 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         false,
       );
       const color = linear(part.color);
+      // Faces and patterns stay plain vinyl; sticking-out parts share the body's tier.
+      const finish = (part.surface ? 0 : tier) + glow(part.glow);
+      const onHead = part.host === 'head' && params.head && headBody;
+      const hostBody = onHead ? headBody : body;
+      const hostScale = onHead ? params.head.scale : params.body.scale;
+      const hostAt = onHead ? params.head.offset : torsoAt;
       for (const p of part.placements) {
-        const local = Matrix.FromArray(partMatrix(body, params.body.scale, part, p));
-        attach(batch, local, color, part.slot === 'eyes');
+        const local = Matrix.FromArray(partMatrix(hostBody, hostScale, part, p, hostAt));
+        attach(batch, local, color, finish, part.slot === 'eyes');
       }
     }
     this.#shadowDirty = true;
@@ -453,6 +492,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       const { phase, rate, amplitude } = owner.handle.params.motion;
       motions.set([phase, rate, this.#breathing ? amplitude : 0, inst.look], i * 4);
       events.set(eventAttribute(owner.event), i * 4);
+      events[i * 4 + 3] = inst.finish;
     });
     mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
     mesh.thinInstanceSetBuffer('color', colors, 4, true);

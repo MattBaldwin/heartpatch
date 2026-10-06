@@ -122,7 +122,7 @@ export const FIXTURE_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: ['#6ec6ff', '#ffffff'],
-      parts: ['dot-eyes', 'smile', 'round-ears'],
+      parts: ['dot-eyes', 'open-mouth', 'round-ears'],
     },
     habitatPreferences: { elements: ['water'], feelings: ['silly'] },
   },
@@ -139,7 +139,7 @@ export const FIXTURE_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: ['#3fa9f5', '#ffffff', '#ffd1e8'],
-      parts: ['oval-eyes', 'open-mouth', 'round-ears', 'spots'],
+      parts: ['dot-eyes', 'open-mouth', 'round-ears', 'bat-wings', 'spots'],
       size: 1.25,
     },
     habitatPreferences: { elements: ['water'], feelings: ['silly', 'joy'] },
@@ -155,7 +155,7 @@ export const FIXTURE_SPECIES: Species[] = [
     baseStats: { hp: 60, attack: 35, defense: 60, speed: 20 },
     moves: ['fixture-rock-a-bye', 'fixture-pebble-puff'],
     evolutions: [],
-    visual: { body: 'pebble', palette: ['#a39e93'], parts: ['sleepy-eyes', 'tiny-smile'] },
+    visual: { body: 'pebble', palette: ['#ada89d'], parts: ['sleepy-eyes', 'tiny-smile'] },
     habitatPreferences: { elements: ['stone'], feelings: ['sleepy'] },
   },
   // Battle engine fixtures (#11).
@@ -177,7 +177,8 @@ export const FIXTURE_SPECIES: Species[] = [
     visual: {
       body: 'bean',
       palette: ['#ff8a3d', '#ffe0b2'],
-      parts: ['dot-eyes', 'cat-mouth', 'long-ears', 'blush-cheeks'],
+      parts: ['oval-eyes', 'cat-mouth', 'long-ears', 'blush-cheeks'],
+      glow: 'accent',
     },
     habitatPreferences: { elements: ['fire'], feelings: ['cozy'] },
   },
@@ -204,7 +205,7 @@ export const FIXTURE_SPECIES: Species[] = [
     baseStats: { hp: 40, attack: 30, defense: 30, speed: 30 },
     moves: ['fixture-lullaby', 'fixture-cuddle-nap'],
     evolutions: [],
-    visual: { body: 'drop', palette: ['#5b5280'], parts: ['sleepy-eyes'] },
+    visual: { body: 'drop', palette: ['#5b5280'], parts: ['sleepy-eyes'], ink: '#fff4dc' },
     habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
   },
 ];
@@ -257,7 +258,13 @@ export const FIXTURE_SECRET_SPECIES: Species[] = [
     baseStats: { hp: 50, attack: 40, defense: 45, speed: 60 },
     moves: ['fixture-hush-hum', 'fixture-moon-blink'],
     evolutions: [],
-    visual: { body: 'blob', palette: ['#3b3561', '#f5e6a8'], parts: ['sleepy-eyes', 'tiny-smile'] },
+    visual: {
+      body: 'blob',
+      palette: ['#3b3561', '#f5e6a8'],
+      parts: ['sleepy-eyes', 'tiny-smile'],
+      ink: '#fff4dc',
+      finish: 'iridescent',
+    },
     habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
   },
   {
@@ -275,6 +282,8 @@ export const FIXTURE_SECRET_SPECIES: Species[] = [
       palette: ['#3b3561', '#f5e6a8', '#c9b8ff'],
       parts: ['sleepy-eyes', 'tiny-smile', 'nub-wings'],
       size: 1.2,
+      ink: '#fff4dc',
+      finish: 'iridescent',
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['sleepy'] },
   },
