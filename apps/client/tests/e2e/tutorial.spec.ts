@@ -2,6 +2,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { expectClear } from './layout.js';
 import { newPlayer, TEST_PASSWORD, uniqueName } from './players.js';
+import { realTap } from './touch.js';
+import { openTray, traysState, traySettled } from './trays.js';
 
 // The tutorial layer (#47) and The First Patch (#24). Asserts on signals from
 // the dev hook (step id, spotlight target, gate), never on pixels. The dev
@@ -20,6 +22,8 @@ interface TutorialDebug {
     spotlightOn: string | null;
     gate: 'blockAll' | 'spotlight' | 'guide' | 'open' | null;
     hole: { x: number; y: number; width: number; height: number } | null;
+    held: boolean;
+    docked: boolean;
   };
   sprout: string | null;
 }
@@ -56,6 +60,11 @@ async function takesTaps(page: Page, target: Locator): Promise<boolean> {
     y,
   ] as const);
 }
+
+type Box = { x: number; y: number; width: number; height: number };
+/** True when the two boxes share any area (touching edges don't count). */
+const overlaps = (a: Box, b: Box) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 /** What takes a tap at the centre of `target`. */
 async function topAt(page: Page, target: Locator): Promise<string | null> {
@@ -437,10 +446,118 @@ test('first battle: Sprout points at the Adventure handle, then at Find a squish
   expect((await overlay())?.spotlightOn).toBe('wild-squishy');
   await expect.poll(() => inHole(handle)).toBe(true);
   expect(await takesTaps(page, handle)).toBe(true);
+  // Every frame of the slide: the tray is on the step's way, so Sprout never
+  // waits behind it (its handle stands in for it until it has slid open).
+  await page.evaluate(() => {
+    const w = window as unknown as {
+      __heldFrames?: number;
+      __heartpatch?: { tutorial?: () => { overlay: { held: boolean } } | null };
+    };
+    w.__heldFrames = 0;
+    const sample = () => {
+      if (w.__heartpatch?.tutorial?.()?.overlay.held) w.__heldFrames! += 1;
+      if (w.__heldFrames !== undefined) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
   await handle.tap();
 
   // Once the tray has slid open, the spotlight rests on Find a squishy, which takes taps.
   const entry = page.getByTestId('battle-entry');
   await expect.poll(() => inHole(entry), { timeout: 10_000 }).toBe(true);
   await expect.poll(() => takesTaps(page, entry)).toBe(true);
+  const heldFrames = await page.evaluate(() => {
+    const w = window as unknown as { __heldFrames?: number };
+    const n = w.__heldFrames;
+    delete w.__heldFrames;
+    return n;
+  });
+  expect(heldFrames).toBe(0);
+  // The spotlight stays; the tucked chip, which would cover the tray on this
+  // small phone, docks into the orb clear of it.
+  await expect(async () => {
+    expect((await overlay())?.spotlightOn).toBe('wild-squishy');
+    expect((await overlay())?.docked).toBe(true);
+    const [chip, panel] = [
+      await bubble.boundingBox(),
+      await page.getByTestId('tray-adventure').boundingBox(),
+    ];
+    expect(chip && panel && !overlaps(chip, panel), JSON.stringify([chip, panel])).toBe(true);
+    expect(await takesTaps(page, bubble)).toBe(true);
+  }).toPass({ timeout: 10_000 });
+});
+
+test("Sprout's tucked chip steps aside for an open tray, so its rows take taps", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000); // draws the Glade; CI renders in software
+  const page = await newPlayer(browser, uniqueName('aside'));
+  const bubble = page.getByTestId('tutorial-bubble');
+  const main = bubble.getByTestId('tutorial-main');
+  const tray = page.getByTestId('tray-adventure');
+  const overlay = async () => (await debug(page))?.overlay;
+
+  await page.getByTestId('lobby').getByTestId('tutorial-start').tap();
+  await expect.poll(async () => (await debug(page))?.stepId, { timeout: 15_000 }).toBe('welcome');
+  const run = (await debug(page))?.mapId;
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 60_000 });
+  await expect.poll(() => drawnMap(page), { timeout: 60_000 }).toBe(run);
+  // The owner's step: "Give them a home", tucked into the chip at the left edge.
+  await jumpTo(page, 'habitat');
+  while ((await main.isVisible()) && (await main.textContent()) === 'Next') await main.tap();
+  await main.tap(); // Let's go!
+  await expect(page.getByTestId('tutorial')).toHaveClass(/tutorial-tucked/);
+  const chip = await bubble.boundingBox();
+  expect(chip).not.toBeNull();
+
+  // Adventure isn't on this step's way: Sprout waits in its orb, clear of the tray.
+  await openTray(page, 'adventure');
+  await traySettled(page, 'adventure');
+  // Rows the chip sat on before (the owner's Claim land and Report).
+  const covered: string[] = await tray.evaluate((node, was) => {
+    const out: string[] = [];
+    for (const row of node.querySelectorAll<HTMLElement>('button[data-testid]')) {
+      const r = row.getBoundingClientRect();
+      const hit =
+        r.width > 0 &&
+        r.left < was.x + was.width &&
+        was.x < r.right &&
+        r.top < was.y + was.height &&
+        was.y < r.bottom;
+      if (hit && !row.closest('[hidden]')) out.push(row.dataset['testid'] ?? '');
+    }
+    return out;
+  }, chip!);
+  expect(covered.length).toBeGreaterThan(0);
+
+  const clearOfTray = async () => {
+    await expect(async () => {
+      const state = await overlay();
+      expect(state?.held).toBe(true);
+      const [orb, panel] = [await bubble.boundingBox(), await tray.boundingBox()];
+      expect(orb && panel && !overlaps(orb, panel), JSON.stringify([orb, panel])).toBe(true);
+      // The orb's own tap target stays reachable: nothing sits on it.
+      expect(await takesTaps(page, bubble)).toBe(true);
+    }).toPass({ timeout: 15_000 }); // a new size draws slowly in software
+  };
+  const home = page.viewportSize()!;
+  for (const size of [
+    { width: 390, height: 844 },
+    { width: 844, height: 390 },
+    { width: 820, height: 1180 },
+    { width: 1180, height: 820 },
+  ]) {
+    await page.setViewportSize(size);
+    await traySettled(page, 'adventure');
+    await clearOfTray();
+  }
+  await page.setViewportSize(home);
+  await traySettled(page, 'adventure');
+  await clearOfTray();
+
+  // A row the chip used to cover takes the tap (it reaches the row, which shuts the tray).
+  const row = tray.getByTestId(covered[0]!);
+  expect(await takesTaps(page, row)).toBe(true);
+  await realTap(row);
+  await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBeNull();
 });

@@ -2,6 +2,7 @@ import { GAME_DATA, NICKNAME_MAX_LENGTH, type HighlightTarget } from '@heartpatc
 import { el } from '../ui/dom.js';
 import type { HighlightTargets } from './highlight-targets.js';
 import {
+  dockChip,
   layoutOverlay,
   placeOrb,
   union,
@@ -10,7 +11,7 @@ import {
   type Rect,
   type Size,
 } from './overlay-layout.js';
-import { foreignSheets, obstacles, openSheets, type OpenSheet } from './sheets.js';
+import { foreignSheets, obstacles, openSheets, sheetCards, type OpenSheet } from './sheets.js';
 import type { GraduationChoice, TutorialView } from './tutorial-controller.js';
 import '../ui/auth/auth.css';
 import './tutorial.css';
@@ -27,7 +28,13 @@ import './tutorial.css';
 // sheet ever lands on Sprout and no sheet is ever stuck under a blocker. The
 // bubble opens again by itself once the sheet closes; a tap on the orb peeks
 // at it sooner, laid out clear of the sheet, and a tap on the read bubble (or
-// its button) tucks it back into the orb.
+// its button) tucks it back into the orb. An open side tray is a sheet too.
+//
+// The tucked chip never covers a sheet the step is using either (a tray on
+// the step's way, like My Heartpatch while Sprout points at Home): it docks
+// into the same orb clear of that sheet, while the spotlight carries on; a
+// tap on it opens the bubble as the chip's does. A tray's handle, standing in
+// while its tray slides in, owns that tray (sheets.ts `foreignSheets`).
 
 export interface TutorialOverlayActions {
   nextLine: () => void;
@@ -70,6 +77,8 @@ export interface TutorialOverlayDebug {
   readonly gate: OverlayLayout['gate'] | null;
   /** Sprout is waiting behind an open sheet (the orb). */
   readonly held: boolean;
+  /** The tucked chip has docked into the orb, clear of a sheet the step is using. */
+  readonly docked: boolean;
   /** The sheets it waits behind (their `data-testid`s, or class names). */
   readonly sheets: readonly string[];
 }
@@ -251,6 +260,9 @@ export function mountTutorialOverlay(
    */
   function naturalSize(): { width: number; height: number } {
     const { width, height, maxHeight, left, right } = bubble.style;
+    // Docked, it's drawn as the orb: measure the chip it stands in for.
+    const docked = overlay.classList.contains('tutorial-docked');
+    if (docked) overlay.classList.remove('tutorial-docked');
     // Measured from the left edge: a shrink-to-fit box placed at `left`
     // only gets the room to its right, which would read narrow and tall.
     bubble.style.width = '';
@@ -264,6 +276,7 @@ export function mountTutorialOverlay(
     bubble.style.maxHeight = maxHeight;
     bubble.style.left = left;
     bubble.style.right = right;
+    if (docked) overlay.classList.add('tutorial-docked');
     return size;
   }
 
@@ -284,7 +297,9 @@ export function mountTutorialOverlay(
     overlay.classList.toggle('tutorial-held', orb);
     // Something to read once the sheet closes: the orb glows until then.
     overlay.classList.toggle('tutorial-new', orb && !view.tucked);
-    overlay.classList.toggle('tutorial-tucked', !held && view.tucked);
+    const tucked = !held && view.tucked;
+    overlay.classList.toggle('tutorial-tucked', tucked);
+    const size = naturalSize();
     layout = layoutOverlay({
       target: held ? null : (found?.rect ?? null),
       // While loading or showing an error, only Sprout's bubble takes taps;
@@ -292,15 +307,29 @@ export function mountTutorialOverlay(
       talkOnly: held ? false : step ? step.talkOnly : true,
       viewport,
       insets,
-      bubbleSize: naturalSize(),
-      tucked: overlay.classList.contains('tutorial-tucked'),
+      bubbleSize: size,
+      tucked,
       soft: found?.soft ?? false,
       avoid: held && peek ? union(waitingFor.map((s) => s.rect)) : null,
     });
     spotlightOn = !held && found?.element ? target : null;
+    // The sheets the step is using (the target is in them): the chip keeps off them too.
+    // (A target in a sheet always has a hole, so the layout placed the chip.)
+    const using = tucked ? sheets.filter((s) => !waitingFor.includes(s)) : [];
+    const dockRect =
+      using.length > 0 && layout.bubbleRect
+        ? dockChip({
+            chip: layout.bubbleRect,
+            sheets: sheetCards(using, viewport),
+            viewport,
+            insets,
+            obstacles: [...obstaclesNow(using, viewport), ...(layout.hole ? [layout.hole] : [])],
+          })
+        : null;
+    overlay.classList.toggle('tutorial-docked', dockRect !== null);
     const orbRect = orb
       ? placeOrb({ viewport, insets, obstacles: obstaclesNow(waitingFor, viewport) })
-      : null;
+      : dockRect;
     const key = JSON.stringify([layout, spotlightOn, orbRect, peek]);
     if (key === drawn) return;
     drawn = key;
@@ -487,6 +516,7 @@ export function mountTutorialOverlay(
         hole: hidden ? null : (layout?.hole ?? null),
         gate: hidden ? null : (layout?.gate ?? null),
         held: !hidden && overlay.classList.contains('tutorial-held'),
+        docked: !hidden && overlay.classList.contains('tutorial-docked'),
         sheets: hidden ? [] : behind,
       };
     },

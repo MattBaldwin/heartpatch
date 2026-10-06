@@ -3,9 +3,10 @@ import type { Rect } from './overlay-layout.js';
 // What else is on screen while the tutorial runs (#127, #128, #139). Sprout
 // waits its turn behind any open sheet: a tile chip, the care sheet, the
 // Hollow's morning report, a lore or milestone card, the home sheet, a
-// battle's result card. They all carry `role="dialog"`, so nothing has to
-// know about the tutorial to be waited for; a non-modal note
-// (`aria-modal="false"`, like the install guide) isn't a sheet.
+// battle's result card, an open side tray (ui/trays). They all carry
+// `role="dialog"`, so nothing has to know about the tutorial to be waited
+// for; a non-modal note (`aria-modal="false"`, like the install guide)
+// isn't a sheet.
 
 /** An open sheet anywhere on the page: a dialog that isn't a mere note. */
 export const SHEET_SELECTOR = '[role="dialog"]:not([aria-modal="false"])';
@@ -69,10 +70,16 @@ function topSheetAt(open: readonly OpenSheet[], except: Element, rect: Rect): El
 /**
  * The sheets Sprout must wait behind: every open one that doesn't hold the
  * step's own target (a spotlight on the care sheet's buttons gates the care
- * sheet on purpose; a morning report over it does not).
+ * sheet on purpose; a morning report over it does not). A target that opens
+ * a sheet (`aria-controls`: a tray's handle, standing in while its tray
+ * slides in) owns that sheet too, so Sprout never ducks away mid-slide.
  */
 export function foreignSheets(sheets: readonly OpenSheet[], target: Element | null): OpenSheet[] {
-  return sheets.filter((s) => target === null || !s.element.contains(target));
+  if (target === null) return [...sheets];
+  const opens = target.getAttribute('aria-controls');
+  return sheets.filter(
+    (s) => !s.element.contains(target) && (opens === null || s.element.id !== opens),
+  );
 }
 
 /**
@@ -83,6 +90,23 @@ export function foreignSheets(sheets: readonly OpenSheet[], target: Element | nu
 export function obstacles(
   root: ParentNode,
   except: Element,
+  sheets: readonly OpenSheet[],
+  viewport: { width: number; height: number },
+): Rect[] {
+  const out = sheetCards(sheets, viewport);
+  for (const element of root.querySelectorAll(CONTROL_SELECTOR)) {
+    if (except.contains(element)) continue;
+    const found = boxOf(element);
+    if (found) out.push(found.box);
+  }
+  return out;
+}
+
+/**
+ * The open sheets' cards: a sheet itself, or, for a sheet that covers the
+ * screen (a backdrop), the children that stand in for it.
+ */
+export function sheetCards(
   sheets: readonly OpenSheet[],
   viewport: { width: number; height: number },
 ): Rect[] {
@@ -100,10 +124,5 @@ export function obstacles(
     }
   };
   for (const sheet of sheets) card(sheet.element, sheet.rect, 2);
-  for (const element of root.querySelectorAll(CONTROL_SELECTOR)) {
-    if (except.contains(element)) continue;
-    const found = boxOf(element);
-    if (found) out.push(found.box);
-  }
   return out;
 }

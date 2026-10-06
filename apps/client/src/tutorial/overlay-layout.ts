@@ -324,6 +324,27 @@ export function placeOrb(spec: {
   return best;
 }
 
+/**
+ * The tucked chip never covers a sheet the step is using (a tray on the
+ * step's route, the care sheet): if `chip` overlaps one of the `sheets`'
+ * cards, it docks into Sprout's orb at a spot clear of them and of the
+ * `obstacles` (placeOrb). Null: the chip stays where it is.
+ */
+export function dockChip(spec: {
+  chip: Rect;
+  sheets: readonly Rect[];
+  viewport: Size;
+  insets: Insets;
+  obstacles: readonly Rect[];
+}): Rect | null {
+  if (!spec.sheets.some((sheet) => intersects(spec.chip, sheet))) return null;
+  return placeOrb({
+    viewport: spec.viewport,
+    insets: spec.insets,
+    obstacles: [...spec.sheets, ...spec.obstacles],
+  });
+}
+
 /** The smallest rect holding all of `rects` (null for none). */
 export function union(rects: readonly Rect[]): Rect | null {
   const first = rects[0];
