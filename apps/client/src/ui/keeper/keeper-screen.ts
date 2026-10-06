@@ -89,7 +89,12 @@ export function styleOf(config: KeeperConfig): string | undefined {
 
 /** `config` wearing hairstyle `id`; the base's own style is stored as none. */
 export function withHairstyle(config: KeeperConfig, id: string): KeeperConfig {
-  const { hairstyle: _, ...rest } = config;
+  const rest: KeeperConfig = {
+    base: config.base,
+    hairColor: config.hairColor,
+    eyeColor: config.eyeColor,
+    outfit: config.outfit,
+  };
   const own = bases.find((b) => b.id === config.base)?.hairstyle;
   return id === own ? rest : { ...rest, hairstyle: id };
 }

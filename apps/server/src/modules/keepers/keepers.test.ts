@@ -134,6 +134,35 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
     expect(mine[0]!.updatedAt).toEqual(new Date('2026-10-03T12:00:00Z'));
   });
 
+  it('keeps a picked hairstyle, and none means the base’s own', async () => {
+    const server = await start();
+    const kid = await player();
+    const styled: KeeperConfig = { ...PIP_KEEPER, hairstyle: 'short-curls' };
+    expect(await saveKeeper(server, kid, styled)).toEqual(styled);
+    expect(await getKeeper(server, kid)).toEqual(styled);
+    const row = (await db.select().from(keepers)).find((r) => r.userId === kid.id);
+    expect(row!.hairstyle).toBe('short-curls');
+
+    // Picking the base's own style stores none (an old save looks the same).
+    const own = await saveKeeper(server, kid, { ...PIP_KEEPER, hairstyle: PIP!.hairstyle });
+    expect(own).toEqual(PIP_KEEPER);
+    expect(await getKeeper(server, kid)).toEqual(PIP_KEEPER);
+
+    // Saving without one clears an earlier pick.
+    await saveKeeper(server, kid, styled);
+    expect(await saveKeeper(server, kid, PIP_KEEPER)).toEqual(PIP_KEEPER);
+    expect(await getKeeper(server, kid)).toEqual(PIP_KEEPER);
+  });
+
+  it('loads a Keeper saved before hairstyles (no column value) unchanged', async () => {
+    const server = await start();
+    const kid = await player();
+    await db.insert(keepers).values({ userId: kid.id, ...CLOVER_KEEPER });
+    const keeper = await getKeeper(server, kid);
+    expect(keeper).toEqual(CLOVER_KEEPER);
+    expect(keeper).not.toHaveProperty('hairstyle');
+  });
+
   it('refuses ids the Keeper data does not have (VALIDATION_FAILED, kid-readable)', async () => {
     const server = await start();
     const kid = await player();
@@ -142,6 +171,7 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
       { ...PIP_KEEPER, hairColor: 'plaid' },
       { ...PIP_KEEPER, eyeColor: 'laser' },
       { ...PIP_KEEPER, outfit: 'armor' },
+      { ...PIP_KEEPER, hairstyle: 'mohawk' },
     ]) {
       const res = await call(server, 'POST', '/keeper', kid, bad);
       expect(res.statusCode).toBe(400);
@@ -156,7 +186,13 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
     const server = await start();
     const kid = await player();
     const missing = { base: PIP_KEEPER.base, hairColor: PIP_KEEPER.hairColor, eyeColor: 'sky' };
-    for (const bad of [{ ...PIP_KEEPER, hat: 'crown' }, missing, { ...PIP_KEEPER, base: '<b>' }]) {
+    for (const bad of [
+      { ...PIP_KEEPER, hat: 'crown' },
+      missing,
+      { ...PIP_KEEPER, base: '<b>' },
+      { ...PIP_KEEPER, hairstyle: null },
+      { ...PIP_KEEPER, hairstyle: 'Big Hair' },
+    ]) {
       const res = await call(server, 'POST', '/keeper', kid, bad);
       expect(errorOf(res).code).toBe('VALIDATION_FAILED');
     }
@@ -210,11 +246,12 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
     const requestId = JoinMapResponseSchema.parse(join.json()).request.id;
     await call(server, 'POST', `/maps/${map.id}/requests/${requestId}/approve`, owner);
 
-    await saveKeeper(server, owner, CLOVER_KEEPER);
+    const styled: KeeperConfig = { ...CLOVER_KEEPER, hairstyle: 'crew-cut' };
+    await saveKeeper(server, owner, styled);
     const res = await call(server, 'GET', `/maps/${map.id}/view`, other);
     const view = MapViewSchema.parse(res.json());
     expect(view.members.map((m) => [m.user.id, m.keeper])).toEqual([
-      [owner.id, { ...CLOVER_KEEPER, wearing: [] }],
+      [owner.id, { ...styled, wearing: [] }],
       [other.id, null],
     ]);
   });
