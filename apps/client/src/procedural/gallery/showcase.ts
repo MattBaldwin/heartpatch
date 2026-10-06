@@ -43,16 +43,21 @@ export function showcaseLooks(bodies: readonly Body[], parts: readonly Part[]): 
   const eyes = parts.filter((p) => p.slot === 'eyes');
   const mouths = parts.filter((p) => p.slot === 'mouth');
   const cheeks = parts.filter((p) => p.slot === 'cheeks');
+  const brows = parts.filter((p) => p.slot === 'brows');
   const features = interleaveSlots(parts.filter((p) => !FACE.has(p.slot)));
   const count = Math.max(
     bodies.length,
     eyes.length,
     mouths.length,
     cheeks.length * 2,
+    brows.length * 2,
     Math.ceil(features.length / 2),
   );
   const looks: SquishySpecies[] = [];
-  for (let i = 0; i < count; i++) {
+  const shown = new Set<string>();
+  const unseen = () => features.some((p) => !shown.has(p.id));
+  // Keep going past `count` while a busy slot (crowns) still has parts unseen.
+  for (let i = 0; i < count || (unseen() && i < count * 3); i++) {
     const body = cycle(bodies, i);
     if (!body) break;
     const chosen: Part[] = [];
@@ -62,13 +67,21 @@ export function showcaseLooks(bodies: readonly Body[], parts: readonly Part[]): 
     add(cycle(eyes, i));
     add(cycle(mouths, i));
     if (i % 2 === 0) add(cycle(cheeks, i / 2));
+    else add(cycle(brows, (i - 1) / 2));
     // Two features each (ears, horns, crown…), stepping through the list so all appear.
+    // Parts not shown yet go first, so busy slots (crowns) still all appear.
     let picked = 0;
-    for (let k = 0; k < features.length && picked < 2; k++) {
+    const order = [
+      ...features.filter((p) => !shown.has(p.id)),
+      ...features.map((_, k) => cycle(features, 2 * i + k)),
+    ];
+    for (const part of order) {
+      if (picked >= 2) break;
       const before = chosen.length;
-      add(cycle(features, 2 * i + k));
+      add(part);
       if (chosen.length > before) picked++;
     }
+    for (const p of chosen) shown.add(p.id);
     looks.push({
       id: `showcase-${i + 1}`,
       visual: {

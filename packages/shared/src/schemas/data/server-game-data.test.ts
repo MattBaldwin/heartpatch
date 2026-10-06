@@ -101,6 +101,17 @@ describe('checkServerGameData', () => {
     ]);
   });
 
+  it('holds secret species to the art rules, evolutions included', () => {
+    const problems = problemsAfter((d) => {
+      d.secretSpecies[0]!.visual.finish = 'vinyl';
+      d.secretSpecies[1]!.visual.size = 1;
+    });
+    expect(problems).toEqual([
+      'secretSpecies["fixture-moonpuff"].visual.finish: secret squishies use the "iridescent" finish, not "vinyl"',
+      'secretSpecies["fixture-moonmallow"].visual.size: an evolution is ×1.2–1.4 the size of fixture-moonpuff, not ×1.00',
+    ]);
+  });
+
   it('checks secret species moves, seasons and visuals against public + secret data', () => {
     const problems = problemsAfter((d) => {
       const s = d.secretSpecies[0]!;

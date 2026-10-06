@@ -15,6 +15,7 @@ export * from './schemas/data/care-actions.js';
 export * from './schemas/data/terrains.js';
 export * from './schemas/data/map-gen.js';
 export * from './schemas/data/visuals.js';
+export * from './schemas/data/art-rules.js';
 export * from './schemas/data/game-data.js';
 export * from './schemas/data/tutorial.js';
 export * from './schemas/data/keepers.js';

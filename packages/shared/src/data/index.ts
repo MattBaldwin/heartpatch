@@ -9,7 +9,7 @@ import { RESOURCES } from './resources.js';
 import { SEASONS } from './seasons.js';
 import { MOVES, SPECIES } from './species.js';
 import { TERRAINS } from './terrains.js';
-import { BODIES, PARTS } from './visuals.js';
+import { ART_RULES, BODIES, PARTS } from './visuals.js';
 
 /** Every public content table, checked by `checkGameData` in tests. */
 export const GAME_DATA: GameData = {
@@ -29,4 +29,5 @@ export const GAME_DATA: GameData = {
   mapGen: MAP_GEN,
   bodies: BODIES,
   parts: PARTS,
+  artRules: ART_RULES,
 };

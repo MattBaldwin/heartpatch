@@ -23,7 +23,7 @@ const look = (visual: Partial<SpeciesVisual> = {}): SquishySpecies => ({
 const GOLDEN = {
   species: look(),
   instanceId: 'golden-1',
-  hash: '10014ec48d2aaefec62a4d8e84c4cb12',
+  hash: '5654119afb5e849d771236b7e645fd4d',
 };
 
 describe('squishyParams', () => {

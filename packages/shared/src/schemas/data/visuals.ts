@@ -20,6 +20,7 @@ const degrees = (min: number, max: number) => z.number().min(min).max(max);
  */
 export const PartSlotSchema = z.enum([
   'eyes',
+  'brows',
   'mouth',
   'cheeks',
   'ears',
@@ -28,11 +29,34 @@ export const PartSlotSchema = z.enum([
   'tail',
   'wings',
   'pattern',
+  // ART_BIBLE §1.2 body plans: limbs, spines, manes and fangs.
+  'legs',
+  'arms',
+  'back',
+  'spikes',
+  'mane',
+  'fangs',
 ]);
 export type PartSlot = z.infer<typeof PartSlotSchema>;
 
+/**
+ * Slots that sit on a species' head when it has one (`visual.head`); the
+ * rest sit on its torso. Without a head, everything sits on the body.
+ */
+export const HEAD_SLOTS: readonly PartSlot[] = [
+  'eyes',
+  'brows',
+  'mouth',
+  'cheeks',
+  'fangs',
+  'ears',
+  'horns',
+  'crown',
+  'mane',
+];
+
 /** Slots whose parts lie flat on the surface instead of sticking out. */
-export const SURFACE_SLOTS: readonly PartSlot[] = ['eyes', 'mouth', 'cheeks', 'pattern'];
+export const SURFACE_SLOTS: readonly PartSlot[] = ['eyes', 'brows', 'mouth', 'cheeks', 'pattern'];
 
 /**
  * The primitive a part is built from; each has one geometry builder in the
@@ -79,6 +103,22 @@ export const BodySchema = z.strictObject({
   lobes: z
     .strictObject({ count: z.number().int().min(2).max(16), depth: z.number().min(0).max(0.25) })
     .optional(),
+  /** A pinch around the body at height `at` (−1 bottom to 1 top): a snowman's two balls. */
+  waist: z
+    .strictObject({
+      at: z.number().min(-0.9).max(0.9),
+      depth: z.number().min(0).max(0.4),
+      width: z.number().min(0.05).max(0.6),
+    })
+    .optional(),
+  /** A standing star seen from the front: `count` soft points, one at the top. */
+  points: z
+    .strictObject({ count: z.number().int().min(3).max(12), depth: z.number().min(0).max(0.35) })
+    .optional(),
+  /** A ghost's scalloped hem: the bottom edge lifts between `count` little feet. */
+  hem: z
+    .strictObject({ count: z.number().int().min(3).max(12), depth: z.number().min(0).max(0.3) })
+    .optional(),
   /** Per-squishy proportion variance as a fraction (0.06 is ±6%). */
   jitter: z.number().min(0).max(0.2),
 });
@@ -97,6 +137,34 @@ export const PartLayoutSchema = z.discriminatedUnion('kind', [
     count: z.number().int().min(2).max(12),
     aroundRange: degrees(0, 180),
     upRange: degrees(0, 90),
+  }),
+  /** `count` copies evenly spaced around the body at `up`, within `around ± spread`. */
+  z.strictObject({
+    kind: z.literal('ring'),
+    count: z.number().int().min(2).max(16),
+    spread: degrees(0, 180),
+  }),
+  /** `count` copies up the body at `around`, from `up` to `to` (a spine of spikes or fins). */
+  z.strictObject({
+    kind: z.literal('row'),
+    count: z.number().int().min(2).max(12),
+    to: degrees(-90, 90),
+  }),
+  /** Four copies: a front pair at ±`around` and a back pair at ±(180 − `around`). Legs. */
+  z.strictObject({ kind: z.literal('quad') }),
+  /**
+   * `count` pieces in a line from `around`/`up`: each piece steps `step`
+   * (of its own length) along, bends `curl` degrees up (negative: down),
+   * swings ±`wave` degrees side to side, and scales by `shrink`. Tails and
+   * long serpent bodies.
+   */
+  z.strictObject({
+    kind: z.literal('chain'),
+    count: z.number().int().min(2).max(14),
+    step: z.number().min(0.2).max(1.2),
+    curl: degrees(-60, 60),
+    wave: degrees(0, 60),
+    shrink: z.number().min(0.5).max(1.2),
   }),
 ]);
 export type PartLayout = z.infer<typeof PartLayoutSchema>;
@@ -156,7 +224,12 @@ export function visualRegistry(data: {
  * Used by `checkGameData` and by the client's gallery tests.
  */
 export function checkSpeciesVisual(
-  visual: { readonly body: string; readonly parts: readonly string[] },
+  visual: {
+    readonly body: string;
+    readonly parts: readonly string[];
+    readonly head?: { readonly body: string };
+    readonly attackPart?: PartSlot;
+  },
   registry: VisualRegistry,
   path: Path,
   report: Report,
@@ -182,6 +255,12 @@ export function checkSpeciesVisual(
     }
     slots.set(part.slot, id);
   });
+  if (visual.head && !registry.bodies.has(visual.head.body)) {
+    report([...path, 'head', 'body'], `unknown head body "${visual.head.body}"`);
+  }
+  if (visual.attackPart && !slots.has(visual.attackPart)) {
+    report([...path, 'attackPart'], `no part in the ${visual.attackPart} slot to attack with`);
+  }
   const unknownParts = visual.parts.some((id) => !registry.parts.has(id));
   if (!slots.has('eyes') && !unknownParts) {
     report([...path, 'parts'], 'every squishy needs eyes (a part in the eyes slot)');
