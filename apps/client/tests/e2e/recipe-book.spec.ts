@@ -171,15 +171,17 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
   // itself (the bag's own timer) before the dev route below finishes it.
   await page.evaluate(() => {
     const seen: string[] = [];
-    (window as unknown as { landedToasts: string[] }).landedToasts = seen;
+    (window as unknown as { __landedToasts: string[] }).__landedToasts = seen;
     const node = document.querySelector('[data-testid="landed-toast"]');
-    if (!node) return;
+    if (!node) throw new Error('landed-toast is not mounted');
     new MutationObserver(() => {
       if (node.textContent) seen.push(node.textContent);
     }).observe(node, { childList: true, characterData: true, subtree: true });
   });
   const landedToasts = () =>
-    page.evaluate(() => (window as unknown as { landedToasts: string[] }).landedToasts.join(' | '));
+    page.evaluate(() =>
+      (window as unknown as { __landedToasts: string[] }).__landedToasts.join(' | '),
+    );
 
   // Make Pumpkin Treats.
   await expect(cooking).toBeHidden();
