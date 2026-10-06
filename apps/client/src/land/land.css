@@ -17,11 +17,13 @@
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
 }
 
-/* Under the map's name and status (map.css `.map-hud`), centred. */
+/* Under the map's name (map.css `.map-hud`) and below the gathering chip
+   (inventory.css `.gather-chip`, +108px, one 44px line), centred, so the two
+   never cover each other's taps. */
 .land-chip {
   position: fixed;
   z-index: 3;
-  top: calc(env(safe-area-inset-top) + 120px);
+  top: calc(env(safe-area-inset-top) + 164px);
   left: calc(env(safe-area-inset-left) + 16px);
   right: calc(env(safe-area-inset-right) + 16px);
   width: max-content;
@@ -31,7 +33,7 @@
   align-items: center;
   gap: 10px;
   box-sizing: border-box;
-  padding: 6px 6px 6px 16px;
+  padding: var(--hp-pad-y) var(--hp-pad-y) var(--hp-pad-y) var(--hp-pad-x);
   border: 3px solid #f6d77a;
   border-radius: 24px;
   background: #fffdf7;
@@ -72,7 +74,7 @@
 .land-toast {
   position: fixed;
   z-index: 4;
-  top: calc(env(safe-area-inset-top) + 120px);
+  top: calc(env(safe-area-inset-top) + 164px);
   left: calc(env(safe-area-inset-left) + 16px);
   right: calc(env(safe-area-inset-right) + 16px);
   width: max-content;
@@ -92,7 +94,7 @@
 .land-welcome {
   position: fixed;
   z-index: 6;
-  top: calc(env(safe-area-inset-top) + 180px);
+  top: calc(env(safe-area-inset-top) + 232px);
   left: calc(env(safe-area-inset-left) + 24px);
   right: calc(env(safe-area-inset-right) + 24px);
   max-width: 400px;

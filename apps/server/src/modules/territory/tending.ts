@@ -62,6 +62,14 @@ export interface LandTendingOptions {
 /** Nights of "went wild" the status lists (the welcome-back card). */
 const WENT_WILD_NIGHTS = 14; // TUNE: guess; a two-week trip
 
+/** Nothing missing, nothing gone wild: a tutorial map's land. */
+const quiet = (at: Date): LandTending => ({
+  missing: [],
+  wentWild: [],
+  nextMissesYouAt: null,
+  now: at.toISOString(),
+});
+
 /** Each owner's Heart Seed, from the map's home tiles. */
 function heartSeeds(homeTiles: readonly { ownerUserId: string; q: number; r: number }[]) {
   const homes = new Map<string, Hex[]>();
@@ -122,12 +130,15 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
   const service: LandTendingService = {
     status: async (user, mapId) => {
       const { map } = await requireMember(db, user, mapId);
+      // Tutorial land never goes wild, so it never misses anyone.
+      if (map.kind === 'tutorial') return quiet(now());
       return statusOf(db, user.id, mapId, map.timeZone, now());
     },
 
     visit: async (user, mapId) => {
       const { map } = await requireMember(db, user, mapId);
       const at = now();
+      if (map.kind === 'tutorial') return quiet(at);
       return store.transaction(async (repo, tx) => {
         // My tiles first (id order), then their tending rows: a nightfall
         // that wants the same land waits, or Visit waits for it.
@@ -176,6 +187,7 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
           if (owners.get(tile.id) !== tile.ownerUserId) continue;
           const fresh = tended.get(tile.id);
           if (!fresh || landMood(fresh, at, rules) !== 'going-wild') continue;
+          // A skipped tile isn't swapped for the next one: a gentler night.
           const cooldown = await territory.cooldownUntil(tile.id);
           if (cooldown !== null && cooldown > at) continue;
           going.push(tile);

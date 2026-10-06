@@ -489,8 +489,8 @@ export interface TendingRepo {
   lockTending: (tileIds: readonly string[]) => Promise<Map<string, Date>>;
   /**
    * Gives owned outer tiles with no row one, tended at `at` (land held before
-   * this table). Inserts only; run it on its own, outside a transaction
-   * holding tile locks.
+   * this table). Takes only key-share locks on the tiles, in id order; run it
+   * on its own, outside a transaction holding tile locks.
    */
   fillMissing: (mapId: string, at: Date) => Promise<void>;
   /** How many tiles went wild from each player on `night`. */
@@ -578,6 +578,10 @@ function tendingQueries(db: Executor): TendingRepo {
         where ${tiles.mapId} = ${mapId}
           and ${tiles.homeSlot} is null
           and ${tiles.ownerUserId} is not null
+        -- The foreign key check's lock, taken first and in id order (tech
+        -- spec §7), so a capture holding one tile can't deadlock with it.
+        order by ${tiles.id}
+        for key share
         on conflict do nothing`);
     },
 

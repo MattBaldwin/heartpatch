@@ -335,7 +335,14 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
       void refresh();
     },
     liveEvent: (event) => {
-      if (event.type !== 'tile.rewilded' || event.mapId !== mapId) return;
+      if (event.mapId !== mapId) return;
+      if (event.type === 'tile.captured') {
+        // A rival took one of my fading tiles: it's theirs now, so stop drawing it faded.
+        const parsed = GAME_EVENTS['tile.captured'].public.safeParse(event.data);
+        if (parsed.success && parsed.data.fromUserId === user?.id) void refresh();
+        return;
+      }
+      if (event.type !== 'tile.rewilded') return;
       const parsed = GAME_EVENTS['tile.rewilded'].public.safeParse(event.data);
       if (!parsed.success || parsed.data.userId === user?.id) void refresh();
       else render();
