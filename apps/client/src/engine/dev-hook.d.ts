@@ -1,6 +1,7 @@
 import type { AudioDebug } from '../audio/audio.js';
 import type { BattleDebug, BattleDevControls } from '../battle/battle-screen.js';
 import type { HollowDebug } from '../hollow/hollow-screen.js';
+import type { LandDebug } from '../land/land-screen.js';
 import type { HomeDebug } from '../home/home-screen.js';
 import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
@@ -63,6 +64,8 @@ declare global {
       territory?(): TerritoryDebug | null;
       /** The night, the morning report, squishies in the Hollow and his visits (#21), or null. */
       hollow?(): HollowDebug | null;
+      /** Land that misses you (owner decision 2026-10-06). */
+      land?(): LandDebug | null;
       /** The raid report (#16): my defense style, raids, unseen, open or not; or null. */
       raids?(): RaidReportDebug | null;
       /** The home base (#18): open or not, its buildings, squishies and wander hops, or null. */

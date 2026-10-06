@@ -2,6 +2,7 @@ import {
   hexKey,
   hexToWorld,
   type Hex,
+  type HexKey,
   type HighlightTarget,
   type MapView,
   type PublicTile,
@@ -116,6 +117,8 @@ export interface MapScreen {
   setUser: (user: PublicUser | null) => void;
   /** Night on the map (#21): fireflies, the night backdrop, lanterns glowing. */
   setNight: (night: boolean) => void;
+  /** My land that misses me (owner decision 2026-10-06): each fading tile's share, 0–1. */
+  setLandFade: (fade: ReadonlyMap<HexKey, number>) => void;
   readonly debug: MapDebug | null;
 }
 
@@ -133,6 +136,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   let ws: WsClient | null = null;
   let selected: Hex | null = null;
   let night = false;
+  let landFade: ReadonlyMap<HexKey, number> = new Map();
 
   const hudName = el('span', { class: 'map-hud-name' });
   const hudStatus = el('span', { class: 'map-hud-status', role: 'status' });
@@ -235,6 +239,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       ...ambient.state,
     });
     built.setNight(night);
+    built.setLandFade(landFade);
     scene3d = built;
     ambient.start();
     // Another screen (a battle, a close-up) swapped the stage: stop asking for
@@ -310,6 +315,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     setNight: (next) => {
       night = next;
       scene3d?.setNight(next);
+      options.invalidate();
+    },
+    setLandFade: (next) => {
+      landFade = next;
+      scene3d?.setLandFade(next);
       options.invalidate();
     },
     setUser: (next) => {

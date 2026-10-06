@@ -250,6 +250,25 @@ export const GAME_EVENTS = {
     public: z.object({ userId: z.uuid(), fromUserId: z.uuid().nullable(), ...coords }),
   },
   /**
+   * Land that misses you (owner decision 2026-10-06, design review Q2): at a
+   * nightfall, some of a player's long-untended land went wild again. The
+   * tiles are neutral now and their guardians are back. Everyone sees which
+   * tiles (land is public); guards on them went home.
+   */
+  'tile.rewilded': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      night: LocalDateSchema,
+      tiles: z.array(z.strictObject({ ...coords, terrain: z.string() })).min(1),
+      returnedSquishyIds: z.array(z.uuid()),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      night: LocalDateSchema,
+      tiles: z.array(z.object(coords)),
+    }),
+  },
+  /**
    * A player changed who stands watch on one of their tiles (#15). Members
    * see how many; which squishies stays internal.
    */

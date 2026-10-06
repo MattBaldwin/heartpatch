@@ -13,6 +13,7 @@
     "test:e2e": "pnpm --filter @heartpatch/client test:e2e",
     "sim": "pnpm --filter @heartpatch/shared sim",
     "sim:progression": "pnpm --filter @heartpatch/shared sim:progression",
+    "sim:map-fill": "pnpm --filter @heartpatch/shared sim:map-fill",
     "lint": "eslint . --max-warnings 0 && node scripts/check-filenames.mjs && node scripts/check-procedural-rules.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",

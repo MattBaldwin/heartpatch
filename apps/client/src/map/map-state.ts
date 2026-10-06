@@ -66,9 +66,13 @@ export class MapState {
         this.current = { ...this.current, map: { ...this.current.map, ...parsed.data } };
         return 'none';
       }
+      // Members came or went, or untended land went wild again at nightfall
+      // (owner decision 2026-10-06): neutral now, with guardians whose hints
+      // come from the map view, so refetch it (once a night at most).
       case 'member.joined':
       case 'member.left':
       case 'member.removed':
+      case 'tile.rewilded':
         return 'resync';
       case 'gather.started':
       case 'resource.gathered': {

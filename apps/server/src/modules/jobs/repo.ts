@@ -3,7 +3,14 @@ import { and, asc, eq, getTableName, inArray, isNotNull, sql, type AnyColumn } f
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { buildings, squishies, tileAttacks, tileDefenders, tiles } from '../../db/schema.js';
+import {
+  buildings,
+  squishies,
+  tileAttacks,
+  tileDefenders,
+  tiles,
+  tileTending,
+} from '../../db/schema.js';
 import { squishyOnWatch } from '../territory/repo.js';
 
 /** A tile as the job board needs it. */
@@ -79,21 +86,32 @@ export const squishyAtWork = (
 /**
  * The one SQL spelling of "when this land changed hands" (owner decision
  * 2026-10-06), read the way `squishyAtWork` reads captures: the first
- * `captured` attack on `tileId` that ended after `since`, or null. Work and
- * gathers finished before then still go in the bag. Both are columns of the
- * outer query.
+ * `captured` attack on `tileId` that ended after `since`, or the time the
+ * land went wild after `since` (land that misses you, `tile_tending.wild_at`),
+ * whichever came first, or null. Work and gathers finished before then still
+ * go in the bag. Both are columns of the outer query. `wild_at` keeps only the
+ * latest time a tile went wild; a capture in between is found first anyway.
  */
 export const firstCaptureSince = (tileId: AnyPgColumn, since: AnyPgColumn) => {
-  // Outer columns written `"table"."column"` and the subquery's table aliased,
-  // so `tile_id` / `started_at` can never bind to `tile_attacks`' own columns.
+  // Outer columns written `"table"."column"` and the subqueries' tables
+  // aliased, so `tile_id` / `started_at` can never bind to their own columns.
   const outer = (column: AnyPgColumn) =>
     sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
   const attack = (column: AnyColumn) => sql`land_capture.${sql.identifier(column.name)}`;
-  return sql<Date | null>`(
-    select min(${attack(tileAttacks.endedAt)}) from ${tileAttacks} as land_capture
-    where ${attack(tileAttacks.tileId)} = ${outer(tileId)}
-      and ${attack(tileAttacks.outcome)} = 'captured'
-      and ${attack(tileAttacks.endedAt)} > ${outer(since)}
+  const wild = (column: AnyColumn) => sql`land_wild.${sql.identifier(column.name)}`;
+  // `least` skips nulls, so either one alone is the answer.
+  return sql<Date | null>`least(
+    (
+      select min(${attack(tileAttacks.endedAt)}) from ${tileAttacks} as land_capture
+      where ${attack(tileAttacks.tileId)} = ${outer(tileId)}
+        and ${attack(tileAttacks.outcome)} = 'captured'
+        and ${attack(tileAttacks.endedAt)} > ${outer(since)}
+    ),
+    (
+      select ${wild(tileTending.wildAt)} from ${tileTending} as land_wild
+      where ${wild(tileTending.tileId)} = ${outer(tileId)}
+        and ${wild(tileTending.wildAt)} > ${outer(since)}
+    )
   )`.mapWith(tileAttacks.endedAt);
 };
 

@@ -155,8 +155,12 @@ export function muteRgb(c: Rgb): Rgb {
   return [out[0] ?? 0, out[1] ?? 0, out[2] ?? 0];
 }
 
-/** The colour a tile is drawn in (sRGB 0–1): its look's colour, wobbled, and muted on wild land. */
-export function tileColor(lookColor: string, jitter: TileJitter, muted: boolean): Rgb {
+/**
+ * The colour a tile is drawn in (sRGB 0–1): its look's colour, wobbled, and
+ * muted on wild land. `muted` may be a share (0–1): land that misses its
+ * owner is drawn part of the way to wild (owner decision 2026-10-06).
+ */
+export function tileColor(lookColor: string, jitter: TileJitter, muted: boolean | number): Rgb {
   const [r, g, b] = hexRgb(lookColor);
   const clamp = (v: number) => Math.min(1, Math.max(0, v));
   const wobbled: Rgb = [
@@ -164,7 +168,15 @@ export function tileColor(lookColor: string, jitter: TileJitter, muted: boolean)
     clamp(g * jitter.brightness),
     clamp(b * jitter.brightness * (1 - jitter.warmth)),
   ];
-  return muted ? muteRgb(wobbled) : wobbled;
+  const share = muted === true ? 1 : muted === false ? 0 : Math.min(1, Math.max(0, muted));
+  if (share === 0) return wobbled;
+  const quiet = muteRgb(wobbled);
+  if (share === 1) return quiet;
+  return [
+    wobbled[0] + (quiet[0] - wobbled[0]) * share,
+    wobbled[1] + (quiet[1] - wobbled[1]) * share,
+    wobbled[2] + (quiet[2] - wobbled[2]) * share,
+  ];
 }
 
 /** Today's date in `timeZone` as `YYYY-MM-DD` (the device's own zone if that one is unknown). */

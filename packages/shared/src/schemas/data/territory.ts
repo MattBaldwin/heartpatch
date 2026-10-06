@@ -29,6 +29,27 @@ export const TerritoryRulesSchema = z.strictObject({
    * under `smallerBelowPercent`% of yours earns `rewardPercent`% rewards.
    */
   gentle: z.strictObject({ smallerBelowPercent: percent, rewardPercent: percent }),
+  /**
+   * Land that misses you (owner decision 2026-10-06, design review Q2): an
+   * outer tile its owner hasn't tended in a while (claimed it, or tapped
+   * Visit, which tends all their land) fades, then goes wild again at a
+   * nightfall and its guardians come back. Home tiles never do.
+   */
+  tending: z
+    .strictObject({
+      /** Untended this many days, a tile starts to fade and the owner is told it misses them. */
+      missesYouAfterDays: positiveInt,
+      /** Untended this many days, it can go wild again at a nightfall. */
+      wildAfterDays: positiveInt,
+      /** Most of one player's tiles that go wild at one nightfall, by PvP mode. */
+      wildPerNight: z.strictObject({ off: positiveInt, on: positiveInt, gentle: positiveInt }),
+      /** Tiles this close to a Heart Seed never fade (1 is the home ring alone). */
+      keepRadius: positiveInt,
+    })
+    .refine((t) => t.wildAfterDays > t.missesYouAfterDays, {
+      message: 'wildAfterDays must come after missesYouAfterDays, so there is a warning first',
+      path: ['wildAfterDays'],
+    }),
 });
 export type TerritoryRules = z.infer<typeof TerritoryRulesSchema>;
 

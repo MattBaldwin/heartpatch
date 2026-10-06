@@ -40,6 +40,7 @@ import {
   HEX_SIZE,
   HOME_LOOK,
   ISLAND,
+  LAND_FADE,
   MUTED,
   PLAYER_COLORS,
   PROP_SWAY,
@@ -156,7 +157,8 @@ interface TileGroup {
   readonly look: TerrainLook;
   readonly tiles: PublicTile[];
   readonly colors: Float32Array;
-  readonly muted: boolean[];
+  /** How muted each tile is drawn: 1 on wild land, part way on land that misses its owner. */
+  readonly muted: number[];
 }
 
 /** One prop kind's instances, for re-muting when ownership changes. */
@@ -284,6 +286,8 @@ export class MapScene {
   private readonly homeNodes: number;
   private tileMeshes = 0;
   private counts = { tinted: 0, homes: 0, claimedHomes: 0, safeTiles: 0 };
+  /** My land that misses me: how far each tile has faded (0–1), by tile. */
+  private landFade = new Map<HexKey, number>();
   /** Ambient time: every terrain material reads it (terrain-plugin.ts). */
   private readonly clock = new TerrainClock();
   private readonly halloween: boolean;
@@ -392,7 +396,7 @@ export class MapScene {
       keepersWearing: this.keepers.handles.map((h) => h.params.worn),
       props: this.propCount,
       propKinds: this.propGroups.length,
-      mutedTiles: this.tileGroups.reduce((n, g) => n + g.muted.filter(Boolean).length, 0),
+      mutedTiles: this.tileGroups.reduce((n, g) => n + g.muted.filter((m) => m === 1).length, 0),
       mutedProps: this.propGroups.reduce(
         (n, g) => n + g.ambient.filter((v, i) => i % 4 === 2 && v === 1).length,
         0,
@@ -702,7 +706,7 @@ export class MapScene {
         look,
         tiles: group.tiles,
         colors,
-        muted: group.tiles.map(() => false),
+        muted: group.tiles.map(() => 0),
       });
     }
     this.tileMeshes = groups.size;
@@ -710,16 +714,26 @@ export class MapScene {
     return animated;
   }
 
+  /**
+   * Land that misses this player (owner decision 2026-10-06): how far each of
+   * their tiles has faded (0–1), drawn part of the way to wild.
+   */
+  setLandFade(fade: ReadonlyMap<HexKey, number>): void {
+    this.landFade = new Map(fade);
+    this.recolour();
+  }
+
   /** Recolours tiles and props whose wildness changed (all of them with `force`). */
   private recolour(force = false): void {
     if (this.tileGroups.length === 0) return;
-    const wild = new Map<HexKey, boolean>();
+    const wild = new Map<HexKey, number>();
     for (const group of this.tileGroups) {
       let changed = false;
       for (const [i, stale] of group.tiles.entries()) {
         const key = hexKey(stale);
         const tile = this.tiles.get(key) ?? stale;
-        const muted = isMuted(tile);
+        const fading = tile.homeSlot === null ? (this.landFade.get(key) ?? 0) : 0;
+        const muted = isMuted(tile) ? 1 : Math.min(1, Math.max(0, fading)) * LAND_FADE.most;
         wild.set(key, muted);
         if (!force && group.muted[i] === muted) continue;
         group.muted[i] = muted;
@@ -735,7 +749,7 @@ export class MapScene {
     for (const group of this.propGroups) {
       let changed = false;
       for (const [i, key] of group.tiles.entries()) {
-        const muted = wild.get(key) === true ? 1 : 0;
+        const muted = wild.get(key) ?? 0;
         if (group.ambient[i * 4 + 2] === muted) continue;
         group.ambient[i * 4 + 2] = muted;
         changed = true;

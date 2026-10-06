@@ -40,7 +40,13 @@ import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
-import { createTerritoryRepo, type DefenderRow, type TerritoryTileRow } from './repo.js';
+import {
+  createTendingRepo,
+  createTerritoryRepo,
+  type DefenderRow,
+  type TerritoryTileRow,
+} from './repo.js';
+import { createLandTending, type LandTendingService } from './tending.js';
 
 /*
  * Territory (#15; design doc §11; decisions B and C). Players claim neutral
@@ -62,6 +68,12 @@ export interface TerritoryService {
     mapId: string,
     request: SetDefendersRequest,
   ) => Promise<TerritoryStatus>;
+  /** My land that misses me, and what went wild lately (land that misses you). */
+  tending: LandTendingService['status'];
+  /** Visit: tends all my land at once. */
+  visit: LandTendingService['visit'];
+  /** Dev only: ages my land, then tonight's land goes wild. */
+  devAgeLand: LandTendingService['devAge'];
 }
 
 export interface TerritoryServiceOptions {
@@ -179,6 +191,12 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
   const rules = options.rules ?? TERRITORY_RULES;
   const guardianData = options.guardians ?? defaultGuardianData();
   const store = createTerritoryRepo(db);
+  const land = createLandTending({
+    db,
+    rules,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.publish ? { publish: options.publish } : {}),
+  });
   /** After commit only (apps/server/README.md, "Live sync"). */
   const published = (mapId: string) => {
     void options.publish?.(mapId);
@@ -332,6 +350,10 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       options.battles.startTile(user, mapId, prepare(user, request)),
 
     status: async (user, mapId) => status(db, user, (await requireMember(db, user, mapId)).map),
+
+    tending: land.status,
+    visit: land.visit,
+    devAgeLand: land.devAge,
 
     setDefenders: async (user, mapId, request) => {
       if (request.squishyIds.length > rules.maxDefenders) {
@@ -496,6 +518,8 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       // Squishies on watch go home, never lost (issue #15).
       const returned = await repo.clearDefenders(tile.id);
       await repo.setOwner(tile.id, attack.attackerUserId);
+      // Claiming land tends it (land that misses you, owner decision 2026-10-06).
+      await createTendingRepo(tx).tend(attack.mapId, [tile.id], at);
       await repo.endAttack(battle.id, 'captured', at);
       const event: NewGameEvent<'tile.captured'> = {
         mapId: attack.mapId,

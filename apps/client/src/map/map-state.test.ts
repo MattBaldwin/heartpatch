@@ -37,6 +37,11 @@ describe('MapState', () => {
       heartSeed: { q: 0, r: 8 },
     };
     expect(state.apply(event('member.joined', joined))).toBe('resync');
+    expect(
+      state.apply(
+        event('tile.rewilded', { userId: userId(2), night: '2026-10-14', tiles: [{ q: 3, r: 0 }] }),
+      ),
+    ).toBe('resync');
     expect(state.apply(event('member.left', { userId: userId(2), releasedTiles: 7 }))).toBe(
       'resync',
     );
