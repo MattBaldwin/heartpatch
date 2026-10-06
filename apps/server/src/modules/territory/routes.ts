@@ -1,6 +1,7 @@
 import {
   AttackTileRequestSchema,
   BattleResponseSchema,
+  DevAgeLandRequestSchema,
   LandTendingResponseSchema,
   MapIdParamsSchema,
   SetDefendersRequestSchema,
@@ -18,6 +19,8 @@ export interface TerritoryRoutesOptions {
   hooks: AuthHooks;
   /** `Idempotency-Key` support (`registerIdempotency`). */
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
+  /** Dev-only routes (`HP_DEV_SQUISHY_GRANTS`): age my land to try fading on a device. */
+  devTools?: boolean;
 }
 
 export const territoryRoutes =
@@ -104,6 +107,27 @@ export const territoryRoutes =
         ),
       }),
     );
+
+    if (options.devTools) {
+      app.post(
+        '/maps/:mapId/dev/territory/age',
+        {
+          schema: {
+            params: MapIdParamsSchema,
+            body: DevAgeLandRequestSchema,
+            response: { 200: LandTendingResponseSchema },
+          },
+          preHandler: [requireAuth, rateLimit('visit')],
+        },
+        async (request) => ({
+          tending: await service.devAgeLand(
+            requireUser(request),
+            request.params.mapId,
+            request.body.days,
+          ),
+        }),
+      );
+    }
 
     done();
   };

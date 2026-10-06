@@ -47,6 +47,8 @@ export interface LandTendingService {
    * missing or tutorial map.
    */
   nightfall: (mapId: string, night: LocalDate) => Promise<{ wild: number } | null>;
+  /** Dev only: ages my land `days`, then tonight's land goes wild. */
+  devAge: (user: PublicUser, mapId: string, days: number) => Promise<LandTending>;
 }
 
 export interface LandTendingOptions {
@@ -117,7 +119,7 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
     };
   };
 
-  return {
+  const service: LandTendingService = {
     status: async (user, mapId) => {
       const { map } = await requireMember(db, user, mapId);
       return statusOf(db, user.id, mapId, map.timeZone, now());
@@ -127,22 +129,24 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
       const { map } = await requireMember(db, user, mapId);
       const at = now();
       return store.transaction(async (repo, tx) => {
-        const mine = await repo.outerTiles(mapId, user.id);
-        await repo.tend(
-          mapId,
-          mine.map((t) => t.id),
-          at,
-        );
+        // My tiles first (id order), then their tending rows: a nightfall
+        // that wants the same land waits, or Visit waits for it.
+        const mine = await repo.lockMyOuterTiles(mapId, user.id);
+        await repo.tend(mapId, mine, at);
         return statusOf(tx, user.id, mapId, map.timeZone, at);
       });
     },
 
     nightfall: async (mapId, night) => {
+      const map = await createMapsRepo(db).findMap(mapId);
+      if (!map || map.kind === 'tutorial') return null;
+      // Land held before tending existed gets a row (tended now), on its own:
+      // inserts only, before the transaction below takes any tile lock.
+      await store.fillMissing(mapId, now());
       const result = await store.transaction(async (repo, tx) => {
-        const map = await createMapsRepo(tx).findMap(mapId);
-        if (!map || map.kind === 'tutorial') return null;
+        // The cutoff is the job's own time, a few minutes past 21:00 at most
+        // (retries); the per-night cap bounds what that can change.
         const at = now();
-        await repo.fillMissing(mapId, at);
         const [tiles, homes, done] = await Promise.all([
           repo.outerTiles(mapId),
           createSquishyJobsRepo(tx).homeTiles(mapId),
@@ -159,45 +163,55 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
         });
         if (picked.length === 0) return { wild: 0 };
 
-        // Tiles first (id order), then who stands watch, then gatherers.
+        // Lock order (tech spec §7): the tiles (id order), their tending rows
+        // (tile id order), who stands watch, the gatherers, their bags, `maps`.
         const territory = createTerritoryRepo(tx);
-        const locked = new Map(
-          (await repo.lockTiles(picked.map((t) => t.id))).map((t) => [t.id, t.ownerUserId]),
-        );
+        const ids = picked.map((t) => t.id);
+        const owners = new Map((await repo.lockTiles(ids)).map((t) => [t.id, t.ownerUserId]));
+        const tended = await repo.lockTending(ids);
         const going: TendingTileRow[] = [];
         for (const tile of picked) {
-          // Still theirs, and no battle for it in the last few hours.
-          if (locked.get(tile.id) !== tile.ownerUserId) continue;
+          // Still theirs, still untended (a Visit may have landed since the
+          // read), and no battle for it in the last few hours.
+          if (owners.get(tile.id) !== tile.ownerUserId) continue;
+          const fresh = tended.get(tile.id);
+          if (!fresh || landMood(fresh, at, rules) !== 'going-wild') continue;
           const cooldown = await territory.cooldownUntil(tile.id);
           if (cooldown !== null && cooldown > at) continue;
           going.push(tile);
         }
         if (going.length === 0) return { wild: 0 };
+
+        const byOwner = new Map<string, TendingTileRow[]>();
+        for (const tile of going) {
+          byOwner.set(tile.ownerUserId, [...(byOwner.get(tile.ownerUserId) ?? []), tile]);
+        }
+        const owned = [...byOwner].sort(([a], [b]) => (a < b ? -1 : 1));
+        // Neutral now, remembering when: work and gathers finished before
+        // then still go in the bag (jobs' `firstCaptureSince`).
+        for (const [userId, list] of owned) {
+          await repo.goWild(
+            list.map((t) => t.id),
+            userId,
+            night,
+            at,
+          );
+        }
         const returned = new Map<string, string[]>();
         for (const tile of going) {
-          const ids = await territory.clearDefenders(tile.id);
-          returned.set(tile.ownerUserId, [...(returned.get(tile.ownerUserId) ?? []), ...ids]);
+          const guards = await territory.clearDefenders(tile.id);
+          returned.set(tile.ownerUserId, [...(returned.get(tile.ownerUserId) ?? []), ...guards]);
         }
         // Gatherers bank what they had ready and rest (as when land changes hands).
         const workers = await repo.workersOn(going.map((t) => t.id));
         await createSquishyJobsRepo(tx).lockSquishies(workers);
         const events: NewGameEvent[] =
           workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at) : [];
-
-        const byOwner = new Map<string, TendingTileRow[]>();
-        for (const tile of going) {
-          byOwner.set(tile.ownerUserId, [...(byOwner.get(tile.ownerUserId) ?? []), tile]);
-        }
-        for (const [userId, owned] of [...byOwner].sort(([a], [b]) => (a < b ? -1 : 1))) {
-          await repo.goWild(
-            owned.map((t) => t.id),
-            userId,
-            night,
-          );
+        for (const [userId, list] of owned) {
           const payload: GameEventPayload<'tile.rewilded'> = {
             userId,
             night,
-            tiles: owned.map(({ q, r, terrain }) => ({ q, r, terrain })),
+            tiles: list.map(({ q, r, terrain }) => ({ q, r, terrain })),
             returnedSquishyIds: returned.get(userId) ?? [],
           };
           events.push({ mapId, type: 'tile.rewilded', actorUserId: null, payload });
@@ -205,8 +219,19 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
         for (const event of events) await repo.appendEvent(event);
         return { wild: going.length };
       });
-      if (result && result.wild > 0) void options.publish?.(mapId);
+      if (result.wild > 0) void options.publish?.(mapId);
       return result;
     },
+
+    devAge: async (user, mapId, days) => {
+      const { map } = await requireMember(db, user, mapId);
+      await store.fillMissing(mapId, now());
+      await store.transaction(async (repo) => {
+        await repo.ageTending(await repo.lockMyOuterTiles(mapId, user.id), days);
+      });
+      await service.nightfall(mapId, localDate(now(), map.timeZone));
+      return statusOf(db, user.id, mapId, map.timeZone, now());
+    },
   };
+  return service;
 }

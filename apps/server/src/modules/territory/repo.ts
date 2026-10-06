@@ -475,16 +475,38 @@ export interface TendingRepo {
   transaction: <T>(fn: (repo: TendingTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
   /** Owned tiles outside every home base, with when they were tended; one owner's, or everyone's. */
   outerTiles: (mapId: string, userId?: string) => Promise<TendingTileRow[]>;
-  /** Marks these tiles tended at `at` (never moves a later time back). */
+  /** Marks these tiles tended at `at` (never moves a later time back), in tile id order. */
   tend: (mapId: string, tileIds: readonly string[], at: Date) => Promise<void>;
-  /** Gives owned outer tiles with no row one, tended at `at` (land held before this table). */
+  /**
+   * Visit's first lock: the player's tiles outside their home base, in id
+   * order (`FOR NO KEY UPDATE`, like jobs), so a Visit and a nightfall that
+   * wants the same land take turns. Returns their ids.
+   */
+  lockMyOuterTiles: (mapId: string, userId: string) => Promise<string[]>;
+  /** Dev only: moves these tiles' last tending `days` back. The caller has locked the tiles. */
+  ageTending: (tileIds: readonly string[], days: number) => Promise<void>;
+  /** Row-locks these tiles' tending rows in tile id order (after the tiles); returns when each was tended. */
+  lockTending: (tileIds: readonly string[]) => Promise<Map<string, Date>>;
+  /**
+   * Gives owned outer tiles with no row one, tended at `at` (land held before
+   * this table). Inserts only; run it on its own, outside a transaction
+   * holding tile locks.
+   */
   fillMissing: (mapId: string, at: Date) => Promise<void>;
   /** How many tiles went wild from each player on `night`. */
   wildCounts: (mapId: string, night: string) => Promise<Map<string, number>>;
   /** Row-locks tiles in id order until commit; returns their owners now. */
   lockTiles: (tileIds: readonly string[]) => Promise<{ id: string; ownerUserId: string | null }[]>;
-  /** These tiles go back to neutral; their rows remember the night and whose they were. */
-  goWild: (tileIds: readonly string[], fromUserId: string, night: string) => Promise<void>;
+  /**
+   * These tiles go back to neutral; their rows remember when, the night and
+   * whose they were. The caller has locked the tiles and their rows.
+   */
+  goWild: (
+    tileIds: readonly string[],
+    fromUserId: string,
+    night: string,
+    at: Date,
+  ) => Promise<void>;
   /** Squishies working these tiles (gatherers), in id order. */
   workersOn: (tileIds: readonly string[]) => Promise<string[]>;
   /** Tiles that went wild from the player since `sinceNight` and aren't theirs again. */
@@ -538,9 +560,11 @@ function tendingQueries(db: Executor): TendingRepo {
 
     tend: async (mapId, tileIds, at) => {
       if (tileIds.length === 0) return;
+      // Tile id order, like every other lock on these rows (tech spec §7).
+      const ordered = [...tileIds].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
       await db
         .insert(tileTending)
-        .values(tileIds.map((tileId) => ({ tileId, mapId, tendedAt: at })))
+        .values(ordered.map((tileId) => ({ tileId, mapId, tendedAt: at })))
         .onConflictDoUpdate({
           target: tileTending.tileId,
           set: { tendedAt: sql`greatest(${tileTending.tendedAt}, excluded.tended_at)` },
@@ -566,6 +590,35 @@ function tendingQueries(db: Executor): TendingRepo {
       return new Map(rows.flatMap((r) => (r.userId === null ? [] : [[r.userId, r.n]])));
     },
 
+    lockMyOuterTiles: async (mapId, userId) => {
+      const rows = await db
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(and(eq(tiles.mapId, mapId), eq(tiles.ownerUserId, userId), isNull(tiles.homeSlot)))
+        .orderBy(asc(tiles.id))
+        .for('no key update');
+      return rows.map((r) => r.id);
+    },
+
+    ageTending: async (tileIds, days) => {
+      if (tileIds.length === 0) return;
+      await db
+        .update(tileTending)
+        .set({ tendedAt: sql`${tileTending.tendedAt} - make_interval(days => ${days})` })
+        .where(inArray(tileTending.tileId, [...tileIds]));
+    },
+
+    lockTending: async (tileIds) => {
+      if (tileIds.length === 0) return new Map();
+      const rows = await db
+        .select({ tileId: tileTending.tileId, tendedAt: tileTending.tendedAt })
+        .from(tileTending)
+        .where(inArray(tileTending.tileId, [...tileIds]))
+        .orderBy(asc(tileTending.tileId))
+        .for('update');
+      return new Map(rows.map((r) => [r.tileId, r.tendedAt]));
+    },
+
     lockTiles: async (tileIds) => {
       if (tileIds.length === 0) return [];
       return db
@@ -576,7 +629,7 @@ function tendingQueries(db: Executor): TendingRepo {
         .for('update');
     },
 
-    goWild: async (tileIds, fromUserId, night) => {
+    goWild: async (tileIds, fromUserId, night, at) => {
       if (tileIds.length === 0) return;
       await db
         .update(tiles)
@@ -584,7 +637,7 @@ function tendingQueries(db: Executor): TendingRepo {
         .where(inArray(tiles.id, [...tileIds]));
       await db
         .update(tileTending)
-        .set({ wildNight: night, wildFromUserId: fromUserId })
+        .set({ wildNight: night, wildFromUserId: fromUserId, wildAt: at })
         .where(inArray(tileTending.tileId, [...tileIds]));
     },
 

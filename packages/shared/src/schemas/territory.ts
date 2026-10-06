@@ -99,5 +99,13 @@ export const LandTendingSchema = z.object({
 });
 export type LandTending = z.infer<typeof LandTendingSchema>;
 
+/**
+ * Dev only (`HP_DEV_SQUISHY_GRANTS`): `POST /maps/:mapId/dev/territory/age`
+ * moves my land's last tending this many days back, then lets tonight's land
+ * go wild, so fading can be tried on a device.
+ */
+export const DevAgeLandRequestSchema = z.strictObject({ days: z.number().int().min(1).max(60) });
+export type DevAgeLandRequest = z.infer<typeof DevAgeLandRequestSchema>;
+
 export const LandTendingResponseSchema = z.object({ tending: LandTendingSchema });
 export type LandTendingResponse = z.infer<typeof LandTendingResponseSchema>;

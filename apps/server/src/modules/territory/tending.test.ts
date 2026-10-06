@@ -15,10 +15,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, users } from '../../db/schema.js';
+import { keepers, mapMembers, sessions, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 import { createLandTending } from './tending.js';
 
 const url = inject('testDatabaseUrl');
@@ -135,6 +136,7 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     who: PublicUser,
     distances: readonly number[],
     terrains?: readonly string[],
+    withNode = false,
   ) {
     const all = await tilesOf(mapId);
     const seed = heartSeedOf(all.filter((t) => t.ownerUserId === who.id && t.homeSlot !== null))!;
@@ -145,6 +147,7 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
           t.homeSlot === null &&
           t.terrain !== 'junipers-gap' &&
           (!terrains || terrains.includes(t.terrain)) &&
+          (!withNode || t.nodeResource !== null) &&
           hexDistance(t, seed) === d,
       )!;
       return tile;
@@ -284,7 +287,119 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     const row = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, gatherer.id) });
     expect(row?.workTileId).toBeNull();
     const types = (await eventsOf(mapId)).map((e) => e.type);
-    expect(types.slice(-3)).toEqual(['work.collected', 'squishy.assigned', 'tile.rewilded']);
+    // Its land went wild first, so the map hears `tile.rewilded` (and resyncs), not a job change.
+    expect(types.slice(-2)).toEqual(['work.collected', 'tile.rewilded']);
+  });
+
+  it('still banks my own gather that finished before its land went wild', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const [far] = await landAt(mapId, kid, [5], undefined, true);
+    const land = createLandTending({ db, clock: () => clock });
+    await land.nightfall(mapId, '2026-10-02');
+    const gather = await call(server, 'POST', `/maps/${mapId}/gathers`, kid, {
+      q: far!.q,
+      r: far!.r,
+    });
+    expect(gather.statusCode, gather.body).toBe(201);
+
+    advance(RULES.wildAfterDays);
+    expect(await land.nightfall(mapId, '2026-10-14')).toMatchObject({ wild: 1 });
+    expect((await tilesOf(mapId)).find((t) => t.id === far!.id)?.ownerUserId).toBeNull();
+    const settled = await call(server, 'POST', `/maps/${mapId}/settle`, kid);
+    expect(settled.statusCode, settled.body).toBe(200);
+    const types = (await eventsOf(mapId)).map((e) => e.type);
+    expect(types).toContain('resource.gathered');
+    const row = await db.query.gatherJobs.findFirst({ where: (t, { eq }) => eq(t.mapId, mapId) });
+    expect(row?.status).not.toBe('lost');
+  });
+
+  it('lets a Visit that lands while nightfall waits keep the land', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const [far] = await landAt(mapId, kid, [5]);
+    const land = createLandTending({ db, clock: () => clock });
+    await land.nightfall(mapId, '2026-10-02');
+    advance(RULES.wildAfterDays);
+
+    let running: Promise<unknown> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(`set local lock_timeout = '10s'`);
+      // A Visit's first lock (tiles, `for no key update`), held while night falls.
+      await tx.execute(`select id from tiles where id = '${uuid(far!.id)}' for no key update`);
+      const pid = await backendPid(tx);
+      running = land.nightfall(mapId, '2026-10-14');
+      await waitUntilBlockedBy(db, pid);
+      await tx.execute(
+        `update tile_tending set tended_at = '${clock.toISOString()}' where tile_id = '${uuid(far!.id)}'`,
+      );
+    });
+    expect(await running).toEqual({ wild: 0 });
+    expect((await tilesOf(mapId)).find((t) => t.id === far!.id)?.ownerUserId).toBe(kid.id);
+  });
+
+  it('takes locks for a Visit in the tech spec order: tiles, then tending rows', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const [far] = await landAt(mapId, kid, [5]);
+    const land = createLandTending({ db, clock: () => clock });
+    await land.nightfall(mapId, '2026-10-02');
+
+    let running: Promise<unknown> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(`set local lock_timeout = '10s'`);
+      // Nightfall's order: the tile, then its tending row. Visit waits at the
+      // tile holding nothing, so taking the row here can't deadlock.
+      await tx.execute(`select id from tiles where id = '${uuid(far!.id)}' for update`);
+      const pid = await backendPid(tx);
+      running = call(server, 'POST', `/maps/${mapId}/territory/visit`, kid);
+      await waitUntilBlockedBy(db, pid);
+      await tx.execute(
+        `select tile_id from tile_tending where tile_id = '${uuid(far!.id)}' for update`,
+      );
+    });
+    expect(((await running) as LightMyRequestResponse).statusCode).toBe(200);
+  });
+
+  it('caps each player on their own each night', async () => {
+    const server = await start();
+    const kid = await player();
+    const friend = await player();
+    const mapId = await patch(server, kid);
+    await db.insert(mapMembers).values({ mapId, userId: friend.id, role: 'member', homeSlot: 1 });
+    await landAt(mapId, kid, [6, 5, 4]);
+    // The friend's land, far from the kid's home (no home ring of their own here).
+    const all = await tilesOf(mapId);
+    const theirs = all
+      .filter((t) => t.ownerUserId === null && t.homeSlot === null && t.terrain !== 'junipers-gap')
+      .slice(-3);
+    for (const t of theirs) await setOwner(t.id, friend.id);
+    const land = createLandTending({ db, clock: () => clock });
+    await land.nightfall(mapId, '2026-10-02');
+    advance(RULES.wildAfterDays);
+    expect(await land.nightfall(mapId, '2026-10-14')).toEqual({ wild: 4 });
+    const wild = (await eventsOf(mapId)).filter((e) => e.type === 'tile.rewilded');
+    expect(wild.map((e) => parseGameEventPayload('tile.rewilded', e.payload).tiles.length)).toEqual(
+      [2, 2],
+    );
+  });
+
+  it('lets a dev age my land and send it wild, to try it on a device', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    await landAt(mapId, kid, [5, 4]);
+    const aged = tendingOf(
+      await call(server, 'POST', `/maps/${mapId}/dev/territory/age`, kid, { days: 6 }),
+    );
+    expect(aged.missing).toHaveLength(2);
+    const wild = tendingOf(
+      await call(server, 'POST', `/maps/${mapId}/dev/territory/age`, kid, { days: 10 }),
+    );
+    expect(wild.wentWild).toHaveLength(2);
   });
 
   it('never fades land on a tutorial map', async () => {

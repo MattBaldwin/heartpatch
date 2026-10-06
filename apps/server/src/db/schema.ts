@@ -856,9 +856,11 @@ export const tileDefenders = pgTable(
  * tends all their land). A timestamp, not a counter (CLAUDE.md rule 4):
  * fading is worked out on read and nightfall picks what goes wild. Owned
  * land with no row yet (held before this table) counts as tended when
- * nightfall first sees it. `wild_night` / `wild_from_user_id` record the last
- * night the tile went wild and from whom, which caps how many go per player
- * per night even if a nightfall runs twice. Home tiles have no row.
+ * nightfall first sees it. `wild_night` / `wild_from_user_id` / `wild_at`
+ * record the last time the tile went wild and from whom: the per-night cap
+ * counts them (so a second nightfall run takes nothing more), and land
+ * going wild counts as changing hands for work and gathers. Home tiles have
+ * no row.
  */
 export const tileTending = pgTable(
   'tile_tending',
@@ -873,10 +875,16 @@ export const tileTending = pgTable(
     tendedAt: timestamptz('tended_at').notNull(),
     wildNight: date('wild_night', { mode: 'string' }),
     wildFromUserId: uuid('wild_from_user_id'),
+    // When it went wild: work and gathers finished before then still go in
+    // the bag, as when land is captured (jobs' `firstCaptureSince`).
+    wildAt: timestamptz('wild_at'),
   },
   (t) => [
     index('tile_tending_map_id_idx').on(t.mapId),
-    check('tile_tending_wild_pair', sql`(${t.wildNight} is null) = (${t.wildFromUserId} is null)`),
+    check(
+      'tile_tending_wild_set',
+      sql`(${t.wildNight} is null) = (${t.wildFromUserId} is null) and (${t.wildNight} is null) = (${t.wildAt} is null)`,
+    ),
   ],
 );
 

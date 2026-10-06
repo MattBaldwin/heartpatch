@@ -237,7 +237,8 @@ Land that misses you (owner decision 2026-10-06, migration 0025): when an outer 
 | `map_id` | uuid | Indexed. No foreign key: a capture writes the row before the battle's squishy locks, and the key-share lock on `maps` would break the lock order. Rows go with their tile |
 | `tended_at` | timestamptz | Claiming the tile or Visit (which tends all the owner's land) moves it on, never back. Owned land held before this table gets a row (tended then) the first time nightfall sees it |
 | `wild_night` | date, null | The map-local night the tile last went wild |
-| `wild_from_user_id` | uuid, null | Whose it was then. Set together with `wild_night` (checked). The per-night cap counts these, so a retried nightfall takes nothing more |
+| `wild_from_user_id` | uuid, null | Whose it was then. The per-night cap counts these, so a retried nightfall takes nothing more |
+| `wild_at` | timestamptz, null | When it went wild. Jobs' `firstCaptureSince` reads it as land changing hands, so work and gathers finished before then still go in the bag. The three `wild_*` columns are set together (checked) |
 
 The row outlives a change of owner: the next claim moves `tended_at` on.
 

@@ -254,6 +254,13 @@ export const MUTED = {
   island: 0.6,
 } as const; // TUNE
 
+/**
+ * Land that misses its owner (owner decision 2026-10-06): how far towards
+ * wild (`MUTED`) a tile is drawn when it's just about to go wild. Short of 1,
+ * so fading land still reads as someone's until it goes.
+ */
+export const LAND_FADE = { most: 0.8 } as const; // TUNE
+
 /** Ambient life: when it runs, and how busy it is per quality tier. */
 export const AMBIENT = {
   /**

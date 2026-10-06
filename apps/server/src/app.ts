@@ -243,6 +243,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           territoryRoutes(createTerritoryService({ db, clock, battles, ...publish }), {
             hooks: authHooks,
             idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
           }),
         );
         // The raid log and defense style (#16); the raid-log consumer writes

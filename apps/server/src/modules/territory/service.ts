@@ -72,6 +72,8 @@ export interface TerritoryService {
   tending: LandTendingService['status'];
   /** Visit: tends all my land at once. */
   visit: LandTendingService['visit'];
+  /** Dev only: ages my land, then tonight's land goes wild. */
+  devAgeLand: LandTendingService['devAge'];
 }
 
 export interface TerritoryServiceOptions {
@@ -189,7 +191,12 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
   const rules = options.rules ?? TERRITORY_RULES;
   const guardianData = options.guardians ?? defaultGuardianData();
   const store = createTerritoryRepo(db);
-  const land = createLandTending({ db, rules, ...(options.clock ? { clock: options.clock } : {}) });
+  const land = createLandTending({
+    db,
+    rules,
+    ...(options.clock ? { clock: options.clock } : {}),
+    ...(options.publish ? { publish: options.publish } : {}),
+  });
   /** After commit only (apps/server/README.md, "Live sync"). */
   const published = (mapId: string) => {
     void options.publish?.(mapId);
@@ -346,6 +353,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
 
     tending: land.status,
     visit: land.visit,
+    devAgeLand: land.devAge,
 
     setDefenders: async (user, mapId, request) => {
       if (request.squishyIds.length > rules.maxDefenders) {

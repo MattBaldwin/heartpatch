@@ -1,5 +1,5 @@
 {
-  "id": "dfefbb8f-f26c-4a46-a614-ab514897204e",
+  "id": "752ff733-cc04-49a0-aa4f-5a7521cf43f8",
   "prevId": "d35b2dc1-8e29-4a2c-a6ad-bc0024c385d8",
   "version": "7",
   "dialect": "postgresql",
@@ -3900,6 +3900,12 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "wild_at": {
+          "name": "wild_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -3934,9 +3940,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "tile_tending_wild_pair": {
-          "name": "tile_tending_wild_pair",
-          "value": "(\"tile_tending\".\"wild_night\" is null) = (\"tile_tending\".\"wild_from_user_id\" is null)"
+        "tile_tending_wild_set": {
+          "name": "tile_tending_wild_set",
+          "value": "(\"tile_tending\".\"wild_night\" is null) = (\"tile_tending\".\"wild_from_user_id\" is null) and (\"tile_tending\".\"wild_night\" is null) = (\"tile_tending\".\"wild_at\" is null)"
         }
       },
       "isRLSEnabled": false
