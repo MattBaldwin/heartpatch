@@ -333,7 +333,7 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
   await expect(picker.getByRole('button', { name: /^Choose \w+$/ })).toBeEnabled();
 });
 
-test('the gather step, played for real: tap the tree tile, Gather, wait, Collect', async ({
+test('the gather step, played for real: tap the tree tile, Gather, wait, and it lands', async ({
   browser,
 }) => {
   test.setTimeout(120_000); // draws the Glade; CI renders in software
@@ -383,14 +383,13 @@ test('the gather step, played for real: tap the tree tile, Gather, wait, Collect
   await expect(page.getByTestId('gather-chip')).toContainText('Timber');
   expect((await hook<{ chip: string | null }>(page, 'inventory'))?.chip).toBe('waiting');
 
-  // The Glade's gather takes 5 seconds; then Collect pops up in the spotlight.
-  const collect = page.getByTestId('tile-collect');
-  await expect(collect).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByTestId('gather-chip')).toContainText('ready');
-  await expect.poll(async () => takesTaps(page, collect)).toBe(true);
-  await collect.tap();
+  // The Glade's gather takes 5 seconds; then the Timber goes straight into
+  // the bag with a pop-up, no Collect (owner decision 2026-10-06), and its
+  // `resource.gathered` finishes the step.
+  await expect(page.getByTestId('landed-toast')).toContainText('Timber', { timeout: 15_000 });
   await step('hearthfire');
   await expect(page.getByTestId('gather-chip')).toBeHidden();
+  await expect(page.getByTestId('tile-collect')).toHaveCount(0);
 });
 
 test('first battle: Sprout points at the Adventure handle, then at Find a squishy inside', async ({

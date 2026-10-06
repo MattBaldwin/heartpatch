@@ -5,12 +5,13 @@ import {
   sealedHint,
   shortfall,
   whereToFind,
+  type Craft,
   type Hex,
   type ItemCounts,
   type PublicTile,
   type RecipeBookPage,
 } from '@heartpatch/shared';
-import { itemName } from '../inventory/bag-view.js';
+import { bagCrafts, itemName, type BagCraft } from '../inventory/bag-view.js';
 import { itemIcon } from '../inventory/item-icons.js';
 import { buildingIcon } from '../home/home-view.js';
 
@@ -32,6 +33,7 @@ export const BOOK_TEXT = {
   stillNeed: (list: string) => `Still need ${list}`,
   comesBack: (season: string) => `Comes back at ${season}!`,
   sealed: 'Collect something new to open this page.',
+  potBusy: 'Your pot is busy! Watch the timer up top.',
 } as const;
 
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
@@ -132,6 +134,12 @@ export interface BookContext {
   readonly seasons: ReadonlySet<string>;
   /** Open pages the player hasn't looked at yet. */
   readonly unseen: ReadonlySet<string>;
+  /**
+   * A craft is still cooking on this patch: the server makes one thing at a
+   * time, so no recipe page can be made until it's done. A finished one goes
+   * in the bag by itself (owner decision 2026-10-06) and frees the pot.
+   */
+  readonly potBusy: boolean;
 }
 
 export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
@@ -153,9 +161,12 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
     };
   });
   const missing = shortfall(ctx.bag, page.ingredients);
-  const canMake = !sealed && inSeason && canMakeNow(page, ctx.bag);
+  const hasAll = canMakeNow(page, ctx.bag);
+  const potBusy = ctx.potBusy && page.kind === 'recipe';
+  const canMake = !sealed && inSeason && hasAll && !potBusy;
   let note: string | null = null;
   if (!sealed && !inSeason && season) note = BOOK_TEXT.comesBack(season);
+  else if (!sealed && hasAll && potBusy) note = BOOK_TEXT.potBusy;
   else if (!sealed && !canMake) {
     note = BOOK_TEXT.stillNeed(
       listWords(Object.entries(missing).map(([id, n]) => `${String(n)} ${itemName(id)}`)),
@@ -184,6 +195,19 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
     note,
     isNew: !sealed && ctx.unseen.has(page.key),
   };
+}
+
+/**
+ * What's cooking, for the strip across the top of the book: the craft still
+ * going that's ready soonest. The server allows one per patch, but the bag's
+ * list is what it says, so any number is drawn safely. A finished one isn't
+ * shown: it's on its way into the bag. Null when nothing's cooking.
+ */
+export function cookingView(
+  crafts: readonly Craft[],
+  msUntil: (iso: string) => number,
+): BagCraft | null {
+  return bagCrafts(crafts).find((c) => msUntil(c.craft.readyAt) > 0) ?? null;
 }
 
 /**

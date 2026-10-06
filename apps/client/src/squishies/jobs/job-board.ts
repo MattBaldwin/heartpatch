@@ -1,5 +1,4 @@
 import type { JobSquishy, JobsView, SetJobRequest } from '@heartpatch/shared';
-import { describeItems } from '../../inventory/bag-view.js';
 import { GameClock } from '../../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { ApiRequestError } from '../../net/api.js';
@@ -7,7 +6,6 @@ import { newIdempotencyKey } from '../../net/idempotency-key.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { jobsApi, type JobsApi } from './jobs-api.js';
 import {
-  anythingReady,
   colorOf,
   hintLines,
   jobLine,
@@ -29,8 +27,11 @@ export interface JobBoardOptions {
   api?: JobsApi;
   /** Device wall clock in ms (tests pass a fake). */
   now?: () => number;
-  /** A command changed the bag (collected work): the bag can refetch. */
-  onChanged?: (mapId: string) => void;
+  /**
+   * Banks finished work into the bag (the bag's settle, owner decision
+   * 2026-10-06), asked before the board reads the server's view.
+   */
+  settle?: (mapId: string) => Promise<void>;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -87,11 +88,6 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     '×',
   );
   const note = el('p', { class: 'jobs-note', role: 'status', 'data-testid': 'jobs-note' });
-  const collectButton = el('button', {
-    type: 'button',
-    class: 'auth-button jobs-collect',
-    'data-testid': 'jobs-collect',
-  });
   const list = el('ul', { class: 'jobs-list', 'data-testid': 'jobs-list' });
   const sheet = el(
     'section',
@@ -103,7 +99,6 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       close,
     ),
     note,
-    collectButton,
     list,
   );
   sheet.hidden = true;
@@ -128,15 +123,12 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   close.addEventListener('click', () => {
     closeBoard();
   });
-  collectButton.addEventListener('click', () => {
-    void act(async (id, send) => {
-      const res = await send((key) => api.collect(id, key));
-      if (!res) return;
-      setView(res.jobs);
-      say(describeItems(res.granted) || 'All collected!');
-      options.onChanged?.(id);
-    });
-  });
+  /** Banks finished work first (it goes straight to the bag), then the server's view. */
+  const freshView = async (id: string): Promise<JobsView> => {
+    // The bag's settle says its own errors and never rejects.
+    await options.settle?.(id);
+    return api.view(id);
+  };
 
   /** Runs one command for the board on screen, one at a time; a CONFLICT refetches. */
   async function act(
@@ -240,13 +232,9 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     const current = view;
     if (!current) {
       list.replaceChildren();
-      collectButton.hidden = true;
       return;
     }
     const nowMs = clock.now();
-    collectButton.hidden = !anythingReady(current);
-    collectButton.textContent = JOBS_TEXT.collect(describeItems(readyTotal(current)) || '🧺');
-    collectButton.disabled = working;
     if (current.squishies.length === 0) {
       list.replaceChildren(el('li', { class: 'jobs-empty' }, JOBS_TEXT.empty));
       return;
@@ -314,9 +302,9 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   /**
    * The countdowns move on by themselves while the sheet is open, once a
    * second, changing only their text (no buttons rebuilt under a finger).
-   * When one reaches zero the server has a cycle to hand out (what's ready
-   * is its sum, not the client's), so the board asks for a fresh view once
-   * and redraws: the row says "+5 Timber ready!" and Collect appears (#149).
+   * When one reaches zero the server has a cycle to bank (what's ready is its
+   * sum, not the client's), so the board settles and asks for a fresh view
+   * once, and redraws: the cycle is in the bag and the next one counts down.
    */
   function tick(): void {
     window.clearTimeout(ticker);
@@ -345,7 +333,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     const had = views;
     if (!id) return;
     try {
-      const fresh = await api.view(id);
+      const fresh = await freshView(id);
       if (mine !== ticket || working || views !== had) return;
       setView(fresh);
       render();
@@ -378,7 +366,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       say('');
       render();
       try {
-        const fresh = await api.view(id);
+        const fresh = await freshView(id);
         if (mine !== ticket) return;
         setView(fresh);
         render();

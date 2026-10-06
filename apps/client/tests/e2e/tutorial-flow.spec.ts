@@ -229,7 +229,7 @@ async function playTutorial(page: Page): Promise<void> {
   await step('gather');
   await reloadAt('gather', glade);
 
-  // Gather, for real: the tree tile, Gather, then Collect in the tile chip.
+  // Gather, for real: the tree tile, Gather, and the Timber lands by itself.
   await readAll();
   await expect(main).toHaveText("Let's go!");
   await tapOn(main);
@@ -246,10 +246,8 @@ async function playTutorial(page: Page): Promise<void> {
   await expect.poll(async () => (await overlay(page))?.spotlightOn).toBe('resource-node');
   await expect.poll(() => takesTaps(gather)).toBe(true);
   await tapOn(gather);
-  const collect = panel.getByTestId('tile-collect');
-  await expect(collect).toBeVisible({ timeout: 15_000 });
-  await expect.poll(() => takesTaps(collect)).toBe(true);
-  await tapOn(collect);
+  // The Glade's 5 s gather goes straight into the bag (owner decision 2026-10-06).
+  await expect(page.getByTestId('landed-toast')).toContainText('Timber', { timeout: 15_000 });
   await step('hearthfire');
 
   // #128: the new step's bubble waits behind the tile chip as a small orb,

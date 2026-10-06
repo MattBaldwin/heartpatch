@@ -17,7 +17,7 @@ import {
   tiles,
   users,
 } from '../../db/schema.js';
-import { keeperColumns } from '../keepers/repo.js';
+import { keeperColumns, keeperFromRow } from '../keepers/repo.js';
 import { titleName } from '../milestones/tracks.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
@@ -533,7 +533,7 @@ function queries(db: Executor): MapsRepo {
         .orderBy(asc(mapMembers.role), asc(mapMembers.joinedAt), asc(users.id));
       return rows.map(({ wearing, titleId, ...row }) => ({
         ...row,
-        keeper: row.keeper ? { ...row.keeper, wearing: wornOf(wearing) } : null,
+        keeper: row.keeper ? { ...keeperFromRow(row.keeper), wearing: wornOf(wearing) } : null,
         title: titleName(titleId),
       }));
     },

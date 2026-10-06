@@ -36,7 +36,7 @@ import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
-import { grantItems, seasonsOn } from '../inventory/service.js';
+import { grantItems, lockGrantRows, seasonsOn } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import {
@@ -132,34 +132,24 @@ function addInto(total: ItemCounts, items: ItemCounts): void {
 const tileOf = (t: { q: number; r: number } | null) => (t ? { q: t.q, r: t.r } : null);
 
 /**
- * Locks every inventory row these grants will touch, per owner (owner id
- * order) and in item-id order, before any grant: one grant per squishy
- * would otherwise lock items in squishy order, against everyone else's
- * item-id order (tech spec §7 step 11). Missing rows are made by the grant.
+ * What a gatherer has to bank at `at`: its work now if it's at work, or, if
+ * its tile changed hands, the cycles it finished before then (owner decision
+ * 2026-10-06: finished cycles are banked first, only the unfinished one is
+ * lost). Null if there's nothing to bank from.
  */
-async function lockGrantRows(
-  tx: Executor,
-  mapId: string,
-  grants: readonly { userId: string; items: ItemCounts }[],
-): Promise<void> {
-  const byOwner = new Map<string, Set<string>>();
-  for (const { userId, items } of grants) {
-    const ids = byOwner.get(userId) ?? new Set<string>();
-    for (const id of Object.keys(items)) ids.add(id);
-    byOwner.set(userId, ids);
-  }
-  const inventory = createInventoryRepo(tx);
-  for (const userId of [...byOwner.keys()].sort()) {
-    const ids = [...(byOwner.get(userId) ?? [])].sort();
-    if (ids.length > 0) await inventory.lockItems({ mapId, userId }, ids);
-  }
+export function bankableWork(row: JobRow, map: JobMap, at: Date, justTaken = false) {
+  if (row.atWork) return workAt(row, map, at, justTaken);
+  if (row.lostAt === null) return null;
+  const until = row.lostAt < at ? row.lostAt : at;
+  return workAt({ ...row, atWork: true }, map, until, justTaken);
 }
 
 /**
  * Takes squishies off their work tiles, banking what each had ready into its
  * owner's bag (ledger reason `work`, ref the squishy). The caller has locked
  * these squishies (tech spec §7: squishies, then the inventory rows this
- * takes); a stale work row (land that changed hands) is just cleared.
+ * takes); a stale work row (land that changed hands) banks the cycles it
+ * finished before then, and is cleared.
  * Returns the events to append (`work.collected`, and `squishy.assigned`
  * with `job`, so maps stop showing a gatherer there), after the caller's own
  * writes, `maps` last. Nightfall, posting a guard and housing use it too.
@@ -175,8 +165,9 @@ export async function leaveWork(
   const rows = (await repo.listByIds(squishyIds)).filter((r) => r.workTile !== null);
   const banked = new Map<string, { squishyIds: string[]; items: ItemCounts }>();
   const events: NewGameEvent[] = [];
-  // Nightfall calls this for a squishy it just took: its day's work still counts.
-  const works = rows.map((row) => ({ row, work: workAt(row, map, at, true) }));
+  // Nightfall calls this for a squishy it just took: its day's work still
+  // counts. Work on land that changed hands banks what finished before then.
+  const works = rows.map((row) => ({ row, work: bankableWork(row, map, at, true) }));
   await lockGrantRows(
     tx,
     map.id,
@@ -195,7 +186,7 @@ export async function leaveWork(
     }
     await repo.stopWork(row.squishy.id);
     // Only a gatherer that was really at work shows on the map.
-    if (work) {
+    if (work && row.atWork) {
       events.push({
         mapId: map.id,
         type: 'squishy.assigned',
@@ -501,8 +492,11 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           if (other) throw new AppError('CONFLICT', MESSAGES.spotTaken(squishyName(other.squishy)));
         } else if (request.job === current) {
           // Resting already, maybe with a stale work row (its land changed
-          // hands): tidy that away so the one-job checks never read it.
-          if (row.workTile !== null && !row.atWork) await repo.stopWork(row.squishy.id);
+          // hands): bank what it finished before then (owner decision
+          // 2026-10-06), then tidy it away so the one-job checks never read it.
+          if (row.workTile !== null && !row.atWork) {
+            await append(repo, await leaveWork(tx, map, [row.squishy.id], 'resting', at));
+          }
           return buildView(tx, repo, map, user.id, at);
         }
 

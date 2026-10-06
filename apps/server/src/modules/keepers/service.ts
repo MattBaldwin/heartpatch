@@ -30,12 +30,15 @@ const MESSAGES: Readonly<Record<keyof KeeperConfig, string>> = {
   hairColor: "We don't know that hair colour. Pick another one!",
   eyeColor: "We don't know that eye colour. Pick another one!",
   outfit: "We don't know that outfit. Pick another one!",
+  hairstyle: "We don't know that hair style. Pick another one!",
 };
 
 export function createKeepersService(options: KeepersServiceOptions): KeepersService {
   const data = options.data ?? KEEPER_DATA;
   const now = options.clock ?? (() => new Date());
   const store = createKeepersRepo(options.db);
+  const baseStyle = (config: KeeperConfig) =>
+    data.bases.find((b) => b.id === config.base)?.hairstyle;
 
   return {
     get: (user) => store.find(user.id),
@@ -49,6 +52,10 @@ export function createKeepersService(options: KeepersServiceOptions): KeepersSer
         hairColor: config.hairColor,
         eyeColor: config.eyeColor,
         outfit: config.outfit,
+        // None, or the base's own, is stored as none: the base's style shows.
+        ...(config.hairstyle === undefined || config.hairstyle === baseStyle(config)
+          ? {}
+          : { hairstyle: config.hairstyle }),
       };
       await store.save(user.id, keeper, now());
       return keeper;
