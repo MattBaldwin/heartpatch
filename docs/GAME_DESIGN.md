@@ -432,7 +432,7 @@ Every new player plays a short solo tutorial before joining or creating a multip
 **Steps [DEFAULT]** — each is a short goal with a highlighted target and one or two lines from Sprout:
 
 1. **Plant your Heart Seed.** Tap the glowing spot → your home base grows from the ground with color spreading outward. *Teaches: home base can never be taken.*
-2. **Gather.** Gather Timber and Emberwood from nearby nodes; each pops into your bag when it's ready (tutorial timers take seconds, not minutes). *Teaches: resources and timers.*
+2. **Gather.** Gather Timber from a nearby node; it pops into your bag when it's ready (tutorial timers take seconds, not minutes). *Teaches: resources and timers.*
 3. **Light your first Hearthfire.** Build it, fuel it, see the warm safe radius on the map. *Teaches: fires keep squishies safe.*
 4. **Meet a wild squishy.** A friendly wild squishy wanders up. **First battle** (scripted to be winnable) introduces moves and one clear example of element and feeling effectiveness ("Super cozy!").
 5. **Capture it.** Use a Heart Charm (capture is guaranteed here). *Teaches: befriending.* Then the player meets their **Partner**: the starter pick from §4 (1 of 3), named by the player. Exact beats are #24's.
