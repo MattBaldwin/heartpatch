@@ -30,6 +30,7 @@ export const JOBS_TEXT = {
   train: 'Train',
   offToTrain: (name: string) => `${name} is off to practice!`,
   noGrounds: 'Build Training Grounds at home to train.',
+  groundsFull: 'The Training Grounds are full right now.',
   pickSpot: 'Where should they gather?',
   noSpots: 'No spots to gather yet. Win some land!',
   cancel: 'Never mind',

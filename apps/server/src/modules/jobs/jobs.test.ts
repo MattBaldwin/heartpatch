@@ -899,6 +899,34 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       });
     });
 
+    it('lands its XP when it is posted on watch, and stops training', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grounds(server, kid, mapId);
+      const hills = await farLand(server, kid, mapId, 'hills');
+      const trainee = await squishy(mapId, kid, { level: 1 });
+      await setJob(server, kid, mapId, trainee, { job: 'training' });
+      later(2 * HOUR_MS);
+      const post = await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: hills.q,
+        r: hills.r,
+        squishyIds: [trainee],
+      });
+      expect(post.statusCode, post.body).toBe(200);
+      expect(await squishyRow(trainee)).toMatchObject({
+        xp: 10,
+        trainingBuildingId: null,
+        trainingSince: null,
+      });
+      expect(jobOf(await jobs(server, kid, mapId), trainee).job).toBe('guard');
+      const trained = (await eventsOf(mapId)).find((e) => e.type === 'squishy.trained')!;
+      expect(trained.payload).toEqual({
+        userId: kid.id,
+        trained: [{ squishyId: trainee, xp: 10 }],
+      });
+    });
+
     it('sleeps at home: safe by a lit fire, exposed when it is out', async () => {
       const server = await start();
       const kid = await player();

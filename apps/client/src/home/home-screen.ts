@@ -37,6 +37,7 @@ import {
   refundPreview,
   speciesMap,
   squishyName,
+  trainCost,
   type HomeSpot,
   type NeedChip,
   type ReachTile,
@@ -795,8 +796,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                     el(
                       'span',
                       { class: 'home-list-sub' },
-                      // Other jobs aren't in the home reply, so only trainees get a line.
-                      here ? HOME_TEXT.practicing(s.level) : '',
+                      // Says what Train would stop (watch, gathering, the team).
+                      here ? HOME_TEXT.practicing(s.level) : trainCost(s),
                     ),
                   ),
                   action,

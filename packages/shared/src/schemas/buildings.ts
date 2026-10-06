@@ -4,6 +4,7 @@ import { ContentIdSchema } from './data/common.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
 import { SpeciesSchema } from './data/species.js';
 import { ItemCountsSchema } from './inventory.js';
+import { SquishyJobIdSchema } from './jobs.js';
 import { LocalDateSchema } from './time.js';
 
 // Home base and buildings API (design doc §11, §13–14; tech spec §5). The
@@ -81,6 +82,8 @@ export const HomeSquishySchema = z.object({
   level: z.number().int().min(1),
   habitatId: z.uuid().nullable(),
   trainingId: z.uuid().nullable(),
+  /** Its one job (squishy jobs), so the Training Grounds card can say what Train stops. */
+  job: SquishyJobIdSchema,
 });
 export type HomeSquishy = z.infer<typeof HomeSquishySchema>;
 

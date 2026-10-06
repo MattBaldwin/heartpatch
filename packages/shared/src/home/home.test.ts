@@ -232,6 +232,10 @@ describe('home-base data', () => {
     ]);
   });
 
+  it('allows one Training Grounds per home (the Train job picks "my" Training Grounds)', () => {
+    expect(building('training-grounds').maxPerHome).toBe(1);
+  });
+
   it('names the carved pumpkin apart from the fire built from it', () => {
     const item = GAME_DATA.resources.find((r) => r.id === 'jack-o-lantern-hearthfire');
     expect(item?.name).toBe("Jack-o'-Lantern");

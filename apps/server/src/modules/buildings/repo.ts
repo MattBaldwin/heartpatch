@@ -9,6 +9,7 @@ import {
 import { and, asc, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
+import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 import { buildings, squishies, tiles } from '../../db/schema.js';
 
@@ -56,6 +57,13 @@ export interface HomeSquishyRow {
   trainingBuildingId: string | null;
 }
 
+/** A squishy on the home screen, with what its one job is read from (`jobOf`). */
+export interface HomeListRow extends HomeSquishyRow {
+  teamSlot: number | null;
+  onWatch: boolean;
+  atWork: boolean;
+}
+
 /**
  * Building storage (#18). Plain queries; the service decides the rules and
  * runs each command in one transaction. Lock order for every command: the
@@ -88,8 +96,12 @@ export interface BuildingsRepo {
   /** Deletes all of a player's buildings on a map (they left); residents move out. */
   deleteOwned: (mapId: string, userId: string) => Promise<number>;
 
-  /** The player's squishies on this map, any state, oldest first. */
-  listSquishies: (mapId: string, userId: string) => Promise<HomeSquishyRow[]>;
+  /**
+   * The player's squishies on this map, any state, oldest first, with what
+   * their one job reads from (the home's Training Grounds card warns before
+   * a Train takes one off watch, work or the team).
+   */
+  listSquishies: (mapId: string, userId: string) => Promise<HomeListRow[]>;
   /** Row-locks a squishy until commit. */
   lockSquishy: (squishyId: string) => Promise<(HomeSquishyRow & { mapId: string }) | null>;
   /**
@@ -275,7 +287,12 @@ function queries(db: Executor): BuildingsRepo {
     listSquishies: async (mapId, userId) =>
       (
         await db
-          .select(squishyColumns)
+          .select({
+            ...squishyColumns,
+            teamSlot: squishies.teamSlot,
+            onWatch: squishyOnWatch(),
+            atWork: squishyAtWork(),
+          })
           .from(squishies)
           .where(and(eq(squishies.mapId, mapId), eq(squishies.ownerUserId, userId)))
           .orderBy(asc(squishies.createdAt), asc(squishies.id))

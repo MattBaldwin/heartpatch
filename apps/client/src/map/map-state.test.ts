@@ -206,12 +206,21 @@ describe('MapState', () => {
       event('building.fueled', { userId: userId(1), building: { ...building, lit: true } }, 3),
     );
     expect(tileOf(home).buildings[0]?.lit).toBe(true);
+    // An upgrade: friends see the new level and the fire's longer reach.
+    state.apply(
+      event(
+        'building.upgraded',
+        { userId: userId(1), building: { ...building, lit: true, level: 2, safeRadius: 2 } },
+        4,
+      ),
+    );
+    expect(tileOf(home).buildings[0]).toMatchObject({ level: 2, safeRadius: 2, lit: true });
     const moved = { ...building, lit: true, q: other.q, r: other.r, spot: 4 };
     state.apply(
       event(
         'building.moved',
         { userId: userId(1), from: { q: home.q, r: home.r, spot: 2 }, building: moved },
-        4,
+        5,
       ),
     );
     expect(tileOf(home).buildings).toEqual([]);
@@ -220,10 +229,10 @@ describe('MapState', () => {
       event(
         'building.removed',
         { userId: userId(1), buildingRowId: building.id, q: other.q, r: other.r },
-        5,
+        6,
       ),
     );
     expect(tileOf(other).buildings).toEqual([]);
-    expect(state.apply(event('building.placed', { userId: userId(1) }, 6))).toBe('resync');
+    expect(state.apply(event('building.placed', { userId: userId(1) }, 7))).toBe('resync');
   });
 });

@@ -78,7 +78,6 @@ export interface CareRepo {
   /** The content id of each habitat building (`buildings.building_id`), by row id. */
   habitatBuildingIds: (buildingRowIds: readonly string[]) => Promise<Map<string, string>>;
 
-  /** Care actions per squishy on `day`. */
   /** Care actions on each squishy on `day` that count toward diminishing returns. */
   countCareOn: (squishyIds: readonly string[], day: string) => Promise<Map<string, number>>;
   /** When each action was last done on each squishy since `since` (`squishyId` → action → when). */

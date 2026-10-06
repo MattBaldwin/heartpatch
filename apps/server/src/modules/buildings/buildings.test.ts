@@ -861,7 +861,12 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const trainingHome = await home(server, kid, mapId);
       expect(trainingHome.buildings[0]).toMatchObject({ residents: 1 });
       expect(trainingHome.squishies).toEqual([
-        expect.objectContaining({ id: pal, trainingId: grounds.id, habitatId: null }),
+        expect.objectContaining({
+          id: pal,
+          trainingId: grounds.id,
+          habitatId: null,
+          job: 'training',
+        }),
       ]);
 
       // Two hours at 5 XP an hour, then it's taken down: the 10 XP land first.

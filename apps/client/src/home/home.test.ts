@@ -21,6 +21,7 @@ import {
   freeHomeSpots,
   likesHabitat,
   refundPreview,
+  trainCost,
   upgradeOffer,
   upgradeReach,
 } from './home-view.js';
@@ -258,6 +259,13 @@ describe('build menu', () => {
     });
   });
 
+  it('says what Train would stop on the Training Grounds card', () => {
+    expect(trainCost({ job: 'guard' })).toBe('On watch · Train ends it');
+    expect(trainCost({ job: 'gatherer' })).toBe('Gathering · Train stops it');
+    expect(trainCost({ job: 'team' })).toBe('On the team · Train takes them off');
+    expect(trainCost({ job: 'resting' })).toBe('');
+  });
+
   it("maps where the fire's light reaches now and after the upgrade", () => {
     const home = homeWith();
     const reach = upgradeReach(home, fire({ q: 0, r: 0 }), 2);
@@ -301,6 +309,7 @@ describe('build menu', () => {
       level: 1,
       habitatId: null,
       trainingId: null,
+      job: 'resting' as const,
     };
     expect(likesHabitat(pal, 'cozy-meadow')).toBe(true);
     expect(likesHabitat(pal, 'ember-den')).toBe(false);

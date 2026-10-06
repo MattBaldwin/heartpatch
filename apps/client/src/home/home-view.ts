@@ -318,6 +318,23 @@ export function buildingNote(b: MyBuilding): string {
   return `${String(living)} of ${String(room)} squishies live here.`;
 }
 
+/**
+ * What sending a squishy to train would stop, said before the tap (the job
+ * board's `teamCost` words), or '' when it isn't doing anything else.
+ */
+export function trainCost(squishy: Pick<HomeSquishy, 'job'>): string {
+  switch (squishy.job) {
+    case 'guard':
+      return 'On watch · Train ends it';
+    case 'gatherer':
+      return 'Gathering · Train stops it';
+    case 'team':
+      return 'On the team · Train takes them off';
+    default:
+      return '';
+  }
+}
+
 /** Does a squishy like this habitat (matching element or feeling tag)? */
 export function likesHabitat(squishy: HomeSquishy, buildingId: string): boolean {
   const building = BUILDING_DATA.get(buildingId);

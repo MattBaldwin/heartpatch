@@ -98,6 +98,7 @@ function squishy(
     level: 8,
     habitatId: where.habitatId ?? null,
     trainingId: where.trainingId ?? null,
+    job: where.trainingId ? 'training' : 'resting',
   };
 }
 

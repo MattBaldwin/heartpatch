@@ -414,6 +414,7 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         training: trainingStatus,
       };
     });
+    // One per home (`maxPerHome: 1`, checked by the data tests).
     const grounds = buildings.find((b) => trainingLevelOf(b) !== null);
     const groundsLevel = grounds ? trainingLevelOf(grounds) : null;
     const team = rows
@@ -572,7 +573,9 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           request.job === 'gatherer' ? await repo.tileAt(map.id, request.q, request.r) : null;
         if (request.job === 'gatherer' && !target) throw new AppError('NOT_FOUND', MESSAGES.noTile);
         // My Training Grounds: its tile is locked with the others, so taking
-        // it down (which locks every home tile first) can't race this.
+        // it down (which locks every home tile first) can't race this. One per
+        // home (`maxPerHome: 1`, checked by the data tests); a second would
+        // need setJob to pick the one with room.
         const groundsBefore =
           request.job === 'training'
             ? ((await createBuildingsRepo(tx).listOwned(map.id, user.id)).find(

@@ -244,8 +244,10 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       return;
     }
     lines = new Map();
-    trainHint.textContent = JOBS_TEXT.noGrounds;
-    trainHint.hidden = current.trainingGrounds !== null || current.squishies.length === 0;
+    const tg = current.trainingGrounds;
+    const tgFull = tg !== null && tg.used >= tg.capacity;
+    trainHint.textContent = tg === null ? JOBS_TEXT.noGrounds : JOBS_TEXT.groundsFull;
+    trainHint.hidden = (tg !== null && !tgFull) || current.squishies.length === 0;
     list.replaceChildren(
       ...current.squishies.map((s) => {
         const name = nameOf(current, s);
