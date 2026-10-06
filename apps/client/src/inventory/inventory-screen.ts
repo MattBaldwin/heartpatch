@@ -248,22 +248,32 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   let serverNextAt: string | null = null;
   /** The last settle failed and its one retry is spent (reset by a settle that works). */
   let retried = false;
+  /** Bumped by every settle sent, so an older reply can't put an older bag back. */
+  let settlesSent = 0;
 
   async function refresh(): Promise<void> {
     const id = mapId;
     const at = generation;
     if (!id) return;
+    settlesSent += 1;
+    const sent = settlesSent;
     try {
       const { landed, nextAt, ...fresh } = await api.settle(id);
       if (at !== generation) return;
-      clock.sync(fresh.now);
-      state = fresh;
-      serverNextAt = nextAt;
+      // A newer settle went out meanwhile: its bag wins, but what this one
+      // banked still pops up (the server put it in the bag).
+      const newest = sent === settlesSent;
+      if (newest) {
+        clock.sync(fresh.now);
+        state = fresh;
+        serverNextAt = nextAt;
+      }
       if (landed.length > 0) {
         landings += 1;
         showToast(landedText(landed));
         options.onCollected?.();
       }
+      if (!newest) return;
       render();
       scheduleSettle();
     } catch (err) {
