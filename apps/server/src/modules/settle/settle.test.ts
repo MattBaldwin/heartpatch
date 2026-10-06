@@ -4,6 +4,7 @@ import {
   CraftResponseSchema,
   GatherResponseSchema,
   hexDistance,
+  InventoryResponseSchema,
   JOB_RULES,
   JobsViewSchema,
   MapResponseSchema,
@@ -306,7 +307,8 @@ describe.skipIf(!url)(
     }
 
     it('banks a finished craft, gather and gatherer in one go, as Collect did', async () => {
-      const server = await start();
+      // No found clothing this time (a gather's real roll would add `clothing.found`).
+      const server = await start({ HP_DEV_DROP_CHANCE: '0' });
       const kid = await player();
       const mapId = await newMap(server, kid);
       const forest = await farLand(server, kid, mapId, 'forest');
@@ -581,6 +583,41 @@ describe.skipIf(!url)(
       const res = await call(server, 'POST', `/maps/${mapId}/settle`, stranger);
       expect([403, 404]).toContain(res.statusCode);
       expect((await call(server, 'POST', `/maps/${mapId}/settle`, null)).statusCode).toBe(401);
+    });
+
+    it('finishes my crafts now with the dev route, only when HP_DEV_SQUISHY_GRANTS is on', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await stock(mapId, kid, { timber: 2, treats: 1 });
+      const { craft: made } = CraftResponseSchema.parse(
+        (await craft(server, kid, mapId, 'heart-charm')).json(),
+      );
+      // Not a route at all without HP_DEV_SQUISHY_GRANTS.
+      expect((await call(server, 'POST', `/maps/${mapId}/dev/crafts/ready`, kid)).statusCode).toBe(
+        404,
+      );
+      await server.close();
+
+      const dev = await start({ HP_DEV_SQUISHY_GRANTS: 'true' });
+      // Someone outside the patch can't see it, as with every map route.
+      const stranger = await player();
+      expect(
+        (await call(dev, 'POST', `/maps/${mapId}/dev/crafts/ready`, stranger)).statusCode,
+      ).toBe(404);
+      const ready = await call(dev, 'POST', `/maps/${mapId}/dev/crafts/ready`, kid);
+      expect(ready.statusCode, ready.body).toBe(200);
+      const bag = InventoryResponseSchema.parse(ready.json());
+      // Ready now, and still the same length (started_at moved back with it).
+      expect(bag.crafts.map((c) => c.id)).toEqual([made.id]);
+      expect(bag.crafts[0]!.readyAt).toBe(clock.toISOString());
+      expect(Date.parse(bag.crafts[0]!.readyAt) - Date.parse(bag.crafts[0]!.startedAt)).toBe(
+        Date.parse(made.readyAt) - Date.parse(made.startedAt),
+      );
+      // The next settle lands it.
+      expect((await settle(dev, kid, mapId)).landed).toEqual([
+        { kind: 'craft', items: { 'heart-charm': 1 } },
+      ]);
     });
 
     describe('the old banking points keep what finished before the land changed hands', () => {
