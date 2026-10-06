@@ -71,6 +71,21 @@ export const squishyAtWork = (
 };
 
 /**
+ * The one SQL spelling of "when this land changed hands" (owner decision
+ * 2026-10-06), read the way `squishyAtWork` reads captures: the first
+ * `captured` attack on `tileId` that ended after `since`, or null. Work and
+ * gathers finished before then still go in the bag. Both are columns of the
+ * outer query.
+ */
+export const firstCaptureSince = (tileId: AnyPgColumn, since: AnyPgColumn) =>
+  sql<Date | null>`(
+    select min(${tileAttacks.endedAt}) from ${tileAttacks}
+    where ${tileAttacks.tileId} = ${tileId}
+      and ${tileAttacks.outcome} = 'captured'
+      and ${tileAttacks.endedAt} > ${since}
+  )`.mapWith(tileAttacks.endedAt);
+
+/**
  * Squishy job storage. Plain queries; the service decides the rules and
  * holds the transaction. Lock order (tech spec §7): the member row (maps
  * repo `lockMember`), tiles in id order, squishies in id order, inventory
@@ -148,12 +163,7 @@ function queries(db: Executor): SquishyJobsRepo {
         teamSlot: squishies.teamSlot,
         workSince: squishies.workSince,
         atWork: squishyAtWork(),
-        lostAt: sql<Date | null>`(
-          select min(${tileAttacks.endedAt}) from ${tileAttacks}
-          where ${tileAttacks.tileId} = ${squishies.workTileId}
-            and ${tileAttacks.outcome} = 'captured'
-            and ${tileAttacks.endedAt} > ${squishies.workStartedAt}
-        )`.mapWith(tileAttacks.endedAt),
+        lostAt: firstCaptureSince(squishies.workTileId, squishies.workStartedAt),
         onWatch: squishyOnWatch(),
         workTileId: workTile.id,
         workQ: workTile.q,

@@ -179,7 +179,7 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
   const charm = book.locator('article[data-page="recipe:heart-charm"]');
   await expect(cooking).toContainText('Pumpkin Treats');
   await expect(charm.getByTestId('recipe-book-make')).toBeDisabled();
-  await expect(charm).toContainText('Your pot is busy… almost there!');
+  await expect(charm).toContainText('Your pot is busy! Watch the timer up top.');
   expect(findAvoidedWords((await cooking.textContent()) ?? '')).toEqual([]);
   await expect(book.getByRole('button', { name: /Collect/ })).toHaveCount(0);
   // "Can make now" hides what the busy pot can't make; the strip stays.

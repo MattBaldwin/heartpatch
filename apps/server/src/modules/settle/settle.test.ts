@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   ApiErrorSchema,
   CraftResponseSchema,
@@ -29,6 +30,11 @@ import {
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { setDevDropChance } from '../wardrobe/drops.js';
+import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
+import { createGatheringService } from '../gathering/service.js';
+import { createInventoryService } from '../inventory/service.js';
+import { createSquishyJobsService } from '../jobs/service.js';
+import { createSettleService } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -575,6 +581,175 @@ describe.skipIf(!url)(
       const res = await call(server, 'POST', `/maps/${mapId}/settle`, stranger);
       expect([403, 404]).toContain(res.statusCode);
       expect((await call(server, 'POST', `/maps/${mapId}/settle`, null)).statusCode).toBe(401);
+    });
+
+    describe('lock order (tech spec §7)', () => {
+      /** Holds `first`, runs `command`, and once it waits, takes `then` too (a deadlock fails fast). */
+      async function holdThen(
+        first: (tx: Database) => Promise<unknown>,
+        command: () => Promise<unknown>,
+        then: (tx: Database) => Promise<unknown>,
+      ): Promise<void> {
+        let running: Promise<unknown> | undefined;
+        await db.transaction(async (tx) => {
+          await tx.execute(`set local lock_timeout = '10s'`);
+          await first(tx);
+          const pid = await backendPid(tx);
+          running = command();
+          await waitUntilBlockedBy(db, pid);
+          await then(tx);
+        });
+        await running;
+      }
+
+      // Plain SQL with ids this test made itself (module tests don't build queries).
+      const lockRow = (
+        tx: Database,
+        table: 'squishies' | 'tiles' | 'gather_jobs' | 'crafts',
+        id: string,
+      ) => tx.execute(`select 1 from ${table} where id = '${id}' for update`);
+      const lockItem = (mapId: string, who: Player, item: string) => (tx: Database) =>
+        tx.execute(
+          `select 1 from inventories
+           where map_id = '${mapId}' and user_id = '${who.id}' and item_id = '${item}' for update`,
+        );
+      const lockMember = (tx: Database, mapId: string, userId: string) =>
+        tx.execute(
+          `select 1 from map_members where map_id = '${mapId}' and user_id = '${userId}' for update`,
+        );
+
+      async function setup() {
+        const server = await start();
+        const kid = await player();
+        const mapId = await newMap(server, kid);
+        const user = { id: kid.id, username: kid.username } as never;
+        const settler = createSettleService({ db, clock: () => clock });
+        const jobsService = createSquishyJobsService({ db, clock: () => clock });
+        return { server, kid, mapId, user, settler, jobsService };
+      }
+
+      /** A gatherer working my Timber node, a cycle finished, and a Timber row to lock. */
+      async function workingGatherer() {
+        const ctx = await setup();
+        const node = await homeNode(ctx.server, ctx.kid, ctx.mapId, 'timber');
+        const pet = await squishy(ctx.mapId, ctx.kid);
+        await ctx.jobsService.setJob(ctx.user, ctx.mapId, pet, {
+          job: 'gatherer',
+          q: node.q,
+          r: node.r,
+        });
+        await stock(ctx.mapId, ctx.kid, { timber: 1 });
+        later(31 * MINUTE_MS);
+        return { ...ctx, pet, tileId: await tileIdAt(ctx.mapId, node) };
+      }
+
+      it('takes the member row before the tiles', async () => {
+        const { kid, mapId, user, settler, tileId } = await workingGatherer();
+        await holdThen(
+          (tx) => lockMember(tx, mapId, kid.id),
+          () => settler.settle(user, mapId),
+          (tx) => lockRow(tx, 'tiles', tileId),
+        );
+      });
+
+      it('takes the work tile before the squishy, so a capture or a new job can’t land mid-settle', async () => {
+        const { mapId, user, settler, tileId, pet } = await workingGatherer();
+        await holdThen(
+          (tx) => lockRow(tx, 'tiles', tileId),
+          () => settler.settle(user, mapId),
+          (tx) => lockRow(tx, 'squishies', pet),
+        );
+      });
+
+      it('takes the squishy before its owner’s inventory rows', async () => {
+        const { kid, mapId, user, settler, pet } = await workingGatherer();
+        await holdThen(
+          (tx) => lockRow(tx, 'squishies', pet),
+          () => settler.settle(user, mapId),
+          lockItem(mapId, kid, 'timber'),
+        );
+        expect((await bag(mapId, kid))['timber']).toBeGreaterThan(1);
+      });
+
+      it('locks two gatherers’ items in item-id order, not squishy order', async () => {
+        const { server, kid, mapId, user, settler, jobsService } = await setup();
+        const forest = await farLand(server, kid, mapId, 'forest');
+        const hills = await farLand(server, kid, mapId, 'hills', [forest]);
+        // The Timber gatherer has the lower id, so grants in squishy order would
+        // take timber before stone: the reverse of item-id order.
+        const [low, high] = [randomUUID(), randomUUID()].sort();
+        await squishy(mapId, kid, { id: low });
+        await squishy(mapId, kid, { id: high });
+        await jobsService.setJob(user, mapId, low!, { job: 'gatherer', q: forest.q, r: forest.r });
+        await jobsService.setJob(user, mapId, high!, { job: 'gatherer', q: hills.q, r: hills.r });
+        await stock(mapId, kid, { stone: 1, timber: 1 });
+        later(31 * MINUTE_MS);
+        // Hold Stone the way a building's cost would (item-id order), then take Timber.
+        await holdThen(
+          lockItem(mapId, kid, 'stone'),
+          () => settler.settle(user, mapId),
+          lockItem(mapId, kid, 'timber'),
+        );
+        expect(await bag(mapId, kid)).toMatchObject({ stone: 3, timber: 3 });
+      });
+
+      it('takes the tile before the gather, and the gather before the inventory rows', async () => {
+        const { server, kid, mapId, user, settler } = await setup();
+        const node = await homeNode(server, kid, mapId, 'timber');
+        const tileId = await tileIdAt(mapId, node);
+        const gather = await gatherAt(server, kid, mapId, node);
+        await stock(mapId, kid, { timber: 1 });
+        clock.setTime(Date.parse(gather.readyAt));
+        await holdThen(
+          (tx) => lockRow(tx, 'tiles', tileId),
+          () => settler.settle(user, mapId),
+          (tx) => lockRow(tx, 'gather_jobs', gather.id),
+        );
+        const again = await gatherAt(server, kid, mapId, node);
+        clock.setTime(Date.parse(again.readyAt));
+        await holdThen(
+          (tx) => lockRow(tx, 'gather_jobs', again.id),
+          () => settler.settle(user, mapId),
+          lockItem(mapId, kid, 'timber'),
+        );
+        expect((await bag(mapId, kid))['timber']).toBe(1 + 2 * gather.items['timber']!);
+      });
+
+      it('takes the craft before the inventory rows, banking a finished one as the next starts', async () => {
+        const { kid, mapId, user } = await setup();
+        const inventory = createInventoryService({ db, clock: () => clock });
+        await stock(mapId, kid, { timber: 4, treats: 2, 'heart-charm': 1 });
+        const first = await inventory.startCraft(user, mapId, 'heart-charm');
+        clock.setTime(Date.parse(first.craft.readyAt));
+        await holdThen(
+          (tx) => lockRow(tx, 'crafts', first.craft.id),
+          () => inventory.startCraft(user, mapId, 'heart-charm'),
+          lockItem(mapId, kid, 'heart-charm'),
+        );
+        expect((await bag(mapId, kid))['heart-charm']).toBe(2);
+      });
+
+      it('takes the tile, then the gather, then the old owner’s rows when a new owner banks it', async () => {
+        const { server, kid, mapId } = await setup();
+        const rival = await player();
+        await db.insert(mapMembers).values({ mapId, userId: rival.id, role: 'member' });
+        const hills = await farLand(server, kid, mapId, 'hills');
+        const tileId = await tileIdAt(mapId, hills);
+        await run(`update tiles set node_resource = 'stone' where id = '${tileId}'`);
+        const gather = await gatherAt(server, kid, mapId, hills);
+        await stock(mapId, kid, { stone: 1 });
+        clock.setTime(Date.parse(gather.readyAt) + MINUTE_MS);
+        await capture(mapId, tileId, kid, rival);
+        const gathering = createGatheringService({ db, clock: () => clock });
+        const asRival = { id: rival.id, username: rival.username } as never;
+        await holdThen(
+          (tx) => lockRow(tx, 'tiles', tileId),
+          () => gathering.start(asRival, mapId, { q: hills.q, r: hills.r }),
+          (tx) => lockRow(tx, 'gather_jobs', gather.id),
+        );
+        // The gather was banked into my bag, not lost.
+        expect((await bag(mapId, kid))['stone']).toBe(1 + gather.items['stone']!);
+      });
     });
   },
 );

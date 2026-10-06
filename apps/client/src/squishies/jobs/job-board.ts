@@ -125,7 +125,8 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   });
   /** Banks finished work first (it goes straight to the bag), then the server's view. */
   const freshView = async (id: string): Promise<JobsView> => {
-    await options.settle?.(id).catch(() => undefined);
+    // The bag's settle says its own errors and never rejects.
+    await options.settle?.(id);
     return api.view(id);
   };
 

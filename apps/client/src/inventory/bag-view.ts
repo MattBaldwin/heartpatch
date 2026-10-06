@@ -94,9 +94,9 @@ export interface BagCraft {
 }
 
 /**
- * Every craft the server says is on the go or ready, soonest first, whatever
- * its recipe or season: the bag is the one place that always offers Collect,
- * so a craft from an old recipe or a season that's over is never stuck.
+ * Every craft the server says is on the go, soonest first, whatever its
+ * recipe or season, so a craft from an old recipe or a season that's over
+ * still shows while it cooks (it lands in the bag by itself when done).
  */
 export function bagCrafts(crafts: readonly Craft[]): BagCraft[] {
   return [...crafts]

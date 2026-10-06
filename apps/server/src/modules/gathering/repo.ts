@@ -3,6 +3,7 @@ import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { gatherJobs, tileAttacks, tiles } from '../../db/schema.js';
+import { firstCaptureSince } from '../jobs/repo.js';
 
 /** A tile as gathering needs it (read only: tiles belong to the maps module). */
 export interface NodeTileRow {
@@ -106,15 +107,12 @@ const gatherColumns = {
   endedAt: gatherJobs.endedAt,
 };
 
-/** The first capture of the gather's tile after it started (`squishyAtWork` reads captures the same way). */
-const lostAtColumn = sql<Date | null>`(
-  select min(${tileAttacks.endedAt}) from ${tileAttacks}
-  where ${tileAttacks.tileId} = ${gatherJobs.tileId}
-    and ${tileAttacks.outcome} = 'captured'
-    and ${tileAttacks.endedAt} > ${gatherJobs.startedAt}
-)`.mapWith(tileAttacks.endedAt);
-
-const settleColumns = { ...gatherColumns, tileOwner: tiles.ownerUserId, lostAt: lostAtColumn };
+/** A gather as settling reads it: the tile's owner now, and the first capture since it started. */
+const settleColumns = {
+  ...gatherColumns,
+  tileOwner: tiles.ownerUserId,
+  lostAt: firstCaptureSince(gatherJobs.tileId, gatherJobs.startedAt),
+};
 
 const toGather = (row: Omit<GatherRow, 'items'> & { items: unknown }): GatherRow => ({
   ...row,

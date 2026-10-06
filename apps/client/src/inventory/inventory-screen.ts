@@ -103,7 +103,7 @@ const TEXT = {
   chipWaiting: (what: string, left: string) => `Gathering ${what}… ready in ${left}`,
   chipReady: (what: string) => `${what} is ready!`,
   chipMore: (n: number) => ` (+${String(n)})`,
-  craftBusy: 'Your pot is busy… it’s nearly done!',
+  craftBusy: 'Your pot is busy cooking!',
   justASec: 'Just a sec…',
   noMap: 'Visit a patch first!',
   devGrant: 'Get stuff (dev)',
@@ -113,6 +113,8 @@ const TEXT = {
 const TOAST_MS = 3200; // TUNE: long enough to read "🪵 +5 Timber!", short enough not to nag
 /** A settle asks a moment after the server's `nextAt`, so it has surely finished by the server's clock. */
 const SETTLE_SLACK_MS = 400; // TUNE: covers the clock sync's rounding and a slow request
+/** A settle that failed (a flaky phone connection, a rate limit) tries once more after this long. */
+const SETTLE_RETRY_MS = 5000; // TUNE: long enough for a radio to come back
 
 /** Things a dev build hands out to try crafting without waiting. */
 const DEV_ITEMS: ItemCounts = {
@@ -244,6 +246,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
 
   /** When the server last said the next thing finishes (its `nextAt`; gatherers' cycles included). */
   let serverNextAt: string | null = null;
+  /** The last settle failed and its one retry is spent (reset by a settle that works). */
+  let retried = false;
 
   async function refresh(): Promise<void> {
     const id = mapId;
@@ -263,8 +267,21 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       render();
       scheduleSettle();
     } catch (err) {
-      if (at === generation) say(messageOf(err));
+      if (at !== generation) return;
+      say(messageOf(err));
+      // Once more in a moment, so a finished thing doesn't sit at "ready!" until
+      // the app is reopened; after that, the next open, Bag or return asks.
+      if (!retried) {
+        retried = true;
+        window.clearTimeout(settleTimer);
+        settleTimer = window.setTimeout(() => {
+          settleTimer = undefined;
+          void refresh();
+        }, SETTLE_RETRY_MS);
+      }
+      return;
     }
+    retried = false;
   }
 
   /**
@@ -306,6 +323,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     window.clearTimeout(settleTimer);
     settleTimer = undefined;
     serverNextAt = null;
+    retried = false;
     hideToast();
   };
 

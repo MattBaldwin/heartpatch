@@ -107,7 +107,7 @@ describe('a busy pot', () => {
     expect(view('recipe:pumpkin-treats', treats).canMake).toBe(true);
     const busy = view('recipe:pumpkin-treats', { ...treats, potBusy: true });
     expect(busy.canMake).toBe(false);
-    expect(busy.note).toBe('Your pot is busy… almost there!');
+    expect(busy.note).toBe('Your pot is busy! Watch the timer up top.');
     expect(findAvoidedWords(busy.note ?? '')).toEqual([]);
   });
 

@@ -33,7 +33,7 @@ export const BOOK_TEXT = {
   stillNeed: (list: string) => `Still need ${list}`,
   comesBack: (season: string) => `Comes back at ${season}!`,
   sealed: 'Collect something new to open this page.',
-  potBusy: 'Your pot is busy… almost there!',
+  potBusy: 'Your pot is busy! Watch the timer up top.',
 } as const;
 
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));

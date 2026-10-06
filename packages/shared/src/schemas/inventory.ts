@@ -85,7 +85,7 @@ export type Landed = z.infer<typeof LandedSchema>;
 /**
  * `POST /maps/:mapId/settle` (owner decision 2026-10-06): everything that
  * finished goes straight into the bag, no Collect tap. The bag after, what
- * landed (oldest first), and when the next thing finishes (null: nothing's
+ * landed (crafts, then gathers, then gatherers' work), and when the next thing finishes (null: nothing's
  * going), so the client asks again then and not before.
  */
 export const SettleResponseSchema = InventoryResponseSchema.extend({

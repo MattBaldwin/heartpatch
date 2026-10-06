@@ -235,7 +235,7 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
     void options.publish?.(mapId);
   };
 
-  return {
+  const service: InventoryService = {
     get: async (user, mapId) => {
       const { map } = await requireMember(db, user, mapId);
       const owner = { mapId, userId: user.id };
@@ -323,7 +323,7 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
         await requireMember(tx, user, mapId);
         await repo.makeCraftsReady({ mapId, userId: user.id }, at);
       });
-      return createInventoryService(options).get(user, mapId);
+      return service.get(user, mapId);
     },
 
     devGrant: async (user, mapId, items) => {
@@ -340,4 +340,5 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
       return { unlocked: BOOK_PAGES.filter((p) => open.has(p.key)).map((p) => p.key) };
     },
   };
+  return service;
 }
