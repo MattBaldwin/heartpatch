@@ -65,8 +65,9 @@ Merge with **squash**, passing `expectedHeadSha`. Post or confirm the verdict co
 
 | Work | Model |
 |---|---|
-| Build sessions that write code; reviewers on code PRs | Fable (`claude-fable-5-1`, owner decision 2026-10-05) |
+| Build sessions that write code; reviewers on code PRs | Opus 5.5 (`claude-opus-5-5`) |
 | Docs-only PR reviews, drift audits, simple content/docs sessions | Sonnet 5.5 |
+| Periodic end-to-end review of the whole solution | Fable (`claude-fable-5-1`), only when the owner explicitly asks for it |
 
 **Keeping supervisor cost down:**
 - Treat trivial wakes (subscription confirmations, merge echoes) as one-liners.
@@ -140,7 +141,7 @@ The supervisor keeps this list current. Remove items as they land.
 - **In flight:** the taps-flake lane (`fix-taps-gather-flake`: `taps.spec.ts:164` gather → chip → Bag fails intermittently on busier branches' WebKit legs) and the lean full review (three read-only reviewers → one ranked report; feeds the art bible).
 - **Plan after stabilization (owner-approved, in order):** lean review report → owner questions one at a time → **ART BIBLE** mockup (palette, lighting, materials, UI kit, motion, squishy style, Sprout) → visual-upgrade lanes per area, each mockup-first (map/terrain resumes #124 on a fresh session from `83a0aa7`; squishies/close-up; HUD kit, menus, recipe book; cinematic; lobby/onboarding) → **Sprout lane** (she/her, face mockup first, portrait in every bubble, data-driven first-time tips with server-side seen state, an "Ask Sprout" button whose next-best hint the server computes without leaking secrets, she rewrites "See the grey land?") → **food lane** (4–6 foods with recipes, a Feed picker, element/feeling favourites, short boosts, same daily caps, the balance sim must pass).
 - **Remaining Phase 1:** #28 device playtest on the live server. Follow-ups: spotlight relayout on an older iPad; `homeNodeOf` tests; a server capability flag to hide "(dev)" buttons; the #126 round-7 notes landed; move the server to the 2 GB plan when AWS allows it.
-- **Owner working style (supervisor 5 handoff):** explain the technical reasons; ask ONE question at a time with the recommended option first; open screenshots and mockups as they arrive; say when something is testable locally (DEPLOY.md §9). Fable (`claude-fable-5-1`) does all build, fix and review work. Nothing visual is built without an owner-approved mockup or captures first.
+- **Owner working style (supervisor 5 handoff):** explain the technical reasons; ask ONE question at a time with the recommended option first; open screenshots and mockups as they arrive; say when something is testable locally (DEPLOY.md §9). Opus 5.5 builds and reviews code, Sonnet 5.5 writes and reviews docs; Fable only when the owner explicitly asks, for a periodic end-to-end review (§6). Nothing visual is built without an owner-approved mockup or captures first.
 - **Merge gates as practised:** reviewer APPROVE on the exact head; CI green on it; base current, or a merge-only delta verified with `git merge-tree`; squash with `expectedHeadSha`; a verdict comment ending with the Claude Code footer. A check red **on main too**, or a test this PR doesn't touch that fails across several PRs while a fix lane owns it, doesn't block (say so in the verdict comment).
 - **After a merge:** check the other open PRs for conflicts (`git merge-tree --name-only`); delete the lane's own one-shot triggers (`list_triggers` with `recurring:false`, filter by `persistent_session_id`); archive the lane. Never archive a supervisor.
 - **Brief notes:**
