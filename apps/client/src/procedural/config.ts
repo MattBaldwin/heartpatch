@@ -5,9 +5,14 @@
  * dev gallery (`/gallery.html`) and on the playtest devices.
  */
 
-/** Fixed toy colours (sRGB hex) for the `ink`, `white` and `blush` palette roles. */
+import { ART_RULES } from '@heartpatch/shared';
+
+/**
+ * Fixed toy colours (sRGB hex) for the `ink`, `white` and `blush` palette
+ * roles. A species may set its own ink (`visual.ink`, ART_BIBLE §1.7).
+ */
 export const FIXED_COLORS = {
-  ink: '#3b2a3f', // TUNE: soft plum, warmer than black
+  ink: ART_RULES.defaultInk,
   white: '#ffffff',
   blush: '#ff9db5', // TUNE
 } as const;
@@ -97,6 +102,22 @@ export const SHADOW_LOOK = {
   glowStrength: 0.75, // TUNE
   glowFalloff: 3.5, // TUNE
 } as const;
+
+/**
+ * Rarity material tiers and glow (ART_BIBLE §1.4), drawn by the squish
+ * shader from a per-instance code: no extra meshes or draw calls.
+ */
+export const FINISH = {
+  /** Sparkle flecks: cells per body height, share of cells with a fleck, fleck strength. */
+  sparkle: { cells: 11, density: 0.16, strength: 0.9 }, // TUNE
+  /** Iridescent rim: strength and how tightly it hugs the edge. */
+  iridescent: { strength: 0.55, falloff: 2.2 }, // TUNE
+  /** Glow: how much of the vinyl's own colour is added back as light. */
+  glow: 0.28, // TUNE
+} as const;
+
+/** Codes in `squishEvent`'s spare `w`: the finish, plus 4 when the instance glows. */
+export const FINISH_CODE = { vinyl: 0, sparkle: 1, iridescent: 2, glow: 4 } as const;
 
 /** Event animations. Each shader formula decays to rest within its duration. */
 export type SquishMove = 'jiggle' | 'wobble' | 'bounce';

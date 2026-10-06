@@ -5,7 +5,15 @@ import { ShaderLanguage } from '@babylonjs/core/Materials/shaderLanguage';
 import type { UniformBuffer } from '@babylonjs/core/Materials/uniformBuffer';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Scene } from '@babylonjs/core/scene';
-import { SHADOW_LOOK, SQUISH, SQUISH_LOOK_CODE, SQUISH_MOVE_CODE, VINYL } from './config.js';
+import {
+  FINISH,
+  FINISH_CODE,
+  SHADOW_LOOK,
+  SQUISH,
+  SQUISH_LOOK_CODE,
+  SQUISH_MOVE_CODE,
+  VINYL,
+} from './config.js';
 
 /**
  * Squash-and-stretch and rim light for every squishy mesh (design doc §19).
@@ -16,7 +24,9 @@ import { SHADOW_LOOK, SQUISH, SQUISH_LOOK_CODE, SQUISH_MOVE_CODE, VINYL } from '
  *   body height (w).
  * - `squishMotion`: breathing phase, rate (breaths/s) and amplitude, and the
  *   look (`SQUISH_LOOK_CODE`: normal, or a rescue guardian's shadow look).
- * - `squishEvent`: the current move's start time (s), kind code and strength.
+ * - `squishEvent`: the current move's start time (s), kind code and strength,
+ *   and in `w` the instance's material tier and glow (`FINISH_CODE`,
+ *   ART_BIBLE §1.4): sparkle flecks, an iridescent rim, light from inside.
  *
  * The vertex shader squashes around the ground point, keeping volume
  * (x and z scale by 1/√s when y scales by s), and corrects normals with the
@@ -40,12 +50,16 @@ attribute vec4 squishOrigin;
 attribute vec4 squishMotion;
 attribute vec4 squishEvent;
 varying float vSquishLook;
+varying float vSquishFinish;
+varying vec3 vSquishLocal;
 #endif
 `;
 
 const FRAGMENT_DEFINITIONS = /* glsl */ `
 #ifdef SQUISH
 varying float vSquishLook;
+varying float vSquishFinish;
+varying vec3 vSquishLocal;
 #endif
 `;
 
@@ -92,6 +106,9 @@ const VERTEX_WORLDPOS = /* glsl */ `
   sqRel.y += sqLift;
   worldPos.xyz = sqOrigin + sqRel;
   vSquishLook = squishMotion.w;
+  vSquishFinish = squishEvent.w;
+  // Body-relative position in body heights, so sparkle flecks stick to the vinyl.
+  vSquishLocal = (worldPos.xyz - sqOrigin) / sqH;
   vPositionW = worldPos.xyz;
 #ifdef NORMAL
   vNormalW = normalize(vNormalW * vec3(1.0 / sqSide, 1.0 / sqS, 1.0 / sqSide));
@@ -108,6 +125,30 @@ const FRAGMENT_RIM = /* glsl */ `
 }
 #endif
 #ifdef SQUISH
+if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
+  // Material tiers (ART_BIBLE §1.4). One code per instance, so a whole
+  // squishy takes the same branches.
+  float fiGlow = step(${num(FINISH_CODE.glow)} - 0.5, vSquishFinish);
+  float fiTier = vSquishFinish - ${num(FINISH_CODE.glow)} * fiGlow;
+  if (fiGlow > 0.5) {
+    finalColor.rgb += surfaceAlbedo * ${num(FINISH.glow)};
+  }
+  if (fiTier > 0.5) {
+    // Sparkle: a white fleck in some cells of a 3D grid, twinkling as the view turns.
+    vec3 fiP = vSquishLocal * ${num(FINISH.sparkle.cells)};
+    vec3 fiCell = floor(fiP);
+    float fiH = fract(sin(dot(fiCell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    float fiDot = smoothstep(0.32, 0.08, length(fract(fiP) - 0.5));
+    float fiTwinkle = 0.5 + 0.5 * sin(fiH * 40.0 + dot(viewDirectionW, vec3(9.0, 7.0, 5.0)));
+    finalColor.rgb += vec3(${num(FINISH.sparkle.strength)}) * step(1.0 - ${num(FINISH.sparkle.density)}, fiH) * fiDot * fiTwinkle;
+  }
+  if (fiTier > 1.5) {
+    // Iridescent: a rainbow rim that shifts with the view angle and height.
+    float fiRim = pow(1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0), ${num(FINISH.iridescent.falloff)});
+    vec3 fiHue = 0.5 + 0.5 * cos(6.2831853 * (fiRim * 1.3 + vSquishLocal.y * 0.7 + vec3(0.0, 0.33, 0.67)));
+    finalColor.rgb += fiHue * fiRim * ${num(FINISH.iridescent.strength)};
+  }
+}
 if (vSquishLook > ${num(SQUISH_LOOK_CODE.shadow)} - 0.5) {
   // A rescue guardian from the Hollow: dark lavender that keeps the vinyl's
   // shading (so the shape still reads), soft glassy eyes in their own colour

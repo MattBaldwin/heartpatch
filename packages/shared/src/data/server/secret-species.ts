@@ -43,7 +43,9 @@ export const SECRET_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: ['#ffc2d6', '#fff6f9', '#ff7aa2', '#ffe066'],
-      parts: ['happy-eyes', 'tiny-smile', 'blush-cheeks', 'nub-wings'],
+      parts: ['oval-eyes', 'tiny-smile', 'blush-cheeks', 'nub-wings'],
+      finish: 'iridescent',
+      glow: 'body',
     },
     habitatPreferences: { elements: ['light'], feelings: ['cozy', 'joy'] },
   },
@@ -60,8 +62,10 @@ export const SECRET_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: ['#ffadc8', '#fff6f9', '#ff5c8f', '#ffd23f'],
-      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'nub-wings', 'leaf-sprout', 'freckles'],
+      parts: ['oval-eyes', 'smile', 'blush-cheeks', 'nub-wings', 'leaf-sprout', 'freckles'],
       size: 1.3,
+      finish: 'iridescent',
+      glow: 'body',
     },
     habitatPreferences: { elements: ['light'], feelings: ['cozy', 'joy'] },
   },

@@ -10,6 +10,7 @@ import { ResourceSchema } from './resources.js';
 import { SeasonSchema } from './seasons.js';
 import { SpeciesSchema } from './species.js';
 import { TerrainSchema } from './terrains.js';
+import { ArtRulesSchema, checkRosterArt, checkSpeciesArt } from './art-rules.js';
 import { BodySchema, checkSpeciesVisual, PartSchema, visualRegistry } from './visuals.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Path, type Report } from './issues.js';
 
@@ -48,6 +49,7 @@ export const GameDataSchema = z
     mapGen: MapGenSettingsSchema,
     bodies: z.array(BodySchema),
     parts: z.array(PartSchema),
+    artRules: ArtRulesSchema,
   })
   .superRefine((data, ctx) => {
     const report: Report = (path, message) => {
@@ -95,6 +97,7 @@ export const GameDataSchema = z
         );
       }
       checkSpeciesVisual(s.visual, visuals, ['species', i, 'visual'], report);
+      if (s.rarity !== 'secret') checkSpeciesArt(s, visuals, data.artRules, ['species', i], report);
       checkRef(seasons, 'season', s.season, ['species', i, 'season'], report);
       s.moves.forEach((move, j) => {
         checkRef(moves, 'move', move, ['species', i, 'moves', j], report);
@@ -114,6 +117,8 @@ export const GameDataSchema = z
         }
       });
     });
+
+    checkRosterArt('species', data.species, visuals, data.artRules, report);
 
     // Evolution chains must end: no species can evolve back into itself.
     const evolvesInto = new Map(data.species.map((s) => [s.id, s.evolutions.map((e) => e.into)]));

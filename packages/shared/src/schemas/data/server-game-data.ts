@@ -5,6 +5,7 @@ import { checkRef, checkUniqueIds, formatDataIssues, type Report } from './issue
 import { MoveSchema } from './moves.js';
 import { SpawnTableSchema } from './spawn-tables.js';
 import { SpeciesSchema } from './species.js';
+import { checkSpeciesArt } from './art-rules.js';
 import { checkSpeciesVisual, visualRegistry } from './visuals.js';
 
 /**
@@ -94,6 +95,7 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
 
     data.secretSpecies.forEach((s, i) => {
       checkSpeciesVisual(s.visual, visuals, ['secretSpecies', i, 'visual'], report);
+      checkSpeciesArt(s, visuals, gameData.artRules, ['secretSpecies', i], report);
       checkRef(seasons, 'season', s.season, ['secretSpecies', i, 'season'], report);
       s.moves.forEach((move, j) => {
         checkRef(moves, 'move', move, ['secretSpecies', i, 'moves', j], report);

@@ -4,6 +4,7 @@ import {
   Rng,
   SURFACE_SLOTS,
   type Body,
+  type Finish,
   type PaletteRole,
   type Part,
   type PartShape,
@@ -61,6 +62,8 @@ export interface PartParams {
   /** Extra distance out from the surface, world units (eye glints sit on the eye). */
   readonly lift: number;
   readonly flip: boolean;
+  /** Lit from inside (the species' `glow`: every non-face part, or only `accent` ones). */
+  readonly glow: boolean;
   readonly placements: readonly PartPlacement[];
 }
 
@@ -73,7 +76,10 @@ export interface SquishyParams {
     readonly scale: Vec3;
     /** Bodies are always the primary colour. */
     readonly color: Rgb;
+    readonly glow: boolean;
   };
+  /** Rarity material tier (ART_BIBLE §1.4) for the body and sticking-out parts. */
+  readonly finish: Finish;
   /** World height of this squishy's body. */
   readonly height: number;
   readonly parts: readonly PartParams[];
@@ -114,7 +120,12 @@ function mix(a: Rgb, b: Rgb, t: number): Rgb {
 }
 
 /** Palette roles for a species, with per-squishy lightness and warmth. */
-function paletteColors(palette: readonly string[], rng: Rng): Record<PaletteRole, Rgb> {
+function paletteColors(
+  palette: readonly string[],
+  inkHex: string | undefined,
+  rng: Rng,
+): Record<PaletteRole, Rgb> {
+  // The default ink tints a missing accent; a species' own (cream) ink is for the face only.
   const ink = hexToRgb(FIXED_COLORS.ink);
   const white = hexToRgb(FIXED_COLORS.white);
   const primary = hexToRgb(palette[0] ?? FIXED_COLORS.white);
@@ -136,7 +147,7 @@ function paletteColors(palette: readonly string[], rng: Rng): Record<PaletteRole
     secondary: vary(secondary),
     accent: vary(accent),
     detail: vary(detail),
-    ink,
+    ink: inkHex ? hexToRgb(inkHex) : ink,
     white,
     blush: hexToRgb(FIXED_COLORS.blush),
   };
@@ -200,6 +211,7 @@ function glintFor(eye: PartParams, white: Rgb, height: number): PartParams {
     surface: true,
     color: white,
     sink: 0,
+    glow: false,
     lift: eye.placements[0] ? eye.placements[0].size[2] * (1 - eye.sink) * 0.75 : 0,
     flip: false,
     placements: eye.placements.map((p) => ({
@@ -243,7 +255,7 @@ export function squishyParams(
   // Parts scale with the species' size, not this squishy's proportions, so
   // a slightly taller squishy doesn't get taller eyes.
   const partHeight = body.height * size;
-  const colors = paletteColors(visual.palette, stream('colors'));
+  const colors = paletteColors(visual.palette, visual.ink, stream('colors'));
 
   const parts: PartParams[] = [];
   for (const id of visual.parts) {
@@ -262,6 +274,9 @@ export function squishyParams(
       sink: part.sink ?? 0,
       lift: 0,
       flip: part.flip ?? false,
+      glow:
+        !surfaceSlots.has(part.slot) &&
+        (visual.glow === 'body' || (visual.glow === 'accent' && part.color === 'accent')),
       placements: placementsFor(part, partHeight, stream(`part:${part.id}`)),
     };
     parts.push(params);
@@ -272,7 +287,8 @@ export function squishyParams(
   return {
     speciesId: species.id,
     instanceId,
-    body: { id: body.id, scale, color: colors.primary },
+    body: { id: body.id, scale, color: colors.primary, glow: visual.glow === 'body' },
+    finish: visual.finish ?? 'vinyl',
     height: body.height * scale[1],
     parts,
     motion: {

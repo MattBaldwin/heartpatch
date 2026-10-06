@@ -22,6 +22,14 @@ export const EvolutionSchema = z.strictObject({
 });
 export type Evolution = z.infer<typeof EvolutionSchema>;
 
+/** Rarity material tiers (ART_BIBLE §1.4). */
+export const FinishSchema = z.enum(['vinyl', 'sparkle', 'iridescent']);
+export type Finish = z.infer<typeof FinishSchema>;
+
+/** What glows (ART_BIBLE §1.4): the whole squishy, or only its `accent` parts. */
+export const GlowSchema = z.enum(['body', 'accent']);
+export type Glow = z.infer<typeof GlowSchema>;
+
 export const HexColorSchema = z
   .string()
   .regex(/^#[0-9a-f]{6}$/, 'Expected a colour like "#ffaa00"');
@@ -38,8 +46,14 @@ export const SpeciesVisualSchema = z.strictObject({
   body: ContentIdSchema,
   palette: z.array(HexColorSchema).min(1).max(4),
   parts: z.array(ContentIdSchema).max(8),
-  /** Overall scale; evolutions are usually a little bigger. Defaults to 1. */
+  /** Overall scale; an evolution is ×1.2–1.4 its base (ART_BIBLE §1.3). Defaults to 1. */
   size: z.number().min(0.5).max(2).optional(),
+  /** Face ink (eyes, brows, mouth); defaults to `artRules.defaultInk`. Chosen for contrast with the body. */
+  ink: HexColorSchema.optional(),
+  /** Rarity material tier (ART_BIBLE §1.4); must match `artRules.finishByRarity`. Defaults to vinyl. */
+  finish: FinishSchema.optional(),
+  /** Lit from inside: the whole squishy, or only its `accent` parts (flames). */
+  glow: GlowSchema.optional(),
 });
 export type SpeciesVisual = z.infer<typeof SpeciesVisualSchema>;
 
