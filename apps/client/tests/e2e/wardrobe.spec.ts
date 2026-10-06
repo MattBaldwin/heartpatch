@@ -279,7 +279,7 @@ test('from a patch, Done goes back to that patch, via the Boutique and Milestone
         [box.x + box.width / 2, box.y + box.height / 2] as const,
       );
       expect(onTop).toBe('wardrobe-done');
-      // The clothes keep at least a whole row, however short the screen.
+      // The clothes keep at least a whole row, even on a short phone held upright.
       const items = (await wardrobe(page).getByTestId('wardrobe-items').boundingBox())!;
       expect(items.height).toBeGreaterThanOrEqual(64);
 
