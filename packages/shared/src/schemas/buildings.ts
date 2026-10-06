@@ -4,6 +4,7 @@ import { ContentIdSchema } from './data/common.js';
 import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
 import { SpeciesSchema } from './data/species.js';
 import { ItemCountsSchema } from './inventory.js';
+import { SquishyJobIdSchema } from './jobs.js';
 import { LocalDateSchema } from './time.js';
 
 // Home base and buildings API (design doc §11, §13–14; tech spec §5). The
@@ -49,11 +50,11 @@ export const MyBuildingSchema = z.object({
   nightsLeft: z.number().int().min(0).nullable(),
   /** Hearthfires: how many more nights fit right now. Null for other kinds. */
   fuelSpace: z.number().int().min(0).nullable(),
-  /** Habitats: how many squishies fit. Null for other kinds. */
+  /** Habitats and Training Grounds: how many squishies fit. Null for fires. */
   capacity: z.number().int().min(0).nullable(),
   /**
    * Habitats: squishies living there, a squishy in the Hollow included (it
-   * keeps its bed). Null for other kinds.
+   * keeps its bed). Training Grounds: squishies practicing there. Null for fires.
    */
   residents: z.number().int().min(0).nullable(),
 });
@@ -68,7 +69,10 @@ export const HomeTileSchema = z.object({
 });
 export type HomeTile = z.infer<typeof HomeTileSchema>;
 
-/** One of my active squishies, and the habitat it lives in (null: none yet). */
+/**
+ * One of my active squishies, the habitat it lives in (null: none yet) and
+ * the Training Grounds it practices at (null: none).
+ */
 export const HomeSquishySchema = z.object({
   id: z.uuid(),
   speciesId: ContentIdSchema,
@@ -77,6 +81,9 @@ export const HomeSquishySchema = z.object({
   nickname: z.string().nullable(),
   level: z.number().int().min(1),
   habitatId: z.uuid().nullable(),
+  trainingId: z.uuid().nullable(),
+  /** Its one job (squishy jobs), so the Training Grounds card can say what Train stops. */
+  job: SquishyJobIdSchema,
 });
 export type HomeSquishy = z.infer<typeof HomeSquishySchema>;
 

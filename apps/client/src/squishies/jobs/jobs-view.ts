@@ -27,6 +27,10 @@ export const JOBS_TEXT = {
   team: 'Team',
   gather: 'Gather',
   rest: 'Rest',
+  train: 'Train',
+  offToTrain: (name: string) => `${name} is off to practice!`,
+  noGrounds: 'Build Training Grounds at home to train.',
+  groundsFull: 'The Training Grounds are full right now.',
   pickSpot: 'Where should they gather?',
   noSpots: 'No spots to gather yet. Win some land!',
   cancel: 'Never mind',
@@ -45,8 +49,10 @@ export const JOBS_TEXT = {
   takenBy: (name: string) => `${name} is here`,
   leavesWatch: 'Leaves watch',
   stopsGathering: 'Stops gathering',
+  stopsTraining: 'Stops training',
   inHollow: 'In the Hollow',
   outOfSeason: 'Out of season, so nothing to find here. Give them a new job!',
+  training: 'Practicing at the Training Grounds 🎯',
 } as const;
 
 /** "1st", "2nd", "3rd". */
@@ -93,6 +99,8 @@ export function jobLine(s: JobSquishy, nowMs: number): string {
       return 'On watch 🛡️';
     case 'gatherer':
       return s.work ? workLine(s.work, nowMs) : 'Gathering';
+    case 'training':
+      return JOBS_TEXT.training;
     case 'resting':
       return s.habitatId ? 'Resting in a habitat 🏡' : 'Resting at home 💤';
   }
@@ -133,6 +141,7 @@ export function teamCost(s: JobSquishy): string | null {
   if (s.squishy.state !== 'active') return JOBS_TEXT.inHollow;
   if (s.job === 'guard') return JOBS_TEXT.leavesWatch;
   if (s.job === 'gatherer') return JOBS_TEXT.stopsGathering;
+  if (s.job === 'training') return JOBS_TEXT.stopsTraining;
   return null;
 }
 

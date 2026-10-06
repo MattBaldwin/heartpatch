@@ -38,6 +38,9 @@ import type { KidProfile, ProgressionConfig, ProgressionRules } from './progress
  * takes that friend's place on the team, at the level the growth rules give
  * it (`befriendedLevel`: below its first evolution with the shipped cap).
  *
+ * Training Grounds (owner decision 2026-10-06): with `rules.training`, the
+ * team trains overnight before each day's battles, as an upper bound.
+ *
  * Not modelled (see `MODEL_LIMITS`): care and habitat changes, gathering, the
  * Hollow Man, the capture roll itself (a win stands in for a befriend), and
  * challenging the other kid once neutral land runs out.
@@ -193,15 +196,20 @@ function grant(
     if (won) member.winsToday += 1;
     const gained = grantedXp(base, kid.profile.xpPercent);
     if (member === kid.team[0]) partnerXp += gained;
-    const next = addXp(member, gained, rules.growth);
-    member.level = next.level;
-    member.xp = next.xp;
-    for (let step = evolutionAt(member.speciesId, member.level, data.evolutions); step;) {
-      member.speciesId = step.into;
-      step = evolutionAt(member.speciesId, member.level, data.evolutions);
-    }
+    grow(data, member, rules, gained);
   }
   return partnerXp;
+}
+
+/** Adds XP to one squishy: levels from the curve, then any evolutions (`applyXp`). */
+function grow(data: ModelData, member: Member, rules: ProgressionRules, gained: number): void {
+  const next = addXp(member, gained, rules.growth);
+  member.level = next.level;
+  member.xp = next.xp;
+  for (let step = evolutionAt(member.speciesId, member.level, data.evolutions); step;) {
+    member.speciesId = step.into;
+    step = evolutionAt(member.speciesId, member.level, data.evolutions);
+  }
 }
 
 /**
@@ -281,6 +289,14 @@ export function runProgression(
     const guardianWindow = spawnWindowAt({ date, hour: 12 }, GUARDIAN_RULES.windowHours);
     const odds = kids.map((kid) => estimateOdds(data, kid, config, guardianWindow, day));
     for (const kid of kids) for (const member of kid.team) member.winsToday = 0;
+    // Overnight at the Training Grounds (plain XP: no care multiplier, no falloff).
+    if (rules.training) {
+      for (const kid of kids) {
+        for (const member of kid.team.slice(0, rules.training.slots)) {
+          grow(data, member, rules, rules.training.xpPerDay);
+        }
+      }
+    }
     const tileBattles = kids.map(() => 0);
     const partnerXp = kids.map(() => 0);
     const triedToday = new Set<HexKey>();

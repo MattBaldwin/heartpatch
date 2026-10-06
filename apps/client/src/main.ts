@@ -331,6 +331,9 @@ const home = createHomeScreen({
     void jobs.openJobBoard(mapId);
   },
   showJobs: (mapId) => mapId !== glade,
+  onRecipeBook: () => {
+    recipeBook.open();
+  },
   onOpen: (mapId) => {
     maps.close();
     catalog.close();

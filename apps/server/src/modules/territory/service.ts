@@ -37,7 +37,7 @@ import type {
   TileBattlePort,
 } from '../battles/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
-import { leaveWork } from '../jobs/service.js';
+import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { createTerritoryRepo, type DefenderRow, type TerritoryTileRow } from './repo.js';
@@ -422,8 +422,9 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
 }
 
 /**
- * Squishies just posted on watch leave their other job: off the team, or
- * off their work tile with what they had ready banked (jobs' `leaveWork`).
+ * Squishies just posted on watch leave their other job: off the team, off
+ * their work tile with what they had ready banked (jobs' `leaveWork`), or
+ * off the Training Grounds with their XP landed (`landTraining`).
  * They're locked already (after the tiles); returns the events to append.
  */
 async function leaveForWatch(
@@ -448,6 +449,8 @@ async function leaveForWatch(
   }
   const working = rows.filter((r) => r.workTile !== null).map((r) => r.squishy.id);
   if (working.length > 0) events.push(...(await leaveWork(tx, map, working, 'guard', at)));
+  const training = rows.filter((r) => r.training !== null).map((r) => r.squishy.id);
+  if (training.length > 0) events.push(...(await landTraining(tx, map, training, at, true)).events);
   return events;
 }
 

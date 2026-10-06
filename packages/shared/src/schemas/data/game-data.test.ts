@@ -177,6 +177,8 @@ describe('checkGameData', () => {
     expect(problems).toEqual([
       'species["fixture-splashmallow"]: Unrecognized key: "spawnRules"',
       'resources["Heart Dust"].id: Expected a lowercase kebab-case id like "ember-den"',
+      // The Heart Snack's cost names it, so it's unknown now too.
+      'careActions["heart-snack"].cost.heartdust: unknown resource "heartdust"',
     ]);
   });
 

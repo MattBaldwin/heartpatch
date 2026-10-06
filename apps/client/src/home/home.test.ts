@@ -21,6 +21,9 @@ import {
   freeHomeSpots,
   likesHabitat,
   refundPreview,
+  trainCost,
+  upgradeOffer,
+  upgradeReach,
 } from './home-view.js';
 
 const ID = (n: number) => `0190a8c4-0000-7000-8000-0000000001${String(n).padStart(2, '0')}`;
@@ -168,7 +171,9 @@ describe('home screen copy', () => {
 
   it('never uses an avoided word', () => {
     const lines = [
-      ...Object.values(HOME_TEXT).map((t) => (typeof t === 'function' ? t('Thing', 'Stuff') : t)),
+      ...Object.values(HOME_TEXT).map((t) =>
+        typeof t === 'function' ? (t as (...args: unknown[]) => string)('Thing', 2) : t,
+      ),
       fireStatus([]),
       fireStatus([fire()]),
       buildingNote(fire()),
@@ -182,24 +187,93 @@ describe('home screen copy', () => {
 });
 
 describe('build menu', () => {
-  it('offers fires and habitats, and says why one can’t be built', () => {
-    const rows = buildRows(homeWith({ buildings: [fire()] }));
+  it('offers fires, habitats and Training Grounds, and says why one can’t be built', () => {
+    const rows = buildRows(homeWith({ buildings: [fire()], items: { timber: 4, stone: 9 } }));
     expect(rows.map((r) => r.building.id)).toEqual([
       'hearthfire',
       'jack-o-lantern-hearthfire',
       'ember-den',
       'cozy-meadow',
+      'training-grounds',
     ]);
-    const byId = new Map(rows.map((r) => [r.building.id, r.option]));
-    expect(byId.get('hearthfire')).toEqual({
-      kind: 'blocked',
-      note: 'Your home has all it can hold.',
+    const byId = new Map(rows.map((r) => [r.building.id, r]));
+    // Built already: upgrade it instead, and no cost line.
+    expect(byId.get('hearthfire')).toMatchObject({
+      option: { kind: 'built', note: 'Built! Tap it at home to upgrade.' },
+      needs: [],
     });
-    expect(byId.get('jack-o-lantern-hearthfire')).toEqual({
-      kind: 'blocked',
-      note: "Need 1 🏮 Jack-o'-Lantern Hearthfire more.",
+    // Never "to build X you need X" (design review 2026-10-05): make the lantern first.
+    expect(byId.get('jack-o-lantern-hearthfire')?.option).toEqual({
+      kind: 'craft',
+      note: "Carve a Jack-o'-Lantern first! It's in your recipe book.",
     });
-    expect(byId.get('cozy-meadow')).toEqual({ kind: 'ready' });
+    expect(byId.get('jack-o-lantern-hearthfire')?.needs.map((n) => n.label)).toEqual(['🏮 0/1']);
+    // One cost line, as have/need chips.
+    expect(byId.get('cozy-meadow')).toMatchObject({ option: { kind: 'ready' } });
+    expect(byId.get('cozy-meadow')?.needs.map((n) => [n.label, n.ok])).toEqual([
+      ['🪵 4/4', true],
+      ['🪨 9/2', true],
+    ]);
+    expect(byId.get('ember-den')?.option).toEqual({ kind: 'short' });
+    expect(byId.get('ember-den')?.needs.map((n) => [n.label, n.ok])).toEqual([
+      ['🪵 4/5', false],
+      ['🪨 9/3', true],
+    ]);
+  });
+
+  it('offers the next level with what it does and costs, and nothing past the top', () => {
+    const home = homeWith({ buildings: [fire()], items: { timber: 12, stone: 10 } });
+    expect(upgradeOffer(home, fire())).toMatchObject({
+      from: 1,
+      to: 2,
+      affordable: true,
+      radius: 2,
+      line: 'Its light will reach 2 tiles. Squishies out there stay safe at night!',
+      next: 'Next time: Level 3 reaches 3 tiles and needs 💎 Glimmer.',
+    });
+    expect(upgradeOffer(home, fire())?.needs.map((n) => n.label)).toEqual(['🪵 12/10', '🪨 10/10']);
+    const two = upgradeOffer(home, fire({ level: 2, safeRadius: 2 }));
+    expect(two).toMatchObject({ to: 3, affordable: false, next: null });
+    expect(upgradeOffer(home, fire({ level: 3, safeRadius: 3 }))).toBeNull();
+    expect(upgradeOffer(home, meadow())).toMatchObject({
+      to: 2,
+      line: 'Room for 5 squishies (now 3).',
+      radius: null,
+    });
+  });
+
+  it('describes the Training Grounds and what upgrading them does', () => {
+    const grounds: MyBuilding = {
+      ...meadow(),
+      buildingId: 'training-grounds',
+      kind: 'training-grounds',
+      capacity: 2,
+      residents: 1,
+    };
+    expect(buildingNote(grounds)).toBe(
+      "1 of 2 squishies are practicing. They learn a little every hour, even while you're away.",
+    );
+    expect(upgradeOffer(homeWith(), grounds)).toMatchObject({
+      to: 2,
+      line: 'Room for 3 squishies, and they learn a little faster.',
+    });
+  });
+
+  it('says what Train would stop on the Training Grounds card', () => {
+    expect(trainCost({ job: 'guard' })).toBe('On watch · Train ends it');
+    expect(trainCost({ job: 'gatherer' })).toBe('Gathering · Train stops it');
+    expect(trainCost({ job: 'team' })).toBe('On the team · Train takes them off');
+    expect(trainCost({ job: 'resting' })).toBe('');
+  });
+
+  it("maps where the fire's light reaches now and after the upgrade", () => {
+    const home = homeWith();
+    const reach = upgradeReach(home, fire({ q: 0, r: 0 }), 2);
+    const count = (state: string) => reach.filter((t) => t.state === state).length;
+    expect(count('now')).toBe(7); // the home base
+    expect(count('new')).toBe(12); // ring 2 around the Heart Seed
+    expect(count('outside')).toBe(18); // ring 3, the edge of the little map
+    expect(reach.every((t) => hexDistance(t, { q: 0, r: 0 }) <= 3)).toBe(true);
   });
 
   it('leaves the Jack-o-Lantern out of season unless one is already built', () => {
@@ -234,6 +308,8 @@ describe('build menu', () => {
       nickname: null,
       level: 1,
       habitatId: null,
+      trainingId: null,
+      job: 'resting' as const,
     };
     expect(likesHabitat(pal, 'cozy-meadow')).toBe(true);
     expect(likesHabitat(pal, 'ember-den')).toBe(false);

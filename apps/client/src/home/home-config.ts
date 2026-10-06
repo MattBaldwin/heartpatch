@@ -5,8 +5,11 @@
 export const HOME_VIEW = {
   /** Hex size of a home tile in the home-base view (the map's is 0.65). */
   hexSize: 2.6, // TUNE: the 7 home tiles fill a portrait iPhone at the start zoom
-  /** Building scale in the home-base view (models are ~1 unit across). */
-  buildingScale: 1.15, // TUNE
+  /**
+   * Building scale in the home-base view (models are ~1 unit across at level
+   * 1; spots sit about 1.35 apart). #184: buildings read too small.
+   */
+  buildingScale: 1.5, // TUNE: about 1.5 units across, a third of a tile; neighbours may just touch
   /** Squishy scale in the home-base view. */
   squishyScale: 0.55, // TUNE
   /** The player's Keeper, beside the Heart Seed. */
@@ -20,6 +23,17 @@ export const HOME_VIEW = {
    * matte, stays below the bloom threshold and lets the spots glow.
    */
   tile: { color: '#efd2a8', roughness: 0.85 }, // TUNE
+  /** The land around the home base: how many rings of tiles, its look, how much lower. */
+  landRings: 3, // TUNE: a level-3 fire on the Heart Seed reaches ring 3
+  land: { color: '#bcd9a4', roughness: 0.9 }, // TUNE
+  landDrop: 0.06, // TUNE
+  /**
+   * The light a fire throws on the land around the home base: warmer and
+   * stronger than the map's `SAFE_GLOW`, since the land here is big and pale.
+   */
+  firelight: { rgb: [1, 0.48, 0.12], fill: 0.24, edge: 0.1 }, // TUNE: added to the land's colour
+  /** The firelight fades with distance from the fire: alpha share 1, 2 and 3+ tiles out. */
+  firelightFade: [1, 0.62, 0.38], // TUNE
   /** The glowing spots while placing or moving (#131): sRGB, and how see-through. */
   spot: { ring: '#f0437f', fill: '#ffd1e3', fillAlpha: 0.55 }, // TUNE
 } as const;

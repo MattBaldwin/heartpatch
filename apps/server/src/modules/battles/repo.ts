@@ -20,7 +20,7 @@ import {
   type FeelingId,
   type OwnedSquishy,
 } from '@heartpatch/shared';
-import { and, asc, desc, eq, inArray, isNotNull, not, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, not, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -262,6 +262,8 @@ function queries(db: Executor): BattlesRepo {
         eq(squishies.state, 'active'),
         options.guardsToo ? undefined : not(squishyOnWatch()),
         not(squishyAtWork()),
+        // Practicing at the Training Grounds is a job too (owner decision 2026-10-06).
+        isNull(squishies.trainingBuildingId),
       );
       const picked = await db
         .select(columns)

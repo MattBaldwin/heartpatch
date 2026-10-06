@@ -131,15 +131,30 @@ describe('moods', () => {
 describe('diminishing returns (decision G)', () => {
   it('gives the first three actions a day in full, then less and less', () => {
     expect([0, 1, 2, 3, 4, 5, 9].map((n) => careGain(feed, n, CARE_RULES))).toEqual([
-      { contentment: 20, percent: 100, full: true },
-      { contentment: 20, percent: 100, full: true },
-      { contentment: 20, percent: 100, full: true },
-      { contentment: 10, percent: 50, full: false },
-      { contentment: 5, percent: 25, full: false },
-      { contentment: 2, percent: 10, full: false },
-      { contentment: 2, percent: 10, full: false },
+      { contentment: 20, percent: 100, full: true, counts: true },
+      { contentment: 20, percent: 100, full: true, counts: true },
+      { contentment: 20, percent: 100, full: true, counts: true },
+      { contentment: 10, percent: 50, full: false, counts: true },
+      { contentment: 5, percent: 25, full: false, counts: true },
+      { contentment: 2, percent: 10, full: false, counts: true },
+      { contentment: 2, percent: 10, full: false, counts: true },
     ]);
     expect(careGain(pet, 7, CARE_RULES).contentment).toBe(1);
+  });
+
+  it('gives a Heart Snack in full on any day, outside the count and with no coins', () => {
+    const snack = CARE_ACTIONS.find((a) => a.id === 'heart-snack');
+    if (!snack) throw new Error('no heart-snack in the data');
+    expect(snack.cost).toEqual({ heartdust: 3 });
+    for (const n of [0, 3, 9]) {
+      expect(careGain(snack, n, CARE_RULES)).toEqual({
+        contentment: snack.contentment,
+        percent: 100,
+        full: true,
+        counts: false,
+      });
+    }
+    expect(careCoins(careGain(snack, 0, CARE_RULES), 0, CARE_RULES)).toBe(0);
   });
 
   it('pays coins for full actions only, up to the daily cap', () => {

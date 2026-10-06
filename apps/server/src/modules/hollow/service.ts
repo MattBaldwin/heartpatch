@@ -42,7 +42,7 @@ import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { grantItems } from '../inventory/service.js';
 import { createCareRepo } from '../care/repo.js';
-import { leaveWork } from '../jobs/service.js';
+import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
@@ -197,8 +197,22 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
             at,
           )
         : [];
+    // A trainee taken to the Hollow stops training; what it earned lands first
+    // (owner decision 2026-10-06). Only the ones really training are touched.
+    const trainingEvents =
+      taken.length > 0
+        ? (
+            await landTraining(
+              tx,
+              map,
+              taken.map((t) => t.squishyId),
+              at,
+              true,
+            )
+          ).events
+        : [];
     await repo.setOutcomes(nightRowId, stored);
-    for (const event of workEvents) await repo.appendEvent(event);
+    for (const event of [...workEvents, ...trainingEvents]) await repo.appendEvent(event);
     for (const t of taken) {
       await repo.appendEvent({
         mapId: map.id,

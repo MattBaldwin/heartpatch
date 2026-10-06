@@ -21,7 +21,9 @@ export const JOB_RULES: JobRules = {
     { terrain: 'forest', resource: 'timber', quantity: 2, seconds: 15 * 60 }, // TUNE:
     { terrain: 'old-forest', resource: 'emberwood', quantity: 1, seconds: 30 * 60 }, // TUNE:
     { terrain: 'hills', resource: 'stone', quantity: 2, seconds: 15 * 60 }, // TUNE:
-    { terrain: 'mountains', resource: 'stone', quantity: 2, seconds: 15 * 60 }, // TUNE:
+    // TUNE: slow, so Glimmer stays special (a Glimmer node is 1 an hour). Mountains
+    // without a node gave Stone; hills, Stone nodes and the home ring still do.
+    { terrain: 'mountains', resource: 'glimmer', quantity: 1, seconds: 90 * 60 },
     { terrain: 'pumpkin-fields', resource: 'pumpkins', quantity: 1, seconds: 20 * 60 }, // TUNE:
   ],
   // TUNE: who is quick at what. Element side first, then feeling.
@@ -46,4 +48,7 @@ export const JOB_RULES: JobRules = {
     },
   ],
   maxGatherHints: 2, // TUNE:
+  // TUNE: owner decision 2026-10-06: at most a day of Training Grounds XP
+  // waits to land, like a gatherer's full basket.
+  training: { maxHours: 24 },
 };

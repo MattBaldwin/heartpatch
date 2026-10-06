@@ -26,7 +26,11 @@ export const RECIPE_BOOK: RecipeBookData = {
     },
     {
       page: 'building:jack-o-lantern-hearthfire',
-      line: "Carve a Jack-o'-Lantern Hearthfire from your recipe book first. Then this page opens!",
+      line: "Carve a Jack-o'-Lantern from your recipe book first. Then this page opens!",
+    },
+    {
+      page: 'building:training-grounds',
+      line: 'Gather some Timber and Stone, and this page opens!',
     },
   ],
 };

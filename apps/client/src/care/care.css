@@ -315,3 +315,24 @@
   font-weight: 600;
   opacity: 0.85;
 }
+
+/* A rare treat (the Heart Snack, owner decision 2026-10-06): its own colour
+   and a gold edge, so it reads as special next to Feed, Pet and Play. */
+.care-actions .care-action-special {
+  background: #8f2f63;
+  box-shadow: inset 0 0 0 2px #ffd36b;
+}
+
+.care-treat {
+  margin: 8px 0 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 14px;
+  background: #fff1d6;
+  color: #6b4300;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.care-treat[hidden] {
+  display: none;
+}

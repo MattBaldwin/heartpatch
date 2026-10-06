@@ -17,9 +17,11 @@ import { statsAtLevel } from '../battle/formulas.js';
  * - `team`: comes along to battles (up to `BATTLE_RULES.teamSize`, in slot order);
  * - `guard`: on watch on one of its owner's tiles (#15's post);
  * - `gatherer`: working a node or a tile of owned land, again and again;
+ * - `training`: practicing at its owner's Training Grounds, a little XP an
+ *   hour (owner decision 2026-10-06); it sleeps at home like a resting one;
  * - `resting`: the default, at home or in a habitat.
  */
-export type SquishyJobId = 'team' | 'guard' | 'gatherer' | 'resting';
+export type SquishyJobId = 'team' | 'guard' | 'gatherer' | 'training' | 'resting';
 
 /** Where a squishy's job stands, as stored: a team slot, a work tile, a watch post. */
 export interface JobFacts {
@@ -28,6 +30,8 @@ export interface JobFacts {
   atWork: boolean;
   /** It stands watch (`isOnWatch` / `squishyOnWatch`). */
   onWatch: boolean;
+  /** It practices at a Training Grounds (`squishies.training_building_id`). */
+  training: boolean;
 }
 
 /**
@@ -38,6 +42,7 @@ export interface JobFacts {
 export function jobOf(facts: JobFacts): SquishyJobId {
   if (facts.onWatch) return 'guard';
   if (facts.atWork) return 'gatherer';
+  if (facts.training) return 'training';
   if (facts.teamSlot !== null) return 'team';
   return 'resting';
 }
@@ -307,4 +312,36 @@ export function jobHintText(hint: JobHint, resources: readonly Resource[]): stri
     case 'guard':
       return 'Sturdy guard 🛡️';
   }
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/** Training XP worked out at `nowMs`, and where the next count starts. */
+export interface TrainingProgress {
+  /** Whole XP earned since `sinceMs`, at most `maxHours` of it. */
+  xp: number;
+  /** A whole `maxHours` waited: it earns nothing more until it lands. */
+  full: boolean;
+  /** Where counting starts once this XP has landed (part of an XP point carries on). */
+  nextSinceMs: number;
+}
+
+/**
+ * Training Grounds XP (owner decision 2026-10-06), worked out lazily
+ * (CLAUDE.md rule 4): `xpPerHour` for every hour since `sinceMs`, floored to
+ * whole XP and capped at `training.maxHours` of it, like a gatherer's full
+ * basket. Time past the cap is never paid; part of an XP point carries over.
+ */
+export function trainingProgress(
+  sinceMs: number,
+  nowMs: number,
+  xpPerHour: number,
+  rules: Pick<JobRules, 'training'>,
+): TrainingProgress {
+  const capMs = rules.training.maxHours * HOUR_MS;
+  const elapsed = Math.max(0, nowMs - sinceMs);
+  const xp = Math.floor((Math.min(elapsed, capMs) * xpPerHour) / HOUR_MS);
+  if (elapsed >= capMs) return { xp, full: true, nextSinceMs: nowMs };
+  // Rounded up, so an XP point is never paid twice.
+  return { xp, full: false, nextSinceMs: sinceMs + Math.ceil((xp * HOUR_MS) / xpPerHour) };
 }

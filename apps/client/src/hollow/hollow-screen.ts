@@ -290,6 +290,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
           hollowed.length > 0 ? HOLLOW_TEXT.sheetIntro : HOLLOW_TEXT.empty,
         ),
         ...(hollowed.length > 0 ? [el('p', { class: 'hollow-sub' }, reward)] : []),
+        ...(hollowed.length > 0 && HOLLOW_TEXT.saveUp !== ''
+          ? [el('p', { class: 'hollow-sub' }, HOLLOW_TEXT.saveUp)]
+          : []),
         el(
           'ul',
           { class: 'hollow-list', 'data-testid': 'hollow-list' },

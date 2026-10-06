@@ -515,6 +515,7 @@ export class MapScene {
     this.buildings.set(
       mapBuildings(view, HEX_SIZE).map(({ tile, building, at }) => ({
         buildingId: building.buildingId,
+        level: building.level,
         lit: building.lit,
         x: at.x,
         z: at.z,

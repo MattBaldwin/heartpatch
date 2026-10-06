@@ -1,4 +1,9 @@
-import type { MorningReport, WsEventMessage } from '@heartpatch/shared';
+import { GAME_DATA, type MorningReport, type WsEventMessage } from '@heartpatch/shared';
+
+/** The Heart Snack, Heartdust's use (owner decision 2026-10-06): what it's called and costs. */
+const SNACK = GAME_DATA.careActions.find(
+  (a) => a.outsideDailyCare === true && a.cost?.['heartdust'] !== undefined,
+);
 
 // The morning report's words (design doc §14, style guide §1, §9): kid-gentle,
 // short, and every squishy taken to the Hollow is followed by "you can rescue
@@ -19,6 +24,8 @@ export const HOLLOW_TEXT = {
   sheetTitle: 'In the Hollow',
   sheetIntro: 'Win a showdown with the shadows to bring them home!',
   reward: (n: number) => `Your first rescue today earns ${String(n)} Heartdust.`,
+  /** What Heartdust is for (the Heart Snack), under the reward line. */
+  saveUp: SNACK ? `Save ${String(SNACK.cost?.['heartdust'] ?? 0)} for a ${SNACK.name}!` : '',
   noReward: 'No more Heartdust today, but they still come home!',
   rescue: 'Rescue!',
   empty: 'Everyone is safe at home!',

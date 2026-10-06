@@ -9,7 +9,7 @@ import { OwnedSquishySchema } from './squishies.js';
 // `POST /maps/:mapId/squishies/:squishyId/job`, `POST /maps/:mapId/team` and
 // `POST /maps/:mapId/work/collect` (send an `Idempotency-Key` on the last three).
 
-export const SquishyJobIdSchema = z.enum(['team', 'guard', 'gatherer', 'resting']);
+export const SquishyJobIdSchema = z.enum(['team', 'guard', 'gatherer', 'training', 'resting']);
 
 const TileSchema = z.object({ q: HexSchema.shape.q, r: HexSchema.shape.r });
 
@@ -35,6 +35,18 @@ export const WorkStatusSchema = z.object({
 });
 export type WorkStatus = z.infer<typeof WorkStatusSchema>;
 
+/** A squishy practicing at the Training Grounds (owner decision 2026-10-06). */
+export const TrainingStatusSchema = z.object({
+  /** The Training Grounds building row it practices at. */
+  buildingId: z.uuid(),
+  xpPerHour: z.number().int().min(1),
+  /** XP waiting to land at the next settle. */
+  xpReady: z.number().int().min(0),
+  /** A whole `training.maxHours` waited: it earns nothing more until it lands. */
+  full: z.boolean(),
+});
+export type TrainingStatus = z.infer<typeof TrainingStatusSchema>;
+
 /** One of my squishies on the job board. */
 export const JobSquishySchema = z.object({
   squishy: OwnedSquishySchema,
@@ -46,6 +58,7 @@ export const JobSquishySchema = z.object({
   /** The habitat it lives in, or null (it waits by the Heart Seed). */
   habitatId: z.uuid().nullable(),
   work: WorkStatusSchema.nullable(),
+  training: TrainingStatusSchema.nullable(),
 });
 export type JobSquishy = z.infer<typeof JobSquishySchema>;
 
@@ -80,6 +93,14 @@ export const JobsViewSchema = z.object({
   /** My team in slot order (squishy ids). Empty: battles take my strongest resting squishies. */
   team: z.array(z.uuid()),
   spots: z.array(WorkSpotSchema),
+  /** My Training Grounds and how full it is, or null if I haven't built one. */
+  trainingGrounds: z
+    .object({
+      id: z.uuid(),
+      capacity: z.number().int().min(1),
+      used: z.number().int().min(0),
+    })
+    .nullable(),
   rules: z.object({
     teamSize: z.number().int().min(1),
     maxStoredCycles: z.number().int().min(1),
@@ -93,6 +114,8 @@ export const SetJobRequestSchema = z.discriminatedUnion('job', [
   z.strictObject({ job: z.literal('resting') }),
   z.strictObject({ job: z.literal('team') }),
   z.strictObject({ job: z.literal('gatherer'), ...TileSchema.shape }),
+  /** At my Training Grounds (one per home base). */
+  z.strictObject({ job: z.literal('training') }),
 ]);
 export type SetJobRequest = z.infer<typeof SetJobRequestSchema>;
 

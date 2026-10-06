@@ -26,7 +26,9 @@ export const GROWTH_RULES: GrowthRules = {
   // TUNE: owner decision 2026-10-06 (design review Q1): keep level 100, but
   // make 30–100 a long tail. `pnpm sim:progression`: a casual kid's Partner
   // grows up (16) on day 3–5, is about 24 on day 14 and 29 on day 30; an
-  // engaged kid's (with `battleXpFalloff`) is about 37 on day 30. Knee 16 is
+  // engaged kid's (with `battleXpFalloff`) is about 37 on day 30. Training
+  // Grounds every night (owner decision 2026-10-06) move a casual Partner a
+  // day sooner at most (about 30 on day 30). Knee 16 is
   // when starters grow up; knee 30 starts the long tail. Pinned by
   // `growth-pace.test.ts`.
   xpCurve: {

@@ -58,6 +58,11 @@ export const JobRulesSchema = z
     affinities: z.array(GatherAffinitySchema),
     /** How many "good at gathering" hints a squishy shows at most. */
     maxGatherHints: z.number().int().min(0).max(6),
+    /**
+     * Training Grounds (owner decision 2026-10-06): XP builds up per hour
+     * from a timestamp, and at most `maxHours` of it waits to land.
+     */
+    training: z.strictObject({ maxHours: z.number().int().min(1).max(72) }),
   })
   .refine((r) => r.work.match.onePercent <= r.work.match.bothPercent, {
     message: 'a double match must be at least as quick as a single one',

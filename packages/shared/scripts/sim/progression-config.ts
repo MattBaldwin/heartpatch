@@ -1,4 +1,6 @@
+import { BUILDINGS } from '../../src/data/buildings.js';
 import { GROWTH_RULES } from '../../src/data/care.js';
+import { JOB_RULES } from '../../src/data/jobs.js';
 import { SPAWN_RULES } from '../../src/data/server/spawn-rules.js';
 import { TERRITORY_RULES } from '../../src/data/territory.js';
 import type { GrowthRules } from '../../src/schemas/data/care.js';
@@ -27,6 +29,25 @@ export interface ProgressionRules {
   readonly growth: GrowthRules;
   readonly spawn: SpawnRules;
   readonly attemptsPerDay: number;
+  /**
+   * Training Grounds (owner decision 2026-10-06), or none: each night the
+   * first `slots` team members (the Partner first) train and get `xpPerDay`
+   * plain XP, no care multiplier and no battle falloff, before the day's
+   * battles. An upper bound: a kid who moves their team to training every
+   * night and back every morning.
+   */
+  readonly training?: { readonly slots: number; readonly xpPerDay: number };
+}
+
+/**
+ * The shipped Training Grounds at their top level, trained a whole capped
+ * day (`JOB_RULES.training.maxHours`) every day: the most a kid can get.
+ */
+function topTraining(): { slots: number; xpPerDay: number } {
+  const grounds = BUILDINGS.find((b) => b.kind === 'training-grounds');
+  const top = grounds?.kind === 'training-grounds' ? grounds.levels.at(-1) : undefined;
+  if (!top) throw new Error('no Training Grounds in the building data');
+  return { slots: top.capacity, xpPerDay: top.xpPerHour * JOB_RULES.training.maxHours };
 }
 
 export interface ProgressionConfig {
@@ -83,6 +104,17 @@ export const CURRENT_RULES: ProgressionRules = {
   growth: GROWTH_RULES,
   spawn: SPAWN_RULES,
   attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
+  training: topTraining(),
+};
+
+/**
+ * The shipped data without Training Grounds: what `now` was before the
+ * owner chose to build them (2026-10-06). Kept to show what training adds.
+ */
+export const NO_TRAINING_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'now, no training',
+  training: undefined,
 };
 
 /**

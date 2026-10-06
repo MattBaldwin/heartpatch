@@ -139,8 +139,10 @@ export class MapState {
         return this.patchTile(parsed.data, { defenders: parsed.data.count }) ? 'redraw' : 'none';
       }
       case 'building.placed':
-      case 'building.fueled': {
-        // A building went up, or a fire was fuelled and lit (#18).
+      case 'building.fueled':
+      case 'building.upgraded': {
+        // A building went up, a fire was fuelled and lit (#18), or a building
+        // was upgraded: a new level, model and safe radius (owner decision 2026-10-06).
         const parsed = GAME_EVENTS[event.type].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
         this.putBuilding(parsed.data.building);

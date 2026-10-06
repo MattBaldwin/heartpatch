@@ -11,6 +11,7 @@ import {
   gatherChip,
   itemName,
   landedText,
+  trainedText,
 } from './bag-view.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
@@ -258,7 +259,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     settlesSent += 1;
     const sent = settlesSent;
     try {
-      const { landed, nextAt, ...fresh } = await api.settle(id);
+      const { landed, trained, nextAt, ...fresh } = await api.settle(id);
       if (at !== generation) return;
       // A newer settle went out meanwhile: its bag wins, but what this one
       // banked still pops up (the server put it in the bag).
@@ -268,10 +269,10 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         state = fresh;
         serverNextAt = nextAt;
       }
-      if (landed.length > 0) {
+      if (landed.length > 0 || trained.length > 0) {
         landings += 1;
-        showToast(landedText(landed));
-        options.onCollected?.();
+        showToast([landedText(landed), trainedText(trained)].filter((t) => t !== '').join(' '));
+        if (landed.length > 0) options.onCollected?.();
       }
       if (!newest) return;
       render();

@@ -10,6 +10,15 @@ export function buildCost(building: Building): ItemCounts {
   return { ...(building.levels[0]?.cost ?? {}) };
 }
 
+/**
+ * What raising a building from `level` to the next level costs, or null at
+ * its top level (design doc §13: upgrades raise radius or capacity).
+ */
+export function upgradeCost(building: Building, level: number): ItemCounts | null {
+  const next = building.levels[level];
+  return level >= 1 && next ? { ...next.cost } : null;
+}
+
 /** Everything spent on a building to reach `level` (level 1 is the build cost). */
 export function spentOn(building: Building, level: number): ItemCounts {
   const spent: ItemCounts = {};
