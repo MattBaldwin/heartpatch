@@ -23,6 +23,7 @@ export interface BagItem {
 const ITEMS = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
 const ORDER = new Map(GAME_DATA.resources.map((r, i) => [r.id, i]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
+const RECIPE_NAMES = new Map(GAME_DATA.recipes.map((r) => [r.id, r.name]));
 
 export function itemName(id: string): string {
   return ITEMS.get(id)?.name ?? 'Mystery thing';
@@ -65,6 +66,32 @@ export function gatherChip(
   const gather = ready ?? soonest;
   if (!gather) return null;
   return { gather, ready: ready !== undefined, more: gathers.length - 1 };
+}
+
+/** A craft on the go or waiting to be collected, as the bag lists it. */
+export interface BagCraft {
+  readonly craft: Craft;
+  /** The recipe's name, or what it makes when the recipe is gone from the data. */
+  readonly name: string;
+  readonly icon: string;
+}
+
+/**
+ * Every craft the server says is on the go or ready, soonest first, whatever
+ * its recipe or season: the bag is the one place that always offers Collect,
+ * so a craft from an old recipe or a season that's over is never stuck.
+ */
+export function bagCrafts(crafts: readonly Craft[]): BagCraft[] {
+  return [...crafts]
+    .sort((a, b) => Date.parse(a.readyAt) - Date.parse(b.readyAt))
+    .map((craft) => {
+      const output = Object.keys(craft.items)[0] ?? craft.recipeId;
+      return {
+        craft,
+        name: RECIPE_NAMES.get(craft.recipeId) ?? itemName(output),
+        icon: itemIcon(output),
+      };
+    });
 }
 
 export type RecipeState =

@@ -3,7 +3,14 @@ import { ApiRequestError } from '../net/api.js';
 import type { TileActions } from '../map/map-screen.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
-import { bagItems, bagRecipes, describeItems, gatherChip, itemName } from './bag-view.js';
+import {
+  bagCrafts,
+  bagItems,
+  bagRecipes,
+  describeItems,
+  gatherChip,
+  itemName,
+} from './bag-view.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemIcon } from './item-icons.js';
@@ -59,6 +66,10 @@ export interface InventoryScreen {
    * once started, or to a kid-readable line saying why not.
    */
   craft: (recipeId: string) => Promise<string | null>;
+  /** Collects a finished craft (the recipe book's Collect), like the Bag's. Null once collected, or why not. */
+  collectCraft: (craftId: string) => Promise<string | null>;
+  /** Ms until an ISO time on the server's clock (0 once it's passed), for countdowns. */
+  msUntil: (iso: string) => number;
   readonly debug: InventoryDebug | null;
 }
 
@@ -69,6 +80,7 @@ const TEXT = {
   close: 'Close',
   empty: 'Your bag is empty. Tap a spot on your land to gather!',
   makeTitle: 'Make things',
+  makingTitle: 'Cooking',
   gatherTitle: 'Gathering',
   gather: 'Gather',
   collect: 'Collect',
@@ -84,7 +96,7 @@ const TEXT = {
   chipWaiting: (what: string, left: string) => `Gathering ${what}… ready in ${left}`,
   chipReady: (what: string) => `${what} is ready! Tap to collect`,
   chipMore: (n: number) => ` (+${String(n)})`,
-  craftBusy: 'Busy making something else.',
+  craftBusy: 'Your pot is busy! Collect first.',
   justASec: 'Just a sec…',
   noMap: 'Visit a patch first!',
   devGrant: 'Get stuff (dev)',
@@ -152,6 +164,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   const itemsBox = el('ul', { class: 'bag-items', 'data-testid': 'bag-items' });
   const gathersTitle = el('h3', { class: 'bag-section-title' }, TEXT.gatherTitle);
   const gathersBox = el('ul', { class: 'bag-rows', 'data-testid': 'bag-gathers' });
+  const craftsTitle = el('h3', { class: 'bag-section-title' }, TEXT.makingTitle);
+  const craftsBox = el('ul', { class: 'bag-rows', 'data-testid': 'bag-crafts' });
   const recipesBox = el('ul', { class: 'bag-rows', 'data-testid': 'bag-recipes' });
   const sheet = el(
     'section',
@@ -159,6 +173,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     el('div', { class: 'tile-panel-head' }, el('h2', { id: 'bag-title' }, TEXT.title), close),
     note,
     itemsBox,
+    craftsTitle,
+    craftsBox,
     gathersTitle,
     gathersBox,
     el('h3', { class: 'bag-section-title' }, TEXT.makeTitle),
@@ -402,19 +418,31 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       }),
     );
 
+    // Every craft on the go, whatever its recipe or season, with its Collect:
+    // the one place that always offers it (the recipe book shows it too).
+    craftsTitle.hidden = state.crafts.length === 0;
+    craftsBox.replaceChildren(
+      ...bagCrafts(state.crafts).map(({ craft, name, icon }) =>
+        el(
+          'li',
+          { class: 'bag-row', 'data-craft': craft.id },
+          el('span', { class: 'bag-row-name' }, `${icon} ${name}`),
+          clock.msUntil(craft.readyAt) > 0
+            ? countdown(bagCountdowns, 'span', 'bag-row-wait', craft.readyAt, (left) =>
+                TEXT.making(name, left),
+              )
+            : button(TEXT.collect, () => void collectCraft(craft.id), {
+                'data-testid': 'bag-craft-collect',
+              }),
+        ),
+      ),
+    );
+
     recipesBox.replaceChildren(
       ...bagRecipes(state.items, state.crafts, state.seasons).map(
         ({ recipe, icon, cost, state: s }) => {
-          const craft = state?.crafts.find((c) => c.recipeId === recipe.id);
           let action: Node;
-          if (craft) {
-            action =
-              clock.msUntil(craft.readyAt) > 0
-                ? countdown(bagCountdowns, 'span', 'bag-row-wait', craft.readyAt, (left) =>
-                    TEXT.making(recipe.name, left),
-                  )
-                : button(TEXT.collect, () => void collectCraft(craft.id));
-          } else if (s.kind === 'ready') {
+          if (s.kind === 'ready') {
             action = button(TEXT.make, () => void startCraft(recipe.id), {
               'data-recipe': recipe.id,
             });
@@ -589,6 +617,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     },
     refresh,
     craft: (recipeId) => startCraft(recipeId),
+    collectCraft: (craftId) => collectCraft(craftId),
+    msUntil: (iso) => clock.msUntil(iso),
     tileActions: {
       show: (container, tile) => {
         panel = { container, tile };

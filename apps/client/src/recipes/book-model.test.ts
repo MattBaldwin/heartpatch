@@ -11,6 +11,7 @@ import {
   bookTabs,
   craftTime,
   findSpot,
+  cookingView,
   freshPages,
   listWords,
   pageView,
@@ -19,6 +20,7 @@ import {
   whereText,
   type BookContext,
 } from './book-model.js';
+import type { Craft } from '@heartpatch/shared';
 
 const PAGES = recipeBookPages();
 const ctx = (over: Partial<BookContext> = {}): BookContext => ({
@@ -26,6 +28,7 @@ const ctx = (over: Partial<BookContext> = {}): BookContext => ({
   bag: {},
   seasons: new Set(['halloween']),
   unseen: new Set(),
+  potBusy: false,
   ...over,
 });
 const view = (key: string, over: Partial<BookContext> = {}) => {
@@ -94,6 +97,79 @@ describe('recipe book pages', () => {
       const words = [v.name, v.flavour, v.meta, v.hint, ...v.ingredients.map((i) => i.where)];
       expect(findAvoidedWords(words.join(' ')), page.key).toEqual([]);
     }
+  });
+});
+
+describe('a busy pot', () => {
+  const treats = { unlocked: new Set(['recipe:pumpkin-treats']), bag: { pumpkins: 1 } };
+
+  it('stops every recipe page being made, with a kind reason', () => {
+    expect(view('recipe:pumpkin-treats', treats).canMake).toBe(true);
+    const busy = view('recipe:pumpkin-treats', { ...treats, potBusy: true });
+    expect(busy.canMake).toBe(false);
+    expect(busy.note).toBe('Your pot is busy! Collect first.');
+    expect(findAvoidedWords(busy.note ?? '')).toEqual([]);
+  });
+
+  it('keeps the page’s own reason when it couldn’t be made anyway', () => {
+    expect(view('recipe:heart-charm', { potBusy: true }).note).toBe(
+      'Still need 2 Timber and 1 Treats',
+    );
+    expect(
+      view('recipe:pumpkin-treats', { ...treats, potBusy: true, seasons: new Set() }).note,
+    ).toBe('Comes back at Halloween!');
+  });
+
+  it('leaves building pages alone (they aren’t cooked)', () => {
+    const fire = view('building:hearthfire', { bag: { stone: 99, timber: 99 }, potBusy: true });
+    expect(fire.canMake).toBe(true);
+  });
+
+  it('drops out of “Can make now”', () => {
+    const page = PAGES.find((p) => p.key === 'recipe:pumpkin-treats')!;
+    const busy = pageView(page, ctx({ ...treats, potBusy: true }));
+    expect(bookOrder([busy], true)).toEqual(['cover', 'contents', 'end']);
+  });
+});
+
+describe('what’s cooking', () => {
+  const craft = (id: string, recipeId: string, readyAt: string, items = {}): Craft => ({
+    id: `0190a8c4-0000-7000-8000-0000000000${id}`,
+    recipeId,
+    items,
+    startedAt: '2026-10-06T12:00:00Z',
+    readyAt,
+  });
+  const at = Date.parse('2026-10-06T12:00:30Z');
+  const msUntil = (iso: string) => Math.max(0, Date.parse(iso) - at);
+
+  it('is nothing when nothing cooks', () => {
+    expect(cookingView([], msUntil)).toBeNull();
+  });
+
+  it('counts down until ready, then offers Collect', () => {
+    const making = craft('01', 'pumpkin-treats', '2026-10-06T12:00:45Z', { treats: 3 });
+    expect(cookingView([making], msUntil)).toMatchObject({
+      name: 'Pumpkin Treats',
+      ready: false,
+    });
+    const ready = cookingView([making], () => 0);
+    expect(ready).toMatchObject({ name: 'Pumpkin Treats', ready: true });
+    expect(ready?.craft.id).toBe(making.id);
+  });
+
+  it('shows a ready one first, else the soonest', () => {
+    const later = craft('02', 'heart-charm', '2026-10-06T12:05:00Z', { 'heart-charm': 1 });
+    const sooner = craft('03', 'heart-charm', '2026-10-06T12:01:00Z', { 'heart-charm': 1 });
+    const done = craft('04', 'heart-charm', '2026-10-06T12:00:10Z', { 'heart-charm': 1 });
+    expect(cookingView([later, sooner], msUntil)?.craft.id).toBe(sooner.id);
+    expect(cookingView([later, done, sooner], msUntil)).toMatchObject({ ready: true });
+    expect(cookingView([later, done, sooner], msUntil)?.craft.id).toBe(done.id);
+  });
+
+  it('names a craft from a recipe that’s gone by what it makes', () => {
+    const old = craft('05', 'old-recipe', '2026-10-06T12:00:00Z', { treats: 2 });
+    expect(cookingView([old], msUntil)).toMatchObject({ name: 'Treats', ready: true });
   });
 });
 
