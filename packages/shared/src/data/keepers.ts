@@ -1,6 +1,8 @@
 import type {
+  HairPiece,
   KeeperBase,
   KeeperData,
+  KeeperHairstyle,
   KeeperSwatch,
   OutfitPalette,
 } from '../schemas/data/keepers.js';
@@ -86,6 +88,180 @@ export const KEEPER_OUTFITS: OutfitPalette[] = [
   },
 ];
 
+/** The top and back of the head; it sits up and back so the face stays clear under the fringe. */
+const CAP: HairPiece = { shape: 'ellipsoid', at: [0, 0.28, 0.16], size: [1.08, 0.92, 1.08] };
+const FRINGE: HairPiece = {
+  shape: 'ellipsoid',
+  at: [0, 0.5, -0.5],
+  size: [1.12, 0.5, 0.6],
+  turn: [-25, 0, 0],
+};
+const ball = (x: number, y: number, z: number, d: number): HairPiece => ({
+  shape: 'ellipsoid',
+  at: [x, y, z],
+  size: [d, d, d],
+});
+
+// TUNE: all hairstyles. Any Keeper can wear any of them (owner decision
+// 2026-10-06); the picker lists them in this order, short to long.
+export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
+  {
+    id: 'spiky',
+    name: 'Spiky',
+    volume: { top: 1.45, width: 1.1 },
+    pieces: [
+      { shape: 'ellipsoid', at: [0, 0.3, 0.14], size: [1.06, 0.9, 1.06] },
+      { shape: 'cone', at: [0, 1.12, 0.05], size: [0.42, 0.62, 0.42] },
+      { shape: 'cone', at: [-0.5, 0.98, 0], size: [0.4, 0.56, 0.4], turn: [0, 0, 28] },
+      { shape: 'cone', at: [0.5, 0.98, 0], size: [0.4, 0.56, 0.4], turn: [0, 0, -28] },
+      { shape: 'cone', at: [0, 0.92, -0.5], size: [0.4, 0.5, 0.4], turn: [-32, 0, 0] },
+      { shape: 'cone', at: [-0.4, 0.86, 0.52], size: [0.38, 0.5, 0.38], turn: [30, 0, 20] },
+      { shape: 'cone', at: [0.4, 0.86, 0.52], size: [0.38, 0.5, 0.38], turn: [30, 0, -20] },
+    ],
+  },
+  {
+    // A neat short cut: close at the sides, a soft flat top, a little flick at the front.
+    id: 'crew-cut',
+    name: 'Crew Cut',
+    volume: { top: 1.2, width: 1.06 },
+    pieces: [
+      { shape: 'ellipsoid', at: [0, 0.26, 0.1], size: [1.05, 0.9, 1.06] },
+      { shape: 'ellipsoid', at: [0, 0.62, 0], size: [0.98, 0.66, 0.98] },
+      { shape: 'ellipsoid', at: [0, 0.74, -0.58], size: [0.74, 0.3, 0.34], turn: [-40, 0, 0] },
+    ],
+  },
+  {
+    // Parted on one side and combed across, with a bit of lift by the part.
+    id: 'side-part',
+    name: 'Side Part',
+    volume: { top: 1.22, width: 1.12 },
+    pieces: [
+      CAP,
+      { shape: 'ellipsoid', at: [0.1, 0.56, -0.52], size: [1.14, 0.44, 0.58], turn: [-25, 0, -12] },
+      { shape: 'ellipsoid', at: [-0.4, 0.7, -0.36], size: [0.5, 0.42, 0.56], turn: [-20, 0, 20] },
+      { shape: 'ellipsoid', at: [0.6, 0.38, -0.5], size: [0.36, 0.5, 0.4], turn: [-10, 0, -30] },
+    ],
+  },
+  {
+    // Just rolled out of bed: soft tufts pointing every which way.
+    id: 'messy-mop',
+    name: 'Messy Mop',
+    volume: { top: 1.32, width: 1.14 },
+    pieces: [
+      { shape: 'ellipsoid', at: [0, 0.3, 0.14], size: [1.1, 0.96, 1.1] },
+      { shape: 'teardrop', at: [-0.42, 0.6, -0.7], size: [0.3, 0.42, 0.28], turn: [-150, 0, -30] },
+      { shape: 'teardrop', at: [-0.02, 0.64, -0.76], size: [0.32, 0.44, 0.3], turn: [-155, 0, 12] },
+      { shape: 'teardrop', at: [0.4, 0.6, -0.68], size: [0.3, 0.4, 0.28], turn: [-145, 0, 38] },
+      { shape: 'teardrop', at: [0.12, 1.12, 0.06], size: [0.3, 0.46, 0.3], turn: [-15, 0, 28] },
+      { shape: 'ellipsoid', at: [-0.42, 0.9, -0.2], size: [0.56, 0.4, 0.56], turn: [-10, 0, 25] },
+      { shape: 'ellipsoid', at: [0.12, 1.0, 0.0], size: [0.58, 0.42, 0.6], turn: [8, 0, -12] },
+      { shape: 'ellipsoid', at: [0.52, 0.86, 0.12], size: [0.54, 0.4, 0.56], turn: [0, 0, -30] },
+      { shape: 'ellipsoid', at: [-0.3, 0.86, 0.5], size: [0.56, 0.42, 0.56], turn: [25, 0, 20] },
+      { shape: 'teardrop', at: [-0.9, 0.3, 0.1], size: [0.34, 0.48, 0.34], turn: [0, 0, 150] },
+      { shape: 'teardrop', at: [0.9, 0.3, 0.1], size: [0.34, 0.48, 0.34], turn: [0, 0, -150] },
+      { shape: 'teardrop', at: [0, 0.2, 0.9], size: [0.4, 0.5, 0.36], turn: [150, 0, 0] },
+    ],
+  },
+  {
+    // Tight little curls close to the head (the big round `curly` is its own style).
+    id: 'short-curls',
+    name: 'Short Curls',
+    volume: { top: 1.26, width: 1.14 },
+    pieces: [
+      { shape: 'ellipsoid', at: [0, 0.28, 0.14], size: [1.08, 0.94, 1.08] },
+      ball(0, 1.04, 0.12, 0.34),
+      ball(-0.44, 0.94, -0.16, 0.34),
+      ball(0.44, 0.94, -0.16, 0.34),
+      ball(-0.44, 0.92, 0.44, 0.34),
+      ball(0.44, 0.92, 0.44, 0.34),
+      ball(0, 0.84, -0.5, 0.32),
+      ball(-0.38, 0.66, -0.68, 0.3),
+      ball(0.38, 0.66, -0.68, 0.3),
+      ball(-0.86, 0.56, 0.08, 0.32),
+      ball(0.86, 0.56, 0.08, 0.32),
+      ball(-0.72, 0.32, 0.62, 0.32),
+      ball(0.72, 0.32, 0.62, 0.32),
+      ball(0, 0.58, 0.88, 0.34),
+    ],
+  },
+  {
+    id: 'swoop',
+    name: 'Swoop',
+    volume: { top: 1.28, width: 1.1 },
+    pieces: [
+      CAP,
+      FRINGE,
+      { shape: 'teardrop', at: [-0.3, 0.74, -0.3], size: [0.75, 1.25, 0.6], turn: [-20, 0, 72] },
+    ],
+  },
+  {
+    id: 'curly',
+    name: 'Curly',
+    volume: { top: 1.38, width: 1.25 },
+    pieces: [
+      { shape: 'ellipsoid', at: [0, 0.3, 0.18], size: [1.14, 0.96, 1.12] },
+      FRINGE,
+      { shape: 'ellipsoid', at: [0, 1.08, 0.12], size: [0.55, 0.5, 0.55] },
+      { shape: 'ellipsoid', at: [-0.6, 0.92, 0.1], size: [0.52, 0.5, 0.52] },
+      { shape: 'ellipsoid', at: [0.6, 0.92, 0.1], size: [0.52, 0.5, 0.52] },
+      ball(-0.95, 0.35, 0.25, 0.5),
+      ball(0.95, 0.35, 0.25, 0.5),
+      ball(-0.82, -0.25, 0.35, 0.46),
+      ball(0.82, -0.25, 0.35, 0.46),
+      { shape: 'ellipsoid', at: [0, 0.55, 0.85], size: [0.6, 0.55, 0.5] },
+      { shape: 'ellipsoid', at: [-0.5, -0.1, 0.85], size: [0.52, 0.52, 0.48] },
+      { shape: 'ellipsoid', at: [0.5, -0.1, 0.85], size: [0.52, 0.52, 0.48] },
+    ],
+  },
+  {
+    id: 'puff',
+    name: 'Puff',
+    volume: { top: 1.62, width: 1.34 },
+    pieces: [{ shape: 'ellipsoid', at: [0, 0.48, 0.24], size: [1.34, 1.14, 1.24] }],
+  },
+  {
+    id: 'bob',
+    name: 'Bob',
+    volume: { top: 1.2, width: 1.12 },
+    pieces: [
+      CAP,
+      FRINGE,
+      { shape: 'ellipsoid', at: [-0.86, -0.12, 0.12], size: [0.42, 1.1, 0.9] },
+      { shape: 'ellipsoid', at: [0.86, -0.12, 0.12], size: [0.42, 1.1, 0.9] },
+      { shape: 'ellipsoid', at: [0, -0.15, 0.42], size: [1.55, 1.05, 0.9] },
+    ],
+  },
+  {
+    id: 'bun',
+    name: 'Bun',
+    volume: { top: 1.2, width: 1.08 },
+    pieces: [CAP, FRINGE, { shape: 'ellipsoid', at: [0, 1.15, 0.32], size: [0.72, 0.66, 0.72] }],
+  },
+  {
+    id: 'pigtails',
+    name: 'Pigtails',
+    volume: { top: 1.2, width: 1.08 },
+    pieces: [
+      CAP,
+      FRINGE,
+      { shape: 'teardrop', at: [-1.12, -0.12, 0.22], size: [0.5, 0.95, 0.5], turn: [0, 0, -150] },
+      { shape: 'teardrop', at: [1.12, -0.12, 0.22], size: [0.5, 0.95, 0.5], turn: [0, 0, 150] },
+    ],
+  },
+  {
+    id: 'long',
+    name: 'Long',
+    volume: { top: 1.2, width: 1.1 },
+    pieces: [
+      CAP,
+      FRINGE,
+      { shape: 'capsule', at: [0, -0.55, 0.5], size: [1.45, 1.5, 0.55] },
+      { shape: 'capsule', at: [-0.88, -0.5, 0.05], size: [0.34, 1.2, 0.4] },
+      { shape: 'capsule', at: [0.88, -0.5, 0.05], size: [0.34, 1.2, 0.4] },
+    ],
+  },
+];
+
 // TUNE: all bases. Skin tones run light to deep; shapes run small and round
 // to tall and slim, so every kid can find one that feels like them.
 export const KEEPER_BASES: KeeperBase[] = [
@@ -132,6 +308,27 @@ export const KEEPER_BASES: KeeperBase[] = [
     outfit: 'meadow',
   },
   {
+    id: 'rowan',
+    name: 'Rowan',
+    skin: '#46281a',
+    body: {
+      height: 1.12,
+      head: 0.43,
+      headShape: 0.96,
+      torsoWidth: 0.25,
+      torsoHeight: 0.29,
+      roundness: 0.2,
+      legs: 0.21,
+      arms: 0.25,
+      limbs: 0.07,
+    },
+    face: { eyes: 'oval', mouth: 'grin', freckles: false, brows: true },
+    hairstyle: 'crew-cut',
+    hairColor: 'midnight',
+    eyeColor: 'hazel',
+    outfit: 'sunflower',
+  },
+  {
     id: 'maple',
     name: 'Maple',
     skin: '#eab48c',
@@ -153,6 +350,27 @@ export const KEEPER_BASES: KeeperBase[] = [
     outfit: 'lavender',
   },
   {
+    id: 'basil',
+    name: 'Basil',
+    skin: '#c8a27c',
+    body: {
+      height: 1.04,
+      head: 0.47,
+      headShape: 1.02,
+      torsoWidth: 0.38,
+      torsoHeight: 0.26,
+      roundness: 0.3,
+      legs: 0.16,
+      arms: 0.22,
+      limbs: 0.1,
+    },
+    face: { eyes: 'happy', mouth: 'smile', freckles: false, brows: true },
+    hairstyle: 'side-part',
+    hairColor: 'cocoa',
+    eyeColor: 'cocoa',
+    outfit: 'meadow',
+  },
+  {
     id: 'wren',
     name: 'Wren',
     skin: '#d39a6c',
@@ -172,6 +390,27 @@ export const KEEPER_BASES: KeeperBase[] = [
     hairColor: 'berry',
     eyeColor: 'hazel',
     outfit: 'strawberry',
+  },
+  {
+    id: 'acorn',
+    name: 'Acorn',
+    skin: '#a5683f',
+    body: {
+      height: 0.84,
+      head: 0.58,
+      headShape: 1.14,
+      torsoWidth: 0.36,
+      torsoHeight: 0.19,
+      roundness: 1,
+      legs: 0.11,
+      arms: 0.15,
+      limbs: 0.1,
+    },
+    face: { eyes: 'round', mouth: 'cat', freckles: false, brows: false },
+    hairstyle: 'short-curls',
+    hairColor: 'midnight',
+    eyeColor: 'cocoa',
+    outfit: 'pumpkin',
   },
   {
     id: 'bramble',
@@ -214,6 +453,27 @@ export const KEEPER_BASES: KeeperBase[] = [
     hairColor: 'midnight',
     eyeColor: 'plum',
     outfit: 'strawberry',
+  },
+  {
+    id: 'juniper',
+    name: 'Juniper',
+    skin: '#f3d6c6',
+    body: {
+      height: 0.94,
+      head: 0.5,
+      headShape: 0.88,
+      torsoWidth: 0.24,
+      torsoHeight: 0.22,
+      roundness: 0.55,
+      legs: 0.17,
+      arms: 0.19,
+      limbs: 0.065,
+    },
+    face: { eyes: 'sleepy', mouth: 'grin', freckles: true, brows: false },
+    hairstyle: 'messy-mop',
+    hairColor: 'sky',
+    eyeColor: 'sky',
+    outfit: 'lavender',
   },
   {
     id: 'hazel',
@@ -262,6 +522,7 @@ export const KEEPER_BASES: KeeperBase[] = [
 /** Every Keeper table, checked by `checkKeeperData` in tests. */
 export const KEEPER_DATA: KeeperData = {
   bases: KEEPER_BASES,
+  hairstyles: KEEPER_HAIRSTYLES,
   hairColors: KEEPER_HAIR_COLORS,
   eyeColors: KEEPER_EYE_COLORS,
   outfits: KEEPER_OUTFITS,

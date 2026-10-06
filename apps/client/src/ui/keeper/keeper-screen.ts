@@ -82,6 +82,18 @@ if (!firstBase) throw new Error('no Keeper bases');
 /** What a new player's picker starts on. */
 const starter = (): KeeperConfig => defaultKeeperConfig(firstBase);
 
+/** The style `config` shows: its own pick, else its base's. */
+export function styleOf(config: KeeperConfig): string | undefined {
+  return config.hairstyle ?? bases.find((b) => b.id === config.base)?.hairstyle;
+}
+
+/** `config` wearing hairstyle `id`; the base's own style is stored as none. */
+export function withHairstyle(config: KeeperConfig, id: string): KeeperConfig {
+  const { hairstyle: _, ...rest } = config;
+  const own = bases.find((b) => b.id === config.base)?.hairstyle;
+  return id === own ? rest : { ...rest, hairstyle: id };
+}
+
 export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   const api = options.api ?? keeperApi;
 
@@ -193,7 +205,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
    * phone or iPad.
    */
   const row = (legend: string, ...buttons: HTMLElement[]) => {
-    const id = `keeper-row-${legend.toLowerCase()}`;
+    const id = `keeper-row-${legend.toLowerCase().replaceAll(' ', '-')}`;
     return el(
       'div',
       { class: 'keeper-row', role: 'group', 'aria-labelledby': id },
@@ -244,6 +256,22 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
               dot(hairOf(b.hairColor), 'keeper-hair-dot'),
             ),
             el('span', { class: 'keeper-base-name' }, b.name),
+          ),
+        ),
+      ),
+      // Any Keeper can wear any style (owner decision 2026-10-06); picking a
+      // Keeper above goes back to its own.
+      row(
+        'Hair style',
+        ...KEEPER_DATA.hairstyles.map((h) =>
+          choice(
+            `Hair style: ${h.name}`,
+            () => styleOf(picked) === h.id,
+            () => {
+              pick(withHairstyle(picked, h.id));
+            },
+            'keeper-style',
+            el('span', { class: 'keeper-base-name' }, h.name),
           ),
         ),
       ),
