@@ -38,6 +38,7 @@ const data = (over: Partial<SpawnData> = {}): SpawnData => ({
   species: new Map(FIXTURE_SPECIES.map((s) => [s.id, s])),
   seasons: SEASONS,
   rules: RULES,
+  maxLevel: GROWTH_RULES.maxLevel,
   ...over,
 });
 

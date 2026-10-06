@@ -91,7 +91,11 @@ function dayTable(runs: readonly ProgressionRun[]): string {
     ...kids.map((k) => `${k.id} Gap win %`),
   ];
   const rows = days.map((day) => {
-    const at = kids.map((k) => k.days[day - 1] as DayRecord);
+    const at = kids.map((k) => {
+      const record = k.days[day - 1];
+      if (!record) throw new Error(`no record for day ${String(day)}`);
+      return record;
+    });
     return [
       String(day),
       ...at.map((d) => String(d.partnerLevel)),
@@ -101,6 +105,19 @@ function dayTable(runs: readonly ProgressionRun[]): string {
     ];
   });
   return markdownTable(head, rows);
+}
+
+/** Each kid's team (Partner / friends) on the shown days, for one map size. */
+function teamTable(runs: readonly ProgressionRun[]): string {
+  const days = [7, 14, 30, 60].filter((d) => runs.every((r) => lead(r).days[d - 1]));
+  return markdownTable(
+    ['Rules', 'Kid', ...days.map((d) => `Day ${String(d)}`)],
+    runs.map((run) => [
+      run.rules.label,
+      run.profile.id,
+      ...days.map((d) => lead(run).days[d - 1]?.levels.join(' / ') ?? '—'),
+    ]),
+  );
 }
 
 function markdownTable(head: readonly string[], rows: readonly (readonly string[])[]): string {
@@ -175,7 +192,8 @@ export function renderProgression(
       summaries
         .filter((s) => s.seats === config.seats[0] && s.gapReadyLevel !== null)
         .map((s) => {
-          const rules = ruleSets.find((r) => r.label === s.rules) as ProgressionRules;
+          const rules = ruleSets.find((r) => r.label === s.rules);
+          if (!rules) throw new Error(`unknown rules ${s.rules}`);
           const kid = config.kids.find((k) => k.id === s.kid);
           const win = gapWin(s.gapReadyLevel ?? 1, kid?.xpPercent ?? 100, rules);
           return [
@@ -190,6 +208,12 @@ export function renderProgression(
         }),
     ),
   ];
+  lines.push(
+    '',
+    `## Team levels (Partner / friends), ${String(config.seats[0])}-seat map`,
+    '',
+    teamTable(runs.filter((r) => r.seats === config.seats[0])),
+  );
   if (info.odds) {
     const offsets = info.odds[0]?.odds.map((o) => o.offset) ?? [];
     lines.push(

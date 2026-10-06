@@ -1,6 +1,7 @@
 import {
   deriveSeed,
   GAME_DATA,
+  GROWTH_RULES,
   STARTERS,
   hexKey,
   hexNeighbors,
@@ -73,6 +74,7 @@ export function defaultSpawnData(): SpawnData {
     species: new Map(ALL_SPECIES.map((s) => [s.id, s])),
     seasons: GAME_DATA.seasons,
     rules: SPAWN_RULES,
+    maxLevel: GROWTH_RULES.maxLevel,
   };
 }
 

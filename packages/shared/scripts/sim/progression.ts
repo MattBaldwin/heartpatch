@@ -14,7 +14,7 @@ import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
 import { SERVER_GAME_DATA, serverBattleData } from '../../src/data/server/index.js';
 import { SPAWN_TABLES } from '../../src/data/server/spawn-tables.js';
 import { hexKey, hexNeighbors, type HexKey } from '../../src/hex/index.js';
-import { generateMap, type MapTile } from '../../src/mapgen/index.js';
+import { generateMap } from '../../src/mapgen/index.js';
 import { deriveSeed } from '../../src/rng/index.js';
 import type { BattleSideSetup } from '../../src/schemas/battle.js';
 import type { Species } from '../../src/schemas/data/species.js';
@@ -131,6 +131,13 @@ export function modelData(): ModelData {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** `items[i mod length]`, for lists the model cycles through. Throws on an empty list. */
+function cycle<T>(items: readonly T[], i: number): T {
+  const item = items[i % items.length];
+  if (item === undefined) throw new Error('cycle(): empty list');
+  return item;
+}
 /** Ordinary terrains the odds estimate samples guardians on, in turn. */
 const ESTIMATE_TERRAINS = ['meadow', 'forest', 'hills', 'lake'] as const;
 const GAP_TERRAIN = 'junipers-gap';
@@ -224,8 +231,7 @@ function estimateOdds(
   return data.guardians.rules.strengths.map(({ strength }) => {
     let wins = 0;
     for (let i = 0; i < config.estimateGames; i++) {
-      const terrain =
-        strength >= 5 ? GAP_TERRAIN : (ESTIMATE_TERRAINS[i % ESTIMATE_TERRAINS.length] as string);
+      const terrain = strength >= 5 ? GAP_TERRAIN : cycle(ESTIMATE_TERRAINS, i);
       const seed = deriveSeed(config.rootSeed, 'odds', kid.profile.id, kid.slot, day, strength, i);
       const guardians = resolveGuardians(
         { seed: deriveSeed(seed, 'team'), terrain, strength, window },
@@ -326,18 +332,19 @@ export function runProgression(
         species: data.species,
         seasons: GAME_DATA.seasons,
         rules: rules.spawn,
+        maxLevel: rules.growth.maxLevel,
       };
       const land = tiles.filter((t) => owner.get(hexKey(t)) === k);
       const wild = profile.battlesPerDay - (tileBattles[k] ?? 0);
       let befriended = 0;
       for (let i = 0; i < wild; i++) {
-        const hour = WILD_HOURS[i % WILD_HOURS.length] as number;
+        const hour = cycle(WILD_HOURS, i);
         const window = spawnWindowAt({ date, hour }, rules.spawn.windowHours);
         const partnerLevel = kid.team[0]?.level ?? null;
         let spawn = null;
         for (let j = 0; spawn === null; j++) {
           if (j > 1000) throw new Error(`no wild squishy on ${profile.id}'s land`);
-          const tile = land[(i + j) % land.length] as MapTile;
+          const tile = cycle(land, i + j);
           const seed = deriveSeed(config.rootSeed, 'wild', profile.id, k, day, i, j);
           spawn = resolveWildSpawn(
             { seed, terrain: tile.terrain, window, partnerLevel },
@@ -438,7 +445,7 @@ export function wildOdds(
       odds: offsets.map((offset) => {
         let wins = 0;
         for (let i = 0; i < games; i++) {
-          const species = bases[i % bases.length] as Species;
+          const species = cycle(bases, i);
           const opponent: BattleSideSetup = {
             controller: { type: 'ai', policy: 'wild' },
             squishies: [{ id: 'wild-1', speciesId: species.id, level: level + offset }],
