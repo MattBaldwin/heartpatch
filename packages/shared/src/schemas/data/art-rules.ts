@@ -21,6 +21,8 @@ export const ArtRulesSchema = z.strictObject({
    * the client draws with it, and contrast holds at both ends.
    */
   lightnessVariation: z.number().min(0).max(0.3),
+  /** …and up to this much warmth (±, sRGB 0–1, added to red and taken from blue). */
+  warmthVariation: z.number().min(0).max(0.2),
   /** Face patterns at least this wide (relative to body height) count as part of the face. */
   facePatchWidth: z.number().min(0).max(1.5),
   finishByRarity: z.record(RaritySchema, FinishSchema),
@@ -69,15 +71,27 @@ export function contrastRatio(a: string, b: string): number {
   return ratioOf(rgbOf(a), rgbOf(b));
 }
 
-/** The lowest contrast between `ink` and `body` as the body's lightness varies by ±`variation`. */
-export function worstContrast(ink: string, body: string, variation: number): number {
-  const scaled = (k: number): Rgb => {
-    const [r, g, b] = rgbOf(body);
-    const clamp = (c: number) => Math.min(1, c * k);
-    return [clamp(r), clamp(g), clamp(b)];
-  };
+/**
+ * The lowest contrast between `ink` and `body` across squishies: the body's
+ * lightness varies by ±`lightness` and its warmth by ±`warmth` (the client's
+ * per-squishy wobble), so every corner is checked.
+ */
+export function worstContrast(
+  ink: string,
+  body: string,
+  lightness: number,
+  warmth: number,
+): number {
+  const [r, g, b] = rgbOf(body);
+  const clamp = (c: number) => Math.min(1, Math.max(0, c));
   const i = rgbOf(ink);
-  return Math.min(ratioOf(i, scaled(1 - variation)), ratioOf(i, scaled(1 + variation)));
+  let worst = Infinity;
+  for (const k of [1 - lightness, 1 + lightness]) {
+    for (const w of [-warmth, warmth]) {
+      worst = Math.min(worst, ratioOf(i, [clamp(r * k + w), clamp(g * k), clamp(b * k - w)]));
+    }
+  }
+  return worst;
 }
 
 export type HueFamily =
@@ -193,7 +207,7 @@ export function checkSpeciesArt(
       if (c) behind.push(c);
     }
     for (const c of behind) {
-      const ratio = worstContrast(ink, c, rules.lightnessVariation);
+      const ratio = worstContrast(ink, c, rules.lightnessVariation, rules.warmthVariation);
       if (ratio < rules.minInkContrast) {
         report(
           [...at, 'ink'],

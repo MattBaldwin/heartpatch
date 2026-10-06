@@ -116,6 +116,9 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
     const pairs = new Set<string>();
     // The secret lines grow up by the same rules as the public ones (once
     // their ids are sound: a clash with a public id is reported above).
+    // TODO: a public → secret evolution isn't growth-checked (its base is
+    // public), and secret lines aren't checked for distinct silhouettes
+    // against public ones. Neither happens in today's data.
     if (!data.secretSpecies.some((s) => publicSpecies.has(s.id)))
       checkRosterArt(
         'secretSpecies',

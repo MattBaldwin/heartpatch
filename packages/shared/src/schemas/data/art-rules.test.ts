@@ -6,6 +6,7 @@ import {
   contrastRatio,
   dominantPart,
   hueFamily,
+  worstContrast,
 } from './art-rules.js';
 import type { ElementId } from './elements.js';
 import type { SpeciesVisual } from './species.js';
@@ -59,6 +60,20 @@ describe('colour helpers', () => {
   it('measures WCAG contrast', () => {
     expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 5);
     expect(contrastRatio('#3b2a3f', '#3b2a3f')).toBeCloseTo(1, 5);
+  });
+
+  it('checks contrast at every corner of the per-squishy colour wobble', () => {
+    // Passes on the species' own colour, but not on a squishy 6% darker.
+    expect(contrastRatio('#3b2a3f', '#a39b8f')).toBeGreaterThan(4.5);
+    expect(worstContrast('#3b2a3f', '#a39b8f', 0.06, 0)).toBeLessThan(4.5);
+    expect(worstContrast('#3b2a3f', '#a39b8f', 0, 0)).toBeCloseTo(
+      contrastRatio('#3b2a3f', '#a39b8f'),
+      9,
+    );
+    // Warmth only ever lowers the worst case further.
+    expect(worstContrast('#3b2a3f', '#aaa296', 0.06, 0.025)).toBeLessThan(
+      worstContrast('#3b2a3f', '#aaa296', 0.06, 0),
+    );
   });
 
   it('names hue families a kid would use', () => {

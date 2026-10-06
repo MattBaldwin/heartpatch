@@ -96,12 +96,13 @@ export function partMatrix(
     // Splay and sink are capped so a leg always has a finite length.
     const splay = Math.min(Math.abs(placement.splay), MAX_LEG_SPLAY) * Math.sign(placement.splay);
     y = normalize(add([0, -1, 0], scaled(outwards, Math.tan(splay))));
-    span = f.point[1] / -y[1] / (1 - Math.min(part.sink, MAX_LEG_SINK));
+    const sink = Math.min(part.sink, MAX_LEG_SINK);
+    span = f.point[1] / -y[1] / (1 - sink);
     let front = flatten(FRONT, y);
     if (len(front) < 1e-3) front = [0, 0, -1];
     z = normalize(front);
     x = cross(y, z);
-    centre = add(f.point, scaled(y, span / 2 - part.sink * span));
+    centre = add(f.point, scaled(y, span / 2 - sink * span));
   } else if (placement.chain) {
     // A chain: piece `index` follows the ones before it, bending and swinging.
     const { index, step, curl, wave, shrink } = placement.chain;

@@ -21,8 +21,8 @@ export const FIXED_COLORS = {
 export const VARIATION = {
   /** Overall lightness change, as a fraction (±); face contrast is checked at both ends. */
   lightness: ART_RULES.lightnessVariation,
-  /** Warm/cool shift moved between red and blue, 0–1 sRGB (±). */
-  warmth: 0.025, // TUNE
+  /** Warm/cool shift moved between red and blue, 0–1 sRGB (±); face contrast is checked at both ends. */
+  warmth: ART_RULES.warmthVariation,
   /** Placement wobble for single and paired parts, in degrees (±). */
   placementDeg: 2.5, // TUNE
   /** Breaths per second, picked in [min, max]. */

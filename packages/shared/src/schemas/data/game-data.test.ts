@@ -296,7 +296,7 @@ describe('checkGameData', () => {
       d.species[0]!.visual.finish = 'sparkle';
     });
     expect(problems).toEqual([
-      'species["fixture-puddlepuff"].visual.ink: face ink #3b2a3f on #3d3550 is down to 1.09:1 across squishies; faces need at least 4.5:1 (set visual.ink)',
+      'species["fixture-puddlepuff"].visual.ink: face ink #3b2a3f on #3d3550 is down to 1.08:1 across squishies; faces need at least 4.5:1 (set visual.ink)',
       'species["fixture-puddlepuff"].visual.finish: common squishies use the "vinyl" finish, not "sparkle"',
     ]);
   });

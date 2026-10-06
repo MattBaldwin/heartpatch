@@ -1342,6 +1342,7 @@ export const ART_RULES: ArtRules = {
   defaultInk: '#3b2a3f', // TUNE: soft plum, warmer than black
   minInkContrast: 4.5,
   lightnessVariation: 0.06, // TUNE: the client's per-squishy lightness wobble
+  warmthVariation: 0.025, // TUNE: …and warmth wobble
   facePatchWidth: 0.3, // TUNE
   finishByRarity: {
     common: 'vinyl',
