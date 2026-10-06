@@ -47,6 +47,7 @@ export const JOBS_TEXT = {
   stopsGathering: 'Stops gathering',
   inHollow: 'In the Hollow',
   outOfSeason: 'Out of season, so nothing to find here. Give them a new job!',
+  training: 'Practicing at the Training Grounds 🎯',
 } as const;
 
 /** "1st", "2nd", "3rd". */
@@ -93,6 +94,8 @@ export function jobLine(s: JobSquishy, nowMs: number): string {
       return 'On watch 🛡️';
     case 'gatherer':
       return s.work ? workLine(s.work, nowMs) : 'Gathering';
+    case 'training':
+      return JOBS_TEXT.training;
     case 'resting':
       return s.habitatId ? 'Resting in a habitat 🏡' : 'Resting at home 💤';
   }

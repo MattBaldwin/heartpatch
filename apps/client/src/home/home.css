@@ -159,3 +159,141 @@
   flex: none;
   min-width: 96px;
 }
+
+/* Levels and upgrades (owner decision 2026-10-06). */
+.home-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.home-level {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fde7cf;
+  color: #8a3f17;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.home-ready {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #ffe066;
+  color: #5a3a00;
+  font-size: 13px;
+}
+
+/* Have/need chips ("🪵 12/10 ✓"): one cost line, as icon counts. */
+.home-needs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.home-need {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fde2cf;
+  color: #8a3f17;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-need-ok {
+  background: #e3f3df;
+  color: #24572f;
+}
+
+.home-need-title {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #7b6676;
+}
+
+.home-next {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: #7b6676;
+}
+
+.home-row > .home-grow {
+  flex: 2 1 0;
+}
+
+/* The upgrade sheet's little map of the fire's light. */
+.home-reach {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.home-reach-map {
+  flex: none;
+  width: 160px;
+  max-width: 50%;
+  height: auto;
+}
+
+.home-reach-map polygon {
+  stroke: #fffaf2;
+  stroke-width: 2;
+}
+
+.home-reach-map .home-reach-now,
+.home-reach-key-now {
+  fill: #ffcf8f;
+  background: #ffcf8f;
+}
+
+.home-reach-map .home-reach-new,
+.home-reach-key-new {
+  fill: #ffe066;
+  background: #ffe066;
+}
+
+.home-reach-map .home-reach-new {
+  stroke: #c98a12;
+}
+
+.home-reach-map .home-reach-outside,
+.home-reach-key-outside {
+  fill: #dbe9d2;
+  background: #dbe9d2;
+}
+
+.home-reach-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.home-reach-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-reach-key {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+}
+
+.home-reach-key-new {
+  border: 2px solid #c98a12;
+  box-sizing: border-box;
+}

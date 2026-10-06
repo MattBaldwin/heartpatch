@@ -220,7 +220,7 @@ declare global {
 
 window.__buildingGallery = {
   ready: () => (stage?.draws ?? 0) > 0,
-  stats: () => (homeScene as HomeScene | null)?.stats ?? null,
+  stats: () => homeScene?.stats ?? null,
   sizes,
   // A tile's width across its flats in the home view.
   tile: { width: HOME_VIEW.hexSize * Math.sqrt(3) },

@@ -27,6 +27,8 @@ import {
   buildingNote,
   buildRows,
   costText,
+  upgradeOffer,
+  upgradeReach,
   fireStatus,
   freeHomeSpots,
   likesHabitat,
@@ -34,6 +36,8 @@ import {
   speciesMap,
   squishyName,
   type HomeSpot,
+  type NeedChip,
+  type ReachTile,
 } from './home-view.js';
 import { homeTileLines } from './home-tile-info.js';
 import './home.css';
@@ -70,6 +74,11 @@ export interface HomeScreenOptions {
   onJobs?: (mapId: string) => void;
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
+  /**
+   * "📖 Recipe book" on a build row short of something you make (the
+   * Jack-o'-Lantern): leaves the home and opens the recipe book.
+   */
+  onRecipeBook?: () => void;
   api?: HomeApi;
 }
 
@@ -79,6 +88,7 @@ type Mode =
   | { readonly kind: 'placing'; readonly buildingId: string }
   | { readonly kind: 'moving'; readonly id: string }
   | { readonly kind: 'selected'; readonly id: string }
+  | { readonly kind: 'upgrade'; readonly id: string }
   | { readonly kind: 'confirm-remove'; readonly id: string };
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -124,6 +134,19 @@ export const HOME_TEXT = {
   addFuel: 'Add fuel',
   moveIn: 'Move in',
   moveOut: 'Move out',
+  upgrade: '⬆️ Upgrade',
+  upgradeNow: 'Upgrade!',
+  notNow: 'Not now',
+  ready: 'Ready!',
+  level: (n: number) => `Level ${String(n)}`,
+  levels: (from: number, to: number) => `Level ${String(from)} → ${String(to)}`,
+  youNeed: 'You need',
+  upgraded: (name: string, level: number) => `Ta-da! Your ${name} is now level ${String(level)}!`,
+  recipeBook: '📖 Recipe book',
+  reachNow: 'Your home: safe now',
+  reachNew: 'Safe after this',
+  reachOut: 'Still outside',
+  reachLabel: 'Your home and the land around it. The new tiles turn safe after the upgrade.',
   livesHere: 'Lives here',
   cozy: 'Loves it here!',
   full: 'Full',
@@ -312,6 +335,18 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       () => ({ mode: { kind: 'selected', id: buildingId }, say: HOME_TEXT.fuelled }),
     );
 
+  const upgrade = (buildingId: string) =>
+    act(
+      (id, send) => send((key) => api.upgrade(id, buildingId, key)),
+      (next) => {
+        const b = next.buildings.find((x) => x.id === buildingId);
+        return {
+          mode: { kind: 'selected', id: buildingId },
+          say: HOME_TEXT.upgraded(buildingName(b?.buildingId ?? ''), b?.level ?? 1),
+        };
+      },
+    );
+
   const remove = (buildingId: string) => {
     let back = '';
     return act(
@@ -457,27 +492,44 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           el(
             'ul',
             { class: 'home-list', 'data-testid': 'home-build-list' },
-            ...buildRows(current).map(({ building, icon, cost, option }) =>
-              el(
+            ...buildRows(current).map(({ building, icon, needs, option }) => {
+              let action: Node;
+              if (option.kind === 'ready' || option.kind === 'short') {
+                action = button(
+                  HOME_TEXT.build,
+                  () => {
+                    setMode({ kind: 'placing', buildingId: building.id });
+                  },
+                  { 'data-build': building.id },
+                );
+                if (option.kind === 'short') (action as HTMLButtonElement).disabled = true;
+              } else if (option.kind === 'craft' && options.onRecipeBook) {
+                action = button(
+                  HOME_TEXT.recipeBook,
+                  () => {
+                    close();
+                    options.onRecipeBook?.();
+                  },
+                  { 'data-recipe-for': building.id },
+                  true,
+                );
+              } else {
+                action = el('span', { class: 'home-list-note' }, '');
+              }
+              const note = 'note' in option ? option.note : null;
+              return el(
                 'li',
-                { class: 'home-list-row' },
+                { class: 'home-list-row', 'data-build-row': building.id },
                 el(
                   'span',
                   { class: 'home-list-name' },
                   `${icon} ${building.name}`,
-                  el('span', { class: 'home-list-sub' }, cost),
+                  ...(needs.length > 0 ? [needRow(needs)] : []),
+                  ...(note ? [el('span', { class: 'home-list-sub' }, note)] : []),
                 ),
-                option.kind === 'ready'
-                  ? button(
-                      HOME_TEXT.build,
-                      () => {
-                        setMode({ kind: 'placing', buildingId: building.id });
-                      },
-                      { 'data-build': building.id },
-                    )
-                  : el('span', { class: 'home-list-note' }, option.note),
-              ),
-            ),
+                action,
+              );
+            }),
           ),
           row(
             button(
@@ -527,6 +579,46 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         body.replaceChildren(...buildingCard(current, b));
         break;
       }
+      case 'upgrade': {
+        const { id } = mode;
+        const b = current.buildings.find((x) => x.id === id);
+        const offer = b ? upgradeOffer(current, b) : null;
+        if (!b || !offer) break;
+        const reach =
+          offer.radius !== null && b.kind === 'hearthfire'
+            ? [reachMap(upgradeReach(current, b, offer.radius))]
+            : [];
+        const go = button(HOME_TEXT.upgradeNow, () => void upgrade(b.id), {
+          'data-testid': 'home-upgrade-confirm',
+          class: 'home-grow',
+        });
+        if (!offer.affordable) go.disabled = true;
+        body.replaceChildren(
+          el(
+            'div',
+            { class: 'home-card-head' },
+            el('h3', { class: 'home-section-title' }, `⬆️ ${buildingName(b.buildingId)}`),
+            el('span', { class: 'home-level' }, HOME_TEXT.levels(offer.from, offer.to)),
+          ),
+          el('p', { class: 'home-card-note', 'data-testid': 'home-upgrade-line' }, offer.line),
+          ...reach,
+          el('p', { class: 'home-need-title' }, HOME_TEXT.youNeed),
+          needRow(offer.needs),
+          ...(offer.next ? [el('p', { class: 'home-next' }, offer.next)] : []),
+          row(
+            go,
+            button(
+              HOME_TEXT.notNow,
+              () => {
+                setMode({ kind: 'selected', id: b.id });
+              },
+              {},
+              true,
+            ),
+          ),
+        );
+        break;
+      }
       case 'confirm-remove': {
         const { id } = mode;
         const b = current.buildings.find((x) => x.id === id);
@@ -556,13 +648,30 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   function buildingCard(current: HomeResponse, b: MyBuilding): Node[] {
     const card: Node[] = [
       el(
-        'h3',
-        { class: 'home-section-title' },
-        `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}`,
+        'div',
+        { class: 'home-card-head' },
+        el(
+          'h3',
+          { class: 'home-section-title' },
+          `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}`,
+        ),
+        el('span', { class: 'home-level' }, HOME_TEXT.level(b.level)),
       ),
       el('p', { class: 'home-card-note', 'data-testid': 'home-card-note' }, buildingNote(b)),
     ];
     const actions: Node[] = [];
+    const offer = upgradeOffer(current, b);
+    if (offer) {
+      const up = button(
+        HOME_TEXT.upgrade,
+        () => {
+          setMode({ kind: 'upgrade', id: b.id });
+        },
+        { 'data-testid': 'home-upgrade' },
+      );
+      if (offer.affordable) up.append(el('span', { class: 'home-ready' }, HOME_TEXT.ready));
+      actions.push(up);
+    }
     if (b.kind === 'hearthfire') {
       const data = GAME_DATA.buildings.find((x) => x.id === b.buildingId);
       const cost =
@@ -661,6 +770,72 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       ),
     );
     return card;
+  }
+
+  /** Have/need chips ("🪵 12/10 ✓"), green when there's enough. */
+  function needRow(needs: readonly NeedChip[]): HTMLElement {
+    return el(
+      'span',
+      { class: 'home-needs' },
+      ...needs.map((n) =>
+        el(
+          'span',
+          {
+            class: `home-need${n.ok ? ' home-need-ok' : ''}`,
+            'aria-label': `${n.name}: ${String(n.have)} of ${String(n.need)}`,
+          },
+          n.ok ? `${n.label} ✓` : n.label,
+        ),
+      ),
+    );
+  }
+
+  /** The upgrade sheet's little map: where the fire's light reaches now and after. */
+  function reachMap(tiles: readonly ReachTile[]): HTMLElement {
+    const NS = 'http://www.w3.org/2000/svg';
+    const size = 20;
+    const svg = document.createElementNS(NS, 'svg');
+    const pos = tiles.map((t) => ({
+      t,
+      x: size * Math.sqrt(3) * (t.q + t.r / 2),
+      y: size * 1.5 * t.r,
+    }));
+    const xs = pos.map((p) => p.x);
+    const ys = pos.map((p) => p.y);
+    const pad = size + 2;
+    const minX = Math.min(...xs) - pad;
+    const minY = Math.min(...ys) - pad;
+    svg.setAttribute(
+      'viewBox',
+      `${String(minX)} ${String(minY)} ${String(Math.max(...xs) + pad - minX)} ${String(Math.max(...ys) + pad - minY)}`,
+    );
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', HOME_TEXT.reachLabel);
+    svg.classList.add('home-reach-map');
+    for (const { t, x, y } of pos) {
+      const corners = Array.from({ length: 6 }, (_, i) => {
+        const a = (Math.PI / 180) * (60 * i - 30);
+        return `${(x + (size - 1.5) * Math.cos(a)).toFixed(1)},${(y + (size - 1.5) * Math.sin(a)).toFixed(1)}`;
+      }).join(' ');
+      const hex = document.createElementNS(NS, 'polygon');
+      hex.setAttribute('points', corners);
+      hex.setAttribute('class', `home-reach-${t.state}`);
+      svg.append(hex);
+    }
+    const key = (state: ReachTile['state'], label: string) =>
+      el('li', {}, el('span', { class: `home-reach-key home-reach-key-${state}` }), label);
+    return el(
+      'div',
+      { class: 'home-reach' },
+      svg,
+      el(
+        'ul',
+        { class: 'home-reach-legend' },
+        key('now', HOME_TEXT.reachNow),
+        key('new', HOME_TEXT.reachNew),
+        key('outside', HOME_TEXT.reachOut),
+      ),
+    );
   }
 
   // ── Scene, taps and wandering ─────────────────────────────────────────

@@ -94,6 +94,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   // The tutorial's care step spotlights these (Feed, Pet, Play).
   const actions = el('div', { class: 'care-actions', 'data-tutorial-target': 'care-buttons' });
   const note = el('p', { class: 'care-note', role: 'status', 'data-testid': 'care-note' });
+  const treatNote = el('p', { class: 'care-treat', 'data-testid': 'care-treat' });
   const infoList = el('ul', { class: 'care-info' });
   const info = el(
     'details',
@@ -142,6 +143,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       xpLine,
       celebrate,
       actions,
+      treatNote,
       note,
       info,
       el('div', { class: 'auth-actions' }, closeUpButton, closeButton),
@@ -206,7 +208,11 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       ...model.buttons.map((b) => {
         const button = el(
           'button',
-          { type: 'button', class: 'auth-button care-action', 'data-care': b.action },
+          {
+            type: 'button',
+            class: `auth-button care-action${b.special ? ' care-action-special' : ''}`,
+            'data-care': b.action,
+          },
           b.label,
           ...(b.sub ? [el('span', { class: 'care-action-sub' }, b.sub)] : []),
           ...(b.note ? [el('span', { class: 'care-action-note' }, b.note)] : []),
@@ -216,6 +222,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
         return button;
       }),
     );
+    treatNote.textContent = model.treat ?? '';
+    treatNote.hidden = model.treat === null;
     infoList.replaceChildren(...model.info.map((line) => el('li', {}, line)));
     const evolved = evolutionLine(squishy, speciesById(reply));
     celebrate.hidden = evolved === null;

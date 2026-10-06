@@ -35,6 +35,7 @@ function squishy(n: number, over: Partial<JobSquishy> = {}): JobSquishy {
     post: null,
     habitatId: null,
     work: null,
+    training: null,
     ...over,
   };
 }

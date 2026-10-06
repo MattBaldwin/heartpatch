@@ -4,10 +4,13 @@ import {
   HOME_BASE_RULES as RULES,
   freeSpots,
   GAME_DATA,
+  hexKey,
+  hexSpiral,
   inSeason,
   isBuildable,
   removeRefund,
   shortfall,
+  upgradeCost,
   type Building,
   type HomeResponse,
   type HomeSquishy,
@@ -35,6 +38,8 @@ export function buildingIcon(buildingId: string): string {
       return '🛖';
     case 'cozy-meadow':
       return '🌼';
+    case 'training-grounds':
+      return '🎯';
     default:
       return '🏠';
   }
@@ -61,16 +66,65 @@ export function fireStatus(buildings: readonly MyBuilding[]): string {
   return `Your fire is lit: ${String(best)} nights left.`;
 }
 
+/**
+ * One ingredient as have/need ("🪵 12/5"), so a kid sees at a glance what's
+ * missing (design review 2026-10-05: one cost line, as icon counts).
+ */
+export interface NeedChip {
+  readonly id: string;
+  readonly icon: string;
+  readonly have: number;
+  readonly need: number;
+  /** Enough in the bag. */
+  readonly ok: boolean;
+  /** "🪵 12/5", with the item's name for screen readers. */
+  readonly label: string;
+  readonly name: string;
+}
+
+/** Have/need chips for a cost, in the cost's order. */
+export function needChips(
+  items: Readonly<Record<string, number>>,
+  cost: ItemCountsLike,
+): NeedChip[] {
+  return Object.entries(cost).map(([id, need]) => {
+    const have = items[id] ?? 0;
+    return {
+      id,
+      icon: itemIcon(id),
+      have,
+      need,
+      ok: have >= need,
+      label: `${itemIcon(id)} ${String(have)}/${String(need)}`,
+      name: itemName(id),
+    };
+  });
+}
+
+type ItemCountsLike = Readonly<Record<string, number>>;
+
+/** How a crafted ingredient is made, for "Carve a Jack-o'-Lantern first!" (default "Make"). */
+const CRAFT_VERBS: Readonly<Record<string, string>> = { 'jack-o-lantern-hearthfire': 'Carve' };
+
 /** What tapping "Build" on one building would do, and why not if it can't. */
 export type BuildOption =
-  { readonly kind: 'ready' } | { readonly kind: 'blocked'; readonly note: string };
+  | { readonly kind: 'ready' }
+  /** Short of a gathered ingredient: Build shows, switched off; the chips say what. */
+  | { readonly kind: 'short' }
+  /** Short of something you make (the Jack-o'-Lantern): make it in the recipe book first. */
+  | { readonly kind: 'craft'; readonly note: string }
+  /** Already built (as many as fit): upgrade it at home instead. */
+  | { readonly kind: 'built'; readonly note: string }
+  | { readonly kind: 'blocked'; readonly note: string };
 
 export interface BuildRow {
   readonly building: Building;
   readonly icon: string;
-  readonly cost: string;
+  readonly needs: readonly NeedChip[];
   readonly option: BuildOption;
 }
+
+const isCrafted = (id: string) => GAME_DATA.resources.find((r) => r.id === id)?.kind === 'crafted';
 
 /** The build menu: every building a player can put up, in data order. */
 export function buildRows(home: HomeResponse): BuildRow[] {
@@ -81,20 +135,128 @@ export function buildRows(home: HomeResponse): BuildRow[] {
     .map((building) => {
       const cost = buildCost(building);
       const owned = home.buildings.filter((b) => b.buildingId === building.id).length;
-      const short = shortfall(home.items, cost);
+      const short = Object.keys(shortfall(home.items, cost));
+      const crafted = short.find(isCrafted);
       let option: BuildOption = { kind: 'ready' };
       if (owned >= building.maxPerHome) {
-        option = { kind: 'blocked', note: 'Your home has all it can hold.' };
+        option = {
+          kind: 'built',
+          note: building.levels.length > 1 ? 'Built! Tap it at home to upgrade.' : 'Built!',
+        };
       } else if (!inSeason(building, seasons)) {
         const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
         option = { kind: 'blocked', note: `Only around ${season}.` };
-      } else if (Object.keys(short).length > 0) {
-        option = { kind: 'blocked', note: `Need ${costText(short)} more.` };
+      } else if (crafted) {
+        const verb = CRAFT_VERBS[crafted] ?? 'Make';
+        option = {
+          kind: 'craft',
+          note: `${verb} a ${itemName(crafted)} first! It's in your recipe book.`,
+        };
+      } else if (short.length > 0) {
+        option = { kind: 'short' };
       } else if (freeHomeSpots(home).length === 0) {
         option = { kind: 'blocked', note: 'No room left. Take something down first.' };
       }
-      return { building, icon: buildingIcon(building.id), cost: costText(cost), option };
+      return {
+        building,
+        icon: buildingIcon(building.id),
+        needs: option.kind === 'built' ? [] : needChips(home.items, cost),
+        option,
+      };
     });
+}
+
+/** What upgrading one of my buildings would do (owner decision 2026-10-06). */
+export interface UpgradeOffer {
+  readonly building: Building;
+  readonly from: number;
+  readonly to: number;
+  readonly needs: readonly NeedChip[];
+  readonly affordable: boolean;
+  /** What the new level does, in a line ("Its light will reach 2 tiles…"). */
+  readonly line: string;
+  /** A Hearthfire's radius at the new level (its light on the land), else null. */
+  readonly radius: number | null;
+  /** What the level after needs, if it needs something new ("…needs 💎 Glimmer."). */
+  readonly next: string | null;
+}
+
+/** The upgrade on offer for a building, or null at its top level (or for one-level buildings). */
+export function upgradeOffer(home: HomeResponse, b: MyBuilding): UpgradeOffer | null {
+  const building = BUILDING_DATA.get(b.buildingId);
+  if (!building) return null;
+  const cost = upgradeCost(building, b.level);
+  const step = building.levels[b.level];
+  if (!cost || !step) return null;
+  const needs = needChips(home.items, cost);
+  const to = b.level + 1;
+  let line = '';
+  let radius: number | null = null;
+  if ('safeRadius' in step) {
+    radius = step.safeRadius;
+    line = `Its light will reach ${String(radius)} tiles. Squishies out there stay safe at night!`;
+  } else if ('xpPerHour' in step) {
+    line = `Room for ${String(step.capacity)} squishies, and they learn a little faster.`;
+  } else if ('capacity' in step) {
+    line = `Room for ${String(step.capacity)} squishies (now ${String(b.capacity ?? 0)}).`;
+  }
+  const after = building.levels[to];
+  let next: string | null = null;
+  if (after) {
+    const fresh = Object.keys(after.cost).filter((id) => !(id in cost));
+    const reach = 'safeRadius' in after ? ` reaches ${String(after.safeRadius)} tiles and` : '';
+    if (fresh.length > 0) {
+      const what = fresh.map((id) => `${itemIcon(id)} ${itemName(id)}`).join(' and ');
+      next = `Next time: Level ${String(to + 1)}${reach} needs ${what}.`;
+    }
+  }
+  return {
+    building,
+    from: b.level,
+    to,
+    needs,
+    affordable: needs.every((n) => n.ok),
+    line,
+    radius,
+    next,
+  };
+}
+
+/** A tile on the upgrade sheet's little map, in coordinates around the Heart Seed. */
+export interface ReachTile {
+  readonly q: number;
+  readonly r: number;
+  /** Safe already (home, or the fire's light now), safe after the upgrade, or still outside. */
+  readonly state: 'now' | 'new' | 'outside';
+}
+
+/**
+ * The little map on a fire's upgrade sheet: the home base and the land
+ * around it, which tiles its light covers now and which it will after the
+ * upgrade (shared rule: the fire's own tile plus its radius, and the whole
+ * home base). Out to one ring past the furthest new tile.
+ */
+export function upgradeReach(home: HomeResponse, fire: MyBuilding, toRadius: number): ReachTile[] {
+  const seed = home.tiles.find((t) => t.heartSeed) ?? { q: 0, r: 0 };
+  const now = new Set([
+    ...home.tiles.map((t) => hexKey(t)),
+    ...hexSpiral({ q: fire.q, r: fire.r }, fire.safeRadius ?? 0).map(hexKey),
+  ]);
+  const after = new Set(hexSpiral({ q: fire.q, r: fire.r }, toRadius).map(hexKey));
+  const ring = (h: { q: number; r: number }) => {
+    const q = h.q - seed.q;
+    const r = h.r - seed.r;
+    return Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r));
+  };
+  const furthest = Math.max(
+    1,
+    ...hexSpiral({ q: fire.q, r: fire.r }, toRadius).map((h) => ring(h)),
+  );
+  return hexSpiral(seed, furthest + 1).map((h) => {
+    const key = hexKey(h);
+    const state = now.has(key) ? 'now' : after.has(key) ? 'new' : 'outside';
+    return { q: h.q - seed.q, r: h.r - seed.r, state };
+  });
 }
 
 /** A spot on one of my home tiles. */
