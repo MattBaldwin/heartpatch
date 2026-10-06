@@ -32,7 +32,7 @@ export const RECIPES: Recipe[] = [
     // cheaper Heart Charms while the season's squishy is out.
     id: 'leafy-heart-charms',
     name: 'Leafy Heart Charms',
-    description: 'Wrap two Heart Charms in crunchy golden leaves. Squishies love the crinkle!',
+    description: 'Make two Heart Charms wrapped in crunchy golden leaves. Squishies love the crinkle!',
     inputs: { 'magic-fallen-leaves': 4, treats: 1 }, // TUNE:
     output: { resource: 'heart-charm', quantity: 2 }, // TUNE:
     craftSeconds: 60, // TUNE: same as a plain Heart Charm

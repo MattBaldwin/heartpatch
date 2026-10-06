@@ -18,7 +18,7 @@ export const RECIPE_BOOK: RecipeBookData = {
   sealedHints: [
     {
       page: 'recipe:pumpkin-treats',
-      line: 'Pumpkins grow in Pumpkin Fields around Halloween. Gather one, and this page opens!',
+      line: 'Pumpkins grow at home and in Pumpkin Fields around Halloween. Gather one, and this page opens!',
     },
     {
       page: 'recipe:jack-o-lantern-hearthfire',
