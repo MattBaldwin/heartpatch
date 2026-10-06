@@ -186,6 +186,7 @@ Phase 1 ships simple level-based single-form evolution; branching arrives in Pha
   - **On:** rival tiles can be challenged; a defender can lose at most **[DEFAULT: 3]** tiles per map-local day. Once a defender reaches the cap, challenges against them are blocked for the day (they don't use up attempts).
   - **Gentle (default):** as On, but a defender can lose at most **[DEFAULT: 1]** tile per map-local day, and challenging a player with far less territory (under **[DEFAULT: half]** of yours, home rings not counted) earns **[DEFAULT: 50%]** rewards, battle XP included (the result card shows the reduced XP).
   - **Off:** no player-vs-player challenges. Players race for neutral land and work together against the Hollow Man.
+- **Land that misses you (owner decision 2026-10-06):** land is tended, not finished. Claiming a tile tends it, and **Visit** tends all of a player's land at once. Land untended for **[DEFAULT: 4 days]** starts to fade and its owner sees "Some land misses you!". Land untended for **[DEFAULT: 12 days]** can go wild again at nightfall: it turns neutral and its guardians come back, at most **[DEFAULT: 2]** of a player's tiles a night in Gentle (**[DEFAULT: 3]** in On and Off), farthest from home first. The home ring and the ring right outside it (**[DEFAULT: 2 tiles]** from the Heart Seed) never fade, so a week away never costs land and a returning player always has a home patch. Only the owner sees their own land fading. `pnpm sim:map-fill` models it.
 - Hearthfire safe radii are measured in hex tiles (§14).
 
 ## 12. Resources

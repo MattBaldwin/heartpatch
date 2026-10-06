@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { SpeciesSchema } from './data/species.js';
 import { OwnedSquishySchema } from './squishies.js';
+import { LocalDateSchema } from './time.js';
 
 // Territory API (design doc §11; issue #15; tech spec §5). Players claim
 // neutral land from its guardians and challenge each other's land; the raid
@@ -58,3 +59,45 @@ export type TerritoryStatus = z.infer<typeof TerritoryStatusSchema>;
 
 export const TerritoryResponseSchema = z.object({ territory: TerritoryStatusSchema });
 export type TerritoryResponse = z.infer<typeof TerritoryResponseSchema>;
+
+/**
+ * One of my tiles that misses me (owner decision 2026-10-06, design review
+ * Q2): untended for a while, so it's fading. `fade` is 0 (just started) to
+ * 100 (it can go wild at the next nightfall). Only the owner sees these.
+ */
+export const MissingTileSchema = z.object({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  fade: z.number().int().min(0).max(100),
+  /** It can go wild at the first nightfall from then. */
+  wildFrom: z.iso.datetime(),
+});
+export type MissingTile = z.infer<typeof MissingTileSchema>;
+
+/** A tile of mine that went wild again lately (and isn't mine again yet). */
+export const WentWildTileSchema = z.object({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  /** The map-local night it went wild. */
+  night: LocalDateSchema,
+});
+export type WentWildTile = z.infer<typeof WentWildTileSchema>;
+
+/**
+ * `GET /maps/:mapId/territory/tending` and `POST /maps/:mapId/territory/visit`
+ * (Visit tends all my land at once): my land that misses me and what went
+ * wild lately.
+ */
+export const LandTendingSchema = z.object({
+  missing: z.array(MissingTileSchema),
+  /** Tiles that went wild from me in the last few nights. */
+  wentWild: z.array(WentWildTileSchema),
+  /** When some land will next start to miss me (the client looks again then); null with no land that can fade. */
+  nextMissesYouAt: z.iso.datetime().nullable(),
+  /** The server's clock. */
+  now: z.iso.datetime(),
+});
+export type LandTending = z.infer<typeof LandTendingSchema>;
+
+export const LandTendingResponseSchema = z.object({ tending: LandTendingSchema });
+export type LandTendingResponse = z.infer<typeof LandTendingResponseSchema>;

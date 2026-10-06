@@ -851,6 +851,36 @@ export const tileDefenders = pgTable(
 );
 
 /**
+ * Land that misses you (owner decision 2026-10-06, design review Q2): when
+ * an outer tile's owner last tended it (claimed it, or tapped Visit, which
+ * tends all their land). A timestamp, not a counter (CLAUDE.md rule 4):
+ * fading is worked out on read and nightfall picks what goes wild. Owned
+ * land with no row yet (held before this table) counts as tended when
+ * nightfall first sees it. `wild_night` / `wild_from_user_id` record the last
+ * night the tile went wild and from whom, which caps how many go per player
+ * per night even if a nightfall runs twice. Home tiles have no row.
+ */
+export const tileTending = pgTable(
+  'tile_tending',
+  {
+    tileId: uuid('tile_id')
+      .primaryKey()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    // No foreign key to `maps`: a capture writes this row before the battle's
+    // squishy locks, and a key-share lock on `maps` there would break the
+    // lock order (tech spec §7). `tile_id` already cascades from the map.
+    mapId: uuid('map_id').notNull(),
+    tendedAt: timestamptz('tended_at').notNull(),
+    wildNight: date('wild_night', { mode: 'string' }),
+    wildFromUserId: uuid('wild_from_user_id'),
+  },
+  (t) => [
+    index('tile_tending_map_id_idx').on(t.mapId),
+    check('tile_tending_wild_pair', sql`(${t.wildNight} is null) = (${t.wildFromUserId} is null)`),
+  ],
+);
+
+/**
  * One row per map per night the Hollow Man came by (#21, design doc §14):
  * the guard that makes nightfall idempotent (a retry, a second job or a
  * restart finds the row and takes nothing more), and the record the morning

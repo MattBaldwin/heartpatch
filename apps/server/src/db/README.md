@@ -228,6 +228,19 @@ Every tile battle (#15, design doc §11 raid rules): the attempt log the daily a
 | `last_action_at` | timestamptz | The player's last action; idle past `abandonMinutes` counts as a loss |
 | `ended_at` | timestamptz, null | |
 
+### `tile_tending`
+Land that misses you (owner decision 2026-10-06, migration 0025): when an outer tile's owner last tended it. One row per tile once it's been claimed (home tiles have none). Fading is worked out on read; nightfall picks what goes wild (`modules/territory/tending.ts`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `tile_id` | uuid → tiles | PK. Cascade delete |
+| `map_id` | uuid | Indexed. No foreign key: a capture writes the row before the battle's squishy locks, and the key-share lock on `maps` would break the lock order. Rows go with their tile |
+| `tended_at` | timestamptz | Claiming the tile or Visit (which tends all the owner's land) moves it on, never back. Owned land held before this table gets a row (tended then) the first time nightfall sees it |
+| `wild_night` | date, null | The map-local night the tile last went wild |
+| `wild_from_user_id` | uuid, null | Whose it was then. Set together with `wild_night` (checked). The per-night cap counts these, so a retried nightfall takes nothing more |
+
+The row outlives a change of owner: the next claim moves `tended_at` on.
+
 ### `tile_defenders`
 Squishies standing watch on their owner's tiles (#15, decision C), up to `TERRITORY_RULES.maxDefenders` per tile.
 

@@ -12,6 +12,10 @@ export const TERRITORY_RATE_LIMITS = {
     perIp: { max: 600, windowMs: MINUTE_MS }, // TUNE: guess
     perUser: { max: 120, windowMs: MINUTE_MS }, // TUNE: guess; a fast tapper, with retries
   },
+  visit: {
+    perIp: { max: 300, windowMs: 15 * MINUTE_MS }, // TUNE: guess; a family on one Wi-Fi
+    perUser: { max: 60, windowMs: 15 * MINUTE_MS }, // TUNE: guess; Visit is one tap now and then
+  },
 } as const satisfies RateLimitTable;
 
 export type TerritoryAction = keyof typeof TERRITORY_RATE_LIMITS;

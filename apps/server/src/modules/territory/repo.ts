@@ -14,8 +14,10 @@ import {
   eq,
   getTableName,
   gt,
+  gte,
   inArray,
   isNotNull,
+  isNull,
   ne,
   or,
   sql,
@@ -23,7 +25,15 @@ import {
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { mapMembers, maps, squishies, tileAttacks, tileDefenders, tiles } from '../../db/schema.js';
+import {
+  mapMembers,
+  maps,
+  squishies,
+  tileAttacks,
+  tileDefenders,
+  tiles,
+  tileTending,
+} from '../../db/schema.js';
 
 /** A tile as territory needs it. `guardianStrength` is secret (tech spec §8). */
 export interface TerritoryTileRow {
@@ -440,6 +450,169 @@ function queries(db: Executor): TerritoryRepo {
         xp: row.xp,
         state: row.state,
       }));
+    },
+  };
+}
+
+/** An owned outer tile and when its owner last tended it (null: no row yet). */
+export interface TendingTileRow {
+  id: string;
+  q: number;
+  r: number;
+  terrain: string;
+  ownerUserId: string;
+  tendedAt: Date | null;
+}
+
+/**
+ * Storage for land that misses you (owner decision 2026-10-06): the
+ * `tile_tending` rows next to the tiles they describe. Plain queries; the
+ * service decides. Lock order (tech spec §7): tiles in id order, then their
+ * `tile_tending` rows and `tile_defenders`, squishies, inventory, `maps`.
+ */
+export interface TendingRepo {
+  /** Runs `fn` in one transaction, with this repo on it. */
+  transaction: <T>(fn: (repo: TendingTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
+  /** Owned tiles outside every home base, with when they were tended; one owner's, or everyone's. */
+  outerTiles: (mapId: string, userId?: string) => Promise<TendingTileRow[]>;
+  /** Marks these tiles tended at `at` (never moves a later time back). */
+  tend: (mapId: string, tileIds: readonly string[], at: Date) => Promise<void>;
+  /** Gives owned outer tiles with no row one, tended at `at` (land held before this table). */
+  fillMissing: (mapId: string, at: Date) => Promise<void>;
+  /** How many tiles went wild from each player on `night`. */
+  wildCounts: (mapId: string, night: string) => Promise<Map<string, number>>;
+  /** Row-locks tiles in id order until commit; returns their owners now. */
+  lockTiles: (tileIds: readonly string[]) => Promise<{ id: string; ownerUserId: string | null }[]>;
+  /** These tiles go back to neutral; their rows remember the night and whose they were. */
+  goWild: (tileIds: readonly string[], fromUserId: string, night: string) => Promise<void>;
+  /** Squishies working these tiles (gatherers), in id order. */
+  workersOn: (tileIds: readonly string[]) => Promise<string[]>;
+  /** Tiles that went wild from the player since `sinceNight` and aren't theirs again. */
+  wentWildSince: (
+    mapId: string,
+    userId: string,
+    sinceNight: string,
+  ) => Promise<{ q: number; r: number; night: string }[]>;
+}
+
+export interface TendingTxRepo extends TendingRepo {
+  /** `appendGameEvent` in this transaction; call it as the last write. */
+  appendEvent: <T extends NewGameEvent['type']>(event: NewGameEvent<T>) => Promise<GameEvent>;
+}
+
+export function createTendingRepo(db: Executor): TendingRepo {
+  return tendingQueries(db);
+}
+
+function tendingQueries(db: Executor): TendingRepo {
+  return {
+    transaction: (fn) =>
+      withTransaction(db, (tx) =>
+        fn({ ...tendingQueries(tx), appendEvent: (event) => appendGameEvent(tx, event) }, tx),
+      ),
+
+    outerTiles: async (mapId, userId) => {
+      const rows = await db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          terrain: tiles.terrain,
+          ownerUserId: tiles.ownerUserId,
+          tendedAt: tileTending.tendedAt,
+        })
+        .from(tiles)
+        .leftJoin(tileTending, eq(tileTending.tileId, tiles.id))
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            isNull(tiles.homeSlot),
+            userId === undefined ? isNotNull(tiles.ownerUserId) : eq(tiles.ownerUserId, userId),
+          ),
+        )
+        .orderBy(asc(tiles.q), asc(tiles.r));
+      return rows.flatMap((r) =>
+        r.ownerUserId === null ? [] : [{ ...r, ownerUserId: r.ownerUserId }],
+      );
+    },
+
+    tend: async (mapId, tileIds, at) => {
+      if (tileIds.length === 0) return;
+      await db
+        .insert(tileTending)
+        .values(tileIds.map((tileId) => ({ tileId, mapId, tendedAt: at })))
+        .onConflictDoUpdate({
+          target: tileTending.tileId,
+          set: { tendedAt: sql`greatest(${tileTending.tendedAt}, excluded.tended_at)` },
+        });
+    },
+
+    fillMissing: async (mapId, at) => {
+      await db.execute(sql`
+        insert into ${tileTending} (tile_id, map_id, tended_at)
+        select ${tiles.id}, ${tiles.mapId}, ${at.toISOString()}::timestamptz from ${tiles}
+        where ${tiles.mapId} = ${mapId}
+          and ${tiles.homeSlot} is null
+          and ${tiles.ownerUserId} is not null
+        on conflict do nothing`);
+    },
+
+    wildCounts: async (mapId, night) => {
+      const rows = await db
+        .select({ userId: tileTending.wildFromUserId, n: count() })
+        .from(tileTending)
+        .where(and(eq(tileTending.mapId, mapId), eq(tileTending.wildNight, night)))
+        .groupBy(tileTending.wildFromUserId);
+      return new Map(rows.flatMap((r) => (r.userId === null ? [] : [[r.userId, r.n]])));
+    },
+
+    lockTiles: async (tileIds) => {
+      if (tileIds.length === 0) return [];
+      return db
+        .select({ id: tiles.id, ownerUserId: tiles.ownerUserId })
+        .from(tiles)
+        .where(inArray(tiles.id, [...tileIds]))
+        .orderBy(asc(tiles.id))
+        .for('update');
+    },
+
+    goWild: async (tileIds, fromUserId, night) => {
+      if (tileIds.length === 0) return;
+      await db
+        .update(tiles)
+        .set({ ownerUserId: null })
+        .where(inArray(tiles.id, [...tileIds]));
+      await db
+        .update(tileTending)
+        .set({ wildNight: night, wildFromUserId: fromUserId })
+        .where(inArray(tileTending.tileId, [...tileIds]));
+    },
+
+    workersOn: async (tileIds) => {
+      if (tileIds.length === 0) return [];
+      const rows = await db
+        .select({ id: squishies.id })
+        .from(squishies)
+        .where(inArray(squishies.workTileId, [...tileIds]))
+        .orderBy(asc(squishies.id));
+      return rows.map((r) => r.id);
+    },
+
+    wentWildSince: async (mapId, userId, sinceNight) => {
+      const rows = await db
+        .select({ q: tiles.q, r: tiles.r, night: tileTending.wildNight })
+        .from(tileTending)
+        .innerJoin(tiles, eq(tiles.id, tileTending.tileId))
+        .where(
+          and(
+            eq(tileTending.mapId, mapId),
+            eq(tileTending.wildFromUserId, userId),
+            gte(tileTending.wildNight, sinceNight),
+            sql`${tiles.ownerUserId} is distinct from ${userId}`,
+          ),
+        )
+        .orderBy(asc(tiles.q), asc(tiles.r));
+      return rows.flatMap((r) => (r.night === null ? [] : [{ q: r.q, r: r.r, night: r.night }]));
     },
   };
 }

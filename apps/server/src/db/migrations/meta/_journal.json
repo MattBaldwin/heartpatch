@@ -176,6 +176,13 @@
       "when": 1791312871571,
       "tag": "0024_training_grounds",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791320796071,
+      "tag": "0025_tile_tending",
+      "breakpoints": true
     }
   ]
 }
