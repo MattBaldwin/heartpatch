@@ -53,6 +53,11 @@ export function buildBuildingModel(
   const l = Math.max(1, level);
   const body: Mesh[] = [];
   const glow: Mesh[] = [];
+  /**
+   * Adds one primitive in one colour, or shaded per vertex: `shade` gets the
+   * vertex's model-space position and returns its colour (flame gradients,
+   * firelight on stones).
+   */
   const part = (
     list: Mesh[],
     mesh: Mesh,
@@ -60,6 +65,7 @@ export function buildBuildingModel(
     at: [number, number, number],
     scale: [number, number, number] = [1, 1, 1],
     rotation: [number, number, number] = [0, 0, 0],
+    shade?: (p: Vector3) => Color3,
   ): void => {
     mesh.position.set(...at);
     mesh.scaling.set(...scale);
@@ -67,10 +73,33 @@ export function buildBuildingModel(
     const c = linear(color);
     const count = mesh.getTotalVertices();
     const colors = new Float32Array(count * 4);
-    for (let i = 0; i < count; i++) colors.set([c.r, c.g, c.b, 1], i * 4);
+    const local = shade ? mesh.getVerticesData(VertexBuffer.PositionKind) : null;
+    const world = shade ? mesh.computeWorldMatrix(true) : null;
+    const p = new Vector3();
+    for (let i = 0; i < count; i++) {
+      let v = c;
+      if (shade && local && world) {
+        Vector3.TransformCoordinatesFromFloatsToRef(
+          local[i * 3] ?? 0,
+          local[i * 3 + 1] ?? 0,
+          local[i * 3 + 2] ?? 0,
+          world,
+          p,
+        );
+        v = shade(p);
+      }
+      colors.set([v.r, v.g, v.b, 1], i * 4);
+    }
     mesh.setVerticesData(VertexBuffer.ColorKind, colors);
     list.push(mesh);
   };
+  /** A flame lick: a white-gold heart at its base fading to orange at its tip. */
+  const flameShade =
+    (base: number, top: number, from: string, to: string) =>
+    (p: Vector3): Color3 => {
+      const t = Math.min(1, Math.max(0, (p.y - base) / Math.max(0.01, top - base)));
+      return Color3.Lerp(linear(from), linear(to), t);
+    };
   const sphere = (d: number, segments = 12) =>
     CreateSphere(`${name}-part`, { diameter: d, segments }, scene);
   const cylinder = (h: number, top: number, bottom: number, tessellation = 12) =>
@@ -91,24 +120,38 @@ export function buildBuildingModel(
       // course of stones and a taller fire. Level 3: three lantern posts too,
       // and the biggest, brightest flame.
       const stones = 7 + 2 * (l - 1);
+      // A lit fire warms the stones' inner faces (its light falling on them).
+      const warmed = (color: string) =>
+        look === 'lit'
+          ? (p: Vector3) => {
+              const inward = Math.min(1, Math.max(0, (0.46 - Math.hypot(p.x, p.z)) / 0.2));
+              return Color3.Lerp(linear(color), linear(C.fireWarm), inward * 0.7);
+            }
+          : undefined;
       around(stones, (a, i) => {
+        const color = i % 2 === 0 ? C.stone : C.stoneDark;
         part(
           body,
           sphere(0.24, 8),
-          i % 2 === 0 ? C.stone : C.stoneDark,
+          color,
           [Math.cos(a) * 0.38, 0.08, Math.sin(a) * 0.38],
           [1.1, 0.75, 1],
+          [0, 0, 0],
+          warmed(color),
         );
       });
       if (l >= 2) {
         around(stones - 2, (a, i) => {
           const turn = a + Math.PI / stones;
+          const color = i % 2 === 0 ? C.stoneDark : C.stone;
           part(
             body,
             sphere(0.16, 8),
-            i % 2 === 0 ? C.stoneDark : C.stone,
+            color,
             [Math.cos(turn) * 0.33, 0.16, Math.sin(turn) * 0.33],
             [1.1, 0.7, 1],
+            [0, 0, 0],
+            warmed(color),
           );
         });
       }
@@ -135,12 +178,41 @@ export function buildBuildingModel(
       }
       if (look === 'lit') {
         const f = 1 + 0.25 * (l - 1); // TUNE: a bigger, brighter fire each level
-        part(glow, sphere(0.4 * f), C.flame, [0, 0.32 * f, 0], [1, 1.5, 1]);
-        part(glow, sphere(0.24 * f), C.flameCore, [0, 0.38 * f, -0.04], [1, 1.5, 1]);
-        part(glow, sphere(0.14 * f), C.flame, [0.12, 0.62 * f, 0.02], [1, 1.6, 1]);
+        const top = 0.95 * f;
+        // Outer flame: gold at the base to orange-red at the tips; the inner
+        // core is a white-gold heart (bright enough for the bloom pass).
+        const outer = flameShade(0.05, top, C.flameCore, C.flameTip);
+        const inner = flameShade(0.1, 0.7 * f, C.flameHeart, C.flame);
+        part(glow, sphere(0.4 * f, 16), C.flame, [0, 0.32 * f, 0], [1, 1.5, 1], [0, 0, 0], outer);
+        part(
+          glow,
+          sphere(0.24 * f, 12),
+          C.flameCore,
+          [0, 0.36 * f, -0.06],
+          [1, 1.5, 1],
+          [0, 0, 0],
+          inner,
+        );
+        part(
+          glow,
+          sphere(0.14 * f),
+          C.flame,
+          [0.12, 0.62 * f, 0.02],
+          [1, 1.6, 1],
+          [0, 0, 0],
+          outer,
+        );
         if (l >= 2) {
-          part(glow, sphere(0.13 * f), C.flame, [-0.12, 0.6 * f, -0.02], [1, 1.6, 1]);
-          part(glow, sphere(0.1 * f), C.flameCore, [0, 0.74 * f, 0], [1, 1.7, 1]);
+          part(
+            glow,
+            sphere(0.13 * f),
+            C.flame,
+            [-0.12, 0.6 * f, -0.02],
+            [1, 1.6, 1],
+            [0, 0, 0],
+            outer,
+          );
+          part(glow, sphere(0.1 * f), C.flameCore, [0, 0.74 * f, 0], [1, 1.7, 1], [0, 0, 0], outer);
         }
       } else {
         part(body, sphere(0.3), C.ash, [0, 0.12, 0], [1, 0.45, 1]);
@@ -272,9 +344,10 @@ export function buildBuildingModel(
         );
       };
       // The target faces the camera (−z), at the front of the mat.
-      target(l >= 2 ? 0.22 : 0, -0.2);
+      // Level 2's two stand close together, so trainees hop about either side.
+      target(l >= 2 ? 0.13 : 0, l >= 2 ? -0.26 : -0.2);
       if (l >= 2) {
-        target(-0.22, -0.12);
+        target(-0.13, -0.18);
         part(body, cylinder(0.8, 0.035, 0.035, 8), C.post, [0.36, 0.4, 0.25]);
         part(
           body,

@@ -22,7 +22,10 @@ import '../../styles.css';
  * `fire3` (one fire at that level with its light on the land around),
  * `fires` (levels 1–3 side by side), `habitats` (both habitats at levels 1
  * and 2), `training1`, `training2` (Training Grounds with two squishies
- * practicing). Plus the main page's `?quality=` and `?renderer=webgpu`.
+ * practicing). Every shot uses one camera: `?pitch=` (degrees, default 42,
+ * a 3/4 view so heights read; the game's is 58), `?dist=` (default 18), and
+ * `?focus=q,r` centres a tile (close-ups use a smaller `dist`). Plus the main
+ * page's `?quality=` and `?renderer=webgpu`.
  */
 
 if (!import.meta.env.DEV) throw new Error('The building gallery is dev-only');
@@ -33,6 +36,9 @@ if (!canvas) throw new Error('missing #game canvas');
 const params = new URLSearchParams(window.location.search);
 const tier = pickInitialTier(params.get('quality'));
 const show = params.get('show') ?? 'fire1';
+const pitch = ((Number(params.get('pitch')) || 42) * Math.PI) / 180;
+const distance = Number(params.get('dist')) || 18;
+const focus = params.get('focus')?.split(',').map(Number) ?? null;
 
 const NOW = '2026-10-12T18:00:00.000Z';
 const ids = (n: number) => `0190a000-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -181,9 +187,15 @@ await boot(canvas, {
         return homeScene.content;
       },
       tier,
+      { pitch, startDistance: distance, minDistance: 3 },
     ),
   onStart: (s) => {
     stage = s;
+    const [q, r] = focus ?? [];
+    if (homeScene && q !== undefined && r !== undefined) {
+      s.camera.panTo(homeScene.spotAt({ q, r, spot: 0 }), true);
+      s.invalidate();
+    }
   },
   onError: (err: unknown) => {
     console.error('Could not start the renderer', err);
@@ -212,6 +224,7 @@ declare global {
     __buildingGallery?: {
       ready: () => boolean;
       stats: () => unknown;
+      quality: () => unknown;
       sizes: typeof sizes;
       tile: { width: number };
     };
@@ -220,6 +233,7 @@ declare global {
 
 window.__buildingGallery = {
   ready: () => (stage?.draws ?? 0) > 0,
+  quality: () => stage?.quality.snapshot ?? null,
   stats: () => homeScene?.stats ?? null,
   sizes,
   // A tile's width across its flats in the home view.

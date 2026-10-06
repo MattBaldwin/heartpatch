@@ -25,13 +25,15 @@ export const HOME_VIEW = {
   tile: { color: '#efd2a8', roughness: 0.85 }, // TUNE
   /** The land around the home base: how many rings of tiles, its look, how much lower. */
   landRings: 3, // TUNE: a level-3 fire on the Heart Seed reaches ring 3
-  land: { color: '#cfe3b8', roughness: 0.9 }, // TUNE
+  land: { color: '#bcd9a4', roughness: 0.9 }, // TUNE
   landDrop: 0.06, // TUNE
   /**
    * The light a fire throws on the land around the home base: warmer and
    * stronger than the map's `SAFE_GLOW`, since the land here is big and pale.
    */
-  firelight: { rgb: [1, 0.66, 0.24], fill: 0.42, edge: 0.75 }, // TUNE
+  firelight: { rgb: [1, 0.48, 0.12], fill: 0.24, edge: 0.1 }, // TUNE: added to the land's colour
+  /** The firelight fades with distance from the fire: alpha share 1, 2 and 3+ tiles out. */
+  firelightFade: [1, 0.62, 0.38], // TUNE
   /** The glowing spots while placing or moving (#131): sRGB, and how see-through. */
   spot: { ring: '#f0437f', fill: '#ffd1e3', fillAlpha: 0.55 }, // TUNE
 } as const;

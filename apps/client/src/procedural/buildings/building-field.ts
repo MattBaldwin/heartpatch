@@ -6,9 +6,14 @@ import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { setInstances } from '../../map/map-scene.js';
-import { GLOW } from './building-config.js';
+import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
+import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { overlayMaterial } from '../../map/map-scene.js';
+import { FIRE_POOL, GLOW } from './building-config.js';
 import {
   buildBuildingModel,
+  levelScale,
   modelKey,
   type BuildingLook,
   type BuildingModel,
@@ -44,6 +49,9 @@ export interface BuildingFieldStats {
   readonly lit: number;
 }
 
+/** How far the light pool floats over a building's ground, per unit of building scale. */
+const POOL_LIFT = 0.06; // TUNE: clears the home tiles' dome
+
 const lookOf = (p: BuildingPlacement): BuildingLook =>
   p.lit === null ? 'plain' : p.lit ? 'lit' : 'out';
 
@@ -52,6 +60,8 @@ export class BuildingField {
   readonly #models = new Map<string, BuildingModel>();
   readonly #body: PBRMaterial;
   readonly #glow: StandardMaterial;
+  /** The soft pool of light under every lit fire: one mesh, one instance per fire. */
+  readonly #pool: Mesh;
   #stats: BuildingFieldStats = { buildings: 0, meshes: 0, lit: 0 };
 
   constructor(scene: Scene) {
@@ -71,6 +81,7 @@ export class BuildingField {
     glow.emissiveColor = new Color3(GLOW, GLOW, GLOW); // vertex colours tint it
     glow.alphaMode = Constants.ALPHA_DISABLE;
     this.#glow = glow;
+    this.#pool = firePool(scene);
   }
 
   /** Replaces every building drawn with these. */
@@ -81,6 +92,7 @@ export class BuildingField {
     >();
     const turn = new Quaternion();
     let lit = 0;
+    const pools: Matrix[] = [];
     for (const p of placements) {
       const look = lookOf(p);
       const level = p.level ?? 1;
@@ -96,6 +108,17 @@ export class BuildingField {
       list.push(
         Matrix.Compose(new Vector3(s, s, s), turn.clone(), new Vector3(p.x, p.y ?? 0, p.z)),
       );
+      if (p.lit === true) {
+        const r = s * levelScale(level).across;
+        pools.push(
+          // Lifted over the tile's domed top, which would hide its middle.
+          Matrix.Compose(
+            new Vector3(r, 1, r),
+            Quaternion.Identity(),
+            new Vector3(p.x, (p.y ?? 0) + POOL_LIFT * s, p.z),
+          ),
+        );
+      }
     }
     for (const [key, { buildingId, look, level }] of byKey) {
       if (this.#models.has(key)) continue;
@@ -113,6 +136,8 @@ export class BuildingField {
         if (matrices.length > 0) meshes++;
       }
     }
+    setInstances(this.#pool, pools, true);
+    if (pools.length > 0) meshes++;
     this.#stats = { buildings: placements.length, meshes, lit };
   }
 
@@ -128,5 +153,37 @@ export class BuildingField {
     this.#models.clear();
     this.#body.dispose();
     this.#glow.dispose();
+    this.#pool.dispose();
   }
+}
+
+/**
+ * A flat disc of warm light, brightest in the middle and fading to nothing
+ * at its rim (vertex alpha), drawn unlit and blended over the ground.
+ */
+function firePool(scene: Scene): Mesh {
+  const disc = CreateDisc(
+    'building-fire-pool',
+    { radius: FIRE_POOL.radius, tessellation: 40 },
+    scene,
+  );
+  disc.rotation.x = Math.PI / 2;
+  disc.bakeCurrentTransformIntoVertices();
+  const positions = disc.getVerticesData(VertexBuffer.PositionKind) ?? [];
+  const warm = Color3.FromHexString(FIRE_POOL.color).toLinearSpace();
+  const colors = new Float32Array((positions.length / 3) * 4);
+  for (let i = 0; i < positions.length / 3; i++) {
+    const d = Math.hypot(positions[i * 3] ?? 0, positions[i * 3 + 2] ?? 0) / FIRE_POOL.radius;
+    const fade = Math.max(0, 1 - d);
+    colors.set([warm.r, warm.g, warm.b, FIRE_POOL.alpha * fade * fade], i * 4);
+  }
+  disc.setVerticesData(VertexBuffer.ColorKind, colors);
+  disc.hasVertexAlpha = true;
+  const material = overlayMaterial(scene, 'building-fire-pool-mat');
+  material.alphaMode = Constants.ALPHA_ADD; // light adds to the ground under it
+  disc.material = material;
+  disc.isPickable = false;
+  disc.alwaysSelectAsActiveMesh = true;
+  disc.setEnabled(false);
+  return disc;
 }

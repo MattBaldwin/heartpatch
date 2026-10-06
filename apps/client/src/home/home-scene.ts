@@ -1,4 +1,5 @@
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
+import { Constants } from '@babylonjs/core/Engines/constants';
 import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3, type Matrix } from '@babylonjs/core/Maths/math.vector';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
@@ -9,6 +10,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import {
   deriveSeed,
   GAME_DATA,
+  hexDistance,
   hexKey,
   hexSpiral,
   hexToWorld,
@@ -96,6 +98,11 @@ interface Resident {
   readonly handle: SquishyHandle;
   /** Where it wanders around (its habitat's spot), or null by the Heart Seed. */
   readonly home: WorldPoint | null;
+  /**
+   * It practices at the Training Grounds: its place in line there (0, 1, …),
+   * which side of the target it hops about. Null for everyone else.
+   */
+  readonly training: number | null;
   at: WorldPoint;
   hop: { from: WorldPoint; to: WorldPoint; start: number } | null;
   hops: number;
@@ -114,7 +121,8 @@ export class HomeScene {
   readonly #spotMarkers: Mesh;
   readonly #spotFill: Mesh;
   readonly #selection: Mesh;
-  readonly #firelight: Mesh;
+  /** The fire's light on the land, one mesh per distance band (it fades going out). */
+  readonly #firelight: Mesh[];
   readonly #residents = new Map<string, Resident>();
   #home: HomeResponse;
   #spots: HomeSpot[] = [];
@@ -171,27 +179,35 @@ export class HomeScene {
     // The warm light a fire throws over the land around the home base, as the
     // map draws it, a little stronger: an upgrade's bigger radius shows here.
     const k = this.#k;
-    this.#firelight = meshFrom(
-      scene,
-      'home-firelight',
-      loftRoundedHex(
-        HEX_SIZE * TILE_FILL * k,
-        [
-          { scale: 0.5, y: DOME * 0.75 * k, alpha: HOME_VIEW.firelight.fill },
-          { scale: 0.8, y: DOME * 0.25 * k, alpha: HOME_VIEW.firelight.fill },
-          { scale: 0.92, y: -BEVEL * 0.25 * k, alpha: HOME_VIEW.firelight.edge },
-          { scale: 1, y: -BEVEL * k, alpha: 0 },
-        ],
-        {
-          corner: CORNER,
-          segments: SEGMENTS,
-          centre: { y: DOME * k, alpha: HOME_VIEW.firelight.fill },
-          rgb: [...HOME_VIEW.firelight.rgb],
-        },
-      ),
-    );
-    this.#firelight.material = overlayMaterial(scene, 'home-firelight-mat');
-    this.#firelight.isPickable = false;
+    const light = HOME_VIEW.firelight;
+    this.#firelight = HOME_VIEW.firelightFade.map((share, band) => {
+      const mesh = meshFrom(
+        scene,
+        `home-firelight-${String(band)}`,
+        loftRoundedHex(
+          HEX_SIZE * TILE_FILL * k,
+          [
+            { scale: 0.5, y: DOME * 0.75 * k, alpha: light.fill * share },
+            { scale: 0.8, y: DOME * 0.25 * k, alpha: light.fill * share },
+            { scale: 0.92, y: -BEVEL * 0.25 * k, alpha: light.edge * share },
+            { scale: 1, y: -BEVEL * k, alpha: 0 },
+          ],
+          {
+            corner: CORNER,
+            segments: SEGMENTS,
+            centre: { y: DOME * k, alpha: light.fill * share },
+            rgb: [...light.rgb],
+          },
+        ),
+      );
+      const material = overlayMaterial(scene, `home-firelight-mat-${String(band)}`);
+      // Light adds to what's under it (it brightens the grass), rather than
+      // painting orange over it, which reads as sand.
+      material.alphaMode = Constants.ALPHA_ADD;
+      mesh.material = material;
+      mesh.isPickable = false;
+      return mesh;
+    });
 
     const radius = HOME_VIEW.hexSize * HOME_VIEW.landRings * 1.8;
     this.content = {
@@ -264,6 +280,8 @@ export class HomeScene {
     const keep = new Set<string>();
     let waiting = 0;
     let housed = 0;
+    /** Trainees seen so far per Training Grounds (each gets its own side). */
+    const trainees = new Map<string, number>();
     for (const squishy of home.squishies) {
       const kind = species.get(squishy.speciesId);
       if (!kind) continue; // a species this client can't draw: it still shows in the list
@@ -271,20 +289,28 @@ export class HomeScene {
       const anchor = anchorId ? (anchors.get(anchorId) ?? null) : null;
       // Every squishy without a habitat gets its own place by the Heart Seed, in list order.
       const waitAt = anchor ? null : this.#waitingPoint(waiting++);
+      let training: number | null = null;
+      if (anchor !== null && squishy.trainingId !== null) {
+        training = trainees.get(squishy.trainingId) ?? 0;
+        trainees.set(squishy.trainingId, training + 1);
+      }
       const existing = this.#residents.get(squishy.id);
       keep.add(squishy.id);
       if (anchor) housed++;
       if (
         existing &&
+        existing.training === training &&
         sameAnchor(existing.home, anchor) &&
         (anchor || sameAnchor(existing.at, waitAt))
       ) {
         continue;
       }
       if (existing) this.#squishies.remove(existing.handle);
-      const at = anchor ? this.#wanderPoint(anchor, squishy.id, 0) : (waitAt ?? { x: 0, z: 0 });
+      const at = anchor
+        ? this.#wanderPoint(anchor, squishy.id, 0, training)
+        : (waitAt ?? { x: 0, z: 0 });
       const handle = this.#squishies.add(kind, squishy.id, this.#placement(at, 0));
-      this.#residents.set(squishy.id, { handle, home: anchor, at, hop: null, hops: 0 });
+      this.#residents.set(squishy.id, { handle, home: anchor, training, at, hop: null, hops: 0 });
     }
     for (const [id, resident] of this.#residents) {
       if (keep.has(id)) continue;
@@ -317,26 +343,35 @@ export class HomeScene {
    */
   #showFirelight(home: HomeResponse): number {
     const homeKeys = new Set(home.tiles.map((t) => hexKey(t)));
-    const lit = new Map<string, { q: number; r: number }>();
+    // Each tile once, at its distance from the nearest lit fire that reaches it.
+    const lit = new Map<string, { local: { q: number; r: number }; d: number }>();
     for (const b of home.buildings) {
       if (b.lit !== true || b.safeRadius === null) continue;
       for (const h of hexSpiral({ q: b.q, r: b.r }, b.safeRadius)) {
         const local = { q: h.q - this.#seed.q, r: h.r - this.#seed.r };
         const ring = Math.max(Math.abs(local.q), Math.abs(local.r), Math.abs(local.q + local.r));
         if (homeKeys.has(hexKey(h)) || ring > HOME_VIEW.landRings) continue;
-        lit.set(hexKey(h), local);
+        const d = hexDistance(h, { q: b.q, r: b.r });
+        const seen = lit.get(hexKey(h));
+        if (!seen || d < seen.d) lit.set(hexKey(h), { local, d });
       }
     }
     // Just over the land's top (its dome peaks at `HOME_LOOK.height + DOME`).
     const lift = -HOME_VIEW.landDrop + HOME_LOOK.height * this.#k + 0.02;
-    setInstances(
-      this.#firelight,
-      [...lit.values()].map((t) => {
-        const p = hexToWorld(t, HOME_VIEW.hexSize);
-        return placeAt(p.x, lift, p.z);
-      }),
-      true,
-    );
+    const bands = this.#firelight.length;
+    this.#firelight.forEach((mesh, band) => {
+      const here = [...lit.values()].filter(
+        (t) => Math.min(Math.max(t.d - 1, 0), bands - 1) === band,
+      );
+      setInstances(
+        mesh,
+        here.map(({ local }) => {
+          const p = hexToWorld(local, HOME_VIEW.hexSize);
+          return placeAt(p.x, lift, p.z);
+        }),
+        true,
+      );
+    });
     return lit.size;
   }
 
@@ -437,7 +472,11 @@ export class HomeScene {
     const r = this.#residents.get(squishyId);
     if (!r?.home) return;
     r.hops += 1;
-    r.hop = { from: r.at, to: this.#wanderPoint(r.home, squishyId, r.hops), start: now };
+    r.hop = {
+      from: r.at,
+      to: this.#wanderPoint(r.home, squishyId, r.hops, r.training),
+      start: now,
+    };
   }
 
   /** Moves hops along; true while anything still moves (keep drawing). */
@@ -474,9 +513,24 @@ export class HomeScene {
     return { x: at.x, z: at.z, y: this.#ground + lift, yaw, scale: HOME_VIEW.squishyScale };
   }
 
-  /** A seeded spot near a habitat: the same squishy wanders the same way for everyone. */
-  #wanderPoint(anchor: WorldPoint, squishyId: string, n: number): WorldPoint {
+  /**
+   * A seeded spot near a habitat: the same squishy wanders the same way for
+   * everyone. A trainee keeps to the left or right of the mat, beside the
+   * target at its front, so the target stays in view.
+   */
+  #wanderPoint(
+    anchor: WorldPoint,
+    squishyId: string,
+    n: number,
+    training: number | null = null,
+  ): WorldPoint {
     const rng = Rng.fromSeed(deriveSeed('home-wander', squishyId, n));
+    if (training !== null) {
+      const side = training % 2 === 0 ? 0 : Math.PI;
+      const angle = side + (rng.next() - 0.5) * 0.8;
+      const distance = (0.32 + rng.next() * 0.16) * HOME_VIEW.buildingScale;
+      return { x: anchor.x + Math.cos(angle) * distance, z: anchor.z + Math.sin(angle) * distance };
+    }
     const angle = rng.next() * Math.PI * 2;
     const distance = (0.45 + rng.next() * 0.55) * HOME_VIEW.wanderRadius;
     return { x: anchor.x + Math.cos(angle) * distance, z: anchor.z + Math.sin(angle) * distance };

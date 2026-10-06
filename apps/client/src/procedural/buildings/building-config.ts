@@ -11,6 +11,9 @@ export const BUILDING_COLORS = {
   logEnd: '#e8c39a', // TUNE
   flame: '#ff9b3d', // TUNE
   flameCore: '#ffe27a', // TUNE
+  flameTip: '#ff6a2b', // TUNE: the flame's top (a gradient from the white-gold heart)
+  flameHeart: '#fff6c8', // TUNE: hot enough to bloom
+  fireWarm: '#ffbf7a', // TUNE: firelight on the stones' inner faces
   ash: '#9a8f99', // TUNE: a fire that's out
   pumpkin: '#ff9a3c', // TUNE
   pumpkinDark: '#e57a22', // TUNE
@@ -49,3 +52,10 @@ export const LEVEL_SCALE = [
 
 /** How strongly glowing parts (flames, a lit grin) shine. */
 export const GLOW = 1.1; // TUNE
+
+/**
+ * The soft pool of firelight on the ground under a lit fire (owner decision
+ * 2026-10-06: light falls on the stones and the ground). Radius in model
+ * units (a level-1 fire is ~1 across), sRGB, and its alpha at the middle.
+ */
+export const FIRE_POOL = { radius: 1.1, color: '#ff8a3a', alpha: 0.38 } as const; // TUNE

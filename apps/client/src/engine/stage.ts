@@ -1,7 +1,7 @@
 import { Scene } from '@babylonjs/core/scene';
 import { MapCamera } from './camera/map-camera.js';
 import type { Bounds, GroundPoint } from './camera/camera-math.js';
-import { CAMERA, SETTLE_FRAMES, type QualityTier } from './config.js';
+import { CAMERA, SETTLE_FRAMES, type CameraConfig, type QualityTier } from './config.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import { setupLighting } from './lighting/lighting.js';
 import { RenderQuality } from './quality/render-quality.js';
@@ -46,6 +46,8 @@ export function mountStage(
   canvas: HTMLCanvasElement,
   build: SceneBuilder,
   tier: QualityTier,
+  /** Dev galleries only: a different camera (pitch, distance) than the game's. */
+  camera: Partial<CameraConfig> = {},
 ): Stage {
   const { engine } = renderer;
   const scene = new Scene(engine);
@@ -62,9 +64,9 @@ export function mountStage(
     throw err;
   }
   const { bounds, start } = content;
-  const camera = new MapCamera(scene, canvas, CAMERA, bounds, start);
-  scene.activeCamera = camera.camera;
-  const quality = new RenderQuality(scene, camera.camera, tier);
+  const mapCamera = new MapCamera(scene, canvas, { ...CAMERA, ...camera }, bounds, start);
+  scene.activeCamera = mapCamera.camera;
+  const quality = new RenderQuality(scene, mapCamera.camera, tier);
 
   const frames = new FrameScheduler(SETTLE_FRAMES);
   const abort = new AbortController();
@@ -99,7 +101,7 @@ export function mountStage(
       loaded = true;
       frames.invalidate();
     }
-    const busy = !loaded || camera.wantsFrame || scene.animatables.length > 0;
+    const busy = !loaded || mapCamera.wantsFrame || scene.animatables.length > 0;
     const { draw, frameMs } = frames.next(performance.now(), busy);
     if (!draw) return;
     scene.render();
@@ -109,7 +111,7 @@ export function mountStage(
   return {
     renderer,
     scene,
-    camera,
+    camera: mapCamera,
     quality,
     invalidate: () => {
       frames.invalidate();
@@ -127,7 +129,7 @@ export function mountStage(
       abort.abort();
       engine.stopRenderLoop();
       quality.dispose();
-      camera.dispose();
+      mapCamera.dispose();
       scene.dispose();
     },
   };
