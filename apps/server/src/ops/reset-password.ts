@@ -23,10 +23,7 @@ if (!username) {
 const config = loadConfig();
 const client = createDbClient(config.DATABASE_URL, { max: 1 });
 try {
-  const service = createAuthService({
-    repo: createAuthRepo(client.db),
-    signupCode: config.HP_SIGNUP_CODE,
-  });
+  const service = createAuthService({ repo: createAuthRepo(client.db) });
   const result = await service.operatorReset(username);
   if (!result) {
     log.error({ username }, 'no such user');

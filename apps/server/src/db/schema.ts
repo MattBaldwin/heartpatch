@@ -76,6 +76,11 @@ export const users = pgTable(
     // design doc §25). Set = it never plays by itself again and can be
     // skipped; replays never move it.
     cinematicSeenAt: timestamptz('cinematic_seen_at'),
+    // Who brought them in (#195): the family code they signed up with, and
+    // its maker or the patch owner whose invite they used. Null for the
+    // operator's codes, `HP_SIGNUP_CODE` and accounts from before #195.
+    signupCodeId: uuid('signup_code_id').references((): AnyPgColumn => signupCodes.id),
+    invitedBy: uuid('invited_by').references((): AnyPgColumn => users.id),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -123,6 +128,33 @@ export const recoveryCodes = pgTable(
       .on(t.userId)
       .where(sql`${t.usedAt} is null`),
     index('recovery_codes_user_id_idx').on(t.userId),
+  ],
+);
+
+/**
+ * Family signup codes (#195): made by a patch owner (at most a few live at
+ * once) or by the operator (`created_by_user_id` null, `ops/signup-code.ts`).
+ * Each sign-up spends one use, in the account's own transaction.
+ */
+export const signupCodes = pgTable(
+  'signup_codes',
+  {
+    id: id(),
+    // SHA-256 of the normalized code; the code itself is shown once and never stored.
+    codeHash: text('code_hash').notNull(),
+    label: text('label').notNull(),
+    createdByUserId: uuid('created_by_user_id').references((): AnyPgColumn => users.id),
+    maxUses: integer('max_uses').notNull(),
+    useCount: integer('use_count').notNull().default(0),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    // Set when its maker turns it off. Accounts made with it stay.
+    revokedAt: timestamptz('revoked_at'),
+  },
+  (t) => [
+    unique('signup_codes_code_hash_key').on(t.codeHash),
+    index('signup_codes_created_by_user_id_idx').on(t.createdByUserId),
+    check('signup_codes_use_count_range', sql`${t.useCount} between 0 and ${t.maxUses}`),
   ],
 );
 

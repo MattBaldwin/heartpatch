@@ -50,7 +50,7 @@ Accounts live in `src/modules/auth` (issue #3). The session is the `hp_session` 
 
 | Endpoint | Does |
 |---|---|
-| `POST /api/v1/auth/signup` | Family code + username + password + birth year + time zone → 201 `{ user, recoveryCode }`, logged in |
+| `POST /api/v1/auth/signup` | Code + username + password + birth year + time zone → 201 `{ user, recoveryCode }`, logged in. The code is a family code (spends one use), a patch invite (also files a join request for that patch, #195) or `HP_SIGNUP_CODE` (bootstrap, for one release), all in the account's transaction |
 | `POST /api/v1/auth/login` | → `{ user }`, logged in |
 | `POST /api/v1/auth/logout` | → 204, ends this device's session |
 | `POST /api/v1/auth/recover` | Username + recovery code + new password → `{ user, recoveryCode }`; revokes every session, logs this device in, rotates the code |
@@ -88,8 +88,13 @@ Maps (players say "patches") live in `src/modules/maps` (issue #4; design doc §
 **Seats:** `MAP_MAX_PLAYERS` (4). Commands that add or remove members take the per-map seats lock first (`lockSeats`: the owner's `map_members` row, `FOR NO KEY UPDATE`), so two approvals racing for the last seat can't both win; a partial unique index on `(map_id, home_slot)` for active members backs it up. **Tutorial gate:** with `HP_TUTORIAL_REQUIRED=true`, creating a map or asking to join needs `users.tutorial_completed_at`. Rate limits are in `modules/maps/limits.ts`.
 
 **Text filter:** run every piece of player-typed text through `assertAllowedText(text, 'name' | 'message')` from `lib/filter.ts` before storing it (tech spec §9). It throws `VALIDATION_FAILED` with a kid-readable message. `checkText` returns the verdict without throwing.
+| `GET /api/v1/signup-codes` | Patch owner: → `{ codes, liveMax }`, their family codes (live first, then ones made in the last 28 days) with uses, expiry and who used them. Never the code itself |
+| `POST /api/v1/signup-codes` | Patch owner: `{ label }` → 201 `{ code, signupCode }` (`no-store`), shown once. At most 3 live per owner (409 past it); needs a patch they own |
+| `POST /api/v1/signup-codes/:codeId/revoke` | The code's maker: → 204. Accounts made with it stay |
 
 **Operator reset** (tech spec §9): `docker compose exec server node dist/ops/reset-password.js <username>` (locally `pnpm --filter @heartpatch/server ops:reset-password <username>`) sets a temporary password, revokes sessions and prints a new recovery code. Never exposed over HTTP.
+
+**Operator family codes** (#195): `docker compose exec server node dist/ops/signup-code.js create "<label>" [--uses N] [--days N]`, `list` or `revoke <code-id>` (locally `pnpm --filter @heartpatch/server ops:signup-code …`). The operator's codes have no cap; `list` shows every recent code, owners' too.
 
 ## Battles
 

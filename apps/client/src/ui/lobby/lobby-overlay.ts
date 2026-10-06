@@ -1,15 +1,25 @@
 import {
   CreateMapRequestSchema,
+  CreateSignupCodeRequestSchema,
   InviteCodeSchema,
+  SIGNUP_CODE_LABEL_MAX,
+  type CreateSignupCodeResponse,
   type MapDetail,
   type MapMember,
   type MemberPasswordResetResponse,
   type MyMapsResponse,
+  type MySignupCodesResponse,
   type PublicUser,
   type PvpMode,
 } from '@heartpatch/shared';
 import { updateHold } from '../../pwa/update-hold.js';
 import { deviceTimeZone, el, messageOf } from '../dom.js';
+import {
+  familyCodeBadge,
+  familyCodeMeta,
+  familyCodeUsedBy,
+  liveFamilyCodes,
+} from './family-codes.js';
 import { forgetPatch, patchToResume, rememberPatch } from './last-patch.js';
 import { lobbyApi } from './lobby-api.js';
 import { joinedSince, listKey, WAITING_POLL_MS } from './lobby-poll.js';
@@ -39,6 +49,12 @@ function codeLifeLeft(iso: string): string {
   const days = Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000);
   if (days <= 1) return 'Works until tomorrow at the latest.';
   return `Works for ${String(days)} more days.`;
+}
+
+/** "14 days" (rounded up). */
+function codeDays(iso: string): string {
+  const days = Math.max(1, Math.ceil((Date.parse(iso) - Date.now()) / 86_400_000));
+  return days === 1 ? '1 day' : `${String(days)} days`;
 }
 
 export interface Lobby {
@@ -510,7 +526,12 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       if (invite) {
         inviteSection.append(
           el('p', { class: 'auth-code', 'data-testid': 'lobby-invite-code' }, invite.code),
-          el('p', { class: 'auth-hint' }, codeLifeLeft(invite.expiresAt)),
+          el(
+            'p',
+            { class: 'auth-hint' },
+            // It signs a new family up too (#195).
+            `${codeLifeLeft(invite.expiresAt)} New families can sign up with it too!`,
+          ),
         );
       } else {
         inviteSection.append(
@@ -542,7 +563,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         row.append(stop);
       }
       inviteSection.append(row);
-      sections.push(inviteSection);
+      sections.push(inviteSection, familyCodesSection(map, status));
 
       if (requests.length > 0) {
         const list = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-requests' });
@@ -759,6 +780,166 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       status,
       el('div', { class: 'auth-actions' }, yes, button('Never mind', spec.onNo, { soft: true })),
     );
+  }
+
+  /**
+   * The owner's family codes (#195): the same list on every patch they own,
+   * since codes belong to the player. Filled in when the list arrives.
+   */
+  function familyCodesSection(map: MapDetail, status: HTMLElement): HTMLElement {
+    const section = el(
+      'div',
+      { class: 'lobby-section', 'data-testid': 'lobby-family-codes' },
+      el('h2', { class: 'lobby-heading' }, 'Family codes'),
+    );
+    const at = shown;
+    lobbyApi
+      .signupCodes()
+      .then((mine) => {
+        if (at !== shown) return;
+        section.append(...familyCodesBody(map, status, mine));
+      })
+      .catch((err: unknown) => {
+        if (at !== shown) return;
+        section.append(el('p', { class: 'auth-hint' }, messageOf(err)));
+      });
+    return section;
+  }
+
+  function familyCodesBody(
+    map: MapDetail,
+    status: HTMLElement,
+    mine: MySignupCodesResponse,
+  ): Node[] {
+    const nodes: Node[] = [
+      el(
+        'p',
+        { class: 'auth-hint' },
+        `A family code lets a new family make accounts. You can have ${String(mine.liveMax)} at a time.`,
+      ),
+    ];
+    if (mine.codes.length > 0) {
+      const list = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-family-code-list' });
+      const now = Date.now();
+      for (const code of mine.codes) {
+        const badge = familyCodeBadge(code.status);
+        let corner: Node;
+        if (badge) {
+          corner = el('span', { class: 'lobby-badge lobby-badge-ended' }, badge);
+        } else {
+          const off = button(
+            'Turn off',
+            () => {
+              act(status, off, async () => {
+                await lobbyApi.revokeSignupCode(code.id);
+                await showMap(map.id, 'Code turned off. Accounts made with it stay safe.');
+              });
+            },
+            { soft: true, small: true },
+          );
+          corner = off;
+        }
+        const usedBy = familyCodeUsedBy(code);
+        list.append(
+          el(
+            'li',
+            { class: `lobby-code${badge ? ' lobby-code-ended' : ''}` },
+            el(
+              'span',
+              { class: 'lobby-code-top' },
+              el('span', { class: 'lobby-map-name' }, code.label),
+              corner,
+            ),
+            el('span', { class: 'lobby-map-meta' }, familyCodeMeta(code, now)),
+            ...(usedBy ? [el('span', { class: 'lobby-map-meta' }, usedBy)] : []),
+          ),
+        );
+      }
+      nodes.push(list);
+    }
+
+    if (liveFamilyCodes(mine.codes) >= mine.liveMax) {
+      nodes.push(
+        el(
+          'p',
+          { class: 'auth-hint' },
+          `You have ${String(mine.liveMax)} codes. Turn one off to make another!`,
+        ),
+      );
+      return nodes;
+    }
+    const inputId = 'lobby-family-code-label';
+    const input = el('input', {
+      id: inputId,
+      class: 'auth-input',
+      type: 'text',
+      maxlength: String(SIGNUP_CODE_LABEL_MAX),
+      autocomplete: 'off',
+      placeholder: 'Like “Lee family”',
+    });
+    const make = button(
+      'Make a family code',
+      () => {
+        act(status, make, async () => {
+          const parsed = CreateSignupCodeRequestSchema.safeParse({ label: input.value });
+          if (!parsed.success) {
+            status.textContent = parsed.error.issues[0]?.message ?? 'Try another name!';
+            input.focus();
+            return;
+          }
+          showFamilyCode(map, await lobbyApi.newSignupCode(parsed.data.label));
+        });
+      },
+      { small: true, testId: 'lobby-make-family-code' },
+    );
+    nodes.push(
+      el('div', { class: 'auth-field' }, el('label', { for: inputId }, "Who's it for?"), input),
+      el('div', { class: 'lobby-row' }, make),
+    );
+    return nodes;
+  }
+
+  /** Shown once; the server keeps only a hash. */
+  function showFamilyCode(map: MapDetail, result: CreateSignupCodeResponse): void {
+    refresh = () => undefined;
+    const { signupCode } = result;
+    const copy = button(
+      'Copy',
+      () => {
+        navigator.clipboard
+          .writeText(result.code)
+          .then(() => {
+            copy.textContent = 'Copied!';
+          })
+          .catch(() => {
+            copy.textContent = 'Write it down instead';
+          });
+      },
+      { soft: true },
+    );
+    show(
+      title("Here's the code!"),
+      subtitle(`For ${signupCode.label}`),
+      el('p', { class: 'auth-code', 'data-testid': 'lobby-family-code' }, result.code),
+      el(
+        'p',
+        { class: 'auth-hint' },
+        "Write it down or copy it now. You'll only see it this once!",
+      ),
+      el(
+        'p',
+        { class: 'auth-hint' },
+        `It works for ${String(signupCode.maxUses)} people and ${codeDays(signupCode.expiresAt)}. They type it on the sign-up screen.`,
+      ),
+      el(
+        'div',
+        { class: 'auth-actions' },
+        button('All done!', () => void showMap(map.id)),
+        ...('clipboard' in navigator ? [copy] : []),
+      ),
+    );
+    // Shown once: an automatic update must not reload it away (#47).
+    releaseUpdates = updateHold.hold();
   }
 
   /** Shown once; the server keeps only hashes. */
