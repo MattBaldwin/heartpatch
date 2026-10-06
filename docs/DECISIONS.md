@@ -697,3 +697,13 @@ _Owner decisions and process changes from the bug-bash stabilization day. Record
 
 ### Models (owner decision, 2026-10-05 evening)
 - **Back to the original split:** Opus 5.5 (`claude-opus-5-5`) builds code and reviews code PRs; Sonnet 5.5 writes docs and reviews docs-only PRs and drift audits. **Fable (`claude-fable-5-1`) is used only when the owner explicitly asks**, for a periodic end-to-end review of the whole solution. It reverses the morning's "Fable does all build and fix work". *Why:* the owner wants Fable's cost spent on occasional whole-solution reviews, not on every lane.
+
+## 2026-10-05 — taps.spec gather/collect on slow WebKit (Fix PR #173)
+
+_Proposed in #173; recorded by the coordinator after merge._
+
+`taps.spec.ts` "gathers and collects" failed on two PR branches' iPhone WebKit lanes at the counting-down chip's tap: the Bag stayed shut. Root cause, from WebKit's source (`EventHandler.cpp`, `targetNodeForClickEvent`): WebKit pairs a pointer's release with the very node its press hit-tested, which on a label is its **Text node**, and fires no `click` when that node is gone by the release (no common ancestor). The chip's once-a-second tick rewrote its words with `textContent`, which replaces the Text node, so any press straddling a tick lost its click; CI's software renderer (0.85–2 s a frame) stretches the 120 ms hold past the next tick on busier branches. Chromium pairs clicks by element and is immune; a finger on iOS is unaffected (its synthetic press and release are dispatched together), a trackpad or mouse on an iPad, or Safari on a Mac, is not.
+
+- **Countdown words are one Text node rewritten in place** (`inventory-screen.ts`, `Countdown.text.data`), never replaced, so the node under a resting pointer survives the tick. Rule for any tappable with live text: rewrite the Text node's `data`; `textContent` on the element swaps it.
+- **The spec presses through a tick** (`touch.ts` `realTapThrough`): a press that holds until the chip's words change under the pointer (the game's own signal, no sleep), then lifts, must open the Bag. Deterministic in WebKit before and after the fix; the held taps (down, ~120 ms, up) stay as they were.
+- **`HP_E2E_CPU_THROTTLE=<n>`** (`players.ts`) slows the page's CPU n× through CDP in Chromium only, a local stand-in for CI's WebKit for `--repeat-each` runs; 4× matched CI's pace on this spec (1.7 min on `ipad-chromium`), 6× blew the iPad test's budget.
