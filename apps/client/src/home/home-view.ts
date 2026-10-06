@@ -311,13 +311,11 @@ export function buildingNote(b: MyBuilding): string {
     const room = b.capacity ?? 0;
     return `${String(n)} of ${String(room)} squishies are practicing. They learn a little every hour, even while you're away.`;
   }
-  if (b.kind === 'habitat') {
-    const living = b.residents ?? 0;
-    const room = b.capacity ?? 0;
-    if (living === 0) return `Room for ${String(room)} squishies.`;
-    return `${String(living)} of ${String(room)} squishies live here.`;
-  }
-  return BUILDING_DATA.get(b.buildingId)?.description ?? '';
+  // A habitat (every kind is handled above or here).
+  const living = b.residents ?? 0;
+  const room = b.capacity ?? 0;
+  if (living === 0) return `Room for ${String(room)} squishies.`;
+  return `${String(living)} of ${String(room)} squishies live here.`;
 }
 
 /** Does a squishy like this habitat (matching element or feeling tag)? */
