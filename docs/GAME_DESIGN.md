@@ -337,8 +337,8 @@ Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
 Every player is represented by a **Keeper**, a character drawn in the same soft vinyl-toy style as the squishies (§19): rounded, chibi-proportioned, glossy and playful. Squishies are still the stars, but your Keeper is how *you* show up in the world.
 
 ### Choosing a Keeper
-- At signup, players **select a Keeper** from a roster of preset base characters **[DEFAULT: 8]** that vary in body shape, skin tone, face and hairstyle.
-- Each base can then be tweaked: hair color, eye color, and a **[DEFAULT: 6]**-color palette for the starter outfit.
+- At signup, players **select a Keeper** from a roster of preset base characters **[DEFAULT: 12]** (8 at launch; 4 more with short styles, owner decision 2026-10-06) that vary in body shape, skin tone, face and hairstyle.
+- Each base can then be tweaked: hair style (any base can wear any style; picking a base starts from its own), hair color, eye color, and a **[DEFAULT: 6]**-color palette for the starter outfit.
 - Players can change their Keeper at any time from the Wardrobe, for free. Progress and clothing stay with the account, not the base character.
 - No clothing is locked to any body type or presentation. Everything fits every Keeper.
 

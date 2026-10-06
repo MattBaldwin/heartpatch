@@ -111,7 +111,7 @@ async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
     .toBe(true);
 }
 
-test('shows all 8 Keeper bases, with no errors', async ({ page }) => {
+test('shows all 12 Keeper bases, with no errors', async ({ page }) => {
   test.setTimeout(90_000); // first load compiles shaders; CI renders in software
   const errors = watchErrors(page);
   const stats = await openGallery(page);
@@ -120,11 +120,25 @@ test('shows all 8 Keeper bases, with no errors', async ({ page }) => {
     const h = (window as Hooks).__heartpatchKeepers!;
     return { shown: h.shown(), bases: h.registryBases(), missing: h.missing() };
   });
-  expect(info.bases).toHaveLength(8);
+  expect(info.bases).toHaveLength(12);
   expect(info.shown.toSorted()).toEqual(info.bases.toSorted());
   expect(info.missing).toEqual([]);
-  expect(stats).toMatchObject({ keepers: 8, lod: 'low' });
+  expect(stats).toMatchObject({ keepers: 12, lod: 'low' });
   await expect(page.getByTestId('keeper-gallery-panel')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('every hairstyle draws on a Keeper, each one different', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = watchErrors(page);
+  const stats = await openGallery(page, '?base=pip&hair=all');
+  expect(stats).toMatchObject({ keepers: 12 });
+  const info = await page.evaluate(() => {
+    const h = (window as Hooks).__heartpatchKeepers!;
+    return { hashes: h.shown().map((_, i) => h.hashOf(i)), missing: h.missing() };
+  });
+  expect(new Set(info.hashes).size).toBe(12);
+  expect(info.missing).toEqual([]);
   expect(errors).toEqual([]);
 });
 
@@ -138,7 +152,7 @@ test('every wardrobe slot attaches to every base (no clothing is body-type locke
     const h = (window as Hooks).__heartpatchKeepers!;
     return h.shown().map((_, i) => h.slotsWorn(i));
   });
-  expect(worn).toHaveLength(8);
+  expect(worn).toHaveLength(12);
   for (const slots of worn) expect(slots).toEqual(SLOTS.filter((s) => s !== 'costume'));
 
   // A costume goes over everything else, on every base.
@@ -182,13 +196,13 @@ test('draw calls stay flat as Keepers multiply (shared geometry, thin instances)
   page,
 }) => {
   test.setTimeout(120_000);
-  const eight = await openGallery(page, '?items=all');
-  const forty = await openGallery(page, '?items=all&count=40');
-  expect(forty.keepers).toBe(40);
-  expect(forty.meshes).toBe(eight.meshes);
+  const twelve = await openGallery(page, '?items=all');
+  const sixty = await openGallery(page, '?items=all&count=60');
+  expect(sixty.keepers).toBe(60);
+  expect(sixty.meshes).toBe(twelve.meshes);
   // Five primitive shapes plus the contact shadows.
-  expect(forty.meshes).toBeLessThanOrEqual(6);
-  expect(forty.instances).toBeGreaterThan(eight.instances * 4);
+  expect(sixty.meshes).toBeLessThanOrEqual(6);
+  expect(sixty.instances).toBeGreaterThan(twelve.instances * 4);
 });
 
 test('an idle Keeper never draws; a cheer plays, then the scene goes idle again', async ({

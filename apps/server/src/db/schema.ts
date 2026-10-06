@@ -587,6 +587,9 @@ export const keepers = pgTable('keepers', {
   hairColor: text('hair_color').notNull(),
   eyeColor: text('eye_color').notNull(),
   outfit: text('outfit').notNull(),
+  // A hairstyle id from the shared Keeper data, or null for the base's own
+  // style (every Keeper saved before styles could be picked).
+  hairstyle: text('hairstyle'),
   // The milestone title shown on their profile card (#44, design doc §24): a
   // title id from the milestone data they've earned, or null for none.
   titleId: text('title_id'),

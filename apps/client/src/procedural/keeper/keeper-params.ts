@@ -6,7 +6,7 @@ import {
   type KeeperBase,
   type KeeperConfig,
   type KeeperData,
-  type Hairstyle,
+  type KeeperHairstyle,
   type PartShape,
   type WardrobeSlot,
 } from '@heartpatch/shared';
@@ -95,77 +95,6 @@ const headSized = (head: Head, x: number, y: number, z: number): Vec3 => [
   z * 2 * head.r[2],
 ];
 
-/** How far hair reaches above and around the head (head radii), per style, for the hat socket. */
-const HAIR_VOLUME: Readonly<Record<Hairstyle, { top: number; width: number }>> = {
-  bob: { top: 1.2, width: 1.12 },
-  spiky: { top: 1.45, width: 1.1 },
-  pigtails: { top: 1.2, width: 1.08 },
-  bun: { top: 1.2, width: 1.08 },
-  curly: { top: 1.38, width: 1.25 },
-  long: { top: 1.2, width: 1.1 },
-  swoop: { top: 1.28, width: 1.1 },
-  puff: { top: 1.62, width: 1.34 },
-};
-
-/**
- * Hair pieces per style, in head units: `[x, y, z]` centre, `[x, y, z]` size
- * in head diameters, turn in degrees. The cap (top and back of the head)
- * sits up and back, so the face stays clear under the fringe.
- */
-type HairSpec = readonly [shape: PartShape, at: Vec3, size: Vec3, turn?: Vec3];
-
-const CAP: HairSpec = ['ellipsoid', [0, 0.28, 0.16], [1.08, 0.92, 1.08]];
-const FRINGE: HairSpec = ['ellipsoid', [0, 0.5, -0.5], [1.12, 0.5, 0.6], [-25, 0, 0]];
-
-const HAIRSTYLES: Readonly<Record<Hairstyle, readonly HairSpec[]>> = {
-  bob: [
-    CAP,
-    FRINGE,
-    ['ellipsoid', [-0.86, -0.12, 0.12], [0.42, 1.1, 0.9]],
-    ['ellipsoid', [0.86, -0.12, 0.12], [0.42, 1.1, 0.9]],
-    ['ellipsoid', [0, -0.15, 0.42], [1.55, 1.05, 0.9]],
-  ],
-  spiky: [
-    ['ellipsoid', [0, 0.3, 0.14], [1.06, 0.9, 1.06]],
-    ['cone', [0, 1.12, 0.05], [0.42, 0.62, 0.42]],
-    ['cone', [-0.5, 0.98, 0], [0.4, 0.56, 0.4], [0, 0, 28]],
-    ['cone', [0.5, 0.98, 0], [0.4, 0.56, 0.4], [0, 0, -28]],
-    ['cone', [0, 0.92, -0.5], [0.4, 0.5, 0.4], [-32, 0, 0]],
-    ['cone', [-0.4, 0.86, 0.52], [0.38, 0.5, 0.38], [30, 0, 20]],
-    ['cone', [0.4, 0.86, 0.52], [0.38, 0.5, 0.38], [30, 0, -20]],
-  ],
-  pigtails: [
-    CAP,
-    FRINGE,
-    ['teardrop', [-1.12, -0.12, 0.22], [0.5, 0.95, 0.5], [0, 0, -150]],
-    ['teardrop', [1.12, -0.12, 0.22], [0.5, 0.95, 0.5], [0, 0, 150]],
-  ],
-  bun: [CAP, FRINGE, ['ellipsoid', [0, 1.15, 0.32], [0.72, 0.66, 0.72]]],
-  curly: [
-    ['ellipsoid', [0, 0.3, 0.18], [1.14, 0.96, 1.12]],
-    FRINGE,
-    ['ellipsoid', [0, 1.08, 0.12], [0.55, 0.5, 0.55]],
-    ['ellipsoid', [-0.6, 0.92, 0.1], [0.52, 0.5, 0.52]],
-    ['ellipsoid', [0.6, 0.92, 0.1], [0.52, 0.5, 0.52]],
-    ['ellipsoid', [-0.95, 0.35, 0.25], [0.5, 0.5, 0.5]],
-    ['ellipsoid', [0.95, 0.35, 0.25], [0.5, 0.5, 0.5]],
-    ['ellipsoid', [-0.82, -0.25, 0.35], [0.46, 0.46, 0.46]],
-    ['ellipsoid', [0.82, -0.25, 0.35], [0.46, 0.46, 0.46]],
-    ['ellipsoid', [0, 0.55, 0.85], [0.6, 0.55, 0.5]],
-    ['ellipsoid', [-0.5, -0.1, 0.85], [0.52, 0.52, 0.48]],
-    ['ellipsoid', [0.5, -0.1, 0.85], [0.52, 0.52, 0.48]],
-  ],
-  long: [
-    CAP,
-    FRINGE,
-    ['capsule', [0, -0.55, 0.5], [1.45, 1.5, 0.55]],
-    ['capsule', [-0.88, -0.5, 0.05], [0.34, 1.2, 0.4]],
-    ['capsule', [0.88, -0.5, 0.05], [0.34, 1.2, 0.4]],
-  ],
-  swoop: [CAP, FRINGE, ['teardrop', [-0.3, 0.74, -0.3], [0.75, 1.25, 0.6], [-20, 0, 72]]],
-  puff: [['ellipsoid', [0, 0.48, 0.24], [1.34, 1.14, 1.24]]],
-};
-
 /** A point on the head's front surface (`fx`, `fy` from its middle, in head diameters). */
 function facePoint(head: Head, fx: number, fy: number, depth: number): { at: Vec3; turn: Vec3 } {
   const [rx, ry, rz] = head.r;
@@ -192,6 +121,24 @@ function baseFor(config: KeeperConfig, data: KeeperData, missing: string[]): Kee
   return fallback;
 }
 
+/**
+ * The hairstyle `config` shows: its own pick, else its base's. An id this
+ * client doesn't know is drawn as the base's style.
+ */
+function hairstyleFor(
+  config: KeeperConfig,
+  base: KeeperBase,
+  data: KeeperData,
+  missing: string[],
+): KeeperHairstyle {
+  const picked = config.hairstyle;
+  const found = picked === undefined ? undefined : data.hairstyles.find((h) => h.id === picked);
+  if (picked !== undefined && !found) missing.push(picked);
+  const style = found ?? data.hairstyles.find((h) => h.id === base.hairstyle);
+  if (!style) throw new Error(`keeperParams: no hairstyle "${base.hairstyle}"`);
+  return style;
+}
+
 function colorFor(
   rows: readonly { id: string; color: string }[],
   id: string,
@@ -211,6 +158,7 @@ export function keeperParams(
 ): KeeperParams {
   const missing: string[] = [];
   const base = baseFor(config, data, missing);
+  const style = hairstyleFor(config, base, data, missing);
   const hair = colorFor(data.hairColors, config.hairColor, base.hairColor, missing);
   const eye = colorFor(data.eyeColors, config.eyeColor, base.eyeColor, missing);
   const outfit =
@@ -227,8 +175,11 @@ export function keeperParams(
   const white = hexToRgb(KEEPER.colors.white);
 
   // Seeded by the whole config, so the same config is always the same Keeper.
+  // The base's own style adds nothing, so Keepers saved before styles could
+  // be picked (and ones that pick their base's style) look as they did.
+  const restyled = style.id === base.hairstyle ? [] : [style.id];
   const rng = Rng.fromSeed(
-    deriveSeed('keeper', base.id, config.hairColor, config.eyeColor, config.outfit),
+    deriveSeed('keeper', base.id, config.hairColor, config.eyeColor, config.outfit, ...restyled),
   );
 
   const b = base.body;
@@ -408,7 +359,7 @@ export function keeperParams(
 
   // ── Hair ──────────────────────────────────────────────────────────────
   const j = KEEPER.jitter;
-  for (const [shape, at, size, turn = NO_TURN] of HAIRSTYLES[base.hairstyle]) {
+  for (const { shape, at, size, turn = NO_TURN } of style.pieces) {
     const k = 1 + wobble(rng, j.hairSize);
     piece(
       'hair',
@@ -421,7 +372,7 @@ export function keeperParams(
   }
 
   // ── Sockets ───────────────────────────────────────────────────────────
-  const volume = HAIR_VOLUME[base.hairstyle];
+  const volume = style.volume;
   const hairTop = head.c[1] + volume.top * head.r[1];
   const headWidth = 2 * head.r[0] * volume.width;
   const heldSize = s * 0.32;
