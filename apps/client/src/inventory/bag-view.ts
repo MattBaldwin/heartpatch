@@ -23,6 +23,7 @@ export interface BagItem {
 const ITEMS = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
 const ORDER = new Map(GAME_DATA.resources.map((r, i) => [r.id, i]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
+const RECIPE_NAMES = new Map(GAME_DATA.recipes.map((r) => [r.id, r.name]));
 
 export function itemName(id: string): string {
   return ITEMS.get(id)?.name ?? 'Mystery thing';
@@ -41,6 +42,23 @@ export function describeItems(items: ItemCounts): string {
   return Object.entries(items)
     .map(([id, n]) => `+${String(n)} ${itemIcon(id)} ${itemName(id)}`)
     .join(', ');
+}
+
+/**
+ * The pop-up when things land in the bag (owner decision 2026-10-06):
+ * "🍪 +3 Treats!" or "🪵 +5 Timber, 🍪 +3 Treats!", everything that landed
+ * at once added up. Empty when nothing did.
+ */
+export function landedText(landed: readonly { items: ItemCounts }[]): string {
+  const total: ItemCounts = {};
+  for (const { items } of landed) {
+    for (const [id, n] of Object.entries(items)) total[id] = (total[id] ?? 0) + n;
+  }
+  const parts = Object.entries(total)
+    .filter(([, n]) => n > 0)
+    .sort(([a], [b]) => (ORDER.get(a) ?? Infinity) - (ORDER.get(b) ?? Infinity))
+    .map(([id, n]) => `${itemIcon(id)} +${String(n)} ${itemName(id)}`);
+  return parts.length === 0 ? '' : `${parts.join(', ')}!`;
 }
 
 /** What the gathering chip over the map shows: one gather, and how many others. */
@@ -65,6 +83,32 @@ export function gatherChip(
   const gather = ready ?? soonest;
   if (!gather) return null;
   return { gather, ready: ready !== undefined, more: gathers.length - 1 };
+}
+
+/** A craft on the go or waiting to be collected, as the bag lists it. */
+export interface BagCraft {
+  readonly craft: Craft;
+  /** The recipe's name, or what it makes when the recipe is gone from the data. */
+  readonly name: string;
+  readonly icon: string;
+}
+
+/**
+ * Every craft the server says is on the go, soonest first, whatever its
+ * recipe or season, so a craft from an old recipe or a season that's over
+ * still shows while it cooks (it lands in the bag by itself when done).
+ */
+export function bagCrafts(crafts: readonly Craft[]): BagCraft[] {
+  return [...crafts]
+    .sort((a, b) => Date.parse(a.readyAt) - Date.parse(b.readyAt))
+    .map((craft) => {
+      const output = Object.keys(craft.items)[0] ?? craft.recipeId;
+      return {
+        craft,
+        name: RECIPE_NAMES.get(craft.recipeId) ?? itemName(output),
+        icon: itemIcon(output),
+      };
+    });
 }
 
 export type RecipeState =

@@ -44,9 +44,10 @@ export const TARGET_ATTRIBUTE = 'data-tutorial-target';
  * for a Hearthfire or a habitat) leaves its target unmapped and input open.
  * The first one on screen wins; a canvas locator is the fallback.
  *
- * The gather step walks the tile panel: Gather, its countdown while the
- * gather runs (nothing to tap, but it shows where Collect will pop up), then
- * Collect, which finishes the step. The Bag's Collect works too.
+ * The gather step walks the tile panel: Gather, then its countdown while the
+ * gather runs and its "into your bag" line (nothing to tap); the Timber goes
+ * straight into the bag with a pop-up (owner decision 2026-10-06), and its
+ * `resource.gathered` finishes the step.
  *
  * Buttons that live in a side tray (ui/trays) are hidden while it's shut, so
  * the tray's handle stands in after them: Sprout points at the handle, and
@@ -55,7 +56,7 @@ export const TARGET_ATTRIBUTE = 'data-tutorial-target';
  * the overlay out again.
  */
 export const TARGET_STAND_INS: Readonly<Partial<Record<HighlightTarget, readonly string[]>>> = {
-  'resource-node': ['tile-collect', 'bag-collect', 'tile-gather', 'tile-gathering'],
+  'resource-node': ['tile-gather', 'tile-gathering', 'tile-landing'],
   'neighbor-tile': ['tile-claim'],
   'capture-button': ['battle-capture'],
   'defense-stance': ['territory-pick'],

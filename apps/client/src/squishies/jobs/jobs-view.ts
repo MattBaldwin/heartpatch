@@ -27,7 +27,6 @@ export const JOBS_TEXT = {
   team: 'Team',
   gather: 'Gather',
   rest: 'Rest',
-  collect: (what: string) => `Collect ${what}`,
   pickSpot: 'Where should they gather?',
   noSpots: 'No spots to gather yet. Win some land!',
   cancel: 'Never mind',
@@ -68,15 +67,19 @@ export function colorOf(s: JobSquishy): string {
   return SPECIES.get(s.squishy.speciesId)?.visual.palette[0] ?? '#c9b8ff';
 }
 
-/** "+5 🪵 Timber ready" / "Full! Collect me" / "Next in 12:30". */
+/**
+ * "Next in 12:30" / "+5 🪵 Timber on its way to your bag!" / "Basket full!".
+ * Finished cycles go straight into the bag (owner decision 2026-10-06), so
+ * "ready" only shows for the moment before they land.
+ */
 export function workLine(work: WorkStatus, nowMs: number): string {
   const name = `${itemIcon(work.resource)} ${itemName(work.resource)}`;
-  if (work.full) return `Gathering ${name}. Full! Time to collect.`;
+  if (work.full) return `Gathering ${name}. Basket full! It empties into your bag soon.`;
   const next =
     work.nextReadyAt === null
       ? ''
       : ` Next in ${formatTimeLeft(Date.parse(work.nextReadyAt) - nowMs)}.`;
-  const ready = work.readyCycles > 0 ? ` ${describeItems(work.ready)} ready!` : '';
+  const ready = work.readyCycles > 0 ? ` ${describeItems(work.ready)} on its way to your bag!` : '';
   return `Gathering ${name}.${ready}${next}`;
 }
 
@@ -118,11 +121,6 @@ export function readyTotal(view: Pick<JobsView, 'squishies'>): ItemCounts {
     for (const [id, n] of Object.entries(s.work?.ready ?? {})) total[id] = (total[id] ?? 0) + n;
   }
   return total;
-}
-
-/** Can anything be collected now (a finished cycle, even an out-of-season one)? */
-export function anythingReady(view: Pick<JobsView, 'squishies'>): boolean {
-  return view.squishies.some((s) => (s.work?.readyCycles ?? 0) > 0);
 }
 
 /** The team picker's slots: a squishy id per slot, or null. */

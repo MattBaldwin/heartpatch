@@ -75,6 +75,25 @@ export const InventoryResponseSchema = z.object({
 });
 export type InventoryResponse = z.infer<typeof InventoryResponseSchema>;
 
+/** What a settle put in the bag: one finished craft, keeper gather, or a gatherer's cycles. */
+export const LandedSchema = z.object({
+  kind: z.enum(['craft', 'gather', 'work']),
+  items: ItemCountsSchema,
+});
+export type Landed = z.infer<typeof LandedSchema>;
+
+/**
+ * `POST /maps/:mapId/settle` (owner decision 2026-10-06): everything that
+ * finished goes straight into the bag, no Collect tap. The bag after, what
+ * landed (crafts, then gathers, then gatherers' work), and when the next thing finishes (null: nothing's
+ * going), so the client asks again then and not before.
+ */
+export const SettleResponseSchema = InventoryResponseSchema.extend({
+  landed: z.array(LandedSchema),
+  nextAt: z.iso.datetime().nullable(),
+});
+export type SettleResponse = z.infer<typeof SettleResponseSchema>;
+
 /** `POST /maps/:mapId/gathers`: start gathering the node on this tile. */
 export const StartGatherRequestSchema = z.strictObject({
   q: HexSchema.shape.q,

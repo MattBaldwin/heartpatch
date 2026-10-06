@@ -42,6 +42,7 @@
 }
 
 .rbook-bar,
+.rbook-cooking,
 .rbook-tabs,
 .rbook-stage,
 .rbook-nav,
@@ -116,6 +117,33 @@
 .rbook-mark-on {
   background: #ffc94d;
   color: #4a3150;
+}
+
+/* What's cooking: a paper strip under the bar, on every page and the cover. */
+.rbook-cooking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  margin: 0 4px 8px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #fff4e0;
+  box-shadow: 0 3px 0 rgb(74 49 80 / 22%);
+  font-size: 15px;
+  font-weight: 900;
+  color: #4a3150;
+}
+
+.rbook-cooking-icon {
+  flex: none;
+  font-size: 24px;
+}
+
+.rbook-cooking-text {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .rbook-tabs {

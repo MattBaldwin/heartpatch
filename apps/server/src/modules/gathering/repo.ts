@@ -1,8 +1,9 @@
 import { ItemCountsSchema, type ItemCounts } from '@heartpatch/shared';
-import { and, asc, eq, gt, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { gatherJobs, tiles } from '../../db/schema.js';
+import { firstCaptureSince } from '../jobs/repo.js';
 
 /** A tile as gathering needs it (read only: tiles belong to the maps module). */
 export interface NodeTileRow {
@@ -32,6 +33,13 @@ export interface GatherRow {
 
 export type NewGather = Omit<GatherRow, 'id' | 'q' | 'r' | 'status' | 'endedAt'>;
 
+/** A gather as settling sees it: who holds its tile now, and when it first changed hands. */
+export interface SettleGatherRow extends GatherRow {
+  tileOwner: string | null;
+  /** The first capture of its tile after the gather started, or null (`tile_attacks`). */
+  lostAt: Date | null;
+}
+
 /**
  * Gather storage. Plain queries; the service decides the rules and runs each
  * command in one transaction. Map and membership reads go through the maps
@@ -59,6 +67,10 @@ export interface GatheringRepo {
    * gather left on land they've lost isn't theirs to collect.
    */
   listActive: (mapId: string, userId: string) => Promise<GatherRow[]>;
+  /** Every gather of the player's still active on the map, wherever its tile went, in id order. Unlocked. */
+  listToSettle: (mapId: string, userId: string) => Promise<SettleGatherRow[]>;
+  /** Row-locks these gathers in id order until commit and reads them again. */
+  lockToSettle: (gatherIds: readonly string[]) => Promise<SettleGatherRow[]>;
   /** Ends an active gather; false if it had already ended. */
   endGather: (
     gatherId: string,
@@ -93,6 +105,13 @@ const gatherColumns = {
   endedAt: gatherJobs.endedAt,
 };
 
+/** A gather as settling reads it: the tile's owner now, and the first capture since it started. */
+const settleColumns = {
+  ...gatherColumns,
+  tileOwner: tiles.ownerUserId,
+  lostAt: firstCaptureSince(gatherJobs.tileId, gatherJobs.startedAt),
+};
+
 const toGather = (row: Omit<GatherRow, 'items'> & { items: unknown }): GatherRow => ({
   ...row,
   // JSON is checked on read, so a hand-edited row fails loudly.
@@ -110,6 +129,18 @@ function createGatheringTxRepo(tx: Transaction): GatheringTxRepo {
 function queries(db: Executor): GatheringRepo {
   const selectGathers = () =>
     db.select(gatherColumns).from(gatherJobs).innerJoin(tiles, eq(tiles.id, gatherJobs.tileId));
+
+  const selectToSettle = () =>
+    db.select(settleColumns).from(gatherJobs).innerJoin(tiles, eq(tiles.id, gatherJobs.tileId));
+  const toSettle = ({
+    tileOwner,
+    lostAt,
+    ...row
+  }: Awaited<ReturnType<typeof selectToSettle>>[number]) => ({
+    ...toGather(row),
+    tileOwner,
+    lostAt,
+  });
 
   return {
     transaction: (fn) => withTransaction(db, (tx) => fn(createGatheringTxRepo(tx), tx)),
@@ -181,6 +212,30 @@ function queries(db: Executor): GatheringRepo {
           )
           .orderBy(asc(gatherJobs.startedAt), asc(gatherJobs.id))
       ).map(toGather),
+
+    listToSettle: async (mapId, userId) =>
+      (
+        await selectToSettle()
+          .where(
+            and(
+              eq(gatherJobs.mapId, mapId),
+              eq(gatherJobs.userId, userId),
+              eq(gatherJobs.status, 'active'),
+            ),
+          )
+          .orderBy(asc(gatherJobs.id))
+      ).map(toSettle),
+
+    lockToSettle: async (gatherIds) => {
+      if (gatherIds.length === 0) return [];
+      // Rows of one kind lock in id order (tech spec §7).
+      return (
+        await selectToSettle()
+          .where(inArray(gatherJobs.id, [...gatherIds]))
+          .orderBy(asc(gatherJobs.id))
+          .for('update', { of: gatherJobs })
+      ).map(toSettle);
+    },
 
     endGather: async (gatherId, end) => {
       // Only an active gather ends: one collected meanwhile stays collected.

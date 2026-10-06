@@ -20,7 +20,9 @@ interface InventoryDebug {
   items: Record<string, number>;
   gathers: number;
   tileAction: string | null;
-  chip: 'waiting' | 'ready' | 'got' | null;
+  chip: 'waiting' | 'ready' | null;
+  toast: string | null;
+  landings: number;
 }
 interface JobsDebug {
   board: { jobs: Record<string, string> };
@@ -45,11 +47,10 @@ async function onAPatch(page: Page, name: string): Promise<string> {
 }
 
 /**
- * Taps (for real) around the Heart Seed until the tile panel offers Gather
- * (or Collect, for the node gathered earlier): every home ring has nodes of
- * ours (design doc §11).
+ * Taps (for real) around the Heart Seed until the tile panel offers Gather:
+ * every home ring has nodes of ours (design doc §11).
  */
-async function tapOwnNode(page: Page, offering: 'gather' | 'collect' = 'gather'): Promise<void> {
+async function tapOwnNode(page: Page): Promise<void> {
   // Let the map settle first: picking a tile needs the scene drawn and the
   // camera's arrival glide over (both slow under software rendering in CI).
   await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
@@ -72,7 +73,7 @@ async function tapOwnNode(page: Page, offering: 'gather' | 'collect' = 'gather')
         .poll(async () => (await bagState(page))?.tileAction, { timeout: 1000 })
         .not.toBeNull()
         .catch(() => undefined);
-      if ((await bagState(page))?.tileAction === offering) return;
+      if ((await bagState(page))?.tileAction === 'gather') return;
     }
   }
   const map = await hook<{ selected: string | null; tiles: number; draws: number }>(page, 'map');
@@ -161,7 +162,9 @@ test('one real tap opens each sheet and works each button over the map', async (
   expect(errors).toEqual([]);
 });
 
-test('gathers and collects with one tap each, and the bag fills up', async ({ browser }) => {
+test('gathers with one tap, and finished things land in the bag by themselves', async ({
+  browser,
+}) => {
   test.setTimeout(240_000); // two gathers, a job and a map build; CI renders in software
   const page = await newPlayer(browser, uniqueName('coll'));
   const errors: string[] = [];
@@ -169,6 +172,7 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   const mapId = await onAPatch(page, 'Collect Patch');
   const panel = page.getByTestId('tile-panel');
   const bag = page.getByTestId('bag');
+  const toast = page.getByTestId('landed-toast');
 
   // Gather on one of our nodes: one tap starts it.
   await tapOwnNode(page);
@@ -178,33 +182,27 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   await expect(panel.getByTestId('tile-gathering')).toBeVisible();
   await realTap(panel.getByRole('button', { name: 'Close' }));
 
-  // It finishes (the dev route stands in for the wait). The chip says so once
-  // the bag has heard: opening the Bag refetches it.
+  // It finishes (the dev route stands in for the wait, so the page's own
+  // timer doesn't know): opening the Bag settles, and it lands with a pop-up.
+  // No Collect anywhere (owner decision 2026-10-06).
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
   await realTap(await inTray(page, 'bag-open'));
-  await expect(bag.getByTestId('bag-collect')).toBeVisible();
-  await realTap(bag.getByRole('button', { name: 'Close' }));
-  await expect.poll(async () => (await bagState(page))?.chip).toBe('ready');
-
-  // The tile panel offers Collect: one tap puts it in the bag.
-  await tapOwnNode(page, 'collect');
-  await expect(panel.getByTestId('tile-collect')).toBeVisible();
-  await realTap(panel.getByTestId('tile-collect'));
-  await expect(page.getByTestId('bag-note')).toContainText('Yay!');
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText('+');
   await expect.poll(async () => (await bagState(page))?.gathers).toBe(0);
   const afterTile = itemTotal((await bagState(page))!.items);
   expect(afterTile).toBeGreaterThan(before);
-  expect((await bagState(page))?.tileAction).toBe('gather');
+  await expect(page.getByRole('button', { name: 'Collect' })).toHaveCount(0);
+  await realTap(bag.getByRole('button', { name: 'Close' }));
+  await expect(page.getByTestId('gather-chip')).toBeHidden();
 
-  // Again, this time from the chip: "ready! Tap to collect" collects on that
-  // one tap and shows what came, then goes away.
+  // Again: the chip counts down, and a tap on it opens the Bag.
+  await tapOwnNode(page);
   await realTap(panel.getByTestId('tile-gather'));
   await expect.poll(async () => (await bagState(page))?.gathers).toBe(1);
   await realTap(panel.getByRole('button', { name: 'Close' }));
   const chip = page.getByTestId('gather-chip');
   await expect(chip).toContainText('Gathering');
-  // A chip still counting down opens the Bag (which refetches, so it learns
-  // the gather is done), and nothing is collected by that tap.
   await realTap(chip);
   await expect(bag).toBeVisible();
   await realTap(bag.getByRole('button', { name: 'Close' }));
@@ -224,20 +222,17 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
   });
   await expect(bag).toBeVisible();
   await realTap(bag.getByRole('button', { name: 'Close' }));
+  // Done: the app coming back to the front settles too, and the chip goes.
   expect((await api(page, 'POST', `/maps/${mapId}/dev/gathers/ready`)).status).toBe(200);
-  await realTap(await inTray(page, 'bag-open'));
-  await realTap(bag.getByRole('button', { name: 'Close' }));
-  await expect(chip).toContainText('Tap to collect');
-  expect((await bagState(page))?.chip).toBe('ready');
-  await realTap(chip);
-  await expect(chip).toContainText('Yay!');
-  expect((await bagState(page))?.chip).toBe('got');
-  await expect(bag).toBeHidden();
-  await expect.poll(async () => (await bagState(page))?.gathers).toBe(0);
+  const landed = (await bagState(page))!.landings;
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect.poll(async () => (await bagState(page))?.landings).toBe(landed + 1);
+  await expect(chip).toBeHidden();
+  await expect(toast).toBeVisible();
   expect(itemTotal((await bagState(page))!.items)).toBeGreaterThan(afterTile);
-  await expect(chip).toBeHidden({ timeout: 10_000 });
 
-  // A squishy gatherer's work: the job board's Collect, one tap.
+  // A squishy gatherer's work lands by itself too: the job board settles
+  // before it reads the server's view.
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/squishies`, {
     speciesId: 'mossmuffin',
     level: 4,
@@ -257,16 +252,13 @@ test('gathers and collects with one tap each, and the bag fills up', async ({ br
     .toBe('gatherer');
   expect((await api(page, 'POST', `/maps/${mapId}/dev/work/ready`)).status).toBe(200);
   await realTap(board.getByRole('button', { name: 'Close' }));
+  const bagBeforeJobs = itemTotal((await bagState(page))!.items);
+  const landedBefore = (await bagState(page))!.landings;
   await realTap(await inTray(page, 'jobs-open'));
-  const bagBeforeJobs = (await api(page, 'GET', `/maps/${mapId}/inventory`)).body as {
-    items: Record<string, number>;
-  };
-  await realTap(board.getByTestId('jobs-collect'));
-  await expect(board.getByTestId('jobs-note')).toContainText('+');
-  const bagAfterJobs = (await api(page, 'GET', `/maps/${mapId}/inventory`)).body as {
-    items: Record<string, number>;
-  };
-  expect(itemTotal(bagAfterJobs.items)).toBeGreaterThan(itemTotal(bagBeforeJobs.items));
+  await expect.poll(async () => (await bagState(page))?.landings).toBe(landedBefore + 1);
+  await expect(toast).toBeVisible();
+  expect(itemTotal((await bagState(page))!.items)).toBeGreaterThan(bagBeforeJobs);
+  await expect(board.getByRole('button', { name: /Collect/ })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

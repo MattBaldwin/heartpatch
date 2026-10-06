@@ -1,10 +1,4 @@
-import {
-  CollectWorkResponseSchema,
-  JobsViewSchema,
-  type CollectWorkResponse,
-  type JobsView,
-  type SetJobRequest,
-} from '@heartpatch/shared';
+import { JobsViewSchema, type JobsView, type SetJobRequest } from '@heartpatch/shared';
 import { apiCallFor } from '../../net/api.js';
 
 /** Squishy job calls (server: modules/jobs). `key` makes a retry safe (tech spec §5). */
@@ -26,13 +20,6 @@ export const jobsApi = {
       method: 'POST',
       body: { squishyIds },
       schema: JobsViewSchema,
-      headers: { 'idempotency-key': key },
-    }),
-
-  collect: (mapId: string, key: string): Promise<CollectWorkResponse> =>
-    apiCallFor(`/maps/${mapId}/work/collect`, {
-      method: 'POST',
-      schema: CollectWorkResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 };
