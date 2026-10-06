@@ -186,7 +186,9 @@ function queries(db: Executor): CareRepo {
             inArray(careLog.squishyId, [...squishyIds]),
             eq(careLog.day, day),
             // A rare treat (the Heart Snack) isn't part of the day's count.
-            OUTSIDE_DAILY_CARE.length > 0 ? notInArray(careLog.action, OUTSIDE_DAILY_CARE) : undefined,
+            OUTSIDE_DAILY_CARE.length > 0
+              ? notInArray(careLog.action, OUTSIDE_DAILY_CARE)
+              : undefined,
           ),
         )
         .groupBy(careLog.squishyId);

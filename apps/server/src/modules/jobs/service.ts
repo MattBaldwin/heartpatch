@@ -172,7 +172,10 @@ export async function landTraining(
   squishyIds: readonly string[],
   at: Date,
   stop: boolean,
-): Promise<{ trained: { squishyId: string; ownerUserId: string; xp: number }[]; events: NewGameEvent[] }> {
+): Promise<{
+  trained: { squishyId: string; ownerUserId: string; xp: number }[];
+  events: NewGameEvent[];
+}> {
   const repo = createSquishyJobsRepo(tx);
   const rows = (await repo.listByIds(squishyIds)).filter((r) => r.training !== null);
   const trained: { squishyId: string; ownerUserId: string; xp: number }[] = [];
@@ -543,7 +546,8 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     if (working.length > 0) events.push(...(await leaveWork(tx, map, working, job, at)));
     // Trainees land what they earned and stop (owner decision 2026-10-06).
     const training = rows.filter((r) => r.training !== null).map((r) => r.squishy.id);
-    if (training.length > 0) events.push(...(await landTraining(tx, map, training, at, true)).events);
+    if (training.length > 0)
+      events.push(...(await landTraining(tx, map, training, at, true)).events);
     return events;
   };
 

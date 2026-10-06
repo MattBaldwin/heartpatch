@@ -556,9 +556,7 @@ export const GAME_EVENTS = {
   'squishy.trained': {
     internal: z.strictObject({
       userId: z.uuid(),
-      trained: z
-        .array(z.strictObject({ squishyId: z.uuid(), xp: z.number().int().min(1) }))
-        .min(1),
+      trained: z.array(z.strictObject({ squishyId: z.uuid(), xp: z.number().int().min(1) })).min(1),
     }),
     public: z.object({ userId: z.uuid() }),
   },

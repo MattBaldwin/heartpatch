@@ -96,7 +96,9 @@ export const SettleResponseSchema = InventoryResponseSchema.extend({
    * Training Grounds XP that landed (owner decision 2026-10-06), per
    * squishy, with its name (only mine, as `JobsView.names`) for the pop-up.
    */
-  trained: z.array(z.object({ squishyId: z.uuid(), name: z.string(), xp: z.number().int().min(1) })),
+  trained: z.array(
+    z.object({ squishyId: z.uuid(), name: z.string(), xp: z.number().int().min(1) }),
+  ),
   nextAt: z.iso.datetime().nullable(),
 });
 export type SettleResponse = z.infer<typeof SettleResponseSchema>;
