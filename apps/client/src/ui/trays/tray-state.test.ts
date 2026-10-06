@@ -58,13 +58,13 @@ describe('trays', () => {
 
 describe('handle badges', () => {
   const alerts: TrayAlert[] = [
-    { side: 'adventure', count: 2, peek: 'New raid report!' },
+    { side: 'adventure', count: 2, peek: 'New challenge report!' },
     { side: 'adventure', count: 1, peek: null },
     { side: 'heartpatch', count: 0, peek: 'Nothing yet' },
   ];
 
   it('add up one side’s alerts', () => {
-    expect(handleBadge(alerts, 'adventure')).toEqual({ text: '3', peek: 'New raid report!' });
+    expect(handleBadge(alerts, 'adventure')).toEqual({ text: '3', peek: 'New challenge report!' });
   });
 
   it('show nothing for a side with no live alerts', () => {
@@ -78,9 +78,9 @@ describe('handle badges', () => {
   });
 
   it('peek only for alerts that are new or changed', () => {
-    const before: TrayAlert[] = [{ side: 'adventure', count: 1, peek: 'New raid report!' }];
+    const before: TrayAlert[] = [{ side: 'adventure', count: 1, peek: 'New challenge report!' }];
     expect(newPeeks(before, before)).toEqual([]);
-    const more: TrayAlert[] = [{ side: 'adventure', count: 2, peek: 'New raid report!' }];
+    const more: TrayAlert[] = [{ side: 'adventure', count: 2, peek: 'New challenge report!' }];
     expect(newPeeks(before, more)).toEqual(more);
     expect(newPeeks([], [{ side: 'heartpatch', count: 1, peek: null }])).toEqual([]);
   });

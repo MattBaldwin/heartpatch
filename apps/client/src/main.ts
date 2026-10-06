@@ -136,10 +136,10 @@ const chatFor = (mapId: string): string | null => (mapId === glade ? null : mapI
 const audio = createAudio();
 
 // The map's controls live in two side trays (owner decision 2026-10-04):
-// "Adventure" on the left, "My Heartpatch" on the right, with news as badges
+// "Adventure" on the left, "My Home" on the right, with news as badges
 // on their handles. Mounted first, so the lobby and catalog cover it.
 const trays = createTrays({ root: document.body });
-// Team and Jobs go in My Heartpatch (squishy jobs); their row shows itself
+// Team and Jobs go in My Home (squishy jobs); their row shows itself
 // whenever this box does (on a map), and not on the Tutorial Glade.
 const jobsBox = el('div', { class: 'tray-jobs' });
 jobsBox.hidden = true;
@@ -149,7 +149,7 @@ let hudMapId: string | null = null;
 /** The patch of the battle on screen (its map is put away meanwhile). */
 let battleMapId: string | null = null;
 
-// The bag and gathering (#17): a Bag entry in the My Heartpatch tray, and the
+// The bag and gathering (#17): a Bag entry in the My Home tray, and the
 // gather buttons in the tile chip.
 const inventory = createInventoryScreen({
   root: document.body,

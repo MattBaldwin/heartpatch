@@ -19,8 +19,15 @@ const raid = (over: Partial<Raid> = {}): Raid => ({
 });
 
 describe('raid words', () => {
-  it('titles the sheet "Raid report", so it never reads like the Hollow’s morning report', () => {
-    expect(RAID_TEXT.title).toBe('Raid report');
+  it('titles the sheet "Challenge report", so it never reads like the Hollow’s morning report', () => {
+    expect(RAID_TEXT.title).toBe('Challenge report');
+  });
+
+  it('calls the player’s tiles their land, never their patch (style guide §9)', () => {
+    expect(RAID_TEXT.challenged).toBe('Someone challenged your land!');
+    for (const text of [RAID_TEXT.news, RAID_TEXT.challenged, RAID_TEXT.quiet]) {
+      expect(text).not.toMatch(/patch|raid/i);
+    }
   });
 
   it('names the three styles with the style guide words', () => {

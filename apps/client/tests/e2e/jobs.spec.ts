@@ -56,7 +56,7 @@ test('a squishy gathers on its own, and the picked team goes to battle', async (
   expect(granted.status).toBe(201);
   const helperId = (granted.body as { squishy: { id: string } }).squishy.id;
 
-  // The job board, from My Heartpatch.
+  // The job board, from My Home.
   await (await trayButton(page, 'jobs-open')).tap();
   const board = page.getByTestId('jobs');
   await expect(board).toBeVisible();

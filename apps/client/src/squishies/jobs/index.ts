@@ -17,7 +17,7 @@ import { createTeamPicker, type TeamPicker, type TeamPickerDebug } from './team-
 // the team picker, as self-contained sheets (`openJobBoard(mapId)` /
 // `openTeamPicker(mapId)`). Entry points: the tile panel's "Send a gatherer"
 // line (`tileActions`) and the Team and Jobs row (`mountTeamButton`), which
-// main.ts mounts in the My Heartpatch tray.
+// main.ts mounts in the My Home tray.
 
 export interface JobsOptions {
   root: HTMLElement;
@@ -44,7 +44,7 @@ export interface Jobs {
   /** The tile panel's lines: who's gathering here, and "Send a gatherer" on my land. */
   readonly tileActions: TileActions;
   /**
-   * Puts the Team and Jobs buttons in `box` (a box in the My Heartpatch tray),
+   * Puts the Team and Jobs buttons in `box` (a box in the My Home tray),
    * opening the sheets for the map `mapNow` names; shown while `box` is.
    */
   mountTeamButton: (box: Element | null, mapNow: () => string | null) => void;

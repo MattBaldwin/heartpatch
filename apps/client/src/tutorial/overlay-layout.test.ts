@@ -359,7 +359,7 @@ describe('dockChip (the tucked chip keeps off a tray the step is using)', () => 
     }
   });
 
-  it('docks clear of Adventure on an iPad both ways round, and leaves My Heartpatch be', () => {
+  it('docks clear of Adventure on an iPad both ways round, and leaves My Home be', () => {
     for (const screen of [
       { width: 1180, height: 820 },
       { width: 820, height: 1180 },
