@@ -1,6 +1,8 @@
 import {
   AttackTileRequestSchema,
   BattleResponseSchema,
+  DevAgeLandRequestSchema,
+  LandTendingResponseSchema,
   MapIdParamsSchema,
   SetDefendersRequestSchema,
   TerritoryResponseSchema,
@@ -17,6 +19,8 @@ export interface TerritoryRoutesOptions {
   hooks: AuthHooks;
   /** `Idempotency-Key` support (`registerIdempotency`). */
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
+  /** Dev-only routes (`HP_DEV_SQUISHY_GRANTS`): age my land to try fading on a device. */
+  devTools?: boolean;
 }
 
 export const territoryRoutes =
@@ -36,6 +40,30 @@ export const territoryRoutes =
       },
       async (request) => ({
         territory: await service.status(requireUser(request), request.params.mapId),
+      }),
+    );
+
+    // Land that misses you (owner decision 2026-10-06): only the owner sees theirs.
+    app.get(
+      '/maps/:mapId/territory/tending',
+      {
+        schema: { params: MapIdParamsSchema, response: { 200: LandTendingResponseSchema } },
+        preHandler: requireAuth,
+      },
+      async (request) => ({
+        tending: await service.tending(requireUser(request), request.params.mapId),
+      }),
+    );
+
+    // Visit tends all my land; a repeat just tends it again, so no Idempotency-Key.
+    app.post(
+      '/maps/:mapId/territory/visit',
+      {
+        schema: { params: MapIdParamsSchema, response: { 200: LandTendingResponseSchema } },
+        preHandler: [requireAuth, rateLimit('visit')],
+      },
+      async (request) => ({
+        tending: await service.visit(requireUser(request), request.params.mapId),
       }),
     );
 
@@ -79,6 +107,27 @@ export const territoryRoutes =
         ),
       }),
     );
+
+    if (options.devTools) {
+      app.post(
+        '/maps/:mapId/dev/territory/age',
+        {
+          schema: {
+            params: MapIdParamsSchema,
+            body: DevAgeLandRequestSchema,
+            response: { 200: LandTendingResponseSchema },
+          },
+          preHandler: [requireAuth, rateLimit('visit')],
+        },
+        async (request) => ({
+          tending: await service.devAgeLand(
+            requireUser(request),
+            request.params.mapId,
+            request.body.days,
+          ),
+        }),
+      );
+    }
 
     done();
   };

@@ -177,6 +177,16 @@ describe('wild land is muted, owned land in full colour', () => {
       expect(full).toEqual(hexRgb(look.color));
       expect(saturation(muted), id).toBeLessThan(saturation(full));
     }
+    // Land that misses its owner is drawn part of the way (owner decision 2026-10-06).
+    const meadowLook = TERRAIN_LOOKS['meadow']!.color;
+    const half = tileColor(meadowLook, level, 0.5);
+    const none = tileColor(meadowLook, level, 0);
+    const all = tileColor(meadowLook, level, 1);
+    expect(none).toEqual(tileColor(meadowLook, level, false));
+    expect(all).toEqual(tileColor(meadowLook, level, true));
+    half.forEach((v, i) => {
+      expect(v).toBeCloseTo(((none[i] ?? 0) + (all[i] ?? 0)) / 2, 6);
+    });
     // A muted meadow and a muted lake still differ (the hex read stays clear).
     const meadow = muteRgb(hexRgb(TERRAIN_LOOKS['meadow']!.color));
     const lake = muteRgb(hexRgb(TERRAIN_LOOKS['lake']!.color));

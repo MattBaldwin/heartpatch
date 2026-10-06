@@ -313,6 +313,12 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(done.rewards?.percent).toBe(100);
       expect((await tileAt(mapId, target!)).ownerUserId).toBe(kid.id);
       expect((await attacksOf(mapId))[0]).toMatchObject({ outcome: 'captured', endedAt: clock });
+      // Claiming land tends it (land that misses you).
+      const claimedId = (await tileAt(mapId, target!)).id;
+      const tended = await db.query.tileTending.findFirst({
+        where: (t, { eq }) => eq(t.tileId, claimedId),
+      });
+      expect(tended?.tendedAt).toEqual(clock);
 
       // Events: started, attacked … ended, captured — in the battle's transaction.
       // (A level-40 starter also grows up here; #19's growth events sit in between.)

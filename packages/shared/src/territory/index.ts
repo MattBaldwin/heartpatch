@@ -88,3 +88,4 @@ export function isOnWatch(
     post !== null && squishy.state === 'active' && post.tileOwnerUserId === squishy.ownerUserId
   );
 }
+export * from './tending.js';

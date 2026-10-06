@@ -9,6 +9,7 @@ import { createMilestonesConsumer } from './modules/milestones/consumer.js';
 import { createMilestonesService } from './modules/milestones/service.js';
 import type { HollowService } from './modules/hollow/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
+import { createLandTending } from './modules/territory/tending.js';
 import { createTutorialConsumer } from './modules/tutorial/consumer.js';
 
 const config = loadServerConfig();
@@ -26,6 +27,13 @@ const app = await buildApp({
 });
 if (!hollowService) throw new Error('the Hollow Man needs the database');
 const hollow = hollowService;
+// Land that misses you (owner decision 2026-10-06): long-untended land goes
+// wild at nightfall, after the Hollow Man. Its own transaction, safe to rerun.
+const land = createLandTending({
+  db: db.db,
+  clock,
+  ...(app.wsHub ? { publish: app.wsHub.publish } : {}),
+});
 // Scheduled jobs and event consumers (tech spec §7), in this process.
 const jobs = await startJobs({
   connectionString: config.DATABASE_URL,
@@ -37,10 +45,16 @@ const jobs = await startJobs({
     createLoreConsumer({ clock }),
     createMilestonesConsumer({ clock }),
   ],
-  // The Hollow Man (#21): night falls on each map at 21:00 map time.
+  // The Hollow Man (#21): night falls on each map at 21:00 map time. Then
+  // untended land goes wild; a retry finds the Hollow's night done and only
+  // tops land up to the night's cap.
   nightfall: {
     due: hollow.dueNightfalls,
-    run: hollow.runNightfall,
+    run: async (mapId, night) => {
+      const taken = await hollow.runNightfall(mapId, night);
+      await land.nightfall(mapId, night);
+      return taken;
+    },
   },
   logger: app.log,
   ...(app.wsHub ? { publish: app.wsHub.publish } : {}),

@@ -6,6 +6,7 @@ import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
 import { createHollowScreen } from './hollow/hollow-screen.js';
+import { createLandScreen } from './land/land-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -213,6 +214,7 @@ const closeUp = createCloseUpScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void land.setMap(null);
     void chat.setMap(null);
     void battles.setMap(null);
     home.setMap(null);
@@ -231,6 +233,7 @@ const closeUp = createCloseUpScreen({
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
+        void land.setMap(mapId);
         void chat.setMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
@@ -275,6 +278,16 @@ const territory = withRaidReport(
   }),
   raidReport,
 );
+// Land that misses you (owner decision 2026-10-06): my fading land drawn on
+// the map, the "Some land misses you!" chip with Visit, and the welcome-back
+// card for land that went wild while I was away.
+const land = createLandScreen({
+  root: document.body,
+  setFade: (fade) => {
+    maps.setLandFade(fade);
+  },
+  view: () => maps.view,
+});
 // The Hollow Man (#21): the night on the map, his visit when night falls,
 // the morning report, and rescues (a rescue battle opens the battle screen).
 const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
@@ -341,6 +354,7 @@ const home = createHomeScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void land.setMap(null);
     void chat.setMap(null);
     void battles.setMap(null);
     lobby.stepOut();
@@ -361,6 +375,7 @@ const home = createHomeScreen({
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
+        void land.setMap(mapId);
         void chat.setMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
@@ -386,6 +401,7 @@ const maps = createMapScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
     lobby.showMessage(message);
@@ -393,6 +409,7 @@ const maps = createMapScreen({
   tileActions: combineTileActions(
     inventory.tileActions,
     home.tileActions,
+    land.tileActions,
     territory.tileActions,
     jobs.tileActions,
   ),
@@ -406,7 +423,7 @@ const maps = createMapScreen({
     // Sprout points at the handles once, on a patch (the Glade has Sprout already).
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
-  layers: [hollowLayer, jobs.badges],
+  layers: [hollowLayer, jobs.badges, land.layer],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
   // A piece of clothing found while playing (#43) shows a little note; night
@@ -414,6 +431,7 @@ const maps = createMapScreen({
   onLiveEvent: (event) => {
     wardrobe.liveEvent(event);
     hollow.liveEvent(event);
+    land.liveEvent(event);
     chat.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
@@ -467,6 +485,7 @@ const tutorial = createTutorialScreen({
       void inventory.setMap(mapId);
       void territory.setMap(mapId);
       void hollow.setMap(mapId);
+      void land.setMap(mapId);
       void battles.setMap(mapId);
     },
     close: () => {
@@ -475,6 +494,7 @@ const tutorial = createTutorialScreen({
       void inventory.setMap(null);
       void territory.setMap(null);
       void hollow.setMap(null);
+      void land.setMap(null);
       void chat.setMap(null);
       home.setMap(null);
       // A care sheet left open on the Glade (an evolution's "Whoa!") would
@@ -552,6 +572,7 @@ const battles = createBattleScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
     lobby.stepOut();
@@ -569,6 +590,7 @@ const battles = createBattleScreen({
           inventory.setMap(mapId),
           territory.setMap(mapId),
           hollow.setMap(mapId),
+          land.setMap(mapId),
           chat.setMap(chatFor(mapId)),
         ]);
       },
@@ -629,6 +651,7 @@ const keeper = createKeeperScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
     maps.close();
@@ -657,6 +680,7 @@ const cinematic = createCinematicScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
     maps.close();
@@ -697,6 +721,7 @@ const wardrobe = createWardrobeScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
     maps.close();
@@ -718,6 +743,7 @@ const wardrobe = createWardrobeScreen({
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
+        void land.setMap(mapId);
         void chat.setMap(chatFor(mapId));
         // A battle left for the wardrobe resumes.
         void battles.setMap(mapId);
@@ -742,6 +768,7 @@ const starters = createStarterScreen({
     void inventory.setMap(null);
     void territory.setMap(null);
     void hollow.setMap(null);
+    void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
     maps.close();
@@ -778,6 +805,7 @@ const lobby = mountLobby(document.body, {
     void inventory.setMap(mapId);
     void territory.setMap(mapId);
     void hollow.setMap(mapId);
+    void land.setMap(mapId);
     void chat.setMap(chatFor(mapId));
     home.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
@@ -834,6 +862,7 @@ mountAuth(document.body, {
     recipeBook.setUser(user);
     territory.setUser(user);
     hollow.setUser(user);
+    land.setUser(user);
     chat.setUser(user);
     home.setUser(user);
     wardrobe.setUser(user);
@@ -902,6 +931,7 @@ if (import.meta.env.DEV) {
     inventory: () => inventory.debug,
     territory: () => territory.debug,
     hollow: () => hollow.debug,
+    land: () => land.debug,
     chat: () => chat.debug,
     raids: () => raidReport.debug,
     home: () => home.debug,
