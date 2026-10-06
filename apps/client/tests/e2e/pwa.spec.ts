@@ -186,7 +186,7 @@ test('shows the Add to Home Screen guide in Safari, in the lobby, until dismisse
   await expect(page.getByTestId('install-guide')).toHaveCount(0);
 
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  await overlay.getByLabel('Family code').fill(signupCode);
+  await overlay.getByLabel('Family or invite code').fill(signupCode);
   await overlay
     .getByLabel('Pick a name')
     .fill(`pwa_${Date.now().toString(36)}${String(testInfo.workerIndex)}`);
