@@ -417,7 +417,7 @@ const maps = createMapScreen({
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
-// Heartpatch tray. "Make it" uses the bag's own crafting; "Find on map" taps
+// Home tray. "Make it" uses the bag's own crafting; "Find on map" taps
 // the player's nearest tile with the ingredient and glides there.
 const recipeBook = createRecipeBook({
   root: document.body,

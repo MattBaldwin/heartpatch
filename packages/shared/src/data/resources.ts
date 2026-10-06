@@ -59,7 +59,7 @@ export const RESOURCES: Resource[] = [
   {
     id: 'witch-dust',
     name: 'Witch Dust',
-    description: 'Glittery purple dust that sparkles up with Emberwood and Pumpkins.',
+    description: 'Glittery purple dust you find with Emberwood and Pumpkins.',
     kind: 'seasonal',
     season: 'halloween',
   },
