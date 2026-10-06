@@ -241,6 +241,23 @@ describe('build menu', () => {
     });
   });
 
+  it('describes the Training Grounds and what upgrading them does', () => {
+    const grounds: MyBuilding = {
+      ...meadow(),
+      buildingId: 'training-grounds',
+      kind: 'training-grounds',
+      capacity: 2,
+      residents: 1,
+    };
+    expect(buildingNote(grounds)).toBe(
+      "1 of 2 squishies are practicing. They learn a little every hour, even while you're away.",
+    );
+    expect(upgradeOffer(homeWith(), grounds)).toMatchObject({
+      to: 2,
+      line: 'Room for 3 squishies, and they learn a little faster.',
+    });
+  });
+
   it("maps where the fire's light reaches now and after the upgrade", () => {
     const home = homeWith();
     const reach = upgradeReach(home, fire({ q: 0, r: 0 }), 2);

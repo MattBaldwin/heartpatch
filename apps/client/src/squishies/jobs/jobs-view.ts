@@ -27,6 +27,7 @@ export const JOBS_TEXT = {
   team: 'Team',
   gather: 'Gather',
   rest: 'Rest',
+  train: 'Train',
   pickSpot: 'Where should they gather?',
   noSpots: 'No spots to gather yet. Win some land!',
   cancel: 'Never mind',
@@ -45,6 +46,7 @@ export const JOBS_TEXT = {
   takenBy: (name: string) => `${name} is here`,
   leavesWatch: 'Leaves watch',
   stopsGathering: 'Stops gathering',
+  stopsTraining: 'Stops training',
   inHollow: 'In the Hollow',
   outOfSeason: 'Out of season, so nothing to find here. Give them a new job!',
   training: 'Practicing at the Training Grounds 🎯',
@@ -136,6 +138,7 @@ export function teamCost(s: JobSquishy): string | null {
   if (s.squishy.state !== 'active') return JOBS_TEXT.inHollow;
   if (s.job === 'guard') return JOBS_TEXT.leavesWatch;
   if (s.job === 'gatherer') return JOBS_TEXT.stopsGathering;
+  if (s.job === 'training') return JOBS_TEXT.stopsTraining;
   return null;
 }
 

@@ -7,6 +7,7 @@ import {
   describeItems,
   gatherChip,
   landedText,
+  trainedText,
 } from './bag-view.js';
 import { FALLBACK_ICON, itemIcon } from './item-icons.js';
 
@@ -75,6 +76,21 @@ describe('landedText', () => {
     ).toBe(`${itemIcon('timber')} +7 Timber, ${itemIcon('treats')} +3 Treats!`);
     expect(landedText([])).toBe('');
     expect(findAvoidedWords(landedText([{ items: { 'witch-dust': 1 } }]))).toEqual([]);
+  });
+});
+
+describe('trainedText', () => {
+  it('names each squishy that trained and how much XP landed', () => {
+    expect(trainedText([{ name: 'Pebblesnooze', xp: 60 }])).toBe(
+      '🎯 Pebblesnooze trained: +60 XP!',
+    );
+    expect(
+      trainedText([
+        { name: 'Pebblesnooze', xp: 60 },
+        { name: 'Emberbun', xp: 7 },
+      ]),
+    ).toBe('🎯 Pebblesnooze trained: +60 XP! 🎯 Emberbun trained: +7 XP!');
+    expect(trainedText([])).toBe('');
   });
 });
 

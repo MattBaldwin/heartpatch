@@ -97,6 +97,23 @@ describe('careSheet', () => {
     ]);
   });
 
+  it('shows the Heart Snack once there is any Heartdust, with have/need, off when short', () => {
+    // No Heartdust: no Heart Snack yet (taught when it's in reach).
+    expect(careSheet(squishy(), reply()).treat).toBeNull();
+    const short = careSheet(squishy(), reply({ items: { heartdust: 1 } }));
+    const snack = short.buttons.find((b) => b.action === 'heart-snack')!;
+    expect(snack).toMatchObject({
+      label: '💖 Heart Snack',
+      sub: '💖 1/3 Heartdust',
+      note: '',
+      special: true,
+    });
+    expect(short.treat).toBe(CARE_TEXT.treatLine('Heart Snack'));
+    const ready = careSheet(squishy(), reply({ items: { heartdust: 3 } }));
+    expect(ready.buttons.find((b) => b.action === 'heart-snack')!.note).toBeNull();
+    expect(ready.buttons.filter((b) => b.special).map((b) => b.action)).toEqual(['heart-snack']);
+  });
+
   it('greys out an action that just happened, and feeding without Treats', () => {
     const model = careSheet(
       squishy({ nextCareAt: { pet: '2026-10-02T12:00:05.000Z' } }),

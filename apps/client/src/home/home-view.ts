@@ -306,6 +306,11 @@ export function buildingNote(b: MyBuilding): string {
     if (nights === 0) return "It's out. Add Emberwood to light it!";
     return `Lit! ${String(nights)} ${nights === 1 ? 'night' : 'nights'} of fuel left.`;
   }
+  if (b.kind === 'training-grounds') {
+    const n = b.residents ?? 0;
+    const room = b.capacity ?? 0;
+    return `${String(n)} of ${String(room)} squishies are practicing. They learn a little every hour, even while you're away.`;
+  }
   if (b.kind === 'habitat') {
     const living = b.residents ?? 0;
     const room = b.capacity ?? 0;

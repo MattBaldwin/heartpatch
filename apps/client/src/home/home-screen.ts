@@ -19,6 +19,7 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
 import { WANDER } from './home-config.js';
+import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { homeApi, type HomeApi } from './home-api.js';
 import { HomeScene, type HomeSceneStats } from './home-scene.js';
 import {
@@ -80,6 +81,8 @@ export interface HomeScreenOptions {
    */
   onRecipeBook?: () => void;
   api?: HomeApi;
+  /** Train and Stop on the Training Grounds card (the job board's own calls). */
+  jobs?: Pick<JobsApi, 'setJob'>;
 }
 
 type Mode =
@@ -134,6 +137,11 @@ export const HOME_TEXT = {
   addFuel: 'Add fuel',
   moveIn: 'Move in',
   moveOut: 'Move out',
+  train: 'Train',
+  stop: 'Stop',
+  practicing: (level: number) => `Practicing · Level ${String(level)}`,
+  trained: (name: string) => `${name} is off to practice!`,
+  stopped: (name: string) => `${name} stopped for a rest.`,
   upgrade: '⬆️ Upgrade',
   upgradeNow: 'Upgrade!',
   notNow: 'Not now',
@@ -173,6 +181,7 @@ const FUEL_NIGHTS = 1;
 
 export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const api = options.api ?? homeApi;
+  const jobs = options.jobs ?? jobsApi;
   const registry = visualRegistry(GAME_DATA);
 
   let user: PublicUser | null = null;
@@ -359,6 +368,21 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       () => ({ mode: { kind: 'idle' }, say: HOME_TEXT.removed(back) }),
     );
   };
+
+  /** Train or stop one of my squishies at the Training Grounds, then read the home again. */
+  const practice = (squishyId: string, train: boolean, name: string, groundsId: string) =>
+    act(
+      async (id, send) => {
+        const done = await send((key) =>
+          jobs.setJob(id, squishyId, { job: train ? 'training' : 'resting' }, key),
+        );
+        return done ? api.get(id) : null;
+      },
+      () => ({
+        mode: { kind: 'selected', id: groundsId },
+        say: train ? HOME_TEXT.trained(name) : HOME_TEXT.stopped(name),
+      }),
+    );
 
   const house = (squishyId: string, habitatId: string | null, name: string, where: string) =>
     act(
@@ -726,6 +750,52 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                         : likesHabitat(s, b.buildingId)
                           ? HOME_TEXT.cozy
                           : '',
+                    ),
+                  ),
+                  action,
+                );
+              }),
+            ),
+      );
+    }
+    if (b.kind === 'training-grounds') {
+      const species = speciesMap(current);
+      const full = (b.residents ?? 0) >= (b.capacity ?? 0);
+      card.push(
+        current.squishies.length === 0
+          ? el('p', { class: 'home-empty' }, HOME_TEXT.noSquishies)
+          : el(
+              'ul',
+              { class: 'home-list', 'data-testid': 'home-trainees' },
+              ...current.squishies.map((s) => {
+                const name = squishyName(s, species);
+                const here = s.trainingId === b.id;
+                const action = here
+                  ? button(
+                      HOME_TEXT.stop,
+                      () => void practice(s.id, false, name, b.id),
+                      {
+                        'data-trainee': s.id,
+                      },
+                      true,
+                    )
+                  : full
+                    ? el('span', { class: 'home-list-note' }, HOME_TEXT.full)
+                    : button(HOME_TEXT.train, () => void practice(s.id, true, name, b.id), {
+                        'data-trainee': s.id,
+                      });
+                return el(
+                  'li',
+                  { class: 'home-list-row' },
+                  el(
+                    'span',
+                    { class: 'home-list-name' },
+                    name,
+                    el(
+                      'span',
+                      { class: 'home-list-sub' },
+                      // Other jobs aren't in the home reply, so only trainees get a line.
+                      here ? HOME_TEXT.practicing(s.level) : '',
                     ),
                   ),
                   action,

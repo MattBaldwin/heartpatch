@@ -260,6 +260,13 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
             },
             { 'data-job': 'gatherer' },
           ),
+          // Owner decision 2026-10-06: practice at the Training Grounds. Without
+          // one (or when it's full) the server says so in a friendly line.
+          button(
+            `🎯 ${JOBS_TEXT.train}`,
+            () => void assign(s, { job: 'training' }, `${name} is off to practice!`),
+            { 'data-job': 'training' },
+          ),
           button(
             `💤 ${JOBS_TEXT.rest}`,
             () => void assign(s, { job: 'resting' }, `${name} is having a rest.`),
