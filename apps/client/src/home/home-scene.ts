@@ -9,6 +9,8 @@ import type { Scene } from '@babylonjs/core/scene';
 import {
   deriveSeed,
   GAME_DATA,
+  hexKey,
+  hexSpiral,
   hexToWorld,
   KEEPER_DATA,
   Rng,
@@ -23,6 +25,7 @@ import { HEX_SIZE, HOME_LOOK, ISLAND, TILE_FILL, type PropKind } from '../map/ma
 import { loftRoundedHex } from '../map/hex-mesh.js';
 import { linear } from '../map/map-props.js';
 import {
+  BEVEL,
   buildHeartSeed,
   buildProp,
   CORNER,
@@ -58,8 +61,10 @@ export interface HomeSceneStats {
   readonly buildings: number;
   readonly litFires: number;
   readonly squishies: number;
-  /** Squishies drawn at a habitat (the rest wait by the Heart Seed). */
+  /** Squishies drawn at a habitat or the Training Grounds (the rest wait by the Heart Seed). */
   readonly housed: number;
+  /** Tiles around the home base a lit fire's light reaches (owner decision 2026-10-06). */
+  readonly firelit: number;
   readonly keeper: boolean;
   /** Clothing ids the Keeper wears (#43). */
   readonly keeperWearing: readonly string[];
@@ -109,10 +114,11 @@ export class HomeScene {
   readonly #spotMarkers: Mesh;
   readonly #spotFill: Mesh;
   readonly #selection: Mesh;
+  readonly #firelight: Mesh;
   readonly #residents = new Map<string, Resident>();
   #home: HomeResponse;
   #spots: HomeSpot[] = [];
-  #counts = { housed: 0 };
+  #counts = { housed: 0, firelit: 0 };
 
   constructor(scene: Scene, home: HomeResponse, options: HomeSceneOptions) {
     this.#scene = scene;
@@ -162,8 +168,32 @@ export class HomeScene {
     this.#selection.material = vinyl(scene, 'home-selection-mat', { color: '#ff6f9f' });
     this.#selection.isPickable = false;
     this.#selection.setEnabled(false);
+    // The warm light a fire throws over the land around the home base, as the
+    // map draws it, a little stronger: an upgrade's bigger radius shows here.
+    const k = this.#k;
+    this.#firelight = meshFrom(
+      scene,
+      'home-firelight',
+      loftRoundedHex(
+        HEX_SIZE * TILE_FILL * k,
+        [
+          { scale: 0.5, y: DOME * 0.75 * k, alpha: HOME_VIEW.firelight.fill },
+          { scale: 0.8, y: DOME * 0.25 * k, alpha: HOME_VIEW.firelight.fill },
+          { scale: 0.92, y: -BEVEL * 0.25 * k, alpha: HOME_VIEW.firelight.edge },
+          { scale: 1, y: -BEVEL * k, alpha: 0 },
+        ],
+        {
+          corner: CORNER,
+          segments: SEGMENTS,
+          centre: { y: DOME * k, alpha: HOME_VIEW.firelight.fill },
+          rgb: [...HOME_VIEW.firelight.rgb],
+        },
+      ),
+    );
+    this.#firelight.material = overlayMaterial(scene, 'home-firelight-mat');
+    this.#firelight.isPickable = false;
 
-    const radius = HOME_VIEW.hexSize * 3;
+    const radius = HOME_VIEW.hexSize * HOME_VIEW.landRings * 1.8;
     this.content = {
       bounds: { minX: -radius, maxX: radius, minZ: -radius, maxZ: radius },
       start: { x: 0, z: 0 },
@@ -178,6 +208,7 @@ export class HomeScene {
       litFires: this.#buildings.stats.lit,
       squishies: this.#residents.size,
       housed: this.#counts.housed,
+      firelit: this.#counts.firelit,
       keeper: this.#keepers.handles.length > 0,
       keeperWearing: this.#keepers.handles[0]?.params.worn ?? [],
       spots: this.#spots.length,
@@ -208,13 +239,25 @@ export class HomeScene {
     this.#buildings.set(
       home.buildings.map((b) => {
         const at = this.spotAt(b);
-        return { buildingId: b.buildingId, lit: b.lit, x: at.x, z: at.z, y: this.#ground, scale };
+        return {
+          buildingId: b.buildingId,
+          level: b.level,
+          lit: b.lit,
+          x: at.x,
+          z: at.z,
+          y: this.#ground,
+          scale,
+        };
       }),
     );
+    const firelit = this.#showFirelight(home);
 
-    // Squishies: at their habitat, or waiting by the Heart Seed.
-    const habitats = new Map(
-      home.buildings.filter((b) => b.kind === 'habitat').map((b) => [b.id, this.spotAt(b)]),
+    // Squishies: at their habitat or the Training Grounds they practice at,
+    // or waiting by the Heart Seed.
+    const anchors = new Map(
+      home.buildings
+        .filter((b) => b.kind === 'habitat' || b.kind === 'training-grounds')
+        .map((b) => [b.id, this.spotAt(b)]),
     );
     const species = new Map<string, Species>();
     for (const s of this.#speciesList()) species.set(s.id, s);
@@ -224,7 +267,8 @@ export class HomeScene {
     for (const squishy of home.squishies) {
       const kind = species.get(squishy.speciesId);
       if (!kind) continue; // a species this client can't draw: it still shows in the list
-      const anchor = squishy.habitatId ? (habitats.get(squishy.habitatId) ?? null) : null;
+      const anchorId = squishy.trainingId ?? squishy.habitatId;
+      const anchor = anchorId ? (anchors.get(anchorId) ?? null) : null;
       // Every squishy without a habitat gets its own place by the Heart Seed, in list order.
       const waitAt = anchor ? null : this.#waitingPoint(waiting++);
       const existing = this.#residents.get(squishy.id);
@@ -247,7 +291,7 @@ export class HomeScene {
       this.#squishies.remove(resident.handle);
       this.#residents.delete(id);
     }
-    this.#counts = { housed };
+    this.#counts = { housed, firelit };
 
     this.#keepers.clear();
     if (this.#options.keeper) {
@@ -264,6 +308,36 @@ export class HomeScene {
         keeperItems(this.#options.keeperWearing ?? []),
       );
     }
+  }
+
+  /**
+   * Glows over the land around the home base that lit fires keep safe (their
+   * radius from the fire's own tile, as nightfall counts it), out to the
+   * land rings drawn here. Returns how many tiles glow.
+   */
+  #showFirelight(home: HomeResponse): number {
+    const homeKeys = new Set(home.tiles.map((t) => hexKey(t)));
+    const lit = new Map<string, { q: number; r: number }>();
+    for (const b of home.buildings) {
+      if (b.lit !== true || b.safeRadius === null) continue;
+      for (const h of hexSpiral({ q: b.q, r: b.r }, b.safeRadius)) {
+        const local = { q: h.q - this.#seed.q, r: h.r - this.#seed.r };
+        const ring = Math.max(Math.abs(local.q), Math.abs(local.r), Math.abs(local.q + local.r));
+        if (homeKeys.has(hexKey(h)) || ring > HOME_VIEW.landRings) continue;
+        lit.set(hexKey(h), local);
+      }
+    }
+    // Just over the land's top (its dome peaks at `HOME_LOOK.height + DOME`).
+    const lift = -HOME_VIEW.landDrop + HOME_LOOK.height * this.#k + 0.02;
+    setInstances(
+      this.#firelight,
+      [...lit.values()].map((t) => {
+        const p = hexToWorld(t, HOME_VIEW.hexSize);
+        return placeAt(p.x, lift, p.z);
+      }),
+      true,
+    );
+    return lit.size;
   }
 
   /** Lights up free spots to tap while placing or moving (empty: off). */
@@ -444,9 +518,36 @@ export class HomeScene {
       }),
     );
 
+    // The land around the home base (#184's "floats in a void"), plain and a
+    // little lower, out to `landRings`, so a fire's light has somewhere to fall.
+    const land = meshFrom(
+      this.#scene,
+      'home-land',
+      loftRoundedHex(
+        HEX_SIZE * TILE_FILL,
+        [...TOP_RINGS.map((r) => ({ scale: r.scale, y: r.y + h })), { scale: 1, y: 0 }],
+        { corner: CORNER, segments: SEGMENTS, centre: { y: h + DOME } },
+      ),
+    );
+    land.material = vinyl(this.#scene, 'home-land-mat', { ...HOME_LOOK, ...HOME_VIEW.land });
+    const homeKeys = new Set(home.tiles.map((t) => hexKey(t)));
+    setInstances(
+      land,
+      hexSpiral(this.#seed, HOME_VIEW.landRings)
+        .filter((t) => !homeKeys.has(hexKey(t)))
+        .map((t) => {
+          const p = local(t);
+          return placeAt(p.x, -HOME_VIEW.landDrop, p.z, s);
+        }),
+    );
+
     const island = CreateCylinder(
       'home-island',
-      { diameter: HOME_VIEW.hexSize * 6.4, height: ISLAND.thickness * k, tessellation: 64 },
+      {
+        diameter: HOME_VIEW.hexSize * (HOME_VIEW.landRings * 2 + 1.4) * 1.75,
+        height: ISLAND.thickness * k,
+        tessellation: 64,
+      },
       this.#scene,
     );
     island.position.y = (-ISLAND.thickness * k) / 2;

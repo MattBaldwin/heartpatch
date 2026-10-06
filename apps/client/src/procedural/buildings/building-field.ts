@@ -23,6 +23,8 @@ import {
 
 export interface BuildingPlacement {
   readonly buildingId: string;
+  /** Its level (each has its own model); 1 when left out. */
+  readonly level?: number;
   /** Hearthfires: lit or out. Null for buildings that are never lit. */
   readonly lit: boolean | null;
   readonly x: number;
@@ -73,15 +75,21 @@ export class BuildingField {
 
   /** Replaces every building drawn with these. */
   set(placements: readonly BuildingPlacement[]): void {
-    const byKey = new Map<string, { buildingId: string; look: BuildingLook; matrices: Matrix[] }>();
+    const byKey = new Map<
+      string,
+      { buildingId: string; look: BuildingLook; level: number; matrices: Matrix[] }
+    >();
     const turn = new Quaternion();
     let lit = 0;
     for (const p of placements) {
       const look = lookOf(p);
-      const key = modelKey(p.buildingId, look);
+      const level = p.level ?? 1;
+      const key = modelKey(p.buildingId, look, level);
       if (p.lit === true) lit++;
       let group = byKey.get(key);
-      if (!group) byKey.set(key, (group = { buildingId: p.buildingId, look, matrices: [] }));
+      if (!group) {
+        byKey.set(key, (group = { buildingId: p.buildingId, look, level, matrices: [] }));
+      }
       const list = group.matrices;
       Quaternion.RotationYawPitchRollToRef(p.yaw ?? 0, 0, 0, turn);
       const s = p.scale ?? 1;
@@ -89,9 +97,9 @@ export class BuildingField {
         Matrix.Compose(new Vector3(s, s, s), turn.clone(), new Vector3(p.x, p.y ?? 0, p.z)),
       );
     }
-    for (const [key, { buildingId, look }] of byKey) {
+    for (const [key, { buildingId, look, level }] of byKey) {
       if (this.#models.has(key)) continue;
-      const model = buildBuildingModel(this.#scene, buildingId, look);
+      const model = buildBuildingModel(this.#scene, buildingId, look, level);
       model.body.material = this.#body;
       if (model.glow) model.glow.material = this.#glow;
       this.#models.set(key, model);
