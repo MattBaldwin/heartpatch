@@ -334,18 +334,113 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         ],
         0.3,
       );
-    case 'leaf-pile':
-      // A crunchy heap of autumn leaves, with a few on top.
+    case 'leaf-pile': {
+      // A heap of autumn leaves (owner: it must read as leaves, not a pie):
+      // a low mound under real leaf shapes, maple (three fanned lobes and a
+      // stem) and oak (a long leaf with round bumps), and a few loose ones
+      // blown off around the base. Leaves are flattened spheres, so this is
+      // still one merged, vertex-coloured mesh.
+      const flat = (
+        d: number,
+        x: number,
+        y: number,
+        z: number,
+        w: number,
+        l: number,
+        yaw: number,
+        tilt: number,
+      ) => at(sphere(d), x, y, z, w, 0.12, l, { x: tilt, y: yaw });
+      // A maple leaf: a round palm with five pointed lobes fanned around it, and a short stem.
+      const maple = (
+        x: number,
+        y: number,
+        z: number,
+        yaw: number,
+        tilt: number,
+        size: number,
+        color: string,
+      ): Mesh[] => [
+        painted(flat(size * 0.5, x, y, z, 1, 1, yaw, tilt), color),
+        ...[-1.2, -0.6, 0, 0.6, 1.2].map((a) =>
+          painted(
+            flat(
+              size * 0.7,
+              x + Math.sin(yaw + a) * size * 0.28,
+              y,
+              z + Math.cos(yaw + a) * size * 0.28,
+              0.34,
+              a === 0 ? 1.15 : Math.abs(a) > 1 ? 0.8 : 1,
+              yaw + a,
+              tilt,
+            ),
+            color,
+          ),
+        ),
+        painted(
+          at(
+            cylinder(size * 0.3, 0.008, 0.008, 4),
+            x - Math.sin(yaw) * size * 0.3,
+            y,
+            z - Math.cos(yaw) * size * 0.3,
+            1,
+            1,
+            1,
+            { x: Math.PI / 2, y: yaw },
+          ),
+          '#8a5530',
+        ),
+      ];
+      const oak = (
+        x: number,
+        y: number,
+        z: number,
+        yaw: number,
+        tilt: number,
+        size: number,
+        color: string,
+      ): Mesh[] => [
+        painted(flat(size, x, y, z, 0.42, 1, yaw, tilt), color),
+        ...[-1, 1].flatMap((side) =>
+          [-0.18, 0.14].map((along) =>
+            painted(
+              flat(
+                size * 0.36,
+                x + Math.sin(yaw) * size * along + Math.cos(yaw) * side * size * 0.2,
+                y,
+                z + Math.cos(yaw) * size * along - Math.sin(yaw) * side * size * 0.2,
+                1,
+                1,
+                yaw,
+                tilt,
+              ),
+              color,
+            ),
+          ),
+        ),
+      ];
       return done(
         [
-          painted(at(sphere(0.3), 0, 0.03, 0, 1.2, 0.42, 1.1), '#e8913a'),
-          painted(at(sphere(0.18), -0.07, 0.08, 0.03, 1, 0.5, 1), '#d9542f'),
-          painted(at(sphere(0.16), 0.08, 0.08, -0.03, 1, 0.5, 1), '#f2c14e'),
-          painted(at(sphere(0.12), 0.01, 0.12, 0.06, 1.3, 0.3, 0.8, { y: 0.6 }), '#c4562e'),
-          painted(at(sphere(0.1), -0.02, 0.14, -0.05, 1.4, 0.3, 0.7, { y: -0.4 }), '#ffd166'),
+          // The mound is mostly hidden: leaves sit on it in layers.
+          painted(at(sphere(0.28), 0, 0.02, 0, 1.15, 0.34, 1.05), '#a85a2a'),
+          ...maple(-0.08, 0.05, 0.08, 0.4, -0.35, 0.17, '#d9442b'),
+          ...oak(0.1, 0.05, 0.07, 2.4, -0.3, 0.16, '#e2a33a'),
+          ...maple(0.11, 0.05, -0.07, 2.2, 0.3, 0.16, '#f08a2e'),
+          ...oak(-0.1, 0.05, -0.08, 5.2, 0.35, 0.15, '#b8742f'),
+          ...maple(0.0, 0.085, -0.02, 1.2, 0.05, 0.17, '#f4c04a'),
+          ...maple(-0.03, 0.1, 0.05, 3.6, -0.1, 0.15, '#e05a2a'),
+          ...oak(0.05, 0.1, 0.0, 0.3, 0.1, 0.14, '#d9442b'),
+          ...maple(0.03, 0.115, -0.04, 5.4, 0.1, 0.13, '#ffb43c'),
+          ...maple(0.0, 0.035, 0.15, 0.1, -0.5, 0.15, '#f08a2e'),
+          ...oak(0.02, 0.035, -0.15, 3.2, 0.5, 0.14, '#d9442b'),
+          // Loose leaves blown off around the base.
+          ...maple(0.28, 0.006, 0.12, 0.9, 0, 0.13, '#d9442b'),
+          ...oak(-0.27, 0.006, 0.1, 2.6, 0, 0.12, '#f4c04a'),
+          ...maple(-0.12, 0.006, -0.27, 5.0, 0, 0.12, '#f08a2e'),
+          ...oak(0.18, 0.006, -0.24, 3.8, 0, 0.11, '#b8742f'),
         ],
-        0.22,
+        0.26,
       );
+    }
     case 'jack-o-lantern':
       // A grinning pumpkin; its material glows (brighter at night).
       return done(
