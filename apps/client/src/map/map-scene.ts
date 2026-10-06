@@ -23,7 +23,7 @@ import {
   type PublicTile,
 } from '@heartpatch/shared';
 import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
-import { MAP_BUILDING_SCALE, SAFE_GLOW } from '../home/home-config.js';
+import { MAP_BUILDING_SCALE, MAP_OUTER_FIRE_SCALE, SAFE_GLOW } from '../home/home-config.js';
 import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
@@ -524,7 +524,7 @@ export class MapScene {
         x: at.x,
         z: at.z,
         y: topOf(tile) + DOME * 0.5,
-        scale: HEX_SIZE * MAP_BUILDING_SCALE,
+        scale: HEX_SIZE * (tile.homeSlot === null ? MAP_OUTER_FIRE_SCALE : MAP_BUILDING_SCALE),
       })),
     );
     const safe: Matrix[] = [];
