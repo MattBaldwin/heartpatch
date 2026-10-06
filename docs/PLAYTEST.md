@@ -54,7 +54,7 @@ See a button that says "dev"? That's a grown-up test button. Skip it!
 
 **Gathering and making things**
 
-- [ ] Tap a spot on your land and "Gather". Come back later and "Collect".
+- [ ] Tap a spot on your land and "Gather". Come back later: what you gathered lands in your Bag by itself.
 - [ ] Open your Bag. "Make" something, like a Heart Charm.
 
 **Care**
@@ -73,7 +73,7 @@ See a button that says "dev"? That's a grown-up test button. Skip it!
 
 - [ ] Tap wild land next to home and "Claim". Win the showdown: "This land is yours!".
 - [ ] Put a squishy on watch on your new land.
-- [ ] A friend challenges your land. Afterwards, the Raid report says what happened.
+- [ ] A friend challenges your land. Afterwards, the Challenge report says what happened.
 
 **The Hollow**
 
