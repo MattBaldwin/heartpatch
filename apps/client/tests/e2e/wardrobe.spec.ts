@@ -273,8 +273,8 @@ test('from a patch, Done goes back to that patch, via the Boutique and Milestone
       }
       const onTop = await page.evaluate(
         ([x, y]) =>
-          document.elementFromPoint(x!, y!)?.closest('[data-testid]')?.getAttribute('data-testid'),
-        [box.x + box.width / 2, box.y + box.height / 2],
+          document.elementFromPoint(x, y)?.closest('[data-testid]')?.getAttribute('data-testid'),
+        [box.x + box.width / 2, box.y + box.height / 2] as const,
       );
       expect(onTop).toBe('wardrobe-done');
 

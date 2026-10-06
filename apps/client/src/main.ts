@@ -548,6 +548,7 @@ const battles = createBattleScreen({
     lobby.stepOut();
   },
   onClosed: (mapId) => {
+    battleMapId = null;
     maps.open(mapId).then(
       () => {
         home.setMap(mapId);
@@ -659,8 +660,9 @@ const cinematic = createCinematicScreen({
   },
 });
 /**
- * The patch the player is on: its map, or the home base, close-up or battle
- * that put the map away for a moment. Null in the lobby.
+ * The patch the player is on: its map (the Keeper menu shows only over one),
+ * or, should the wardrobe ever open over them, the home base, close-up or
+ * battle that put the map away for a moment. Null in the lobby.
  */
 function patchOnScreen(): string | null {
   if (hudMapId !== null) return hudMapId;
