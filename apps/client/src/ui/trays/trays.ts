@@ -154,7 +154,15 @@ export function createTrays(options: TraysOptions): Trays {
     const trayBody = el('div', { class: 'tray-body' }, ...body);
     const tray = el(
       'section',
-      { class: `tray tray-${which}`, id, 'aria-label': title, 'data-testid': id },
+      // A dialog, like every sheet over the map, so Sprout waits its turn
+      // behind an open tray that isn't on the step's way (tutorial/sheets.ts).
+      {
+        class: `tray tray-${which}`,
+        id,
+        role: 'dialog',
+        'aria-label': title,
+        'data-testid': id,
+      },
       el('header', { class: 'tray-head' }, el('h2', { class: 'tray-title' }, title), close),
       trayBody,
     );

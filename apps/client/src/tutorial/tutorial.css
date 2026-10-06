@@ -250,6 +250,26 @@
   font-size: 14px;
 }
 
+/* The tucked chip docked into the orb, clear of a sheet the step is using
+   (an open tray on the step's way). The spotlight and arrow stay; a tap on
+   it opens the bubble, as the chip's does. */
+.tutorial.tutorial-tucked.tutorial-docked .tutorial-bubble {
+  box-sizing: border-box;
+  max-width: none;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fffbe0, #ffd76a 55%, #f2a93b);
+  box-shadow:
+    0 0 0 3px #fffafc,
+    0 0 14px 4px rgb(255 215 106 / 55%);
+}
+
+.tutorial.tutorial-tucked.tutorial-docked .tutorial-bubble > * {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tutorial-arrow,
   .tutorial.tutorial-held.tutorial-new .tutorial-bubble {

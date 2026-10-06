@@ -3,7 +3,7 @@ import type { Rect } from './overlay-layout.js';
 // What else is on screen while the tutorial runs (#127, #128, #139). Sprout
 // waits its turn behind any open sheet: a tile chip, the care sheet, the
 // Hollow's morning report, a lore or milestone card, the home sheet, a
-// battle's result card. They all carry `role="dialog"`, so nothing has to
+// battle's result card, an open side tray (ui/trays). They all carry `role="dialog"`, so nothing has to
 // know about the tutorial to be waited for; a non-modal note
 // (`aria-modal="false"`, like the install guide) isn't a sheet.
 
@@ -86,6 +86,23 @@ export function obstacles(
   sheets: readonly OpenSheet[],
   viewport: { width: number; height: number },
 ): Rect[] {
+  const out = sheetCards(sheets, viewport);
+  for (const element of root.querySelectorAll(CONTROL_SELECTOR)) {
+    if (except.contains(element)) continue;
+    const found = boxOf(element);
+    if (found) out.push(found.box);
+  }
+  return out;
+}
+
+/**
+ * The open sheets' cards: a sheet itself, or, for a sheet that covers the
+ * screen (a backdrop), the children that stand in for it.
+ */
+export function sheetCards(
+  sheets: readonly OpenSheet[],
+  viewport: { width: number; height: number },
+): Rect[] {
   const out: Rect[] = [];
   const backdrop = viewport.width * viewport.height * BACKDROP_SHARE;
   const card = (element: Element, rect: Rect, depth: number) => {
@@ -100,10 +117,5 @@ export function obstacles(
     }
   };
   for (const sheet of sheets) card(sheet.element, sheet.rect, 2);
-  for (const element of root.querySelectorAll(CONTROL_SELECTOR)) {
-    if (except.contains(element)) continue;
-    const found = boxOf(element);
-    if (found) out.push(found.box);
-  }
   return out;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   blockersAround,
+  dockChip,
   holeFor,
   intersects,
   layoutOverlay,
@@ -8,6 +9,7 @@ import {
   ORB_SIZE,
   placeOrb,
   SPOTLIGHT_PADDING,
+  tuckedChip,
   union,
   type Rect,
 } from './overlay-layout.js';
@@ -313,6 +315,72 @@ describe('placeOrb (Sprout waiting behind a sheet, #139)', () => {
     });
     expect(orb.x).toBeGreaterThanOrEqual(44);
     expect(intersects(orb, { x: 44, y: 24, width: 200, height: 80 })).toBe(false);
+  });
+});
+
+describe('dockChip (the tucked chip keeps off a tray the step is using)', () => {
+  // My Heartpatch open on an iPhone (390 wide): its 278 pt panel on the right,
+  // its handle carried along at 55%, the corner buttons above it.
+  const tray: Rect = { x: 112, y: 113, width: 278, height: 689 };
+  const controls: Rect[] = [
+    { x: 16, y: 464, width: 96, height: 94 },
+    { x: 12, y: 50, width: 150, height: 56 },
+    { x: 330, y: 50, width: 48, height: 48 },
+  ];
+  const chipSize = { width: 179, height: 62 };
+
+  it("puts the chip in its own place (the left edge, 38% down) when nothing's open", () => {
+    expect(tuckedChip(viewport, insets, chipSize)).toEqual({
+      x: 8,
+      y: Math.round(844 * 0.38),
+      ...chipSize,
+    });
+  });
+
+  it('leaves the chip where it is when it covers no sheet', () => {
+    const chip = tuckedChip(viewport, insets, { width: 90, height: 48 });
+    expect(dockChip({ chip, sheets: [tray], viewport, insets, obstacles: controls })).toBeNull();
+  });
+
+  it('docks into an orb clear of the tray, its controls and the spotlight', () => {
+    const chip = tuckedChip(viewport, insets, chipSize);
+    expect(intersects(chip, tray)).toBe(true);
+    const hole: Rect = { x: 122, y: 300, width: 258, height: 76 };
+    const orb = dockChip({
+      chip,
+      sheets: [tray],
+      viewport,
+      insets,
+      obstacles: [...controls, hole],
+    });
+    expect(orb).not.toBeNull();
+    expect(orb!.width).toBe(ORB_SIZE);
+    for (const o of [tray, hole, ...controls]) {
+      expect(intersects(orb!, o), JSON.stringify(orb)).toBe(false);
+    }
+  });
+
+  it('finds a free edge on an iPad, both ways round, with either tray open', () => {
+    for (const screen of [
+      { width: 1180, height: 820 },
+      { width: 820, height: 1180 },
+    ]) {
+      const left: Rect = { x: 0, y: 66, width: 384, height: screen.height - 74 };
+      const right: Rect = { ...left, x: screen.width - 384 };
+      const none = { top: 24, right: 0, bottom: 20, left: 0 };
+      const chip = tuckedChip(screen, none, chipSize);
+      for (const panel of [left, right]) {
+        const orb = dockChip({
+          chip,
+          sheets: [panel],
+          viewport: screen,
+          insets: none,
+          obstacles: [],
+        });
+        if (orb) expect(intersects(orb, panel), JSON.stringify([screen, panel])).toBe(false);
+        else expect(intersects(chip, panel)).toBe(false);
+      }
+    }
   });
 });
 

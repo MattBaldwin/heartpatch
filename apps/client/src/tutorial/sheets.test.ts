@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { foreignSheets, type OpenSheet } from './sheets.js';
+import { foreignSheets, sheetCards, type OpenSheet } from './sheets.js';
 
 /** A fake open sheet that holds `inside`. */
 const sheet = (name: string, inside: object[]): OpenSheet =>
@@ -23,5 +23,19 @@ describe('foreignSheets (Sprout waits behind sheets, #127)', () => {
 
   it('is empty with nothing open', () => {
     expect(foreignSheets([], null)).toEqual([]);
+  });
+});
+
+describe('sheetCards', () => {
+  it("is each open sheet's own box when it's a card, not a backdrop", () => {
+    const tray = {
+      element: {},
+      rect: { x: 112, y: 113, width: 278, height: 689 },
+    } as unknown as OpenSheet;
+    expect(sheetCards([tray], { width: 390, height: 844 })).toEqual([tray.rect]);
+  });
+
+  it('is empty with nothing open', () => {
+    expect(sheetCards([], { width: 390, height: 844 })).toEqual([]);
   });
 });
