@@ -1,3 +1,5 @@
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { GAME_DATA, visualRegistry, type BattleTimeOfDay } from '@heartpatch/shared';
 import { BattleScene } from '../../battle/battle-scene.js';
 import { BattleContent } from '../../battle/battle-view.js';
@@ -97,6 +99,14 @@ function frame(): void {
     scene.imageProcessingConfiguration.isEnabled = false;
     for (const mesh of scene.meshes) {
       if (!mesh.name.startsWith('squishy-')) mesh.setEnabled(false);
+    }
+    // Flat black squishies, so glowing and white ones show their shape too.
+    for (const material of scene.materials) {
+      if (material instanceof PBRMaterial && material.name === 'squishy-vinyl') {
+        material.unlit = true;
+        material.albedoColor = Color3.Black();
+        material.clearCoat.isEnabled = false;
+      }
     }
   }
   if (stage && battle) {

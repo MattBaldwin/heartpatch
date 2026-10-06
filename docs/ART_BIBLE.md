@@ -2,7 +2,7 @@
 
 > How Heartpatch **looks and moves**. `GAME_DESIGN.md` §19 sets the direction (soft vinyl toys, procedural, never pixelated); `STYLE_GUIDE.md` covers words. This file pins the numbers and rules every visual lane builds against, so the squishies, the world and the UI read as one game. Reviewers check client PRs against it.
 >
-> **Status:** draft for owner approval (art-bible lane, 2026-10-06; mockup 2). The squishy chapter comes with a prototype vertical slice (6 lines) and contact sheets; the other chapters are the plan the visual-upgrade lanes build mockup-first (COORDINATOR.md "Plan after stabilization").
+> **Status:** owner-approved direction (mockup 2, 2026-10-06); the full roster awaits a final look. The squishy chapter comes with the prototype roster and contact sheets; the other chapters are the plan the visual-upgrade lanes build mockup-first (COORDINATOR.md "Plan after stabilization").
 
 **The one rule:** squishies are the stars. Everything else (land, sky, props, UI) is softer, calmer and lower-contrast than they are, and nothing in a scene is allowed to change a squishy's own colours.
 
@@ -40,7 +40,7 @@ A kid should name a squishy from its shadow alone (the catalog's unseen cards wi
 | Spike coats | `scatter` over the whole body | a burr ball |
 | Wings and fins | flattened teardrops | stubby wings, big thunderbird wings |
 
-**Body plans** in the slice: quadruped (Flurrypup → Blusterpup), biped with arms (Emberbun → Hearthbun), serpentine (Puddlepuff → Splashmallow), flier (Thunderpuff → Thunderplume), spiky ball → spiky knight (Thistlepip → Bristlebloom), and an object (Candlekit the candle → Wickwhisker the lantern cat). The remaining lines get plans from the same kit: plants and food shapes (Mossmuffin, Gourdon), finned swimmers (Bubbletub), clouds and crystals (Glimmerock), ghosts (Glowboo).
+**Body plans** across the roster (§1.10): quadrupeds, bipeds with arms, a serpent, fliers and hovering sprites, a tortoise, a golem, a hopper, a swimmer, a ghost, plants and food (a muffin, a pumpkin) and objects (a candle). No two lines share a plan where it can be avoided.
 
 - **[checked] No two species lines share body + dominant part + hue family.** The *dominant part* is the line's biggest sticking-out part apart from legs (by silhouette area); the *hue family* is the body colour's family (red, orange, yellow, green, cyan, blue, purple, pink, or white, dark and neutral).
 - **Pose and attack part** (for the battle-feel lane): every line names how it stands (`pose`: sit, stand, upright, slither, hover) and the slot a move animation drives (`attackPart`: a tail to swing, arms to punch, wings to flap, spikes to puff). **[checked]** the attack part's slot exists on the species.
@@ -120,18 +120,31 @@ Shared data shapes this chapter adds (all additive; no id is renamed or removed,
 - **Visual-only species edits.** Ids, names, elements, feelings, rarities, moves, stats, evolution levels and spawn tables are untouched.
 - **Golden hashes:** `paramsHash` covers every visual field, so the pinned squishy hashes (`params.test.ts` and the gallery e2e) change once, on purpose.
 
-### 1.10 Vertical slice (mockup 2)
+### 1.10 Roster
 
-| Line | Element · Feeling | Body plan | Base (baby) | Evolution (grown up) | Attack part |
+Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 the base's size.
+
+| Line | Element · Feeling | Body plan | Baby | Grown up | Pose · attack part |
 |---|---|---|---|---|---|
-| Flurrypup → Blusterpup | Frost · Brave | quadruped | chibi pup: big round head, stubby legs, floppy ears, curly tail | frost wolf: smaller head, long legs, sharp eyes, smirk and fangs, alert ears, icicle mane, spiked tail (×1.3, sparkle) | tail |
-| Emberbun → Hearthbun | Fire · Cozy | biped with arms | fire bunny: big head, stubby arms and feet, flame tuft | fire brawler: upright, strong arms, swept-back ears, flame mane and flame tail (×1.3) | arms |
-| Puddlepuff → Splashmallow | Water · Silly | serpentine | droplet tadpole with a wiggly tail | sea serpent: a long swinging body, fin row, toothy grin (×1.3) | tail |
-| Thunderpuff → Thunderplume | Spark · Brave | flier | hovering storm-cloud chick | thunderbird: big yellow wings, beak, storm crest, tail feathers (×1.3) | wings |
-| Thistlepip → Bristlebloom | Leaf · Brave | spiky | burr ball on little feet | thistle knight: tall cactus body, thistle crown, back spines, leaf arms (×1.25) | spikes → arms |
-| Candlekit → Wickwhisker | Fire · Spooky | object → quadruped | candle cat | lantern cat: four long legs, flame mane, whisker flames, flame tail, fangs (×1.25) | crown → tail |
-
-The other 12 lines keep mockup 1's look until the owner approves this slice; then they get body plans from the same kit.
+| Puddlepuff → Splashmallow | Water · Silly | serpentine | droplet tadpole, wiggly tail | sea serpent: long swinging body, fin row, toothy grin | sit → slither · tail |
+| Pebblesnooze → Boulderdoze | Stone · Sleepy | boulder tortoise | pebble shell, stubby legs, head in a nightcap | big boulder tortoise: crag nubs on the shell, horns, smirk | stand · crown → back |
+| Emberbun → Hearthbun | Fire · Cozy | biped with arms | fire bunny on little feet | upright brawler: strong arms, flame mane and tail | stand → upright · arms |
+| Snoozicle → Drowsiberg | Frost · Sleepy | snowman → yeti | little snowman with stubby arms | yeti: fur ruff, icicle crown, strong arms, fangs | sit → upright · arms |
+| Fuzzbolt → Frizzbolt | Spark · Silly | quadruped cat | big-headed kitten, lightning ears, zigzag tail | lynx: long legs, spark crest, fangs | stand · tail |
+| Fizzlepop → Zingaling | Spark · Joy | star sprite | hovering star with little wings | bigger star: glowing wings, antennae | hover · wings → antennae |
+| Bubbletub → Bubbletide | Water · Cozy | finned swimmer | bubbly seal: side fins, tail fan | narwhal: horn, fin row, sharp eyes | sit → slither · tail → horn |
+| Thistlepip → Bristlebloom | Leaf · Brave | spiky ball → knight | burr ball on little feet | cactus knight: thistle crown, back spines, leaf arms | sit → upright · spikes → arms |
+| Flurrypup → Blusterpup | Frost · Brave | quadruped pup | big-headed pup, stubby legs, floppy ears | frost wolf: long legs, icicle mane, spiked tail, fangs | stand · tail |
+| Glimmerock → Glittercrag | Stone · Joy | crystal golem | gem pebble with tiny arms and feet | golem: huge body, tiny head, strong arms, crystal spines | stand → upright · arms |
+| Nookling → Snugglenook | Shadow · Cozy | long-eared hopper | bunny with a big head and big feet | jackalope: antlers, long ears, fluffy tail | sit → stand · legs |
+| Mossmuffin → Mossquilt | Leaf · Cozy | muffin → mushroom treant | walking muffin with a moss cap | treant: mushroom-cap head, leaf arms, root legs, fern tail | stand → upright · crown → arms |
+| Dawndrop → Dazzledrop | Light · Joy | sun orb | hovering sun with a halo of rays | sun with a crown of rays and glowing wings | hover · crown → mane |
+| Thunderpuff → Thunderplume | Spark · Brave | flier | storm-cloud chick | thunderbird: big wings, beak, crest, tail feathers | hover · wings |
+| Gourdon → Glowgourd | Leaf · Silly | walking pumpkin | pumpkin on little feet, vine tail | glowing jack-o'-lantern brute: leaf arms, toothy grin | stand · tail → arms |
+| Glowboo → Brightboo | Light · Spooky | ghost | little ghost with stubby arms | big ghost: strong arms, wispy tail, brows and fangs | hover · arms |
+| Upsybat → Topsywing | Shadow · Silly | bat flier | round bat: big ears, little wings | bat with big wings, fangs, curly tail | hover · wings |
+| Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
+| *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | fairy: glowing wings, leaf sprout, arms | hover · wings |
 
 ## 2. Palette
 
@@ -185,13 +198,20 @@ Sprout (she/her) is "the tiny glowing spirit of your Heart Seed". Proposal for t
 
 ## Appendix: performance budget
 
-- **Draw calls** per squishy field stay **one per body kind on screen + one per part primitive (5) + one contact-shadow mesh**, however many squishies there are. Every new part uses the existing primitives, so body plans add no part draw calls. A head adds its body kind to the field: a battle fighter is at most **7** draw calls (torso, head, 5 primitives), up from 6.
+- **Draw calls** per squishy field stay **one per body kind on screen + one per part primitive (5) + one contact-shadow mesh**, however many squishies there are. Every new part uses the existing primitives, so body plans add no part draw calls. A head adds its body kind to the field: a battle fighter is at most **7** draw calls (torso, head, 5 primitives), up from 6. A map showing all 14 body kinds at once is 20 draw calls (was 13 with 7 kinds).
 - **Triangles** grow with the extra pieces. Measured on the slice (base and evolution):
 
-| Detail level | Used for | Current | Mockup 2 |
+| Detail level | Used for | Current | New roster |
 |---|---|---|---|
 | high (32 rings) | battle, care, wardrobe | 7.5k–12.7k per squishy | 10.5k–21.9k per squishy |
 | low (14 rings) | map | 1.5k–2.8k per squishy | 2.2k–4.7k per squishy |
 
-  Two fighters in a battle draw under 50k squishy triangles; 50 squishies on the map about 235k (was about 125k). Both should fit a recent iPhone at 60 fps and an older iPad at 30 fps; that is an estimate to confirm on the devices (the dev roster page and the gallery's `?count=50` stress test). If the governor drops a tier, the map's `low` level is already in use; a later lane can add a `tiny` level (fewer rings for limbs and chain pieces) for crowded maps.
+- **Stress test** (the gallery's `?count=50`, every species plus showcase looks, iPhone viewport at DPR 2, low tier, headless Chromium with **software WebGL**, so absolute numbers mean nothing for a device):
+
+| | Draw calls | Instances | Mean frame | p95 frame |
+|---|---|---|---|---|
+| Current (`main`) | 13 | 593 | 342 ms | 683 ms |
+| New roster | 20 | 888 | 407 ms | 867 ms |
+
+  About **+19% frame time** for the same scene on a CPU renderer, which is mostly vertex work. A phone GPU handles vertex work far faster, so I expect the real cost to be small, but it is not measured on a device yet: confirm 60 fps (recent iPhone) and 30 fps (older iPad) on the devices during #28. If a crowded map needs it, a later lane can add a `tiny` detail level (fewer rings on limbs and chain pieces).
 - Material tiers, ink and fog opt-out add **no** draw calls, meshes, materials or textures (§1.4).
