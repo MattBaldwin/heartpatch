@@ -63,13 +63,23 @@ export function grantedXp(baseXp: number, multiplier: number): number {
   return Math.floor((Math.max(0, baseXp) * multiplier) / 100);
 }
 
-/** Total XP a squishy needs to be `level` (level 1 is 0). */
+/**
+ * Total XP a squishy needs to be `level` (level 1 is 0). Past each of the
+ * curve's knees, every level also costs `steep × (L − knee)²` more in total.
+ */
 export function xpForLevel(
   level: number,
   rules: Pick<GrowthRules, 'xpCurve' | 'maxLevel'>,
 ): number {
-  const steps = Math.max(0, Math.min(level, rules.maxLevel) - 1);
-  return rules.xpCurve.perLevel * steps + rules.xpCurve.curve * steps * steps;
+  const { perLevel, curve, knees = [] } = rules.xpCurve;
+  const capped = Math.min(level, rules.maxLevel);
+  const steps = Math.max(0, capped - 1);
+  let xp = perLevel * steps + curve * steps * steps;
+  for (const knee of knees) {
+    const past = Math.max(0, capped - knee.level);
+    xp += knee.steep * past * past;
+  }
+  return xp;
 }
 
 /** The level `xp` total XP reaches, up to `maxLevel`. */

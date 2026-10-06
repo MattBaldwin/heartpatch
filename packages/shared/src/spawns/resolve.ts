@@ -24,7 +24,15 @@ export interface SpawnInput {
   readonly seed: Seed;
   readonly terrain: string;
   readonly window: SpawnWindow;
+  /**
+   * The player's Partner's level, when they have one. With the rules'
+   * `partnerOffset`, the wild squishy's level follows it.
+   */
+  readonly partnerLevel?: number | null;
 }
+
+/** The highest level a squishy can be (`BattleSquishySetup.level`). */
+const TOP_LEVEL = 100;
 
 export interface SpawnData {
   readonly tables: readonly SpawnTable[];
@@ -71,6 +79,17 @@ export function resolveWildSpawn(input: SpawnInput, data: SpawnData): WildSpawn 
   if (entries.length === 0) return null;
 
   const { species } = rng.weighted(entries);
-  const level = rng.int(data.rules.levels.min, data.rules.levels.max);
-  return { speciesId: species, level };
+  return { speciesId: species, level: wildLevel(rng, input.partnerLevel ?? null, data.rules) };
+}
+
+/**
+ * The level roll: the Partner's level plus `partnerOffset` when both exist,
+ * else `levels`. Always one roll, so which species a tile has never depends
+ * on who's looking.
+ */
+function wildLevel(rng: Rng, partnerLevel: number | null, rules: SpawnRules): number {
+  const offset = rules.partnerOffset;
+  if (!offset || partnerLevel === null) return rng.int(rules.levels.min, rules.levels.max);
+  const level = partnerLevel + rng.int(offset.min, offset.max);
+  return Math.max(rules.levels.min, Math.min(TOP_LEVEL, level));
 }

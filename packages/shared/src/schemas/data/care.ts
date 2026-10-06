@@ -103,12 +103,22 @@ export const GrowthRulesSchema = z
     /** Squishies stop levelling here (evolution levels go up to 100). */
     maxLevel: z.number().int().min(2).max(100),
     /**
-     * Total XP to reach level L is `perLevel × (L − 1) + curve × (L − 1)²`:
-     * early levels come quickly, later ones take longer.
+     * Total XP to reach level L is `perLevel × (L − 1) + curve × (L − 1)²`,
+     * plus `steep × (L − level)²` for each knee below L: early levels come
+     * quickly, later ones take longer, and each knee makes the climb past it
+     * steeper still. No knees (the default) is the plain curve.
      */
     xpCurve: z.strictObject({
       perLevel: z.number().int().min(1),
       curve: z.number().int().min(0),
+      knees: z
+        .array(
+          z.strictObject({
+            level: z.number().int().min(2).max(100),
+            steep: z.number().int().min(0),
+          }),
+        )
+        .optional(),
     }),
     /** Care multiplier: `minPercent` at no contentment up to `maxPercent` when full. */
     care: z.strictObject({

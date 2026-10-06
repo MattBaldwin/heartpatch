@@ -21,7 +21,8 @@
     "typecheck": "tsc -p tsconfig.src.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "sim": "tsx scripts/sim/cli.ts"
+    "sim": "tsx scripts/sim/cli.ts",
+    "sim:progression": "tsx scripts/sim/progression-cli.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"

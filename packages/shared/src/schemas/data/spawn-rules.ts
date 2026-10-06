@@ -22,10 +22,25 @@ export const SpawnRulesSchema = z.strictObject({
     .refine(isSpawnWindowHours, 'must divide 24 (1, 2, 3, 4, 6, 8, 12 or 24)'),
   /** Chance (%) that a tile has a wild squishy in a window. */
   chance: z.number().int().min(0).max(100),
-  /** Wild squishy levels, both inclusive. */
+  /**
+   * Wild squishy levels, both inclusive, for a player without a Partner (or
+   * with no `partnerOffset`). `min` is also the floor for Partner-scaled levels.
+   */
   levels: z
     .strictObject({ min: z.number().int().min(1).max(100), max: z.number().int().min(1).max(100) })
     .refine((l) => l.min <= l.max, { message: 'min must not be more than max', path: ['max'] }),
+  /**
+   * Wild levels follow the player's Partner: its level plus a roll in this
+   * range (both inclusive), kept within `levels.min` and 100. Optional: left
+   * out, or for a player without a Partner, levels roll in `levels`.
+   */
+  partnerOffset: z
+    .strictObject({
+      min: z.number().int().min(-99).max(99),
+      max: z.number().int().min(-99).max(99),
+    })
+    .refine((o) => o.min <= o.max, { message: 'min must not be more than max', path: ['max'] })
+    .optional(),
   /**
    * Map-local hours where each time of day starts, earliest first, from 0.
    * A window's time of day is judged at its middle.

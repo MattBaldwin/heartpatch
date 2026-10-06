@@ -133,13 +133,16 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
     }
     const tutorial = map.kind === 'tutorial';
     const gone = new Set((await store.goneSpawns(mapId, userId, window.id, tutorial)).map(hexKey));
+    // Wild levels follow the player's Partner (owner decision 2026-10-06), so
+    // fights stay a fair match as it grows; no Partner keeps the plain range.
+    const partnerLevel = tutorial ? null : await store.partnerLevel(mapId, userId);
     // Hand-authored maps have no secret seed; their spawns key off the map id.
     const mapSeed = map.seed ?? deriveSeed('hand-authored-map', map.id);
     const found = reach.flatMap((tile): TileSpawn[] => {
       if (gone.has(hexKey(tile))) return [];
       if (tutorial) return [{ tile, spawn: gladeSpawn(tile) }];
       const seed = deriveSeed(mapSeed, 'spawn', tile.q, tile.r, window.id);
-      const spawn = resolveWildSpawn({ seed, terrain: tile.terrain, window }, data);
+      const spawn = resolveWildSpawn({ seed, terrain: tile.terrain, window, partnerLevel }, data);
       return spawn ? [{ tile, spawn }] : [];
     });
     return { found, window: window.id };
