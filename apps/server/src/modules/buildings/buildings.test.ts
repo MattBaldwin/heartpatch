@@ -139,12 +139,16 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
   const give = (mapId: string, who: Player, items: Record<string, number>) =>
     withTransaction(db, (tx) => grantItems(tx, { mapId, userId: who.id }, items, 'dev-grant'));
 
-  /** A plain home tile (no Heart Seed, no node) and the Heart Seed tile. */
+  /**
+   * A home ring tile and the Heart Seed tile. Every ring tile has a node in
+   * its middle since the seasonal nodes joined the ring (owner decision
+   * 2026-10-06), so buildings go on spots 1–6.
+   */
   async function homeTiles(server: FastifyInstance, who: Player, mapId: string) {
     const { tiles } = await home(server, who, mapId);
     expect(tiles).toHaveLength(7);
     const seed = tiles.find((t) => t.heartSeed)!;
-    const plain = tiles.filter((t) => !t.heartSeed && t.nodeResource === null);
+    const plain = tiles.filter((t) => !t.heartSeed);
     expect(plain.length).toBeGreaterThan(0);
     const at = (t: { q: number; r: number }) => ({ q: t.q, r: t.r });
     return { seed: at(seed), plain: at(plain[0]!), tiles };
@@ -326,12 +330,20 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         expect(errorOf(res).message).toBe('You can only build on your home base.');
       }
 
-      await placed(server, kid, mapId, { buildingId: 'hearthfire', ...plain, spot: 0 });
-      const taken = await place(server, kid, mapId, {
+      // A ring tile's node stands in its middle, like the Heart Seed.
+      const node = await place(server, kid, mapId, {
         buildingId: 'cozy-meadow',
         q: plain.q,
         r: plain.r,
         spot: 0,
+      });
+      expect(errorOf(node).message).toBe('Something is already there. Try another spot!');
+      await placed(server, kid, mapId, { buildingId: 'hearthfire', ...plain, spot: 3 });
+      const taken = await place(server, kid, mapId, {
+        buildingId: 'cozy-meadow',
+        q: plain.q,
+        r: plain.r,
+        spot: 3,
       });
       expect(errorOf(taken).message).toBe('Something is already there. Try another spot!');
       const second = await place(server, kid, mapId, {

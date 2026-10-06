@@ -19,12 +19,22 @@ import {
   type MapDetail,
 } from '@heartpatch/shared';
 import { GUARDIAN_RULES, hintForGuardians } from '@heartpatch/shared/server';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { joinRequests, keepers, mapMembers, maps, sessions, users } from '../../db/schema.js';
+import {
+  buildings,
+  joinRequests,
+  keepers,
+  mapMembers,
+  maps,
+  sessions,
+  tiles,
+  users,
+} from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS, MAP_RATE_LIMITS } from './limits.js';
@@ -819,6 +829,70 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(after.map.pvpMode).toBe('off');
       expect(after.seq).toBe(await latest());
       expect(after.seq).toBe(3);
+    });
+
+    it('gives an older map its seasonal home nodes when it is next read (owner decision 2026-10-06)', async () => {
+      const server = await start();
+      const { owner, map } = await mapWith(server, 0);
+      const SEASONAL = ['pumpkins', 'magic-fallen-leaves'];
+      // A map made before the seasonal nodes joined the home ring.
+      await db
+        .update(tiles)
+        .set({ nodeResource: null })
+        .where(
+          and(
+            eq(tiles.mapId, map.id),
+            isNotNull(tiles.homeSlot),
+            inArray(tiles.nodeResource, SEASONAL),
+          ),
+        );
+      const free = (await tilesOf(map.id)).filter(
+        (t) => t.homeSlot === 0 && t.nodeResource === null,
+      );
+      // The Heart Seed tile and the two free ring tiles; a fire stands in the middle of one.
+      expect(free).toHaveLength(3);
+      const homeTiles = (await tilesOf(map.id)).filter((t) => t.homeSlot === 0);
+      const seedTile = homeTiles.find(
+        (t) =>
+          t.q * 7 === homeTiles.reduce((n, h) => n + h.q, 0) &&
+          t.r * 7 === homeTiles.reduce((n, h) => n + h.r, 0),
+      )!;
+      const [built, open] = free.filter((t) => t.id !== seedTile.id);
+      await db.insert(buildings).values({
+        mapId: map.id,
+        ownerUserId: owner.id,
+        tileId: built!.id,
+        buildingId: 'hearthfire',
+        kind: 'hearthfire',
+        spot: 0,
+      });
+
+      const view = async () =>
+        MapViewSchema.parse((await call(server, 'GET', `/maps/${map.id}/view`, owner)).json());
+      const nodesOf = (v: Awaited<ReturnType<typeof view>>, slot: number) =>
+        v.tiles.filter((t) => t.homeSlot === slot).map((t) => t.nodeResource);
+
+      const first = await view();
+      // Every other home has both again; this one gets Pumpkins on the tile
+      // without a building, and its leaf pile waits for a free middle.
+      for (const slot of [1, 2, 3])
+        expect(nodesOf(first, slot)).toEqual(expect.arrayContaining(SEASONAL));
+      const mine = first.tiles.filter((t) => t.homeSlot === 0);
+      expect(mine.find((t) => t.q === open!.q && t.r === open!.r)?.nodeResource).toBe('pumpkins');
+      expect(mine.find((t) => t.q === built!.q && t.r === built!.r)?.nodeResource).toBeNull();
+      expect(mine.find((t) => t.q === seedTile.q && t.r === seedTile.r)?.nodeResource).toBeNull();
+      // Stored, so reading again changes nothing (and the seq stays put).
+      const again = await view();
+      expect(again.tiles).toEqual(first.tiles);
+      expect(again.seq).toBe(first.seq);
+
+      // Moving the fire away frees the middle: the leaf pile turns up there.
+      await db.delete(buildings).where(eq(buildings.tileId, built!.id));
+      const home = await call(server, 'GET', `/maps/${map.id}/home`, owner);
+      expect(home.statusCode).toBe(200);
+      expect((await tilesOf(map.id)).find((t) => t.id === built!.id)?.nodeResource).toBe(
+        'magic-fallen-leaves',
+      );
     });
 
     it('reads the map, members, tiles and seq from one snapshot', async () => {

@@ -1,9 +1,10 @@
 import type { DefenseStance, MapRole, PublicKeeper, PublicTile, PvpMode } from '@heartpatch/shared';
-import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
+  buildings,
   gatherJobs,
   inviteCodes,
   joinRequests,
@@ -100,6 +101,16 @@ export interface MemberRow {
   title: string | null;
 }
 
+/** A home tile for topping up its ring's nodes (`listHomeRingTiles`). */
+export interface HomeRingTileRow {
+  id: string;
+  q: number;
+  r: number;
+  homeSlot: number;
+  nodeResource: string | null;
+  middleTaken: boolean;
+}
+
 export interface PendingRequestRow {
   id: string;
   user: UserRef;
@@ -151,6 +162,14 @@ export interface MapsRepo {
    * hint, and drops `guardianStrength` (secret, tech spec §8).
    */
   listTiles: (mapId: string) => Promise<TileViewRow[]>;
+  /**
+   * Every home tile on the map, with whether a building stands on its middle
+   * spot (`seedHomeRingNodes`). `lock` row-locks the tiles in id order first
+   * (tech spec §7, step 6), as building placement does.
+   */
+  listHomeRingTiles: (mapId: string, lock?: boolean) => Promise<HomeRingTileRow[]>;
+  /** Puts a node on a home tile that has none; false if it already had one. */
+  addHomeNode: (tileId: string, resource: string) => Promise<boolean>;
   /** Gives the player every tile of a home slot; returns those tiles. */
   claimHomeTiles: (
     mapId: string,
@@ -359,6 +378,43 @@ function queries(db: Executor): MapsRepo {
         .set({ pvpMode })
         .where(and(eq(maps.id, mapId), ne(maps.pvpMode, pvpMode)))
         .returning({ id: maps.id });
+      return changed.length > 0;
+    },
+
+    listHomeRingTiles: async (mapId, lock = false) => {
+      const where = and(eq(tiles.mapId, mapId), isNotNull(tiles.homeSlot));
+      if (lock) {
+        await db
+          .select({ id: tiles.id })
+          .from(tiles)
+          .where(where)
+          .orderBy(asc(tiles.id))
+          .for('no key update');
+      }
+      const rows = await db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          homeSlot: tiles.homeSlot,
+          nodeResource: tiles.nodeResource,
+          // Spelled out: a one-table select drops column qualifiers in sql``.
+          middleTaken: sql<boolean>`exists (
+            select 1 from ${buildings} b where b.tile_id = ${tiles}.id and b.spot = 0
+          )`,
+        })
+        .from(tiles)
+        .where(where)
+        .orderBy(asc(tiles.q), asc(tiles.r));
+      return rows.map((row) => ({ ...row, homeSlot: row.homeSlot ?? 0 }));
+    },
+
+    addHomeNode: async (tileId, resource) => {
+      const changed = await db
+        .update(tiles)
+        .set({ nodeResource: resource })
+        .where(and(eq(tiles.id, tileId), isNotNull(tiles.homeSlot), isNull(tiles.nodeResource)))
+        .returning({ id: tiles.id });
       return changed.length > 0;
     },
 

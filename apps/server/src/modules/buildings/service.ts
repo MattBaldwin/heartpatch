@@ -41,6 +41,7 @@ import {
 import { landTraining, leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
+import { seedHomeRingNodes } from '../maps/home-ring.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import {
   createBuildingsRepo,
@@ -320,6 +321,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
   return {
     home: async (user, mapId) => {
       const { map } = await requireMember(db, user, mapId);
+      // An older map's home ring gets its seasonal nodes (owner decision 2026-10-06).
+      await seedHomeRingNodes(db, mapId);
       return homeView(store, db, mapId, user.id, now(), map.timeZone);
     },
 

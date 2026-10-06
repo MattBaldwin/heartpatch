@@ -33,6 +33,7 @@ import { createKeepersRepo } from '../keepers/repo.js';
 import { starterPick } from '../starters/service.js';
 import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
+import { seedHomeRingNodes } from './home-ring.js';
 import { requireMember } from './members.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
@@ -341,8 +342,12 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
 
     // One snapshot, so the seq matches the tiles and members exactly: live
     // sync replays everything after it and nothing before (tech spec §5).
-    view: (user, mapId) =>
-      store.snapshot(async (repo, tx) => {
+    view: async (user, mapId) => {
+      // Older maps get their seasonal home nodes first (a write, so outside
+      // the read-only snapshot); a member check runs again inside it.
+      await requireViewer(db, user, mapId);
+      await seedHomeRingNodes(db, mapId);
+      return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();
         const [members, tiles, buildings, seed] = await Promise.all([
@@ -379,7 +384,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           ),
           seq: map.eventSeq,
         };
-      }),
+      });
+    },
 
     regenerateInvite: async (user, mapId) => {
       await requireOwner(db, user, mapId);

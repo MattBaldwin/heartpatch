@@ -29,6 +29,10 @@ export const RECIPE_BOOK: RecipeBookData = {
       line: "Carve a Jack-o'-Lantern from your recipe book first. Then this page opens!",
     },
     {
+      page: 'recipe:leafy-heart-charms',
+      line: 'Crunchy golden leaves pile up at home around Thanksgiving. Gather some, and this page opens!',
+    },
+    {
       page: 'building:training-grounds',
       line: 'Gather some Timber and Stone, and this page opens!',
     },

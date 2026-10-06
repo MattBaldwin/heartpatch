@@ -1,3 +1,5 @@
+export * from './home-ring.js';
+
 import {
   hex,
   hexDistance,

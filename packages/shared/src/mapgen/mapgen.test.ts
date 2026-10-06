@@ -44,7 +44,7 @@ describe('generateMap: determinism', () => {
     // maps. That's fine for maps not created yet (tiles are persisted), so
     // update the hash on purpose.
     expect(hashString(JSON.stringify(generate('pinned-seed', 4)))).toBe(
-      '7f11bab5b87bb8c49389945abd10cdfa',
+      '4d809aead0d653d4c4a31c5db548d8b6',
     );
   });
 });
@@ -161,7 +161,7 @@ describe('generateMap: home bases', () => {
     }
   });
 
-  it('guarantees Timber, Stone, Emberwood and a farm plot in every home ring (decision B)', () => {
+  it('guarantees Timber, Stone, Emberwood, a farm plot and the seasonal nodes in every home ring', () => {
     for (const map of maps) {
       const byKey = new Map(map.tiles.map((t) => [hexKey(t), t]));
       for (const home of map.homes) {
@@ -169,7 +169,15 @@ describe('generateMap: home bases', () => {
           .map((h) => byKey.get(hexKey(h))!.nodeResource)
           .filter((r) => r !== null)
           .sort();
-        expect(nodes).toEqual(['emberwood', 'stone', 'timber', 'treats']);
+        // Decision B, plus Pumpkins and a leaf pile (owner decision 2026-10-06).
+        expect(nodes).toEqual([
+          'emberwood',
+          'magic-fallen-leaves',
+          'pumpkins',
+          'stone',
+          'timber',
+          'treats',
+        ]);
       }
     }
   });
