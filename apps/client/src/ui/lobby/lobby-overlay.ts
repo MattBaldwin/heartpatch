@@ -502,6 +502,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     const isOwner = map.role === 'owner';
     const status = el('p', { class: 'auth-error', role: 'alert', 'data-testid': 'lobby-error' });
     const sections: Node[] = [];
+    /** Fetches that fill this screen in, started once it's the one showing. */
+    let afterShow: (() => void) | undefined;
 
     const { onOpen } = options;
     if (onOpen) {
@@ -563,7 +565,9 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         row.append(stop);
       }
       inviteSection.append(row);
-      sections.push(inviteSection, familyCodesSection(map, status));
+      const familyCodes = familyCodesSection(map, status);
+      sections.push(inviteSection, familyCodes.section);
+      afterShow = familyCodes.load;
 
       if (requests.length > 0) {
         const list = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-requests' });
@@ -704,6 +708,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       ...sections,
       backLink(),
     );
+    afterShow?.();
   }
 
   function memberRow(map: MapDetail, member: MapMember): HTMLElement {
@@ -786,24 +791,30 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
    * The owner's family codes (#195): the same list on every patch they own,
    * since codes belong to the player. Filled in when the list arrives.
    */
-  function familyCodesSection(map: MapDetail, status: HTMLElement): HTMLElement {
+  function familyCodesSection(
+    map: MapDetail,
+    status: HTMLElement,
+  ): { section: HTMLElement; load: () => void } {
     const section = el(
       'div',
       { class: 'lobby-section', 'data-testid': 'lobby-family-codes' },
       el('h2', { class: 'lobby-heading' }, 'Family codes'),
     );
-    const at = shown;
-    lobbyApi
-      .signupCodes()
-      .then((mine) => {
-        if (at !== shown) return;
-        section.append(...familyCodesBody(map, status, mine));
-      })
-      .catch((err: unknown) => {
-        if (at !== shown) return;
-        section.append(el('p', { class: 'auth-hint' }, messageOf(err)));
-      });
-    return section;
+    // Call once the screen is showing: a newer screen drops a late answer.
+    const load = () => {
+      const at = shown;
+      lobbyApi
+        .signupCodes()
+        .then((mine) => {
+          if (at !== shown) return;
+          section.append(...familyCodesBody(map, status, mine));
+        })
+        .catch((err: unknown) => {
+          if (at !== shown) return;
+          section.append(el('p', { class: 'auth-hint' }, messageOf(err)));
+        });
+    };
+    return { section, load };
   }
 
   function familyCodesBody(
