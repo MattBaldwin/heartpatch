@@ -24,8 +24,8 @@ export interface JobsOptions {
   api?: JobsApi;
   /** The Tutorial Glade keeps its own flow: no job entry points there. */
   isGlade?: (mapId: string) => boolean;
-  /** Collected work changed the bag. */
-  onChanged?: (mapId: string) => void;
+  /** Banks finished work into the bag (the bag's settle), before the job board reads its view. */
+  settle?: (mapId: string) => Promise<void>;
 }
 
 export interface JobsDebug {
@@ -79,7 +79,7 @@ export function createJobs(options: JobsOptions): Jobs {
   const board: JobBoard = createJobBoard({
     root: options.root,
     ...(options.api ? { api: options.api } : {}),
-    ...(options.onChanged ? { onChanged: options.onChanged } : {}),
+    ...(options.settle ? { settle: options.settle } : {}),
   });
   const picker: TeamPicker = createTeamPicker({
     root: options.root,

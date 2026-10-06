@@ -48,7 +48,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'Gather Timber',
     sproutLines: [
       'Ooh, a tree full of Timber! Tap the tree tile by your seed, then Gather.',
-      "Here it's quick! In a real patch it takes longer, so tap Collect when it's ready.",
+      "Here it's quick! In a real patch it takes longer, and it pops into your Bag by itself.",
     ],
     highlightTarget: 'resource-node',
     completeOn: { eventType: 'resource.gathered', actor: 'player', where: [] },

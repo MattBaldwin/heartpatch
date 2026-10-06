@@ -18,17 +18,21 @@ describe('checkKeeperData', () => {
     expect(checkKeeperData(KEEPER_DATA)).toEqual([]);
   });
 
-  it('ships 8 bases and 6 outfit palettes (design doc §23 defaults)', () => {
-    expect(KEEPER_DATA.bases).toHaveLength(8);
+  it('ships 12 bases, 12 hairstyles and 6 outfit palettes', () => {
+    // Design doc §23 [DEFAULT: 8] bases; 12 since the owner's hairstyle
+    // decision (2026-10-06) added four with short styles.
+    expect(KEEPER_DATA.bases).toHaveLength(12);
+    expect(KEEPER_DATA.hairstyles).toHaveLength(12);
     expect(KEEPER_DATA.outfits).toHaveLength(6);
   });
 
   it('varies body shape, skin tone, face and hairstyle across the bases', () => {
+    const count = KEEPER_DATA.bases.length;
     const distinct = (pick: (b: KeeperData['bases'][number]) => unknown) =>
       new Set(KEEPER_DATA.bases.map((b) => JSON.stringify(pick(b)))).size;
-    expect(distinct((b) => b.skin)).toBe(8);
-    expect(distinct((b) => b.hairstyle)).toBe(8);
-    expect(distinct((b) => b.body)).toBe(8);
+    expect(distinct((b) => b.skin)).toBe(count);
+    expect(distinct((b) => b.hairstyle)).toBe(count);
+    expect(distinct((b) => b.body)).toBe(count);
     expect(distinct((b) => b.face)).toBeGreaterThanOrEqual(6);
     const heights = KEEPER_DATA.bases.map((b) => b.body.height);
     expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.2);
@@ -44,6 +48,49 @@ describe('checkKeeperData', () => {
       'bases["pip"].hairColor: unknown hair colour "rainbow"',
       'bases["clover"].outfit: unknown outfit "tuxedo"',
     ]);
+  });
+
+  it('starts every hairstyle on some base, so each one shows on the first screen', () => {
+    const used = new Set(KEEPER_DATA.bases.map((b) => b.hairstyle));
+    expect(KEEPER_DATA.hairstyles.filter((h) => !used.has(h.id))).toEqual([]);
+  });
+
+  it('reports a base whose hairstyle is unknown, and duplicate hairstyles', () => {
+    const data = copy();
+    data.bases[0]!.hairstyle = 'mohawk';
+    data.hairstyles.push({ ...data.hairstyles[1]! });
+    expect(checkKeeperData(data)).toEqual([
+      'hairstyles["crew-cut"].id: duplicate id "crew-cut"',
+      'bases["pip"].hairstyle: unknown hairstyle "mohawk"',
+    ]);
+  });
+
+  it('checks hairstyle pieces: known shapes, three numbers each, at most 16', () => {
+    const bad = (edit: (style: KeeperData['hairstyles'][number]) => void) => {
+      const data = copy();
+      edit(data.hairstyles[0]!);
+      return checkKeeperData(data);
+    };
+    expect(
+      bad((h) => {
+        (h.pieces[0] as { shape: string }).shape = 'cube';
+      }),
+    ).toHaveLength(1);
+    expect(
+      bad((h) => {
+        (h.pieces[0]!.at as number[]).push(1);
+      }),
+    ).toHaveLength(1);
+    expect(
+      bad((h) => {
+        h.pieces = Array.from({ length: 17 }, () => h.pieces[0]!);
+      }),
+    ).toHaveLength(1);
+    expect(
+      bad((h) => {
+        h.pieces = [];
+      }),
+    ).toHaveLength(1);
   });
 
   it('keeps shapes inside the chibi ranges', () => {
@@ -74,6 +121,18 @@ describe('Keeper configs', () => {
     expect(keeperConfigProblem({ ...ok, hairColor: 'plaid' }, KEEPER_DATA)).toBe('hairColor');
     expect(keeperConfigProblem({ ...ok, eyeColor: 'laser' }, KEEPER_DATA)).toBe('eyeColor');
     expect(keeperConfigProblem({ ...ok, outfit: 'armor' }, KEEPER_DATA)).toBe('outfit');
+    expect(keeperConfigProblem({ ...ok, hairstyle: 'mohawk' }, KEEPER_DATA)).toBe('hairstyle');
+  });
+
+  it('takes any hairstyle on any base, or none (the base’s own)', () => {
+    expect(defaultKeeperConfig(pip)).not.toHaveProperty('hairstyle');
+    for (const base of KEEPER_DATA.bases) {
+      for (const style of KEEPER_DATA.hairstyles) {
+        const config = { ...defaultKeeperConfig(base), hairstyle: style.id };
+        expect(KeeperConfigSchema.parse(config)).toEqual(config);
+        expect(keeperConfigProblem(config, KEEPER_DATA)).toBeNull();
+      }
+    }
   });
 
   it('is a strict shape: no extra fields, ids only', () => {
@@ -81,6 +140,8 @@ describe('Keeper configs', () => {
     expect(KeeperConfigSchema.safeParse(ok).success).toBe(true);
     expect(KeeperConfigSchema.safeParse({ ...ok, hat: 'crown' }).success).toBe(false);
     expect(KeeperConfigSchema.safeParse({ ...ok, base: 'Not An Id' }).success).toBe(false);
+    expect(KeeperConfigSchema.safeParse({ ...ok, hairstyle: 'Not An Id' }).success).toBe(false);
+    expect(KeeperConfigSchema.safeParse({ ...ok, hairstyle: null }).success).toBe(false);
   });
 
   it('rides on the public member view', () => {
@@ -98,6 +159,9 @@ describe('Keeper configs', () => {
       false,
     );
     expect(MapMemberSchema.parse({ ...member, keeper: null }).keeper).toBeNull();
+    // A picked hairstyle rides along too.
+    const styled = { ...keeper, hairstyle: 'crew-cut' };
+    expect(MapMemberSchema.parse({ ...member, keeper: styled }).keeper).toEqual(styled);
   });
 
   it('names the wardrobe slots #43 builds on (design doc §23)', () => {

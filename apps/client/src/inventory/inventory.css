@@ -222,8 +222,50 @@
   }
 }
 
+/* "🪵 +5 Timber!": what just landed in the bag (owner decision 2026-10-06).
+   Above the sheets and the recipe book (5), at the bottom of the screen, so it
+   never sits on the wardrobe's "You found …" card at the top. Not tappable. */
+.landed-toast {
+  position: fixed;
+  z-index: 6;
+  bottom: calc(env(safe-area-inset-bottom) + 96px);
+  left: 50%;
+  box-sizing: border-box;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: var(--hp-pad-y) calc(var(--hp-pad-x) + 6px);
+  border-radius: 999px;
+  background: #eaf8dc;
+  box-shadow: 0 6px 18px rgb(47 107 61 / 28%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: #2f6b3d;
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: landed-toast-pop 0.35s ease-out;
+}
+
+.landed-toast[hidden] {
+  display: none;
+}
+
+@keyframes landed-toast-pop {
+  from {
+    transform: translateX(-50%) translateY(12px) scale(0.8);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .gather-chip {
+  .gather-chip,
+  .landed-toast {
     animation: none;
   }
 }

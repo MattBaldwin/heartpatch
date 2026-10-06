@@ -15,6 +15,7 @@ interface KeeperConfig {
   hairColor: string;
   eyeColor: string;
   outfit: string;
+  hairstyle?: string;
 }
 
 /** `KeeperDebug` from src/ui/keeper/keeper-screen.ts (this project can't see its types). */
@@ -141,6 +142,57 @@ test('a new Keeper is picked before any patch, remembered, and changed for free'
   expect(errors).toEqual([]);
 });
 
+test('any Keeper wears any hair style, kept after a reload', async ({ page }) => {
+  test.setTimeout(240_000);
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  await signUp(page, uniqueName('hair'));
+  const picker = page.getByTestId('keeper-picker');
+  await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();
+  const style = (name: string) => picker.getByRole('button', { name: `Hair style: ${name}` });
+
+  // A new Keeper comes with its own short style…
+  await picker.getByRole('button', { name: 'Rowan', exact: true }).tap();
+  await expect(style('Crew Cut')).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(() => keeperState(page).then((s) => s?.preview ?? null)).not.toBeNull();
+  const rowan = (await keeperState(page))!;
+  expect(rowan.picked).toEqual({
+    base: 'rowan',
+    hairColor: 'midnight',
+    eyeColor: 'hazel',
+    outfit: 'sunflower',
+  });
+
+  // …and can wear any other; the Keeper and colours stay.
+  await style('Long').tap();
+  await expect(style('Long')).toHaveAttribute('aria-pressed', 'true');
+  await expect(style('Crew Cut')).toHaveAttribute('aria-pressed', 'false');
+  const styled = (await keeperState(page))!;
+  expect(styled.picked).toEqual({ ...rowan.picked, hairstyle: 'long' });
+  expect(styled.preview).not.toBe(rowan.preview);
+
+  await picker.getByRole('button', { name: 'That’s me!' }).tap();
+  await waitForLobby(page);
+  expect((await keeperState(page))!.saved).toEqual(styled.picked);
+
+  // Kept: after a reload the editor opens on the same style.
+  await page.reload();
+  await waitForLobby(page);
+  await expect.poll(() => keeperState(page).then((s) => s?.saved ?? null)).toEqual(styled.picked);
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByTestId('lobby-settings').tap();
+  await lobby.getByTestId('keeper-settings').tap();
+  await expect(style('Long')).toHaveAttribute('aria-pressed', 'true');
+
+  // Picking a Keeper again goes back to its own style.
+  await picker.getByRole('button', { name: 'Rowan', exact: true }).tap();
+  await expect(style('Crew Cut')).toHaveAttribute('aria-pressed', 'true');
+  expect((await keeperState(page))!.picked).toEqual(rowan.picked);
+  await picker.getByRole('button', { name: 'Back' }).tap();
+  await waitForLobby(page);
+  expect(errors).toEqual([]);
+});
+
 test('the Keeper stands at home on the map and cheers in battles', async ({ page }) => {
   test.setTimeout(240_000);
   await signUp(page, uniqueName('cheer'));
@@ -206,7 +258,7 @@ test('every row of the picker is reachable on phones, iPads and laptops (#130)',
     const layout = await page.evaluate(() => {
       const rows = document.querySelector<HTMLElement>('.keeper-rows')!;
       return {
-        // All four rows fit: nothing hides below "That's me!".
+        // All five rows fit: nothing hides below "That's me!".
         fits: rows.scrollHeight <= rows.clientHeight + 1,
         // The first choice of each row is what a finger on it touches.
         reachable: [...rows.querySelectorAll('.keeper-row')].map((row) => {
@@ -221,7 +273,7 @@ test('every row of the picker is reachable on phones, iPads and laptops (#130)',
     });
     expect(layout, `${String(size.width)}×${String(size.height)}`).toEqual({
       fits: true,
-      reachable: [true, true, true, true],
+      reachable: [true, true, true, true, true],
       swipe: 'pan-x pan-y',
     });
     // More Keepers than fit: the row says so (it fades out at the end).
@@ -236,5 +288,5 @@ test('every row of the picker is reachable on phones, iPads and laptops (#130)',
     saved: null,
     picked: { outfit: 'pumpkin' },
   });
-  await expectRoomyLabels(page, '.keeper-base, .keeper-actions .auth-button');
+  await expectRoomyLabels(page, '.keeper-base, .keeper-style, .keeper-actions .auth-button');
 });

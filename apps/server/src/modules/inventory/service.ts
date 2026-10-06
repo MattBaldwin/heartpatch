@@ -21,6 +21,7 @@ import {
   type RecipeBookResponse,
 } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
+import type { NewGameEvent } from '../../db/game-events.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, type Clock } from '../../lib/time.js';
@@ -47,7 +48,7 @@ const MESSAGES = {
   unknownItem: "We don't know that item.",
   unknownRecipe: "We don't know that recipe.",
   noCraft: "We couldn't find that.",
-  busy: "You're already making something! Collect it first.",
+  busy: 'Your pot is still cooking! It pops into your bag when it’s ready.',
   collected: 'Already collected!',
   notReady: 'Not ready yet. Check back soon!',
   outOfSeason: (season: string) => `That recipe only works around ${season}!`,
@@ -107,6 +108,58 @@ export async function consumeItems(
   await repo.subtract(owner, items, { reason, refId });
 }
 
+/**
+ * Locks every inventory row these grants will touch, per owner (owner id
+ * order) and in item-id order, before any grant: one grant at a time would
+ * otherwise lock items in grant order, against everyone else's item-id order
+ * (tech spec §7 step 11). Missing rows are made by the grant.
+ */
+export async function lockGrantRows(
+  tx: Executor,
+  mapId: string,
+  grants: readonly { userId: string; items: ItemCounts }[],
+): Promise<void> {
+  const byOwner = new Map<string, Set<string>>();
+  for (const { userId, items } of grants) {
+    const ids = byOwner.get(userId) ?? new Set<string>();
+    for (const id of Object.keys(items)) ids.add(id);
+    byOwner.set(userId, ids);
+  }
+  const inventory = createInventoryRepo(tx);
+  for (const userId of [...byOwner.keys()].sort()) {
+    const ids = [...(byOwner.get(userId) ?? [])].sort();
+    if (ids.length > 0) await inventory.lockItems({ mapId, userId }, ids);
+  }
+}
+
+/**
+ * Banks a finished craft into its maker's bag, inside the caller's
+ * transaction (owner decision 2026-10-06: no Collect tap): the items (ledger
+ * reason `craft`) and the row marked collected, which frees the pot. The
+ * caller has locked the craft and the inventory rows. Returns the
+ * `item.crafted` event to append last, as a Collect did.
+ */
+export async function bankCraft(
+  tx: Executor,
+  craft: CraftRow,
+  at: Date,
+): Promise<NewGameEvent<'item.crafted'>> {
+  const owner = { mapId: craft.mapId, userId: craft.userId };
+  await grantItems(tx, owner, craft.items, 'craft', craft.id);
+  await createInventoryRepo(tx).markCraftCollected(craft.id, at);
+  return {
+    mapId: craft.mapId,
+    type: 'item.crafted',
+    actorUserId: craft.userId,
+    payload: {
+      craftId: craft.id,
+      userId: craft.userId,
+      recipeId: craft.recipeId,
+      items: craft.items,
+    },
+  };
+}
+
 /** A recipe book page by key (`recipe:<id>`, `building:<id>`), if the book has it. */
 export const recipeBookPage = (key: string): RecipeBookPage | undefined =>
   BOOK_PAGE_BY_KEY.get(key);
@@ -159,6 +212,8 @@ export interface InventoryService {
   startCraft: (user: PublicUser, mapId: string, recipeId: string) => Promise<CraftResponse>;
   /** Puts a finished craft in the bag. */
   collectCraft: (user: PublicUser, mapId: string, craftId: string) => Promise<CollectResponse>;
+  /** Dev/test only: the player's crafts on this map finish now (e2e skips the wait). The bag, as `get`. */
+  devCraftsReady: (user: PublicUser, mapId: string) => Promise<InventoryResponse>;
   /** Dev/test only: items for the player. */
   devGrant: (user: PublicUser, mapId: string, items: ItemCounts) => Promise<ItemCounts>;
   /** The recipe book pages this account has opened (account-level). */
@@ -180,7 +235,7 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
     void options.publish?.(mapId);
   };
 
-  return {
+  const service: InventoryService = {
     get: async (user, mapId) => {
       const { map } = await requireMember(db, user, mapId);
       const owner = { mapId, userId: user.id };
@@ -213,9 +268,18 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
           }
           const page = recipeBookPage(recipePageKey(recipe.id));
           if (page) await requirePageOpen(tx, user.id, page);
-          if ((await repo.listActiveCrafts(owner)).length > 0) {
-            throw new AppError('CONFLICT', MESSAGES.busy);
-          }
+          // A finished craft goes in the bag first and frees the pot; one
+          // still cooking keeps it busy. Lock order (tech spec §7): the craft,
+          // then every inventory row this touches (what's banked and what's
+          // spent) in item-id order, then `maps`.
+          const active = await repo.lockActiveCrafts(owner);
+          if (active.some((c) => c.readyAt > at)) throw new AppError('CONFLICT', MESSAGES.busy);
+          await lockGrantRows(tx, mapId, [
+            ...active.map((c) => ({ userId: user.id, items: c.items })),
+            { userId: user.id, items: recipe.inputs },
+          ]);
+          const banked: NewGameEvent[] = [];
+          for (const done of active) banked.push(await bankCraft(tx, done, at));
           const craft = await repo.insertCraft({
             ...owner,
             recipeId: recipe.id,
@@ -225,6 +289,7 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
           });
           // Short of anything: CONFLICT, and the craft row rolls back with it.
           await consumeItems(tx, owner, recipe.inputs, 'craft', craft.id);
+          for (const event of banked) await repo.appendEvent(event);
           return { craft: toCraft(craft), items: await repo.list(owner), now: at.toISOString() };
         });
       } catch (err) {
@@ -245,23 +310,20 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
         }
         if (craft.collectedAt) throw new AppError('CONFLICT', MESSAGES.collected);
         if (craft.readyAt > at) throw new AppError('CONFLICT', MESSAGES.notReady);
-        await grantItems(tx, owner, craft.items, 'craft', craft.id);
-        await repo.markCraftCollected(craft.id, at);
-        await repo.appendEvent({
-          mapId,
-          type: 'item.crafted',
-          actorUserId: user.id,
-          payload: {
-            craftId: craft.id,
-            userId: user.id,
-            recipeId: craft.recipeId,
-            items: craft.items,
-          },
-        });
+        await repo.appendEvent(await bankCraft(tx, craft, at));
         return { granted: craft.items, items: await repo.list(owner), now: at.toISOString() };
       });
       published(mapId);
       return result;
+    },
+
+    devCraftsReady: async (user, mapId) => {
+      const at = now();
+      await store.transaction(async (repo, tx) => {
+        await requireMember(tx, user, mapId);
+        await repo.makeCraftsReady({ mapId, userId: user.id }, at);
+      });
+      return service.get(user, mapId);
     },
 
     devGrant: async (user, mapId, items) => {
@@ -278,4 +340,5 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
       return { unlocked: BOOK_PAGES.filter((p) => open.has(p.key)).map((p) => p.key) };
     },
   };
+  return service;
 }

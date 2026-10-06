@@ -1,6 +1,13 @@
 import { findAvoidedWords, GAME_DATA, type Craft, type Gather } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { bagItems, bagRecipes, describeItems, gatherChip } from './bag-view.js';
+import {
+  bagCrafts,
+  bagItems,
+  bagRecipes,
+  describeItems,
+  gatherChip,
+  landedText,
+} from './bag-view.js';
 import { FALLBACK_ICON, itemIcon } from './item-icons.js';
 
 const craft: Craft = {
@@ -57,6 +64,42 @@ describe('bag', () => {
       ...GAME_DATA.resources.flatMap((r) => [r.name, r.description]),
     ];
     for (const line of lines) expect(findAvoidedWords(line), line).toEqual([]);
+  });
+});
+
+describe('landedText', () => {
+  it('adds up everything that landed at once, kindly', () => {
+    expect(landedText([{ items: { treats: 3 } }])).toBe(`${itemIcon('treats')} +3 Treats!`);
+    expect(
+      landedText([{ items: { treats: 3 } }, { items: { timber: 5 } }, { items: { timber: 2 } }]),
+    ).toBe(`${itemIcon('timber')} +7 Timber, ${itemIcon('treats')} +3 Treats!`);
+    expect(landedText([])).toBe('');
+    expect(findAvoidedWords(landedText([{ items: { 'witch-dust': 1 } }]))).toEqual([]);
+  });
+});
+
+describe('bagCrafts', () => {
+  it('lists every craft soonest first, whatever its recipe or season', () => {
+    const treats: Craft = {
+      ...craft,
+      id: '0190a8c4-0000-7000-8000-0000000000bc',
+      recipeId: 'pumpkin-treats',
+      items: { treats: 3 },
+      readyAt: '2026-10-02T12:00:30Z',
+    };
+    const gone: Craft = {
+      ...craft,
+      id: '0190a8c4-0000-7000-8000-0000000000bd',
+      recipeId: 'a-recipe-no-longer-in-the-data',
+      items: { emberwood: 1 },
+      readyAt: '2026-10-02T12:05:00Z',
+    };
+    expect(bagCrafts([gone, craft, treats]).map((c) => [c.craft.id, c.name, c.icon])).toEqual([
+      [treats.id, 'Pumpkin Treats', itemIcon('treats')],
+      [craft.id, 'Heart Charm', itemIcon('heart-charm')],
+      [gone.id, 'Emberwood', itemIcon('emberwood')],
+    ]);
+    expect(bagCrafts([])).toEqual([]);
   });
 });
 

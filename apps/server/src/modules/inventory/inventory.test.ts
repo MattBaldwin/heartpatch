@@ -311,7 +311,9 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
 
       const busy = await craft(server, kid, mapId, 'heart-charm');
       expect(busy.statusCode).toBe(409);
-      expect(errorOf(busy).message).toBe("You're already making something! Collect it first.");
+      expect(errorOf(busy).message).toBe(
+        'Your pot is still cooking! It pops into your bag when it’s ready.',
+      );
 
       const early = await collect(server, kid, mapId, made.craft.id);
       expect(early.statusCode).toBe(409);
@@ -371,7 +373,9 @@ describe.skipIf(!url)('inventory and crafting (needs DATABASE_URL)', () => {
       ]);
       expect([a.statusCode, b.statusCode].sort()).toEqual([201, 409]);
       const refused = a.statusCode === 409 ? a : b;
-      expect(errorOf(refused).message).toBe("You're already making something! Collect it first.");
+      expect(errorOf(refused).message).toBe(
+        'Your pot is still cooking! It pops into your bag when it’s ready.',
+      );
       const after = await inventory(server, kid, mapId);
       expect(after.crafts).toHaveLength(1);
       expect(after.items).toEqual({

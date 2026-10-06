@@ -27,6 +27,12 @@ export interface JobRow {
   workSince: Date | null;
   /** It works a tile its owner still holds, untouched since it started (`squishyAtWork`). */
   atWork: boolean;
+  /**
+   * When its work tile was first captured after it started there, or null:
+   * cycles finished before then still go in its owner's bag (owner decision
+   * 2026-10-06); only the unfinished one is lost.
+   */
+  lostAt: Date | null;
   /** Its watch post as stored (maybe on land that changed hands). */
   post: { tileId: string; q: number; r: number } | null;
   /** It stands watch (`squishyOnWatch`). */
@@ -62,6 +68,27 @@ export const squishyAtWork = (
       and ${attack(tileAttacks.outcome)} = 'captured'
       and ${attack(tileAttacks.endedAt)} > ${outer(squishy.workStartedAt)}
   ))`;
+};
+
+/**
+ * The one SQL spelling of "when this land changed hands" (owner decision
+ * 2026-10-06), read the way `squishyAtWork` reads captures: the first
+ * `captured` attack on `tileId` that ended after `since`, or null. Work and
+ * gathers finished before then still go in the bag. Both are columns of the
+ * outer query.
+ */
+export const firstCaptureSince = (tileId: AnyPgColumn, since: AnyPgColumn) => {
+  // Outer columns written `"table"."column"` and the subquery's table aliased,
+  // so `tile_id` / `started_at` can never bind to `tile_attacks`' own columns.
+  const outer = (column: AnyPgColumn) =>
+    sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+  const attack = (column: AnyColumn) => sql`land_capture.${sql.identifier(column.name)}`;
+  return sql<Date | null>`(
+    select min(${attack(tileAttacks.endedAt)}) from ${tileAttacks} as land_capture
+    where ${attack(tileAttacks.tileId)} = ${outer(tileId)}
+      and ${attack(tileAttacks.outcome)} = 'captured'
+      and ${attack(tileAttacks.endedAt)} > ${outer(since)}
+  )`.mapWith(tileAttacks.endedAt);
 };
 
 /**
@@ -142,6 +169,7 @@ function queries(db: Executor): SquishyJobsRepo {
         teamSlot: squishies.teamSlot,
         workSince: squishies.workSince,
         atWork: squishyAtWork(),
+        lostAt: firstCaptureSince(squishies.workTileId, squishies.workStartedAt),
         onWatch: squishyOnWatch(),
         workTileId: workTile.id,
         workQ: workTile.q,
@@ -190,6 +218,7 @@ function queries(db: Executor): SquishyJobsRepo {
           },
     workSince: r.workSince,
     atWork: r.atWork,
+    lostAt: r.lostAt,
     post:
       r.postTileId === null || r.postQ === null || r.postR === null
         ? null

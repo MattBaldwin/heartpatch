@@ -62,7 +62,7 @@
   touch-action: pan-y;
 }
 
-/* The label beside its choices, so four rows fit where two used to. */
+/* The label beside its choices, so five rows fit where two used to. */
 .keeper-row {
   display: flex;
   flex: none;
@@ -133,6 +133,7 @@
 }
 
 .keeper-base,
+.keeper-style,
 .keeper-swatch {
   flex: none;
   display: flex;
@@ -158,6 +159,12 @@
   border-radius: 18px;
 }
 
+/* A style is its name: a pill as tall as the swatches. */
+.keeper-style {
+  padding: 0 14px;
+  border-radius: 18px;
+}
+
 .keeper-base-name {
   font-size: 13px;
   font-weight: 700;
@@ -165,12 +172,14 @@
 }
 
 .keeper-base[aria-pressed='true'],
+.keeper-style[aria-pressed='true'],
 .keeper-swatch[aria-pressed='true'] {
   border-color: #ff7aa2;
   background: #fff;
 }
 
 .keeper-base:active,
+.keeper-style:active,
 .keeper-swatch:active {
   transform: scale(0.95);
 }
@@ -200,10 +209,28 @@
   margin-top: 2px;
 }
 
-/* A phone in a Safari tab: the subtitle gives its room to the rows. */
+/* A phone in a Safari tab: the subtitle gives its room to the rows, and the
+   rows sit closer (choices stay 44px) so all five fit under the Keeper. */
 @media (max-height: 740px) {
   .keeper-subtitle {
     display: none;
+  }
+
+  .keeper-card {
+    gap: 6px;
+    padding-block: 12px;
+  }
+
+  .keeper-rows {
+    gap: 2px;
+  }
+
+  .keeper-choices {
+    padding-block: 2px;
+  }
+
+  .keeper-base {
+    min-height: 48px;
   }
 }
 
