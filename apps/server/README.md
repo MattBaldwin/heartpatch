@@ -281,12 +281,12 @@ Lock order: the night's row, squishies, then `maps` (events).
 
 ## Care, levels and evolution
 
-Care (design doc §7–8; issue #19; DECISIONS G and "Care (#19)") lives in `src/modules/care`. Contentment is stored as its value at the last care action (`squishies.contentment_at_last_care`) plus `last_cared_at`, and today's value is worked out on read with shared `contentmentAt` (CLAUDE.md rule 4). Every care action is a `care_log` row, which counts a squishy's actions per day (diminishing returns) and an account's Patch Coins from care per day (the cap); the day is the account's (`users.time_zone`).
+Care (design doc §7–8; issue #19; DECISIONS G and "Care (#19)") lives in `src/modules/care`. Contentment is stored as its value at the last care action (`squishies.contentment_at_last_care`) plus `last_cared_at`, and today's value is worked out on read with shared `contentmentAt` (CLAUDE.md rule 4). Every care action is a `care_log` row, which counts a squishy's actions per day (diminishing returns; rare treats marked `outsideDailyCare`, the Heart Snack, aren't counted and always give full contentment) and an account's Patch Coins from care per day (the cap); the day is the account's (`users.time_zone`).
 
 | Endpoint | Does |
 |---|---|
 | `GET /api/v1/maps/:mapId/care` | → `CareListResponse`: my active squishies as their care sheets show them (contentment, mood, level, XP bar, stats, XP bonus, care today, debounce, an unseen evolution), `speciesDefs` for secret forms I own or just grew out of, my bag, `coinsToday`, `now` |
-| `POST /api/v1/maps/:mapId/squishies/:squishyId/care` | `{ action }` → `CareResponse` (the list plus `result`). My own active squishy; a short per-action debounce (`cooldownSeconds`, `CONFLICT`); feed pays a Treat with `consumeItems(…, 'care', careLogId)`; `squishy.cared` |
+| `POST /api/v1/maps/:mapId/squishies/:squishyId/care` | `{ action }` → `CareResponse` (the list plus `result`). My own active squishy; a short per-action debounce (`cooldownSeconds`, `CONFLICT`); feed pays a Treat and the Heart Snack 3 Heartdust, both with `consumeItems(…, 'care', careLogId)`; `squishy.cared` |
 | `POST /api/v1/maps/:mapId/squishies/:squishyId/care/seen` | → `CareListResponse`: the owner saw the evolution celebration |
 | `POST /api/v1/maps/:mapId/squishies/:squishyId/rename` | `{ nickname }` (shared `NicknameSchema`: trimmed, 1–16 letters, numbers, spaces and a little punctuation; `null` goes back to the species name) → `CareListResponse` (#20). My own active squishy; every nickname passes `lib/filter.ts` (`assertAllowedText(…, 'name')`, `VALIDATION_FAILED` with a kid-readable message); `squishy.updated` (`{ userId, squishyId, nickname }` to members) only when the name changed |
 

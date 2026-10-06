@@ -124,13 +124,14 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 
 **XP gained = battle XP × care multiplier × habitat multiplier**
 
-- **Care multiplier.** Care actions (**feed, pet, play**) raise **contentment** (0–100). Contentment decays slowly over real time **[DEFAULT: ~24h from full to baseline]**. Multiplier **[DEFAULT: 1.0× to 1.75×]**. A new squishy starts at contentment **[DEFAULT: 50]** ("Feeling okay!"), not at the baseline.
+- **Care multiplier.** Care actions (**feed, pet, play**, and the rare Heart Snack below) raise **contentment** (0–100). Contentment decays slowly over real time **[DEFAULT: ~24h from full to baseline]**. Multiplier **[DEFAULT: 1.0× to 1.75×]**. A new squishy starts at contentment **[DEFAULT: 50]** ("Feeling okay!"), not at the baseline.
 - **Habitat multiplier.** Habitats carry element and feeling tags. A squishy housed in a matching habitat gets **[DEFAULT: up to 1.75×]**. A mismatch gives 1.0×. A squishy is either housed in a habitat or standing watch (§14), not both.
 - **Floor of 1.0×.** Neglect never weakens or sickens a squishy; it only means no bonus. Combat alone always advances a squishy, just more slowly.
 - **Cap.** Combined multiplier capped at **[DEFAULT: 3×]**.
 - **Implementation:** no ticking simulation. Store `contentment` and `lastCaredAt`; compute current contentment lazily from elapsed time on read. Care can't be tap-spammed: each squishy's returns shrink as the day's actions pile up (below), and the server ignores a repeat of the same action within about 10 seconds so one stroke counts once.
 - **Diminishing returns:** the first **[DEFAULT: 3]** care actions per squishy per day give full contentment; later ones give less (50%, then 25%, then 10%). Patch Coins from care are capped per account per day **[DEFAULT: 10]**, and only full-value actions earn one. Attentive play is rewarded without turning care into a chore that favours whoever has the most screen time.
-- **Why three actions:** each maps to close-up gestures (§20): drag a treat → **feed**, stroke → **pet**, tap to boop or pinch to tickle → **play**. Each also has a visible button. This keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
+- **Heart Snack (rare treat).** A care button that costs **[DEFAULT: 3]** Heartdust and adds **[DEFAULT: 25]** contentment. It always counts in full, sits outside the day's diminishing returns and earns no Patch Coins, so Heartdust from rescues has a use (owner decision 2026-10-06).
+- **Why three everyday actions:** each maps to close-up gestures (§20): drag a treat → **feed**, stroke → **pet**, tap to boop or pinch to tickle → **play**. Each also has a visible button. This keeps care easy to pick up. Training is the **Training Grounds** building (§13), not a care button. Grooming returns with squishy dress-up (Phase 2). Care actions are data, so adding one later needs no engine change.
 - **Levels and pace.** Levels go up to 100. Wild squishies match the player's Partner at **[DEFAULT: −2 to +1]** of its level, so wild fights stay a fair match as it grows. The XP curve steepens past level 16 (when starters grow up) and again past 30, so 30–100 is a long tail rather than a first-week sprint. A befriended squishy joins at most **[DEFAULT: 1]** level below its first evolution, so it grows up by training rather than by being caught. Battle XP tires out over a day: each squishy gets full XP for its first **[DEFAULT: 7]** wins of the map-local day, then **[DEFAULT: 10%]**, so playing all day doesn't race far ahead (owner decisions 2026-10-06). `pnpm sim:progression` shows the pace day by day.
 - Care history (a rolling score over the squishy's life) feeds evolution odds (§8).
 
@@ -194,10 +195,10 @@ Resources vary by terrain, making certain tiles worth fighting over.
 | Resource | Source | Use |
 |---|---|---|
 | Timber | Forest | Basic building |
-| Stone | Hills, mountains | Basic building |
+| Stone | Hills, Stone nodes | Basic building |
 | Emberwood | Old forest | Hearthfire fuel (nightly upkeep) |
-| Glimmer | Mountains, caves | Advanced habitats, decorations |
-| Heartdust | Rescuing Hollowed squishies, events | Nurseries, evolution boosters (rare) |
+| Glimmer | Mountains, caves | Hearthfire level 3, advanced habitats, decorations |
+| Heartdust | Rescuing Hollowed squishies, events | Heart Snack (care), nurseries, evolution boosters (rare) |
 | Treats | Grown on farm plots | Feeding squishies, raising care |
 
 **Seasonal resources** (special uses, see §15): Pumpkins, Witch Dust, Magic Fallen Leaves, Turkey Feathers, Presents, Fireworks.
