@@ -36,7 +36,7 @@ export function fenceOf(buildingId: string): FenceBuilding | undefined {
   return FENCE_BY_ID.get(buildingId);
 }
 
-const ELEMENT_NAMES = new Map(ELEMENTS.map((e) => [e.id, e.name]));
+const ELEMENT_NAMES = new Map<string, string>(ELEMENTS.map((e) => [e.id, e.name]));
 
 /** A picture for each element, on fence cards and the build list. */
 export const ELEMENT_ICONS: Readonly<Record<string, string>> = {
