@@ -111,7 +111,7 @@ describe('resolveWildSpawn', () => {
     });
 
     it('takes the rarity discount off Partner-matched levels, not plain ones', () => {
-      // fixture-moonpuff is secret; the others are common.
+      // fixture-moonpuff is secret, fixture-splashmallow uncommon; the others are common.
       const SECRET_TABLES: SpawnTable[] = [
         {
           id: 'forest-secret',
@@ -119,10 +119,17 @@ describe('resolveWildSpawn', () => {
           entries: [{ species: 'fixture-moonpuff', weight: 1 }],
         },
       ];
+      const UNCOMMON_TABLES: SpawnTable[] = [
+        {
+          id: 'forest-uncommon',
+          terrains: ['forest'],
+          entries: [{ species: 'fixture-splashmallow', weight: 1 }],
+        },
+      ];
       const NO_DISCOUNT: SpawnRules = { ...OFFSET_RULES, rarityLevelDiscount: undefined };
       const DISCOUNT_RULES: SpawnRules = {
         ...OFFSET_RULES,
-        rarityLevelDiscount: { rare: 1, secret: 2 },
+        rarityLevelDiscount: { uncommon: 1, secret: 2 },
       };
       const roll = (q: number, partnerLevel: number | null, rules: SpawnRules, tables = TABLES) =>
         resolveWildSpawn(
@@ -143,9 +150,13 @@ describe('resolveWildSpawn', () => {
         expect(roll(q, 30, DISCOUNT_RULES, SECRET_TABLES).level).toBe(
           roll(q, 30, NO_DISCOUNT, SECRET_TABLES).level - 2,
         );
-        // Floored at levels.min.
-        expect(roll(q, 3, DISCOUNT_RULES, SECRET_TABLES).level).toBeGreaterThanOrEqual(
-          RULES.levels.min,
+        // Floored at levels.min, and exactly that when the discount goes under it.
+        expect(roll(q, 3, DISCOUNT_RULES, SECRET_TABLES).level).toBe(
+          Math.max(RULES.levels.min, roll(q, 3, NO_DISCOUNT, SECRET_TABLES).level - 2),
+        );
+        // A one-level discount takes off exactly one.
+        expect(roll(q, 30, DISCOUNT_RULES, UNCOMMON_TABLES).level).toBe(
+          roll(q, 30, NO_DISCOUNT, UNCOMMON_TABLES).level - 1,
         );
         // A rarity it doesn't name takes off nothing.
         expect(roll(q, 30, DISCOUNT_RULES)).toEqual(roll(q, 30, NO_DISCOUNT));

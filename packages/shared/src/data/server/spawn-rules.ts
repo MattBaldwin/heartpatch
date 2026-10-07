@@ -8,7 +8,7 @@ export const SPAWN_RULES: SpawnRules = {
   // TUNE: owner decision 2026-10-06 (design review Q2): wild squishies are
   // the Partner's level −2 to +1, so fights stay a fair match as it grows.
   partnerOffset: { min: -2, max: 1 },
-  // TUNE: owner decision 2026-10-06 (#208): rarer base forms carry bigger
+  // TUNE: owner decision 2026-10-07 (#208): rarer base forms carry bigger
   // base stats, so a Partner-matched one spawns this many levels lower.
   rarityLevelDiscount: { rare: 1, epic: 2, legendary: 2, secret: 2 },
   // TUNE: judged at each window's middle, so 4-hour windows give night, day,

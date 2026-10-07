@@ -45,7 +45,7 @@ export const SpawnRulesSchema = z.strictObject({
   /**
    * Levels taken off a Partner-matched wild squishy by its rarity, after the
    * `partnerOffset` roll and before the `levels.min` floor (owner decision
-   * 2026-10-06, #208): rarer base forms have bigger base stats, so at the
+   * 2026-10-07, #208): rarer base forms have bigger base stats, so at the
    * Partner's level they'd win far more often. A rarity left out takes off 0.
    * Plain levels (no Partner) ignore it.
    */
