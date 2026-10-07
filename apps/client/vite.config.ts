@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defaultClientConditions, defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { readBuildInfo, runGit } from './tooling/version/build-info.js';
 import { pwaAssets } from './tooling/pwa/plugin.js';
 
 /**
@@ -21,6 +22,10 @@ function forbidServerData(): Plugin {
 }
 
 export default defineConfig({
+  // The version line in the profile menu (#198): src/pwa/build-info.ts.
+  define: {
+    __HP_BUILD__: JSON.stringify(readBuildInfo({ env: process.env, git: runGit, now: new Date() })),
+  },
   plugins: [
     forbidServerData(),
     pwaAssets(),

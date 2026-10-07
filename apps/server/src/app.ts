@@ -112,6 +112,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   const health = createHealthService({
     version: config.APP_VERSION,
+    build: config.APP_BUILD ?? null,
+    commit: config.APP_COMMIT ?? null,
     checks: options.readinessChecks ?? [],
   });
 

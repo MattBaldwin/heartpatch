@@ -37,6 +37,45 @@ describe('GET /api/v1/health', () => {
     expect(res.statusCode).toBe(200);
     const body = HealthResponseSchema.parse(res.json());
     expect(body.version).toBe('1.2.3');
+    expect(body).toMatchObject({ build: null, commit: null });
+  });
+
+  it("reports the server's build number and commit, and nothing else about it (#198)", async () => {
+    const built = loadConfig({ ...env, APP_BUILD: '214', APP_COMMIT: 'cb04682' });
+    const res = await (
+      await start({ config: built })
+    ).inject({
+      method: 'GET',
+      url: '/api/v1/health',
+    });
+    const body = HealthResponseSchema.parse(res.json());
+    expect(body).toMatchObject({ build: 214, commit: 'cb04682' });
+    expect(Object.keys(res.json<Record<string, unknown>>()).sort()).toEqual([
+      'build',
+      'commit',
+      'status',
+      'uptimeSeconds',
+      'version',
+    ]);
+  });
+});
+
+describe('build config (#198)', () => {
+  it('treats empty build args as unset', () => {
+    expect(loadConfig({ ...env, APP_BUILD: '', APP_COMMIT: '' })).toMatchObject({
+      APP_BUILD: undefined,
+      APP_COMMIT: undefined,
+    });
+  });
+
+  it('keeps the first 7 digits of a full sha, as the client build does', () => {
+    const sha = 'cb04682f1e2d3c4b5a69788796a5b4c3d2e1f001';
+    expect(loadConfig({ ...env, APP_BUILD: '214', APP_COMMIT: sha }).APP_COMMIT).toBe('cb04682');
+  });
+
+  it('refuses a build number or commit that is not one', () => {
+    expect(() => loadConfig({ ...env, APP_BUILD: 'abc' })).toThrow();
+    expect(() => loadConfig({ ...env, APP_COMMIT: 'not-a-sha' })).toThrow();
   });
 });
 
