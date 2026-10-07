@@ -66,6 +66,11 @@
   box-shadow: 0 10px 30px rgb(74 49 80 / 28%);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
   color: #4a3150;
+  /* Never up under the side trays' handles (centred at 55% of the screen,
+     about 100px tall): a tall panel (a fire's card, #202) scrolls inside. */
+  max-height: calc(45dvh - 62px - env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .tile-panel-home {

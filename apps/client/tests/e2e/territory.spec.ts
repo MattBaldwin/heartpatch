@@ -12,8 +12,8 @@ const STRONG = GAME_DATA.species.find(
 
 /**
  * Territory on an iPhone (issue #15): claim wild land next to your home base
- * by winning a showdown with its guardians, see it become yours, and post a
- * guard on it. Checked through the dev hook's signals, never pixels.
+ * by winning a showdown with its guardians, see it become yours, light a
+ * Hearthfire in its middle (#202), and post a guard on it. Checked through the dev hook's signals, never pixels.
  */
 
 /** `TerritoryDebug` from src/territory/territory-screen.ts (this project can't see its types). */
@@ -36,7 +36,8 @@ interface BattleDebug {
 
 const territoryState = (page: Page) => hook<TerritoryDebug>(page, 'territory');
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
-const mapState = (page: Page) => hook<{ id: string; selected: string | null }>(page, 'map');
+const mapState = (page: Page) =>
+  hook<{ id: string; selected: string | null; litFires: number }>(page, 'map');
 
 /** A touch tap on the canvas as pointer events (as map.spec.ts does). */
 async function tapCanvas(page: Page, x: number, y: number): Promise<void> {
@@ -105,6 +106,11 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
     level: STRONG_LEVEL,
   });
   expect(granted.status).toBe(201);
+  // Timber, Stone and Emberwood for a fire on the new land.
+  const stuff = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
+    items: { timber: 10, stone: 10, emberwood: 10 },
+  });
+  expect(stuff.status).toBe(201);
 
   // Wild land next to home: the panel says Claim, kindly.
   const spot = await findTile(page, 'claim');
@@ -170,6 +176,15 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
     })
     .toBe('watch');
   await expect(page.getByTestId('territory-watch')).toContainText('Nobody stands watch');
+
+  // A Hearthfire in the new land's middle (#202): build it, then fuel it to light it.
+  await page.getByTestId('tile-build-fire').tap();
+  await expect(panel).toContainText('It goes in the middle of this tile');
+  await page.getByTestId('tile-build-fire-confirm').tap();
+  await expect(page.getByTestId('tile-fire')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('tile-fire-fuel').tap();
+  await expect(page.getByTestId('tile-fire-note')).toContainText('Lit!', { timeout: 30_000 });
+  await expect.poll(async () => (await mapState(page))?.litFires, { timeout: 30_000 }).toBe(1);
 
   // Post a squishy on watch there (the starter and the strong one to choose from).
   await page.getByTestId('territory-pick').tap();

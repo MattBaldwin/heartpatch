@@ -194,6 +194,7 @@ export const HOME_TEXT = {
   fuelledSome: (n: number) =>
     `Your bag ran out! ${String(n)} ${n === 1 ? 'fire' : 'fires'} got more. The lowest went first. 🔥`,
   fireBuilt: 'Ta-da! Your fire is built. Add Emberwood to light it!',
+  landFuel: '🔥 Add fuel',
 } as const;
 
 /** One night of fuel per tap: easy to count, quick to top up. */
@@ -1167,12 +1168,22 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     }
   }
 
-  const tileButton = (label: string, onTap: () => void, testId: string, soft = false) => {
+  /** A tile-panel button: a big one, a soft small one, or (`small`) a small one for a card row. */
+  const tileButton = (
+    label: string,
+    onTap: () => void,
+    testId: string,
+    soft: boolean | 'small' = false,
+  ) => {
+    const look =
+      soft === 'small'
+        ? 'auth-button auth-button-small'
+        : `auth-button bag-action${soft ? ' auth-button-soft auth-button-small' : ''}`;
     const b = el(
       'button',
       {
         type: 'button',
-        class: `auth-button bag-action${soft ? ' auth-button-soft auth-button-small' : ''}`,
+        class: look,
         'data-testid': testId,
       },
       label,
@@ -1182,7 +1193,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     return b;
   };
   const tileRow = (...children: Node[]) =>
-    el('div', { class: 'home-row home-row-wrap' }, ...children);
+    el('div', { class: 'home-row home-row-wrap home-row-tight' }, ...children);
   const cardHead = (b: { buildingId: string }, level: number) =>
     el(
       'div',
@@ -1353,15 +1364,18 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         data?.kind === 'hearthfire'
           ? costText({ [data.fuelResource]: data.fuelPerNight * FUEL_NIGHTS })
           : '';
+      // Short labels in one row of small buttons, so the panel stays clear of the trays.
       const fuelButton = tileButton(
-        `${HOME_TEXT.addFuel} (${cost})`,
+        HOME_TEXT.landFuel,
         () =>
           void tileAct(
             (id, send) => send((key) => api.fuel(id, fire.id, FUEL_NIGHTS, key)),
             HOME_TEXT.fuelled,
           ),
         'tile-fire-fuel',
+        'small',
       );
+      fuelButton.setAttribute('aria-label', `${HOME_TEXT.addFuel} (${cost})`);
       if ((fire.fuelSpace ?? 0) === 0) fuelButton.disabled = true;
       card.push(
         el('p', { class: 'home-card-note', 'data-testid': 'tile-fire-note' }, buildingNote(fire)),
@@ -1376,6 +1390,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                     renderTile();
                   },
                   'tile-fire-upgrade',
+                  'small',
                 ),
               ]
             : []),
@@ -1401,6 +1416,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     const { container, tile } = panel;
     const me = user?.id ?? null;
     const mine = me !== null && tile.ownerUserId === me;
+    // A step of a fire's card (build, upgrade, take down) has the panel to
+    // itself, so it stays short and clear of the side trays.
+    const focused = mine && tile.homeSlot === null && tileMode !== 'card';
+    container.classList.toggle('tile-actions-focus', focused);
+    container.parentElement?.classList.toggle('tile-panel-actions-focus', focused);
     if (mine && tile.homeSlot === null) {
       if (!home) void loadForPanel();
       container.replaceChildren(...landTileNodes(tile));
@@ -1455,6 +1475,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       },
       hide: () => {
         panel?.container.replaceChildren();
+        panel?.container.classList.remove('tile-actions-focus');
+        panel?.container.parentElement?.classList.remove('tile-panel-actions-focus');
         panel = null;
         render();
       },

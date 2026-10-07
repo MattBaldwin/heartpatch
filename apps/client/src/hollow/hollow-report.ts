@@ -66,8 +66,8 @@ export function unseenReports(
 
 /**
  * The report card's title and lines for these nights (newest first).
- * `fireHint` is the status's own ("no fire of mine is lit for tonight"), so
- * a night he let them be asks for a fire only while there isn't one.
+ * `fireHint` is the status's own ("a gatherer of mine would sleep on dark
+ * land tonight"), so a night he let them be asks for a fire only while one would.
  */
 export function reportText(
   reports: readonly MorningReport[],
