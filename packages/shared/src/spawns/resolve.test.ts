@@ -89,7 +89,7 @@ describe('resolveWildSpawn', () => {
       );
     const tiles = Array.from({ length: 80 }, (_, q) => q);
 
-    it('rolls the Partner’s level −2 to +1, every one of them', () => {
+    it('rolls every level in the offset range (this fixture: −2 to +1)', () => {
       const levels = new Set(tiles.map((q) => at(q, 30)!.level));
       expect([...levels].sort((a, b) => a - b)).toEqual([28, 29, 30, 31]);
     });

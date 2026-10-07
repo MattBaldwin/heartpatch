@@ -118,7 +118,7 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 - **Offline defense:** the defender's squishies are controlled by an AI following their **defense stance** (aggressive, defensive, balanced).
 - **Capture:** weakening a wild squishy and using a **Heart Charm** (craftable) gives a capture chance that rises as its HP drops.
 - **No re-fighting for XP, and no getting stuck:** a wild squishy you beat without befriending, lose to or run from wanders off for you for the rest of its spawn window, so the next one you find is someone new. A tie leaves it there. Other players can still find it. On the Tutorial Glade only befriending moves one on, so a new player can always try again.
-- **Rarer wild squishies are a step harder:** rare and rarer base forms have bigger stats, so at your Partner's level they're a real challenge. A team (or a potion) is the way to take them on (owner decision 2026-10-07).
+- **Rarer wild squishies are a step harder:** rare and rarer base forms have bigger stats, so at your Partner's level they're a real challenge. A team is the way to take them on, and battle potions are coming (#214) (owner decision 2026-10-07).
 - Battles are never violent: squishies get "tuckered out", not hurt.
 
 ## 7. Growth: care, habitats and XP
