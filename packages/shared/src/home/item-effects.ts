@@ -31,6 +31,8 @@ export type ItemEffect =
   | { readonly kind: 'building'; readonly effect: BuildingEffect }
   /** Buildings it keeps going each night. */
   | { readonly kind: 'fuel'; readonly buildings: readonly string[] }
+  /** Something you can also make: the recipes that make it. */
+  | { readonly kind: 'made-from'; readonly recipes: readonly string[] }
   /** Recipes it goes into. */
   | { readonly kind: 'recipes'; readonly recipes: readonly string[] }
   /** Buildings it helps build. */
@@ -66,6 +68,13 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
     effects.push({ kind: 'battle' });
   }
   if (item.id === BEFRIEND_ITEM) effects.push({ kind: 'befriend' });
+
+  // A gathered or seasonal thing a recipe also makes (Treats from Pumpkins).
+  // A made thing's own page already says how it's made.
+  const makers = data.recipes.filter((r) => r.output.resource === item.id);
+  if (item.kind !== 'crafted' && makers.length > 0) {
+    effects.push({ kind: 'made-from', recipes: makers.map((r) => r.id) });
+  }
 
   const firstCost = (b: (typeof data.buildings)[number]) => b.levels[0]?.cost ?? {};
   const inFirst = data.buildings.filter((b) => (firstCost(b)[item.id] ?? 0) > 0);

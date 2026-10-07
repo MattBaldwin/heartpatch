@@ -55,6 +55,13 @@ describe('itemEffects (#241)', () => {
     expect(ember).toContainEqual(expect.objectContaining({ kind: 'recipes' }));
     expect(itemEffects('heartdust')).toEqual([{ kind: 'care', actions: ['heart-snack'] }]);
     expect(itemEffects('treats')).toContainEqual({ kind: 'care', actions: ['feed'] });
+    // Something a recipe also makes says so, from the recipe data.
+    const makers = GAME_DATA.recipes.filter((r) => r.output.resource === 'treats').map((r) => r.id);
+    expect(makers.length).toBeGreaterThan(0);
+    expect(itemEffects('treats')).toContainEqual({ kind: 'made-from', recipes: makers });
+    expect(itemEffects('heart-charm')).not.toContainEqual(
+      expect.objectContaining({ kind: 'made-from' }),
+    );
     const timber = itemEffects('timber').find((e) => e.kind === 'build-with');
     expect(timber?.kind === 'build-with' && timber.buildings).toContain('hearthfire');
   });

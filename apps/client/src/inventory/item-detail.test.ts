@@ -28,6 +28,7 @@ describe('the Bag item card (#241)', () => {
   it('names a few things and then says "and more"', () => {
     const treats = itemDetail('treats', 1).chips.map((c) => c.text);
     expect(treats).toContain('🤗 Care: Feed');
+    expect(treats).toContain('🥣 Made from Pumpkins');
     expect(treats.find((t) => t.startsWith('🍳'))).toMatch(/and more$/);
     expect(itemDetail('fireworks', 1).chips.map((c) => c.text)).toEqual(['🎀 A New Year keepsake']);
   });

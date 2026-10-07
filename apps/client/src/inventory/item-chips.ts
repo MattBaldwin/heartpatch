@@ -14,6 +14,8 @@ export interface ItemChip {
 
 const BUILDING_NAMES = new Map(GAME_DATA.buildings.map((b) => [b.id, b.name]));
 const RECIPE_NAMES = new Map(GAME_DATA.recipes.map((r) => [r.id, r.name]));
+const RECIPES = new Map(GAME_DATA.recipes.map((r) => [r.id, r]));
+const ITEM_NAMES = new Map(GAME_DATA.resources.map((r) => [r.id, r.name]));
 const CARE_NAMES = new Map(GAME_DATA.careActions.map((c) => [c.id, c.name]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
 
@@ -50,6 +52,13 @@ export function itemChip(effect: ItemEffect): ItemChip {
       return chip(effectChip(effect.effect));
     case 'fuel':
       return chip('🪵 Keeps fires lit at night');
+    case 'made-from': {
+      // What goes in, across every recipe that makes it: "Made from Pumpkins".
+      const inputs = [
+        ...new Set(effect.recipes.flatMap((r) => Object.keys(RECIPES.get(r)?.inputs ?? {}))),
+      ];
+      return chip(`🥣 Made from ${few(inputs.map((i) => ITEM_NAMES.get(i) ?? i))}`);
+    }
     case 'recipes':
       return chip(`🍳 Goes into ${few(effect.recipes.map((r) => RECIPE_NAMES.get(r) ?? r))}`);
     case 'build-with':
