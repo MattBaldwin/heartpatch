@@ -9,8 +9,10 @@ const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
 test('owner makes a patch, a friend joins with the code, owner approves and resets', async ({
   browser,
 }, testInfo) => {
-  // Two signups, each through the Keeper picker's 3D preview (#42); CI renders in software.
-  test.setTimeout(90_000);
+  // Two signups, each through the Keeper picker's 3D preview (#42); CI renders
+  // in software. A pass takes about a minute on iPad WebKit (58.6 s on #224's
+  // CI), and a shard's first tests also pay for the first shader compiles.
+  test.setTimeout(120_000);
   const suffix = `${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
   const ownerName = `own_${suffix}`;
   const friendName = `pal_${suffix}`;
