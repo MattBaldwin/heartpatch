@@ -5,6 +5,7 @@ import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
+import { createWildPicker } from './battle/wild-picker.js';
 import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
@@ -397,6 +398,8 @@ const home = createHomeScreen({
   },
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
+// Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
+const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(mapId, tile) });
 const maps = createMapScreen({
   root: document.body,
   showScene,
@@ -416,7 +419,9 @@ const maps = createMapScreen({
     home.setMap(null);
     lobby.showMessage(message);
   },
+  // Meet it first (#209): the tuft the player tapped is what they came for.
   tileActions: combineTileActions(
+    wildPicker.tileActions,
     inventory.tileActions,
     home.tileActions,
     land.tileActions,
@@ -575,6 +580,10 @@ const milestones = createMilestoneCelebration({
 const battles = createBattleScreen({
   root: document.body,
   isGlade: (mapId) => mapId === glade,
+  onWildHints: (mapId, tiles) => {
+    wildPicker.setHints(mapId, tiles);
+    maps.setWild(mapId, tiles);
+  },
   // Find a squishy and the Catalog live in the Adventure tray.
   entryRoot: trays.slot('battle'),
   showScene,

@@ -30,6 +30,7 @@ import { MapSync } from './map-sync.js';
 import { listenForTaps } from './tap-detector.js';
 import { describeTile } from './tile-info.js';
 import { mountTilePanel } from './tile-panel.js';
+import { wildMarkers } from './wild-markers.js';
 import './map.css';
 
 // The map screen (#7, live updates from #22): draws the open map, keeps it
@@ -99,6 +100,8 @@ export interface MapDebug extends MapSceneStats {
   readonly viewSeq: number;
   readonly selected: string | null;
   readonly live: WsStatus | null;
+  /** Each wild-squishy tuft's tile and its middle on screen (CSS pixels), for e2e taps (#209). */
+  readonly wild: readonly { key: HexKey; x: number; y: number }[];
 }
 
 export interface MapScreen {
@@ -119,6 +122,12 @@ export interface MapScreen {
   setNight: (night: boolean) => void;
   /** My land that misses me (owner decision 2026-10-06): each fading tile's share, 0–1. */
   setLandFade: (fade: ReadonlyMap<HexKey, number>) => void;
+  /**
+   * Tiles in reach with a wild squishy this window (#209, the server's
+   * `wildHints`: tiles only, no species) for map `mapId`: each gets a
+   * rustling tuft. A reply for another map is ignored.
+   */
+  setWild: (mapId: string, tiles: readonly Hex[]) => void;
   readonly debug: MapDebug | null;
 }
 
@@ -137,6 +146,14 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   let selected: Hex | null = null;
   let night = false;
   let landFade: ReadonlyMap<HexKey, number> = new Map();
+  /** The wild hints for the map on screen (#209). */
+  let wild: { mapId: string; tiles: readonly Hex[] } | null = null;
+  const drawWild = (): void => {
+    const state = sync.state;
+    if (!scene3d || !state) return;
+    const tiles = wild?.mapId === state.id ? wild.tiles : [];
+    scene3d.setWild(wildMarkers(tiles, (key) => state.tileAt(key)));
+  };
 
   const hudName = el('span', { class: 'map-hud-name' });
   const hudStatus = el('span', { class: 'map-hud-status', role: 'status' });
@@ -210,6 +227,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     socket: liveSocket,
     onRedraw: (state) => {
       scene3d?.update(state.view);
+      drawWild();
       for (const layer of options.layers ?? []) layer.update?.(state.view);
       if (selected) showTile(state, selected);
       options.invalidate();
@@ -241,6 +259,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     built.setNight(night);
     built.setLandFade(landFade);
     scene3d = built;
+    drawWild();
     ambient.start();
     // Another screen (a battle, a close-up) swapped the stage: stop asking for
     // frames until the map is built again.
@@ -322,9 +341,15 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       scene3d?.setLandFade(next);
       options.invalidate();
     },
+    setWild: (mapId, tiles) => {
+      wild = { mapId, tiles };
+      drawWild();
+      options.invalidate();
+    },
     setUser: (next) => {
       if (next?.id === user?.id) return;
       user = next;
+      wild = null;
       if (sync.state) close();
       ws?.close();
       ws = null;
@@ -341,6 +366,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         ...scene3d.stats,
         selected: selected ? hexKey(selected) : null,
         live: ws?.status ?? null,
+        wild: scene3d.wildRects().map(({ key, rect }) => ({
+          key,
+          x: rect.x + rect.width / 2,
+          y: rect.y + rect.height / 2,
+        })),
       };
     },
   };
