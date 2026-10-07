@@ -58,7 +58,7 @@ export const RECIPE_BOOK: RecipeBookData = {
     },
     {
       page: 'building:hedge',
-      line: 'Gather Greens from a meadow and some Timber, and this page opens!',
+      line: 'Get Greens from a meadow (a squishy gatherer picks them) and some Timber, and this page opens!',
     },
     {
       page: 'building:moat',
@@ -86,7 +86,7 @@ export const RECIPE_BOOK: RecipeBookData = {
     },
     {
       page: 'building:ice-wall',
-      line: 'Find Ice in the mountains (or freeze some Water) and gather Stone, and this page opens!',
+      line: 'Get Ice from the mountains (a squishy gatherer chips it) or freeze Water, plus some Stone, and this page opens!',
     },
   ],
 };
