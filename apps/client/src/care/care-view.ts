@@ -25,6 +25,13 @@ const DONE_LINES: Readonly<Record<string, string>> = {
   'heart-snack': 'Mmm! They feel so loved.',
 };
 
+/**
+ * Public species ids. Only a public form with no public evolution says it's
+ * fully evolved: a secret form's own evolutions stay on the server, so it
+ * just shows its level (#205).
+ */
+const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
+
 // Player-facing text (style guide §2, §6, §9).
 export const CARE_TEXT = {
   title: 'Care',
@@ -243,7 +250,7 @@ export function careSheet(
     level:
       growsAt !== undefined && growsAt > squishy.level
         ? CARE_TEXT.growsUp(squishy.level, growsAt)
-        : evolutions?.length === 0
+        : evolutions?.length === 0 && PUBLIC_SPECIES.has(squishy.speciesId)
           ? CARE_TEXT.fullyEvolved(squishy.level)
           : CARE_TEXT.level(squishy.level),
     xp: toNext === null ? 1 : Math.min(1, squishy.xpIntoLevel / toNext),

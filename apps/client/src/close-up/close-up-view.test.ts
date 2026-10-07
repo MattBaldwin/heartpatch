@@ -118,7 +118,7 @@ describe('info card', () => {
       speciesName: 'Gloomdrop',
       nickname: null,
       levelNumber: 4,
-      level: 'Level 4 · Fully evolved! 🌟', // its species never evolves
+      level: 'Level 4',
       element: 'Shadow',
       feeling: 'Sleepy',
       mood: 'Happy and bouncy!',

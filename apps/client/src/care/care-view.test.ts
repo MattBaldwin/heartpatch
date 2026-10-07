@@ -78,7 +78,7 @@ describe('careSheet', () => {
       color: '#3b3561',
       mood: 'Happy and bouncy!',
       hearts: 0.5,
-      level: 'Level 4 · Fully evolved! 🌟', // its species never evolves
+      level: 'Level 4',
       xp: 0.25,
       xpLine: '15 / 60 XP',
     });
@@ -154,8 +154,11 @@ describe('careSheet', () => {
     });
     expect(careSheet(squishy(), growing).level).toBe('Level 4 · evolves at Level 16');
     expect(careSheet(squishy({ level: 16 }), growing).level).toBe('Level 16');
-    // A top form (#205, owner-approved words).
-    expect(careSheet(squishy({ speciesId: 'moonmallow' }), growing).level).toBe(
+    // Not a public species (a test stand-in, like a secret form): just its level.
+    expect(careSheet(squishy({ speciesId: 'moonmallow' }), growing).level).toBe('Level 4');
+    // A public top form (#205, owner-approved words).
+    const top = GAME_DATA.species.find((s) => s.evolutions.length === 0)!;
+    expect(careSheet(squishy({ speciesId: top.id }), reply()).level).toBe(
       'Level 4 · Fully evolved! 🌟',
     );
   });

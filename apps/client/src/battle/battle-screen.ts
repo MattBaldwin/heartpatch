@@ -563,7 +563,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.showResult({
       ...outcome,
       xp: lines,
-      evolving: xp.length > 0 ? evolving : [],
+      evolving,
       done: MESSAGES.done,
       ...(nudge ? { nudge } : {}),
     });

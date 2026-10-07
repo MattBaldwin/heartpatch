@@ -93,7 +93,14 @@ export interface CareRepo {
 
   setGrowth: (
     squishyId: string,
-    growth: { xp: number; level: number; speciesId: string; element: ElementId },
+    growth: {
+      xp: number;
+      level: number;
+      speciesId: string;
+      element: ElementId;
+      /** Pins the joining level of a row the previous release wrote (#205). */
+      joinedLevel?: number;
+    },
   ) => Promise<void>;
   insertEvolution: (evolution: EvolutionRow & { mapId: string }) => Promise<void>;
   /** The newest evolution each squishy's owner hasn't seen celebrated yet. */

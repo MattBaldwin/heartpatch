@@ -238,7 +238,15 @@ export async function applyXp(
     element = into.element;
   }
 
-  await repo.setGrowth(row.id, { xp: next.xp, level: next.level, speciesId, element });
+  await repo.setGrowth(row.id, {
+    xp: next.xp,
+    level: next.level,
+    speciesId,
+    element,
+    // A row the previous release wrote has no joining level: its first XP
+    // pins it at the level it had, so its meter stops restarting (#205).
+    ...(row.joinedLevel === null ? { joinedLevel: row.level } : {}),
+  });
   for (const evolution of evolutions) {
     await repo.insertEvolution({
       mapId: row.mapId,
