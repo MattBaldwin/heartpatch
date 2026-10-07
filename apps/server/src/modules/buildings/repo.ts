@@ -21,6 +21,12 @@ export interface HomeTileRow {
   nodeResource: string | null;
 }
 
+/** A tile a command targets: maybe a home tile, maybe captured land, maybe not mine. */
+export interface TargetTileRow extends HomeTileRow {
+  ownerUserId: string | null;
+  homeSlot: number | null;
+}
+
 export interface BuildingRow {
   id: string;
   mapId: string;
@@ -28,6 +34,8 @@ export interface BuildingRow {
   tileId: string;
   q: number;
   r: number;
+  /** The tile's home slot: null for captured land outside every home base (#202). */
+  homeSlot: number | null;
   buildingId: string;
   kind: BuildingKind;
   level: number;
@@ -82,6 +90,24 @@ export interface BuildingsRepo {
    * hands meanwhile (a member leaving releases them).
    */
   lockHomeTiles: (mapId: string, userId: string) => Promise<HomeTileRow[]>;
+  /**
+   * `lockHomeTiles` plus one more tile at `target` (captured land a command
+   * builds on, #202), all in one id-ordered lock (tech spec §7 step 6), so a
+   * member leaving (every tile, id order) can't deadlock with it.
+   */
+  lockHomeTilesAnd: (
+    mapId: string,
+    userId: string,
+    target: { q: number; r: number },
+  ) => Promise<{ home: HomeTileRow[]; target: TargetTileRow | null }>;
+  /** Locks every building on these tiles, in id order (step 8): land changing hands (#202). */
+  lockOnTiles: (tileIds: readonly string[]) => Promise<BuildingRow[]>;
+  /** Every building's spot, by map, owner and id: the #204 re-layout's scan (no locks). */
+  listPlacements: () => Promise<
+    { id: string; mapId: string; ownerUserId: string; buildingId: string; spot: number }[]
+  >;
+  /** Locks all my Hearthfires on this map, in id order (Fuel all fires, #202). */
+  lockFires: (mapId: string, userId: string) => Promise<BuildingRow[]>;
   /** The player's buildings on this map, by tile then spot. */
   listOwned: (mapId: string, userId: string) => Promise<BuildingRow[]>;
   /** Every building on the map, on tiles its owner still holds, by tile then spot. */
@@ -131,6 +157,7 @@ const buildingColumns = {
   tileId: buildings.tileId,
   q: tiles.q,
   r: tiles.r,
+  homeSlot: tiles.homeSlot,
   buildingId: buildings.buildingId,
   kind: buildings.kind,
   level: buildings.level,
@@ -199,6 +226,71 @@ function queries(db: Executor): BuildingsRepo {
         .for('no key update');
       return rows.sort((a, b) => a.q - b.q || a.r - b.r);
     },
+
+    lockHomeTilesAnd: async (mapId, userId, target) => {
+      const rows = await db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          nodeResource: tiles.nodeResource,
+          ownerUserId: tiles.ownerUserId,
+          homeSlot: tiles.homeSlot,
+        })
+        .from(tiles)
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            or(
+              and(eq(tiles.ownerUserId, userId), isNotNull(tiles.homeSlot)),
+              and(eq(tiles.q, target.q), eq(tiles.r, target.r)),
+            ),
+          ),
+        )
+        .orderBy(asc(tiles.id))
+        .for('no key update');
+      const home = rows
+        .filter((t) => t.ownerUserId === userId && t.homeSlot !== null)
+        .map(({ id, q, r, nodeResource }) => ({ id, q, r, nodeResource }))
+        .sort((a, b) => a.q - b.q || a.r - b.r);
+      return { home, target: rows.find((t) => t.q === target.q && t.r === target.r) ?? null };
+    },
+
+    lockOnTiles: async (tileIds) =>
+      tileIds.length === 0
+        ? []
+        : (
+            await selectBuildings()
+              .where(inArray(buildings.tileId, [...tileIds]))
+              .orderBy(asc(buildings.id))
+              .for('update', { of: buildings })
+          ).map(toBuilding),
+
+    listPlacements: () =>
+      db
+        .select({
+          id: buildings.id,
+          mapId: buildings.mapId,
+          ownerUserId: buildings.ownerUserId,
+          buildingId: buildings.buildingId,
+          spot: buildings.spot,
+        })
+        .from(buildings)
+        .orderBy(asc(buildings.mapId), asc(buildings.ownerUserId), asc(buildings.id)),
+
+    lockFires: async (mapId, userId) =>
+      (
+        await selectBuildings()
+          .where(
+            and(
+              eq(buildings.mapId, mapId),
+              eq(buildings.ownerUserId, userId),
+              eq(buildings.kind, 'hearthfire'),
+            ),
+          )
+          .orderBy(asc(buildings.id))
+          .for('update', { of: buildings })
+      ).map(toBuilding),
 
     listOwned: async (mapId, userId) =>
       (

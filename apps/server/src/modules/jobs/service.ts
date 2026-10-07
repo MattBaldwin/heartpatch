@@ -249,6 +249,8 @@ export async function leaveWork(
   squishyIds: readonly string[],
   job: SquishyJobId,
   at: Date,
+  /** More grants the caller will make right after (a lost fire's refund, #202): locked with these. */
+  alsoLock: readonly { userId: string; items: ItemCounts }[] = [],
 ): Promise<NewGameEvent[]> {
   const repo = createSquishyJobsRepo(tx);
   const rows = (await repo.listByIds(squishyIds)).filter((r) => r.workTile !== null);
@@ -257,13 +259,12 @@ export async function leaveWork(
   // Nightfall calls this for a squishy it just took: its day's work still
   // counts. Work on land that changed hands banks what finished before then.
   const works = rows.map((row) => ({ row, work: bankableWork(row, map, at, true) }));
-  await lockGrantRows(
-    tx,
-    map.id,
-    works.flatMap(({ row, work }) =>
+  await lockGrantRows(tx, map.id, [
+    ...works.flatMap(({ row, work }) =>
       work ? [{ userId: row.squishy.ownerUserId, items: work.ready }] : [],
     ),
-  );
+    ...alsoLock,
+  ]);
   for (const { row, work } of works) {
     const owner = row.squishy.ownerUserId;
     if (work && !isEmpty(work.ready)) {

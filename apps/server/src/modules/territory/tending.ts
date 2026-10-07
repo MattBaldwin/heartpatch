@@ -19,6 +19,8 @@ import {
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { localDate, type Clock } from '../../lib/time.js';
+import { takeDownOnLostLand } from '../buildings/service.js';
+import { grantItems, lockGrantRows } from '../inventory/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
@@ -214,11 +216,35 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
           const guards = await territory.clearDefenders(tile.id);
           returned.set(tile.ownerUserId, [...(returned.get(tile.ownerUserId) ?? []), ...guards]);
         }
+        // Fires on that land come down too (#202, step 8). What they give
+        // back goes in their owners' bags with the gatherers' banking below,
+        // the inventory rows locked together (step 11).
+        const lostFires = await takeDownOnLostLand(
+          tx,
+          mapId,
+          going.map((t) => t.id),
+          at,
+          map.timeZone,
+          'wild',
+        );
+        for (const lost of lostFires) await repo.setLostFire(lost.tileId, lost.refund);
+        const refunds = lostFires
+          .filter((l) => Object.keys(l.refund).length > 0)
+          .map((l) => ({
+            userId: l.ownerUserId,
+            items: l.refund,
+            refId: l.event.payload.buildingRowId,
+          }));
         // Gatherers bank what they had ready and rest (as when land changes hands).
         const workers = await repo.workersOn(going.map((t) => t.id));
         await createSquishyJobsRepo(tx).lockSquishies(workers);
         const events: NewGameEvent[] =
-          workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at) : [];
+          workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at, refunds) : [];
+        if (workers.length === 0) await lockGrantRows(tx, mapId, refunds);
+        for (const { userId, items, refId } of refunds) {
+          await grantItems(tx, { mapId, userId }, items, 'build-refund', refId);
+        }
+        events.push(...lostFires.map((l) => l.event));
         for (const [userId, list] of owned) {
           const payload: GameEventPayload<'tile.rewilded'> = {
             userId,

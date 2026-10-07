@@ -188,7 +188,11 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
 
   it("locks a leaving member's habitat residents in id order (buildings `removeMemberBuildings`)", async () => {
     const { mapId, userId, buildingId, ids } = await patch();
-    await nightfallAgainst(ids, () => unplanned((tx) => removeMemberBuildings(tx, mapId, userId)));
+    await nightfallAgainst(ids, () =>
+      unplanned((tx) =>
+        removeMemberBuildings(tx, { id: mapId, timeZone: 'UTC' }, userId, new Date()),
+      ),
+    );
     const gone = await db
       .select({ id: buildings.id })
       .from(buildings)

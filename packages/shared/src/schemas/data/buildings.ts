@@ -23,6 +23,22 @@ const buildingBase = {
   /** How many of this building one home base can have. */
   maxPerHome: z.number().int().positive(),
   /**
+   * Where it can stand (#202): `home` on the home base only, `owned` on any
+   * tile its owner holds (home base included, where `maxPerHome` counts).
+   */
+  placement: z.enum(['home', 'owned']),
+  /**
+   * How many can stand on one tile outside the home base. Required with
+   * `placement: 'owned'` (`checkGameData`).
+   */
+  maxPerTile: z.number().int().positive().optional(),
+  /**
+   * Which spots it takes on a tile (#204): the middle (`centre`, lights such
+   * as a Hearthfire), the six around it (`ring`), or a hex edge (`edge`,
+   * fences, #203).
+   */
+  slot: z.enum(['centre', 'ring', 'edge']),
+  /**
    * Percent of what it cost that comes back when it's taken down (rounded
    * down per item). Defaults to `HOME_BASE_RULES.removeRefundPercent`.
    */
@@ -73,5 +89,7 @@ export const BuildingSchema = z.discriminatedUnion('kind', [
 ]);
 export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];
+export type BuildingSlot = Building['slot'];
+export type BuildingPlacement = Building['placement'];
 export type HearthfireBuilding = z.infer<typeof HearthfireBuildingSchema>;
 export type HabitatBuilding = z.infer<typeof HabitatBuildingSchema>;

@@ -7,6 +7,7 @@ import { createHollowConsumer } from './modules/hollow/consumer.js';
 import { createLoreConsumer } from './modules/lore/consumer.js';
 import { createMilestonesConsumer } from './modules/milestones/consumer.js';
 import { createMilestonesService } from './modules/milestones/service.js';
+import { relayoutHomes } from './modules/buildings/layout.js';
 import type { HollowService } from './modules/hollow/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
 import { createLandTending } from './modules/territory/tending.js';
@@ -73,6 +74,18 @@ createMilestonesService({ db: db.db, clock })
       app.log.error({ err }, 'First Patch backfill failed');
     },
   );
+// Typed spots for homes built before them (#204): misplaced buildings move
+// on their own tile. Idempotent, so every boot can run it; it never blocks start.
+relayoutHomes(db.db, clock, (owner, err) => {
+  app.log.error({ err, ...owner }, 'home re-layout skipped a player');
+}).then(
+  (moved) => {
+    if (moved > 0) app.log.info({ moved }, 'moved buildings into their typed spots');
+  },
+  (err: unknown) => {
+    app.log.error({ err }, 'home re-layout failed');
+  },
+);
 // Closing the app (shutdown or failed start) stops the jobs, then drains the DB pool.
 app.addHook('onClose', async () => {
   await jobs.stop();

@@ -110,6 +110,8 @@ export interface TerritoryRepo {
   findAttack: (battleId: string) => Promise<TileAttackRow | null>;
   touchAttack: (battleId: string, at: Date) => Promise<void>;
   endAttack: (battleId: string, outcome: TileAttackOutcome, at: Date) => Promise<void>;
+  /** The capture took the defender's fire down (#202): what came back, for the Challenge report. */
+  setLostFireRefund: (attackId: string, refund: Record<string, number>) => Promise<void>;
 
   setOwner: (tileId: string, userId: string) => Promise<void>;
   /** The owner's squishies on watch on the tile, by slot (active ones only). */
@@ -322,6 +324,13 @@ function queries(db: Executor): TerritoryRepo {
         .where(eq(tileAttacks.battleId, battleId));
     },
 
+    setLostFireRefund: async (attackId, refund) => {
+      await db
+        .update(tileAttacks)
+        .set({ lostFireRefund: refund })
+        .where(eq(tileAttacks.id, attackId));
+    },
+
     endAttack: async (battleId, outcome, at) => {
       await db
         .update(tileAttacks)
@@ -507,6 +516,8 @@ export interface TendingRepo {
     night: string,
     at: Date,
   ) => Promise<void>;
+  /** A fire came down when this tile went wild (#202): what came back, for the welcome-back card. */
+  setLostFire: (tileId: string, refund: Record<string, number>) => Promise<void>;
   /** Squishies working these tiles (gatherers), in id order. */
   workersOn: (tileIds: readonly string[]) => Promise<string[]>;
   /** Tiles that went wild from the player since `sinceNight` and aren't theirs again. */
@@ -514,7 +525,7 @@ export interface TendingRepo {
     mapId: string,
     userId: string,
     sinceNight: string,
-  ) => Promise<{ q: number; r: number; night: string }[]>;
+  ) => Promise<{ q: number; r: number; night: string; lostFire: Record<string, number> | null }[]>;
 }
 
 export interface TendingTxRepo extends TendingRepo {
@@ -641,8 +652,15 @@ function tendingQueries(db: Executor): TendingRepo {
         .where(inArray(tiles.id, [...tileIds]));
       await db
         .update(tileTending)
-        .set({ wildNight: night, wildFromUserId: fromUserId, wildAt: at })
+        .set({ wildNight: night, wildFromUserId: fromUserId, wildAt: at, lostFireRefund: null })
         .where(inArray(tileTending.tileId, [...tileIds]));
+    },
+
+    setLostFire: async (tileId, refund) => {
+      await db
+        .update(tileTending)
+        .set({ lostFireRefund: refund })
+        .where(eq(tileTending.tileId, tileId));
     },
 
     workersOn: async (tileIds) => {
@@ -657,7 +675,12 @@ function tendingQueries(db: Executor): TendingRepo {
 
     wentWildSince: async (mapId, userId, sinceNight) => {
       const rows = await db
-        .select({ q: tiles.q, r: tiles.r, night: tileTending.wildNight })
+        .select({
+          q: tiles.q,
+          r: tiles.r,
+          night: tileTending.wildNight,
+          lostFire: tileTending.lostFireRefund,
+        })
         .from(tileTending)
         .innerJoin(tiles, eq(tiles.id, tileTending.tileId))
         .where(
@@ -669,7 +692,9 @@ function tendingQueries(db: Executor): TendingRepo {
           ),
         )
         .orderBy(asc(tiles.q), asc(tiles.r));
-      return rows.flatMap((r) => (r.night === null ? [] : [{ q: r.q, r: r.r, night: r.night }]));
+      return rows.flatMap((r) =>
+        r.night === null ? [] : [{ q: r.q, r: r.r, night: r.night, lostFire: r.lostFire ?? null }],
+      );
     },
   };
 }

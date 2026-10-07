@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ItemCountsSchema } from './inventory.js';
 import { HexSchema } from '../hex/index.js';
 import { SpeciesSchema } from './data/species.js';
 import { OwnedSquishySchema } from './squishies.js';
@@ -80,6 +81,8 @@ export const WentWildTileSchema = z.object({
   r: HexSchema.shape.r,
   /** The map-local night it went wild. */
   night: LocalDateSchema,
+  /** My fire there came down with it (#202): what came back to my bag. Null: no fire. */
+  lostFire: ItemCountsSchema.nullable(),
 });
 export type WentWildTile = z.infer<typeof WentWildTileSchema>;
 

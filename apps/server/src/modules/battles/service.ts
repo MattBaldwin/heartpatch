@@ -25,6 +25,7 @@ import {
   type BattleSideSetup,
   type BattleSquishySetup,
   type BattleState,
+  type ItemCounts,
   type Hex,
   type Move,
   type OwnedSquishy,
@@ -42,7 +43,7 @@ import { newSeed } from '../../lib/rng.js';
 import type { Clock } from '../../lib/time.js';
 import { applyXp, appendGrowthEvents, EVOLUTION_STEPS, type Growth } from '../care/service.js';
 import { creditCoins } from '../coins/service.js';
-import { consumeItems } from '../inventory/service.js';
+import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import type { MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
@@ -155,6 +156,12 @@ export interface TileBattleEnd {
   xpPercent: number;
   /** A capture's chance of found clothing: the tile, and Gentle's share of the chance. */
   drop: { tileId: string; percent: number } | null;
+  /**
+   * Refunds for the defender's fire the capture took down (#202), for
+   * battles to grant after its squishy locks (tech spec §7: inventory after
+   * squishies). Empty or missing: nothing to give back.
+   */
+  refunds?: readonly { userId: string; items: ItemCounts; refId: string }[];
 }
 
 /** The other side of a rescue (#21), built by the hollow module in the start transaction. */
@@ -530,6 +537,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       award.xp = Math.floor(
         (award.xp * battleXpPercent(wins.get(award.squishyId) ?? 0, GROWTH_RULES)) / 100,
       );
+    }
+    // A captured tile's fire comes back to its old owner (#202): their
+    // inventory rows (step 11) after the squishy locks, before any XP writes
+    // `species_seen`.
+    const refunds = tile.refunds ?? [];
+    if (refunds.length > 0) {
+      await lockGrantRows(tx, row.mapId, refunds);
+      for (const { userId, items, refId } of refunds) {
+        await grantItems(tx, { mapId: row.mapId, userId }, items, 'build-refund', refId);
+      }
     }
     const grown: Growth[] = [];
     for (const award of awards) {

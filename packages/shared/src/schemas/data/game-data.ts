@@ -190,6 +190,15 @@ export const GameDataSchema = z
       if (b.kind === 'hearthfire') {
         checkRef(resources, 'resource', b.fuelResource, ['buildings', i, 'fuelResource'], report);
       }
+      if (b.placement === 'owned' && b.maxPerTile === undefined) {
+        report(
+          ['buildings', i, 'maxPerTile'],
+          `"${b.id}" can stand on owned land: give it maxPerTile`,
+        );
+      }
+      if (b.placement === 'owned' && b.slot === 'edge') {
+        report(['buildings', i, 'slot'], `"${b.id}": edges come with fences (#203)`);
+      }
     });
 
     data.careActions.forEach((c, i) => {

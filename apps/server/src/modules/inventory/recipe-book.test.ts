@@ -202,8 +202,9 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     await give(server, kid, mapId, { timber: 30, stone: 30, treats: 2 });
     await craftAndCollect(server, kid, mapId, 'heart-charm');
     const tile = await plainHomeTile(server, kid, mapId);
+    // A fire takes the tile's middle, habitats the ring around it (#204).
     for (const [spot, buildingId] of ['hearthfire', 'ember-den', 'cozy-meadow'].entries()) {
-      const res = await place(server, kid, mapId, { buildingId, ...tile, spot: spot + 1 });
+      const res = await place(server, kid, mapId, { buildingId, ...tile, spot });
       expect(res.statusCode, res.body).toBe(201);
     }
   });
@@ -235,7 +236,7 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     const res = await place(server, kid, mapId, {
       buildingId: 'jack-o-lantern-hearthfire',
       ...tile,
-      spot: 1,
+      spot: 0,
     });
     expect(res.statusCode).toBe(403);
     expect(errorOf(res)).toEqual({ code: 'FORBIDDEN', message: SEALED_BUILDING });
@@ -297,7 +298,7 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     const res = await place(server, kid, mapId, {
       buildingId: 'jack-o-lantern-hearthfire',
       ...tile,
-      spot: 1,
+      spot: 0,
     });
     expect(res.statusCode, res.body).toBe(201);
   });

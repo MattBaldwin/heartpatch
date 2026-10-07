@@ -1,8 +1,9 @@
 import type { Building } from '../schemas/data/buildings.js';
 
 /**
- * Home-base buildings (design doc §13–15). Ids are stored in `buildings`
- * rows: add freely, never rename or remove one.
+ * Buildings (design doc §13–15). Ids are stored in `buildings` rows: add
+ * freely, never rename or remove one. `placement` says where one can stand
+ * (#202) and `slot` which spots it takes on a tile (#204).
  */
 export const BUILDINGS: Building[] = [
   {
@@ -11,6 +12,10 @@ export const BUILDINGS: Building[] = [
     name: 'Hearthfire',
     description: "A warm, bright fire. While it's lit, squishies near it are safe all night.",
     maxPerHome: 1, // TUNE:
+    // #202: on any tile you own, one a tile, in its middle (#204).
+    placement: 'owned',
+    maxPerTile: 1, // TUNE:
+    slot: 'centre',
     fuelResource: 'emberwood',
     fuelPerNight: 1, // TUNE:
     maxFuelNights: 5, // TUNE: docs/DECISIONS.md, design doc §14
@@ -28,6 +33,8 @@ export const BUILDINGS: Building[] = [
     description: 'A grinning, extra-bright fire. Its light reaches further than a plain one.',
     season: 'halloween',
     maxPerHome: 1, // TUNE:
+    placement: 'home',
+    slot: 'centre',
     // The carved pumpkin was a lot of work: it always comes back whole.
     refundPercent: 100, // TUNE:
     fuelResource: 'emberwood',
@@ -42,6 +49,8 @@ export const BUILDINGS: Building[] = [
     name: 'Ember Den',
     description: 'A toasty nook for squishies who love the warmth.',
     maxPerHome: 2, // TUNE:
+    placement: 'home',
+    slot: 'ring',
     tags: { elements: ['fire'], feelings: ['cozy'] },
     levels: [
       { cost: { timber: 5, stone: 3 }, capacity: 3 }, // TUNE:
@@ -54,6 +63,8 @@ export const BUILDINGS: Building[] = [
     name: 'Cozy Meadow',
     description: 'Soft grass and sunny spots, perfect for a nap.',
     maxPerHome: 2, // TUNE:
+    placement: 'home',
+    slot: 'ring',
     tags: { elements: ['leaf'], feelings: ['cozy', 'sleepy'] },
     levels: [
       { cost: { timber: 4, stone: 2 }, capacity: 3 }, // TUNE:
@@ -66,6 +77,8 @@ export const BUILDINGS: Building[] = [
     name: 'Training Grounds',
     description: 'Squishies practice their best moves here, a little every hour.',
     maxPerHome: 1, // TUNE:
+    placement: 'home',
+    slot: 'ring',
     levels: [
       { cost: { timber: 8, stone: 8 }, capacity: 2, xpPerHour: 5 }, // TUNE:
       { cost: { timber: 16, stone: 16 }, capacity: 3, xpPerHour: 8 }, // TUNE:

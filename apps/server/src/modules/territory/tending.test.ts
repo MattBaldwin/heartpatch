@@ -260,7 +260,7 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     expect(await land.nightfall(mapId, '2026-10-14')).toEqual({ wild: 1 });
 
     const back = tendingOf(await call(server, 'GET', `/maps/${mapId}/territory/tending`, kid));
-    expect(back.wentWild).toEqual([{ q: far!.q, r: far!.r, night: '2026-10-14' }]);
+    expect(back.wentWild).toEqual([{ q: far!.q, r: far!.r, night: '2026-10-14', lostFire: null }]);
     await setOwner(far!.id, kid.id);
     const reclaimed = tendingOf(await call(server, 'GET', `/maps/${mapId}/territory/tending`, kid));
     expect(reclaimed.wentWild).toEqual([]);

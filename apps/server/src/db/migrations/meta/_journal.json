@@ -183,6 +183,13 @@
       "when": 1791322664349,
       "tag": "0025_tile_tending",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791332198704,
+      "tag": "0026_panoramic_the_enforcers",
+      "breakpoints": true
     }
   ]
 }

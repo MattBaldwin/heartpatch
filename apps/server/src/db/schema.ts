@@ -247,7 +247,8 @@ export const buildings = pgTable(
       .notNull()
       .references(() => maps.id, { onDelete: 'cascade' }),
     ownerUserId: uuid('owner_user_id').notNull(),
-    // One of the owner's home tiles (the service checks it).
+    // One of the owner's home tiles, or for a Hearthfire any tile they own
+    // (#202; the service checks it, and land changing hands takes it down).
     tileId: uuid('tile_id')
       .notNull()
       .references(() => tiles.id, { onDelete: 'cascade' }),
@@ -268,6 +269,10 @@ export const buildings = pgTable(
     }),
     // One building per spot.
     unique('buildings_tile_id_spot_key').on(t.tileId, t.spot),
+    // One of each fire per tile (#202, `maxPerTile: 1`).
+    uniqueIndex('buildings_one_fire_per_tile_key')
+      .on(t.tileId, t.buildingId)
+      .where(sql`${t.kind} = 'hearthfire'`),
     index('buildings_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
     check('buildings_level_positive', sql`${t.level} >= 1`),
     check('buildings_spot_range', sql`${t.spot} between 0 and 6`),
@@ -802,6 +807,9 @@ export const tileAttacks = pgTable(
     // The player's last action; idle past the abandon time counts as a loss.
     lastActionAt: timestamptz('last_action_at').notNull(),
     endedAt: timestamptz('ended_at'),
+    // A capture took the defender's fire down (#202): what came back to them,
+    // for the Challenge report. Null: no fire there.
+    lostFireRefund: jsonb('lost_fire_refund').$type<Record<string, number>>(),
   },
   (t) => [
     unique('tile_attacks_battle_id_key').on(t.battleId),
@@ -878,6 +886,9 @@ export const tileTending = pgTable(
     // When it went wild: work and gathers finished before then still go in
     // the bag, as when land is captured (jobs' `firstCaptureSince`).
     wildAt: timestamptz('wild_at'),
+    // Its owner's fire came down when it went wild (#202): what came back,
+    // for the welcome-back card. Null: no fire there.
+    lostFireRefund: jsonb('lost_fire_refund').$type<Record<string, number>>(),
   },
   (t) => [
     index('tile_tending_map_id_idx').on(t.mapId),

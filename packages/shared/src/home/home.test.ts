@@ -12,11 +12,13 @@ import {
   addFuel,
   buildCost,
   daysBetween,
+  fitsSlot,
   freeSpots,
   fuelCost,
   fuelSpace,
   hearthfireState,
   isReservedSpot,
+  planFuelAll,
   localDateFromDays,
   localDateToDays,
   protectsNight,
@@ -178,6 +180,50 @@ describe('building spots', () => {
       1, 2, 3, 4, 5, 6,
     ]);
   });
+
+  it('offers a light only the middle and a building only the ring (#204)', () => {
+    const plain = { heartSeed: false, nodeResource: null };
+    expect(freeSpots(RULES, plain, new Set(), 'centre')).toEqual([0]);
+    expect(freeSpots(RULES, plain, new Set([0]), 'centre')).toEqual([]);
+    expect(
+      freeSpots(RULES, { heartSeed: false, nodeResource: 'timber' }, new Set(), 'centre'),
+    ).toEqual([]);
+    expect(freeSpots(RULES, plain, new Set([2]), 'ring')).toEqual([1, 3, 4, 5, 6]);
+    expect(freeSpots(RULES, plain, new Set(), 'edge')).toEqual([]);
+    expect(fitsSlot('centre', 0)).toBe(true);
+    expect(fitsSlot('centre', 3)).toBe(false);
+    expect(fitsSlot('ring', 0)).toBe(false);
+    expect(fitsSlot('ring', 6)).toBe(true);
+    expect(fitsSlot('edge', 0)).toBe(false);
+  });
+});
+
+describe('Fuel all fires (#202)', () => {
+  const ember = (id: string, nightsLeft: number) => ({
+    id,
+    fuelResource: 'emberwood',
+    fuelPerNight: 1,
+    nightsLeft,
+    space: 5 - nightsLeft,
+  });
+
+  it('fills every fire when the bag has enough', () => {
+    const plan = planFuelAll([ember('a', 4), ember('b', 1), ember('c', 5)], { emberwood: 50 });
+    expect(Object.fromEntries(plan)).toEqual({ a: 1, b: 4 });
+  });
+
+  it('gives the lowest fire a night first, one night at a time, when the bag runs short', () => {
+    const plan = planFuelAll([ember('a', 2), ember('b', 0), ember('c', 1)], { emberwood: 4 });
+    // b 0→1, b/c 1→2 (b first by id), c 1→2, then a/b/c all at 2: a gets the last.
+    expect(Object.fromEntries(plan)).toEqual({ a: 1, b: 2, c: 1 });
+    expect(planFuelAll([ember('a', 0)], { emberwood: 0 }).size).toBe(0);
+  });
+
+  it('pays each fire from its own fuel', () => {
+    const odd = { ...ember('z', 0), fuelResource: 'pumpkins', fuelPerNight: 2 };
+    const plan = planFuelAll([ember('a', 3), odd], { emberwood: 1, pumpkins: 5 });
+    expect(Object.fromEntries(plan)).toEqual({ a: 1, z: 2 });
+  });
 });
 
 describe('building costs and refunds', () => {
@@ -230,6 +276,16 @@ describe('home-base data', () => {
       'cozy-meadow',
       'training-grounds',
     ]);
+  });
+
+  it('lets a Hearthfire stand on owned land, one a tile, in the middle (#202, #204)', () => {
+    expect(fire).toMatchObject({ placement: 'owned', maxPerTile: 1, slot: 'centre' });
+    expect(lantern).toMatchObject({ placement: 'home', slot: 'centre' });
+    for (const id of ['ember-den', 'cozy-meadow', 'training-grounds']) {
+      expect(building(id)).toMatchObject({ placement: 'home', slot: 'ring' });
+    }
+    const loose = { ...GAME_DATA, buildings: [{ ...fire, maxPerTile: undefined }] };
+    expect(checkGameData(loose).join(' ')).toContain('maxPerTile');
   });
 
   it('allows one Training Grounds per home (the Train job picks "my" Training Grounds)', () => {

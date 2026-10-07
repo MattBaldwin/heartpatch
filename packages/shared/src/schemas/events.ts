@@ -330,7 +330,10 @@ export const GAME_EVENTS = {
       building: PlacedBuildingSchema,
     }),
   },
-  /** A player took a building down (#18). Its residents moved out. */
+  /**
+   * A player took a building down (#18), or it came down with the land
+   * under it (#202, `lost`). Its residents moved out.
+   */
   'building.removed': {
     internal: z.strictObject({
       userId: z.uuid(),
@@ -341,6 +344,12 @@ export const GAME_EVENTS = {
       refund: z.record(z.string(), z.number().int().min(1)),
       /** Squishies that lived there and moved out. */
       movedOut: z.array(z.uuid()),
+      /**
+       * Why it came down when its owner didn't take it down (#202): its land
+       * was won by a rival (`captured`), went wild (`wild`), or its owner
+       * left the patch (`left`).
+       */
+      lost: z.enum(['captured', 'wild', 'left']).optional(),
     }),
     public: z.object({
       userId: z.uuid(),
