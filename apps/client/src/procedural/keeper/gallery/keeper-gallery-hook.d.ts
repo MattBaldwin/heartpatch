@@ -28,6 +28,8 @@ declare global {
       play(move: SquishMove): void;
       /** True while anything moves. */
       animating(): boolean;
+      /** True once every shown mesh's shader has compiled (after a fallback, if one was needed). */
+      shadersReady(): boolean;
     };
   }
 }
