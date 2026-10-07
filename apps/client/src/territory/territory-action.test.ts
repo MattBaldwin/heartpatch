@@ -53,6 +53,8 @@ describe('territoryAction', () => {
     expect(territoryAction(tile, view, ME, status(), NOW)).toEqual({
       kind: 'claim',
       attemptsLeft: 7,
+      // When tries refill, for the sheet's countdown (#201).
+      triesResetAt: '2026-10-06T06:00:00.000Z',
     });
   });
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { workableByMe } from './index.js';
 import {
   hintLines,
+  countsDown,
   jobLine,
   nameOf,
   readyTotal,
@@ -67,6 +68,13 @@ describe('full XP again (#201)', () => {
     // Once it's back, the line is just the job (the board asks for a fresh view).
     expect(jobLine(tired, NOW + 5 * 3_600_000)).toBe('On the team (1st) ⚔️');
     expect(jobLine(squishy(2, { job: 'team', teamSlot: 1 }), NOW)).toBe('On the team (2nd) ⚔️');
+  });
+
+  it('ticks on the board, so the note counts down and the board asks again at zero', () => {
+    const at = new Date(NOW + 3_600_000).toISOString();
+    expect(countsDown(squishy(1, { job: 'team', teamSlot: 0, fullXpResetAt: at }))).toBe(true);
+    expect(countsDown(squishy(1, { fullXpResetAt: at }))).toBe(true);
+    expect(countsDown(squishy(1, { job: 'team', teamSlot: 0 }))).toBe(false);
   });
 });
 

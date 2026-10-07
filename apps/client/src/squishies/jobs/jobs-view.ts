@@ -89,6 +89,15 @@ export function workLine(work: WorkStatus, nowMs: number): string {
   return `Gathering ${name}.${ready}${next}`;
 }
 
+/**
+ * Its line on the job board changes by itself: a gatherer counting down to
+ * its next cycle, or a squishy waiting for full battle XP (#201). The board
+ * ticks these lines and asks for a fresh view when one runs out.
+ */
+export function countsDown(s: JobSquishy): boolean {
+  return (s.work !== null && !s.work.full) || s.fullXpResetAt !== null;
+}
+
 /** The squishy's job, in a few words, and when full battle XP comes back (#201). */
 export function jobLine(s: JobSquishy, nowMs: number): string {
   const job = jobWords(s, nowMs);

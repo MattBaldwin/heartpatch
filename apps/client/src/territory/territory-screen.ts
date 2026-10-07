@@ -200,9 +200,9 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
     countdown = { node, until, text, done };
     return node;
   };
-  /** Tries refill at the patch's midnight: ask the server for the fresh count. */
-  const triesLine = (text: (wait: string) => string) =>
-    countdownLine(status?.triesResetAt ?? '', text, () => void refresh(), 'territory-tries');
+  /** Tries refill at the patch's midnight (`triesResetAt`): ask the server for the fresh count. */
+  const triesLine = (resetAt: string, text: (wait: string) => string) =>
+    countdownLine(resetAt, text, () => void refresh(), 'territory-tries');
 
   const button = (
     label: string,
@@ -305,7 +305,9 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       case 'claim':
         children.push(
           line(TERRITORY_TEXT.claimNote),
-          triesLine((wait) => TERRITORY_TEXT.triesLeft(action.attemptsLeft, wait)),
+          triesLine(action.triesResetAt, (wait) =>
+            TERRITORY_TEXT.triesLeft(action.attemptsLeft, wait),
+          ),
           button(TERRITORY_TEXT.claim, () => void battleFor(tile), { 'data-testid': 'tile-claim' }),
         );
         break;
@@ -313,7 +315,9 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         children.push(
           line(TERRITORY_TEXT.challengeNote(owner ?? TERRITORY_TEXT.someone)),
           ...(tile.defenders > 0 ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))] : []),
-          triesLine((wait) => TERRITORY_TEXT.triesLeft(action.attemptsLeft, wait)),
+          triesLine(action.triesResetAt, (wait) =>
+            TERRITORY_TEXT.triesLeft(action.attemptsLeft, wait),
+          ),
           button(TERRITORY_TEXT.challenge, () => void battleFor(tile), {
             'data-testid': 'tile-challenge',
           }),
@@ -325,7 +329,7 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         );
         break;
       case 'no-tries':
-        children.push(triesLine(TERRITORY_TEXT.noTries));
+        children.push(triesLine(action.triesResetAt, TERRITORY_TEXT.noTries));
         break;
       case 'pvp-off':
         children.push(line(TERRITORY_TEXT.pvpOff));
@@ -384,7 +388,8 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       ticker = window.setInterval(() => {
         if (!countdown) return;
         const { wait, ask } = countdownAt(clock, countdown.until, asked);
-        countdown.node.textContent = countdown.text(wait);
+        const text = countdown.text(wait);
+        if (countdown.node.textContent !== text) countdown.node.textContent = text;
         if (ask) {
           asked = countdown.until;
           countdown.done();

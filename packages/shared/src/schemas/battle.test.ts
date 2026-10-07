@@ -27,6 +27,7 @@ import {
   type BattleEventView,
   type BattleResultView,
   type BattleSquishyView,
+  BattleRewardsSchema,
 } from './battle.js';
 
 /*
@@ -129,5 +130,15 @@ describe('PlayerBattleActionSchema', () => {
     expect(
       BattleActionRequestSchema.safeParse({ action: { type: 'forfeit' }, turn: -1 }).success,
     ).toBe(false);
+  });
+});
+
+describe('BattleRewardsSchema (#201)', () => {
+  it('reads rewards stored before fullXpResetAt as no falloff', () => {
+    expect(BattleRewardsSchema.parse({ xp: [], percent: 100 })).toEqual({
+      xp: [],
+      percent: 100,
+      fullXpResetAt: null,
+    });
   });
 });

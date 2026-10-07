@@ -8,6 +8,7 @@ import { jobsApi, type JobsApi } from './jobs-api.js';
 import {
   colorOf,
   hintLines,
+  countsDown,
   jobLine,
   JOBS_TEXT,
   nameOf,
@@ -314,7 +315,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   /** A squishy's job line, remembered so the countdown can update it alone. */
   function lineFor(s: JobSquishy, nowMs: number): HTMLElement {
     const node = el('p', { class: 'jobs-line' }, jobLine(s, nowMs));
-    if (s.work && !s.work.full) lines.set(s.squishy.id, { squishy: s, node });
+    if (countsDown(s)) lines.set(s.squishy.id, { squishy: s, node });
     return node;
   }
 

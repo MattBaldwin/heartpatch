@@ -504,9 +504,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
     // The device clock is close enough for an hours-and-minutes note.
     const fullXpAt = b.rewards?.fullXpResetAt;
-    if (fullXpAt && Date.parse(fullXpAt) > Date.now()) {
-      lines.push(MESSAGES.fullXpNote(formatWait(Date.parse(fullXpAt) - Date.now())));
-    }
+    const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - Date.now() : 0;
+    if (fullXpLeft > 0) lines.push(MESSAGES.fullXpNote(formatWait(fullXpLeft)));
     // Won a wild battle without befriending it: say how (owner decision 2026-10-04).
     const nudge =
       b.kind === 'wild' && result?.winner === b.mySide && result.reason !== 'captured'
