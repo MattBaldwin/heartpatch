@@ -372,6 +372,7 @@ describe('ribbon tabs', () => {
   });
 
   it('say what every page makes is for (#241)', () => {
-    expect(views.every((v) => v.effect !== null && v.effect.chips.length > 0)).toBe(true);
+    // Names any page that says nothing, so a failure points at the content to fix.
+    expect(views.filter((v) => !v.effect?.chips.length).map((v) => v.key)).toEqual([]);
   });
 });
