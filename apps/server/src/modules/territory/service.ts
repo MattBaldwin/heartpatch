@@ -52,6 +52,7 @@ import {
   type DefenderRow,
   type TerritoryTileRow,
 } from './repo.js';
+import { takeDownOnLostLand } from '../buildings/service.js';
 import { createLandTending, type LandTendingService } from './tending.js';
 
 /*
@@ -531,6 +532,14 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       // Claiming land tends it (land that misses you, owner decision 2026-10-06).
       await createTendingRepo(tx).tend(attack.mapId, [tile.id], at);
       await repo.endAttack(battle.id, 'captured', at);
+      // The defender's fire comes down with the land (#202, step 8); the
+      // rival never gets it. Battles grants the refund after its squishy locks.
+      const map = await createMapsRepo(tx).findMap(attack.mapId);
+      const lostFires = map
+        ? await takeDownOnLostLand(tx, attack.mapId, [tile.id], at, map.timeZone, 'captured')
+        : [];
+      const refund = lostFires.find((l) => l.ownerUserId === tile.ownerUserId)?.refund ?? null;
+      if (refund) await repo.setLostFireRefund(attack.id, refund);
       const event: NewGameEvent<'tile.captured'> = {
         mapId: attack.mapId,
         type: 'tile.captured',
@@ -551,9 +560,16 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       // Battles rolls the capture's found clothing (#84) once it has locked
       // the squishies; Gentle's share scales the chance like the XP.
       return {
-        events: [event],
+        events: [event, ...lostFires.map((l) => l.event)],
         xpPercent,
         drop: { tileId: tile.id, percent: attack.rewardPercent },
+        refunds: lostFires
+          .filter((l) => Object.keys(l.refund).length > 0)
+          .map((l) => ({
+            userId: l.ownerUserId,
+            items: l.refund,
+            refId: l.event.payload.buildingRowId,
+          })),
       };
     },
   };

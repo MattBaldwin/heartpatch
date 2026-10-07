@@ -1,5 +1,6 @@
 import {
   BuildingParamsSchema,
+  FuelAllResponseSchema,
   FuelBuildingRequestSchema,
   HomeResponseSchema,
   HouseSquishyRequestSchema,
@@ -107,6 +108,15 @@ export const buildingsRoutes =
           request.params.buildingId,
           request.body.nights,
         ),
+    );
+
+    app.post(
+      '/maps/:mapId/buildings/fuel-all',
+      {
+        schema: { params: MapIdParamsSchema, response: { 200: FuelAllResponseSchema } },
+        ...commandHooks,
+      },
+      async (request) => service.fuelAll(requireUser(request), request.params.mapId),
     );
 
     app.post(

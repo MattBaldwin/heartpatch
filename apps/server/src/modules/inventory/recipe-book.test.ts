@@ -157,6 +157,16 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     return { q: tile.q, r: tile.r };
   }
 
+  /** A neutral outer tile with a free middle, handed to `who` (as if claimed): fires go there. */
+  async function landTile(mapId: string, who: Player) {
+    const tile = (await db.query.tiles.findFirst({
+      where: (t, { and, eq, isNull }) =>
+        and(eq(t.mapId, mapId), isNull(t.homeSlot), isNull(t.ownerUserId), isNull(t.nodeResource)),
+    }))!;
+    await db.execute(`update tiles set owner_user_id = '${who.id}' where id = '${tile.id}'`);
+    return { q: tile.q, r: tile.r };
+  }
+
   const place = (
     server: FastifyInstance,
     who: Player,
@@ -201,10 +211,17 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     await give(server, kid, mapId, { timber: 30, stone: 30, treats: 2 });
     await craftAndCollect(server, kid, mapId, 'heart-charm');
     const tile = await plainHomeTile(server, kid, mapId);
-    for (const [spot, buildingId] of ['hearthfire', 'ember-den', 'cozy-meadow'].entries()) {
-      const res = await place(server, kid, mapId, { buildingId, ...tile, spot: spot + 1 });
+    // Habitats go around a home tile's middle (#204); fires only out on land (#202).
+    for (const [i, buildingId] of ['ember-den', 'cozy-meadow'].entries()) {
+      const res = await place(server, kid, mapId, { buildingId, ...tile, spot: i + 1 });
       expect(res.statusCode, res.body).toBe(201);
     }
+    const res = await place(server, kid, mapId, {
+      buildingId: 'hearthfire',
+      ...(await landTile(mapId, kid)),
+      spot: 0,
+    });
+    expect(res.statusCode, res.body).toBe(201);
   });
 
   it('refuses a sealed recipe with FORBIDDEN and spends nothing', async () => {
@@ -234,7 +251,7 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     const res = await place(server, kid, mapId, {
       buildingId: 'jack-o-lantern-hearthfire',
       ...tile,
-      spot: 1,
+      spot: 0,
     });
     expect(res.statusCode).toBe(403);
     expect(errorOf(res)).toEqual({ code: 'FORBIDDEN', message: SEALED_BUILDING });
@@ -301,11 +318,10 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
         .map((p) => p.key)
         .filter((key) => !notYet.has(key)),
     );
-    const tile = await plainHomeTile(server, kid, mapId);
     const res = await place(server, kid, mapId, {
       buildingId: 'jack-o-lantern-hearthfire',
-      ...tile,
-      spot: 1,
+      ...(await landTile(mapId, kid)),
+      spot: 0,
     });
     expect(res.statusCode, res.body).toBe(201);
   });

@@ -1,9 +1,17 @@
 import type { DefenseStance, PublicUser, RaidReplay, RaidReport } from '@heartpatch/shared';
+import { describeItems } from '../inventory/bag-view.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import type { TerritoryScreen } from '../territory/territory-screen.js';
 import { el, messageOf } from '../ui/dom.js';
-import { RAID_TEXT, raidLine, raidStyleLine, STANCES, stanceName } from './raid-words.js';
+import {
+  RAID_TEXT,
+  raidFireLine,
+  raidLine,
+  raidStyleLine,
+  STANCES,
+  stanceName,
+} from './raid-words.js';
 import { raidsApi, type RaidsApi } from './raids-api.js';
 import './raids.css';
 
@@ -237,6 +245,12 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
                       ? [el('span', { class: 'raid-new' }, RAID_TEXT.fresh)]
                       : []),
                     el('p', { class: 'raid-line' }, raidLine(raid)),
+                    ...(raid.lostFire
+                      ? [
+                          el('p', { class: 'raid-line' }, raidFireLine(raid) ?? ''),
+                          el('p', { class: 'raid-style-line' }, describeItems(raid.lostFire)),
+                        ]
+                      : []),
                     ...(style ? [el('p', { class: 'raid-style-line' }, style)] : []),
                   ),
                   ...(raid.replayable ? [watchButton] : []),

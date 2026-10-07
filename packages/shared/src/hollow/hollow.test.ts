@@ -98,17 +98,25 @@ const PLACES = {
   'safe-bed': { state: 'active', sleepsAt: SAFE_TILE, post: null, shelter: 'safe' },
   'dark-bed': { state: 'active', sleepsAt: DARK_TILE, post: null, shelter: 'exposed' },
   homeless: { state: 'active', sleepsAt: null, post: null, shelter: 'exposed' },
+  // On watch inside a lit fire's light.
   'on-watch': {
     state: 'active',
     sleepsAt: DARK_TILE,
-    post: { tileOwnerUserId: A },
+    post: { tileOwnerUserId: A, at: SAFE_TILE },
     shelter: 'on-watch',
+  },
+  // On watch out in the dark (owner decision 2026-10-07): exposed like a gatherer there.
+  'dark-watch': {
+    state: 'active',
+    sleepsAt: SAFE_TILE,
+    post: { tileOwnerUserId: A, at: DARK_TILE },
+    shelter: 'exposed',
   },
   // Its post changed hands: it went home, to a dark bed.
   'lost-post': {
     state: 'active',
     sleepsAt: DARK_TILE,
-    post: { tileOwnerUserId: B },
+    post: { tileOwnerUserId: B, at: SAFE_TILE },
     shelter: 'exposed',
   },
   hollowed: { state: 'hollowed', sleepsAt: DARK_TILE, post: null, shelter: 'hollowed' },

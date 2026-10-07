@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { BattleEndReasonSchema, PlayerBattleSchema } from './battle.js';
 import { DefenseStanceSchema } from './data/raids.js';
+import { ItemCountsSchema } from './inventory.js';
 
 // Offline defense and the raid log (design doc §3, §6, §11; issue #16). A
 // rival tile's defenders are always played by the server's AI following the
@@ -42,6 +43,8 @@ export const RaidSchema = z.object({
   seenAt: z.iso.datetime().nullable(),
   /** False when there's nothing to watch (called off, or from before a re-tune). */
   replayable: z.boolean(),
+  /** My fire on that land came down when it was taken (#202): what came back. Null: no fire. */
+  lostFire: ItemCountsSchema.nullable(),
 });
 export type Raid = z.infer<typeof RaidSchema>;
 

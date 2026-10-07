@@ -23,6 +23,8 @@ export interface RaidRow {
   /** The battle's status and content hash, for "can it be replayed?". */
   battleStatus: (typeof battles.$inferSelect)['status'];
   contentHash: string;
+  /** My fire there came down with the capture (#202): what came back. */
+  lostFire: Record<string, number> | null;
 }
 
 export interface NewRaid {
@@ -99,6 +101,8 @@ const raidColumns = {
   seenAt: raids.seenAt,
   battleStatus: battles.status,
   contentHash: battles.contentHash,
+  // The capture took my fire down (#202): what came back.
+  lostFire: tileAttacks.lostFireRefund,
 };
 
 export function createRaidsRepo(db: Executor): RaidsRepo {
@@ -117,6 +121,7 @@ function queries(db: Executor): RaidsRepo {
       .innerJoin(tiles, eq(tiles.id, raids.tileId))
       .innerJoin(battles, eq(battles.id, raids.battleId))
       .innerJoin(users, eq(users.id, raids.attackerUserId))
+      .leftJoin(tileAttacks, eq(tileAttacks.battleId, raids.battleId))
       .where(where);
 
   return {

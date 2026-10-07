@@ -8,8 +8,8 @@ import { realTap, realTapAt } from './touch.js';
  * at every step. Sprout waits its turn (#127, #128, #139): no bubble or
  * blocker ever takes a tap meant for a sheet unless the step spotlights that
  * sheet on purpose, the Hollow's morning report is never stuck under the
- * gate, cards come one at a time (#129), "Light a Hearthfire" guides without
- * blocking (#140) and no tutorial request is ever aborted (#163). Asserted
+ * gate, cards come one at a time (#129) and no tutorial request is ever
+ * aborted (#163). Asserted
  * through the dev hook and hit-testing, never pixels. Battles the player
  * can't win on purpose go through the API (the server's tutorial.test.ts
  * plays them for real); everything the player taps is tapped here.
@@ -53,16 +53,6 @@ async function takesTaps(target: Locator): Promise<boolean> {
     const box = node.getBoundingClientRect();
     return node.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
   });
-}
-
-/** The centre of `target` sits inside the spotlight hole. */
-async function inHole(page: Page, target: Locator): Promise<boolean> {
-  const hole = (await overlay(page))?.hole;
-  const box = await target.boundingBox();
-  if (!hole || !box) return false;
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  return cx >= hole.x && cx <= hole.x + hole.width && cy >= hole.y && cy <= hole.y + hole.height;
 }
 
 /**
@@ -265,53 +255,13 @@ async function playTutorial(page: Page): Promise<void> {
   await expect(main).toBeVisible();
   await expect(main).toHaveText('Next');
 
-  // #140: "Light a Hearthfire" guides without blocking: the My Home
-  // handle is lit and pointed at, then Home inside, then Build at home.
-  await readAll();
-  await expect.poll(async () => (await overlay(page))?.gate).toBe('guide');
-  expect((await overlay(page))?.spotlightOn).toBe('build-button');
-  const handle = page.getByTestId('tray-handle-heartpatch');
-  await expect.poll(() => inHole(page, handle)).toBe(true);
-  await expect(page.getByTestId('tutorial-blocker')).toHaveCount(0);
-  await expect.poll(() => takesTaps(handle)).toBe(true);
-  await tapOn(handle);
-  const homeButton = page.getByTestId('home-open');
-  await expect.poll(() => inHole(page, homeButton), { timeout: 10_000 }).toBe(true);
-  await expect.poll(() => takesTaps(homeButton)).toBe(true);
-  await tapOn(homeButton);
-  await expect(page.getByTestId('home')).toBeVisible(slow);
-  await expect.poll(() => inHole(page, page.getByTestId('home-build')), slow).toBe(true);
-  expect((await overlay(page))?.gate).toBe('guide');
+  // Step 3 is a talk now: the Heart Seed keeps home safe, and the fire waits
+  // for land (`land-fire`, after the claim; owner decision 2026-10-07).
   await reloadAt('hearthfire', glade);
-  // Build and fuel it by hand, the guide leading: Build, the Hearthfire in
-  // the list, a spot, then Add fuel (the Emberwood from the dev bag, as the
-  // gather is tapped for real above).
-  const items = await api(page, 'POST', `/maps/${glade}/dev/items`, {
-    items: { timber: 20, stone: 20, emberwood: 5 },
-  });
-  expect(items.status).toBe(201);
-  await openHome();
-  const sheet = page.getByTestId('home');
-  await expect.poll(() => inHole(page, sheet.getByTestId('home-build')), slow).toBe(true);
-  await tapOn(sheet.getByTestId('home-build'));
-  const row = sheet.locator('[data-build="hearthfire"]');
-  await expect.poll(() => inHole(page, row), slow).toBe(true);
-  expect((await overlay(page))?.gate).toBe('guide');
-  await tapOn(row);
-  await tapOn(sheet.getByTestId('home-anywhere'));
-  const fuel = sheet.getByTestId('home-fuel');
-  await expect(fuel).toBeVisible(slow);
-  await expect.poll(() => inHole(page, fuel), slow).toBe(true);
-  await expect.poll(() => takesTaps(fuel)).toBe(true);
-  await tapOn(fuel);
+  await readAll();
+  await expect(main).toHaveText('Got it!');
+  await tapOn(main);
   await step('first-battle');
-  // Sprout waits behind the home sheet; Done, then Back to map, take one tap each.
-  await expect.poll(async () => (await overlay(page))?.held, slow).toBe(true);
-  await expectNoTrap(page);
-  await tapOn(sheet.getByTestId('home-done'));
-  await tapOn(sheet.getByTestId('home-back'));
-  await expect(sheet).toBeHidden();
-  await expect.poll(async () => (await overlay(page))?.held, slow).toBe(false);
   const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
   const view = await api<{
     tiles: { q: number; r: number; homeSlot: number | null; ownerUserId: string | null }[];

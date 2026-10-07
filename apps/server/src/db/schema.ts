@@ -279,7 +279,8 @@ export const buildings = pgTable(
       .notNull()
       .references(() => maps.id, { onDelete: 'cascade' }),
     ownerUserId: uuid('owner_user_id').notNull(),
-    // One of the owner's home tiles (the service checks it).
+    // One of the owner's home tiles, or for a Hearthfire any tile they own
+    // (#202; the service checks it, and land changing hands takes it down).
     tileId: uuid('tile_id')
       .notNull()
       .references(() => tiles.id, { onDelete: 'cascade' }),
@@ -300,6 +301,11 @@ export const buildings = pgTable(
     }),
     // One building per spot.
     unique('buildings_tile_id_spot_key').on(t.tileId, t.spot),
+    // One fire per tile (#202) needs no index of its own: fires stand only in
+    // a tile's middle (spot 0, `slot: 'centre'`), so `buildings_tile_id_spot_key`
+    // already allows one. (A unique index on fires per tile would fail on the
+    // home fires main allowed, two to a home tile, before the boot pass packs
+    // them up.)
     index('buildings_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
     check('buildings_level_positive', sql`${t.level} >= 1`),
     check('buildings_spot_range', sql`${t.spot} between 0 and 6`),
@@ -834,6 +840,9 @@ export const tileAttacks = pgTable(
     // The player's last action; idle past the abandon time counts as a loss.
     lastActionAt: timestamptz('last_action_at').notNull(),
     endedAt: timestamptz('ended_at'),
+    // A capture took the defender's fire down (#202): what came back to them,
+    // for the Challenge report. Null: no fire there.
+    lostFireRefund: jsonb('lost_fire_refund').$type<Record<string, number>>(),
   },
   (t) => [
     unique('tile_attacks_battle_id_key').on(t.battleId),
@@ -910,6 +919,9 @@ export const tileTending = pgTable(
     // When it went wild: work and gathers finished before then still go in
     // the bag, as when land is captured (jobs' `firstCaptureSince`).
     wildAt: timestamptz('wild_at'),
+    // Its owner's fire came down when it went wild (#202): what came back,
+    // for the welcome-back card. Null: no fire there.
+    lostFireRefund: jsonb('lost_fire_refund').$type<Record<string, number>>(),
   },
   (t) => [
     index('tile_tending_map_id_idx').on(t.mapId),
@@ -940,6 +952,25 @@ export const hollowEvents = pgTable(
     outcomes: jsonb('outcomes').notNull().default([]),
   },
   (t) => [unique('hollow_events_map_id_night_key').on(t.mapId, t.night)],
+);
+
+/**
+ * Home fires packed up when the Heart Seed began keeping home safe (#202,
+ * owner decision 2026-10-07): everything they gave back, for a one-time note
+ * in the morning report. One row per player per map, written by the boot
+ * pass (`modules/buildings/layout.ts`).
+ */
+export const packedHomeFires = pgTable(
+  'packed_home_fires',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    refund: jsonb('refund').$type<Record<string, number>>().notNull(),
+    packedAt: timestamptz('packed_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.mapId, t.userId] })],
 );
 
 export const hollowRescueOutcome = pgEnum('hollow_rescue_outcome', [

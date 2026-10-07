@@ -244,6 +244,7 @@ Every tile battle (#15, design doc §11 raid rules): the attempt log the daily a
 | `cooldown_until` | timestamptz | `started_at` + `TERRITORY_RULES.cooldownHours`; nobody battles for the tile again before it |
 | `last_action_at` | timestamptz | The player's last action; idle past `abandonMinutes` counts as a loss |
 | `ended_at` | timestamptz, null | |
+| `lost_fire_refund` | jsonb, null | What the defender's fires on the tile gave back when it was captured (#202, migration 0027); the Challenge report shows it |
 
 ### `tile_tending`
 Land that misses you (owner decision 2026-10-06, migration 0025): when an outer tile's owner last tended it. One row per tile once it's been claimed (home tiles have none). Fading is worked out on read; nightfall picks what goes wild (`modules/territory/tending.ts`).
@@ -256,8 +257,21 @@ Land that misses you (owner decision 2026-10-06, migration 0025): when an outer 
 | `wild_night` | date, null | The map-local night the tile last went wild |
 | `wild_from_user_id` | uuid, null | Whose it was then. The per-night cap counts these, so a retried nightfall takes nothing more |
 | `wild_at` | timestamptz, null | When it went wild. Jobs' `firstCaptureSince` reads it as land changing hands, so work and gathers finished before then still go in the bag. The three `wild_*` columns are set together (checked) |
+| `lost_fire_refund` | jsonb, null | What its owner's fires gave back when it last went wild (#202, migration 0027); the welcome-back card shows it. Cleared when it goes wild again |
 
 The row outlives a change of owner: the next claim moves `tended_at` on.
+
+### `packed_home_fires`
+Fires that stood on home tiles when the Heart Seed took over keeping home safe (#202, owner decision 2026-10-07, migration 0027). The boot pass (`buildings/layout.ts`) packs them up with everything back and writes one row per player, which the morning report reads for its one-time note.
+
+| Column | Type | Notes |
+|---|---|---|
+| `map_id` | uuid → maps | PK with `user_id`. Cascade delete |
+| `user_id` | uuid | |
+| `refund` | jsonb | Everything given back (build, upgrades and unburned fuel) |
+| `packed_at` | timestamptz | |
+
+One fire per tile needs no index of its own: fires stand only in a tile's middle (spot 0), and `buildings_tile_id_spot_key` allows one building per spot.
 
 ### `tile_defenders`
 Squishies standing watch on their owner's tiles (#15, decision C), up to `TERRITORY_RULES.maxDefenders` per tile.

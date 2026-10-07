@@ -116,7 +116,7 @@ describe('tutorial step engine', () => {
     const talkOnly = TUTORIAL_STEPS.filter(
       (s) => s.completeOn.eventType === 'tutorial.acknowledged',
     );
-    expect(talkOnly.map((s) => s.id)).toEqual(['welcome', 'plant', 'graduation']);
+    expect(talkOnly.map((s) => s.id)).toEqual(['welcome', 'plant', 'hearthfire', 'graduation']);
     for (const step of talkOnly) {
       expect(completesStep(step.completeOn, ack(step.id), player)).toBe(true);
       expect(completesStep(step.completeOn, ack('nope'), player)).toBe(false);

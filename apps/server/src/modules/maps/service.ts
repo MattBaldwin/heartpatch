@@ -272,8 +272,11 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       }
       await repo.archiveMember(mapId, memberId);
       const releasedTiles = await repo.releaseTiles(mapId, memberId);
-      // A returning player gets a fresh home base (#4), so their buildings go (#18).
-      await removeMemberBuildings(tx, mapId, memberId);
+      // A returning player gets a fresh home base (#4), so their buildings go
+      // (#18); fires on their captured land give back what a lost fire does (#202).
+      const map = await repo.findMap(mapId);
+      const lostFires = map ? await removeMemberBuildings(tx, map, memberId, now()) : [];
+      for (const event of lostFires) await repo.appendEvent(event);
       await repo.appendEvent({
         mapId,
         type,

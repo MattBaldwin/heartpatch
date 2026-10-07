@@ -1,6 +1,13 @@
 import { findAvoidedWords, RaidOutcomeSchema, type Raid } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { RAID_TEXT, raidLine, raidStyleLine, STANCES, stanceName } from './raid-words.js';
+import {
+  RAID_TEXT,
+  raidFireLine,
+  raidLine,
+  raidStyleLine,
+  STANCES,
+  stanceName,
+} from './raid-words.js';
 
 const raid = (over: Partial<Raid> = {}): Raid => ({
   id: '0190a000-0000-7000-8000-000000000001',
@@ -15,7 +22,19 @@ const raid = (over: Partial<Raid> = {}): Raid => ({
   resolvedAt: '2026-10-02T18:00:00.000Z',
   seenAt: null,
   replayable: true,
+  lostFire: null,
   ...over,
+});
+
+describe('a fire lost with the land (#202)', () => {
+  it('says so kindly, only when there was a fire there', () => {
+    expect(raidFireLine(raid())).toBeNull();
+    const line = raidFireLine(raid({ outcome: 'taken', lostFire: { timber: 2 } }));
+    expect(line).toBe(
+      'Your fire there went out when the land changed hands. You got some things back 🔥',
+    );
+    expect(findAvoidedWords(line!)).toEqual([]);
+  });
 });
 
 describe('raid words', () => {
