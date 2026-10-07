@@ -23,7 +23,13 @@ describe('apiCall', () => {
       { method: 'POST', body: { a: 1 }, schema: HealthResponseSchema },
       fake.impl,
     );
-    expect(health).toEqual({ status: 'ok', version: 'dev', uptimeSeconds: 1 });
+    expect(health).toEqual({
+      status: 'ok',
+      version: 'dev',
+      build: null,
+      commit: null,
+      uptimeSeconds: 1,
+    });
     const { url, init } = fake.calls[0]!;
     expect(url).toBe('/api/v1/health');
     expect(init.credentials).toBe('same-origin');
