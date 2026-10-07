@@ -6,6 +6,7 @@ import {
   CareListResponseSchema,
   CatalogResponseSchema,
   CareResponseSchema,
+  GAME_DATA,
   GROWTH_RULES,
   HollowResponseSchema,
   HomeResponseSchema,
@@ -697,6 +698,8 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       const before = await list(server, kid, mapId);
       expect(before.speciesDefs.map((s) => s.id)).toEqual([SECRET_FROM]);
       expect(JSON.stringify(before)).not.toContain(SECRET_INTO);
+      // A secret form comes next: no evolving meter, so nothing says one exists (#205).
+      expect(before.squishies[0]!.evolving).toBeNull();
 
       expect(await grantXp(id, 1)).toMatchObject({
         level: EVOLVES_AT,
@@ -785,6 +788,71 @@ describe.skipIf(!url)('care (needs DATABASE_URL)', () => {
       expect(types.slice(-3)).toEqual(['battle.ended', 'squishy.leveled', 'squishy.evolved']);
       const ended = (await eventsOf(mapId)).find((e) => e.type === 'battle.ended')!;
       expect(ended.payload).toMatchObject({ xp: [{ squishyId: pal.id }] });
+      // No evolving meter toward a secret form, and none after evolving (#205).
+      expect(battle.rewards?.xp).toEqual([
+        expect.objectContaining({ squishyId: pal.id, evolvingBefore: null, evolvingAfter: null }),
+      ]);
+    });
+
+    it('fills the evolving meter from the level a squishy joined at (#205)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const base = GAME_DATA.species.find(
+        (s) => s.evolutions.length > 0 && s.evolutions[0]!.level > 4,
+      )!;
+      const evolvesAt = Math.min(...base.evolutions.map((e) => e.level));
+      // The dev grant joins it at level 3, like a befriended one.
+      const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
+        speciesId: base.id,
+        level: 3,
+      });
+      const pal = SquishyResponseSchema.parse(granted.json()).squishy;
+      expect((await rowOf(pal.id))?.joinedLevel).toBe(3);
+      expect((await one(server, kid, mapId, pal.id)).evolving).toEqual({
+        percent: 0,
+        levelsToGo: evolvesAt - 3,
+      });
+      // Some way toward its evolution level: XP since level 3 over the XP to go.
+      const from = xpForLevel(3, GROWTH_RULES);
+      const span = xpForLevel(evolvesAt, GROWTH_RULES) - from;
+      const growth = await grantXp(pal.id, Math.floor(span / 4));
+      expect(growth).toMatchObject({ evolvingBefore: 0 });
+      const percent = Math.floor((growth!.xp * 100) / span);
+      expect(percent).toBeGreaterThan(0);
+      expect(growth!.evolvingAfter).toBe(percent);
+      expect((await one(server, kid, mapId, pal.id)).evolving?.percent).toBe(percent);
+
+      // A real battle stores both percents in its rewards, for the results card.
+      const fight = await call(server, 'POST', `/maps/${mapId}/dev/battles`, kid, {
+        opponent: { speciesId: base.id, level: 2 },
+      });
+      let battle: PlayerBattle = BattleResponseSchema.parse(fight.json()).battle;
+      for (let i = 0; i < BATTLE_RULES.maxTurns + 5 && battle.status === 'active'; i++) {
+        const side = battle.view.sides.a;
+        const res = await call(server, 'POST', `/battles/${battle.id}/actions`, kid, {
+          action: { type: 'move', move: side.squishies[side.active]!.moves[0]! },
+          turn: battle.view.turn,
+        });
+        expect(res.statusCode).toBe(200);
+        battle = BattleResponseSchema.parse(res.json()).battle;
+      }
+      expect(battle.status).toBe('finished');
+      const award = battle.rewards?.xp.find((a) => a.squishyId === pal.id);
+      expect(award).toMatchObject({ evolvingBefore: percent });
+      expect(award?.evolvingAfter).toBe((await one(server, kid, mapId, pal.id)).evolving?.percent);
+      expect(award!.evolvingAfter!).toBeGreaterThanOrEqual(percent);
+    });
+
+    it('pins the joining level of an older row on its first XP (#205)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      // A row the previous release wrote: no joining level.
+      const id = await squishy(mapId, kid, { level: 6 });
+      expect((await rowOf(id))?.joinedLevel).toBeNull();
+      await grantXp(id, 5);
+      expect((await rowOf(id))?.joinedLevel).toBe(6);
     });
   });
 

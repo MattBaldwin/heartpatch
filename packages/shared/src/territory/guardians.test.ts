@@ -95,22 +95,43 @@ describe('resolveGuardians', () => {
 });
 
 describe('hintForGuardians', () => {
-  const team = (...levels: number[]) => levels.map((level) => ({ level }));
+  const team = (...levels: number[]) =>
+    levels.map((level) => ({ level, feeling: 'sleepy' as const }));
+  const band = (levels: number[]) => hintForGuardians(team(...levels), RULES)?.difficulty;
 
   it('counts the team and bands its total level (easy, tough, very tough)', () => {
-    expect(hintForGuardians(team(5), RULES)).toEqual({ count: 1, difficulty: 'easy' });
-    expect(hintForGuardians(team(3, 3), RULES)).toEqual({ count: 2, difficulty: 'tough' });
-    expect(hintForGuardians(team(10, 10), RULES)).toEqual({ count: 2, difficulty: 'tough' });
-    expect(hintForGuardians(team(10, 11), RULES)).toEqual({ count: 2, difficulty: 'very-tough' });
+    expect(hintForGuardians(team(5), RULES)).toMatchObject({ count: 1, difficulty: 'easy' });
+    expect(band([3, 3])).toBe('tough');
+    expect(band([10, 10])).toBe('tough');
+    expect(band([10, 11])).toBe('very-tough');
+  });
+
+  it("says each guardian's feeling in team order, and nothing else about them (#216)", () => {
+    const hint = hintForGuardians(
+      [
+        { level: 3, feeling: 'brave' },
+        { level: 4, feeling: 'joy' },
+        { level: 2, feeling: 'brave' },
+      ],
+      RULES,
+    );
+    expect(hint).toEqual({ count: 3, difficulty: 'tough', feelings: ['brave', 'joy', 'brave'] });
   });
 
   it('is null for land nobody guards', () => {
     expect(hintForGuardians([], RULES)).toBeNull();
   });
 
-  it('says only how many and how tough, never who or what level', () => {
-    const hint = hintForGuardians(guardians('forest', 5), RULES);
-    expect(GuardianHintSchema.strict().parse(hint)).toEqual({ count: 3, difficulty: 'very-tough' });
+  it('says only how many, how tough and how they feel, never who or what level', () => {
+    const team = guardians('forest', 5);
+    const hint = hintForGuardians(team, RULES, DATA.species);
+    // Rolled guardians feel as their species does, as they do in battle.
+    const feelings = team.map((g) => DATA.species.get(g.speciesId)!.feeling);
+    expect(GuardianHintSchema.strict().parse(hint)).toEqual({
+      count: 3,
+      difficulty: 'very-tough',
+      feelings,
+    });
     expect(JSON.stringify(hint)).not.toMatch(/fixture|level|species|guardian-/);
   });
 });

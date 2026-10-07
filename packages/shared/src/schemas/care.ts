@@ -19,6 +19,12 @@ export const NewEvolutionSchema = z.object({
 });
 export type NewEvolution = z.infer<typeof NewEvolutionSchema>;
 
+/** Progress toward a squishy's next evolution (#205, shared `evolvingMeter`). */
+export const EvolvingMeterSchema = z.strictObject({
+  percent: z.number().int().min(0).max(100),
+  levelsToGo: z.number().int().min(0),
+});
+
 /**
  * One of my squishies, as its care sheet shows it. Only its owner gets this:
  * other members see the mood on `squishy.cared`, never the numbers.
@@ -35,6 +41,13 @@ export const CareSquishySchema = z.object({
   /** XP into this level and the size of this level (null at the top level), for the bar. */
   xpIntoLevel: z.number().int().min(0),
   xpToNext: z.number().int().min(1).nullable(),
+  /**
+   * Progress toward its next evolution (#205): percent (0–100, 100 = past the
+   * level, it evolves on its next XP) and levels to go. Null on a top form or
+   * when a secret form comes next (CLAUDE.md rule 6). An older server sends
+   * none: no meter.
+   */
+  evolving: EvolvingMeterSchema.nullable().default(null),
   /** Battle stats at this level (they grow with every level). */
   stats: BattleStatsSchema,
   /** Contentment now, 0–100 (worked out from the last care, design doc §7). */

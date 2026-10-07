@@ -63,6 +63,11 @@ test('cares for a squishy from home base: pet, play and feed', async ({ browser 
   const mood = (contentment: number) => moodFor(contentment, CARE_RULES);
   await expect.poll(async () => (await careState(page))?.mood, slow).toBe(mood(start));
   expect(await careState(page)).toMatchObject({ contentment: start, caredToday: 0, squishes: 0 });
+  // A starter is a base form: its evolving meter sits under the level's XP bar (#205).
+  const evolving = sheet.getByTestId('care-evolving');
+  await expect(evolving).toBeVisible();
+  await expect(evolving).toContainText(/✨ Evolving\s*\d+%/);
+  await expect(sheet.getByTestId('care-level')).toContainText('evolves at Level');
 
   // Pet: more contentment, a squish, and a cheerful line.
   await sheet.locator('[data-care="pet"]').tap();

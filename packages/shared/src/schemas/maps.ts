@@ -3,6 +3,7 @@ import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
 import { PublicBuildingSchema } from './buildings.js';
 import { ContentIdSchema, DisplayNameSchema } from './data/common.js';
+import { FeelingIdSchema } from './data/elements.js';
 import { PublicKeeperSchema } from './data/keepers.js';
 import { TimeZoneSchema } from './time.js';
 import { WsSeqSchema } from './ws.js';
@@ -218,14 +219,21 @@ export const GuardianDifficultySchema = z.enum(GUARDIAN_DIFFICULTIES);
 export type GuardianDifficulty = z.infer<typeof GuardianDifficultySchema>;
 
 /**
- * A neutral tile's guardians as the tile panel hints at them: how many, and a
- * difficulty word. Never species, levels, moves or seeds (CLAUDE.md rule 6,
- * tech spec §8).
+ * A neutral tile's guardians as the tile panel hints at them: how many, a
+ * difficulty word, and each one's feeling in team order (#216, owner-approved:
+ * a feeling hints a little at a species). Never species, levels, elements,
+ * moves or seeds (CLAUDE.md rule 6, tech spec §8). An older server sends no
+ * `feelings`, which reads as `[]`.
  */
-export const GuardianHintSchema = z.object({
-  count: z.number().int().min(1),
-  difficulty: GuardianDifficultySchema,
-});
+export const GuardianHintSchema = z
+  .object({
+    count: z.number().int().min(1),
+    difficulty: GuardianDifficultySchema,
+    feelings: z.array(FeelingIdSchema).default([]),
+  })
+  .refine((hint) => hint.feelings.length === 0 || hint.feelings.length === hint.count, {
+    message: 'One feeling per guardian',
+  });
 export type GuardianHint = z.infer<typeof GuardianHintSchema>;
 
 /**

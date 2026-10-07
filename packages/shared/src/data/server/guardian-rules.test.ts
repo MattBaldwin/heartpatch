@@ -51,10 +51,15 @@ describe('guardian rules', () => {
     const [weakest, ...stronger] = GUARDIAN_RULES.strengths;
     expect(weakest).toMatchObject({ count: 1, levels: { min: 1, max: 2 } });
     for (let level = weakest!.levels.min; level <= weakest!.levels.max; level += 1) {
-      expect(hintForGuardians([{ level }], GUARDIAN_RULES)?.difficulty).toBe('easy');
+      expect(hintForGuardians([{ level, feeling: 'joy' }], GUARDIAN_RULES)?.difficulty).toBe(
+        'easy',
+      );
     }
     for (const tier of stronger) {
-      const team = Array.from({ length: tier.count }, () => ({ level: tier.levels.min }));
+      const team = Array.from({ length: tier.count }, () => ({
+        level: tier.levels.min,
+        feeling: 'joy' as const,
+      }));
       expect(hintForGuardians(team, GUARDIAN_RULES)?.difficulty).not.toBe('easy');
     }
   });

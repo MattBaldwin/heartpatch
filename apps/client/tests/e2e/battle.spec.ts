@@ -184,6 +184,8 @@ test('plays a wild battle to the end and resumes it after a refresh', async ({ b
   await expect(result).toBeVisible();
   await expect(result).toContainText(/Hooray|tuckered|tie/);
   await expect(page.getByTestId('battle-xp')).toContainText(/XP/);
+  // The starter is a base form: its evolving meter is under its XP line (#205).
+  await expect(page.getByTestId('battle-evolving').first()).toContainText('Evolving');
   // The card fits the phone with its gutters (#133).
   const card = (await result.boundingBox())!;
   const viewport = page.viewportSize()!;
