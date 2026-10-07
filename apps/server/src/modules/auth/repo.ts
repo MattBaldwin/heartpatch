@@ -55,6 +55,7 @@ export interface AuthRepo {
   }) => Promise<AccountUser | null>;
   /** Case-insensitive lookup. */
   findUserByUsername: (username: string) => Promise<UserWithPassword | null>;
+  findPasswordHash: (userId: string) => Promise<string | null>;
   createSession: (userId: string, session: NewSession) => Promise<void>;
   /** The unexpired session for a token hash, with its user. */
   findSession: (tokenHash: string, now: Date) => Promise<SessionWithUser | null>;
@@ -67,9 +68,34 @@ export interface AuthRepo {
    * Returns false, changing nothing, if `redeemRecoveryCodeId` is no longer active.
    */
   resetPassword: (reset: PasswordReset) => Promise<boolean>;
+  /**
+   * Replaces the active recovery code with a new one (#197), in one
+   * transaction. Sessions and the password stay as they are. False, changing
+   * nothing, if the password is no longer `passwordHash` (reset meanwhile).
+   */
+  replaceRecoveryCode: (change: {
+    userId: string;
+    passwordHash: string;
+    codeHash: string;
+    now: Date;
+  }) => Promise<boolean>;
 }
 
 class RollbackSignal extends Error {}
+
+/**
+ * Every recovery code rotation locks the account first (tech spec §7, step
+ * 4), then `recovery_codes`, so a recover, a new code and a reset by
+ * someone else take turns instead of deadlocking. Returns its password hash.
+ */
+async function lockAccount(tx: Executor, userId: string): Promise<string | null> {
+  const [row] = await tx
+    .select({ passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.id, userId))
+    .for('no key update');
+  return row?.passwordHash ?? null;
+}
 
 export function createAuthRepo(db: Executor): AuthRepo {
   return {
@@ -106,6 +132,14 @@ export function createAuthRepo(db: Executor): AuthRepo {
         .where(eq(sql`lower(${users.username})`, username.toLowerCase()))
         .limit(1);
       return user ?? null;
+    },
+
+    findPasswordHash: async (userId) => {
+      const [user] = await db
+        .select({ passwordHash: users.passwordHash })
+        .from(users)
+        .where(eq(users.id, userId));
+      return user?.passwordHash ?? null;
     },
 
     createSession: async (userId, session) => {
@@ -146,6 +180,7 @@ export function createAuthRepo(db: Executor): AuthRepo {
     resetPassword: async (reset) => {
       try {
         await db.transaction(async (tx) => {
+          await lockAccount(tx, reset.userId);
           // Retire the active code. When redeeming, it must be the one checked,
           // so two concurrent resets with the same code can't both succeed.
           const retired = await tx
@@ -176,5 +211,18 @@ export function createAuthRepo(db: Executor): AuthRepo {
         throw err;
       }
     },
+
+    replaceRecoveryCode: async ({ userId, passwordHash, codeHash, now }) =>
+      db.transaction(async (tx) => {
+        // The password was checked before the lock; a reset since then
+        // changed it, and that reset's new code must stay the active one.
+        if ((await lockAccount(tx, userId)) !== passwordHash) return false;
+        await tx
+          .update(recoveryCodes)
+          .set({ usedAt: now })
+          .where(and(eq(recoveryCodes.userId, userId), isNull(recoveryCodes.usedAt)));
+        await tx.insert(recoveryCodes).values({ userId, codeHash });
+        return true;
+      }),
   };
 }

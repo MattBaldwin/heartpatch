@@ -5,8 +5,12 @@ import {
   type PublicUser,
 } from '@heartpatch/shared';
 import { updateHold } from '../../pwa/update-hold.js';
+import { accountApi } from '../account/account-api.js';
 import { deviceTimeZone, el, messageOf, type Attrs } from '../dom.js';
 import { authApi } from './auth-api.js';
+import { AUTH_HELP_TEXT, nameList } from './auth-help-text.js';
+import { forgetNames, rememberedNames, rememberName } from './remembered-names.js';
+import { saveCodePanel } from './save-code.js';
 import './auth.css';
 
 // Sign up, log in and recovery as a DOM overlay over the canvas (tech spec §6).
@@ -33,9 +37,12 @@ interface FormSpec {
   subtitle: string;
   fields: FieldSpec[];
   submitLabel: string;
+  /** Shown between the subtitle and the fields (the remembered names, #197). */
+  intro?: Node[];
   /** Resolves to a problem to show, or null on success. */
   onSubmit: (values: Record<string, string>) => Promise<FormProblem | null>;
-  links: { label: string; onClick: () => void; testId: string }[];
+  /** `pair` links sit side by side with the next `pair` link. */
+  links: { label: string; onClick: () => void; testId: string; pair?: boolean }[];
 }
 
 const textInput = (extra: Attrs): Attrs => ({
@@ -61,6 +68,9 @@ function firstIssue(error: { issues: { path: PropertyKey[]; message: string }[] 
     ...(typeof field === 'string' ? { field } : {}),
   };
 }
+
+/** How long "Next" after sign up waits to learn whether there's a helper to offer. */
+const HELPER_STEP_WAIT_MS = 5000; // TUNE: guess
 
 export interface AuthOverlayOptions {
   /** Called whenever the player logs in or out. */
@@ -160,6 +170,8 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
 
   const signedIn = (user: PublicUser) => {
     letUpdatesThrough();
+    // This device remembers who plays on it (#197); never the password.
+    rememberName(user.username);
     overlay.hidden = true;
     card.replaceChildren();
     chipName.textContent = `Hi, ${user.username}!`;
@@ -196,6 +208,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
       { class: 'auth-form', id: spec.id, novalidate: '' },
       el('h1', { class: 'auth-title', id: 'auth-title' }, spec.title),
       el('p', { class: 'auth-subtitle' }, spec.subtitle),
+      ...(spec.intro ?? []),
     );
     const controls = new Map<string, HTMLInputElement | HTMLSelectElement>();
     for (const field of spec.fields) {
@@ -221,6 +234,7 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
       );
     }
     form.append(error, submit);
+    let pairRow: HTMLElement | null = null;
     for (const link of spec.links) {
       const button = el(
         'button',
@@ -228,7 +242,16 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
         link.label,
       );
       button.addEventListener('click', link.onClick);
-      form.append(button);
+      if (!link.pair) {
+        pairRow = null;
+        form.append(button);
+        continue;
+      }
+      if (!pairRow) {
+        pairRow = el('div', { class: 'auth-link-row' });
+        form.append(pairRow);
+      }
+      pairRow.append(button);
     }
 
     form.addEventListener('submit', (event) => {
@@ -263,7 +286,9 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
       { type: 'button', class: 'auth-button auth-button-soft' },
       'Sign up',
     );
-    login.addEventListener('click', showLogin);
+    login.addEventListener('click', () => {
+      showLogin();
+    });
     signup.addEventListener('click', showSignup);
     showCard(
       el('h1', { class: 'auth-title', id: 'auth-title' }, 'Welcome to Heartpatch!'),
@@ -273,7 +298,16 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
     );
   }
 
-  function showLogin(): void {
+  /**
+   * The log in screen. With names remembered on this device (#197) the
+   * player taps theirs; "Someone else" (`typeName`) shows the name box.
+   */
+  function showLogin(typeName = false): void {
+    const names = rememberedNames();
+    if (names.length > 0 && !typeName) {
+      showRememberedLogin(names);
+      return;
+    }
     showCard(
       buildForm({
         id: 'auth-login',
@@ -295,11 +329,151 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
           return null;
         },
         links: [
+          { label: AUTH_HELP_TEXT.forgotName, onClick: showForgotName, testId: 'auth-forgot-name' },
           { label: 'Forgot your password?', onClick: showRecover, testId: 'auth-to-recover' },
           { label: 'New here? Sign up', onClick: showSignup, testId: 'auth-to-signup' },
         ],
       }),
     );
+  }
+
+  /** "Who's playing?": tap your name, then type your password. */
+  function showRememberedLogin(names: string[]): void {
+    let picked = names[0] ?? '';
+    const passwordLabel = (name: string) => `Password for ${name}`;
+    const buttons = names.map((name) => {
+      const button = el(
+        'button',
+        {
+          type: 'button',
+          class: 'auth-name',
+          'aria-pressed': name === picked ? 'true' : 'false',
+          'data-testid': 'auth-remembered-name',
+        },
+        el('span', { class: 'auth-name-face', 'aria-hidden': 'true' }),
+        name,
+      );
+      button.addEventListener('click', () => {
+        picked = name;
+        for (const b of buttons) {
+          b.setAttribute('aria-pressed', b === button ? 'true' : 'false');
+        }
+        const label = form.querySelector('label[for="auth-login-password"]');
+        if (label) label.textContent = passwordLabel(name);
+        form.querySelector<HTMLInputElement>('#auth-login-password')?.focus();
+      });
+      return button;
+    });
+    const form = buildForm({
+      id: 'auth-login',
+      title: 'Welcome back!',
+      subtitle: AUTH_HELP_TEXT.whoPlaying,
+      intro: [el('div', { class: 'auth-names', role: 'group', 'aria-label': 'Names' }, ...buttons)],
+      fields: [
+        {
+          name: 'password',
+          label: passwordLabel(picked),
+          input: { type: 'password', autocomplete: 'current-password' },
+        },
+      ],
+      submitLabel: 'Log in',
+      onSubmit: async (values) => {
+        const parsed = LoginRequestSchema.safeParse({ ...values, username: picked });
+        if (!parsed.success) return firstIssue(parsed.error);
+        signedIn(await authApi.login(parsed.data));
+        return null;
+      },
+      links: [
+        {
+          label: AUTH_HELP_TEXT.someoneElse,
+          onClick: () => {
+            showLogin(true);
+          },
+          testId: 'auth-someone-else',
+          pair: true,
+        },
+        {
+          label: AUTH_HELP_TEXT.notYou,
+          onClick: () => {
+            showForgetNames(names);
+          },
+          testId: 'auth-not-you',
+          pair: true,
+        },
+        { label: 'Forgot your password?', onClick: showRecover, testId: 'auth-to-recover' },
+      ],
+    });
+    showCard(form);
+  }
+
+  /** "Not you?" asks first (style guide §3.6), then forgets every name. */
+  function showForgetNames(names: string[]): void {
+    const forget = el('button', { type: 'button', class: 'auth-button' }, AUTH_HELP_TEXT.forget);
+    const keep = el(
+      'button',
+      { type: 'button', class: 'auth-button auth-button-soft' },
+      AUTH_HELP_TEXT.keep,
+    );
+    forget.addEventListener('click', () => {
+      forgetNames();
+      showLogin();
+    });
+    keep.addEventListener('click', () => {
+      showLogin();
+    });
+    showCard(
+      el('h1', { class: 'auth-title', id: 'auth-title' }, AUTH_HELP_TEXT.forgetTitle),
+      el('p', { class: 'auth-subtitle' }, `This device will stop remembering ${nameList(names)}.`),
+      el('p', { class: 'auth-hint auth-center' }, AUTH_HELP_TEXT.forgetHint),
+      el('div', { class: 'auth-actions' }, forget, keep),
+    );
+  }
+
+  /**
+   * "Forgot your name?" (#197): the three ways back, in a sheet over the log
+   * in screen. It only explains; nothing is looked up, so there's no box to
+   * type a guess into.
+   */
+  function showForgotName(): void {
+    const close = el('button', { type: 'button', class: 'auth-button' }, AUTH_HELP_TEXT.gotIt);
+    const sheet = el(
+      'div',
+      {
+        class: 'auth-sheet',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-labelledby': 'auth-sheet-title',
+        tabindex: '-1',
+        'data-testid': 'auth-forgot-name-sheet',
+      },
+      el('h2', { class: 'auth-title', id: 'auth-sheet-title' }, AUTH_HELP_TEXT.forgotName),
+      el('p', { class: 'auth-subtitle' }, AUTH_HELP_TEXT.forgotNameSubtitle),
+      ...AUTH_HELP_TEXT.ways.map((way) =>
+        el(
+          'div',
+          { class: 'auth-way' },
+          el('span', { class: 'auth-way-icon', 'aria-hidden': 'true' }, way.icon),
+          el(
+            'span',
+            { class: 'auth-way-text' },
+            el('strong', {}, way.title),
+            el('span', {}, way.body),
+          ),
+        ),
+      ),
+      close,
+    );
+    const backdrop = el('div', { class: 'auth-sheet-backdrop' }, sheet);
+    const dismiss = () => {
+      backdrop.remove();
+      card.focus({ preventScroll: true });
+    };
+    close.addEventListener('click', dismiss);
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) dismiss();
+    });
+    overlay.append(backdrop);
+    sheet.focus({ preventScroll: true });
   }
 
   function showSignup(): void {
@@ -339,10 +513,36 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
           });
           if (!parsed.success) return firstIssue(parsed.error);
           const result = await authApi.signup(parsed.data);
-          showRecoveryCode(result.user, result.recoveryCode, "Ta-da! You're in!");
+          // Asked now, while the code is saved: the helper step is ready on "Next".
+          // Never a wait on "Next": no answer in time just skips the (optional) step.
+          const helper = Promise.race([
+            accountApi
+              .candidates()
+              .then((list) => list.find((c) => c.reason === 'invited-you') ?? null)
+              .catch(() => null),
+            new Promise<null>((resolve) => {
+              window.setTimeout(() => {
+                resolve(null);
+              }, HELPER_STEP_WAIT_MS);
+            }),
+          ]);
+          showRecoveryCode(result.user, result.recoveryCode, "Ta-da! You're in!", () => {
+            void helper.then((candidate) => {
+              if (candidate) showHelperStep(result.user, candidate.user);
+              else signedIn(result.user);
+            });
+          });
           return null;
         },
-        links: [{ label: 'Have an account? Log in', onClick: showLogin, testId: 'auth-to-login' }],
+        links: [
+          {
+            label: 'Have an account? Log in',
+            onClick: () => {
+              showLogin();
+            },
+            testId: 'auth-to-login',
+          },
+        ],
       }),
     );
   }
@@ -373,44 +573,85 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
           const parsed = RecoverRequestSchema.safeParse(values);
           if (!parsed.success) return firstIssue(parsed.error);
           const result = await authApi.recover(parsed.data);
-          showRecoveryCode(result.user, result.recoveryCode, 'All set! New password saved.');
+          showRecoveryCode(result.user, result.recoveryCode, 'All set! New password saved.', () => {
+            signedIn(result.user);
+          });
           return null;
         },
-        links: [{ label: 'Back to log in', onClick: showLogin, testId: 'auth-to-login' }],
+        links: [
+          {
+            label: 'Back to log in',
+            onClick: () => {
+              showLogin();
+            },
+            testId: 'auth-to-login',
+          },
+        ],
       }),
     );
   }
 
-  /** The code is shown once, so make saving it the obvious next step. */
-  function showRecoveryCode(user: PublicUser, code: string, title: string): void {
-    const done = el('button', { type: 'button', class: 'auth-button' }, 'I saved it!');
-    done.addEventListener('click', () => {
-      signedIn(user);
-    });
-    const copy = el('button', { type: 'button', class: 'auth-button auth-button-soft' }, 'Copy');
-    copy.addEventListener('click', () => {
-      navigator.clipboard
-        .writeText(code)
-        .then(() => {
-          copy.textContent = 'Copied!';
-        })
-        .catch(() => {
-          copy.textContent = 'Write it down instead';
-        });
-    });
+  /** The code is shown once, so make saving it the obvious next step (#197). */
+  function showRecoveryCode(
+    user: PublicUser,
+    code: string,
+    title: string,
+    onDone: () => void,
+  ): void {
     showCard(
-      el('h1', { class: 'auth-title', id: 'auth-title' }, title),
-      el('p', { class: 'auth-subtitle' }, "Here's your secret recovery code:"),
-      el('p', { class: 'auth-code', 'data-testid': 'auth-recovery-code' }, code),
-      el(
-        'p',
-        { class: 'auth-hint' },
-        "Ask a grown-up to write it down somewhere safe. It's your way back in if you forget your password!",
-      ),
-      el('div', { class: 'auth-actions' }, done, ...('clipboard' in navigator ? [copy] : [])),
+      saveCodePanel({ title, titleId: 'auth-title', username: user.username, code, onDone }),
     );
     // Shown once: an automatic update must not reload it away (#47).
     releaseUpdates = updateHold.hold();
+  }
+
+  /**
+   * "Do you have a grown-up helper?" (#197): offered once after sign up, only
+   * when a grown-up brought the player in. Never required.
+   */
+  function showHelperStep(user: PublicUser, grownup: PublicUser): void {
+    const error = el('p', { class: 'auth-error', role: 'alert', 'data-testid': 'auth-error' });
+    const ask = el('button', { type: 'button', class: 'auth-button' }, `Ask ${grownup.username}`);
+    const later = el(
+      'button',
+      { type: 'button', class: 'auth-button auth-button-soft' },
+      AUTH_HELP_TEXT.maybeLater,
+    );
+    ask.addEventListener('click', () => {
+      if (ask.disabled) return;
+      ask.disabled = true;
+      error.textContent = '';
+      accountApi
+        .ask(grownup.id)
+        .then(() => {
+          signedIn(user);
+        })
+        .catch((err: unknown) => {
+          error.textContent = messageOf(err);
+          ask.disabled = false;
+        });
+    });
+    later.addEventListener('click', () => {
+      signedIn(user);
+    });
+    showCard(
+      el('h1', { class: 'auth-title', id: 'auth-title' }, AUTH_HELP_TEXT.helperTitle),
+      el('p', { class: 'auth-subtitle' }, AUTH_HELP_TEXT.helperSubtitle),
+      el(
+        'div',
+        { class: 'lobby-choice', 'aria-checked': 'true', role: 'radio' },
+        el(
+          'span',
+          { class: 'lobby-choice-label' },
+          grownup.username,
+          el('span', { class: 'lobby-choice-picked', 'aria-hidden': 'true' }, '✓ Picked'),
+        ),
+        el('span', { class: 'lobby-choice-hint' }, AUTH_HELP_TEXT.reasons['invited-you']),
+      ),
+      error,
+      el('div', { class: 'auth-actions' }, ask, later),
+      el('p', { class: 'auth-hint auth-center' }, AUTH_HELP_TEXT.helperLater),
+    );
   }
 
   authApi
