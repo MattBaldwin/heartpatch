@@ -19,7 +19,6 @@ import {
   type RescueGuardianRules,
 } from '@heartpatch/shared';
 import { RESCUE_GUARDIANS, SERVER_GAME_DATA } from '@heartpatch/shared/server';
-import { eq } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -340,15 +339,15 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         spot: 0,
         fuelledThrough: TONIGHT,
       });
-      const work = (tileId: string) => ({
-        workTileId: tileId,
-        workSince: clock,
-        workStartedAt: clock,
-      });
+      // Gatherers on both (as if through `/job`): our own uuids, so raw SQL is safe.
+      const work = (squishyId: string, tileId: string) =>
+        db.execute(
+          `update squishies set work_tile_id = '${tileId}', work_since = '${clock.toISOString()}', work_started_at = '${clock.toISOString()}' where id = '${squishyId}'`,
+        );
       const near = await squishy(mapId, kid);
       const out = await squishy(mapId, kid);
-      await db.update(squishies).set(work(lit.id)).where(eq(squishies.id, near));
-      await db.update(squishies).set(work(far.id)).where(eq(squishies.id, out));
+      await work(near, lit.id);
+      await work(out, far.id);
       // No fire at home: the outer fire's light doesn't reach the Heart Seed.
       const atHome = await squishy(mapId, kid);
 
