@@ -110,6 +110,11 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   // Nothing gathered yet: only Sprout's Heart Charms.
   await expect.poll(async () => (await bagState(page))?.items).toEqual({ 'heart-charm': 3 });
   await expect(bag.locator('[data-item="heart-charm"]')).toContainText('3');
+  // Tapping an item says what it's for (#241); tapping it again closes the card.
+  await bag.locator('[data-item="heart-charm"]').tap();
+  await expect(bag.getByTestId('bag-detail')).toContainText('Helps befriend a wild squishy');
+  await bag.locator('[data-item="heart-charm"]').tap();
+  await expect(bag.getByTestId('bag-detail')).toBeHidden();
   await expect(bag.getByTestId('bag-gathers')).toContainText(/\d/);
   await bag.getByRole('button', { name: 'Get stuff (dev)' }).tap();
   await expect.poll(async () => (await bagState(page))?.items['timber']).toBe(10);

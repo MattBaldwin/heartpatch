@@ -54,7 +54,17 @@
   list-style: none;
 }
 
+.bag-cell {
+  display: flex;
+}
+
 .bag-item {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -80,6 +90,93 @@
   font-size: 14px;
   font-weight: 600;
   color: #8a5f86;
+}
+
+.bag-item[aria-pressed='true'] {
+  background: #ffe0ee;
+  box-shadow: 0 0 0 3px #ff9ab8;
+}
+
+.bag-item:focus-visible {
+  outline: 3px solid #ff9ab8;
+  outline-offset: 2px;
+}
+
+/* What a tapped item is for (#241). */
+.bag-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 20px;
+  background: #fff6e6;
+}
+
+.bag-detail[hidden] {
+  display: none;
+}
+
+.bag-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bag-detail-icon {
+  font-size: 36px;
+  line-height: 1;
+}
+
+.bag-detail-title {
+  display: flex;
+  flex-direction: column;
+  font-size: 20px;
+  color: #7a2d55;
+}
+
+.bag-detail-have {
+  font-size: 14px;
+  font-weight: 700;
+  color: #8a5f86;
+}
+
+.bag-detail-purpose,
+.bag-detail-where {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.bag-detail-where {
+  font-size: 15px;
+  color: #8a5f86;
+}
+
+.bag-detail-where b {
+  color: #4a3150;
+}
+
+.bag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Like the build menu's effect chips (home.css .home-effect). */
+.bag-chip {
+  padding: 3px var(--hp-pad-x);
+  border-radius: 999px;
+  background: #fff3d6;
+  font-size: 13px;
+  font-weight: 800;
+  color: #7a4a12;
+}
+
+.bag-chip-battle {
+  background: #eef6e6;
+  color: #2f6b3d;
 }
 
 .bag-empty {

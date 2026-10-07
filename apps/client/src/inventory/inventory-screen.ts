@@ -15,6 +15,7 @@ import {
 } from './bag-view.js';
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
+import { itemDetail } from './item-detail.js';
 import { itemIcon } from './item-icons.js';
 import { COMMAND_RETRY_MS, sendCommand } from './send-command.js';
 import { tileAction, type TileAction } from './tile-action.js';
@@ -108,6 +109,7 @@ const TEXT = {
   justASec: 'Just a sec…',
   noMap: 'Visit a patch first!',
   devGrant: 'Get stuff (dev)',
+  findIt: 'Find it:',
 } as const;
 
 /** How long the "it landed!" pop-up stays. */
@@ -171,6 +173,10 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   );
   const note = el('p', { class: 'bag-note', role: 'status', 'data-testid': 'bag-note' });
   const itemsBox = el('ul', { class: 'bag-items', 'data-testid': 'bag-items' });
+  // What a tapped item is for (#241): one card under the grid; tap again to close.
+  const detailBox = el('div', { class: 'bag-detail', 'data-testid': 'bag-detail' });
+  detailBox.hidden = true;
+  let picked: string | null = null;
   const gathersTitle = el('h3', { class: 'bag-section-title' }, TEXT.gatherTitle);
   const gathersBox = el('ul', { class: 'bag-rows', 'data-testid': 'bag-gathers' });
   const craftsTitle = el('h3', { class: 'bag-section-title' }, TEXT.makingTitle);
@@ -182,6 +188,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     el('div', { class: 'tile-panel-head' }, el('h2', { id: 'bag-title' }, TEXT.title), close),
     note,
     itemsBox,
+    detailBox,
     craftsTitle,
     craftsBox,
     gathersTitle,
@@ -227,6 +234,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   chip.addEventListener('click', openBag);
   close.addEventListener('click', () => {
     sheet.hidden = true;
+    picked = null;
     say('');
     render();
   });
@@ -465,6 +473,40 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     return el(tag, { class: cls }, text);
   };
 
+  function renderDetail(item: { id: string; count: number } | null): void {
+    if (!item) picked = null;
+    detailBox.hidden = item === null;
+    if (!item) {
+      detailBox.replaceChildren();
+      return;
+    }
+    const d = itemDetail(item.id, item.count);
+    detailBox.replaceChildren(
+      el(
+        'div',
+        { class: 'bag-detail-head' },
+        el('span', { class: 'bag-detail-icon', 'aria-hidden': 'true' }, d.icon),
+        el(
+          'span',
+          { class: 'bag-detail-title' },
+          el('strong', {}, d.name),
+          el('span', { class: 'bag-detail-have' }, d.have),
+        ),
+      ),
+      el('p', { class: 'bag-detail-purpose' }, d.purpose),
+      el(
+        'div',
+        { class: 'bag-chips' },
+        ...d.chips.map((c) =>
+          el('span', { class: c.battle ? 'bag-chip bag-chip-battle' : 'bag-chip' }, c.text),
+        ),
+      ),
+      ...(d.where
+        ? [el('p', { class: 'bag-detail-where' }, el('b', {}, TEXT.findIt), ` ${d.where}`)]
+        : []),
+    );
+  }
+
   function renderBag(): void {
     bagCountdowns = [];
     if (sheet.hidden || !state) return;
@@ -473,16 +515,31 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     itemsBox.replaceChildren(
       ...(items.length === 0
         ? [el('li', { class: 'bag-empty' }, TEXT.empty)]
-        : items.map((item) =>
-            el(
-              'li',
-              { class: 'bag-item', 'data-item': item.id },
+        : items.map((item) => {
+            const tile = el(
+              'button',
+              {
+                type: 'button',
+                class: 'bag-item',
+                'data-item': item.id,
+                'aria-pressed': String(item.id === picked),
+              },
               el('span', { class: 'bag-item-icon', 'aria-hidden': 'true' }, item.icon),
               el('span', { class: 'bag-item-count' }, String(item.count)),
               el('span', { class: 'bag-item-name' }, item.name),
-            ),
-          )),
+            );
+            tile.addEventListener('click', () => {
+              picked = picked === item.id ? null : item.id;
+              render();
+              // The grid was redrawn: keep focus on the tile that was tapped.
+              itemsBox.querySelector<HTMLElement>(`[data-item="${item.id}"]`)?.focus();
+              // On a phone the card can open below the fold: bring it up.
+              if (picked !== null) detailBox.scrollIntoView({ block: 'nearest' });
+            });
+            return el('li', { class: 'bag-cell' }, tile);
+          })),
     );
+    renderDetail(items.find((i) => i.id === picked) ?? null);
 
     gathersTitle.hidden = state.gathers.length === 0;
     gathersBox.replaceChildren(
