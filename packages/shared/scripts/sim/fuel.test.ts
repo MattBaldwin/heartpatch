@@ -32,9 +32,9 @@ describe('the fuel model', () => {
 
   it('keeps lit the smaller of what the land allows and what the fuel feeds', () => {
     const day = fuelDay(14, casual, { ...home, outer: 2 });
-    expect(day.landFires).toBe(3);
+    expect(day.landFires).toBe(2);
     expect(day.fuelFires).toBe(20);
-    expect(day.lit).toBe(3);
+    expect(day.lit).toBe(2);
     expect(fuelDay(14, { ...casual, gatherers: 0 }, { ...home, outer: 10 }).lit).toBe(4);
   });
 });

@@ -18,7 +18,8 @@ import type { FuelProfile } from './fuel-config.js';
  *   old-forest land) and banks its cycles at every session, capped at
  *   `maxStoredCycles` (`workProgress`, the server's own maths).
  *
- * Fires the land allows: one at home plus one per outer tile (`maxPerTile`).
+ * Fires the land allows: one per outer tile (`maxPerTile`). None at home:
+ * the Heart Seed keeps it safe (owner decision 2026-10-07).
  * The Jack-o'-Lantern Hearthfire is a Halloween extra and isn't counted.
  */
 
@@ -112,7 +113,7 @@ export interface FuelDay {
   readonly nodes: number;
   readonly keeper: number;
   readonly gatherers: number;
-  /** Fires the kid's land allows: home plus one per outer tile. */
+  /** Fires the kid's land allows: one per outer tile. */
   readonly landFires: number;
   /** Fires the Keeper's gathers alone keep lit. */
   readonly keeperFires: number;
@@ -125,7 +126,7 @@ export interface FuelDay {
 export function fuelDay(day: number, profile: FuelProfile, land: EmberwoodLand): FuelDay {
   const keeper = keeperPerDay(profile, land);
   const gatherers = gatherersPerDay(profile, land);
-  const landFires = 1 + land.outer;
+  const landFires = land.outer;
   const fuelFires = Math.floor((keeper + gatherers) / FUEL_PER_NIGHT);
   return {
     day,
