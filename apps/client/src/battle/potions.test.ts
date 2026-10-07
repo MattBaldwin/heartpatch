@@ -6,6 +6,7 @@ import {
   chipsOf,
   CHIP_LOOKS,
   itemButtonLabel,
+  itemButtonName,
   NO_CHIPS,
   noPotionLine,
   pickLine,
@@ -27,8 +28,10 @@ describe('battle potions in the HUD (#214)', () => {
   });
 
   it('counts every potion on the button, and says nothing while the bag loads', () => {
-    expect(itemButtonLabel(null)).toBe('Use item');
-    expect(itemButtonLabel(3)).toBe('Use item (3)');
+    expect(itemButtonLabel(null)).toBe('🧪');
+    expect(itemButtonLabel(3)).toBe('🧪 3');
+    expect(itemButtonName(null)).toBe('Use item');
+    expect(itemButtonName(3)).toBe('Use item, 3 in your bag');
     expect(potionTotal(null)).toBeNull();
     expect(potionTotal({ 'brave-brew': 1, 'cozy-cocoa': 2, timber: 9 })).toBe(3);
     expect(potionTotal({})).toBe(0);

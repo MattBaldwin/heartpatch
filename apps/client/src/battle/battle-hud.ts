@@ -5,6 +5,7 @@ import { charmButton, noCharmsLine } from './heart-charm.js';
 import {
   CHIP_LOOKS,
   itemButtonLabel,
+  itemButtonName,
   NO_CHIPS,
   pickLine,
   type PlateChips,
@@ -323,6 +324,38 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     );
   };
 
+  /** "Who comes out?": the bench, in the sheet like the potion picker (#214). */
+  const openSwap = (mode: Extract<ControlMode, { type: 'choose' }>): void => {
+    problem.textContent = '';
+    const pick = el('div', { class: 'battle-moves' });
+    for (const { slot, name } of mode.bench) {
+      pick.append(
+        button(
+          name,
+          () => {
+            act({ type: 'swap', slot });
+          },
+          { soft: true, testId: 'battle-swap-pick' },
+        ),
+      );
+    }
+    controls.replaceChildren(
+      el('p', { class: 'battle-ask' }, 'Who comes out?'),
+      pick,
+      el(
+        'div',
+        { class: 'battle-row' },
+        button(
+          'Back',
+          () => {
+            setControls(mode);
+          },
+          { soft: true, small: true, testId: 'battle-swap-back' },
+        ),
+      ),
+    );
+  };
+
   const setControls = (mode: ControlMode): void => {
     controls.replaceChildren();
     controls.hidden = mode.type === 'hidden';
@@ -368,33 +401,34 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           }
           row.append(node);
         }
-        for (const { slot, name } of mode.bench) {
+        // Line 1 (owner decision 2026-10-07, #214): the Heart Charm, the
+        // compact potion button right beside it, and one Swap that asks who
+        // comes out, so all three fit a 375 px phone with a full team. Run
+        // away wraps to line 2, as before.
+        if (mode.items) {
+          const items = mode.items;
+          const potions = button(
+            itemButtonLabel(items.total),
+            () => {
+              openPicker(mode, items);
+            },
+            { small: true, testId: 'battle-item' },
+          );
+          potions.setAttribute('aria-label', itemButtonName(items.total));
+          // None in the bag: still there, dimmed, like the Heart Charm.
+          if (items.total === 0) potions.classList.add('battle-button-empty');
+          row.append(potions);
+        }
+        if (mode.bench.length > 0) {
           row.append(
             button(
-              `Swap: ${name}`,
+              'Swap',
               () => {
-                act({ type: 'swap', slot });
+                openSwap(mode);
               },
               { soft: true, small: true, testId: 'battle-swap' },
             ),
           );
-        }
-        // Swap keeps its place on the first line, as before potions, so it
-        // stays in view on a short phone; with no bench (a lone Partner) the
-        // potions sit right after the Heart Charm (#214).
-        if (mode.items) {
-          const items = mode.items;
-          row.append(
-            button(
-              itemButtonLabel(items.total),
-              () => {
-                openPicker(mode, items);
-              },
-              { small: true, testId: 'battle-item' },
-            ),
-          );
-          // None in the bag: still there, dimmed, like the Heart Charm (#214).
-          if (items.total === 0) row.lastElementChild?.classList.add('battle-button-empty');
         }
         // Forgiving (style guide §3): running away asks first.
         const run = button(

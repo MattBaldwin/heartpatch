@@ -22,9 +22,19 @@ const POTIONS = new Map(BATTLE_POTIONS.map((p) => [p.id, p]));
 
 export const potionOf = (id: string): BattlePotion | undefined => POTIONS.get(id);
 
-/** "Use item (3)": every potion in the bag; no count while it loads. */
+const POTION_GLYPH = '🧪';
+
+/**
+ * The compact potion button beside "Use Heart Charm" (owner decision
+ * 2026-10-07): "🧪 3", every potion in the bag; just "🧪" while it loads.
+ */
 export function itemButtonLabel(total: number | null): string {
-  return total === null ? 'Use item' : `Use item (${String(total)})`;
+  return total === null ? POTION_GLYPH : `${POTION_GLYPH} ${String(total)}`;
+}
+
+/** What the compact button says to a screen reader: "Use item, 3 in your bag". */
+export function itemButtonName(total: number | null): string {
+  return total === null ? 'Use item' : `Use item, ${String(total)} in your bag`;
 }
 
 export type PotionTileState = 'ready' | 'empty' | 'used';
