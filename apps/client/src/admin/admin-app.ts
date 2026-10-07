@@ -1,5 +1,6 @@
 import {
   ADMIN_IDLE_MINUTES,
+  ADMIN_MAX_HOURS,
   type AdminAuditResponse,
   type AdminMeResponse,
   type AdminPatchDetail,
@@ -112,7 +113,7 @@ export function startAdmin(root: HTMLElement): void {
     if (Date.parse(until) <= now().getTime()) {
       showLogin(
         until === state.me.expiresAt
-          ? 'Signed out: a session lasts 8 hours at most.'
+          ? `Signed out: a session lasts ${String(ADMIN_MAX_HOURS)} hours at most.`
           : `Signed out after ${String(ADMIN_IDLE_MINUTES)} quiet minutes.`,
       );
     }
@@ -267,7 +268,7 @@ export function startAdmin(root: HTMLElement): void {
       el(
         'p',
         { class: 'adm-hint' },
-        'Needed on every sign-in. A session ends after 30 minutes without a click and never lasts more than 8 hours. The authenticator is set up on the server, never here.',
+        `Needed on every sign-in. A session ends after ${String(ADMIN_IDLE_MINUTES)} minutes without a click and never lasts more than ${String(ADMIN_MAX_HOURS)} hours. The authenticator is set up on the server, never here.`,
       ),
     );
     form.addEventListener('submit', (e) => {
@@ -786,7 +787,7 @@ export function startAdmin(root: HTMLElement): void {
         'div',
         { class: 'adm-split' },
         table(
-          ['Player', 'Last sign-in', 'Devices', 'Recovery code'],
+          ['Player', 'Signed in since', 'Devices', 'Recovery code'],
           list.players.map((p) => ({
             selected: p.id === selected,
             open: () => {
@@ -880,7 +881,10 @@ export function startAdmin(root: HTMLElement): void {
         'dl',
         { class: 'adm-facts' },
         fact('Brought in by', broughtInBy(detail)),
-        fact('Last sign-in', player.lastSignInAt ? dateTime(player.lastSignInAt) : 'not signed in'),
+        fact(
+          'Signed in since',
+          player.lastSignInAt ? dateTime(player.lastSignInAt) : 'not signed in anywhere',
+        ),
         fact('Signed-in devices', String(player.activeSessions)),
         fact('Recovery code', player.hasRecoveryCode ? 'Has an unused one' : 'None waiting'),
       ),

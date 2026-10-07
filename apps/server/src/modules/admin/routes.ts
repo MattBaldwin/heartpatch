@@ -127,7 +127,11 @@ export const adminRoutes =
       ]),
     ) as Record<AdminRateAction, preHandlerAsyncHookHandler>;
 
-    /** The gate, then the admin's limit for the kind of request. */
+    /**
+     * The gate, then the admin's limit for the kind of request. It runs before
+     * validation (`preValidation`), so a non-admin gets 403 whatever they send,
+     * never a 400 that says what the route expects.
+     */
     const gate = (kind: AdminRateAction) => [requireAdmin, limiters[kind]];
 
     /** The lowercased username from the validated body (as auth's `usernameKey`). */
@@ -175,7 +179,7 @@ export const adminRoutes =
 
     app.get(
       '/admin/me',
-      { schema: { response: { 200: AdminMeResponseSchema } }, preHandler: gate('read') },
+      { schema: { response: { 200: AdminMeResponseSchema } }, preValidation: gate('read') },
       (request) => {
         if (!request.admin) throw new AppError('FORBIDDEN', FORBIDDEN_MESSAGE);
         return request.admin;
@@ -191,7 +195,7 @@ export const adminRoutes =
           querystring: AdminPatchesQuerySchema,
           response: { 200: AdminPatchesResponseSchema },
         },
-        preHandler: gate('read'),
+        preValidation: gate('read'),
       },
       (request) => service.patches(request.query),
     );
@@ -200,7 +204,7 @@ export const adminRoutes =
       '/admin/patches/:mapId',
       {
         schema: { params: AdminPatchParamsSchema, response: { 200: AdminPatchDetailSchema } },
-        preHandler: gate('read'),
+        preValidation: gate('read'),
       },
       (request) => service.patch(request.params.mapId),
     );
@@ -209,7 +213,7 @@ export const adminRoutes =
       '/admin/patches/:mapId/invite/reveal',
       {
         schema: { params: AdminPatchParamsSchema, response: { 200: AdminInviteResponseSchema } },
-        preHandler: gate('secret'),
+        preValidation: gate('secret'),
       },
       (request) => service.revealInvite(ctx(request), request.params.mapId),
     );
@@ -218,7 +222,7 @@ export const adminRoutes =
       '/admin/patches/:mapId/invite',
       {
         schema: { params: AdminPatchParamsSchema, response: { 200: AdminInviteResponseSchema } },
-        preHandler: gate('act'),
+        preValidation: gate('act'),
       },
       (request) => service.newInvite(ctx(request), request.params.mapId),
     );
@@ -228,7 +232,7 @@ export const adminRoutes =
         `/admin/patches/:mapId/requests/:requestId/${answer}`,
         {
           schema: { params: AdminRequestParamsSchema, response: { 204: z.null() } },
-          preHandler: gate('act'),
+          preValidation: gate('act'),
         },
         async (request, reply) => {
           const { mapId, requestId } = request.params;
@@ -247,7 +251,7 @@ export const adminRoutes =
           querystring: AdminListQuerySchema,
           response: { 200: AdminPlayersResponseSchema },
         },
-        preHandler: gate('read'),
+        preValidation: gate('read'),
       },
       (request) => service.players(request.query),
     );
@@ -256,7 +260,7 @@ export const adminRoutes =
       '/admin/players/:userId',
       {
         schema: { params: AdminPlayerParamsSchema, response: { 200: AdminPlayerDetailSchema } },
-        preHandler: gate('read'),
+        preValidation: gate('read'),
       },
       (request) => service.player(request.params.userId),
     );
@@ -268,7 +272,7 @@ export const adminRoutes =
           params: AdminPlayerParamsSchema,
           response: { 200: AdminResetPasswordResponseSchema },
         },
-        preHandler: gate('secret'),
+        preValidation: gate('secret'),
       },
       (request) => service.resetPassword(ctx(request), request.params.userId),
     );
@@ -280,7 +284,7 @@ export const adminRoutes =
           params: AdminPlayerParamsSchema,
           response: { 200: AdminLogoutEverywhereResponseSchema },
         },
-        preHandler: gate('act'),
+        preValidation: gate('act'),
       },
       (request) => service.logoutEverywhere(ctx(request), request.params.userId),
     );
@@ -289,7 +293,7 @@ export const adminRoutes =
       '/admin/lookup',
       {
         schema: { body: AdminLookupRequestSchema, response: { 200: AdminLookupResponseSchema } },
-        preHandler: gate('secret'),
+        preValidation: gate('secret'),
       },
       (request) => service.lookup(ctx(request), request.body),
     );
@@ -298,7 +302,10 @@ export const adminRoutes =
 
     app.get(
       '/admin/signup-codes',
-      { schema: { response: { 200: AdminSignupCodesResponseSchema } }, preHandler: gate('read') },
+      {
+        schema: { response: { 200: AdminSignupCodesResponseSchema } },
+        preValidation: gate('read'),
+      },
       () => service.signupCodes(),
     );
 
@@ -309,7 +316,7 @@ export const adminRoutes =
           body: AdminCreateSignupCodeRequestSchema,
           response: { 201: CreateSignupCodeResponseSchema },
         },
-        preHandler: gate('secret'),
+        preValidation: gate('secret'),
       },
       async (request, reply) =>
         reply.code(201).send(await service.createSignupCode(ctx(request), request.body)),
@@ -323,7 +330,7 @@ export const adminRoutes =
           body: AdminExtendSignupCodeRequestSchema,
           response: { 204: z.null() },
         },
-        preHandler: gate('act'),
+        preValidation: gate('act'),
       },
       async (request, reply) => {
         await service.extendSignupCode(ctx(request), request.params.codeId, request.body.days);
@@ -335,7 +342,7 @@ export const adminRoutes =
       '/admin/signup-codes/:codeId/revoke',
       {
         schema: { params: AdminCodeParamsSchema, response: { 204: z.null() } },
-        preHandler: gate('act'),
+        preValidation: gate('act'),
       },
       async (request, reply) => {
         await service.revokeSignupCode(ctx(request), request.params.codeId);
@@ -349,7 +356,7 @@ export const adminRoutes =
       '/admin/audit',
       {
         schema: { querystring: AdminListQuerySchema, response: { 200: AdminAuditResponseSchema } },
-        preHandler: gate('read'),
+        preValidation: gate('read'),
       },
       (request) => service.audit(request.query),
     );

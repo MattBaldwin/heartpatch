@@ -55,7 +55,8 @@
 
 		# The operator admin console (#196) is its own page; the server gates
 		# every call it makes.
-		rewrite /admin /admin.html
+		@admin path /admin /admin/
+		rewrite @admin /admin.html
 
 		# Unknown paths get the app shell so client-side routes survive a reload.
 		# A missing hashed asset stays a real 404 rather than HTML.

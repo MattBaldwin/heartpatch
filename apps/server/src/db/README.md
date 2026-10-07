@@ -115,9 +115,9 @@ Every admin action, sign-in and host-script grant (#196). Never holds a secret.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid PK | |
-| `actor_user_id` | uuid → users, null | The admin; null for a host script |
+| `actor_user_id` | uuid → users, null | The admin; null for a host script. `on delete set null`, so a record never blocks deleting an account |
 | `action` | text | `AUDIT_ACTIONS` (`modules/admin/audit-actions.ts`) |
-| `target_user_id` | uuid → users, null | |
+| `target_user_id` | uuid → users, null | `on delete set null` |
 | `target_map_id` | uuid → maps, null | `on delete set null` |
 | `detail` | jsonb | Non-secret detail (a lookup's search, a code's label) |
 | `outcome` | `admin_audit_outcome` | `pending` when written (before the action), then `done` or `failed`. Still `pending` = the action may have run but its outcome couldn't be written (logged) |

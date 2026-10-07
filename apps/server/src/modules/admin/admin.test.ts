@@ -287,6 +287,17 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
         expect(errorOf(res).code).toBe('FORBIDDEN');
       }
     }
+    // Malformed requests too: the gate runs before validation, so nothing about
+    // a route's shape is told to someone who isn't an admin.
+    for (const [method, path, body] of [
+      ['GET', '/admin/patches/not-a-uuid'],
+      ['GET', '/admin/patches?page=zero'],
+      ['POST', '/admin/lookup', { patch: 1 }],
+      ['POST', `/admin/signup-codes`, {}],
+    ] as const) {
+      const res = await adminCall(server, method, path, null, body, kid.token);
+      expect(res.statusCode, `${method} ${path}`).toBe(403);
+    }
   });
 
   it('signs in only with the admin role, the password and a fresh authenticator code', async () => {

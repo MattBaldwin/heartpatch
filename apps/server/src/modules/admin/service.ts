@@ -85,6 +85,7 @@ const MESSAGES = {
   notFoundRequest: "We couldn't find that request. It may have been answered already.",
   noInvite: 'This patch has no live invite code. Make a new one.',
   tutorial: 'Tutorial runs have no invite codes or join requests.',
+  notRevoked: "We couldn't find that code, or it's already turned off.",
   notFoundCode:
     "That code can't be extended: it's gone, turned off, or a patch owner's code that has ended.",
 } as const;
@@ -543,7 +544,7 @@ export function createAdminService(options: AdminServiceOptions) {
         },
         async () => {
           if (!(await signupCodes.operatorRevoke(codeId))) {
-            throw new AppError('NOT_FOUND', MESSAGES.notFoundCode);
+            throw new AppError('NOT_FOUND', MESSAGES.notRevoked);
           }
         },
       );

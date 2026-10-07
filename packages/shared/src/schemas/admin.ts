@@ -11,6 +11,9 @@ import { LocalDateSchema } from './time.js';
 /** An admin session ends after this long without a request (#196). */
 export const ADMIN_IDLE_MINUTES = 30; // TUNE: issue #196
 
+/** And ends this long after sign-in regardless. */
+export const ADMIN_MAX_HOURS = 8; // TUNE: guess
+
 /** Rows per page on every admin list. */
 export const ADMIN_PAGE_SIZE = 25; // TUNE: guess
 

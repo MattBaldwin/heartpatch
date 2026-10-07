@@ -190,9 +190,10 @@ export const adminAudit = pgTable(
   'admin_audit',
   {
     id: id(),
-    actorUserId: uuid('actor_user_id').references(() => users.id),
+    // `set null`, so a record never blocks deleting an account later.
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
     action: text('action').notNull(),
-    targetUserId: uuid('target_user_id').references(() => users.id),
+    targetUserId: uuid('target_user_id').references(() => users.id, { onDelete: 'set null' }),
     targetMapId: uuid('target_map_id').references(() => maps.id, { onDelete: 'set null' }),
     // Non-secret detail (a lookup's search, a code's label).
     detail: jsonb('detail').notNull().default({}),

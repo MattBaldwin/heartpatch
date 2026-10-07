@@ -1,5 +1,5 @@
 // Admin console settings (#196) and rate limits (tech spec §5).
-import { ADMIN_IDLE_MINUTES } from '@heartpatch/shared';
+import { ADMIN_IDLE_MINUTES, ADMIN_MAX_HOURS } from '@heartpatch/shared';
 import type { RateLimit } from '../../lib/rate-limit.js';
 import { MINUTE_MS } from '../../lib/time.js';
 
@@ -11,7 +11,7 @@ export const ADMIN_RULES = {
   /** An admin session ends after this long without a request (owner request, #196). */
   idleMs: ADMIN_IDLE_MINUTES * MINUTE_MS,
   /** And after this long regardless. */
-  maxMs: 8 * 60 * MINUTE_MS, // TUNE: guess
+  maxMs: ADMIN_MAX_HOURS * 60 * MINUTE_MS,
   /** TOTP steps of clock drift allowed either side (30 s each). */
   totpDriftSteps: 1,
   /** How many nights a patch's page shows. */
