@@ -126,6 +126,21 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
     'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!',
   );
   await slowExpect(fireRow.getByRole('button')).toHaveCount(0);
+  // Each row says what the building does (#207): a line, then effect chips.
+  await expect(fireRow).toContainText(
+    'Keeps squishies out on your land safe from the Hollow Man at night.',
+  );
+  await expect(fireRow.locator('.home-effect')).toHaveText([
+    '🛡️ Safe 1 tile around',
+    '🪵 Needs fuel each night',
+  ]);
+  // The Build button sits under the chips on a phone, still on screen.
+  const meadowRow = sheet.locator('[data-build-row="cozy-meadow"]');
+  const chips = (await meadowRow.locator('.home-effects').boundingBox())!;
+  const build = (await meadowRow.locator('[data-build="cozy-meadow"]').boundingBox())!;
+  const view = page.viewportSize()!;
+  expect(build.x + build.width).toBeLessThanOrEqual(view.width);
+  if (view.width < 600) expect(build.y).toBeGreaterThanOrEqual(chips.y + chips.height - 1);
   await sheet.getByRole('button', { name: 'Cancel' }).tap();
 
   // A Cozy Meadow, and the squishy moves in.

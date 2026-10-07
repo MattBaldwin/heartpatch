@@ -10,7 +10,7 @@ export const BUILDINGS: Building[] = [
     id: 'hearthfire',
     kind: 'hearthfire',
     name: 'Hearthfire',
-    description: "A warm, bright fire. While it's lit, squishies near it are safe all night.",
+    description: 'Keeps squishies out on your land safe from the Hollow Man at night.',
     // #202: on captured land, one a tile, in its middle (#204). Never at
     // home: the Heart Seed keeps home safe (owner decision 2026-10-07).
     placement: 'land',
@@ -30,7 +30,7 @@ export const BUILDINGS: Building[] = [
     id: 'jack-o-lantern-hearthfire',
     kind: 'hearthfire',
     name: "Jack-o'-Lantern Hearthfire",
-    description: 'A grinning, extra-bright fire. Its light reaches further than a plain one.',
+    description: 'A grinning fire whose light reaches extra far.',
     season: 'halloween',
     placement: 'land', // like the Hearthfire (owner decision 2026-10-07)
     maxPerTile: 1, // TUNE:
@@ -47,7 +47,7 @@ export const BUILDINGS: Building[] = [
     id: 'ember-den',
     kind: 'habitat',
     name: 'Ember Den',
-    description: 'A toasty nook for squishies who love the warmth.',
+    description: 'A warm home. Fire and Cozy squishies grow faster here.',
     maxPerHome: 2, // TUNE:
     placement: 'home',
     slot: 'ring',
@@ -61,7 +61,7 @@ export const BUILDINGS: Building[] = [
     id: 'cozy-meadow',
     kind: 'habitat',
     name: 'Cozy Meadow',
-    description: 'Soft grass and sunny spots, perfect for a nap.',
+    description: 'A sunny nap spot. Leaf, Cozy and Sleepy squishies grow faster here.',
     maxPerHome: 2, // TUNE:
     placement: 'home',
     slot: 'ring',
@@ -75,7 +75,7 @@ export const BUILDINGS: Building[] = [
     id: 'training-grounds',
     kind: 'training-grounds',
     name: 'Training Grounds',
-    description: 'Squishies practice their best moves here, a little every hour.',
+    description: 'Squishies practice here and earn XP all by themselves.',
     maxPerHome: 1, // TUNE:
     placement: 'home',
     slot: 'ring',
