@@ -15,6 +15,7 @@ import {
   type MapSceneOptions,
 } from './map-scene.js';
 import { testView, userId } from './test-view.js';
+import { wildMarkers } from './wild-markers.js';
 
 describe('MapScene', () => {
   const engine = new NullEngine({
@@ -48,6 +49,32 @@ describe('MapScene', () => {
     expect(tileMeshes.length).toBeLessThanOrEqual(9);
     expect(tileMeshes.reduce((n, m) => n + m.thinInstanceCount, 0)).toBe(469);
     expect(scene.getMeshByName('tiles-home')).toBeTruthy();
+  });
+
+  it('draws every wild-squishy tuft from one instanced mesh, swaying on the terrain clock (#209)', () => {
+    const view = testView(1);
+    const { scene, map, mesh, instances } = build(view);
+    expect(instances('wild-tuft')).toBe(0);
+    expect(mesh('wild-tuft')?.isEnabled()).toBe(false);
+    const tiles = new Map(view.tiles.map((t) => [`${String(t.q)},${String(t.r)}`, t]));
+    const hints = view.tiles.slice(0, 12).map(({ q, r }) => ({ q, r }));
+    const before = scene.meshes.length;
+
+    map.setWild(wildMarkers(hints, (key) => tiles.get(key)));
+    expect(instances('wild-tuft')).toBe(12);
+    expect(map.stats.wildMarkers).toBe(12);
+    expect(scene.meshes.length).toBe(before);
+    // Each tuft sways in the map's breeze: the terrain plugin's sway turns on
+    // for a mesh with per-instance `terrainAmbient` (terrain-plugin.ts).
+    expect(mesh('wild-tuft')!.isVerticesDataPresent('terrainAmbient')).toBe(true);
+
+    // Fewer, then none: same mesh, nothing left over.
+    map.setWild(wildMarkers(hints.slice(0, 3), (key) => tiles.get(key)));
+    expect(instances('wild-tuft')).toBe(3);
+    map.setWild([]);
+    expect(instances('wild-tuft')).toBe(0);
+    expect(map.stats.wildMarkers).toBe(0);
+    expect(scene.meshes.length).toBe(before);
   });
 
   it('keeps the whole map to a few dozen meshes (draw calls)', () => {

@@ -405,6 +405,46 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect(row).toMatchObject({ spawnQ: edge.q, spawnR: edge.r });
     });
 
+    it('meets the hinted tile the player picks over HTTP, not the nearest (#209)', async () => {
+      const server = await start();
+      const kid = await player();
+      // The Glade: every tile in reach has a wild squishy, so there's always a choice.
+      const started = await call(server, 'POST', '/tutorial/start', kid);
+      const mapId = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
+      const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
+        speciesId: STRONG,
+        level: STRONG_LEVEL,
+      });
+      expect(granted.statusCode).toBe(201);
+      const hints = await call(server, 'GET', `/maps/${mapId}/wild`, kid);
+      const { tiles: hinted } = WildHintsResponseSchema.parse(hints.json()).wild;
+      expect(hinted.length).toBeGreaterThan(1);
+      // The last hint, so the nearest pick (the first) would be a different tile.
+      const picked = hinted.at(-1)!;
+
+      const res = await call(server, 'POST', `/maps/${mapId}/battles`, kid, { tile: picked });
+      expect(res.statusCode, res.body).toBe(201);
+      const { battle } = BattleResponseSchema.parse(res.json());
+      const row = await db.query.battles.findFirst({ where: (t, { eq }) => eq(t.id, battle.id) });
+      expect(row).toMatchObject({ kind: 'wild', spawnQ: picked.q, spawnR: picked.r });
+      await call(server, 'POST', `/battles/${battle.id}/actions`, kid, {
+        action: { type: 'forfeit' },
+        turn: battle.view.turn,
+      });
+
+      // A tile out of reach (a stale map, or a hand-made request) is too far.
+      // Every tile in reach on the Glade is hinted, so any other tile is out of it.
+      const reach = new Set(hinted.map(hexKey));
+      const far = (await tilesOf(mapId)).find((t) => !reach.has(hexKey(t)))!;
+      const refused = await call(server, 'POST', `/maps/${mapId}/battles`, kid, {
+        tile: { q: far.q, r: far.r },
+      });
+      expect(refused.statusCode).toBe(404);
+      const err = ApiErrorSchema.parse(refused.json());
+      expect(err.error.code).toBe('NOT_FOUND');
+      expect(err.error.message).toMatch(/too far/);
+    });
+
     it('says nobody is around when no tile has a squishy', async () => {
       const server = await start();
       const kid = await player();
