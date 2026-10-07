@@ -166,6 +166,14 @@ export const SPAWN_TABLES: SpawnTable[] = [
       { species: 'candlekit', weight: 2 }, // TUNE:
     ],
   },
+  // Thanksgiving (each species also carries `season: 'thanksgiving'`).
+  {
+    // Crunchkin plays in the leaves under the trees (and the home leaf piles).
+    id: 'thanksgiving-leaves',
+    terrains: ['forest', 'old-forest', 'meadow'],
+    season: 'thanksgiving',
+    entries: [{ species: 'crunchkin', weight: 4 }], // TUNE:
+  },
   {
     // Secret: a tiny piece of the Heartpatch, out on Gap nights. Weights add
     // up across matching tables, so this is 1 in 27 Gap night spawns (1 in

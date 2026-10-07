@@ -19,7 +19,7 @@ import {
   type MoteKind,
 } from './ambient-layout.js';
 import { hash01 } from './map-layout.js';
-import { HEX_SIZE, MOTE_KINDS, MOTES, SKY_BACKDROP } from './map-config.js';
+import { HEX_SIZE, MOTE_KINDS, MOTES, SKY_BACKDROP, THANKSGIVING } from './map-config.js';
 import { linear, merged, painted } from './map-props.js';
 import { attachTerrainPlugin, DRIFT_ATTRIBUTE, type TerrainClock } from './terrain-plugin.js';
 
@@ -199,6 +199,7 @@ export class MapAmbient {
   private readonly clouds: Mesh;
   private readonly cloudMaterial: StandardMaterial;
   private readonly halloween: boolean;
+  private readonly thanksgiving: boolean;
   private readonly rings: readonly number[];
   private night = false;
   private shown: Partial<Record<MoteKind, number>> = {};
@@ -207,12 +208,14 @@ export class MapAmbient {
     scene: Scene,
     tiles: readonly PublicTile[],
     clock: TerrainClock,
-    options: { halloween: boolean; islandRadius: number },
+    options: { halloween: boolean; thanksgiving?: boolean; islandRadius: number },
   ) {
     this.halloween = options.halloween;
+    this.thanksgiving = options.thanksgiving === true;
     for (const kind of MOTE_KINDS) {
       if (HALLOWEEN_ONLY.has(kind) && !options.halloween) continue;
-      const motes = motesFor(kind, tiles, HEX_SIZE);
+      const season = kind === 'leaves' && this.thanksgiving ? THANKSGIVING.leaves : undefined;
+      const motes = motesFor(kind, tiles, HEX_SIZE, season);
       if (motes.length === 0) continue;
       const mesh = moteMesh(scene, kind);
       const material = glowMaterial(scene, `mote-${kind}-mat`, MOTES[kind].color, kind === 'fog');
@@ -353,7 +356,9 @@ export class MapAmbient {
       ? this.halloween
         ? SKY_BACKDROP.halloweenNight
         : SKY_BACKDROP.night
-      : SKY_BACKDROP.day;
+      : this.thanksgiving
+        ? THANKSGIVING.day
+        : SKY_BACKDROP.day;
     const inner = linear(look.inner);
     const mid = linear(look.mid);
     // Centre and the island's rim: inner; then mid; then fading out.

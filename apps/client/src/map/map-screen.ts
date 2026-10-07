@@ -23,7 +23,7 @@ import { el } from '../ui/dom.js';
 import { HEX_SIZE } from './map-config.js';
 import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
-import { isHalloween } from './map-dressing.js';
+import { isHalloween, seasonsOn } from './map-dressing.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
@@ -176,7 +176,14 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     }
     selected = h;
     scene3d?.select(h);
-    panel.show(describeTile(tile, (id) => state.member(id), user?.id ?? null));
+    panel.show(
+      describeTile(
+        tile,
+        (id) => state.member(id),
+        user?.id ?? null,
+        seasonsOn(state.view.map.timeZone, options.now?.() ?? new Date()),
+      ),
+    );
     options.tileActions?.show(panel.actions, tile, state.view);
     options.invalidate();
   };
@@ -225,8 +232,10 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   const build = (scene: Scene): SceneContent => {
     const state = sync.state;
     if (!state) throw new Error('no map to build');
+    const at = options.now?.() ?? new Date();
     const built = new MapScene(scene, state.view, {
-      halloween: isHalloween(state.view.map.timeZone, options.now?.() ?? new Date()),
+      halloween: isHalloween(state.view.map.timeZone, at),
+      seasons: seasonsOn(state.view.map.timeZone, at),
       ...ambient.state,
     });
     built.setNight(night);

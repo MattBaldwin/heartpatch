@@ -46,6 +46,14 @@ export const JOB_RULES: JobRules = {
       feelings: ['spooky'],
       seasons: ['halloween'],
     },
+    {
+      // Only Thanksgiving squishies, so nobody gets a leaf hint all year.
+      resource: 'magic-fallen-leaves',
+      icon: '🍂',
+      elements: [],
+      feelings: [],
+      seasons: ['thanksgiving'],
+    },
   ],
   maxGatherHints: 2, // TUNE:
   // TUNE: owner decision 2026-10-06: at most a day of Training Grounds XP
