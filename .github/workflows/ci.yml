@@ -77,8 +77,8 @@ jobs:
   # WebKit e2e, split by device and into groups that run side by side.
   e2e:
     runs-on: ubuntu-24.04
-    # Room for a slow WebKit install (capped at 20 min, below) plus the tests
-    # in the heaviest group (about 5 min).
+    # Room for setup (about 4 min), the WebKit system deps (capped at 17 min,
+    # below) and the tests in the heaviest group (about 5 min).
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -132,11 +132,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-webkit-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
-      # A slow apt mirror held shards in the install below for 29 min, so jobs
-      # timed out before any test ran. apt gives up on a silent connection
-      # after 30 s; a mirror that trickles is caught by the 6-min cap on each
-      # try below, which retries on a fresh connection (timeout kills the whole
-      # process group; dpkg --configure -a tidies a half-done install).
+      # A slow apt mirror held shards in the OS-package install for 29 min, so
+      # jobs timed out before any test ran. apt gives up on a silent
+      # connection after 30 s; a mirror that trickles is caught by the 5-min
+      # cap on each try below, which retries on a fresh connection. The cap
+      # runs as root: Playwright starts apt as root, and a signal from the
+      # runner user can't reach it, so the lock would outlive the try.
       - name: apt retries and timeouts
         run: |
           printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
@@ -144,22 +145,14 @@ jobs:
 
       - name: Install Playwright WebKit
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 20
-        run: |
-          for try in 1 2 3; do
-            timeout 6m pnpm --filter @heartpatch/client exec playwright install --with-deps webkit && exit 0
-            echo "::warning::try $try failed or took over 6 min; retrying"
-            sudo dpkg --configure -a || true
-          done
-          exit 1
+        run: pnpm --filter @heartpatch/client exec playwright install webkit
 
       - name: Install Playwright WebKit system deps
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        timeout-minutes: 20
+        timeout-minutes: 17
         run: |
           for try in 1 2 3; do
-            timeout 6m pnpm --filter @heartpatch/client exec playwright install-deps webkit && exit 0
-            echo "::warning::try $try failed or took over 6 min; retrying"
+            sudo env "PATH=$PATH" timeout -k 30s 5m apps/client/node_modules/.bin/playwright install-deps webkit && exit 0
+            echo "::warning::try $try failed or took over 5 min; retrying"
             sudo dpkg --configure -a || true
           done
           exit 1
