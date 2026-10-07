@@ -228,6 +228,7 @@
 /* The Keeper menu over the map (ui/trays): a round face button; the name,
    menu rows and "Log out" fold out under it. Off the map it's the plain chip. */
 .auth-chip-toggle,
+.auth-chip-head,
 .auth-chip-menu {
   display: none;
 }
@@ -283,6 +284,29 @@
   font-weight: 900;
 }
 
+.hp-trays-on .auth-chip-head {
+  display: flex;
+  margin-top: -10px;
+}
+
+/* The game's version (#198): small and quiet, tap to copy. Small text, but a
+   full 44pt tap target (style guide §2); the name above has its own row. */
+.auth-chip-version {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #7d6380;
+  text-align: left;
+  cursor: pointer;
+}
+
 .hp-trays-on .auth-chip-menu {
   display: flex;
   flex-direction: column;
@@ -304,6 +328,16 @@
   color: #4a3150;
   text-align: left;
   cursor: pointer;
+}
+
+.auth-chip-menu > button[hidden] {
+  display: none;
+}
+
+/* "Update now" waiting for a recovery code to be put away (#47, #198). */
+.auth-chip-menu > button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .hp-trays-on .auth-chip-body > .auth-button {
