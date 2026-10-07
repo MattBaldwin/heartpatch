@@ -62,7 +62,8 @@ function building(
   extra: Partial<MyBuilding> = {},
 ): MyBuilding {
   const data = GAME_DATA.buildings.find((b) => b.id === buildingId);
-  if (!data) throw new Error(`no building ${buildingId}`);
+  // Fences (#203) stand on edges, not spots: they're drawn with the map.
+  if (!data || data.kind === 'fence') throw new Error(`no building on a spot: ${buildingId}`);
   const step = data.levels[level - 1];
   const fire = data.kind === 'hearthfire';
   return {

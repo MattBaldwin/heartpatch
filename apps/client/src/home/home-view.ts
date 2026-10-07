@@ -285,6 +285,8 @@ export function effectChip(effect: BuildingEffect): string {
       return `🏠 Room for ${String(effect.capacity)}`;
     case 'training':
       return `🏋️ ${String(effect.capacity)} ${effect.capacity === 1 ? 'squishy' : 'squishies'} · ${String(effect.xpPerHour)} XP/hr`;
+    case 'fence':
+      return `🪵 Keeps other Keepers out · ${String(effect.hp)} energy`;
   }
 }
 
@@ -315,6 +317,8 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
   const seasons = new Set(home.seasons);
   return GAME_DATA.buildings
     .filter((b) => isBuildable(RULES, b))
+    // Fences (#203) go on a tile's edges, from the tile's panel on the map.
+    .filter((b) => b.slot !== 'edge')
     .filter((b) => inSeason(b, seasons) || home.buildings.some((m) => m.buildingId === b.id))
     .map((building) => {
       const cost = buildCost(building);
