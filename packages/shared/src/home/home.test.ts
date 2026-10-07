@@ -271,13 +271,15 @@ describe('home-base data', () => {
     );
   });
 
-  it('lets players build fires, habitats and Training Grounds', () => {
+  it('lets players build fires, habitats, Training Grounds and fences', () => {
     expect(BUILDINGS.filter((b) => isBuildable(RULES, b)).map((b) => b.id)).toEqual([
       'hearthfire',
       'jack-o-lantern-hearthfire',
       'ember-den',
       'cozy-meadow',
       'training-grounds',
+      'emberwood-fence',
+      'stone-wall',
     ]);
   });
 

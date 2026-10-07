@@ -14,6 +14,8 @@ import { registerIdempotency } from './lib/idempotency.js';
 import { battlesRoutes } from './modules/battles/routes.js';
 import { buildingsRoutes } from './modules/buildings/routes.js';
 import { createBuildingsService } from './modules/buildings/service.js';
+import { fencesRoutes } from './modules/fences/routes.js';
+import { createFencesService } from './modules/fences/service.js';
 import { careRoutes } from './modules/care/routes.js';
 import { chatRoutes } from './modules/chat/routes.js';
 import { createChatService } from './modules/chat/service.js';
@@ -265,6 +267,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
         await api.register(
           buildingsRoutes(createBuildingsService({ db, clock, log: app.log, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+          }),
+        );
+        // Fences on the edges of my land (#203).
+        await api.register(
+          fencesRoutes(createFencesService({ db, clock, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),

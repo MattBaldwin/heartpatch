@@ -2,7 +2,7 @@ import {
   BuildingKindSchema,
   ElementIdSchema,
   FeelingIdSchema,
-  type BuildingKind,
+  type BuildingRowKind,
   type ElementId,
   type FeelingId,
 } from '@heartpatch/shared';
@@ -37,7 +37,7 @@ export interface BuildingRow {
   /** The tile's home slot: null for captured land outside every home base (#202). */
   homeSlot: number | null;
   buildingId: string;
-  kind: BuildingKind;
+  kind: BuildingRowKind;
   level: number;
   spot: number;
   /** Last map-local night the fuel covers (`YYYY-MM-DD`); null: never fuelled. */

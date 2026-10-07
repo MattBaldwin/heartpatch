@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { BattleEndReasonSchema, PlayerBattleSchema } from './battle.js';
+import { ContentIdSchema } from './data/common.js';
 import { DefenseStanceSchema } from './data/raids.js';
 import { ItemCountsSchema } from './inventory.js';
 
@@ -45,6 +46,21 @@ export const RaidSchema = z.object({
   replayable: z.boolean(),
   /** My fire on that land came down when it was taken (#202): what came back. Null: no fire. */
   lostFire: ItemCountsSchema.nullable(),
+  /**
+   * A fence battle (#203): which of my fences, whether it was broken, and
+   * how much energy it has left in whole percent (0 when broken). Null: the
+   * guard battle. Optional only so older fixtures parse.
+   */
+  fence: z
+    .object({
+      buildingId: ContentIdSchema,
+      broken: z.boolean(),
+      percent: z.number().int().min(0).max(100),
+    })
+    .nullable()
+    .optional(),
+  /** My fence segments there came down when it was taken (#203): what came back. Null: none. */
+  lostFences: ItemCountsSchema.nullable().optional(),
 });
 export type Raid = z.infer<typeof RaidSchema>;
 

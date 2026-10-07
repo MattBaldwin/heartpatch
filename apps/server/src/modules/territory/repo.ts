@@ -59,6 +59,36 @@ export interface TileAttackRow {
   rewardPercent: number;
   startedAt: Date;
   lastActionAt: Date;
+  cooldownUntil: Date;
+  endedAt: Date | null;
+  /** A fenced tile's challenge has two parts (#203): the fence, then the guard. */
+  part: 'fence' | 'guard';
+  /** A guard battle straight after a broken fence: that fence attack (no try of its own). */
+  followsAttackId: string | null;
+  /** The fence part's segment, its kind, and its energy before and after (0: broken). */
+  fenceSegmentId: string | null;
+  fenceBuildingId: string | null;
+  fenceHpBefore: number | null;
+  fenceMaxHp: number | null;
+  fenceHpAfter: number | null;
+}
+
+/** What a new attempt-log row records (`insertAttack`). */
+export interface NewTileAttack {
+  mapId: string;
+  tileId: string;
+  attackerUserId: string;
+  defenderUserId: string | null;
+  battleId: string;
+  rewardPercent: number;
+  startedAt: Date;
+  cooldownUntil: Date;
+  part?: 'fence' | 'guard';
+  followsAttackId?: string | null;
+  fenceSegmentId?: string | null;
+  fenceBuildingId?: string | null;
+  fenceHpBefore?: number | null;
+  fenceMaxHp?: number | null;
 }
 
 /** A squishy standing watch, as a battle side needs it. */
@@ -97,16 +127,27 @@ export interface TerritoryRepo {
   /** The latest cooldown on the tile, or null if it's never been battled for. */
   cooldownUntil: (tileId: string) => Promise<Date | null>;
 
-  insertAttack: (attack: {
-    mapId: string;
-    tileId: string;
-    attackerUserId: string;
-    defenderUserId: string | null;
-    battleId: string;
-    rewardPercent: number;
-    startedAt: Date;
-    cooldownUntil: Date;
-  }) => Promise<TileAttackRow>;
+  insertAttack: (attack: NewTileAttack) => Promise<TileAttackRow>;
+  /**
+   * The player's fence attack on this tile that broke the fence and ended
+   * after `since`, with no guard battle after it yet (#203): a guard battle
+   * now finishes the same challenge. Null if there's none.
+   */
+  brokenFenceFor: (
+    tileId: string,
+    attackerUserId: string,
+    since: Date,
+  ) => Promise<TileAttackRow | null>;
+  /** Every such fence attack of the player's on this map (the claim sheet's "Keep going"). */
+  myBrokenFences: (
+    mapId: string,
+    attackerUserId: string,
+    since: Date,
+  ) => Promise<(TileAttackRow & { q: number; r: number })[]>;
+  /** What the fence had left when its battle ended (0: broken). */
+  setFenceResult: (attackId: string, hpAfter: number) => Promise<void>;
+  /** The capture took the defender's other fence segments down (#203): what came back. */
+  setLostFenceRefund: (attackId: string, refund: Record<string, number>) => Promise<void>;
   findAttack: (battleId: string) => Promise<TileAttackRow | null>;
   touchAttack: (battleId: string, at: Date) => Promise<void>;
   endAttack: (battleId: string, outcome: TileAttackOutcome, at: Date) => Promise<void>;
@@ -170,7 +211,26 @@ const attackColumns = {
   rewardPercent: tileAttacks.rewardPercent,
   startedAt: tileAttacks.startedAt,
   lastActionAt: tileAttacks.lastActionAt,
+  cooldownUntil: tileAttacks.cooldownUntil,
+  endedAt: tileAttacks.endedAt,
+  part: sql<'fence' | 'guard'>`${tileAttacks.part}`,
+  followsAttackId: tileAttacks.followsAttackId,
+  fenceSegmentId: tileAttacks.fenceSegmentId,
+  fenceBuildingId: tileAttacks.fenceBuildingId,
+  fenceHpBefore: tileAttacks.fenceHpBefore,
+  fenceMaxHp: tileAttacks.fenceMaxHp,
+  fenceHpAfter: tileAttacks.fenceHpAfter,
 };
+
+/** A fence attack that broke the fence, with no guard battle after it yet (#203). */
+const brokenFence = (since: Date) =>
+  and(
+    eq(tileAttacks.part, 'fence'),
+    eq(tileAttacks.outcome, 'won'),
+    isNotNull(tileAttacks.endedAt),
+    gt(tileAttacks.endedAt, since),
+    sql`not exists (select 1 from ${tileAttacks} as follow where follow.follows_attack_id = ${tileAttacks.id})`,
+  );
 
 /**
  * The one SQL spelling of "on watch" (decision C; shared `isOnWatch` is the
@@ -265,6 +325,8 @@ function queries(db: Executor): TerritoryRepo {
           eq(tileAttacks.mapId, mapId),
           eq(tileAttacks.attackerUserId, userId),
           ne(tileAttacks.outcome, 'no-contest'),
+          // The guard battle after a broken fence is the same challenge (#203).
+          isNull(tileAttacks.followsAttackId),
           sql`${localDateOf(tileAttacks.startedAt, timeZone)} = ${date}::date`,
         ),
       ),
@@ -307,6 +369,50 @@ function queries(db: Executor): TerritoryRepo {
         .returning(attackColumns);
       if (!row) throw new Error('insertAttack: insert returned no row');
       return row;
+    },
+
+    brokenFenceFor: async (tileId, attackerUserId, since) => {
+      const [row] = await db
+        .select(attackColumns)
+        .from(tileAttacks)
+        .where(
+          and(
+            eq(tileAttacks.tileId, tileId),
+            eq(tileAttacks.attackerUserId, attackerUserId),
+            brokenFence(since),
+          ),
+        )
+        .orderBy(desc(tileAttacks.endedAt))
+        .limit(1);
+      return row ?? null;
+    },
+
+    myBrokenFences: (mapId, attackerUserId, since) =>
+      db
+        .select({ ...attackColumns, q: tiles.q, r: tiles.r })
+        .from(tileAttacks)
+        .innerJoin(tiles, eq(tiles.id, tileAttacks.tileId))
+        .where(
+          and(
+            eq(tileAttacks.mapId, mapId),
+            eq(tileAttacks.attackerUserId, attackerUserId),
+            brokenFence(since),
+          ),
+        )
+        .orderBy(desc(tileAttacks.endedAt)),
+
+    setFenceResult: async (attackId, hpAfter) => {
+      await db
+        .update(tileAttacks)
+        .set({ fenceHpAfter: hpAfter })
+        .where(eq(tileAttacks.id, attackId));
+    },
+
+    setLostFenceRefund: async (attackId, refund) => {
+      await db
+        .update(tileAttacks)
+        .set({ lostFenceRefund: refund })
+        .where(eq(tileAttacks.id, attackId));
     },
 
     findAttack: async (battleId) => {

@@ -184,6 +184,15 @@ const BattleStateSchema = ClientBattleViewSchema.extend({ rng: RngStateSchema })
 const ResultSchema = ClientBattleViewSchema.shape.phase.options[2].shape.result;
 const LogSchema = ClientBattleViewSchema.shape.log;
 
+/**
+ * A battle's whole setup, as `replayBattle` takes it: its seed and stored
+ * sides, plus a fence battle's turn limit (#203), which lives in its state.
+ */
+export function setupOf(row: Pick<BattleRow, 'seed' | 'setup' | 'state'>): BattleSetup {
+  const { turnLimit } = row.state;
+  return { seed: row.seed, sides: row.setup, ...(turnLimit !== undefined && { turnLimit }) };
+}
+
 type RawBattleRow = typeof battles.$inferSelect;
 
 function toRow(row: RawBattleRow): BattleRow {

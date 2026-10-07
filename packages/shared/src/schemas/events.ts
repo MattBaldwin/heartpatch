@@ -5,6 +5,7 @@ import { ContentIdSchema } from './data/common.js';
 import { PvpModeSchema } from './maps.js';
 import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './battle.js';
 import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
+import { HexEdgeSchema, PlacedFenceSchema } from './fences.js';
 import { MoodIdSchema } from './data/care.js';
 import { RaidOutcomeSchema } from './raids.js';
 import { LocalDateSchema } from './time.js';
@@ -45,6 +46,8 @@ const TutorialAdvancedSchema = z.strictObject({
 });
 /** A building as stored in an event payload (`PlacedBuilding`, strict). */
 const PlacedBuildingStrictSchema = z.strictObject(PlacedBuildingSchema.shape);
+/** A fence segment as stored in an event payload (`PlacedFence`, strict). */
+const PlacedFenceStrictSchema = z.strictObject(PlacedFenceSchema.shape);
 const BattleStartedSchema = z.strictObject({
   battleId: z.uuid(),
   kind: BattleKindSchema,
@@ -386,6 +389,91 @@ export const GAME_EVENTS = {
       cost: z.record(z.string(), z.number().int().min(1)),
     }),
     public: z.object({ userId: z.uuid(), building: PlacedBuildingSchema }),
+  },
+  /**
+   * A player fenced edges of one of their tiles (#203): one event per
+   * segment. Members see the fence on the map; the bill stays internal.
+   */
+  'fence.built': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      fence: PlacedFenceStrictSchema,
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), fence: PlacedFenceSchema }),
+  },
+  /** A player raised a fence segment a level (#203): more energy, tougher. */
+  'fence.upgraded': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      fence: PlacedFenceStrictSchema,
+      fromLevel: z.number().int().min(1),
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), fence: PlacedFenceSchema }),
+  },
+  /** A player mended a fence segment back to full energy (#203). */
+  'fence.repaired': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      fence: PlacedFenceStrictSchema,
+      cost: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), fence: PlacedFenceSchema }),
+  },
+  /**
+   * A challenger fought a fence segment and it held (#203): it keeps the
+   * energy it lost (owner decision 2026-10-07). `userId` is its owner.
+   */
+  'fence.damaged': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      attackerUserId: z.uuid(),
+      attackId: z.uuid(),
+      battleId: z.uuid(),
+      fence: PlacedFenceStrictSchema,
+    }),
+    public: z.object({ userId: z.uuid(), attackerUserId: z.uuid(), fence: PlacedFenceSchema }),
+  },
+  /**
+   * A challenger broke a fence segment (#203): it's gone, with nothing back.
+   * The land is still its owner's. `userId` is its owner.
+   */
+  'fence.broken': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      attackerUserId: z.uuid(),
+      attackId: z.uuid(),
+      battleId: z.uuid(),
+      fenceId: z.uuid(),
+      buildingId: ContentIdSchema,
+      ...coords,
+      edge: HexEdgeSchema,
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      attackerUserId: z.uuid(),
+      fenceId: z.uuid(),
+      ...coords,
+      edge: HexEdgeSchema,
+    }),
+  },
+  /**
+   * A fence segment came down (#203): its owner took it down for part of
+   * its cost back, or it came down with the land under it (`lost`, as
+   * buildings do in #202) and gave the same back.
+   */
+  'fence.removed': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      fenceId: z.uuid(),
+      buildingId: ContentIdSchema,
+      ...coords,
+      edge: HexEdgeSchema,
+      refund: z.record(z.string(), z.number().int().min(1)),
+      lost: z.enum(['captured', 'wild', 'left']).optional(),
+    }),
+    public: z.object({ userId: z.uuid(), fenceId: z.uuid(), ...coords, edge: HexEdgeSchema }),
   },
   /** A squishy moved into a habitat, or out of one (`habitatId` null) (#18). */
   'squishy.housed': {

@@ -70,6 +70,11 @@ export function isFenceSetup(setup: BattleParticipantSetup): setup is BattleFenc
   return 'fence' in setup;
 }
 
+/** The species of a side's squishies, leaving out a fence (#203: it isn't one). */
+export function setupSpecies(squishies: readonly BattleParticipantSetup[]): string[] {
+  return squishies.flatMap((s) => (isFenceSetup(s) ? [] : [s.speciesId]));
+}
+
 /** A player picks this side's actions, or an AI policy does. */
 export const BattleControllerSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('player') }),

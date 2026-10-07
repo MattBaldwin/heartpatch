@@ -1,5 +1,6 @@
 import {
   ApiErrorSchema,
+  setupSpecies,
   BATTLE_RULES,
   BattleResponseSchema,
   createBattleContent,
@@ -393,7 +394,7 @@ describe.skipIf(!url)('raids (needs DATABASE_URL)', () => {
         where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, rival.id)),
       });
       expect(met.map((m) => m.speciesId)).toEqual(
-        expect.arrayContaining(battle.setup.a.squishies.map((sq) => sq.speciesId)),
+        expect.arrayContaining(setupSpecies(battle.setup.a.squishies)),
       );
 
       // After a re-tune the stored log is the truth: listed, but not replayable.

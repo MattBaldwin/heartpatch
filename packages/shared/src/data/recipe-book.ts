@@ -56,5 +56,13 @@ export const RECIPE_BOOK: RecipeBookData = {
       page: 'building:training-grounds',
       line: 'Gather some Timber and Stone, and this page opens!',
     },
+    {
+      page: 'building:emberwood-fence',
+      line: 'Gather Emberwood from the old forest and some Timber, and this page opens!',
+    },
+    {
+      page: 'building:stone-wall',
+      line: 'Gather Stone from the hills and some Timber, and this page opens!',
+    },
   ],
 };

@@ -91,6 +91,7 @@ export * from './schemas/squishies.js';
 export * from './schemas/jobs.js';
 export * from './schemas/inventory.js';
 export * from './schemas/buildings.js';
+export * from './schemas/fences.js';
 export * from './gathering/index.js';
 export * from './recipe-book/index.js';
 export * from './home/index.js';

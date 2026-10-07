@@ -15,6 +15,7 @@ import { RESCUE_GUARDIANS, type LoreEntry } from '@heartpatch/shared/server';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
+import { createFencesRepo } from '../modules/fences/repo.js';
 import { createBoutiqueService, stockFor } from '../modules/boutique/service.js';
 import { createBuildingsService, removeMemberBuildings } from '../modules/buildings/service.js';
 import { createCareService } from '../modules/care/service.js';
@@ -53,6 +54,7 @@ import {
   buildings,
   clothingOwned,
   coinLedger,
+  fenceSegments,
   gameEvents,
   gatherJobs,
   inventories,
@@ -1319,6 +1321,35 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       ).map((b) => b.id);
     });
     expect(locked).toEqual(fireIds);
+  });
+
+  it('locks the fence segments on lost land in id order (fences `lockOnTiles`, #203)', async () => {
+    const { mapId, userId, tileIds } = await fires();
+    const fenceIds = [randomUUID(), randomUUID(), randomUUID()].sort();
+    await db.insert(fenceSegments).values(
+      [...fenceIds].reverse().map((id, i) => ({
+        id,
+        mapId,
+        ownerUserId: userId,
+        tileId: tileIds[i]!,
+        edge: i,
+        buildingId: 'emberwood-fence',
+        hp: 70,
+      })),
+    );
+    const lockFenceRow = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: fenceSegments.id })
+        .from(fenceSegments)
+        .where(eq(fenceSegments.id, id))
+        .for('update');
+    let locked: string[] = [];
+    await rowsAgainst(lockFenceRow, fenceIds, async () => {
+      locked = (
+        await unplanned((tx) => createFencesRepo(tx).lockOnTiles([...tileIds].reverse()))
+      ).map((f) => f.id);
+    });
+    expect(locked).toEqual(fenceIds);
   });
 
   it("locks a player's fires in id order for Fuel all fires (buildings `lockFires`, #202)", async () => {

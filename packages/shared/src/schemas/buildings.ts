@@ -14,7 +14,9 @@ import { LocalDateSchema } from './time.js';
 /** A building spot on a home tile: 0 is the middle, 1–6 around it (`spotOffset`). */
 export const BuildingSpotSchema = z.number().int().min(0).max(6);
 
+/** Kinds of `buildings` row. Fences (#203) are segments on edges, in their own rows. */
 export const BuildingKindSchema = z.enum(['hearthfire', 'habitat', 'training-grounds']);
+export type BuildingRowKind = z.infer<typeof BuildingKindSchema>;
 
 /**
  * A building as every member sees it on the map: which one, its level, where

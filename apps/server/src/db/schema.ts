@@ -312,6 +312,45 @@ export const buildings = pgTable(
   ],
 );
 
+/**
+ * Fence segments (#203, #204): one on a hex edge of a tile its owner holds,
+ * on their side of the edge (a neighbour fences their own side). `edge` is
+ * the shared `HEX_DIRECTIONS` index. `hp` is the energy it has left: damage
+ * stays until the owner repairs it (owner decision 2026-10-07), and a broken
+ * segment is deleted. Its kind and level's numbers are in `BUILDINGS`.
+ */
+export const fenceSegments = pgTable(
+  'fence_segments',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    ownerUserId: uuid('owner_user_id').notNull(),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    edge: smallint('edge').notNull(),
+    buildingId: text('building_id').notNull(),
+    level: smallint('level').notNull().default(1),
+    hp: smallint('hp').notNull(),
+    builtAt: timestamptz('built_at').notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'fence_segments_owner_member_fk',
+      columns: [t.mapId, t.ownerUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // One segment per edge of a tile (its owner's side).
+    unique('fence_segments_tile_id_edge_key').on(t.tileId, t.edge),
+    index('fence_segments_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
+    check('fence_segments_edge_range', sql`${t.edge} between 0 and 5`),
+    check('fence_segments_level_positive', sql`${t.level} >= 1`),
+    check('fence_segments_hp_positive', sql`${t.hp} >= 1`),
+  ],
+);
+
 export const squishies = pgTable(
   'squishies',
   {
@@ -847,6 +886,23 @@ export const tileAttacks = pgTable(
     // A capture took the defender's fire down (#202): what came back to them,
     // for the Challenge report. Null: no fire there.
     lostFireRefund: jsonb('lost_fire_refund').$type<Record<string, number>>(),
+    // Fences (#203): a challenge on a fenced tile has two parts. `fence` is
+    // the battle against its weakest exposed segment; `guard` the usual
+    // battle. A guard battle straight after a broken fence, in the same
+    // challenge, `follows` that fence attack and uses no try of its own.
+    part: text('part').notNull().default('guard'),
+    followsAttackId: uuid('follows_attack_id'),
+    // The fence part's segment (kept after it's broken and deleted), its
+    // kind, its energy at the start and its full energy then, and what it
+    // had left at the end (0: broken). Null for a guard battle, and while a fence battle runs.
+    fenceSegmentId: uuid('fence_segment_id'),
+    fenceBuildingId: text('fence_building_id'),
+    fenceHpBefore: smallint('fence_hp_before'),
+    fenceMaxHp: smallint('fence_max_hp'),
+    fenceHpAfter: smallint('fence_hp_after'),
+    // A capture took the defender's other fence segments on the tile down:
+    // what came back to them. Null: none.
+    lostFenceRefund: jsonb('lost_fence_refund').$type<Record<string, number>>(),
   },
   (t) => [
     unique('tile_attacks_battle_id_key').on(t.battleId),
@@ -863,6 +919,10 @@ export const tileAttacks = pgTable(
       .where(sql`${t.defenderUserId} is not null`),
     check('tile_attacks_reward_percent_range', sql`${t.rewardPercent} between 0 and 100`),
     check('tile_attacks_cooldown_after_start', sql`${t.cooldownUntil} >= ${t.startedAt}`),
+    check('tile_attacks_part', sql`${t.part} in ('fence', 'guard')`),
+    index('tile_attacks_follows_attack_id_idx')
+      .on(t.followsAttackId)
+      .where(sql`${t.followsAttackId} is not null`),
   ],
 );
 
