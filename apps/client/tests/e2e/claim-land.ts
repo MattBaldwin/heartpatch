@@ -1,6 +1,7 @@
 import { GAME_DATA } from '@heartpatch/shared';
 import { expect, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
+import { traysState } from './trays.js';
 
 /** The dev squishy's level: strong enough to beat the guardians next to home. */
 export const STRONG_LEVEL = 40;
@@ -74,6 +75,12 @@ export async function claimLand(page: Page, mapId: string): Promise<{ q: number;
     level: STRONG_LEVEL,
   });
   expect(granted.status).toBe(201);
+  // An open side tray covers part of the map and the tile panel: shut it first.
+  const open = (await traysState(page))?.open ?? null;
+  if (open !== null) {
+    await page.getByTestId(`tray-handle-${open}`).tap();
+    await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBeNull();
+  }
   await findTile(page, 'claim');
   const [q, r] = (await mapState(page))!.selected!.split(',').map(Number) as [number, number];
   await page.getByTestId('tile-claim').tap();

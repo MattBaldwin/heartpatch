@@ -937,14 +937,9 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
          where map_id = '${mapId}' and user_id = '${kid.id}'`,
       );
       await grounds(server, kid, mapId);
-      const hills = await farLand(server, kid, mapId, 'hills');
-      const [trainee, guard] = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      // A second friend resting at home, so the trainee isn't the last one.
+      const [trainee] = [await squishy(mapId, kid), await squishy(mapId, kid)];
       await setJob(server, kid, mapId, trainee, { job: 'training' });
-      await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
-        q: hills.q,
-        r: hills.r,
-        squishyIds: [guard],
-      });
       const hollow = createHollowService({
         db,
         clock: () => clock,
