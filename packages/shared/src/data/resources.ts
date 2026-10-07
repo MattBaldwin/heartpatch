@@ -1,8 +1,8 @@
 import type { Resource } from '../schemas/data/resources.js';
 
 /**
- * Resources from design doc §12, plus crafted items: the Heart Charm (§6) and
- * the Jack-o'-Lantern Hearthfire (§15). `gather` is one gather on a node.
+ * Resources from design doc §12, plus crafted items: the Heart Charm (§6),
+ * the Jack-o'-Lantern Hearthfire (§15) and the battle potions (#214). `gather` is one gather on a node.
  */
 export const RESOURCES: Resource[] = [
   {
@@ -112,5 +112,29 @@ export const RESOURCES: Resource[] = [
     name: "Jack-o'-Lantern",
     description: 'A carved, grinning pumpkin. Build it into a Hearthfire at home!',
     kind: 'crafted',
+  },
+  // Battle potions (#214, owner decisions 2026-10-07): drinking one takes the
+  // squishy's turn, and the next bump it takes is 75% softer, so a potion is
+  // never wasted against a much stronger rare squishy.
+  {
+    id: 'brave-brew',
+    name: 'Brave Brew',
+    description: 'A fizzy, peppery sip. Your squishy plays bolder for the whole battle!',
+    kind: 'crafted',
+    battleEffect: { attackPercent: 25, shieldPercent: 75 }, // TUNE:
+  },
+  {
+    id: 'cozy-cocoa',
+    name: 'Cozy Cocoa',
+    description: 'Warm and marshmallowy. Bumps feel extra soft for the whole battle!',
+    kind: 'crafted',
+    battleEffect: { defensePercent: 25, shieldPercent: 75 }, // TUNE:
+  },
+  {
+    id: 'hearty-soup',
+    name: 'Hearty Soup',
+    description: 'A big bowl of yum that brings back lots of energy.',
+    kind: 'crafted',
+    battleEffect: { healPercent: 40, shieldPercent: 75 }, // TUNE:
   },
 ];

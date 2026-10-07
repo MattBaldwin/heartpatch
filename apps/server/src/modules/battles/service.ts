@@ -464,6 +464,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         return { type: 'replace', side: PLAYER_SIDE, slot: action.slot };
       case 'forfeit':
         return { type: 'forfeit', side: PLAYER_SIDE };
+      case 'item':
+        return {
+          type: 'turn',
+          choices: { [PLAYER_SIDE]: { type: 'item', item: action.item } },
+        };
       case 'capture':
         return {
           type: 'turn',
@@ -827,6 +832,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             { mapId: row.mapId, userId: row.playerUserId },
             { [HEART_CHARM]: 1 },
             'capture',
+            row.id,
+          );
+        } else if (request.action.type === 'item') {
+          // A potion (#214) comes out of the bag in this transaction too, so
+          // a refused step (one already drunk, not a battle item) gives it
+          // back. None in the bag is CONFLICT ("You need 1 more …").
+          await consumeItems(
+            tx,
+            { mapId: row.mapId, userId: row.playerUserId },
+            { [request.action.item]: 1 },
+            'battle-item',
             row.id,
           );
         }

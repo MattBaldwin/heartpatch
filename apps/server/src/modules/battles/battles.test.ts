@@ -604,6 +604,100 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
     });
   });
 
+  describe('potions (#214: the bag pays, the engine decides)', () => {
+    async function giveItems(server: FastifyInstance, who: Player, mapId: string, items: object) {
+      const res = await call(server, 'POST', `/maps/${mapId}/dev/items`, who, { items });
+      expect(res.statusCode).toBe(201);
+    }
+
+    async function countOf(who: Player, mapId: string, itemId: string): Promise<number> {
+      const row = await db.query.inventories.findFirst({
+        where: (t, { and, eq }) =>
+          and(eq(t.mapId, mapId), eq(t.userId, who.id), eq(t.itemId, itemId)),
+      });
+      return row?.quantity ?? 0;
+    }
+
+    const ledgerFor = (battleId: string) =>
+      db.query.resourceLedger.findMany({ where: (t, { eq }) => eq(t.refId, battleId) });
+
+    it('spends one potion with the turn, ledgered against the battle', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId, { speciesId: SECRET_IDS[0], level: 10 });
+      const battle = await pickFight(server, kid, mapId, {
+        opponent: { speciesId: SECRET_IDS[0] },
+      });
+      await giveItems(server, kid, mapId, { 'brave-brew': 2 });
+
+      const res = await act(server, kid, battle, { type: 'item', item: 'brave-brew' });
+      expect(res.statusCode).toBe(200);
+      const after = battleOf(res);
+      expect(after.view.turn).toBe(1);
+      expect(after.view.sides.a.itemsUsed).toEqual(['brave-brew']);
+      expect(after.view.log).toContainEqual({
+        turn: 1,
+        side: 'a',
+        slot: 0,
+        type: 'item',
+        item: 'brave-brew',
+      });
+      expect(myActive(after).boosts.attack).toBe(25);
+      expect(await countOf(kid, mapId, 'brave-brew')).toBe(1);
+      expect(
+        (await ledgerFor(battle.id)).map(({ itemId, delta, reason }) => ({
+          itemId,
+          delta,
+          reason,
+        })),
+      ).toEqual([{ itemId: 'brave-brew', delta: -1, reason: 'battle-item' }]);
+
+      // A second Brave Brew in the same battle is refused, and nothing is spent.
+      const again = await act(server, kid, after, { type: 'item', item: 'brave-brew' });
+      expect(again.statusCode).toBe(409);
+      expect(await countOf(kid, mapId, 'brave-brew')).toBe(1);
+      expect((await ledgerFor(battle.id)).length).toBe(1);
+    });
+
+    it('refuses a potion the bag doesn’t have, or a thing that isn’t a potion', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId, { level: 10 });
+      const battle = await pickFight(server, kid, mapId);
+
+      const none = await act(server, kid, battle, { type: 'item', item: 'cozy-cocoa' });
+      expect(none.statusCode).toBe(409);
+      expect(errorOf(none).message).toMatch(/Cozy Cocoa/);
+
+      await giveItems(server, kid, mapId, { timber: 3 });
+      const timber = await act(server, kid, battle, { type: 'item', item: 'timber' });
+      expect(timber.statusCode).toBe(409);
+      expect(await countOf(kid, mapId, 'timber')).toBe(3);
+      expect(battleOf(await call(server, 'GET', `/battles/${battle.id}`, kid)).view.turn).toBe(0);
+    });
+
+    it('refuses someone else’s battle and a finished one, spending nothing', async () => {
+      const server = await start();
+      const kid = await player();
+      const other = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId, { level: 10 });
+      const battle = await pickFight(server, kid, mapId);
+      await giveItems(server, kid, mapId, { 'hearty-soup': 1 });
+
+      const theirs = await act(server, other, battle, { type: 'item', item: 'hearty-soup' });
+      expect([403, 404]).toContain(theirs.statusCode);
+
+      expect((await act(server, kid, battle, { type: 'forfeit' })).statusCode).toBe(200);
+      const over = await act(server, kid, battle, { type: 'item', item: 'hearty-soup' });
+      expect(over.statusCode).toBe(409);
+      expect(await countOf(kid, mapId, 'hearty-soup')).toBe(1);
+      expect(await ledgerFor(battle.id)).toEqual([]);
+    });
+  });
+
   describe('daily XP falloff (owner decision 2026-10-06)', () => {
     const falloff = GROWTH_RULES.battleXpFalloff!;
 

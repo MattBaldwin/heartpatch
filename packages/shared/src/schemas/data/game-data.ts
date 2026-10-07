@@ -152,6 +152,9 @@ export const GameDataSchema = z
       if (r.gather && r.kind === 'crafted') {
         report(['resources', i, 'gather'], 'crafted things come from recipes, not nodes');
       }
+      if (r.battleEffect && r.kind !== 'crafted') {
+        report(['resources', i, 'battleEffect'], 'only crafted things can be used in battle');
+      }
       r.gather?.extras?.forEach((extra, j) => {
         checkRef(
           resources,
