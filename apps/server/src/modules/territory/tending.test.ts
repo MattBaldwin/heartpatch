@@ -140,18 +140,25 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
   ) {
     const all = await tilesOf(mapId);
     const seed = heartSeedOf(all.filter((t) => t.ownerUserId === who.id && t.homeSlot !== null))!;
-    const picked = distances.map((d) => {
-      const tile = all.find(
-        (t) =>
-          t.ownerUserId === null &&
-          t.homeSlot === null &&
-          t.terrain !== 'junipers-gap' &&
-          (!terrains || terrains.includes(t.terrain)) &&
-          (!withNode || t.nodeResource !== null) &&
-          hexDistance(t, seed) === d,
-      )!;
-      return tile;
-    });
+    const free = (t: (typeof all)[number], d: number) =>
+      t.ownerUserId === null &&
+      t.homeSlot === null &&
+      t.terrain !== 'junipers-gap' &&
+      (!terrains || terrains.includes(t.terrain)) &&
+      hexDistance(t, seed) === d;
+    const picked = [];
+    for (const d of distances) {
+      const tile = all.find((t) => free(t, d) && (!withNode || t.nodeResource !== null));
+      if (tile) {
+        picked.push(tile);
+        continue;
+      }
+      // Some random patches (about 0.6%) have no node tile at this distance:
+      // give a bare one a Timber node so the test doesn't hang on the seed.
+      const bare = all.find((t) => free(t, d))!;
+      await db.execute(`update tiles set node_resource = 'timber' where id = '${uuid(bare.id)}'`);
+      picked.push({ ...bare, nodeResource: 'timber' });
+    }
     for (const t of picked) await setOwner(t.id, who.id);
     return picked;
   }
