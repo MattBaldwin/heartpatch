@@ -788,6 +788,8 @@ const lobbyCoins = createCoinCounter({
 // guide is a card in the patch list (#135).
 const installGuide = import.meta.env.PROD ? startPwa(document.body) : null;
 const lobby = mountLobby(document.body, {
+  // A patch's map is on screen (its HUD is up): looking around goes back to it (#212).
+  patchOpen: () => hudMapId !== null,
   buttonRoot: trays.slot('top-left'),
   // A reload lands back on the last patch (#160), unless a tutorial run
   // going opens the Glade by itself (the same rule the tutorial uses).

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /** True while a screen holds automatic updates (dev hook, src/pwa/update-hold.ts). */
 const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
@@ -173,4 +174,53 @@ test('a new family signs up with a patch invite and lands in the join queue (#19
 
   await owner.context().close();
   await kid.context().close();
+});
+
+test('looking around the world has a big way back to the patch list (#212)', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const page = await newPlayer(browser, uniqueName('peek'));
+  const lobby = page.getByTestId('lobby');
+  const back = page.getByTestId('lobby-back');
+  await expect(back).toBeHidden();
+
+  await lobby.getByRole('button', { name: 'Look around the world' }).tap();
+  await expect(lobby).toBeHidden();
+  await expect(back).toBeVisible();
+  await expect(back).toHaveText('← Back to my patches');
+  const box = (await back.boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(48);
+  // Bottom centre, for a thumb, fully on screen.
+  const viewport = page.viewportSize()!;
+  expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThan(2);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+
+  await back.tap();
+  await expect(lobby.getByRole('heading', { name: 'Your patches' })).toBeVisible();
+  await expect(back).toBeHidden();
+
+  // Over an open patch there's no pill: the patch is what you're looking at.
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Peek Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await expect(back).toBeHidden();
+  await page.getByTestId('lobby-open').tap();
+  await lobby.getByRole('button', { name: 'Look around the world' }).tap();
+  await expect(lobby).toBeHidden();
+  await expect(back).toBeHidden();
+
+  // Home can't open (offline): the list says why over the still-open patch,
+  // and looking around from there goes back to the patch, still no pill.
+  await page.route('**/api/v1/maps/*/home', (route) =>
+    route.fulfill({ status: 503, json: { error: { code: 'INTERNAL', message: 'Oops!' } } }),
+  );
+  await (await trayButton(page, 'home-open')).tap();
+  await expect(lobby).toBeVisible();
+  await lobby.getByRole('button', { name: 'Look around the world' }).tap();
+  await expect(lobby).toBeHidden();
+  await expect(back).toBeHidden();
+  await page.context().close();
 });
