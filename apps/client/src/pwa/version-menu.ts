@@ -57,6 +57,8 @@ export function mountVersionMenu(deps: {
   const flash = (note: string) => {
     clearTimeout(copiedTimer);
     line.textContent = note;
+    // The label is the button's name, so VoiceOver reads the note only if it changes too.
+    line.setAttribute('aria-label', note);
     copiedTimer = setTimeout(() => {
       copiedTimer = undefined;
       render();
