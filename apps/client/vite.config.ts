@@ -22,6 +22,27 @@ function forbidServerData(): Plugin {
   };
 }
 
+/**
+ * Serves the admin console's page (#196) at `/admin`, as Caddy does in
+ * production, in dev and preview. Everything else keeps the app shell.
+ */
+function adminPage(): Plugin {
+  const rewrite = (req: { url?: string }, _res: unknown, next: () => void) => {
+    const match = /^\/admin\/?(\?.*)?$/.exec(req.url ?? '');
+    if (match) req.url = `/admin.html${match[1] ?? ''}`;
+    next();
+  };
+  return {
+    name: 'heartpatch:admin-page',
+    configureServer(server) {
+      server.middlewares.use(rewrite);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(rewrite);
+    },
+  };
+}
+
 export default defineConfig({
   // The version line in the profile menu (#198): src/pwa/build-info.ts.
   define: {
@@ -29,6 +50,7 @@ export default defineConfig({
   },
   plugins: [
     forbidServerData(),
+    adminPage(),
     pwaAssets(),
     // What's new (#220): changelog.json from changes/*.md.
     changelogAsset(),
@@ -54,6 +76,9 @@ export default defineConfig({
           'pwa/icon-*.png',
           'pwa/apple-touch-icon.png',
         ],
+        // The admin console (#196) is its own page: players' devices never
+        // download or cache it, and a change to it never prompts a game update.
+        globIgnores: ['assets/admin-*'],
         // Hashed names already change with their content.
         dontCacheBustURLsMatching: /^assets\//,
         // TUNE: the engine bundle is ~1 MB; fail the build well before a
@@ -83,6 +108,10 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: true,
+    rollupOptions: {
+      // The game, and the operator admin console (#196) as its own page.
+      input: { main: 'index.html', admin: 'admin.html' },
+    },
   },
   test: {
     include: ['src/**/*.test.ts', 'tooling/**/*.test.ts'],

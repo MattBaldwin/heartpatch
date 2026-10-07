@@ -40,11 +40,11 @@ heartpatch/
 │     │  ├─ modules/          auth, health, keepers, maps, tutorial, battles, spawns,
 │     │  │                    territory, gathering, inventory, buildings, care, raids,
 │     │  │                    hollow, wardrobe, chat, coins, boutique, lore,
-│     │  │                    milestones, jobs (squishy jobs; pg-boss is src/jobs/)
+│     │  │                    milestones, jobs (squishy jobs; pg-boss is src/jobs/), admin
 │     │  │   └─ <module>/     routes.ts, service.ts, repo.ts, schemas.ts, *.test.ts
 │     │  ├─ ws/               WebSocket hub, channels, message handlers
 │     │  ├─ jobs/             pg-boss: boss, event consumers, nightfall, limits
-│     │  ├─ ops/              operator scripts (reset-password, signup-code)
+│     │  ├─ ops/              operator scripts (reset-password, signup-code, grant-admin, enrol-totp)
 │     │  └─ lib/              filter, rng, time, errors, idempotency, zod
 │     └─ tests/
 ├─ packages/
@@ -143,6 +143,7 @@ Add anything else only with a one-line justification in the PR.
 | `tile_tending` (migration 0025) | land that misses you (owner decision 2026-10-06, design review Q2): when an outer tile's owner last tended it (a claim or Visit), and when, which night and from whom it last went wild (the per-night cap; `wild_at` counts as land changing hands for work and gathers). Fading is worked out on read | regrowth Fix PR |
 | `squishies.training_building_id`, `training_since` (migration 0024) | Training Grounds (owner decision 2026-10-06): the Training Grounds a squishy practices at (`ON DELETE SET NULL`) and when its current count of XP started (XP worked out on read). One job at a time is kept by the commands, as for guards | upgrades Fix PR |
 | `squishies.joined_level` (integer, nullable, migration 0028) | the level a squishy joined at, so the evolving meter counts a befriended one from there (owner decision 2026-10-07); set on every insert, backfilled from `squishy.captured` events, else the level at migration; null (the previous release's rows) reads as the level now | #205 |
+| `users.role`, `admin_totp`, `admin_sessions`, `admin_audit` (migration 0030) | the operator admin console: the admin role (set only by a host script), each admin's authenticator, console sessions apart from `sessions`, and the audit log of every admin action | #196 |
 | `quick_messages` | Phase 1 quick messages: a preset, emoji or sticker id per row, never typed text; each map keeps its latest `feedLimit` | #23 |
 
 `game_events` is the stream in §7. A rescue's Heartdust goes into `inventories` through `resource_ledger` (reason `rescue`); `hollow_rescues.heartdust` records what it paid.
@@ -296,8 +297,9 @@ Add anything else only with a one-line justification in the PR.
 
 - Argon2id with library defaults (or memory ≥ 19 MiB, iterations ≥ 2).
 - Recovery codes: 12 characters, shown once, stored hashed. **One active code per user**; resetting with it marks it used and shows a fresh one. The `recovery_codes` table keeps used codes for audit.
-- **Operator password reset:** a built server script for players with no map owner, or whose game maps have different owners, run on the host as `docker compose exec server node dist/ops/reset-password.js <username>` (the production image has no pnpm or dev tooling). Never exposed over HTTP. A reset (operator or map owner) also revokes the user's existing sessions and shows a new recovery code.
+- **Operator password reset:** a built server script for players with no map owner, or whose game maps have different owners, run on the host as `docker compose exec server node dist/ops/reset-password.js <username>` (the production image has no pnpm or dev tooling). Never exposed to players over HTTP; the admin console (#196, below) runs the same reset for signed-in admins. A reset (operator or map owner) also revokes the user's existing sessions and shows a new recovery code.
 - **Family signup codes (#195):** 12 characters, shown once, stored as SHA-256 in `signup_codes` (looked up by hash, since sign-up has no username to find the row by). A patch owner may have 3 live codes, the operator any number (`ops/signup-code.js`). Signing up spends a use in the account's own transaction. A patch invite typed at sign-up also files that patch's join request in the same transaction; the owner's approval waits until the new player has a Keeper (and the tutorial, where required).
+- **Operator admin console (#196, owner decisions 2026-10-07):** `/admin`, for accounts with `users.role = 'admin'`, which only the host script `ops/grant-admin.js` sets. Every admin sign-in needs a TOTP code from an authenticator app, set up only with `ops/enrol-totp.js`. Admin sessions are separate (`hp_admin`, path `/api/v1/admin`, `SameSite=Strict`), end after 30 idle minutes or 8 hours, and are re-checked against the role on every request; every admin route answers 403 without one. Every action is written to `admin_audit` before it runs. Secrets (temporary passwords, recovery codes, family codes) are shown once, never logged or audited. Admin sign-in and the console's player search take typed names; both are admins-only and audited, so players still can't look names up. No chat view in Phase 1.
 - **Account self-service (#197), all without email:** the device remembers the last 3 names that logged in on it (`localStorage`, never passwords). A logged-in player can make a new recovery code with their password (the old one stops working; sessions stay). A **grown-up helper** is picked from a list the server builds (`users.invited_by` and active patch-mates on multiplayer maps, only those 18 or older by `users.birth_year`), never typed, and must say yes; saying yes and each reset check the age again. Only an `active` link lets the helper see the name and reset the password, like an owner reset (sessions revoked, one-time password, new recovery code), at most 3 resets a day per helper, each recorded in `account_helper_resets`. No endpoint takes a typed username except log in, sign up and recover, so names can't be looked up.
 - All user-entered text (usernames, nicknames, outfit names, chat in Phase 2) goes through `lib/filter` on the server.
 - Helmet security headers; Content-Security-Policy restricting scripts to self.
@@ -372,6 +374,7 @@ Small and cheap on purpose: one server for a few families.
 - Structured pino logs to stdout; Docker log rotation configured.
 - `/api/v1/health` (liveness: process is up) and `/api/v1/ready` (readiness: DB reachable). Ongoing container health checks use **`/health` only**, so a brief database hiccup can't restart a healthy container. `/ready` is checked once per deploy (§12).
 - A small admin page for the map owner (Phase 1: members, join requests, password reset; later: chat review).
+- The operator admin console (`/admin`, #196, §9): every patch, member, join request, account and family code, the Hollow Man's recent nights per patch, and the audit log.
 
 ## 15. Audio
 
