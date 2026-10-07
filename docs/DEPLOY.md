@@ -222,7 +222,7 @@ What each setting means is explained in the file itself. In short:
 | `POSTGRES_PASSWORD` | Database password. Set once: Postgres stores it when the database is first created (see Troubleshooting to change it) |
 | `PUBLIC_ORIGIN` | `https://play.pumpkinpatchgames.com` |
 | `LOG_LEVEL` | `info` |
-| `HP_SIGNUP_CODE` | Needed to create an account (family-only signup). Change it if it leaks |
+| `HP_SIGNUP_CODE` | Bootstrap signup code, for one release after #195 (family codes and patch invites replace it). Change it if it leaks |
 | `HP_TUTORIAL_REQUIRED` | `true`: new accounts finish the tutorial first (owner decision 2026-10-04). Set `false` and restart only if the tutorial misbehaves |
 | `HEARTPATCH_TAG` | Leave empty: `deploy.sh` writes the running version here |
 
@@ -354,6 +354,19 @@ For a player with no map owner to reset them (tech spec §9):
 ```sh
 docker compose exec server node dist/ops/reset-password.js <username>
 ```
+
+### Family signup codes
+
+Each new family gets its own code (#195). Make one, see them all, or turn one off:
+
+```sh
+docker compose exec server node dist/ops/signup-code.js create "Smith family"   # 8 uses, 14 days
+docker compose exec server node dist/ops/signup-code.js create "Playtesters" --uses 20 --days 30
+docker compose exec server node dist/ops/signup-code.js list
+docker compose exec server node dist/ops/signup-code.js revoke <code-id>
+```
+
+The code is printed once (only its hash is stored). Patch owners can also make up to 3 codes from their patch's page, and a patch's invite code signs a new family up too. `HP_SIGNUP_CODE` still works for this release, as a fallback.
 
 ## 9. Playtesting
 
