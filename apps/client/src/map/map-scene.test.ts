@@ -73,6 +73,61 @@ describe('MapScene', () => {
     }
   });
 
+  it('draws fence segments with one instanced mesh per look and level, in budget', () => {
+    // Every home tile of a 4-player map fenced on all six edges, every look
+    // and level in turn: far more fence than a real map carries.
+    const looks = [
+      'hedge',
+      'moat',
+      'stone-wall',
+      'emberwood-palisade',
+      'glimmer-rail',
+      'lantern-fence',
+      'bramble-hedge',
+      'ice-wall',
+    ];
+    let n = 0;
+    const base = testView(4);
+    const view: MapView = {
+      ...base,
+      tiles: base.tiles.map((t) =>
+        t.ownerUserId === null
+          ? t
+          : {
+              ...t,
+              fences: [0, 1, 2, 3, 4, 5].map((edge) => {
+                n++;
+                return {
+                  id: `0190a8c4-0000-7000-8000-${String(n).padStart(12, '0')}`,
+                  edge,
+                  buildingId: looks[n % looks.length] ?? 'hedge',
+                  level: (n % 3) + 1,
+                  hp: 70,
+                  maxHp: 70,
+                };
+              }),
+            },
+      ),
+    };
+    const { scene, map } = build(view);
+    expect(n).toBeGreaterThan(24);
+    expect(map.stats.fences).toBe(n);
+    const fenceMeshes = scene.meshes.filter((m) => m.name.startsWith('fence-')) as Mesh[];
+    expect(fenceMeshes.length).toBeLessThanOrEqual(24);
+    expect(fenceMeshes.reduce((sum, m) => sum + m.thinInstanceCount, 0)).toBe(n);
+    // Fences have their own budget on top of the map's: a few hundred
+    // triangles a segment, so even this much fence costs under 50k.
+    const triangles = fenceMeshes.reduce(
+      (sum, m) => sum + (m.getTotalIndices() / 3) * m.thinInstanceCount,
+      0,
+    );
+    expect(triangles).toBeLessThan(50_000);
+    // Taking them all down clears every segment.
+    map.update(base);
+    expect(map.stats.fences).toBe(0);
+    expect(fenceMeshes.reduce((sum, m) => sum + m.thinInstanceCount, 0)).toBe(0);
+  });
+
   it('starts still under reduced motion and off on the low tier, before any frame', () => {
     expect(build(testView(1), { reducedMotion: true }).map.stats).toMatchObject({
       ambient: 'still',

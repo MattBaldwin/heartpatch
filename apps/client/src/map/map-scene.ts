@@ -27,6 +27,8 @@ import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
 import { MAP_BUILDING_SCALE, MAP_OUTER_FIRE_SCALE, SAFE_GLOW } from '../home/home-config.js';
 import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
+import { FenceField } from './fence-field.js';
+import { fenceLength, fencePlacements } from './fence-layout.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
@@ -90,6 +92,8 @@ export const CORNER = 0.2; // TUNE: corner rounding, fraction of the radius
 export const SEGMENTS = 3;
 /** Tint floats this far above the tile so it never z-fights. */
 const TINT_LIFT = 0.012;
+/** Fences stand near a tile's rim, where its rounded top has dropped a little. TUNE */
+const FENCE_LIFT = DOME * 0.2;
 /** Highest a tap can land, for the first guess when picking a tile. */
 const PICK_HEIGHT = 0.25;
 
@@ -109,6 +113,8 @@ export interface MapSceneStats {
   /** Buildings on home bases (#18), and the Hearthfires among them drawn lit. */
   readonly buildings: number;
   readonly litFires: number;
+  /** Fence segments on hex edges (#203). */
+  readonly fences: number;
   /** Tiles under a lit Hearthfire's soft glow (its safe radius, #18). */
   readonly safeTiles: number;
   /** Clothing ids each drawn Keeper wears (#43), by drawing order. */
@@ -278,6 +284,8 @@ export class MapScene {
   private readonly keepers: KeeperField;
   /** Fires and habitats on home bases (#18), at map scale. */
   private readonly buildings: BuildingField;
+  /** Fence segments along tile edges (#203). */
+  private readonly fences: FenceField;
   /** The soft glow over tiles a lit Hearthfire keeps safe (#18). */
   private readonly safeGlow: Mesh;
   /** The player's home node the tutorial points at (`homeNodeRect`), until `update`. */
@@ -360,6 +368,14 @@ export class MapScene {
     // No contact shadows: map props have none either, and Keepers are tiny here.
     this.keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: 'low', shadows: false });
     this.buildings = new BuildingField(scene);
+    const fenceMat = vinyl(scene, 'fence-mat', { color: '#ffffff' });
+    fenceMat.freeze();
+    this.fences = new FenceField(scene, {
+      length: fenceLength(HEX_SIZE),
+      material: fenceMat,
+      setInstances,
+      placeAt,
+    });
     this.safeGlow = meshFrom(
       scene,
       'safe-glow',
@@ -393,6 +409,7 @@ export class MapScene {
       keepers: this.keepers.handles.length,
       buildings: this.buildings.stats.buildings,
       litFires: this.buildings.stats.lit,
+      fences: this.fences.count,
       keepersWearing: this.keepers.handles.map((h) => h.params.worn),
       props: this.propCount,
       propKinds: this.propGroups.length,
@@ -529,6 +546,17 @@ export class MapScene {
         z: at.z,
         y: topOf(tile) + DOME * 0.5,
         scale: HEX_SIZE * (tile.homeSlot === null ? MAP_OUTER_FIRE_SCALE : MAP_BUILDING_SCALE),
+      })),
+    );
+    // Fence segments on the edges (#203): a border reads as one fence line.
+    this.fences.set(
+      fencePlacements(view, HEX_SIZE).map(({ tile, fence, x, z, yaw }) => ({
+        buildingId: fence.buildingId,
+        level: fence.level,
+        x,
+        y: topOf(tile) + FENCE_LIFT,
+        z,
+        yaw,
       })),
     );
     const safe: Matrix[] = [];
