@@ -188,8 +188,9 @@ async function relayoutOne(
       );
     }
     if (removed.length > 0) await repo.notePackedFires(owner.mapId, owner.userId, refund, at);
-    // Not published live: this runs at boot, before any client connects, and
-    // clients read the map afresh when they do.
+    // Not published live: it runs once at boot, alongside the server coming
+    // up. A client that connects mid-pass sees the change on its next read
+    // (home tiles are safe either way).
     for (const event of [...removed, ...movedEvents]) await repo.appendEvent(event);
     return { packed: removed.length, moved: movedEvents.length };
   });

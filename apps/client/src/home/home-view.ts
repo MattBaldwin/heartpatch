@@ -82,7 +82,7 @@ export function landFires(home: HomeResponse): MyBuilding[] {
 export interface FuelAllOffer {
   /** Fires out on my land. */
   readonly land: number;
-  /** Fires on my land with a night or less left. */
+  /** My fires with a night or less left (all of them, as the server's Fuel all counts; after the boot pass they're all on land). */
   readonly low: number;
   /** Emberwood (and any other fuel) to fill every fire. */
   readonly cost: Record<string, number>;

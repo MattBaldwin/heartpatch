@@ -111,7 +111,7 @@ export type HomeResponse = z.infer<typeof HomeResponseSchema>;
 
 /**
  * `POST /maps/:mapId/buildings`: build on a spot of one of my home tiles, or
- * (a building with `placement: 'owned'`, #202) of any tile I own.
+ * (a building with `placement: 'land'` or `'owned'`, #202) of a tile I own.
  */
 export const PlaceBuildingRequestSchema = z.strictObject({
   buildingId: ContentIdSchema,
