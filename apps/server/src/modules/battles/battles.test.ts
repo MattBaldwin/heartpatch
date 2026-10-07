@@ -658,6 +658,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       // A second Brave Brew in the same battle is refused, and nothing is spent.
       const again = await act(server, kid, after, { type: 'item', item: 'brave-brew' });
       expect(again.statusCode).toBe(409);
+      expect(errorOf(again).message).toMatch(/already had one/);
       expect(await countOf(kid, mapId, 'brave-brew')).toBe(1);
       expect((await ledgerFor(battle.id)).length).toBe(1);
     });
@@ -676,6 +677,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       await giveItems(server, kid, mapId, { timber: 3 });
       const timber = await act(server, kid, battle, { type: 'item', item: 'timber' });
       expect(timber.statusCode).toBe(409);
+      expect(errorOf(timber).message).toMatch(/not something you can use in a battle/);
       expect(await countOf(kid, mapId, 'timber')).toBe(3);
       expect(battleOf(await call(server, 'GET', `/battles/${battle.id}`, kid)).view.turn).toBe(0);
     });
@@ -690,7 +692,8 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       await giveItems(server, kid, mapId, { 'hearty-soup': 1 });
 
       const theirs = await act(server, other, battle, { type: 'item', item: 'hearty-soup' });
-      expect([403, 404]).toContain(theirs.statusCode);
+      expect(theirs.statusCode).toBe(404);
+      expect(errorOf(theirs).code).toBe('NOT_FOUND');
 
       expect((await act(server, kid, battle, { type: 'forfeit' })).statusCode).toBe(200);
       const over = await act(server, kid, battle, { type: 'item', item: 'hearty-soup' });

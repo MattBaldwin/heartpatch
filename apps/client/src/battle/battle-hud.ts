@@ -368,6 +368,20 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           }
           row.append(node);
         }
+        for (const { slot, name } of mode.bench) {
+          row.append(
+            button(
+              `Swap: ${name}`,
+              () => {
+                act({ type: 'swap', slot });
+              },
+              { soft: true, small: true, testId: 'battle-swap' },
+            ),
+          );
+        }
+        // Swap keeps its place on the first line, as before potions, so it
+        // stays in view on a short phone; with no bench (a lone Partner) the
+        // potions sit right after the Heart Charm (#214).
         if (mode.items) {
           const items = mode.items;
           row.append(
@@ -381,17 +395,6 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
           );
           // None in the bag: still there, dimmed, like the Heart Charm (#214).
           if (items.total === 0) row.lastElementChild?.classList.add('battle-button-empty');
-        }
-        for (const { slot, name } of mode.bench) {
-          row.append(
-            button(
-              `Swap: ${name}`,
-              () => {
-                act({ type: 'swap', slot });
-              },
-              { soft: true, small: true, testId: 'battle-swap' },
-            ),
-          );
         }
         // Forgiving (style guide §3): running away asks first.
         const run = button(

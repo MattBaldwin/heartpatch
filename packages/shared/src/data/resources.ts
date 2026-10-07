@@ -2,7 +2,8 @@ import type { Resource } from '../schemas/data/resources.js';
 
 /**
  * Resources from design doc §12, plus crafted items: the Heart Charm (§6),
- * the Jack-o'-Lantern Hearthfire (§15) and the battle potions (#214). `gather` is one gather on a node.
+ * the Jack-o'-Lantern Hearthfire (§15) and the battle potions (#214).
+ * `gather` is one gather on a node.
  */
 export const RESOURCES: Resource[] = [
   {

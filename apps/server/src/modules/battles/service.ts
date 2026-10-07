@@ -267,6 +267,8 @@ const MESSAGES = {
   badChoice: "That's not a move you can make right now. Try another!",
   unknownSpecies: "We don't know that squishy.",
   noCapture: "You can't use a Heart Charm here.",
+  notAPotion: "That's not something you can use in a battle.",
+  hadOne: 'You already had one of those this battle! Try another.',
 } as const;
 
 export function defaultBattleContent(): BattleContent {
@@ -836,12 +838,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           );
         } else if (request.action.type === 'item') {
           // A potion (#214) comes out of the bag in this transaction too, so
-          // a refused step (one already drunk, not a battle item) gives it
-          // back. None in the bag is CONFLICT ("You need 1 more …").
+          // a refused step gives it back. Refusals the engine would make are
+          // checked first, so they say why (not "You need 1 more …") and
+          // lock no inventory row. None in the bag is CONFLICT from the bag.
+          const { item } = request.action;
+          if (!content.items.has(item)) throw new AppError('CONFLICT', MESSAGES.notAPotion);
+          const used = row.state.sides[PLAYER_SIDE].itemsUsed.filter((id) => id === item).length;
+          if (used >= content.rules.items.usesEach) throw new AppError('CONFLICT', MESSAGES.hadOne);
           await consumeItems(
             tx,
             { mapId: row.mapId, userId: row.playerUserId },
-            { [request.action.item]: 1 },
+            { [item]: 1 },
             'battle-item',
             row.id,
           );

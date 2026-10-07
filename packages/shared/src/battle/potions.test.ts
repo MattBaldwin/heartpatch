@@ -119,7 +119,34 @@ describe('battle potions (#214)', () => {
     expect(next.sides.a.itemsUsed).toEqual([BREW]);
   });
 
-  it('Brave Brew raises attack 25% for the rest of the battle, swaps included', () => {
+  it('keeps a boost and a shield on the squishy that drank, through a swap out and back', () => {
+    const team = deepFreeze(
+      startBattle(
+        content,
+        battleSetup(
+          'potion-swap',
+          {
+            squishies: [
+              squishy('fixture-twirlysprout', { level: 20 }),
+              squishy('fixture-emberbun', { level: 20 }),
+            ],
+          },
+          { squishies: [squishy('fixture-pebblesnooze', { level: 20 })] },
+        ),
+      ),
+    );
+    // Rock-a-Bye lands no hit, so the shield stays up to be read.
+    const drank = turn(team, item(BREW), move('rock-a-bye'));
+    const out = turn(drank, { type: 'swap', slot: 1 }, move('rock-a-bye'));
+    expect(activeSquishy(out, 'a').boosts).toEqual({ attack: 0, defense: 0 });
+    const back = turn(out, { type: 'swap', slot: 0 }, move('rock-a-bye'));
+    expect(activeSquishy(back, 'a')).toMatchObject({
+      boosts: { attack: 25, defense: 0 },
+      shield: 75,
+    });
+  });
+
+  it('Brave Brew raises attack 25% for the rest of the battle', () => {
     const next = turn(pvp(), item(BREW), move('giggle-drizzle'));
     const me = activeSquishy(next, 'a');
     expect(me.boosts).toEqual({ attack: 25, defense: 0 });
@@ -183,6 +210,21 @@ describe('battle potions (#214)', () => {
     const hit = ofType(newEvents(state, next), 'hit')[0]!;
     expect(hit).toMatchObject({ side: 'a', shielded: true });
     expect(activeSquishy(next, 'a').shield).toBe(0);
+  });
+
+  it('a miss leaves the shield up for the next hit that lands', () => {
+    // Belly Flop lands 90% of the time: find seeds where it misses (fixed, so deterministic).
+    let misses = 0;
+    for (let i = 0; i < 60 && misses < 3; i++) {
+      const state = patchActive(pvp(`shield-miss-${String(i)}`), 'a', { shield: 75 });
+      const next = turn(state, move('dizzy-dance'), move('belly-flop'));
+      const events = newEvents(state, next);
+      if (!ofType(events, 'miss').some((e) => e.side === 'b')) continue;
+      misses += 1;
+      expect(ofType(events, 'hit')).toEqual([]);
+      expect(activeSquishy(next, 'a').shield).toBe(75);
+    }
+    expect(misses).toBeGreaterThan(0);
   });
 
   it('a move that lands no hit leaves the shield up', () => {
