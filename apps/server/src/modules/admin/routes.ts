@@ -6,6 +6,7 @@ import {
   AdminInviteResponseSchema,
   AdminListQuerySchema,
   AdminLoginRequestSchema,
+  AdminLogoutEverywhereResponseSchema,
   AdminLookupRequestSchema,
   AdminLookupResponseSchema,
   AdminMeResponseSchema,
@@ -260,7 +261,7 @@ export const adminRoutes =
       {
         schema: {
           params: AdminPlayerParamsSchema,
-          response: { 200: z.object({ ended: z.number().int().nonnegative() }) },
+          response: { 200: AdminLogoutEverywhereResponseSchema },
         },
         preHandler: gate('act'),
       },

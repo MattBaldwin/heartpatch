@@ -8,6 +8,9 @@ import { LocalDateSchema } from './time.js';
 // a role a host script grants (`ops/grant-admin.ts`), never an HTTP route, and
 // every sign-in needs a code from the admin's authenticator app (TOTP).
 
+/** An admin session ends after this long without a request (#196). */
+export const ADMIN_IDLE_MINUTES = 30; // TUNE: issue #196
+
 /** Rows per page on every admin list. */
 export const ADMIN_PAGE_SIZE = 25;
 
@@ -178,6 +181,11 @@ export const AdminResetPasswordResponseSchema = z.object({
   recoveryCode: z.string(),
 });
 export type AdminResetPasswordResponse = z.infer<typeof AdminResetPasswordResponseSchema>;
+
+/** `POST /api/v1/admin/players/:userId/logout-everywhere`: how many sessions ended. */
+export const AdminLogoutEverywhereResponseSchema = z.object({
+  ended: z.number().int().nonnegative(),
+});
 
 /** `GET /api/v1/admin/signup-codes`: every maker's codes. */
 export const AdminSignupCodesResponseSchema = z.object({

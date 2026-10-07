@@ -131,6 +131,8 @@ Maps (players say "patches") live in `src/modules/maps` (issue #4; design doc §
 | `POST /api/v1/admin/signup-codes/:codeId/extend` \| `revoke` | `{ days }` (extend) → 204 |
 | `GET /api/v1/admin/audit?q=&page=` | → `{ entries, … }`, newest first |
 
+**The page** is `apps/client/admin.html` (`src/admin/`), its own Vite entry, served at `/admin` (Caddy rewrites it; Vite does in dev and preview). Plain DOM, no canvas; it shows sign-in whenever the server answers 403.
+
 **Host scripts:** `ops/grant-admin.ts <username> [--revoke]` and `ops/enrol-totp.ts <username> [--confirm <code>]` (locally `pnpm --filter @heartpatch/server ops:grant-admin …` / `ops:enrol-totp …`). Setup steps are in `docs/DEPLOY.md`, "Admin console".
 
 ## Battles
