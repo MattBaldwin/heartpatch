@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { TERRITORY_RULES } from '../../src/data/territory.js';
 import {
+  CHALLENGES_GENTLE,
   ENGAGED,
   FADING_GENTLE,
+  FENCES_GENTLE,
   FADING_ON,
   MAP_FILL_CONFIG,
   MAP_FILL_RULES,
@@ -72,6 +74,30 @@ describe('runMapFill', () => {
     expect(run.days[2]!.tiles[0]).toBeGreaterThan(run.days[1]!.tiles[0]!);
   });
 
+  it('with fences, challenges still go on to the last days: the map never freezes (#203)', () => {
+    for (const id of ['engaged-2', 'four-one-stops']) {
+      const fenced = summariseMapFill(runMapFill(scenario(id), FENCES_GENTLE, MAP_FILL_CONFIG));
+      expect(fenced.captured).toBeGreaterThan(0);
+      expect(fenced.fencedAtEnd).toBeGreaterThan(0);
+      expect(fenced.lastCapture!).toBeGreaterThanOrEqual(MAP_FILL_CONFIG.days - 7);
+    }
+    // Engaged kids meet fences, break some, and take land more slowly.
+    const plain = summariseMapFill(
+      runMapFill(scenario('engaged-2'), CHALLENGES_GENTLE, MAP_FILL_CONFIG),
+    );
+    const fenced = summariseMapFill(
+      runMapFill(scenario('engaged-2'), FENCES_GENTLE, MAP_FILL_CONFIG),
+    );
+    expect(fenced.fenceBreaks).toBeGreaterThan(0);
+    expect(fenced.captured).toBeLessThan(plain.captured);
+    expect(plain.fenceBreaks).toBe(0);
+  });
+
+  it('keeps Gentle’s cap: a kid loses at most one tile a day to challenges', () => {
+    const run = runMapFill(scenario('engaged-2'), FENCES_GENTLE, MAP_FILL_CONFIG);
+    for (const d of run.days) expect(d.captured.reduce((t, n) => t + n, 0)).toBeLessThanOrEqual(2);
+  });
+
   it('renders every table', () => {
     const runs = MAP_FILL_RULES.map((rules) =>
       runMapFill(
@@ -92,5 +118,6 @@ describe('runMapFill', () => {
     expect(report).toMatch(/Map-full day/);
     expect(report).toMatch(/Tiles a kid keeps after stopping/);
     expect(report).toMatch(/\| 7 days \|/);
+    expect(report).toMatch(/Challenges and fences/);
   });
 });
