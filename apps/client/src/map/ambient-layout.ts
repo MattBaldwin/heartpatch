@@ -109,11 +109,17 @@ const SALT: Readonly<Record<MoteKind, number>> = {
  * gets `perTile` on average (hash-seeded, so the same everywhere), up to
  * `max`. Home tiles get none.
  */
-export function motesFor(kind: MoteKind, tiles: readonly PublicTile[], size: number): Mote[] {
-  const { perTile, max } = MOTES[kind];
+export function motesFor(
+  kind: MoteKind,
+  tiles: readonly PublicTile[],
+  size: number,
+  /** A season's own amount and land (Thanksgiving's leaves). */
+  season?: { perTile: number; max: number; terrains: readonly string[] },
+): Mote[] {
+  const { perTile, max } = season ?? MOTES[kind];
   const style = STYLE[kind];
   const salt = SALT[kind];
-  const terrains = TERRAINS_FOR[kind];
+  const terrains = season?.terrains ?? TERRAINS_FOR[kind];
   const lerp = ([lo, hi]: readonly [number, number], t: number) => lo + (hi - lo) * t;
   const motes: Mote[] = [];
   for (const tile of tiles) {

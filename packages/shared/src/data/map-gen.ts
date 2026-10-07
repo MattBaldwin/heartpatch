@@ -14,7 +14,11 @@ export const MAP_GEN: MapGenSettings = {
   gapRadius: 1, // TUNE: 7 Gap tiles
   gapTerrain: 'junipers-gap',
   homeTerrain: 'meadow',
-  homeRingNodes: ['timber', 'stone', 'emberwood', 'treats'], // decision B: treats = farm plot
+  // Decision B: treats = farm plot. Seasonal nodes (owner decision 2026-10-06,
+  // design-review Q6) only show and gather in their season, so every kid can
+  // carve a Jack-o'-Lantern without map luck. Maps made before they were added
+  // get them when their homes are next read (server `seedHomeRingNodes`).
+  homeRingNodes: ['timber', 'stone', 'emberwood', 'treats', 'pumpkins', 'magic-fallen-leaves'],
   patchSize: 6, // TUNE:
   guardianStrength: { min: 1, max: 4, stepsPerLevel: 2, gap: 5 }, // TUNE:
 };

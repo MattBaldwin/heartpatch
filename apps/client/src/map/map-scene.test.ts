@@ -7,7 +7,13 @@ import { hexToWorld, type MapView } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HEX_SIZE, type PropKind } from './map-config.js';
 import { findHomeBases } from './map-layout.js';
-import { buildProp, MapScene, tileScreenRectOf, type MapSceneOptions } from './map-scene.js';
+import {
+  buildProp,
+  homeNodeShown,
+  MapScene,
+  tileScreenRectOf,
+  type MapSceneOptions,
+} from './map-scene.js';
 import { testView, userId } from './test-view.js';
 
 describe('MapScene', () => {
@@ -308,5 +314,16 @@ describe('MapScene', () => {
     camera.setTarget(new Vector3(0, 40, 80));
     scene.render();
     expect(tileScreenRectOf(scene, middle)).toBeNull();
+  });
+});
+
+describe('homeNodeShown (owner decision 2026-10-06)', () => {
+  it('shows year-round nodes always, and seasonal ones only in their season', () => {
+    const october = new Set(['halloween']);
+    expect(homeNodeShown('timber', new Set())).toBe(true);
+    expect(homeNodeShown('pumpkins', october)).toBe(true);
+    expect(homeNodeShown('pumpkins', new Set(['thanksgiving']))).toBe(false);
+    expect(homeNodeShown('magic-fallen-leaves', october)).toBe(false);
+    expect(homeNodeShown('magic-fallen-leaves', new Set(['thanksgiving']))).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AmbientJudge, ambientMode, moteShare, motesFor } from './ambient-layout.js';
-import { AMBIENT, HEX_SIZE, MOTE_KINDS, MOTES } from './map-config.js';
+import { AMBIENT, HEX_SIZE, MOTE_KINDS, MOTES, THANKSGIVING } from './map-config.js';
 import { testView } from './test-view.js';
 
 const { tiles } = testView();
@@ -18,6 +18,15 @@ describe('motesFor', () => {
       expect(motes.length, kind).toBeLessThanOrEqual(MOTES[kind].max);
       expect(motes.length, kind).toBeGreaterThan(0);
     }
+  });
+
+  it("takes a season's own amount and land (Thanksgiving's leaves)", () => {
+    const autumn = motesFor('leaves', tiles, HEX_SIZE, THANKSGIVING.leaves);
+    expect(autumn.length).toBeGreaterThan(motesFor('leaves', tiles, HEX_SIZE).length);
+    expect(autumn.length).toBeLessThanOrEqual(THANKSGIVING.leaves.max);
+    const meadows = tiles.filter((t) => t.terrain === 'meadow' && t.homeSlot === null);
+    expect(motesFor('leaves', meadows, HEX_SIZE)).toEqual([]);
+    expect(motesFor('leaves', meadows, HEX_SIZE, THANKSGIVING.leaves).length).toBeGreaterThan(0);
   });
 
   it('keeps motes over their own terrain, never over home tiles', () => {
