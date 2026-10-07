@@ -1,10 +1,12 @@
 import { GAME_DATA } from '../data/index.js';
 import { HOME_BASE_RULES } from '../data/home-base.js';
+import { JOB_RULES } from '../data/jobs.js';
 import { RECIPE_BOOK } from '../data/recipe-book.js';
 import { shortfall, type ItemCounts } from '../gathering/index.js';
 import { buildCost } from '../home/costs.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import { isBuildable, type HomeBaseRules } from '../schemas/data/home-base.js';
+import { terrainNodeResources } from '../schemas/data/terrains.js';
 
 // The recipe book (owner decision 2026-10-05, design doc §12–13): one page per
 // craft recipe and per home-buildable building. A page opens the first time
@@ -110,6 +112,11 @@ export function canMakeNow(page: Pick<RecipeBookPage, 'ingredients'>, bag: ItemC
 export interface WhereToFind {
   /** Terrains whose resource nodes give it, in data order. */
   terrains: string[];
+  /**
+   * Terrains whose land gives it to a squishy gatherer, no node needed
+   * (`JOB_RULES.terrainYields`, #238's nesting economy), in that order.
+   */
+  gatheredOn: string[];
   /** Every home ring has a node of it (`mapGen.homeRingNodes`). */
   homeRing: boolean;
   /** Resources whose gathers can bring it along as a bonus (`gather.extras`). */
@@ -124,9 +131,13 @@ export interface WhereToFind {
 export function whereToFind(
   resourceId: string,
   data: Pick<GameData, 'resources' | 'terrains' | 'mapGen' | 'recipes'> = GAME_DATA,
+  jobs: Pick<typeof JOB_RULES, 'terrainYields'> = JOB_RULES,
 ): WhereToFind {
   return {
-    terrains: data.terrains.filter((t) => t.nodeResources.includes(resourceId)).map((t) => t.id),
+    terrains: data.terrains
+      .filter((t) => terrainNodeResources(t).includes(resourceId))
+      .map((t) => t.id),
+    gatheredOn: jobs.terrainYields.filter((y) => y.resource === resourceId).map((y) => y.terrain),
     homeRing: data.mapGen.homeRingNodes.includes(resourceId),
     bonusFrom: data.resources
       .filter((r) => r.gather?.extras?.some((e) => e.resource === resourceId) ?? false)

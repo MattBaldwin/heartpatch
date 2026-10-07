@@ -257,7 +257,8 @@ function queries(db: Executor): BattlesRepo {
         element: squishies.element,
         feeling: squishies.feeling,
       };
-      // Only the battle start reads the team (it's stored in the battle's setup).
+      // Read when a battle starts (it's stored in the battle's setup), and when
+      // a craft starts (#238: a Frost squishy on the team freezes Water faster).
       const mine = and(
         eq(squishies.mapId, mapId),
         eq(squishies.ownerUserId, userId),
