@@ -265,9 +265,7 @@ describe('MapState', () => {
     state.apply(event('fence.built', { ...by, fence: fence(0) }, 3));
     expect(tileOf().fences?.map((f) => f.edge)).toEqual([0, 3]);
     // A challenger bumped it: it keeps the energy it lost.
-    state.apply(
-      event('fence.damaged', { ...by, attackerUserId: userId(2), fence: fence(0, 42) }, 4),
-    );
+    state.apply(event('fence.damaged', { ...by, fence: fence(0, 42) }, 4));
     expect(tileOf().fences?.[0]).toMatchObject({ edge: 0, hp: 42 });
     state.apply(event('fence.repaired', { ...by, fence: fence(0) }, 5));
     expect(tileOf().fences?.[0]?.hp).toBe(70);
