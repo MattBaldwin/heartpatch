@@ -1,5 +1,5 @@
 import type { HelperCandidate, HelperReason, MyHelper, PublicUser } from '@heartpatch/shared';
-import { and, asc, count, eq, gte, inArray, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gte, inArray, lte, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor } from '../../db/client.js';
 import { accountHelperResets, accountHelpers, mapMembers, maps, users } from '../../db/schema.js';
@@ -46,9 +46,12 @@ export interface AccountHelpersRepo {
   }) => Promise<boolean>;
   /**
    * Who the player may ask: whoever brought them in (`users.invited_by`) and
-   * everyone they share a multiplayer patch with, minus live links.
+   * everyone they share a multiplayer patch with, born in `bornBy` or
+   * earlier (grown-ups only), minus live links.
    */
-  candidates: (userId: string) => Promise<HelperCandidate[]>;
+  candidates: (userId: string, bornBy: number) => Promise<HelperCandidate[]>;
+  /** The account's birth year, or null if there's no such account. */
+  birthYear: (userId: string) => Promise<number | null>;
   countResetsSince: (helperUserId: string, since: Date) => Promise<number>;
   insertReset: (reset: { userId: string; helperUserId: string; now: Date }) => Promise<void>;
   findUser: (userId: string) => Promise<PublicUser | null>;
@@ -176,7 +179,7 @@ export function createAccountHelpersRepo(db: Executor): AccountHelpersRepo {
       return rows.length > 0;
     },
 
-    candidates: async (userId) => {
+    candidates: async (userId, bornBy) => {
       const me = alias(mapMembers, 'me');
       const them = alias(mapMembers, 'them');
       const inviter = alias(users, 'inviter');
@@ -184,7 +187,7 @@ export function createAccountHelpersRepo(db: Executor): AccountHelpersRepo {
         db
           .select({ id: inviter.id, username: inviter.username })
           .from(users)
-          .innerJoin(inviter, eq(inviter.id, users.invitedBy))
+          .innerJoin(inviter, and(eq(inviter.id, users.invitedBy), lte(inviter.birthYear, bornBy)))
           .where(eq(users.id, userId)),
         db
           .select({
@@ -199,7 +202,7 @@ export function createAccountHelpersRepo(db: Executor): AccountHelpersRepo {
             them,
             and(eq(them.mapId, me.mapId), eq(them.status, 'active'), ne(them.userId, userId)),
           )
-          .innerJoin(users, eq(users.id, them.userId))
+          .innerJoin(users, and(eq(users.id, them.userId), lte(users.birthYear, bornBy)))
           .where(and(eq(me.userId, userId), eq(me.status, 'active')))
           .orderBy(asc(maps.name), asc(maps.id)),
         db
@@ -247,6 +250,14 @@ export function createAccountHelpersRepo(db: Executor): AccountHelpersRepo {
 
     insertReset: async ({ userId, helperUserId, now }) => {
       await db.insert(accountHelperResets).values({ userId, helperUserId, createdAt: now });
+    },
+
+    birthYear: async (userId) => {
+      const [row] = await db
+        .select({ birthYear: users.birthYear })
+        .from(users)
+        .where(eq(users.id, userId));
+      return row?.birthYear ?? null;
     },
 
     findUser: async (userId) => {

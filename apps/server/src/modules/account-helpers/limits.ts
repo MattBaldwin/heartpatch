@@ -4,6 +4,8 @@ import type { RateLimitTable } from '../../lib/rate-limit.js';
 import { MINUTE_MS } from '../../lib/time.js';
 
 export const HELPER_RULES = {
+  /** A helper is a grown-up: this old or more by `users.birth_year` (this year minus it). */
+  minHelperAge: 18, // owner decision 2026-10-07
   /** Helpers per player, counting asks not answered yet. */
   helpersPerPlayer: 2, // TUNE: owner decision 2026-10-07
   /** Players one helper may help, counting asks not answered yet. */
@@ -28,3 +30,8 @@ export const HELPER_RATE_LIMITS = {
 } as const satisfies RateLimitTable;
 
 export type HelperAction = keyof typeof HELPER_RATE_LIMITS;
+
+/** The latest birth year a helper may have, in `year` (the server's UTC year). */
+export function latestHelperBirthYear(year: number): number {
+  return year - HELPER_RULES.minHelperAge;
+}

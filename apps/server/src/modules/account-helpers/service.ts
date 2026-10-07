@@ -10,7 +10,7 @@ import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { newResetCredentials } from '../auth/secrets.js';
-import { HELPER_RULES } from './limits.js';
+import { HELPER_RULES, latestHelperBirthYear } from './limits.js';
 import { createAccountHelpersRepo, type AccountHelpersRepo } from './repo.js';
 
 /**
@@ -54,6 +54,7 @@ const MESSAGES = {
   notYourHelper: "They aren't your helper any more.",
   notHelping: "You aren't helping them any more.",
   notLinked: 'You can only help players who picked you as their helper.',
+  grownUpsOnly: 'Helpers are grown-ups. Ask a grown-up in your patch to join!',
   resetsUsedUp: `That's ${String(HELPER_RULES.resetsPerDay)} resets today. Try again tomorrow!`,
 } as const;
 
@@ -62,6 +63,14 @@ export function createAccountHelpersService(
 ): AccountHelpersService {
   const store = createAccountHelpersRepo(options.db);
   const now = options.clock ?? (() => new Date());
+
+  /** Born in this year or earlier: old enough to help (owner decision 2026-10-07). */
+  const bornBy = () => latestHelperBirthYear(now().getUTCFullYear());
+  /** Throws unless the account is a grown-up. */
+  const assertGrownUp = async (repo: AccountHelpersRepo, userId: string) => {
+    const year = await repo.birthYear(userId);
+    if (year === null || year > bornBy()) throw new AppError('FORBIDDEN', MESSAGES.grownUpsOnly);
+  };
 
   const view = async (repo: AccountHelpersRepo, userId: string) => {
     const links = await repo.liveLinks(userId);
@@ -90,14 +99,14 @@ export function createAccountHelpersService(
   return {
     mine: (user) => view(store, user.id),
 
-    candidates: async (user) => ({ candidates: await store.candidates(user.id) }),
+    candidates: async (user) => ({ candidates: await store.candidates(user.id, bornBy()) }),
 
     ask: async (user, helperId) => {
       try {
         await store.transaction(async (repo) => {
           // Both accounts, so neither side's cap can be passed by two asks at once.
           await repo.lockUsers([user.id, helperId]);
-          const candidates = await repo.candidates(user.id);
+          const candidates = await repo.candidates(user.id, bornBy());
           if (!candidates.some((c) => c.user.id === helperId)) {
             // Already asked shows up as "not on the list" too; say which.
             if (await repo.findLive(user.id, helperId)) {
@@ -123,8 +132,12 @@ export function createAccountHelpersService(
     removeHelper: (user, helperId) =>
       move(user.id, helperId, ['pending', 'active'], 'removed', user.id, MESSAGES.notYourHelper),
 
-    accept: (helper, playerId) =>
-      move(playerId, helper.id, ['pending'], 'active', helper.id, MESSAGES.askGone),
+    accept: async (helper, playerId) => {
+      // Asks are only offered to grown-ups, but birth years can't be trusted
+      // to stay put, so saying yes checks again.
+      await assertGrownUp(store, helper.id);
+      return move(playerId, helper.id, ['pending'], 'active', helper.id, MESSAGES.askGone);
+    },
 
     decline: (helper, playerId) =>
       move(playerId, helper.id, ['pending'], 'declined', helper.id, MESSAGES.askGone),
@@ -145,6 +158,8 @@ export function createAccountHelpersService(
         if (!(await repo.lockActive(playerId, helper.id))) {
           throw new AppError('FORBIDDEN', MESSAGES.notLinked);
         }
+        // Only a grown-up resets, checked again here (owner decision 2026-10-07).
+        await assertGrownUp(repo, helper.id);
         const since = new Date(at.getTime() - HELPER_RULES.resetWindowMs);
         if ((await repo.countResetsSince(helper.id, since)) >= HELPER_RULES.resetsPerDay) {
           throw new AppError('RATE_LIMITED', MESSAGES.resetsUsedUp);

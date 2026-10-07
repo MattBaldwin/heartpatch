@@ -9,7 +9,8 @@ test('a grown-up helper helps a kid back in', async ({ browser }, testInfo) => {
   const grownName = `mom_${suffix}`;
   const kidName = `pip_${suffix}`;
 
-  const grown = await newPlayer(browser, grownName);
+  // Helpers are grown-ups (18+, owner decision 2026-10-07).
+  const grown = await newPlayer(browser, grownName, undefined, { birthYear: '1985' });
   const grownLobby = grown.getByTestId('lobby');
   await grownLobby.getByRole('button', { name: 'Make a patch' }).tap();
   await grownLobby.getByLabel('Patch name').fill('Cozy Corner');
@@ -17,7 +18,7 @@ test('a grown-up helper helps a kid back in', async ({ browser }, testInfo) => {
   const code = (await grownLobby.getByTestId('lobby-invite-code').textContent()) ?? '';
 
   // The kid signs up with the invite and asks the grown-up behind it.
-  const kid = await newPlayer(browser, kidName, code, 'ask');
+  const kid = await newPlayer(browser, kidName, code, { helper: 'ask' });
   const kidLobby = kid.getByTestId('lobby');
   await kidLobby.getByTestId('lobby-settings').tap();
   const myHelpers = kidLobby.getByTestId('account-helpers');

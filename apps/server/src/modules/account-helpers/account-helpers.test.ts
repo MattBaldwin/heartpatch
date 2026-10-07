@@ -47,6 +47,8 @@ const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PASSWORD = 'squishy-secret';
 const RECOVERY = 'ABCDEFGHJKMN';
+const GROWN_UP = 1985;
+const KID = 2014;
 
 interface Player {
   id: string;
@@ -81,14 +83,15 @@ describe.skipIf(!url)('grown-up helpers (needs DATABASE_URL)', () => {
   });
 
   /** A logged-in player with a known password and recovery code. */
-  async function player(options: { invitedBy?: string } = {}): Promise<Player> {
+  /** Grown-ups by default; helpers must be 18+ (owner decision 2026-10-07). */
+  async function player(options: { invitedBy?: string; birthYear?: number } = {}): Promise<Player> {
     const username = `helpkid_${String((counter += 1))}`;
     const [user] = await db
       .insert(users)
       .values({
         username,
         passwordHash: `plain:${PASSWORD}`,
-        birthYear: 2014,
+        birthYear: options.birthYear ?? GROWN_UP,
         invitedBy: options.invitedBy ?? null,
       })
       .returning({ id: users.id });
@@ -219,6 +222,21 @@ describe.skipIf(!url)('grown-up helpers (needs DATABASE_URL)', () => {
       expect(await candidates(kid)).toEqual([]);
     });
 
+    it(`offers only grown-ups (${String(HELPER_RULES.minHelperAge)}+ by birth year)`, async () => {
+      const year = clock.getUTCFullYear();
+      const kidInviter = await player({ birthYear: KID });
+      const kid = await player({ invitedBy: kidInviter.id, birthYear: KID });
+      const justEighteen = await player({ birthYear: year - 18 });
+      const seventeen = await player({ birthYear: year - 17 });
+      const otherKid = await player({ birthYear: KID });
+      await patch('Pumpkin Hill', [justEighteen, kid, seventeen, otherKid]);
+
+      expect((await candidates(kid)).map((c) => c.user.id)).toEqual([justEighteen.id]);
+      // Asking a kid anyway (by id) is refused like anyone off the list.
+      expect((await ask(kid, otherKid)).statusCode).toBe(404);
+      expect((await ask(kid, kidInviter)).statusCode).toBe(404);
+    });
+
     it('needs a login', async () => {
       expect((await call('GET', '/account/helpers/candidates', null)).statusCode).toBe(401);
       expect((await call('GET', '/account/helpers', null)).statusCode).toBe(401);
@@ -308,6 +326,18 @@ describe.skipIf(!url)('grown-up helpers (needs DATABASE_URL)', () => {
       expect((await mine(kid)).helpers).toHaveLength(HELPER_RULES.helpersPerPlayer);
     });
 
+    it("a kid can't say yes, even to an ask that got through", async () => {
+      const kidHelper = await player({ birthYear: KID });
+      const kid = await player({ birthYear: KID });
+      await db.insert(accountHelpers).values({ userId: kid.id, helperUserId: kidHelper.id });
+      const res = await answer(kidHelper, kid, 'accept');
+      expect(res.statusCode).toBe(403);
+      expect(errorOf(res).message).toBe(
+        'Helpers are grown-ups. Ask a grown-up in your patch to join!',
+      );
+      expect((await mine(kid)).helpers[0]!.status).toBe('pending');
+    });
+
     it('a "no" just makes the ask go away, and can be asked again', async () => {
       const grownup = await player();
       const kid = await player({ invitedBy: grownup.id });
@@ -358,6 +388,17 @@ describe.skipIf(!url)('grown-up helpers (needs DATABASE_URL)', () => {
       const kid = await player();
       await patch('Pumpkin Hill', [owner, kid]);
       const res = await reset(owner, kid);
+      expect(res.statusCode).toBe(403);
+      expect(await loggedIn(kid.token)).toBe(true);
+    });
+
+    it('re-checks the helper is a grown-up at reset time', async () => {
+      const kidHelper = await player({ birthYear: KID });
+      const kid = await player({ birthYear: KID });
+      await db
+        .insert(accountHelpers)
+        .values({ userId: kid.id, helperUserId: kidHelper.id, status: 'active' });
+      const res = await reset(kidHelper, kid);
       expect(res.statusCode).toBe(403);
       expect(await loggedIn(kid.token)).toBe(true);
     });

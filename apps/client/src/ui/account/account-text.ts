@@ -35,7 +35,7 @@ export const ACCOUNT_TEXT = {
 
   addTitle: 'Add a helper',
   addSubtitle: "Pick a grown-up you play with. They'll be asked first.",
-  nobody: 'Join a patch first, then you can pick a helper from your patch-mates!',
+  nobody: 'Helpers are grown-ups. Ask a grown-up in your patch to join!',
 
   theirName: 'Their name is:',
   anyCase: 'Big or small letters both work.',

@@ -24,7 +24,7 @@ export async function newPlayer(
   browser: Browser,
   name: string,
   code?: string,
-  helper: 'later' | 'ask' = 'later',
+  options: SignUpOptions = {},
 ): Promise<Page> {
   // The project's device settings (viewport, touch), so tap() works like on an iPhone.
   const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, baseURL } =
@@ -39,7 +39,7 @@ export async function newPlayer(
   });
   const page = await context.newPage();
   await slowCpu(page);
-  await signUp(page, name, code, helper);
+  await signUp(page, name, code, options);
   await pickKeeper(page);
   // Roomy: under a full e2e run the lobby's first fetches can take a while.
   await expect(
@@ -75,17 +75,26 @@ export async function savedCode(overlay: Locator, next = 'Next'): Promise<void> 
   await done.tap();
 }
 
+export interface SignUpOptions {
+  /** The year picked at sign up; 2014 (a kid) unless given. */
+  birthYear?: string;
+  /**
+   * The helper step (#197) shows only when a grown-up (18+) brought the
+   * player in, e.g. with their patch invite: what to tap there.
+   */
+  helper?: 'later' | 'ask';
+}
+
 /**
  * Signs up through the sign-in overlay with a code and taps past the
- * recovery code. A patch invite has a grown-up behind it (the owner), so the
- * helper step follows (#197): `helper` says what to tap there. The Keeper
- * picker (#42) comes next.
+ * recovery code (and the helper step, when `options.helper` says it comes).
+ * The Keeper picker (#42) comes next.
  */
 export async function signUp(
   page: Page,
   name: string,
   code = signupCode,
-  helper: 'later' | 'ask' = 'later',
+  options: SignUpOptions = {},
 ): Promise<void> {
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');
@@ -93,10 +102,11 @@ export async function signUp(
   await overlay.getByLabel('Family or invite code').fill(code);
   await overlay.getByLabel('Pick a name').fill(name);
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
-  await overlay.getByLabel('Year you were born').selectOption('2014');
+  await overlay.getByLabel('Year you were born').selectOption(options.birthYear ?? '2014');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await savedCode(overlay);
-  if (code === signupCode) return;
+  const { helper } = options;
+  if (!helper) return;
   await expect(
     overlay.getByRole('heading', { name: 'Do you have a grown-up helper?' }),
   ).toBeVisible();
