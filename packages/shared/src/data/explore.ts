@@ -105,6 +105,7 @@ export const EXPLORE_RULES: ExploreRules = {
   },
   xpPerSquishy: 6, // TUNE: held to the sim:progression gate (#193-style)
   // TUNE: owner decision 2026-10-07: yield, not speed (a speed bonus gave +0 %
-  // because of the 4-cycle cap). Sized with `pnpm sim:economy`.
+  // because of the 4-cycle cap). +1 a cycle, sized with `pnpm sim:economy`;
+  // revisit after the #28 playtest.
   homestead: { yieldPercent: 100, yieldPlus: 1 },
 };
