@@ -27,4 +27,16 @@ export const RECIPES: Recipe[] = [
     craftSeconds: 5 * 60, // TUNE:
     season: 'halloween',
   },
+  {
+    // Thanksgiving's use for Magic Fallen Leaves (owner decision 2026-10-06):
+    // cheaper Heart Charms while the season's squishy is out.
+    id: 'leafy-heart-charms',
+    name: 'Leafy Heart Charms',
+    description:
+      'Make two Heart Charms wrapped in crunchy golden leaves. Squishies love the crinkle!',
+    inputs: { 'magic-fallen-leaves': 4, treats: 1 }, // TUNE:
+    output: { resource: 'heart-charm', quantity: 2 }, // TUNE:
+    craftSeconds: 60, // TUNE: same as a plain Heart Charm
+    season: 'thanksgiving',
+  },
 ];

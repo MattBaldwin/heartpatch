@@ -293,8 +293,10 @@ function checkLayout(
     if (!seen.has(key)) report([...at, 'tiles'], `missing tile (${key})`);
   }
   // Every home ring has these, like on a real map (design doc §11, decision B).
+  // Seasonal ones are left out: the Tutorial Glade has no seasons.
+  const seasonal = new Set(gameData.resources.filter((r) => r.season).map((r) => r.id));
   for (const resource of mapGen.homeRingNodes) {
-    if (!ringNodes.has(resource)) {
+    if (!ringNodes.has(resource) && !seasonal.has(resource)) {
       report([...at, 'tiles'], `the home ring needs a "${resource}" node (map-gen homeRingNodes)`);
     }
   }

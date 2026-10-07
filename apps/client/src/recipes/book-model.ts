@@ -28,7 +28,8 @@ export const BOOK_TEXT = {
   madeBy: (what: string) => `or make ${what}`,
   nowhere: 'Nobody has found any yet. Keep exploring!',
   onlyAt: (season: string) => `Only at ${season}`,
-  makes: (n: number, what: string) => `Makes ${String(n)} ${what}`,
+  makes: (n: number, what: string) =>
+    `Makes ${String(n)} ${what}${n > 1 && !what.endsWith('s') ? 's' : ''}`,
   build: 'Build it at home',
   stillNeed: (list: string) => `Still need ${list}`,
   comesBack: (season: string) => `Comes back at ${season}!`,
@@ -61,8 +62,10 @@ export function whereText(resourceId: string): string {
   if (facts.homeRing) places.push(BOOK_TEXT.homeRing);
   const parts: string[] = [];
   if (places.length > 0) parts.push(listWords(places));
-  if (facts.bonusFrom.length > 0)
-    parts.push(BOOK_TEXT.bonus(listWords(facts.bonusFrom.map(itemName), 'or')));
+  if (facts.bonusFrom.length > 0) {
+    const bonus = BOOK_TEXT.bonus(listWords(facts.bonusFrom.map(itemName), 'or'));
+    parts.push(parts.length > 0 ? `or ${bonus}` : bonus);
+  }
   if (facts.madeBy.length > 0) {
     parts.push(
       BOOK_TEXT.madeBy(

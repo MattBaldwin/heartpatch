@@ -23,9 +23,11 @@ describe('checkTutorialData', () => {
     const home = layout.tiles.filter((t) => t.homeSlot === 0);
     expect(home).toHaveLength(7);
     // Step 2 gathers Timber and Emberwood right next to home (design doc §26).
-    // Like every real home ring (design doc §11, decision B): step 6 feeds Treats.
+    // Like every real home ring (design doc §11, decision B): step 6 feeds
+    // Treats. The Glade has no seasons, so no seasonal nodes.
+    const seasonal = new Set(GAME_DATA.resources.filter((r) => r.season).map((r) => r.id));
     expect(home.map((t) => t.nodeResource)).toEqual(
-      expect.arrayContaining(GAME_DATA.mapGen.homeRingNodes),
+      expect.arrayContaining(GAME_DATA.mapGen.homeRingNodes.filter((r) => !seasonal.has(r))),
     );
     expect(home.find((t) => t.q === 0 && t.r === 0)?.terrain).toBe(GAME_DATA.mapGen.homeTerrain);
   });

@@ -38,6 +38,7 @@ const resource = (id: string) => GAME_DATA.resources.find((r) => r.id === id)!;
 const TIMBER = resource('timber');
 const EMBERWOOD = resource('emberwood');
 const PUMPKINS = resource('pumpkins');
+const LEAVES = resource('magic-fallen-leaves');
 
 describe.skipIf(!url)('gathering (needs DATABASE_URL)', () => {
   let client: DbClient;
@@ -510,11 +511,8 @@ describe.skipIf(!url)('gathering (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       const ember = await nodeTile(server, kid, mapId, 'emberwood');
-      // A pumpkin patch at home (generated maps put them on neutral land).
-      const patch = (await view(server, kid, mapId)).tiles.find(
-        (t) => t.ownerUserId === kid.id && t.nodeResource === null && t.homeSlot !== null,
-      )!;
-      await setTile(mapId, patch, { nodeResource: 'pumpkins' });
+      // Every home ring has a Pumpkin node (owner decision 2026-10-06).
+      const patch = await nodeTile(server, kid, mapId, 'pumpkins');
 
       // Nov 9, 23:30 in Denver is Nov 10 in UTC, but still Halloween on this map.
       clock.setTime(Date.parse('2026-11-10T06:30:00Z'));
@@ -551,6 +549,33 @@ describe.skipIf(!url)('gathering (needs DATABASE_URL)', () => {
       expect(errorOf(shut).message).toBe('Pumpkins only turn up around Halloween!');
       const plain = GatherResponseSchema.parse((await gatherAt(server, kid, mapId, ember)).json());
       expect(plain.gather.items).toEqual({ emberwood: EMBERWOOD.gather!.quantity });
+    });
+
+    it('gathers the home leaf pile, and leaves with Timber, only around Thanksgiving', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const pile = await nodeTile(server, kid, mapId, 'magic-fallen-leaves');
+      const wood = await nodeTile(server, kid, mapId, 'timber');
+
+      // Halloween: the leaf pile is still asleep, and Timber is just Timber.
+      clock.setTime(Date.parse('2026-10-20T18:00:00Z'));
+      const early = await gatherAt(server, kid, mapId, pile);
+      expect(early.statusCode).toBe(409);
+      expect(errorOf(early).message).toBe('Magic Fallen Leaves only turn up around Thanksgiving!');
+      const logs = GatherResponseSchema.parse((await gatherAt(server, kid, mapId, wood)).json());
+      expect(logs.gather.items).toEqual({ timber: TIMBER.gather!.quantity });
+      clock.setTime(Date.parse(logs.gather.readyAt) + 1000);
+      expect((await collect(server, kid, mapId, logs.gather.id)).statusCode).toBe(200);
+
+      clock.setTime(Date.parse('2026-11-20T18:00:00Z'));
+      const leaves = GatherResponseSchema.parse((await gatherAt(server, kid, mapId, pile)).json());
+      expect(leaves.gather.items).toEqual({ 'magic-fallen-leaves': LEAVES.gather!.quantity });
+      const more = GatherResponseSchema.parse((await gatherAt(server, kid, mapId, wood)).json());
+      expect(more.gather.items).toEqual({
+        timber: TIMBER.gather!.quantity,
+        'magic-fallen-leaves': 1,
+      });
     });
   });
 });

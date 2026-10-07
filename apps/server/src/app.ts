@@ -188,6 +188,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           tutorialRequired: config.HP_TUTORIAL_REQUIRED,
           keeperRequired: config.HP_KEEPER_REQUIRED,
           clock,
+          log: app.log,
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         await api.register(
@@ -263,7 +264,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           raidsRoutes(createRaidsService({ db, clock }), { hooks: authHooks, idempotency }),
         );
         await api.register(
-          buildingsRoutes(createBuildingsService({ db, clock, ...publish }), {
+          buildingsRoutes(createBuildingsService({ db, clock, log: app.log, ...publish }), {
             hooks: authHooks,
             idempotency,
           }),
