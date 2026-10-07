@@ -148,6 +148,23 @@ function step(
   };
 }
 
+/** A fence's lines (#203, the owner-approved mockup): it creaks, then cracks. */
+export const FENCE_LINES = {
+  hit: (name: string) => `${name} creaks…`,
+  down: (name: string) => `Crack! ${name} fell down! 🪵`,
+  broke: 'The fence is down! Hooray!',
+  held: 'The fence held! Next time!',
+  stopped: 'You stopped for now. The fence keeps what it lost.',
+  replayHeld: 'Your fence held!',
+} as const;
+
+/** The last line of a fence battle (#203): `won` is the watching side's win. */
+function fenceEndLine(won: boolean | 'draw', reason: string): string {
+  if (won === 'draw') return FENCE_LINES.held;
+  if (won) return reason === 'turn-limit' ? FENCE_LINES.replayHeld : FENCE_LINES.broke;
+  return reason === 'forfeit' ? FENCE_LINES.stopped : FENCE_LINES.held;
+}
+
 /**
  * The steps for the log entries after `fromIndex` (what the client hasn't
  * shown yet). Names come from the battle's own content, so a secret squishy
@@ -162,8 +179,12 @@ export function playbackSteps(
     const squishy = battle.view.sides[side].squishies[slot];
     if (!squishy) return 'Someone';
     const species = content.speciesName(squishy.speciesId);
+    // A fence (#203) is a thing, not a squishy: "The Hedge".
+    if (squishy.fence !== undefined) return `The ${species}`;
     return isMine(battle, side) ? species : `Wild ${species}`;
   };
+  const isFence = (side: BattleSideId, slot: number): boolean =>
+    battle.view.sides[side].squishies[slot]?.fence !== undefined;
 
   return battle.view.log.slice(fromIndex).map((event: BattleEventView): PlaybackStep => {
     switch (event.type) {
@@ -190,7 +211,11 @@ export function playbackSteps(
           'hit',
           event.side,
           event.slot,
-          event.shielded ? SHIELD_LINE : `${name(event.side, event.slot)} lost some energy.`,
+          event.shielded
+            ? SHIELD_LINE
+            : isFence(event.side, event.slot)
+              ? FENCE_LINES.hit(name(event.side, event.slot))
+              : `${name(event.side, event.slot)} lost some energy.`,
           PLAYBACK.hitMs,
           {
             callout: event.shielded ? SHIELD_CALLOUT : effectivenessLine(event.effectiveness),
@@ -263,7 +288,9 @@ export function playbackSteps(
           'tuckered',
           event.side,
           event.slot,
-          `${name(event.side, event.slot)} is all tuckered out!`,
+          isFence(event.side, event.slot)
+            ? FENCE_LINES.down(name(event.side, event.slot))
+            : `${name(event.side, event.slot)} is all tuckered out!`,
           PLAYBACK.tuckeredMs,
           { energy: 0 },
         );
@@ -314,8 +341,12 @@ export function playbackSteps(
       }
       case 'battle-end': {
         const side = battle.mySide;
-        const text =
-          event.winner === 'draw'
+        const fence = (['a', 'b'] as const).some((s) =>
+          battle.view.sides[s].squishies.some((q) => q.fence !== undefined),
+        );
+        const text = fence
+          ? fenceEndLine(event.winner === 'draw' ? 'draw' : event.winner === side, event.reason)
+          : event.winner === 'draw'
             ? "It's a tie! Everyone's sleepy."
             : event.winner === side
               ? event.reason === 'captured'

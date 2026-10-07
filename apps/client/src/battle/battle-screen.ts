@@ -52,7 +52,7 @@ import {
   type PotionTile,
 } from './potions.js';
 import { keeperReaction } from './keeper-reaction.js';
-import { resultLine } from './result-line.js';
+import { fenceResult, resultLine } from './result-line.js';
 
 // The battle screen (#13): starts or resumes a PvE battle, draws it, plays the
 // server's log back step by step, and sends the player's taps as intents. The
@@ -484,6 +484,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
             tiles: potionTiles(potions, b.view.sides[b.mySide].itemsUsed),
             who: plateName(names, activeOf(b, b.mySide), nicknames),
           },
+          // Breaking a fence (#203): how long it can last.
+          fence:
+            b.view.turnLimit !== undefined && activeOf(b, otherSide(b.mySide)).fence !== undefined
+              ? { turn: b.view.turn + 1, limit: b.view.turnLimit }
+              : null,
         };
       case 'replace':
         return b.view.phase.sides.includes(b.mySide)
@@ -498,6 +503,39 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const names = content;
     if (!names) return;
     const result = b.view.phase.type === 'over' ? b.view.phase.result : null;
+    // A fence battle (#203): its own words, whoever's watching.
+    const fenceSide = (['a', 'b'] as const).find((side) =>
+      b.view.sides[side].squishies.some((s) => s.fence !== undefined),
+    );
+    if (fenceSide && result && result.winner !== 'draw' && b.status !== 'no-contest') {
+      const card = fenceResult(
+        result.winner === b.mySide ? 'mine' : 'theirs',
+        result.reason,
+        replaying,
+      );
+      hud.setCaption(null);
+      if (replaying) {
+        hud.showResult({ ...card, xp: [MESSAGES.replayNote], done: MESSAGES.done });
+        return;
+      }
+      const fenceXp = (b.rewards?.xp ?? []).filter((award) => award.xp > 0);
+      hud.showResult({
+        ...card,
+        xp:
+          fenceXp.length > 0
+            ? fenceXp.map((award) => {
+                const squishy = b.view.sides[b.mySide].squishies.find(
+                  (s) => s.id === award.squishyId,
+                );
+                const name = squishy ? plateName(names, squishy, nicknames) : 'Your squishy';
+                return `${name} earned ${String(award.xp)} XP!`;
+              })
+            : [MESSAGES.noXp],
+        evolving: [],
+        done: MESSAGES.done,
+      });
+      return;
+    }
     if (replaying) {
       // The defender's side of a challenge: kind either way, and no XP (#16).
       const outcome = !result
@@ -782,12 +820,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         battle.view.sides[side].squishies.map((s) => ({
           speciesId: s.speciesId,
           instanceId: s.id,
+          level: s.level,
         })),
       );
       const slot = shown[side].active;
       const squishy = battle.view.sides[side].squishies[slot];
       if (squishy) {
-        built.sendOut(side, squishy.speciesId, squishy.id);
+        built.sendOut(side, squishy.speciesId, squishy.id, squishy.level);
         if ((shown[side].energy[slot] ?? 1) === 0) built.knockedOut(side);
         built.setShield(side, (shown[side].chips[slot] ?? NO_CHIPS).shield);
       }

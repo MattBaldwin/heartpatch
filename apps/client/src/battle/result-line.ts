@@ -25,3 +25,36 @@ export function resultLine(
   if (wandersOff) return RESULT_LINES.wildGoneSub;
   return outcome === 'scooted' ? RESULT_LINES.scootedSub : RESULT_LINES.lostSub;
 }
+
+/** The result card for a fence battle (#203, the owner-approved mockup). */
+export const FENCE_RESULTS = {
+  broke: {
+    title: 'Crack! The fence fell down!',
+    subtitle: 'Now beat the guard to make it yours. Tap Keep going on the land!',
+  },
+  held: {
+    title: 'The fence held!',
+    subtitle: 'It keeps the energy it lost. This land needs a little rest now.',
+  },
+  stopped: { title: 'You stopped for now.', subtitle: 'The fence keeps the energy it lost.' },
+  // The owner's replay of a challenge on their fence.
+  replayHeld: { title: 'Your fence held!', subtitle: 'Fix it up from the land’s Fences.' },
+  replayBroke: {
+    title: 'They broke your fence!',
+    subtitle: 'Build it again from the land’s Fences.',
+  },
+} as const;
+
+/**
+ * A fence battle's card: the challenger broke it, it held to the turn limit
+ * (or tuckered them out), or they stopped. In a replay, the owner's side.
+ */
+export function fenceResult(
+  winner: 'mine' | 'theirs',
+  reason: string,
+  replay: boolean,
+): { title: string; subtitle: string } {
+  if (replay) return winner === 'mine' ? FENCE_RESULTS.replayHeld : FENCE_RESULTS.replayBroke;
+  if (winner === 'mine') return FENCE_RESULTS.broke;
+  return reason === 'forfeit' ? FENCE_RESULTS.stopped : FENCE_RESULTS.held;
+}
