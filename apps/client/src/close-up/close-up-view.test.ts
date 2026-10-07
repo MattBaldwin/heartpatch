@@ -41,6 +41,7 @@ function squishy(over: Partial<CareSquishy> = {}): CareSquishy {
     xp: 80,
     xpIntoLevel: 5,
     xpToNext: 40,
+    evolving: null,
     stats: { hp: 30, attack: 10, defense: 10, speed: 10 },
     contentment: 40,
     mood: 'happy',
@@ -117,7 +118,7 @@ describe('info card', () => {
       speciesName: 'Gloomdrop',
       nickname: null,
       levelNumber: 4,
-      level: 'Level 4',
+      level: 'Level 4 · Fully evolved! 🌟', // its species never evolves
       element: 'Shadow',
       feeling: 'Sleepy',
       mood: 'Happy and bouncy!',

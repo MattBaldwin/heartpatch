@@ -518,13 +518,18 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     // What the server granted (Gentle's share, care and habitat included);
     // a battle from before rewards were stored has only the engine's base XP.
     const awards = b.rewards?.xp ?? (result?.xp ?? []).filter((award) => award.side === b.mySide);
-    const xp = awards
-      .filter((award) => award.xp > 0)
-      .map((award) => {
-        const squishy = mine.squishies.find((s) => s.id === award.squishyId);
-        const name = squishy ? plateName(names, squishy, nicknames) : 'Your squishy';
-        return `${name} earned ${String(award.xp)} XP!`;
-      });
+    const earned = awards.filter((award) => award.xp > 0);
+    const xp = earned.map((award) => {
+      const squishy = mine.squishies.find((s) => s.id === award.squishyId);
+      const name = squishy ? plateName(names, squishy, nicknames) : 'Your squishy';
+      return `${name} earned ${String(award.xp)} XP!`;
+    });
+    // Each one's evolving meter, before and after (#205), from the server.
+    const evolving = earned.map((award) =>
+      'evolvingBefore' in award && award.evolvingBefore !== null && award.evolvingAfter !== null
+        ? { before: award.evolvingBefore, after: award.evolvingAfter }
+        : null,
+    );
     const glade = options.isGlade?.(b.mapId) ?? false;
     const outcome =
       b.status === 'no-contest' || !result
@@ -555,7 +560,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       b.kind === 'wild' && result?.winner === b.mySide && result.reason !== 'captured'
         ? BEFRIEND_NUDGE
         : undefined;
-    hud.showResult({ ...outcome, xp: lines, done: MESSAGES.done, ...(nudge ? { nudge } : {}) });
+    hud.showResult({
+      ...outcome,
+      xp: lines,
+      evolving: xp.length > 0 ? evolving : [],
+      done: MESSAGES.done,
+      ...(nudge ? { nudge } : {}),
+    });
   };
 
   /**

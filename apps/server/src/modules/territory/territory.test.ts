@@ -871,8 +871,9 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         'battle.ended',
         events.find((e) => e.type === 'battle.ended')!.payload,
       );
-      expect(done.rewards).toEqual({
-        xp: ended.xp,
+      // The same XP as battle.ended; each award also carries its evolving meter (#205).
+      expect(done.rewards?.xp.map(({ squishyId, xp }) => ({ squishyId, xp }))).toEqual(ended.xp);
+      expect(done.rewards).toMatchObject({
         percent: TERRITORY_RULES.gentle.rewardPercent,
         fullXpResetAt: null,
       });

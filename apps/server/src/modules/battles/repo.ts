@@ -124,7 +124,9 @@ export interface BattlesRepo {
   /** Row-locks the squishies until commit (XP is written under it, care's `applyXp`). */
   lockSquishies: (ids: readonly string[]) => Promise<void>;
   /**
-   * A new squishy for a player (befriended, or the dev grant). It starts at
+   * A new squishy for a player (befriended, a starter, the tutorial's
+   * Partner, or the dev grant; every insert comes through here, which sets
+   * its joining level, #205). It starts at
    * `contentment`, sliding down from `at` (its creation) like care.
    */
   insertSquishy: (squishy: {
@@ -349,6 +351,10 @@ function queries(db: Executor): BattlesRepo {
         .insert(squishies)
         .values({
           ...squishy,
+          // Every new squishy joins at the level it's inserted at (#205): the
+          // starter at 1, a befriended one at its battle level, a dev grant at
+          // the asked-for level.
+          joinedLevel: squishy.level,
           // Passed explicitly (the column default stays 0, no migration);
           // `lastCaredAt` = creation, so contentment decays from here.
           contentmentAtLastCare: contentment,

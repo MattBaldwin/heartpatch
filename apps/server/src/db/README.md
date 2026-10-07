@@ -171,6 +171,7 @@ Tiles are written once, from `generateMap`, when the map is created.
 | `nickname` | text, null | Filtered before insert |
 | `level` | integer, default 1 | ≥ 1 |
 | `xp` | integer, default 0 | ≥ 0 |
+| `joined_level` | integer, null | The level it joined at (#205): the evolving meter counts from here. Set on every insert (`insertSquishy`); backfilled by migration 0028 from `squishy.captured` events, else the level it had then. Null only for rows the previous release wrote: read as the level now |
 | `state` | enum `squishy_state` | `active` \| `hollowed` |
 | `habitat_building_id` | uuid → buildings, null | The habitat it lives in (#18); `ON DELETE SET NULL` |
 | `contentment_at_last_care` | integer, default 0 | 0–100 (check): contentment right after the last care action (#19) |

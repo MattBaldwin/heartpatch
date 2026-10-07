@@ -14,6 +14,7 @@ import {
   speciesById,
   type SquishyFace,
 } from './care-view.js';
+import { evolvingMeterEl } from './evolving-meter.js';
 import './care.css';
 
 // The care sheet (#19, design doc §7–8): one squishy's mood, level and XP,
@@ -91,6 +92,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   const xpFill = el('div', { class: 'care-meter-fill care-xp' });
   const xpBar = el('div', { class: 'care-meter', 'aria-hidden': 'true' }, xpFill);
   const xpLine = el('p', { class: 'care-xp-line' });
+  const evolving = evolvingMeterEl('care-evolving');
   // The tutorial's care step spotlights these (Feed, Pet, Play).
   const actions = el('div', { class: 'care-actions', 'data-tutorial-target': 'care-buttons' });
   const note = el('p', { class: 'care-note', role: 'status', 'data-testid': 'care-note' });
@@ -141,6 +143,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       level,
       xpBar,
       xpLine,
+      evolving.root,
       celebrate,
       actions,
       treatNote,
@@ -204,6 +207,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     level.textContent = model.level;
     xpFill.style.width = `${String(Math.round(model.xp * 100))}%`;
     xpLine.textContent = model.xpLine;
+    evolving.update(model.evolving);
     actions.replaceChildren(
       ...model.buttons.map((b) => {
         const button = el(

@@ -27,6 +27,8 @@ export interface CareSquishyRow {
   nickname: string | null;
   level: number;
   xp: number;
+  /** The level it joined at (#205); null for rows from before it was kept. */
+  joinedLevel: number | null;
   state: 'active' | 'hollowed';
   habitatBuildingId: string | null;
   /**
@@ -115,6 +117,7 @@ const squishyColumns = {
   nickname: squishies.nickname,
   level: squishies.level,
   xp: squishies.xp,
+  joinedLevel: squishies.joinedLevel,
   state: squishies.state,
   habitatBuildingId: squishies.habitatBuildingId,
   onWatch: squishyOnWatch(),

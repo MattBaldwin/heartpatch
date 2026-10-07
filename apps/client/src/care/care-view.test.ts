@@ -14,6 +14,7 @@ import {
   squishyFace,
   careSheet,
   evolutionLine,
+  evolvingBar,
   nextReadyIn,
   speciesById,
 } from './care-view.js';
@@ -44,6 +45,7 @@ const squishy = (extra: Partial<CareSquishy> = {}): CareSquishy => ({
   xp: 200,
   xpIntoLevel: 15,
   xpToNext: 60,
+  evolving: null,
   stats: { hp: 20, attack: 8, defense: 8, speed: 9 },
   contentment: 50,
   mood: 'happy',
@@ -76,7 +78,7 @@ describe('careSheet', () => {
       color: '#3b3561',
       mood: 'Happy and bouncy!',
       hearts: 0.5,
-      level: 'Level 4',
+      level: 'Level 4 · Fully evolved! 🌟', // its species never evolves
       xp: 0.25,
       xpLine: '15 / 60 XP',
     });
@@ -140,7 +142,7 @@ describe('careSheet', () => {
     expect(note(5000)).toBeNull();
   });
 
-  it('says when a squishy grows up, until it has', () => {
+  it('says when a squishy evolves, until it has, and when it is fully evolved', () => {
     const growing = reply({
       speciesDefs: [
         {
@@ -150,15 +152,42 @@ describe('careSheet', () => {
         species('moonmallow', 'Moonmallow', '#c9b8ff'),
       ],
     });
-    expect(careSheet(squishy(), growing).level).toBe('Level 4 · grows up at Level 16');
+    expect(careSheet(squishy(), growing).level).toBe('Level 4 · evolves at Level 16');
     expect(careSheet(squishy({ level: 16 }), growing).level).toBe('Level 16');
-    expect(careSheet(squishy({ speciesId: 'moonmallow' }), growing).level).toBe('Level 4');
+    // A top form (#205, owner-approved words).
+    expect(careSheet(squishy({ speciesId: 'moonmallow' }), growing).level).toBe(
+      'Level 4 · Fully evolved! 🌟',
+    );
   });
 
   it('fills the bar at the top level, and says so', () => {
     const model = careSheet(squishy({ level: 100, xpToNext: null }), reply());
     expect(model).toMatchObject({ xp: 1, xpLine: 'Top level!' });
     expect(careSheet(squishy({ xpBonusPercent: 100 }), reply()).info[2]).toContain('normal XP');
+  });
+
+  it('shows the evolving meter under the XP bar, ready at 100%, and none without one (#205)', () => {
+    expect(
+      careSheet(squishy({ evolving: { percent: 62, levelsToGo: 5 } }), reply()).evolving,
+    ).toEqual({
+      label: '✨ Evolving',
+      value: '62%',
+      fill: 0.62,
+      ready: false,
+      sub: null,
+    });
+    expect(
+      careSheet(squishy({ evolving: { percent: 100, levelsToGo: 0 } }), reply()).evolving,
+    ).toEqual({
+      label: '✨ Ready to evolve!',
+      value: '',
+      fill: 1,
+      ready: true,
+      sub: 'One more battle ✨',
+    });
+    expect(careSheet(squishy({ evolving: null }), reply()).evolving).toBeNull();
+    expect(evolvingBar(null)).toBeNull();
+    expect(CARE_TEXT.evolvingGain(8)).toBe('+8% toward evolving!');
   });
 
   it('uses a nickname when there is one', () => {
@@ -203,6 +232,9 @@ describe('lines', () => {
       CARE_TEXT.whyCare,
       CARE_TEXT.fades,
       CARE_TEXT.growsUp(4, 16),
+      CARE_TEXT.fullyEvolved(18),
+      CARE_TEXT.evolvingPercent(62),
+      CARE_TEXT.evolvingGain(8),
       CARE_TEXT.fullLeft(1),
       CARE_TEXT.evolved('Moonpuff', 'Moonmallow'),
       CARE_TEXT.notHere,
