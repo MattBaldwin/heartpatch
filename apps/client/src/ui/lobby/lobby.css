@@ -217,3 +217,38 @@
   font-size: 14px;
   color: #7d6380;
 }
+
+/* The owner's family codes (#195): one card per code, ended ones dashed. */
+.lobby-code {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px;
+  border: 2px solid #ecd3e2;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.lobby-code-ended {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.lobby-code-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.lobby-code-top .lobby-map-name {
+  overflow-wrap: anywhere;
+}
+
+.lobby-badge-ended {
+  background: #eee3ea;
+  color: #6b5a66;
+}

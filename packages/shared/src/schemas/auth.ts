@@ -68,12 +68,16 @@ export const RecoveryCodeSchema = z
       ),
   );
 
-/** The family signup code from the operator (decision D). */
+/**
+ * The code typed on the sign-up screen (decision D, #195): a family code, a
+ * patch invite code, or the operator's `HP_SIGNUP_CODE` while it lasts. The
+ * server works out which.
+ */
 export const SignupCodeSchema = z
   .string()
   .trim()
-  .min(1, 'Ask a grown-up for the family code.')
-  .max(128, 'That family code is too long.');
+  .min(1, 'Ask a grown-up for a family or invite code.')
+  .max(128, 'That code is too long.');
 
 /** `POST /api/v1/auth/signup` */
 export const SignupRequestSchema = z.object({

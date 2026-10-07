@@ -15,8 +15,12 @@ export function uniqueName(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${String(test.info().workerIndex)}`;
 }
 
-/** A new player in their own browser context (own cookies), signed up and in the lobby. */
-export async function newPlayer(browser: Browser, name: string): Promise<Page> {
+/**
+ * A new player in their own browser context (own cookies), signed up and in
+ * the lobby. `code` is what they type in the code field: the dev server's
+ * family code unless given (a patch invite also signs up, #195).
+ */
+export async function newPlayer(browser: Browser, name: string, code?: string): Promise<Page> {
   // The project's device settings (viewport, touch), so tap() works like on an iPhone.
   const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, baseURL } =
     test.info().project.use;
@@ -30,7 +34,7 @@ export async function newPlayer(browser: Browser, name: string): Promise<Page> {
   });
   const page = await context.newPage();
   await slowCpu(page);
-  await signUp(page, name);
+  await signUp(page, name, code);
   await pickKeeper(page);
   // Roomy: under a full e2e run the lobby's first fetches can take a while.
   await expect(
@@ -55,14 +59,14 @@ async function slowCpu(page: Page): Promise<void> {
 }
 
 /**
- * Signs up through the sign-in overlay with the family code and taps past the
+ * Signs up through the sign-in overlay with a code and taps past the
  * recovery code. The Keeper picker (#42) comes next.
  */
-export async function signUp(page: Page, name: string): Promise<void> {
+export async function signUp(page: Page, name: string, code = signupCode): Promise<void> {
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  await overlay.getByLabel('Family code').fill(signupCode);
+  await overlay.getByLabel('Family or invite code').fill(code);
   await overlay.getByLabel('Pick a name').fill(name);
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');

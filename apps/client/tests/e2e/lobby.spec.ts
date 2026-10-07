@@ -124,3 +124,53 @@ test('a reload lands back on the patch the player was on (#160)', async ({ brows
   await expect(lobby).toBeHidden();
   await page.context().close();
 });
+
+test('a new family signs up with a patch invite and lands in the join queue (#195)', async ({
+  browser,
+}, testInfo) => {
+  // Two signups, each through the Keeper picker's 3D preview (#42); CI renders in software.
+  test.setTimeout(90_000);
+  const suffix = `${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
+  const ownerName = `host_${suffix}`;
+  const kidName = `newfam_${suffix}`;
+
+  const owner = await newPlayer(browser, ownerName);
+  const ownerLobby = owner.getByTestId('lobby');
+  await ownerLobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await ownerLobby.getByLabel('Patch name').fill('Cozy Corner');
+  await ownerLobby.getByRole('button', { name: 'Make it!' }).tap();
+  const code = (await ownerLobby.getByTestId('lobby-invite-code').textContent()) ?? '';
+  await expect(ownerLobby.getByTestId('lobby-invite')).toContainText('New families can sign up');
+
+  // The owner makes a family code for another family: shown once, then listed.
+  const familyCodes = ownerLobby.getByTestId('lobby-family-codes');
+  await familyCodes.getByLabel("Who's it for?").fill('Lee family');
+  await familyCodes.getByRole('button', { name: 'Make a family code' }).tap();
+  await expect(ownerLobby.getByTestId('lobby-family-code')).toHaveText(
+    /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/,
+  );
+  expect(await updatesHeld(owner)).toBe(true);
+  await ownerLobby.getByRole('button', { name: 'All done!' }).tap();
+  await expect(familyCodes.getByRole('listitem')).toContainText(['Lee family']);
+  await expect(familyCodes).toContainText('0 of 8 used');
+
+  // A brand-new family types the patch invite on the sign-up screen: one code
+  // makes the account and asks to join.
+  const kid = await newPlayer(browser, kidName, code);
+  const kidLobby = kid.getByTestId('lobby');
+  await expect(kidLobby.getByTestId('lobby-waiting')).toContainText('Cozy Corner');
+  await expect(kidLobby.getByTestId('lobby-waiting')).toContainText(`Waiting for ${ownerName}`);
+
+  // The owner sees them asking and says yes.
+  await ownerLobby.getByRole('button', { name: 'Back to my patches' }).tap();
+  await expect(ownerLobby.getByTestId('lobby-map-asking')).toHaveText('1 wants to join!');
+  await ownerLobby.getByRole('button', { name: /Cozy Corner/ }).tap();
+  const requests = ownerLobby.getByTestId('lobby-requests');
+  await expect(requests).toContainText(`${kidName} wants to join`);
+  await requests.getByRole('button', { name: 'Yes!' }).tap();
+  await expect(ownerLobby.getByTestId('lobby-members')).toContainText(kidName);
+  await expect(kidLobby.getByTestId('lobby-waiting')).toHaveCount(0, { timeout: 15_000 });
+
+  await owner.context().close();
+  await kid.context().close();
+});
