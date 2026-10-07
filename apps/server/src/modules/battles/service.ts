@@ -1,6 +1,7 @@
 import {
   applyBattleAction,
   BattleRuleError,
+  itemRefusal,
   battleXpPercent,
   befriendedLevel,
   CAPTURABLE_BATTLE_KINDS,
@@ -275,6 +276,8 @@ const MESSAGES = {
   badChoice: "That's not a move you can make right now. Try another!",
   unknownSpecies: "We don't know that squishy.",
   noCapture: "You can't use a Heart Charm here.",
+  notAPotion: "That's not something you can use in a battle.",
+  hadOne: 'You already had one of those this battle! Try another.',
 } as const;
 
 export function defaultBattleContent(): BattleContent {
@@ -472,6 +475,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         return { type: 'replace', side: PLAYER_SIDE, slot: action.slot };
       case 'forfeit':
         return { type: 'forfeit', side: PLAYER_SIDE };
+      case 'item':
+        return {
+          type: 'turn',
+          choices: { [PLAYER_SIDE]: { type: 'item', item: action.item } },
+        };
       case 'capture':
         return {
           type: 'turn',
@@ -850,6 +858,22 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             { mapId: row.mapId, userId: row.playerUserId },
             { [HEART_CHARM]: 1 },
             'capture',
+            row.id,
+          );
+        } else if (request.action.type === 'item') {
+          // A potion (#214) comes out of the bag in this transaction too, so
+          // a refused step gives it back. Refusals the engine would make are
+          // checked first, so they say why (not "You need 1 more …") and
+          // lock no inventory row. None in the bag is CONFLICT from the bag.
+          const { item } = request.action;
+          const refusal = itemRefusal(content, row.state, PLAYER_SIDE, item);
+          if (refusal === 'not-an-item') throw new AppError('CONFLICT', MESSAGES.notAPotion);
+          if (refusal === 'used-up') throw new AppError('CONFLICT', MESSAGES.hadOne);
+          await consumeItems(
+            tx,
+            { mapId: row.mapId, userId: row.playerUserId },
+            { [item]: 1 },
+            'battle-item',
             row.id,
           );
         }

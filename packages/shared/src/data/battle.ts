@@ -104,4 +104,7 @@ export const BATTLE_RULES: BattleRules = {
       swapBelow: 35,
     },
   },
+
+  // TUNE: one of each potion per side per battle (#214).
+  items: { usesEach: 1 },
 };

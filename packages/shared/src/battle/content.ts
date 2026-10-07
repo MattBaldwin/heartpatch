@@ -4,6 +4,7 @@ import type { BattleRules } from '../schemas/data/battle.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import type { ElementMatrix, FeelingMatrix, SynergyTable } from '../schemas/data/matrices.js';
 import type { Move } from '../schemas/data/moves.js';
+import type { BattleItemEffect } from '../schemas/data/resources.js';
 import type { Species } from '../schemas/data/species.js';
 
 /** The data tables a battle reads, indexed by id. */
@@ -21,6 +22,8 @@ export interface BattleContent {
   readonly feelingMatrix: FeelingMatrix;
   readonly synergy: SynergyTable;
   readonly rules: BattleRules;
+  /** Items usable in battle (potions, #214): resource id → effect. */
+  readonly items: ReadonlyMap<string, BattleItemEffect>;
 }
 
 /**
@@ -30,7 +33,7 @@ export interface BattleContent {
  */
 export type BattleData = Pick<
   GameData,
-  'species' | 'moves' | 'elementMatrix' | 'feelingMatrix' | 'synergy'
+  'species' | 'moves' | 'elementMatrix' | 'feelingMatrix' | 'synergy' | 'resources'
 >;
 
 /**
@@ -49,6 +52,7 @@ export function createBattleContent(
     feelingMatrix: data.feelingMatrix,
     synergy: data.synergy,
     rules,
+    items: new Map(battleItems(data).map(({ id, battleEffect }) => [id, battleEffect])),
   };
 }
 
@@ -66,6 +70,12 @@ function canonicalJson(value: unknown): string {
 
 const byId = <T extends { id: string }>(rows: readonly T[]) =>
   [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+/** The resources a battle can use (`battleEffect`), by id order. */
+const battleItems = (data: BattleData) =>
+  byId(data.resources).flatMap(({ id, battleEffect }) =>
+    battleEffect ? [{ id, battleEffect }] : [],
+  );
 
 /** Hashes only the battle-relevant fields, so rewording a move changes nothing. */
 export function battleContentHash(data: BattleData, rules: BattleRules): string {
@@ -88,6 +98,7 @@ export function battleContentHash(data: BattleData, rules: BattleRules): string 
       elementMatrix: data.elementMatrix,
       feelingMatrix: data.feelingMatrix,
       synergy: data.synergy,
+      items: battleItems(data),
       // Callout lines are player-facing words, not rules.
       rules: {
         ...rules,

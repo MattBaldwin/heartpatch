@@ -81,9 +81,13 @@ test('trays hold the controls, and the recipe book makes, seals, searches and fi
     items: { timber: 2, treats: 1 },
   });
   expect(granted.status).toBe(201);
-  // Reopen the book: it reads the bag fresh.
+  // Reopen the book: it reads the bag fresh. Timber and Treats also open
+  // Cozy Cocoa (#214): its "New page!" card comes first; leave it for later.
   await page.getByTestId('recipe-book-close').tap();
   await (await trayButton(page, 'recipe-book-open')).tap();
+  const cocoa = page.getByTestId('recipe-book-new-page');
+  await expect(cocoa).toContainText('Cozy Cocoa');
+  await cocoa.getByRole('button', { name: 'Later' }).tap();
   await page.getByTestId('recipe-book-cover-open').tap();
   await book.locator('[data-testid="recipe-book-toc"][data-page="recipe:heart-charm"]').tap();
   await expect(
@@ -143,12 +147,23 @@ test('the recipe book shows what’s cooking, and a finished craft lands by itse
   // Pumpkins open the Pumpkin Treats page (Halloween is on: the dev server
   // runs on today's date, inside the 2026 window).
   const mapId = (await mapState(page))!.id;
+  const book = page.getByTestId('recipe-book');
+  // Timber and Treats (for the Heart Charm below) also open Cozy Cocoa
+  // (#214): see its "New page!" card and leave it for later first.
+  const basics = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
+    items: { timber: 2, treats: 1 },
+  });
+  expect(basics.status).toBe(201);
+  await (await trayButton(page, 'recipe-book-open')).tap();
+  const cocoa = page.getByTestId('recipe-book-new-page');
+  await expect(cocoa).toContainText('Cozy Cocoa');
+  await cocoa.getByRole('button', { name: 'Later' }).tap();
+  await page.getByTestId('recipe-book-close').tap();
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
-    items: { pumpkins: 1, timber: 2, treats: 1 },
+    items: { pumpkins: 1 },
   });
   expect(granted.status).toBe(201);
 
-  const book = page.getByTestId('recipe-book');
   const cooking = book.getByTestId('recipe-book-cooking');
   const toc = (key: string) => book.locator(`[data-testid="recipe-book-toc"][data-page="${key}"]`);
   const openBookAt = async (key: string) => {

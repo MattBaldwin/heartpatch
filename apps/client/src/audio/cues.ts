@@ -107,6 +107,7 @@ export function battleCue(
     case 'forfeit':
       return 'whiff';
     case 'heal':
+    case 'item':
       return 'twinkle';
     case 'tuckered':
       return 'sleepy';
