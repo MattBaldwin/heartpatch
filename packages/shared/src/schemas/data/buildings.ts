@@ -86,10 +86,28 @@ export const TrainingGroundsBuildingSchema = z.strictObject({
   }),
 });
 
+/**
+ * A fence (#203): segments on a tile's hex edges that keep other players'
+ * challenges out. Its material sets its `element` (owner decision
+ * 2026-10-07: wood is weak to Fire, stone to Water). Each level is a stat
+ * block a challenger's squishy battles (`hp` is its energy bar, `defense`
+ * its toughness); a fence never makes a move.
+ */
+export const FenceBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('fence'),
+  element: ElementIdSchema,
+  levels: levels({
+    hp: z.number().int().min(1).max(9999),
+    defense: z.number().int().min(1).max(9999),
+  }),
+});
+
 export const BuildingSchema = z.discriminatedUnion('kind', [
   HearthfireBuildingSchema,
   HabitatBuildingSchema,
   TrainingGroundsBuildingSchema,
+  FenceBuildingSchema,
 ]);
 export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];
@@ -102,3 +120,4 @@ export function buildsAtHome(building: Pick<Building, 'placement'>): boolean {
 }
 export type HearthfireBuilding = z.infer<typeof HearthfireBuildingSchema>;
 export type HabitatBuilding = z.infer<typeof HabitatBuildingSchema>;
+export type FenceBuilding = z.infer<typeof FenceBuildingSchema>;

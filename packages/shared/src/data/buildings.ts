@@ -84,4 +84,39 @@ export const BUILDINGS: Building[] = [
       { cost: { timber: 16, stone: 16 }, capacity: 3, xpPerHour: 8 }, // TUNE:
     ],
   },
+  {
+    // #203: fence segments on a tile's edges keep challengers out. Wood is
+    // weak to Fire (owner decision 2026-10-07): it's a Leaf fence.
+    id: 'emberwood-fence',
+    kind: 'fence',
+    name: 'Emberwood Fence',
+    description: 'Keeps other Keepers out until they break it. Fire squishies crack it fast!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    element: 'leaf',
+    levels: [
+      { cost: { emberwood: 6, timber: 2 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { emberwood: 8, timber: 4 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { emberwood: 10, timber: 4, glimmer: 2 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
+  {
+    // Stone is weak to Water (owner decision 2026-10-07).
+    id: 'stone-wall',
+    kind: 'fence',
+    name: 'Stone Wall',
+    description: 'A sturdy wall that keeps other Keepers out. Water squishies wash it away!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    element: 'stone',
+    levels: [
+      { cost: { stone: 8, timber: 3 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { stone: 10, timber: 5 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { stone: 12, timber: 5, glimmer: 2 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
 ];

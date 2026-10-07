@@ -20,7 +20,12 @@ export type BuildingEffect =
   /** How many squishies live there. */
   | { readonly kind: 'room'; readonly capacity: number }
   /** Training Grounds: how many practice at once, and the XP each earns an hour. */
-  | { readonly kind: 'training'; readonly capacity: number; readonly xpPerHour: number };
+  | { readonly kind: 'training'; readonly capacity: number; readonly xpPerHour: number }
+  /**
+   * A fence (#203): keeps challengers out until they break it. `hp` is its
+   * energy at this level; `element` its material's (what cracks it fast).
+   */
+  | { readonly kind: 'fence'; readonly hp: number; readonly element: ElementId };
 
 /**
  * What `building` does at `level` (1 = just built), in the order a row shows
@@ -48,5 +53,7 @@ export function buildingEffects(building: Building, level = 1): BuildingEffect[]
       const { capacity, xpPerHour } = at(building.levels);
       return [{ kind: 'training', capacity, xpPerHour }];
     }
+    case 'fence':
+      return [{ kind: 'fence', hp: at(building.levels).hp, element: building.element }];
   }
 }

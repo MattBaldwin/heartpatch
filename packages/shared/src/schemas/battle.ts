@@ -39,7 +39,36 @@ export const BattleSquishySetupSchema = z.strictObject({
    */
   stats: BattleStatsSchema.optional(),
 });
+
+/**
+ * A fence segment as the other side of a fence battle (#203): a stat block
+ * from data, not a squishy. It has energy and toughness but no moves, and
+ * starts with the energy it has left (damage stays, owner decision
+ * 2026-10-07). `fence` is its building id; the element is its material's.
+ */
+export const BattleFenceSetupSchema = z.strictObject({
+  id: z.string().min(1).max(64),
+  fence: ContentIdSchema,
+  level: z.number().int().min(1).max(100),
+  element: ElementIdSchema,
+  stats: BattleStatsSchema,
+  /** Energy it starts with; at most `stats.hp`. */
+  energy: z.number().int().min(1).max(9999),
+});
+export type BattleFenceSetup = z.infer<typeof BattleFenceSetupSchema>;
+
+/** One participant: a squishy, or a fence (#203). */
+export const BattleParticipantSetupSchema = z.union([
+  BattleSquishySetupSchema,
+  BattleFenceSetupSchema,
+]);
 export type BattleSquishySetup = z.infer<typeof BattleSquishySetupSchema>;
+export type BattleParticipantSetup = z.infer<typeof BattleParticipantSetupSchema>;
+
+/** Is this participant a fence (#203)? */
+export function isFenceSetup(setup: BattleParticipantSetup): setup is BattleFenceSetup {
+  return 'fence' in setup;
+}
 
 /** A player picks this side's actions, or an AI policy does. */
 export const BattleControllerSchema = z.discriminatedUnion('type', [
@@ -50,8 +79,11 @@ export type BattleController = z.infer<typeof BattleControllerSchema>;
 
 export const BattleSideSetupSchema = z.strictObject({
   controller: BattleControllerSchema,
-  /** The first squishy starts out. The team size limit is in battle rules. */
-  squishies: z.array(BattleSquishySetupSchema).min(1),
+  /**
+   * The first squishy starts out. The team size limit is in battle rules. A
+   * fence (#203) stands alone on an AI side.
+   */
+  squishies: z.array(BattleParticipantSetupSchema).min(1),
 });
 export type BattleSideSetup = z.infer<typeof BattleSideSetupSchema>;
 
@@ -59,6 +91,11 @@ export const BattleSetupSchema = z
   .strictObject({
     seed: SeedSchema,
     sides: z.strictObject({ a: BattleSideSetupSchema, b: BattleSideSetupSchema }),
+    /**
+     * Turns this battle lasts at most, if fewer than battle rules'
+     * `maxTurns` (a fence battle, #203).
+     */
+    turnLimit: z.number().int().min(1).optional(),
   })
   .superRefine((setup, ctx) => {
     const seen = new Set<string>();
@@ -144,6 +181,8 @@ export const BattleSquishyViewSchema = z.object({
   stages: z.object({ attack: stage, defense: stage, speed: stage }),
   status: z.object({ id: BattleStatusIdSchema, turnsLeft: z.number().int().min(0) }).nullable(),
   joined: z.boolean(),
+  /** A fence segment (#203): its building id. It has no moves. */
+  fence: ContentIdSchema.optional(),
   // Potions (#214). Defaults read battles stored before them.
   boosts: z
     .object({ attack: z.number().int().min(0), defense: z.number().int().min(0) })
@@ -240,6 +279,8 @@ export const ClientBattleViewSchema = z.object({
   version: z.literal(1),
   contentHash: z.string(),
   turn: z.number().int().min(0),
+  /** Turns the battle lasts at most, when less than the rules' (a fence battle, #203). */
+  turnLimit: z.number().int().min(1).optional(),
   sides: z.object({ a: BattleSideViewSchema, b: BattleSideViewSchema }),
   phase: BattlePhaseSchema,
   log: z.array(BattleEventSchema),
