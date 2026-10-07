@@ -531,6 +531,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
             tile.addEventListener('click', () => {
               picked = picked === item.id ? null : item.id;
               render();
+              // The grid was redrawn: keep focus on the tile that was tapped.
+              itemsBox.querySelector<HTMLElement>(`[data-item="${item.id}"]`)?.focus();
               // On a phone the card can open below the fold: bring it up.
               if (picked !== null) detailBox.scrollIntoView({ block: 'nearest' });
             });

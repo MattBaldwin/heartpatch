@@ -78,15 +78,17 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
 
   const firstCost = (b: (typeof data.buildings)[number]) => b.levels[0]?.cost ?? {};
   const inFirst = data.buildings.filter((b) => (firstCost(b)[item.id] ?? 0) > 0);
-  // A made thing that's a building's whole point (the Jack-o'-Lantern) says
-  // what it becomes; a gathered one is just one of the materials.
-  if (item.kind === 'crafted') {
-    for (const b of inFirst) {
-      effects.push({ kind: 'builds', building: b.id, placement: b.placement });
-      for (const effect of buildingEffects(b)) effects.push({ kind: 'building', effect });
-    }
-  } else if (inFirst.length > 0) {
-    effects.push({ kind: 'build-with', buildings: inFirst.map((b) => b.id) });
+  // A made thing that's a building's whole cost (the Jack-o'-Lantern) says
+  // what it becomes and what that does; anything else is one material.
+  const whole = (b: (typeof data.buildings)[number]) =>
+    item.kind === 'crafted' && Object.keys(firstCost(b)).length === 1;
+  for (const b of inFirst.filter(whole)) {
+    effects.push({ kind: 'builds', building: b.id, placement: b.placement });
+    for (const effect of buildingEffects(b)) effects.push({ kind: 'building', effect });
+  }
+  const materials = inFirst.filter((b) => !whole(b));
+  if (materials.length > 0) {
+    effects.push({ kind: 'build-with', buildings: materials.map((b) => b.id) });
   }
 
   const upgrades = data.buildings.filter(

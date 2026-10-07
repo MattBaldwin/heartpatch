@@ -98,6 +98,12 @@ describe('recipe book pages', () => {
     ]);
   });
 
+  it("don't repeat what a recipe is made from (#241)", () => {
+    const chips = view('recipe:pumpkin-treats').effect?.chips.map((c) => c.text) ?? [];
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.some((t) => t.startsWith('🥣'))).toBe(false);
+  });
+
   it('say what a building does like the build menu (#241)', () => {
     const grounds = view('building:training-grounds');
     const building = GAME_DATA.buildings.find((b) => b.id === 'training-grounds');

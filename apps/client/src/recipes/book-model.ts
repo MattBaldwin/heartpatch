@@ -2,6 +2,7 @@ import {
   canMakeNow,
   GAME_DATA,
   hexDistance,
+  itemEffects,
   sealedHint,
   shortfall,
   whereToFind,
@@ -12,7 +13,7 @@ import {
   type RecipeBookPage,
 } from '@heartpatch/shared';
 import { bagCrafts, itemName, type BagCraft } from '../inventory/bag-view.js';
-import { itemChips, type ItemChip } from '../inventory/item-chips.js';
+import { itemChip, type ItemChip } from '../inventory/item-chips.js';
 import { itemIcon } from '../inventory/item-icons.js';
 import { buildingIcon, effectChips } from '../home/home-view.js';
 
@@ -156,7 +157,9 @@ export function pageEffect(page: RecipeBookPage): PageEffect | null {
   }
   const item = RESOURCES.get(page.output.resource);
   if (!item) return null;
-  return { purpose: item.description, chips: itemChips(item.id) };
+  // The page's own ingredients already say what it's made from.
+  const effects = itemEffects(item.id).filter((e) => e.kind !== 'made-from');
+  return { purpose: item.description, chips: effects.map(itemChip) };
 }
 
 export interface BookContext {

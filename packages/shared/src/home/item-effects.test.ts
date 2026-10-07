@@ -88,13 +88,37 @@ describe('itemEffects (#241)', () => {
   });
 
   it('works out effects from the data it is given', () => {
+    const level = (cost: Record<string, number>) => ({ cost, capacity: 2, xpPerHour: 1 });
+    const grounds = GAME_DATA.buildings.find((b) => b.kind === 'training-grounds');
+    if (grounds?.kind !== 'training-grounds') throw new Error('no training grounds');
     const data = {
-      ...GAME_DATA,
-      resources: [{ id: 'goo', name: 'Goo', description: 'Gooey.', kind: 'gathered' as const }],
-      recipes: [],
-      buildings: [],
+      resources: [
+        { id: 'goo', name: 'Goo', description: 'Gooey.', kind: 'gathered' as const },
+        { id: 'blob', name: 'Blob', description: 'A blob.', kind: 'crafted' as const },
+      ],
+      recipes: [
+        {
+          id: 'blobbing',
+          name: 'Blobbing',
+          description: 'Blob it.',
+          inputs: { goo: 2 },
+          output: { resource: 'blob', quantity: 1 },
+          craftSeconds: 1,
+        },
+      ],
+      buildings: [
+        { ...grounds, id: 'gym', levels: [level({ blob: 1, goo: 1 }), level({ goo: 5 })] },
+      ],
       careActions: [],
     };
-    expect(itemEffects('goo', data)).toEqual([]);
+    expect(itemEffects('goo', data)).toEqual([
+      { kind: 'build-with', buildings: ['gym'] },
+      { kind: 'recipes', recipes: ['blobbing'] },
+    ]);
+    // One material among several: it helps build, it doesn't "build" it.
+    expect(itemEffects('blob', data)).toEqual([{ kind: 'build-with', buildings: ['gym'] }]);
+    expect(
+      itemEffects('goo', { ...data, resources: data.resources, recipes: [], buildings: [] }),
+    ).toEqual([]);
   });
 });
