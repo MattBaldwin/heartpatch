@@ -117,7 +117,8 @@ A **balance simulator** (see issues) runs thousands of seeded battles and flags 
 - **PvE:** wild squishies and tile guardians use a simple AI.
 - **Offline defense:** the defender's squishies are controlled by an AI following their **defense stance** (aggressive, defensive, balanced).
 - **Capture:** weakening a wild squishy and using a **Heart Charm** (craftable) gives a capture chance that rises as its HP drops.
-- **No re-fighting for XP:** a wild squishy you beat without befriending wanders off for you for the rest of its spawn window. Other players can still find it.
+- **No re-fighting for XP, and no getting stuck:** a wild squishy you beat without befriending, lose to or run from wanders off for you for the rest of its spawn window, so the next one you find is someone new. A tie leaves it there. Other players can still find it. On the Tutorial Glade only befriending moves one on, so a new player can always try again.
+- **Rarer wild squishies come a little lower:** a wild squishy matched to your Partner's level spawns a level or two lower if it's rare or rarer, since rarer squishies are naturally stronger (server-only `SPAWN_RULES.rarityLevelDiscount`).
 - Battles are never violent: squishies get "tuckered out", not hurt.
 
 ## 7. Growth: care, habitats and XP
