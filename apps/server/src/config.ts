@@ -1,4 +1,8 @@
+import { ShortCommitSchema } from '@heartpatch/shared';
 import { z } from 'zod';
+
+/** An unset build arg reaches the image as an empty string: treat it as unset. */
+const unsetIfEmpty = (value: unknown) => (value === '' ? undefined : value);
 
 const ConfigSchema = z.object({
   // Defaults to production so a misconfigured image never loads dev-only tooling.
@@ -7,6 +11,20 @@ const ConfigSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   PUBLIC_ORIGIN: z.url().default('http://localhost:5173'),
   APP_VERSION: z.string().min(1).default('dev'),
+  // The build number (commits on main) and short sha the image was built from
+  // (#198), set by the deploy as build args; unset for local runs.
+  APP_BUILD: z.preprocess(unsetIfEmpty, z.coerce.number().int().positive().optional()),
+  // A full or short sha; kept as its first 7 hex digits, as the client build does
+  // (tooling/version/build-info.ts), so one build arg serves both images.
+  APP_COMMIT: z.preprocess(
+    unsetIfEmpty,
+    z
+      .string()
+      .regex(/^[0-9a-f]{7,40}$/)
+      .transform((sha) => sha.slice(0, 7))
+      .pipe(ShortCommitSchema)
+      .optional(),
+  ),
   // Required, so a missing value stops the server rather than failing on first query.
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   // Behind Caddy, trust one proxy hop so request.ip is the player's IP (per-IP rate limits).
