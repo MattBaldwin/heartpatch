@@ -571,7 +571,7 @@ async function desktopPlayer(browser: Browser, name: string): Promise<Page> {
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');
   await realTap(overlay.getByRole('button', { name: 'Sign up' }));
-  await overlay.getByLabel('Family code').fill(process.env['HP_SIGNUP_CODE'] ?? '');
+  await overlay.getByLabel('Family or invite code').fill(process.env['HP_SIGNUP_CODE'] ?? '');
   await overlay.getByLabel('Pick a name').fill(name);
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');

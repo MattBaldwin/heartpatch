@@ -44,7 +44,7 @@ heartpatch/
 │     │  │   └─ <module>/     routes.ts, service.ts, repo.ts, schemas.ts, *.test.ts
 │     │  ├─ ws/               WebSocket hub, channels, message handlers
 │     │  ├─ jobs/             pg-boss: boss, event consumers, nightfall, limits
-│     │  ├─ ops/              operator scripts (reset-password)
+│     │  ├─ ops/              operator scripts (reset-password, signup-code)
 │     │  └─ lib/              filter, rng, time, errors, idempotency, zod
 │     └─ tests/
 ├─ packages/
@@ -291,6 +291,7 @@ Add anything else only with a one-line justification in the PR.
 - Argon2id with library defaults (or memory ≥ 19 MiB, iterations ≥ 2).
 - Recovery codes: 12 characters, shown once, stored hashed. **One active code per user**; resetting with it marks it used and shows a fresh one. The `recovery_codes` table keeps used codes for audit.
 - **Operator password reset:** a built server script for players with no map owner, or whose game maps have different owners, run on the host as `docker compose exec server node dist/ops/reset-password.js <username>` (the production image has no pnpm or dev tooling). Never exposed over HTTP. A reset (operator or map owner) also revokes the user's existing sessions and shows a new recovery code.
+- **Family signup codes (#195):** 12 characters, shown once, stored as SHA-256 in `signup_codes` (looked up by hash, since sign-up has no username to find the row by). A patch owner may have 3 live codes, the operator any number (`ops/signup-code.js`). Signing up spends a use in the account's own transaction. A patch invite typed at sign-up also files that patch's join request in the same transaction; the owner's approval waits until the new player has a Keeper (and the tutorial, where required).
 - All user-entered text (usernames, nicknames, outfit names, chat in Phase 2) goes through `lib/filter` on the server.
 - Helmet security headers; Content-Security-Policy restricting scripts to self.
 - No third-party analytics or ads. No email collection. Birth year only.
@@ -313,7 +314,7 @@ Add anything else only with a one-line justification in the PR.
 | `HP_DEV_SQUISHY_GRANTS` | `true` | dev/test only; registers routes that hand a player a squishy and start a battle against a chosen wild squishy (#13), until spawns (#14) and the tutorial's starter exist (Playwright sets it) |
 | `HP_DEV_DROP_CHANCE` | `100` | dev/test only; every found-clothing drop table's chance, in percent (#43), so a gather finds something |
 | `HP_SEED_ALLOW_REMOTE` | `true` | `pnpm db:seed` only; lets the seed write to a database whose host isn't local (localhost, 127.0.0.1, ::1 or the compose service `db`). Refused in production |
-| `HP_SIGNUP_CODE` | random string | required to create an account (family-only signup, Phase 1); checked with a constant-time comparison under the auth rate limit |
+| `HP_SIGNUP_CODE` | random string | bootstrap signup code, kept for one release after #195 (family codes and patch invites now sign families up); checked with a constant-time comparison under the auth rate limit |
 | `HP_TUTORIAL_REQUIRED` | `false` | defaults to `false` when unset; when `false`, new accounts can create/join maps without finishing the tutorial. Production sets `true` (owner decision 2026-10-04, `infra/compose/.env.prod.example`) |
 | `HP_KEEPER_REQUIRED` | `true` | defaults to `true`; creating or joining a map needs a Keeper (#42), so other players always see who's who. `false` only for testing |
 

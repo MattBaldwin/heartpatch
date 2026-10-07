@@ -139,7 +139,7 @@ async function signUpAndMakePatch(page, name) {
   await page.goto(`${BASE}/`, { waitUntil: 'load' });
   const overlay = page.getByTestId('auth-overlay');
   await overlay.getByRole('button', { name: 'Sign up' }).click();
-  await overlay.getByLabel('Family code').fill(SIGNUP_CODE);
+  await overlay.getByLabel('Family or invite code').fill(SIGNUP_CODE);
   await overlay.getByLabel('Pick a name').fill(name);
   await overlay.getByLabel('Pick a password').fill('squishy-secret');
   await overlay.getByLabel('Year you were born').selectOption('2014');

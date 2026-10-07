@@ -51,6 +51,8 @@ import { healthRoutes } from './modules/health/routes.js';
 import { keepersRoutes } from './modules/keepers/routes.js';
 import { createKeepersService } from './modules/keepers/service.js';
 import { mapsRoutes } from './modules/maps/routes.js';
+import { signupCodesRoutes } from './modules/signup-codes/routes.js';
+import { createSignupCodesService } from './modules/signup-codes/service.js';
 import { createMapsService } from './modules/maps/service.js';
 import { createHealthService, type ReadinessCheck } from './modules/health/service.js';
 import { tutorialRoutes } from './modules/tutorial/routes.js';
@@ -118,9 +120,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const { db } = options;
   const secureCookies = config.NODE_ENV === 'production';
   const authRepo = db ? createAuthRepo(db) : undefined;
-  const auth = authRepo
-    ? createAuthService({ repo: authRepo, signupCode: config.HP_SIGNUP_CODE, now: clock })
+  // Family codes and patch invites both sign a new family up (#195).
+  const signupCodes = db
+    ? createSignupCodesService({ db, bootstrapCode: config.HP_SIGNUP_CODE, clock })
     : undefined;
+  const auth =
+    authRepo && signupCodes
+      ? createAuthService({ repo: authRepo, passes: signupCodes, now: clock })
+      : undefined;
   const authHooks = auth ? createAuthHooks(auth, { secureCookies }) : undefined;
 
   // Live sync (`/ws`, tech spec §5). Modules call `wsHub.publish(mapId)` after
@@ -154,7 +161,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       // Modules that need a logged-in player (they all need the database too)
       // register inside this block and take `authHooks.requireAuth` (and
       // `wsHub`, if they write game events).
-      if (db && auth && authHooks) {
+      if (db && auth && authHooks && signupCodes) {
         await api.register(
           authRoutes(auth, {
             hooks: authHooks,
@@ -164,6 +171,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
               : {}),
           }),
         );
+
+        await api.register(signupCodesRoutes(signupCodes, { hooks: authHooks }));
 
         const keepers = createKeepersService({ db, clock });
         await api.register(keepersRoutes(keepers, { hooks: authHooks }));

@@ -123,6 +123,14 @@ export interface PendingRequestRow {
  * Map storage. Plain queries; the service decides the rules and runs each
  * command in one transaction with `transaction`.
  */
+export interface InviteRow {
+  id: string;
+  mapId: string;
+  createdByUserId: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+}
+
 export interface MapsRepo {
   /**
    * Runs `fn` in one transaction (`withTransaction`): `repo` is this repo on
@@ -241,6 +249,8 @@ export interface MapsRepo {
     code: string,
     now: Date,
   ) => Promise<{ id: string; mapId: string; mapName: string } | null>;
+  /** A multiplayer map's invite by code, live or not (sign-up says why one stopped working, #195). */
+  findInviteByCode: (code: string) => Promise<InviteRow | null>;
 
   findPendingRequest: (
     mapId: string,
@@ -709,6 +719,22 @@ function queries(db: Executor): MapsRepo {
             eq(maps.kind, 'multiplayer'),
           ),
         );
+      return row ?? null;
+    },
+
+    findInviteByCode: async (code) => {
+      const [row] = await db
+        .select({
+          id: inviteCodes.id,
+          mapId: inviteCodes.mapId,
+          createdByUserId: inviteCodes.createdByUserId,
+          expiresAt: inviteCodes.expiresAt,
+          revokedAt: inviteCodes.revokedAt,
+        })
+        .from(inviteCodes)
+        .innerJoin(maps, eq(maps.id, inviteCodes.mapId))
+        .where(and(eq(inviteCodes.code, code), eq(maps.kind, 'multiplayer')))
+        .limit(1);
       return row ?? null;
     },
 

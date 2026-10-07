@@ -9,6 +9,7 @@ import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import { canonicalTimeZone } from '../../lib/time.js';
 import { SESSION_RENEW_AFTER_MS, SESSION_TTL_MS } from './limits.js';
+import type { SignupPasses } from '../signup-codes/service.js';
 import type { AuthRepo, NewSession } from './repo.js';
 import {
   hashSecret,
@@ -16,7 +17,6 @@ import {
   newRecoveryCode,
   newSessionToken,
   newResetCredentials,
-  safeEqual,
   verifyAgainstDummy,
   verifySecret,
 } from './secrets.js';
@@ -61,15 +61,17 @@ export interface AuthService {
 
 export interface AuthServiceOptions {
   repo: AuthRepo;
-  /** `HP_SIGNUP_CODE`; undefined closes signups. */
-  signupCode: string | undefined;
+  /**
+   * Checks and spends the code typed on the sign-up screen (#195): a family
+   * code, a patch invite or `HP_SIGNUP_CODE`. Omit it to close signups.
+   */
+  passes?: SignupPasses;
   now?: () => Date;
 }
 
 // Kid-readable messages (style guide §6).
 const MESSAGES = {
   signupsClosed: 'New accounts are closed right now. Ask a grown-up for help!',
-  wrongSignupCode: "That family code doesn't match. Ask a grown-up for the right one!",
   usernameTaken: 'Someone already picked that name. Try another one!',
   birthYear: 'Pick the year you were born.',
   timeZone: "Hmm, we couldn't read your clock. Please try again!",
@@ -78,7 +80,7 @@ const MESSAGES = {
 } as const;
 
 export function createAuthService(options: AuthServiceOptions): AuthService {
-  const { repo, signupCode } = options;
+  const { repo, passes } = options;
   const now = options.now ?? (() => new Date());
 
   const issueSession = (): { issued: IssuedSession; stored: NewSession } => {
@@ -89,11 +91,9 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
 
   return {
     signup: async (input) => {
-      // First, so nothing else is revealed without the family code (decision D).
-      if (signupCode === undefined) throw new AppError('FORBIDDEN', MESSAGES.signupsClosed);
-      if (!safeEqual(input.signupCode, signupCode)) {
-        throw new AppError('FORBIDDEN', MESSAGES.wrongSignupCode);
-      }
+      // First, so nothing else is revealed without a working code (decision D).
+      if (!passes) throw new AppError('FORBIDDEN', MESSAGES.signupsClosed);
+      const pass = await passes.check(input.signupCode);
       assertAllowedText(input.username, 'name');
       if (input.birthYear > now().getUTCFullYear()) {
         throw new AppError('VALIDATION_FAILED', MESSAGES.birthYear);
@@ -114,6 +114,7 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
         timeZone,
         recoveryCodeHash,
         session: session.stored,
+        redeem: (tx, userId) => passes.redeem(tx, pass, userId),
       });
       if (!user) throw new AppError('CONFLICT', MESSAGES.usernameTaken);
       return { user, session: session.issued, recoveryCode: formatRecoveryCode(recoveryCode) };
