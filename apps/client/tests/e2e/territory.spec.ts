@@ -71,10 +71,14 @@ async function tapCanvas(page: Page, x: number, y: number): Promise<void> {
 
 /**
  * Taps outward from the Heart Seed (where the camera starts) until the tile
- * panel offers `action`; returns where it tapped. Wild land rings every home
- * base just past its ring (design doc §11).
+ * panel offers `action` on a tile `fits` (by its "q,r"); returns where it
+ * tapped. Wild land rings every home base just past its ring (design doc §11).
  */
-async function findTile(page: Page, action: string): Promise<{ x: number; y: number }> {
+async function findTile(
+  page: Page,
+  action: string,
+  fits: (key: string) => boolean = () => true,
+): Promise<{ x: number; y: number }> {
   const box = (await page.locator('#game').boundingBox())!;
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
@@ -83,10 +87,12 @@ async function findTile(page: Page, action: string): Promise<{ x: number; y: num
       const angle = (step * Math.PI) / 6;
       const at = { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) };
       await tapCanvas(page, at.x, at.y);
-      if ((await territoryState(page))?.tileAction === action) return at;
+      if ((await territoryState(page))?.tileAction !== action) continue;
+      const selected = (await mapState(page))?.selected ?? null;
+      if (selected !== null && fits(selected)) return at;
     }
   }
-  throw new Error(`no tile offering "${action}" near the Heart Seed`);
+  throw new Error(`no tile offering "${action}" that fits near the Heart Seed`);
 }
 
 test('claims wild land from its guardians and posts a guard on it', async ({ browser }) => {
@@ -119,8 +125,15 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   });
   expect(stuff.status).toBe(201);
 
-  // Wild land next to home: the panel says Claim, kindly.
-  const spot = await findTile(page, 'claim');
+  // Wild land next to home: the panel says Claim, kindly. A Hearthfire goes in
+  // a tile's middle (#202), so the land claimed here has no resource node
+  // there: many wild terrains put one on 40–50% of their tiles, and a node
+  // tile's panel rightly offers no fire ("a fire next door can reach it").
+  const { body: wild } = await api<MapView>(page, 'GET', `/maps/${mapId}/view`);
+  const clear = new Set(
+    wild.tiles.filter((t) => t.nodeResource === null).map((t) => `${String(t.q)},${String(t.r)}`),
+  );
+  const spot = await findTile(page, 'claim', (key) => clear.has(key));
   const panel = page.getByTestId('tile-panel');
   // Any wait: in the patch's last hour it's minutes, or "less than a minute".
   await expect(panel).toContainText(
