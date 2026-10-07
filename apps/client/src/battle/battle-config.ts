@@ -39,6 +39,8 @@ export const PLAYBACK = {
   swapMs: 700, // TUNE
   /** Offering a Heart Charm: a hopeful pause, then a bounce or a wiggle. */
   captureMs: 1300, // TUNE
+  /** A potion (#214): a cosy sip, a happy wiggle, and the sparkle shield. */
+  itemMs: 1000, // TUNE
   /** A raid replay (#16) rests on its first turn this long before it plays. */
   replayLeadMs: 900, // TUNE
   /** Breather before the result screen. */
@@ -131,3 +133,14 @@ export const BATTLE_CAMERA = {
   /** How fast a push-in and a beat decay back, per second. */
   beatDecay: 2.4, // TUNE
 } as const;
+
+/**
+ * A potion's sparkle shield (#214): a soft lavender bubble over the squishy
+ * until the next hit lands. `fit` is its size against the squishy's.
+ */
+export const SHIELD_BUBBLE = {
+  color: [0.82, 0.72, 1] as const, // TUNE
+  glow: [0.42, 0.34, 0.62] as const, // TUNE
+  alpha: 0.24, // TUNE
+  fit: 1.25, // TUNE
+};

@@ -7,6 +7,14 @@ import type {
 import type { SquishMove } from '../procedural/config.js';
 import { PLAYBACK } from './battle-config.js';
 import {
+  chipsAfterDrinking,
+  chipsOf,
+  SHIELD_CALLOUT,
+  SHIELD_LINE,
+  sipLine,
+  type PlateChips,
+} from './potions.js';
+import {
   effectivenessLine,
   isMine,
   STAT_WORDS,
@@ -32,6 +40,8 @@ export interface PlaybackStep {
     | 'swap'
     | 'forfeit'
     | 'capture'
+    /** A potion (#214). */
+    | 'item'
     | 'end';
   /** Whose squishy the step is about. */
   readonly side: BattleSideId;
@@ -53,6 +63,10 @@ export interface PlaybackStep {
   readonly effectiveness: string | null;
   /** For a status starting or showing again: which one (the arena shows its stars or bubbles). */
   readonly status: BattleStatusId | null;
+  /** For items: which potion. */
+  readonly item: string | null;
+  /** For hits: a potion's sparkle shield took most of it, and pops. */
+  readonly shielded: boolean;
   readonly ms: number;
 }
 
@@ -60,6 +74,8 @@ export interface PlaybackStep {
 export interface ShownSide {
   readonly active: number;
   readonly energy: readonly number[];
+  /** Each squishy's potion chips (#214), as far as the log has played. */
+  readonly chips: readonly PlateChips[];
 }
 export type ShownState = Readonly<Record<BattleSideId, ShownSide>>;
 
@@ -67,6 +83,7 @@ export function shownFrom(battle: PlayerBattle): ShownState {
   const side = (id: BattleSideId): ShownSide => ({
     active: battle.view.sides[id].active,
     energy: battle.view.sides[id].squishies.map((s) => s.energy),
+    chips: battle.view.sides[id].squishies.map(chipsOf),
   });
   return { a: side('a'), b: side('b') };
 }
@@ -79,6 +96,16 @@ export function applyStep(shown: ShownState, step: PlaybackStep): ShownState {
     side = { ...side, energy: side.energy.map((e, i) => (i === step.slot ? energy : e)) };
   }
   if (step.kind === 'swap' && step.to !== null) side = { ...side, active: step.to };
+  const { item } = step;
+  if ((item !== null && step.kind === 'item') || step.shielded) {
+    side = {
+      ...side,
+      chips: side.chips.map((c, i) => {
+        if (i !== step.slot) return c;
+        return item !== null ? chipsAfterDrinking(c, item) : { ...c, shield: false };
+      }),
+    };
+  }
   return { ...shown, [step.side]: side };
 }
 
@@ -89,7 +116,18 @@ function step(
   text: string,
   ms: number,
   extra: Partial<
-    Pick<PlaybackStep, 'callout' | 'squish' | 'energy' | 'to' | 'move' | 'effectiveness' | 'status'>
+    Pick<
+      PlaybackStep,
+      | 'callout'
+      | 'squish'
+      | 'energy'
+      | 'to'
+      | 'move'
+      | 'effectiveness'
+      | 'status'
+      | 'item'
+      | 'shielded'
+    >
   > = {},
 ): PlaybackStep {
   return {
@@ -105,6 +143,8 @@ function step(
     move: extra.move ?? null,
     effectiveness: extra.effectiveness ?? null,
     status: extra.status ?? null,
+    item: extra.item ?? null,
+    shielded: extra.shielded ?? false,
   };
 }
 
@@ -150,14 +190,24 @@ export function playbackSteps(
           'hit',
           event.side,
           event.slot,
-          `${name(event.side, event.slot)} lost some energy.`,
+          event.shielded ? SHIELD_LINE : `${name(event.side, event.slot)} lost some energy.`,
           PLAYBACK.hitMs,
           {
-            callout: effectivenessLine(event.effectiveness),
+            callout: event.shielded ? SHIELD_CALLOUT : effectivenessLine(event.effectiveness),
             squish: 'wobble',
             energy: event.energy,
             effectiveness: event.effectiveness,
+            shielded: event.shielded === true,
           },
+        );
+      case 'item':
+        return step(
+          'item',
+          event.side,
+          event.slot,
+          sipLine(name(event.side, event.slot), event.item),
+          PLAYBACK.itemMs,
+          { squish: 'bounce', item: event.item },
         );
       case 'heal':
         return step(

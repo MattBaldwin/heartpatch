@@ -9,6 +9,32 @@ export const RECIPES: Recipe[] = [
     output: { resource: 'heart-charm', quantity: 1 },
     craftSeconds: 60, // TUNE:
   },
+  // Battle potions (#214): farm Treats plus something gathered. Year-round
+  // inputs, so a potion never needs a season.
+  {
+    id: 'brave-brew',
+    name: 'Brave Brew',
+    description: 'Stir Treats and a pinch of Stone into a fizzy, peppery brew.',
+    inputs: { treats: 2, stone: 2 }, // TUNE:
+    output: { resource: 'brave-brew', quantity: 1 },
+    craftSeconds: 2 * 60, // TUNE:
+  },
+  {
+    id: 'cozy-cocoa',
+    name: 'Cozy Cocoa',
+    description: 'Warm Treats over a little Timber fire. Marshmallows on top!',
+    inputs: { treats: 2, timber: 2 }, // TUNE:
+    output: { resource: 'cozy-cocoa', quantity: 1 },
+    craftSeconds: 2 * 60, // TUNE:
+  },
+  {
+    id: 'hearty-soup',
+    name: 'Hearty Soup',
+    description: 'Simmer Treats on Emberwood until it smells amazing.',
+    inputs: { treats: 2, emberwood: 1 }, // TUNE:
+    output: { resource: 'hearty-soup', quantity: 1 },
+    craftSeconds: 2 * 60, // TUNE:
+  },
   {
     id: 'pumpkin-treats',
     name: 'Pumpkin Treats',

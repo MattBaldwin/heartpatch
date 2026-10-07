@@ -36,13 +36,27 @@ export function stageMultiplier(stages: number, rules: BattleRules): number {
   return stages >= 0 ? factor : 1 / factor;
 }
 
-/** A stat after stat stages. */
+/** A stat after stat stages and any potion boost (#214). */
 export function effectiveStat(
   squishy: BattleSquishy,
   stat: BattleStat,
   rules: BattleRules,
 ): number {
-  return squishy.stats[stat] * stageMultiplier(squishy.stages[stat], rules);
+  const staged = squishy.stats[stat] * stageMultiplier(squishy.stages[stat], rules);
+  const boost = stat === 'speed' ? 0 : squishy.boosts[stat];
+  return boost === 0 ? staged : (staged * (100 + boost)) / 100;
+}
+
+/**
+ * A landed hit's energy after the target's shield (#214): `shield`% less,
+ * rounded down, but never below the damage `minimum`.
+ */
+export function shieldedAmount(amount: number, shield: number, rules: BattleRules): number {
+  if (shield === 0) return amount;
+  return Math.min(
+    amount,
+    Math.max(rules.damage.minimum, Math.floor((amount * (100 - shield)) / 100)),
+  );
 }
 
 /** Element × feeling for a move into a defender: what the callout describes. */
