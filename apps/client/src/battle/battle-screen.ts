@@ -149,6 +149,7 @@ const MESSAGES = {
   resultNoContest: 'No contest!',
   wonSub: 'Everyone had a great time.',
   wildWonSub: "It's tuckered out and toddles away!",
+  wildGoneSub: 'It wandered off. Try another one nearby!',
   gentleNote: (percent: number) =>
     `Gentle patch: ${percent === 50 ? 'half' : `${String(percent)}%`} XP for playing a smaller Keeper.`,
   lostSub: 'A nap and a snack, and they’ll be ready again.',
@@ -493,9 +494,17 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
                     // A beaten wild squishy wanders off (owner decision 2026-10-03).
                     subtitle: b.kind === 'wild' ? MESSAGES.wildWonSub : MESSAGES.wonSub,
                   }
-            : result.reason === 'forfeit'
-              ? { title: MESSAGES.resultScooted, subtitle: MESSAGES.scootedSub }
-              : { title: MESSAGES.resultLost, subtitle: MESSAGES.lostSub };
+            : {
+                title: result.reason === 'forfeit' ? MESSAGES.resultScooted : MESSAGES.resultLost,
+                // A wild squishy you lost to or ran from wanders off too, so
+                // the next find is a different one (owner decision 2026-10-06, #208).
+                subtitle:
+                  b.kind === 'wild'
+                    ? MESSAGES.wildGoneSub
+                    : result.reason === 'forfeit'
+                      ? MESSAGES.scootedSub
+                      : MESSAGES.lostSub,
+              };
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
