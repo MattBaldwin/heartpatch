@@ -40,10 +40,9 @@ export interface PotionSimConfig {
   readonly kidPolicy: BattleAiPolicy;
   readonly partnerLevels: readonly number[];
   readonly rarities: readonly Rarity[];
-  /**
-   * Levels a Partner-matched wild squishy spawns below the roll, by rarity.
-   * Mirrors #211's server-only `SPAWN_RULES.rarityLevelDiscount` until it lands.
-   */
+  /** Wild levels around the Partner's; `SPAWN_RULES.partnerOffset` when left out. */
+  readonly levelOffset?: { readonly min: number; readonly max: number };
+  /** Levels a Partner-matched wild squishy spawns below the roll, by rarity (none ships). */
   readonly rarityLevelDiscount: Partial<Record<Rarity, number>>;
   readonly plans: readonly PotionPlan[];
   /** Battles per starter × wild species × Partner level × level offset × plan. */
@@ -55,7 +54,7 @@ export const POTION_SIM_CONFIG: PotionSimConfig = {
   kidPolicy: 'balanced', // TUNE: a kid picks good moves most of the time
   partnerLevels: [5, 10, 20, 30],
   rarities: ['common', 'uncommon', 'rare', 'epic', 'legendary'],
-  rarityLevelDiscount: { rare: 1, epic: 2, legendary: 2, secret: 2 },
+  rarityLevelDiscount: {},
   plans: [
     { key: 'none' },
     { key: 'brave-brew', item: 'brave-brew', when: 'first-turn' },
@@ -121,7 +120,7 @@ export function runPotionSim(config: PotionSimConfig): {
   const data = serverData();
   const content = createBattleContent(data, BATTLE_RULES);
   const { base } = speciesForms(data);
-  const offset = SPAWN_RULES.partnerOffset ?? { min: 0, max: 0 };
+  const offset = levelOffsetOf(config);
   const rows: PotionSimRow[] = [];
   const wildCounts: Partial<Record<Rarity, number>> = {};
   for (const rarity of config.rarities) {
@@ -176,6 +175,9 @@ export function runPotionSim(config: PotionSimConfig): {
   return { rows, contentHash: content.contentHash, wildCounts };
 }
 
+const levelOffsetOf = (config: PotionSimConfig) =>
+  config.levelOffset ?? SPAWN_RULES.partnerOffset ?? { min: 0, max: 0 };
+
 const pct = (wins: number, battles: number) =>
   battles === 0 ? '–' : `${((wins * 100) / battles).toFixed(0)}%`;
 
@@ -191,16 +193,14 @@ export function renderPotionReport(
     );
     return row ? pct(row.wins, row.battles) : '–';
   };
+  const offset = levelOffsetOf(config);
+  const discount = Object.entries(config.rarityLevelDiscount)
+    .map(([r, n]) => `${String(n)} for ${r}`)
+    .join(', ');
   const lines = [
     '# Potion sim (#214)',
     '',
-    `Content hash \`${result.contentHash}\`. A lone starter Partner, played by the \`${config.kidPolicy}\` policy, against every wild base form of a rarity. Wild levels: Partner level ${String(SPAWN_RULES.partnerOffset?.min ?? 0)} to +${String(SPAWN_RULES.partnerOffset?.max ?? 0)}, less the rarity discount (${Object.entries(
-      config.rarityLevelDiscount,
-    )
-      .map(([r, n]) => `${r} ${String(n)}`)
-      .join(
-        ', ',
-      )}). Brave Brew and Cozy Cocoa are drunk on turn 1; Hearty Soup the first turn below half energy. Win rate (draws count as not winning).`,
+    `Content hash \`${result.contentHash}\`. A lone starter Partner, played by the \`${config.kidPolicy}\` policy, against every wild base form of a rarity. Wild levels: Partner level ${String(offset.min)} to ${String(offset.max)}${discount ? `, less ${discount}` : ''}. Brave Brew and Cozy Cocoa are drunk on turn 1; Hearty Soup the first turn below half energy. Win rate (draws count as not winning).`,
     '',
   ];
   for (const level of levels) {

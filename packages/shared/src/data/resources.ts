@@ -121,14 +121,14 @@ export const RESOURCES: Resource[] = [
     name: 'Brave Brew',
     description: 'A fizzy, peppery sip. Your squishy plays bolder for the whole battle!',
     kind: 'crafted',
-    battleEffect: { attackPercent: 25, shieldPercent: 75 }, // TUNE:
+    battleEffect: { attackPercent: 40, shieldPercent: 75 }, // TUNE: owner decision 2026-10-07
   },
   {
     id: 'cozy-cocoa',
     name: 'Cozy Cocoa',
     description: 'Warm and marshmallowy. Bumps feel extra soft for the whole battle!',
     kind: 'crafted',
-    battleEffect: { defensePercent: 25, shieldPercent: 75 }, // TUNE:
+    battleEffect: { defensePercent: 40, shieldPercent: 75 }, // TUNE: owner decision 2026-10-07
   },
   {
     id: 'hearty-soup',
