@@ -68,6 +68,11 @@ describe('build config (#198)', () => {
     });
   });
 
+  it('keeps the first 7 digits of a full sha, as the client build does', () => {
+    const sha = 'cb04682f1e2d3c4b5a69788796a5b4c3d2e1f001';
+    expect(loadConfig({ ...env, APP_BUILD: '214', APP_COMMIT: sha }).APP_COMMIT).toBe('cb04682');
+  });
+
   it('refuses a build number or commit that is not one', () => {
     expect(() => loadConfig({ ...env, APP_BUILD: 'abc' })).toThrow();
     expect(() => loadConfig({ ...env, APP_COMMIT: 'not-a-sha' })).toThrow();

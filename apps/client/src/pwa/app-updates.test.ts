@@ -55,6 +55,19 @@ describe('createAppUpdates', () => {
     expect({ applied, reloads }).toEqual({ applied: 1, reloads: 0 });
   });
 
+  it('offers a newer worker again after the one being applied was replaced', () => {
+    const applied: string[] = [];
+    const updates = createAppUpdates({ hold: createUpdateHold(), reload: () => undefined });
+    updates.offer(() => applied.push('first'));
+    updates.apply();
+    expect(updates.applying).toBe(true);
+    // The first went redundant while held; update-flow offers the newer one.
+    updates.offer(() => applied.push('second'));
+    expect(updates.applying).toBe(false);
+    updates.apply();
+    expect(applied).toEqual(['first', 'second']);
+  });
+
   it('reloads for a newer server, but never while updates are held (#47)', () => {
     const hold = createUpdateHold();
     let reloads = 0;

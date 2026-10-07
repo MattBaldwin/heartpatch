@@ -286,20 +286,23 @@
 
 .hp-trays-on .auth-chip-head {
   display: flex;
-  margin-top: -8px;
+  margin-top: -10px;
 }
 
-/* The game's version (#198): small and quiet, tap to copy. */
+/* The game's version (#198): small and quiet, tap to copy. Small text, but a
+   full 44pt tap target (style guide §2); the name above has its own row. */
 .auth-chip-version {
-  min-height: 32px;
-  padding: 0 8px 6px;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 8px;
   border: 0;
   background: none;
   font: inherit;
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: #8a7290;
+  color: #7d6380;
   text-align: left;
   cursor: pointer;
 }

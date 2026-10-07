@@ -14,7 +14,16 @@ const ConfigSchema = z.object({
   // The build number (commits on main) and short sha the image was built from
   // (#198), set by the deploy as build args; unset for local runs.
   APP_BUILD: z.preprocess(unsetIfEmpty, z.coerce.number().int().positive().optional()),
-  APP_COMMIT: z.preprocess(unsetIfEmpty, ShortCommitSchema.optional()),
+  // A full or short sha; kept as its first 7 hex digits, as the client build does
+  // (tooling/version/build-info.ts), so one build arg serves both images.
+  APP_COMMIT: z.preprocess(
+    unsetIfEmpty,
+    z
+      .string()
+      .regex(/^[0-9a-f]{7,40}$/)
+      .transform((sha) => ShortCommitSchema.parse(sha.slice(0, 7)))
+      .optional(),
+  ),
   // Required, so a missing value stops the server rather than failing on first query.
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   // Behind Caddy, trust one proxy hop so request.ip is the player's IP (per-IP rate limits).

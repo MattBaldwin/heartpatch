@@ -10,6 +10,12 @@ import '../ui/auth/auth.css';
 /** TUNE: how long the line says "Copied!". */
 const COPIED_MS = 1500;
 
+export const VERSION_TEXT = {
+  copied: 'Copied!',
+  notCopied: "Couldn't copy. Write it down instead!",
+  updateNow: 'Update now',
+} as const;
+
 export interface VersionMenu {
   line: HTMLButtonElement;
   updateRow: HTMLButtonElement;
@@ -32,7 +38,7 @@ export function mountVersionMenu(deps: {
     'button',
     { type: 'button', 'data-testid': 'app-update-now' },
     el('span', { 'aria-hidden': 'true' }, '✨'),
-    'Update now',
+    VERSION_TEXT.updateNow,
   );
 
   let server: ServerBuild | null = null;
@@ -42,25 +48,33 @@ export function mountVersionMenu(deps: {
     if (copiedTimer === undefined) line.textContent = view.text;
     line.setAttribute('aria-label', `Version ${view.text}. Tap to copy.`);
     updateRow.hidden = !view.updateReady;
+    updateRow.disabled = deps.updates.applying;
   };
 
+  /** Says `note` on the line for a moment, then the version again. */
+  const flash = (note: string) => {
+    clearTimeout(copiedTimer);
+    line.textContent = note;
+    copiedTimer = setTimeout(() => {
+      copiedTimer = undefined;
+      render();
+    }, COPIED_MS);
+  };
   line.addEventListener('click', () => {
     const text = versionView(deps.client, server, deps.updates.workerWaiting).text;
-    deps
-      .copy(text)
-      .then(() => {
-        clearTimeout(copiedTimer);
-        line.textContent = 'Copied!';
-        copiedTimer = setTimeout(() => {
-          copiedTimer = undefined;
-          render();
-        }, COPIED_MS);
-      })
-      .catch(() => undefined);
+    deps.copy(text).then(
+      () => {
+        flash(VERSION_TEXT.copied);
+      },
+      () => {
+        // The words stay on screen, as the recovery code's Copy does.
+        flash(VERSION_TEXT.notCopied);
+      },
+    );
   });
   updateRow.addEventListener('click', () => {
-    updateRow.disabled = true;
     deps.updates.apply();
+    render();
   });
 
   return {

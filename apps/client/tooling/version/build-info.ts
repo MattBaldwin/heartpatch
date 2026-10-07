@@ -15,6 +15,7 @@ export interface BuildSource {
 }
 
 const COUNT = /^[1-9]\d*$/;
+// A full or short sha, as the server's APP_COMMIT takes (apps/server/src/config.ts).
 const SHA = /^[0-9a-f]{7,40}$/;
 
 function info(count: string, sha: string, now: Date): BuildInfo | null {

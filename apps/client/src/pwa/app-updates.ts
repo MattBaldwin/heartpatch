@@ -34,6 +34,8 @@ export interface AppUpdates {
   /** A new service worker is waiting; `apply` switches to it (update-flow.ts). */
   offer: (apply: () => void) => void;
   readonly workerWaiting: boolean;
+  /** `apply` was called and hasn't switched yet (it may be waiting for the hold). */
+  readonly applying: boolean;
   /**
    * Switches to the newest version: the waiting worker if there is one, else
    * a reload (page loads are network-first, so it fetches the new build).
@@ -50,10 +52,16 @@ export function createAppUpdates(deps: {
   let applied = false;
   return {
     offer: (apply) => {
+      // A newer worker replaced the one being applied (it went redundant
+      // while held): this one gets its own tap.
       waiting = apply;
+      applied = false;
     },
     get workerWaiting() {
       return waiting !== null;
+    },
+    get applying() {
+      return applied;
     },
     apply: () => {
       if (applied) return;
