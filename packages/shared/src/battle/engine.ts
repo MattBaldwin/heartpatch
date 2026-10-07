@@ -16,6 +16,7 @@ import {
   effectivenessTier,
   matchupMultiplier,
   rollDamage,
+  shieldedAmount,
   statsAtLevel,
 } from './formulas.js';
 import {
@@ -23,6 +24,7 @@ import {
   benchOf,
   otherSide,
   type BattleEndReason,
+  type BattleBoostStat,
   type BattleEvent,
   type BattleResult,
   type BattleSquishy,
@@ -46,6 +48,7 @@ import {
 const SIDES = BattleSideIdSchema.options;
 
 const freshStages = (): Record<BattleStat, number> => ({ attack: 0, defense: 0, speed: 0 });
+const noBoosts = (): Record<BattleBoostStat, number> => ({ attack: 0, defense: 0 });
 
 /** Builds the first state from a setup. Throws if the setup breaks the rules. */
 export function startBattle(content: BattleContent, input: BattleSetup): BattleState {
@@ -76,8 +79,11 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
           stages: freshStages(),
           status: null,
           joined: slot === 0,
+          boosts: noBoosts(),
+          shield: 0,
         };
       }),
+      itemsUsed: [],
     };
   };
   return {
@@ -102,7 +108,9 @@ function draftOf(state: BattleState): Draft<BattleState> {
       moves: [...s.moves],
       stages: { ...s.stages },
       status: s.status && { ...s.status },
+      boosts: { ...s.boosts },
     })),
+    itemsUsed: [...side.itemsUsed],
   });
   return {
     version: state.version,
@@ -176,6 +184,13 @@ class Step {
       if (choice.type === 'swap') this.swap(side, choice.slot);
     }
 
+    // Battle items next (potions, #214): the side's whole turn too, before
+    // any move, so a shield is up for this turn's hit.
+    for (const side of SIDES) {
+      const choice = picked[side];
+      if (choice.type === 'item') this.useItem(side, choice.item);
+    }
+
     // Heart Charms next; a squishy that says yes ends the battle. Also the
     // side's whole turn.
     for (const side of SIDES) {
@@ -208,6 +223,8 @@ class Step {
       if (this.state.sides[otherSide(side)].controller.type !== 'ai') {
         throw new BattleRuleError(`side ${side} can only befriend an AI side's squishy`);
       }
+    } else if (given.type === 'item') {
+      this.checkItem(side, given.item);
     } else if (given.type === 'move') {
       if (!this.active(side).moves.includes(given.move)) {
         throw new BattleRuleError(`side ${side}'s squishy doesn't know "${given.move}"`);
@@ -216,6 +233,45 @@ class Step {
       this.checkBenchSlot(side, given.slot);
     }
     return given;
+  }
+
+  /** A battle item this side may still use (`itemRefusal`). */
+  private checkItem(side: BattleSideId, item: string): void {
+    switch (itemRefusal(this.content, this.state, side, item)) {
+      case 'not-an-item':
+        throw new BattleRuleError(`"${item}" can't be used in battle`);
+      case 'used-up':
+        throw new BattleRuleError(`side ${side} already used "${item}" this battle`);
+      case null:
+        return;
+    }
+  }
+
+  /**
+   * The active squishy uses a battle item (#214): boosts last the rest of
+   * the battle, a heal gives back a share of full energy, and the shield
+   * replaces any shield it had. No roll, so a potion always works.
+   */
+  private useItem(side: BattleSideId, item: string): void {
+    const effect = this.content.items.get(item);
+    if (!effect) throw new BattleRuleError(`"${item}" can't be used in battle`);
+    const user = this.active(side);
+    this.state.sides[side].itemsUsed.push(item);
+    this.emit({ ...this.at(side), type: 'item', item });
+    user.boosts.attack += effect.attackPercent ?? 0;
+    user.boosts.defense += effect.defensePercent ?? 0;
+    user.shield = effect.shieldPercent;
+    if (effect.healPercent) this.heal(side, effect.healPercent);
+  }
+
+  /** Gives `side`'s active squishy back `percent`% of full energy, up to full. */
+  private heal(side: BattleSideId, percent: number): void {
+    const user = this.active(side);
+    const restored = Math.floor((user.stats.hp * percent) / 100);
+    const amount = Math.min(restored, user.stats.hp - user.energy);
+    if (amount === 0) return;
+    user.energy += amount;
+    this.emit({ ...this.at(side), type: 'heal', amount, energy: user.energy });
   }
 
   private checkBenchSlot(side: BattleSideId, slot: number): void {
@@ -299,29 +355,34 @@ class Step {
     }
 
     if (move.power > 0) {
+      const rolled = rollDamage(this.content, move, user, target, this.rng);
+      const shielded = target.shield > 0;
       const amount = Math.min(
         target.energy,
-        rollDamage(this.content, move, user, target, this.rng),
+        shieldedAmount(rolled, target.shield, this.content.rules),
       );
+      target.shield = 0;
       target.energy -= amount;
       const effectiveness = effectivenessTier(
         matchupMultiplier(this.content, move, user, target),
         this.content.rules,
       );
-      this.emit({ ...this.at(foeSide), type: 'hit', amount, energy: target.energy, effectiveness });
+      this.emit({
+        ...this.at(foeSide),
+        type: 'hit',
+        amount,
+        energy: target.energy,
+        effectiveness,
+        ...(shielded && { shielded: true as const }),
+      });
       if (target.energy === 0) this.emit({ ...this.at(foeSide), type: 'tuckered-out' });
     }
 
     for (const effect of move.effects ?? []) {
       switch (effect.type) {
-        case 'heal': {
-          const restored = Math.floor((user.stats.hp * effect.percent) / 100);
-          const amount = Math.min(restored, user.stats.hp - user.energy);
-          if (amount === 0) break;
-          user.energy += amount;
-          this.emit({ ...this.at(side), type: 'heal', amount, energy: user.energy });
+        case 'heal':
+          this.heal(side, effect.percent);
           break;
-        }
         case 'stat': {
           const who = effect.target === 'self' ? side : foeSide;
           const squishy = this.active(who);
@@ -587,9 +648,38 @@ export function battleRecord(
   };
 }
 
-/** Every choice a side could legally make this turn (for the UI and tests). */
-export function legalChoices(state: BattleState, side: BattleSideId): BattleChoice[] {
+/**
+ * Why `side` can't use `item` now (#214), or null if it can: it isn't a
+ * battle item, or the side already used `rules.items.usesEach` of that kind
+ * this battle. The engine, `legalChoices` and the server all ask this, so the
+ * rule lives in one place. Whether the bag holds one is the server's to check.
+ */
+export function itemRefusal(
+  content: BattleContent,
+  state: Pick<BattleState, 'sides'>,
+  side: BattleSideId,
+  item: string,
+): 'not-an-item' | 'used-up' | null {
+  if (!content.items.has(item)) return 'not-an-item';
+  const used = state.sides[side].itemsUsed.filter((id) => id === item).length;
+  return used >= content.rules.items.usesEach ? 'used-up' : null;
+}
+
+/**
+ * Every choice a side could legally make this turn (for the UI and tests).
+ * Battle items are listed when `content` is given: player sides only, and
+ * whether the bag holds one is the server's to check.
+ */
+export function legalChoices(
+  state: BattleState,
+  side: BattleSideId,
+  content?: BattleContent,
+): BattleChoice[] {
   if (state.phase.type !== 'turn') return [];
+  const items =
+    content && state.sides[side].controller.type === 'player'
+      ? [...content.items.keys()].filter((item) => !itemRefusal(content, state, side, item))
+      : [];
   return [
     ...activeSquishy(state, side).moves.map((move): BattleChoice => ({ type: 'move', move })),
     ...benchOf(state, side).map(({ slot }): BattleChoice => ({ type: 'swap', slot })),
@@ -597,5 +687,6 @@ export function legalChoices(state: BattleState, side: BattleSideId): BattleChoi
     state.sides[otherSide(side)].controller.type === 'ai'
       ? [{ type: 'capture' } as const]
       : []),
+    ...items.map((item): BattleChoice => ({ type: 'item', item })),
   ];
 }

@@ -16,6 +16,10 @@ const ICONS: Readonly<Record<string, string>> = {
   fireworks: '🎆',
   'heart-charm': '💗',
   'jack-o-lantern-hearthfire': '🏮',
+  // Battle potions (#214).
+  'brave-brew': '🧪',
+  'cozy-cocoa': '☕',
+  'hearty-soup': '🍲',
 };
 
 export const FALLBACK_ICON = '✨';

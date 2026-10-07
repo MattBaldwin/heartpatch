@@ -43,6 +43,14 @@ import {
   plateName,
 } from './battle-view.js';
 import { BEFRIEND_NUDGE, HEART_CHARM, noCharmsLine } from './heart-charm.js';
+import {
+  NO_CHIPS,
+  noPotionLine,
+  potionTiles,
+  potionTotal,
+  usedLine,
+  type PotionTile,
+} from './potions.js';
 import { keeperReaction } from './keeper-reaction.js';
 import { resultLine } from './result-line.js';
 
@@ -86,6 +94,8 @@ export interface BattleScreenOptions {
   onStep?: (step: PlaybackStep) => void;
   /** Heart Charms in the player's bag on a map (the wild battle's button shows it). */
   charms?: (mapId: string) => Promise<number>;
+  /** The player's bag on a map, item id → count (the potion picker shows it, #214). */
+  items?: (mapId: string) => Promise<Readonly<Record<string, number>>>;
   /** The player's squishies' nicknames on a map, by squishy id (#141). */
   nicknames?: (mapId: string) => Promise<ReadonlyMap<string, string>>;
   /** True for the Tutorial Glade, where a wild squishy never wanders off (#24). */
@@ -113,6 +123,8 @@ export interface BattleDebug {
   readonly replay: boolean;
   /** Heart Charms the wild battle's button shows (null until counted, or not a wild battle). */
   readonly charms: number | null;
+  /** Potions in the bag, by id (#214); null until counted, or in a replay. */
+  readonly potions: Readonly<Record<string, number>> | null;
   /** The battle clock now, ms (a manual clock in dev captures). */
   readonly clock: number;
 }
@@ -223,6 +235,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const countCharms =
     options.charms ??
     ((id: string) => inventoryApi.get(id).then((bag) => bag.items[HEART_CHARM] ?? 0));
+  const countItems =
+    options.items ?? ((id: string) => inventoryApi.get(id).then((bag) => bag.items));
   const listNicknames =
     options.nicknames ??
     (async (id: string): Promise<ReadonlyMap<string, string>> => {
@@ -249,6 +263,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let replaying = false;
   /** Heart Charms in the bag for the battle on screen (wild battles); null until known. */
   let charms: number | null = null;
+  /** The bag's potions for the battle on screen (#214); null until known. */
+  let potions: Readonly<Record<string, number>> | null = null;
   /** The player's squishies' nicknames on this map (#141). */
   let nicknames: ReadonlyMap<string, string> = new Map();
 
@@ -386,6 +402,27 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         }
       });
     },
+    onNoItem: (tile: PotionTile) => {
+      const current = battle;
+      if (!current || waiting || queue.length > 0) return;
+      if (tile.state === 'used') {
+        hud.setProblem(usedLine(tile.id));
+        return;
+      }
+      // None in the bag as far as we know: look again first, like the Heart Charm.
+      waiting = true;
+      hud.setControls({ type: 'waiting' });
+      void refreshPotions(current).then((bag) => {
+        if (battle?.id !== current.id) return;
+        waiting = false;
+        if ((bag?.[tile.id] ?? 0) > 0) {
+          void submit({ type: 'item', item: tile.id });
+        } else {
+          hud.setControls(controlsFor(current));
+          hud.setProblem(noPotionLine(tile.id));
+        }
+      });
+    },
     onDone: () => {
       close();
     },
@@ -414,7 +451,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       : energy === 0
         ? 'Tuckered out'
         : null;
+    const chips = shown[side].chips[slot] ?? NO_CHIPS;
+    scene3d?.setShield(side, chips.shield && energy > 0);
     hud.setPlate(plateSideOf(battle.mySide, side), {
+      chips,
       name: plateName(content, squishy, side === battle.mySide ? nicknames : undefined),
       level: squishy.level,
       element: squishy.element,
@@ -439,6 +479,11 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           moves: activeOf(b, b.mySide).moves.map((id) => ({ id, name: names.moveName(id) })),
           bench,
           capture: CAPTURABLE_BATTLE_KINDS.has(b.kind) ? { charms } : null,
+          items: {
+            total: potionTotal(potions),
+            tiles: potionTiles(potions, b.view.sides[b.mySide].itemsUsed),
+            who: plateName(names, activeOf(b, b.mySide), nicknames),
+          },
         };
       case 'replace':
         return b.view.phase.sides.includes(b.mySide)
@@ -531,6 +576,28 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       return count;
     } catch {
       return charms ?? 0;
+    }
+  };
+
+  /**
+   * Counts the bag's potions (#214), then redraws the buttons if the player
+   * can act. A failed count leaves them unknown (the server has the final say).
+   */
+  const refreshPotions = async (
+    b: PlayerBattle,
+  ): Promise<Readonly<Record<string, number>> | null> => {
+    if (replaying) return potions;
+    try {
+      const bag = await countItems(b.mapId);
+      if (battle?.id === b.id) {
+        potions = bag;
+        if (!waiting && queue.length === 0 && b.status === 'active') {
+          hud.setControls(controlsFor(battle));
+        }
+      }
+      return bag;
+    } catch {
+      return potions;
     }
   };
 
@@ -629,6 +696,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     queue = playbackSteps(next, content, from);
     // A capture try spends a charm: count again.
     if (next.view.log.slice(from).some((e) => e.type === 'capture')) void refreshCharms(next);
+    // A potion (#214) came out of the bag: count again.
+    if (next.view.log.slice(from).some((e) => e.type === 'item' && e.side === next.mySide)) {
+      void refreshPotions(next);
+    }
     hud.setControls(replaying ? { type: 'hidden' } : { type: 'waiting' });
     if (queue.length === 0) settle();
     else playNext();
@@ -707,6 +778,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       if (squishy) {
         built.sendOut(side, squishy.speciesId, squishy.id);
         if ((shown[side].energy[slot] ?? 1) === 0) built.knockedOut(side);
+        built.setShield(side, (shown[side].chips[slot] ?? NO_CHIPS).shield);
       }
     }
     built.update(now());
@@ -755,8 +827,12 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     scene3d = null;
     keeperReactions = 0;
     charms = null;
+    potions = null;
     nicknames = new Map();
-    if (!replay) void refreshCharms(next);
+    if (!replay) {
+      void refreshCharms(next);
+      void refreshPotions(next);
+    }
     refreshNicknames(next);
     if (!wasOpen) options.onOpen(next.mapId);
     entry.hidden = true;
@@ -855,6 +931,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         keeperReactions,
         replay: replaying,
         charms,
+        potions,
         clock: now(),
       };
     },

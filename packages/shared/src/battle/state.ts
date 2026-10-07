@@ -23,13 +23,25 @@ export interface BattleSquishy {
   readonly status: { readonly id: BattleStatusId; readonly turnsLeft: number } | null;
   /** Has been out in this battle, so it earns battle XP. */
   readonly joined: boolean;
+  /**
+   * Potion boosts in percent (#214): Brave Brew's attack, Cozy Cocoa's
+   * defense. They last the rest of the battle, swaps included.
+   */
+  readonly boosts: Readonly<Record<BattleBoostStat, number>>;
+  /** Percent taken off the next hit it takes (a potion's shield, #214); 0 is none. */
+  readonly shield: number;
 }
+
+/** The stats a potion can boost (#214). */
+export type BattleBoostStat = 'attack' | 'defense';
 
 export interface BattleSide {
   readonly controller: BattleController;
   readonly squishies: readonly BattleSquishy[];
   /** Slot of the squishy that's out. */
   readonly active: number;
+  /** Battle items this side used, in order (#214): each kind only `rules.items.usesEach` times. */
+  readonly itemsUsed: readonly string[];
 }
 
 export type BattleEndReason = 'tuckered-out' | 'forfeit' | 'turn-limit' | 'captured';
@@ -84,6 +96,8 @@ export type BattleEvent =
       readonly amount: number;
       readonly energy: number;
       readonly effectiveness: string;
+      /** A potion's shield took some of it (#214), and is now used up. */
+      readonly shielded?: true;
     })
   | (At & { readonly type: 'heal'; readonly amount: number; readonly energy: number })
   /** `stages` is the change actually applied (0 if already at the limit). */
@@ -98,6 +112,11 @@ export type BattleEvent =
   | (At & { readonly type: 'status-skip'; readonly status: BattleStatusId })
   | (At & { readonly type: 'status-end'; readonly status: BattleStatusId })
   | (At & { readonly type: 'tuckered-out' })
+  /**
+   * The squishy at `side`/`slot` used a battle item (a potion, #214). Its
+   * effects follow as `heal` events; boosts and the shield are in the state.
+   */
+  | (At & { readonly type: 'item'; readonly item: string })
   /**
    * A Heart Charm was offered to the squishy at `side`/`slot` (the other side
    * offered it). `caught`: it said yes, and the battle ends.
