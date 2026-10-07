@@ -82,7 +82,7 @@ describe('one job at a time', () => {
 });
 
 describe('what a gatherer works', () => {
-  it('works a node first, then the land outside the home base', () => {
+  it('works its spot in the home ring, and the land’s main resource out on the map', () => {
     expect(
       workSource({ terrain: 'meadow', nodeResource: 'timber', homeSlot: 0 }, resources, JOB_RULES),
     ).toEqual({ resource: 'timber', quantity: 5, seconds: 900, from: 'node' });
@@ -106,10 +106,30 @@ describe('what a gatherer works', () => {
     expect(
       workSource({ terrain: 'lake', nodeResource: null, homeSlot: null }, resources, JOB_RULES),
     ).toMatchObject({ resource: 'water', from: 'land' });
-    // A spot is the rarer secondary, and wins: Glimmer on a mountain spot.
+    // Out on the land, squishies gather the land's main resource; spots are
+    // the Keeper's (owner decision on #238): a forest with a Greens spot still
+    // gives a gatherer Timber, a mountain with a Glimmer spot Ice.
+    expect(
+      workSource(
+        { terrain: 'forest', nodeResource: 'greens', homeSlot: null },
+        resources,
+        JOB_RULES,
+      ),
+    ).toMatchObject({ resource: 'timber', from: 'land' });
     expect(
       workSource(
         { terrain: 'mountains', nodeResource: 'glimmer', homeSlot: null },
+        resources,
+        JOB_RULES,
+      ),
+    ).toMatchObject({ resource: 'ice', from: 'land' });
+    expect(
+      workSource({ terrain: 'lake', nodeResource: 'water', homeSlot: null }, resources, JOB_RULES),
+    ).toMatchObject({ resource: 'water', from: 'land' });
+    // Land with no yield keeps its spot for a gatherer (Juniper's Gap).
+    expect(
+      workSource(
+        { terrain: 'junipers-gap', nodeResource: 'glimmer', homeSlot: null },
         resources,
         JOB_RULES,
       ),

@@ -1,5 +1,6 @@
 import { GAME_DATA, type PublicUser } from '@heartpatch/shared';
 import { el, messageOf } from '../ui/dom.js';
+import { rarityChip } from '../ui/rarity/rarity.js';
 import { catalogApi } from './catalog-api.js';
 import { catalogPage, type CatalogPage } from './catalog-view.js';
 import './catalog.css';
@@ -107,6 +108,10 @@ export function createCatalogScreen(options: CatalogScreenOptions): CatalogScree
         const parts = [
           blob,
           el('span', { class: 'catalog-name' }, card.name ?? UNSEEN),
+          // Unseen cards keep a blank space, so the cards line up (#240).
+          card.rarity
+            ? rarityChip(card.rarity)
+            : el('span', { class: 'catalog-rarity-gap', 'aria-hidden': 'true' }),
           el('span', { class: 'catalog-badge' }, badge),
         ];
         const careFor = options.onCare;

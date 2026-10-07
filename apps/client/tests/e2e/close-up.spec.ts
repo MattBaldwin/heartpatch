@@ -204,8 +204,12 @@ test('cares up close with gestures, renames, and swipes back home', async ({ bro
   await slowExpect(feed).toContainText('9 Treats');
   expect((await state(page))?.caredToday).toBe(3);
 
-  // The info card: open About, then rename (the server filters every name).
+  // The info card: the rarity chip under the name (#240), then open About and
+  // rename (the server filters every name).
   const view = page.getByTestId('close-up');
+  await slowExpect(view.getByTestId('close-up-rarity')).toHaveText(
+    /^(Common|Uncommon|Rare|Epic|Legendary|Secret)$/,
+  );
   await view.getByTestId('close-up-about').locator('summary').tap();
   await slowExpect(view.getByTestId('close-up-facts')).toContainText('Feeling');
   await view.getByTestId('close-up-rename-open').tap();

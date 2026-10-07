@@ -63,6 +63,7 @@ Only the spine that other tables reference is designed here (tech spec §4, `doc
 | `cinematic_seen_at` | timestamptz, null | First time the opening cinematic was watched or skipped (migration 0020, #46). Set = it never auto-plays again and can be skipped; replays never move it |
 | `signup_code_id` | uuid → signup_codes, null | The family code they signed up with (migration 0026, #195) |
 | `invited_by` | uuid → users, null | Who brought them in: that code's maker, or the owner whose patch invite they signed up with. Null for operator codes, `HP_SIGNUP_CODE` and older accounts |
+| `role` | `user_role` (`player` \| `admin`), default `player` | Admin opens the operator console (#196). Only `ops/grant-admin.ts` sets it, never HTTP |
 | `created_at` | timestamptz | |
 
 ### `sessions`
@@ -84,6 +85,69 @@ Only the spine that other tables reference is designed here (tech spec §4, `doc
 | `used_at` | timestamptz, null | Set when the code is redeemed or replaced by a reset. Used rows stay for audit |
 
 One active code per user: a partial unique index on `user_id` where `used_at is null` (tech spec §9).
+
+### `account_helpers`
+Grown-up helper links (migration 0029, #197). The player asks, the helper says yes; only an `active` link lets the helper see the name and reset the password.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → users | The player who asked. Cascade delete. Indexed |
+| `helper_user_id` | uuid → users | Cascade delete. Indexed |
+| `status` | `account_helper_status` | `pending`, `active`, `declined`, `removed`. Ended rows stay for audit |
+| `created_at` | timestamptz | When the player asked |
+| `answered_at` | timestamptz, null | When the helper said yes or no |
+| `ended_at` | timestamptz, null | When either side removed it |
+
+One live link per pair: a partial unique index on (`user_id`, `helper_user_id`) where `status in ('pending', 'active')`. A check keeps `user_id <> helper_user_id`. Caps (2 helpers per player, 10 players per helper, asks included) live in `HELPER_RULES`.
+
+### `account_helper_resets`
+Each helper password reset (migration 0029, #197), written in the reset's transaction. The helper's daily cap (3 in a rolling 24 hours) counts these rows, so it survives restarts.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → users | Who was reset. Cascade delete |
+| `helper_user_id` | uuid → users | Who reset them. Cascade delete. Indexed with `created_at` |
+| `created_at` | timestamptz | |
+
+### `admin_totp`
+An admin's authenticator app (#196), made and confirmed only by `ops/enrol-totp.ts`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` | uuid PK → users | Cascade delete |
+| `secret` | text | Base32 TOTP secret. Has to be readable to check codes, so it never leaves the server and is never logged |
+| `created_at` | timestamptz | |
+| `enrolled_at` | timestamptz, null | Set when the operator confirms a code; sign-in needs it |
+| `last_step` | bigint, null | The newest 30-second step a code was accepted for; a code at or before it is refused (no reuse) |
+
+### `admin_sessions`
+Admin console sessions (#196), apart from `sessions`, behind the `hp_admin` cookie.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → users | Cascade delete. Indexed |
+| `token_hash` | text, unique | SHA-256 of the cookie token |
+| `created_at` | timestamptz | |
+| `last_seen_at` | timestamptz | Touched on every request; idle 30 minutes = ended |
+| `expires_at` | timestamptz | 8 hours after sign-in, regardless |
+
+### `admin_audit`
+Every admin action, sign-in and host-script grant (#196). Never holds a secret.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `actor_user_id` | uuid → users, null | The admin; null for a host script. `on delete set null`, so a record never blocks deleting an account |
+| `action` | text | `AUDIT_ACTIONS` (`modules/admin/audit-actions.ts`) |
+| `target_user_id` | uuid → users, null | `on delete set null` |
+| `target_map_id` | uuid → maps, null | `on delete set null` |
+| `detail` | jsonb | Non-secret detail (a lookup's search, a code's label) |
+| `outcome` | `admin_audit_outcome` | `pending` when written (before the action), then `done` or `failed`. Still `pending` = the action may have run but its outcome couldn't be written (logged) |
+| `ip` | text, null | |
+| `created_at` | timestamptz | Indexed (newest first) |
 
 ### `signup_codes`
 Family signup codes (migration 0026, #195).

@@ -9,6 +9,7 @@ import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
 import { createCoinPill } from '../coins/coin-counter.js';
 import { el, messageOf } from '../dom.js';
+import { rarityClass } from '../rarity/rarity.js';
 import { boutiqueApi, type BoutiqueApi } from './boutique-api.js';
 import { BOUTIQUE_TEXT, buyState, racksOf } from './boutique-view.js';
 import './boutique.css';
@@ -148,7 +149,7 @@ export function createBoutiqueCard(options: BoutiqueCardOptions): BoutiqueCard {
           el('span', { class: 'wardrobe-item-name' }, item?.name ?? entry.itemId),
           el(
             'span',
-            { class: `wardrobe-rarity-dot rarity-${item?.rarity ?? 'common'}` },
+            { class: `wardrobe-rarity-dot ${rarityClass(item?.rarity ?? 'common')}` },
             item?.slot === 'squishy'
               ? BOUTIQUE_TEXT.forSquishies
               : options.rarityName(item?.rarity ?? 'common'),

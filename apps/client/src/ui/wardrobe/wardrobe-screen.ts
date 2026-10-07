@@ -25,6 +25,7 @@ import {
 } from '../../milestones/milestones-card.js';
 import { MILESTONES_TEXT } from '../../milestones/milestones-view.js';
 import { el, messageOf } from '../dom.js';
+import { RARITY_NAMES, rarityClass } from '../rarity/rarity.js';
 import { KeeperPreview } from '../keeper/keeper-preview.js';
 import { OutfitSync } from './outfit-sync.js';
 import { watchScrollEdges } from './scroll-edges.js';
@@ -133,11 +134,11 @@ export const WARDROBE_TEXT = {
   } satisfies Record<WardrobeTab, string>,
   rarities: {
     all: 'All',
-    common: 'Common',
-    uncommon: 'Uncommon',
-    rare: 'Rare',
-    epic: 'Epic',
-    legendary: 'Legendary',
+    common: RARITY_NAMES.common,
+    uncommon: RARITY_NAMES.uncommon,
+    rare: RARITY_NAMES.rare,
+    epic: RARITY_NAMES.epic,
+    legendary: RARITY_NAMES.legendary,
   } satisfies Record<RarityFilter, string>,
   empty: 'Nothing here yet. Keep exploring to find some!',
   emptyRarity: 'None like that yet. Keep exploring!',
@@ -388,7 +389,10 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
             rarity = r;
             render();
           },
-          { 'data-rarity': r, class: `wardrobe-chip wardrobe-rarity rarity-${r}` },
+          {
+            'data-rarity': r,
+            class: `wardrobe-chip wardrobe-rarity ${r === 'all' ? 'rarity-all' : rarityClass(r)}`,
+          },
         ),
       ),
     );
@@ -408,7 +412,7 @@ export function createWardrobeScreen(options: WardrobeScreenOptions): WardrobeSc
         el('span', { class: 'wardrobe-item-name' }, item.name),
         el(
           'span',
-          { class: `wardrobe-rarity-dot rarity-${item.rarity}` },
+          { class: `wardrobe-rarity-dot ${rarityClass(item.rarity)}` },
           WARDROBE_TEXT.rarities[item.rarity],
         ),
       ];

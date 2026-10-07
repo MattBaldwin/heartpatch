@@ -22,6 +22,7 @@ import { createCareService } from '../modules/care/service.js';
 import { createCoinsRepo } from '../modules/coins/repo.js';
 import { accountDay, creditCoins, spendCoins } from '../modules/coins/service.js';
 import { createGatheringService } from '../modules/gathering/service.js';
+import { createAccountHelpersRepo } from '../modules/account-helpers/repo.js';
 import { createHollowConsumer } from '../modules/hollow/consumer.js';
 import { createHollowRepo } from '../modules/hollow/repo.js';
 import { createHollowService } from '../modules/hollow/service.js';
@@ -1391,6 +1392,23 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     }
     await rowsAgainst(lockTileRow, tileIds, () =>
       unplanned((tx) => createHollowRepo(tx).lockPostTiles(mapId)),
+    );
+  });
+
+  it('locks both accounts of a helper link in id order (account-helpers `lockUsers`, #197)', async () => {
+    const ids: string[] = [];
+    for (const name of ['lockhelper_a', 'lockhelper_b']) {
+      const [row] = await db
+        .insert(users)
+        .values({ username: `${name}_${String(Date.now())}`, passwordHash: 'x', birthYear: 2014 })
+        .returning({ id: users.id });
+      ids.push(row!.id);
+    }
+    ids.sort();
+    const lockUserRow = (tx: Transaction, id: string) =>
+      tx.select({ id: users.id }).from(users).where(eq(users.id, id)).for('update');
+    await rowsAgainst(lockUserRow, ids, () =>
+      unplanned((tx) => createAccountHelpersRepo(tx).lockUsers([...ids].reverse())),
     );
   });
 });

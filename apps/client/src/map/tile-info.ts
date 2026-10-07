@@ -1,12 +1,16 @@
 import {
   FEELINGS,
+  JOB_RULES,
   RESOURCES,
   TERRAINS,
+  workSource,
   type GuardianDifficulty,
   type GuardianHint,
   type MapMember,
   type PublicTile,
+  type Resource,
 } from '@heartpatch/shared';
+import { itemIcon } from '../inventory/item-icons.js';
 
 // What the tile info panel says about a tile (copy follows docs/STYLE_GUIDE.md).
 // Pure, so every case is unit-tested. Home bases can never be claimed (design
@@ -24,6 +28,11 @@ export interface TileInfo {
   readonly resource: string | null;
   /** Wild land's guardians today: how many and how tough (owner decision 10). */
   readonly guardians: string | null;
+  /**
+   * What a squishy gatherer picks on this land, whether or not it has a
+   * Keeper spot (#238's nesting economy): "Squishies gather 🌲 Timber here."
+   */
+  readonly gatherer: string | null;
   readonly home: boolean;
 }
 
@@ -64,8 +73,28 @@ export function describeTile(
     owner,
     resource: resource ? `Find ${resource.name} here.` : null,
     guardians: guardianLine(tile.guardianHint),
+    gatherer: gathererLine(tile),
     home,
   };
+}
+
+/**
+ * What a squishy gatherer picks on this tile, from the shared gather rule
+ * (`workSource`, owner decision on #238): out on the land its terrain's main
+ * resource, whatever spot it has; in the home ring, its spot. The icon is the
+ * gather match's (`JOB_RULES.affinities`), else the item's own.
+ */
+export function gathererLine(
+  tile: Pick<PublicTile, 'terrain' | 'homeSlot' | 'nodeResource'>,
+  resources: readonly Resource[] = RESOURCES,
+  rules: Pick<typeof JOB_RULES, 'terrainYields' | 'affinities'> = JOB_RULES,
+): string | null {
+  const source = workSource(tile, resources, rules);
+  if (!source) return null;
+  const name = resources.find((r) => r.id === source.resource)?.name ?? source.resource;
+  const icon =
+    rules.affinities.find((a) => a.resource === source.resource)?.icon ?? itemIcon(source.resource);
+  return `Squishies gather ${icon} ${name} here.`;
 }
 
 const DIFFICULTY_WORDS: Readonly<Record<GuardianDifficulty, string>> = {

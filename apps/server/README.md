@@ -97,9 +97,43 @@ Maps (players say "patches") live in `src/modules/maps` (issue #4; design doc §
 
 **Text filter:** run every piece of player-typed text through `assertAllowedText(text, 'name' | 'message')` from `lib/filter.ts` before storing it (tech spec §9). It throws `VALIDATION_FAILED` with a kid-readable message. `checkText` returns the verdict without throwing.
 
-**Operator reset** (tech spec §9): `docker compose exec server node dist/ops/reset-password.js <username>` (locally `pnpm --filter @heartpatch/server ops:reset-password <username>`) sets a temporary password, revokes sessions and prints a new recovery code. Never exposed over HTTP.
+**Operator reset** (tech spec §9): `docker compose exec server node dist/ops/reset-password.js <username>` (locally `pnpm --filter @heartpatch/server ops:reset-password <username>`) sets a temporary password, revokes sessions and prints a new recovery code. Never exposed to players over HTTP; the admin console runs the same reset (below).
 
 **Operator family codes** (#195): `docker compose exec server node dist/ops/signup-code.js create "<label>" [--uses N] [--days N]`, `list` or `revoke <code-id>` (locally `pnpm --filter @heartpatch/server ops:signup-code …`). The operator's codes have no cap; `list` shows every recent code, owners' too.
+
+## Admin console
+
+`modules/admin` (#196) serves the operator console at `/api/v1/admin/*`. **Admin is a role** (`users.role = 'admin'`) that only the host script `ops/grant-admin.ts` sets; no route grants or removes it. Every route but `login` and `logout` runs the gate first: a live `hp_admin` session (its own cookie, `Path=/api/v1/admin`, `SameSite=Strict`), re-checked against the account's role and confirmed authenticator on every request, ending after 30 idle minutes or 8 hours (`ADMIN_RULES`). Without one: **403 `FORBIDDEN`**, whatever player session the browser has. Every reply is `Cache-Control: no-store`. Admin sessions and authenticator codes run on real time (`BuildAppOptions.adminNow`), never `HP_DEV_NOW`, because authenticator apps follow the real clock; game data (seasons, invite and code expiry, player sessions) uses the game clock.
+
+**Sign-in** needs the password and a 6-digit TOTP code (RFC 6238, `modules/admin/totp.ts`, no dependency). Each code works once (`admin_totp.last_step`). A wrong name, password, code or a non-admin all get the same 401. Limits: 10 per IP and 5 per username per 15 minutes; signed-in requests are limited per admin, one shared counter per kind (`ADMIN_RATE_LIMITS`: reads, actions, and secrets: resets, reveals, lookups and new codes together).
+
+**Audit:** every action writes an `admin_audit` row **before** it runs (`pending`), marked `done` or `failed` after, so nothing goes unrecorded; its checks (does the patch, player or request exist?) run inside, so a refused action is recorded as `failed` too (a missing target is named in `detail`). Once an action has run, its result always reaches the admin (a reset's one-time secrets): an outcome that can't be written is logged and the row stays `pending` ("unfinished" in the console). `ops/reset-password.ts` audits the same way (`hostAudited`). Sign-ins (failed ones on admin accounts too), sign-outs and the host scripts write rows as well. No row holds a secret.
+
+**Commands reuse their modules.** Join requests and invite codes run through the maps service **as the patch's owner**, so seats, the Keeper and tutorial gates, game events and lock order are the owner page's own. A reset is `AuthService.operatorReset`, the same function `ops/reset-password.ts` runs. Family codes use the signup-codes service's operator functions.
+
+| Endpoint | Notes |
+|---|---|
+| `POST /api/v1/admin/login` | `{ username, password, code }` → `{ admin, idleExpiresAt, expiresAt }` and the `hp_admin` cookie |
+| `POST /api/v1/admin/logout` | → 204; ends this admin session |
+| `GET /api/v1/admin/me` | → the same shape as login |
+| `GET /api/v1/admin/patches?q=&page=&tutorial=` | → `{ patches, page, pageSize, total }`: name, owner, members and seats, made, last activity, seasons, PvP mode, waiting requests. Tutorial runs only with `tutorial=true` |
+| `GET /api/v1/admin/patches/:mapId` | → members (last active here), waiting requests, the invite's expiry (never the code), the Hollow Man's last 7 nights |
+| `POST /api/v1/admin/patches/:mapId/invite/reveal` | → `{ code, expiresAt }`, recorded |
+| `POST /api/v1/admin/patches/:mapId/invite` | → a new `{ code, expiresAt }`; the old code stops working |
+| `POST /api/v1/admin/patches/:mapId/requests/:requestId/approve` \| `decline` | → 204, as the owner |
+| `GET /api/v1/admin/players?q=&page=` | → `{ players, … }`: made, last sign-in, signed-in devices, whether a recovery code is waiting (never the code), patches |
+| `GET /api/v1/admin/players/:userId` | → the same, plus who brought them in (#195) and their patches, past and asked |
+| `POST /api/v1/admin/players/:userId/reset-password` | → `{ username, temporaryPassword, recoveryCode }`, shown once; every session ended |
+| `POST /api/v1/admin/players/:userId/logout-everywhere` | → `{ ended }` |
+| `POST /api/v1/admin/lookup` | `{ patch, from, to }` → `{ matches }` (at most 10): who joined, or asked to join, a patch whose name contains `patch` between those dates (widened 14 h each side for time zones) |
+| `GET /api/v1/admin/signup-codes` | → every maker's family codes |
+| `POST /api/v1/admin/signup-codes` | `{ label, maxUses, days }` → 201 `{ code, signupCode }`, shown once |
+| `POST /api/v1/admin/signup-codes/:codeId/extend` \| `revoke` | `{ days }` (extend) → 204. Extending works on live codes and on the operator's own ended ones; a patch owner's ended code stays ended (reviving it could pass their 3-live cap) |
+| `GET /api/v1/admin/audit?q=&page=` | → `{ entries, … }`, newest first |
+
+**The page** is `apps/client/admin.html` (`src/admin/`), its own Vite entry, served at `/admin` (Caddy rewrites it; Vite does in dev and preview). Plain DOM, no canvas; it shows sign-in whenever the server answers 403.
+
+**Host scripts:** `ops/grant-admin.ts <username> [--revoke]` and `ops/enrol-totp.ts <username> [--confirm <code>]` (locally `pnpm --filter @heartpatch/server ops:grant-admin …` / `ops:enrol-totp …`). Setup steps are in `docs/DEPLOY.md`, "Admin console".
 
 ## Battles
 
@@ -133,7 +167,7 @@ PvE battles (design doc §6; tech spec §8; DECISIONS "Battle engine (#11)") liv
 
 Resources, gathering and crafting (design doc §12, §15; issue #17) live in `src/modules/inventory` and `src/modules/gathering`. Inventory is per player per map (`inventories`, a missing row is 0), and every change also writes a `resource_ledger` row with its reason (tech spec §4). Timers are timestamps (CLAUDE.md rule 4): a gather or craft stores `started_at` and `ready_at`, and settling checks the clock then, so it finishes while the player is logged out and nothing ticks in between.
 
-**Water, Greens and Ice (#238).** Land without a node gives a gatherer its terrain's primary resource (`JOB_RULES.terrainYields`: meadow Greens, mountains Ice, lake Water…); nodes are the rarer secondary. The new nodes (a well on every lake, Greens on some forests) come from terrains' `extraNodes`: shared `extraNodes` rolls each tile with no node, outside home bases, on its own seed from the map seed. `generateMap` runs it after the main pass, which is unchanged, and the map view runs the same function on older maps (`seedExtraNodes`, `modules/maps/extra-nodes.ts`). Both get exactly the same nodes. The top-up locks the tiles it adds to (step 6, id order) and plans again under the lock, so it adds each node once. A tile with a building in its middle, or a squishy gathering on it, waits until it's free (a node would change what that work pays). A recipe with `fasterWith` (freezing Water) is that percent quicker when a squishy of that element is on the team as the craft starts (`craftSecondsFor`); the finish time is stored as usual.
+**Water, Greens and Ice (#238).** Out on the land, a gatherer works its terrain's primary resource (`JOB_RULES.terrainYields`: meadow Greens, mountains Ice, lake Water…) whatever spot the tile has (`workSource`); spots there are the Keeper's, and in the home ring a gatherer works the spot. Nodes are the rarer secondary. The new nodes (a well on every lake, Greens on some forests) come from terrains' `extraNodes`: shared `extraNodes` rolls each tile with no node, outside home bases, on its own seed from the map seed. `generateMap` runs it after the main pass, which is unchanged, and the map view runs the same function on older maps (`seedExtraNodes`, `modules/maps/extra-nodes.ts`). Both get exactly the same nodes. The top-up locks the tiles it adds to (step 6, id order) and plans again under the lock, so it adds each node once. A tile with a building in its middle, or a squishy gathering on it, waits until it's free. A recipe with `fasterWith` (freezing Water) is that percent quicker when a squishy of that element is on the team as the craft starts (`craftSecondsFor`); the finish time is stored as usual.
 
 **Finished things go straight into the bag (owner decision 2026-10-06; `src/modules/settle`).** There is no Collect step for players: `POST /maps/:mapId/settle` banks everything of mine on the map that has finished by the server's clock (ready crafts, my Keeper gathers, my gatherers' finished cycles, still capped) in one transaction, with the same ledger rows (`craft`, `gather`, `work`) and events (`item.crafted`, `resource.gathered`, `work.collected`) a collect writes, and a settled gather rolls for found clothing (`rollFoundDrop`). The client settles when a map opens, when the app comes back, when the Bag or job board opens, and at the reply's `nextAt`. Starting a craft banks a finished craft first (the pot is busy only while something cooks), and gathering a node banks the finished gather there first (mine, or a previous owner's that finished before the land changed hands, into their bag). The collect routes below stay for installed apps still on an older bundle.
 

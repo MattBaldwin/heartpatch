@@ -1,4 +1,4 @@
-import type { Catalog, Species } from '@heartpatch/shared';
+import type { Catalog, Rarity, Species } from '@heartpatch/shared';
 
 /*
  * The catalog page's model (design doc §21: seen vs caught). Pure, so it's
@@ -13,6 +13,8 @@ export interface CatalogCard {
   readonly name: string | null;
   /** The species' main colour once seen; unseen cards are a silhouette. */
   readonly color: string | null;
+  /** The species' rarity once seen (#240); unseen cards keep it hidden. */
+  readonly rarity: Rarity | null;
   readonly seen: boolean;
   readonly caught: boolean;
   /** A secret squishy the player found. */
@@ -37,6 +39,7 @@ export function catalogPage(publicSpecies: readonly Species[], catalog: Catalog)
       speciesId: species.id,
       name: entry ? species.name : null,
       color: entry ? (species.visual.palette[0] ?? null) : null,
+      rarity: entry ? species.rarity : null,
       seen: entry !== undefined,
       caught: entry?.firstCaughtAt != null,
       secret,

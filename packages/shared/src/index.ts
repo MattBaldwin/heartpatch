@@ -1,4 +1,5 @@
 export * from './schemas/errors.js';
+export * from './schemas/account-helpers.js';
 export * from './schemas/auth.js';
 export * from './schemas/health.js';
 export * from './schemas/changelog.js';
@@ -80,6 +81,7 @@ export * from './mapgen/index.js';
 export * from './schemas/ws.js';
 export * from './schemas/maps.js';
 export * from './schemas/signup-codes.js';
+export * from './schemas/admin.js';
 export * from './schemas/tutorial.js';
 export * from './schemas/lore.js';
 export * from './schemas/keepers.js';

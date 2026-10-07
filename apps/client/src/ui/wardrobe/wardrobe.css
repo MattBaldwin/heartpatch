@@ -160,23 +160,7 @@
   font-size: 12px;
 }
 
-/* Rarity colours, from plain to sparkly (design doc §23). */
-.rarity-common {
-  --rarity: #8fbf8a;
-}
-.rarity-uncommon {
-  --rarity: #4fa36b;
-}
-.rarity-rare {
-  --rarity: #4f8fd6;
-}
-.rarity-epic {
-  --rarity: #8a62c4;
-}
-.rarity-legendary {
-  --rarity: #e0a12a;
-}
-
+/* Rarity colours (`--rarity`) come from ../rarity/rarity.css. */
 .wardrobe-rarity:not(.rarity-all)::before {
   content: '';
   width: 12px;

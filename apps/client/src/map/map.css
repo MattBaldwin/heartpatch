@@ -27,7 +27,8 @@
 .map-hud-login[hidden],
 .tile-panel[hidden],
 .tile-panel-resource[hidden],
-.tile-panel-guardians[hidden] {
+.tile-panel-guardians[hidden],
+.tile-panel-gatherer[hidden] {
   display: none;
 }
 
@@ -147,7 +148,8 @@
 
 .tile-panel-about,
 .tile-panel-resource,
-.tile-panel-guardians {
+.tile-panel-guardians,
+.tile-panel-gatherer {
   margin: 4px 0 0;
   font-size: 15px;
   line-height: 1.35;
@@ -158,6 +160,12 @@
 }
 
 .tile-panel-resource {
+  font-weight: 600;
+  color: #6b8a3a;
+}
+
+/* What a squishy gatherer picks here (#238): the land's own green. */
+.tile-panel-gatherer {
   font-weight: 600;
   color: #6b8a3a;
 }

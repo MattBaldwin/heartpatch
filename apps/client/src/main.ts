@@ -20,6 +20,7 @@ import { createMapScreen } from './map/map-screen.js';
 import { fetchHealth } from './net/api.js';
 import { buildTestScene } from './scenes/test-scene.js';
 import { createCinematicScreen } from './cinematics/cinematic-screen.js';
+import { mountAccount } from './ui/account/account-screen.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
 import { createLorebook } from './lore/lorebook.js';
 import { createMilestoneCelebration } from './milestones/milestone-celebration.js';
@@ -810,6 +811,8 @@ const lobbyCoins = createCoinCounter({
 // Offline shell, update prompt, Add to Home Screen guide (issue #26). The
 // guide is a card in the patch list (#135).
 const installGuide = import.meta.env.PROD ? startPwa(document.body) : null;
+// Grown-up helpers and new recovery codes (#197): Settings rows and helper asks.
+const account = mountAccount(document.body);
 const lobby = mountLobby(document.body, {
   // A patch is on screen (its map, or the home base, close-up or battle over
   // it): looking around goes back to it, with no "Back to my patches" pill (#212).
@@ -851,7 +854,7 @@ const lobby = mountLobby(document.body, {
   ],
   listHeader: () => {
     void lobbyCoins.refresh();
-    return [lobbyCoins.node];
+    return [lobbyCoins.node, ...account.listHeader()];
   },
   settings: () => [
     ...audio.settings(),
@@ -859,6 +862,7 @@ const lobby = mountLobby(document.body, {
     ...cinematic.settings(),
     ...tutorial.settings(),
     ...lorebook.settings(),
+    ...account.settings(),
   ],
 });
 /** A row in the Keeper menu (the corner of the map). */
@@ -929,6 +933,7 @@ mountAuth(document.body, {
     }),
   ],
   onChange: (user) => {
+    account.setUser(user);
     battles.setUser(user);
     catalog.setUser(user);
     care.setUser(user);

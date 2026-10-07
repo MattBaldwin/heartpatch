@@ -582,7 +582,8 @@ async function desktopPlayer(browser: Browser, name: string): Promise<Page> {
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await realTap(overlay.getByRole('button', { name: 'Sign up' }));
-  await realTap(overlay.getByRole('button', { name: 'I saved it!' }));
+  await realTap(overlay.getByText("I've saved it"));
+  await realTap(overlay.getByTestId('auth-code-done'));
   await skipCinematic(page);
   const picker = page.getByTestId('keeper-picker');
   await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();

@@ -1,5 +1,6 @@
 import {
   findAvoidedWords,
+  GAME_DATA,
   recipeBookPages,
   RECIPE_BOOK,
   type PublicTile,
@@ -36,6 +37,12 @@ const view = (key: string, over: Partial<BookContext> = {}) => {
   if (!page) throw new Error(`no page ${key}`);
   return pageView(page, ctx(over));
 };
+
+/**
+ * Made things with no use yet, and where their use comes from (#241's
+ * guard): one named entry each. #203 removes "ice" with the Ice Wall.
+ */
+const NO_USE_YET: Readonly<Record<string, string>> = { ice: 'used by the Ice Wall (#203)' };
 
 describe('recipe book pages', () => {
   it('keep have/need per ingredient, capped for the 0/1 display', () => {
@@ -78,6 +85,42 @@ describe('recipe book pages', () => {
     expect(jack.hint).toMatch(/Emberwood and Pumpkin/);
   });
 
+  it("say what a recipe's item does, from its data (#241)", () => {
+    const brew = view('recipe:brave-brew');
+    expect(brew.effect?.purpose).toBe(
+      GAME_DATA.resources.find((r) => r.id === 'brave-brew')?.description,
+    );
+    expect(brew.effect?.chips).toEqual([
+      { text: '💪 +40% oomph all battle', battle: true },
+      { text: '🫧 Next bump 75% softer', battle: true },
+      { text: '🎒 Use it in a battle', battle: false },
+    ]);
+    // The recipe's own line stays, as flavour.
+    expect(brew.flavour).toBe(GAME_DATA.recipes.find((r) => r.id === 'brave-brew')?.description);
+    expect(view('recipe:jack-o-lantern-hearthfire').effect?.chips.map((c) => c.text)).toEqual([
+      "🎃 Builds a Jack-o'-Lantern Hearthfire",
+      '🛡️ Safe 2 tiles around',
+      '🪵 Needs fuel each night',
+    ]);
+  });
+
+  it("don't repeat what a recipe is made from (#241)", () => {
+    const chips = view('recipe:pumpkin-treats').effect?.chips.map((c) => c.text) ?? [];
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.some((t) => t.startsWith('🥣'))).toBe(false);
+  });
+
+  it('say what a building does like the build menu (#241)', () => {
+    const grounds = view('building:training-grounds');
+    const building = GAME_DATA.buildings.find((b) => b.id === 'training-grounds');
+    expect(grounds.effect).toEqual({
+      purpose: building?.description,
+      chips: [{ text: '🏋️ 2 squishies · 5 XP/hr', battle: false }],
+    });
+    // Said once: the purpose line, not again as flavour.
+    expect(grounds.flavour).toBe('');
+  });
+
   it('say buildings are built at home', () => {
     const den = view('building:ember-den', { bag: { timber: 5, stone: 3 } });
     expect(den.section).toBe('build');
@@ -97,7 +140,15 @@ describe('recipe book pages', () => {
   it('use kind words only', () => {
     for (const page of PAGES) {
       const v = pageView(page, ctx({ unlocked: new Set(PAGES.map((p) => p.key)) }));
-      const words = [v.name, v.flavour, v.meta, v.hint, ...v.ingredients.map((i) => i.where)];
+      const words = [
+        v.name,
+        v.flavour,
+        v.meta,
+        v.hint,
+        ...v.ingredients.map((i) => i.where),
+        v.effect?.purpose ?? '',
+        ...(v.effect?.chips.map((c) => c.text) ?? []),
+      ];
       expect(findAvoidedWords(words.join(' ')), page.key).toEqual([]);
     }
   });
@@ -326,7 +377,23 @@ describe('ribbon tabs', () => {
     ]);
   });
 
-  it('leave the effect line empty until something has one', () => {
-    expect(views.every((v) => v.effect === null)).toBe(true);
+  it('names only things a page still makes as having no use yet', () => {
+    for (const made of Object.keys(NO_USE_YET)) {
+      const pages = GAME_DATA.recipes.filter((r) => r.output.resource === made);
+      expect(pages.length, `${made} is made by no recipe page`).toBeGreaterThan(0);
+    }
+  });
+
+  it('say what every page makes is for (#241)', () => {
+    for (const v of views) {
+      const made = GAME_DATA.recipes.find((r) => `recipe:${r.id}` === v.key)?.output.resource;
+      const waiting = made === undefined ? undefined : NO_USE_YET[made];
+      if (waiting) {
+        // Self-expiring: once it has a use, this fails until its entry goes.
+        expect(v.effect?.chips ?? [], `${made}: ${waiting}`).toEqual([]);
+      } else {
+        expect(v.effect !== null && v.effect.chips.length > 0, v.key).toBe(true);
+      }
+    }
   });
 });
