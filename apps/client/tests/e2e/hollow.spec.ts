@@ -28,6 +28,13 @@ interface HollowDebug {
   fireHint: boolean;
 }
 
+/**
+ * WebKit's page error for an in-flight API fetch that a reload aborts (on CI:
+ * "…/localhost:5173/api/v1/milestones due to access control checks."), as in
+ * cinematic.spec.ts.
+ */
+const ABORTED_FETCH = /\/api\/v1\/\S* due to access control checks\.?$/;
+
 const hollowState = (page: Page) => hook<HollowDebug>(page, 'hollow');
 const mapState = (page: Page) => hook<{ id: string; live: string | null }>(page, 'map');
 const battleState = (page: Page) =>
@@ -41,7 +48,13 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   // drawing when he's gone" is about his visit alone.
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const errors: string[] = [];
-  page.on('pageerror', (err) => errors.push(err.message));
+  // Only an API fetch the reload below aborts is let through, and only while
+  // reloading; every other page error stays fatal.
+  let reloading = false;
+  page.on('pageerror', (err) => {
+    if (reloading && ABORTED_FETCH.test(err.message)) return;
+    errors.push(err.message);
+  });
   // A shader that doesn't compile only logs (the shadow look, owner decision 7).
   page.on('console', (msg) => {
     if (msg.type() === 'error' && /shader|effect|compile/i.test(msg.text()))
@@ -67,6 +80,15 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
 
   // Land of their own, and a guard out there with no fire lit: exposed.
   const land = await claimLand(page, mapId);
+  // Capturing old forest finds a lore page (the-tidied-clearing), and the next
+  // map open (the reload below) would pop it over the trays and hold the
+  // morning report back (one card at a time, #129). This test isn't about
+  // lore: mark it read, the way the lorebook does once a page has been shown.
+  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
+  await page.evaluate((key) => {
+    const shown = JSON.parse(localStorage.getItem(key) ?? '[]') as string[];
+    localStorage.setItem(key, JSON.stringify([...shown, 'the-tidied-clearing']));
+  }, `heartpatch.lore.shown.${me}`);
   const squishy = { speciesId: STARTERS.speciesIds[0], level: 5 };
   const granted = await api<{ squishy: { id: string } }>(
     page,
@@ -82,7 +104,9 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   });
   expect(posted.status, JSON.stringify(posted.body)).toBe(200);
   // The nudge, once the hollow status is read again (unless it's night on the server's clock).
+  reloading = true;
   await page.reload();
+  reloading = false;
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
   await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
   if (!(await hollowState(page))!.night) {
