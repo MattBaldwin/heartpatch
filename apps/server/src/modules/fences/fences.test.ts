@@ -541,6 +541,25 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       );
     });
 
+    it('no Keep going once the land went wild meanwhile: it is a fresh claim', async () => {
+      const server = await start();
+      const { kid, mapId, near } = await fencedRival(server, {
+        team: [
+          { level: 40, speciesId: EMBER },
+          { level: 30, speciesId: EMBER },
+        ],
+      });
+      await playOut(server, kid, battleOf(await attack(server, kid, mapId, near)));
+      expect((await status(server, kid, mapId)).fenceBroken).toHaveLength(1);
+      // The rival's land goes wild inside the window (nightfall, or they left).
+      await db.execute(`update tiles set owner_user_id = null where id = '${near.id}'`);
+      expect((await status(server, kid, mapId)).fenceBroken).toEqual([]);
+      // Not a free follow-up: the tile's rest stands, like any challenge.
+      const again = await attack(server, kid, mapId, near);
+      expect(again.statusCode).toBe(409);
+      expect(errorOf(again).message).toMatch(/little rest/);
+    });
+
     it('a fence that holds keeps the energy it lost, and its owner hears about it', async () => {
       const server = await start();
       const { kid, rival, mapId, near } = await fencedRival(server, {

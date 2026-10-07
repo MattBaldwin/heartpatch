@@ -205,6 +205,9 @@ export function createFencesService(options: FencesServiceOptions): FencesServic
         // Only edges facing land on the map I don't hold need a fence: not
         // one between two of my tiles, nor one on the map's rim (CLAUDE.md
         // rule 1: the sheet only offers these, but the server decides).
+        // Neighbours aren't locked: a capture of the tile beyond, committing
+        // at the same moment, can leave this new segment on an inner edge.
+        // The sheet says so ("inside your land now") and Take down works.
         const tiles = await createTerritoryRepo(tx).listTiles(mapId);
         const border = new Set<number>(
           borderEdges(

@@ -223,6 +223,12 @@ const attackColumns = {
 };
 
 /** A fence attack that broke the fence, with no guard battle after it yet (#203). */
+/**
+ * The tile is still the defender's the fence was broken on: if it went wild
+ * or changed hands meanwhile, there's no challenge left to finish.
+ */
+const stillTheirs = eq(tiles.ownerUserId, tileAttacks.defenderUserId);
+
 const brokenFence = (since: Date) =>
   and(
     eq(tileAttacks.part, 'fence'),
@@ -375,11 +381,13 @@ function queries(db: Executor): TerritoryRepo {
       const [row] = await db
         .select(attackColumns)
         .from(tileAttacks)
+        .innerJoin(tiles, eq(tiles.id, tileAttacks.tileId))
         .where(
           and(
             eq(tileAttacks.tileId, tileId),
             eq(tileAttacks.attackerUserId, attackerUserId),
             brokenFence(since),
+            stillTheirs,
           ),
         )
         .orderBy(desc(tileAttacks.endedAt))
@@ -397,6 +405,7 @@ function queries(db: Executor): TerritoryRepo {
             eq(tileAttacks.mapId, mapId),
             eq(tileAttacks.attackerUserId, attackerUserId),
             brokenFence(since),
+            stillTheirs,
           ),
         )
         .orderBy(desc(tileAttacks.endedAt)),
