@@ -64,7 +64,9 @@ async function checkTileChip(page: Page): Promise<void> {
   await page.mouse.click(box.width / 2, box.height / 2);
   const panel = page.getByTestId('tile-panel');
   await expect(panel).toBeVisible();
-  await expectRoomyLabels(page, '.tile-panel button');
+  // The × is an icon, not a label: where its glyph box sits depends only on
+  // the font's metrics (7 px in the CI container's fonts), not on the layout.
+  await expectRoomyLabels(page, '.tile-panel button:not(.tile-panel-close)');
   await panel.getByRole('button', { name: 'Close' }).tap();
 }
 
