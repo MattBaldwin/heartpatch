@@ -1013,7 +1013,7 @@ const MILESTONE: ClothingItem[] = [
   {
     id: 'evolvers-goggles',
     name: "Evolver's Goggles",
-    description: 'For watching very closely when someone grows up.',
+    description: 'For watching very closely when someone evolves.',
     slot: 'hair-accessory',
     rarity: 'rare',
     sources: ['milestone'],

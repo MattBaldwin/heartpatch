@@ -93,26 +93,49 @@ describe('describeTile', () => {
   });
 });
 
-describe('guardianLine (owner decision 10)', () => {
-  it('says how many and how tough, kindly', () => {
-    expect(guardianLine({ count: 3, difficulty: 'tough' })).toBe(
-      'Guarded by 3 sleepy squishies • tough',
+describe('guardianLine (owner decision 10, #216)', () => {
+  it('says how many, how they really feel and how tough, kindly', () => {
+    expect(guardianLine({ count: 1, difficulty: 'easy', feelings: ['brave'] })).toBe(
+      'Guarded by 1 Brave squishy • easy',
     );
-    expect(guardianLine({ count: 1, difficulty: 'easy' })).toBe(
-      'Guarded by 1 sleepy squishy • easy',
+    expect(
+      guardianLine({ count: 3, difficulty: 'tough', feelings: ['sleepy', 'sleepy', 'sleepy'] }),
+    ).toBe('Guarded by 3 Sleepy squishies • tough');
+    // Repeats counted, in team order.
+    expect(
+      guardianLine({ count: 3, difficulty: 'very-tough', feelings: ['sleepy', 'joy', 'sleepy'] }),
+    ).toBe('Guarded by 3 squishies: 2 Sleepy, 1 Joy • very tough');
+    expect(
+      guardianLine({ count: 3, difficulty: 'tough', feelings: ['spooky', 'cozy', 'silly'] }),
+    ).toBe('Guarded by 3 squishies: 1 Spooky, 1 Cozy, 1 Silly • tough');
+  });
+
+  it("says no feeling when an older server doesn't send them", () => {
+    expect(guardianLine({ count: 1, difficulty: 'easy', feelings: [] })).toBe(
+      'Guarded by 1 squishy • easy',
     );
-    expect(guardianLine({ count: 2, difficulty: 'very-tough' })).toBe(
-      'Guarded by 2 sleepy squishies • very tough',
+    expect(guardianLine({ count: 2, difficulty: 'tough', feelings: [] })).toBe(
+      'Guarded by 2 squishies • tough',
     );
+  });
+
+  it('never uses an avoided word, whatever the feelings', () => {
+    const feelings = ['joy', 'cozy', 'brave', 'silly', 'sleepy', 'spooky'] as const;
     for (const difficulty of ['easy', 'tough', 'very-tough'] as const) {
-      expect(guardianLine({ count: 2, difficulty })).not.toMatch(AVOIDED);
+      for (const f of feelings) {
+        expect(guardianLine({ count: 2, difficulty, feelings: [f, 'joy'] })).not.toMatch(AVOIDED);
+      }
     }
   });
 
   it('shows on wild land with a hint, and nowhere else', () => {
-    const hint = { count: 2, difficulty: 'tough' as const };
+    const hint = {
+      count: 2,
+      difficulty: 'tough' as const,
+      feelings: ['joy' as const, 'joy' as const],
+    };
     expect(describeTile(tile({ guardianHint: hint }), lookup, userId(1)).guardians).toBe(
-      'Guarded by 2 sleepy squishies • tough',
+      'Guarded by 2 Joy squishies • tough',
     );
     expect(describeTile(tile({}), lookup, userId(1)).guardians).toBeNull();
     expect(describeTile(tile({ ownerUserId: userId(2) }), lookup, userId(1)).guardians).toBeNull();

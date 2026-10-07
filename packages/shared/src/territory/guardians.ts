@@ -70,18 +70,32 @@ export function resolveGuardians(input: GuardianInput, data: GuardianData): Batt
 }
 
 /**
- * What the tile panel may say about a team (owner decision 10): how many, and
- * a difficulty word from the team's total level against the fixed `hint`
- * bands, so every member sees the same hint. Null for no team. Never species,
- * levels, moves or seeds (CLAUDE.md rule 6).
+ * What the tile panel may say about a team (owner decision 10): how many, a
+ * difficulty word from the team's total level against the fixed `hint`
+ * bands, and each guardian's feeling in team order (#216), so every member
+ * sees the same hint. Null for no team. Never species, levels, elements,
+ * moves or seeds (CLAUDE.md rule 6).
  */
 export function hintForGuardians(
-  team: readonly Pick<BattleSquishySetup, 'level'>[],
+  team: readonly (Pick<BattleSquishySetup, 'level' | 'feeling'> & { speciesId?: string })[],
   rules: Pick<GuardianRules, 'hint'>,
+  /** For feelings: a guardian without its own feels as its species does, as in battle. */
+  species?: ReadonlyMap<string, Pick<Species, 'feeling'>>,
 ): GuardianHint | null {
   if (team.length === 0) return null;
   const total = team.reduce((sum, g) => sum + g.level, 0);
   const difficulty: GuardianDifficulty =
     total <= rules.hint.easyUpTo ? 'easy' : total <= rules.hint.toughUpTo ? 'tough' : 'very-tough';
-  return { count: team.length, difficulty };
+  // Only their feelings, in team order (#216): never species, levels or elements.
+  // All or nothing, so the line never names some guardians and not others.
+  const feelings = team.flatMap((g) => {
+    const feeling =
+      g.feeling ?? (g.speciesId === undefined ? undefined : species?.get(g.speciesId)?.feeling);
+    return feeling === undefined ? [] : [feeling];
+  });
+  return {
+    count: team.length,
+    difficulty,
+    feelings: feelings.length === team.length ? feelings : [],
+  };
 }

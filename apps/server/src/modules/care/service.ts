@@ -7,6 +7,7 @@ import {
   contentmentAfterCare,
   contentmentAt,
   evolutionAt,
+  evolvingMeter,
   GAME_DATA,
   grantedXp,
   GROWTH_RULES,
@@ -14,6 +15,7 @@ import {
   statsAtLevel,
   xpMultiplier,
   xpProgress,
+  type EvolvingMeter,
   type CareAction,
   type CareListResponse,
   type CareResponse,
@@ -69,6 +71,20 @@ export const EVOLUTION_STEPS: readonly EvolutionStep[] = [
   ),
   ...SERVER_GAME_DATA.secretEvolutions,
 ];
+
+/**
+ * Progress toward a squishy's next evolution (#205). Null on a top form or
+ * when a secret form comes next: nothing about a secret evolution leaves the
+ * server (CLAUDE.md rule 6).
+ */
+export function evolvingOf(squishy: {
+  speciesId: string;
+  level: number;
+  xp: number;
+  joinedLevel: number | null;
+}): EvolvingMeter | null {
+  return evolvingMeter(squishy, EVOLUTION_STEPS, (id) => PUBLIC_SPECIES.has(id), GROWTH_RULES);
+}
 
 /** Habitat tags by building content id (#18 data). */
 const HABITAT_TAGS = new Map<string, HabitatTags>(
@@ -168,6 +184,13 @@ export interface Growth {
   totalXp: number;
   /** Each form it grew into, in order (usually none, at most one in Phase 1 data). */
   evolutions: { fromSpeciesId: string; intoSpeciesId: string }[];
+  /**
+   * The evolving meter's percent before and after this XP (#205), for the
+   * results card; null where it shows no meter. After is null for one that
+   * evolved: the evolution celebration takes over.
+   */
+  evolvingBefore: number | null;
+  evolvingAfter: number | null;
 }
 
 /**
@@ -215,7 +238,15 @@ export async function applyXp(
     element = into.element;
   }
 
-  await repo.setGrowth(row.id, { xp: next.xp, level: next.level, speciesId, element });
+  await repo.setGrowth(row.id, {
+    xp: next.xp,
+    level: next.level,
+    speciesId,
+    element,
+    // A row the previous release wrote has no joining level: its first XP
+    // pins it at the level it had, so its meter stops restarting (#205).
+    ...(row.joinedLevel === null ? { joinedLevel: row.level } : {}),
+  });
   for (const evolution of evolutions) {
     await repo.insertEvolution({
       mapId: row.mapId,
@@ -237,6 +268,11 @@ export async function applyXp(
     level: next.level,
     totalXp: next.xp,
     evolutions,
+    evolvingBefore: evolvingOf(row)?.percent ?? null,
+    evolvingAfter:
+      evolutions.length > 0
+        ? null
+        : (evolvingOf({ ...row, level: next.level, xp: next.xp })?.percent ?? null),
   };
 }
 
@@ -344,6 +380,7 @@ export function createCareService(options: CareServiceOptions): CareService {
         xp: row.xp,
         xpIntoLevel: progress.intoLevel,
         xpToNext: progress.toNext,
+        evolving: evolvingOf(row),
         stats: statsAtLevel(base, row.level, BATTLE_RULES),
         contentment,
         mood: moodFor(contentment, CARE_RULES),

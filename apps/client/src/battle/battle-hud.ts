@@ -1,5 +1,8 @@
 import { ELEMENTS, FEELINGS, type BattleSideId, type PlayerBattleAction } from '@heartpatch/shared';
+import { CARE_TEXT, evolvingBar } from '../care/care-view.js';
+import { evolvingMeterEl } from '../care/evolving-meter.js';
 import { el } from '../ui/dom.js';
+import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
 import type { SafeRegion } from './camera-director.js';
 import { charmButton, noCharmsLine } from './heart-charm.js';
 import {
@@ -61,6 +64,11 @@ export interface ResultInfo {
   subtitle: string;
   /** "Moonpuff earned 12 XP" lines. */
   xp: string[];
+  /**
+   * The evolving meter under each XP line (#205), by index: the percent
+   * before and after this battle. Missing or null: no meter for that line.
+   */
+  evolving?: readonly ({ before: number; after: number } | null)[];
   /** One extra hint line ("Weaken a wild squishy, then…"), if any. */
   nudge?: string;
   done: string;
@@ -113,25 +121,6 @@ const CALLOUT_MS = 1100; // TUNE: long enough to read "Super cozy!"
  */
 export const SHEET_SHARE = 0.35; // TUNE
 
-/** Little badges for an element and a feeling (vector-free glyphs the system renders crisply). */
-const ELEMENT_GLYPH: Readonly<Record<string, string>> = {
-  fire: '🔥',
-  water: '💧',
-  leaf: '🍃',
-  frost: '❄️',
-  spark: '⚡',
-  stone: '🪨',
-  shadow: '🌙',
-  light: '✨',
-};
-const FEELING_GLYPH: Readonly<Record<string, string>> = {
-  joy: '😄',
-  cozy: '☺️',
-  brave: '😤',
-  silly: '🤪',
-  sleepy: '😴',
-  spooky: '👻',
-};
 const ELEMENT_NAMES = new Map<string, string>(ELEMENTS.map((e) => [e.id, e.name]));
 const FEELING_NAMES = new Map<string, string>(FEELINGS.map((f) => [f.id, f.name]));
 
@@ -550,7 +539,20 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         el(
           'ul',
           { class: 'battle-xp', 'data-testid': 'battle-xp' },
-          ...info.xp.map((line) => el('li', {}, line)),
+          ...info.xp.map((line, i) => {
+            const gain = info.evolving?.[i];
+            if (!gain) return el('li', {}, line);
+            const meter = evolvingMeterEl('battle-evolving');
+            const bar = evolvingBar(gain.after);
+            meter.update(bar, {
+              gainedFrom: gain.before / 100,
+              sub:
+                gain.after > gain.before && !bar?.ready
+                  ? CARE_TEXT.evolvingGain(gain.after - gain.before)
+                  : undefined,
+            });
+            return el('li', {}, line, meter.root);
+          }),
         ),
         ...(info.nudge
           ? [el('p', { class: 'battle-hint', 'data-testid': 'battle-nudge' }, info.nudge)]

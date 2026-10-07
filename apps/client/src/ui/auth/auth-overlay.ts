@@ -141,10 +141,13 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
   menuToggle.addEventListener('click', () => {
     setMenu(!chip.classList.contains('auth-chip-open'));
   });
-  // A row opened something: the menu folds away.
-  menuRows.addEventListener('click', (e) => {
+  // A row (or the head's version line, which opens What's new) opened
+  // something: the menu folds away.
+  const foldOnButton = (e: Event) => {
     if (e.target instanceof Element && e.target.closest('button')) setMenu(false);
-  });
+  };
+  menuRows.addEventListener('click', foldOnButton);
+  menuHead.addEventListener('click', foldOnButton);
 
   /** Set while a recovery code is on screen: no update may reload it away. */
   let releaseUpdates: (() => void) | null = null;

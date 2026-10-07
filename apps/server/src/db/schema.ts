@@ -389,6 +389,10 @@ export const squishies = pgTable(
     nickname: text('nickname'),
     level: integer('level').notNull().default(1),
     xp: integer('xp').notNull().default(0),
+    // The level it joined at (#205): the evolving meter counts from here. Set
+    // on every insert (a befriended squishy keeps its battle level); null only
+    // for rows the previous release wrote, read as the level they have now.
+    joinedLevel: integer('joined_level'),
     state: squishyState('state').notNull().default('active'),
     // The habitat it lives in (#18); null: none yet. Only the owner's own
     // habitat, checked by the buildings service. Taking it down moves it out.

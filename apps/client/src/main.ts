@@ -38,6 +38,7 @@ import { appUpdates } from './pwa/app-updates.js';
 import { CLIENT_BUILD } from './pwa/build-info.js';
 import { startPwa } from './pwa/pwa.js';
 import { mountVersionMenu } from './pwa/version-menu.js';
+import { createWhatsNew } from './whats-new/whats-new.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
@@ -257,6 +258,8 @@ const closeUp = createCloseUpScreen({
 });
 /** #16's raid report is open: the Hollow's morning report waits its turn (#21). */
 let raidReportOpen = false;
+/** What's new (#220) is open: the other cards wait for it (one card at a time, #129). */
+let whatsNewOpen = false;
 // Territory (#15): Claim, Challenge and guards in the tile panel. A tile
 // battle opens the battle screen, unless another screen sits over the map.
 // The raid report (#16) rides along with territory onto every map: challenges
@@ -316,10 +319,13 @@ const hollow = createHollowScreen({
     },
   },
   // One card at a time (#129): the morning report waits behind the raid
-  // report, a found lore page and a milestone party. (`lorebook` and
-  // `milestones` are made below; this is only read at render time.)
+  // report, a found lore page, a milestone party and What's new. (`lorebook`
+  // and `milestones` are made below; this is only read at render time.)
   otherReportOpen: () =>
-    raidReportOpen || lorebook.debug.showing !== null || milestones.debug.showing !== null,
+    raidReportOpen ||
+    whatsNewOpen ||
+    lorebook.debug.showing !== null ||
+    milestones.debug.showing !== null,
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
   },
@@ -419,6 +425,8 @@ const maps = createMapScreen({
   ),
   onHudChange: (mapId) => {
     hudMapId = mapId;
+    // The map is up: a new build's What's new may pop up now (#220).
+    if (mapId !== null) whatsNew.maybePop();
     trays.setVisible(mapId !== null);
     recipeBook.setMap(mapId);
     // Hidden, then shown: the Team and Jobs row checks the map (not on the Glade).
@@ -531,18 +539,22 @@ const tutorial = createTutorialScreen({
 });
 // Found lore pages (design doc §16). Mounted after the tutorial, so its card
 // sits over Sprout's layer. One card at a time (#129): a page waits behind a
-// battle, a milestone party and the morning report, and tells the report
-// when it's gone.
+// battle, a milestone party, the morning report and What's new, and tells the
+// report when it's gone.
 const lorebook = createLorebook({
   root: document.body,
-  busy: () => battles.debug !== null || milestones.debug.showing !== null || hollowReportOpen(),
+  busy: () =>
+    battles.debug !== null ||
+    milestones.debug.showing !== null ||
+    hollowReportOpen() ||
+    whatsNewOpen,
   onChange: () => {
     hollow.otherReportChanged();
   },
 });
 // A milestone earned (#44): a little party, but never over a battle, a lore
-// page, the morning report, an evolution's "Whoa!" or the wardrobe (one card
-// at a time, #129).
+// page, the morning report, What's new, an evolution's "Whoa!" or the wardrobe
+// (one card at a time, #129).
 // Nor over a form the player just asked for (the lobby's "Make a patch").
 const milestones = createMilestoneCelebration({
   root: document.body,
@@ -550,6 +562,7 @@ const milestones = createMilestoneCelebration({
     battles.debug !== null ||
     lorebook.debug.showing !== null ||
     hollowReportOpen() ||
+    whatsNewOpen ||
     (care.debug?.celebrating ?? false) ||
     (wardrobe.debug?.open ?? false) ||
     lobby.formOpen,
@@ -853,13 +866,46 @@ const menuRow = (icon: string, label: string, onTap: () => void): HTMLButtonElem
   row.addEventListener('click', onTap);
   return row;
 };
+// What's new (#220): the version line opens it, and after an update it pops
+// up once over the map: never with no map up, over a battle, the tutorial,
+// Sprout's tray hint, a screen over the map, another card (#129) or a held
+// screen (#47). Those cards wait for it in turn (`whatsNewOpen`).
+const whatsNew = createWhatsNew({
+  root: document.body,
+  client: CLIENT_BUILD,
+  busy: () =>
+    hudMapId === null ||
+    updateHold.held ||
+    lobby.isOpen ||
+    battles.debug !== null ||
+    (tutorial.debug !== null && tutorial.debug.phase !== 'closed') ||
+    trays.debug.hint ||
+    catalog.isOpen ||
+    care.isOpen ||
+    closeUp.isOpen ||
+    (wardrobe.debug?.open ?? false) ||
+    recipeBook.isOpen ||
+    raidReportOpen ||
+    (land.debug?.welcome ?? false) ||
+    lorebook.debug.showing !== null ||
+    milestones.debug.showing !== null ||
+    hollowReportOpen(),
+  onChange: () => {
+    whatsNewOpen = whatsNew.debug.open;
+    hollow.otherReportChanged();
+  },
+  canCopy: 'clipboard' in navigator,
+  // async: a missing clipboard (an http page) rejects instead of throwing.
+  copy: async (text) => navigator.clipboard.writeText(text),
+});
 // The game's version under the name, and "Update now" when one is ready (#198).
 const version = mountVersionMenu({
   client: CLIENT_BUILD,
   updates: appUpdates,
   fetchServer: () => fetchHealth(),
-  // async: a missing clipboard (an http page) rejects instead of throwing.
-  copy: async (text) => navigator.clipboard.writeText(text),
+  onOpen: () => {
+    whatsNew.open();
+  },
 });
 mountAuth(document.body, {
   menuHead: () => {
@@ -967,6 +1013,7 @@ if (import.meta.env.DEV) {
     starter: () => starters.debug,
     lore: () => lorebook.debug,
     milestones: () => milestones.debug,
+    whatsNew: () => whatsNew.debug,
     audio: () => audio.debug,
   };
 

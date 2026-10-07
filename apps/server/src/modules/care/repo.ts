@@ -27,6 +27,8 @@ export interface CareSquishyRow {
   nickname: string | null;
   level: number;
   xp: number;
+  /** The level it joined at (#205); null for rows from before it was kept. */
+  joinedLevel: number | null;
   state: 'active' | 'hollowed';
   habitatBuildingId: string | null;
   /**
@@ -91,7 +93,14 @@ export interface CareRepo {
 
   setGrowth: (
     squishyId: string,
-    growth: { xp: number; level: number; speciesId: string; element: ElementId },
+    growth: {
+      xp: number;
+      level: number;
+      speciesId: string;
+      element: ElementId;
+      /** Pins the joining level of a row the previous release wrote (#205). */
+      joinedLevel?: number;
+    },
   ) => Promise<void>;
   insertEvolution: (evolution: EvolutionRow & { mapId: string }) => Promise<void>;
   /** The newest evolution each squishy's owner hasn't seen celebrated yet. */
@@ -115,6 +124,7 @@ const squishyColumns = {
   nickname: squishies.nickname,
   level: squishies.level,
   xp: squishies.xp,
+  joinedLevel: squishies.joinedLevel,
   state: squishies.state,
   habitatBuildingId: squishies.habitatBuildingId,
   onWatch: squishyOnWatch(),

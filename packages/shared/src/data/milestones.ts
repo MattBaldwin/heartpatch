@@ -122,20 +122,20 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
     tiers: [
       {
         threshold: 1,
-        goal: 'Help a squishy grow up.',
+        goal: 'Help a squishy evolve.',
         title: { id: 'proud-keeper', name: 'Proud Keeper' },
         coins: 25,
       },
       {
         threshold: 5,
-        goal: 'Help 5 squishies grow up.',
+        goal: 'Help 5 squishies evolve.',
         title: { id: 'evolver', name: 'Evolver' },
         coins: 50,
         clothing: 'evolvers-goggles',
       },
       {
         threshold: 20,
-        goal: 'Help 20 squishies grow up.',
+        goal: 'Help 20 squishies evolve.',
         title: { id: 'glow-up-guru', name: 'Glow-Up Guru' },
         coins: 100,
         clothing: 'prism-boots',

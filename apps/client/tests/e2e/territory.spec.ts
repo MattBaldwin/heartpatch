@@ -140,24 +140,29 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
     /tries left · new tries in (\d+h( \d{2}m)?|\d+m|less than a minute)/,
   );
   expect(findAvoidedWords((await panel.textContent()) ?? '')).toEqual([]);
-  // How many guardians and how tough (owner decision 10), as the server's view
-  // says for the tile the map has selected; never who.
+  // How many guardians, how they feel (#216) and how tough (owner decision
+  // 10), as the server's view says for the tile the map has selected; never who.
   const selected = (await mapState(page))!.selected!;
   const { body: view } = await api<{
     tiles: {
       q: number;
       r: number;
-      guardianHint: { count: number; difficulty: string } | null;
+      guardianHint: { count: number; difficulty: string; feelings: string[] } | null;
     }[];
   }>(page, 'GET', `/maps/${mapId}/view`);
   const hint =
     view.tiles.find((t) => `${String(t.q)},${String(t.r)}` === selected)?.guardianHint ?? null;
   expect(hint).not.toBeNull();
   const words = { easy: 'easy', tough: 'tough', 'very-tough': 'very tough' } as const;
-  const who = hint!.count === 1 ? '1 sleepy squishy' : `${String(hint!.count)} sleepy squishies`;
-  await expect(page.getByTestId('tile-panel-guardians')).toHaveText(
-    `Guarded by ${who} • ${words[hint!.difficulty as keyof typeof words]}`,
-  );
+  const guardians = page.getByTestId('tile-panel-guardians');
+  await expect(guardians).toContainText(`Guarded by ${String(hint!.count)} `);
+  await expect(guardians).toContainText(`• ${words[hint!.difficulty as keyof typeof words]}`);
+  expect(hint!.feelings).toHaveLength(hint!.count);
+  for (const id of hint!.feelings) {
+    const name = GAME_DATA.feelings.find((f) => f.id === id)!.name;
+    await expect(guardians).toContainText(name);
+  }
+  await expect(guardians).not.toContainText('sleepy squish');
   await page.getByTestId('tile-claim').tap();
 
   // The guardians' showdown takes the screen; play it out.
@@ -206,7 +211,9 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
 
   // A Hearthfire in the new land's middle (#202): build it, then fuel it to light it.
   await page.getByTestId('tile-build-fire').tap();
-  await expect(panel).toContainText('It goes in the middle of this tile');
+  // What a fire does (#207): its line and chips, as in the build menu.
+  await expect(panel).toContainText('Keeps squishies out on your land safe from the Hollow Man');
+  await expect(panel.locator('.home-effect').first()).toHaveText('🛡️ Safe 1 tile around');
   await page.getByTestId('tile-build-fire-confirm').tap();
   await expect(page.getByTestId('tile-fire')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('tile-fire-fuel').tap();
