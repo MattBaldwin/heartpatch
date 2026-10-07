@@ -1030,6 +1030,11 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       for (const table of GUARDIAN_RULES.tables) {
         for (const entry of table.entries) expect(tilesJson).not.toContain(`"${entry.species}"`);
       }
+      // Nor elements: a hint's feelings are feelings, never the guardians' element.
+      const hintsJson = JSON.stringify(rawTiles.map((t) => t.guardianHint));
+      for (const element of GAME_DATA.elements) {
+        expect(hintsJson).not.toContain(`"${element.id}"`);
+      }
       for (const tile of rawTiles) {
         if (tile.guardianHint)
           expect(Object.keys(tile.guardianHint).sort()).toEqual([

@@ -70,10 +70,11 @@ export function resolveGuardians(input: GuardianInput, data: GuardianData): Batt
 }
 
 /**
- * What the tile panel may say about a team (owner decision 10): how many, and
- * a difficulty word from the team's total level against the fixed `hint`
- * bands, so every member sees the same hint. Null for no team. Never species,
- * levels, moves or seeds (CLAUDE.md rule 6).
+ * What the tile panel may say about a team (owner decision 10): how many, a
+ * difficulty word from the team's total level against the fixed `hint`
+ * bands, and each guardian's feeling in team order (#216), so every member
+ * sees the same hint. Null for no team. Never species, levels, elements,
+ * moves or seeds (CLAUDE.md rule 6).
  */
 export function hintForGuardians(
   team: readonly (Pick<BattleSquishySetup, 'level' | 'feeling'> & { speciesId?: string })[],

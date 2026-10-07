@@ -369,8 +369,9 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           listPublicBuildings(tx, mapId, at, map.timeZone),
           createTerritoryRepo(tx).mapSeed(mapId),
         ]);
-        // Neutral land's guardians today (#15's team), as a count and a word
-        // (owner decision 10): the same for every member, and never who.
+        // Neutral land's guardians today (#15's team), as a count, a word
+        // (owner decision 10) and their feelings (#216): the same for every
+        // member, and never who.
         const hintFor = (tile: TileViewRow): GuardianHint | null =>
           tile.ownerUserId === null && tile.homeSlot === null
             ? hintForGuardians(
