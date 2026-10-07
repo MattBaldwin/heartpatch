@@ -38,12 +38,6 @@ const view = (key: string, over: Partial<BookContext> = {}) => {
   return pageView(page, ctx(over));
 };
 
-/**
- * Made things with no use yet, and where their use comes from (#241's
- * guard): one named entry each. #203 removes "ice" with the Ice Wall.
- */
-const NO_USE_YET: Readonly<Record<string, string>> = { ice: 'used by the Ice Wall (#203)' };
-
 describe('recipe book pages', () => {
   it('keep have/need per ingredient, capped for the 0/1 display', () => {
     const charm = view('recipe:heart-charm', { bag: { timber: 5, treats: 0 } });
@@ -377,23 +371,7 @@ describe('ribbon tabs', () => {
     ]);
   });
 
-  it('names only things a page still makes as having no use yet', () => {
-    for (const made of Object.keys(NO_USE_YET)) {
-      const pages = GAME_DATA.recipes.filter((r) => r.output.resource === made);
-      expect(pages.length, `${made} is made by no recipe page`).toBeGreaterThan(0);
-    }
-  });
-
   it('say what every page makes is for (#241)', () => {
-    for (const v of views) {
-      const made = GAME_DATA.recipes.find((r) => `recipe:${r.id}` === v.key)?.output.resource;
-      const waiting = made === undefined ? undefined : NO_USE_YET[made];
-      if (waiting) {
-        // Self-expiring: once it has a use, this fails until its entry goes.
-        expect(v.effect?.chips ?? [], `${made}: ${waiting}`).toEqual([]);
-      } else {
-        expect(v.effect !== null && v.effect.chips.length > 0, v.key).toBe(true);
-      }
-    }
+    expect(views.every((v) => v.effect !== null && v.effect.chips.length > 0)).toBe(true);
   });
 });
