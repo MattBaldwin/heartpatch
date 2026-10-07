@@ -377,6 +377,13 @@ describe('ribbon tabs', () => {
     ]);
   });
 
+  it('names only things a page still makes as having no use yet', () => {
+    for (const made of Object.keys(NO_USE_YET)) {
+      const pages = GAME_DATA.recipes.filter((r) => r.output.resource === made);
+      expect(pages.length, `${made} is made by no recipe page`).toBeGreaterThan(0);
+    }
+  });
+
   it('say what every page makes is for (#241)', () => {
     for (const v of views) {
       const made = GAME_DATA.recipes.find((r) => `recipe:${r.id}` === v.key)?.output.resource;

@@ -53,7 +53,7 @@ export const RESOURCES: Resource[] = [
     id: 'greens',
     name: 'Greens',
     description:
-      'Leafy bundles of grass and clover from meadows and forests, for growing leafy things.',
+      'Leafy bundles of grass and clover from meadows and forests. Stir them into yummy Treats!',
     kind: 'gathered',
     gather: { seconds: 15 * 60, quantity: 4 }, // TUNE: a little less than Stone
   },
@@ -61,7 +61,7 @@ export const RESOURCES: Resource[] = [
     id: 'ice',
     name: 'Ice',
     description:
-      'Cold and sparkly chunks from the mountains. Fences will want it soon! They never melt in your bag.',
+      'Cold and sparkly chunks from the mountains. Fences will want them soon! They never melt in your bag.',
     kind: 'gathered',
     gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Emberwood
   },
