@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { trayButton } from './trays.js';
 
 /** True while a screen holds automatic updates (dev hook, src/pwa/update-hold.ts). */
 const updatesHeld = (page: Page) => hook<boolean>(page, 'updatesHeld');
@@ -207,6 +208,17 @@ test('looking around the world has a big way back to the patch list (#212)', asy
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   await expect(back).toBeHidden();
   await page.getByTestId('lobby-open').tap();
+  await lobby.getByRole('button', { name: 'Look around the world' }).tap();
+  await expect(lobby).toBeHidden();
+  await expect(back).toBeHidden();
+
+  // Home can't open (offline): the list says why over the still-open patch,
+  // and looking around from there goes back to the patch, still no pill.
+  await page.route('**/api/v1/maps/*/home', (route) =>
+    route.fulfill({ status: 503, json: { error: { code: 'INTERNAL', message: 'Oops!' } } }),
+  );
+  await (await trayButton(page, 'home-open')).tap();
+  await expect(lobby).toBeVisible();
   await lobby.getByRole('button', { name: 'Look around the world' }).tap();
   await expect(lobby).toBeHidden();
   await expect(back).toBeHidden();

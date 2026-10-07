@@ -97,6 +97,12 @@ export interface LobbyOptions {
   listHeader?: () => Node[];
   /** Rows on the Settings screen (the tutorial's replay, #47). */
   settings?: () => Node[];
+  /**
+   * True while a patch is on screen behind the lobby (#212): "Look around the
+   * world" then goes back to it, and the "Back to my patches" pill stays
+   * away. main.ts knows (the map's HUD); defaults to none.
+   */
+  patchOpen?: () => boolean;
   /** Where the "My patches" button goes over a map (the trays' corner); defaults to `root`. */
   buttonRoot?: HTMLElement;
   /**
@@ -133,16 +139,12 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   root.append(panel, backPill);
   (options.buttonRoot ?? root).append(openButton);
 
-  /** True while a patch is open behind the lobby (it went aside for one). */
-  let patchOpen = false;
   /** Shows the panel, corner button and back pill for `mode` (lobby-chrome.ts). */
   const setMode = (mode: LobbyMode) => {
     const chrome = lobbyChrome(mode);
     panel.hidden = !chrome.panel;
     openButton.hidden = !chrome.openButton;
     backPill.hidden = !chrome.backPill;
-    if (mode === 'map') patchOpen = true;
-    if (mode === 'away') patchOpen = false;
   };
 
   let user: PublicUser | null = null;
@@ -372,7 +374,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       LOBBY_PEEK_TEXT.lookAround,
     );
     close.addEventListener('click', () => {
-      setMode(closeListTo(patchOpen));
+      setMode(closeListTo(options.patchOpen?.() ?? false));
     });
     show(
       title('Your patches'),
@@ -1044,25 +1046,19 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         setMode('away');
       }
     },
-    // These four open the lobby after a patch has closed (main.ts), so
-    // "Look around the world" from there peeks at the world, not a patch.
     showMessage: (message) => {
-      patchOpen = false;
       if (user) void showList(message);
     },
     showCreate: () => {
-      patchOpen = false;
       if (user) showCreate();
     },
     showJoin: () => {
-      patchOpen = false;
       if (user) showJoin();
     },
     refreshList: () => {
       if (user && onList && !panel.hidden) void showList();
     },
     show: () => {
-      patchOpen = false;
       if (user) void showList();
     },
     hide: () => {
