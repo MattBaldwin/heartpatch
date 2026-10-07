@@ -10,6 +10,7 @@ import {
   grantedXp,
   GROWTH_RULES,
   heartSeedOf,
+  JobsViewSchema,
   MAP_GEN,
   MapResponseSchema,
   replayBattle,
@@ -619,15 +620,24 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       if (over.view.phase.type !== 'over') throw new Error('not over');
       const { result } = over.view.phase;
       const row = (await rowOf(battle.id))!;
-      const paid = new Map(
-        (row.rewards as { xp: { squishyId: string; xp: number }[] }).xp.map((x) => [
-          x.squishyId,
-          x.xp,
-        ]),
-      );
+      const rewards = row.rewards as {
+        xp: { squishyId: string; xp: number }[];
+        fullXpResetAt: string | null;
+      };
+      const paid = new Map(rewards.xp.map((x) => [x.squishyId, x.xp]));
       const base = new Map(result.xp.map((x) => [x.squishyId, x.xp]));
-      return { winner: result.winner, paid, base };
+      // The result card's "Full XP again in …" (#201) reads the player's view.
+      expect(over.rewards?.fullXpResetAt).toBe(rewards.fullXpResetAt);
+      return { winner: result.winner, paid, base, fullXpResetAt: rewards.fullXpResetAt };
     }
+    /** Each squishy's `fullXpResetAt` on the team view (#201). */
+    async function fullXpBack(server: FastifyInstance, who: Player, mapId: string) {
+      const res = await call(server, 'GET', `/maps/${mapId}/jobs`, who);
+      expect(res.statusCode, res.body).toBe(200);
+      const view = JobsViewSchema.parse(res.json());
+      return new Map(view.squishies.map((s) => [s.squishy.id, s.fullXpResetAt]));
+    }
+    const DENVER_MIDNIGHT = '2026-10-03T06:00:00.000Z';
     /**
      * XP a squishy granted at `GRANTED` (no care since, no habitat) gets for
      * `base` now: contentment slides down as the test clock moves on.
@@ -670,17 +680,28 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
         expect(won.winner).toBe('a');
         expect(won.paid.get(lead.id)).toBe(full(won.base.get(lead.id)!));
         expect(won.base.has(bench.id)).toBe(false);
+        expect(won.fullXpResetAt).toBeNull();
       }
+      // Now the lead's next win pays less, until Denver's midnight; the bench's doesn't.
+      expect(await fullXpBack(server, kid, mapId)).toEqual(
+        new Map([
+          [lead.id, DENVER_MIDNIGHT],
+          [bench.id, null],
+        ]),
+      );
       // Past the limit, the lead gets the share, still on Oct 2 in Denver (23:59).
       clock.setTime(Date.parse('2026-10-03T05:59:00Z'));
       const tired = await fight(server, kid, mapId, weak);
       expect(tired.paid.get(lead.id)).toBe(share(tired.base.get(lead.id)!));
+      expect(tired.fullXpResetAt).toBe(DENVER_MIDNIGHT);
       // The squishy that sat on the bench has won nothing today: full XP.
       expect((await team([bench.id])).statusCode).toBe(200);
       const fresh = await fight(server, kid, mapId, weak);
       expect(fresh.paid.get(bench.id)).toBe(full(fresh.base.get(bench.id)!));
+      expect(fresh.fullXpResetAt).toBeNull();
       // Midnight in Denver (06:00 UTC): the lead's count starts again.
       clock.setTime(Date.parse('2026-10-03T06:00:00Z'));
+      expect((await fullXpBack(server, kid, mapId)).get(lead.id)).toBeNull();
       expect((await team([lead.id])).statusCode).toBe(200);
       const morning = await fight(server, kid, mapId, weak);
       expect(morning.paid.get(lead.id)).toBe(full(morning.base.get(lead.id)!));
