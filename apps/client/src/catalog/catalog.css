@@ -136,9 +136,10 @@
   font-size: 12px;
 }
 
-/* An unseen card's empty space where the chip would be, so cards line up. */
+/* An unseen card's empty space where the chip would be (its line plus
+   padding, as above), so cards line up. */
 .catalog-rarity-gap {
-  min-height: 21px;
+  min-height: calc(12px * 1.2 + 4px);
 }
 
 .catalog-badge {

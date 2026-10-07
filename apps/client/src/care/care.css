@@ -20,7 +20,8 @@
 }
 
 .care[hidden],
-.care-celebrate[hidden] {
+.care-celebrate[hidden],
+.care-rarity[hidden] {
   display: none;
 }
 

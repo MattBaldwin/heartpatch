@@ -1,4 +1,4 @@
-import { CLOTHING_RARITIES, findAvoidedWords, RaritySchema } from '@heartpatch/shared';
+import { CLOTHING_RARITIES, findAvoidedWords, RaritySchema, type Rarity } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { WARDROBE_TEXT } from '../wardrobe/wardrobe-screen.js';
 import { RARITY_NAMES, rarityClass, rarityName } from './rarity.js';
@@ -20,10 +20,8 @@ describe('rarity words and colours (#240)', () => {
 
   it("gives every rarity a colour class, with the wardrobe's colours unchanged", () => {
     const sheet = rarityCss;
-    const colour = (rarity: string) =>
-      new RegExp(`\\.${rarityClass(rarity as never)} \\{\\s*--rarity: (#[0-9a-f]{6});`).exec(
-        sheet,
-      )?.[1];
+    const colour = (rarity: Rarity) =>
+      new RegExp(`\\.${rarityClass(rarity)} \\{\\s*--rarity: (#[0-9a-f]{6});`).exec(sheet)?.[1];
     expect(Object.fromEntries(RaritySchema.options.map((r) => [r, colour(r)]))).toEqual({
       common: '#8fbf8a',
       uncommon: '#4fa36b',
