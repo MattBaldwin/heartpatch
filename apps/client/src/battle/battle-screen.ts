@@ -23,7 +23,7 @@ import { lodFor } from '../procedural/motion.js';
 import { formatWait } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
-import { nearbyNote } from './wild-pick.js';
+import { nearbyNote, tilesToMark } from './wild-pick.js';
 import { ManualClock, realClock, type BattleClock } from './battle-clock.js';
 import { BREATHING_FRAME_MS, PLAYBACK, RETRY_AFTER_MS } from './battle-config.js';
 import { mountBattleHud, plateSideOf, type BattleHud, type ControlMode } from './battle-hud.js';
@@ -321,7 +321,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       .wildHints(id)
       .then((tiles) => {
         if (mapId !== id || user !== who) return;
-        options.onWildHints?.(id, tiles);
+        options.onWildHints?.(id, tilesToMark(tiles, options.isGlade?.(id) ?? false));
         if (enter.disabled || note.textContent) return;
         note.textContent = nearbyNote(tiles.length);
       })
@@ -362,6 +362,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   };
   enter.addEventListener('click', () => {
     busy((id) => api.startWild(id));
+  });
+  // Back from the background (hours, maybe a new spawn window): fresh tufts.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && battle === null) refreshNearby();
   });
   if (options.devTools) {
     const grant = el(
@@ -915,6 +919,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     },
     setUser: (next) => {
       if (next?.id === user?.id) return;
+      // Another player on this device never sees the last one's tufts.
+      if (mapId !== null) options.onWildHints?.(mapId, []);
       user = next;
       if (battle) close(false);
       mapId = null;

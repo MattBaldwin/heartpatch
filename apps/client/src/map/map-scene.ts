@@ -432,6 +432,11 @@ export class MapScene {
       const tile = this.tiles.get(m.key);
       return tile ? [{ marker: m, tile }] : [];
     });
+    // A redraw (any live event) with the same tufts: nothing to rebuild.
+    const same =
+      placed.length === this.wild.length &&
+      placed.every((p, i) => p.marker.key === this.wild[i]?.key);
+    if (same) return;
     this.wild = placed.map((p) => p.marker);
     const { offset, scale, sway } = WILD_MARKER;
     const size = new Vector3(scale, scale, scale);

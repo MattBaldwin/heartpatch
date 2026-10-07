@@ -19,10 +19,19 @@ export function nearbyNote(count: number): string {
 }
 
 /**
+ * The tiles to mark on a map: none on the Tutorial Glade, where every tile in
+ * reach has a starter and the tutorial teaches one thing at a time (design
+ * doc §26: battles come at its own step, through Find a squishy).
+ */
+export function tilesToMark(tiles: readonly Hex[], glade: boolean): readonly Hex[] {
+  return glade ? [] : tiles;
+}
+
+/**
  * The hints the map on screen shows (tiles only, no species), so the tile
  * panel can offer "Meet it" on exactly the tiles with a tuft.
  */
-export class WildHints {
+export class WildHintTiles {
   private mapId: string | null = null;
   private keys = new Set<HexKey>();
 

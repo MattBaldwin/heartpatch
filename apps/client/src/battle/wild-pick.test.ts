@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nearbyNote, WildHints, WILD_TEXT } from './wild-pick.js';
+import { nearbyNote, tilesToMark, WildHintTiles, WILD_TEXT } from './wild-pick.js';
 
 describe('nearbyNote', () => {
   it('counts the tufts and points at them (owner decision 2026-10-07)', () => {
@@ -18,9 +18,9 @@ describe('nearbyNote', () => {
   });
 });
 
-describe('WildHints', () => {
+describe('WildHintTiles', () => {
   it('offers Meet it on exactly the hinted tiles of the map on screen', () => {
-    const hints = new WildHints();
+    const hints = new WildHintTiles();
     hints.set('map-a', [
       { q: 1, r: 2 },
       { q: -3, r: 0 },
@@ -32,7 +32,7 @@ describe('WildHints', () => {
   });
 
   it('never matches another map’s tiles, or after the map goes away', () => {
-    const hints = new WildHints();
+    const hints = new WildHintTiles();
     hints.set('map-a', [{ q: 1, r: 2 }]);
     expect(hints.has('map-b', { q: 1, r: 2 })).toBe(false);
     hints.set(null, [{ q: 1, r: 2 }]);
@@ -41,9 +41,24 @@ describe('WildHints', () => {
   });
 
   it('forgets a tile once the next hints leave it out (met, or a new window)', () => {
-    const hints = new WildHints();
+    const hints = new WildHintTiles();
     hints.set('map-a', [{ q: 1, r: 2 }]);
     hints.set('map-a', []);
     expect(hints.has('map-a', { q: 1, r: 2 })).toBe(false);
+  });
+});
+
+describe('tilesToMark', () => {
+  const tiles = [
+    { q: 1, r: 2 },
+    { q: 0, r: 0 },
+  ];
+
+  it('marks every hinted tile on a patch', () => {
+    expect(tilesToMark(tiles, false)).toEqual(tiles);
+  });
+
+  it('marks nothing on the Tutorial Glade: battles wait for their own step', () => {
+    expect(tilesToMark(tiles, true)).toEqual([]);
   });
 });

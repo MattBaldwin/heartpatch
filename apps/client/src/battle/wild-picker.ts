@@ -1,7 +1,7 @@
 import { hexKey, type Hex, type PublicTile } from '@heartpatch/shared';
 import type { TileActions } from '../map/map-screen.js';
 import { el, messageOf } from '../ui/dom.js';
-import { WildHints, WILD_TEXT } from './wild-pick.js';
+import { WildHintTiles, WILD_TEXT } from './wild-pick.js';
 
 // "Meet it" in the tile panel (#209): on a tile with a rustling tuft, the
 // panel says "Something's rustling here!" and offers to meet whoever it is.
@@ -21,7 +21,7 @@ export interface WildPicker {
 }
 
 export function createWildPicker(options: WildPickerOptions): WildPicker {
-  const hints = new WildHints();
+  const hints = new WildHintTiles();
   let panel: { container: HTMLElement; tile: PublicTile; mapId: string } | null = null;
   /** What went wrong with the last Meet it on the tile shown, until another tile shows. */
   let problem: string | null = null;

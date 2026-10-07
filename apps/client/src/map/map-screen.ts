@@ -349,6 +349,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     setUser: (next) => {
       if (next?.id === user?.id) return;
       user = next;
+      wild = null;
       if (sync.state) close();
       ws?.close();
       ws = null;
