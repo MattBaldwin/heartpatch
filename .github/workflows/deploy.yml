@@ -94,6 +94,30 @@ jobs:
         run: |
           echo "number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+      # What's new (#220): the image build has no .git, so the changelog (with
+      # each entry's build number from git) is written here, into
+      # apps/client/public, and the caddy image's Vite build ships it. Skipped
+      # until the client has the `changelog` script, so this can land first.
+      - name: Has changelog script
+        id: changelog
+        if: matrix.image == 'caddy'
+        run: |
+          if grep -q '"changelog":' apps/client/package.json; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@v4
+        if: steps.changelog.outputs.enabled == 'true'
+      - uses: actions/setup-node@v5
+        if: steps.changelog.outputs.enabled == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: What's new
+        if: steps.changelog.outputs.enabled == 'true'
+        run: |
+          pnpm install --frozen-lockfile --filter @heartpatch/client...
+          pnpm --filter @heartpatch/client changelog
+          test -s apps/client/public/changelog.json
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:

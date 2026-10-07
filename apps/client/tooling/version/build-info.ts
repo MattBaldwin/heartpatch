@@ -38,10 +38,11 @@ export function readBuildInfo(source: BuildSource): BuildInfo | null {
   return count && sha ? info(count, sha, source.now) : null;
 }
 
-/** git, or null when it isn't installed or this isn't a checkout. */
-export function runGit(args: string[]): string | null {
+/** git (in `cwd`, else here), or null when it isn't installed or this isn't a checkout. */
+export function runGit(args: string[], cwd?: string): string | null {
   try {
     return execFileSync('git', args, {
+      ...(cwd === undefined ? {} : { cwd }),
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
