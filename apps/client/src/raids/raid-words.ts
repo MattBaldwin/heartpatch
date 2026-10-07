@@ -1,4 +1,4 @@
-import type { DefenseStance, Raid } from '@heartpatch/shared';
+import { GAME_DATA, type DefenseStance, type Raid } from '@heartpatch/shared';
 
 // Player-facing words for the challenge report (#16; style guide §2, §6, §9):
 // calm and reassuring, never shaming. A challenge is "Someone challenged your
@@ -32,11 +32,25 @@ export function stanceName(stance: DefenseStance): string {
   return STANCES.find((s) => s.stance === stance)?.name ?? 'Balanced';
 }
 
+const FENCE_NAMES = new Map(
+  GAME_DATA.buildings.filter((b) => b.kind === 'fence').map((b) => [b.id, b.name]),
+);
+
 /** One line per raid: who came by and how it went, kind either way. */
 export function raidLine(
-  raid: Pick<Raid, 'attackerName' | 'outcome' | 'reason' | 'stance'>,
+  raid: Pick<Raid, 'attackerName' | 'outcome' | 'reason' | 'stance'> & Partial<Pick<Raid, 'fence'>>,
 ): string {
   const who = raid.attackerName;
+  // A fence battle (#203): the fence held, or it was broken (the guard's still there).
+  if (raid.fence) {
+    const name = FENCE_NAMES.get(raid.fence.buildingId) ?? 'fence';
+    if (raid.fence.broken) {
+      return `🪵 ${who} broke your ${name}! Your guard is still there. Build it again from the land’s Fences.`;
+    }
+    return raid.reason === 'forfeit'
+      ? `🔨 ${who} came by, then stopped. Your ${name} is at ${String(raid.fence.percent)}%.`
+      : `🔨 Your ${name} kept ${who} out! It’s at ${String(raid.fence.percent)}%. Repair it from the land’s Fences.`;
+  }
   const defenders = raid.stance === null ? 'The land’s guardians' : 'Your squishies';
   switch (raid.outcome) {
     case 'held':
@@ -59,6 +73,13 @@ export function raidFireLine(raid: Pick<Raid, 'lostFire'>): string | null {
   return raid.lostFire === null
     ? null
     : 'Your fire there went out when the land changed hands. You got some things back 🔥';
+}
+
+/** My fences that came down with the land (#203), or null when there were none there. */
+export function raidFencesLine(raid: Partial<Pick<Raid, 'lostFences'>>): string | null {
+  return raid.lostFences
+    ? 'Your fences there came down when the land changed hands. You got some things back 🪵'
+    : null;
 }
 
 /** "Bold" etc. for a raid's style, or null when guardians stood in. */

@@ -2,6 +2,7 @@ import { findAvoidedWords, RaidOutcomeSchema, type Raid } from '@heartpatch/shar
 import { describe, expect, it } from 'vitest';
 import {
   RAID_TEXT,
+  raidFencesLine,
   raidFireLine,
   raidLine,
   raidStyleLine,
@@ -24,6 +25,36 @@ const raid = (over: Partial<Raid> = {}): Raid => ({
   replayable: true,
   lostFire: null,
   ...over,
+});
+
+describe('fences in the report (#203)', () => {
+  it('says the fence held, with its energy, or that it was broken', () => {
+    const held = raid({
+      fence: { buildingId: 'hedge', broken: false, percent: 60 },
+      reason: 'turn-limit',
+    });
+    expect(raidLine(held)).toBe(
+      '🔨 Your Hedge kept Pumpkinpal out! It’s at 60%. Repair it from the land’s Fences.',
+    );
+    const stopped = raid({
+      fence: { buildingId: 'hedge', broken: false, percent: 90 },
+      reason: 'forfeit',
+    });
+    expect(raidLine(stopped)).toBe('🔨 Pumpkinpal came by, then stopped. Your Hedge is at 90%.');
+    const broke = raid({
+      outcome: 'lost',
+      fence: { buildingId: 'ice-wall', broken: true, percent: 0 },
+    });
+    expect(raidLine(broke)).toContain('broke your Ice Wall');
+    for (const r of [held, stopped, broke]) expect(findAvoidedWords(raidLine(r))).toEqual([]);
+  });
+
+  it('says fences came down with the land, only when some did', () => {
+    expect(raidFencesLine(raid())).toBeNull();
+    const line = raidFencesLine(raid({ outcome: 'taken', lostFences: { greens: 4 } }));
+    expect(line).toContain('fences there came down');
+    expect(findAvoidedWords(line ?? '')).toEqual([]);
+  });
 });
 
 describe('a fire lost with the land (#202)', () => {

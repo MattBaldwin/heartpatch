@@ -6,6 +6,7 @@ import type { TerritoryScreen } from '../territory/territory-screen.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
   RAID_TEXT,
+  raidFencesLine,
   raidFireLine,
   raidLine,
   raidStyleLine,
@@ -251,7 +252,13 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
                           el('p', { class: 'raid-style-line' }, describeItems(raid.lostFire)),
                         ]
                       : []),
-                    ...(style ? [el('p', { class: 'raid-style-line' }, style)] : []),
+                    ...(raid.lostFences
+                      ? [
+                          el('p', { class: 'raid-line' }, raidFencesLine(raid) ?? ''),
+                          el('p', { class: 'raid-style-line' }, describeItems(raid.lostFences)),
+                        ]
+                      : []),
+                    ...(style && !raid.fence ? [el('p', { class: 'raid-style-line' }, style)] : []),
                   ),
                   ...(raid.replayable ? [watchButton] : []),
                 );
