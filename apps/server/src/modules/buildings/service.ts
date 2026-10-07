@@ -2,6 +2,8 @@ import {
   addFuel,
   buildCost,
   buildingPageKey,
+  buildsAtHome,
+  fitsSlot,
   fuelCost,
   fuelSpace,
   GAME_DATA,
@@ -11,9 +13,11 @@ import {
   isBuildable,
   isReservedSpot,
   jobOf,
+  planFuelAll,
   removeRefund,
   upgradeCost,
   type Building,
+  type FuelAllResponse,
   type HomeResponse,
   type ItemCounts,
   type MapLocalTime,
@@ -27,6 +31,7 @@ import {
 } from '@heartpatch/shared';
 import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
+import type { NewGameEvent } from '../../db/game-events.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
@@ -34,6 +39,7 @@ import { createInventoryRepo } from '../inventory/repo.js';
 import {
   consumeItems,
   grantItems,
+  lockGrantRows,
   recipeBookPage,
   requirePageOpen,
   seasonsOn,
@@ -49,11 +55,16 @@ import {
   type BuildingsRepo,
   type BuildingsTxRepo,
   type HomeTileRow,
+  type TargetTileRow,
 } from './repo.js';
 
 /*
- * Home base and buildings (#18, design doc §11, §13–14). Players build on
- * the spots of their own home tiles (the Heart Seed and its ring), paying
+ * Home base and buildings (#18, design doc §11, §13–14). Players build
+ * habitats and the like on the spots of their own home tiles (the Heart
+ * Seed and its ring), and Hearthfires (`placement: 'land'`, #202) only out on
+ * captured land, one a tile (`maxPerTile`): the Heart Seed keeps home safe
+ * (owner decision 2026-10-07). Each building takes a spot of its `slot`
+ * (#204): a light the middle, a habitat the ring around it. Paying
  * through `consumeItems(…, 'build')` in the same transaction as the row
  * (CLAUDE.md rule 7). Hearthfire fuel is a date (tech spec §7): adding fuel
  * moves `fuelled_through`, and lit / nights left are worked out on read, so
@@ -76,7 +87,18 @@ const MESSAGES = {
   notYet: "That one isn't ready to build yet. Soon!",
   outOfSeason: (name: string, season: string) => `${name} can only be built around ${season}!`,
   notHome: 'You can only build on your home base.',
+  notMine: 'You can only build on your own land.',
+  fireAtHome: 'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!',
   spotTaken: 'Something is already there. Try another spot!',
+  middleTaken: 'The middle of this tile is taken. A fire next door can reach it!',
+  wrongSlot: (building: Building) =>
+    building.slot === 'centre'
+      ? `${building.name}s go in the middle of a tile!`
+      : `The ${building.name} goes around the middle of a tile!`,
+  tileHasOne: (name: string) => `This tile already has a ${name}!`,
+  staysPut: 'A fire on your land stays where it is. Take it down to build it somewhere else.',
+  noFires: 'You have no fires to fuel yet. Build one first!',
+  allFull: 'All your fires are full! Come back after a night or two.',
   tooMany: (name: string) => `Your home already has all the ${name} it can hold!`,
   noBuilding: "We couldn't find that building.",
   notAFire: 'Only fires need fuel.',
@@ -114,6 +136,8 @@ export interface BuildingsService {
     buildingRowId: string,
     nights: number,
   ) => Promise<HomeResponse>;
+  /** Tops up all my fires, lowest first, until they're full or my bag runs out (#202). */
+  fuelAll: (user: PublicUser, mapId: string) => Promise<FuelAllResponse>;
   /** Raises one of my buildings a level, paying the next level's cost. */
   upgrade: (user: PublicUser, mapId: string, buildingRowId: string) => Promise<HomeResponse>;
   /** Moves one of my squishies into a habitat, or out (null). */
@@ -248,17 +272,35 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     };
   }
 
-  /** The target tile and spot, checked: mine, on my home base, and free. */
+  /**
+   * The target tile and spot, checked for `building`: on my home base (or,
+   * for a building that can stand on owned land, any tile I own), its
+   * slot's kind of spot (#204), and free.
+   */
   function checkSpot(
+    userId: string,
     home: readonly HomeTileRow[],
     owned: readonly BuildingRow[],
+    building: Building,
     target: { q: number; r: number; spot: number },
+    outer: TargetTileRow | null = null,
     moving: string | null = null,
   ): HomeTileRow {
-    const tile = home.find((t) => t.q === target.q && t.r === target.r);
-    if (!tile) throw new AppError('FORBIDDEN', MESSAGES.notHome);
-    if (isReservedSpot({ heartSeed: isSeed(tile, heartSeedOf(home)), ...tile }, target.spot)) {
-      throw new AppError('CONFLICT', MESSAGES.spotTaken);
+    const homeTile = home.find((t) => t.q === target.q && t.r === target.r);
+    // Fires stand only on captured land (owner decision 2026-10-07).
+    if (homeTile && !buildsAtHome(building)) throw new AppError('FORBIDDEN', MESSAGES.fireAtHome);
+    if (!homeTile) {
+      if (building.placement === 'home') throw new AppError('FORBIDDEN', MESSAGES.notHome);
+      if (outer?.ownerUserId !== userId) throw new AppError('FORBIDDEN', MESSAGES.notMine);
+    }
+    const tile = homeTile ?? outer;
+    if (!tile) throw new AppError('FORBIDDEN', MESSAGES.notMine);
+    if (!fitsSlot(building.slot, target.spot)) {
+      throw new AppError('CONFLICT', MESSAGES.wrongSlot(building));
+    }
+    const seed = homeTile ? isSeed(homeTile, heartSeedOf(home)) : false;
+    if (isReservedSpot({ heartSeed: seed, nodeResource: tile.nodeResource }, target.spot)) {
+      throw new AppError('CONFLICT', MESSAGES.middleTaken);
     }
     const taken = owned.some(
       (b) => b.id !== moving && b.tileId === tile.id && b.spot === target.spot,
@@ -279,7 +321,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       timeZone: string;
       mapKind: MapRow['kind'];
       home: HomeTileRow[];
+      /** The tile at `target` when one was asked for (locked with the home tiles). */
+      outer: TargetTileRow | null;
     }) => Promise<T>,
+    target: { q: number; r: number } | null = null,
   ): Promise<T> {
     const at = now();
     let result: T;
@@ -287,7 +332,9 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       result = await store.transaction(async (repo, tx) => {
         const { map } = await requireMember(tx, user, mapId);
         // Every building command for this player runs one at a time (repo.ts).
-        const home = await repo.lockHomeTiles(mapId, user.id);
+        const { home, target: outer } = target
+          ? await repo.lockHomeTilesAnd(mapId, user.id, target)
+          : { home: await repo.lockHomeTiles(mapId, user.id), target: null };
         return run({
           repo,
           tx,
@@ -296,10 +343,12 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           timeZone: map.timeZone,
           mapKind: map.kind,
           home,
+          outer,
         });
       });
     } catch (err) {
-      // Two taps raced for the same spot (the one-building-per-spot key).
+      // Two taps raced for the same spot (the one-building-per-spot key, or
+      // one fire a tile).
       if (isUniqueViolation(err)) throw new AppError('CONFLICT', MESSAGES.spotTaken);
       throw err;
     }
@@ -331,47 +380,65 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     place: (user, mapId, request) => {
       const building = requireBuildingData(request.buildingId);
       if (!isBuildable(HOME_BASE_RULES, building)) throw new AppError('CONFLICT', MESSAGES.notYet);
-      return command(user, mapId, async ({ repo, tx, at, local, timeZone, home }) => {
-        if (!inSeason(building, new Set(seasonsOn(at, timeZone)))) {
-          const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
-          throw new AppError('CONFLICT', MESSAGES.outOfSeason(building.name, season));
-        }
-        // A sealed recipe book page can't be built (owner decision 2026-10-05).
-        // Moves, removals and fuel aren't gated.
-        const page = recipeBookPage(buildingPageKey(building.id));
-        if (page) await requirePageOpen(tx, user.id, page);
-        const owned = await repo.listOwned(mapId, user.id);
-        const tile = checkSpot(home, owned, request);
-        if (owned.filter((b) => b.buildingId === building.id).length >= building.maxPerHome) {
-          throw new AppError('CONFLICT', MESSAGES.tooMany(building.name));
-        }
-        const row = await repo.insertBuilding({
-          mapId,
-          ownerUserId: user.id,
-          tileId: tile.id,
-          buildingId: building.id,
-          kind: building.kind,
-          spot: request.spot,
-          placedAt: at,
-        });
-        // Short of anything: CONFLICT, and the row rolls back with it.
-        const cost = buildCost(building);
-        await consumeItems(tx, { mapId, userId: user.id }, cost, 'build', row.id);
-        await repo.appendEvent({
-          mapId,
-          type: 'building.placed',
-          actorUserId: user.id,
-          payload: { userId: user.id, building: placed(row, local), cost },
-        });
-        return homeView(repo, tx, mapId, user.id, at, timeZone);
-      });
+      return command(
+        user,
+        mapId,
+        async ({ repo, tx, at, local, timeZone, home, outer }) => {
+          if (!inSeason(building, new Set(seasonsOn(at, timeZone)))) {
+            const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
+            throw new AppError('CONFLICT', MESSAGES.outOfSeason(building.name, season));
+          }
+          // A sealed recipe book page can't be built (owner decision 2026-10-05).
+          // Moves, removals and fuel aren't gated.
+          const page = recipeBookPage(buildingPageKey(building.id));
+          if (page) await requirePageOpen(tx, user.id, page);
+          const owned = await repo.listOwned(mapId, user.id);
+          const tile = checkSpot(user.id, home, owned, building, request, outer);
+          const same = owned.filter((b) => b.buildingId === building.id);
+          const homeIds = new Set(home.map((t) => t.id));
+          if (homeIds.has(tile.id)) {
+            // The home base keeps its own count (#202: one Hearthfire at home).
+            if (same.filter((b) => homeIds.has(b.tileId)).length >= (building.maxPerHome ?? 0)) {
+              throw new AppError('CONFLICT', MESSAGES.tooMany(building.name));
+            }
+          } else if (
+            same.filter((b) => b.tileId === tile.id).length >= (building.maxPerTile ?? 0)
+          ) {
+            throw new AppError('CONFLICT', MESSAGES.tileHasOne(building.name));
+          }
+          const row = await repo.insertBuilding({
+            mapId,
+            ownerUserId: user.id,
+            tileId: tile.id,
+            buildingId: building.id,
+            kind: building.kind,
+            spot: request.spot,
+            placedAt: at,
+          });
+          // Short of anything: CONFLICT, and the row rolls back with it.
+          const cost = buildCost(building);
+          await consumeItems(tx, { mapId, userId: user.id }, cost, 'build', row.id);
+          await repo.appendEvent({
+            mapId,
+            type: 'building.placed',
+            actorUserId: user.id,
+            payload: { userId: user.id, building: placed(row, local), cost },
+          });
+          return homeView(repo, tx, mapId, user.id, at, timeZone);
+        },
+        { q: request.q, r: request.r },
+      );
     },
 
     move: (user, mapId, buildingRowId, request) =>
       command(user, mapId, async ({ repo, tx, at, local, timeZone, home }) => {
         const row = await lockMine(repo, mapId, user.id, buildingRowId);
+        // A fire out on my land stays put (#202); home buildings move within home.
+        if (!home.some((t) => t.id === row.tileId))
+          throw new AppError('CONFLICT', MESSAGES.staysPut);
         const owned = await repo.listOwned(mapId, user.id);
-        const tile = checkSpot(home, owned, request, row.id);
+        const building = requireBuildingData(row.buildingId);
+        const tile = checkSpot(user.id, home, owned, building, request, null, row.id);
         if (tile.id !== row.tileId || request.spot !== row.spot) {
           await repo.moveBuilding(row.id, { tileId: tile.id, spot: request.spot });
           await repo.appendEvent({
@@ -394,19 +461,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     remove: (user, mapId, buildingRowId) =>
       command(user, mapId, async ({ repo, tx, at, local, timeZone }) => {
         const row = await lockMine(repo, mapId, user.id, buildingRowId);
-        const building = BUILDING_DATA.get(row.buildingId);
-        const refund: ItemCounts = building
-          ? removeRefund(building, row.level, HOME_BASE_RULES)
-          : {};
-        // Fuel it hasn't burned yet comes back whole.
-        if (building?.kind === 'hearthfire') {
-          const { nightsLeft } = hearthfireState(row.fuelledThrough, local, HOME_BASE_RULES);
-          if (nightsLeft > 0) {
-            for (const [id, n] of Object.entries(fuelCost(building, nightsLeft))) {
-              refund[id] = (refund[id] ?? 0) + n;
-            }
-          }
-        }
+        const refund = takeDownRefund(row, local);
         const movedOut = await repo.moveOutAll(row.id);
         const trainees = await repo.lockTrainees(row.id);
         // Inventory rows before `species_seen` (tech spec §7 step 11): the
@@ -460,6 +515,81 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           },
         });
         return homeView(repo, tx, mapId, user.id, at, timeZone);
+      }),
+
+    fuelAll: (user, mapId) =>
+      command(user, mapId, async ({ repo, tx, at, local, timeZone }) => {
+        // My fires (step 8, id order), then the bag's rows (step 11, `consumeItems`).
+        const fires = (await repo.lockFires(mapId, user.id)).flatMap((row) => {
+          const fire = BUILDING_DATA.get(row.buildingId);
+          return fire?.kind === 'hearthfire' ? [{ row, fire }] : [];
+        });
+        if (fires.length === 0) throw new AppError('CONFLICT', MESSAGES.noFires);
+        const items = await createInventoryRepo(tx).list({ mapId, userId: user.id });
+        const plan = planFuelAll(
+          fires.map(({ row, fire }) => ({
+            id: row.id,
+            fuelResource: fire.fuelResource,
+            fuelPerNight: fire.fuelPerNight,
+            nightsLeft: hearthfireState(row.fuelledThrough, local, HOME_BASE_RULES).nightsLeft,
+            space: fuelSpace(fire, row.fuelledThrough, local, HOME_BASE_RULES),
+          })),
+          items,
+        );
+        const room = fires.some(
+          ({ row, fire }) =>
+            fuelSpace(fire, row.fuelledThrough, local, HOME_BASE_RULES) > (plan.get(row.id) ?? 0),
+        );
+        if (plan.size === 0) {
+          if (!room) throw new AppError('CONFLICT', MESSAGES.allFull);
+          // Room but nothing to burn: the usual "You need 1 more Emberwood
+          // first!", for a fire that has room (so nothing is ever spent).
+          const first = fires.find(
+            ({ row, fire }) => fuelSpace(fire, row.fuelledThrough, local, HOME_BASE_RULES) > 0,
+          );
+          if (first)
+            await consumeItems(
+              tx,
+              { mapId, userId: user.id },
+              fuelCost(first.fire, 1),
+              'fuel',
+              first.row.id,
+            );
+        }
+        const total: ItemCounts = {};
+        for (const { row, fire } of fires) {
+          const nights = plan.get(row.id) ?? 0;
+          if (nights === 0) continue;
+          for (const [id, n] of Object.entries(fuelCost(fire, nights)))
+            total[id] = (total[id] ?? 0) + n;
+        }
+        // One spend for all of it: the rows lock once, in item-id order.
+        await consumeItems(tx, { mapId, userId: user.id }, total, 'fuel', null);
+        let nights = 0;
+        for (const { row, fire } of fires) {
+          const adding = plan.get(row.id) ?? 0;
+          if (adding === 0) continue;
+          const fuelledThrough = addFuel(fire, row.fuelledThrough, local, adding, HOME_BASE_RULES);
+          await repo.setFuel(row.id, fuelledThrough, at);
+          nights += adding;
+          await repo.appendEvent({
+            mapId,
+            type: 'building.fueled',
+            actorUserId: user.id,
+            payload: {
+              userId: user.id,
+              building: placed({ ...row, fuelledThrough }, local),
+              nights: adding,
+              fuelledThrough,
+            },
+          });
+        }
+        return {
+          fires: plan.size,
+          nights,
+          short: room,
+          home: await homeView(repo, tx, mapId, user.id, at, timeZone),
+        };
       }),
 
     upgrade: (user, mapId, buildingRowId) =>
@@ -556,16 +686,124 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
 }
 
 /**
+ * What taking a building down gives back (design doc §13): its refund share
+ * of everything spent on it, plus, for a fire, the fuel it hasn't burned.
+ */
+export function takeDownRefund(row: BuildingRow, local: MapLocalTime): ItemCounts {
+  const building = BUILDING_DATA.get(row.buildingId);
+  const refund: ItemCounts = building ? removeRefund(building, row.level, HOME_BASE_RULES) : {};
+  if (building?.kind === 'hearthfire') {
+    const { nightsLeft } = hearthfireState(row.fuelledThrough, local, HOME_BASE_RULES);
+    if (nightsLeft > 0) {
+      for (const [id, n] of Object.entries(fuelCost(building, nightsLeft))) {
+        refund[id] = (refund[id] ?? 0) + n;
+      }
+    }
+  }
+  return refund;
+}
+
+/** A building that came down with its land (#202), for the caller to finish. */
+export interface LostBuilding {
+  readonly ownerUserId: string;
+  readonly tileId: string;
+  readonly refund: ItemCounts;
+  /** `building.removed`, `lost` set: append it with the caller's other events. */
+  readonly event: NewGameEvent<'building.removed'>;
+}
+
+/**
+ * Land changed hands or went wild (#202): its buildings come down in the
+ * caller's transaction, after its tile locks. Locks them (tech spec §7 step
+ * 8, id order) and deletes them; the caller grants each `refund` to its
+ * owner at step 11 (after any squishy locks) and appends the events, so the
+ * rival never gets the fire and nothing is lost but the fire itself.
+ * Buildings on captured land are fires (placement `land`): nobody lives
+ * in them.
+ */
+export async function takeDownOnLostLand(
+  tx: Executor,
+  mapId: string,
+  tileIds: readonly string[],
+  at: Date,
+  timeZone: string,
+  lost: 'captured' | 'wild',
+): Promise<LostBuilding[]> {
+  const repo = createBuildingsRepo(tx);
+  const local = mapLocalTime(at, timeZone);
+  const down: LostBuilding[] = [];
+  for (const row of await repo.lockOnTiles(tileIds)) {
+    const refund = takeDownRefund(row, local);
+    await repo.deleteBuilding(row.id);
+    down.push({
+      ownerUserId: row.ownerUserId,
+      tileId: row.tileId,
+      refund,
+      event: {
+        mapId,
+        type: 'building.removed',
+        actorUserId: null,
+        payload: {
+          userId: row.ownerUserId,
+          buildingRowId: row.id,
+          buildingId: row.buildingId,
+          q: row.q,
+          r: row.r,
+          refund,
+          movedOut: [],
+          lost,
+        },
+      },
+    });
+  }
+  return down;
+}
+
+/**
  * Deletes a departing member's buildings, inside the maps module's leave /
- * remove transaction (decision: a returning player gets a fresh home base).
- * Their squishies move out of the habitats (the foreign key sets null).
+ * remove transaction (decision: a returning player gets a fresh home base),
+ * after their tiles are released. Their squishies move out of the habitats
+ * (the foreign key sets null). A fire out on their captured land gives back
+ * what a lost one does (#202: half its cost and its unburned fuel, step 11);
+ * home buildings go as before. Returns the `building.removed` events to append.
  */
 export async function removeMemberBuildings(
   tx: Executor,
-  mapId: string,
+  map: { id: string; timeZone: string },
   userId: string,
-): Promise<number> {
-  return createBuildingsRepo(tx).deleteOwned(mapId, userId);
+  at: Date,
+): Promise<NewGameEvent<'building.removed'>[]> {
+  const repo = createBuildingsRepo(tx);
+  // Read before the delete locks them: every command on these buildings
+  // locks their owner's home tiles first, which the caller's release holds.
+  const outer = (await repo.listOwned(map.id, userId)).filter((b) => b.homeSlot === null);
+  await repo.deleteOwned(map.id, userId);
+  const local = mapLocalTime(at, map.timeZone);
+  const lost = outer.map((row) => ({ row, refund: takeDownRefund(row, local) }));
+  const grants = lost.filter((l) => Object.keys(l.refund).length > 0);
+  await lockGrantRows(
+    tx,
+    map.id,
+    grants.map((l) => ({ userId, items: l.refund })),
+  );
+  for (const { row, refund } of grants) {
+    await grantItems(tx, { mapId: map.id, userId }, refund, 'build-refund', row.id);
+  }
+  return lost.map(({ row, refund }) => ({
+    mapId: map.id,
+    type: 'building.removed',
+    actorUserId: null,
+    payload: {
+      userId,
+      buildingRowId: row.id,
+      buildingId: row.buildingId,
+      q: row.q,
+      r: row.r,
+      refund,
+      movedOut: [],
+      lost: 'left',
+    },
+  }));
 }
 
 /**

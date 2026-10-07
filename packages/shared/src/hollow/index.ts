@@ -76,23 +76,31 @@ export interface NightSquishy {
    * Null if it has neither: nothing shelters it.
    */
   readonly sleepsAt: Hex | null;
-  /** The tile it stands watch on, if it's posted (decision C). */
-  readonly post: WatchPost | null;
+  /**
+   * The tile it stands watch on, if it's posted (decision C), and where that
+   * tile is: a guard spends the night there.
+   */
+  readonly post: (WatchPost & { readonly at: Hex }) | null;
 }
 
 /**
  * Where a squishy stands at nightfall:
  * - `hollowed`: already in the Hollow;
- * - `on-watch`: guarding its owner's land, so not exposed (decision C);
- * - `safe`: it sleeps inside a lit Hearthfire's safe tiles;
+ * - `on-watch`: guarding its owner's land inside a lit Hearthfire's light (or
+ *   on a home tile). A guard out in the dark is `exposed`, like a gatherer
+ *   sleeping there (owner decision 2026-10-07, superseding decision C's
+ *   "guards are safe on watch");
+ * - `safe`: it sleeps inside the safe tiles (home, or a lit fire's reach);
  * - `exposed`: the Hollow Man may take it.
  */
 export type Shelter = 'hollowed' | 'on-watch' | 'safe' | 'exposed';
 
-/** `safe`: every tile lit fires protect tonight (`safeTiles` / `litSafeTiles`). */
+/** `safe`: every home tile and the tiles lit fires protect tonight (`safeTiles` / `litSafeTiles`). */
 export function shelterOf(squishy: NightSquishy, safe: ReadonlySet<HexKey>): Shelter {
   if (squishy.state !== 'active') return 'hollowed';
-  if (isOnWatch(squishy, squishy.post)) return 'on-watch';
+  if (squishy.post !== null && isOnWatch(squishy, squishy.post)) {
+    return safe.has(hexKey(squishy.post.at)) ? 'on-watch' : 'exposed';
+  }
   if (squishy.sleepsAt !== null && safe.has(hexKey(squishy.sleepsAt))) return 'safe';
   return 'exposed';
 }
@@ -116,7 +124,7 @@ export interface NightfallOutcome {
   readonly userId: string;
   /** The squishy taken to the Hollow, or null. */
   readonly taken: string | null;
-  /** Their squishies left at home in the dark (the taken one included). */
+  /** Their squishies left in the dark, guards out there included (the taken one too). */
   readonly exposed: number;
   /** Their squishies kept safe: by a lit fire, or standing watch. */
   readonly sheltered: number;

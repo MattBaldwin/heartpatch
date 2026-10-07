@@ -1,6 +1,7 @@
 import {
   GAME_DATA,
   visualRegistry,
+  type FuelAllResponse,
   type HomeResponse,
   type KeeperConfig,
   type MyBuilding,
@@ -24,6 +25,7 @@ import { JOBS_TEXT } from '../squishies/jobs/jobs-view.js';
 import { homeApi, type HomeApi } from './home-api.js';
 import { HomeScene, type HomeSceneStats } from './home-scene.js';
 import {
+  atHome,
   buildingIcon,
   buildingName,
   buildingNote,
@@ -31,8 +33,12 @@ import {
   costText,
   upgradeOffer,
   upgradeReach,
-  fireStatus,
+  HOME_SAFE_LINE,
   freeHomeSpots,
+  fuelAllOffer,
+  landFireLine,
+  landTileOffer,
+  BUILDING_DATA,
   likesHabitat,
   refundPreview,
   speciesMap,
@@ -176,6 +182,20 @@ export const HOME_TEXT = {
   movedIn: (name: string, where: string) => `${name} moved into the ${where}!`,
   movedOut: (name: string) => `${name} moved out.`,
   goHome: 'Go home',
+  // Fires on my land (#202).
+  buildFire: '🔥 Build a fire',
+  buildHere: '🔥 Build',
+  landFires: (n: number, low: number) =>
+    `🔥 ${String(n)} ${n === 1 ? 'fire' : 'fires'} on your land.` +
+    (low === 0 ? '' : low === 1 ? ' 1 is almost out!' : ` ${String(low)} are almost out!`),
+  fuelAll: (cost: string) => `🔥 Fuel all fires (${cost})`,
+  allFull: 'All your fires are full! 🔥',
+  fuelledAll: (n: number, nights: number) =>
+    `Ta-da! All ${String(n)} fires are full for ${String(nights)} ${nights === 1 ? 'night' : 'nights'}. 🔥`,
+  fuelledSome: (n: number) =>
+    `Your bag ran out! ${String(n)} ${n === 1 ? 'fire' : 'fires'} got more. The lowest went first. 🔥`,
+  fireBuilt: 'Ta-da! Your fire is built. Add Emberwood to light it!',
+  landFuel: '🔥 Add fuel',
 } as const;
 
 /** One night of fuel per tap: easy to count, quick to top up. */
@@ -219,11 +239,16 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   });
 
   const status = el('p', { class: 'home-fire', 'data-testid': 'home-fire' });
+  // Fires out on my land and "Fuel all fires" (#202), under the home fire's line.
+  const landLine = el('p', { class: 'home-land-fires', 'data-testid': 'home-land-fires' });
+  const fuelAllBox = el('div', { class: 'home-row home-fuel-all' });
   const top = el(
     'header',
     { class: 'home-top' },
     el('h2', { class: 'home-title', id: 'home-title' }, HOME_TEXT.title),
     status,
+    landLine,
+    fuelAllBox,
   );
   const note = el('p', { class: 'home-note', role: 'status', 'data-testid': 'home-note' });
   const body = el('div', { class: 'home-body' });
@@ -346,6 +371,31 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       () => ({ mode: { kind: 'selected', id: buildingId }, say: HOME_TEXT.fuelled }),
     );
 
+  /** "Fuel all fires" (#202): every fire, lowest first, until full or the bag runs out. */
+  const fuelAll = () => {
+    let result: FuelAllResponse | null = null;
+    return act(
+      async (id, send) => {
+        result = await send((key) => api.fuelAll(id, key));
+        return result?.home ?? null;
+      },
+      () => {
+        const done: FuelAllResponse | null = result;
+        // How full "full" is comes from the server's reply (fuel nights are tunable data).
+        const fires = done?.home.buildings.filter((b) => b.kind === 'hearthfire') ?? [];
+        return {
+          mode: { kind: 'idle' },
+          say: done?.short
+            ? HOME_TEXT.fuelledSome(done.fires)
+            : HOME_TEXT.fuelledAll(
+                fires.length,
+                Math.max(0, ...fires.map((b) => b.nightsLeft ?? 0)),
+              ),
+        };
+      },
+    );
+  };
+
   const upgrade = (buildingId: string) =>
     act(
       (id, send) => send((key) => api.upgrade(id, buildingId, key)),
@@ -406,10 +456,14 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   /** The spots to light up for the current mode. */
   const spotsFor = (current: HomeResponse): HomeSpot[] => {
     const m = mode;
-    if (m.kind === 'placing') return freeHomeSpots(current);
+    const home = atHome(current);
+    if (m.kind === 'placing') {
+      return freeHomeSpots(home, null, BUILDING_DATA.get(m.buildingId)?.slot);
+    }
     if (m.kind === 'moving') {
-      const moving = current.buildings.find((b) => b.id === m.id);
-      return freeHomeSpots(current, m.id).filter(
+      const moving = home.buildings.find((b) => b.id === m.id);
+      const slot = BUILDING_DATA.get(moving?.buildingId ?? '')?.slot;
+      return freeHomeSpots(home, m.id, slot).filter(
         (s) => !(moving && s.q === moving.q && s.r === moving.r && s.spot === moving.spot),
       );
     }
@@ -421,7 +475,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     // A building that's gone can't stay selected.
     const m = mode;
     if ('id' in m && !next.buildings.some((b) => b.id === m.id)) mode = { kind: 'idle' };
-    scene3d?.update(next);
+    // The home scene draws the home base; fires out on my land are on the map.
+    scene3d?.update(atHome(next));
     syncScene();
     render();
     syncWander();
@@ -449,12 +504,13 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       return;
     }
     const current = home;
-    status.textContent = fireStatus(current.buildings);
+    status.textContent = HOME_SAFE_LINE;
+    renderFuelAll(current);
     const row = (...children: Node[]) => el('div', { class: 'home-row' }, ...children);
 
     switch (mode.kind) {
       case 'idle': {
-        const chips = current.buildings.map((b) =>
+        const chips = atHome(current).buildings.map((b) =>
           button(
             `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}`,
             () => {
@@ -518,7 +574,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           el(
             'ul',
             { class: 'home-list', 'data-testid': 'home-build-list' },
-            ...buildRows(current).map(({ building, icon, needs, option }) => {
+            ...buildRows(current).map(({ building, icon, needs, option, where }) => {
               let action: Node;
               if (option.kind === 'ready' || option.kind === 'short') {
                 const build = button(
@@ -553,6 +609,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   `${icon} ${building.name}`,
                   ...(needs.length > 0 ? [needRow(needs)] : []),
                   ...(note ? [el('span', { class: 'home-list-sub' }, note)] : []),
+                  ...(where ? [el('span', { class: 'home-list-sub' }, where)] : []),
                 ),
                 action,
               );
@@ -670,6 +727,29 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         break;
       }
     }
+  }
+
+  /** The home's top card: how many fires are out on my land, and "Fuel all fires" (#202). */
+  function renderFuelAll(current: HomeResponse): void {
+    const offer = mode.kind === 'idle' ? fuelAllOffer(current) : null;
+    landLine.hidden = offer === null;
+    fuelAllBox.hidden = offer === null;
+    if (!offer) {
+      fuelAllBox.replaceChildren();
+      return;
+    }
+    landLine.textContent = offer.full
+      ? HOME_TEXT.allFull
+      : HOME_TEXT.landFires(offer.land, offer.low);
+    if (offer.full) {
+      fuelAllBox.replaceChildren();
+      return;
+    }
+    fuelAllBox.replaceChildren(
+      button(HOME_TEXT.fuelAll(costText(offer.cost)), () => void fuelAll(), {
+        'data-testid': 'home-fuel-all',
+      }),
+    );
   }
 
   function buildingCard(current: HomeResponse, b: MyBuilding): Node[] {
@@ -916,7 +996,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const build = (scene: Scene): SceneContent => {
     if (!home) throw new Error('no home to build');
     lastTier = options.tier();
-    const built = new HomeScene(scene, home, {
+    const built = new HomeScene(scene, atHome(home), {
       registry,
       lod: lodFor('closeUp', lastTier),
       keeper: options.keeper(),
@@ -1035,13 +1115,318 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     if (id) options.onClosed(id);
   }
 
-  // ── Tile panel (home tiles on the map) ────────────────────────────────
+  // ── Tile panel (home tiles and my fires on the map) ───────────────────
+  /** What the panel shows for a fire on my land (#202): its card, or a step of a command. */
+  type TileMode = 'card' | 'build' | 'upgrade' | 'confirm';
+  let tileMode: TileMode = 'card';
+  /** Which fire the build step is for (the Hearthfire or the Jack-o'-Lantern). */
+  let tileBuilding = '';
+  let tileNote = '';
+  let tileWorking = false;
+
+  /** Reads my home (buildings, bag) for the panel when it isn't loaded yet. */
+  async function loadForPanel(): Promise<void> {
+    const id = mapId;
+    const at = generation;
+    if (!id || home) return;
+    try {
+      const fresh = await api.get(id);
+      if (at !== generation) return;
+      home = fresh;
+    } catch (err) {
+      if (at === generation) tileNote = messageOf(err);
+    }
+    renderTile();
+  }
+
+  /** One command from the tile panel, one at a time; the panel says how it went. */
+  async function tileAct(
+    run: (
+      mapId: string,
+      send: <T>(command: (key: string) => Promise<T>) => Promise<T | null>,
+    ) => Promise<HomeResponse | null>,
+    done: string | ((next: HomeResponse) => string),
+  ): Promise<void> {
+    const id = mapId;
+    if (!id || tileWorking) return;
+    const at = generation;
+    tileWorking = true;
+    renderTile();
+    try {
+      const next = await run(id, (command) =>
+        sendCommand(sendDeps, command, () => at === generation),
+      );
+      if (!next || at !== generation) return;
+      home = next;
+      tileMode = 'card';
+      tileNote = typeof done === 'string' ? done : done(next);
+    } catch (err) {
+      if (at === generation) {
+        tileNote = messageOf(err);
+        if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
+          home = null;
+          await loadForPanel();
+        }
+      }
+    } finally {
+      tileWorking = false;
+      if (at === generation) renderTile();
+    }
+  }
+
+  /** A tile-panel button: a big one, a soft small one, or (`small`) a small one for a card row. */
+  const tileButton = (
+    label: string,
+    onTap: () => void,
+    testId: string,
+    soft: boolean | 'small' = false,
+  ) => {
+    const look =
+      soft === 'small'
+        ? 'auth-button auth-button-small'
+        : `auth-button bag-action${soft ? ' auth-button-soft auth-button-small' : ''}`;
+    const b = el(
+      'button',
+      {
+        type: 'button',
+        class: look,
+        'data-testid': testId,
+      },
+      label,
+    );
+    b.disabled = tileWorking;
+    b.addEventListener('click', onTap);
+    return b;
+  };
+  const tileRow = (...children: Node[]) =>
+    el('div', { class: 'home-row home-row-wrap home-row-tight' }, ...children);
+  const cardHead = (b: { buildingId: string }, level: number) =>
+    el(
+      'div',
+      { class: 'home-card-head' },
+      el(
+        'h3',
+        { class: 'home-section-title' },
+        `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}`,
+      ),
+      el('span', { class: 'home-level' }, HOME_TEXT.level(level)),
+    );
+
+  /** A fire out on my land, or the offer to build one (#202). */
+  function landTileNodes(tile: PublicTile): Node[] {
+    if (!home) return [];
+    const offer = landTileOffer(tile, home);
+    const note = tileNote ? [el('p', { class: 'tile-action-note', role: 'status' }, tileNote)] : [];
+    if (offer.kind === 'node') return [el('p', { class: 'tile-action-note' }, offer.line), ...note];
+    if (offer.kind === 'none') return note;
+    if (offer.kind === 'build') {
+      if (tileMode !== 'build') {
+        const lantern = offer.lantern;
+        // Each fire has its own Build / Not now card, so one tap never spends
+        // a carved pumpkin (or anything else) by accident.
+        const pick = (buildingId: string) => () => {
+          tileMode = 'build';
+          tileBuilding = buildingId;
+          tileNote = '';
+          renderTile();
+        };
+        return [
+          ...note,
+          ...(lantern
+            ? [
+                tileButton(
+                  `${buildingIcon(lantern.building.id)} ${buildingName(lantern.building.id)}`,
+                  pick(lantern.building.id),
+                  'tile-build-lantern',
+                  true,
+                ),
+              ]
+            : []),
+          tileButton(HOME_TEXT.buildFire, pick(offer.building.id), 'tile-build-fire', true),
+        ];
+      }
+      const chosen =
+        offer.lantern && tileBuilding === offer.lantern.building.id
+          ? offer.lantern
+          : { building: offer.building, needs: offer.needs };
+      const go = tileButton(
+        HOME_TEXT.buildHere,
+        () =>
+          void tileAct(
+            (id, send) =>
+              send((key) =>
+                api.place(
+                  id,
+                  { buildingId: chosen.building.id, q: tile.q, r: tile.r, spot: 0 },
+                  key,
+                ),
+              ),
+            HOME_TEXT.fireBuilt,
+          ),
+        'tile-build-fire-confirm',
+      );
+      if (!chosen.needs.every((n) => n.ok)) go.disabled = true;
+      return [
+        el(
+          'div',
+          { class: 'home-card' },
+          cardHead({ buildingId: chosen.building.id }, 1),
+          el('p', { class: 'home-card-note' }, landFireLine(chosen.building)),
+          needRow(chosen.needs),
+          tileRow(
+            go,
+            tileButton(
+              HOME_TEXT.notNow,
+              () => {
+                tileMode = 'card';
+                renderTile();
+              },
+              'tile-build-fire-cancel',
+              true,
+            ),
+          ),
+        ),
+        ...note,
+      ];
+    }
+    const { fire } = offer;
+    const current = home;
+    const card: Node[] = [cardHead(fire, fire.level)];
+    const upgradeAt = upgradeOffer(current, fire);
+    if (tileMode === 'upgrade' && upgradeAt) {
+      const go = tileButton(
+        HOME_TEXT.upgradeNow,
+        () =>
+          void tileAct(
+            (id, send) => send((key) => api.upgrade(id, fire.id, key)),
+            HOME_TEXT.upgraded(buildingName(fire.buildingId), upgradeAt.to),
+          ),
+        'tile-fire-upgrade-confirm',
+      );
+      if (!upgradeAt.affordable) go.disabled = true;
+      card.push(
+        el('p', { class: 'home-card-note' }, upgradeAt.line),
+        needRow(upgradeAt.needs),
+        tileRow(
+          go,
+          tileButton(
+            HOME_TEXT.notNow,
+            () => {
+              tileMode = 'card';
+              renderTile();
+            },
+            'tile-fire-upgrade-cancel',
+            true,
+          ),
+        ),
+      );
+    } else if (tileMode === 'confirm') {
+      const back = costText(refundPreview(fire));
+      card.push(
+        el(
+          'p',
+          { class: 'home-card-note' },
+          HOME_TEXT.confirm(buildingName(fire.buildingId), back),
+        ),
+        tileRow(
+          tileButton(
+            HOME_TEXT.yes,
+            () => {
+              let refund = '';
+              void tileAct(
+                async (id, send) => {
+                  const res = await send((key) => api.remove(id, fire.id, key));
+                  if (!res) return null;
+                  refund = describeItems(res.refund);
+                  return res.home;
+                },
+                () => HOME_TEXT.removed(refund),
+              );
+            },
+            'tile-fire-remove-confirm',
+          ),
+          tileButton(
+            HOME_TEXT.keep,
+            () => {
+              tileMode = 'card';
+              renderTile();
+            },
+            'tile-fire-keep',
+            true,
+          ),
+        ),
+      );
+    } else {
+      const data = BUILDING_DATA.get(fire.buildingId);
+      const cost =
+        data?.kind === 'hearthfire'
+          ? costText({ [data.fuelResource]: data.fuelPerNight * FUEL_NIGHTS })
+          : '';
+      // Short labels in one row of small buttons, so the panel stays clear of the trays.
+      const fuelButton = tileButton(
+        HOME_TEXT.landFuel,
+        () =>
+          void tileAct(
+            (id, send) => send((key) => api.fuel(id, fire.id, FUEL_NIGHTS, key)),
+            HOME_TEXT.fuelled,
+          ),
+        'tile-fire-fuel',
+        'small',
+      );
+      fuelButton.setAttribute('aria-label', `${HOME_TEXT.addFuel} (${cost})`);
+      if ((fire.fuelSpace ?? 0) === 0) fuelButton.disabled = true;
+      card.push(
+        el('p', { class: 'home-card-note', 'data-testid': 'tile-fire-note' }, buildingNote(fire)),
+        tileRow(
+          ...(upgradeAt
+            ? [
+                tileButton(
+                  HOME_TEXT.upgrade,
+                  () => {
+                    tileMode = 'upgrade';
+                    tileNote = '';
+                    renderTile();
+                  },
+                  'tile-fire-upgrade',
+                  'small',
+                ),
+              ]
+            : []),
+          fuelButton,
+          tileButton(
+            HOME_TEXT.takeDown,
+            () => {
+              tileMode = 'confirm';
+              tileNote = '';
+              renderTile();
+            },
+            'tile-fire-remove',
+            true,
+          ),
+        ),
+      );
+    }
+    return [el('div', { class: 'home-card', 'data-testid': 'tile-fire' }, ...card), ...note];
+  }
+
   function renderTile(): void {
     if (!panel) return;
     const { container, tile } = panel;
-    const lines = homeTileLines(tile, user?.id ?? null);
+    const me = user?.id ?? null;
+    const mine = me !== null && tile.ownerUserId === me;
+    // A step of a fire's card (build, upgrade, take down) has the panel to
+    // itself, so it stays short and clear of the side trays.
+    const focused = mine && tile.homeSlot === null && tileMode !== 'card';
+    container.classList.toggle('tile-actions-focus', focused);
+    container.parentElement?.classList.toggle('tile-panel-actions-focus', focused);
+    if (mine && tile.homeSlot === null) {
+      if (!home) void loadForPanel();
+      container.replaceChildren(...landTileNodes(tile));
+      return;
+    }
+    const lines = homeTileLines(tile, me);
     const nodes: Node[] = lines.map((line) => el('p', { class: 'tile-action-note' }, line));
-    if (tile.homeSlot !== null && tile.ownerUserId !== null && tile.ownerUserId === user?.id) {
+    if (tile.homeSlot !== null && mine) {
       nodes.push(
         el(
           'button',
@@ -1075,12 +1460,21 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     open,
     tileActions: {
       show: (container, tile) => {
+        // Another tile: back to its card, with nothing said yet.
+        if (panel?.tile.q !== tile.q || panel.tile.r !== tile.r) {
+          tileMode = 'card';
+          tileNote = '';
+          // Read my fires and bag afresh for a tile of mine out on my land.
+          if (!isOpen && tile.homeSlot === null && tile.ownerUserId === user?.id) home = null;
+        }
         panel = { container, tile };
         renderTile();
         render();
       },
       hide: () => {
         panel?.container.replaceChildren();
+        panel?.container.classList.remove('tile-actions-focus');
+        panel?.container.parentElement?.classList.remove('tile-panel-actions-focus');
         panel = null;
         render();
       },

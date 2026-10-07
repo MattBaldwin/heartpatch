@@ -10,6 +10,7 @@ import {
   MapResponseSchema,
   MapViewSchema,
   parseGameEventPayload,
+  RaidReportResponseSchema,
   SquishyResponseSchema,
   STARTERS,
   TERRITORY_RULES,
@@ -31,11 +32,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, users } from '../../db/schema.js';
+import { buildings, keepers, sessions, users } from '../../db/schema.js';
+import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService, type TileBattleEnd } from '../battles/service.js';
+import { createRaidsConsumer } from '../raids/consumer.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createTerritoryService, createTileBattlePort, defaultGuardianData } from './service.js';
 
@@ -681,6 +684,63 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const mode = await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'on' });
       expect(mode.statusCode).toBe(200);
       expect((await attack(server, kid, mapId, near2)).statusCode).toBe(201);
+    });
+
+    it("takes the defender's fire down on a capture and gives it back to them, never the rival (#202)", async () => {
+      const server = await start();
+      const { kid, rival, mapId, near } = await rivals(server);
+      // The rival's fire on the land the kid is about to win, three nights of fuel left
+      // (the clock is past the new-player shield: Oct 4).
+      const [fire] = await db
+        .insert(buildings)
+        .values({
+          mapId,
+          ownerUserId: rival.id,
+          tileId: near.id,
+          buildingId: 'hearthfire',
+          kind: 'hearthfire',
+          spot: 0,
+          fuelledThrough: '2026-10-06',
+        })
+        .returning({ id: buildings.id });
+
+      const res = await attack(server, kid, mapId, near);
+      expect(res.statusCode, res.body).toBe(201);
+      await playOut(server, kid, battleOf(res));
+      expect((await tileAt(mapId, near)).ownerUserId).toBe(kid.id);
+
+      // Down in the same transaction: no fire on the tile, the rival's bag got it back.
+      expect(
+        await db.query.buildings.findMany({ where: (t, { eq }) => eq(t.tileId, near.id) }),
+      ).toEqual([]);
+      const refund = { timber: 2, stone: 2, emberwood: 3 };
+      const ledgerOf = (userId: string) =>
+        db.query.resourceLedger.findMany({
+          where: (t, { and, eq }) =>
+            and(eq(t.mapId, mapId), eq(t.userId, userId), eq(t.reason, 'build-refund')),
+        });
+      expect(
+        Object.fromEntries((await ledgerOf(rival.id)).map((l) => [l.itemId, l.delta])),
+      ).toEqual(refund);
+      expect(await ledgerOf(kid.id)).toEqual([]);
+      const events = await eventsOf(mapId);
+      const types = events.map((e) => e.type);
+      expect(types.indexOf('building.removed')).toBeGreaterThan(types.indexOf('tile.captured'));
+      const removed = events.find((e) => e.type === 'building.removed')!;
+      expect(parseGameEventPayload('building.removed', removed.payload)).toMatchObject({
+        userId: rival.id,
+        buildingRowId: fire!.id,
+        refund,
+        lost: 'captured',
+      });
+      // The Challenge report tells the rival.
+      expect((await attacksOf(mapId)).at(-1)).toMatchObject({ lostFireRefund: refund });
+      await runConsumer(db, createRaidsConsumer(), mapId);
+      const report = await call(server, 'GET', `/maps/${mapId}/raids`, rival);
+      expect(RaidReportResponseSchema.parse(report.json()).report.raids[0]).toMatchObject({
+        outcome: 'taken',
+        lostFire: refund,
+      });
     });
 
     it('counts a challenge still going toward the daily loss cap', async () => {

@@ -59,6 +59,8 @@ export interface NightSquishyRow {
   habitat: { q: number; r: number } | null;
   /** Who owns the tile it stands watch on, if it's posted; `undefined` if it isn't. */
   postOwnerUserId: string | null | undefined;
+  /** Where it stands watch (it spends the night there), or null if it isn't posted. */
+  post: { q: number; r: number } | null;
   /** The tile it works as a gatherer (it spends the night there), or null. */
   work: { q: number; r: number } | null;
 }
@@ -102,8 +104,20 @@ export interface HollowRepo {
   activeMembers: (mapId: string) => Promise<{ userId: string; joinedAt: Date }[]>;
   /** Every home tile with an owner (the Heart Seeds and their rings). */
   homeTiles: (mapId: string) => Promise<{ ownerUserId: string; q: number; r: number }[]>;
-  /** Every squishy of an active member, any state, row-locked until commit. */
-  nightSquishies: (mapId: string) => Promise<NightSquishyRow[]>;
+  /**
+   * Locks every tile someone stands watch on (step 6, id order, `FOR NO KEY
+   * UPDATE`), before `nightSquishies`' squishy locks, so a guard taken to the
+   * Hollow can leave its post the way posting writes it: under its tile's lock.
+   */
+  lockPostTiles: (mapId: string) => Promise<void>;
+  /**
+   * Every squishy of an active member, any state, row-locked until commit
+   * (nightfall). `lock: false` only reads (the hollow status's nudge): a read
+   * endpoint never waits on or blocks a command's squishy locks.
+   */
+  nightSquishies: (mapId: string, options?: { lock?: boolean }) => Promise<NightSquishyRow[]>;
+  /** Takes these squishies off watch (`tile_defenders`); after `lockPostTiles`. */
+  leavePosts: (squishyIds: readonly string[]) => Promise<void>;
   /** Moves a squishy to the Hollow if it's still active; false if it wasn't. */
   hollow: (squishyId: string) => Promise<boolean>;
   /** Brings a squishy home from the Hollow; false if it wasn't there. */
@@ -267,11 +281,32 @@ function queries(db: Executor): HollowRepo {
       return rows.flatMap((r) => (r.ownerUserId ? [{ ...r, ownerUserId: r.ownerUserId }] : []));
     },
 
-    nightSquishies: async (mapId) => {
+    lockPostTiles: async (mapId) => {
+      await db
+        .select({ id: tiles.id })
+        .from(tiles)
+        .where(
+          and(
+            eq(tiles.mapId, mapId),
+            inArray(
+              tiles.id,
+              db
+                .select({ tileId: tileDefenders.tileId })
+                .from(tileDefenders)
+                .where(eq(tileDefenders.mapId, mapId)),
+            ),
+          ),
+        )
+        // Id order (tech spec §7 "Lock order"), like jobs' `lockTiles`.
+        .orderBy(asc(tiles.id))
+        .for('no key update');
+    },
+
+    nightSquishies: async (mapId, { lock = true } = {}) => {
       const habitatTile = alias(tiles, 'habitat_tile');
       const postTile = alias(tiles, 'post_tile');
       const workTile = alias(tiles, 'night_work_tile');
-      const rows = await db
+      const query = db
         .select({
           id: squishies.id,
           ownerUserId: squishies.ownerUserId,
@@ -280,6 +315,8 @@ function queries(db: Executor): HollowRepo {
           habitatR: habitatTile.r,
           posted: tileDefenders.squishyId,
           postOwnerUserId: postTile.ownerUserId,
+          postQ: postTile.q,
+          postR: postTile.r,
           // A gatherer still at work (jobs' `squishyAtWork`) sleeps on its tile.
           atWork: squishyAtWork(),
           workQ: workTile.q,
@@ -302,7 +339,8 @@ function queries(db: Executor): HollowRepo {
         // the night's row, then squishies). Posting a guard (#15) locks the
         // squishy too, but the joined `tile_defenders` row isn't read again
         // after a lock wait, so a post at the very stroke of nightfall can race.
-        .for('update', { of: squishies });
+        .$dynamic();
+      const rows = await (lock ? query.for('update', { of: squishies }) : query);
       return rows.map((r) => ({
         id: r.id,
         ownerUserId: r.ownerUserId,
@@ -310,8 +348,14 @@ function queries(db: Executor): HollowRepo {
         habitat:
           r.habitatQ !== null && r.habitatR !== null ? { q: r.habitatQ, r: r.habitatR } : null,
         postOwnerUserId: r.posted === null ? undefined : r.postOwnerUserId,
+        post: r.postQ !== null && r.postR !== null ? { q: r.postQ, r: r.postR } : null,
         work: r.atWork && r.workQ !== null && r.workR !== null ? { q: r.workQ, r: r.workR } : null,
       }));
+    },
+
+    leavePosts: async (squishyIds) => {
+      if (squishyIds.length === 0) return;
+      await db.delete(tileDefenders).where(inArray(tileDefenders.squishyId, [...squishyIds]));
     },
 
     hollow: async (squishyId) => {

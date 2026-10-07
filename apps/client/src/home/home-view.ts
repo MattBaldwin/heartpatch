@@ -12,6 +12,7 @@ import {
   shortfall,
   upgradeCost,
   type Building,
+  type BuildingSlot,
   type HomeResponse,
   type HomeSquishy,
   type MyBuilding,
@@ -56,15 +57,145 @@ export function costText(cost: Record<string, number>): string {
     .join(', ');
 }
 
-/** One line about how the home's fires are doing, for the top of the screen. */
-export function fireStatus(buildings: readonly MyBuilding[]): string {
-  const fires = buildings.filter((b) => b.kind === 'hearthfire');
-  if (fires.length === 0) return 'Build a Hearthfire to keep everyone safe at night!';
-  const best = Math.max(...fires.map((f) => f.nightsLeft ?? 0));
-  if (best === 0) return 'Your fire is out! Add some Emberwood.';
-  if (best === 1) return 'Your fire is lit: 1 night left.';
-  return `Your fire is lit: ${String(best)} nights left.`;
+/** Is this building on my home base (not out on my captured land, #202)? */
+export function isAtHome(
+  home: Pick<HomeResponse, 'tiles'>,
+  b: Pick<MyBuilding, 'q' | 'r'>,
+): boolean {
+  return home.tiles.some((t) => t.q === b.q && t.r === b.r);
 }
+
+/**
+ * The home as the home screen shows it: only the buildings on the home base.
+ * Fires out on my land live on their tiles (the map's tile panel, #202).
+ */
+export function atHome(home: HomeResponse): HomeResponse {
+  return { ...home, buildings: home.buildings.filter((b) => isAtHome(home, b)) };
+}
+
+/** My fires out on captured land (#202), in the server's order. */
+export function landFires(home: HomeResponse): MyBuilding[] {
+  return home.buildings.filter((b) => b.kind === 'hearthfire' && !isAtHome(home, b));
+}
+
+/** What "Fuel all fires" would do now (#202), or null with no fire out on my land. */
+export interface FuelAllOffer {
+  /** Fires out on my land. */
+  readonly land: number;
+  /** My fires with a night or less left (all of them, as the server's Fuel all counts; after the boot pass they're all on land). */
+  readonly low: number;
+  /** Emberwood (and any other fuel) to fill every fire. */
+  readonly cost: Record<string, number>;
+  /** Every fire is full already. */
+  readonly full: boolean;
+}
+
+export function fuelAllOffer(home: HomeResponse): FuelAllOffer | null {
+  const outside = landFires(home);
+  if (outside.length === 0) return null;
+  const fires = home.buildings.filter((b) => b.kind === 'hearthfire');
+  const cost: Record<string, number> = {};
+  for (const b of fires) {
+    const fire = BUILDING_DATA.get(b.buildingId);
+    if (fire?.kind !== 'hearthfire' || (b.fuelSpace ?? 0) === 0) continue;
+    for (const [id, n] of Object.entries(fuelCost(fire, b.fuelSpace ?? 0))) {
+      cost[id] = (cost[id] ?? 0) + n;
+    }
+  }
+  return {
+    land: outside.length,
+    low: fires.filter((b) => (b.nightsLeft ?? 0) <= 1).length,
+    cost,
+    full: Object.keys(cost).length === 0,
+  };
+}
+
+/** What the tile panel offers on one of my tiles out on captured land (#202). */
+export type LandTileOffer =
+  | { readonly kind: 'fire'; readonly fire: MyBuilding }
+  /** Its middle holds a node: a fire next door can reach it. */
+  | { readonly kind: 'node'; readonly line: string }
+  | {
+      readonly kind: 'build';
+      readonly building: Building;
+      readonly needs: readonly NeedChip[];
+      /** The Jack-o'-Lantern Hearthfire too, in season with a carved pumpkin in the bag. */
+      readonly lantern: { readonly building: Building; readonly needs: readonly NeedChip[] } | null;
+    }
+  /** Something else stands in the middle (not one of mine to show here). */
+  | { readonly kind: 'none' };
+
+/** What stands in a tile's middle, in a kid's words (never "node", owner note 2026-10-07). */
+const MIDDLE_THINGS: Readonly<Record<string, string>> = {
+  treats: 'a farm plot',
+  pumpkins: 'a pumpkin patch',
+  'magic-fallen-leaves': 'a leaf pile',
+  glimmer: 'some Glimmer crystals',
+};
+
+/** "a Timber pile", "a farm plot": the resource spot in a tile's middle. */
+export function middleThing(resource: string): string {
+  return MIDDLE_THINGS[resource] ?? `a ${itemName(resource)} pile`;
+}
+
+/** The building that can stand on owned land, one a tile, in its middle: the Hearthfire. */
+export const LAND_FIRE = GAME_DATA.buildings.find(
+  (b) => b.placement === 'land' && b.kind === 'hearthfire',
+);
+
+export function landTileOffer(
+  tile: {
+    q: number;
+    r: number;
+    nodeResource: string | null;
+    buildings: readonly { spot: number }[];
+  },
+  home: HomeResponse,
+): LandTileOffer {
+  const fire = home.buildings.find(
+    (b) => b.kind === 'hearthfire' && b.q === tile.q && b.r === tile.r,
+  );
+  if (fire) return { kind: 'fire', fire };
+  if (!LAND_FIRE) return { kind: 'none' };
+  if (tile.nodeResource !== null) {
+    return {
+      kind: 'node',
+      line: `🔥 Fires go in the middle of a tile. This one has ${middleThing(tile.nodeResource)} there, so a fire next door can reach it!`,
+    };
+  }
+  if (tile.buildings.some((b) => b.spot === 0)) return { kind: 'none' };
+  const seasons = new Set(home.seasons);
+  const lantern =
+    GAME_DATA.buildings.find(
+      (b) =>
+        b.placement === 'land' &&
+        b.id !== LAND_FIRE.id &&
+        inSeason(b, seasons) &&
+        Object.keys(shortfall(home.items, buildCost(b))).length === 0,
+    ) ?? null;
+  return {
+    kind: 'build',
+    building: LAND_FIRE,
+    needs: needChips(home.items, buildCost(LAND_FIRE)),
+    lantern: lantern
+      ? { building: lantern, needs: needChips(home.items, buildCost(lantern)) }
+      : null,
+  };
+}
+
+/** The build card's line for a fire out on my land. */
+export function landFireLine(building: Building): string {
+  const step = building.levels[0];
+  const reach = step && 'safeRadius' in step ? step.safeRadius : 1;
+  return `It goes in the middle of this tile 🔥 and keeps everyone within ${String(reach)} ${reach === 1 ? 'tile' : 'tiles'} cozy at night.`;
+}
+
+/** The home's top line (owner decision 2026-10-07): the Heart Seed keeps home safe. */
+export const HOME_SAFE_LINE = 'Your Heart Seed keeps home safe 💗';
+
+/** Where fires go, on the build sheet (fires stand only on captured land). */
+export const FIRES_ON_LAND =
+  'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!';
 
 /**
  * One ingredient as have/need ("🪵 12/5"), so a kid sees at a glance what's
@@ -113,8 +244,10 @@ export type BuildOption =
   | { readonly kind: 'short' }
   /** Short of something you make (the Jack-o'-Lantern): make it in the recipe book first. */
   | { readonly kind: 'craft'; readonly note: string }
-  /** Already built (as many as fit): upgrade it at home instead. */
+  /** Already built (as many as the home base holds): upgrade it at home instead. */
   | { readonly kind: 'built'; readonly note: string }
+  /** Built only out on my land, from the map's tile panel (fires, #202). */
+  | { readonly kind: 'land'; readonly note: string }
   | { readonly kind: 'blocked'; readonly note: string };
 
 export interface BuildRow {
@@ -122,12 +255,29 @@ export interface BuildRow {
   readonly icon: string;
   readonly needs: readonly NeedChip[];
   readonly option: BuildOption;
+  /** Which spots it takes (#204): "Fires go in the middle of a tile 🔥". */
+  readonly where: string;
+}
+
+/** Where a building goes on a tile, in a line (#204). */
+export function slotLine(building: Pick<Building, 'kind' | 'slot'>): string {
+  if (building.slot === 'centre') {
+    return building.kind === 'hearthfire'
+      ? 'Fires go in the middle of a tile 🔥'
+      : 'Goes in the middle of a tile';
+  }
+  if (building.slot === 'ring') return 'Goes around the middle 🏡';
+  return 'Goes along the edge of a tile';
 }
 
 const isCrafted = (id: string) => GAME_DATA.resources.find((r) => r.id === id)?.kind === 'crafted';
 
-/** The build menu: every building a player can put up, in data order. */
-export function buildRows(home: HomeResponse): BuildRow[] {
+/**
+ * The build menu: every building a player can put up at home, in data order.
+ * Counts only home buildings (fires out on my land don't use up home's one).
+ */
+export function buildRows(everything: HomeResponse): BuildRow[] {
+  const home = atHome(everything);
   const seasons = new Set(home.seasons);
   return GAME_DATA.buildings
     .filter((b) => isBuildable(RULES, b))
@@ -138,7 +288,16 @@ export function buildRows(home: HomeResponse): BuildRow[] {
       const short = Object.keys(shortfall(home.items, cost));
       const crafted = short.find(isCrafted);
       let option: BuildOption = { kind: 'ready' };
-      if (owned >= building.maxPerHome) {
+      if (building.placement === 'land' && crafted) {
+        // Carve the Jack-o'-Lantern first, then build it out on your land.
+        const verb = CRAFT_VERBS[crafted] ?? 'Make';
+        option = {
+          kind: 'craft',
+          note: `${verb} a ${itemName(crafted)} first! It's in your recipe book.`,
+        };
+      } else if (building.placement === 'land') {
+        option = { kind: 'land', note: FIRES_ON_LAND };
+      } else if (owned >= (building.maxPerHome ?? 0)) {
         option = {
           kind: 'built',
           note: building.levels.length > 1 ? 'Built! Tap it at home to upgrade.' : 'Built!',
@@ -154,14 +313,15 @@ export function buildRows(home: HomeResponse): BuildRow[] {
         };
       } else if (short.length > 0) {
         option = { kind: 'short' };
-      } else if (freeHomeSpots(home).length === 0) {
+      } else if (freeHomeSpots(home, null, building.slot).length === 0) {
         option = { kind: 'blocked', note: 'No room left. Take something down first.' };
       }
       return {
         building,
         icon: buildingIcon(building.id),
-        needs: option.kind === 'built' ? [] : needChips(home.items, cost),
+        needs: option.kind === 'built' || option.kind === 'land' ? [] : needChips(home.items, cost),
         option,
+        where: building.placement === 'land' ? '' : slotLine(building),
       };
     });
 }
@@ -269,9 +429,13 @@ export interface HomeSpot {
 /**
  * Every free spot on my home base: the Heart Seed tile first, then the ring
  * in `q, r` order, spots in order. `except` is a building being moved (its
- * own spot counts as free).
+ * own spot counts as free); `slot` keeps only that kind of spot (#204).
  */
-export function freeHomeSpots(home: HomeResponse, except: string | null = null): HomeSpot[] {
+export function freeHomeSpots(
+  home: HomeResponse,
+  except: string | null = null,
+  slot?: BuildingSlot,
+): HomeSpot[] {
   const tiles = [...home.tiles].sort(
     (a, b) => Number(b.heartSeed) - Number(a.heartSeed) || a.q - b.q || a.r - b.r,
   );
@@ -282,7 +446,7 @@ export function freeHomeSpots(home: HomeResponse, except: string | null = null):
         .filter((b) => b.id !== except && b.q === tile.q && b.r === tile.r)
         .map((b) => b.spot),
     );
-    for (const spot of freeSpots(RULES, tile, taken)) {
+    for (const spot of freeSpots(RULES, tile, taken, slot)) {
       spots.push({ q: tile.q, r: tile.r, spot });
     }
   }

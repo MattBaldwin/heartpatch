@@ -195,7 +195,8 @@ describe('MapState', () => {
       r: home.r,
     };
     const tileOf = (t: { q: number; r: number }) => state.tileAt(hexKey(t))!;
-    expect(state.apply(event('building.placed', { userId: userId(1), building }))).toBe('none');
+    // Each redraws the map: fires on land are built and fuelled from it (#202).
+    expect(state.apply(event('building.placed', { userId: userId(1), building }))).toBe('redraw');
     expect(tileOf(home).buildings).toEqual([
       {
         id: building.id,
@@ -207,9 +208,11 @@ describe('MapState', () => {
         safeRadius: 1,
       },
     ]);
-    state.apply(
-      event('building.fueled', { userId: userId(1), building: { ...building, lit: true } }, 3),
-    );
+    expect(
+      state.apply(
+        event('building.fueled', { userId: userId(1), building: { ...building, lit: true } }, 3),
+      ),
+    ).toBe('redraw');
     expect(tileOf(home).buildings[0]?.lit).toBe(true);
     // An upgrade: friends see the new level and the fire's longer reach.
     state.apply(
@@ -230,13 +233,15 @@ describe('MapState', () => {
     );
     expect(tileOf(home).buildings).toEqual([]);
     expect(tileOf(other).buildings.map((b) => b.spot)).toEqual([4]);
-    state.apply(
-      event(
-        'building.removed',
-        { userId: userId(1), buildingRowId: building.id, q: other.q, r: other.r },
-        6,
+    expect(
+      state.apply(
+        event(
+          'building.removed',
+          { userId: userId(1), buildingRowId: building.id, q: other.q, r: other.r },
+          6,
+        ),
       ),
-    );
+    ).toBe('redraw');
     expect(tileOf(other).buildings).toEqual([]);
     expect(state.apply(event('building.placed', { userId: userId(1) }, 7))).toBe('resync');
   });

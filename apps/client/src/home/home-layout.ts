@@ -46,28 +46,22 @@ export function mapBuildings(view: MapView, hexSize: number): PlacedOnMap[] {
 }
 
 /**
- * Tiles kept safe tonight by lit Hearthfires, as the map shows them: each lit
- * fire's whole home base plus its radius (shared `safeTiles`, the same rule
- * nightfall uses). `lit` is as of the view or the last event about it.
+ * Tiles safe tonight, as the map shows them: every claimed home base (the
+ * Heart Seed keeps it safe, owner decision 2026-10-07) plus each lit fire's
+ * tile and radius out on land (shared `safeTiles`, the rule nightfall uses).
+ * `lit` is as of the view or the last event about it.
  */
 export function mapSafeTiles(view: MapView): Set<HexKey> {
-  const homeBySlot = new Map<number, PublicTile[]>();
-  for (const t of view.tiles) {
-    if (t.homeSlot === null) continue;
-    const list = homeBySlot.get(t.homeSlot) ?? [];
-    list.push(t);
-    homeBySlot.set(t.homeSlot, list);
-  }
+  const homes = view.tiles.filter((t) => t.homeSlot !== null && t.ownerUserId !== null);
   const fires: SafeFire[] = [];
   for (const tile of view.tiles) {
     for (const b of tile.buildings) {
       if (b.lit !== true || b.safeRadius === null) continue;
-      const home = tile.homeSlot === null ? [] : (homeBySlot.get(tile.homeSlot) ?? []);
-      fires.push({ at: tile, radius: b.safeRadius, homeTiles: home });
+      fires.push({ at: tile, radius: b.safeRadius });
     }
   }
   const known = new Set(view.tiles.map((t) => hexKey(t)));
-  return new Set([...safeTiles(fires)].filter((key) => known.has(key)));
+  return new Set([...safeTiles(fires, homes)].filter((key) => known.has(key)));
 }
 
 /** The middle of a set of hexes (the Heart Seed of a home base). */
