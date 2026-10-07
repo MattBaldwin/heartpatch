@@ -129,6 +129,16 @@ describe('info card', () => {
     expect(card.buttons.map((b) => b.action)).toEqual(['feed', 'pet', 'play']);
   });
 
+  it("carries its species' rarity for the chip (#240)", () => {
+    // A secret squishy the player has: its row came with the reply.
+    expect(infoCard(squishy(), reply()).rarity).toBe('secret');
+    const pub = GAME_DATA.species[0];
+    if (!pub) throw new Error('no species');
+    expect(infoCard(squishy({ speciesId: pub.id }), reply()).rarity).toBe(pub.rarity);
+    // No row for it: no chip, rather than a guess.
+    expect(infoCard(squishy({ speciesId: 'who-knows' }), reply()).rarity).toBeNull();
+  });
+
   it('goes by its nickname once it has one', () => {
     const card = infoCard(squishy({ nickname: 'Sir Puffs' }), reply());
     expect(card.name).toBe('Sir Puffs');

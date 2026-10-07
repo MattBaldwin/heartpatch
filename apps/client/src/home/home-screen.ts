@@ -3,10 +3,12 @@ import {
   visualRegistry,
   type FuelAllResponse,
   type HomeResponse,
+  type HomeSquishy,
   type KeeperConfig,
   type MyBuilding,
   type PublicTile,
   type PublicUser,
+  type Species,
 } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
 import type { QualityTier } from '../engine/config.js';
@@ -19,6 +21,7 @@ import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
+import { rarityDot } from '../ui/rarity/rarity.js';
 import { WANDER } from './home-config.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { JOBS_TEXT } from '../squishies/jobs/jobs-view.js';
@@ -43,6 +46,7 @@ import {
   refundPreview,
   speciesMap,
   squishyName,
+  squishyRarity,
   trainCost,
   type HomeSpot,
   type NeedChip,
@@ -828,7 +832,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   el(
                     'span',
                     { class: 'home-list-name' },
-                    name,
+                    squishyTitle(s, name, species),
                     el(
                       'span',
                       { class: 'home-list-sub' },
@@ -877,7 +881,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   el(
                     'span',
                     { class: 'home-list-name' },
-                    name,
+                    squishyTitle(s, name, species),
                     el(
                       'span',
                       { class: 'home-list-sub' },
@@ -1516,4 +1520,14 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       };
     },
   };
+}
+
+/** A list row's name with its rarity dot before it, where the row is tight (#240). */
+function squishyTitle(
+  squishy: HomeSquishy,
+  name: string,
+  species: ReadonlyMap<string, Species>,
+): HTMLElement {
+  const rarity = squishyRarity(squishy, species);
+  return el('span', { class: 'home-list-title' }, ...(rarity ? [rarityDot(rarity)] : []), name);
 }

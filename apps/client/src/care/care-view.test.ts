@@ -193,6 +193,15 @@ describe('careSheet', () => {
     expect(CARE_TEXT.evolvingGain(8)).toBe('+8% toward evolving!');
   });
 
+  it("carries its species' rarity for the chip under the name (#240)", () => {
+    // Moonpuff is a secret squishy the player has (its row came with the reply).
+    expect(careSheet(squishy(), reply()).rarity).toBe('secret');
+    const pub = GAME_DATA.species.find((s) => s.rarity === 'legendary');
+    if (!pub) throw new Error('no legendary species');
+    expect(careSheet(squishy({ speciesId: pub.id }), reply()).rarity).toBe('legendary');
+    expect(careSheet(squishy({ speciesId: 'who-knows' }), reply()).rarity).toBeNull();
+  });
+
   it('uses a nickname when there is one', () => {
     expect(careSheet(squishy({ nickname: 'Pip' }), reply()).name).toBe('Pip');
   });

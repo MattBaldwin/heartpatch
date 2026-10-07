@@ -137,6 +137,13 @@
   font-weight: 700;
 }
 
+/* A squishy's name with its rarity dot before it (#240). */
+.home-list-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .home-list-sub {
   font-size: 13px;
   font-weight: 600;
