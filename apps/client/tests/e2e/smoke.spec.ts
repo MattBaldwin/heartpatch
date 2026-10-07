@@ -317,3 +317,49 @@ test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }
     scroll: [0, 0],
   });
 });
+
+test('keeps its shape when the phone turns (#251)', async ({ page }) => {
+  test.setTimeout(90_000); // first load compiles shaders; CI renders in software
+  // iOS sends `resize` before the turned layout settles, and none after it.
+  // Registered before the game's own listener, so it can swallow the real
+  // one once asked to (listeners on the window run in the order added).
+  await page.addInitScript(() => {
+    window.addEventListener('resize', (e) => {
+      if (e.isTrusted && document.documentElement.dataset['swallowResize']) {
+        e.stopImmediatePropagation();
+      }
+    });
+  });
+  await page.goto('/');
+  const canvas = page.locator('#game');
+  await expect(canvas).toHaveAttribute('data-ready', 'true');
+  await waitForIdle(page);
+  const vp = page.viewportSize()!;
+
+  // The page hears a resize while the canvas still has its old size (left
+  // to settle, so its frames can't pick up the new size by chance), then
+  // nothing when the layout turns.
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('resize'));
+    document.documentElement.dataset['swallowResize'] = 'true';
+  });
+  await waitForIdle(page);
+  const before = await draws(page);
+  await page.setViewportSize({ width: vp.height, height: vp.width });
+
+  // The drawing buffer (which the camera's aspect is worked out from) takes
+  // the canvas's new shape, and a frame is drawn at it.
+  const shape = () =>
+    canvas.evaluate((c: HTMLCanvasElement) => ({
+      buffer: Math.round((c.width / c.height) * 100) / 100,
+      box: Math.round((c.clientWidth / c.clientHeight) * 100) / 100,
+    }));
+  await expect
+    .poll(async () => {
+      const s = await shape();
+      return s.buffer === s.box;
+    })
+    .toBe(true);
+  expect((await shape()).box).toBeGreaterThan(1); // it did turn
+  await expect.poll(() => draws(page)).toBeGreaterThan(before);
+});

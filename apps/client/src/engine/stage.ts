@@ -70,12 +70,28 @@ export function mountStage(
 
   const frames = new FrameScheduler(SETTLE_FRAMES);
   const abort = new AbortController();
+  // One resize path, at most once a frame. The canvas's own box is watched:
+  // iOS sends `resize` before a turned layout settles and none after, so the
+  // buffer and the camera's aspect kept the old shape until the map was
+  // remounted (#251). Window `resize` still covers a pixel-ratio change (a
+  // window moving screens) that leaves the box as it was.
+  let resizeFrame = 0;
   const onResize = (): void => {
-    quality.refreshPixelRatio(); // the DPR changes when a window moves screens
-    engine.resize();
-    frames.invalidate();
+    if (resizeFrame !== 0) return;
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = 0;
+      quality.refreshPixelRatio();
+      engine.resize();
+      frames.invalidate();
+    });
   };
   window.addEventListener('resize', onResize, { signal: abort.signal });
+  const canvasBox = new ResizeObserver(onResize);
+  canvasBox.observe(canvas);
+  abort.signal.addEventListener('abort', () => {
+    canvasBox.disconnect();
+    cancelAnimationFrame(resizeFrame);
+  });
 
   scene.onAfterRenderObservable.addOnce(() => {
     canvas.dataset['ready'] = 'true';
