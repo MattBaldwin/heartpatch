@@ -101,10 +101,12 @@ export function drawCodePicture(g: PictureContext, username: string, code: strin
   g.restore();
 
   g.textAlign = 'center';
+  // Text shrinks to fit inside the card, so a wide 16-letter name stays readable.
+  const inCard = W - 200;
   const text = (words: string, y: number, weight: number, size: number, colour: string) => {
     g.font = font(weight, size);
     g.fillStyle = colour;
-    g.fillText(words, W / 2, y);
+    g.fillText(words, W / 2, y, inCard);
   };
   text(CODE_PICTURE_TEXT.title, 330, 900, 64, INK);
   text(CODE_PICTURE_TEXT.subtitle, 385, 700, 36, INK_SOFT);
@@ -122,7 +124,7 @@ export function drawCodePicture(g: PictureContext, username: string, code: strin
   g.setLineDash([]);
   g.font = `700 66px ${MONO}`;
   g.fillStyle = INK;
-  g.fillText(code, W / 2, 778);
+  g.fillText(code, W / 2, 778, W - 300);
 
   text(CODE_PICTURE_TEXT.keep, 910, 700, 32, INK_SOFT);
   text(CODE_PICTURE_TEXT.site, 1110, 600, 28, INK_HINT);

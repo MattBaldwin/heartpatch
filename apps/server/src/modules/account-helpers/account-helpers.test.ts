@@ -285,17 +285,27 @@ describe.skipIf(!url)('grown-up helpers (needs DATABASE_URL)', () => {
       const others = await Promise.all(
         Array.from({ length: HELPER_RULES.playersPerHelper }, () => player()),
       );
+      // Asks not answered yet count too.
       await db.insert(accountHelpers).values(
-        others.map((o) => ({
+        others.map((o, i) => ({
           userId: o.id,
           helperUserId: grownup.id,
-          status: 'active' as const,
+          status: i % 2 === 0 ? ('active' as const) : ('pending' as const),
         })),
       );
       const kid = await player({ invitedBy: grownup.id });
       const res = await ask(kid, grownup);
       expect(res.statusCode).toBe(409);
       expect(errorOf(res).message).toMatch(/helping lots of players/);
+    });
+
+    it('lets only two asks through when four are sent at once', async () => {
+      const kid = await player();
+      const grownups = await Promise.all(Array.from({ length: 4 }, () => player()));
+      await patch('Busy Patch', [kid, ...grownups]);
+      const results = await Promise.all(grownups.map((g) => ask(kid, g)));
+      expect(results.map((r) => r.statusCode).sort()).toEqual([200, 200, 409, 409]);
+      expect((await mine(kid)).helpers).toHaveLength(HELPER_RULES.helpersPerPlayer);
     });
 
     it('a "no" just makes the ask go away, and can be asked again', async () => {
@@ -398,6 +408,19 @@ describe.skipIf(!url)('grown-up helpers (needs DATABASE_URL)', () => {
       expect((await reset(grownup, kid2)).statusCode).toBe(200);
     });
 
+    it(`lets only ${String(HELPER_RULES.resetsPerDay)} of 5 resets at once through`, async () => {
+      const { grownup, kid } = await linked();
+      const kid2 = await player({ invitedBy: grownup.id });
+      linksOf(await ask(kid2, grownup));
+      linksOf(await answer(grownup, kid2, 'accept'));
+      const results = await Promise.all([kid, kid2, kid, kid2, kid].map((k) => reset(grownup, k)));
+      expect(results.map((r) => r.statusCode).sort()).toEqual([200, 200, 200, 429, 429]);
+      const rows = await db.query.accountHelperResets.findMany({
+        where: (r, { eq }) => eq(r.helperUserId, grownup.id),
+      });
+      expect(rows).toHaveLength(HELPER_RULES.resetsPerDay);
+    });
+
     it('needs a login', async () => {
       const { kid } = await linked();
       expect(
@@ -424,6 +447,33 @@ describe.skipIf(!url)('grown-up helpers (needs DATABASE_URL)', () => {
       const recovered = await recover(kid.username, recoveryCode);
       expect(recovered.statusCode).toBe(200);
       RecoveryCodeResponseSchema.parse(recovered.json());
+    });
+
+    it('makes three codes at once without a hiccup, leaving one that works', async () => {
+      const kid = await player();
+      const results = await Promise.all(
+        [1, 2, 3].map(() => call('POST', '/auth/recovery-code', kid, { password: PASSWORD })),
+      );
+      expect(results.map((r) => r.statusCode)).toEqual([200, 200, 200]);
+      const active = await db.query.recoveryCodes.findMany({
+        where: (c, { and, eq, isNull }) => and(eq(c.userId, kid.id), isNull(c.usedAt)),
+      });
+      expect(active).toHaveLength(1);
+    });
+
+    it("races a helper's reset of the same player without a hiccup", async () => {
+      const { grownup, kid } = await linked();
+      const [own, theirs] = await Promise.all([
+        call('POST', '/auth/recovery-code', kid, { password: PASSWORD }),
+        reset(grownup, kid),
+      ]);
+      expect(theirs.statusCode).toBe(200);
+      // The kid's request lands first, or finds its session already revoked.
+      expect([200, 401]).toContain(own.statusCode);
+      const active = await db.query.recoveryCodes.findMany({
+        where: (c, { and, eq, isNull }) => and(eq(c.userId, kid.id), isNull(c.usedAt)),
+      });
+      expect(active).toHaveLength(1);
     });
 
     it('needs a login', async () => {

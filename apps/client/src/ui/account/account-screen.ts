@@ -222,7 +222,9 @@ export function mountAccount(root: HTMLElement): AccountScreen {
               helper.user.username,
               el(
                 'span',
-                { class: active ? 'lobby-badge lobby-badge-ok' : 'lobby-badge lobby-badge-alert' },
+                {
+                  class: active ? 'lobby-badge account-badge-ok' : 'lobby-badge lobby-badge-alert',
+                },
                 active ? ACCOUNT_TEXT.helperBadge : ACCOUNT_TEXT.waitingBadge,
               ),
             ),

@@ -193,6 +193,14 @@ export function createAuthRepo(db: Executor): AuthRepo {
 
     replaceRecoveryCode: async (userId, codeHash, now) => {
       await db.transaction(async (tx) => {
+        // The account first (tech spec §7, step 4), like every reset: two
+        // rotations at once (two devices, or a helper's reset) take turns
+        // instead of both inserting an active code.
+        await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, userId))
+          .for('no key update');
         await tx
           .update(recoveryCodes)
           .set({ usedAt: now })

@@ -18,6 +18,7 @@ export const SAVE_CODE_TEXT = {
   press: 'Press and hold the picture, then tap Save to Photos.',
   noPicture: "We couldn't make a picture here. Copy it or write it down instead!",
   done: 'Done',
+  oneMoment: 'One moment…',
 } as const;
 
 export interface SaveCodeOptions {
@@ -61,8 +62,14 @@ export function saveCodePanel(options: SaveCodeOptions): HTMLElement {
     tick.classList.toggle('auth-tick-on', tickBox.checked);
   };
   tickBox.addEventListener('change', sync);
+  let left = false;
   done.addEventListener('click', () => {
-    if (!tickBox.checked) return;
+    if (!tickBox.checked || left) return;
+    // Once only: after sign up the next screen may wait on the network.
+    left = true;
+    done.disabled = true;
+    done.textContent = SAVE_CODE_TEXT.oneMoment;
+    tickBox.disabled = true;
     dropPicture();
     options.onDone();
   });
