@@ -202,6 +202,9 @@ Resources vary by terrain, making certain tiles worth fighting over.
 | Glimmer | Mountains, caves | Hearthfire level 3, advanced habitats, decorations |
 | Heartdust | Rescuing Hollowed squishies, events | Heart Snack (care), nurseries, evolution boosters (rare) |
 | Treats | Grown on farm plots | Feeding squishies, raising care |
+| Water | A well on every lake (#238) | Moats; freezing into Ice; later, watering farm plots |
+| Greens | Meadows, and some forests (#238) | Hedges and Bramble Hedges |
+| Ice | Some mountains, or 3 Water frozen at home (half the time with a Frost squishy on your team) (#238) | Ice Walls |
 
 **Seasonal resources** (special uses, see §15): Pumpkins, Witch Dust, Magic Fallen Leaves, Turkey Feathers, Presents, Fireworks.
 

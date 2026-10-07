@@ -901,7 +901,7 @@ export class MapScene {
 // Each home base's resource nodes (Timber, Stone, Emberwood, the farm plot),
 // drawn in the middle of their tile as on the Home view, so "tap the tree
 // tile" has a tree to tap. Kept apart from the terrain props above, which
-// skip home tiles.
+// skip home tiles. The #238 nodes (Water, Greens, Ice) show on any tile.
 
 /** Node resources drawn as props in the middle of their tile (the map and Home). */
 export const NODE_PROPS: Readonly<Record<string, PropKind>> = {
@@ -913,7 +913,18 @@ export const NODE_PROPS: Readonly<Record<string, PropKind>> = {
   // carved one, so it reads apart from the farm plot, and Thanksgiving's leaf pile.
   pumpkins: 'pumpkin-patch',
   'magic-fallen-leaves': 'leaf-pile',
+  // #238: drawn on any tile, home or not (`LAND_NODES`).
+  water: 'well',
+  greens: 'greens-patch',
+  ice: 'ice-crystals',
 };
+
+/**
+ * Nodes drawn on every tile, not only at home (#238, owner-approved mockup
+ * 2026-10-07): the new gatherables are on outer land, and a lake with a well
+ * says "you can gather here" at a glance.
+ */
+export const LAND_NODES: ReadonlySet<string> = new Set(['water', 'greens', 'ice']);
 
 const NODE_SEASONS = new Map(GAME_DATA.resources.map((r) => [r.id, r.season]));
 
@@ -936,12 +947,15 @@ function buildHomeNodes(
   const byKind = new Map<PropKind, Matrix[]>();
   let count = 0;
   for (const tile of tiles) {
-    const node = tile.homeSlot !== null ? tile.nodeResource : null;
+    const node =
+      tile.homeSlot !== null || (tile.nodeResource !== null && LAND_NODES.has(tile.nodeResource))
+        ? tile.nodeResource
+        : null;
     const kind = node && homeNodeShown(node, seasons) ? NODE_PROPS[node] : null;
     if (!kind) continue;
     const p = hexToWorld(tile, HEX_SIZE);
     const list = byKind.get(kind) ?? [];
-    list.push(placeAt(p.x, HOME_LOOK.height + DOME * 0.5, p.z));
+    list.push(placeAt(p.x, lookOf(tile).height + DOME * 0.5, p.z));
     byKind.set(kind, list);
     count++;
   }
