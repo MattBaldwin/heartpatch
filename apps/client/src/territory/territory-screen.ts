@@ -16,6 +16,7 @@ import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { territoryApi, type TerritoryApi } from './territory-api.js';
+import { crackedBy, fenceCard } from '../fences/fence-model.js';
 import { territoryAction, watchInTheDark, type TerritoryAction } from './territory-action.js';
 import './territory.css';
 
@@ -83,6 +84,15 @@ export const TERRITORY_TEXT = {
   saved: 'Your guards are in place!',
   shielded: "You're new here, so nobody can challenge your land yet.",
   mystery: 'Mystery squishy',
+  // Fences (#203, the owner-approved mockup).
+  fenced: '🪵 Fenced! Break the fence, then beat the guard.',
+  breakFirst: (fence: string, percent: number, cracks: string) =>
+    `1 · Your first squishy breaks the ${fence} (${String(percent)}%). ${cracks}!`,
+  thenGuard: '2 · Then the rest of your team beats the guard.',
+  whoGoesFirst: 'Pick who goes first in Team.',
+  keepGoingNote: 'Crack! The fence fell down! 🪵 Now beat the guard to make it yours.',
+  keepGoing: 'Keep going!',
+  keepGoingFree: 'Keep going is part of this challenge. No extra try.',
 } as const;
 
 export function createTerritoryScreen(options: TerritoryScreenOptions): TerritoryScreen {
@@ -313,9 +323,20 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
           button(TERRITORY_TEXT.claim, () => void battleFor(tile), { 'data-testid': 'tile-claim' }),
         );
         break;
-      case 'challenge':
+      case 'challenge': {
+        const card = action.fence ? fenceCard(action.fence) : null;
         children.push(
-          line(TERRITORY_TEXT.challengeNote(owner ?? TERRITORY_TEXT.someone)),
+          ...(card
+            ? [
+                line(TERRITORY_TEXT.fenced, 'territory-fenced'),
+                line(
+                  TERRITORY_TEXT.breakFirst(card.name, card.percent, crackedBy(card.element)),
+                  'territory-fence-plan',
+                ),
+                line(TERRITORY_TEXT.thenGuard),
+                line(TERRITORY_TEXT.whoGoesFirst),
+              ]
+            : [line(TERRITORY_TEXT.challengeNote(owner ?? TERRITORY_TEXT.someone))]),
           ...(tile.defenders > 0 ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))] : []),
           triesLine(action.triesResetAt, (wait) =>
             TERRITORY_TEXT.triesLeft(action.attemptsLeft, wait),
@@ -323,6 +344,16 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
           button(TERRITORY_TEXT.challenge, () => void battleFor(tile), {
             'data-testid': 'tile-challenge',
           }),
+        );
+        break;
+      }
+      case 'keep-going':
+        children.push(
+          line(TERRITORY_TEXT.keepGoingNote, 'territory-keep-going-note'),
+          button(TERRITORY_TEXT.keepGoing, () => void battleFor(tile), {
+            'data-testid': 'territory-keep-going',
+          }),
+          line(TERRITORY_TEXT.keepGoingFree),
         );
         break;
       case 'resting':
