@@ -1,6 +1,7 @@
 import {
   applyBattleAction,
   BattleRuleError,
+  itemRefusal,
   battleXpPercent,
   befriendedLevel,
   CAPTURABLE_BATTLE_KINDS,
@@ -842,9 +843,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           // checked first, so they say why (not "You need 1 more …") and
           // lock no inventory row. None in the bag is CONFLICT from the bag.
           const { item } = request.action;
-          if (!content.items.has(item)) throw new AppError('CONFLICT', MESSAGES.notAPotion);
-          const used = row.state.sides[PLAYER_SIDE].itemsUsed.filter((id) => id === item).length;
-          if (used >= content.rules.items.usesEach) throw new AppError('CONFLICT', MESSAGES.hadOne);
+          const refusal = itemRefusal(content, row.state, PLAYER_SIDE, item);
+          if (refusal === 'not-an-item') throw new AppError('CONFLICT', MESSAGES.notAPotion);
+          if (refusal === 'used-up') throw new AppError('CONFLICT', MESSAGES.hadOne);
           await consumeItems(
             tx,
             { mapId: row.mapId, userId: row.playerUserId },

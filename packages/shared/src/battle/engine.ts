@@ -235,14 +235,15 @@ class Step {
     return given;
   }
 
-  /** A battle item this side may still use (`rules.items.usesEach` of each kind). */
+  /** A battle item this side may still use (`itemRefusal`). */
   private checkItem(side: BattleSideId, item: string): void {
-    if (!this.content.items.has(item)) {
-      throw new BattleRuleError(`"${item}" can't be used in battle`);
-    }
-    const used = this.state.sides[side].itemsUsed.filter((id) => id === item).length;
-    if (used >= this.content.rules.items.usesEach) {
-      throw new BattleRuleError(`side ${side} already used "${item}" this battle`);
+    switch (itemRefusal(this.content, this.state, side, item)) {
+      case 'not-an-item':
+        throw new BattleRuleError(`"${item}" can't be used in battle`);
+      case 'used-up':
+        throw new BattleRuleError(`side ${side} already used "${item}" this battle`);
+      case null:
+        return;
     }
   }
 
@@ -648,6 +649,23 @@ export function battleRecord(
 }
 
 /**
+ * Why `side` can't use `item` now (#214), or null if it can: it isn't a
+ * battle item, or the side already used `rules.items.usesEach` of that kind
+ * this battle. The engine, `legalChoices` and the server all ask this, so the
+ * rule lives in one place. Whether the bag holds one is the server's to check.
+ */
+export function itemRefusal(
+  content: BattleContent,
+  state: Pick<BattleState, 'sides'>,
+  side: BattleSideId,
+  item: string,
+): 'not-an-item' | 'used-up' | null {
+  if (!content.items.has(item)) return 'not-an-item';
+  const used = state.sides[side].itemsUsed.filter((id) => id === item).length;
+  return used >= content.rules.items.usesEach ? 'used-up' : null;
+}
+
+/**
  * Every choice a side could legally make this turn (for the UI and tests).
  * Battle items are listed when `content` is given: player sides only, and
  * whether the bag holds one is the server's to check.
@@ -658,12 +676,9 @@ export function legalChoices(
   content?: BattleContent,
 ): BattleChoice[] {
   if (state.phase.type !== 'turn') return [];
-  const { controller, itemsUsed } = state.sides[side];
   const items =
-    content && controller.type === 'player'
-      ? [...content.items.keys()].filter(
-          (item) => itemsUsed.filter((id) => id === item).length < content.rules.items.usesEach,
-        )
+    content && state.sides[side].controller.type === 'player'
+      ? [...content.items.keys()].filter((item) => !itemRefusal(content, state, side, item))
       : [];
   return [
     ...activeSquishy(state, side).moves.map((move): BattleChoice => ({ type: 'move', move })),

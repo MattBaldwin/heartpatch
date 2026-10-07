@@ -28,6 +28,8 @@ import { activeSquishy, type BattleEvent, type BattleState } from './state.js';
  * the next hit it takes. One of each per side per battle.
  */
 
+// Fixture potions with their own numbers (+25%), independent of the owner's
+// tuning in data/resources.ts, so re-tuning never moves these tests.
 const POTIONS: Resource[] = [
   {
     id: 'fixture-brave-brew',
