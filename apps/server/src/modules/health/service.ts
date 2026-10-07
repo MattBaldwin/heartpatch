@@ -13,6 +13,9 @@ export interface HealthService {
 
 export function createHealthService(options: {
   version: string;
+  /** The build number and short sha (#198); null when not built from git. */
+  build: number | null;
+  commit: string | null;
   checks: readonly ReadinessCheck[];
   now?: () => number;
 }): HealthService {
@@ -23,6 +26,8 @@ export function createHealthService(options: {
     health: () => ({
       status: 'ok',
       version: options.version,
+      build: options.build,
+      commit: options.commit,
       uptimeSeconds: Math.floor((now() - startedAt) / 1000),
     }),
 

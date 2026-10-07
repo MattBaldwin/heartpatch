@@ -35,6 +35,11 @@ FROM node:22-bookworm-slim AS server
 ENV NODE_ENV=production
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
+# The build number (commits on main) and short sha (#198), from the deploy's
+# build args: the build context has no .git. Empty means unset.
+ARG APP_BUILD=
+ARG APP_COMMIT=
+ENV APP_BUILD=$APP_BUILD APP_COMMIT=$APP_COMMIT
 WORKDIR /app
 COPY --from=prod-deps /repo/node_modules node_modules
 COPY --from=prod-deps /repo/packages/shared/node_modules packages/shared/node_modules

@@ -33,7 +33,10 @@ import { wardrobeBackTo, wardrobeFrom, type WardrobeFrom } from './ui/wardrobe/w
 import { createTrays, trayRow } from './ui/trays/trays.js';
 import { findSpot } from './recipes/book-model.js';
 import { createRecipeBook } from './recipes/recipe-book.js';
+import { appUpdates } from './pwa/app-updates.js';
+import { CLIENT_BUILD } from './pwa/build-info.js';
 import { startPwa } from './pwa/pwa.js';
+import { mountVersionMenu } from './pwa/version-menu.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
@@ -843,9 +846,22 @@ const menuRow = (icon: string, label: string, onTap: () => void): HTMLButtonElem
   row.addEventListener('click', onTap);
   return row;
 };
+// The game's version under the name, and "Update now" when one is ready (#198).
+const version = mountVersionMenu({
+  client: CLIENT_BUILD,
+  updates: appUpdates,
+  fetchServer: () => fetchHealth(),
+  // async: a missing clipboard (an http page) rejects instead of throwing.
+  copy: async (text) => navigator.clipboard.writeText(text),
+});
 mountAuth(document.body, {
+  menuHead: () => {
+    version.refresh();
+    return [version.line];
+  },
   // Over the map, the rare things live in the Keeper menu in the corner.
   menu: () => [
+    version.updateRow,
     menuRow('👗', 'Wardrobe', () => {
       wardrobe.open();
     }),
