@@ -69,6 +69,9 @@ function firstIssue(error: { issues: { path: PropertyKey[]; message: string }[] 
   };
 }
 
+/** How long "Next" after sign up waits to learn whether there's a helper to offer. */
+const HELPER_STEP_WAIT_MS = 5000; // TUNE: guess
+
 export interface AuthOverlayOptions {
   /** Called whenever the player logs in or out. */
   onChange?: (user: PublicUser | null) => void;
@@ -511,10 +514,18 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
           if (!parsed.success) return firstIssue(parsed.error);
           const result = await authApi.signup(parsed.data);
           // Asked now, while the code is saved: the helper step is ready on "Next".
-          const helper = accountApi
-            .candidates()
-            .then((list) => list.find((c) => c.reason === 'invited-you') ?? null)
-            .catch(() => null);
+          // Never a wait on "Next": no answer in time just skips the (optional) step.
+          const helper = Promise.race([
+            accountApi
+              .candidates()
+              .then((list) => list.find((c) => c.reason === 'invited-you') ?? null)
+              .catch(() => null),
+            new Promise<null>((resolve) => {
+              window.setTimeout(() => {
+                resolve(null);
+              }, HELPER_STEP_WAIT_MS);
+            }),
+          ]);
           showRecoveryCode(result.user, result.recoveryCode, "Ta-da! You're in!", () => {
             void helper.then((candidate) => {
               if (candidate) showHelperStep(result.user, candidate.user);
