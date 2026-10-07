@@ -77,10 +77,16 @@ jobs:
   # WebKit e2e, split by device and into groups that run side by side.
   e2e:
     runs-on: ubuntu-24.04
-    # Room for setup and queueing (up to 5 min), the WebKit system deps
-    # (capped at 17 min, below) and the slowest group's tests (group 5, the
-    # catch-all, about 25 min and growing), with some slack.
-    timeout-minutes: 60
+    # WebKit and its OS packages come preinstalled in the official Playwright
+    # image, so no shard downloads from an apt mirror (a slow one timed jobs
+    # out on 2026-10-07 even with retries). The tag must match the
+    # @playwright/test version in the lockfile; the first step checks it.
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
+    # Room for the image pull and setup (about 5 min) and the slowest group's
+    # tests (group 5, the catch-all, about 25 min and growing; see #246).
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -98,16 +104,15 @@ jobs:
           POSTGRES_USER: heartpatch
           POSTGRES_PASSWORD: heartpatch
           POSTGRES_DB: heartpatch
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U heartpatch -d heartpatch"
           --health-interval 2s
           --health-timeout 3s
           --health-retries 15
     env:
-      # The dev server and the db scripts need this.
-      DATABASE_URL: postgres://heartpatch:heartpatch@localhost:5432/heartpatch
+      # The dev server and the db scripts need this. Inside a container job the
+      # service is reached by its name, not localhost.
+      DATABASE_URL: postgres://heartpatch:heartpatch@postgres:5432/heartpatch
     steps:
       - uses: actions/checkout@v5
         with:
@@ -122,45 +127,16 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+
+      - name: Playwright image matches the lockfile
+        run: |
+          want="$(pnpm --filter @heartpatch/client exec playwright --version | awk '{print $2}')"
+          echo "image v1.63.0, lockfile v$want"
+          test "$want" = "1.63.0" || { echo "::error::Update the e2e container tag in ci.yml to v$want"; exit 1; }
+
       # The specs import @heartpatch/shared's built output.
       - run: pnpm --filter @heartpatch/shared build
       - run: pnpm db:migrate && pnpm db:seed
-
-      # Cache the browser download; the OS packages it needs still install each run.
-      - uses: actions/cache@v4
-        id: pw-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-webkit-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-
-      # A slow apt mirror held shards in the OS-package install for 29 min, so
-      # jobs timed out before any test ran. apt gives up on a silent
-      # connection after 30 s and waits up to 60 s for a lock. dpkg stays off
-      # its own pty, so it stays in the process group the retry cap below can
-      # stop.
-      - name: apt retries and timeouts
-        run: |
-          printf '%s\n' 'Acquire::Retries "5";' 'Acquire::http::Timeout "30";' \
-            'Acquire::https::Timeout "30";' 'Dpkg::Use-Pty "0";' 'DPkg::Lock::Timeout "60";' \
-            | sudo tee /etc/apt/apt.conf.d/99-ci-retries
-
-      - name: Install Playwright WebKit
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @heartpatch/client exec playwright install webkit
-
-      # A mirror that trickles is caught by the 5-min cap on each try, which
-      # retries on a fresh connection. The cap runs as root: Playwright then
-      # calls apt itself, and a signal from the runner user couldn't reach a
-      # root apt started through sudo, so its lock would outlive the try.
-      - name: Install Playwright WebKit system deps
-        timeout-minutes: 17
-        run: |
-          for try in 1 2 3; do
-            sudo env "PATH=$PATH" timeout -k 30s 5m apps/client/node_modules/.bin/playwright install-deps webkit && exit 0
-            echo "::warning::install-deps try $try of 3 failed or took over 5 min"
-            sudo dpkg --configure -a || echo "::warning::dpkg --configure -a failed after try $try"
-          done
-          exit 1
 
       - name: E2E (${{ matrix.project }}, group ${{ matrix.group }}/5)
         env:
