@@ -13,7 +13,8 @@
     "db:check": "drizzle-kit check",
     "db:migrate": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/db/cli.ts migrate",
     "db:seed": "NODE_ENV=development tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/db/cli.ts seed",
-    "ops:reset-password": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/reset-password.ts"
+    "ops:reset-password": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/reset-password.ts",
+    "ops:signup-code": "tsx --conditions=@heartpatch/source --env-file-if-exists=../../.env src/ops/signup-code.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

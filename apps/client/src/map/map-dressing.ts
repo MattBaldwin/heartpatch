@@ -198,13 +198,16 @@ export function localDateIn(timeZone: string, now: Date): string {
   }
 }
 
+/** The seasons on for a map, by its local date (shared `activeSeasons`); none if the zone is unreadable. */
+export function seasonsOn(timeZone: string, now: Date): string[] {
+  try {
+    return activeSeasons(GAME_DATA.seasons, localDateIn(timeZone, now)).map((s) => s.id);
+  } catch {
+    return [];
+  }
+}
+
 /** True while Halloween is on for a map, by its local date (shared `activeSeasons`). */
 export function isHalloween(timeZone: string, now: Date): boolean {
-  try {
-    return activeSeasons(GAME_DATA.seasons, localDateIn(timeZone, now)).some(
-      (s) => s.id === 'halloween',
-    );
-  } catch {
-    return false;
-  }
+  return seasonsOn(timeZone, now).includes('halloween');
 }

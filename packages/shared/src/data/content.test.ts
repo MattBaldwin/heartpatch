@@ -73,7 +73,15 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
     ]);
   });
 
-  it('guarantees Timber, Stone, Emberwood and a farm plot in every home ring', () => {
-    expect([...MAP_GEN.homeRingNodes].sort()).toEqual(['emberwood', 'stone', 'timber', 'treats']);
+  it('guarantees Timber, Stone, Emberwood, a farm plot and the seasonal nodes in every home ring', () => {
+    // Pumpkins and a leaf pile: owner decision 2026-10-06 (design-review Q6).
+    expect([...MAP_GEN.homeRingNodes].sort()).toEqual([
+      'emberwood',
+      'magic-fallen-leaves',
+      'pumpkins',
+      'stone',
+      'timber',
+      'treats',
+    ]);
   });
 });
