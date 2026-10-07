@@ -190,13 +190,16 @@ export const GameDataSchema = z
       if (b.kind === 'hearthfire') {
         checkRef(resources, 'resource', b.fuelResource, ['buildings', i, 'fuelResource'], report);
       }
-      if (b.placement === 'owned' && b.maxPerTile === undefined) {
+      if (b.placement !== 'home' && b.maxPerTile === undefined) {
         report(
           ['buildings', i, 'maxPerTile'],
           `"${b.id}" can stand on owned land: give it maxPerTile`,
         );
       }
-      if (b.placement === 'owned' && b.slot === 'edge') {
+      if (b.placement !== 'land' && b.maxPerHome === undefined) {
+        report(['buildings', i, 'maxPerHome'], `"${b.id}" can stand at home: give it maxPerHome`);
+      }
+      if (b.placement !== 'home' && b.slot === 'edge') {
         report(['buildings', i, 'slot'], `"${b.id}": edges come with fences (#203)`);
       }
     });

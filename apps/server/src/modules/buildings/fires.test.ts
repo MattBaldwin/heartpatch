@@ -1,6 +1,7 @@
 import {
   ApiErrorSchema,
   FuelAllResponseSchema,
+  HollowResponseSchema,
   HomeResponseSchema,
   MapResponseSchema,
   MapViewSchema,
@@ -80,13 +81,11 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       .returning({ id: users.id });
     await db.insert(keepers).values({ userId: user!.id, ...TEST_KEEPER });
     const { token, tokenHash } = newSessionToken();
-    await db
-      .insert(sessions)
-      .values({
-        userId: user!.id,
-        tokenHash,
-        expiresAt: new Date(Date.parse(START) + 365 * DAY_MS),
-      });
+    await db.insert(sessions).values({
+      userId: user!.id,
+      tokenHash,
+      expiresAt: new Date(Date.parse(START) + 365 * DAY_MS),
+    });
     return { id: user!.id, username, token };
   }
 
@@ -215,10 +214,9 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       expect.objectContaining({ id: lit.id, spot: 0, lit: true, safeRadius: 2 }),
     ]);
 
-    // Its light reaches 2 tiles round it, not the kid's home base.
+    // Its light reaches 2 tiles round it (homes are safe on their own).
     const fires = await createBuildingsRepo(db).listOnMap(mapId);
-    const homes = (await home(server, kid, mapId)).tiles;
-    const safe = litSafeTiles(fires, () => homes, mapLocalTime(clock, ZONE));
+    const safe = litSafeTiles(fires, [], mapLocalTime(clock, ZONE));
     expect(safe.has(hexKey(tile))).toBe(true);
     expect(
       [...safe].every((key) => {
@@ -365,32 +363,42 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
     });
   });
 
-  it('moves old homes into typed spots once, even when two boots race (#204)', async () => {
+  it('packs up home fires with everything back, and moves misplaced buildings, once (#202, #204)', async () => {
     const server = await start();
     const kid = await player();
     const mapId = await newMap(server, kid);
     const { tiles } = await home(server, kid, mapId);
-    const [plain, plain2] = tiles.filter((t) => !t.heartSeed && t.nodeResource === null);
+    const [ring, ring2] = tiles.filter((t) => !t.heartSeed);
     const tileId = async (t: { q: number; r: number }) =>
       (await db.query.tiles.findFirst({
         where: (x, { and, eq }) => and(eq(x.mapId, mapId), eq(x.q, t.q), eq(x.r, t.r)),
       }))!.id;
-    // Built before typed spots: a habitat in a middle, a fire on a ring, and
-    // a fire on a ring of a tile whose middle is taken (it stays, grandfathered).
-    const old = (buildingId: string, kind: string, tile: string, spot: number) =>
+    // Built before today's rules: a habitat in a middle (its node's), a
+    // level-2 fire at home with two nights of fuel, and a Jack-o'-Lantern
+    // fire by the Heart Seed.
+    const old = (
+      buildingId: string,
+      kind: string,
+      tile: string,
+      spot: number,
+      extra: { level?: number; fuelledThrough?: string } = {},
+    ) =>
       db
         .insert(buildings)
-        .values({ mapId, ownerUserId: kid.id, tileId: tile, buildingId, kind, spot })
+        .values({ mapId, ownerUserId: kid.id, tileId: tile, buildingId, kind, spot, ...extra })
         .returning({ id: buildings.id })
         .then(([row]) => row!.id);
-    const den = await old('ember-den', 'habitat', await tileId(plain!), 0);
-    const hearth = await old('hearthfire', 'hearthfire', await tileId(plain2!), 3);
+    const den = await old('ember-den', 'habitat', await tileId(ring!), 0);
+    const hearth = await old('hearthfire', 'hearthfire', await tileId(ring2!), 3, {
+      level: 2,
+      fuelledThrough: '2026-10-03',
+    });
     const seedTile = tiles.find((t) => t.heartSeed)!;
     const lantern = await old('jack-o-lantern-hearthfire', 'hearthfire', await tileId(seedTile), 2);
 
     const errors: unknown[] = [];
     // It scans every patch in the database (other tests' too), so only this
-    // patch's buildings and events are checked.
+    // patch's rows and events are checked.
     await Promise.all([
       relayoutHomes(
         db,
@@ -404,19 +412,36 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       ),
     ]);
     expect(errors).toEqual([]);
-    const spotOf = async (id: string) =>
-      (await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!.spot;
-    expect(await spotOf(den)).toBe(1);
-    expect(await spotOf(hearth)).toBe(0);
-    expect(await spotOf(lantern)).toBe(2);
-    const moved = (await eventsOf(mapId)).filter((e) => e.type === 'building.moved');
-    expect(moved).toHaveLength(2);
+    const rowOf = (id: string) =>
+      db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, id) });
+    expect((await rowOf(den))?.spot).toBe(1);
+    expect(await rowOf(hearth)).toBeUndefined();
+    expect(await rowOf(lantern)).toBeUndefined();
+    // Everything back, whole: both levels' cost, its fuel, and the carved pumpkin.
+    const refund = { timber: 15, stone: 15, emberwood: 2, 'jack-o-lantern-hearthfire': 1 };
+    const bag = await db.query.inventories.findMany({
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+    });
+    expect(Object.fromEntries(bag.map((b) => [b.itemId, b.quantity]))).toEqual(refund);
+    // The morning report's one-time note.
+    const status = await call(server, 'GET', `/maps/${mapId}/hollow`, kid);
+    expect(HollowResponseSchema.parse(status.json()).hollow.homeFirePacked).toEqual({
+      refund,
+      at: clock.toISOString(),
+    });
+    const events = await eventsOf(mapId);
+    const packed = events.filter((e) => e.type === 'building.removed');
+    expect(packed.map((e) => parseGameEventPayload('building.removed', e.payload).lost)).toEqual([
+      'packed',
+      'packed',
+    ]);
+    expect(events.filter((e) => e.type === 'building.moved')).toHaveLength(1);
     // Run again: nothing left to do here.
     await relayoutHomes(
       db,
       () => clock,
       () => undefined,
     );
-    expect((await eventsOf(mapId)).filter((e) => e.type === 'building.moved')).toHaveLength(2);
+    expect(await eventsOf(mapId)).toHaveLength(events.length);
   });
 });

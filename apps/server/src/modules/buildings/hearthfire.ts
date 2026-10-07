@@ -52,24 +52,21 @@ export function toPublicBuilding(row: BuildingRow, local: MapLocalTime): PublicB
 }
 
 /**
- * Tiles protected for the night of `local` by lit fires: each lit fire's
- * radius, plus its owner's whole home base when the fire stands on it
- * (shared `safeTiles`). A fire out on captured land covers only its radius
- * (#202). `homeTilesOf` gives a fire's owner's home tiles, so fires of
- * several players can be passed.
+ * Tiles safe on the night of `local`: every home base on the map, always
+ * (the Heart Seed keeps it safe, owner decision 2026-10-07), plus each lit
+ * fire's tile and radius out on captured land (shared `safeTiles`).
+ * `homeTiles` is every home tile on the map, every player's.
  */
 export function litSafeTiles(
   fires: readonly BuildingRow[],
-  homeTilesOf: (ownerUserId: string) => readonly { q: number; r: number }[],
+  homeTiles: readonly { q: number; r: number }[],
   local: MapLocalTime,
 ): Set<HexKey> {
   const lit = fires.flatMap((row) => {
     const radius = safeRadiusOf(row);
     if (radius === null) return [];
     if (!hearthfireState(row.fuelledThrough, local, HOME_BASE_RULES).lit) return [];
-    const home = homeTilesOf(row.ownerUserId);
-    const onHome = home.some((t) => t.q === row.q && t.r === row.r);
-    return [{ at: { q: row.q, r: row.r }, radius, homeTiles: onHome ? home : [] }];
+    return [{ at: { q: row.q, r: row.r }, radius }];
   });
-  return safeTiles(lit);
+  return safeTiles(lit, homeTiles);
 }

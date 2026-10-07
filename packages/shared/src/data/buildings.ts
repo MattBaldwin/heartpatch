@@ -11,9 +11,9 @@ export const BUILDINGS: Building[] = [
     kind: 'hearthfire',
     name: 'Hearthfire',
     description: "A warm, bright fire. While it's lit, squishies near it are safe all night.",
-    maxPerHome: 1, // TUNE:
-    // #202: on any tile you own, one a tile, in its middle (#204).
-    placement: 'owned',
+    // #202: on captured land, one a tile, in its middle (#204). Never at
+    // home: the Heart Seed keeps home safe (owner decision 2026-10-07).
+    placement: 'land',
     maxPerTile: 1, // TUNE:
     slot: 'centre',
     fuelResource: 'emberwood',
@@ -32,8 +32,8 @@ export const BUILDINGS: Building[] = [
     name: "Jack-o'-Lantern Hearthfire",
     description: 'A grinning, extra-bright fire. Its light reaches further than a plain one.',
     season: 'halloween',
-    maxPerHome: 1, // TUNE:
-    placement: 'home',
+    placement: 'land', // like the Hearthfire (owner decision 2026-10-07)
+    maxPerTile: 1, // TUNE:
     slot: 'centre',
     // The carved pumpkin was a lot of work: it always comes back whole.
     refundPercent: 100, // TUNE:

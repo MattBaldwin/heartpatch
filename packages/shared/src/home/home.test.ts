@@ -127,20 +127,24 @@ describe('Hearthfire fuel (tech spec §7)', () => {
 describe('safe tiles (design doc §14)', () => {
   const home = hexSpiral(hex(5, -2), 1);
 
-  it('covers the whole home base and every tile within the radius of the fire', () => {
-    // A level-1 fire on a ring tile reaches one tile past the home on that side.
-    const ringTile = hex(6, -2);
-    const safe = safeTiles([{ at: ringTile, radius: 1, homeTiles: home }]);
+  it('keeps every home base safe, fire or not (the Heart Seed, owner decision 2026-10-07)', () => {
+    const safe = safeTiles([], home);
+    expect(safe.size).toBe(7);
     for (const h of home) expect(safe.has(hexKey(h))).toBe(true);
-    for (const h of hexSpiral(ringTile, 1)) expect(safe.has(hexKey(h))).toBe(true);
-    expect(safe.has(hexKey(hex(7, -2)))).toBe(true);
-    expect(safe.has(hexKey(hex(3, -2)))).toBe(false); // the far side, 2 past the home
-    expect(safe.size).toBe(7 + 3);
+  });
+
+  it("adds a lit fire's tile and every tile within its radius, out on captured land", () => {
+    const land = hex(8, -2);
+    const safe = safeTiles([{ at: land, radius: 1 }], home);
+    for (const h of hexSpiral(land, 1)) expect(safe.has(hexKey(h))).toBe(true);
+    expect(safe.has(hexKey(hex(10, -2)))).toBe(false);
+    // Two tiles past the home's edge: home and the fire's reach don't overlap.
+    expect(safe.size).toBe(7 + 7);
   });
 
   it('reaches further from a Jack-o-Lantern fire', () => {
     const radius = lantern.levels[0]!.safeRadius;
-    const safe = safeTiles([{ at: hex(5, -2), radius, homeTiles: home }]);
+    const safe = safeTiles([{ at: hex(5, -2), radius }]);
     expect(safe.size).toBe(1 + 3 * radius * (radius + 1));
     for (const key of safe) {
       const [q, r] = key.split(',').map(Number);
@@ -149,14 +153,13 @@ describe('safe tiles (design doc §14)', () => {
     expect(radius).toBeGreaterThan(fire.levels[0]!.safeRadius);
   });
 
-  it('is empty with no lit fires, and joins several', () => {
+  it('is empty with no homes and no lit fires, and joins several', () => {
     expect(safeTiles([]).size).toBe(0);
-    const other = hexSpiral(hex(-5, 2), 1);
     const safe = safeTiles([
-      { at: hex(5, -2), radius: 0, homeTiles: home },
-      { at: hex(-5, 2), radius: 0, homeTiles: other },
+      { at: hex(5, -2), radius: 0 },
+      { at: hex(-5, 2), radius: 0 },
     ]);
-    expect(safe.size).toBe(14);
+    expect(safe.size).toBe(2);
   });
 });
 
@@ -279,13 +282,16 @@ describe('home-base data', () => {
   });
 
   it('lets a Hearthfire stand on owned land, one a tile, in the middle (#202, #204)', () => {
-    expect(fire).toMatchObject({ placement: 'owned', maxPerTile: 1, slot: 'centre' });
-    expect(lantern).toMatchObject({ placement: 'home', slot: 'centre' });
+    // Only on captured land: the Heart Seed keeps home safe (owner decision 2026-10-07).
+    expect(fire).toMatchObject({ placement: 'land', maxPerTile: 1, slot: 'centre' });
+    expect(lantern).toMatchObject({ placement: 'land', maxPerTile: 1, slot: 'centre' });
     for (const id of ['ember-den', 'cozy-meadow', 'training-grounds']) {
       expect(building(id)).toMatchObject({ placement: 'home', slot: 'ring' });
     }
     const loose = { ...GAME_DATA, buildings: [{ ...fire, maxPerTile: undefined }] };
     expect(checkGameData(loose).join(' ')).toContain('maxPerTile');
+    const homeless = { ...GAME_DATA, buildings: [{ ...fire, placement: 'owned' as const }] };
+    expect(checkGameData(homeless).join(' ')).toContain('maxPerHome');
   });
 
   it('allows one Training Grounds per home (the Train job picks "my" Training Grounds)', () => {

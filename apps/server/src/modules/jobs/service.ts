@@ -346,14 +346,10 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
       createBuildingsRepo(tx).listOnMap(map.id),
       repo.homeTiles(map.id),
     ]);
-    const homes = new Map<string, { q: number; r: number }[]>();
-    for (const { ownerUserId, q, r } of homeTiles) {
-      homes.set(ownerUserId, [...(homes.get(ownerUserId) ?? []), { q, r }]);
-    }
     const night = tonightOf(mapLocalTime(at, map.timeZone), HOME_BASE_RULES);
     return litSafeTiles(
       fires.filter((b) => b.kind === 'hearthfire'),
-      (owner) => homes.get(owner) ?? [],
+      homeTiles,
       { date: night, minute: 0 },
     );
   };

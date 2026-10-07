@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './data/common.js';
 import { SpeciesSchema } from './data/species.js';
+import { ItemCountsSchema } from './inventory.js';
 import { OwnedSquishySchema } from './squishies.js';
 import { LocalDateSchema } from './time.js';
 
@@ -55,11 +56,18 @@ export const HollowStatusSchema = z.object({
     rewardsLeftToday: z.number().int().min(0),
   }),
   /**
-   * A cozy nudge, "Light a fire before night falls!": the Hollow Man's first
-   * visit to me (after my first-night grace) is tonight or still to come,
-   * and no fire of mine is lit for tonight.
+   * A cozy nudge to light a fire: the Hollow Man's first visit to me (after
+   * my first-night grace) is tonight or still to come, and one of my
+   * squishies would sleep in the dark tonight (a gatherer out on land no lit
+   * fire reaches; home is always safe, owner decision 2026-10-07).
    */
   fireHint: z.boolean(),
+  /**
+   * My home fire packed up when the Heart Seed began keeping home safe
+   * (#202, owner decision 2026-10-07): what came back, and when. The
+   * morning report says so once per device; null when I never had one.
+   */
+  homeFirePacked: z.object({ refund: ItemCountsSchema, at: z.iso.datetime() }).nullable(),
   /** The server's clock. */
   now: z.iso.datetime(),
 });

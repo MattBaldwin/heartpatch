@@ -11,7 +11,7 @@ import { withTransaction, type Executor, type Transaction } from '../../db/clien
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
-import { buildings, squishies, tiles } from '../../db/schema.js';
+import { buildings, packedHomeFires, squishies, tiles } from '../../db/schema.js';
 
 /** One of the player's home tiles (read only: tiles belong to the maps module). */
 export interface HomeTileRow {
@@ -104,8 +104,30 @@ export interface BuildingsRepo {
   lockOnTiles: (tileIds: readonly string[]) => Promise<BuildingRow[]>;
   /** Every building's spot, by map, owner and id: the #204 re-layout's scan (no locks). */
   listPlacements: () => Promise<
-    { id: string; mapId: string; ownerUserId: string; buildingId: string; spot: number }[]
+    {
+      id: string;
+      mapId: string;
+      ownerUserId: string;
+      buildingId: string;
+      spot: number;
+      homeSlot: number | null;
+    }[]
   >;
+  /**
+   * Notes that a player's home fires were packed up (#202): adds `refund` to
+   * what the note says came back. Inserted after the bag's rows, before `maps`.
+   */
+  notePackedFires: (
+    mapId: string,
+    userId: string,
+    refund: Record<string, number>,
+    at: Date,
+  ) => Promise<void>;
+  /** The player's packed-home-fire note, or null. */
+  packedFires: (
+    mapId: string,
+    userId: string,
+  ) => Promise<{ refund: Record<string, number>; packedAt: Date } | null>;
   /** Locks all my Hearthfires on this map, in id order (Fuel all fires, #202). */
   lockFires: (mapId: string, userId: string) => Promise<BuildingRow[]>;
   /** The player's buildings on this map, by tile then spot. */
@@ -274,9 +296,35 @@ function queries(db: Executor): BuildingsRepo {
           ownerUserId: buildings.ownerUserId,
           buildingId: buildings.buildingId,
           spot: buildings.spot,
+          homeSlot: tiles.homeSlot,
         })
         .from(buildings)
+        .innerJoin(tiles, eq(tiles.id, buildings.tileId))
         .orderBy(asc(buildings.mapId), asc(buildings.ownerUserId), asc(buildings.id)),
+
+    notePackedFires: async (mapId, userId, refund, at) => {
+      const [existing] = await db
+        .select({ refund: packedHomeFires.refund })
+        .from(packedHomeFires)
+        .where(and(eq(packedHomeFires.mapId, mapId), eq(packedHomeFires.userId, userId)));
+      const sum: Record<string, number> = { ...(existing?.refund ?? {}) };
+      for (const [id, n] of Object.entries(refund)) sum[id] = (sum[id] ?? 0) + n;
+      await db
+        .insert(packedHomeFires)
+        .values({ mapId, userId, refund: sum, packedAt: at })
+        .onConflictDoUpdate({
+          target: [packedHomeFires.mapId, packedHomeFires.userId],
+          set: { refund: sum, packedAt: at },
+        });
+    },
+
+    packedFires: async (mapId, userId) => {
+      const [row] = await db
+        .select({ refund: packedHomeFires.refund, packedAt: packedHomeFires.packedAt })
+        .from(packedHomeFires)
+        .where(and(eq(packedHomeFires.mapId, mapId), eq(packedHomeFires.userId, userId)));
+      return row ?? null;
+    },
 
     lockFires: async (mapId, userId) =>
       (

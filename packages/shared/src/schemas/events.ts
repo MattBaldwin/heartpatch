@@ -346,10 +346,11 @@ export const GAME_EVENTS = {
       movedOut: z.array(z.uuid()),
       /**
        * Why it came down when its owner didn't take it down (#202): its land
-       * was won by a rival (`captured`), went wild (`wild`), or its owner
-       * left the patch (`left`).
+       * was won by a rival (`captured`), went wild (`wild`), its owner left
+       * the patch (`left`), or it was a fire at home, packed up when the
+       * Heart Seed began keeping home safe (`packed`, owner decision 2026-10-07).
        */
-      lost: z.enum(['captured', 'wild', 'left']).optional(),
+      lost: z.enum(['captured', 'wild', 'left', 'packed']).optional(),
     }),
     public: z.object({
       userId: z.uuid(),

@@ -304,7 +304,8 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
           'treats/land',
         ]),
       );
-      expect(view.spots.every((s) => !s.firelit)).toBe(true);
+      // Home is always safe (the Heart Seed, owner decision 2026-10-07); land needs a fire.
+      expect(view.spots.filter((s) => s.from === 'node').every((s) => s.firelit)).toBe(true);
     });
   });
 
@@ -927,7 +928,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       });
     });
 
-    it('sleeps at home: safe by a lit fire, exposed when it is out', async () => {
+    it('sleeps at home, always safe (the Heart Seed, owner decision 2026-10-07)', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
@@ -949,33 +950,12 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         clock: () => clock,
         battles: createBattlesService({ db, clock: () => clock }),
       });
-
-      // A lit fire at home: the trainee sleeps safe.
-      const node = await homeNode(server, kid, mapId, 'stone');
-      await db.insert(buildings).values({
-        mapId,
-        ownerUserId: kid.id,
-        tileId: await tileIdAt(mapId, node),
-        buildingId: 'hearthfire',
-        kind: 'hearthfire',
-        spot: 1,
-        fuelledThrough: '2026-10-02',
-      });
+      // No fire anywhere, two nights running: the trainee sleeps safe at home.
       clock.setTime(Date.parse('2026-10-03T03:00:00Z')); // 9 PM in Denver
       expect(await hollow.runNightfall(mapId, '2026-10-02')).toEqual({ taken: 0 });
-
-      // The next night the fire is out: the trainee is the only one exposed.
       clock.setTime(Date.parse('2026-10-04T03:00:00Z'));
-      expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 1 });
-      const taken = await squishyRow(trainee);
-      expect(taken).toMatchObject({
-        state: 'hollowed',
-        trainingBuildingId: null,
-        trainingSince: null,
-      });
-      // Its training up to then landed first: 24 h capped at 5 an hour, on top
-      // of its level-5 start.
-      expect(taken!.xp).toBe(xpForLevel(5, GROWTH_RULES) + 5 * JOB_RULES.training.maxHours);
+      expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 0 });
+      expect(await squishyRow(trainee)).toMatchObject({ state: 'active' });
     });
   });
 

@@ -2,6 +2,7 @@ import {
   addFuel,
   buildCost,
   buildingPageKey,
+  buildsAtHome,
   fitsSlot,
   fuelCost,
   fuelSpace,
@@ -58,10 +59,11 @@ import {
 } from './repo.js';
 
 /*
- * Home base and buildings (#18, design doc §11, §13–14). Players build on
- * the spots of their own home tiles (the Heart Seed and its ring), and a
- * building with `placement: 'owned'` (the Hearthfire, #202) on any tile they
- * own, one a tile (`maxPerTile`). Each building takes a spot of its `slot`
+ * Home base and buildings (#18, design doc §11, §13–14). Players build
+ * habitats and the like on the spots of their own home tiles (the Heart
+ * Seed and its ring), and Hearthfires (`placement: 'land'`, #202) only out on
+ * captured land, one a tile (`maxPerTile`): the Heart Seed keeps home safe
+ * (owner decision 2026-10-07). Each building takes a spot of its `slot`
  * (#204): a light the middle, a habitat the ring around it. Paying
  * through `consumeItems(…, 'build')` in the same transaction as the row
  * (CLAUDE.md rule 7). Hearthfire fuel is a date (tech spec §7): adding fuel
@@ -86,6 +88,7 @@ const MESSAGES = {
   outOfSeason: (name: string, season: string) => `${name} can only be built around ${season}!`,
   notHome: 'You can only build on your home base.',
   notMine: 'You can only build on your own land.',
+  fireAtHome: 'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!',
   spotTaken: 'Something is already there. Try another spot!',
   middleTaken: 'The middle of this tile is taken. A fire next door can reach it!',
   wrongSlot: (building: Building) =>
@@ -284,8 +287,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     moving: string | null = null,
   ): HomeTileRow {
     const homeTile = home.find((t) => t.q === target.q && t.r === target.r);
+    // Fires stand only on captured land (owner decision 2026-10-07).
+    if (homeTile && !buildsAtHome(building)) throw new AppError('FORBIDDEN', MESSAGES.fireAtHome);
     if (!homeTile) {
-      if (building.placement !== 'owned') throw new AppError('FORBIDDEN', MESSAGES.notHome);
+      if (building.placement === 'home') throw new AppError('FORBIDDEN', MESSAGES.notHome);
       if (outer?.ownerUserId !== userId) throw new AppError('FORBIDDEN', MESSAGES.notMine);
     }
     const tile = homeTile ?? outer;
@@ -393,7 +398,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           const homeIds = new Set(home.map((t) => t.id));
           if (homeIds.has(tile.id)) {
             // The home base keeps its own count (#202: one Hearthfire at home).
-            if (same.filter((b) => homeIds.has(b.tileId)).length >= building.maxPerHome) {
+            if (same.filter((b) => homeIds.has(b.tileId)).length >= (building.maxPerHome ?? 0)) {
               throw new AppError('CONFLICT', MESSAGES.tooMany(building.name));
             }
           } else if (
@@ -710,7 +715,7 @@ export interface LostBuilding {
  * 8, id order) and deletes them; the caller grants each `refund` to its
  * owner at step 11 (after any squishy locks) and appends the events, so the
  * rival never gets the fire and nothing is lost but the fire itself.
- * Buildings on captured land are fires (placement `owned`): nobody lives
+ * Buildings on captured land are fires (placement `land`): nobody lives
  * in them.
  */
 export async function takeDownOnLostLand(

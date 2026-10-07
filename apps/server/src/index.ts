@@ -74,13 +74,14 @@ createMilestonesService({ db: db.db, clock })
       app.log.error({ err }, 'First Patch backfill failed');
     },
   );
-// Typed spots for homes built before them (#204): misplaced buildings move
-// on their own tile. Idempotent, so every boot can run it; it never blocks start.
+// Homes built before today's rules (#202, #204): home fires pack up with a
+// full refund, and misplaced buildings move on their own tile. Idempotent,
+// so every boot can run it; it never blocks start.
 relayoutHomes(db.db, clock, (owner, err) => {
   app.log.error({ err, ...owner }, 'home re-layout skipped a player');
 }).then(
-  (moved) => {
-    if (moved > 0) app.log.info({ moved }, 'moved buildings into their typed spots');
+  (done) => {
+    if (done.packed + done.moved > 0) app.log.info(done, 'tidied homes to the building rules');
   },
   (err: unknown) => {
     app.log.error({ err }, 'home re-layout failed');

@@ -20,16 +20,20 @@ const buildingBase = {
    * built stays and keeps working after the season ends (keepsakes, §15).
    */
   season: ContentIdSchema.optional(),
-  /** How many of this building one home base can have. */
-  maxPerHome: z.number().int().positive(),
   /**
-   * Where it can stand (#202): `home` on the home base only, `owned` on any
-   * tile its owner holds (home base included, where `maxPerHome` counts).
+   * How many of this building one home base can have. Required unless it
+   * stands only on captured land (`checkGameData`).
    */
-  placement: z.enum(['home', 'owned']),
+  maxPerHome: z.number().int().positive().optional(),
   /**
-   * How many can stand on one tile outside the home base. Required with
-   * `placement: 'owned'` (`checkGameData`).
+   * Where it can stand (#202): `home` on the home base only; `land` only on
+   * captured land outside it (Hearthfires: the Heart Seed keeps home safe,
+   * owner decision 2026-10-07); `owned` on any tile its owner holds.
+   */
+  placement: z.enum(['home', 'land', 'owned']),
+  /**
+   * How many can stand on one tile outside the home base. Required unless
+   * it's `placement: 'home'` (`checkGameData`).
    */
   maxPerTile: z.number().int().positive().optional(),
   /**
@@ -91,5 +95,10 @@ export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];
 export type BuildingSlot = Building['slot'];
 export type BuildingPlacement = Building['placement'];
+
+/** Can this building stand on a home tile? (Not one for captured land only.) */
+export function buildsAtHome(building: Pick<Building, 'placement'>): boolean {
+  return building.placement !== 'land';
+}
 export type HearthfireBuilding = z.infer<typeof HearthfireBuildingSchema>;
 export type HabitatBuilding = z.infer<typeof HabitatBuildingSchema>;

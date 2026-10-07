@@ -222,6 +222,61 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
     return tile!.id;
   }
 
+  /**
+   * Land of `who`'s out on the map, at least 3 tiles from anyone's land
+   * already out there, so no fire on other land reaches it.
+   */
+  async function farLand(mapId: string, who: PublicUser) {
+    const all = await db.query.tiles.findMany({
+      where: (t, { and, eq, isNull }) => and(eq(t.mapId, mapId), isNull(t.homeSlot)),
+      orderBy: (t, { asc }) => [asc(t.q), asc(t.r)],
+    });
+    const held = all.filter((t) => t.ownerUserId !== null);
+    const tile = all.find(
+      (t) => t.ownerUserId === null && held.every((h) => hexDistance(h, t) >= 3),
+    )!;
+    await db.execute(`update tiles set owner_user_id = '${who.id}' where id = '${tile.id}'`);
+    return tile.id;
+  }
+
+  /** Puts a squishy to work (a gatherer) on a tile: it sleeps out there. Our own uuids. */
+  const work = (squishyId: string, tileId: string) =>
+    db.execute(
+      `update squishies set work_tile_id = '${tileId}', work_since = '${clock.toISOString()}', work_started_at = '${clock.toISOString()}' where id = '${squishyId}'`,
+    );
+
+  /**
+   * A squishy out in the dark: a gatherer on its own far land with no fire
+   * (home is always safe, owner decision 2026-10-07). `tileId` puts it on
+   * that land instead.
+   */
+  async function dark(
+    mapId: string,
+    who: PublicUser,
+    options: { tileId?: string; level?: number } = {},
+  ): Promise<string> {
+    const id = await squishy(
+      mapId,
+      who,
+      options.level === undefined ? {} : { level: options.level },
+    );
+    await work(id, options.tileId ?? (await farLand(mapId, who)));
+    return id;
+  }
+
+  /** A lit fire on `tileId` (out on land), fuelled through `fuelledThrough`. */
+  async function fireOn(mapId: string, who: PublicUser, tileId: string, fuelledThrough: string) {
+    await db.insert(buildings).values({
+      mapId,
+      ownerUserId: who.id,
+      tileId,
+      buildingId: 'hearthfire',
+      kind: 'hearthfire',
+      spot: 0,
+      fuelledThrough,
+    });
+  }
+
   const stateOf = async (id: string) =>
     (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!.state;
   const nightsOf = (mapId: string) =>
@@ -270,12 +325,16 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const kid = await player();
       const friend = await player();
       const mapId = await patch(server, kid, [friend]);
-      // The kid's fire is lit tonight: everyone at home, housed or not, is safe.
+      // Home is always safe, housed or not; the kid's gatherer works land with a lit fire.
       const meadow = await build(mapId, kid, 'cozy-meadow', { spot: 2 });
-      await build(mapId, kid, 'hearthfire', { fuelledThrough: TONIGHT });
-      const safe = [await squishy(mapId, kid), await squishy(mapId, kid, { habitat: meadow })];
-      // The friend has no fire: two at home are exposed; one stands watch on their land.
-      const exposed = [await squishy(mapId, friend), await squishy(mapId, friend)];
+      const lit = await farLand(mapId, kid);
+      await fireOn(mapId, kid, lit, TONIGHT);
+      const safe = [
+        await squishy(mapId, kid, { habitat: meadow }),
+        await dark(mapId, kid, { tileId: lit }),
+      ];
+      // The friend's two gatherers are out in the dark; one more stands watch on their land.
+      const exposed = [await dark(mapId, friend), await dark(mapId, friend)];
       const guard = await squishy(mapId, friend);
       await standWatch(mapId, await landFor(mapId, friend), guard);
 
@@ -348,25 +407,26 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const out = await squishy(mapId, kid);
       await work(near, lit.id);
       await work(out, far.id);
-      // No fire at home: the outer fire's light doesn't reach the Heart Seed.
+      // No fire at home, and home is safe anyway: the Heart Seed (owner decision 2026-10-07).
       const atHome = await squishy(mapId, kid);
 
       expect(await hollowService().runNightfall(mapId, TONIGHT)).toEqual({ taken: 1 });
       const [night] = await nightsOf(mapId);
       expect(night!.outcomes).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ userId: kid.id, exposed: 2, sheltered: 1 }),
+          expect.objectContaining({ userId: kid.id, exposed: 1, sheltered: 2 }),
         ]),
       );
       expect(await stateOf(near)).toBe('active');
-      expect([await stateOf(out), await stateOf(atHome)].sort()).toEqual(['active', 'hollowed']);
+      expect(await stateOf(atHome)).toBe('active');
+      expect(await stateOf(out)).toBe('hollowed');
     });
 
     it('runs once per map and night, however often it is asked (idempotent)', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await patch(server, kid);
-      const ids = [await squishy(mapId, kid), await squishy(mapId, kid), await squishy(mapId, kid)];
+      const ids = [await dark(mapId, kid), await dark(mapId, kid), await dark(mapId, kid)];
       const hollow = hollowService();
 
       // Two jobs at once (a retry racing the first): one wins, the other waits and finds the row.
@@ -391,12 +451,12 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const server = await start();
       const kid = await player();
       const mapId = await patch(server, kid);
-      // Fuelled through tonight: tonight is safe, tomorrow it has gone out.
-      await build(mapId, kid, 'hearthfire', { fuelledThrough: TONIGHT });
-      const meadow = await build(mapId, kid, 'cozy-meadow', { spot: 2 });
+      // Fuelled through tonight: tonight its land is safe, tomorrow it has gone out.
+      const land = await farLand(mapId, kid);
+      await fireOn(mapId, kid, land, TONIGHT);
       const ids = [
-        await squishy(mapId, kid, { habitat: meadow }),
-        await squishy(mapId, kid, { habitat: meadow }),
+        await dark(mapId, kid, { tileId: land }),
+        await dark(mapId, kid, { tileId: land }),
       ];
       const hollow = hollowService();
       expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
@@ -404,10 +464,19 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 1 });
       const states = await Promise.all(ids.map(stateOf));
       expect(states.filter((s) => s === 'hollowed')).toHaveLength(1);
-      // Its habitat bed is kept while it's away (#18).
-      const id = ids[states.indexOf('hollowed')]!;
-      const away = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, id) });
-      expect(away!.habitatBuildingId).toBe(meadow);
+    });
+
+    it('keeps everyone at home safe with no fire at all (the Heart Seed, owner decision 2026-10-07)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      const meadow = await build(mapId, kid, 'cozy-meadow', { spot: 2 });
+      const ids = [await squishy(mapId, kid), await squishy(mapId, kid, { habitat: meadow })];
+      expect(await hollowService().runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
+      for (const id of ids) expect(await stateOf(id)).toBe('active');
+      expect((await nightsOf(mapId))[0]!.outcomes).toEqual([
+        { userId: kid.id, taken: null, exposed: 0, sheltered: 2 },
+      ]);
     });
 
     it('takes nothing on a tutorial map (nothing can be lost in the tutorial)', async () => {
@@ -421,9 +490,9 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect((await hollowService().dueNightfalls()).map((d) => d.mapId)).not.toContain(mapId);
       expect(await hollowService().runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
       expect(await stateOf(id)).toBe('active');
-      // Two out in the dark (the Glade friend too), and nobody taken.
+      // Both at home (the Glade friend too), safe by the Heart Seed.
       expect((await nightsOf(mapId))[0]!.outcomes).toEqual([
-        { userId: kid.id, taken: null, exposed: 2, sheltered: 0 },
+        { userId: kid.id, taken: null, exposed: 0, sheltered: 2 },
       ]);
     });
 
@@ -440,9 +509,9 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const request = JoinMapResponseSchema.parse(join.json()).request;
       await call(server, 'POST', `/maps/${mapId}/requests/${request.id}/approve`, kid);
       // Two each (he never takes a last friend), none behind a fire.
-      const theirs = [await squishy(mapId, friend), await squishy(mapId, friend)];
+      const theirs = [await dark(mapId, friend), await dark(mapId, friend)];
       // The kid joined at noon: tonight is their first grace night too.
-      const mine = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      const mine = [await dark(mapId, kid), await dark(mapId, kid)];
       const hollow = hollowService(WEAK_SHADOWS, HOLLOW_RULES);
 
       // Tonight (5 minutes later) and tomorrow: nothing taken from either, the dark still counted.
@@ -467,7 +536,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const kid = await player();
       const friend = await player();
       const mapId = await patch(server, kid);
-      const mine = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      const mine = [await dark(mapId, kid), await dark(mapId, kid)];
       // Two days on, a friend joins (game clock).
       clock.setTime(Date.parse('2026-10-04T18:00:00Z'));
       const res = await call(server, 'GET', `/maps/${mapId}`, kid);
@@ -475,7 +544,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const join = await call(server, 'POST', '/maps/join', friend, { code });
       const request = JoinMapResponseSchema.parse(join.json()).request;
       await call(server, 'POST', `/maps/${mapId}/requests/${request.id}/approve`, kid);
-      const theirs = await squishy(mapId, friend);
+      const theirs = await dark(mapId, friend);
       expect(
         await hollowService(WEAK_SHADOWS, HOLLOW_RULES).runNightfall(mapId, '2026-10-04'),
       ).toEqual({ taken: 1 });
@@ -519,13 +588,12 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const kid = await player();
       const friend = await player();
       const mapId = await patch(server, kid, [friend]);
-      await build(mapId, kid, 'hearthfire', { fuelledThrough: TONIGHT });
       await squishy(mapId, kid);
       // Two in the dark (he never takes a last friend): one of them is taken.
-      const dark = [await squishy(mapId, friend), await squishy(mapId, friend)];
+      const darkOnes = [await dark(mapId, friend), await dark(mapId, friend)];
       await hollowService().runNightfall(mapId, TONIGHT);
-      const states = await Promise.all(dark.map(stateOf));
-      const taken = dark[states.indexOf('hollowed')]!;
+      const states = await Promise.all(darkOnes.map(stateOf));
+      const taken = darkOnes[states.indexOf('hollowed')]!;
       expect(states.filter((s) => s === 'hollowed')).toHaveLength(1);
 
       // Next morning, 8:00 MDT.
@@ -562,33 +630,42 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
   });
 
   describe('the fire hint', () => {
-    it('nudges a new player to light a fire until the Hollow Man first visits, or a fire is lit', async () => {
+    it('nudges a new player to light a fire while one of theirs sleeps in the dark, until his first visit', async () => {
       const server = await start();
       const kid = await player();
       const friend = await player();
       // Joined at noon on Oct 2: grace for Oct 2 and 3, his first visit on Oct 4.
       const mapId = await patch(server, kid, [friend]);
+      // Everyone at home is safe (owner decision 2026-10-07): nothing to nudge about.
+      await squishy(mapId, kid);
+      expect((await statusOf(server, kid, mapId)).fireHint).toBe(false);
+      // A gatherer out on dark land: light a fire there.
+      const land = await farLand(mapId, kid);
+      await dark(mapId, kid, { tileId: land });
       expect((await statusOf(server, kid, mapId)).fireHint).toBe(true);
       clock.setTime(Date.parse('2026-10-04T18:00:00Z')); // noon Oct 4: tonight is the first visit
       expect((await statusOf(server, kid, mapId)).fireHint).toBe(true);
       clock.setTime(Date.parse('2026-10-05T18:00:00Z')); // past it: no more nudging
       expect((await statusOf(server, kid, mapId)).fireHint).toBe(false);
 
-      // A fire lit for tonight ends it early; one that's gone out doesn't.
+      // A fire lit for tonight on that land ends it early; one that's gone out doesn't.
       clock.setTime(Date.parse(START));
-      const fire = await build(mapId, friend, 'hearthfire', { fuelledThrough: '2026-10-01' });
-      expect((await statusOf(server, friend, mapId)).fireHint).toBe(true);
-      await db.execute(`update buildings set fuelled_through = '${TONIGHT}' where id = '${fire}'`);
-      expect((await statusOf(server, friend, mapId)).fireHint).toBe(false);
-      // Someone else's fire doesn't count for me.
+      await fireOn(mapId, kid, land, '2026-10-01');
       expect((await statusOf(server, kid, mapId)).fireHint).toBe(true);
+      await db.execute(
+        `update buildings set fuelled_through = '${TONIGHT}' where tile_id = '${land}'`,
+      );
+      expect((await statusOf(server, kid, mapId)).fireHint).toBe(false);
+      // Nothing of the friend's is out in the dark.
+      expect((await statusOf(server, friend, mapId)).fireHint).toBe(false);
     });
 
     it('keeps nudging while he leaves my last friend in the dark, past the grace', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await patch(server, kid);
-      await squishy(mapId, kid);
+      const land = await farLand(mapId, kid);
+      await dark(mapId, kid, { tileId: land });
       const hollow = hollowService(WEAK_SHADOWS, HOLLOW_RULES);
       // Grace nights, then a real one: one friend in the dark, spared (owner decision 2026-10-05).
       for (const night of [TONIGHT, '2026-10-03', '2026-10-04']) {
@@ -598,8 +675,8 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const status = await statusOf(server, kid, mapId);
       expect(status.reports[0]).toMatchObject({ night: '2026-10-04', taken: null, exposed: 1 });
       expect(status.fireHint).toBe(true);
-      // A fire lit for tonight ends it.
-      await build(mapId, kid, 'hearthfire', { fuelledThrough: '2026-10-05' });
+      // A fire lit for tonight on its land ends it.
+      await fireOn(mapId, kid, land, '2026-10-05');
       expect((await statusOf(server, kid, mapId)).fireHint).toBe(false);
     });
 
@@ -746,8 +823,8 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const server = await start();
       const kid = await player();
       const mapId = await patch(server, kid);
-      await squishy(mapId, kid);
-      await squishy(mapId, kid);
+      await dark(mapId, kid);
+      await dark(mapId, kid);
 
       const fall = async () => {
         const res = await call(server, 'POST', `/maps/${mapId}/dev/nightfall`, kid);

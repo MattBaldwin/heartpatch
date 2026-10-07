@@ -953,6 +953,25 @@ export const hollowEvents = pgTable(
   (t) => [unique('hollow_events_map_id_night_key').on(t.mapId, t.night)],
 );
 
+/**
+ * Home fires packed up when the Heart Seed began keeping home safe (#202,
+ * owner decision 2026-10-07): everything they gave back, for a one-time note
+ * in the morning report. One row per player per map, written by the boot
+ * pass (`modules/buildings/layout.ts`).
+ */
+export const packedHomeFires = pgTable(
+  'packed_home_fires',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    refund: jsonb('refund').$type<Record<string, number>>().notNull(),
+    packedAt: timestamptz('packed_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.mapId, t.userId] })],
+);
+
 export const hollowRescueOutcome = pgEnum('hollow_rescue_outcome', [
   'active',
   'rescued',
