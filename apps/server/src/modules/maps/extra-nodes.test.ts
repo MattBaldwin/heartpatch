@@ -172,7 +172,7 @@ describe.skipIf(!url)('new gatherables (#238, needs DATABASE_URL)', () => {
       speciesId: 'thistlepip',
     });
     expect(granted.statusCode, granted.body).toBe(201);
-    const squishyId = (granted.json() as { squishy: { id: string } }).squishy.id;
+    const squishyId = granted.json<{ squishy: { id: string } }>().squishy.id;
     await db.execute(
       `update squishies set team_slot = null, work_tile_id = '${extra.id}', work_since = now(), work_started_at = now() where id = '${squishyId}'`,
     );
