@@ -40,7 +40,7 @@ import { homeRingWaiting } from '../buildings/home-ring.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { mapLocalTime } from '../../lib/time.js';
-import { tileGuardians } from '../territory/service.js';
+import { defaultGuardianData, tileGuardians } from '../territory/service.js';
 import { createMapsRepo } from './repo.js';
 import { createMapsService } from './service.js';
 
@@ -1003,18 +1003,25 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         await db.query.tiles.findMany({ where: (t, { eq }) => eq(t.mapId, map.id) })
       ).map((t) => ({ q: t.q, r: t.r, s: t.guardianStrength }));
       const strengthAt = new Map(strengths.map((t) => [`${String(t.q)},${String(t.r)}`, t.s]));
-      const expected = (at: Date) =>
-        neutral.map((t) =>
-          hintForGuardians(
-            tileGuardians(
-              { id: map.id, timeZone: 'America/Chicago', seed: row!.seed },
-              { ...t, guardianStrength: strengthAt.get(`${String(t.q)},${String(t.r)}`) ?? null },
-              at,
-            ),
-            GUARDIAN_RULES,
-          ),
+      const teamAt = (t: (typeof neutral)[number], at: Date) =>
+        tileGuardians(
+          { id: map.id, timeZone: 'America/Chicago', seed: row!.seed },
+          { ...t, guardianStrength: strengthAt.get(`${String(t.q)},${String(t.r)}`) ?? null },
+          at,
         );
+      const { species } = defaultGuardianData();
+      const expected = (at: Date) =>
+        neutral.map((t) => hintForGuardians(teamAt(t, at), GUARDIAN_RULES, species));
       expect(neutral.map((t) => t.guardianHint)).toEqual(expected(clock));
+      // Their feelings (#216) are the team's, in order, as the showdown meets
+      // them: each guardian feels as its species does.
+      for (const t of neutral) {
+        const feelings = teamAt(t, clock).map(
+          (g) => g.feeling ?? species.get(g.speciesId)!.feeling,
+        );
+        expect(t.guardianHint!.feelings).toEqual(feelings);
+        expect(t.guardianHint!.feelings).toHaveLength(t.guardianHint!.count);
+      }
 
       // Never species, levels, moves, strengths or seeds (CLAUDE.md rule 6).
       const rawTiles = (JSON.parse(mine.raw) as { tiles: { guardianHint: object | null }[] }).tiles;
@@ -1025,7 +1032,11 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       }
       for (const tile of rawTiles) {
         if (tile.guardianHint)
-          expect(Object.keys(tile.guardianHint).sort()).toEqual(['count', 'difficulty']);
+          expect(Object.keys(tile.guardianHint).sort()).toEqual([
+            'count',
+            'difficulty',
+            'feelings',
+          ]);
       }
 
       // Tomorrow's guardians may differ: worked out on read, by the map's day.

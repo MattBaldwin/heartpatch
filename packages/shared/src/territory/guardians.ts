@@ -76,12 +76,25 @@ export function resolveGuardians(input: GuardianInput, data: GuardianData): Batt
  * levels, moves or seeds (CLAUDE.md rule 6).
  */
 export function hintForGuardians(
-  team: readonly Pick<BattleSquishySetup, 'level'>[],
+  team: readonly (Pick<BattleSquishySetup, 'level' | 'feeling'> & { speciesId?: string })[],
   rules: Pick<GuardianRules, 'hint'>,
+  /** For feelings: a guardian without its own feels as its species does, as in battle. */
+  species?: ReadonlyMap<string, Pick<Species, 'feeling'>>,
 ): GuardianHint | null {
   if (team.length === 0) return null;
   const total = team.reduce((sum, g) => sum + g.level, 0);
   const difficulty: GuardianDifficulty =
     total <= rules.hint.easyUpTo ? 'easy' : total <= rules.hint.toughUpTo ? 'tough' : 'very-tough';
-  return { count: team.length, difficulty };
+  // Only their feelings, in team order (#216): never species, levels or elements.
+  // All or nothing, so the line never names some guardians and not others.
+  const feelings = team.flatMap((g) => {
+    const feeling =
+      g.feeling ?? (g.speciesId === undefined ? undefined : species?.get(g.speciesId)?.feeling);
+    return feeling === undefined ? [] : [feeling];
+  });
+  return {
+    count: team.length,
+    difficulty,
+    feelings: feelings.length === team.length ? feelings : [],
+  };
 }

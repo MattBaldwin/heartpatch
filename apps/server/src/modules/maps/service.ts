@@ -373,6 +373,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
             ? hintForGuardians(
                 tileGuardians({ ...map, seed }, tile, at, guardians),
                 guardians.rules,
+                // Their feelings (#216): each species' own, as the showdown uses.
+                guardians.species,
               )
             : null;
         return {
