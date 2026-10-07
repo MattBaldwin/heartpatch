@@ -18,7 +18,8 @@ import {
   atHome,
   buildingNote,
   buildRows,
-  fireStatus,
+  FIRES_ON_LAND,
+  HOME_SAFE_LINE,
   freeHomeSpots,
   fuelAllOffer,
   landFireLine,
@@ -124,20 +125,23 @@ describe('home layout', () => {
     }
   });
 
-  it('glows over every home tile and the radius of a lit fire, and nothing for an unlit one', () => {
-    const lit = { ...fire({ lit: true }) };
-    const { view, seed } = viewWith([lit]);
-    const safe = mapSafeTiles(view);
-    expect(safe.size).toBe(7); // radius 1 from the Heart Seed is the home base itself
-    for (const key of safe) {
-      const [q, r] = key.split(',').map(Number);
-      expect(hexDistance({ q: q!, r: r! }, seed)).toBeLessThanOrEqual(1);
-    }
-    expect(mapSafeTiles(viewWith([fire({ lit: false })]).view).size).toBe(0);
-    expect(mapSafeTiles(viewWith([meadow()]).view).size).toBe(0);
+  it('glows over every claimed home (the Heart Seed) and the radius of a lit fire', () => {
+    const { view, seed } = viewWith([meadow()]);
+    const homes = view.tiles.filter((t) => t.homeSlot !== null && t.ownerUserId !== null);
+    const base = mapSafeTiles(view);
+    expect([...base].sort()).toEqual(homes.map(hexKey).sort());
+    expect([...mapSafeTiles(viewWith([fire({ lit: false })]).view)].sort()).toEqual(
+      [...base].sort(),
+    );
+    // A lit fire's radius past the home base glows too.
     const bright = mapSafeTiles(viewWith([fire({ lit: true, safeRadius: 2 })]).view);
-    expect(bright.size).toBe(19);
-    expect(bright.has(hexKey(seed))).toBe(true);
+    for (const key of base) expect(bright.has(key)).toBe(true);
+    expect([...bright].some((key) => !base.has(key))).toBe(true);
+    for (const key of bright) {
+      if (base.has(key)) continue;
+      const [q, r] = key.split(',').map(Number);
+      expect(hexDistance({ q: q!, r: r! }, seed)).toBe(2);
+    }
   });
 
   it('lists every building on the map with where it stands', () => {
@@ -150,15 +154,8 @@ describe('home layout', () => {
 });
 
 describe('home screen copy', () => {
-  it('says how the fire is doing', () => {
-    expect(fireStatus([])).toBe('Build a Hearthfire to keep everyone safe at night!');
-    expect(fireStatus([fire()])).toBe('Your fire is out! Add some Emberwood.');
-    expect(fireStatus([fire({ lit: true, nightsLeft: 1 })])).toBe(
-      'Your fire is lit: 1 night left.',
-    );
-    expect(fireStatus([fire({ lit: true, nightsLeft: 4 })])).toBe(
-      'Your fire is lit: 4 nights left.',
-    );
+  it('says home is safe, and how a fire is doing', () => {
+    expect(HOME_SAFE_LINE).toBe('Your Heart Seed keeps home safe 💗');
     expect(buildingNote(fire({ nightsLeft: 3 }))).toBe('Lit! 3 nights of fuel left.');
     expect(buildingNote(meadow({ residents: 2 }))).toBe('2 of 3 squishies live here.');
   });
@@ -180,8 +177,8 @@ describe('home screen copy', () => {
       ...Object.values(HOME_TEXT).map((t) =>
         typeof t === 'function' ? (t as (...args: unknown[]) => string)('Thing', 2) : t,
       ),
-      fireStatus([]),
-      fireStatus([fire()]),
+      HOME_SAFE_LINE,
+      FIRES_ON_LAND,
       buildingNote(fire()),
       buildingNote(meadow()),
       ...buildRows(homeWith({ items: {} })).map((r) =>
@@ -203,14 +200,13 @@ describe('build menu', () => {
       'training-grounds',
     ]);
     const byId = new Map(rows.map((r) => [r.building.id, r]));
-    // Built already: upgrade it instead, and no cost line.
+    // Fires go out on land, never at home (owner decision 2026-10-07): no Build, no cost line.
     expect(byId.get('hearthfire')).toMatchObject({
       option: {
-        kind: 'built',
-        note: 'You have one at home! Upgrade it to reach farther ⬆️',
-        more: 'Build one on your land too! 🔥',
+        kind: 'land',
+        note: 'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!',
       },
-      where: 'Fires go in the middle of a tile 🔥',
+      where: '',
       needs: [],
     });
     // Never "to build X you need X" (design review 2026-10-05): make the lantern first.
@@ -358,18 +354,10 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
   const outer = fire({ id: ID(9), q: 3, r: 0, spot: 0, nightsLeft: 2, fuelSpace: 3, lit: true });
   const homeFire = fire({ q: 0, r: -1, spot: 0, nightsLeft: 1, fuelSpace: 4, lit: true });
 
-  it('keeps the home screen to home buildings, and its fire line to the home fire', () => {
+  it('keeps the home screen to home buildings, and fires to my land', () => {
     const home = homeWith({ buildings: [homeFire, outer] });
     expect(atHome(home).buildings.map((b) => b.id)).toEqual([homeFire.id]);
     expect(landFires(home).map((b) => b.id)).toEqual([outer.id]);
-    expect(fireStatus(atHome(home).buildings)).toBe('Your fire is lit: 1 night left.');
-    // The fire out there doesn't use up home's one: the row says build one there too.
-    const row = buildRows(home).find((r) => r.building.id === 'hearthfire')!;
-    expect(row.option).toMatchObject({ kind: 'built', more: 'Build one on your land too! 🔥' });
-    expect(
-      buildRows(homeWith({ buildings: [outer] })).find((r) => r.building.id === 'hearthfire')
-        ?.option,
-    ).toEqual({ kind: 'ready' });
   });
 
   it('lights only the right kind of spot (#204)', () => {
@@ -379,7 +367,6 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
     expect(freeHomeSpots(home, null, 'centre').every((s) => s.spot === 0)).toBe(true);
     expect(freeHomeSpots(home, null, 'ring').every((s) => s.spot > 0)).toBe(true);
     const rows = new Map(buildRows(home).map((r) => [r.building.id, r.where]));
-    expect(rows.get('hearthfire')).toBe('Fires go in the middle of a tile 🔥');
     expect(rows.get('cozy-meadow')).toBe('Goes around the middle 🏡');
   });
 
@@ -407,7 +394,7 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
     expect(empty.kind === 'build' && empty.needs.map((n) => n.ok)).toEqual([true, false]);
     expect(landTileOffer({ ...tile, q: 4, nodeResource: 'timber', buildings: [] }, home)).toEqual({
       kind: 'node',
-      line: '🔥 Fires go in the middle of a tile. This one has a Timber node, so a fire next door can reach it!',
+      line: '🔥 Fires go in the middle of a tile. This one has a Timber pile there, so a fire next door can reach it!',
     });
     expect(landFireLine(LAND_FIRE!)).toBe(
       'It goes in the middle of this tile 🔥 and keeps everyone within 1 tile cozy at night.',

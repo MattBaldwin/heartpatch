@@ -90,8 +90,12 @@ describe('the morning report', () => {
   });
 
   it('uses kind words only (style guide §9) and keeps lines short', () => {
-    const text = Object.values(HOLLOW_TEXT).map((v) =>
-      typeof v === 'function' ? (v as (...a: unknown[]) => string)('Moonpuff', 1) : v,
+    const text: string[] = Object.values(HOLLOW_TEXT).flatMap((v): string[] =>
+      typeof v === 'function'
+        ? [(v as (...a: unknown[]) => string)('Moonpuff', 1)]
+        : typeof v === 'string'
+          ? [v]
+          : [...(v as readonly string[])],
     );
     for (const line of text) {
       expect(findAvoidedWords(line)).toEqual([]);

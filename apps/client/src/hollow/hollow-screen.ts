@@ -8,6 +8,7 @@ import {
   type Species,
   type WsEventMessage,
 } from '@heartpatch/shared';
+import { describeItems } from '../inventory/bag-view.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
@@ -80,6 +81,8 @@ export interface HollowScreen {
 const MAX_NIGHT_CHECK_MS = 30 * 60_000;
 
 const seenKey = (userId: string, mapId: string) => `heartpatch.hollow.seen.${userId}.${mapId}`;
+/** The packed-home-fire note seen on this device (#202): its `at`. */
+const packedKey = (userId: string, mapId: string) => `heartpatch.hollow.packed.${userId}.${mapId}`;
 
 function safeStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
   try {
@@ -202,6 +205,25 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       return null;
     }
   };
+  /** The packed-home-fire note, while this device hasn't shown it (#202). */
+  const packedNote = (): { refund: Record<string, number>; at: string } | null => {
+    const packed = status?.homeFirePacked ?? null;
+    if (!packed || !user || !mapId) return null;
+    try {
+      return storage?.getItem(packedKey(user.id, mapId)) === packed.at ? null : packed;
+    } catch {
+      return packed;
+    }
+  };
+  const markPackedSeen = (): void => {
+    const packed = status?.homeFirePacked ?? null;
+    if (!packed || !user || !mapId) return;
+    try {
+      storage?.setItem(packedKey(user.id, mapId), packed.at);
+    } catch {
+      // Private mode or full storage: the note may show again next time.
+    }
+  };
   const markSeen = (night: string): void => {
     if (!user || !mapId) return;
     try {
@@ -234,9 +256,18 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
 
     const heldBack = options.otherReportOpen?.() ?? false;
     heldBackBefore = heldBack;
-    reportBox.hidden = !on || report.length === 0 || visitPlaying || heldBack;
+    const packed = packedNote();
+    reportBox.hidden = !on || (report.length === 0 && !packed) || visitPlaying || heldBack;
     if (!reportBox.hidden) {
-      const { title, lines } = reportText(report, (t) => nameOf(t), status?.fireHint ?? true);
+      const told =
+        report.length > 0
+          ? reportText(report, (t) => nameOf(t), status?.fireHint ?? true)
+          : { title: HOLLOW_TEXT.packedTitle, lines: [] };
+      const { title } = told;
+      const lines = [
+        ...told.lines,
+        ...(packed ? [...HOLLOW_TEXT.packed, describeItems(packed.refund)] : []),
+      ];
       const waiting = report.flatMap((r) => (r.taken?.inHollow ? [r.taken] : []));
       const rescueFirst = waiting[0];
       reportBox.replaceChildren(
@@ -343,6 +374,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   function dismissReport(): void {
     const newest = report[0];
     if (newest) markSeen(newest.night);
+    markPackedSeen();
     report = [];
     render();
   }

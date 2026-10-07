@@ -33,7 +33,7 @@ import {
   costText,
   upgradeOffer,
   upgradeReach,
-  fireStatus,
+  HOME_SAFE_LINE,
   freeHomeSpots,
   fuelAllOffer,
   landFireLine,
@@ -186,7 +186,7 @@ export const HOME_TEXT = {
   buildFire: '🔥 Build a fire',
   buildHere: '🔥 Build',
   landFires: (n: number, low: number) =>
-    `🔥 ${String(n)} more ${n === 1 ? 'fire' : 'fires'} on your land.` +
+    `🔥 ${String(n)} ${n === 1 ? 'fire' : 'fires'} on your land.` +
     (low === 0 ? '' : low === 1 ? ' 1 is almost out!' : ` ${String(low)} are almost out!`),
   fuelAll: (cost: string) => `🔥 Fuel all fires (${cost})`,
   allFull: 'All your fires are full! 🔥',
@@ -499,7 +499,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       return;
     }
     const current = home;
-    status.textContent = fireStatus(atHome(current).buildings);
+    status.textContent = HOME_SAFE_LINE;
     renderFuelAll(current);
     const row = (...children: Node[]) => el('div', { class: 'home-row' }, ...children);
 
@@ -595,7 +595,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                 action = el('span', { class: 'home-list-note' }, '');
               }
               const note = 'note' in option ? option.note : null;
-              const more = option.kind === 'built' ? (option.more ?? null) : null;
               return el(
                 'li',
                 { class: 'home-list-row', 'data-build-row': building.id },
@@ -605,8 +604,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   `${icon} ${building.name}`,
                   ...(needs.length > 0 ? [needRow(needs)] : []),
                   ...(note ? [el('span', { class: 'home-list-sub' }, note)] : []),
-                  ...(more ? [el('span', { class: 'home-list-sub' }, more)] : []),
-                  el('span', { class: 'home-list-sub' }, where),
+                  ...(where ? [el('span', { class: 'home-list-sub' }, where)] : []),
                 ),
                 action,
               );
@@ -1206,8 +1204,30 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     if (offer.kind === 'none') return note;
     if (offer.kind === 'build') {
       if (tileMode !== 'build') {
+        const lantern = offer.lantern;
         return [
           ...note,
+          ...(lantern
+            ? [
+                tileButton(
+                  `${buildingIcon(lantern.id)} ${buildingName(lantern.id)}`,
+                  () =>
+                    void tileAct(
+                      (id, send) =>
+                        send((key) =>
+                          api.place(
+                            id,
+                            { buildingId: lantern.id, q: tile.q, r: tile.r, spot: 0 },
+                            key,
+                          ),
+                        ),
+                      HOME_TEXT.fireBuilt,
+                    ),
+                  'tile-build-lantern',
+                  true,
+                ),
+              ]
+            : []),
           tileButton(
             HOME_TEXT.buildFire,
             () => {

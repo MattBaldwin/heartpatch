@@ -115,13 +115,32 @@ export type LandTileOffer =
   | { readonly kind: 'fire'; readonly fire: MyBuilding }
   /** Its middle holds a node: a fire next door can reach it. */
   | { readonly kind: 'node'; readonly line: string }
-  | { readonly kind: 'build'; readonly building: Building; readonly needs: readonly NeedChip[] }
+  | {
+      readonly kind: 'build';
+      readonly building: Building;
+      readonly needs: readonly NeedChip[];
+      /** The Jack-o'-Lantern Hearthfire too, in season with a carved pumpkin in the bag. */
+      readonly lantern: Building | null;
+    }
   /** Something else stands in the middle (not one of mine to show here). */
   | { readonly kind: 'none' };
 
+/** What stands in a tile's middle, in a kid's words (never "node", owner note 2026-10-07). */
+const MIDDLE_THINGS: Readonly<Record<string, string>> = {
+  treats: 'a farm plot',
+  pumpkins: 'a pumpkin patch',
+  'magic-fallen-leaves': 'a leaf pile',
+  glimmer: 'some Glimmer crystals',
+};
+
+/** "a Timber pile", "a farm plot": the resource spot in a tile's middle. */
+export function middleThing(resource: string): string {
+  return MIDDLE_THINGS[resource] ?? `a ${itemName(resource)} pile`;
+}
+
 /** The building that can stand on owned land, one a tile, in its middle: the Hearthfire. */
 export const LAND_FIRE = GAME_DATA.buildings.find(
-  (b) => b.placement === 'owned' && b.kind === 'hearthfire',
+  (b) => b.placement === 'land' && b.kind === 'hearthfire',
 );
 
 export function landTileOffer(
@@ -141,11 +160,25 @@ export function landTileOffer(
   if (tile.nodeResource !== null) {
     return {
       kind: 'node',
-      line: `🔥 Fires go in the middle of a tile. This one has a ${itemName(tile.nodeResource)} node, so a fire next door can reach it!`,
+      line: `🔥 Fires go in the middle of a tile. This one has ${middleThing(tile.nodeResource)} there, so a fire next door can reach it!`,
     };
   }
   if (tile.buildings.some((b) => b.spot === 0)) return { kind: 'none' };
-  return { kind: 'build', building: LAND_FIRE, needs: needChips(home.items, buildCost(LAND_FIRE)) };
+  const seasons = new Set(home.seasons);
+  const lantern =
+    GAME_DATA.buildings.find(
+      (b) =>
+        b.placement === 'land' &&
+        b.id !== LAND_FIRE.id &&
+        inSeason(b, seasons) &&
+        Object.keys(shortfall(home.items, buildCost(b))).length === 0,
+    ) ?? null;
+  return {
+    kind: 'build',
+    building: LAND_FIRE,
+    needs: needChips(home.items, buildCost(LAND_FIRE)),
+    lantern,
+  };
 }
 
 /** The build card's line for a fire out on my land. */
@@ -155,15 +188,12 @@ export function landFireLine(building: Building): string {
   return `It goes in the middle of this tile 🔥 and keeps everyone within ${String(reach)} ${reach === 1 ? 'tile' : 'tiles'} cozy at night.`;
 }
 
-/** One line about how the home's fires are doing, for the top of the screen. */
-export function fireStatus(buildings: readonly MyBuilding[]): string {
-  const fires = buildings.filter((b) => b.kind === 'hearthfire');
-  if (fires.length === 0) return 'Build a Hearthfire to keep everyone safe at night!';
-  const best = Math.max(...fires.map((f) => f.nightsLeft ?? 0));
-  if (best === 0) return 'Your fire is out! Add some Emberwood.';
-  if (best === 1) return 'Your fire is lit: 1 night left.';
-  return `Your fire is lit: ${String(best)} nights left.`;
-}
+/** The home's top line (owner decision 2026-10-07): the Heart Seed keeps home safe. */
+export const HOME_SAFE_LINE = 'Your Heart Seed keeps home safe 💗';
+
+/** Where fires go, on the build sheet (fires stand only on captured land). */
+export const FIRES_ON_LAND =
+  'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!';
 
 /**
  * One ingredient as have/need ("🪵 12/5"), so a kid sees at a glance what's
@@ -212,11 +242,10 @@ export type BuildOption =
   | { readonly kind: 'short' }
   /** Short of something you make (the Jack-o'-Lantern): make it in the recipe book first. */
   | { readonly kind: 'craft'; readonly note: string }
-  /**
-   * Already built (as many as the home base holds): upgrade it at home
-   * instead; `more` when it can be built out on my land too (#202).
-   */
-  | { readonly kind: 'built'; readonly note: string; readonly more?: string }
+  /** Already built (as many as the home base holds): upgrade it at home instead. */
+  | { readonly kind: 'built'; readonly note: string }
+  /** Built only out on my land, from the map's tile panel (fires, #202). */
+  | { readonly kind: 'land'; readonly note: string }
   | { readonly kind: 'blocked'; readonly note: string };
 
 export interface BuildRow {
@@ -257,13 +286,16 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
       const short = Object.keys(shortfall(home.items, cost));
       const crafted = short.find(isCrafted);
       let option: BuildOption = { kind: 'ready' };
-      if (owned >= building.maxPerHome && building.placement === 'owned') {
+      if (building.placement === 'land' && crafted) {
+        // Carve the Jack-o'-Lantern first, then build it out on your land.
+        const verb = CRAFT_VERBS[crafted] ?? 'Make';
         option = {
-          kind: 'built',
-          note: 'You have one at home! Upgrade it to reach farther ⬆️',
-          more: 'Build one on your land too! 🔥',
+          kind: 'craft',
+          note: `${verb} a ${itemName(crafted)} first! It's in your recipe book.`,
         };
-      } else if (owned >= building.maxPerHome) {
+      } else if (building.placement === 'land') {
+        option = { kind: 'land', note: FIRES_ON_LAND };
+      } else if (owned >= (building.maxPerHome ?? 0)) {
         option = {
           kind: 'built',
           note: building.levels.length > 1 ? 'Built! Tap it at home to upgrade.' : 'Built!',
@@ -285,9 +317,9 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
       return {
         building,
         icon: buildingIcon(building.id),
-        needs: option.kind === 'built' ? [] : needChips(home.items, cost),
+        needs: option.kind === 'built' || option.kind === 'land' ? [] : needChips(home.items, cost),
         option,
-        where: slotLine(building),
+        where: building.placement === 'land' ? '' : slotLine(building),
       };
     });
 }

@@ -33,7 +33,15 @@ export const HOLLOW_TEXT = {
   devNightfall: 'Night falls (dev)',
   devNight: (night: string, taken: number) =>
     taken === 0 ? `Night fell (${night}). Nobody was taken.` : `Night fell (${night}).`,
-  fireHint: 'Light a fire before night falls!',
+  /** A gatherer would sleep out on dark land tonight (home is always safe, owner decision 2026-10-07). */
+  fireHint: 'A friend sleeps out in the dark. Light a fire there!',
+  /** My home fire packed up when the Heart Seed began keeping home safe (#202). */
+  packedTitle: 'Good morning!',
+  packed: [
+    'Your Heart Seed keeps home safe now!',
+    'Your home fire packed up, and everything came back.',
+    'Build fires on your land! 🔥',
+  ],
   /** Peeks out beside the Adventure handle while a friend is in the Hollow. */
   news: 'A friend is in the Hollow!',
   mystery: 'a squishy friend',
