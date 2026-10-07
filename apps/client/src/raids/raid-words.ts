@@ -54,6 +54,13 @@ export function raidLine(
   }
 }
 
+/** A fire that came down with the land (#202), or null when there was none there. */
+export function raidFireLine(raid: Pick<Raid, 'lostFire'>): string | null {
+  return raid.lostFire === null
+    ? null
+    : 'Your fire there went out when the land changed hands. You got some things back 🔥';
+}
+
 /** "Bold" etc. for a raid's style, or null when guardians stood in. */
 export function raidStyleLine(raid: Pick<Raid, 'stance'>): string | null {
   return raid.stance === null ? null : `Style: ${stanceName(raid.stance)}`;

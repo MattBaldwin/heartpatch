@@ -29,6 +29,11 @@ export const LAND_TEXT = {
     n === 1
       ? 'Its guardians are back. You can claim it again!'
       : 'Their guardians are back. You can claim them again!',
+  /** My fires came down with the land (#202): what came back is shown under it. */
+  welcomeFire: (n: number) =>
+    n === 1
+      ? 'Your fire out there went out when the land went wild. You got some things back 🔥'
+      : `Your ${String(n)} fires out there went out when the land went wild. You got some things back 🔥`,
   ok: 'Okay!',
 } as const;
 
@@ -74,6 +79,24 @@ export function latestWildNight(tending: LandTending | null): string | null {
   for (const t of tending?.wentWild ?? [])
     if (latest === null || t.night > latest) latest = t.night;
   return latest;
+}
+
+/**
+ * My fires that came down with land that went wild after the night I last
+ * saw (#202): how many, and everything that came back, added up.
+ */
+export function unseenLostFires(
+  tending: LandTending | null,
+  seenNight: string | null,
+): { fires: number; back: Record<string, number> } {
+  const back: Record<string, number> = {};
+  let fires = 0;
+  for (const t of tending?.wentWild ?? []) {
+    if (t.lostFire === null || (seenNight !== null && t.night <= seenNight)) continue;
+    fires += 1;
+    for (const [id, n] of Object.entries(t.lostFire)) back[id] = (back[id] ?? 0) + n;
+  }
+  return { fires, back };
 }
 
 /** Tiles that went wild after the night I last saw on the welcome-back card. */

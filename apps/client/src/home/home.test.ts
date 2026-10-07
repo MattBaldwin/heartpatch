@@ -15,10 +15,16 @@ import { HOME_TEXT } from './home-screen.js';
 import { mapBuildings, mapSafeTiles, spotWorld } from './home-layout.js';
 import { homeTileLines } from './home-tile-info.js';
 import {
+  atHome,
   buildingNote,
   buildRows,
   fireStatus,
   freeHomeSpots,
+  fuelAllOffer,
+  landFireLine,
+  landFires,
+  landTileOffer,
+  LAND_FIRE,
   likesHabitat,
   refundPreview,
   trainCost,
@@ -199,7 +205,12 @@ describe('build menu', () => {
     const byId = new Map(rows.map((r) => [r.building.id, r]));
     // Built already: upgrade it instead, and no cost line.
     expect(byId.get('hearthfire')).toMatchObject({
-      option: { kind: 'built', note: 'Built! Tap it at home to upgrade.' },
+      option: {
+        kind: 'built',
+        note: 'You have one at home! Upgrade it to reach farther ⬆️',
+        more: 'Build one on your land too! 🔥',
+      },
+      where: 'Fires go in the middle of a tile 🔥',
       needs: [],
     });
     // Never "to build X you need X" (design review 2026-10-05): make the lantern first.
@@ -339,5 +350,67 @@ describe('home base colours (#131)', () => {
 
   it('makes the build spots stand out from the tiles', () => {
     expect(contrast(HOME_VIEW.spot.ring, HOME_VIEW.tile.color)).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('fires on my land (#202) and typed spots (#204)', () => {
+  // My fire out on captured land at (3, 0), two nights left.
+  const outer = fire({ id: ID(9), q: 3, r: 0, spot: 0, nightsLeft: 2, fuelSpace: 3, lit: true });
+  const homeFire = fire({ q: 0, r: -1, spot: 0, nightsLeft: 1, fuelSpace: 4, lit: true });
+
+  it('keeps the home screen to home buildings, and its fire line to the home fire', () => {
+    const home = homeWith({ buildings: [homeFire, outer] });
+    expect(atHome(home).buildings.map((b) => b.id)).toEqual([homeFire.id]);
+    expect(landFires(home).map((b) => b.id)).toEqual([outer.id]);
+    expect(fireStatus(atHome(home).buildings)).toBe('Your fire is lit: 1 night left.');
+    // The fire out there doesn't use up home's one: the row says build one there too.
+    const row = buildRows(home).find((r) => r.building.id === 'hearthfire')!;
+    expect(row.option).toMatchObject({ kind: 'built', more: 'Build one on your land too! 🔥' });
+    expect(
+      buildRows(homeWith({ buildings: [outer] })).find((r) => r.building.id === 'hearthfire')
+        ?.option,
+    ).toEqual({ kind: 'ready' });
+  });
+
+  it('lights only the right kind of spot (#204)', () => {
+    const home = homeWith();
+    // Five plain tiles have a free middle; the Heart Seed and the node don't.
+    expect(freeHomeSpots(home, null, 'centre')).toHaveLength(5);
+    expect(freeHomeSpots(home, null, 'centre').every((s) => s.spot === 0)).toBe(true);
+    expect(freeHomeSpots(home, null, 'ring').every((s) => s.spot > 0)).toBe(true);
+    const rows = new Map(buildRows(home).map((r) => [r.building.id, r.where]));
+    expect(rows.get('hearthfire')).toBe('Fires go in the middle of a tile 🔥');
+    expect(rows.get('cozy-meadow')).toBe('Goes around the middle 🏡');
+  });
+
+  it('offers Fuel all fires with what filling every fire costs, once a fire is out on my land', () => {
+    expect(fuelAllOffer(homeWith({ buildings: [homeFire] }))).toBeNull();
+    expect(fuelAllOffer(homeWith({ buildings: [homeFire, outer] }))).toEqual({
+      land: 1,
+      low: 1,
+      cost: { emberwood: 7 },
+      full: false,
+    });
+    const full = [
+      { ...homeFire, nightsLeft: 5, fuelSpace: 0 },
+      { ...outer, nightsLeft: 5, fuelSpace: 0 },
+    ];
+    expect(fuelAllOffer(homeWith({ buildings: full }))).toMatchObject({ full: true, cost: {} });
+  });
+
+  it('offers a fire on my land: its card, a build, or a word about the node in the middle', () => {
+    const home = homeWith({ buildings: [outer], items: { timber: 5, stone: 2 } });
+    const tile = { q: 3, r: 0, nodeResource: null, buildings: [{ spot: 0 }] };
+    expect(landTileOffer(tile, home)).toEqual({ kind: 'fire', fire: outer });
+    const empty = landTileOffer({ ...tile, q: 4, buildings: [] }, home);
+    expect(empty).toMatchObject({ kind: 'build', building: { id: 'hearthfire' } });
+    expect(empty.kind === 'build' && empty.needs.map((n) => n.ok)).toEqual([true, false]);
+    expect(landTileOffer({ ...tile, q: 4, nodeResource: 'timber', buildings: [] }, home)).toEqual({
+      kind: 'node',
+      line: '🔥 Fires go in the middle of a tile. This one has a Timber node, so a fire next door can reach it!',
+    });
+    expect(landFireLine(LAND_FIRE!)).toBe(
+      'It goes in the middle of this tile 🔥 and keeps everyone within 1 tile cozy at night.',
+    );
   });
 });
