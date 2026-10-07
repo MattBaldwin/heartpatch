@@ -7,6 +7,7 @@ import { ECONOMY_CONFIG, type EconomyProfile } from './economy-config.js';
 import { gainPercent, renderEconomy, runEconomy } from './economy-report.js';
 import {
   exploreDay,
+  gatherersOnHomesteads,
   gatherersPerDay,
   homesteadsOf,
   keeperPerDay,
@@ -24,12 +25,10 @@ const casual: EconomyProfile = {
   gatherers: 1,
   searchesPerDay: 10,
 };
-const hourly: EconomyProfile = {
-  ...casual,
-  id: 'hourly',
-  sessions: Array.from({ length: 24 }, (_, h) => h),
-};
-// Forest land: 2 Timber a gather, 15 minutes (30 for a gatherer, 24 on a homestead).
+const PLUS_ONE = { homestead: { yieldPercent: 100, yieldPlus: 1 } };
+const QUARTER = { homestead: { yieldPercent: 125, yieldPlus: 0 } };
+// Forest land: 2 Timber a cycle, 30 minutes for a gatherer; 10 h and 14 h
+// between sessions, so 4 stored cycles each time.
 const forest: GatherSpot = {
   resource: 'timber',
   quantity: 2,
@@ -40,25 +39,27 @@ const forest: GatherSpot = {
 const homestead: GatherSpot = { ...forest, homestead: true };
 
 describe('the economy model', () => {
-  it('gives the homestead bonus only on homesteads, and only when it is switched on', () => {
-    const plain = gatherersPerDay(hourly, [forest], true);
-    expect(gatherersPerDay(hourly, [forest], false)).toEqual(plain);
-    const faster = gatherersPerDay(hourly, [homestead], true);
-    expect(total(faster)).toBeGreaterThan(total(plain));
-    expect(total(gatherersPerDay(hourly, [homestead], false))).toBe(total(plain));
+  it('gives the homestead bonus on every cycle a homestead gives, and nowhere else', () => {
+    expect(gatherersPerDay(casual, [forest], PLUS_ONE)).toEqual({ timber: 2 * 4 * 2 });
+    expect(gatherersPerDay(casual, [homestead], null)).toEqual({ timber: 2 * 4 * 2 });
+    expect(gatherersPerDay(casual, [homestead], PLUS_ONE)).toEqual({ timber: 2 * 4 * 3 });
+    expect(gatherersPerDay(casual, [homestead], QUARTER)).toEqual({ timber: 2 * 4 * 3 });
   });
 
-  it('shows the stored-cycle cap swallowing the bonus for a kid who rarely looks', () => {
-    // 10 h and 14 h gaps: four cycles either way.
-    expect(gatherersPerDay(casual, [homestead], true)).toEqual(
-      gatherersPerDay(casual, [homestead], false),
-    );
+  it('sends gatherers where they bank the most, homestead bonus included', () => {
+    const node: GatherSpot = { ...forest, quantity: 3, from: 'node' };
+    expect(gatherersPerDay(casual, [node, homestead], null)).toEqual({ timber: 2 * 4 * 3 });
+    expect(gatherersOnHomesteads(casual, [node, homestead], null)).toBe(0);
+    expect(gatherersOnHomesteads(casual, [node, { ...homestead, quantity: 3 }], PLUS_ONE)).toBe(1);
   });
 
   it('lands one Keeper gather per tapped node per finished session gap', () => {
     const node: GatherSpot = { ...forest, from: 'node' };
-    expect(keeperPerDay(casual, [node, forest], false)).toEqual({ timber: 2 * 2 });
-    expect(keeperPerDay({ ...casual, keeperNodes: 0 }, [node], false)).toEqual({});
+    expect(keeperPerDay(casual, [node, forest], null)).toEqual({ timber: 2 * 2 });
+    expect(keeperPerDay(casual, [{ ...node, homestead: true }], PLUS_ONE)).toEqual({
+      timber: 3 * 2,
+    });
+    expect(keeperPerDay({ ...casual, keeperNodes: 0 }, [node], null)).toEqual({});
   });
 
   it('explores the nearest land first and joins it as homesteads', () => {
@@ -103,5 +104,7 @@ describe('runEconomy', () => {
       expect(d.homesteads).toBeLessThanOrEqual(d.explored);
     }
     expect(renderEconomy(rows, short, { seconds: 0 })).toContain('| 2 | casual | 3 |');
+    for (const d of rows.flatMap((r) => r.days))
+      expect(d.onHomesteads).toBeLessThanOrEqual(d.homesteads);
   });
 });

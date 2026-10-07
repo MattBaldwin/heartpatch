@@ -10,7 +10,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { ECONOMY_CONFIG } from './economy-config.js';
-import { gainPercent, renderEconomy, runEconomy } from './economy-report.js';
+import { gainPercent, renderEconomy, runCandidates, runEconomy } from './economy-report.js';
 import { total } from './economy.js';
 import { PROGRESSION_CONFIG } from './progression-config.js';
 
@@ -22,11 +22,12 @@ const outDir = resolve(values.out);
 
 const started = performance.now();
 const rows = runEconomy(ECONOMY_CONFIG, PROGRESSION_CONFIG);
+const candidates = runCandidates(ECONOMY_CONFIG, PROGRESSION_CONFIG);
 const seconds = (performance.now() - started) / 1000;
 
 mkdirSync(outDir, { recursive: true });
 const reportPath = resolve(outDir, 'economy-report.md');
-writeFileSync(reportPath, renderEconomy(rows, ECONOMY_CONFIG, { seconds }));
+writeFileSync(reportPath, renderEconomy(rows, ECONOMY_CONFIG, { seconds }, candidates));
 
 console.log(`${String(rows.length)} runs in ${seconds.toFixed(1)} s.`);
 for (const row of rows) {
@@ -37,5 +38,9 @@ for (const row of rows) {
     )
     .join('; ');
   console.log(`  ${String(row.seats)} seats ${row.kid.padEnd(7)} ${days}`);
+}
+for (const c of candidates) {
+  const gains = [...c.gains].map(([k, g]) => `${k} +${String(g)} %`).join(', ');
+  console.log(`  candidate ${c.label}: ${gains}`);
 }
 console.log(`Report: ${reportPath}`);

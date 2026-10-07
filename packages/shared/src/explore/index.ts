@@ -141,6 +141,20 @@ export function searchSpots(
   return spots;
 }
 
+/**
+ * What one finished cycle gives on a joined homestead, a squishy's or the
+ * Keeper's (owner decision 2026-10-07: yield, not speed): the usual
+ * `quantity` scaled by `yieldPercent` (rounded up, whole-number maths) plus
+ * `yieldPlus`. A paused homestead gives nothing, which the caller handles.
+ */
+export function homesteadQuantity(
+  quantity: number,
+  rules: Pick<ExploreRules, 'homestead'>,
+): number {
+  const { yieldPercent, yieldPlus } = rules.homestead;
+  return Math.floor((quantity * yieldPercent + 99) / 100) + yieldPlus;
+}
+
 // Progress is one bit per spot index (`tile_explore.searched`).
 
 /** Has the spot at `index` been searched? */

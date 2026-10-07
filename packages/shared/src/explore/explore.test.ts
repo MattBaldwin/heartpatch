@@ -7,6 +7,7 @@ import { hashString } from '../rng/index.js';
 import { checkExploreRules, MAX_SEARCH_SPOTS, type ExploreRules } from '../schemas/data/explore.js';
 import {
   exploreNeeds,
+  homesteadQuantity,
   isExplorable,
   isFullyExplored,
   isSearched,
@@ -166,6 +167,23 @@ describe('searchSpots', () => {
         for (const other of spots.slice(i + 1)) expect(apart(s, other, minGap)).toBe(true);
       });
     }
+  });
+});
+
+describe('homesteadQuantity', () => {
+  it('gives the shipped bonus on every cycle (owner decision 2026-10-07: yield, not speed)', () => {
+    expect(EXPLORE_RULES.homestead).toEqual({ yieldPercent: 100, yieldPlus: 1 });
+    expect(homesteadQuantity(1, EXPLORE_RULES)).toBe(2);
+    expect(homesteadQuantity(5, EXPLORE_RULES)).toBe(6);
+  });
+
+  it('scales by a percent rounded up, then adds', () => {
+    const quarter = { homestead: { yieldPercent: 125, yieldPlus: 0 } };
+    expect([1, 2, 4, 5].map((q) => homesteadQuantity(q, quarter))).toEqual([2, 3, 5, 7]);
+    const both = { homestead: { yieldPercent: 150, yieldPlus: 1 } };
+    expect(homesteadQuantity(3, both)).toBe(6);
+    const none = { homestead: { yieldPercent: 100, yieldPlus: 0 } };
+    expect(homesteadQuantity(4, none)).toBe(4);
   });
 });
 

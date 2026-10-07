@@ -89,11 +89,15 @@ export const ExploreRulesSchema = z.strictObject({
   /** XP each squishy on the team gets per search: plain XP, like Training Grounds. */
   xpPerSquishy: z.number().int().min(0).max(1000),
   /**
-   * A joined homestead's gathering speed (owner decision 2026-10-07, Q1),
-   * a whole percent added to `workSpeedModifiers` for its squishy and
-   * Keeper gathers.
+   * A joined homestead's bigger yield (owner decisions 2026-10-07: Q1, then
+   * yield, not speed). Each finished cycle on it, a squishy's or the
+   * Keeper's, gives `ceil(quantity × yieldPercent / 100) + yieldPlus`
+   * (`homesteadQuantity`). A paused homestead gives nothing.
    */
-  homestead: z.strictObject({ gatherPercent: z.number().int().min(100).max(1000) }),
+  homestead: z.strictObject({
+    yieldPercent: z.number().int().min(100).max(400),
+    yieldPlus: z.number().int().min(0).max(10),
+  }),
 });
 export type ExploreRules = z.infer<typeof ExploreRulesSchema>;
 

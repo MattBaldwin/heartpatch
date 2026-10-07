@@ -24,39 +24,42 @@ export interface EconomyConfig {
   /** Map seats to model, as `pnpm sim:progression` does. */
   readonly seats: readonly number[];
   readonly profiles: readonly EconomyProfile[];
+  /** Homestead yield bonuses the report compares with the shipped one. */
+  readonly candidates: readonly {
+    readonly label: string;
+    readonly homestead: { readonly yieldPercent: number; readonly yieldPlus: number };
+  }[];
 }
 
 export const ECONOMY_CONFIG: EconomyConfig = {
   days: [7, 14, 30],
   seats: [4, 2],
-  // TUNE: the fuel report's two kids, plus exploring. Casual: a short look
-  // twice a day, about one tile's spots a day. Engaged: five sessions and two
-  // or three tiles a day. Hourly: the engaged kid's land, opened every hour
-  // from 8:00 to 21:00, the most a speed bonus can be worth.
+  // TUNE: guesses. Casual: a short look twice a day, about one tile's spots
+  // a day, and three of the squishies befriended by then (one a day) out
+  // gathering. Engaged: five sessions, two or three tiles a day, six gatherers
+  // (two befriended a day; the team of 3 stays home).
   profiles: [
     {
       id: 'casual',
       kid: 'casual',
       sessions: [8, 18],
-      keeperNodes: 1,
-      gatherers: 1,
+      keeperNodes: 2,
+      gatherers: 3,
       searchesPerDay: 10,
     },
     {
       id: 'engaged',
       kid: 'engaged',
       sessions: [7, 11, 15, 18, 20],
-      keeperNodes: 3,
-      gatherers: 3,
+      keeperNodes: 4,
+      gatherers: 6,
       searchesPerDay: 30,
     },
-    {
-      id: 'hourly',
-      kid: 'engaged',
-      sessions: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
-      keeperNodes: 3,
-      gatherers: 3,
-      searchesPerDay: 30,
-    },
+  ],
+  // The owner's two starting points (2026-10-07), and a bigger one for scale.
+  candidates: [
+    { label: '+1 a cycle', homestead: { yieldPercent: 100, yieldPlus: 1 } },
+    { label: '125 %, rounded up', homestead: { yieldPercent: 125, yieldPlus: 0 } },
+    { label: '150 %, rounded up', homestead: { yieldPercent: 150, yieldPlus: 0 } },
   ],
 };

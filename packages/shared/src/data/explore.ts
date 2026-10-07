@@ -104,6 +104,7 @@ export const EXPLORE_RULES: ExploreRules = {
     edgeMargin: 0.08, // TUNE: nothing hangs over the tile's edge
   },
   xpPerSquishy: 6, // TUNE: held to the sim:progression gate (#193-style)
-  // TUNE: owner decision 2026-10-07 (Q1, "about 125%"); tuned from `pnpm sim:economy`.
-  homestead: { gatherPercent: 125 },
+  // TUNE: owner decision 2026-10-07: yield, not speed (a speed bonus gave +0 %
+  // because of the 4-cycle cap). Sized with `pnpm sim:economy`.
+  homestead: { yieldPercent: 100, yieldPlus: 1 },
 };
