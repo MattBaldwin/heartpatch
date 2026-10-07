@@ -1,0 +1,159 @@
+import { expect, test, type Page } from '@playwright/test';
+import { tapCanvas } from './claim-land.js';
+import { hook } from './dev-hook.js';
+import { expectRoomyLabels, settled, still } from './layout.js';
+import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { openTray, traysState, traySettled, type TraySide } from './trays.js';
+
+// Every map control stays on screen and in reach on short screens too (#136:
+// on an iPhone on its side, the old button column ran off the top, and an
+// open tray hid its last rows below the fold). Measured as boxes, not pixels.
+
+const SHORT_SCREENS = [
+  { name: 'iPhone landscape', width: 844, height: 390 },
+  { name: 'iPhone SE landscape', width: 667, height: 375 },
+  { name: 'iPhone portrait', width: 390, height: 844 },
+  { name: 'iPhone SE portrait', width: 375, height: 667 },
+  { name: 'iPad landscape', width: 1180, height: 820 },
+  { name: 'iPad portrait', width: 820, height: 1180 },
+] as const;
+
+/** The map's own controls while no tray is open. */
+const HUD = [
+  '[data-testid^="tray-handle-"]',
+  '[data-testid="lobby-open"]',
+  '[data-testid="chat-open"]',
+  '[data-testid="keeper-menu"]',
+].join(', ');
+
+/** A tray's rows a player uses (the dev-only grant buttons may scroll). */
+const ROWS = [
+  '.tray-section > button',
+  '.tray-section > .battle-entry-box > button:not([data-testid^="battle-dev-"])',
+  '.tray-jobs .jobs-entry > button',
+].join(', ');
+
+const mapState = (page: Page) => hook<{ selected: string | null }>(page, 'map');
+
+type Box = { id: string; l: number; t: number; r: number; b: number };
+
+/** The boxes of the visible elements matching `selector`, as drawn. */
+async function boxes(page: Page, selector: string): Promise<Box[]> {
+  await settled(page);
+  await still(page, selector);
+  return page.evaluate((selector) => {
+    const out: Box[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(selector)) {
+      if (el.closest('[hidden]') || el.closest('[inert]')) continue;
+      if (getComputedStyle(el).visibility === 'hidden') continue;
+      const b = el.getBoundingClientRect();
+      if (b.width === 0 || b.height === 0) continue;
+      const id = el.dataset['testid'] ?? el.className;
+      out.push({ id, l: b.left, t: b.top, r: b.right, b: b.bottom });
+    }
+    return out;
+  }, selector);
+}
+
+const overlap = (a: Box, b: Box) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+const inside = (a: Box, b: Box) =>
+  a.l >= b.l - 0.5 && a.t >= b.t - 0.5 && a.r <= b.r + 0.5 && a.b <= b.b + 0.5;
+const show = (a: Box) => `${a.id} ${JSON.stringify([a.l, a.t, a.r, a.b].map(Math.round))}`;
+
+/** On screen, at least 44 px each way, and clear of each other. */
+function expectReachable(list: Box[], screen: Box): void {
+  const problems: string[] = [];
+  for (const [i, a] of list.entries()) {
+    if (!inside(a, screen)) problems.push(`${show(a)} is off screen`);
+    if (a.r - a.l < 43.5 || a.b - a.t < 43.5) problems.push(`${show(a)} is under 44 px`);
+    for (const b of list.slice(i + 1)) {
+      if (overlap(a, b)) problems.push(`${show(a)} overlaps ${show(b)}`);
+    }
+  }
+  expect(problems).toEqual([]);
+}
+
+/** Every row of the open tray is in its body's view without scrolling. */
+async function checkTray(page: Page, side: TraySide, screen: Box): Promise<void> {
+  await openTray(page, side);
+  await traySettled(page, side);
+  const tray = page.getByTestId(`tray-${side}`);
+  await expect(tray.locator('.tray-body')).toHaveJSProperty('scrollTop', 0);
+  const view = (await boxes(page, `[data-testid="tray-${side}"] .tray-body`))[0]!;
+  const rows = await boxes(page, `[data-testid="tray-${side}"] :is(${ROWS})`);
+  expect(rows.length).toBeGreaterThan(1);
+  const hidden = rows.filter((row) => !inside(row, view)).map(show);
+  expect(hidden, `rows below the fold of ${show(view)}`).toEqual([]);
+  // Narrower rows side by side still keep their words off the edges.
+  await expectRoomyLabels(page, `[data-testid="tray-${side}"] :is(${ROWS})`);
+  // The handle it carries and the close button stay reachable; the corner
+  // buttons stay clear of the tray.
+  const controls = await boxes(
+    page,
+    `[data-testid="tray-handle-${side}"], [data-testid="tray-${side}"] .tray-close`,
+  );
+  expectReachable(controls, screen);
+  const trayBox = (await boxes(page, `[data-testid="tray-${side}"]`))[0]!;
+  const corners = await boxes(
+    page,
+    '[data-testid="lobby-open"], [data-testid="chat-open"], [data-testid="keeper-menu"]',
+  );
+  expect(corners.filter((c) => overlap(c, trayBox)).map(show)).toEqual([]);
+  await tray.locator('.tray-close').tap();
+  await expect.poll(async () => (await traysState(page))?.open).toBeNull();
+  await expect(tray).not.toHaveClass(/tray-shown/);
+}
+
+test('the map’s controls fit short and tall screens', async ({ browser }) => {
+  test.setTimeout(300_000); // six screens; CI renders in software
+  const page = await newPlayer(browser, uniqueName('short'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Short Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await page.getByTestId('tray-hint-ok').tap();
+  await expect(page.getByTestId('tray-hint')).toBeHidden();
+
+  for (const size of SHORT_SCREENS) {
+    await test.step(size.name, async () => {
+      await page.setViewportSize({ width: size.width, height: size.height });
+      const screen: Box = { id: 'screen', l: 0, t: 0, r: size.width, b: size.height };
+
+      const hud = await boxes(page, HUD);
+      expect(hud.map((b) => b.id).sort()).toEqual([
+        'chat-open',
+        'keeper-menu',
+        'lobby-open',
+        'tray-handle-adventure',
+        'tray-handle-heartpatch',
+      ]);
+      expectReachable(hud, screen);
+
+      for (const side of ['adventure', 'heartpatch'] as const) {
+        await checkTray(page, side, screen);
+      }
+
+      // A picked tile's panel sits clear of every map control.
+      // Right after a resize the map can miss a tap while it catches up, so
+      // tap again only while nothing is picked: a second tap on the picked
+      // Heart Seed would open Home.
+      const game = (await page.locator('#game').boundingBox())!;
+      const panel = page.getByTestId('tile-panel');
+      await expect(async () => {
+        if ((await mapState(page))?.selected == null) {
+          await tapCanvas(page, game.width / 2, game.height / 2);
+        }
+        await expect(panel).toBeVisible({ timeout: 5_000 });
+      }).toPass({ timeout: 30_000 });
+      const panelBox = (await boxes(page, '[data-testid="tile-panel"]'))[0]!;
+      expect(inside(panelBox, screen), show(panelBox)).toBe(true);
+      const under = (await boxes(page, HUD)).filter((c) => overlap(c, panelBox)).map(show);
+      expect(under, `under the tile panel ${show(panelBox)}`).toEqual([]);
+      await panel.getByRole('button', { name: 'Close' }).tap();
+      await expect(panel).toBeHidden();
+    });
+  }
+});

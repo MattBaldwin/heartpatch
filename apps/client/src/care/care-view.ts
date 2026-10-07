@@ -5,6 +5,7 @@ import {
   type CareListResponse,
   type CareResult,
   type CareSquishy,
+  type Rarity,
   type Species,
   type SpeciesVisual,
 } from '@heartpatch/shared';
@@ -153,6 +154,8 @@ export function faceFor(speciesId: string, species: ReadonlyMap<string, Species>
 
 export interface CareSheetModel {
   readonly name: string;
+  /** The species' rarity for its chip (#240), or null when the client has no row for it. */
+  readonly rarity: Rarity | null;
   readonly color: string;
   readonly mood: string;
   /** Hearts meter, 0–1. */
@@ -244,6 +247,7 @@ export function careSheet(
   const growsAt = evolutions?.[0]?.level;
   return {
     name: squishyName(squishy, species),
+    rarity: species.get(squishy.speciesId)?.rarity ?? null,
     color: blobColor(squishy.speciesId, species),
     mood: moodLine(squishy.mood, CARE_RULES),
     hearts: squishy.contentment / CARE_RULES.maxContentment,

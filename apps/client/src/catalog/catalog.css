@@ -131,6 +131,17 @@
   overflow-wrap: anywhere;
 }
 
+.catalog-entry .rarity-chip {
+  padding: 2px 8px 2px 6px;
+  font-size: 12px;
+}
+
+/* An unseen card's empty space where the chip would be (its line plus
+   padding, as above), so cards line up. */
+.catalog-rarity-gap {
+  min-height: calc(12px * 1.2 + 4px);
+}
+
 .catalog-badge {
   min-height: 18px;
   font-size: 13px;

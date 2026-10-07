@@ -1,4 +1,10 @@
-import type { JobSquishy, JobsView, WorkSpot, WorkStatus } from '@heartpatch/shared';
+import {
+  GAME_DATA,
+  type JobSquishy,
+  type JobsView,
+  type WorkSpot,
+  type WorkStatus,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { workableByMe } from './index.js';
 import {
@@ -6,6 +12,7 @@ import {
   countsDown,
   jobLine,
   nameOf,
+  rarityOf,
   readyTotal,
   spotLabel,
   teamCost,
@@ -190,5 +197,20 @@ describe('the tile panel', () => {
     expect(workableByMe({ ...tile, terrain: 'lake' }, id(200))).toBe(false);
     expect(workableByMe({ ...tile, homeSlot: 0 }, id(200))).toBe(false);
     expect(workableByMe({ ...tile, homeSlot: 0, nodeResource: 'stone' }, id(200))).toBe(true);
+  });
+});
+
+describe('rarityOf (#240)', () => {
+  it("gives a squishy's species rarity for its dot on the team picker", () => {
+    expect(rarityOf(squishy(1))).toBe('common');
+    const epic = GAME_DATA.species.find((s) => s.rarity === 'epic');
+    if (!epic) throw new Error('no epic species');
+    const s = squishy(2);
+    expect(rarityOf({ ...s, squishy: { ...s.squishy, speciesId: epic.id } })).toBe('epic');
+  });
+
+  it('shows no dot for a species this client has no row for', () => {
+    const s = squishy(3);
+    expect(rarityOf({ ...s, squishy: { ...s.squishy, speciesId: 'secret-thing' } })).toBeNull();
   });
 });

@@ -2,9 +2,18 @@ import type { JobsView } from '@heartpatch/shared';
 import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
 import { el, messageOf } from '../../ui/dom.js';
+import { rarityDot } from '../../ui/rarity/rarity.js';
 import { blobFor } from './job-board.js';
 import { jobsApi, type JobsApi } from './jobs-api.js';
-import { hintLines, JOBS_TEXT, nameOf, teamCost, teamSlots, toggleTeam } from './jobs-view.js';
+import {
+  hintLines,
+  JOBS_TEXT,
+  nameOf,
+  rarityOf,
+  teamCost,
+  teamSlots,
+  toggleTeam,
+} from './jobs-view.js';
 import './jobs.css';
 
 // The team picker (owner decisions 2026-10-04): three slots for the squishies
@@ -185,7 +194,7 @@ export function createTeamPicker(options: TeamPickerOptions): TeamPicker {
           el(
             'span',
             { class: 'team-candidate-text' },
-            el('strong', {}, nameOf(current, s)),
+            el('strong', { class: 'team-candidate-name' }, ...rarityDotFor(s), nameOf(current, s)),
             el('span', { class: 'jobs-small' }, hintLines(s).join(' · ')),
             ...(cost && !chosen ? [el('span', { class: 'jobs-dark' }, cost)] : []),
           ),
@@ -242,4 +251,10 @@ export function createTeamPicker(options: TeamPickerOptions): TeamPicker {
       };
     },
   };
+}
+
+/** Just the rarity dot before a name, where the row is tight (#240). */
+function rarityDotFor(s: JobsView['squishies'][number]): HTMLElement[] {
+  const rarity = rarityOf(s);
+  return rarity ? [rarityDot(rarity)] : [];
 }
