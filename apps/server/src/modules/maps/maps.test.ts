@@ -898,7 +898,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
         [
           ...litSafeTiles(
             list,
-            () => bare.map((t) => ({ q: t.q, r: t.r })),
+            bare.map((t) => ({ q: t.q, r: t.r })),
             mapLocalTime(new Date(), 'America/Chicago'),
           ),
         ].sort();

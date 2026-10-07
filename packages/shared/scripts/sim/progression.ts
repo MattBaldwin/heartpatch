@@ -80,6 +80,8 @@ export interface DayRecord {
   readonly levels: readonly number[];
   /** Tiles the kid owns, home ring included. */
   readonly tiles: number;
+  /** Which tiles those are, for models built on this one (`pnpm sim:fuel`). */
+  readonly land: readonly HexKey[];
   /** Neutral tiles left on the map (shared by both kids). */
   readonly neutralLeft: number;
   /** Neutral tiles left outside Juniper's Gap. */
@@ -398,7 +400,8 @@ export function runProgression(
         partnerLevel: kid.team[0]?.level ?? 0,
         partnerSpecies: kid.team[0]?.speciesId ?? '',
         levels: kid.team.map((m) => m.level),
-        tiles: tiles.filter((t) => owner.get(hexKey(t)) === k).length,
+        tiles: land.length,
+        land: land.map(hexKey),
         neutralLeft: left.length,
         neutralLeftOutsideGap: left.filter((t) => t.terrain !== GAP_TERRAIN).length,
         odds: odds[k] ?? [],

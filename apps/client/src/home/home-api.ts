@@ -1,6 +1,8 @@
 import {
+  FuelAllResponseSchema,
   HomeResponseSchema,
   RemoveBuildingResponseSchema,
+  type FuelAllResponse,
   type HomeResponse,
   type RemoveBuildingResponse,
 } from '@heartpatch/shared';
@@ -48,6 +50,14 @@ export const homeApi = {
       method: 'POST',
       body: { nights },
       schema: HomeResponseSchema,
+      headers: { 'idempotency-key': key },
+    }),
+
+  /** Tops up every fire, lowest first, until full or the bag runs out (#202). */
+  fuelAll: (mapId: string, key: string): Promise<FuelAllResponse> =>
+    apiCallFor(`/maps/${mapId}/buildings/fuel-all`, {
+      method: 'POST',
+      schema: FuelAllResponseSchema,
       headers: { 'idempotency-key': key },
     }),
 

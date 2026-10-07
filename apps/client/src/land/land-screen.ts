@@ -10,6 +10,7 @@ import {
   type PublicUser,
   type WsEventMessage,
 } from '@heartpatch/shared';
+import { describeItems } from '../inventory/bag-view.js';
 import { tileScreenRectOf } from '../map/map-scene.js';
 import type { MapLayer, TileActions } from '../map/map-screen.js';
 import { el, messageOf } from '../ui/dom.js';
@@ -20,6 +21,7 @@ import {
   landMarks,
   latestWildNight,
   rippleFade,
+  unseenLostFires,
   unseenWild,
   type LandMark,
 } from './land-text.js';
@@ -133,6 +135,8 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
   );
   const welcomeLine = el('p', { class: 'land-line' });
   const welcomeClaim = el('p', { class: 'land-line' });
+  const welcomeFire = el('p', { class: 'land-line', 'data-testid': 'land-welcome-fire' });
+  const welcomeBack = el('p', { class: 'land-line land-line-small' });
   const welcome = el(
     'div',
     {
@@ -145,6 +149,8 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
     el('h2', { class: 'land-title', id: 'land-welcome-title' }, LAND_TEXT.welcomeTitle),
     welcomeLine,
     welcomeClaim,
+    welcomeFire,
+    welcomeBack,
     okButton,
   );
   welcome.hidden = true;
@@ -194,6 +200,13 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
     if (unseen > 0) {
       welcomeLine.textContent = LAND_TEXT.welcomeLine(unseen);
       welcomeClaim.textContent = LAND_TEXT.welcomeClaim(unseen);
+    }
+    const lost = open ? unseenLostFires(tending, seenNight()) : { fires: 0, back: {} };
+    welcomeFire.hidden = lost.fires === 0;
+    welcomeBack.hidden = lost.fires === 0;
+    if (lost.fires > 0) {
+      welcomeFire.textContent = LAND_TEXT.welcomeFire(lost.fires);
+      welcomeBack.textContent = describeItems(lost.back);
     }
     const view = options.view();
     marks.draw(open ? landMarks(tending, view?.tiles ?? []) : new Map(), view);

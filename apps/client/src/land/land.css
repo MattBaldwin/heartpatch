@@ -155,3 +155,9 @@
   font-weight: 700;
   color: #4a2c43;
 }
+
+/* What came back from a fire that went out with the land (#202). */
+.land-line-small {
+  font-size: 15px;
+  font-weight: 600;
+}
