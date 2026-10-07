@@ -9,7 +9,7 @@ import {
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
-import { shieldUntil, territoryAction } from './territory-action.js';
+import { shieldUntil, territoryAction, watchInTheDark } from './territory-action.js';
 import { TERRITORY_TEXT } from './territory-screen.js';
 
 const ME = userId(1);
@@ -134,6 +134,37 @@ describe('territoryAction', () => {
     const { view, tile } = setup();
     expect(territoryAction(tile, view, null, status(), NOW).kind).toBe('none');
     expect(territoryAction(tile, view, ME, null, NOW).kind).toBe('none');
+  });
+});
+
+describe('watchInTheDark', () => {
+  it('warns on my land no lit fire reaches, never on a home tile', () => {
+    const { view, tile } = setup(() => ({ ownerUserId: ME }));
+    expect(watchInTheDark(tile, view)).toBe(true);
+    const home = view.tiles.find((t) => t.homeSlot !== null && t.ownerUserId === ME)!;
+    expect(watchInTheDark(home, view)).toBe(false);
+    const fire = {
+      id: '0190a8c4-0000-7000-8000-000000000101',
+      buildingId: 'hearthfire',
+      kind: 'hearthfire' as const,
+      level: 1,
+      spot: 0,
+      lit: true,
+      safeRadius: 1,
+    };
+    const lit: MapView = {
+      ...view,
+      tiles: view.tiles.map((t) => (t === tile ? { ...t, buildings: [fire] } : t)),
+    };
+    expect(watchInTheDark(tile, lit)).toBe(false);
+    // A fire out of fuel lights nothing.
+    const out: MapView = {
+      ...view,
+      tiles: view.tiles.map((t) =>
+        t === tile ? { ...t, buildings: [{ ...fire, lit: false }] } : t,
+      ),
+    };
+    expect(watchInTheDark(tile, out)).toBe(true);
   });
 });
 

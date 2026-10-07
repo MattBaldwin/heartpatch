@@ -176,6 +176,10 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
     })
     .toBe('watch');
   await expect(page.getByTestId('territory-watch')).toContainText('Nobody stands watch');
+  // No fire reaches it yet: a guard here would stand in the dark (owner decision 2026-10-07).
+  await expect(page.getByTestId('territory-dark')).toHaveText(
+    "It's dark here at night. Build a fire nearby to keep your guard safe! 🔥",
+  );
 
   // A Hearthfire in the new land's middle (#202): build it, then fuel it to light it.
   await page.getByTestId('tile-build-fire').tap();
@@ -185,6 +189,8 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   await page.getByTestId('tile-fire-fuel').tap();
   await expect(page.getByTestId('tile-fire-note')).toContainText('Lit!', { timeout: 30_000 });
   await expect.poll(async () => (await mapState(page))?.litFires, { timeout: 30_000 }).toBe(1);
+  // Lit, its light reaches the guard's post.
+  await expect(page.getByTestId('territory-dark')).toHaveCount(0, { timeout: 30_000 });
 
   // Post a squishy on watch there (the starter and the strong one to choose from).
   await page.getByTestId('territory-pick').tap();

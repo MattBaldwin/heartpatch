@@ -22,6 +22,7 @@ import { createCoinsRepo } from '../modules/coins/repo.js';
 import { accountDay, creditCoins, spendCoins } from '../modules/coins/service.js';
 import { createGatheringService } from '../modules/gathering/service.js';
 import { createHollowConsumer } from '../modules/hollow/consumer.js';
+import { createHollowRepo } from '../modules/hollow/repo.js';
 import { createHollowService } from '../modules/hollow/service.js';
 import { grantItems } from '../modules/inventory/service.js';
 import { createLoreConsumer } from '../modules/lore/consumer.js';
@@ -1336,6 +1337,29 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     // The target (an outer tile, q 12) has the lowest id; the home tiles the two above.
     await rowsAgainst(lockTileRow, tileIds, () =>
       unplanned((tx) => createBuildingsRepo(tx).lockHomeTilesAnd(mapId, userId, { q: 12, r: 0 })),
+    );
+  });
+
+  it("locks guards' posts in id order at nightfall (hollow `lockPostTiles`, owner decision 2026-10-07)", async () => {
+    const { mapId, userId, tileIds } = await fires();
+    // A guard on each tile, stored highest tile id first.
+    for (const tileId of [...tileIds].reverse()) {
+      const [guard] = await db
+        .insert(squishies)
+        .values({
+          mapId,
+          ownerUserId: userId,
+          speciesId: 'test-squishy',
+          element: 'fire',
+          feeling: 'cozy',
+        })
+        .returning({ id: squishies.id });
+      await db
+        .insert(tileDefenders)
+        .values({ mapId, tileId, slot: 0, squishyId: guard!.id, assignedAt: new Date() });
+    }
+    await rowsAgainst(lockTileRow, tileIds, () =>
+      unplanned((tx) => createHollowRepo(tx).lockPostTiles(mapId)),
     );
   });
 });

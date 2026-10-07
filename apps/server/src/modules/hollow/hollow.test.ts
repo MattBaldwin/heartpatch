@@ -212,16 +212,6 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
     await db.insert(tileDefenders).values({ mapId, tileId, slot: 0, squishyId, assignedAt: clock });
   }
 
-  /** A non-home tile, given to `who` (as if they'd claimed it). */
-  async function landFor(mapId: string, who: PublicUser) {
-    const tile = await db.query.tiles.findFirst({
-      where: (t, { and, eq, isNull }) =>
-        and(eq(t.mapId, mapId), isNull(t.homeSlot), isNull(t.ownerUserId)),
-    });
-    await db.execute(`update tiles set owner_user_id = '${who.id}' where id = '${tile!.id}'`);
-    return tile!.id;
-  }
-
   /**
    * Land of `who`'s out on the map, at least 3 tiles from anyone's land
    * already out there, so no fire on other land reaches it.
@@ -320,7 +310,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
   }
 
   describe('nightfall', () => {
-    it('takes one exposed squishy, never one behind a lit fire or on watch (acceptance)', async () => {
+    it('takes one exposed squishy, never one behind a lit fire or on watch in its light (acceptance)', async () => {
       const server = await start();
       const kid = await player();
       const friend = await player();
@@ -333,10 +323,13 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         await squishy(mapId, kid, { habitat: meadow }),
         await dark(mapId, kid, { tileId: lit }),
       ];
-      // The friend's two gatherers are out in the dark; one more stands watch on their land.
+      // The friend's two gatherers are out in the dark; one more stands watch
+      // on their land, by a lit fire (guards need its light too, owner decision 2026-10-07).
       const exposed = [await dark(mapId, friend), await dark(mapId, friend)];
       const guard = await squishy(mapId, friend);
-      await standWatch(mapId, await landFor(mapId, friend), guard);
+      const post = await farLand(mapId, friend);
+      await fireOn(mapId, friend, post, TONIGHT);
+      await standWatch(mapId, post, guard);
 
       const hollow = hollowService();
       expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 1 });
@@ -371,6 +364,42 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(publicViewFor(PUBLIC_VIEWS, hollowed!, { userId: friend.id })).toMatchObject({
         squishyId: taken,
       });
+    });
+
+    it('takes a guard on watch in the dark, who leaves the watch; never one in a fire’s light or at home (#202)', async () => {
+      const server = await start();
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(server, kid, [friend]);
+      // Guards on watch need a lit fire's reach (owner decision 2026-10-07):
+      // one out in the dark, one by a lit fire, one on a home tile.
+      const darkPost = await farLand(mapId, kid);
+      const litPost = await farLand(mapId, kid);
+      await fireOn(mapId, kid, litPost, '2026-10-04');
+      const [home] = await homeTilesOf(mapId, kid);
+      const inTheDark = await squishy(mapId, kid);
+      const byTheFire = await squishy(mapId, kid);
+      const atHome = await squishy(mapId, kid);
+      await standWatch(mapId, darkPost, inTheDark);
+      await standWatch(mapId, litPost, byTheFire);
+      await standWatch(mapId, home!.id, atHome);
+      // The nudge says so before night falls.
+      expect((await statusOf(server, kid, mapId)).fireHint).toBe(true);
+
+      clock.setTime(Date.parse('2026-10-04T18:00:00Z')); // past the first-night grace
+      expect(await hollowService().runNightfall(mapId, '2026-10-04')).toEqual({ taken: 1 });
+      expect(await stateOf(inTheDark)).toBe('hollowed');
+      for (const id of [byTheFire, atHome]) expect(await stateOf(id)).toBe('active');
+      const [night] = await nightsOf(mapId);
+      expect(night!.outcomes).toEqual(
+        expect.arrayContaining([{ userId: kid.id, taken: inTheDark, exposed: 1, sheltered: 2 }]),
+      );
+      // Taken, it left the watch in the same nightfall: its tile falls back to
+      // its land's guardians. The others stay on watch.
+      const posted = await db.query.tileDefenders.findMany({
+        where: (t, { eq }) => eq(t.mapId, mapId),
+      });
+      expect(posted.map((d) => d.squishyId).sort()).toEqual([byTheFire, atHome].sort());
     });
 
     it('keeps a gatherer safe under a fire on captured land, and not one beyond it (#202)', async () => {

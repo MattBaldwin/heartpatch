@@ -1,10 +1,12 @@
 import {
   attackTargetProblem,
+  hexKey,
   TERRITORY_RULES,
   type MapView,
   type PublicTile,
   type TerritoryStatus,
 } from '@heartpatch/shared';
+import { mapSafeTiles } from '../home/home-layout.js';
 
 // What the tile panel offers for land (design doc §11): claim wild land next
 // to yours, challenge a neighbour's, or pick who stands watch on your own.
@@ -79,4 +81,13 @@ export function shieldUntil(
   if (!owner) return null;
   const until = Date.parse(owner.joinedAt) + TERRITORY_RULES.newPlayerShieldHours * HOUR_MS;
   return until > now ? new Date(until).toISOString() : null;
+}
+
+/**
+ * A guard on this tile would spend the night in the dark: no lit Hearthfire
+ * reaches it, so the Hollow Man may take one (owner decision 2026-10-07).
+ * Home tiles are always safe. What the map shows; nightfall decides.
+ */
+export function watchInTheDark(tile: Pick<PublicTile, 'q' | 'r'>, view: MapView): boolean {
+  return !mapSafeTiles(view).has(hexKey(tile));
 }

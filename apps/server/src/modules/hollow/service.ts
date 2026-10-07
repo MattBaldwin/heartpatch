@@ -134,6 +134,9 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     night: LocalDate,
   ): Promise<{ taken: number } | null> => {
     const at = now();
+    // Step 6 before the night's row and the squishies: a guard taken tonight
+    // leaves its post under its tile's lock, as posting writes it.
+    await repo.lockPostTiles(map.id);
     const nightRowId = await repo.claimNight(map.id, night, at);
     if (nightRowId === null) return null;
 
@@ -159,9 +162,13 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       ownerUserId: s.ownerUserId,
       state: s.state,
       // A gatherer spends the night out on its work tile (owner decisions
-      // 2026-10-04): out on land beyond a lit fire's light it's exposed.
+      // 2026-10-04), and a guard on its post (owner decision 2026-10-07):
+      // out on land beyond a lit fire's light, either is exposed.
       sleepsAt: s.work ?? s.habitat ?? heartSeedOf(homes.get(s.ownerUserId) ?? []),
-      post: s.postOwnerUserId === undefined ? null : { tileOwnerUserId: s.postOwnerUserId },
+      post:
+        s.postOwnerUserId === undefined || s.post === null
+          ? null
+          : { tileOwnerUserId: s.postOwnerUserId, at: s.post },
     });
     const outcomes = nightfall(
       members.map(({ userId, joinedAt }) => ({
@@ -185,6 +192,12 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       stored.push({ ...outcome, taken: took ? squishyId : null });
       if (took) taken.push({ userId: outcome.userId, squishyId });
     }
+    // A guard taken to the Hollow leaves the watch; its tile falls back to its
+    // land's guardians, as with any guard that can't stand watch.
+    const guards = taken.filter((t) =>
+      squishyRows.some((s) => s.id === t.squishyId && s.postOwnerUserId !== undefined),
+    );
+    await repo.leavePosts(guards.map((t) => t.squishyId));
     // A gatherer taken to the Hollow stops work; what it had ready goes in the bag.
     const workers = taken.filter((t) => squishyRows.some((s) => s.id === t.squishyId && s.work));
     const workEvents =
@@ -270,8 +283,8 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         ]);
       // Until the Hollow Man's first visit to me (first-night grace), a
       // nudge to light a fire while one of mine would sleep in the dark
-      // tonight: a gatherer out on land no lit fire reaches. Home is always
-      // safe (owner decision 2026-10-07), and guards are on watch.
+      // tonight: a gatherer or a guard out on land no lit fire reaches. Home
+      // is always safe (owner decisions 2026-10-07).
       const joinedAt = members.find((m) => m.userId === user.id)?.joinedAt;
       const firstVisit = joinedAt
         ? firstHollowNight(mapLocalTime(joinedAt, map.timeZone), nightRules)
@@ -281,14 +294,12 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         homeTiles,
         { date: tonight, minute: 0 },
       );
-      const inTheDark = squishyRows.some(
-        (s) =>
-          s.ownerUserId === user.id &&
-          s.state === 'active' &&
-          s.postOwnerUserId === undefined &&
-          s.work !== null &&
-          !safeTonight.has(hexKey(s.work)),
-      );
+      const inTheDark = squishyRows.some((s) => {
+        if (s.ownerUserId !== user.id || s.state !== 'active') return false;
+        // On watch on my own land: it spends the night on its post.
+        if (s.postOwnerUserId === user.id && s.post) return !safeTonight.has(hexKey(s.post));
+        return s.work !== null && !safeTonight.has(hexKey(s.work));
+      });
       const mine = nights.flatMap((n) => {
         const outcome = reportOf(n.outcomes, user.id);
         return outcome ? [{ night: n.night, outcome }] : [];

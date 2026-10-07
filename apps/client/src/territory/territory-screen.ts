@@ -16,7 +16,7 @@ import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { territoryApi, type TerritoryApi } from './territory-api.js';
-import { territoryAction, type TerritoryAction } from './territory-action.js';
+import { territoryAction, watchInTheDark, type TerritoryAction } from './territory-action.js';
 import './territory.css';
 
 // Territory in the tile panel (#15, design doc §11): "Claim" wild land next
@@ -70,6 +70,8 @@ export const TERRITORY_TEXT = {
   tooFar: 'Too far away! Try land next to yours.',
   watchCount: (n: number, max: number) => `On watch: ${String(n)} of ${String(max)}`,
   watchNone: 'Nobody stands watch here yet.',
+  // Guards need a lit fire's light too (owner decision 2026-10-07).
+  watchDark: "It's dark here at night. Build a fire nearby to keep your guard safe! 🔥",
   pick: 'Pick guards',
   save: 'Save',
   cancel: 'Never mind',
@@ -321,6 +323,9 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         break;
       case 'watch':
         if (picking) {
+          if (watchInTheDark(tile, view)) {
+            children.push(line(TERRITORY_TEXT.watchDark, 'territory-dark'));
+          }
           children.push(...picker(tile, picking));
         } else {
           const ids = [...action.squishyIds];
@@ -334,6 +339,9 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
                 : TERRITORY_TEXT.watchNone,
               'territory-watch',
             ),
+            ...(watchInTheDark(tile, view)
+              ? [line(TERRITORY_TEXT.watchDark, 'territory-dark')]
+              : []),
             button(
               TERRITORY_TEXT.pick,
               () => {
