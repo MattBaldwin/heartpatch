@@ -284,6 +284,12 @@ export const BattleRewardsSchema = z.object({
   xp: z.array(z.object({ squishyId: z.uuid(), xp: z.number().int().min(0) })),
   /** The share of the battle's XP it paid, in percent (Gentle mode, design doc §11). */
   percent: z.number().int().min(0).max(100),
+  /**
+   * Set when the daily battle-XP falloff cut this battle's XP (#201): the
+   * patch's next local midnight, when full XP comes back. Null otherwise and
+   * for battles stored before it.
+   */
+  fullXpResetAt: z.iso.datetime().nullable().default(null),
 });
 export type BattleRewards = z.infer<typeof BattleRewardsSchema>;
 

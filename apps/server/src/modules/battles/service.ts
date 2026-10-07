@@ -40,11 +40,12 @@ import { isUniqueViolation } from '../../db/errors.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
-import type { Clock } from '../../lib/time.js';
+import { nextLocalMidnight, type Clock } from '../../lib/time.js';
 import { applyXp, appendGrowthEvents, EVOLUTION_STEPS, type Growth } from '../care/service.js';
 import { creditCoins } from '../coins/service.js';
 import { consumeItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
+import { createMapsRepo } from '../maps/repo.js';
 import type { MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
@@ -534,11 +535,15 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       awards.map((a) => a.squishyId),
       at,
     );
+    let fellOff = false;
     for (const award of awards) {
-      award.xp = Math.floor(
-        (award.xp * battleXpPercent(wins.get(award.squishyId) ?? 0, GROWTH_RULES)) / 100,
-      );
+      const percent = battleXpPercent(wins.get(award.squishyId) ?? 0, GROWTH_RULES);
+      if (percent < 100) fellOff = true;
+      award.xp = Math.floor((award.xp * percent) / 100);
     }
+    // When full XP comes back (#201): wins count from the patch's midnight.
+    const map = fellOff ? await createMapsRepo(tx).findMap(row.mapId) : null;
+    const fullXpResetAt = map ? nextLocalMidnight(at, map.timeZone).toISOString() : null;
     const grown: Growth[] = [];
     for (const award of awards) {
       if (award.xp <= 0) continue;
@@ -595,6 +600,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       rewards: {
         xp: grown.map(({ squishyId, xp }) => ({ squishyId, xp })),
         percent: tile.xpPercent,
+        fullXpResetAt,
       },
       endedAt: at,
     });
