@@ -17,6 +17,7 @@ import type { CinematicDebug } from '../cinematics/cinematic-screen.js';
 import type { WardrobeDebug } from '../ui/wardrobe/wardrobe-screen.js';
 import type { LorebookDebug } from '../lore/lorebook.js';
 import type { MilestoneCelebrationDebug } from '../milestones/milestone-celebration.js';
+import type { WhatsNewDebug } from '../whats-new/whats-new.js';
 import type { StarterDebug } from '../starters/starter-screen.js';
 import type { TraysDebug } from '../ui/trays/trays.js';
 import type { RecipeBookDebug } from '../recipes/recipe-book.js';
@@ -88,6 +89,8 @@ declare global {
       chat?(): ChatDebug | null;
       /** Sound (#25): unlock state, engine, the loop wanted and playing, the last cue, levels. */
       audio?(): AudioDebug;
+      /** What's new (#220): whether the sheet is open, why it opened and how many entries it lists. */
+      whatsNew?(): WhatsNewDebug;
     };
   }
 }

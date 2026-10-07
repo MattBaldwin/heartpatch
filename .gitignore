@@ -15,3 +15,6 @@ test-results/
 
 # pnpm sim output (balance simulator, issue #12)
 reports/
+
+# Written by `pnpm --filter @heartpatch/client changelog` in the deploy (#220).
+apps/client/public/changelog.json

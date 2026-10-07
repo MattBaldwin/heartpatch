@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defaultClientConditions, defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { changelogAsset } from './tooling/changelog/plugin.js';
 import { readBuildInfo, runGit } from './tooling/version/build-info.js';
 import { pwaAssets } from './tooling/pwa/plugin.js';
 
@@ -29,6 +30,8 @@ export default defineConfig({
   plugins: [
     forbidServerData(),
     pwaAssets(),
+    // What's new (#220): changelog.json from changes/*.md.
+    changelogAsset(),
     // The service worker (issue #26, tech spec §3): src/pwa/sw.ts, built to
     // /sw.js with the build's precache list. Production builds only.
     VitePWA({
@@ -45,6 +48,8 @@ export default defineConfig({
           'index.html',
           'assets/**/*.{js,css}',
           'manifest.webmanifest',
+          // What's new (#220): opens offline too.
+          'changelog.json',
           'favicon.svg',
           'pwa/icon-*.png',
           'pwa/apple-touch-icon.png',
