@@ -45,6 +45,10 @@ export const RECIPE_BOOK: RecipeBookData = {
       line: 'Grow some Treats and gather Emberwood from the old forest, and this page opens!',
     },
     {
+      page: 'recipe:cook-treats',
+      line: 'Pick some Greens on a meadow or in a forest, and this page opens!',
+    },
+    {
       page: 'recipe:freeze-water',
       line: 'Fetch some Water from a lakeside well, and this page opens!',
     },

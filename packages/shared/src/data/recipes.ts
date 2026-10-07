@@ -9,6 +9,16 @@ export const RECIPES: Recipe[] = [
     output: { resource: 'heart-charm', quantity: 1 },
     craftSeconds: 60, // TUNE:
   },
+  // #238: Treats cooked from Greens (owner decision, the nesting economy);
+  // farm plots still grow them, and that stays the best way.
+  {
+    id: 'cook-treats',
+    name: 'Cooked Treats',
+    description: 'Stir up some Greens into yummy Treats for your squishies.',
+    inputs: { greens: 2 }, // TUNE:
+    output: { resource: 'treats', quantity: 3 }, // TUNE:
+    craftSeconds: 60, // TUNE:
+  },
   // #238: Ice without mountains. Slow on its own; a Frost squishy on the
   // team freezes it twice as fast.
   {

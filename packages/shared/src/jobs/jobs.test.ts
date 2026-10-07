@@ -98,7 +98,22 @@ describe('what a gatherer works', () => {
         resources,
         JOB_RULES,
       ),
-    ).toEqual({ resource: 'glimmer', quantity: 1, seconds: 90 * 60, from: 'land' });
+    ).toEqual({ resource: 'ice', quantity: 1, seconds: 20 * 60, from: 'land' });
+    // The nesting economy (#238): each terrain's primary resource on the land.
+    expect(
+      workSource({ terrain: 'meadow', nodeResource: null, homeSlot: null }, resources, JOB_RULES),
+    ).toMatchObject({ resource: 'greens', from: 'land' });
+    expect(
+      workSource({ terrain: 'lake', nodeResource: null, homeSlot: null }, resources, JOB_RULES),
+    ).toMatchObject({ resource: 'water', from: 'land' });
+    // A spot is the rarer secondary, and wins: Glimmer on a mountain spot.
+    expect(
+      workSource(
+        { terrain: 'mountains', nodeResource: 'glimmer', homeSlot: null },
+        resources,
+        JOB_RULES,
+      ),
+    ).toMatchObject({ resource: 'glimmer', from: 'node' });
     expect(
       workSource(
         { terrain: 'pumpkin-fields', nodeResource: null, homeSlot: null },
@@ -113,7 +128,11 @@ describe('what a gatherer works', () => {
       workSource({ terrain: 'forest', nodeResource: null, homeSlot: 2 }, resources, JOB_RULES),
     ).toBeNull();
     expect(
-      workSource({ terrain: 'lake', nodeResource: null, homeSlot: null }, resources, JOB_RULES),
+      workSource(
+        { terrain: 'junipers-gap', nodeResource: null, homeSlot: null },
+        resources,
+        JOB_RULES,
+      ),
     ).toBeNull();
   });
 });
@@ -224,7 +243,10 @@ describe('job hints', () => {
       JOB_RULES,
       BATTLE_RULES,
     );
-    expect(hints).toEqual([{ kind: 'gather', resource: 'timber', icon: '🌲', great: true }]);
+    expect(hints).toEqual([
+      { kind: 'gather', resource: 'timber', icon: '🌲', great: true },
+      { kind: 'gather', resource: 'greens', icon: '🌿', great: false },
+    ]);
     expect(jobHintText(hints[0]!, resources)).toBe('Great at gathering Timber 🌲');
   });
 

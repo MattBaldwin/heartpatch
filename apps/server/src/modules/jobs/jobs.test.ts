@@ -298,7 +298,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       expect(jobOf(view, idle)).toMatchObject({ job: 'resting', habitatId: null, work: null });
       expect(view.team).toEqual([]);
       expect(view.rules).toEqual({ teamSize: 3, maxStoredCycles: JOB_RULES.work.maxStoredCycles });
-      // Home nodes and the meadow (Treats) can be worked; home land without a node can't.
+      // Home nodes and the meadow (Greens since #238) can be worked; home land without a node can't.
       const spots = view.spots.map((s) => `${s.resource}/${s.from}`).sort();
       expect(spots).toEqual(
         expect.arrayContaining([
@@ -306,7 +306,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
           'stone/node',
           'timber/node',
           'treats/node',
-          'treats/land',
+          'greens/land',
         ]),
       );
       // Home is always safe (the Heart Seed, owner decision 2026-10-07); land needs a fire.

@@ -110,9 +110,9 @@ describe('job lines', () => {
   });
 
   it('shows the trade-offs from data', () => {
-    // Water + Silly: both sides of Treats' match, and Puddlepuff's stats lean one way.
+    // Water + Silly: both sides of Water's match (#238), and Puddlepuff's stats lean one way.
     const lines = hintLines(squishy(1));
-    expect(lines[0]).toBe('Great at gathering Treats 🍪');
+    expect(lines[0]).toBe('Great at gathering Water 💧');
     expect(lines).toHaveLength(2);
     expect(['Strong fighter 💪', 'Speedy fighter ⚡', 'Sturdy guard 🛡️']).toContain(lines[1]);
   });
@@ -187,7 +187,9 @@ describe('the tile panel', () => {
     expect(workableByMe(tile, id(200))).toBe(true);
     expect(workableByMe(tile, id(201))).toBe(false);
     expect(workableByMe(tile, null)).toBe(false);
-    expect(workableByMe({ ...tile, terrain: 'lake' }, id(200))).toBe(false);
+    // Lakes give Water to a gatherer now (#238); Juniper's Gap land gives nothing.
+    expect(workableByMe({ ...tile, terrain: 'lake' }, id(200))).toBe(true);
+    expect(workableByMe({ ...tile, terrain: 'junipers-gap' }, id(200))).toBe(false);
     expect(workableByMe({ ...tile, homeSlot: 0 }, id(200))).toBe(false);
     expect(workableByMe({ ...tile, homeSlot: 0, nodeResource: 'stone' }, id(200))).toBe(true);
   });

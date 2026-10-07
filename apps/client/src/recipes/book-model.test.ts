@@ -173,7 +173,10 @@ describe('where to find it', () => {
   it('names terrains, the home ring, bonuses and recipes', () => {
     expect(whereText('timber')).toBe("Forest, Juniper's Gap and your home ring.");
     expect(whereText('witch-dust')).toBe('A surprise bonus when you gather Emberwood or Pumpkins.');
-    expect(whereText('treats')).toBe('Your home ring, or make Pumpkin Treats.');
+    expect(whereText('treats')).toBe('Your home ring, or make Cooked Treats or Pumpkin Treats.');
+    // The nesting economy (#238): land a gatherer works, unless its spots say it already.
+    expect(whereText('ice')).toBe('A squishy gathering on Mountains, or make Frozen Water.');
+    expect(whereText('greens')).toBe('Forest, or a squishy gathering on Meadow.');
     expect(whereText('pumpkins')).toBe('Pumpkin Fields and your home ring.');
     expect(whereText('magic-fallen-leaves')).toBe(
       'Your home ring, or a surprise bonus when you gather Timber.',
@@ -317,7 +320,10 @@ describe('ribbon tabs', () => {
       { id: 'none', label: 'Nothing yet', color: '#fff', outputs: ['no-such-thing'] },
     ]);
     expect(tabs.map((t) => t.label)).toEqual(['Treats & food', 'Charms']);
-    expect(views.filter(tabs[0]!.matches).map((p) => p.key)).toEqual(['recipe:pumpkin-treats']);
+    expect(views.filter(tabs[0]!.matches).map((p) => p.key)).toEqual([
+      'recipe:cook-treats',
+      'recipe:pumpkin-treats',
+    ]);
   });
 
   it('leave the effect line empty until something has one', () => {

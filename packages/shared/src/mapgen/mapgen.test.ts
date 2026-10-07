@@ -52,7 +52,7 @@ describe('generateMap: determinism', () => {
     // maps. That's fine for maps not created yet (tiles are persisted), so
     // update the hash on purpose.
     expect(hashString(JSON.stringify(generate('pinned-seed', 4)))).toBe(
-      'c9f05f2dfd6b84c8dc7a59f22ae018ee',
+      '6b17966c98f2a81970687e78ad3b2d9b',
     );
   });
 
@@ -107,14 +107,16 @@ describe('extraNodes (#238: Water, Greens and Ice)', () => {
     }
   });
 
-  it('puts a well on every lake, and Greens and Ice where the data says', () => {
+  it('puts a well on every lake, and Greens on some forests, where the data says', () => {
     for (const t of map.tiles) {
       if (t.homeSlot === null && t.terrain === 'lake') expect(t.nodeResource).toBe('water');
     }
     const kinds = new Set(map.tiles.map((t) => `${t.terrain}:${String(t.nodeResource)}`));
-    expect(kinds).toContain('meadow:greens');
-    expect(kinds).toContain('mountains:ice');
-    // A different seed, different meadows.
+    expect(kinds).toContain('forest:greens');
+    // The nesting economy (#238): meadows and mountains give theirs to gatherers, no spot.
+    expect(kinds).not.toContain('meadow:greens');
+    expect(kinds).not.toContain('mountains:ice');
+    // A different seed, different forests.
     const other = extraNodes(
       withoutExtras(generate('another-seed', 4)),
       GAME_DATA.terrains,
