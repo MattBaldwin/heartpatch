@@ -13,6 +13,11 @@ concurrency:
   # Cancel superseded PR runs, but let every main run finish.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  # @playwright/test in the lockfile. The e2e container tag below must say the
+  # same (container.image can't read env), and an e2e step checks both.
+  PLAYWRIGHT_VERSION: 1.63.0
+
 jobs:
   # Lint, types, unit and DB tests, build: everything but the browser.
   fast:
@@ -79,10 +84,10 @@ jobs:
     runs-on: ubuntu-24.04
     # WebKit and its OS packages come preinstalled in the official Playwright
     # image, so no shard downloads from an apt mirror (a slow one timed jobs
-    # out on 2026-10-07 even with retries). The tag must match the
-    # @playwright/test version in the lockfile; the first step checks it.
+    # out on 2026-10-07 even with retries). Its tag must equal PLAYWRIGHT_VERSION
+    # (top of file); a step below checks that against the lockfile.
     container:
-      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      image: mcr.microsoft.com/playwright:v1.63.0-noble # = PLAYWRIGHT_VERSION
       options: --ipc=host
     # Room for the image pull and setup (about 5 min) and the slowest group's
     # tests (group 5, the catch-all, about 25 min and growing; see #246).
@@ -121,6 +126,11 @@ jobs:
           # Full history: the app's build number is the commit count (#198).
           fetch-depth: 0
 
+      # The workspace is owned by the runner user but steps here run as root,
+      # so git would refuse it ("dubious ownership") and the build number
+      # (commit count, #198) would fall back to dev.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v5
@@ -131,10 +141,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Playwright image matches the lockfile
+        shell: bash
         run: |
           want="$(pnpm --filter @heartpatch/client exec playwright --version | awk '{print $2}')"
-          echo "image v1.63.0, lockfile v$want"
-          test "$want" = "1.63.0" || { echo "::error::Update the e2e container tag in ci.yml to v$want"; exit 1; }
+          test -n "$want" || { echo "::error::Couldn't read the lockfile's Playwright version"; exit 1; }
+          echo "image v$PLAYWRIGHT_VERSION, lockfile v$want"
+          test "$want" = "$PLAYWRIGHT_VERSION" || { echo "::error::Set PLAYWRIGHT_VERSION and the e2e container tag in ci.yml to $want"; exit 1; }
+          grep -q "playwright:v$PLAYWRIGHT_VERSION-noble" .github/workflows/ci.yml || { echo "::error::The e2e container tag in ci.yml doesn't match PLAYWRIGHT_VERSION"; exit 1; }
 
       # The specs import @heartpatch/shared's built output.
       - run: pnpm --filter @heartpatch/shared build
