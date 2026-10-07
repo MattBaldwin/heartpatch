@@ -259,7 +259,9 @@ test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }
   await page.goto('/');
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   // Gestures go to the stage on screen, so wait until it has drawn a frame.
-  await expect.poll(() => draws(page)).toBeGreaterThan(0);
+  // Software rendering at iPad size can block the page for several seconds
+  // right after the first frame (shader work), so one read can take that long.
+  await expect.poll(() => draws(page), { timeout: 30_000 }).toBeGreaterThan(0);
   const vp = page.viewportSize()!;
   const mid = { x: vp.width / 2, y: vp.height / 2 };
   // Gestures scale with the screen so iPhone and iPad move the map by similar amounts.
