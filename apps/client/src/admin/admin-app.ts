@@ -787,7 +787,7 @@ export function startAdmin(root: HTMLElement): void {
         'div',
         { class: 'adm-split' },
         table(
-          ['Player', 'Signed in since', 'Devices', 'Recovery code'],
+          ['Player', 'Newest sign-in', 'Devices', 'Recovery code'],
           list.players.map((p) => ({
             selected: p.id === selected,
             open: () => {
@@ -882,7 +882,7 @@ export function startAdmin(root: HTMLElement): void {
         { class: 'adm-facts' },
         fact('Brought in by', broughtInBy(detail)),
         fact(
-          'Signed in since',
+          'Newest sign-in',
           player.lastSignInAt ? dateTime(player.lastSignInAt) : 'not signed in anywhere',
         ),
         fact('Signed-in devices', String(player.activeSessions)),

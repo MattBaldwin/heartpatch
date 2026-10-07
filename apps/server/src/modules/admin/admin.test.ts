@@ -30,7 +30,7 @@ import { createAuthService } from '../auth/service.js';
 import type * as Secrets from '../auth/secrets.js';
 import { AUDIT_ACTIONS } from './audit-actions.js';
 import { confirmTotp, grantAdmin, hostAudited, revokeAdmin, startTotp } from './grants.js';
-import { ADMIN_COOKIE, ADMIN_COOKIE_PATH, ADMIN_RULES } from './limits.js';
+import { ADMIN_COOKIE, ADMIN_COOKIE_PATH, ADMIN_RATE_LIMITS, ADMIN_RULES } from './limits.js';
 import { createAdminRepo } from './repo.js';
 import { adminRoutes } from './routes.js';
 import type { AdminService } from './service.js';
@@ -872,6 +872,34 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
     expect(rows.find((c) => c.id === operatorCode)!.expiresAt.getTime()).toBeGreaterThan(
       Date.now() + 6 * DAY_MS,
     );
+  });
+
+  it('gives a signed-in admin the usual 400 for a malformed request, and counts limits per kind', async () => {
+    const server = await start();
+    const boss = await admin();
+    const token = await signIn(server, boss);
+    const bad = await adminCall(server, 'GET', '/admin/patches/not-a-uuid', token);
+    expect(bad.statusCode).toBe(400);
+    expect(errorOf(bad).code).toBe('VALIDATION_FAILED');
+
+    // The "secret" budget is shared by every route of that kind.
+    const statuses: number[] = [];
+    for (let i = 0; i < ADMIN_RATE_LIMITS.secret.max; i++) {
+      const path =
+        i % 2 === 0
+          ? `/admin/patches/${ZERO}/invite/reveal`
+          : `/admin/players/${ZERO}/reset-password`;
+      statuses.push((await adminCall(server, 'POST', path, token)).statusCode);
+    }
+    expect(statuses.every((s) => s === 404)).toBe(true);
+    const over = await adminCall(server, 'POST', '/admin/lookup', token, {
+      patch: 'meadow',
+      from: '2026-10-01',
+      to: '2026-10-07',
+    });
+    expect(over.statusCode).toBe(429);
+    // Reads have their own budget.
+    expect((await adminCall(server, 'GET', '/admin/me', token)).statusCode).toBe(200);
   });
 
   it('rate-limits sign-in per username', async () => {
