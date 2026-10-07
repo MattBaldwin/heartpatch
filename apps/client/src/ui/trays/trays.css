@@ -33,6 +33,21 @@
   }
 }
 
+/* A phone on its side (#136): one column of rows is taller than the screen,
+   so the last rows (the challenge report, the Hollow, Team and Jobs) hid
+   below the fold. The tray grows wider instead and its sections sit side by
+   side (see .tray-body below), still leaving room for the handle it carries. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .trays {
+    --tray-width: min(
+      600px,
+      calc(
+        100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - var(--tray-handle) - 16px
+      )
+    );
+  }
+}
+
 .trays[hidden],
 .trays [hidden] {
   display: none !important;
@@ -139,6 +154,17 @@
 
 .tray-section:empty {
   display: none;
+}
+
+/* Short and wide (#136): sections in two columns, each one still a column
+   of rows. More than fits scrolls down, as in the one-column tray. */
+@media (max-height: 520px) and (min-width: 640px) {
+  .tray-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    align-content: start;
+  }
 }
 
 /* Every entry in a tray is one big row: icon, words, maybe a badge.
