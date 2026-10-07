@@ -61,7 +61,7 @@ export const RESOURCES: Resource[] = [
     id: 'ice',
     name: 'Ice',
     description:
-      'Chilly chunks from the mountains, for building frosty things. They never melt in your bag!',
+      'Cold and sparkly chunks from the mountains. Fences will want it soon! They never melt in your bag.',
     kind: 'gathered',
     gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Emberwood
   },
