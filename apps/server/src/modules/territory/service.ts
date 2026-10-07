@@ -108,7 +108,8 @@ const MESSAGES = {
   // claim sheet counts down to it ("New tries in 3h 20m 🌙").
   noAttempts: "You've used all your tries for today. New tries come at your patch's midnight 🌙",
   shielded: 'This Keeper is new here. Their land is safe for now. Try wild land!',
-  lossCap: "This Keeper's land has had enough fun for today. Try again tomorrow!",
+  lossCap:
+    "This Keeper's land has had enough fun for today. It's ready again at your patch's midnight 🌙",
   nobodyGuards: 'Nobody is guarding this spot right now. Try again later!',
   notYours: 'You can only guard your own land.',
   homeWatch: 'Home bases are safe already. Pick land outside your home!',
