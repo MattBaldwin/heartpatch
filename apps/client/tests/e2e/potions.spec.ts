@@ -62,7 +62,7 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
   // A wild battle: "Use item" counts the bag.
   await realTap(await trayButton(page, 'battle-dev-fight'));
   await expect(page.getByTestId('battle-hud')).toBeVisible();
-  let state = await settled(page);
+  const state = await settled(page);
   await expect(page.getByTestId('battle-item')).toHaveText('🧪 1');
   await expect(page.getByTestId('battle-item')).toHaveAccessibleName('Use item, 1 in your bag');
   expect(state.potions?.['brave-brew']).toBe(1);
@@ -84,7 +84,7 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
   await realTap(brew);
   // The turn goes out, then plays back.
   await expect.poll(async () => (await battleState(page))?.turn, { timeout: 30_000 }).toBe(1);
-  state = await settled(page);
+  await settled(page);
   await expect(page.getByTestId('battle-chip-attack-mine')).toBeVisible();
   await expect.poll(async () => (await battleState(page))?.potions?.['brave-brew'] ?? 0).toBe(0);
   await expect(page.getByTestId('battle-item')).toHaveText('🧪 0');
@@ -137,6 +137,7 @@ test('a full team at 375 px: Heart Charm, potions and Swap share the first line,
   // One Swap for the whole bench: it asks who comes out.
   await realTap(page.getByTestId('battle-swap'));
   await expect(page.getByTestId('battle-swap-pick')).toHaveCount(2);
+  await expectRoomyLabels(page, '.battle-button, .battle-ask');
   await realTap(page.getByTestId('battle-swap-back'));
   await expect(page.getByTestId('battle-swap')).toBeVisible();
 });

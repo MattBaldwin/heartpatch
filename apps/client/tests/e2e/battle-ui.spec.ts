@@ -175,7 +175,6 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     const pick = page.getByTestId('battle-swap-pick').first();
     await expect(pick).toBeVisible();
-    await expectRoomyLabels(page, '.battle-button, .battle-ask');
     const pickBox = (await pick.boundingBox())!;
     await page.mouse.click(pickBox.x + pickBox.width / 2, pickBox.y + pickBox.height / 2);
     state = await settled(page);
