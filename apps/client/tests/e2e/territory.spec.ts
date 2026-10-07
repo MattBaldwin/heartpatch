@@ -127,11 +127,9 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
 
   // Wild land next to home: the panel says Claim, kindly. A Hearthfire goes in
   // a tile's middle (#202), so the land claimed here has no resource node
-  // there: wild terrain puts one on 40–100% of tiles, and a node tile's panel
-  // rightly offers no fire ("a fire next door can reach it").
-  const { body: wild } = await api<{
-    tiles: { q: number; r: number; nodeResource: string | null }[];
-  }>(page, 'GET', `/maps/${mapId}/view`);
+  // there: many wild terrains put one on 40–50% of their tiles, and a node
+  // tile's panel rightly offers no fire ("a fire next door can reach it").
+  const { body: wild } = await api<MapView>(page, 'GET', `/maps/${mapId}/view`);
   const clear = new Set(
     wild.tiles.filter((t) => t.nodeResource === null).map((t) => `${String(t.q)},${String(t.r)}`),
   );

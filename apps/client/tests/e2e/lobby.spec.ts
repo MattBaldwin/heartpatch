@@ -11,7 +11,7 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
 }, testInfo) => {
   // Two signups, each through the Keeper picker's 3D preview (#42); CI renders
   // in software. A pass takes about a minute on iPad WebKit (58.6 s on #224's
-  // CI), and a shard's first tests also pay for the first shader compiles.
+  // CI), and a group's first tests also pay for the first shader compiles.
   test.setTimeout(120_000);
   const suffix = `${Date.now().toString(36)}${String(testInfo.workerIndex)}`;
   const ownerName = `own_${suffix}`;
