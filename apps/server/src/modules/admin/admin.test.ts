@@ -113,10 +113,11 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
    * step the pid part and the counter until the whole name passes.
    */
   const patchName = (word: string): string => {
-    for (let n = process.pid; ; n += 1_000_000) {
+    for (let n = process.pid, tries = 0; tries < 100; n += 1_000_000, tries += 1) {
       const name = `${word} ${letters(n)} ${letters((counter += 1))}`;
       if (checkText(name, 'name').ok) return name;
     }
+    throw new Error(`patchName: no "${word}" name passed the filter`);
   };
 
   /** A logged-in player with a Keeper, written straight to the database. */
