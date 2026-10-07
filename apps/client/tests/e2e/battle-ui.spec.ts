@@ -35,20 +35,10 @@ interface Point3 {
 
 const battleState = (page: Page) => hook<BattleDebug>(page, 'battle');
 
-/** Where the camera sits once the director has stopped moving it (after a beat). */
-async function restingCamera(page: Page): Promise<Point3> {
-  await expect
-    .poll(
-      async () => {
-        const a = (await battleState(page))?.scene?.camera;
-        await page.waitForTimeout(300);
-        const b = (await battleState(page))?.scene?.camera;
-        return !!a && !!b && Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 1e-3;
-      },
-      { timeout: 30_000 },
-    )
-    .toBe(true);
-  return (await battleState(page))!.scene!.camera!;
+/** The map camera's own state (`MapCameraState`): what a leaked pan or wheel would move. */
+interface MapCamera {
+  target: { x: number; z: number };
+  distance: number;
 }
 
 async function settled(page: Page): Promise<BattleDebug> {
@@ -132,7 +122,9 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
 
   // A drag and a wheel across the fight itself (kids poke the squishies) never
   // reach the canvas, where the map camera listens: the HUD's shield takes them,
-  // and the camera stays where the director put it.
+  // and the map camera (which a leaked pan or wheel would move) stays put. The
+  // battle's own camera isn't compared: the director overwrites the stage
+  // camera every frame, and its framing breathes with the fighters' idle sway.
   await page.evaluate(() => {
     const game = document.querySelector('#game');
     const w = window as unknown as { __canvasGestures: number };
@@ -143,7 +135,7 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
       });
     }
   });
-  const before = await restingCamera(page);
+  const before = (await hook<MapCamera>(page, 'camera'))!;
   const mineBox = (await page.getByTestId('battle-plate-mine').boundingBox())!;
   const sheetBox = (await page.getByTestId('battle-sheet').boundingBox())!;
   const yMid = (mineBox.y + mineBox.height + sheetBox.y) / 2;
@@ -158,10 +150,10 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
     await page.evaluate(() => (window as unknown as { __canvasGestures: number }).__canvasGestures),
   ).toBe(0);
   await page.waitForTimeout(1500); // a fling would have glided by now
-  const after = await restingCamera(page);
-  expect(after.x).toBeCloseTo(before.x, 2);
-  expect(after.y).toBeCloseTo(before.y, 2);
-  expect(after.z).toBeCloseTo(before.z, 2);
+  const after = (await hook<MapCamera>(page, 'camera'))!;
+  expect(after.target.x).toBeCloseTo(before.target.x, 3);
+  expect(after.target.z).toBeCloseTo(before.target.z, 3);
+  expect(after.distance).toBeCloseTo(before.distance, 3);
 
   // One mouse click (a laptop) on Swap, if someone is on the bench and we can still act:
   // it asks who comes out (#214), then a click on the name swaps.
