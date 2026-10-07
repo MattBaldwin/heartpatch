@@ -193,7 +193,7 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
 });
 
 test('says when tries come back once they are used up (#201)', async ({ browser }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000); // a reload rebuilds the map; CI renders in software
   const page = await newPlayer(browser, uniqueName('tries'));
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -202,7 +202,7 @@ test('says when tries come back once they are used up (#201)', async ({ browser 
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   await expect
-    .poll(() => territoryState(page))
+    .poll(() => territoryState(page), { timeout: 30_000 })
     .toMatchObject({ attemptsLeft: TERRITORY_RULES.attemptsPerDay });
 
   // Use every try through the API: start a claim on a different wild tile
@@ -231,7 +231,10 @@ test('says when tries come back once they are used up (#201)', async ({ browser 
   // Back on the patch (a reload lands there), wild land says when tries come back.
   await page.reload();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
-  await expect.poll(() => territoryState(page)).toMatchObject({ attemptsLeft: 0 });
+  // Roomy: a reload rebuilds the map scene, slow on a software-rendered runner.
+  await expect
+    .poll(() => territoryState(page), { timeout: 30_000 })
+    .toMatchObject({ attemptsLeft: 0 });
   await findTile(page, 'no-tries');
   await expect(page.getByTestId('territory-tries')).toHaveText(
     /^New tries in (\d+h( \d{2}m)?|\d+m|less than a minute) 🌙$/,
