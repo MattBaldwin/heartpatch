@@ -579,8 +579,23 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
       ...(page.isNew ? [el('span', { class: 'rbook-sticker' }, RECIPE_BOOK_TEXT.newTag)] : []),
     ),
     el('h3', { class: 'rbook-name' }, page.name),
-    ...(page.effect ? [el('p', { class: 'rbook-effect' }, page.effect)] : []),
-    el('p', { class: 'rbook-flavour' }, page.flavour),
+    ...(page.effect
+      ? [
+          el('p', { class: 'rbook-purpose', 'data-testid': 'rbook-purpose' }, page.effect.purpose),
+          el(
+            'div',
+            { class: 'rbook-chips', 'data-testid': 'rbook-chips' },
+            ...page.effect.chips.map((c) =>
+              el(
+                'span',
+                { class: c.battle ? 'rbook-chip rbook-chip-battle' : 'rbook-chip' },
+                c.text,
+              ),
+            ),
+          ),
+        ]
+      : []),
+    ...(page.flavour ? [el('p', { class: 'rbook-flavour' }, page.flavour)] : []),
     el('p', { class: 'rbook-meta' }, page.meta),
     el('h4', { class: 'rbook-need' }, RECIPE_BOOK_TEXT.youNeed),
     el('ul', { class: 'rbook-ings' }, ...page.ingredients.map((i) => ingredientLine(page, i))),
