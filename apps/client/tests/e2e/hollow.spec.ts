@@ -86,6 +86,8 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
   await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
   if (!(await hollowState(page))!.night) {
+    // The reload shut the trays: open the one the nudge lives in again.
+    await trayButton(page, 'hollow-fire-hint');
     await expect(hint).toBeVisible();
     await expect(hint).toContainText('A friend sleeps out in the dark. Light a fire there!');
     expect(findAvoidedWords((await hint.textContent()) ?? '')).toEqual([]);

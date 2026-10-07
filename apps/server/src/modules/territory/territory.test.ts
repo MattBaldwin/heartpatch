@@ -677,7 +677,9 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const left = (await status(server, kid, mapId)).attemptsLeft;
       const capped = await attack(server, kid, mapId, near2);
       expect(capped.statusCode).toBe(409);
-      expect(errorOf(capped).message).toMatch(/enough fun for today/);
+      expect(errorOf(capped).message).toMatch(
+        /enough fun for today\. It.s ready again at your patch.s midnight/,
+      );
       expect((await status(server, kid, mapId)).attemptsLeft).toBe(left);
 
       // On: up to three a day.
