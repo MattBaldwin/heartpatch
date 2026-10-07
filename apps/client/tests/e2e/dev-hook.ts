@@ -18,6 +18,7 @@ export type HookName =
   | 'cinematic'
   | 'inventory'
   | 'territory'
+  | 'fences'
   | 'hollow'
   | 'raids'
   | 'home'
