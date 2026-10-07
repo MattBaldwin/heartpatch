@@ -560,6 +560,7 @@ const milestones = createMilestoneCelebration({
 // out while one is open, and the map comes back after.
 const battles = createBattleScreen({
   root: document.body,
+  isGlade: (mapId) => mapId === glade,
   // Find a squishy and the Catalog live in the Adventure tray.
   entryRoot: trays.slot('battle'),
   showScene,
