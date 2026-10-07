@@ -131,11 +131,13 @@ const TAP_MAX_MS = 400;
 
 /**
  * Taps the middle of the spotlight hole (the spotlit tile) until `opened`
- * shows. The canvas times the press itself: one it saw as longer than a tap
- * isn't one, since a slow box can stretch Playwright's round trips between
- * the press and the lift past TAP_MAX_MS (as in taps.spec.ts), so it is
- * pressed again rather than counted. A press the map took as a tap that still
- * opens nothing fails, saying what was under the finger and what got picked.
+ * shows. A press the map saw as longer than a tap isn't one: a slow box can
+ * stretch Playwright's round trips between the press and the lift past
+ * TAP_MAX_MS (as in taps.spec.ts), so it is pressed again rather than counted.
+ * The canvas times the press itself, with the same event timestamps the map's
+ * tap detector reads (taps.spec.ts's Date.now() would include Playwright's own
+ * overhead). A press the map took as a tap that still opens nothing fails,
+ * saying what was under the finger and what got picked.
  */
 async function tapSpotlitTile(page: Page, opened: Locator): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {
@@ -160,21 +162,26 @@ async function tapSpotlitTile(page: Page, opened: Locator): Promise<void> {
       { px: x, py: y },
     );
     await realTapAt(page, x, y);
-    if (
-      await opened.waitFor({ timeout: 5_000 }).then(
-        () => true,
-        () => false,
-      )
-    )
-      return;
     const press = await page.evaluate(() => {
       const [down, up] = (window as unknown as { __mapPress: number[] }).__mapPress;
-      return down === undefined || up === undefined ? null : Math.round(up - down);
+      return down === undefined || up === undefined ? null : up - down;
     });
-    if (press !== null && press > TAP_MAX_MS && attempt < 3) continue;
+    // Too long to be a tap: the map rightly ignored it, so press again (and
+    // say so in the output, as evidence the slow-press case happens).
+    if (press !== null && press > TAP_MAX_MS && attempt < 3) {
+      console.log(`a ${String(Math.round(press))} ms press is no tap; pressing again`);
+      continue;
+    }
+    const shown = await opened.waitFor({ timeout: 5_000 }).then(
+      () => true,
+      () => false,
+    );
+    if (shown) return;
     const picked = (await hook<{ selected: string | null }>(page, 'map'))?.selected ?? null;
-    const what = `a press of ${String(press)} ms at (${String(Math.round(x))}, ${String(Math.round(y))}) on [${under.join(', ')}] picked ${String(picked)}`;
-    await expect(opened, what).toBeVisible();
+    const ms = press === null ? 'no' : `a ${String(Math.round(press))} ms`;
+    throw new Error(
+      `the spotlit tile didn't open after ${ms} press at (${String(Math.round(x))}, ${String(Math.round(y))}) on [${under.join(', ')}]; the map picked ${String(picked)}`,
+    );
   }
 }
 
