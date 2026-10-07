@@ -1,15 +1,17 @@
 import { findAvoidedWords, STARTERS } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
+import { claimLand } from './claim-land.js';
 import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 
 /**
- * The Hollow Man on an iPhone (issue #21): a new player gets a nudge to light
- * a fire and two nights of grace (owner decision 2026-10-03); then night falls
- * (the dev route), he visits the map once, takes a squishy left outside a lit
- * fire to the Hollow, the morning report says so kindly, and a rescue sets off
- * from anywhere.
+ * The Hollow Man on an iPhone (issue #21): home is always safe (the Heart
+ * Seed, #202), so a new player claims land and posts a guard out there;
+ * with no fire lit on it they get a nudge to light one, and two nights of
+ * grace (owner decision 2026-10-03). Then night falls (the dev route), he
+ * visits the map once, takes the guard standing in the dark to the Hollow,
+ * the morning report says so kindly, and a rescue sets off from anywhere.
  * Checked through the dev hook's signals, never pixels or timing.
  */
 
@@ -32,7 +34,7 @@ const battleState = (page: Page) =>
   hook<{ status: string; scene: { squishies: number; shadowLook: number } | null }>(page, 'battle');
 
 test('night falls, the Hollow Man visits, and a rescue sets off', async ({ browser }) => {
-  test.setTimeout(180_000); // map and arena builds; CI renders in software
+  test.setTimeout(240_000); // map and arena builds and a claim; CI renders in software
   const page = await newPlayer(browser, uniqueName('hollow'));
   // The map's ambient life (swaying trees, drifting motes) keeps a fast
   // renderer drawing; reduced motion holds it still, so "the map stops
@@ -59,17 +61,36 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
     .poll(() => hollowState(page))
     .toMatchObject({ mapId, hollowed: 0, report: [], visits: 0 });
 
-  // New here with no fire: a small nudge (unless it's night on the server's clock).
+  // Home is always safe: a squishy waiting by the Heart Seed is no worry, so no nudge.
   const hint = await trayButton(page, 'hollow-fire-hint');
+  await expect(hint).toBeHidden();
+
+  // Land of their own, and a guard out there with no fire lit: exposed.
+  const land = await claimLand(page, mapId);
+  const squishy = { speciesId: STARTERS.speciesIds[0], level: 5 };
+  const granted = await api<{ squishy: { id: string } }>(
+    page,
+    'POST',
+    `/maps/${mapId}/dev/squishies`,
+    squishy,
+  );
+  expect(granted.status).toBe(201);
+  // On watch out there with no fire lit (owner decision 2026-10-07: guards need its light too).
+  const posted = await api(page, 'POST', `/maps/${mapId}/defenders`, {
+    ...land,
+    squishyIds: [granted.body.squishy.id],
+  });
+  expect(posted.status, JSON.stringify(posted.body)).toBe(200);
+  // The nudge, once the hollow status is read again (unless it's night on the server's clock).
+  await page.reload();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
   if (!(await hollowState(page))!.night) {
     await expect(hint).toBeVisible();
-    await expect(hint).toContainText('Light a fire before night falls!');
+    await expect(hint).toContainText('A friend sleeps out in the dark. Light a fire there!');
     expect(findAvoidedWords((await hint.textContent()) ?? '')).toEqual([]);
   }
 
-  // One squishy, waiting by the Heart Seed with no Hearthfire built: exposed.
-  const squishy = { speciesId: STARTERS.speciesIds[0], level: 5 };
-  expect((await api(page, 'POST', `/maps/${mapId}/dev/squishies`, squishy)).status).toBe(201);
   // First-night grace: the first two nightfalls take nothing.
   for (let night = 0; night < 2; night++) {
     const graced = await api(page, 'POST', `/maps/${mapId}/dev/nightfall`);
@@ -89,7 +110,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   const graceReport = page.getByTestId('hollow-report');
   await expect(graceReport).toBeVisible();
   await expect(graceReport).toContainText('took nobody this time');
-  await expect(graceReport).toContainText('Light a fire before night falls!');
+  await expect(graceReport).toContainText('A friend sleeps out in the dark. Light a fire there!');
   expect(findAvoidedWords((await graceReport.textContent()) ?? '')).toEqual([]);
   expect(await hollowState(page)).toMatchObject({ hollowed: 0 });
   await page.getByTestId('hollow-report-ok').tap();

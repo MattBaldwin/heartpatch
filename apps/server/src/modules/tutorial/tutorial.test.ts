@@ -778,10 +778,8 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
       await gather(1, 0);
       expect(await step()).toBe('hearthfire');
 
-      // 3. Light a Hearthfire: Emberwood fuels it, the bag's Stone builds it.
-      await gather(1, -1);
-      const fire = await build('hearthfire');
-      await ok('POST', `/maps/${m}/buildings/${fire.id}/fuel`, { nights: 1 });
+      // 3. The Heart Seed keeps home safe (owner decision 2026-10-07): Sprout says so.
+      await acknowledge(server, kid, 'hearthfire');
       expect(await step()).toBe('first-battle');
 
       // 4. First battle, with the Glade friend: won or not, it counts.
@@ -828,13 +826,26 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
         const res = await call(server, 'POST', `/maps/${m}/attacks`, kid, { q, r });
         if (res.statusCode >= 300) continue;
         const ended = await playOut(server, kid, battleOf(res));
-        if ((await step()) === 'defend') {
+        if ((await step()) === 'land-fire') {
           claimed = { q, r };
           break;
         }
         expect(ended.status).toBe('finished');
       }
       expect(claimed).not.toBeNull();
+
+      // 8b. A fire in the new land's middle: Emberwood fuels it, the bag's Stone builds it.
+      await gather(1, -1);
+      const lit = await ok('POST', `/maps/${m}/buildings`, {
+        buildingId: 'hearthfire',
+        ...claimed!,
+        spot: 0,
+      });
+      const fire = HomeResponseSchema.parse(lit.json()).buildings.find(
+        (b) => b.buildingId === 'hearthfire',
+      )!;
+      await ok('POST', `/maps/${m}/buildings/${fire.id}/fuel`, { nights: 1 });
+      expect(await step()).toBe('defend');
 
       // 9. Defend: the Glade friend stands watch on the new land.
       const helper = (await squishiesOf(m)).find(

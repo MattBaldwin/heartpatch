@@ -149,21 +149,23 @@ export class MapState {
         // was upgraded: a new level, model and safe radius (owner decision 2026-10-06).
         const parsed = GAME_EVENTS[event.type].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
-        this.putBuilding(parsed.data.building);
-        return 'none';
+        // Fires on land are built and fuelled from the map itself (#202), so
+        // the map redraws them (and their glow) at once.
+        return this.putBuilding(parsed.data.building) ? 'redraw' : 'none';
       }
       case 'building.moved': {
         const parsed = GAME_EVENTS['building.moved'].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
-        this.dropBuilding(hexKey(parsed.data.from), parsed.data.building.id);
-        this.putBuilding(parsed.data.building);
-        return 'none';
+        const left = this.dropBuilding(hexKey(parsed.data.from), parsed.data.building.id);
+        const came = this.putBuilding(parsed.data.building);
+        return left || came ? 'redraw' : 'none';
       }
       case 'building.removed': {
         const parsed = GAME_EVENTS['building.removed'].public.safeParse(event.data);
         if (!parsed.success) return 'resync';
-        this.dropBuilding(hexKey(parsed.data), parsed.data.buildingRowId);
-        return 'none';
+        return this.dropBuilding(hexKey(parsed.data), parsed.data.buildingRowId)
+          ? 'redraw'
+          : 'none';
       }
       default:
         // Types this map doesn't draw (yet).
@@ -186,23 +188,24 @@ export class MapState {
   }
 
   /** Adds or replaces a building on its tile, keeping spot order. */
-  private putBuilding(placed: PlacedBuilding): void {
+  private putBuilding(placed: PlacedBuilding): boolean {
     const { q, r, ...building } = placed;
     const key = hexKey({ q, r });
-    this.editTile(key, (tile) =>
+    return this.editTile(key, (tile) =>
       [...tile.buildings.filter((b) => b.id !== building.id), building].sort(
         (a, b) => a.spot - b.spot,
       ),
     );
   }
 
-  private dropBuilding(key: HexKey, id: string): void {
-    this.editTile(key, (tile) => tile.buildings.filter((b) => b.id !== id));
+  private dropBuilding(key: HexKey, id: string): boolean {
+    return this.editTile(key, (tile) => tile.buildings.filter((b) => b.id !== id));
   }
 
-  private editTile(key: HexKey, buildings: (tile: PublicTile) => PublicTile['buildings']): void {
+  /** Changes a tile's buildings; false if the map has no such tile. */
+  private editTile(key: HexKey, buildings: (tile: PublicTile) => PublicTile['buildings']): boolean {
     const tile = this.byHex.get(key);
-    if (tile) this.patchTile(tile, { buildings: buildings(tile) });
+    return tile ? this.patchTile(tile, { buildings: buildings(tile) }) : false;
   }
 
   private index(): void {

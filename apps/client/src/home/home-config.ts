@@ -44,6 +44,9 @@ export const SPOT_SIZE = 0.3; // TUNE: ring spots sit about half-way to the tile
 /** Building scale on the world map, as a fraction of the map's hex size. */
 export const MAP_BUILDING_SCALE = 0.42; // TUNE
 
+/** A fire on captured land stands alone in its tile's middle, so it's drawn bigger (#202). */
+export const MAP_OUTER_FIRE_SCALE = 0.75; // TUNE
+
 /** The soft glow over Hearthfire-safe tiles on the map (linear RGB, alpha). */
 export const SAFE_GLOW = { rgb: [1, 0.82, 0.42], fill: 0.2, edge: 0.55 } as const; // TUNE
 

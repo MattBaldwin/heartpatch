@@ -6,6 +6,7 @@ import {
   landMarks,
   latestWildNight,
   rippleFade,
+  unseenLostFires,
   unseenWild,
 } from './land-text.js';
 
@@ -54,8 +55,8 @@ describe('marks and fade', () => {
         { q: 4, r: 0, fade: 70, wildFrom: WILD_FROM },
       ],
       wentWild: [
-        { q: 5, r: 0, night: '2026-10-14' },
-        { q: 6, r: 0, night: '2026-10-14' },
+        { q: 5, r: 0, night: '2026-10-14', lostFire: null },
+        { q: 6, r: 0, night: '2026-10-14', lostFire: null },
       ],
     });
     const tiles = [
@@ -102,11 +103,33 @@ describe('marks and fade', () => {
   });
 });
 
+describe('fires that went out with the land (#202)', () => {
+  it('counts my fires lost since the card I last saw, and adds up what came back', () => {
+    const t = tending({
+      wentWild: [
+        { q: 5, r: 0, night: '2026-10-14', lostFire: { timber: 2, stone: 2, emberwood: 1 } },
+        { q: 6, r: 0, night: '2026-10-15', lostFire: { timber: 2, stone: 2 } },
+        { q: 7, r: 0, night: '2026-10-15', lostFire: null },
+      ],
+    });
+    expect(unseenLostFires(t, null)).toEqual({
+      fires: 2,
+      back: { timber: 4, stone: 4, emberwood: 1 },
+    });
+    expect(unseenLostFires(t, '2026-10-14')).toEqual({ fires: 1, back: { timber: 2, stone: 2 } });
+    expect(unseenLostFires(t, '2026-10-15').fires).toBe(0);
+    expect(LAND_TEXT.welcomeFire(1)).toBe(
+      'Your fire out there went out when the land went wild. You got some things back 🔥',
+    );
+    for (const n of [1, 2]) expect(findAvoidedWords(LAND_TEXT.welcomeFire(n))).toEqual([]);
+  });
+});
+
 describe('the welcome-back card', () => {
   const t = tending({
     wentWild: [
-      { q: 5, r: 0, night: '2026-10-14' },
-      { q: 6, r: 0, night: '2026-10-15' },
+      { q: 5, r: 0, night: '2026-10-14', lostFire: null },
+      { q: 6, r: 0, night: '2026-10-15', lostFire: null },
     ],
   });
 

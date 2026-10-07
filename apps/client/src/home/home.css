@@ -297,3 +297,28 @@
   border: 2px solid #c98a12;
   box-sizing: border-box;
 }
+
+/* A fire's card mid-step in the map's tile panel (#202): the other rows step aside. */
+.tile-panel-actions-focus > .tile-actions-slot:not(.tile-actions-focus) {
+  display: none;
+}
+
+/* The header lets taps through to the scene; its Fuel all fires button takes them (#202). */
+.home-fuel-all {
+  pointer-events: auto;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.home-land-fires {
+  margin: 4px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* A fire's card in the tile panel: one tight row of small buttons. */
+.home-row-tight {
+  gap: 8px;
+  justify-content: flex-start;
+}
