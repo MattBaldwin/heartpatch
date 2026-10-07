@@ -344,14 +344,34 @@
   text-align: center;
 }
 
-.rbook-effect {
-  align-self: center;
+.rbook-purpose {
   margin: 0;
-  padding: 3px 12px;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #4a3150;
+  text-align: center;
+}
+
+.rbook-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Like the build menu's effect chips (home.css .home-effect). */
+.rbook-chip {
+  padding: 3px var(--hp-pad-x);
   border-radius: 999px;
+  background: #fff3d6;
+  font-size: 13px;
+  font-weight: 800;
+  color: #7a4a12;
+}
+
+.rbook-chip-battle {
   background: #eef6e6;
-  font-size: 14px;
-  font-weight: 900;
   color: #2f6b3d;
 }
 

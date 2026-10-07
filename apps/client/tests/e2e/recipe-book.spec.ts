@@ -74,6 +74,8 @@ test('trays hold the controls, and the recipe book makes, seals, searches and fi
     charm.locator('[data-ingredient="treats"] [data-testid="recipe-book-qty"]'),
   ).toHaveText('0/1');
   await expect(charm).toContainText('Forest');
+  // What it's for (#241), worked out from its data.
+  await expect(charm.getByTestId('rbook-chips')).toContainText('Helps befriend a wild squishy');
   expect(findAvoidedWords((await charm.textContent()) ?? '')).toEqual([]);
   const make = charm.getByTestId('recipe-book-make');
   await expect(make).toBeDisabled();
