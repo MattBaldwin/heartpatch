@@ -11,6 +11,7 @@ import { createCoinPill } from '../coins/coin-counter.js';
 import { el, messageOf } from '../dom.js';
 import { boutiqueApi, type BoutiqueApi } from './boutique-api.js';
 import { BOUTIQUE_TEXT, buyState, racksOf } from './boutique-view.js';
+import '../rarity/rarity.css';
 import './boutique.css';
 
 // The Boutique (design doc §23, #45): reached from the Wardrobe, it takes the

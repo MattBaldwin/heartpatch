@@ -187,6 +187,13 @@
   flex-direction: column;
 }
 
+/* The rarity dot sits before the name (#240). */
+.team-candidate-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .tile-workers {
   margin: 4px 0;
   font-size: 15px;

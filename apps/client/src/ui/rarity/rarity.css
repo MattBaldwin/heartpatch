@@ -1,0 +1,64 @@
+/* Rarity colours, from plain to sparkly (design doc §23), shared by squishies
+   (#240) and clothing (wardrobe, Boutique). Secret is squishies only. */
+.rarity-common {
+  --rarity: #8fbf8a;
+}
+.rarity-uncommon {
+  --rarity: #4fa36b;
+}
+.rarity-rare {
+  --rarity: #4f8fd6;
+}
+.rarity-epic {
+  --rarity: #8a62c4;
+}
+.rarity-legendary {
+  --rarity: #e0a12a;
+}
+.rarity-secret {
+  --rarity: #d9468b;
+}
+
+/* The chip: a coloured dot and the word, outlined in the rarity's colour.
+   The word stays in ink, since the paler colours are hard to read as text. */
+.rarity-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: inset 0 0 0 2px var(--rarity);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #4a3150;
+  white-space: nowrap;
+}
+
+.rarity-chip::before,
+.rarity-dot {
+  content: '';
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rarity);
+}
+
+/* Just the dot, where a row is tight. */
+.rarity-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  vertical-align: middle;
+}
+
+/* Secret glows a little, so it reads as special. */
+.rarity-secret.rarity-chip::before,
+.rarity-secret.rarity-dot {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 6px 2px var(--rarity);
+}

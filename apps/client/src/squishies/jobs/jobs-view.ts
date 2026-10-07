@@ -7,6 +7,7 @@ import {
   type ItemCounts,
   type JobSquishy,
   type JobsView,
+  type Rarity,
   type WorkSpot,
   type WorkStatus,
 } from '@heartpatch/shared';
@@ -66,6 +67,14 @@ const SPECIES = new Map(GAME_DATA.species.map((s) => [s.id, s]));
 /** What to call a squishy (the server's name for it, else its species'). */
 export function nameOf(view: Pick<JobsView, 'names'>, s: JobSquishy): string {
   return view.names[s.squishy.id] ?? SPECIES.get(s.squishy.speciesId)?.name ?? 'Your squishy';
+}
+
+/**
+ * A squishy's rarity for its dot (#240), or null when this client has no
+ * row for its species (a secret one: the jobs view sends names, not rows).
+ */
+export function rarityOf(s: JobSquishy): Rarity | null {
+  return SPECIES.get(s.squishy.speciesId)?.rarity ?? null;
 }
 
 /** A squishy's colour for its little blob (its species' main colour). */

@@ -25,6 +25,7 @@ import {
 } from '../../milestones/milestones-card.js';
 import { MILESTONES_TEXT } from '../../milestones/milestones-view.js';
 import { el, messageOf } from '../dom.js';
+import { RARITY_NAMES } from '../rarity/rarity.js';
 import { KeeperPreview } from '../keeper/keeper-preview.js';
 import { OutfitSync } from './outfit-sync.js';
 import { watchScrollEdges } from './scroll-edges.js';
@@ -131,14 +132,7 @@ export const WARDROBE_TEXT = {
     costume: 'Costumes',
     squishy: 'Squishy',
   } satisfies Record<WardrobeTab, string>,
-  rarities: {
-    all: 'All',
-    common: 'Common',
-    uncommon: 'Uncommon',
-    rare: 'Rare',
-    epic: 'Epic',
-    legendary: 'Legendary',
-  } satisfies Record<RarityFilter, string>,
+  rarities: { all: 'All', ...RARITY_NAMES } satisfies Record<RarityFilter, string>,
   empty: 'Nothing here yet. Keep exploring to find some!',
   emptyRarity: 'None like that yet. Keep exploring!',
   squishyNote: 'Tiny things for your squishy friends.',

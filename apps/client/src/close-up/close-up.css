@@ -55,6 +55,20 @@
   cursor: pointer;
 }
 
+/* Name over its rarity chip (#240); shrinks so Back keeps its room. */
+.close-up-titles {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.close-up-titles .close-up-name {
+  max-width: 100%;
+}
+
 .close-up-name {
   margin: 0;
   overflow: hidden;
