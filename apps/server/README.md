@@ -97,9 +97,41 @@ Maps (players say "patches") live in `src/modules/maps` (issue #4; design doc §
 
 **Text filter:** run every piece of player-typed text through `assertAllowedText(text, 'name' | 'message')` from `lib/filter.ts` before storing it (tech spec §9). It throws `VALIDATION_FAILED` with a kid-readable message. `checkText` returns the verdict without throwing.
 
-**Operator reset** (tech spec §9): `docker compose exec server node dist/ops/reset-password.js <username>` (locally `pnpm --filter @heartpatch/server ops:reset-password <username>`) sets a temporary password, revokes sessions and prints a new recovery code. Never exposed over HTTP.
+**Operator reset** (tech spec §9): `docker compose exec server node dist/ops/reset-password.js <username>` (locally `pnpm --filter @heartpatch/server ops:reset-password <username>`) sets a temporary password, revokes sessions and prints a new recovery code. Never exposed to players over HTTP; the admin console runs the same reset (below).
 
 **Operator family codes** (#195): `docker compose exec server node dist/ops/signup-code.js create "<label>" [--uses N] [--days N]`, `list` or `revoke <code-id>` (locally `pnpm --filter @heartpatch/server ops:signup-code …`). The operator's codes have no cap; `list` shows every recent code, owners' too.
+
+## Admin console
+
+`modules/admin` (#196) serves the operator console at `/api/v1/admin/*`. **Admin is a role** (`users.role = 'admin'`) that only the host script `ops/grant-admin.ts` sets; no route grants or removes it. Every route but `login` and `logout` runs the gate first: a live `hp_admin` session (its own cookie, `Path=/api/v1/admin`, `SameSite=Strict`), re-checked against the account's role and confirmed authenticator on every request, ending after 30 idle minutes or 8 hours (`ADMIN_RULES`). Without one: **403 `FORBIDDEN`**, whatever player session the browser has. Every reply is `Cache-Control: no-store`. The console's clock is real time (`BuildAppOptions.adminNow`), never `HP_DEV_NOW`, because authenticator codes follow the real clock.
+
+**Sign-in** needs the password and a 6-digit TOTP code (RFC 6238, `modules/admin/totp.ts`, no dependency). Each code works once (`admin_totp.last_step`). A wrong name, password, code or a non-admin all get the same 401. Limits: 10 per IP and 5 per username per 15 minutes; signed-in requests are limited per admin (`ADMIN_RATE_LIMITS`: reads, actions, and secrets).
+
+**Audit:** every action writes an `admin_audit` row **before** it runs (`pending`), marked `done` or `failed` after, so nothing goes unrecorded. Sign-ins (failed ones on admin accounts too), sign-outs and the host scripts write rows as well. No row holds a secret.
+
+**Commands reuse their modules.** Join requests and invite codes run through the maps service **as the patch's owner**, so seats, the Keeper and tutorial gates, game events and lock order are the owner page's own. A reset is `AuthService.operatorReset`, the same function `ops/reset-password.ts` runs. Family codes use the signup-codes service's operator functions.
+
+| Endpoint | Notes |
+|---|---|
+| `POST /api/v1/admin/login` | `{ username, password, code }` → `{ admin, idleExpiresAt, expiresAt }` and the `hp_admin` cookie |
+| `POST /api/v1/admin/logout` | → 204; ends this admin session |
+| `GET /api/v1/admin/me` | → the same shape as login |
+| `GET /api/v1/admin/patches?q=&page=&tutorial=` | → `{ patches, page, pageSize, total }`: name, owner, members and seats, made, last activity, seasons, PvP mode, waiting requests. Tutorial runs only with `tutorial=true` |
+| `GET /api/v1/admin/patches/:mapId` | → members (last active here), waiting requests, the invite's expiry (never the code), the Hollow Man's last 7 nights |
+| `POST /api/v1/admin/patches/:mapId/invite/reveal` | → `{ code, expiresAt }`, recorded |
+| `POST /api/v1/admin/patches/:mapId/invite` | → a new `{ code, expiresAt }`; the old code stops working |
+| `POST /api/v1/admin/patches/:mapId/requests/:requestId/approve` \| `decline` | → 204, as the owner |
+| `GET /api/v1/admin/players?q=&page=` | → `{ players, … }`: made, last sign-in, signed-in devices, whether a recovery code is waiting (never the code), patches |
+| `GET /api/v1/admin/players/:userId` | → the same, plus who brought them in (#195) and their patches, past and asked |
+| `POST /api/v1/admin/players/:userId/reset-password` | → `{ username, temporaryPassword, recoveryCode }`, shown once; every session ended |
+| `POST /api/v1/admin/players/:userId/logout-everywhere` | → `{ ended }` |
+| `POST /api/v1/admin/lookup` | `{ patch, from, to }` → `{ matches }` (at most 10): who joined, or asked to join, a patch whose name contains `patch` between those dates (widened 14 h each side for time zones) |
+| `GET /api/v1/admin/signup-codes` | → every maker's family codes |
+| `POST /api/v1/admin/signup-codes` | `{ label, maxUses, days }` → 201 `{ code, signupCode }`, shown once |
+| `POST /api/v1/admin/signup-codes/:codeId/extend` \| `revoke` | `{ days }` (extend) → 204 |
+| `GET /api/v1/admin/audit?q=&page=` | → `{ entries, … }`, newest first |
+
+**Host scripts:** `ops/grant-admin.ts <username> [--revoke]` and `ops/enrol-totp.ts <username> [--confirm <code>]` (locally `pnpm --filter @heartpatch/server ops:grant-admin …` / `ops:enrol-totp …`). Setup steps are in `docs/DEPLOY.md`, "Admin console".
 
 ## Battles
 

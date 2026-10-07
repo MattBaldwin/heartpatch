@@ -6,6 +6,8 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 import type { Config } from './config.js';
 import { registerErrorHandling } from './lib/errors.js';
 import { serializerCompiler, validatorCompiler } from './lib/zod.js';
+import { adminRoutes } from './modules/admin/routes.js';
+import { createAdminService } from './modules/admin/service.js';
 import { createAuthHooks, registerRequestGuards } from './modules/auth/hooks.js';
 import type { Database } from './db/client.js';
 import { createClock, type Clock } from './lib/time.js';
@@ -87,6 +89,11 @@ export interface BuildAppOptions {
   /** The game clock; defaults to `createClock(config)` (honours `HP_DEV_NOW`). Tests can move it. */
   clock?: Clock;
   logger?: FastifyServerOptions['logger'];
+  /**
+   * The admin console's clock (#196): real time by default, never
+   * `HP_DEV_NOW`, since authenticator codes follow the real clock. Tests move it.
+   */
+  adminNow?: Clock;
   /**
    * The Hollow Man (#21) for `src/index.ts`, which runs his nightfall job and
    * rescue consumer next to the app. Called once the service exists.
@@ -197,6 +204,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             ...(config.HP_DEV_MAP_CREATE_LIMIT_PER_IP !== undefined
               ? { createPerIpMax: config.HP_DEV_MAP_CREATE_LIMIT_PER_IP }
               : {}),
+          }),
+        );
+
+        // The operator admin console (#196): admins only, its own session and
+        // cookie. Real time, not the game clock: authenticator codes follow it.
+        await api.register(
+          adminRoutes(createAdminService({ db, auth, maps, signupCodes, now: options.adminNow }), {
+            secureCookies,
           }),
         );
 

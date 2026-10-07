@@ -10,6 +10,8 @@ import { pino } from 'pino';
 import { loadConfig } from '../config.js';
 import { createDbClient } from '../db/client.js';
 import { createAuthRepo } from '../modules/auth/repo.js';
+import { recordHostAction } from '../modules/admin/grants.js';
+import { AUDIT_ACTIONS } from '../modules/admin/audit-actions.js';
 import { createAuthService } from '../modules/auth/service.js';
 
 const log = pino({ name: 'ops' });
@@ -29,6 +31,8 @@ try {
     log.error({ username }, 'no such user');
     process.exitCode = 1;
   } else {
+    // In the admin console's audit log too (#196); never the secrets.
+    await recordHostAction(client.db, AUDIT_ACTIONS.resetPassword, result.user.id);
     // Secrets go to the operator's terminal only, not to the log stream.
     log.info({ userId: result.user.id }, 'password reset; all sessions revoked');
     process.stdout.write(

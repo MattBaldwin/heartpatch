@@ -368,6 +368,43 @@ docker compose exec server node dist/ops/signup-code.js revoke <code-id>
 
 The code is printed once (only its hash is stored). Patch owners can also make up to 3 codes from their patch's page, and a patch's invite code signs a new family up too. `HP_SIGNUP_CODE` still works for this release, as a fallback.
 
+### Admin console
+
+`https://play.pumpkinpatchgames.com/admin` shows every patch, its players and join requests, every account, family codes and an audit log, and lets you reset a password, log a player out everywhere, answer a stuck join request, make an invite code or a family code, and look up a forgotten username (#196). Only accounts with the admin role can use it, and every sign-in needs a 6-digit code from an authenticator app (Google Authenticator, 1Password, Authy or the iPhone's Passwords app). Both are set up here on the server, never in the browser.
+
+**One-time setup (do this once, for your own account):**
+
+1. Make an ordinary Heartpatch account for yourself in the game if you don't have one. Use a long password you don't use anywhere else.
+2. Give it the admin role:
+
+   ```sh
+   docker compose exec server node dist/ops/grant-admin.js <your-username>
+   ```
+
+3. Start the authenticator setup. It prints a secret and an `otpauth://` link:
+
+   ```sh
+   docker compose exec server node dist/ops/enrol-totp.js <your-username>
+   ```
+
+   In your authenticator app, add an account and type the secret in (or open the link on the phone). It shows a new 6-digit code every 30 seconds.
+4. Confirm it with the code the app shows right now:
+
+   ```sh
+   docker compose exec server node dist/ops/enrol-totp.js <your-username> --confirm 123456
+   ```
+
+5. Open `/admin`, sign in with your username, password and the app's current code.
+
+The secret is shown only on your terminal; it isn't logged. Clear the terminal afterwards (`clear`) if anyone might see your screen.
+
+**Good to know:**
+- An admin session ends after 30 minutes without a click, and after 8 hours regardless. Each code works once.
+- Every action, sign-in (including failed ones) and host-script grant is in the console's audit log. Resets there are the same as `reset-password.js`.
+- **Lost phone?** Run step 3 again: it replaces the authenticator and signs you out of the console. Then step 4 with the new app.
+- **Take admin away:** `docker compose exec server node dist/ops/grant-admin.js <username> --revoke` (it also removes their authenticator and ends their console sessions).
+- Right now you are the only admin (owner decision 2026-10-07). Granting someone else is the same two scripts, run for their account.
+
 ## 9. Playtesting
 
 The checklist for testers is [PLAYTEST.md](PLAYTEST.md). This section is where the game runs for a playtest and which accounts to use.
