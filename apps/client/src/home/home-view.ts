@@ -82,7 +82,7 @@ export function landFires(home: HomeResponse): MyBuilding[] {
 export interface FuelAllOffer {
   /** Fires out on my land. */
   readonly land: number;
-  /** Fires (home included) with a night or less left. */
+  /** Fires on my land with a night or less left. */
   readonly low: number;
   /** Emberwood (and any other fuel) to fill every fire. */
   readonly cost: Record<string, number>;

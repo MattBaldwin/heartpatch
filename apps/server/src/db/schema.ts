@@ -301,11 +301,11 @@ export const buildings = pgTable(
     }),
     // One building per spot.
     unique('buildings_tile_id_spot_key').on(t.tileId, t.spot),
-    // One fire per tile, of any kind (#202, `maxPerTile: 1`): a Hearthfire and
-    // a Jack-o'-Lantern never share one, even if a tile gets a second centre spot.
-    uniqueIndex('buildings_one_fire_per_tile_key')
-      .on(t.tileId)
-      .where(sql`${t.kind} = 'hearthfire'`),
+    // One fire per tile (#202) needs no index of its own: fires stand only in
+    // a tile's middle (spot 0, `slot: 'centre'`), so `buildings_tile_id_spot_key`
+    // already allows one. (A unique index on fires per tile would fail on the
+    // home fires main allowed, two to a home tile, before the boot pass packs
+    // them up.)
     index('buildings_map_id_owner_user_id_idx').on(t.mapId, t.ownerUserId),
     check('buildings_level_positive', sql`${t.level} >= 1`),
     check('buildings_spot_range', sql`${t.spot} between 0 and 6`),

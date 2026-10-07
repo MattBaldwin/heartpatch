@@ -1,4 +1,6 @@
 import {
+  battleXpPercent,
+  GROWTH_RULES,
   BATTLE_RULES,
   GAME_DATA,
   gameplayOverrides,
@@ -34,7 +36,8 @@ import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
-import { mapLocalTime, type Clock } from '../../lib/time.js';
+import { mapLocalTime, nextLocalMidnight, type Clock } from '../../lib/time.js';
+import { createBattlesRepo } from '../battles/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
@@ -367,6 +370,15 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
       firelitTiles(tx, repo, map, at),
       createBuildingsRepo(tx).listOwned(map.id, userId),
     ]);
+    // Who has won its full-XP battles today (#201): wins pay less until the
+    // patch's next midnight (the battles service's falloff, the same count).
+    const wins = await createBattlesRepo(tx).winsToday(
+      map.id,
+      userId,
+      rows.map((r) => r.squishy.id),
+      at,
+    );
+    const fullXpBack = nextLocalMidnight(at, map.timeZone).toISOString();
     const seasons = new Set(seasonsOn(at, map.timeZone));
     const workers = new Map<string, string>();
     const squishies: JobSquishy[] = rows.map((row) => {
@@ -409,6 +421,8 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         habitatId: row.habitatBuildingId,
         work: status,
         training: trainingStatus,
+        fullXpResetAt:
+          battleXpPercent(wins.get(row.squishy.id) ?? 0, GROWTH_RULES) < 100 ? fullXpBack : null,
       };
     });
     // One per home (`maxPerHome: 1`, checked by the data tests).

@@ -247,7 +247,9 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
     const { plain, node } = await land(mapId, kid, 2);
 
     const first = await placed(server, kid, mapId, fire(plain[0]!));
-    // A second fire on that tile: refused before the spot check, the database backs it up.
+    // A second fire on that tile: refused before the spot check. The database
+    // backs it up: fires stand only in the middle, and a tile has one middle
+    // (`buildings_tile_id_spot_key`).
     const again = await place(server, kid, mapId, { ...fire(plain[0]!), spot: 0 });
     expect(again.statusCode).toBe(409);
     await expect(
@@ -257,9 +259,9 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
         tileId: (await db.query.buildings.findFirst({
           where: (t, { eq }) => eq(t.id, first.id),
         }))!.tileId,
-        buildingId: 'hearthfire',
+        buildingId: 'jack-o-lantern-hearthfire',
         kind: 'hearthfire',
-        spot: 3,
+        spot: 0,
       }),
     ).rejects.toThrow();
     // Only the middle, and not a node's.
@@ -375,7 +377,8 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       }))!.id;
     // Built before today's rules: a habitat in a middle (its node's), a
     // level-2 fire at home with two nights of fuel, and a Jack-o'-Lantern
-    // fire by the Heart Seed.
+    // fire beside it on the same home tile (main allowed one of each per
+    // home, on any spot): migration 0027 adds no index they could break.
     const old = (
       buildingId: string,
       kind: string,
@@ -393,8 +396,7 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       level: 2,
       fuelledThrough: '2026-10-03',
     });
-    const seedTile = tiles.find((t) => t.heartSeed)!;
-    const lantern = await old('jack-o-lantern-hearthfire', 'hearthfire', await tileId(seedTile), 2);
+    const lantern = await old('jack-o-lantern-hearthfire', 'hearthfire', await tileId(ring2!), 4);
 
     const errors: unknown[] = [];
     // It scans every patch in the database (other tests' too), so only this

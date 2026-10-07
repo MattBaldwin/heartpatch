@@ -1,5 +1,5 @@
 {
-  "id": "7bf4fc6a-4a7d-4ced-968a-a89527fd4b43",
+  "id": "cc43fd84-f6ae-47dd-8e72-9d84d54b18e0",
   "prevId": "4b7be723-debb-439c-b95a-70be89768630",
   "version": "7",
   "dialect": "postgresql",
@@ -312,22 +312,6 @@
         }
       },
       "indexes": {
-        "buildings_one_fire_per_tile_key": {
-          "name": "buildings_one_fire_per_tile_key",
-          "columns": [
-            {
-              "expression": "tile_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"buildings\".\"kind\" = 'hearthfire'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "buildings_map_id_owner_user_id_idx": {
           "name": "buildings_map_id_owner_user_id_idx",
           "columns": [

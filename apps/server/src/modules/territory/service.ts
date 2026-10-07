@@ -29,7 +29,13 @@ import {
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
-import { localDate, MINUTE_MS, spawnWindowFor, type Clock } from '../../lib/time.js';
+import {
+  localDate,
+  MINUTE_MS,
+  nextLocalMidnight,
+  spawnWindowFor,
+  type Clock,
+} from '../../lib/time.js';
 import type {
   BattlesService,
   PrepareTileBattle,
@@ -98,7 +104,9 @@ const MESSAGES = {
   pvpOff: 'Challenges are off on this patch. Claim wild land instead!',
   movedOn: 'That land just changed hands. Take another look!',
   cooldown: 'This land needs a little rest. Try again later!',
-  noAttempts: "You've used all your tries for today. Come back tomorrow!",
+  // Time-free (#201): the patch's midnight may not be the player's; the
+  // claim sheet counts down to it ("New tries in 3h 20m 🌙").
+  noAttempts: "You've used all your tries for today. New tries come at your patch's midnight 🌙",
   shielded: 'This Keeper is new here. Their land is safe for now. Try wild land!',
   lossCap: "This Keeper's land has had enough fun for today. Try again tomorrow!",
   nobodyGuards: 'Nobody is guarding this spot right now. Try again later!',
@@ -333,6 +341,8 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
     return {
       attemptsLeft: Math.max(0, rules.attemptsPerDay - used),
       attemptsPerDay: rules.attemptsPerDay,
+      // Tries count from the patch's midnight (`attemptsOn`), so they refill at the next one.
+      triesResetAt: nextLocalMidnight(at, map.timeZone).toISOString(),
       shieldUntil: shieldEnds && shieldEnds > at ? shieldEnds.toISOString() : null,
       defenders,
       squishies,

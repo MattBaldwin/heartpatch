@@ -271,7 +271,7 @@ Fires that stood on home tiles when the Heart Seed took over keeping home safe (
 | `refund` | jsonb | Everything given back (build, upgrades and unburned fuel) |
 | `packed_at` | timestamptz | |
 
-`buildings` also has `buildings_one_fire_per_tile_key` (migration 0027): one fire of any kind per tile, unique on `tile_id` where `kind = 'hearthfire'`.
+One fire per tile needs no index of its own: fires stand only in a tile's middle (spot 0), and `buildings_tile_id_spot_key` allows one building per spot.
 
 ### `tile_defenders`
 Squishies standing watch on their owner's tiles (#15, decision C), up to `TERRITORY_RULES.maxDefenders` per tile.

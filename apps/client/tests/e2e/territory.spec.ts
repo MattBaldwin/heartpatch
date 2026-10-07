@@ -1,4 +1,11 @@
-import { findAvoidedWords, GAME_DATA, TERRITORY_RULES } from '@heartpatch/shared';
+import {
+  attackTargetProblem,
+  findAvoidedWords,
+  GAME_DATA,
+  TERRITORY_RULES,
+  type MapView,
+  type PlayerBattle,
+} from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
@@ -115,7 +122,10 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   // Wild land next to home: the panel says Claim, kindly.
   const spot = await findTile(page, 'claim');
   const panel = page.getByTestId('tile-panel');
-  await expect(panel).toContainText('tries left today');
+  // Any wait: in the patch's last hour it's minutes, or "less than a minute".
+  await expect(panel).toContainText(
+    /tries left · new tries in (\d+h( \d{2}m)?|\d+m|less than a minute)/,
+  );
   expect(findAvoidedWords((await panel.textContent()) ?? '')).toEqual([]);
   // How many guardians and how tough (owner decision 10), as the server's view
   // says for the tile the map has selected; never who.
@@ -204,4 +214,55 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   expect(findAvoidedWords((await panel.textContent()) ?? '')).toEqual([]);
 
   expect(errors).toEqual([]);
+});
+
+test('says when tries come back once they are used up (#201)', async ({ browser }) => {
+  test.setTimeout(300_000); // a reload rebuilds the map; CI renders in software
+  const page = await newPlayer(browser, uniqueName('tries'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Tries Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await expect
+    .poll(() => territoryState(page), { timeout: 30_000 })
+    .toMatchObject({ attemptsLeft: TERRITORY_RULES.attemptsPerDay });
+
+  // Use every try through the API: start a claim on a different wild tile
+  // each time (a fought-over tile rests), and scoot home straight away.
+  const mapId = (await mapState(page))!.id;
+  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
+  const { body: view } = await api<MapView>(page, 'GET', `/maps/${mapId}/view`);
+  const wild = view.tiles.filter(
+    (t) => attackTargetProblem(t, view.tiles, me, view.map.pvpMode) === null,
+  );
+  expect(wild.length).toBeGreaterThanOrEqual(TERRITORY_RULES.attemptsPerDay);
+  for (const tile of wild.slice(0, TERRITORY_RULES.attemptsPerDay)) {
+    const started = await api<{ battle: PlayerBattle }>(page, 'POST', `/maps/${mapId}/attacks`, {
+      q: tile.q,
+      r: tile.r,
+    });
+    expect(started.status).toBe(201);
+    const { battle } = started.body;
+    const ended = await api(page, 'POST', `/battles/${battle.id}/actions`, {
+      action: { type: 'forfeit' },
+      turn: battle.view.turn,
+    });
+    expect(ended.status).toBe(200);
+  }
+
+  // Back on the patch (a reload lands there), wild land says when tries come back.
+  await page.reload();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
+  // Roomy: a reload rebuilds the map scene, slow on a software-rendered runner.
+  await expect
+    .poll(() => territoryState(page), { timeout: 30_000 })
+    .toMatchObject({ attemptsLeft: 0 });
+  await findTile(page, 'no-tries');
+  await expect(page.getByTestId('territory-tries')).toHaveText(
+    /^New tries in (\d+h( \d{2}m)?|\d+m|less than a minute) 🌙$/,
+  );
+  expect(findAvoidedWords((await page.getByTestId('tile-panel').textContent()) ?? '')).toEqual([]);
+  await page.context().close();
 });
