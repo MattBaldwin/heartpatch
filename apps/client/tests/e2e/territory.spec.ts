@@ -211,7 +211,9 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
 
   // A Hearthfire in the new land's middle (#202): build it, then fuel it to light it.
   await page.getByTestId('tile-build-fire').tap();
-  await expect(panel).toContainText('It goes in the middle of this tile');
+  // What a fire does (#207): its line and chips, as in the build menu.
+  await expect(panel).toContainText('Keeps squishies out on your land safe from the Hollow Man');
+  await expect(panel.locator('.home-effect').first()).toHaveText('🛡️ Safe 1 tile around');
   await page.getByTestId('tile-build-fire-confirm').tap();
   await expect(page.getByTestId('tile-fire')).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('tile-fire-fuel').tap();
