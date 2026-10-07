@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { GAME_DATA } from '../data/index.js';
 import { hashString } from '../rng/index.js';
 import { hex, hexDistance, hexKey, hexRing, hexSpiral } from '../hex/index.js';
-import { generateMap, homeShares, mapLayout, type GeneratedMap, type MapGenData } from './index.js';
+import { terrainNodeResources } from '../schemas/data/terrains.js';
+import {
+  extraNodes,
+  generateMap,
+  homeShares,
+  mapLayout,
+  type GeneratedMap,
+  type MapGenData,
+} from './index.js';
 
 const { mapGen } = GAME_DATA;
 const PLAYER_COUNTS = [2, 3, 4] as const;
@@ -44,8 +52,75 @@ describe('generateMap: determinism', () => {
     // maps. That's fine for maps not created yet (tiles are persisted), so
     // update the hash on purpose.
     expect(hashString(JSON.stringify(generate('pinned-seed', 4)))).toBe(
+      'c9f05f2dfd6b84c8dc7a59f22ae018ee',
+    );
+  });
+
+  it('keeps the main pass as it was before the extra nodes (#238)', () => {
+    // Without the extra pass's nodes, the map is the one main made before
+    // #238 (its pinned hash then), so no stored map's nodes move.
+    const map = generate('pinned-seed', 4);
+    expect(hashString(JSON.stringify({ ...map, tiles: withoutExtras(map) }))).toBe(
       '4d809aead0d653d4c4a31c5db548d8b6',
     );
+  });
+});
+
+/** The map's tiles with the extra pass's nodes (#238) taken off again. */
+function withoutExtras(map: GeneratedMap): GeneratedMap['tiles'] {
+  const extraIds = new Set(
+    GAME_DATA.terrains.flatMap((t) => (t.extraNodes ?? []).map((e) => `${t.id}:${e.resource}`)),
+  );
+  return map.tiles.map((t) =>
+    t.homeSlot === null &&
+    extraIds.has(`${t.terrain}:${String(t.nodeResource)}`) &&
+    !GAME_DATA.terrains.find((x) => x.id === t.terrain)!.nodeResources.includes(t.nodeResource!)
+      ? { ...t, nodeResource: null }
+      : t,
+  );
+}
+
+describe('extraNodes (#238: Water, Greens and Ice)', () => {
+  const map = generate('extra-seed', 4);
+  const old = { ...map, tiles: withoutExtras(map) };
+
+  it('gives an older map, read later, exactly the nodes a new map is made with', () => {
+    const added = new Map(
+      extraNodes(old.tiles, GAME_DATA.terrains, 'extra-seed').map((n) => [hexKey(n), n.resource]),
+    );
+    const backfilled = old.tiles.map((t) => ({
+      ...t,
+      nodeResource: added.get(hexKey(t)) ?? t.nodeResource,
+    }));
+    expect(backfilled).toEqual(map.tiles);
+    expect(added.size).toBeGreaterThan(0);
+  });
+
+  it('adds nothing twice, and never to home tiles or tiles with a node', () => {
+    expect(extraNodes(map.tiles, GAME_DATA.terrains, 'extra-seed')).toEqual([]);
+    const added = extraNodes(old.tiles, GAME_DATA.terrains, 'extra-seed');
+    const byKey = new Map(old.tiles.map((t) => [hexKey(t), t]));
+    for (const n of added) {
+      const tile = byKey.get(hexKey(n))!;
+      expect(tile.homeSlot).toBeNull();
+      expect(tile.nodeResource).toBeNull();
+    }
+  });
+
+  it('puts a well on every lake, and Greens and Ice where the data says', () => {
+    for (const t of map.tiles) {
+      if (t.homeSlot === null && t.terrain === 'lake') expect(t.nodeResource).toBe('water');
+    }
+    const kinds = new Set(map.tiles.map((t) => `${t.terrain}:${String(t.nodeResource)}`));
+    expect(kinds).toContain('meadow:greens');
+    expect(kinds).toContain('mountains:ice');
+    // A different seed, different meadows.
+    const other = extraNodes(
+      withoutExtras(generate('another-seed', 4)),
+      GAME_DATA.terrains,
+      'another-seed',
+    );
+    expect(other).not.toEqual(extraNodes(old.tiles, GAME_DATA.terrains, 'extra-seed'));
   });
 });
 
@@ -221,7 +296,7 @@ describe('generateMap: terrain, nodes and guardians', () => {
     for (const map of maps) {
       for (const tile of map.tiles) {
         if (tile.homeSlot !== null || tile.nodeResource === null) continue;
-        expect(terrainById.get(tile.terrain)!.nodeResources).toContain(tile.nodeResource);
+        expect(terrainNodeResources(terrainById.get(tile.terrain)!)).toContain(tile.nodeResource);
       }
     }
   });

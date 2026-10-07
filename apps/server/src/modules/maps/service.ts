@@ -30,6 +30,7 @@ import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings, removeMemberBuildings } from '../buildings/service.js';
+import { seedExtraNodes } from './extra-nodes.js';
 import { createKeepersRepo } from '../keepers/repo.js';
 import { starterPick } from '../starters/service.js';
 import { newResetCredentials } from '../auth/secrets.js';
@@ -359,6 +360,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       await requireViewer(db, user, mapId);
       // A building moved out of the way is a live event for everyone else.
       if (await seedHomeRingNodes(db, mapId, now(), options.log)) published(mapId);
+      // Water, Greens and Ice on a map made before them (#238), once.
+      await seedExtraNodes(db, mapId);
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();

@@ -113,6 +113,18 @@ export interface HomeRingTileRow {
   takenSpots: number[];
 }
 
+/** A tile with no node outside home bases (`listNodelessTiles`). */
+export interface NodelessTileRow {
+  id: string;
+  q: number;
+  r: number;
+  terrain: string;
+  homeSlot: null;
+  nodeResource: null;
+  /** A building stands in its middle (a fire on captured land): no node fits yet. */
+  middleTaken: boolean;
+}
+
 export interface PendingRequestRow {
   id: string;
   user: UserRef;
@@ -180,6 +192,14 @@ export interface MapsRepo {
   listHomeRingTiles: (mapId: string, lock?: boolean) => Promise<HomeRingTileRow[]>;
   /** Puts a node on a home tile that has none; false if it already had one. */
   addHomeNode: (tileId: string, resource: string) => Promise<boolean>;
+  /**
+   * The map's tiles with no node outside home bases (#238's extra nodes),
+   * with whether a building stands in the middle. `lock`: the tiles at
+   * these ids are locked first (`FOR NO KEY UPDATE`, id order).
+   */
+  listNodelessTiles: (mapId: string, lockIds?: readonly string[]) => Promise<NodelessTileRow[]>;
+  /** Puts a node on a tile outside home bases that has none; false if it already had one. */
+  addTileNode: (tileId: string, resource: string) => Promise<boolean>;
   /** Gives the player every tile of a home slot; returns those tiles. */
   claimHomeTiles: (
     mapId: string,
@@ -424,6 +444,40 @@ function queries(db: Executor): MapsRepo {
         homeSlot: row.homeSlot ?? 0,
         takenSpots: row.takenSpots.map(Number),
       }));
+    },
+
+    listNodelessTiles: async (mapId, lockIds = []) => {
+      if (lockIds.length > 0) {
+        await db
+          .select({ id: tiles.id })
+          .from(tiles)
+          .where(inArray(tiles.id, [...lockIds]))
+          .orderBy(asc(tiles.id))
+          .for('no key update');
+      }
+      const rows = await db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          terrain: tiles.terrain,
+          middleTaken: sql<boolean>`exists (
+            select 1 from ${buildings} b where b.tile_id = ${tiles}.id and b.spot = 0
+          )`,
+        })
+        .from(tiles)
+        .where(and(eq(tiles.mapId, mapId), isNull(tiles.homeSlot), isNull(tiles.nodeResource)))
+        .orderBy(asc(tiles.q), asc(tiles.r));
+      return rows.map((r) => ({ ...r, homeSlot: null, nodeResource: null }));
+    },
+
+    addTileNode: async (tileId, resource) => {
+      const changed = await db
+        .update(tiles)
+        .set({ nodeResource: resource })
+        .where(and(eq(tiles.id, tileId), isNull(tiles.homeSlot), isNull(tiles.nodeResource)))
+        .returning({ id: tiles.id });
+      return changed.length > 0;
     },
 
     addHomeNode: async (tileId, resource) => {

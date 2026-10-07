@@ -40,6 +40,28 @@ export const RESOURCES: Resource[] = [
     kind: 'gathered',
     gather: { seconds: 60 * 60, quantity: 1 }, // TUNE: rarer than Stone
   },
+  // #238: new things to gather, for the element fences (#203).
+  {
+    id: 'water',
+    name: 'Water',
+    description: 'Cool, clear water from a lakeside well.',
+    kind: 'gathered',
+    gather: { seconds: 20 * 60, quantity: 3 }, // TUNE: like Treats
+  },
+  {
+    id: 'greens',
+    name: 'Greens',
+    description: 'Leafy bundles of grass and clover from meadows and forests.',
+    kind: 'gathered',
+    gather: { seconds: 15 * 60, quantity: 4 }, // TUNE: a little less than Stone
+  },
+  {
+    id: 'ice',
+    name: 'Ice',
+    description: 'Glittery, chilly chunks from the mountains. They never melt in your bag!',
+    kind: 'gathered',
+    gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Emberwood
+  },
   {
     id: 'heartdust',
     name: 'Heartdust',

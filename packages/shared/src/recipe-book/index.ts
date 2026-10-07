@@ -5,6 +5,7 @@ import { shortfall, type ItemCounts } from '../gathering/index.js';
 import { buildCost } from '../home/costs.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import { isBuildable, type HomeBaseRules } from '../schemas/data/home-base.js';
+import { terrainNodeResources } from '../schemas/data/terrains.js';
 
 // The recipe book (owner decision 2026-10-05, design doc §12–13): one page per
 // craft recipe and per home-buildable building. A page opens the first time
@@ -126,7 +127,9 @@ export function whereToFind(
   data: Pick<GameData, 'resources' | 'terrains' | 'mapGen' | 'recipes'> = GAME_DATA,
 ): WhereToFind {
   return {
-    terrains: data.terrains.filter((t) => t.nodeResources.includes(resourceId)).map((t) => t.id),
+    terrains: data.terrains
+      .filter((t) => terrainNodeResources(t).includes(resourceId))
+      .map((t) => t.id),
     homeRing: data.mapGen.homeRingNodes.includes(resourceId),
     bonusFrom: data.resources
       .filter((r) => r.gather?.extras?.some((e) => e.resource === resourceId) ?? false)

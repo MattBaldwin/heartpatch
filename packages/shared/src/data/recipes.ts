@@ -9,6 +9,17 @@ export const RECIPES: Recipe[] = [
     output: { resource: 'heart-charm', quantity: 1 },
     craftSeconds: 60, // TUNE:
   },
+  // #238: Ice without mountains. Slow on its own; a Frost squishy on the
+  // team freezes it twice as fast.
+  {
+    id: 'freeze-water',
+    name: 'Frozen Water',
+    description: 'Leave Water out in the cold until it turns into sparkly Ice.',
+    inputs: { water: 3 }, // TUNE:
+    output: { resource: 'ice', quantity: 1 },
+    craftSeconds: 30 * 60, // TUNE:
+    fasterWith: { element: 'frost', percent: 50 }, // TUNE:
+  },
   // Battle potions (#214): farm Treats plus something gathered. Year-round
   // inputs, so a potion never needs a season.
   {

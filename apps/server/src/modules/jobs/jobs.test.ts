@@ -11,6 +11,8 @@ import {
   MapViewSchema,
   type JobsView,
   type PublicTile,
+  extraNodes,
+  GAME_DATA,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -178,12 +180,15 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
   ): Promise<PublicTile> {
     const all = await tilesOf(server, who, mapId);
     const home = all.filter((t) => t.homeSlot !== null);
+    const seed = (await db.query.maps.findFirst({ where: (m, { eq }) => eq(m.id, mapId) }))!.seed!;
     const far = all.find(
       (t) =>
         t.ownerUserId === null &&
         t.homeSlot === null &&
         !skip.some((s) => s.q === t.q && s.r === t.r) &&
-        home.every((h) => hexDistance(h, t) >= 4),
+        home.every((h) => hexDistance(h, t) >= 4) &&
+        // Bare even after #238's extra pass would roll this terrain here.
+        extraNodes([{ ...t, terrain, nodeResource: null }], GAME_DATA.terrains, seed).length === 0,
     );
     expect(far).toBeDefined();
     await run(

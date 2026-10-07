@@ -9,6 +9,7 @@ export const TERRAINS: Terrain[] = [
     weight: 30, // TUNE:
     nodeChance: 0,
     nodeResources: [],
+    extraNodes: [{ resource: 'greens', chance: 60 }], // TUNE: #238
   },
   {
     id: 'forest',
@@ -17,6 +18,7 @@ export const TERRAINS: Terrain[] = [
     weight: 20, // TUNE:
     nodeChance: 40, // TUNE:
     nodeResources: ['timber'],
+    extraNodes: [{ resource: 'greens', chance: 25 }], // TUNE: #238, so Hedges don't need meadows
   },
   {
     id: 'old-forest',
@@ -41,6 +43,7 @@ export const TERRAINS: Terrain[] = [
     weight: 8, // TUNE:
     nodeChance: 50, // TUNE:
     nodeResources: ['stone', 'glimmer'],
+    extraNodes: [{ resource: 'ice', chance: 35 }], // TUNE: #238
   },
   {
     id: 'lake',
@@ -49,6 +52,7 @@ export const TERRAINS: Terrain[] = [
     weight: 8, // TUNE:
     nodeChance: 0,
     nodeResources: [],
+    extraNodes: [{ resource: 'water', chance: 100 }], // TUNE: #238, a well on every lake
   },
   {
     id: 'pumpkin-fields',
