@@ -1,4 +1,12 @@
-import type { MapView, PublicFence, PublicTile, PublicUser, ItemCounts } from '@heartpatch/shared';
+import {
+  GAME_EVENTS,
+  type ItemCounts,
+  type MapView,
+  type PublicFence,
+  type PublicTile,
+  type PublicUser,
+  type WsEventMessage,
+} from '@heartpatch/shared';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import type { TileActions } from '../map/map-screen.js';
 import type { TerritoryScreen } from '../territory/territory-screen.js';
@@ -41,6 +49,8 @@ export interface FenceDebug {
 export interface FenceScreen {
   setMap: (mapId: string | null) => void;
   setUser: (user: PublicUser | null) => void;
+  /** Every live event: my fences that a capture left on inner edges (#244). */
+  liveEvent: (event: WsEventMessage) => void;
   readonly tileActions: TileActions;
   readonly debug: FenceDebug | null;
 }
@@ -67,6 +77,8 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
   let note = '';
   let mode: Mode = { kind: 'card' };
   let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
+  /** My fences a capture of mine took down from inner edges, not yet said (#244). */
+  let innerDown = 0;
   /** A command's answer for the tile on screen, until the map catches up. */
   let answer: { q: number; r: number; fences: readonly PublicFence[] } | null = null;
 
@@ -536,6 +548,11 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
       }
     }
     if (note && nodes.length > 0) nodes.push(line(note, 'fence-note'));
+    // Said once, on the next tile of mine the panel shows.
+    if (innerDown > 0) {
+      nodes.unshift(line(FENCE_TEXT.innerDown(innerDown), 'fence-inner'));
+      innerDown = 0;
+    }
     setFocus(container, mode.kind !== 'card');
     container.replaceChildren(...nodes);
   }
@@ -550,6 +567,7 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
     generation += 1;
     items = null;
     answer = null;
+    innerDown = 0;
     mode = { kind: 'card' };
     note = '';
   };
@@ -567,6 +585,14 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
       mapId = null;
       reset();
       render();
+    },
+    liveEvent: (event) => {
+      if (event.mapId !== mapId || event.type !== 'fence.removed') return;
+      const parsed = GAME_EVENTS['fence.removed'].public.safeParse(event.data);
+      if (parsed.success && parsed.data.lost === 'inner' && parsed.data.userId === user?.id) {
+        innerDown += 1;
+        render();
+      }
     },
     tileActions: {
       show: (container, tile, view) => {

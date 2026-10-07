@@ -123,6 +123,8 @@ describe('the fence sheet (#203)', () => {
       FENCE_TEXT.takenDown('3 Emberwood'),
       FENCE_TEXT.repaired,
       FENCE_TEXT.upgraded(2),
+      FENCE_TEXT.innerDown(1),
+      FENCE_TEXT.innerDown(3),
     ];
     for (const line of lines) expect(findAvoidedWords(line)).toEqual([]);
     expect(FENCE_TEXT.fenceThem(2, 'x')).toBe('🪵 Fence both (x)');

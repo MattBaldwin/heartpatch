@@ -452,6 +452,7 @@ const maps = createMapScreen({
     wardrobe.liveEvent(event);
     hollow.liveEvent(event);
     land.liveEvent(event);
+    fences.liveEvent(event);
     chat.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);

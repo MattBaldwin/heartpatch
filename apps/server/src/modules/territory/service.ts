@@ -68,7 +68,7 @@ import { createFencesRepo } from '../fences/repo.js';
 import {
   FENCE_DATA,
   sumRefunds,
-  takeDownFencesOnLostLand,
+  takeDownFencesOnCapture,
   toPlacedFence,
 } from '../fences/service.js';
 import { createLandTending, type LandTendingService } from './tending.js';
@@ -711,8 +711,16 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         : [];
       const refund = lostFires.find((l) => l.ownerUserId === tile.ownerUserId)?.refund ?? null;
       if (refund) await repo.setLostFireRefund(attack.id, refund);
-      // So do its fence segments still standing (#203), for the take-down share.
-      const lostFences = await takeDownFencesOnLostLand(tx, attack.mapId, [tile.id], 'captured');
+      // So do its fence segments still standing (#203), for the take-down
+      // share, and the capturer's own that faced it, now on inner edges
+      // of their land (owner decision on #244).
+      const lostFences = await takeDownFencesOnCapture(
+        tx,
+        attack.mapId,
+        tile,
+        attack.attackerUserId,
+        await repo.listTiles(attack.mapId),
+      );
       const fenceRefund = sumRefunds(
         lostFences.filter((l) => l.ownerUserId === tile.ownerUserId).map((l) => l.refund),
       );

@@ -91,6 +91,26 @@ describe('public views', () => {
         fence,
       });
     }
+    // A fence on an inner edge after a capture (#244): why it came down is
+    // public (its owner's client says so); what came back isn't.
+    const inner = event('fence.removed', {
+      userId: attacker,
+      fenceId,
+      buildingId: 'stone-wall',
+      q: 3,
+      r: -1,
+      edge: 2,
+      refund: { stone: 4 },
+      lost: 'inner',
+    });
+    expect(publicViewFor(PUBLIC_VIEWS, inner, { userId: 'someone-else' })).toEqual({
+      userId: attacker,
+      fenceId,
+      q: 3,
+      r: -1,
+      edge: 2,
+      lost: 'inner',
+    });
   });
 
   it('tells only the owner which squishy went to the Hollow or came home (#21)', () => {

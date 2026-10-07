@@ -191,6 +191,10 @@ export const FENCE_TEXT = {
       ? '1 edge faces other land with no fence.'
       : `${String(n)} edges face other land with no fence.`,
   inside: 'All inside your land: no fence needed here.',
+  innerDown: (n: number) =>
+    n === 1
+      ? '🪵 Your new land is past one of your fences, so it came down. Part of it came back to your bag!'
+      : `🪵 Your new land is past ${String(n)} of your fences, so they came down. Part of each came back to your bag!`,
   build: 'Build a fence',
   openSheet: (n: number) => (n > 0 ? `🪵 Fences (${String(n)})` : '🪵 Fences'),
   segment: (name: string, edge: string, percent: number) =>

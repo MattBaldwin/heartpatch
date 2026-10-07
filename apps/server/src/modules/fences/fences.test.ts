@@ -3,6 +3,7 @@ import {
   BATTLE_RULES,
   BattleResponseSchema,
   borderEdges,
+  HEX_EDGES,
   edgeNeighbor,
   FENCE_RULES,
   FenceTileResponseSchema,
@@ -572,6 +573,47 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       expect(res.statusCode).toBe(403);
       expect(await attacksOf(mapId)).toEqual([]);
     });
+  });
+
+  it('capturing the land beyond my fence takes it down for the take-down share (#244)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    await give(mapId, kid, PLENTY);
+    await grant(server, kid, mapId, 40, EMBER);
+    const [near] = await edgeOf(mapId, kid);
+    const all = await tilesOf(mapId);
+    const mine = all.filter((t) => t.ownerUserId === kid.id);
+    // One of my tiles beside it: fence its edge facing it, and one facing elsewhere.
+    const beside = mine.find((t) => hexDistance(t, near!) === 1)!;
+    const facing = HEX_EDGES.find((e) => hexKey(edgeNeighbor(beside, e)) === hexKey(near!))!;
+    const other = borderEdges(beside, mine).find((e) => e !== facing);
+    const edges = other === undefined ? [facing] : [facing, other];
+    const built = await call(server, 'POST', `/maps/${mapId}/fences`, kid, {
+      buildingId: 'emberwood-palisade',
+      q: beside.q,
+      r: beside.r,
+      edges,
+    });
+    expect(built.statusCode, built.body).toBe(201);
+
+    const claim = await attack(server, kid, mapId, near!);
+    expect(claim.statusCode, claim.body).toBe(201);
+    await playOut(server, kid, battleOf(claim));
+    expect((await tileAt(mapId, near!)).ownerUserId).toBe(kid.id);
+
+    // The segment facing it is on an inner edge now: down, half back. The other stands.
+    expect((await segmentsOn(beside.id)).map((s) => s.edge)).toEqual(
+      other === undefined ? [] : [other],
+    );
+    expect(sumOf(await ledgerOf(mapId, kid.id, 'build-refund'))).toEqual({
+      emberwood: 3,
+      timber: 1,
+    });
+    const removed = (await eventsOf(mapId)).filter((e) => e.type === 'fence.removed');
+    expect(removed).toHaveLength(1);
+    const payload = parseGameEventPayload('fence.removed', removed[0]!.payload);
+    expect(payload).toMatchObject({ userId: kid.id, edge: facing, lost: 'inner' });
   });
 
   it('fences on land that goes wild come down, with the take-down share back', async () => {

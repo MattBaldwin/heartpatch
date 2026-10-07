@@ -1,13 +1,17 @@
 import {
   buildCost,
   buildingPageKey,
+  edgeNeighbor,
   fenceHpAfterUpgrade,
   fenceMaxHp,
   fenceRepairCost,
   FENCE_RULES,
   GAME_DATA,
   HOME_BASE_RULES,
+  hexDistance,
+  hexKey,
   isBuildable,
+  isHexEdge,
   removeRefund,
   upgradeCost,
   type BuildFenceRequest,
@@ -321,30 +325,71 @@ export async function takeDownFencesOnLostLand(
   const repo = createFencesRepo(tx);
   const rows = await repo.lockOnTiles(tileIds);
   await repo.deleteFences(rows.map((r) => r.id));
-  return rows.map((row) => {
-    const refund = fenceRefund(row);
-    return {
-      ownerUserId: row.ownerUserId,
-      tileId: row.tileId,
-      fenceId: row.id,
-      refund,
-      event: {
-        mapId,
-        type: 'fence.removed',
-        actorUserId: null,
-        payload: {
-          userId: row.ownerUserId,
-          fenceId: row.id,
-          buildingId: row.buildingId,
-          q: row.q,
-          r: row.r,
-          edge: row.edge,
-          refund,
-          lost,
-        },
-      },
-    };
+  return rows.map((row) => lostFence(mapId, row, lost));
+}
+
+/**
+ * A capture (#203, owner decision on #244): the old owner's segments on the
+ * tile come down (`captured`), and so do the capturer's own segments on
+ * their tiles next to it that faced it, now inner edges of their land
+ * (`inner`). Both for the take-down share, in the capture's transaction
+ * after its tile lock. One lock over every tile involved (step 8, id
+ * order), so two captures side by side can't lock each other's rows in
+ * opposite orders. `tiles` is the map as it is now, the capture applied.
+ */
+export async function takeDownFencesOnCapture(
+  tx: Executor,
+  mapId: string,
+  tile: { id: string; q: number; r: number },
+  capturerUserId: string,
+  tiles: readonly { id: string; q: number; r: number; ownerUserId: string | null }[],
+): Promise<LostFence[]> {
+  const repo = createFencesRepo(tx);
+  const captured = hexKey(tile);
+  const mine = tiles.filter(
+    (t) => t.id !== tile.id && t.ownerUserId === capturerUserId && hexDistance(t, tile) === 1,
+  );
+  const rows = await repo.lockOnTiles([tile.id, ...mine.map((t) => t.id)]);
+  const lost = rows.flatMap((row): LostFence[] => {
+    if (row.tileId === tile.id) return [lostFence(mapId, row, 'captured')];
+    const inward =
+      row.ownerUserId === capturerUserId &&
+      isHexEdge(row.edge) &&
+      hexKey(edgeNeighbor(row, row.edge)) === captured;
+    return inward ? [lostFence(mapId, row, 'inner')] : [];
   });
+  await repo.deleteFences(lost.map((l) => l.fenceId));
+  return lost;
+}
+
+/** A segment coming down with the take-down share back, and its event. */
+function lostFence(
+  mapId: string,
+  row: FenceRow,
+  lost: 'captured' | 'wild' | 'left' | 'inner',
+): LostFence {
+  const refund = fenceRefund(row);
+  return {
+    ownerUserId: row.ownerUserId,
+    tileId: row.tileId,
+    fenceId: row.id,
+    refund,
+    event: {
+      mapId,
+      type: 'fence.removed',
+      actorUserId: null,
+      payload: {
+        userId: row.ownerUserId,
+        fenceId: row.id,
+        buildingId: row.buildingId,
+        q: row.q,
+        r: row.r,
+        edge: row.edge,
+        refund,
+        lost,
+      },
+    },
+  };
 }
 
 /** Adds up what several lost segments gave back to one owner. */
