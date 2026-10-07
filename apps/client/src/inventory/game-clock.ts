@@ -42,3 +42,32 @@ export function formatTimeLeft(ms: number): string {
   if (minutes > 0) return `${String(minutes)}:${String(seconds).padStart(2, '0')}`;
   return `${String(seconds)}s`;
 }
+
+/**
+ * How long until something comes back, rounded up to the minute (#201):
+ * "3h 20m", "1h 05m", "5h", "25m", or "less than a minute". Rounded up, so
+ * it never says a thing is back before it is.
+ */
+export function formatWait(ms: number): string {
+  if (ms < 60_000) return 'less than a minute';
+  const minutes = Math.ceil(ms / 60_000);
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${String(rest)}m`;
+  if (rest === 0) return `${String(hours)}h`;
+  return `${String(hours)}h ${String(rest).padStart(2, '0')}m`;
+}
+
+/**
+ * A countdown to `until` on the game clock: the wait to show, and whether it
+ * has run out, so the screen asks the server again. `asked` is the `until`
+ * it already asked about (null: none), so it asks once per countdown.
+ */
+export function countdownAt(
+  clock: Pick<GameClock, 'msUntil'>,
+  until: string,
+  asked: string | null,
+): { wait: string; ask: boolean } {
+  const left = clock.msUntil(until);
+  return { wait: formatWait(left), ask: left <= 0 && asked !== until };
+}

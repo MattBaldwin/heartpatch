@@ -29,7 +29,13 @@ import {
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
-import { localDate, MINUTE_MS, spawnWindowFor, type Clock } from '../../lib/time.js';
+import {
+  localDate,
+  MINUTE_MS,
+  nextLocalMidnight,
+  spawnWindowFor,
+  type Clock,
+} from '../../lib/time.js';
 import type {
   BattlesService,
   PrepareTileBattle,
@@ -332,6 +338,8 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
     return {
       attemptsLeft: Math.max(0, rules.attemptsPerDay - used),
       attemptsPerDay: rules.attemptsPerDay,
+      // Tries count from the patch's midnight (`attemptsOn`), so they refill at the next one.
+      triesResetAt: nextLocalMidnight(at, map.timeZone).toISOString(),
       shieldUntil: shieldEnds && shieldEnds > at ? shieldEnds.toISOString() : null,
       defenders,
       squishies,

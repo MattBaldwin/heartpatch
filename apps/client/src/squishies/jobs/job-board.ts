@@ -334,6 +334,10 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     for (const { squishy, node } of lines.values()) {
       const next = squishy.work?.nextReadyAt ?? null;
       if (next !== null && Date.parse(next) <= nowMs) finished = true;
+      // Full XP came back at the patch's midnight (#201): ask for the fresh view.
+      if (squishy.fullXpResetAt !== null && Date.parse(squishy.fullXpResetAt) <= nowMs) {
+        finished = true;
+      }
       const text = jobLine(squishy, nowMs);
       if (node.textContent !== text) node.textContent = text;
     }

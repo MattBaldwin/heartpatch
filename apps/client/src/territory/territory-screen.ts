@@ -9,7 +9,7 @@ import {
   type Species,
   type TerritoryStatus,
 } from '@heartpatch/shared';
-import { formatTimeLeft, GameClock } from '../inventory/game-clock.js';
+import { countdownAt, GameClock } from '../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import type { TileActions } from '../map/map-screen.js';
 import { ApiRequestError } from '../net/api.js';
@@ -60,9 +60,11 @@ export const TERRITORY_TEXT = {
   someone: 'Someone',
   onWatchThere: (n: number) =>
     n === 1 ? '1 squishy stands watch here.' : `${String(n)} squishies stand watch here.`,
-  triesLeft: (n: number) => (n === 1 ? '1 try left today.' : `${String(n)} tries left today.`),
-  resting: (left: string) => `This land is resting. Ready in ${left}.`,
-  noTries: 'No tries left today. Come back tomorrow!',
+  // Relative times, never clock times: the patch's midnight isn't every player's (#201).
+  triesLeft: (n: number, wait: string) =>
+    `${n === 1 ? '1 try' : `${String(n)} tries`} left · new tries in ${wait}`,
+  resting: (wait: string) => `This land needs a rest. Try again in ${wait}.`,
+  noTries: (wait: string) => `New tries in ${wait} 🌙`,
   pvpOff: 'Challenges are off on this patch.',
   // The server's own words for a shielded Keeper (territory service), so a tap
   // here reads the same as a refused challenge would.
@@ -97,7 +99,16 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
   let picking: string[] | null = null;
   let note = '';
   let ticker: number | undefined;
-  let countdown: { node: HTMLElement; until: string } | null = null;
+  /** The countdown on screen: a tile's rest, or when tries refill (#201). */
+  let countdown: {
+    node: HTMLElement;
+    until: string;
+    text: (wait: string) => string;
+    /** Run out: the tile can be claimed again, or tries have refilled. */
+    done: () => void;
+  } | null = null;
+  /** The countdown we already asked the server about, so it asks once. */
+  let asked: string | null = null;
 
   const speciesName = (squishy: OwnedSquishy): string => {
     const species: Species | undefined =
@@ -177,6 +188,21 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
 
   const line = (text: string, testId?: string) =>
     el('p', { class: 'tile-action-note', ...(testId ? { 'data-testid': testId } : {}) }, text);
+
+  /** A line counting down to `until`; at zero it calls `done` once. */
+  const countdownLine = (
+    until: string,
+    text: (wait: string) => string,
+    done: () => void,
+    testId?: string,
+  ) => {
+    const node = line(text(countdownAt(clock, until, asked).wait), testId);
+    countdown = { node, until, text, done };
+    return node;
+  };
+  /** Tries refill at the patch's midnight: ask the server for the fresh count. */
+  const triesLine = (text: (wait: string) => string) =>
+    countdownLine(status?.triesResetAt ?? '', text, () => void refresh(), 'territory-tries');
 
   const button = (
     label: string,
@@ -279,7 +305,7 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
       case 'claim':
         children.push(
           line(TERRITORY_TEXT.claimNote),
-          line(TERRITORY_TEXT.triesLeft(action.attemptsLeft)),
+          triesLine((wait) => TERRITORY_TEXT.triesLeft(action.attemptsLeft, wait)),
           button(TERRITORY_TEXT.claim, () => void battleFor(tile), { 'data-testid': 'tile-claim' }),
         );
         break;
@@ -287,20 +313,19 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
         children.push(
           line(TERRITORY_TEXT.challengeNote(owner ?? TERRITORY_TEXT.someone)),
           ...(tile.defenders > 0 ? [line(TERRITORY_TEXT.onWatchThere(tile.defenders))] : []),
-          line(TERRITORY_TEXT.triesLeft(action.attemptsLeft)),
+          triesLine((wait) => TERRITORY_TEXT.triesLeft(action.attemptsLeft, wait)),
           button(TERRITORY_TEXT.challenge, () => void battleFor(tile), {
             'data-testid': 'tile-challenge',
           }),
         );
         break;
-      case 'resting': {
-        const node = line(TERRITORY_TEXT.resting(formatTimeLeft(clock.msUntil(action.until))));
-        countdown = { node, until: action.until };
-        children.push(node);
+      case 'resting':
+        children.push(
+          countdownLine(action.until, TERRITORY_TEXT.resting, render, 'territory-rest'),
+        );
         break;
-      }
       case 'no-tries':
-        children.push(line(TERRITORY_TEXT.noTries));
+        children.push(triesLine(TERRITORY_TEXT.noTries));
         break;
       case 'pvp-off':
         children.push(line(TERRITORY_TEXT.pvpOff));
@@ -353,14 +378,17 @@ export function createTerritoryScreen(options: TerritoryScreenOptions): Territor
     syncTicker();
   }
 
-  /** Ticks once a second only while a resting countdown is on screen. */
+  /** Ticks once a second only while a countdown is on screen. */
   function syncTicker(): void {
     if (countdown && ticker === undefined) {
       ticker = window.setInterval(() => {
         if (!countdown) return;
-        const left = clock.msUntil(countdown.until);
-        if (left <= 0) render();
-        else countdown.node.textContent = TERRITORY_TEXT.resting(formatTimeLeft(left));
+        const { wait, ask } = countdownAt(clock, countdown.until, asked);
+        countdown.node.textContent = countdown.text(wait);
+        if (ask) {
+          asked = countdown.until;
+          countdown.done();
+        }
       }, 1000);
     } else if (!countdown && ticker !== undefined) {
       window.clearInterval(ticker);
