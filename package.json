@@ -15,6 +15,7 @@
     "sim:progression": "pnpm --filter @heartpatch/shared sim:progression",
     "sim:map-fill": "pnpm --filter @heartpatch/shared sim:map-fill",
     "sim:fuel": "pnpm --filter @heartpatch/shared sim:fuel",
+    "sim:economy": "pnpm --filter @heartpatch/shared sim:economy",
     "lint": "eslint . --max-warnings 0 && node scripts/check-filenames.mjs && node scripts/check-procedural-rules.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",
