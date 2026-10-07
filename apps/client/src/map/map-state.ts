@@ -5,6 +5,7 @@ import {
   type MapMember,
   type MapView,
   type PlacedBuilding,
+  type PlacedFence,
   type PublicTile,
   type WsEventMessage,
 } from '@heartpatch/shared';
@@ -167,6 +168,23 @@ export class MapState {
           ? 'redraw'
           : 'none';
       }
+      case 'fence.built':
+      case 'fence.upgraded':
+      case 'fence.repaired':
+      case 'fence.damaged': {
+        // A fence segment went up, grew, was mended, or held against a
+        // challenger and kept the energy it lost (#203).
+        const parsed = GAME_EVENTS[event.type].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        return this.putFence(parsed.data.fence) ? 'redraw' : 'none';
+      }
+      case 'fence.broken':
+      case 'fence.removed': {
+        // Broken by a challenger, or taken down (#203).
+        const parsed = GAME_EVENTS[event.type].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        return this.dropFence(hexKey(parsed.data), parsed.data.fenceId) ? 'redraw' : 'none';
+      }
       default:
         // Types this map doesn't draw (yet).
         return 'none';
@@ -200,6 +218,23 @@ export class MapState {
 
   private dropBuilding(key: HexKey, id: string): boolean {
     return this.editTile(key, (tile) => tile.buildings.filter((b) => b.id !== id));
+  }
+
+  /** Adds or replaces a fence segment on its tile, keeping edge order (#203). */
+  private putFence(placed: PlacedFence): boolean {
+    const { q, r, ...fence } = placed;
+    const tile = this.byHex.get(hexKey({ q, r }));
+    if (!tile) return false;
+    const fences = [...(tile.fences ?? []).filter((f) => f.id !== fence.id), fence].sort(
+      (a, b) => a.edge - b.edge,
+    );
+    return this.patchTile(tile, { fences });
+  }
+
+  private dropFence(key: HexKey, id: string): boolean {
+    const tile = this.byHex.get(key);
+    if (!tile) return false;
+    return this.patchTile(tile, { fences: (tile.fences ?? []).filter((f) => f.id !== id) });
   }
 
   /** Changes a tile's buildings; false if the map has no such tile. */
