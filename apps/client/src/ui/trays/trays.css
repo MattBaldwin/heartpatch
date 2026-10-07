@@ -36,7 +36,8 @@
 /* A phone on its side (#136): one column of rows is taller than the screen,
    so the last rows (the challenge report, the Hollow, Team and Jobs) hid
    below the fold. The tray grows wider instead and its sections sit side by
-   side (see .tray-body below), still leaving room for the handle it carries. */
+   side (see .tray-body below), still leaving room for the handle it carries.
+   The same query is used there: change both together. */
 @media (max-height: 520px) and (min-width: 640px) {
   .trays {
     --tray-width: min(
@@ -157,7 +158,8 @@
 }
 
 /* Short and wide (#136): sections in two columns, each one still a column
-   of rows. More than fits scrolls down, as in the one-column tray. */
+   of rows. More than fits scrolls down, as in the one-column tray. Same
+   query as the wider --tray-width near the top: change both together. */
 @media (max-height: 520px) and (min-width: 640px) {
   .tray-body {
     display: grid;
