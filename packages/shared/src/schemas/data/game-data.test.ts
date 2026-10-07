@@ -23,6 +23,30 @@ describe('checkGameData', () => {
     expect(checkGameData(withFixtures())).toEqual([]);
   });
 
+  it('keeps battle potions to crafted things with a real effect (#214)', () => {
+    const potions = GAME_DATA.resources.filter((r) => r.battleEffect);
+    expect(potions.map((r) => r.id)).toEqual(['brave-brew', 'cozy-cocoa', 'hearty-soup']);
+    for (const potion of potions) {
+      expect(potion.battleEffect?.shieldPercent).toBe(75);
+      expect(GAME_DATA.recipes.some((r) => r.output.resource === potion.id && !r.season)).toBe(
+        true,
+      );
+    }
+    expect(
+      problemsAfter((d) => {
+        d.resources.find((r) => r.id === 'timber')!.battleEffect = {
+          healPercent: 10,
+          shieldPercent: 50,
+        };
+      }),
+    ).toEqual(['resources["timber"].battleEffect: only crafted things can be used in battle']);
+    expect(
+      problemsAfter((d) => {
+        d.resources.find((r) => r.id === 'brave-brew')!.battleEffect = { shieldPercent: 50 };
+      }).join(),
+    ).toMatch(/needs a boost or a heal/);
+  });
+
   it('names the species id and field for a bad stat', () => {
     const problems = problemsAfter((d) => {
       d.species[0]!.baseStats.hp = 0;

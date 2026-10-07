@@ -22,6 +22,27 @@ export const GatherSettingsSchema = z.strictObject({
 });
 export type GatherSettings = z.infer<typeof GatherSettingsSchema>;
 
+const percent = z.number().int().min(1).max(100);
+
+/**
+ * What a battle item does when a squishy uses it in battle (#214). It takes
+ * the squishy's turn. `attackPercent`/`defensePercent` raise that stat for
+ * the rest of the battle; `healPercent` gives back that share of full
+ * energy; `shieldPercent` takes that share off the next hit it takes (the
+ * shield doesn't stack: a new one replaces the old).
+ */
+export const BattleItemEffectSchema = z
+  .strictObject({
+    attackPercent: percent.optional(),
+    defensePercent: percent.optional(),
+    healPercent: percent.optional(),
+    shieldPercent: percent,
+  })
+  .refine((e) => e.attackPercent ?? e.defensePercent ?? e.healPercent, {
+    message: 'a battle item needs a boost or a heal besides its shield',
+  });
+export type BattleItemEffect = z.infer<typeof BattleItemEffectSchema>;
+
 export const ResourceSchema = z.strictObject({
   id: ContentIdSchema,
   name: DisplayNameSchema,
@@ -34,5 +55,7 @@ export const ResourceSchema = z.strictObject({
    * a node (terrains, home rings) needs one; `checkGameData` checks it.
    */
   gather: GatherSettingsSchema.optional(),
+  /** Usable in battle (potions, #214). Only crafted items have one; `checkGameData` checks it. */
+  battleEffect: BattleItemEffectSchema.optional(),
 });
 export type Resource = z.infer<typeof ResourceSchema>;

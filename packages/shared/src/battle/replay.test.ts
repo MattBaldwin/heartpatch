@@ -223,7 +223,7 @@ describe('replay (design doc §6: every battle replays from its seed and action 
         ],
         "phase": {
           "result": {
-            "contentHash": "6f716d2a438631675e01ba5880e6d88d",
+            "contentHash": "70bc8c45deeb42abeca68325014f1a1c",
             "reason": "tuckered-out",
             "turns": 13,
             "winner": "a",

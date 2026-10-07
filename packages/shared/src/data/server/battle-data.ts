@@ -16,5 +16,6 @@ export function serverBattleData(gameData: GameData, serverData: ServerGameData)
     elementMatrix: gameData.elementMatrix,
     feelingMatrix: gameData.feelingMatrix,
     synergy: gameData.synergy,
+    resources: gameData.resources,
   };
 }

@@ -85,12 +85,15 @@ const SlotSchema = z.number().int().min(0).max(5);
  * or offer a Heart Charm to the other side's squishy (`capture`, #14; costs
  * the turn too). Only a player side can capture, and only from an AI side.
  * `sure` makes it always work (the tutorial's first capture, design doc §26);
- * the server sets it, never the client.
+ * the server sets it, never the client. `item`: the squishy that's out uses
+ * a battle item (a potion, #214; costs the turn), each kind at most
+ * `rules.items.usesEach` times per side per battle.
  */
 export const BattleChoiceSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('move'), move: ContentIdSchema }),
   z.strictObject({ type: z.literal('swap'), slot: SlotSchema }),
   z.strictObject({ type: z.literal('capture'), sure: z.literal(true).optional() }),
+  z.strictObject({ type: z.literal('item'), item: ContentIdSchema }),
 ]);
 export type BattleChoice = z.infer<typeof BattleChoiceSchema>;
 
@@ -141,6 +144,11 @@ export const BattleSquishyViewSchema = z.object({
   stages: z.object({ attack: stage, defense: stage, speed: stage }),
   status: z.object({ id: BattleStatusIdSchema, turnsLeft: z.number().int().min(0) }).nullable(),
   joined: z.boolean(),
+  // Potions (#214). Defaults read battles stored before them.
+  boosts: z
+    .object({ attack: z.number().int().min(0), defense: z.number().int().min(0) })
+    .default({ attack: 0, defense: 0 }),
+  shield: z.number().int().min(0).max(100).default(0),
 });
 export type BattleSquishyView = z.infer<typeof BattleSquishyViewSchema>;
 
@@ -148,6 +156,7 @@ export const BattleSideViewSchema = z.object({
   controller: BattleControllerSchema,
   squishies: z.array(BattleSquishyViewSchema).min(1),
   active: z.number().int().min(0),
+  itemsUsed: z.array(ContentIdSchema).default([]),
 });
 export type BattleSideView = z.infer<typeof BattleSideViewSchema>;
 
@@ -192,6 +201,7 @@ export const BattleEventSchema = z.discriminatedUnion('type', [
     amount: z.number().int().min(0),
     energy: z.number().int().min(0),
     effectiveness: ContentIdSchema,
+    shielded: z.literal(true).optional(),
   }),
   z.object({
     ...at,
@@ -210,6 +220,7 @@ export const BattleEventSchema = z.discriminatedUnion('type', [
   z.object({ ...at, type: z.literal('status-skip'), status: BattleStatusIdSchema }),
   z.object({ ...at, type: z.literal('status-end'), status: BattleStatusIdSchema }),
   z.object({ ...at, type: z.literal('tuckered-out') }),
+  z.object({ ...at, type: z.literal('item'), item: ContentIdSchema }),
   z.object({ ...at, type: z.literal('capture'), caught: z.boolean() }),
   z.object({ turn: at.turn, type: z.literal('forfeit'), side: BattleSideIdSchema }),
   z.object({
@@ -343,6 +354,8 @@ export const PlayerBattleActionSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('forfeit') }),
   /** Use a Heart Charm on the wild squishy (wild battles only; costs one charm). */
   z.strictObject({ type: z.literal('capture') }),
+  /** Use a battle item from the bag (a potion, #214; costs one and the turn). */
+  z.strictObject({ type: z.literal('item'), item: ContentIdSchema }),
 ]);
 export type PlayerBattleAction = z.infer<typeof PlayerBattleActionSchema>;
 

@@ -174,6 +174,11 @@ export const BattleRulesSchema = z.strictObject({
       path: ['nearlyOut'],
     }),
   ai: z.record(BattleAiPolicySchema, BattleAiPolicyRulesSchema),
+  /**
+   * Battle items (potions, #214): how many times a side may use each kind
+   * in one battle, so they can't be stacked into an easy win.
+   */
+  items: z.strictObject({ usesEach: z.number().int().min(1).max(10) }),
 });
 export type BattleRules = z.infer<typeof BattleRulesSchema>;
 

@@ -1,4 +1,7 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
@@ -30,7 +33,7 @@ import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
 import { arenaPlan, arenaSeed } from './arena-layout.js';
 import { buildArena, type Arena, type ArenaStats } from './arena.js';
-import { BATTLE_CAMERA, CHOREO, FIGHTER, HOMES } from './battle-config.js';
+import { BATTLE_CAMERA, CHOREO, FIGHTER, HOMES, SHIELD_BUBBLE } from './battle-config.js';
 import type { PlaybackStep } from './battle-playback.js';
 import type { BattleContent } from './battle-view.js';
 import { CameraDirector, type FitPoint, type SafeRegion } from './camera-director.js';
@@ -184,6 +187,10 @@ export class BattleScene {
   readonly #keepers: KeeperField;
   readonly #keeper: KeeperHandle | null;
   readonly #effects: EffectPool;
+  /** A potion's sparkle shield over each side's squishy (#214), made with the scene. */
+  readonly #bubbles: Record<BattleSideId, Mesh>;
+  readonly #bubbleMaterial: StandardMaterial;
+  readonly #shielded: Record<BattleSideId, boolean> = { a: false, b: false };
   readonly #camera: CameraDirector;
   readonly #shadows: Mesh;
   readonly #shadowMatrices = new Float32Array(4 * 16);
@@ -264,6 +271,21 @@ export class BattleScene {
     this.#shadows.alwaysSelectAsActiveMesh = true;
 
     this.#effects = new EffectPool(scene);
+    // One soft, glassy bubble per side, hidden until a potion puts it up.
+    this.#bubbleMaterial = new StandardMaterial('battle-shield-bubble', scene);
+    this.#bubbleMaterial.diffuseColor = new Color3(...SHIELD_BUBBLE.color);
+    this.#bubbleMaterial.emissiveColor = new Color3(...SHIELD_BUBBLE.glow);
+    this.#bubbleMaterial.specularColor = new Color3(1, 1, 1);
+    this.#bubbleMaterial.specularPower = 48;
+    this.#bubbleMaterial.alpha = SHIELD_BUBBLE.alpha;
+    const bubble = (side: BattleSideId) => {
+      const mesh = CreateSphere(`battle-shield-${side}`, { diameter: 1, segments: 16 }, scene);
+      mesh.material = this.#bubbleMaterial;
+      mesh.isPickable = false;
+      mesh.setEnabled(false);
+      return mesh;
+    };
+    this.#bubbles = { a: bubble('a'), b: bubble('b') };
     this.#camera = new CameraDirector(
       { a: this.#rigs.a.home, b: this.#rigs.b.home },
       options.reducedMotion,
@@ -558,6 +580,7 @@ export class BattleScene {
     if (this.#arena.update(now)) moving = true;
     if (this.#camera.moving(now)) moving = true;
     this.#writeShadows();
+    this.#placeBubbles();
     return moving;
   }
 
@@ -573,6 +596,32 @@ export class BattleScene {
     if (this.#effects.stats.live > 0) return true;
     if (this.#camera.moving(now)) return true;
     return this.#keeper !== null && this.#keepers.isPlaying(this.#keeper, now);
+  }
+
+  /** Shows or hides the sparkle shield over a side's squishy (from its pill's chips). */
+  setShield(side: BattleSideId, on: boolean): void {
+    this.#shielded[side] = on;
+  }
+
+  /** True while a side's sparkle shield shows (the dev hook and tests). */
+  shieldShown(side: BattleSideId): boolean {
+    return this.#bubbles[side].isEnabled();
+  }
+
+  #placeBubbles(): void {
+    for (const side of SIDES) {
+      const rig = this.#rigs[side];
+      const fighter = rig.out;
+      const mesh = this.#bubbles[side];
+      const show = this.#shielded[side] && fighter !== null && !rig.down && rig.pose.scale > 0.05;
+      mesh.setEnabled(show);
+      if (!show) continue;
+      const c = this.#centre(rig, rig.pose, fighter);
+      mesh.position.set(c.x, c.y, c.z);
+      const across = fighter.radius * 2 * SHIELD_BUBBLE.fit * rig.pose.scale;
+      const tall = fighter.height * SHIELD_BUBBLE.fit * rig.pose.scale;
+      mesh.scaling.set(across, Math.max(across, tall), across);
+    }
   }
 
   setLod(lod: SquishyLod): void {
@@ -619,6 +668,8 @@ export class BattleScene {
     this.#scene.onBeforeRenderObservable.remove(this.#beforeRender);
     this.#scene.onAfterRenderObservable.remove(this.#afterRender);
     this.#effects.dispose();
+    for (const side of SIDES) this.#bubbles[side].dispose();
+    this.#bubbleMaterial.dispose();
     this.#keepers.dispose();
     for (const side of SIDES) {
       const rig = this.#rigs[side];

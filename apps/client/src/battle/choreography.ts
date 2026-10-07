@@ -716,6 +716,8 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
       act(step.side, 'knockback', hitStop, after, strength);
       if (!reduced) fx('flash', step.side, 0, { strength });
       fx('impact', step.side, hitStop, { strength });
+      // A potion's sparkle shield pops as it takes the hit (#214).
+      if (step.shielded) fx('sparkle', step.side, hitStop, { element: null });
       fx('dust', step.side, hitStop + after * 0.35);
       squish.push({
         side: step.side,
@@ -744,6 +746,14 @@ export function planStep(step: PlaybackStep, ctx: PlanContext): StepPlan {
       act(step.side, 'power-up', 0, ms * 0.9);
       fx('sparkle', step.side);
       squish.push({ side: step.side, move: 'bounce', delay: ms * 0.7, strength: 0.6 });
+      cam = camera({ focus: step.side });
+      break;
+    case 'item':
+      // A cosy sip (#214): a little power-up and a happy bounce, then the
+      // sparkle shield is up (the scene shows it from the pills' chips).
+      act(step.side, 'power-up', 0, ms * 0.8);
+      fx('sparkle', step.side, ms * 0.35, { element: null });
+      squish.push({ side: step.side, move: 'bounce', delay: ms * 0.25, strength: 0.7 });
       cam = camera({ focus: step.side });
       break;
     case 'effect': {

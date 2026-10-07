@@ -163,12 +163,20 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   expect(after.y).toBeCloseTo(before.y, 2);
   expect(after.z).toBeCloseTo(before.z, 2);
 
-  // One mouse click (a laptop) on Swap, if someone is on the bench and we can still act.
+  // One mouse click (a laptop) on Swap, if someone is on the bench and we can still act:
+  // it asks who comes out (#214), then a click on the name swaps.
   if (state.phase === 'turn' && (await page.getByTestId('battle-swap').count()) > 0) {
-    const swap = page.getByTestId('battle-swap').first();
-    await expect(swap).toHaveText(/Swap: /);
+    const swap = page.getByTestId('battle-swap');
+    await expect(swap).toHaveText('Swap');
+    // Swap shows inside the sheet, even on a short phone: no scrolling to find it.
     const box = (await swap.boundingBox())!;
+    const sheetBox = (await page.getByTestId('battle-sheet').boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(sheetBox.y + sheetBox.height + 0.5);
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    const pick = page.getByTestId('battle-swap-pick').first();
+    await expect(pick).toBeVisible();
+    const pickBox = (await pick.boundingBox())!;
+    await page.mouse.click(pickBox.x + pickBox.width / 2, pickBox.y + pickBox.height / 2);
     state = await settled(page);
     expect(state.turn).toBe(2);
   }
