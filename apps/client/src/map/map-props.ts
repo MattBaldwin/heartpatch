@@ -314,7 +314,7 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
       );
     case 'greens-patch': {
       // A leafy mound with grass tufts and a clover (#238). Three-sided
-      // blades and few segments: meadows are common, so it stays cheap.
+      // blades and few segments, so a forest full of them stays cheap.
       const parts: Mesh[] = [painted(at(cylinder(0.05, 0.24, 0.32, 6), 0, 0.02, 0), '#6fbf63')];
       const tufts = [
         [-0.08, 0.04, 1],

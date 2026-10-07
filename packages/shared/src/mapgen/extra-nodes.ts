@@ -1,8 +1,9 @@
 import { deriveSeed, Rng } from '../rng/index.js';
 import type { Terrain } from '../schemas/data/terrains.js';
 
-// Extra nodes (#238): Water on lakes, Greens on meadows and forests, Ice on
-// mountains. A second pass after `generateMap`'s main one, rolled per tile
+// Extra nodes (#238): a well on every lake, and Greens on some forests (the
+// nesting economy: each terrain's land gives its primary resource to a
+// gatherer, spots are the rarer secondary). A second pass after `generateMap`'s main one, rolled per tile
 // from the map seed, so a new map and an older map read later get exactly
 // the same nodes, and running it twice adds nothing (CLAUDE.md rule 4: done
 // on read, no backfill job).

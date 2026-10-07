@@ -46,7 +46,7 @@ export const RECIPE_BOOK: RecipeBookData = {
     },
     {
       page: 'recipe:cook-treats',
-      line: 'Pick some Greens on a meadow or in a forest, and this page opens!',
+      line: 'Send a squishy to gather on a meadow, or find Greens in a forest, and this page opens!',
     },
     {
       page: 'recipe:freeze-water',
