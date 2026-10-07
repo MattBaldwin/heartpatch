@@ -42,6 +42,8 @@ test('tapping the version line opens What’s new with the real entries', async 
   await page.getByTestId('keeper-menu').tap();
   await page.getByTestId('app-version').tap();
   await expect(sheet).toBeVisible();
+  // The menu folds away, so it doesn't sit over the sheet.
+  await expect(page.getByTestId('keeper-menu')).toHaveAttribute('aria-expanded', 'false');
   await expect(sheet.getByRole('heading', { name: 'What’s new' })).toBeVisible();
   await expect(sheet.locator('[data-entry="220-whats-new"]')).toBeVisible();
   await expect(sheet.getByRole('button', { name: 'Copy' })).toBeVisible();
