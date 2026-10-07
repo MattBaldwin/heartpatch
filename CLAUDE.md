@@ -33,6 +33,7 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 
 - Small, focused PRs, one issue per PR, titled `#<issue>: <summary>`. Link the issue with `Closes #N`. PRs not tied to an issue (docs, process, drift fixes) use a `Docs:`, `Chore:` or `Fix:` prefix instead.
 - Include tests for all shared logic and server endpoints. Include a short "How to test on iPhone" note in PRs that touch the client.
+- **What's new:** a PR that changes something a player can see or feel adds one `changes/<issue>-<slug>.md` entry (front matter `title` and `area`, one or two kid-readable lines, then a `**Try it:**` line). The app's What's new sheet is built from these; the build number comes from git, so don't write one. Behind-the-scenes PRs (tooling, refactors, docs) add none.
 - Keep tunable numbers in data config, not code. Mark guesses with a `// TUNE:` comment.
 - **File and folder names are kebab-case** (`src/db/game-events.ts`, `create-scene.test.ts`); identifiers inside stay camelCase/PascalCase. `pnpm lint` enforces it for source files.
 - Use `pnpm` scripts from the repo root: `pnpm dev`, `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm build`.

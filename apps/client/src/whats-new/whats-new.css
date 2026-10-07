@@ -1,0 +1,206 @@
+/* What's new (#220): a tall card over the map, in the game's card look, above
+   the tutorial layer (9, mounted after it) and under the Keeper chip (10). */
+.whats-new {
+  position: fixed;
+  z-index: 9;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) + 56px);
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(380px, calc(100% - 24px));
+  padding: 18px 16px 14px;
+  border-radius: 26px;
+  background: #fffafc;
+  box-shadow: 0 14px 34px rgb(74 49 80 / 32%);
+  transform: translateX(-50%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.whats-new[hidden] {
+  display: none;
+}
+
+.whats-new-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.whats-new-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.whats-new-sub {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #7d6380;
+}
+
+.whats-new-copy {
+  position: relative;
+  min-height: 32px;
+  margin-left: 4px;
+  padding: 2px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #fbeaf2;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: #7a2d55;
+  cursor: pointer;
+}
+
+/* The chip looks small, but its tap target is 44px tall, like every button. */
+.whats-new-copy::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
+
+.whats-new-x {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: #fbeaf2;
+  font-size: 24px;
+  color: #7a2d55;
+  cursor: pointer;
+}
+
+.whats-new-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.whats-new-version {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.whats-new-version h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #7a2d55;
+  font-variant-numeric: tabular-nums;
+}
+
+.whats-new-entry {
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: #fbeaf2;
+}
+
+.whats-new-entry h4 {
+  margin: 2px 0 4px;
+  font-size: 17px;
+}
+
+.whats-new-entry p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.whats-new-entry .whats-new-area {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #8a3a66;
+}
+
+.whats-new-entry .whats-new-try {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: #fff3d6;
+  color: #7a4a12;
+}
+
+.whats-new-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #b0305e;
+}
+
+.whats-new-divider::before,
+.whats-new-divider::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  border-radius: 2px;
+  background: #f4c6da;
+}
+
+.whats-new-divider-seen {
+  color: #7d6380;
+}
+
+.whats-new-divider-seen::before,
+.whats-new-divider-seen::after {
+  background: #ead9e3;
+}
+
+.whats-new-empty {
+  margin: auto 0;
+  text-align: center;
+}
+
+.whats-new-empty-icon {
+  margin: 0;
+  font-size: 44px;
+}
+
+.whats-new-empty h4 {
+  margin: 6px 0 2px;
+  font-size: 20px;
+}
+
+.whats-new-empty p,
+.whats-new-note {
+  margin: 0;
+  font-weight: 600;
+  color: #7d6380;
+}
+
+.whats-new-done {
+  flex: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .whats-new:not([hidden]) {
+    animation: whats-new-in 180ms ease-out;
+  }
+}
+
+@keyframes whats-new-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
