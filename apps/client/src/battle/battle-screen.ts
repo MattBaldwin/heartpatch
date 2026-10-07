@@ -7,6 +7,7 @@ import {
   visualRegistry,
   type BattleSideId,
   type BattleTimeOfDay,
+  type Hex,
   type KeeperConfig,
   type PlayerBattle,
   type PlayerBattleAction,
@@ -22,6 +23,7 @@ import { lodFor } from '../procedural/motion.js';
 import { formatWait } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
+import { nearbyNote, tilesToMark } from './wild-pick.js';
 import { ManualClock, realClock, type BattleClock } from './battle-clock.js';
 import { BREATHING_FRAME_MS, PLAYBACK, RETRY_AFTER_MS } from './battle-config.js';
 import { mountBattleHud, plateSideOf, type BattleHud, type ControlMode } from './battle-hud.js';
@@ -100,6 +102,8 @@ export interface BattleScreenOptions {
   nicknames?: (mapId: string) => Promise<ReadonlyMap<string, string>>;
   /** True for the Tutorial Glade, where a wild squishy never wanders off (#24). */
   isGlade?: (mapId: string) => boolean;
+  /** Fresh wild hints for the map on screen (#209): the map draws a tuft on each. */
+  onWildHints?: (mapId: string, tiles: readonly Hex[]) => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -149,6 +153,13 @@ export interface BattleScreen {
    */
   watch: (start: PlayerBattle, end: PlayerBattle) => void;
   close: () => void;
+  /**
+   * Meets the wild squishy on `tile` of map `mapId` (#209, Meet it in the
+   * tile panel), the way Find a squishy meets the nearest. Rejects with a
+   * player-safe message (a stale tuft: "too far", or nobody there any more),
+   * and fetches fresh hints so the tufts catch up.
+   */
+  meetWild: (mapId: string, tile: Hex) => Promise<void>;
   readonly debug: BattleDebug | null;
   /** Dev builds only: the clock controls, or null on the real clock. */
   readonly dev: BattleDevControls | null;
@@ -297,23 +308,23 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   const mayOpen = () => options.canOpen?.() !== false;
 
   /**
-   * "2 wild squishies nearby!": a hint for the map on screen (tiles only, no
-   * species, this spawn window only). A late reply for another map is dropped.
+   * "6 nearby! Or tap a rustle to pick.": the tiles in reach with a wild
+   * squishy (tiles only, no species, this spawn window only), counted under
+   * the button and handed on for the map's tufts (#209). A late reply for
+   * another map is dropped.
    */
   const refreshNearby = (): void => {
     const id = mapId;
     const who = user;
     if (!id) return;
     api
-      .wildNearby(id)
-      .then((count) => {
-        if (mapId !== id || user !== who || enter.disabled || note.textContent) return;
-        note.textContent =
-          count === 0
-            ? 'No wild squishies nearby right now.'
-            : count === 1
-              ? 'A wild squishy is nearby!'
-              : `${String(count)} wild squishies nearby!`;
+      .wildHints(id)
+      .then((tiles) => {
+        if (mapId !== id || user !== who) return;
+        const glade = options.isGlade?.(id) ?? false;
+        options.onWildHints?.(id, tilesToMark(tiles, glade));
+        if (enter.disabled || note.textContent) return;
+        note.textContent = nearbyNote(tiles.length, !glade);
       })
       .catch(() => {
         // Only a hint: the button still works without it.
@@ -321,11 +332,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   };
 
   /**
-   * Runs an entry action for the map on screen now. A reply that lands after
-   * the player moved on (another map, the Glade, logout, a battle opened
-   * another way) is dropped, so it can never open a battle over the wrong screen.
+   * Runs an entry action for the map on screen now, and opens the battle it
+   * starts. A reply that lands after the player moved on (another map, the
+   * Glade, logout, a battle opened another way) is dropped, so it can never
+   * open a battle over the wrong screen. Rejects with what went wrong (unless
+   * the player moved on); resolves at once while another start is going.
    */
-  const busy = (start: (id: string) => Promise<PlayerBattle | null>) => {
+  const run = async (start: (id: string) => Promise<PlayerBattle | null>): Promise<void> => {
     const id = mapId;
     const who = user;
     if (!id || enter.disabled) return;
@@ -333,20 +346,27 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     note.textContent = '';
     // Not over another screen either (the lobby's panel, the catalog).
     const stillHere = () => mapId === id && user === who && battle === null && mayOpen();
-    start(id)
-      .then((next) => {
-        if (next && stillHere()) open(next);
-      })
-      .catch((err: unknown) => {
-        if (!stillHere()) return;
-        note.textContent = messageOf(err);
-      })
-      .finally(() => {
-        enter.disabled = false;
-      });
+    try {
+      const next = await start(id);
+      if (next && stillHere()) open(next);
+    } catch (err) {
+      if (stillHere()) throw err;
+    } finally {
+      enter.disabled = false;
+    }
+  };
+  /** `run`, with what went wrong under the button. */
+  const busy = (start: (id: string) => Promise<PlayerBattle | null>) => {
+    run(start).catch((err: unknown) => {
+      note.textContent = messageOf(err);
+    });
   };
   enter.addEventListener('click', () => {
     busy((id) => api.startWild(id));
+  });
+  // Back from the background (hours, maybe a new spawn window): fresh tufts.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && battle === null) refreshNearby();
   });
   if (options.devTools) {
     const grant = el(
@@ -900,6 +920,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     },
     setUser: (next) => {
       if (next?.id === user?.id) return;
+      // Another player on this device never sees the last one's tufts.
+      if (mapId !== null) options.onWildHints?.(mapId, []);
       user = next;
       if (battle) close(false);
       mapId = null;
@@ -916,6 +938,15 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       });
     },
     close,
+    meetWild: async (id, tile) => {
+      if (id !== mapId) return;
+      try {
+        await run((current) => api.startWild(current, tile));
+      } catch (err) {
+        refreshNearby();
+        throw err;
+      }
+    },
     get debug() {
       if (!battle || !shown) return null;
       const mine = shown[battle.mySide];
