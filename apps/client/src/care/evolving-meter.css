@@ -1,0 +1,61 @@
+/* The evolving meter (#205): its own colours, so it never reads as the XP bar. */
+.evolving {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* Its own display would otherwise beat the hidden attribute. */
+.evolving[hidden],
+.evolving-sub[hidden],
+.evolving-gain[hidden] {
+  display: none;
+}
+
+.evolving-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #8a3a66;
+}
+
+.evolving-line b {
+  font-variant-numeric: tabular-nums;
+}
+
+.evolving-bar {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f6e3ee;
+  box-shadow: inset 0 0 0 2px #f1cfe1;
+}
+
+.evolving-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffc8e2, #f59bc8 55%, #ffd36e);
+}
+
+.evolving-gain {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: repeating-linear-gradient(135deg, #ffe28a 0 6px, #ffd36e 6px 12px);
+}
+
+.evolving-sub {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #7d6380;
+}
+
+.evolving-ready .evolving-fill {
+  background: linear-gradient(90deg, #ffd36e, #ffb347);
+}

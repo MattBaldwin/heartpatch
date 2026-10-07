@@ -180,3 +180,52 @@ export function battleXpPercent(
   if (!falloff || winsToday < falloff.fullWinsPerDay) return 100;
   return falloff.afterPercent;
 }
+
+/** How far a squishy is toward its next evolution (#205), for the evolving meter. */
+export interface EvolvingMeter {
+  /** 0–100, floored. 100: past the level, it evolves on its next XP. */
+  readonly percent: number;
+  /** Levels until the evolution level (0 once it's reached). */
+  readonly levelsToGo: number;
+}
+
+/**
+ * Progress toward the evolution `evolutionAt` would pick next: XP since the
+ * form's own start over the XP to the evolution level. The start is the
+ * level it joined at (a befriended squishy keeps its battle level), or the
+ * level its species is evolved into at, whichever is later; a base form a
+ * player raised from the start joins at level 1.
+ *
+ * Null when there's no next evolution (a top form) or when the next one is
+ * into a form `isPublic` says is secret: a meter would give away that a
+ * secret form exists and when (CLAUDE.md rule 6). Callers pass every step,
+ * secret ones included, so a secret step that comes first hides the meter.
+ */
+export function evolvingMeter(
+  squishy: {
+    readonly speciesId: string;
+    readonly level: number;
+    readonly xp: number;
+    /** The level it joined at; null for squishies from before it was kept (#205): its level now. */
+    readonly joinedLevel: number | null;
+  },
+  steps: readonly EvolutionStep[],
+  isPublic: (speciesId: string) => boolean,
+  rules: Pick<GrowthRules, 'xpCurve' | 'maxLevel'>,
+): EvolvingMeter | null {
+  let next: EvolutionStep | null = null;
+  let evolvedAt = 1;
+  for (const step of steps) {
+    if (step.from === squishy.speciesId && (!next || step.level < next.level)) next = step;
+    if (step.into === squishy.speciesId) evolvedAt = Math.max(evolvedAt, step.level);
+  }
+  if (!next || !isPublic(next.into)) return null;
+  const start = Math.max(1, squishy.joinedLevel ?? squishy.level, evolvedAt);
+  const levelsToGo = Math.max(0, next.level - squishy.level);
+  const from = xpForLevel(start, rules);
+  const span = xpForLevel(next.level, rules) - from;
+  const xp = Math.max(squishy.xp, xpForLevel(squishy.level, rules));
+  if (span <= 0 || levelsToGo === 0) return { percent: 100, levelsToGo };
+  const percent = Math.floor(((xp - from) * 100) / span);
+  return { percent: Math.max(0, Math.min(100, percent)), levelsToGo };
+}

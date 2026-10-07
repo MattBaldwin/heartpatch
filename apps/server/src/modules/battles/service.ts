@@ -615,7 +615,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       result,
       log: [...state.log],
       rewards: {
-        xp: grown.map(({ squishyId, xp }) => ({ squishyId, xp })),
+        xp: grown.map(({ squishyId, xp, evolvingBefore, evolvingAfter }) => ({
+          squishyId,
+          xp,
+          evolvingBefore,
+          evolvingAfter,
+        })),
         percent: tile.xpPercent,
         fullXpResetAt,
       },

@@ -25,12 +25,26 @@ const DONE_LINES: Readonly<Record<string, string>> = {
   'heart-snack': 'Mmm! They feel so loved.',
 };
 
+/**
+ * Public species ids. Only a public form with no public evolution says it's
+ * fully evolved: a secret form's own evolutions stay on the server, so it
+ * just shows its level (#205).
+ */
+const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
+
 // Player-facing text (style guide §2, §6, §9).
 export const CARE_TEXT = {
   title: 'Care',
   close: 'All done',
   level: (n: number) => `Level ${String(n)}`,
-  growsUp: (n: number, at: number) => `Level ${String(n)} · grows up at Level ${String(at)}`,
+  growsUp: (n: number, at: number) => `Level ${String(n)} · evolves at Level ${String(at)}`,
+  // A top form (#205, owner-approved words 2026-10-07).
+  fullyEvolved: (n: number) => `Level ${String(n)} · Fully evolved! 🌟`,
+  evolving: '✨ Evolving',
+  evolvingPercent: (p: number) => `${String(p)}%`,
+  readyToEvolve: '✨ Ready to evolve!',
+  oneMoreBattle: 'One more battle ✨',
+  evolvingGain: (p: number) => `+${String(p)}% toward evolving!`,
   topLevel: 'Top level!',
   xp: (into: number, size: number) => `${String(into)} / ${String(size)} XP`,
   noTreats: 'No Treats',
@@ -45,9 +59,9 @@ export const CARE_TEXT = {
   fallbackDone: 'They loved that!',
   lessNow: "They're nice and full of love for today!",
   coins: (n: number) => `+${String(n)} Patch ${n === 1 ? 'Coin' : 'Coins'}`,
-  infoTitle: 'Growing up',
-  // Why care matters (design doc §7), up front in "Growing up".
-  whyCare: 'Happy squishies learn more from battles and grow up faster!',
+  infoTitle: 'Levels and evolving',
+  // Why care matters (design doc §7), up front in "Levels and evolving".
+  whyCare: 'Happy squishies learn more from battles and evolve sooner!',
   // CARE_RULES.hoursFullToBaseline (24, `// TUNE:`): reword if it moves far from a day.
   fades: 'Happiness fades over about a day, so come back and say hi.',
   bonus: (percent: number) =>
@@ -150,8 +164,36 @@ export interface CareSheetModel {
   readonly buttons: readonly CareButton[];
   /** Under the buttons while a rare treat shows ("A Heart Snack tastes like…"), else null. */
   readonly treat: string | null;
-  /** "Growing up": why care matters, then the numbers (style guide §2). */
+  /** "Levels and evolving": why care matters, then the numbers (style guide §2). */
   readonly info: readonly string[];
+  /** The evolving meter (#205), under the level's XP bar; null with none. */
+  readonly evolving: EvolvingBar | null;
+}
+
+/** The evolving meter's words and fill (#205). */
+export interface EvolvingBar {
+  /** "✨ Evolving", or "✨ Ready to evolve!" at 100%. */
+  readonly label: string;
+  /** "62%", or empty when ready. */
+  readonly value: string;
+  /** 0–1. */
+  readonly fill: number;
+  readonly ready: boolean;
+  /** "One more battle ✨" when ready, else null. */
+  readonly sub: string | null;
+}
+
+/** The meter for `percent` (0–100), or null with none (a top form, or a secret one next). */
+export function evolvingBar(percent: number | null): EvolvingBar | null {
+  if (percent === null) return null;
+  const ready = percent >= 100;
+  return {
+    label: ready ? CARE_TEXT.readyToEvolve : CARE_TEXT.evolving,
+    value: ready ? '' : CARE_TEXT.evolvingPercent(percent),
+    fill: Math.max(0, Math.min(1, percent / 100)),
+    ready,
+    sub: ready ? CARE_TEXT.oneMoreBattle : null,
+  };
 }
 
 /**
@@ -197,8 +239,9 @@ export function careSheet(
   });
   const treat = actions.find((a) => a.outsideDailyCare === true);
   const toNext = squishy.xpToNext;
-  // Phase 1 forms grow up once, at a level (design doc §8).
-  const growsAt = species.get(squishy.speciesId)?.evolutions[0]?.level;
+  // Phase 1 forms evolve once, at a level (design doc §8).
+  const evolutions = species.get(squishy.speciesId)?.evolutions;
+  const growsAt = evolutions?.[0]?.level;
   return {
     name: squishyName(squishy, species),
     color: blobColor(squishy.speciesId, species),
@@ -207,7 +250,9 @@ export function careSheet(
     level:
       growsAt !== undefined && growsAt > squishy.level
         ? CARE_TEXT.growsUp(squishy.level, growsAt)
-        : CARE_TEXT.level(squishy.level),
+        : evolutions?.length === 0 && PUBLIC_SPECIES.has(squishy.speciesId)
+          ? CARE_TEXT.fullyEvolved(squishy.level)
+          : CARE_TEXT.level(squishy.level),
     xp: toNext === null ? 1 : Math.min(1, squishy.xpIntoLevel / toNext),
     xpLine: toNext === null ? CARE_TEXT.topLevel : CARE_TEXT.xp(squishy.xpIntoLevel, toNext),
     buttons,
@@ -218,6 +263,7 @@ export function careSheet(
       CARE_TEXT.bonus(squishy.xpBonusPercent),
       CARE_TEXT.fullLeft(squishy.fullCareLeft),
     ].filter((line) => line !== ''),
+    evolving: evolvingBar(squishy.evolving?.percent ?? null),
   };
 }
 

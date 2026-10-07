@@ -116,7 +116,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'care',
     goal: 'Show your Partner some love',
     sproutLines: [
-      'Happy squishies learn more and grow up faster! Visit them often.',
+      'Happy squishies learn more and evolve sooner! Visit them often.',
       "Open My Home, then Home. Tap your Partner's name, then Pet, Play or Feed!",
     ],
     highlightTarget: 'care-buttons',

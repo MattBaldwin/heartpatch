@@ -280,8 +280,24 @@ export const CAPTURABLE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['wild']
  * squishy's care and habitat multiplier (#19). The same numbers as
  * `battle.ended.xp`.
  */
+const EvolvingPercentSchema = z.number().int().min(0).max(100).nullable().default(null);
+
 export const BattleRewardsSchema = z.object({
-  xp: z.array(z.object({ squishyId: z.uuid(), xp: z.number().int().min(0) })),
+  xp: z.array(
+    z.object({
+      squishyId: z.uuid(),
+      xp: z.number().int().min(0),
+      /**
+       * Its evolving meter before and after this battle's XP (#205), for the
+       * results card; null with no meter (a top form, a secret one next) and
+       * for battles stored before it. After is null when this battle evolved
+       * it (the evolution celebration takes over); 100: it evolves on its
+       * next XP.
+       */
+      evolvingBefore: EvolvingPercentSchema,
+      evolvingAfter: EvolvingPercentSchema,
+    }),
+  ),
   /** The share of the battle's XP it paid, in percent (Gentle mode, design doc §11). */
   percent: z.number().int().min(0).max(100),
   /**
