@@ -102,7 +102,7 @@ export function fenceToBreak(
   const segments = (tile.fences ?? []).map((f) => ({ ...f, q: tile.q, r: tile.r }));
   if (owner === null || owner === me || segments.length === 0) return null;
   const theirs = view.tiles.filter((t) => t.ownerUserId === owner);
-  if (!isTileFenced(tile, theirs, segments)) return null;
+  if (!isTileFenced(tile, theirs, segments, view.tiles)) return null;
   const mine = view.tiles.filter((t) => t.ownerUserId === me);
   const weakest = weakestSegment(exposedSegments(tile, segments, mine));
   return weakest ? ((tile.fences ?? []).find((f) => f.id === weakest.id) ?? null) : null;

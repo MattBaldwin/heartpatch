@@ -5,6 +5,7 @@ import { generateMap, type MapTile } from '../../src/mapgen/index.js';
 import { deriveSeed, Rng } from '../../src/rng/index.js';
 import {
   borderEdges,
+  edgeNeighbor,
   exposedSegments,
   isTileFenced,
   weakestSegment,
@@ -126,7 +127,7 @@ export function runMapFill(
   const tilesOf = (s: number) =>
     [...owned].filter(([, o]) => o.owner === s).flatMap(([k]) => byKey.get(k) ?? []);
   const fencedFor = (t: MapTile, s: number) =>
-    isTileFenced(t, tilesOf(s), segments.get(hexKey(t)) ?? []);
+    isTileFenced(t, tilesOf(s), segments.get(hexKey(t)) ?? [], tiles);
 
   const days: MapFillDay[] = [];
   for (let day = 1; day <= config.days; day++) {
@@ -233,6 +234,15 @@ export function runMapFill(
           if (fightGuard && rng.int(1, 100) <= seat.kid.guardWinPercent) {
             owned.set(key, { owner: s, tendedAt: noon });
             segments.delete(key);
+            // My own fences that faced it are on inner edges now: down (#244).
+            for (const n of hexNeighbors(target.t)) {
+              const nk = hexKey(n);
+              if (ownerOf(nk) !== s) continue;
+              const kept = (segments.get(nk) ?? []).filter(
+                (g) => hexKey(edgeNeighbor(n, g.edge)) !== key,
+              );
+              segments.set(nk, kept);
+            }
             captured[s] = (captured[s] ?? 0) + 1;
             lostToday[target.owner] = (lostToday[target.owner] ?? 0) + 1;
           }
@@ -260,7 +270,7 @@ export function runMapFill(
           )
           .map((t) => {
             const have = new Set((segments.get(hexKey(t)) ?? []).map((g) => g.edge));
-            return { t, open: borderEdges(t, mine).filter((e) => !have.has(e)) };
+            return { t, open: borderEdges(t, mine, tiles).filter((e) => !have.has(e)) };
           })
           .filter((x) => x.open.length > 0)
           .sort((x, y) => x.open.length - y.open.length || x.t.q - y.t.q || x.t.r - y.t.r);

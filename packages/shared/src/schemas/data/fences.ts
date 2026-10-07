@@ -20,6 +20,15 @@ export const FenceRulesSchema = z.strictObject({
    */
   battleTurns: z.number().int().min(1).max(50),
   /**
+   * After breaking a fence, the challenger has this long to "Keep going":
+   * the guard battle that finishes the same challenge, with no new try.
+   */
+  keepGoingMinutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 60),
+  /**
    * The stats a fence never uses (it makes no moves), and the feeling its
    * battle state carries. The feeling is ignored in the maths: a fence's
    * matchup is its material's element only.

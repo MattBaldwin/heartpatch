@@ -424,7 +424,8 @@ export const GAME_EVENTS = {
   /**
    * A challenger fought a fence segment and it held (#203): it keeps the
    * energy it lost (owner decision 2026-10-07). `userId` is its owner. Who
-   * challenged stays internal: the owner's report says "someone".
+   * challenged stays out of the public view (coordinator, #203); the owner's
+   * Challenge report names them, as it does for any challenge.
    */
   'fence.damaged': {
     internal: z.strictObject({
@@ -438,8 +439,9 @@ export const GAME_EVENTS = {
   },
   /**
    * A challenger broke a fence segment (#203): it's gone, with nothing back.
-   * The land is still its owner's. `userId` is its owner; who broke it stays
-   * internal ("Someone broke your fence!").
+   * The land is still its owner's, or a rival's capture destroyed it with
+   * the land (owner decision 2026-10-07). `userId` is its owner; who broke it
+   * stays out of the public view, and the owner's Challenge report names them.
    */
   'fence.broken': {
     internal: z.strictObject({

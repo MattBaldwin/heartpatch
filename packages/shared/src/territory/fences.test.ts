@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.js';
 import { ELEMENTS } from '../data/elements.js';
 import { FENCE_RULES } from '../data/fences.js';
-import { hex, hexNeighbors, type Hex } from '../hex/index.js';
+import { hex, hexNeighbors, hexSpiral, type Hex } from '../hex/index.js';
 import { BattleFenceSetupSchema } from '../schemas/battle.js';
 import { FenceRulesSchema } from '../schemas/data/fences.js';
 import type { FenceBuilding } from '../schemas/data/buildings.js';
@@ -33,6 +33,8 @@ const ring = (tile: Hex, skip: number[] = []): FenceSpot[] =>
 const centre = hex(0, 0);
 const patch = [centre, ...hexNeighbors(centre)];
 const east = hex(1, 0); // edge 0 of the centre
+// The whole map: radius 9 around the centre.
+const MAP = hexSpiral(centre, 9);
 
 describe('fence edges (#203, #204)', () => {
   it('numbers edges in HEX_DIRECTIONS order, and each edge has an opposite', () => {
@@ -45,42 +47,60 @@ describe('fence edges (#203, #204)', () => {
   });
 
   it('a tile’s border edges are the ones facing land its owner doesn’t hold', () => {
-    expect(borderEdges(centre, patch)).toEqual([]);
+    expect(borderEdges(centre, patch, MAP)).toEqual([]);
     // East's edges 2, 3 and 4 face (1,-1), the centre and (0,1): all mine.
-    expect(borderEdges(east, patch)).toEqual([0, 1, 5]);
+    expect(borderEdges(east, patch, MAP)).toEqual([0, 1, 5]);
+  });
+
+  it('needs no fence on the map’s rim, facing nothing', () => {
+    // A corner of a radius-9 map: only three of its edges face a real tile.
+    const corner = hex(-9, 9);
+    const real = HEX_EDGES.filter((e) =>
+      MAP.some((t) => t.q === edgeNeighbor(corner, e).q && t.r === edgeNeighbor(corner, e).r),
+    );
+    expect(real).toHaveLength(3);
+    expect(borderEdges(corner, [corner], MAP)).toEqual(real);
+    expect(
+      isTileFenced(
+        corner,
+        [corner],
+        real.map((edge) => ({ ...corner, edge })),
+        MAP,
+      ),
+    ).toBe(true);
   });
 });
 
 describe('isTileFenced (#204: every edge touching land you don’t own has a segment)', () => {
   it('an interior tile needs no fence at all', () => {
-    expect(isTileFenced(centre, patch, [])).toBe(true);
+    expect(isTileFenced(centre, patch, [], MAP)).toBe(true);
   });
 
   it('a border tile is fenced only when every border edge has a segment', () => {
     const tile = east;
-    expect(isTileFenced(tile, patch, [])).toBe(false);
-    expect(isTileFenced(tile, patch, ring(tile, [0]))).toBe(false);
+    expect(isTileFenced(tile, patch, [], MAP)).toBe(false);
+    expect(isTileFenced(tile, patch, ring(tile, [0]), MAP)).toBe(false);
     // Interior edges (2, 3 and 4 face my own land) don't matter.
     const borderOnly = [0, 1, 5].map((edge) => ({ ...tile, edge }));
-    expect(isTileFenced(tile, patch, borderOnly)).toBe(true);
+    expect(isTileFenced(tile, patch, borderOnly, MAP)).toBe(true);
   });
 
   it('a neighbour I capture turns its edge interior: fenced with one fewer segment', () => {
     const tile = east;
     const segments = [1, 5].map((edge) => ({ ...tile, edge })); // edge 0 open
-    expect(isTileFenced(tile, patch, segments)).toBe(false);
+    expect(isTileFenced(tile, patch, segments, MAP)).toBe(false);
     const captured = [...patch, edgeNeighbor(tile, 0)];
-    expect(isTileFenced(tile, captured, segments)).toBe(true);
+    expect(isTileFenced(tile, captured, segments, MAP)).toBe(true);
   });
 
   it('a neighbour I lose opens its edge: no longer fenced until I build there', () => {
     const tile = east;
     const segments = [0, 1, 5].map((edge) => ({ ...tile, edge }));
-    expect(isTileFenced(tile, patch, segments)).toBe(true);
+    expect(isTileFenced(tile, patch, segments, MAP)).toBe(true);
     // The tile to its south-west, (0,1), goes to a rival: edge 4 now faces them.
     const lost = patch.filter((t) => !(t.q === 0 && t.r === 1));
-    expect(isTileFenced(tile, lost, segments)).toBe(false);
-    expect(isTileFenced(tile, lost, [...segments, { ...tile, edge: 4 }])).toBe(true);
+    expect(isTileFenced(tile, lost, segments, MAP)).toBe(false);
+    expect(isTileFenced(tile, lost, [...segments, { ...tile, edge: 4 }], MAP)).toBe(true);
   });
 
   it('only the owner’s segments on this tile count, never a neighbour’s side', () => {
@@ -90,11 +110,11 @@ describe('isTileFenced (#204: every edge touching land you don’t own has a seg
       ...edgeNeighbor(tile, edge),
       edge: oppositeEdge(edge),
     }));
-    expect(isTileFenced(tile, patch, theirs)).toBe(false);
+    expect(isTileFenced(tile, patch, theirs, MAP)).toBe(false);
   });
 
   it('a tile the owner doesn’t hold isn’t fenced', () => {
-    expect(isTileFenced(hex(5, 5), patch, ring(hex(5, 5)))).toBe(false);
+    expect(isTileFenced(hex(5, 5), patch, ring(hex(5, 5)), MAP)).toBe(false);
   });
 });
 

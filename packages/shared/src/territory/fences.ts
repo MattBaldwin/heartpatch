@@ -44,29 +44,41 @@ export interface FenceSegmentStats extends FenceSpot {
 
 /**
  * Edges of `tile` that touch land its owner doesn't hold (neutral, wild or a
- * rival's): the ones a fence has to cover. `ownedTiles` are the owner's.
+ * rival's): the ones a fence has to cover. `ownedTiles` are the owner's;
+ * `mapTiles` every tile on the map, so an edge on the map's rim, facing
+ * nothing, needs no fence (nobody can come from there).
  */
-export function borderEdges(tile: Hex, ownedTiles: readonly Hex[]): HexEdge[] {
+export function borderEdges(
+  tile: Hex,
+  ownedTiles: readonly Hex[],
+  mapTiles: readonly Hex[],
+): HexEdge[] {
   const owned = new Set(ownedTiles.map(hexKey));
-  return HEX_EDGES.filter((edge) => !owned.has(hexKey(edgeNeighbor(tile, edge))));
+  const onMap = new Set(mapTiles.map(hexKey));
+  return HEX_EDGES.filter((edge) => {
+    const next = hexKey(edgeNeighbor(tile, edge));
+    return onMap.has(next) && !owned.has(next);
+  });
 }
 
 /**
  * Is `tile` fenced (#204)? Yes when every edge touching land its owner
  * doesn't hold has a segment. Edges between two of the owner's tiles need
- * none, so an interior tile is fenced already (nobody can reach it anyway).
- * `ownedTiles` and `segments` are the owner's. A tile they don't own isn't.
+ * none, so an interior tile is fenced already (nobody can reach it anyway),
+ * and neither do edges facing off the map. `ownedTiles` and `segments` are
+ * the owner's, `mapTiles` the map's. A tile they don't own isn't fenced.
  */
 export function isTileFenced(
   tile: Hex,
   ownedTiles: readonly Hex[],
   segments: readonly FenceSpot[],
+  mapTiles: readonly Hex[],
 ): boolean {
   if (!ownedTiles.some((t) => t.q === tile.q && t.r === tile.r)) return false;
   const fenced = new Set(
     segments.filter((s) => s.q === tile.q && s.r === tile.r).map((s) => s.edge),
   );
-  return borderEdges(tile, ownedTiles).every((edge) => fenced.has(edge));
+  return borderEdges(tile, ownedTiles, mapTiles).every((edge) => fenced.has(edge));
 }
 
 /**

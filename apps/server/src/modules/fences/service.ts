@@ -1,4 +1,5 @@
 import {
+  borderEdges,
   buildCost,
   buildingPageKey,
   edgeNeighbor,
@@ -37,6 +38,7 @@ import {
   requirePageOpen,
 } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
+import { createTerritoryRepo } from '../territory/repo.js';
 import { createFencesRepo, type FenceRow, type FencesTxRepo, type FenceTileRow } from './repo.js';
 
 /*
@@ -63,6 +65,7 @@ const MESSAGES = {
   noTile: "We couldn't find that spot.",
   notMine: 'You can only put fences on your own land.',
   edgeTaken: 'That edge has a fence already. Try another one!',
+  notBorder: "That edge doesn't face anyone else's land, so it doesn't need a fence!",
   noFence: "We couldn't find that fence.",
   topLevel: (name: string) => `Your ${name} is as strong as it gets!`,
   full: (name: string) => `Your ${name} is as good as new!`,
@@ -198,6 +201,20 @@ export function createFencesService(options: FencesServiceOptions): FencesServic
         const taken = new Set((await repo.listOnTile(tile.id)).map((f) => f.edge));
         if (request.edges.some((edge) => taken.has(edge))) {
           throw new AppError('CONFLICT', MESSAGES.edgeTaken);
+        }
+        // Only edges facing land on the map I don't hold need a fence: not
+        // one between two of my tiles, nor one on the map's rim (CLAUDE.md
+        // rule 1: the sheet only offers these, but the server decides).
+        const tiles = await createTerritoryRepo(tx).listTiles(mapId);
+        const border = new Set<number>(
+          borderEdges(
+            tile,
+            tiles.filter((t) => t.ownerUserId === user.id),
+            tiles,
+          ),
+        );
+        if (request.edges.some((edge) => !border.has(edge))) {
+          throw new AppError('CONFLICT', MESSAGES.notBorder);
         }
         const cost = buildCost(fence);
         const hp = fenceMaxHp(fence, 1);

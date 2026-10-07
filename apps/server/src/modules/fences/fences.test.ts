@@ -191,6 +191,16 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
     );
   }
 
+  /** Edges of `tile` that face land on the map `who` doesn't hold (where a fence may go). */
+  async function borderOf(mapId: string, tile: Tile, who: PublicUser): Promise<number[]> {
+    const all = await tilesOf(mapId);
+    return borderEdges(
+      tile,
+      all.filter((t) => t.ownerUserId === who.id),
+      all,
+    );
+  }
+
   const eventsOf = (mapId: string) =>
     db.query.gameEvents.findMany({
       where: (t, { eq }) => eq(t.mapId, mapId),
@@ -268,7 +278,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
     const [near] = await edgeOf(mapId, kid);
     await setOwner(near!.id, rival.id);
     const rivalTiles = (await tilesOf(mapId)).filter((t) => t.ownerUserId === rival.id);
-    const edges = borderEdges(near!, rivalTiles);
+    const edges = borderEdges(near!, rivalTiles, await tilesOf(mapId));
     const { level = 1, hp = 70, kind = 'emberwood-palisade' } = options.fence ?? {};
     await db.insert(fenceSegments).values(
       edges.map((edge) => ({
@@ -297,18 +307,19 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       await give(mapId, kid, PLENTY);
       const [tile] = await edgeOf(mapId, kid);
       await setOwner(tile!.id, kid.id);
+      const [a, b] = await borderOf(mapId, tile!, kid);
 
       const res = await call(server, 'POST', `/maps/${mapId}/fences`, kid, {
         buildingId: 'emberwood-palisade',
         q: tile!.q,
         r: tile!.r,
-        edges: [3, 0],
+        edges: [b!, a!],
       });
       expect(res.statusCode, res.body).toBe(201);
       const built = fencesOf(res);
       expect(built.fences.map((f) => [f.edge, f.level, f.hp, f.maxHp])).toEqual([
-        [0, 1, 70, 70],
-        [3, 1, 70, 70],
+        [a, 1, 70, 70],
+        [b, 1, 70, 70],
       ]);
       // Two segments' worth, ledgered against each.
       expect(sumOf(await ledgerOf(mapId, kid.id, 'build'))).toEqual({ emberwood: -12, timber: -4 });
@@ -317,7 +328,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       const shown = MapViewSchema.parse(
         (await call(server, 'GET', `/maps/${mapId}/view`, friend)).json(),
       ).tiles.find((t) => t.q === tile!.q && t.r === tile!.r)!;
-      expect(shown.fences?.map((f) => f.edge)).toEqual([0, 3]);
+      expect(shown.fences?.map((f) => f.edge)).toEqual([a, b]);
       const types = (await eventsOf(mapId)).map((e) => e.type);
       expect(types.filter((t) => t === 'fence.built')).toHaveLength(2);
     });
@@ -337,22 +348,36 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
           edges,
         });
 
+      const [e1, e2, e3] = await borderOf(mapId, mine!, kid);
       // Its recipe page opens once the kid has collected Emberwood and Timber.
-      const sealed = await build(mine!, [0]);
+      const sealed = await build(mine!, [e1!]);
       expect(sealed.statusCode).toBe(403);
       await give(mapId, kid, { emberwood: 6, timber: 2 });
 
       expect((await build(theirs!, [0])).statusCode).toBe(403);
-      const short = await build(mine!, [0, 1]);
+      const short = await build(mine!, [e1!, e2!]);
       expect(short.statusCode).toBe(409);
       expect(errorOf(short).message).toMatch(/Emberwood|Timber/);
       expect(await segmentsOn(mine!.id)).toEqual([]);
 
-      expect((await build(mine!, [2])).statusCode).toBe(201);
+      // An edge between two of my tiles faces nobody: no fence there (rule 1).
+      const kidTiles = new Set(
+        (await tilesOf(mapId)).filter((t) => t.ownerUserId === kid.id).map(hexKey),
+      );
+      const inner = HEX_EDGES.find((e) => kidTiles.has(hexKey(edgeNeighbor(mine!, e))))!;
+      expect([e1, e2, e3]).not.toContain(inner);
+      const inside = await build(mine!, [inner]);
+      expect(inside.statusCode).toBe(409);
+      expect(errorOf(inside).message).toBe(
+        "That edge doesn't face anyone else's land, so it doesn't need a fence!",
+      );
+      expect(await segmentsOn(mine!.id)).toEqual([]);
+
+      expect((await build(mine!, [e1!])).statusCode).toBe(201);
       await give(mapId, kid, PLENTY);
-      const taken = await build(mine!, [2, 4]);
+      const taken = await build(mine!, [e1!, e2!]);
       expect(taken.statusCode).toBe(409);
-      expect((await segmentsOn(mine!.id)).map((s) => s.edge)).toEqual([2]);
+      expect((await segmentsOn(mine!.id)).map((s) => s.edge)).toEqual([e1]);
       // Fences don't go through the home build sheet's spots.
       const viaSpot = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
         buildingId: 'emberwood-palisade',
@@ -553,6 +578,50 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       expect(after.fenceBroken).toEqual([]);
     });
 
+    it('a tile on the map’s rim is fenced without fencing the edges facing nothing', async () => {
+      const server = await start();
+      const kid = await player();
+      const rival = await player();
+      const mapId = await patch(server, kid, [rival]);
+      await grant(server, kid, mapId, 40, EMBER);
+      await grant(server, rival, mapId, 3, SPLASH);
+      clock.setTime(clock.getTime() + (TERRITORY_RULES.newPlayerShieldHours + 1) * HOUR_MS);
+      // Two neutral tiles side by side on the rim: the kid's and the rival's.
+      const all = await tilesOf(mapId);
+      const onMap = new Set(all.map(hexKey));
+      const rim = all.filter(
+        (t) =>
+          t.homeSlot === null &&
+          t.ownerUserId === null &&
+          hexNeighbors(t).some((n) => !onMap.has(hexKey(n))),
+      );
+      const theirs = rim.find((t) =>
+        rim.some((o) => o.id !== t.id && hexKey(o) !== hexKey(t) && hexDistance(o, t) === 1),
+      )!;
+      const mine = rim.find((o) => o.id !== theirs.id && hexDistance(o, theirs) === 1)!;
+      await setOwner(mine.id, kid.id);
+      await setOwner(theirs.id, rival.id);
+      const edges = await borderOf(mapId, theirs, rival);
+      // Fewer than six: the edges facing off the map need nothing.
+      expect(edges.length).toBeLessThan(6);
+      await db.insert(fenceSegments).values(
+        edges.map((edge) => ({
+          mapId,
+          ownerUserId: rival.id,
+          tileId: theirs.id,
+          edge,
+          buildingId: 'hedge',
+          level: 1,
+          hp: 70,
+        })),
+      );
+      // Fenced all round: the challenge starts with the fence battle.
+      const res = await attack(server, kid, mapId, theirs);
+      expect(res.statusCode, res.body).toBe(201);
+      expect(battleOf(res).view.turnLimit).toBe(FENCE_RULES.battleTurns);
+      expect(battleOf(res).view.sides.b.squishies[0]).toMatchObject({ fence: 'hedge' });
+    });
+
     it('a tile with an open border edge isn’t fenced: an ordinary challenge', async () => {
       const server = await start();
       const { kid, mapId, near, edges } = await fencedRival(server, {
@@ -591,7 +660,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
     // One of my tiles beside it: fence its edge facing it, and one facing elsewhere.
     const beside = mine.find((t) => hexDistance(t, near!) === 1)!;
     const facing = HEX_EDGES.find((e) => hexKey(edgeNeighbor(beside, e)) === hexKey(near!))!;
-    const other = borderEdges(beside, mine).find((e) => e !== facing);
+    const other = borderEdges(beside, mine, all).find((e) => e !== facing);
     const edges = other === undefined ? [facing] : [facing, other];
     const built = await call(server, 'POST', `/maps/${mapId}/fences`, kid, {
       buildingId: 'emberwood-palisade',
@@ -671,7 +740,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       buildingId: 'stone-wall',
       q: tile!.q,
       r: tile!.r,
-      edges: [0, 1],
+      edges: (await borderOf(mapId, tile!, kid)).slice(0, 2),
     });
     expect(built.statusCode, built.body).toBe(201);
     expect((await call(server, 'POST', `/maps/${mapId}/leave`, kid)).statusCode).toBe(204);

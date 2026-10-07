@@ -97,7 +97,7 @@ export const BUILDINGS: Building[] = [
     placement: 'owned',
     slot: 'edge',
     maxPerTile: 6, // one a hex edge
-    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
     element: 'leaf',
     levels: [
       { cost: { greens: 8, timber: 1 }, hp: 70, defense: 14 }, // TUNE:
@@ -114,7 +114,7 @@ export const BUILDINGS: Building[] = [
     placement: 'owned',
     slot: 'edge',
     maxPerTile: 6, // one a hex edge
-    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
     element: 'water',
     levels: [
       { cost: { water: 8, stone: 2 }, hp: 70, defense: 14 }, // TUNE:
@@ -131,7 +131,7 @@ export const BUILDINGS: Building[] = [
     placement: 'owned',
     slot: 'edge',
     maxPerTile: 6, // one a hex edge
-    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
     element: 'stone',
     levels: [
       { cost: { stone: 8, timber: 3 }, hp: 70, defense: 14 }, // TUNE:
@@ -148,7 +148,7 @@ export const BUILDINGS: Building[] = [
     placement: 'owned',
     slot: 'edge',
     maxPerTile: 6, // one a hex edge
-    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
     element: 'fire',
     levels: [
       { cost: { emberwood: 6, timber: 2 }, hp: 70, defense: 14 }, // TUNE:
@@ -165,7 +165,7 @@ export const BUILDINGS: Building[] = [
     placement: 'owned',
     slot: 'edge',
     maxPerTile: 6, // one a hex edge
-    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
     element: 'spark',
     levels: [
       { cost: { glimmer: 2, timber: 4 }, hp: 70, defense: 14 }, // TUNE:
@@ -182,7 +182,7 @@ export const BUILDINGS: Building[] = [
     placement: 'owned',
     slot: 'edge',
     maxPerTile: 6, // one a hex edge
-    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
     element: 'light',
     levels: [
       { cost: { glimmer: 2, timber: 5 }, hp: 70, defense: 14 }, // TUNE:
@@ -199,7 +199,7 @@ export const BUILDINGS: Building[] = [
     placement: 'owned',
     slot: 'edge',
     maxPerTile: 6, // one a hex edge
-    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
     element: 'shadow',
     levels: [
       { cost: { greens: 6, emberwood: 3 }, hp: 70, defense: 14 }, // TUNE:
@@ -216,7 +216,7 @@ export const BUILDINGS: Building[] = [
     placement: 'owned',
     slot: 'edge',
     maxPerTile: 6, // one a hex edge
-    maxPerHome: 42, // TUNE: every edge at home; there it's just for looks
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
     element: 'frost',
     levels: [
       { cost: { ice: 6, stone: 2 }, hp: 70, defense: 14 }, // TUNE:

@@ -276,6 +276,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           tile,
           tiles.filter((t) => t.ownerUserId === defenderId),
           segments,
+          tiles,
         );
       // The guard battle straight after I broke this tile's fence finishes
       // that challenge (#203): no new try, and the fence's cooldown stands.
@@ -285,7 +286,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         : await repo.brokenFenceFor(
             tile.id,
             user.id,
-            new Date(at.getTime() - rules.abandonMinutes * MINUTE_MS),
+            new Date(at.getTime() - fenceRules.keepGoingMinutes * MINUTE_MS),
           );
       const today = localDate(at, map.timeZone);
       if (!brokeFence) {
@@ -415,7 +416,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
   const status = async (tx: Executor, user: PublicUser, map: MapRow): Promise<TerritoryStatus> => {
     const repo = createTerritoryRepo(tx);
     const at = now();
-    const window = rules.abandonMinutes * MINUTE_MS;
+    const window = fenceRules.keepGoingMinutes * MINUTE_MS;
     const [used, joinedAt, defenders, squishies, broken] = await Promise.all([
       repo.attemptsOn(map.id, user.id, localDate(at, map.timeZone), map.timeZone),
       repo.joinedAt(map.id, user.id),

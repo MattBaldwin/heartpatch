@@ -92,7 +92,7 @@ export function tilesOf(view: Pick<MapView, 'tiles'>, owner: string): PublicTile
 /** Edges of my `tile` that face land I don't hold and have no fence yet. */
 export function openEdges(tile: PublicTile, view: Pick<MapView, 'tiles'>, me: string): number[] {
   const fenced = new Set((tile.fences ?? []).map((f) => f.edge));
-  return borderEdges(tile, tilesOf(view, me)).filter((e) => !fenced.has(e));
+  return borderEdges(tile, tilesOf(view, me), view.tiles).filter((e) => !fenced.has(e));
 }
 
 /** Is this edge of my tile inside my land now (no fence needed there)? */
@@ -102,7 +102,7 @@ export function isInterior(
   view: Pick<MapView, 'tiles'>,
   me: string,
 ): boolean {
-  return !borderEdges(tile, tilesOf(view, me)).includes(edge as never);
+  return !borderEdges(tile, tilesOf(view, me), view.tiles).includes(edge as never);
 }
 
 /** A cost times `n` (fencing several edges at once). */
@@ -185,6 +185,13 @@ export function fenceChoices(items: ItemCounts, edges: number): FenceChoice[] {
   });
 }
 
+/** How much of the cost comes back, in kid words, from the refund rule (`// TUNE:`). */
+export function refundShare(percent: number): string {
+  if (percent >= 100) return "That's everything it cost.";
+  if (percent === 50) return "That's half of what it cost.";
+  return "That's part of what it cost.";
+}
+
 // Player-facing text (style guide: cozy, short, kid-readable).
 export const FENCE_TEXT = {
   fenced: '🪵 Fenced all the way round! Challengers must break it first.',
@@ -225,7 +232,8 @@ export const FENCE_TEXT = {
   takeDown: 'Take down',
   takeDownTitle: 'Take down this fence?',
   interiorNote: "This edge is inside your land now, so it isn't keeping anyone out.",
-  refund: (items: string) => `You get back ${items}. That's half of what it cost.`,
+  refund: (items: string) =>
+    `You get back ${items}. ${refundShare(HOME_BASE_RULES.removeRefundPercent)}`,
   noRefund: 'Nothing comes back from this one.',
   keep: 'Keep it',
   yesTakeDown: 'Yes, take it down',
