@@ -116,7 +116,10 @@ test('claims wild land from its guardians and posts a guard on it', async ({ bro
   // Wild land next to home: the panel says Claim, kindly.
   const spot = await findTile(page, 'claim');
   const panel = page.getByTestId('tile-panel');
-  await expect(panel).toContainText(/tries left · new tries in \d+h/);
+  // Any wait: in the patch's last hour it's minutes, or "less than a minute".
+  await expect(panel).toContainText(
+    /tries left · new tries in (\d+h( \d{2}m)?|\d+m|less than a minute)/,
+  );
   expect(findAvoidedWords((await panel.textContent()) ?? '')).toEqual([]);
   // How many guardians and how tough (owner decision 10), as the server's view
   // says for the tile the map has selected; never who.
