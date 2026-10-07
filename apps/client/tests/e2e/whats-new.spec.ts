@@ -8,13 +8,15 @@ import { newPlayer, uniqueName, visitPatch } from './players.js';
 
 const SEEN_BUILD_KEY = 'heartpatch.whatsNewSeenBuild';
 
-async function makePatch(page: Page): Promise<void> {
+async function makePatch(page: Page, answerHint = true): Promise<void> {
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('News Patch');
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // Sprout's first-time tray hint keeps What's new waiting until it's answered.
+  if (answerHint) await page.getByTestId('tray-hint-ok').tap();
 }
 
 /** This app's build number, from the version line. */
@@ -53,7 +55,7 @@ test('tapping the version line opens What’s new with the real entries', async 
 test('after an update What’s new pops up once, new things first', async ({ browser }) => {
   test.setTimeout(180_000);
   const page = await newPlayer(browser, uniqueName('pop'));
-  await makePatch(page);
+  await makePatch(page, false);
   const build = await appBuild(page);
 
   const entry = (slug: string, title: string, at: number) => ({
@@ -82,10 +84,17 @@ test('after an update What’s new pops up once, new things first', async ({ bro
     },
     [SEEN_BUILD_KEY, String(build - 3)] as const,
   );
+  // A reload goes straight back to the patch.
   await page.reload();
-  await visitPatch(page.getByTestId('lobby'));
+  await expect(page.getByTestId('map-hud')).toContainText('News Patch', { timeout: 30_000 });
 
+  // It waits for Sprout's tray hint, then pops up.
   const sheet = page.getByTestId('whats-new');
+  const hint = page.getByTestId('tray-hint');
+  await expect(hint).toBeVisible();
+  await page.waitForTimeout(4_000); // longer than a busy retry
+  await expect(sheet).toBeHidden();
+  await page.getByTestId('tray-hint-ok').tap();
   await expect(sheet).toBeVisible({ timeout: 30_000 });
   await expect(sheet.getByRole('heading', { name: 'What’s new!' })).toBeVisible();
   const dividers = sheet.getByRole('separator');
@@ -101,8 +110,7 @@ test('after an update What’s new pops up once, new things first', async ({ bro
 
   // Once only: the next visit stays quiet.
   await page.reload();
-  await visitPatch(page.getByTestId('lobby'));
-  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await expect(page.getByTestId('map-hud')).toContainText('News Patch', { timeout: 30_000 });
   await page.waitForTimeout(4_000); // longer than a busy retry
   await expect(sheet).toBeHidden();
   await page.context().close();

@@ -850,8 +850,8 @@ const menuRow = (icon: string, label: string, onTap: () => void): HTMLButtonElem
   return row;
 };
 // What's new (#220): the version line opens it, and after an update it pops
-// up once over the map, never over a battle, the tutorial, another card or a
-// held screen (#47).
+// up once over the map, never over a battle, the tutorial, Sprout's tray
+// hint, another card or a held screen (#47).
 const whatsNew = createWhatsNew({
   root: document.body,
   client: CLIENT_BUILD,
@@ -860,6 +860,7 @@ const whatsNew = createWhatsNew({
     lobby.isOpen ||
     battles.debug !== null ||
     (tutorial.debug !== null && tutorial.debug.phase !== 'closed') ||
+    trays.debug.hint ||
     lorebook.debug.showing !== null ||
     milestones.debug.showing !== null ||
     hollowReportOpen(),
