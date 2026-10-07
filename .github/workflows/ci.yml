@@ -134,26 +134,30 @@ jobs:
 
       # A slow apt mirror held shards in the OS-package install for 29 min, so
       # jobs timed out before any test ran. apt gives up on a silent
-      # connection after 30 s; a mirror that trickles is caught by the 5-min
-      # cap on each try below, which retries on a fresh connection. The cap
-      # runs as root: Playwright starts apt as root, and a signal from the
-      # runner user can't reach it, so the lock would outlive the try.
+      # connection after 30 s and waits up to 60 s for a lock. dpkg stays off
+      # its own pty, so it stays in the process group the retry cap below can
+      # stop.
       - name: apt retries and timeouts
         run: |
-          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
+          printf '%s\n' 'Acquire::Retries "5";' 'Acquire::http::Timeout "30";' \
+            'Acquire::https::Timeout "30";' 'Dpkg::Use-Pty "0";' 'DPkg::Lock::Timeout "60";' \
             | sudo tee /etc/apt/apt.conf.d/99-ci-retries
 
       - name: Install Playwright WebKit
         if: steps.pw-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @heartpatch/client exec playwright install webkit
 
+      # A mirror that trickles is caught by the 5-min cap on each try, which
+      # retries on a fresh connection. The cap runs as root: Playwright then
+      # calls apt itself, and a signal from the runner user couldn't reach a
+      # root apt started through sudo, so its lock would outlive the try.
       - name: Install Playwright WebKit system deps
         timeout-minutes: 17
         run: |
           for try in 1 2 3; do
             sudo env "PATH=$PATH" timeout -k 30s 5m apps/client/node_modules/.bin/playwright install-deps webkit && exit 0
-            echo "::warning::try $try failed or took over 5 min; retrying"
-            sudo dpkg --configure -a || true
+            echo "::warning::install-deps try $try of 3 failed or took over 5 min"
+            sudo dpkg --configure -a || echo "::warning::dpkg --configure -a failed after try $try"
           done
           exit 1
 
