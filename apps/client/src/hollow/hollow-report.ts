@@ -33,7 +33,7 @@ export const HOLLOW_TEXT = {
   devNightfall: 'Night falls (dev)',
   devNight: (night: string, taken: number) =>
     taken === 0 ? `Night fell (${night}). Nobody was taken.` : `Night fell (${night}).`,
-  /** A gatherer would sleep out on dark land tonight (home is always safe, owner decision 2026-10-07). */
+  /** A gatherer or guard would spend tonight on dark land (home is always safe, owner decisions 2026-10-07). */
   fireHint: 'A friend sleeps out in the dark. Light a fire there!',
   /** My home fire packed up when the Heart Seed began keeping home safe (#202). */
   packedTitle: 'Good morning!',
@@ -66,8 +66,8 @@ export function unseenReports(
 
 /**
  * The report card's title and lines for these nights (newest first).
- * `fireHint` is the status's own ("a gatherer of mine would sleep on dark
- * land tonight"), so a night he let them be asks for a fire only while one would.
+ * `fireHint` is the status's own ("a gatherer or guard of mine would spend
+ * tonight on dark land"), so a night he let them be asks for a fire only while one would.
  */
 export function reportText(
   reports: readonly MorningReport[],
@@ -97,13 +97,24 @@ export function reportText(
   return { title, lines };
 }
 
-/** Building events that can light (or put out) tonight's fire. */
-const FIRE_EVENTS = new Set(['building.placed', 'building.fueled', 'building.removed']);
+/**
+ * Events that can change who of mine spends tonight in the dark: a fire lit,
+ * put out or reaching further, or a gatherer or guard sent out or brought in
+ * (owner decision 2026-10-07: guards need a fire's light too).
+ */
+const NIGHT_EVENTS = new Set([
+  'building.placed',
+  'building.fueled',
+  'building.upgraded',
+  'building.removed',
+  'squishy.assigned',
+  'defenders.changed',
+]);
 
-/** One of my buildings changed: tonight's fire may be lit now (the fire hint asks again). */
-export function changesMyFire(
+/** Something of mine changed that the fire hint depends on: it asks again. */
+export function changesMyNight(
   event: Pick<WsEventMessage, 'type' | 'data'>,
   userId: string,
 ): boolean {
-  return FIRE_EVENTS.has(event.type) && event.data['userId'] === userId;
+  return NIGHT_EVENTS.has(event.type) && event.data['userId'] === userId;
 }

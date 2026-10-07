@@ -120,7 +120,7 @@ export type LandTileOffer =
       readonly building: Building;
       readonly needs: readonly NeedChip[];
       /** The Jack-o'-Lantern Hearthfire too, in season with a carved pumpkin in the bag. */
-      readonly lantern: Building | null;
+      readonly lantern: { readonly building: Building; readonly needs: readonly NeedChip[] } | null;
     }
   /** Something else stands in the middle (not one of mine to show here). */
   | { readonly kind: 'none' };
@@ -177,7 +177,9 @@ export function landTileOffer(
     kind: 'build',
     building: LAND_FIRE,
     needs: needChips(home.items, buildCost(LAND_FIRE)),
-    lantern,
+    lantern: lantern
+      ? { building: lantern, needs: needChips(home.items, buildCost(lantern)) }
+      : null,
   };
 }
 

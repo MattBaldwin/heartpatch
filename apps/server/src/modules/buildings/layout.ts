@@ -5,6 +5,7 @@ import {
   freeSpots,
   fuelCost,
   hearthfireState,
+  heartSeedOf,
   spentOn,
   type ItemCounts,
   type MapLocalTime,
@@ -35,11 +36,10 @@ import { createBuildingsRepo, type BuildingRow, type HomeTileRow } from './repo.
  * (step 11), the note, then `maps` for the events.
  */
 
-/** Home tiles' middles hold the Heart Seed (the mean of the seven tiles). */
+/** The Heart Seed's tile: the middle of the home (shared `heartSeedOf`). */
 function isHeartSeed(tile: HomeTileRow, home: readonly HomeTileRow[]): boolean {
-  const q = home.reduce((sum, t) => sum + t.q, 0) / home.length;
-  const r = home.reduce((sum, t) => sum + t.r, 0) / home.length;
-  return tile.q === q && tile.r === r;
+  const seed = heartSeedOf(home);
+  return seed !== null && tile.q === seed.q && tile.r === seed.r;
 }
 
 /** Everything a packed-up home fire gives back: all it cost, and its unburned fuel. */

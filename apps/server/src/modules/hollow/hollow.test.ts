@@ -400,6 +400,14 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         where: (t, { eq }) => eq(t.mapId, mapId),
       });
       expect(posted.map((d) => d.squishyId).sort()).toEqual([byTheFire, atHome].sort());
+      // …and every map hears its post is empty now, as posting and jobs say.
+      const changed = (await eventsOf(mapId)).filter((e) => e.type === 'defenders.changed');
+      const darkTile = (await db.query.tiles.findFirst({
+        where: (t, { eq }) => eq(t.id, darkPost),
+      }))!;
+      expect(changed.map((e) => e.payload)).toEqual([
+        { userId: kid.id, q: darkTile.q, r: darkTile.r, count: 0, squishyIds: [] },
+      ]);
     });
 
     it('keeps a gatherer safe under a fire on captured land, and not one beyond it (#202)', async () => {

@@ -9,7 +9,7 @@ import { testView } from '../map/test-view.js';
 import { VISIT_KEYS, visitFrames } from '../procedural/hollow-man/hollow-man-config.js';
 import { NIGHT_LOOK } from './hollow-config.js';
 import { HollowLayer } from './hollow-layer.js';
-import { changesMyFire, HOLLOW_TEXT, reportText, unseenReports } from './hollow-report.js';
+import { changesMyNight, HOLLOW_TEXT, reportText, unseenReports } from './hollow-report.js';
 
 const ID = (n: number) => `0190a8c4-0000-7000-8000-0000000002${String(n).padStart(2, '0')}`;
 const taken = (n: number, inHollow = true) => ({
@@ -27,13 +27,15 @@ const night = (date: string, extra: Partial<MorningReport> = {}): MorningReport 
 });
 
 describe('the fire hint', () => {
-  it('asks again when one of my buildings changes, not someone else’s or anything else', () => {
+  it('asks again when my fires, gatherers or guards change, not someone else’s or anything else', () => {
     const me = ID(1);
-    expect(changesMyFire({ type: 'building.fueled', data: { userId: me } }, me)).toBe(true);
-    expect(changesMyFire({ type: 'building.placed', data: { userId: me } }, me)).toBe(true);
-    expect(changesMyFire({ type: 'building.removed', data: { userId: me } }, me)).toBe(true);
-    expect(changesMyFire({ type: 'building.fueled', data: { userId: ID(2) } }, me)).toBe(false);
-    expect(changesMyFire({ type: 'squishy.housed', data: { userId: me } }, me)).toBe(false);
+    expect(changesMyNight({ type: 'building.fueled', data: { userId: me } }, me)).toBe(true);
+    expect(changesMyNight({ type: 'building.placed', data: { userId: me } }, me)).toBe(true);
+    expect(changesMyNight({ type: 'building.removed', data: { userId: me } }, me)).toBe(true);
+    expect(changesMyNight({ type: 'building.fueled', data: { userId: ID(2) } }, me)).toBe(false);
+    expect(changesMyNight({ type: 'squishy.assigned', data: { userId: me } }, me)).toBe(true);
+    expect(changesMyNight({ type: 'defenders.changed', data: { userId: me } }, me)).toBe(true);
+    expect(changesMyNight({ type: 'squishy.housed', data: { userId: me } }, me)).toBe(false);
   });
 });
 

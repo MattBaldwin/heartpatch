@@ -396,6 +396,16 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
       kind: 'node',
       line: '🔥 Fires go in the middle of a tile. This one has a Timber pile there, so a fire next door can reach it!',
     });
+    // No carved pumpkin, no lantern; with one in Halloween, its own build card and cost.
+    expect(empty.kind === 'build' && empty.lantern).toBeNull();
+    const carved = landTileOffer(
+      { ...tile, q: 4, buildings: [] },
+      homeWith({ buildings: [outer], items: { 'jack-o-lantern-hearthfire': 1 } }),
+    );
+    expect(carved.kind === 'build' && carved.lantern).toMatchObject({
+      building: { id: 'jack-o-lantern-hearthfire' },
+      needs: [{ ok: true }],
+    });
     expect(landFireLine(LAND_FIRE!)).toBe(
       'It goes in the middle of this tile 🔥 and keeps everyone within 1 tile cozy at night.',
     );

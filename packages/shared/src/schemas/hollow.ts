@@ -58,8 +58,8 @@ export const HollowStatusSchema = z.object({
   /**
    * A cozy nudge to light a fire: the Hollow Man's first visit to me (after
    * my first-night grace) is tonight or still to come, and one of my
-   * squishies would sleep in the dark tonight (a gatherer out on land no lit
-   * fire reaches; home is always safe, owner decision 2026-10-07).
+   * squishies would spend tonight in the dark (a gatherer or a guard out on
+   * land no lit fire reaches; home is always safe, owner decisions 2026-10-07).
    */
   fireHint: z.boolean(),
   /**

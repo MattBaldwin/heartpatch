@@ -190,7 +190,8 @@ export const HOME_TEXT = {
     (low === 0 ? '' : low === 1 ? ' 1 is almost out!' : ` ${String(low)} are almost out!`),
   fuelAll: (cost: string) => `🔥 Fuel all fires (${cost})`,
   allFull: 'All your fires are full! 🔥',
-  fuelledAll: (n: number) => `Ta-da! All ${String(n)} fires are full for 5 nights. 🔥`,
+  fuelledAll: (n: number, nights: number) =>
+    `Ta-da! All ${String(n)} fires are full for ${String(nights)} ${nights === 1 ? 'night' : 'nights'}. 🔥`,
   fuelledSome: (n: number) =>
     `Your bag ran out! ${String(n)} ${n === 1 ? 'fire' : 'fires'} got more. The lowest went first. 🔥`,
   fireBuilt: 'Ta-da! Your fire is built. Add Emberwood to light it!',
@@ -380,12 +381,15 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       },
       () => {
         const done: FuelAllResponse | null = result;
+        // How full "full" is comes from the server's reply (fuel nights are tunable data).
+        const fires = done?.home.buildings.filter((b) => b.kind === 'hearthfire') ?? [];
         return {
           mode: { kind: 'idle' },
           say: done?.short
             ? HOME_TEXT.fuelledSome(done.fires)
             : HOME_TEXT.fuelledAll(
-                done?.home.buildings.filter((b) => b.kind === 'hearthfire').length ?? 0,
+                fires.length,
+                Math.max(0, ...fires.map((b) => b.nightsLeft ?? 0)),
               ),
         };
       },
@@ -1115,6 +1119,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   /** What the panel shows for a fire on my land (#202): its card, or a step of a command. */
   type TileMode = 'card' | 'build' | 'upgrade' | 'confirm';
   let tileMode: TileMode = 'card';
+  /** Which fire the build step is for (the Hearthfire or the Jack-o'-Lantern). */
+  let tileBuilding = '';
   let tileNote = '';
   let tileWorking = false;
 
@@ -1216,41 +1222,33 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     if (offer.kind === 'build') {
       if (tileMode !== 'build') {
         const lantern = offer.lantern;
+        // Each fire has its own Build / Not now card, so one tap never spends
+        // a carved pumpkin (or anything else) by accident.
+        const pick = (buildingId: string) => () => {
+          tileMode = 'build';
+          tileBuilding = buildingId;
+          tileNote = '';
+          renderTile();
+        };
         return [
           ...note,
           ...(lantern
             ? [
                 tileButton(
-                  `${buildingIcon(lantern.id)} ${buildingName(lantern.id)}`,
-                  () =>
-                    void tileAct(
-                      (id, send) =>
-                        send((key) =>
-                          api.place(
-                            id,
-                            { buildingId: lantern.id, q: tile.q, r: tile.r, spot: 0 },
-                            key,
-                          ),
-                        ),
-                      HOME_TEXT.fireBuilt,
-                    ),
+                  `${buildingIcon(lantern.building.id)} ${buildingName(lantern.building.id)}`,
+                  pick(lantern.building.id),
                   'tile-build-lantern',
                   true,
                 ),
               ]
             : []),
-          tileButton(
-            HOME_TEXT.buildFire,
-            () => {
-              tileMode = 'build';
-              tileNote = '';
-              renderTile();
-            },
-            'tile-build-fire',
-            true,
-          ),
+          tileButton(HOME_TEXT.buildFire, pick(offer.building.id), 'tile-build-fire', true),
         ];
       }
+      const chosen =
+        offer.lantern && tileBuilding === offer.lantern.building.id
+          ? offer.lantern
+          : { building: offer.building, needs: offer.needs };
       const go = tileButton(
         HOME_TEXT.buildHere,
         () =>
@@ -1259,7 +1257,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
               send((key) =>
                 api.place(
                   id,
-                  { buildingId: offer.building.id, q: tile.q, r: tile.r, spot: 0 },
+                  { buildingId: chosen.building.id, q: tile.q, r: tile.r, spot: 0 },
                   key,
                 ),
               ),
@@ -1267,14 +1265,14 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           ),
         'tile-build-fire-confirm',
       );
-      if (!offer.needs.every((n) => n.ok)) go.disabled = true;
+      if (!chosen.needs.every((n) => n.ok)) go.disabled = true;
       return [
         el(
           'div',
           { class: 'home-card' },
-          cardHead({ buildingId: offer.building.id }, 1),
-          el('p', { class: 'home-card-note' }, landFireLine(offer.building)),
-          needRow(offer.needs),
+          cardHead({ buildingId: chosen.building.id }, 1),
+          el('p', { class: 'home-card-note' }, landFireLine(chosen.building)),
+          needRow(chosen.needs),
           tileRow(
             go,
             tileButton(

@@ -34,7 +34,7 @@ import {
   SERVER_GAME_DATA,
 } from '@heartpatch/shared/server';
 import type { Executor, Transaction } from '../../db/client.js';
-import type { GameEvent } from '../../db/game-events.js';
+import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, mapLocalTime, type Clock } from '../../lib/time.js';
 import type { BattlesService, StartResult } from '../battles/service.js';
@@ -198,6 +198,31 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       squishyRows.some((s) => s.id === t.squishyId && s.postOwnerUserId !== undefined),
     );
     await repo.leavePosts(guards.map((t) => t.squishyId));
+    // One `defenders.changed` per tile whose guards changed, as posting and
+    // jobs send, so every map shows the watch as it now stands.
+    const takenIds = new Set(taken.map((t) => t.squishyId));
+    const postEvents: NewGameEvent<'defenders.changed'>[] = [];
+    const seenPosts = new Set<string>();
+    for (const { userId, squishyId } of guards) {
+      const post = squishyRows.find((s) => s.id === squishyId)?.post;
+      if (!post || seenPosts.has(hexKey(post))) continue;
+      seenPosts.add(hexKey(post));
+      const ids = squishyRows
+        .filter(
+          (s) =>
+            s.post?.q === post.q &&
+            s.post.r === post.r &&
+            s.state === 'active' &&
+            !takenIds.has(s.id),
+        )
+        .map((s) => s.id);
+      postEvents.push({
+        mapId: map.id,
+        type: 'defenders.changed',
+        actorUserId: null,
+        payload: { userId, q: post.q, r: post.r, count: ids.length, squishyIds: ids },
+      });
+    }
     // A gatherer taken to the Hollow stops work; what it had ready goes in the bag.
     const workers = taken.filter((t) => squishyRows.some((s) => s.id === t.squishyId && s.work));
     const workEvents =
@@ -225,7 +250,9 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           ).events
         : [];
     await repo.setOutcomes(nightRowId, stored);
-    for (const event of [...workEvents, ...trainingEvents]) await repo.appendEvent(event);
+    for (const event of [...postEvents, ...workEvents, ...trainingEvents]) {
+      await repo.appendEvent(event);
+    }
     for (const t of taken) {
       await repo.appendEvent({
         mapId: map.id,
@@ -278,7 +305,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           store.activeMembers(mapId),
           createBuildingsRepo(db).listOnMap(mapId),
           store.homeTiles(mapId),
-          store.nightSquishies(mapId),
+          store.nightSquishies(mapId, { lock: false }),
           createBuildingsRepo(db).packedFires(mapId, user.id),
         ]);
       // Until the Hollow Man's first visit to me (first-night grace), a

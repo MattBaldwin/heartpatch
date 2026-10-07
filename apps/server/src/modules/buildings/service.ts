@@ -542,8 +542,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         );
         if (plan.size === 0) {
           if (!room) throw new AppError('CONFLICT', MESSAGES.allFull);
-          // Room but nothing to burn: the usual "You need 1 more Emberwood first!".
-          const first = fires[0];
+          // Room but nothing to burn: the usual "You need 1 more Emberwood
+          // first!", for a fire that has room (so nothing is ever spent).
+          const first = fires.find(
+            ({ row, fire }) => fuelSpace(fire, row.fuelledThrough, local, HOME_BASE_RULES) > 0,
+          );
           if (first)
             await consumeItems(
               tx,

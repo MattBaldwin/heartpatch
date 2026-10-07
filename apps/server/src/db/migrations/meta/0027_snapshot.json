@@ -1,5 +1,5 @@
 {
-  "id": "84911f5e-ecf1-454d-9ba4-cc92cb5c4f47",
+  "id": "7bf4fc6a-4a7d-4ced-968a-a89527fd4b43",
   "prevId": "4b7be723-debb-439c-b95a-70be89768630",
   "version": "7",
   "dialect": "postgresql",
@@ -317,12 +317,6 @@
           "columns": [
             {
               "expression": "tile_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "building_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

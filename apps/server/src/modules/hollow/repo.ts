@@ -110,8 +110,12 @@ export interface HollowRepo {
    * Hollow can leave its post the way posting writes it: under its tile's lock.
    */
   lockPostTiles: (mapId: string) => Promise<void>;
-  /** Every squishy of an active member, any state, row-locked until commit. */
-  nightSquishies: (mapId: string) => Promise<NightSquishyRow[]>;
+  /**
+   * Every squishy of an active member, any state, row-locked until commit
+   * (nightfall). `lock: false` only reads (the hollow status's nudge): a read
+   * endpoint never waits on or blocks a command's squishy locks.
+   */
+  nightSquishies: (mapId: string, options?: { lock?: boolean }) => Promise<NightSquishyRow[]>;
   /** Takes these squishies off watch (`tile_defenders`); after `lockPostTiles`. */
   leavePosts: (squishyIds: readonly string[]) => Promise<void>;
   /** Moves a squishy to the Hollow if it's still active; false if it wasn't. */
@@ -298,11 +302,11 @@ function queries(db: Executor): HollowRepo {
         .for('no key update');
     },
 
-    nightSquishies: async (mapId) => {
+    nightSquishies: async (mapId, { lock = true } = {}) => {
       const habitatTile = alias(tiles, 'habitat_tile');
       const postTile = alias(tiles, 'post_tile');
       const workTile = alias(tiles, 'night_work_tile');
-      const rows = await db
+      const query = db
         .select({
           id: squishies.id,
           ownerUserId: squishies.ownerUserId,
@@ -335,7 +339,8 @@ function queries(db: Executor): HollowRepo {
         // the night's row, then squishies). Posting a guard (#15) locks the
         // squishy too, but the joined `tile_defenders` row isn't read again
         // after a lock wait, so a post at the very stroke of nightfall can race.
-        .for('update', { of: squishies });
+        .$dynamic();
+      const rows = await (lock ? query.for('update', { of: squishies }) : query);
       return rows.map((r) => ({
         id: r.id,
         ownerUserId: r.ownerUserId,
