@@ -57,6 +57,7 @@ export const FIXTURE_BATTLE_DATA = {
   elementMatrix: FIXTURE_ELEMENT_MATRIX,
   feelingMatrix: FIXTURE_FEELING_MATRIX,
   synergy: FIXTURE_SYNERGY_TABLE,
+  resources: [],
 };
 
 /**
@@ -145,6 +146,7 @@ export const FIXTURE_BATTLE_RULES: BattleRules = {
       swapBelow: 35,
     },
   },
+  items: { usesEach: 1 },
 };
 
 export const FIXTURE_BATTLE_CONTENT = createBattleContent(

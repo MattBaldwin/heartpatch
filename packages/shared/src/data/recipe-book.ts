@@ -33,6 +33,18 @@ export const RECIPE_BOOK: RecipeBookData = {
       line: 'Crunchy golden leaves pile up at home around Thanksgiving. Gather some, and this page opens!',
     },
     {
+      page: 'recipe:brave-brew',
+      line: 'Grow some Treats and gather Stone from the hills, and this page opens!',
+    },
+    {
+      page: 'recipe:cozy-cocoa',
+      line: 'Grow some Treats and gather Timber from the forest, and this page opens!',
+    },
+    {
+      page: 'recipe:hearty-soup',
+      line: 'Grow some Treats and gather Emberwood from the old forest, and this page opens!',
+    },
+    {
       page: 'building:training-grounds',
       line: 'Gather some Timber and Stone, and this page opens!',
     },

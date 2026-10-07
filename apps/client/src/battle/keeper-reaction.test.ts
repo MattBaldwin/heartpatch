@@ -16,6 +16,8 @@ const step = (kind: PlaybackStep['kind'], side: 'a' | 'b', extra: Partial<Playba
     move: null,
     effectiveness: null,
     status: null,
+    item: null,
+    shielded: false,
     ms: 0,
     ...extra,
   }) satisfies PlaybackStep;

@@ -18,6 +18,8 @@ function battle(log: BattleEventView[], extra: Partial<PlayerBattle['view']> = {
     stages: { attack: 0, defense: 0, speed: 0 },
     status: null,
     joined: true,
+    boosts: { attack: 0, defense: 0 },
+    shield: 0,
   });
   return {
     id: '00000000-0000-7000-8000-000000000001',
@@ -34,11 +36,13 @@ function battle(log: BattleEventView[], extra: Partial<PlayerBattle['view']> = {
           controller: { type: 'player' },
           squishies: [squishy('mine', 'test-puff', 40), squishy('bench', 'test-mallow', 40)],
           active: 0,
+          itemsUsed: [],
         },
         b: {
           controller: { type: 'ai', policy: 'wild' },
           squishies: [squishy('wild-1', 'test-mallow', 40)],
           active: 0,
+          itemsUsed: [],
         },
       },
       phase: { type: 'turn' },
@@ -238,7 +242,7 @@ describe('playbackSteps', () => {
     expect(shown.b.energy).toEqual([40]);
     for (const step of playbackSteps(b, content, 0)) shown = applyStep(shown, step);
     expect(shown.b.energy).toEqual([0]);
-    expect(shown.a).toEqual({ active: 1, energy: [40, 40] });
+    expect(shown.a).toMatchObject({ active: 1, energy: [40, 40] });
   });
 });
 
@@ -262,5 +266,69 @@ describe('view helpers', () => {
     );
     expect(content.speciesName('nope')).toBe('Mystery squishy');
     expect(content.moveName('nope')).toBe('Mystery move');
+  });
+
+  it('plays a potion: a sip line, then a shielded hit pops the shield (#214)', () => {
+    const b = battle([
+      { ...at('a'), type: 'item', item: 'brave-brew' },
+      { ...at('b'), type: 'move', move: 'test-hush-hum' },
+      {
+        ...at('a'),
+        type: 'hit',
+        amount: 2,
+        energy: 38,
+        effectiveness: 'normal',
+        shielded: true,
+      },
+    ]);
+    const content = new BattleContent(b);
+    const steps = playbackSteps(b, content, 0);
+    expect(steps.map((s) => s.kind)).toEqual(['item', 'move', 'hit']);
+    expect(steps[0]).toMatchObject({
+      item: 'brave-brew',
+      text: 'Puff sipped Brave Brew! Feeling bold!',
+    });
+    expect(steps[2]).toMatchObject({
+      shielded: true,
+      callout: 'Sparkle shield!',
+      text: 'The sparkle shield soaked up most of it!',
+    });
+
+    let shown = shownFrom({
+      ...b,
+      view: { ...b.view, log: [] },
+    });
+    expect(shown.a.chips[0]).toEqual({ attack: false, defense: false, shield: false });
+    shown = applyStep(shown, steps[0]!);
+    expect(shown.a.chips[0]).toEqual({ attack: true, defense: false, shield: true });
+    // The bench squishy and the other side are untouched.
+    expect(shown.a.chips[1]).toEqual({ attack: false, defense: false, shield: false });
+    expect(shown.b.chips[0]).toEqual({ attack: false, defense: false, shield: false });
+    shown = applyStep(shown, steps[1]!);
+    shown = applyStep(shown, steps[2]!);
+    expect(shown.a.chips[0]).toEqual({ attack: true, defense: false, shield: false });
+    for (const step of steps) expect(findAvoidedWords(step.text)).toEqual([]);
+  });
+
+  it('starts the chips from the view, so a resumed battle keeps them', () => {
+    const b = battle([]);
+    const mine = b.view.sides.a.squishies[0]!;
+    const resumed: PlayerBattle = {
+      ...b,
+      view: {
+        ...b.view,
+        sides: {
+          ...b.view.sides,
+          a: {
+            ...b.view.sides.a,
+            squishies: [
+              { ...mine, boosts: { attack: 0, defense: 40 }, shield: 75 },
+              b.view.sides.a.squishies[1]!,
+            ],
+          },
+        },
+      },
+    };
+    expect(shownFrom(resumed).a.chips[0]).toEqual({ attack: false, defense: true, shield: true });
   });
 });
