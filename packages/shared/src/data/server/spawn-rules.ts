@@ -10,8 +10,8 @@ export const SPAWN_RULES: SpawnRules = {
   // beats an ordinary one about 75% of the time as it grows.
   partnerOffset: { min: -2, max: 0 },
   // No `rarityLevelDiscount`: rarer wild squishies are meant to be a step
-  // harder than ordinary ones (owner decision 2026-10-07, #208); teams and
-  // potions cover them.
+  // harder than ordinary ones (owner decision 2026-10-07, #208). A team takes
+  // them on, and battle potions are coming (#214).
   // TUNE: judged at each window's middle, so 4-hour windows give night, day,
   // day, day, dusk, night.
   timesOfDay: [
