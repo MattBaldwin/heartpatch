@@ -461,3 +461,33 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
       );
   }
 }
+
+/**
+ * The wild-squishy marker (#209): a rustling tuft of three glossy leaves on a
+ * soft cream disc, so it reads on any terrain. Every tuft is the same (no
+ * species, CLAUDE.md rule 6); one merged mesh, drawn with thin instances.
+ * About 0.26 tall before `WILD_MARKER.scale`. TUNE: every size and colour.
+ */
+export function buildWildTuft(scene: Scene): Mesh {
+  const leaf = (height: number, lean: number, turn: number, hex: string): Mesh => {
+    const m = CreateSphere('wild-tuft-leaf', { diameter: 1, segments: 6 }, scene);
+    m.scaling.set(0.07, height, 0.035);
+    m.position.y = height / 2;
+    m.bakeCurrentTransformIntoVertices();
+    // Pivots at its base now: lean out from the middle, so the leaves fan open.
+    m.rotation.set(0, turn, lean);
+    return painted(m, hex);
+  };
+  const disc = CreateCylinder(
+    'wild-tuft-disc',
+    { height: 0.014, diameter: 0.26, tessellation: 16 },
+    scene,
+  );
+  disc.position.y = 0.007;
+  return merged('wild-tuft', [
+    painted(disc, '#fff4dc'),
+    leaf(0.26, 0, 0, '#8fcf7a'),
+    leaf(0.2, 0.55, 0.35, '#78b866'),
+    leaf(0.2, -0.55, -0.35, '#78b866'),
+  ]);
+}

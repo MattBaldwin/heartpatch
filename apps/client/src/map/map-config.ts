@@ -242,6 +242,20 @@ export const PROP_SWAY: Readonly<Partial<Record<PropKind, { tip: number; top: nu
 };
 
 /**
+ * The wild-squishy tuft (#209) on a tile in reach with a wild squishy. It
+ * stands off the tile's middle (where the Heart Seed and the props crowd),
+ * and sways in the map's breeze a little more than grass, so it looks like
+ * something's moving in there. No motion of its own beyond the terrain clock.
+ */
+export const WILD_MARKER = {
+  /** Offset from the tile's middle (world units). */
+  offset: { x: -0.17, z: -0.17 }, // TUNE
+  scale: 1.5, // TUNE
+  /** As `PROP_SWAY`: how far the top sways, and that top's height (before scale). */
+  sway: { tip: 0.05, top: 0.26 }, // TUNE
+} as const;
+
+/**
  * Wild land (no owner) is drawn soft and grey-ish; claimed land is in full
  * colour (Sprout: "See the grey land? … the color comes back"). `saturation`
  * is the share of colour kept, `shade` dims it a little (grey that keeps its

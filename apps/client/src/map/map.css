@@ -176,3 +176,33 @@
 .tile-panel-actions:not(:has(.tile-actions-slot > *)) {
   display: none;
 }
+
+/* Something's rustling here! (#209): a soft leafy line over Meet it, like the tuft. */
+.wild-rustle {
+  margin: 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #eef7e6;
+  font-size: 15px;
+  font-weight: 800;
+  color: #3f6b3a;
+}
+
+/* A phone on its side (#209): the panel's lines first, then its big buttons
+   two to a row, so the card stays low between the side trays. The same query
+   as the trays (#136, trays.css). */
+@media (max-height: 520px) and (min-width: 640px) {
+  .tile-panel .tile-panel-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tile-panel .tile-actions-slot > * {
+    grid-column: 1 / -1;
+  }
+
+  .tile-panel .tile-actions-slot > .bag-action {
+    grid-column: auto;
+    order: 1;
+  }
+}
