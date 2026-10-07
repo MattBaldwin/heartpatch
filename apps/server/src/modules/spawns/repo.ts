@@ -34,10 +34,12 @@ export interface SpawnsRepo {
   listTiles: (mapId: string) => Promise<SpawnTileRow[]>;
   /**
    * Tiles whose wild squishy this player is done with for this spawn window:
-   * befriended (#14) or beaten without befriending (it wandered off, owner
-   * decision 2026-10-03). Any battle the player won counts; a loss, a tie, a
-   * run home or a no contest leaves it there. With `befriendedOnly`, only a
-   * befriend counts (the Tutorial Glade, where beaten ones stay, #24).
+   * befriended (#14), beaten without befriending (it wandered off, owner
+   * decision 2026-10-03), or lost to, a run home included (it wandered off
+   * too, so "Find a squishy" moves on: owner decision 2026-10-06, #208). Any
+   * finished battle with a winner counts; a tie or a no contest leaves it
+   * there. With `befriendedOnly`, only a befriend counts (the Tutorial Glade,
+   * where beaten ones stay, #24).
    */
   goneSpawns: (
     mapId: string,
@@ -89,9 +91,11 @@ export function createSpawnsRepo(db: Executor): SpawnsRepo {
             eq(battles.playerUserId, userId),
             eq(battles.spawnWindow, window),
             isNotNull(battles.result),
-            // The player is always side `a` (battles service, `PLAYER_SIDE`).
-            sql`${battles.result} ->> 'winner' = 'a'`,
-            befriendedOnly ? sql`${battles.result} ->> 'reason' = 'captured'` : undefined,
+            // The player is always side `a` (battles service, `PLAYER_SIDE`),
+            // so `b` is a loss or a run home. A no contest has no result.
+            befriendedOnly
+              ? sql`${battles.result} ->> 'reason' = 'captured'`
+              : sql`${battles.result} ->> 'winner' in ('a', 'b')`,
           ),
         );
       return rows.flatMap(({ q, r }) => (q === null || r === null ? [] : [{ q, r }]));

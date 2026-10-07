@@ -75,8 +75,8 @@ export interface WildEncounter {
   squishies: BattleSquishySetup[];
   /**
    * The tile and spawn window it came from, stored on the battle so a
-   * befriended or beaten squishy is gone for that player for the rest of the
-   * window.
+   * squishy the player befriended, beat, lost to or ran from is gone for them
+   * for the rest of the window (#208).
    * Absent for squishies that aren't a tile's spawn (the dev route).
    */
   spawn?: { q: number; r: number; window: string };
