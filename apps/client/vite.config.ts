@@ -76,6 +76,9 @@ export default defineConfig({
           'pwa/icon-*.png',
           'pwa/apple-touch-icon.png',
         ],
+        // The admin console (#196) is its own page: players' devices never
+        // download or cache it, and a change to it never prompts a game update.
+        globIgnores: ['assets/admin-*'],
         // Hashed names already change with their content.
         dontCacheBustURLsMatching: /^assets\//,
         // TUNE: the engine bundle is ~1 MB; fail the build well before a

@@ -45,8 +45,11 @@ import type { AdminContext, AdminService, IssuedAdminSession } from './service.j
 
 declare module 'fastify' {
   interface FastifyRequest {
-    /** The signed-in admin's session; set by the admin module's gate (#196), null elsewhere. */
-    admin: AdminMeResponse | null;
+    /**
+     * The signed-in admin's session, set by the admin module's gate (#196).
+     * Only decorated inside the admin routes, so it's undefined elsewhere.
+     */
+    admin?: AdminMeResponse | null;
   }
 }
 
@@ -108,26 +111,40 @@ export const adminRoutes =
       return { admin: request.admin.admin, ip: ipOf(request) };
     };
 
-    /** The gate, then a per-admin limit for the kind of request. */
-    const gate = (kind: AdminRateAction) => [
-      requireAdmin,
-      rateLimit(fastify, [
-        {
-          limit: ADMIN_RATE_LIMITS[kind],
-          key: (request) => `admin:${kind}:user:${request.admin?.admin.id ?? ipOf(request)}`,
-        },
+    /**
+     * One counter per kind, shared by every route of that kind, so the
+     * "secret" budget covers resets, reveals, lookups and new codes together.
+     */
+    const limiters = Object.fromEntries(
+      (Object.keys(ADMIN_RATE_LIMITS) as AdminRateAction[]).map((kind) => [
+        kind,
+        rateLimit(fastify, [
+          {
+            limit: ADMIN_RATE_LIMITS[kind],
+            key: (request) => `admin:${kind}:user:${request.admin?.admin.id ?? ipOf(request)}`,
+          },
+        ]),
       ]),
-    ];
+    ) as Record<AdminRateAction, preHandlerAsyncHookHandler>;
+
+    /** The gate, then the admin's limit for the kind of request. */
+    const gate = (kind: AdminRateAction) => [requireAdmin, limiters[kind]];
+
+    /** The lowercased username from the validated body (as auth's `usernameKey`). */
+    const usernameKey = (request: FastifyRequest): string => {
+      const body = request.body;
+      if (typeof body === 'object' && body !== null && 'username' in body) {
+        const { username } = body;
+        if (typeof username === 'string') return username.trim().toLowerCase();
+      }
+      return '';
+    };
 
     const loginLimit = rateLimit(fastify, [
       { limit: ADMIN_LOGIN_LIMITS.perIp, key: (request) => `admin:login:ip:${ipOf(request)}` },
       {
         limit: ADMIN_LOGIN_LIMITS.perUsername,
-        key: (request) => {
-          const body = request.body as { username?: unknown } | undefined;
-          const name = typeof body?.username === 'string' ? body.username.trim().toLowerCase() : '';
-          return `admin:login:user:${name}`;
-        },
+        key: (request) => `admin:login:user:${usernameKey(request)}`,
       },
     ]);
 

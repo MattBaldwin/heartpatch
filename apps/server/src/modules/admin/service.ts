@@ -64,8 +64,17 @@ export interface AdminServiceOptions {
   auth: AuthService;
   maps: MapsService;
   signupCodes: SignupCodesService;
-  /** Real time by default (see `BuildAppOptions.adminNow`). */
+  /** Sessions and authenticator codes: real time by default (see `BuildAppOptions.adminNow`). */
   now?: Clock | undefined;
+  /** The game clock, for game data (seasons, invite and code expiry, player sessions). */
+  clock?: Clock | undefined;
+  /** Where an audit write that fails after its action is reported (`app.log`). */
+  log?: AuditLog | undefined;
+}
+
+/** The slice of a pino logger the audit needs. */
+export interface AuditLog {
+  error: (obj: object, msg: string) => void;
 }
 
 // The console is for grown-ups, but stays plain and friendly (style guide §6).
@@ -76,15 +85,16 @@ const MESSAGES = {
   notFoundRequest: "We couldn't find that request. It may have been answered already.",
   noInvite: 'This patch has no live invite code. Make a new one.',
   tutorial: 'Tutorial runs have no invite codes or join requests.',
-  notFoundCode: "We couldn't find that code, or it's turned off.",
+  notFoundCode:
+    "That code can't be extended: it's gone, turned off, or a patch owner's code that has ended.",
 } as const;
 
-/** One player's night, as `hollow_events.outcomes` stores it (read loosely). */
+/** One player's night, as `hollow_events.outcomes` stores it; a row that doesn't fit is dropped. */
 const NightOutcomeSchema = z.object({
   userId: z.string(),
   taken: z.string().nullable(),
-  exposed: z.number(),
-  sheltered: z.number(),
+  exposed: z.number().int().nonnegative(),
+  sheltered: z.number().int().nonnegative(),
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -102,23 +112,58 @@ function pageOf(query: AdminListQuery): { page: number; offset: number } {
 export function createAdminService(options: AdminServiceOptions) {
   const { db, auth, maps, signupCodes } = options;
   const now = options.now ?? (() => new Date());
+  const gameNow = options.clock ?? (() => new Date());
   const repo = createAdminRepo(db);
   const mapsRepo = createMapsRepo(db);
 
+  /** Marks an audit row; a failure here is logged, never allowed to hide what the action did. */
+  const finish = async (auditId: string, outcome: 'done' | 'failed') => {
+    try {
+      await repo.finishAudit(auditId, outcome);
+    } catch (err) {
+      options.log?.error({ err, auditId, outcome }, 'admin audit: could not record the outcome');
+    }
+  };
+
   /**
    * Runs an action between a `pending` audit row and its outcome, so every
-   * action is on record even if it fails or the process stops midway.
+   * action is on record even if it fails or the process stops midway. The
+   * checks an action makes (does the patch exist?) run inside, so a refused
+   * action is recorded too. Once the action has run, its result (a reset's
+   * one-time secrets) always reaches the admin, even if the outcome can't be
+   * written: the row then stays `pending`.
    */
   const audited = async <T>(input: AuditInput, run: () => Promise<T>): Promise<T> => {
     const auditId = await repo.audit(input);
+    let result: T;
     try {
-      const result = await run();
-      await repo.finishAudit(auditId, 'done');
-      return result;
+      result = await run();
     } catch (err) {
-      await repo.finishAudit(auditId, 'failed');
+      await finish(auditId, 'failed');
       throw err;
     }
+    await finish(auditId, 'done');
+    return result;
+  };
+
+  /** Audit targets that exist (the columns are foreign keys); a missing one goes in `detail`. */
+  const targets = async (ids: { mapId?: string; userId?: string }) => {
+    const [patch, username] = await Promise.all([
+      ids.mapId === undefined ? null : repo.findPatch(ids.mapId),
+      ids.userId === undefined ? null : repo.findUsername(ids.userId),
+    ]);
+    const missing: Record<string, string> = {};
+    if (ids.mapId !== undefined && !patch) missing['mapId'] = ids.mapId;
+    if (ids.userId !== undefined && username === null) missing['userId'] = ids.userId;
+    return {
+      patch,
+      username,
+      input: {
+        targetMapId: patch ? patch.id : null,
+        targetUserId: username === null ? null : (ids.userId ?? null),
+      },
+      missing,
+    };
   };
 
   const toPatch = (row: PatchRow): AdminPatchSummary => ({
@@ -130,7 +175,9 @@ export function createAdminService(options: AdminServiceOptions) {
     maxPlayers: row.maxPlayers,
     createdAt: iso(row.createdAt),
     lastActivityAt: isoOrNull(row.lastActivityAt),
-    seasons: activeSeasons(GAME_DATA.seasons, localDate(now(), row.timeZone)).map((s) => s.name),
+    seasons: activeSeasons(GAME_DATA.seasons, localDate(gameNow(), row.timeZone)).map(
+      (s) => s.name,
+    ),
     pvpMode: row.pvpMode,
     pendingRequests: row.pendingRequests,
   });
@@ -147,8 +194,7 @@ export function createAdminService(options: AdminServiceOptions) {
   });
 
   /** A patch (not a tutorial run), or NOT_FOUND. */
-  const requirePatch = async (mapId: string): Promise<PatchRow> => {
-    const patch = await repo.findPatch(mapId);
+  const requirePatch = (patch: PatchRow | null): PatchRow => {
     if (!patch) throw new AppError('NOT_FOUND', MESSAGES.notFoundPatch);
     if (patch.kind !== 'multiplayer') throw new AppError('NOT_FOUND', MESSAGES.tutorial);
     return patch;
@@ -159,15 +205,13 @@ export function createAdminService(options: AdminServiceOptions) {
    * maps module's own rules (seats, the Keeper and tutorial gates, events and
    * lock order) then apply unchanged.
    */
-  const ownerOf = async (mapId: string) => {
-    await requirePatch(mapId);
-    const owner = await mapsRepo.owner(mapId);
+  const ownerOf = async (patch: PatchRow | null) => {
+    const owner = await mapsRepo.owner(requirePatch(patch).id);
     if (!owner) throw new AppError('NOT_FOUND', MESSAGES.notFoundPatch);
     return owner;
   };
 
-  const requirePlayer = async (userId: string) => {
-    const username = await repo.findUsername(userId);
+  const requirePlayer = (username: string | null): string => {
     if (username === null) throw new AppError('NOT_FOUND', MESSAGES.notFoundPlayer);
     return username;
   };
@@ -262,7 +306,7 @@ export function createAdminService(options: AdminServiceOptions) {
       const [members, requests, invite, nights] = await Promise.all([
         repo.patchMembers(mapId),
         repo.pendingRequests(mapId),
-        mapsRepo.liveInvite(mapId, now()),
+        mapsRepo.liveInvite(mapId, gameNow()),
         repo.recentNights(mapId, ADMIN_RULES.nightsShown),
       ]);
       const outcomes = nights.map((n) => ({
@@ -295,16 +339,18 @@ export function createAdminService(options: AdminServiceOptions) {
 
     /** The live invite code, shown on request and recorded. */
     revealInvite: async (ctx: AdminContext, mapId: string): Promise<AdminInviteResponse> => {
-      await requirePatch(mapId);
+      const found = await targets({ mapId });
       return audited(
         {
           actorUserId: ctx.admin.id,
           action: AUDIT_ACTIONS.revealInvite,
-          targetMapId: mapId,
+          ...found.input,
+          detail: found.missing,
           ip: ctx.ip,
         },
         async () => {
-          const invite = await mapsRepo.liveInvite(mapId, now());
+          requirePatch(found.patch);
+          const invite = await mapsRepo.liveInvite(mapId, gameNow());
           if (!invite) throw new AppError('NOT_FOUND', MESSAGES.noInvite);
           return { code: formatInviteCode(invite.code), expiresAt: iso(invite.expiresAt) };
         },
@@ -313,15 +359,16 @@ export function createAdminService(options: AdminServiceOptions) {
 
     /** A new invite code as the owner would make it; the old one stops working. */
     newInvite: async (ctx: AdminContext, mapId: string): Promise<AdminInviteResponse> => {
-      const owner = await ownerOf(mapId);
+      const found = await targets({ mapId });
       return audited(
         {
           actorUserId: ctx.admin.id,
           action: AUDIT_ACTIONS.newInvite,
-          targetMapId: mapId,
+          ...found.input,
+          detail: found.missing,
           ip: ctx.ip,
         },
-        () => maps.regenerateInvite(owner, mapId),
+        async () => maps.regenerateInvite(await ownerOf(found.patch), mapId),
       );
     },
 
@@ -332,22 +379,26 @@ export function createAdminService(options: AdminServiceOptions) {
       requestId: string,
       answer: 'approve' | 'decline',
     ): Promise<void> => {
-      const owner = await ownerOf(mapId);
-      const request = (await repo.pendingRequests(mapId)).find((r) => r.id === requestId);
-      if (!request) throw new AppError('NOT_FOUND', MESSAGES.notFoundRequest);
+      const found = await targets({ mapId });
+      const request = found.patch
+        ? (await repo.pendingRequests(mapId)).find((r) => r.id === requestId)
+        : undefined;
       await audited(
         {
           actorUserId: ctx.admin.id,
           action: answer === 'approve' ? AUDIT_ACTIONS.approve : AUDIT_ACTIONS.decline,
-          targetMapId: mapId,
-          targetUserId: request.userId,
-          detail: { requestId },
+          ...found.input,
+          targetUserId: request?.userId ?? null,
+          detail: { requestId, ...found.missing },
           ip: ctx.ip,
         },
-        () =>
-          answer === 'approve'
+        async () => {
+          const owner = await ownerOf(found.patch);
+          if (!request) throw new AppError('NOT_FOUND', MESSAGES.notFoundRequest);
+          await (answer === 'approve'
             ? maps.approve(owner, mapId, requestId)
-            : maps.deny(owner, mapId, requestId),
+            : maps.deny(owner, mapId, requestId));
+        },
       );
     },
 
@@ -357,7 +408,7 @@ export function createAdminService(options: AdminServiceOptions) {
       const { page, offset } = pageOf(query);
       const { rows, total } = await repo.listPlayers(
         query.q || undefined,
-        now(),
+        gameNow(),
         ADMIN_PAGE_SIZE,
         offset,
       );
@@ -365,7 +416,7 @@ export function createAdminService(options: AdminServiceOptions) {
     },
 
     player: async (userId: string): Promise<AdminPlayerDetail> => {
-      const row = await repo.findPlayer(userId, now());
+      const row = await repo.findPlayer(userId, gameNow());
       if (!row) throw new AppError('NOT_FOUND', MESSAGES.notFoundPlayer);
       const patches = await repo.playerPatches(userId);
       return {
@@ -384,16 +435,17 @@ export function createAdminService(options: AdminServiceOptions) {
       ctx: AdminContext,
       userId: string,
     ): Promise<AdminResetPasswordResponse> => {
-      const username = await requirePlayer(userId);
+      const found = await targets({ userId });
       return audited(
         {
           actorUserId: ctx.admin.id,
           action: AUDIT_ACTIONS.resetPassword,
-          targetUserId: userId,
+          ...found.input,
+          detail: found.missing,
           ip: ctx.ip,
         },
         async () => {
-          const result = await auth.operatorReset(username);
+          const result = await auth.operatorReset(requirePlayer(found.username));
           if (!result) throw new AppError('NOT_FOUND', MESSAGES.notFoundPlayer);
           return {
             username: result.user.username,
@@ -406,15 +458,19 @@ export function createAdminService(options: AdminServiceOptions) {
 
     /** Ends every one of a player's sessions. Their password stays. */
     logoutEverywhere: async (ctx: AdminContext, userId: string): Promise<{ ended: number }> => {
-      await requirePlayer(userId);
+      const found = await targets({ userId });
       return audited(
         {
           actorUserId: ctx.admin.id,
           action: AUDIT_ACTIONS.logoutEverywhere,
-          targetUserId: userId,
+          ...found.input,
+          detail: found.missing,
           ip: ctx.ip,
         },
-        async () => ({ ended: await repo.deleteSessions(userId) }),
+        async () => {
+          requirePlayer(found.username);
+          return { ended: await repo.deleteSessions(userId) };
+        },
       );
     },
 
@@ -470,7 +526,7 @@ export function createAdminService(options: AdminServiceOptions) {
           ip: ctx.ip,
         },
         async () => {
-          if (!(await repo.extendSignupCode(codeId, days * DAY_MS, now()))) {
+          if (!(await repo.extendSignupCode(codeId, days * DAY_MS, gameNow()))) {
             throw new AppError('NOT_FOUND', MESSAGES.notFoundCode);
           }
         },

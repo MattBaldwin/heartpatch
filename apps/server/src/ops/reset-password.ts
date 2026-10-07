@@ -10,7 +10,7 @@ import { pino } from 'pino';
 import { loadConfig } from '../config.js';
 import { createDbClient } from '../db/client.js';
 import { createAuthRepo } from '../modules/auth/repo.js';
-import { recordHostAction } from '../modules/admin/grants.js';
+import { hostAudited } from '../modules/admin/grants.js';
 import { AUDIT_ACTIONS } from '../modules/admin/audit-actions.js';
 import { createAuthService } from '../modules/auth/service.js';
 
@@ -25,14 +25,24 @@ if (!username) {
 const config = loadConfig();
 const client = createDbClient(config.DATABASE_URL, { max: 1 });
 try {
-  const service = createAuthService({ repo: createAuthRepo(client.db) });
-  const result = await service.operatorReset(username);
+  const authRepo = createAuthRepo(client.db);
+  const service = createAuthService({ repo: authRepo });
+  const found = await authRepo.findUserByUsername(username);
+  // In the admin console's audit log too (#196), written before the reset;
+  // never the secrets. Once the reset has run, the secrets are always printed.
+  const result = found
+    ? await hostAudited(
+        client.db,
+        AUDIT_ACTIONS.resetPassword,
+        found.id,
+        () => service.operatorReset(username),
+        log,
+      )
+    : null;
   if (!result) {
     log.error({ username }, 'no such user');
     process.exitCode = 1;
   } else {
-    // In the admin console's audit log too (#196); never the secrets.
-    await recordHostAction(client.db, AUDIT_ACTIONS.resetPassword, result.user.id);
     // Secrets go to the operator's terminal only, not to the log stream.
     log.info({ userId: result.user.id }, 'password reset; all sessions revoked');
     process.stdout.write(

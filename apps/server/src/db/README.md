@@ -120,7 +120,7 @@ Every admin action, sign-in and host-script grant (#196). Never holds a secret.
 | `target_user_id` | uuid → users, null | |
 | `target_map_id` | uuid → maps, null | `on delete set null` |
 | `detail` | jsonb | Non-secret detail (a lookup's search, a code's label) |
-| `outcome` | `admin_audit_outcome` | `pending` when written (before the action), then `done` or `failed` |
+| `outcome` | `admin_audit_outcome` | `pending` when written (before the action), then `done` or `failed`. Still `pending` = the action may have run but its outcome couldn't be written (logged) |
 | `ip` | text, null | |
 | `created_at` | timestamptz | Indexed (newest first) |
 

@@ -29,7 +29,7 @@ import { newSessionToken } from '../auth/secrets.js';
 import { createAuthService } from '../auth/service.js';
 import type * as Secrets from '../auth/secrets.js';
 import { AUDIT_ACTIONS } from './audit-actions.js';
-import { confirmTotp, grantAdmin, revokeAdmin, startTotp } from './grants.js';
+import { confirmTotp, grantAdmin, hostAudited, revokeAdmin, startTotp } from './grants.js';
 import { ADMIN_COOKIE, ADMIN_COOKIE_PATH, ADMIN_RULES } from './limits.js';
 import { createAdminRepo } from './repo.js';
 import { adminRoutes } from './routes.js';
@@ -101,8 +101,13 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
 
   const newName = () => `adm_${String(process.pid % 1000)}_${String((counter += 1))}`;
   /** Patch names take letters, numbers and spaces. */
-  const patchName = (word: string) =>
-    `${word} ${String(process.pid % 1000)} ${String((counter += 1))}`;
+  /**
+   * Patch names unique to this run, in letters only: the name filter turns
+   * away runs of digits (they could be a phone number).
+   */
+  const letters = (n: number) =>
+    n.toString(26).replace(/./g, (d) => String.fromCharCode(97 + parseInt(d, 26)));
+  const patchName = (word: string) => `${word} ${letters(process.pid)} ${letters((counter += 1))}`;
 
   /** A logged-in player with a Keeper, written straight to the database. */
   async function player(): Promise<Player> {
@@ -735,6 +740,127 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
       ).json(),
     );
     expect(wild.matches).toEqual([]);
+  });
+
+  /** Makes every update of `admin_audit` fail (an audit outcome that can't be written). */
+  async function breakAuditUpdates<T>(run: () => Promise<T>): Promise<T> {
+    await db.execute(`create or replace function admin_audit_broken() returns trigger
+      language plpgsql as $$ begin raise exception 'audit store down'; end $$`);
+    await db.execute(`create trigger admin_audit_broken before update on admin_audit
+      for each row execute function admin_audit_broken()`);
+    try {
+      return await run();
+    } finally {
+      await db.execute('drop trigger admin_audit_broken on admin_audit');
+      await db.execute('drop function admin_audit_broken()');
+    }
+  }
+
+  it('hands over the secrets of a reset that ran, even when its outcome cannot be recorded', async () => {
+    const server = await start();
+    const boss = await admin();
+    const token = await signIn(server, boss);
+    const kid = await player();
+    const other = await player();
+
+    const res = await breakAuditUpdates(() =>
+      adminCall(server, 'POST', `/admin/players/${kid.id}/reset-password`, token),
+    );
+    expect(res.statusCode).toBe(200);
+    const reset = AdminResetPasswordResponseSchema.parse(res.json());
+    const login = await playerCall(server, 'POST', '/auth/login', null, {
+      username: kid.username,
+      password: reset.temporaryPassword,
+    });
+    expect(login.statusCode).toBe(200);
+    // The row written before the reset is still there, left unfinished, and the failure is logged.
+    const rows = (await auditRows(AUDIT_ACTIONS.resetPassword)).filter(
+      (r) => r.targetUserId === kid.id,
+    );
+    expect(rows.map((r) => r.outcome)).toEqual(['pending']);
+    expect(logLines.join('\n')).toContain('admin audit: could not record the outcome');
+
+    // The host script's reset (ops/reset-password.ts) works the same way.
+    const errors: object[] = [];
+    const cli = await breakAuditUpdates(() =>
+      hostAudited(
+        db,
+        AUDIT_ACTIONS.resetPassword,
+        other.id,
+        () => createAuthService({ repo: createAuthRepo(db) }).operatorReset(other.username),
+        { error: (obj) => errors.push(obj) },
+      ),
+    );
+    expect(cli?.temporaryPassword).toMatch(/^[A-Z0-9]{4}-/);
+    expect(errors).toHaveLength(1);
+    const cliRows = (await auditRows(AUDIT_ACTIONS.resetPassword)).filter(
+      (r) => r.targetUserId === other.id,
+    );
+    expect(cliRows.map((r) => [r.actorUserId, r.outcome])).toEqual([[null, 'pending']]);
+  });
+
+  it('records refused actions too: a missing patch, player or request', async () => {
+    const server = await start();
+    const boss = await admin();
+    const token = await signIn(server, boss);
+    const { mapId } = await patch(server, patchName('Refused'));
+    const before = (await db.select().from(adminAudit)).length;
+
+    const refused = [
+      await adminCall(server, 'POST', `/admin/patches/${ZERO}/requests/${ZERO}/approve`, token),
+      await adminCall(server, 'POST', `/admin/patches/${mapId}/requests/${ZERO}/decline`, token),
+      await adminCall(server, 'POST', `/admin/patches/${ZERO}/invite/reveal`, token),
+      await adminCall(server, 'POST', `/admin/patches/${ZERO}/invite`, token),
+      await adminCall(server, 'POST', `/admin/players/${ZERO}/reset-password`, token),
+      await adminCall(server, 'POST', `/admin/players/${ZERO}/logout-everywhere`, token),
+    ];
+    expect(refused.map((r) => r.statusCode)).toEqual([404, 404, 404, 404, 404, 404]);
+    const rows = (await db.select().from(adminAudit)).filter((r) => r.actorUserId === boss.id);
+    const failed = rows.filter((r) => r.outcome === 'failed');
+    expect((await db.select().from(adminAudit)).length - before).toBe(6);
+    expect(failed).toHaveLength(6);
+    // A target that doesn't exist is named in the detail, not the (foreign-key) column.
+    const reset = failed.find((r) => r.action === AUDIT_ACTIONS.resetPassword)!;
+    expect(reset.targetUserId).toBeNull();
+    expect(reset.detail).toEqual({ userId: ZERO });
+    const decline = failed.find((r) => r.action === AUDIT_ACTIONS.decline)!;
+    expect(decline.targetMapId).toBe(mapId);
+    expect(decline.detail).toEqual({ requestId: ZERO });
+  });
+
+  it("extends live codes and the operator's own, but never revives a patch owner's ended code", async () => {
+    const server = await start();
+    const boss = await admin();
+    const token = await signIn(server, boss);
+    const { owner } = await patch(server, patchName('Codes'));
+    const made = await playerCall(server, 'POST', '/signup-codes', owner, { label: 'Lee family' });
+    expect(made.statusCode).toBe(201);
+    const ownerCode = CreateSignupCodeResponseSchema.parse(made.json()).signupCode.id;
+    const operatorCode = CreateSignupCodeResponseSchema.parse(
+      (
+        await adminCall(server, 'POST', '/admin/signup-codes', token, {
+          label: 'Playtesters',
+          maxUses: 5,
+          days: 3,
+        })
+      ).json(),
+    ).signupCode.id;
+    const extend = (codeId: string) =>
+      adminCall(server, 'POST', `/admin/signup-codes/${codeId}/extend`, token, { days: 7 });
+
+    // While live, an owner's code can be extended.
+    expect((await extend(ownerCode)).statusCode).toBe(204);
+    // Once ended, only the operator's can.
+    await db.execute(
+      `update signup_codes set expires_at = now() - interval '1 day' where id in ('${ownerCode}', '${operatorCode}')`,
+    );
+    expect((await extend(ownerCode)).statusCode).toBe(404);
+    expect((await extend(operatorCode)).statusCode).toBe(204);
+    const rows = await db.select().from(signupCodes);
+    expect(rows.find((c) => c.id === ownerCode)!.expiresAt.getTime()).toBeLessThan(Date.now());
+    expect(rows.find((c) => c.id === operatorCode)!.expiresAt.getTime()).toBeGreaterThan(
+      Date.now() + 6 * DAY_MS,
+    );
   });
 
   it('rate-limits sign-in per username', async () => {

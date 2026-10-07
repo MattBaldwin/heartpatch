@@ -208,11 +208,23 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
 
         // The operator admin console (#196): admins only, its own session and
-        // cookie. Real time, not the game clock: authenticator codes follow it.
+        // cookie. Sessions and codes run on real time (authenticator apps follow
+        // it); game data reads use the game clock.
         await api.register(
-          adminRoutes(createAdminService({ db, auth, maps, signupCodes, now: options.adminNow }), {
-            secureCookies,
-          }),
+          adminRoutes(
+            createAdminService({
+              db,
+              auth,
+              maps,
+              signupCodes,
+              now: options.adminNow,
+              clock,
+              log: app.log,
+            }),
+            {
+              secureCookies,
+            },
+          ),
         );
 
         // Wild squishies (#14) plug into battles through `findWildEncounter`,

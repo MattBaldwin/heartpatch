@@ -13,13 +13,34 @@ export type GrantResult = 'no_such_user' | 'unchanged' | 'changed';
 const hostAudit = (repo: AdminRepo, action: string, userId: string) =>
   repo.audit({ actorUserId: null, action, targetUserId: userId }, 'done');
 
-/** Records something a host script did to an account outside these functions. */
-export async function recordHostAction(
+/**
+ * Runs a host script's action between a `pending` audit row and its outcome,
+ * as the console does: on record even if it fails or stops midway. Once the
+ * action has run its result is always returned (a reset's one-time secrets
+ * must reach the operator); an outcome that can't be written is logged.
+ */
+export async function hostAudited<T>(
   db: Executor,
   action: string,
   targetUserId: string,
-): Promise<void> {
-  await hostAudit(createAdminRepo(db), action, targetUserId);
+  run: () => Promise<T>,
+  log: { error: (obj: object, msg: string) => void },
+): Promise<T> {
+  const repo = createAdminRepo(db);
+  const auditId = await repo.audit({ actorUserId: null, action, targetUserId });
+  const finish = (outcome: 'done' | 'failed') =>
+    repo.finishAudit(auditId, outcome).catch((err: unknown) => {
+      log.error({ err, auditId, outcome }, 'admin audit: could not record the outcome');
+    });
+  let result: T;
+  try {
+    result = await run();
+  } catch (err) {
+    await finish('failed');
+    throw err;
+  }
+  await finish('done');
+  return result;
 }
 
 /** Makes an account an admin. They still need an authenticator before they can sign in. */

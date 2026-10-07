@@ -772,8 +772,10 @@ export function createAdminRepo(db: Executor): AdminRepo {
     // --- Family codes --------------------------------------------------------
 
     /**
-     * Moves a live code's end `ms` later (from now if it already ended). False
-     * if there's no such code or it was turned off.
+     * Moves a code's end `ms` later (from now if it already ended). False if
+     * there's no such code, it was turned off, or it's a patch owner's code
+     * that has ended: reviving one could put its owner past their live-code
+     * cap (`SIGNUP_CODE_RULES.ownerLiveMax`), so they make a new one instead.
      */
     extendSignupCode: async (codeId: string, ms: number, now: Date): Promise<boolean> => {
       const rows = await db
@@ -781,7 +783,16 @@ export function createAdminRepo(db: Executor): AdminRepo {
         .set({
           expiresAt: sql`greatest(${signupCodes.expiresAt}, ${now.toISOString()}::timestamptz) + make_interval(secs => ${ms / 1000})`,
         })
-        .where(and(eq(signupCodes.id, codeId), isNull(signupCodes.revokedAt)))
+        .where(
+          and(
+            eq(signupCodes.id, codeId),
+            isNull(signupCodes.revokedAt),
+            or(
+              isNull(signupCodes.createdByUserId),
+              sql`${signupCodes.expiresAt} > ${now.toISOString()}::timestamptz`,
+            ),
+          ),
+        )
         .returning({ id: signupCodes.id });
       return rows.length > 0;
     },

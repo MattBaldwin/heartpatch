@@ -12,7 +12,7 @@ import { LocalDateSchema } from './time.js';
 export const ADMIN_IDLE_MINUTES = 30; // TUNE: issue #196
 
 /** Rows per page on every admin list. */
-export const ADMIN_PAGE_SIZE = 25;
+export const ADMIN_PAGE_SIZE = 25; // TUNE: guess
 
 /** Six digits from an authenticator app; spaces are allowed ("123 456"). */
 export const TotpCodeSchema = z
@@ -196,14 +196,14 @@ export type AdminSignupCodesResponse = z.infer<typeof AdminSignupCodesResponseSc
 /** `POST /api/v1/admin/signup-codes` */
 export const AdminCreateSignupCodeRequestSchema = z.object({
   label: SignupCodeLabelSchema,
-  maxUses: z.number().int().min(1).max(1000),
-  days: z.number().int().min(1).max(365),
+  maxUses: z.number().int().min(1).max(1000), // TUNE: as ops/signup-code.ts --uses
+  days: z.number().int().min(1).max(365), // TUNE: as ops/signup-code.ts --days
 });
 export type AdminCreateSignupCodeRequest = z.infer<typeof AdminCreateSignupCodeRequestSchema>;
 
 /** `POST /api/v1/admin/signup-codes/:codeId/extend` */
 export const AdminExtendSignupCodeRequestSchema = z.object({
-  days: z.number().int().min(1).max(90),
+  days: z.number().int().min(1).max(90), // TUNE: guess
 });
 
 /** `POST /api/v1/admin/lookup`: "forgot my username" from what a parent knows. */
@@ -217,7 +217,7 @@ export const AdminLookupRequestSchema = z
 export type AdminLookupRequest = z.infer<typeof AdminLookupRequestSchema>;
 
 /** At most this many matches; narrow the search for more. */
-export const ADMIN_LOOKUP_MAX = 10;
+export const ADMIN_LOOKUP_MAX = 10; // TUNE: guess
 
 export const AdminLookupResponseSchema = z.object({
   matches: z.array(

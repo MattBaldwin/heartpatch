@@ -73,11 +73,13 @@ export function startAdmin(root: HTMLElement): void {
     'aria-labelledby': 'adm-dialog-title',
   });
   scrim.append(dialogEl);
+  /** A dialog showing one-time secrets closes only through its own button. */
+  let holdsSecrets = false;
   scrim.addEventListener('click', (e) => {
-    if (e.target === scrim) closeDialog();
+    if (e.target === scrim && !holdsSecrets) closeDialog();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !scrim.hidden) closeDialog();
+    if (e.key === 'Escape' && !scrim.hidden && !holdsSecrets) closeDialog();
   });
 
   let toastTimer = 0;
@@ -107,7 +109,13 @@ export function startAdmin(root: HTMLElement): void {
         ? state.me.idleExpiresAt
         : state.me.expiresAt;
     timer.textContent = countdown(until, now());
-    if (Date.parse(until) <= now().getTime()) showLogin('Signed out after 30 quiet minutes.');
+    if (Date.parse(until) <= now().getTime()) {
+      showLogin(
+        until === state.me.expiresAt
+          ? 'Signed out: a session lasts 8 hours at most.'
+          : `Signed out after ${String(ADMIN_IDLE_MINUTES)} quiet minutes.`,
+      );
+    }
   }, 1000);
 
   /** Runs a call; a missing admin session sends you back to sign-in. */
@@ -139,6 +147,7 @@ export function startAdmin(root: HTMLElement): void {
   // --- Dialogs ------------------------------------------------------------
 
   function closeDialog() {
+    holdsSecrets = false;
     scrim.hidden = true;
     dialogEl.replaceChildren();
   }
@@ -214,6 +223,7 @@ export function startAdmin(root: HTMLElement): void {
       el('p', { class: 'adm-hint' }, after),
       el('div', { class: 'adm-actions end' }, close),
     );
+    holdsSecrets = true;
   }
 
   // --- Sign-in --------------------------------------------------------------

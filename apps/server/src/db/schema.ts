@@ -180,7 +180,8 @@ export const adminSessions = pgTable(
 /**
  * Every admin action, sign-in and host-script grant (#196). Written before
  * the action runs (`pending`) and marked `done` or `failed` after, so no
- * action goes unrecorded. Never holds a secret. `actor_user_id` is null for
+ * action goes unrecorded (one left `pending` may have run: its outcome
+ * couldn't be written). Never holds a secret. `actor_user_id` is null for
  * the host scripts.
  */
 export const adminAuditOutcome = pgEnum('admin_audit_outcome', ['pending', 'done', 'failed']);
