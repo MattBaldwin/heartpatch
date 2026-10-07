@@ -31,7 +31,7 @@ import type { BattleState } from './state.js';
 
 const fence = (extra: Partial<BattleFenceSetup> = {}): BattleFenceSetup => ({
   id: 'fence',
-  fence: 'emberwood-fence',
+  fence: 'hedge',
   level: 1,
   element: 'leaf',
   stats: { hp: 70, attack: 1, defense: 14, speed: 1 },
@@ -78,7 +78,7 @@ describe('fence battles (#203)', () => {
   it('starts the fence with the energy it has left, and no moves', () => {
     const state = startBattle(content, fenceBattle('f1', emberbun(), fence({ energy: 42 })));
     const wall = state.sides.b.squishies[0]!;
-    expect(wall).toMatchObject({ fence: 'emberwood-fence', energy: 42, moves: [] });
+    expect(wall).toMatchObject({ fence: 'hedge', energy: 42, moves: [] });
     expect(wall.stats.hp).toBe(70);
     expect(state.turnLimit).toBe(6);
   });
@@ -182,7 +182,7 @@ describe('fence battles (#203)', () => {
     const state = startBattle(content, fenceBattle('f10', emberbun()));
     const view = ClientBattleViewSchema.parse(clientBattleView(state));
     expect(view.turnLimit).toBe(6);
-    expect(view.sides.b.squishies[0]!.fence).toBe('emberwood-fence');
+    expect(view.sides.b.squishies[0]!.fence).toBe('hedge');
     expect('rng' in view).toBe(false);
   });
 

@@ -1333,7 +1333,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
         ownerUserId: userId,
         tileId: tileIds[i]!,
         edge: i,
-        buildingId: 'emberwood-fence',
+        buildingId: 'emberwood-palisade',
         hp: 70,
       })),
     );

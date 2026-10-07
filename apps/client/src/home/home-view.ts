@@ -315,55 +315,58 @@ const isCrafted = (id: string) => GAME_DATA.resources.find((r) => r.id === id)?.
 export function buildRows(everything: HomeResponse): BuildRow[] {
   const home = atHome(everything);
   const seasons = new Set(home.seasons);
-  return GAME_DATA.buildings
-    .filter((b) => isBuildable(RULES, b))
-    // Fences (#203) go on a tile's edges, from the tile's panel on the map.
-    .filter((b) => b.slot !== 'edge')
-    .filter((b) => inSeason(b, seasons) || home.buildings.some((m) => m.buildingId === b.id))
-    .map((building) => {
-      const cost = buildCost(building);
-      const owned = home.buildings.filter((b) => b.buildingId === building.id).length;
-      const short = Object.keys(shortfall(home.items, cost));
-      const crafted = short.find(isCrafted);
-      let option: BuildOption = { kind: 'ready' };
-      if (building.placement === 'land' && crafted) {
-        // Carve the Jack-o'-Lantern first, then build it out on your land.
-        const verb = CRAFT_VERBS[crafted] ?? 'Make';
-        option = {
-          kind: 'craft',
-          note: `${verb} a ${itemName(crafted)} first! It's in your recipe book.`,
+  return (
+    GAME_DATA.buildings
+      .filter((b) => isBuildable(RULES, b))
+      // Fences (#203) go on a tile's edges, from the tile's panel on the map.
+      .filter((b) => b.slot !== 'edge')
+      .filter((b) => inSeason(b, seasons) || home.buildings.some((m) => m.buildingId === b.id))
+      .map((building) => {
+        const cost = buildCost(building);
+        const owned = home.buildings.filter((b) => b.buildingId === building.id).length;
+        const short = Object.keys(shortfall(home.items, cost));
+        const crafted = short.find(isCrafted);
+        let option: BuildOption = { kind: 'ready' };
+        if (building.placement === 'land' && crafted) {
+          // Carve the Jack-o'-Lantern first, then build it out on your land.
+          const verb = CRAFT_VERBS[crafted] ?? 'Make';
+          option = {
+            kind: 'craft',
+            note: `${verb} a ${itemName(crafted)} first! It's in your recipe book.`,
+          };
+        } else if (building.placement === 'land') {
+          option = { kind: 'land', note: FIRES_ON_LAND };
+        } else if (owned >= (building.maxPerHome ?? 0)) {
+          option = {
+            kind: 'built',
+            note: building.levels.length > 1 ? 'Built! Tap it at home to upgrade.' : 'Built!',
+          };
+        } else if (!inSeason(building, seasons)) {
+          const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
+          option = { kind: 'blocked', note: `Only around ${season}.` };
+        } else if (crafted) {
+          const verb = CRAFT_VERBS[crafted] ?? 'Make';
+          option = {
+            kind: 'craft',
+            note: `${verb} a ${itemName(crafted)} first! It's in your recipe book.`,
+          };
+        } else if (short.length > 0) {
+          option = { kind: 'short' };
+        } else if (freeHomeSpots(home, null, building.slot).length === 0) {
+          option = { kind: 'blocked', note: 'No room left. Take something down first.' };
+        }
+        return {
+          building,
+          icon: buildingIcon(building.id),
+          description: building.description,
+          effects: effectChips(building),
+          needs:
+            option.kind === 'built' || option.kind === 'land' ? [] : needChips(home.items, cost),
+          option,
+          where: building.placement === 'land' ? '' : slotLine(building),
         };
-      } else if (building.placement === 'land') {
-        option = { kind: 'land', note: FIRES_ON_LAND };
-      } else if (owned >= (building.maxPerHome ?? 0)) {
-        option = {
-          kind: 'built',
-          note: building.levels.length > 1 ? 'Built! Tap it at home to upgrade.' : 'Built!',
-        };
-      } else if (!inSeason(building, seasons)) {
-        const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
-        option = { kind: 'blocked', note: `Only around ${season}.` };
-      } else if (crafted) {
-        const verb = CRAFT_VERBS[crafted] ?? 'Make';
-        option = {
-          kind: 'craft',
-          note: `${verb} a ${itemName(crafted)} first! It's in your recipe book.`,
-        };
-      } else if (short.length > 0) {
-        option = { kind: 'short' };
-      } else if (freeHomeSpots(home, null, building.slot).length === 0) {
-        option = { kind: 'blocked', note: 'No room left. Take something down first.' };
-      }
-      return {
-        building,
-        icon: buildingIcon(building.id),
-        description: building.description,
-        effects: effectChips(building),
-        needs: option.kind === 'built' || option.kind === 'land' ? [] : needChips(home.items, cost),
-        option,
-        where: building.placement === 'land' ? '' : slotLine(building),
-      };
-    });
+      })
+  );
 }
 
 /** What upgrading one of my buildings would do (owner decision 2026-10-06). */

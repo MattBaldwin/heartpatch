@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from '../data/buildings.js';
+import { ELEMENTS } from '../data/elements.js';
 import { FENCE_RULES } from '../data/fences.js';
 import { hex, hexNeighbors, type Hex } from '../hex/index.js';
 import { BattleFenceSetupSchema } from '../schemas/battle.js';
@@ -22,7 +23,7 @@ import {
 } from './fences.js';
 
 const FENCES = BUILDINGS.filter((b): b is FenceBuilding => b.kind === 'fence');
-const wood = FENCES.find((f) => f.id === 'emberwood-fence')!;
+const wood = FENCES.find((f) => f.id === 'emberwood-palisade')!;
 
 /** Every edge of `tile` fenced, except `skip`. */
 const ring = (tile: Hex, skip: number[] = []): FenceSpot[] =>
@@ -122,12 +123,29 @@ describe('the segment a challenger fights (owner decision 2026-10-06)', () => {
 describe('fence data and numbers', () => {
   it('rules parse, and every fence has a material element and edge slot', () => {
     expect(FenceRulesSchema.parse(FENCE_RULES)).toEqual(FENCE_RULES);
-    expect(FENCES.map((f) => [f.id, f.element, f.slot, f.placement])).toEqual([
-      ['emberwood-fence', 'leaf', 'edge', 'owned'],
-      ['stone-wall', 'stone', 'edge', 'owned'],
+    // One fence per element (owner decision 2026-10-07, second mockup).
+    expect(FENCES.map((f) => [f.id, f.element])).toEqual([
+      ['hedge', 'leaf'],
+      ['moat', 'water'],
+      ['stone-wall', 'stone'],
+      ['emberwood-palisade', 'fire'],
+      ['glimmer-rail', 'spark'],
+      ['lantern-fence', 'light'],
+      ['bramble-hedge', 'shadow'],
+      ['ice-wall', 'frost'],
     ]);
-    // Emberwood is the point (#203): it competes with Hearthfire fuel.
+    expect(new Set(FENCES.map((f) => f.element)).size).toBe(ELEMENTS.length);
+    for (const f of FENCES) expect([f.slot, f.placement]).toEqual(['edge', 'owned']);
+    // The Palisade burns Emberwood (#203): it competes with Hearthfire fuel.
     expect(wood.levels[0]!.cost['emberwood']).toBeGreaterThan(0);
+  });
+
+  it('gives every fence the same energy and toughness at a level: only the element differs', () => {
+    for (const f of FENCES) {
+      expect(f.levels.map((l) => [l.hp, l.defense])).toEqual(
+        wood.levels.map((l) => [l.hp, l.defense]),
+      );
+    }
   });
 
   it('gets tougher each level', () => {
@@ -143,9 +161,9 @@ describe('fence data and numbers', () => {
     const setup = fenceBattleSetup('seg', wood, 2, 55, FENCE_RULES);
     expect(BattleFenceSetupSchema.parse(setup)).toEqual(setup);
     expect(setup).toMatchObject({
-      fence: 'emberwood-fence',
+      fence: 'emberwood-palisade',
       level: 2,
-      element: 'leaf',
+      element: 'fire',
       energy: 55,
     });
     expect(setup.stats).toEqual(fenceStats(wood, 2, FENCE_RULES));

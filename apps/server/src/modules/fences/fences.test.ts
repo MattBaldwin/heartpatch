@@ -52,7 +52,7 @@ const ZONE = 'America/Denver';
 // Noon in Denver: a whole map-local day either side to move around in.
 const START = '2026-10-02T18:00:00Z';
 const PLENTY = { timber: 80, stone: 80, emberwood: 60, glimmer: 6 };
-/** A Fire squishy cracks a wood fence fast; a Water one barely dents it. */
+/** A Fire breaker, and a Water one that barely dents a Leaf Hedge. */
 const EMBER = 'emberbun';
 const SPLASH = 'puddlepuff';
 
@@ -254,7 +254,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
     server: FastifyInstance,
     options: {
       team: { level: number; speciesId: string }[];
-      fence?: { level: number; hp: number };
+      fence?: { level: number; hp: number; kind?: string };
     },
   ) {
     const kid = await player();
@@ -268,14 +268,14 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
     await setOwner(near!.id, rival.id);
     const rivalTiles = (await tilesOf(mapId)).filter((t) => t.ownerUserId === rival.id);
     const edges = borderEdges(near!, rivalTiles);
-    const { level = 1, hp = 70 } = options.fence ?? {};
+    const { level = 1, hp = 70, kind = 'emberwood-palisade' } = options.fence ?? {};
     await db.insert(fenceSegments).values(
       edges.map((edge) => ({
         mapId,
         ownerUserId: rival.id,
         tileId: near!.id,
         edge,
-        buildingId: 'emberwood-fence',
+        buildingId: kind,
         level,
         hp,
       })),
@@ -298,7 +298,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       await setOwner(tile!.id, kid.id);
 
       const res = await call(server, 'POST', `/maps/${mapId}/fences`, kid, {
-        buildingId: 'emberwood-fence',
+        buildingId: 'emberwood-palisade',
         q: tile!.q,
         r: tile!.r,
         edges: [3, 0],
@@ -330,7 +330,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       await setOwner(theirs!.id, rival.id);
       const build = (h: Tile, edges: number[]) =>
         call(server, 'POST', `/maps/${mapId}/fences`, kid, {
-          buildingId: 'emberwood-fence',
+          buildingId: 'emberwood-palisade',
           q: h.q,
           r: h.r,
           edges,
@@ -354,7 +354,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       expect((await segmentsOn(mine!.id)).map((s) => s.edge)).toEqual([2]);
       // Fences don't go through the home build sheet's spots.
       const viaSpot = await call(server, 'POST', `/maps/${mapId}/buildings`, kid, {
-        buildingId: 'emberwood-fence',
+        buildingId: 'emberwood-palisade',
         q: mine!.q,
         r: mine!.r,
         spot: 1,
@@ -371,7 +371,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       await setOwner(tile!.id, kid.id);
       const built = fencesOf(
         await call(server, 'POST', `/maps/${mapId}/fences`, kid, {
-          buildingId: 'emberwood-fence',
+          buildingId: 'emberwood-palisade',
           q: tile!.q,
           r: tile!.r,
           edges: [1],
@@ -424,7 +424,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       expect(fenceBattle.view.turnLimit).toBe(FENCE_RULES.battleTurns);
       expect(fenceBattle.view.sides.a.squishies.map((s) => s.id)).toEqual([team[0]!.id]);
       const wall = fenceBattle.view.sides.b.squishies[0]!;
-      expect(wall).toMatchObject({ fence: 'emberwood-fence', moves: [], energy: 70 });
+      expect(wall).toMatchObject({ fence: 'emberwood-palisade', moves: [], energy: 70 });
       const brokenEdge = (await segmentsOn(near.id)).find((s) => s.id === wall.id)!.edge;
       expect(exposed).toContain(brokenEdge as HexEdge);
       const broke = await playOut(server, kid, fenceBattle);
@@ -478,14 +478,14 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       ).report;
       expect(report.raids.map((r) => [r.outcome, r.fence])).toEqual([
         ['taken', null],
-        ['lost', { buildingId: 'emberwood-fence', broken: true, percent: 0 }],
+        ['lost', { buildingId: 'emberwood-palisade', broken: true, percent: 0 }],
       ]);
       expect(report.raids[0]!.lostFences).toEqual({ emberwood: 3 * standing, timber: standing });
     });
 
     it('only breaks the fence when nobody is left to fight the guard: a second visit takes it', async () => {
       const server = await start();
-      const { kid, rival, mapId, near } = await fencedRival(server, {
+      const { kid, mapId, near } = await fencedRival(server, {
         team: [{ level: 40, speciesId: EMBER }],
       });
       await playOut(server, kid, battleOf(await attack(server, kid, mapId, near)));
@@ -509,14 +509,14 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
       expect((await status(server, kid, mapId)).attemptsLeft).toBe(
         TERRITORY_RULES.attemptsPerDay - 2,
       );
-      void rival;
     });
 
     it('a fence that holds keeps the energy it lost, and its owner hears about it', async () => {
       const server = await start();
       const { kid, rival, mapId, near } = await fencedRival(server, {
         team: [{ level: 5, speciesId: SPLASH }],
-        fence: { level: 3, hp: 140 },
+        // A Leaf Hedge: Water barely dents it.
+        fence: { level: 3, hp: 140, kind: 'hedge' },
       });
       const held = await playOut(server, kid, battleOf(await attack(server, kid, mapId, near)));
       expect(held.view.phase).toMatchObject({
@@ -594,7 +594,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
     )!;
     await setOwner(far.id, kid.id);
     const built = await call(server, 'POST', `/maps/${mapId}/fences`, kid, {
-      buildingId: 'emberwood-fence',
+      buildingId: 'emberwood-palisade',
       q: far.q,
       r: far.r,
       edges: [0],

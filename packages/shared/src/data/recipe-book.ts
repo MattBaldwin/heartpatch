@@ -57,12 +57,36 @@ export const RECIPE_BOOK: RecipeBookData = {
       line: 'Gather some Timber and Stone, and this page opens!',
     },
     {
-      page: 'building:emberwood-fence',
-      line: 'Gather Emberwood from the old forest and some Timber, and this page opens!',
+      page: 'building:hedge',
+      line: 'Gather Greens from a meadow and some Timber, and this page opens!',
+    },
+    {
+      page: 'building:moat',
+      line: 'Fetch Water from a lakeside well and some Stone, and this page opens!',
     },
     {
       page: 'building:stone-wall',
       line: 'Gather Stone from the hills and some Timber, and this page opens!',
+    },
+    {
+      page: 'building:emberwood-palisade',
+      line: 'Gather Emberwood from the old forest and some Timber, and this page opens!',
+    },
+    {
+      page: 'building:glimmer-rail',
+      line: 'Find Glimmer in the mountains and gather some Timber, and this page opens!',
+    },
+    {
+      page: 'building:lantern-fence',
+      line: 'Find Glimmer in the mountains and gather some Timber, and this page opens!',
+    },
+    {
+      page: 'building:bramble-hedge',
+      line: 'Gather Greens and some Emberwood, and this page opens!',
+    },
+    {
+      page: 'building:ice-wall',
+      line: 'Find Ice in the mountains (or freeze some Water) and gather Stone, and this page opens!',
     },
   ],
 };

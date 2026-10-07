@@ -253,7 +253,7 @@ describe('MapState', () => {
     const fence = (edge: number, hp = 70) => ({
       id: `0190a8c4-0000-7000-8000-00000000010${String(edge)}`,
       edge,
-      buildingId: 'emberwood-fence',
+      buildingId: 'hedge',
       level: 1,
       hp,
       maxHp: 70,

@@ -17,7 +17,7 @@ export const HexEdgeSchema = z.number().int().min(0).max(5);
 export const PublicFenceSchema = z.object({
   id: z.uuid(),
   edge: HexEdgeSchema,
-  /** Fence id from the shared building table (`emberwood-fence`). */
+  /** Fence id from the shared building table (`emberwood-palisade`). */
   buildingId: ContentIdSchema,
   level: z.number().int().min(1),
   /** Energy left; damage stays until it's repaired (owner decision 2026-10-07). */

@@ -91,7 +91,7 @@ describe('runMapFill', () => {
     expect(fenced.fenceBreaks).toBeGreaterThan(0);
     expect(fenced.captured).toBeLessThan(plain.captured);
     expect(plain.fenceBreaks).toBe(0);
-  });
+  }, 30_000); // three 75-day runs
 
   it('keeps Gentle’s cap: a kid loses at most one tile a day to challenges', () => {
     const run = runMapFill(scenario('engaged-2'), FENCES_GENTLE, MAP_FILL_CONFIG);

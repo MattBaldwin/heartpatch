@@ -278,8 +278,14 @@ describe('home-base data', () => {
       'ember-den',
       'cozy-meadow',
       'training-grounds',
-      'emberwood-fence',
+      'hedge',
+      'moat',
       'stone-wall',
+      'emberwood-palisade',
+      'glimmer-rail',
+      'lantern-fence',
+      'bramble-hedge',
+      'ice-wall',
     ]);
   });
 
