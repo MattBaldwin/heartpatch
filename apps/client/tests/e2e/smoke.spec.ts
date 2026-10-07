@@ -165,7 +165,8 @@ test('renders the Babylon scene and reaches the server', async ({ page }) => {
   await expect(page.locator('[data-testid="dev-status"]')).toHaveText(/server: ok/);
   // Any tier: the game starts on high (tiers.test.ts), but a cold load on a
   // software renderer can crawl (every frame over a second while shaders
-  // compile), and the governor then drops straight to low (governor.ts `crawl`).
+  // compile), and the governor then drops straight to low (governor.ts `crawl`)
+  // and may climb back through medium.
   await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(
     /^(\d+ fps|idle) · WebGL2 · (high|medium|low) · \d\.\d\dx$/,
     { timeout: 15_000 },
