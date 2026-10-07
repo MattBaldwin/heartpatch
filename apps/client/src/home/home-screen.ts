@@ -929,7 +929,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     return card;
   }
 
-  /** Have/need chips ("🪵 12/10 ✓"), green when there's enough. */
   /** What a building does, as chips (#207). */
   function effectRow(effects: readonly string[]): HTMLElement {
     return el(
@@ -939,6 +938,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     );
   }
 
+  /** Have/need chips ("🪵 12/10 ✓"), green when there's enough. */
   function needRow(needs: readonly NeedChip[]): HTMLElement {
     return el(
       'span',

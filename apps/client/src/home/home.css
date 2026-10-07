@@ -195,7 +195,7 @@
 }
 
 .home-effect {
-  padding: 3px 9px;
+  padding: 3px var(--hp-pad-x);
   border-radius: 999px;
   background: #fff3d6;
   color: #7a4a12;

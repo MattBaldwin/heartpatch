@@ -27,8 +27,12 @@ export type BuildingEffect =
  * it. A level past its last one reads as its last.
  */
 export function buildingEffects(building: Building, level = 1): BuildingEffect[] {
-  const at = <T>(levels: readonly T[]): T =>
-    levels[Math.min(Math.max(level, 1), levels.length) - 1] as T;
+  // Levels are 1-based; anything below 1 reads as 1 and past the last as the
+  // last. The schema requires at least one level, so the last always exists.
+  const at = <T>(levels: readonly T[]): T => {
+    const i = Math.min(Math.max(Math.floor(level) || 1, 1), levels.length) - 1;
+    return (levels[i] ?? levels[levels.length - 1]) as T;
+  };
   switch (building.kind) {
     case 'hearthfire':
       return [
