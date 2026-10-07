@@ -9,9 +9,9 @@ export const SPAWN_RULES: SpawnRules = {
   // (#208): wild squishies are the Partner's level −2 to +0, so a lone Partner
   // beats an ordinary one about 75% of the time as it grows.
   partnerOffset: { min: -2, max: 0 },
-  // TUNE: owner decision 2026-10-07 (#208): rarer base forms carry bigger
-  // base stats, so a Partner-matched one spawns this many levels lower.
-  rarityLevelDiscount: { rare: 1, epic: 2, legendary: 2, secret: 2 },
+  // No `rarityLevelDiscount`: rarer wild squishies are meant to be a step
+  // harder than ordinary ones (owner decision 2026-10-07, #208); teams and
+  // potions cover them.
   // TUNE: judged at each window's middle, so 4-hour windows give night, day,
   // day, day, dusk, night.
   timesOfDay: [

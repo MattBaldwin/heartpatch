@@ -49,11 +49,6 @@ const HOUR_MS = 60 * 60 * 1000;
 const SECRET_WILD = SERVER_GAME_DATA.secretSpecies.find(
   (s) => !SERVER_GAME_DATA.secretEvolutions.some((e) => e.into === s.id),
 )!.id;
-/** Levels a Partner-matched `SECRET_WILD` spawns below the Partner's roll (#208). */
-const SECRET_DISCOUNT =
-  SPAWN_RULES.rarityLevelDiscount?.[
-    SERVER_GAME_DATA.secretSpecies.find((s) => s.id === SECRET_WILD)!.rarity
-  ] ?? 0;
 /** The dev squishy's level: strong enough to win any wild battle here. */
 const STRONG_LEVEL = 40;
 /** A year-round public squishy that grows up before `STRONG_LEVEL`, so battle XP evolves it. */
@@ -338,9 +333,8 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const scaled = await meet();
       const offset = SPAWN_RULES.partnerOffset!;
       for (const wild of scaled) {
-        // Less its rarity's discount (#208).
-        expect(wild.level).toBeGreaterThanOrEqual(30 + offset.min - SECRET_DISCOUNT);
-        expect(wild.level).toBeLessThanOrEqual(30 + offset.max - SECRET_DISCOUNT);
+        expect(wild.level).toBeGreaterThanOrEqual(30 + offset.min);
+        expect(wild.level).toBeLessThanOrEqual(30 + offset.max);
       }
       expect(scaled.map((w) => w.speciesId)).toEqual(plain.map((w) => w.speciesId));
       // The battle meets the same level.
@@ -365,7 +359,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const { battles } = services();
       const { battle } = await battles.startWild(kid, mapId);
       const wild = battle.view.sides.b.squishies[0]!;
-      const lowest = 60 + SPAWN_RULES.partnerOffset!.min - SECRET_DISCOUNT;
+      const lowest = 60 + SPAWN_RULES.partnerOffset!.min;
       expect(wild.level).toBeGreaterThanOrEqual(lowest);
       await capture(battles, kid, battle);
       const firstEvolution = Math.min(
