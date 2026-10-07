@@ -77,8 +77,8 @@ jobs:
   # WebKit e2e, split by device and into groups that run side by side.
   e2e:
     runs-on: ubuntu-24.04
-    # Room for a slow apt mirror during the WebKit install (once took 15 min)
-    # plus the tests in the heaviest group (about 5 min).
+    # Room for a slow WebKit install (capped at 20 min, below) plus the tests
+    # in the heaviest group (about 5 min).
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -132,13 +132,37 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-webkit-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
+      # A slow apt mirror held shards in the install below for 29 min, so jobs
+      # timed out before any test ran. apt gives up on a silent connection
+      # after 30 s; a mirror that trickles is caught by the 6-min cap on each
+      # try below, which retries on a fresh connection (timeout kills the whole
+      # process group; dpkg --configure -a tidies a half-done install).
+      - name: apt retries and timeouts
+        run: |
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
+            | sudo tee /etc/apt/apt.conf.d/99-ci-retries
+
       - name: Install Playwright WebKit
         if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @heartpatch/client exec playwright install --with-deps webkit
+        timeout-minutes: 20
+        run: |
+          for try in 1 2 3; do
+            timeout 6m pnpm --filter @heartpatch/client exec playwright install --with-deps webkit && exit 0
+            echo "::warning::try $try failed or took over 6 min; retrying"
+            sudo dpkg --configure -a || true
+          done
+          exit 1
 
       - name: Install Playwright WebKit system deps
         if: steps.pw-cache.outputs.cache-hit == 'true'
-        run: pnpm --filter @heartpatch/client exec playwright install-deps webkit
+        timeout-minutes: 20
+        run: |
+          for try in 1 2 3; do
+            timeout 6m pnpm --filter @heartpatch/client exec playwright install-deps webkit && exit 0
+            echo "::warning::try $try failed or took over 6 min; retrying"
+            sudo dpkg --configure -a || true
+          done
+          exit 1
 
       - name: E2E (${{ matrix.project }}, group ${{ matrix.group }}/5)
         env:
