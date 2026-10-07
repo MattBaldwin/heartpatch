@@ -55,6 +55,7 @@ export interface AuthRepo {
   }) => Promise<AccountUser | null>;
   /** Case-insensitive lookup. */
   findUserByUsername: (username: string) => Promise<UserWithPassword | null>;
+  findPasswordHash: (userId: string) => Promise<string | null>;
   createSession: (userId: string, session: NewSession) => Promise<void>;
   /** The unexpired session for a token hash, with its user. */
   findSession: (tokenHash: string, now: Date) => Promise<SessionWithUser | null>;
@@ -67,6 +68,11 @@ export interface AuthRepo {
    * Returns false, changing nothing, if `redeemRecoveryCodeId` is no longer active.
    */
   resetPassword: (reset: PasswordReset) => Promise<boolean>;
+  /**
+   * Replaces the active recovery code with a new one (#197), in one
+   * transaction. Sessions and the password stay as they are.
+   */
+  replaceRecoveryCode: (userId: string, codeHash: string, now: Date) => Promise<void>;
 }
 
 class RollbackSignal extends Error {}
@@ -106,6 +112,14 @@ export function createAuthRepo(db: Executor): AuthRepo {
         .where(eq(sql`lower(${users.username})`, username.toLowerCase()))
         .limit(1);
       return user ?? null;
+    },
+
+    findPasswordHash: async (userId) => {
+      const [user] = await db
+        .select({ passwordHash: users.passwordHash })
+        .from(users)
+        .where(eq(users.id, userId));
+      return user?.passwordHash ?? null;
     },
 
     createSession: async (userId, session) => {
@@ -175,6 +189,16 @@ export function createAuthRepo(db: Executor): AuthRepo {
         if (err instanceof RollbackSignal) return false;
         throw err;
       }
+    },
+
+    replaceRecoveryCode: async (userId, codeHash, now) => {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(recoveryCodes)
+          .set({ usedAt: now })
+          .where(and(eq(recoveryCodes.userId, userId), isNull(recoveryCodes.usedAt)));
+        await tx.insert(recoveryCodes).values({ userId, codeHash });
+      });
     },
   };
 }

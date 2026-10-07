@@ -20,7 +20,12 @@ export function uniqueName(prefix: string): string {
  * the lobby. `code` is what they type in the code field: the dev server's
  * family code unless given (a patch invite also signs up, #195).
  */
-export async function newPlayer(browser: Browser, name: string, code?: string): Promise<Page> {
+export async function newPlayer(
+  browser: Browser,
+  name: string,
+  code?: string,
+  helper: 'later' | 'ask' = 'later',
+): Promise<Page> {
   // The project's device settings (viewport, touch), so tap() works like on an iPhone.
   const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, baseURL } =
     test.info().project.use;
@@ -34,7 +39,7 @@ export async function newPlayer(browser: Browser, name: string, code?: string): 
   });
   const page = await context.newPage();
   await slowCpu(page);
-  await signUp(page, name, code);
+  await signUp(page, name, code, helper);
   await pickKeeper(page);
   // Roomy: under a full e2e run the lobby's first fetches can take a while.
   await expect(
@@ -59,10 +64,29 @@ async function slowCpu(page: Page): Promise<void> {
 }
 
 /**
- * Signs up through the sign-in overlay with a code and taps past the
- * recovery code. The Keeper picker (#42) comes next.
+ * Taps past the save-your-code screen (#197): "I've saved it" wakes up the
+ * button, which says `next` ("Next" after sign up, "Done" from Settings).
  */
-export async function signUp(page: Page, name: string, code = signupCode): Promise<void> {
+export async function savedCode(overlay: Locator, next = 'Next'): Promise<void> {
+  const done = overlay.getByTestId('auth-code-done');
+  await expect(done).toHaveText(next);
+  await expect(done).toBeDisabled();
+  await overlay.getByText("I've saved it").tap();
+  await done.tap();
+}
+
+/**
+ * Signs up through the sign-in overlay with a code and taps past the
+ * recovery code. A patch invite has a grown-up behind it (the owner), so the
+ * helper step follows (#197): `helper` says what to tap there. The Keeper
+ * picker (#42) comes next.
+ */
+export async function signUp(
+  page: Page,
+  name: string,
+  code = signupCode,
+  helper: 'later' | 'ask' = 'later',
+): Promise<void> {
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
@@ -71,7 +95,13 @@ export async function signUp(page: Page, name: string, code = signupCode): Promi
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  await overlay.getByRole('button', { name: 'I saved it!' }).tap();
+  await savedCode(overlay);
+  if (code === signupCode) return;
+  await expect(
+    overlay.getByRole('heading', { name: 'Do you have a grown-up helper?' }),
+  ).toBeVisible();
+  if (helper === 'ask') await overlay.getByRole('button', { name: /^Ask / }).tap();
+  else await overlay.getByRole('button', { name: 'Maybe later' }).tap();
 }
 
 /**

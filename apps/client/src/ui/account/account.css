@@ -1,0 +1,32 @@
+/* Grown-up helpers (#197). Cards, buttons and lists come from auth.css and
+   lobby.css; this adds the helper's big name and a "Helper" badge. */
+.account-bigname {
+  margin: 0;
+  padding: 12px;
+  border: 2px solid #ecd3e2;
+  border-radius: 18px;
+  background: #fff;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-align: center;
+  overflow-wrap: anywhere;
+  -webkit-user-select: all;
+  user-select: all;
+}
+
+.lobby-badge-ok {
+  background: #e6f6ea;
+  color: #2f6b3d;
+}
+
+.account-settings,
+.account-asks-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-asks-box:empty {
+  display: none;
+}

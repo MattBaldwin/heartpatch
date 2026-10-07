@@ -1,6 +1,7 @@
 import {
   formatRecoveryCode,
   type LoginRequest,
+  type NewRecoveryCodeResponse,
   type PublicUser,
   type RecoverRequest,
   type SignupRequest,
@@ -44,6 +45,11 @@ export interface AuthService {
   logout: (token: string | undefined) => Promise<void>;
   /** Sets a new password with the recovery code, revokes every session and logs this device in. */
   recover: (input: RecoverRequest) => Promise<AuthResultWithCode>;
+  /**
+   * A new recovery code for a logged-in player who knows their password
+   * (#197). The old code stops working; sessions stay.
+   */
+  replaceRecoveryCode: (user: PublicUser, password: string) => Promise<NewRecoveryCodeResponse>;
   /** The player behind a session token, renewing the rolling expiry when due. */
   authenticate: (token: string | undefined) => Promise<{
     user: PublicUser;
@@ -77,6 +83,7 @@ const MESSAGES = {
   timeZone: "Hmm, we couldn't read your clock. Please try again!",
   wrongLogin: "That name and password don't match. Try again!",
   wrongRecoveryCode: "That recovery code doesn't match. Check it and try again!",
+  wrongPassword: "Hmm, that password isn't right. Try again!",
 } as const;
 
 export function createAuthService(options: AuthServiceOptions): AuthService {
@@ -167,6 +174,18 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
         session: session.issued,
         recoveryCode: formatRecoveryCode(recoveryCode),
       };
+    },
+
+    replaceRecoveryCode: async (user, password) => {
+      const passwordHash = await repo.findPasswordHash(user.id);
+      const ok = passwordHash
+        ? await verifySecret(passwordHash, password)
+        : await verifyAgainstDummy(password);
+      // VALIDATION_FAILED, not UNAUTHENTICATED: they are still logged in.
+      if (!ok) throw new AppError('VALIDATION_FAILED', MESSAGES.wrongPassword);
+      const recoveryCode = newRecoveryCode();
+      await repo.replaceRecoveryCode(user.id, await hashSecret(recoveryCode), now());
+      return { recoveryCode: formatRecoveryCode(recoveryCode) };
     },
 
     authenticate: async (token) => {
