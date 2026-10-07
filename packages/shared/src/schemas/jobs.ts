@@ -59,6 +59,12 @@ export const JobSquishySchema = z.object({
   habitatId: z.uuid().nullable(),
   work: WorkStatusSchema.nullable(),
   training: TrainingStatusSchema.nullable(),
+  /**
+   * It has won its full-XP battles for today (#201, `battleXpFalloff`), so
+   * wins pay less until then: the patch's next local midnight. Null while
+   * wins still pay in full.
+   */
+  fullXpResetAt: z.iso.datetime().nullable(),
 });
 export type JobSquishy = z.infer<typeof JobSquishySchema>;
 
