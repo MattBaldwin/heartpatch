@@ -82,8 +82,10 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   expect(job.status).toBe(200);
   // The nudge, once the hollow status is read again (unless it's night on the server's clock).
   await page.reload();
-  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live).toBe('live');
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
+  await expect
+    .poll(async () => (await mapState(page))?.live, { timeout: 30_000 })
+    .toBe('live');
   if (!(await hollowState(page))!.night) {
     await expect(hint).toBeVisible();
     await expect(hint).toContainText('A friend sleeps out in the dark. Light a fire there!');
