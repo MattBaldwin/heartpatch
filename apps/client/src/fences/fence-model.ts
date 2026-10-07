@@ -19,7 +19,8 @@ import {
   type PublicTile,
 } from '@heartpatch/shared';
 import { bagItems } from '../inventory/bag-view.js';
-import { costText } from '../home/home-view.js';
+import { costText, effectChips } from '../home/home-view.js';
+import { ELEMENT_GLYPH } from '../ui/glyphs.js';
 
 // What the fence sheet shows (#203, the owner-approved mockup): the fences on
 // a tile of mine, the open edges a new one could go on, what each costs, and
@@ -37,18 +38,6 @@ export function fenceOf(buildingId: string): FenceBuilding | undefined {
 }
 
 const ELEMENT_NAMES = new Map<string, string>(ELEMENTS.map((e) => [e.id, e.name]));
-
-/** A picture for each element, on fence cards and the build list. */
-export const ELEMENT_ICONS: Readonly<Record<string, string>> = {
-  fire: '🔥',
-  water: '💧',
-  leaf: '🍃',
-  frost: '❄️',
-  spark: '⚡',
-  stone: '🪨',
-  shadow: '🌙',
-  light: '✨',
-};
 
 /** A picture for each fence on buttons and cards. */
 const FENCE_ICONS: Readonly<Record<string, string>> = {
@@ -166,6 +155,19 @@ export function fenceCard(fence: PublicFence): FenceCard | null {
   };
 }
 
+/**
+ * What a fence does at `level`, as chips worked out from its data (#241,
+ * like the build menu's, #207): its element, the shared fence effect (keeps
+ * other Keepers out, its energy), and its level.
+ */
+export function fenceChips(fence: FenceBuilding, level = 1): string[] {
+  return [
+    `${ELEMENT_GLYPH[fence.element] ?? '✨'} ${elementName(fence.element)}`,
+    ...effectChips(fence, level),
+    `Level ${String(level)} of ${String(fence.levels.length)}`,
+  ];
+}
+
 /** One row of the build list. */
 export interface FenceChoice {
   readonly fence: FenceBuilding;
@@ -212,7 +214,7 @@ export const FENCE_TEXT = {
   energy: (percent: number) => `Fence ${String(percent)}%`,
   energyFull: (hp: number) => `Energy ${String(hp)}`,
   cracks: (element: FenceBuilding['element']) =>
-    `${ELEMENT_ICONS[element] ?? ''} ${elementName(element)} · ${crackedBy(element)}`,
+    `${ELEMENT_GLYPH[element] ?? ''} ${elementName(element)} · ${crackedBy(element)}`,
   repair: (cost: string) => `🔨 Repair (${cost})`,
   repaired: 'Good as new! 🔨',
   upgrade: (cost: string) => `⬆️ Upgrade (${cost})`,

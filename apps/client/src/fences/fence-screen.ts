@@ -18,6 +18,7 @@ import {
   canAfford,
   edgeName,
   fenceCard,
+  fenceChips,
   fenceChoices,
   fenceIcon,
   fenceOf,
@@ -281,7 +282,12 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
             'data-fence': c.fence.id,
           },
           el('span', { class: 'fence-material-name' }, `${fenceIcon(c.fence.id)} ${c.fence.name}`),
-          el('span', { class: 'fence-material-element' }, FENCE_TEXT.cracks(c.fence.element)),
+          el('span', { class: 'fence-material-about' }, c.fence.description),
+          el(
+            'span',
+            { class: 'fence-chips' },
+            ...fenceChips(c.fence).map((chip) => el('span', { class: 'home-effect' }, chip)),
+          ),
           el(
             'span',
             { class: `fence-material-cost${items && !c.affordable ? ' fence-short' : ''}` },

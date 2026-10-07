@@ -11,8 +11,7 @@
 }
 
 .fence-materials {
-  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
-  max-height: 14rem;
+  max-height: 16rem;
   overflow-y: auto;
 }
 
@@ -62,7 +61,7 @@
   font-weight: 700;
 }
 
-.fence-material-element,
+.fence-material-about,
 .fence-material-cost {
   font-size: 0.8em;
   opacity: 0.8;
@@ -96,4 +95,10 @@
   flex: 1;
   height: 0.75rem;
   accent-color: #d0578f;
+}
+
+.fence-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
 }

@@ -6,6 +6,7 @@ import {
   crackedBy,
   edgeName,
   fenceCard,
+  fenceChips,
   fenceChoices,
   fenceCrackers,
   FENCE_TEXT,
@@ -90,6 +91,17 @@ describe('the fence sheet (#203)', () => {
     const top = fenceCard(fence({ level: 3, hp: 140, maxHp: 140 }));
     expect(top?.upgrade).toBeNull();
     expect(fenceCard(fence({ buildingId: 'not-a-fence' }))).toBeNull();
+  });
+
+  it('shows what a fence does as chips from its data (#241)', () => {
+    const hedge = FENCES.find((f) => f.id === 'hedge');
+    if (!hedge) throw new Error('no hedge');
+    expect(fenceChips(hedge)).toEqual([
+      '🍃 Leaf',
+      '🪵 Keeps other Keepers out · 70 energy',
+      'Level 1 of 3',
+    ]);
+    expect(fenceChips(hedge, 3)[1]).toBe('🪵 Keeps other Keepers out · 140 energy');
   });
 
   it('multiplies the build cost by the edges picked, and checks the bag', () => {
