@@ -1,9 +1,9 @@
 import {
   FEELINGS,
   JOB_RULES,
-  workSource,
   RESOURCES,
   TERRAINS,
+  workSource,
   type GuardianDifficulty,
   type GuardianHint,
   type MapMember,
