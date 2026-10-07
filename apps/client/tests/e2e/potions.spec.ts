@@ -131,6 +131,9 @@ test('a full team at 375 px: Heart Charm, potions and Swap share the first line,
     expect(box.y + box.height).toBeLessThanOrEqual(sheet.y + sheet.height + 0.5);
     expect(box.x + box.width).toBeLessThanOrEqual(375 + 0.5);
     expect(Math.abs(box.y - boxes[0]!.y)).toBeLessThan(1);
+    // A 44 pt target both ways (style guide §3), the compact 🧪 included.
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
   }
   await expectRoomyLabels(page, '.battle-button');
 

@@ -331,6 +331,8 @@
 }
 
 .battle-button-small {
+  /* 44 pt both ways (style guide §3), even for the compact 🧪 alone (#214). */
+  min-width: 44px;
   min-height: 44px;
   padding: var(--hp-pad-y) var(--hp-pad-x);
   border-radius: 999px;
