@@ -77,9 +77,10 @@ jobs:
   # WebKit e2e, split by device and into groups that run side by side.
   e2e:
     runs-on: ubuntu-24.04
-    # Room for setup (1-4 min), the WebKit system deps (capped at 17 min,
-    # below) and the slowest group's tests (iPhone group 5, about 25 min).
-    timeout-minutes: 45
+    # Room for setup and queueing (up to 5 min), the WebKit system deps
+    # (capped at 17 min, below) and the slowest group's tests (group 5, the
+    # catch-all, about 25 min and growing), with some slack.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
