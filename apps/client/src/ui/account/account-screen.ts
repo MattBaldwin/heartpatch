@@ -308,7 +308,7 @@ export function mountAccount(root: HTMLElement): AccountScreen {
     const answer = (verb: 'accept' | 'decline', player: PublicUser) => (b: HTMLButtonElement) => {
       act(status, b, async () => {
         await (verb === 'accept' ? accountApi.accept(player.id) : accountApi.decline(player.id));
-        await fillAsks(box);
+        redraw();
       });
     };
     box.replaceChildren(

@@ -138,7 +138,8 @@ export function createAccountHelpersService(
       const at = now();
       const player = await store.transaction(async (repo, tx) => {
         // Both accounts (tech spec §7, step 4): the player's holds off a second
-        // reset, the helper's makes the daily count below exact.
+        // reset, a recover and a new code; the helper's makes the daily count
+        // below exact. The password reset then takes `recovery_codes`.
         await repo.lockUsers([helper.id, playerId]);
         // Then the link, so a removal waits for this reset or wins before it.
         if (!(await repo.lockActive(playerId, helper.id))) {
@@ -149,7 +150,7 @@ export function createAccountHelpersService(
           throw new AppError('RATE_LIMITED', MESSAGES.resetsUsedUp);
         }
         const target = await repo.findUser(playerId);
-        if (!target) throw new AppError('FORBIDDEN', MESSAGES.notLinked);
+        if (!target) throw new AppError('NOT_FOUND', MESSAGES.notLinked);
         // Revokes their sessions and rotates their recovery code (auth contract).
         await createAuthRepo(tx).resetPassword({
           userId: playerId,

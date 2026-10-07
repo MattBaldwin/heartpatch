@@ -182,9 +182,16 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
         ? await verifySecret(passwordHash, password)
         : await verifyAgainstDummy(password);
       // VALIDATION_FAILED, not UNAUTHENTICATED: they are still logged in.
-      if (!ok) throw new AppError('VALIDATION_FAILED', MESSAGES.wrongPassword);
+      if (!passwordHash || !ok) throw new AppError('VALIDATION_FAILED', MESSAGES.wrongPassword);
       const recoveryCode = newRecoveryCode();
-      await repo.replaceRecoveryCode(user.id, await hashSecret(recoveryCode), now());
+      const replaced = await repo.replaceRecoveryCode({
+        userId: user.id,
+        passwordHash,
+        codeHash: await hashSecret(recoveryCode),
+        now: now(),
+      });
+      // Their password was reset a moment ago, so the one typed is old now.
+      if (!replaced) throw new AppError('VALIDATION_FAILED', MESSAGES.wrongPassword);
       return { recoveryCode: formatRecoveryCode(recoveryCode) };
     },
 

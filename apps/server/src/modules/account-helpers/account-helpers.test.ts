@@ -468,12 +468,47 @@ describe.skipIf(!url)('grown-up helpers (needs DATABASE_URL)', () => {
         reset(grownup, kid),
       ]);
       expect(theirs.statusCode).toBe(200);
-      // The kid's request lands first, or finds its session already revoked.
-      expect([200, 401]).toContain(own.statusCode);
+      // The kid's request lands first, or finds the password changed (400)
+      // or its session revoked (401): never a 500.
+      expect([200, 400, 401]).toContain(own.statusCode);
       const active = await db.query.recoveryCodes.findMany({
         where: (c, { and, eq, isNull }) => and(eq(c.userId, kid.id), isNull(c.usedAt)),
       });
       expect(active).toHaveLength(1);
+    });
+
+    // Recover with a code used to retire the code before locking the account,
+    // the other way round from these; together they deadlocked (a 500).
+    it('races recover-with-code without a deadlock', async () => {
+      for (let round = 0; round < 3; round += 1) {
+        const kid = await player();
+        const results = await Promise.all([
+          call('POST', '/auth/recovery-code', kid, { password: PASSWORD }),
+          recover(kid.username, RECOVERY),
+        ]);
+        for (const res of results) expect(res.statusCode).toBeLessThan(500);
+        const active = await db.query.recoveryCodes.findMany({
+          where: (c, { and, eq, isNull }) => and(eq(c.userId, kid.id), isNull(c.usedAt)),
+        });
+        expect(active).toHaveLength(1);
+      }
+    });
+
+    it("races a helper's reset against recover-with-code without a deadlock", async () => {
+      for (let round = 0; round < 3; round += 1) {
+        const { grownup, kid } = await linked();
+        const [theirs, own] = await Promise.all([
+          reset(grownup, kid),
+          recover(kid.username, RECOVERY),
+        ]);
+        expect(theirs.statusCode).toBe(200);
+        // Recover first, or the code was already replaced by the reset.
+        expect([200, 401]).toContain(own.statusCode);
+        const active = await db.query.recoveryCodes.findMany({
+          where: (c, { and, eq, isNull }) => and(eq(c.userId, kid.id), isNull(c.usedAt)),
+        });
+        expect(active).toHaveLength(1);
+      }
     });
 
     it('needs a login', async () => {
