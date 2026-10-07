@@ -11,7 +11,7 @@ import {
   type WorkStatus,
 } from '@heartpatch/shared';
 import { describeItems, itemName } from '../../inventory/bag-view.js';
-import { formatTimeLeft } from '../../inventory/game-clock.js';
+import { formatTimeLeft, formatWait } from '../../inventory/game-clock.js';
 import { itemIcon } from '../../inventory/item-icons.js';
 
 // The job board's and team picker's words and models (owner decisions
@@ -89,8 +89,23 @@ export function workLine(work: WorkStatus, nowMs: number): string {
   return `Gathering ${name}.${ready}${next}`;
 }
 
-/** The squishy's job, in a few words. */
+/**
+ * Its line on the job board changes by itself: a gatherer counting down to
+ * its next cycle, or a squishy waiting for full battle XP (#201). The board
+ * ticks these lines and asks for a fresh view when one runs out.
+ */
+export function countsDown(s: JobSquishy): boolean {
+  return (s.work !== null && !s.work.full) || s.fullXpResetAt !== null;
+}
+
+/** The squishy's job, in a few words, and when full battle XP comes back (#201). */
 export function jobLine(s: JobSquishy, nowMs: number): string {
+  const job = jobWords(s, nowMs);
+  if (s.fullXpResetAt === null || Date.parse(s.fullXpResetAt) <= nowMs) return job;
+  return `${job} · Full XP again in ${formatWait(Date.parse(s.fullXpResetAt) - nowMs)}`;
+}
+
+function jobWords(s: JobSquishy, nowMs: number): string {
   if (s.squishy.state !== 'active') return `${JOBS_TEXT.inHollow}. You can rescue them!`;
   switch (s.job) {
     case 'team':

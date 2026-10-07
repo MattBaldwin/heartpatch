@@ -19,6 +19,7 @@ import { inventoryApi } from '../inventory/inventory-api.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
+import { formatWait } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
 import { ManualClock, realClock, type BattleClock } from './battle-clock.js';
@@ -151,6 +152,8 @@ const MESSAGES = {
   resultNoContest: 'No contest!',
   gentleNote: (percent: number) =>
     `Gentle patch: ${percent === 50 ? 'half' : `${String(percent)}%`} XP for playing a smaller Keeper.`,
+  // Past today's full-XP wins (#201, `battleXpFalloff`): relative, never a clock time.
+  fullXpNote: (wait: string) => `Full XP again in ${wait}.`,
   drawSub: 'Everyone needs a nap.',
   noContestSub: 'The squishies got distracted. Nobody won or lost.',
   noXp: 'No XP this time.',
@@ -498,6 +501,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
+    // The device clock is close enough for an hours-and-minutes note.
+    const fullXpAt = b.rewards?.fullXpResetAt;
+    const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - Date.now() : 0;
+    if (fullXpLeft > 0) lines.push(MESSAGES.fullXpNote(formatWait(fullXpLeft)));
     // Won a wild battle without befriending it: say how (owner decision 2026-10-04).
     const nudge =
       b.kind === 'wild' && result?.winner === b.mySide && result.reason !== 'captured'
