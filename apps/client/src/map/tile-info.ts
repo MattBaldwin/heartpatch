@@ -1,13 +1,16 @@
 import {
   FEELINGS,
   JOB_RULES,
+  workSource,
   RESOURCES,
   TERRAINS,
   type GuardianDifficulty,
   type GuardianHint,
   type MapMember,
   type PublicTile,
+  type Resource,
 } from '@heartpatch/shared';
+import { itemIcon } from '../inventory/item-icons.js';
 
 // What the tile info panel says about a tile (copy follows docs/STYLE_GUIDE.md).
 // Pure, so every case is unit-tested. Home bases can never be claimed (design
@@ -76,20 +79,22 @@ export function describeTile(
 }
 
 /**
- * What a squishy gatherer picks on this land, from `JOB_RULES.terrainYields`
- * and the affinity icons (#238): the terrain's primary resource. Home land
- * gives a gatherer nothing without a spot, nor does land with no yield.
+ * What a squishy gatherer picks on this tile, from the shared gather rule
+ * (`workSource`, owner decision on #238): out on the land its terrain's main
+ * resource, whatever spot it has; in the home ring, its spot. The icon is the
+ * gather match's (`JOB_RULES.affinities`), else the item's own.
  */
 export function gathererLine(
-  tile: Pick<PublicTile, 'terrain' | 'homeSlot'>,
+  tile: Pick<PublicTile, 'terrain' | 'homeSlot' | 'nodeResource'>,
+  resources: readonly Resource[] = RESOURCES,
   rules: Pick<typeof JOB_RULES, 'terrainYields' | 'affinities'> = JOB_RULES,
 ): string | null {
-  if (tile.homeSlot !== null) return null;
-  const yieldHere = rules.terrainYields.find((y) => y.terrain === tile.terrain);
-  if (!yieldHere) return null;
-  const name = RESOURCES.find((r) => r.id === yieldHere.resource)?.name ?? yieldHere.resource;
-  const icon = rules.affinities.find((a) => a.resource === yieldHere.resource)?.icon;
-  return `Squishies gather ${icon ? `${icon} ` : ''}${name} here.`;
+  const source = workSource(tile, resources, rules);
+  if (!source) return null;
+  const name = resources.find((r) => r.id === source.resource)?.name ?? source.resource;
+  const icon =
+    rules.affinities.find((a) => a.resource === source.resource)?.icon ?? itemIcon(source.resource);
+  return `Squishies gather ${icon} ${name} here.`;
 }
 
 const DIFFICULTY_WORDS: Readonly<Record<GuardianDifficulty, string>> = {

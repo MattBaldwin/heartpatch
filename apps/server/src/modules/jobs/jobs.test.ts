@@ -402,6 +402,41 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       );
     });
 
+    it('works the land’s main resource out on the map, whatever its spot; home spots as ever (#238)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      // Out on the land, spots are the Keeper's: a forest's Greens spot, a mountain's Glimmer.
+      const forest = await farLand(server, kid, mapId, 'forest');
+      const mountain = await farLand(server, kid, mapId, 'mountains', [forest]);
+      await run(
+        `update tiles set node_resource = 'greens' where id = '${await tileIdAt(mapId, forest)}'`,
+      );
+      await run(
+        `update tiles set node_resource = 'glimmer' where id = '${await tileIdAt(mapId, mountain)}'`,
+      );
+      const home = await homeNode(server, kid, mapId, 'stone');
+      const [a, b, c] = [
+        await squishy(mapId, kid),
+        await squishy(mapId, kid),
+        await squishy(mapId, kid),
+      ];
+      const work = async (id: string, at: { q: number; r: number }) => {
+        const res = await setJob(server, kid, mapId, id, { job: 'gatherer', q: at.q, r: at.r });
+        expect(res.statusCode, res.body).toBe(200);
+        return jobOf(JobsViewSchema.parse(res.json()), id).work;
+      };
+      expect(await work(a, forest)).toMatchObject({ resource: 'timber', from: 'land' });
+      expect(await work(b, mountain)).toMatchObject({ resource: 'ice', from: 'land' });
+      // In the home ring, a spot is still what a gatherer works.
+      expect(await work(c, home)).toMatchObject({ resource: 'stone', from: 'node' });
+      // The job board's spots say the same.
+      const spots = (await jobs(server, kid, mapId)).spots;
+      const at = (t: { q: number; r: number }) => spots.find((s) => s.q === t.q && s.r === t.r);
+      expect(at(forest)).toMatchObject({ resource: 'timber', from: 'land' });
+      expect(at(mountain)).toMatchObject({ resource: 'ice', from: 'land' });
+    });
+
     it('farms territory by terrain, one gatherer per tile, only on my land', async () => {
       const server = await start();
       const [kid, sib] = [await player(), await player()];

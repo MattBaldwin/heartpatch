@@ -124,8 +124,8 @@ export interface NodelessTileRow {
   /** A building stands in its middle (a fire on captured land): no node fits yet. */
   middleTaken: boolean;
   /**
-   * A squishy gathers here (a job on bare land): a node would change what
-   * its work pays, finished cycles included, so it waits until the job ends.
+   * A squishy gathers here: its node waits until the job ends, so a new spot
+   * can never change what that work pays (`seedExtraNodes`).
    */
   worked: boolean;
 }

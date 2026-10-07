@@ -1,7 +1,7 @@
-import { JOB_RULES, type PublicTile } from '@heartpatch/shared';
+import { JOB_RULES, RESOURCES, workSource, type PublicTile } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { MapState } from './map-state.js';
-import { describeTile, gathererLine, guardianLine, type TileInfo } from './tile-info.js';
+import { describeTile, guardianLine, type TileInfo } from './tile-info.js';
 import { testView, userId } from './test-view.js';
 
 const state = new MapState(testView(2));
@@ -83,8 +83,9 @@ describe('describeTile', () => {
     expect(describeTile(tile({}), lookup, null).resource).toBeNull();
   });
 
-  it('says what a squishy gatherer picks on the land, from the job rules (#238)', () => {
-    // With or without a Keeper spot: a forest's Greens spot doesn't hide its Timber.
+  it('says what a squishy gatherer picks, from the shared gather rule (#238)', () => {
+    // Out on the land, the land's main resource, whatever spot it has: a
+    // forest's Greens spot is the Keeper's, and its Timber the squishies'.
     const forest = describeTile(tile({ terrain: 'forest', nodeResource: 'greens' }), lookup, null);
     expect(forest.resource).toBe('Find Greens here.');
     expect(forest.gatherer).toBe('Squishies gather 🌲 Timber here.');
@@ -94,19 +95,24 @@ describe('describeTile', () => {
     expect(
       describeTile(tile({ terrain: 'lake', nodeResource: 'water' }), lookup, null).gatherer,
     ).toBe('Squishies gather 💧 Water here.');
-    expect(describeTile(tile({ terrain: 'mountains' }), lookup, null).gatherer).toBe(
-      'Squishies gather 🧊 Ice here.',
-    );
-    // Home land gives a gatherer nothing without a spot; Juniper's Gap has no yield.
+    expect(
+      describeTile(tile({ terrain: 'mountains', nodeResource: 'glimmer' }), lookup, null).gatherer,
+    ).toBe('Squishies gather 🧊 Ice here.');
+    // In the home ring, a spot is what squishies work; bare home land gives nothing.
+    expect(
+      describeTile(tile({ terrain: 'forest', homeSlot: 0, nodeResource: 'stone' }), lookup, null)
+        .gatherer,
+    ).toBe('Squishies gather 🪨 Stone here.');
     expect(
       describeTile(tile({ terrain: 'forest', homeSlot: 0 }), lookup, null).gatherer,
     ).toBeNull();
     expect(describeTile(tile({ terrain: 'junipers-gap' }), lookup, null).gatherer).toBeNull();
-    // Every yield in the rules reads from data, icon included.
-    for (const y of JOB_RULES.terrainYields) {
-      const icon = JOB_RULES.affinities.find((a) => a.resource === y.resource)?.icon;
-      expect(icon, y.resource).toBeDefined();
-      expect(gathererLine({ terrain: y.terrain, homeSlot: null })).toContain(icon!);
+    // The panel and the gather rule can't drift: every tile of a real map agrees.
+    for (const t of state.view.tiles) {
+      const source = workSource(t, RESOURCES, JOB_RULES);
+      const line = describeTile(t, lookup, null).gatherer;
+      if (source === null) expect(line).toBeNull();
+      else expect(line).toContain(RESOURCES.find((r) => r.id === source.resource)?.name ?? '?');
     }
   });
 

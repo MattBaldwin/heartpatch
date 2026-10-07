@@ -8,9 +8,11 @@ import { createMapsRepo } from './repo.js';
  * time it's read, instead of a backfill job (CLAUDE.md rule 4). A new map
  * gets the same nodes when it's generated: both run shared `extraNodes` on
  * the map seed, rolled per tile. A tile with a building in its middle (a fire
- * on captured land) waits until the middle is free, since a node takes it,
- * and so does a tile a squishy gathers on: a node would change what its work
- * pays, cycles already finished included. Starting a job locks the tile the
+ * on captured land) waits until the middle is free, since a node takes it.
+ * So does a tile a squishy gathers on. Out on the land a gatherer works the
+ * terrain's main resource whatever spot it has (`workSource`, owner decision
+ * on #238), so a new spot doesn't change its pay today; the wait keeps it
+ * that way if the gather rule ever changes. Starting a job locks the tile the
  * same way (jobs `lockTiles`), so the check under the lock below holds.
  *
  * A future "cleared" mark (#242, clearing land to repurpose it) is one more
