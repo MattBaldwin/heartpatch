@@ -150,6 +150,12 @@ test('the map’s controls fit short and tall screens', async ({ browser }) => {
       }).toPass({ timeout: 30_000 });
       const panelBox = (await boxes(page, '[data-testid="tile-panel"]'))[0]!;
       expect(inside(panelBox, screen), show(panelBox)).toBe(true);
+      // Its own controls fit it without scrolling (#138: "Go home" stuck out
+      // of the bottom on a phone on its side).
+      const panelControls = await boxes(page, '[data-testid="tile-panel"] button');
+      expect(panelControls.length).toBeGreaterThan(0);
+      const cut = panelControls.filter((c) => !inside(c, panelBox)).map(show);
+      expect(cut, `cut off by the tile panel ${show(panelBox)}`).toEqual([]);
       const under = (await boxes(page, HUD)).filter((c) => overlap(c, panelBox)).map(show);
       expect(under, `under the tile panel ${show(panelBox)}`).toEqual([]);
       await panel.getByRole('button', { name: 'Close' }).tap();

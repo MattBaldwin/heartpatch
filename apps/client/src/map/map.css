@@ -73,6 +73,16 @@
   overscroll-behavior: contain;
 }
 
+/* Wide enough that the panel (470px at most, centred) clears both handles
+   (96px each, ui/trays) beside it: it only has to stay under the corner
+   buttons (56px from the top), so a phone on its side shows "Go home"
+   without scrolling (#138). */
+@media (min-width: 662px) {
+  .tile-panel {
+    max-height: calc(100dvh - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
 .tile-panel-home {
   background: #fff6e6;
 }
