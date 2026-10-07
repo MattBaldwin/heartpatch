@@ -159,9 +159,14 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   ).toBe(0);
   await page.waitForTimeout(1500); // a fling would have glided by now
   const after = await restingCamera(page);
-  expect(after.x).toBeCloseTo(before.x, 2);
-  expect(after.y).toBeCloseTo(before.y, 2);
-  expect(after.z).toBeCloseTo(before.z, 2);
+  // The director stops drawing a beat before its ease is exactly done (within
+  // 0.002 of the focus, and with the push-in's target still decaying), so the
+  // next frame drawn for any reason can settle it by a few hundredths of a
+  // unit, an invisible amount. A drag reaching the map camera would pan it by
+  // whole units: within 0.05 means the camera didn't move.
+  expect(after.x).toBeCloseTo(before.x, 1);
+  expect(after.y).toBeCloseTo(before.y, 1);
+  expect(after.z).toBeCloseTo(before.z, 1);
 
   // One mouse click (a laptop) on Swap, if someone is on the bench and we can still act:
   // it asks who comes out (#214), then a click on the name swaps.
