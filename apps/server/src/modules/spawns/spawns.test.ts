@@ -302,7 +302,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect((await seenOf(mapId, kid))[0]!.firstSeenAt).toEqual(new Date('2026-10-02T18:00:00Z'));
     });
 
-    it('matches wild levels to the Partner, −2 to +1, and keeps the species', async () => {
+    it('matches wild levels to the Partner, within partnerOffset, and keeps the species', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await patchWithSquishy(server, kid);
