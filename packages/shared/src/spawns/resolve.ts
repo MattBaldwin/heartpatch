@@ -1,5 +1,6 @@
 import { activeSeasons } from '../data/season-windows.js';
 import { Rng, type Seed } from '../rng/index.js';
+import type { Rarity } from '../schemas/data/common.js';
 import type { Season } from '../schemas/data/seasons.js';
 import type { SpawnRules, TimeOfDay } from '../schemas/data/spawn-rules.js';
 import type { SpawnTable } from '../schemas/data/spawn-tables.js';
@@ -80,23 +81,31 @@ export function resolveWildSpawn(input: SpawnInput, data: SpawnData): WildSpawn 
   const { species } = rng.weighted(entries);
   return {
     speciesId: species,
-    level: wildLevel(rng, input.partnerLevel ?? null, data.rules, data.maxLevel),
+    level: wildLevel(
+      rng,
+      input.partnerLevel ?? null,
+      data.species.get(species)?.rarity,
+      data.rules,
+      data.maxLevel,
+    ),
   };
 }
 
 /**
- * The level roll: the Partner's level plus `partnerOffset` when both exist,
- * else `levels`. Always one roll, so which species a tile has never depends
- * on who's looking.
+ * The level roll: the Partner's level plus `partnerOffset`, less the
+ * species' `rarityLevelDiscount`, when both exist; else `levels`. Always one
+ * roll, so which species a tile has never depends on who's looking.
  */
 function wildLevel(
   rng: Rng,
   partnerLevel: number | null,
+  rarity: Rarity | undefined,
   rules: SpawnRules,
   maxLevel: number,
 ): number {
   const offset = rules.partnerOffset;
   if (!offset || partnerLevel === null) return rng.int(rules.levels.min, rules.levels.max);
-  const level = partnerLevel + rng.int(offset.min, offset.max);
+  const discount = rarity === undefined ? 0 : (rules.rarityLevelDiscount?.[rarity] ?? 0);
+  const level = partnerLevel + rng.int(offset.min, offset.max) - discount;
   return Math.max(rules.levels.min, Math.min(maxLevel, level));
 }

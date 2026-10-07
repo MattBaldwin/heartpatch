@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FIXTURE_SPECIES } from '../../tests/fixtures/sample-content.js';
+import { FIXTURE_SECRET_SPECIES, FIXTURE_SPECIES } from '../../tests/fixtures/sample-content.js';
 import { GROWTH_RULES } from '../data/care.js';
 import { SEASONS } from '../data/seasons.js';
 import { SPAWN_RULES } from '../data/server/spawn-rules.js';
@@ -89,7 +89,7 @@ describe('resolveWildSpawn', () => {
       );
     const tiles = Array.from({ length: 80 }, (_, q) => q);
 
-    it('rolls the Partner’s level −2 to +1, every one of them', () => {
+    it('rolls every level in the offset range (this fixture: −2 to +1)', () => {
       const levels = new Set(tiles.map((q) => at(q, 30)!.level));
       expect([...levels].sort((a, b) => a - b)).toEqual([28, 29, 30, 31]);
     });
@@ -108,6 +108,63 @@ describe('resolveWildSpawn', () => {
         expect(at(q, top)!.level).toBeLessThanOrEqual(top);
       }
       expect(new Set(tiles.map((q) => at(q, top)!.level))).toContain(top);
+    });
+
+    it('takes the rarity discount off Partner-matched levels, not plain ones', () => {
+      // fixture-moonpuff is secret, fixture-splashmallow uncommon; the others are common.
+      const SECRET_TABLES: SpawnTable[] = [
+        {
+          id: 'forest-secret',
+          terrains: ['forest'],
+          entries: [{ species: 'fixture-moonpuff', weight: 1 }],
+        },
+      ];
+      const UNCOMMON_TABLES: SpawnTable[] = [
+        {
+          id: 'forest-uncommon',
+          terrains: ['forest'],
+          entries: [{ species: 'fixture-splashmallow', weight: 1 }],
+        },
+      ];
+      const NO_DISCOUNT: SpawnRules = { ...OFFSET_RULES, rarityLevelDiscount: undefined };
+      const DISCOUNT_RULES: SpawnRules = {
+        ...OFFSET_RULES,
+        rarityLevelDiscount: { uncommon: 1, secret: 2 },
+      };
+      const roll = (q: number, partnerLevel: number | null, rules: SpawnRules, tables = TABLES) =>
+        resolveWildSpawn(
+          {
+            seed: deriveSeed('map-seed', 'spawn', q, 0, window('2026-10-02').id),
+            terrain: 'forest',
+            window: window('2026-10-02'),
+            partnerLevel,
+          },
+          data({
+            rules,
+            tables,
+            species: new Map([...FIXTURE_SPECIES, ...FIXTURE_SECRET_SPECIES].map((s) => [s.id, s])),
+          }),
+        )!;
+      for (const q of tiles) {
+        // Two levels lower than the same roll without the discount.
+        expect(roll(q, 30, DISCOUNT_RULES, SECRET_TABLES).level).toBe(
+          roll(q, 30, NO_DISCOUNT, SECRET_TABLES).level - 2,
+        );
+        // Floored at levels.min, and exactly that when the discount goes under it.
+        expect(roll(q, 3, DISCOUNT_RULES, SECRET_TABLES).level).toBe(
+          Math.max(RULES.levels.min, roll(q, 3, NO_DISCOUNT, SECRET_TABLES).level - 2),
+        );
+        // A one-level discount takes off exactly one.
+        expect(roll(q, 30, DISCOUNT_RULES, UNCOMMON_TABLES).level).toBe(
+          roll(q, 30, NO_DISCOUNT, UNCOMMON_TABLES).level - 1,
+        );
+        // A rarity it doesn't name takes off nothing.
+        expect(roll(q, 30, DISCOUNT_RULES)).toEqual(roll(q, 30, NO_DISCOUNT));
+        // No Partner: the plain levels, untouched.
+        expect(roll(q, null, DISCOUNT_RULES, SECRET_TABLES)).toEqual(
+          roll(q, null, NO_DISCOUNT, SECRET_TABLES),
+        );
+      }
     });
 
     it('rolls the plain levels without a Partner, or without partnerOffset', () => {

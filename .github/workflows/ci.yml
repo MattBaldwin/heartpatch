@@ -37,6 +37,9 @@ jobs:
       DATABASE_URL: postgres://heartpatch:heartpatch@localhost:5432/heartpatch
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: the app's build number is the commit count (#198).
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -106,6 +109,9 @@ jobs:
       DATABASE_URL: postgres://heartpatch:heartpatch@localhost:5432/heartpatch
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: the app's build number is the commit count (#198).
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 

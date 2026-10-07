@@ -225,7 +225,23 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const server = await start();
       const kid = await player();
       const mapId = await patchWithSquishy(server, kid);
-      const { battles } = services();
+      const { battles, spawns } = services();
+
+      // What's on each tile in reach, asked straight from the spawns port.
+      const tilesInReach = (await spawns.wildHints(kid, mapId)).tiles;
+      const peek = () =>
+        Promise.all(
+          tilesInReach.map((tile) =>
+            spawns.findWildEncounter({
+              mapId,
+              userId: kid.id,
+              mapKind: 'multiplayer',
+              now: clock,
+              tile,
+            }),
+          ),
+        );
+      const before = await peek();
 
       const first = await battles.startWild(kid, mapId);
       expect(first.created).toBe(true);
@@ -248,14 +264,29 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
         }),
       ]);
 
-      // Run away and come back later in the window: the same squishy, same level.
+      // Run away and come back later in the window: no reroll. It wandered off
+      // (#208), so that tile has nobody for this player until the next window,
+      // and the next nearest one is fixed for the window too.
+      const firstRow = (await db.query.battles.findFirst({
+        where: (t, { eq }) => eq(t.id, first.battle.id),
+      }))!;
+      const tile = { q: firstRow.spawnQ!, r: firstRow.spawnR! };
       await battles.act(kid, first.battle.id, { action: { type: 'forfeit' }, turn: 0 });
       clock.setTime(clock.getTime() + 30 * 60 * 1000);
+      await expect(battles.startWild(kid, mapId, { tile })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
+      // Every other tile still has the very same squishy at the same level.
+      const later = await peek();
+      tilesInReach.forEach((t, i) => {
+        if (t.q === tile.q && t.r === tile.r) expect(later[i]).toBeNull();
+        else expect(later[i]).toEqual(before[i]);
+      });
       const again = await battles.startWild(kid, mapId);
       expect(again.battle.id).not.toBe(first.battle.id);
       expect(again.battle.view.sides.b.squishies[0]).toMatchObject({
-        speciesId: wild.speciesId,
-        level: wild.level,
+        speciesId: before[1]!.squishies[0]!.speciesId,
+        level: before[1]!.squishies[0]!.level,
       });
       // Battle seeds still come fresh from newSeed(), never from the spawn.
       expect((await battles.get(kid, first.battle.id)).seed).not.toBe(
@@ -266,7 +297,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect((await seenOf(mapId, kid))[0]!.firstSeenAt).toEqual(new Date('2026-10-02T18:00:00Z'));
     });
 
-    it('matches wild levels to the Partner, −2 to +1, and keeps the species', async () => {
+    it('matches wild levels to the Partner, within partnerOffset, and keeps the species', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await patchWithSquishy(server, kid);
@@ -328,7 +359,8 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const { battles } = services();
       const { battle } = await battles.startWild(kid, mapId);
       const wild = battle.view.sides.b.squishies[0]!;
-      expect(wild.level).toBeGreaterThanOrEqual(58);
+      const lowest = 60 + SPAWN_RULES.partnerOffset!.min;
+      expect(wild.level).toBeGreaterThanOrEqual(lowest);
       await capture(battles, kid, battle);
       const firstEvolution = Math.min(
         ...SERVER_GAME_DATA.secretEvolutions
@@ -338,7 +370,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
           (e) => e.level,
         ),
       );
-      expect(firstEvolution).toBeLessThan(58);
+      expect(firstEvolution).toBeLessThan(lowest);
       const friend = (await squishiesOf(mapId, kid)).find((s) => s.speciesId === SECRET_WILD);
       expect(friend).toMatchObject({
         level: firstEvolution - GROWTH_RULES.befriendBelowEvolution!,
@@ -515,8 +547,11 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect(await spawnTileOf(next.battle.id)).not.toEqual(tile);
       await battles.act(kid, next.battle.id, { action: { type: 'forfeit' }, turn: 0 });
 
-      // Asking again changes nothing (it's read from the finished battle).
-      expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsAfter);
+      // Asking again changes nothing (it's read from the finished battles).
+      const hintsLater = (await spawns.wildHints(kid, mapId)).tiles;
+      expect(hintsLater).toHaveLength(hintsBefore.length - 2);
+      expect(hintsLater).not.toContainEqual(await spawnTileOf(next.battle.id));
+      expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsLater);
       // Another member still finds it there: same squishy, same level. (Their
       // reach is their own land, so hand them the tile for the test.)
       await db.execute(`
@@ -557,6 +592,10 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect(done.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
       // Beaten, not befriended: still there, so the kid can try again.
       expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsBefore);
+      // A run home leaves it there too (#208 rotates only off the Glade).
+      const ran = await battles.startWild(kid, mapId, { tile });
+      await battles.act(kid, ran.battle.id, { action: { type: 'forfeit' }, turn: 0 });
+      expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsBefore);
       const again = await battles.startWild(kid, mapId, { tile });
       expect(await spawnTileOf(again.battle.id)).toEqual(tile);
 
@@ -573,7 +612,7 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect(new Set(near.map((n) => n.speciesId)).size).toBe(3);
     });
 
-    it('a loss or a run home leaves it there', async () => {
+    it('a loss or a run home: it wanders off too, so the next find is a different one (#208)', async () => {
       const server = await start();
       const kid = await player();
       const res = await call(server, 'POST', '/maps', kid, {
@@ -590,20 +629,54 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
         data: { ...EVERYWHERE, rules: { ...EVERYWHERE.rules, levels: { min: 60, max: 60 } } },
       });
       const hintsBefore = (await spawns.wildHints(kid, mapId)).tiles;
+      expect(hintsBefore.length).toBeGreaterThan(2);
 
-      // Run home.
+      // Lose: the nearest one wanders off, and "Find a squishy" picks another.
       const first = await battles.startWild(kid, mapId);
-      const tile = await spawnTileOf(first.battle.id);
-      await battles.act(kid, first.battle.id, { action: { type: 'forfeit' }, turn: 0 });
-      expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsBefore);
+      const lostTile = await spawnTileOf(first.battle.id);
+      expect(lostTile).toEqual(hintsBefore[0]);
+      const lost = await fight(battles, kid, first.battle);
+      expect(lost.view.phase).toMatchObject({
+        type: 'over',
+        result: { winner: 'b', reason: 'tuckered-out' },
+      });
+      const afterLoss = (await spawns.wildHints(kid, mapId)).tiles;
+      expect(afterLoss).not.toContainEqual(lostTile);
+      expect(afterLoss).toHaveLength(hintsBefore.length - 1);
+      await expect(battles.startWild(kid, mapId, { tile: lostTile })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+      });
 
-      // Lose.
-      const second = await battles.startWild(kid, mapId, { tile });
-      const lost = await fight(battles, kid, second.battle);
-      expect(lost.view.phase).toMatchObject({ type: 'over', result: { winner: 'b' } });
-      expect((await spawns.wildHints(kid, mapId)).tiles).toEqual(hintsBefore);
-      const third = await battles.startWild(kid, mapId, { tile });
-      expect(third.created).toBe(true);
+      // Run home: counts the same, so scooting can't keep one around.
+      const second = await battles.startWild(kid, mapId);
+      const ranTile = await spawnTileOf(second.battle.id);
+      expect(ranTile).not.toEqual(lostTile);
+      expect(ranTile).toEqual(afterLoss[0]);
+      const ran = await battles.act(kid, second.battle.id, {
+        action: { type: 'forfeit' },
+        turn: 0,
+      });
+      expect(ran.view.phase).toMatchObject({
+        type: 'over',
+        result: { winner: 'b', reason: 'forfeit' },
+      });
+      const afterRun = (await spawns.wildHints(kid, mapId)).tiles;
+      expect(afterRun).not.toContainEqual(ranTile);
+      expect(afterRun).toHaveLength(hintsBefore.length - 2);
+
+      // The next find is a third one.
+      const third = await battles.startWild(kid, mapId);
+      const thirdTile = await spawnTileOf(third.battle.id);
+      expect([lostTile, ranTile]).not.toContainEqual(thirdTile);
+      await battles.act(kid, third.battle.id, { action: { type: 'forfeit' }, turn: 0 });
+
+      // Back in the next window, nearest first again.
+      clock.setTime(clock.getTime() + SPAWN_RULES.windowHours * HOUR_MS);
+      const nextWindow = (await spawns.wildHints(kid, mapId)).tiles;
+      expect(nextWindow).toContainEqual(lostTile);
+      expect(nextWindow).toContainEqual(ranTile);
+      const again = await battles.startWild(kid, mapId);
+      expect(await spawnTileOf(again.battle.id)).toEqual(lostTile);
     });
   });
 

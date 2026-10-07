@@ -31,10 +31,11 @@ import { createSpawnsRepo, type SpawnTileRow } from './repo.js';
  * tile's wild squishy is fixed for each spawn window: it's rolled from
  * `deriveSeed(mapSeed, 'spawn', q, r, windowId)`, a seed that is never sent
  * anywhere, against the secret spawn tables. Nothing about it is stored until
- * a player battles it. Once a player befriends it, or beats it without
+ * a player battles it. Once a player befriends it, beats it without
  * befriending it (it's tuckered out and toddles away: owner decision
- * 2026-10-03), it's gone for that player until the next window. Other players
- * can still find theirs (DECISIONS #14).
+ * 2026-10-03), or loses to it or runs home (it wanders off, so the nearest
+ * pick moves on: owner decision 2026-10-06, #208), it's gone for that player
+ * until the next window. Other players can still find theirs (DECISIONS #14).
  *
  * The Tutorial Glade (#24) is different in two ways: its wild squishies are
  * the three starters, so the friend a player befriends there (their Partner)
@@ -116,7 +117,7 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
 
   /**
    * What's on the player's tiles in reach right now, nearest first, leaving
-   * out the ones they already befriended or beat this window. With `only`, just that
+   * out the ones they already befriended, beat or lost to this window. With `only`, just that
    * tile (which must be in reach).
    */
   const spawnsFor = async (
