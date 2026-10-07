@@ -11,11 +11,19 @@ export const WILD_TEXT = {
   none: 'No wild squishies nearby right now.',
   /** Under "Find a squishy" (owner decision 2026-10-07). */
   nearby: (count: number) => `${String(count)} nearby! Or tap a rustle to pick.`,
+  /** Where nothing is marked (the Tutorial Glade): no rustles to point at. */
+  nearbyOne: 'A wild squishy is nearby!',
+  nearbyMany: (count: number) => `${String(count)} wild squishies nearby!`,
 } as const;
 
-/** The note under "Find a squishy": how many tufts are on the map. */
-export function nearbyNote(count: number): string {
-  return count > 0 ? WILD_TEXT.nearby(count) : WILD_TEXT.none;
+/**
+ * The note under "Find a squishy": how many are around, pointing at the
+ * tufts only when the map shows them (`marked`; never on the Glade).
+ */
+export function nearbyNote(count: number, marked = true): string {
+  if (count === 0) return WILD_TEXT.none;
+  if (marked) return WILD_TEXT.nearby(count);
+  return count === 1 ? WILD_TEXT.nearbyOne : WILD_TEXT.nearbyMany(count);
 }
 
 /**

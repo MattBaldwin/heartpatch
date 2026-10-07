@@ -321,9 +321,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       .wildHints(id)
       .then((tiles) => {
         if (mapId !== id || user !== who) return;
-        options.onWildHints?.(id, tilesToMark(tiles, options.isGlade?.(id) ?? false));
+        const glade = options.isGlade?.(id) ?? false;
+        options.onWildHints?.(id, tilesToMark(tiles, glade));
         if (enter.disabled || note.textContent) return;
-        note.textContent = nearbyNote(tiles.length);
+        note.textContent = nearbyNote(tiles.length, !glade);
       })
       .catch(() => {
         // Only a hint: the button still works without it.

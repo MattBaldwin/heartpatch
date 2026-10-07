@@ -9,6 +9,13 @@ describe('nearbyNote', () => {
 
   it('says so kindly when nobody is around', () => {
     expect(nearbyNote(0)).toBe('No wild squishies nearby right now.');
+    expect(nearbyNote(0, false)).toBe('No wild squishies nearby right now.');
+  });
+
+  it('never points at rustles the map doesn’t show (the Tutorial Glade)', () => {
+    expect(nearbyNote(1, false)).toBe('A wild squishy is nearby!');
+    expect(nearbyNote(6, false)).toBe('6 wild squishies nearby!');
+    for (const n of [1, 2, 6]) expect(nearbyNote(n, false)).not.toMatch(/rustle/);
   });
 
   it('keeps every line short and kid-readable (style guide §2)', () => {
