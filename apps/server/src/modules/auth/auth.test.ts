@@ -167,19 +167,22 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
       expect(errorOf(res).code).toBe('FORBIDDEN');
     });
 
-    it('requires the family signup code', async () => {
+    it('requires a working code', async () => {
       const server = await start();
       const res = await post(server, '/auth/signup', signupBody({ signupCode: 'guess-guess' }));
       expect(res.statusCode).toBe(403);
-      expect(errorOf(res).message).toMatch(/family code/);
+      expect(errorOf(res)).toEqual({
+        code: 'FORBIDDEN',
+        message: "Hmm, that code doesn't work. Check it with a grown-up!",
+      });
     });
 
-    it('is closed when no signup code is configured', async () => {
+    it('refuses every typed code when HP_SIGNUP_CODE is unset (family codes still work)', async () => {
       const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
       app = await buildApp({ config, db });
       const res = await post(app, '/auth/signup', signupBody());
       expect(res.statusCode).toBe(403);
-      expect(errorOf(res).message).toMatch(/closed/);
+      expect(errorOf(res).message).toMatch(/doesn't work/);
     });
 
     it('rejects a taken username, ignoring case', async () => {
@@ -382,7 +385,7 @@ describe.skipIf(!url)('auth endpoints (needs DATABASE_URL)', () => {
     it('sets a temporary password, revokes sessions and issues a new code', async () => {
       const server = await start();
       const { body, user, token, recoveryCode } = await signup(server);
-      const service = createAuthService({ repo: createAuthRepo(db), signupCode: SIGNUP_CODE });
+      const service = createAuthService({ repo: createAuthRepo(db) });
 
       const result = await service.operatorReset(body.username.toUpperCase());
       expect(result?.user).toEqual(user);

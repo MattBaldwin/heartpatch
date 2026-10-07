@@ -13,7 +13,7 @@ test('signs up, logs out and logs back in', async ({ page }, testInfo) => {
   await expect(overlay.getByRole('heading', { name: 'Welcome to Heartpatch!' })).toBeVisible();
 
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  await overlay.getByLabel('Family code').fill(signupCode);
+  await overlay.getByLabel('Family or invite code').fill(signupCode);
   await overlay.getByLabel('Pick a name').fill(username);
   await overlay.getByLabel('Pick a password').fill(password);
   await overlay.getByLabel('Year you were born').selectOption('2014');
@@ -49,7 +49,7 @@ test('explains form problems in kid-friendly words', async ({ page }) => {
   await page.goto('/');
   const overlay = page.getByTestId('auth-overlay');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  await overlay.getByLabel('Family code').fill('anything');
+  await overlay.getByLabel('Family or invite code').fill('anything');
   await overlay.getByLabel('Pick a name').fill('ab');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
   await expect(overlay.getByTestId('auth-error')).toHaveText(/Names need at least 3/);

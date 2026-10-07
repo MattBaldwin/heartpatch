@@ -35,7 +35,10 @@ export interface PasswordReset {
 }
 
 export interface AuthRepo {
-  /** Creates the user, their recovery code and a session; null if the username is taken. */
+  /**
+   * Creates the user, spends their sign-up code, and stores their recovery
+   * code and a session, in one transaction; null if the username is taken.
+   */
   createAccount: (input: {
     username: string;
     passwordHash: string;
@@ -43,6 +46,12 @@ export interface AuthRepo {
     timeZone: string;
     recoveryCodeHash: string;
     session: NewSession;
+    /**
+     * Spends the sign-up code in the same transaction, right after the user
+     * row exists (rule 7). Throwing rolls the whole account back. Omitted
+     * only where nothing was typed (tests).
+     */
+    redeem?: (tx: Executor, userId: string) => Promise<unknown>;
   }) => Promise<AccountUser | null>;
   /** Case-insensitive lookup. */
   findUserByUsername: (username: string) => Promise<UserWithPassword | null>;
@@ -77,6 +86,7 @@ export function createAuthRepo(db: Executor): AuthRepo {
             })
             .returning({ id: users.id, username: users.username });
           if (!user) throw new Error('createAccount: insert returned no row');
+          await input.redeem?.(tx, user.id);
           await tx
             .insert(recoveryCodes)
             .values({ userId: user.id, codeHash: input.recoveryCodeHash });

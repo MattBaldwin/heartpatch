@@ -61,6 +61,8 @@ Only the spine that other tables reference is designed here (tech spec §4, `doc
 | `tutorial_completed_at` | timestamptz, null | Set on first completion and kept when replaying (unlocks skip, design doc §26) |
 | `partner_species_id` | text, null | The Partner's species: the starter befriended in the latest tutorial run (migration 0017, #24). The starter pick pre-selects it |
 | `cinematic_seen_at` | timestamptz, null | First time the opening cinematic was watched or skipped (migration 0020, #46). Set = it never auto-plays again and can be skipped; replays never move it |
+| `signup_code_id` | uuid → signup_codes, null | The family code they signed up with (migration 0026, #195) |
+| `invited_by` | uuid → users, null | Who brought them in: that code's maker, or the owner whose patch invite they signed up with. Null for operator codes, `HP_SIGNUP_CODE` and older accounts |
 | `created_at` | timestamptz | |
 
 ### `sessions`
@@ -82,6 +84,21 @@ Only the spine that other tables reference is designed here (tech spec §4, `doc
 | `used_at` | timestamptz, null | Set when the code is redeemed or replaced by a reset. Used rows stay for audit |
 
 One active code per user: a partial unique index on `user_id` where `used_at is null` (tech spec §9).
+
+### `signup_codes`
+Family signup codes (migration 0026, #195).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `code_hash` | text, unique | SHA-256 of the normalized code (sign-up looks it up by hash); the code is shown once and never stored |
+| `label` | text | Who it's for ("Smith family"); filtered like a name |
+| `created_by_user_id` | uuid → users, null | The patch owner who made it; null for the operator's (`ops/signup-code.ts`). Indexed (the 3-live cap) |
+| `max_uses` | integer | 8 by default |
+| `use_count` | integer, default 0 | Raised by one in each sign-up's transaction, only while live (a guarded `UPDATE`, so concurrent sign-ups never go over). Checked `0..max_uses` |
+| `created_at` | timestamptz | |
+| `expires_at` | timestamptz | 14 days by default |
+| `revoked_at` | timestamptz, null | Turned off by its maker. Accounts made with it stay |
 
 ### `maps`
 | Column | Type | Notes |

@@ -304,9 +304,10 @@ export function mountAuth(root: HTMLElement, options: AuthOverlayOptions = {}): 
         fields: [
           {
             name: 'signupCode',
-            label: 'Family code',
-            hint: 'A grown-up has this.',
-            input: textInput({ autocomplete: 'off' }),
+            label: 'Family or invite code',
+            // A patch invite signs you up and asks to join, in one go (#195).
+            hint: 'A grown-up has this. A patch invite code works too!',
+            input: textInput({ autocomplete: 'off', autocapitalize: 'characters' }),
           },
           {
             name: 'username',
