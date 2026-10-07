@@ -310,7 +310,7 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
           ),
           painted(at(box(0.05, 0.05, 0.05), 0, 0.2, 0), '#d39a5c'),
         ],
-        0.24,
+        0, // its stone base sits on the ground
       );
     case 'greens-patch': {
       // A leafy mound with grass tufts and a clover (#238). Three-sided
@@ -360,23 +360,23 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
           ),
         );
       }
-      return done(parts, 0.3);
+      return done(parts, 0); // the mound is its own footing
     }
     case 'ice-crystals': {
       // A cluster of icy blue spires (#238), cooler than Glimmer's pink crystal.
       const parts: Mesh[] = [];
       const shards = [
-        [0, 0, 0.24, 0, '#bfe6ff'],
-        [0.06, 0.03, 0.16, 0.3, '#d8f0ff'],
-        [-0.06, 0.02, 0.14, -0.35, '#a8dcff'],
+        [0, 0, 0.34, 0, '#bfe6ff'],
+        [0.08, 0.04, 0.24, 0.3, '#d8f0ff'],
+        [-0.08, 0.03, 0.2, -0.35, '#a8dcff'],
       ] as const;
       for (const [x, z, h, tilt, color] of shards) {
         parts.push(
-          painted(at(cylinder(h, 0.055, 0.065, 5), x, h / 2, z, 1, 1, 1, { z: tilt }), color),
+          painted(at(cylinder(h, 0.08, 0.09, 5), x, h / 2, z, 1, 1, 1, { z: tilt }), color),
         );
         parts.push(
           painted(
-            at(cylinder(0.06, 0, 0.055, 5), x - Math.sin(tilt) * h, h + 0.025, z, 1, 1, 1, {
+            at(cylinder(0.09, 0, 0.08, 5), x - Math.sin(tilt) * h, h + 0.04, z, 1, 1, 1, {
               z: tilt,
             }),
             color,

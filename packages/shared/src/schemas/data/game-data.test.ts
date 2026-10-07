@@ -232,6 +232,19 @@ describe('checkGameData', () => {
     ]);
   });
 
+  it('checks the extra nodes a terrain adds (#238): known and gatherable', () => {
+    const problems = problemsAfter((d) => {
+      d.terrains.find((t) => t.id === 'lake')!.extraNodes = [
+        { resource: 'pearls', chance: 50 },
+        { resource: 'heart-charm', chance: 50 },
+      ];
+    });
+    expect(problems).toEqual([
+      'terrains["lake"].extraNodes[0].resource: unknown resource "pearls"',
+      'terrains["lake"].extraNodes[1].resource: node resource "heart-charm" has no gather settings',
+    ]);
+  });
+
   it("keeps Juniper's Gap terrain out of the scattered land", () => {
     const problems = problemsAfter((d) => {
       d.terrains.find((t) => t.id === 'junipers-gap')!.weight = 5;

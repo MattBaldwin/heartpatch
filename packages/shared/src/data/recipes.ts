@@ -14,7 +14,8 @@ export const RECIPES: Recipe[] = [
   {
     id: 'freeze-water',
     name: 'Frozen Water',
-    description: 'Leave Water out in the cold until it turns into sparkly Ice.',
+    description:
+      'Leave Water out in the cold until it turns into sparkly Ice. A Frost squishy on your team makes it twice as fast!',
     inputs: { water: 3 }, // TUNE:
     output: { resource: 'ice', quantity: 1 },
     craftSeconds: 30 * 60, // TUNE:

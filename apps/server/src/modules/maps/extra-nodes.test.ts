@@ -165,7 +165,8 @@ describe.skipIf(!url)('new gatherables (#238, needs DATABASE_URL)', () => {
     );
     const counts = await Promise.all([seedExtraNodes(db, mapId), seedExtraNodes(db, mapId)]);
     const extras = [...made.values()].filter((n) => n === 'water' || n === 'ice' || n === 'greens');
-    expect(counts[0] + counts[1]).toBeLessThanOrEqual(extras.length);
+    // Each node added exactly once, between the two of them.
+    expect(counts[0] + counts[1]).toBe(extras.length);
     expect(await nodesOf(mapId)).toEqual(made);
   });
 
