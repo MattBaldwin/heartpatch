@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import {
   applyBattleAction,
@@ -1152,7 +1152,12 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .select({ q: tiles.q, r: tiles.r })
       .from(tiles)
       .where(
-        and(eq(tiles.mapId, map.id), eq(tiles.ownerUserId, kid.id), isNotNull(tiles.nodeResource)),
+        // Timber: a year-round node (the ring's seasonal ones only gather in season).
+        and(
+          eq(tiles.mapId, map.id),
+          eq(tiles.ownerUserId, kid.id),
+          eq(tiles.nodeResource, 'timber'),
+        ),
       )
       .orderBy(asc(tiles.q), asc(tiles.r))
       .limit(1);

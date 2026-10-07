@@ -10,7 +10,12 @@ export const RESOURCES: Resource[] = [
     name: 'Timber',
     description: 'Sturdy logs from the forest.',
     kind: 'gathered',
-    gather: { seconds: 15 * 60, quantity: 5 }, // TUNE:
+    // TUNE: around Thanksgiving, a few Magic Fallen Leaves come down with the logs.
+    gather: {
+      seconds: 15 * 60,
+      quantity: 5,
+      extras: [{ resource: 'magic-fallen-leaves', quantity: 1 }],
+    },
   },
   {
     id: 'stone',
@@ -66,9 +71,11 @@ export const RESOURCES: Resource[] = [
   {
     id: 'magic-fallen-leaves',
     name: 'Magic Fallen Leaves',
-    description: 'Crunchy leaves with a golden shimmer.',
+    description:
+      'Crunchy leaves with a golden shimmer. They pile up at home and tumble down with Timber.',
     kind: 'seasonal',
     season: 'thanksgiving',
+    gather: { seconds: 20 * 60, quantity: 3 }, // TUNE: a home leaf pile, like the farm plot
   },
   {
     id: 'turkey-feathers',

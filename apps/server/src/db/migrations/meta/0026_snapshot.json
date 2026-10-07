@@ -1,5 +1,5 @@
 {
-  "id": "7d42d02b-7ae2-49ad-a478-7e94431c4e08",
+  "id": "4b7be723-debb-439c-b95a-70be89768630",
   "prevId": "752ff733-cc04-49a0-aa4f-5a7521cf43f8",
   "version": "7",
   "dialect": "postgresql",
@@ -312,28 +312,6 @@
         }
       },
       "indexes": {
-        "buildings_one_fire_per_tile_key": {
-          "name": "buildings_one_fire_per_tile_key",
-          "columns": [
-            {
-              "expression": "tile_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "building_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"buildings\".\"kind\" = 'hearthfire'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "buildings_map_id_owner_user_id_idx": {
           "name": "buildings_map_id_owner_user_id_idx",
           "columns": [
@@ -3037,6 +3015,112 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.signup_codes": {
+      "name": "signup_codes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "code_hash": {
+          "name": "code_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by_user_id": {
+          "name": "created_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "max_uses": {
+          "name": "max_uses",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "use_count": {
+          "name": "use_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "signup_codes_created_by_user_id_idx": {
+          "name": "signup_codes_created_by_user_id_idx",
+          "columns": [
+            {
+              "expression": "created_by_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "signup_codes_created_by_user_id_users_id_fk": {
+          "name": "signup_codes_created_by_user_id_users_id_fk",
+          "tableFrom": "signup_codes",
+          "tableTo": "users",
+          "columnsFrom": ["created_by_user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "signup_codes_code_hash_key": {
+          "name": "signup_codes_code_hash_key",
+          "nullsNotDistinct": false,
+          "columns": ["code_hash"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "signup_codes_use_count_range": {
+          "name": "signup_codes_use_count_range",
+          "value": "\"signup_codes\".\"use_count\" between 0 and \"signup_codes\".\"max_uses\""
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.species_seen": {
       "name": "species_seen",
       "schema": "",
@@ -3647,12 +3731,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "lost_fire_refund": {
-          "name": "lost_fire_refund",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -3934,12 +4012,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "lost_fire_refund": {
-          "name": "lost_fire_refund",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -4154,6 +4226,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "signup_code_id": {
+          "name": "signup_code_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "invited_by": {
+          "name": "invited_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -4179,7 +4263,26 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "users_signup_code_id_signup_codes_id_fk": {
+          "name": "users_signup_code_id_signup_codes_id_fk",
+          "tableFrom": "users",
+          "tableTo": "signup_codes",
+          "columnsFrom": ["signup_code_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "users_invited_by_users_id_fk": {
+          "name": "users_invited_by_users_id_fk",
+          "tableFrom": "users",
+          "tableTo": "users",
+          "columnsFrom": ["invited_by"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

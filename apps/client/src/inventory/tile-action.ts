@@ -2,6 +2,7 @@ import {
   canGather,
   GAME_DATA,
   gatherYield,
+  inSeason,
   type Gather,
   type ItemCounts,
   type PublicTile,
@@ -37,6 +38,10 @@ export function tileAction(
 ): TileAction {
   const resource = tile.nodeResource ? RESOURCES.get(tile.nodeResource) : undefined;
   if (!resource?.gather) return { kind: 'none' };
+  // A seasonal home node isn't there out of season (owner decision 2026-10-06).
+  if (tile.homeSlot !== null && !inSeason(resource, new Set(state.seasons))) {
+    return { kind: 'none' };
+  }
   if (me === null || tile.ownerUserId !== me) {
     return tile.gathering ? { kind: 'busy', readyAt: tile.gathering.readyAt } : { kind: 'none' };
   }

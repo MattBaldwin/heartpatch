@@ -13,6 +13,7 @@ import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Scene } from '@babylonjs/core/scene';
 import {
+  GAME_DATA,
   hexKey,
   hexToWorld,
   worldToHex,
@@ -129,6 +130,8 @@ export interface MapSceneStats {
 export interface MapSceneOptions {
   /** Halloween is on for this map (shared `activeSeasons`, map-local date). */
   readonly halloween?: boolean;
+  /** Every season on for this map (map-local date): seasonal home nodes show only in theirs. */
+  readonly seasons?: readonly string[];
   /** The quality tier and reduced motion to start with (`setAmbient` follows changes). */
   readonly tier?: QualityTier;
   readonly reducedMotion?: boolean;
@@ -313,10 +316,11 @@ export class MapScene {
     this.buildIsland(view.tiles);
     this.animated = this.buildTiles(view.tiles);
     this.buildProps(view.tiles);
-    this.homeNodes = buildHomeNodes(scene, view.tiles);
+    this.homeNodes = buildHomeNodes(scene, view.tiles, new Set(options.seasons ?? []));
     this.buildGap();
     this.ambient = new MapAmbient(scene, view.tiles, this.clock, {
       halloween: this.halloween,
+      thanksgiving: options.seasons?.includes('thanksgiving') === true,
       islandRadius: mapRadius(view.tiles, HEX_SIZE) + ISLAND.margin,
     });
     // Start as the tier and motion setting say, so nothing shows for a frame
@@ -905,15 +909,35 @@ export const NODE_PROPS: Readonly<Record<string, PropKind>> = {
   stone: 'rock',
   emberwood: 'old-tree',
   treats: 'pumpkin',
-  pumpkins: 'pumpkin',
+  // Seasonal home nodes (owner decision 2026-10-06): a pumpkin patch with a
+  // carved one, so it reads apart from the farm plot, and Thanksgiving's leaf pile.
+  pumpkins: 'pumpkin-patch',
+  'magic-fallen-leaves': 'leaf-pile',
 };
 
+const NODE_SEASONS = new Map(GAME_DATA.resources.map((r) => [r.id, r.season]));
+
+/**
+ * Whether a home node shows: a seasonal one (the Pumpkin node, the leaf
+ * pile) only while its season is on (owner decision 2026-10-06). Its middle
+ * spot stays taken all year, so nothing gets built where it will grow back.
+ */
+export function homeNodeShown(resourceId: string, seasons: ReadonlySet<string>): boolean {
+  const season = NODE_SEASONS.get(resourceId);
+  return season === undefined || seasons.has(season);
+}
+
 /** Draws every home node, one instanced mesh per prop kind; returns how many. */
-function buildHomeNodes(scene: Scene, tiles: readonly PublicTile[]): number {
+function buildHomeNodes(
+  scene: Scene,
+  tiles: readonly PublicTile[],
+  seasons: ReadonlySet<string>,
+): number {
   const byKind = new Map<PropKind, Matrix[]>();
   let count = 0;
   for (const tile of tiles) {
-    const kind = tile.homeSlot !== null && tile.nodeResource ? NODE_PROPS[tile.nodeResource] : null;
+    const node = tile.homeSlot !== null ? tile.nodeResource : null;
+    const kind = node && homeNodeShown(node, seasons) ? NODE_PROPS[node] : null;
     if (!kind) continue;
     const p = hexToWorld(tile, HEX_SIZE);
     const list = byKind.get(kind) ?? [];

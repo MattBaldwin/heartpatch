@@ -30,9 +30,15 @@ export function describeTile(
   tile: PublicTile,
   member: (userId: string) => MapMember | undefined,
   me: string | null,
+  /** Seasons on for the map: a seasonal home node only shows in its own (owner decision 2026-10-06). */
+  seasons: readonly string[] = [],
 ): TileInfo {
   const terrain = TERRAINS.find((t) => t.id === tile.terrain);
-  const resource = RESOURCES.find((r) => r.id === tile.nodeResource);
+  const found = RESOURCES.find((r) => r.id === tile.nodeResource);
+  const resource =
+    found && tile.homeSlot !== null && found.season && !seasons.includes(found.season)
+      ? undefined
+      : found;
   const ownerName =
     tile.ownerUserId === null ? null : (member(tile.ownerUserId)?.user.username ?? null);
   const mine = me !== null && tile.ownerUserId === me;

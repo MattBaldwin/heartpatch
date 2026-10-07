@@ -1,21 +1,28 @@
 import {
+  CreateSignupCodeResponseSchema,
   InviteResponseSchema,
   JoinMapResponseSchema,
   MapResponseSchema,
   MemberPasswordResetResponseSchema,
   MyMapsResponseSchema,
+  MySignupCodesResponseSchema,
   PvpModeResponseSchema,
   type CreateMapRequest,
+  type CreateSignupCodeResponse,
   type Invite,
   type MapDetail,
   type MemberPasswordResetResponse,
   type MyJoinRequest,
   type MyMapsResponse,
+  type MySignupCodesResponse,
   type PvpMode,
 } from '@heartpatch/shared';
 import { apiCall, apiCallFor } from '../../net/api.js';
 
-/** The lobby's calls to `/api/v1/maps` (server: modules/maps/routes.ts). */
+/**
+ * The lobby's calls to `/api/v1/maps` (server: modules/maps/routes.ts) and
+ * an owner's family codes, `/api/v1/signup-codes` (modules/signup-codes/routes.ts).
+ */
 export const lobbyApi = {
   myMaps: (): Promise<MyMapsResponse> =>
     apiCallFor('/maps', { method: 'GET', schema: MyMapsResponseSchema }),
@@ -73,4 +80,18 @@ export const lobbyApi = {
       method: 'POST',
       schema: MemberPasswordResetResponseSchema,
     }),
+
+  signupCodes: (): Promise<MySignupCodesResponse> =>
+    apiCallFor('/signup-codes', { method: 'GET', schema: MySignupCodesResponseSchema }),
+
+  newSignupCode: (label: string): Promise<CreateSignupCodeResponse> =>
+    apiCallFor('/signup-codes', {
+      method: 'POST',
+      body: { label },
+      schema: CreateSignupCodeResponseSchema,
+    }),
+
+  revokeSignupCode: async (codeId: string): Promise<void> => {
+    await apiCall(`/signup-codes/${codeId}/revoke`, { method: 'POST', schema: null });
+  },
 };

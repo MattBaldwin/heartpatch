@@ -32,7 +32,10 @@ export type PropKind =
   | 'snow-peak'
   | 'crystal'
   | 'hay-bale'
-  | 'jack-o-lantern';
+  | 'jack-o-lantern'
+  // Seasonal home nodes: Halloween's pumpkin patch, Thanksgiving's leaf pile.
+  | 'pumpkin-patch'
+  | 'leaf-pile';
 
 export interface TerrainLook {
   /** Top colour, sRGB hex. */
@@ -312,6 +315,16 @@ export const HALLOWEEN = {
   /** A jack-o'-lantern's glow colour (sRGB), by day and at night. Not muted on wild land: a lit lantern glows anywhere. */
   glowColor: '#ff9a3c', // TUNE
   glow: { day: 0.06, night: 0.32 }, // TUNE
+} as const;
+
+/**
+ * Thanksgiving dressing (season on, map-local date; owner decision
+ * 2026-10-06): leaves tumble over the meadows and hills too, more of them,
+ * and the daytime backdrop warms to amber.
+ */
+export const THANKSGIVING = {
+  leaves: { perTile: 0.5, max: 80, terrains: ['forest', 'old-forest', 'meadow', 'hills'] }, // TUNE
+  day: { inner: '#fff0d6', mid: '#f6d2a8', cloud: '#fff8ee' }, // TUNE
 } as const;
 
 /** Juniper's Gap's crystals glow softly, day and night (sRGB colour, strength). */

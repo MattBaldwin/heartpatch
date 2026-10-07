@@ -8,6 +8,7 @@ import {
   isHalloween,
   isMuted,
   localDateIn,
+  seasonsOn,
   muteRgb,
   tileColor,
   tileJitter,
@@ -216,6 +217,17 @@ describe('Halloween by the map’s local date', () => {
     const edge = new Date('2026-11-10T05:00:00Z');
     expect(isHalloween('America/Los_Angeles', edge)).toBe(true);
     expect(isHalloween('Pacific/Kiritimati', edge)).toBe(false);
+  });
+
+  it('lists every season on, overlapping windows included', () => {
+    expect(seasonsOn('America/Chicago', new Date('2026-11-05T18:00:00Z'))).toEqual([
+      'halloween',
+      'thanksgiving',
+    ]);
+    expect(seasonsOn('America/Chicago', new Date('2026-11-15T18:00:00Z'))).toEqual([
+      'thanksgiving',
+    ]);
+    expect(seasonsOn('America/Chicago', new Date('2026-08-15T18:00:00Z'))).toEqual([]);
   });
 
   it("falls back to the device's zone for a zone it doesn't know", () => {

@@ -1,9 +1,10 @@
 import type { DefenseStance, MapRole, PublicKeeper, PublicTile, PvpMode } from '@heartpatch/shared';
-import { and, asc, count, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
+  buildings,
   gatherJobs,
   inviteCodes,
   joinRequests,
@@ -100,6 +101,18 @@ export interface MemberRow {
   title: string | null;
 }
 
+/** A home tile for topping up its ring's nodes (`listHomeRingTiles`). */
+export interface HomeRingTileRow {
+  id: string;
+  q: number;
+  r: number;
+  homeSlot: number;
+  nodeResource: string | null;
+  ownerUserId: string | null;
+  /** Building spots in use on the tile (0 is the middle). */
+  takenSpots: number[];
+}
+
 export interface PendingRequestRow {
   id: string;
   user: UserRef;
@@ -110,6 +123,14 @@ export interface PendingRequestRow {
  * Map storage. Plain queries; the service decides the rules and runs each
  * command in one transaction with `transaction`.
  */
+export interface InviteRow {
+  id: string;
+  mapId: string;
+  createdByUserId: string;
+  expiresAt: Date;
+  revokedAt: Date | null;
+}
+
 export interface MapsRepo {
   /**
    * Runs `fn` in one transaction (`withTransaction`): `repo` is this repo on
@@ -151,6 +172,14 @@ export interface MapsRepo {
    * hint, and drops `guardianStrength` (secret, tech spec §8).
    */
   listTiles: (mapId: string) => Promise<TileViewRow[]>;
+  /**
+   * Every home tile on the map, with the building spots in use on it
+   * (`seedHomeRingNodes`). `lock` row-locks the tiles in id order first
+   * (tech spec §7, step 6), as building placement does.
+   */
+  listHomeRingTiles: (mapId: string, lock?: boolean) => Promise<HomeRingTileRow[]>;
+  /** Puts a node on a home tile that has none; false if it already had one. */
+  addHomeNode: (tileId: string, resource: string) => Promise<boolean>;
   /** Gives the player every tile of a home slot; returns those tiles. */
   claimHomeTiles: (
     mapId: string,
@@ -220,6 +249,8 @@ export interface MapsRepo {
     code: string,
     now: Date,
   ) => Promise<{ id: string; mapId: string; mapName: string } | null>;
+  /** A multiplayer map's invite by code, live or not (sign-up says why one stopped working, #195). */
+  findInviteByCode: (code: string) => Promise<InviteRow | null>;
 
   findPendingRequest: (
     mapId: string,
@@ -359,6 +390,48 @@ function queries(db: Executor): MapsRepo {
         .set({ pvpMode })
         .where(and(eq(maps.id, mapId), ne(maps.pvpMode, pvpMode)))
         .returning({ id: maps.id });
+      return changed.length > 0;
+    },
+
+    listHomeRingTiles: async (mapId, lock = false) => {
+      const where = and(eq(tiles.mapId, mapId), isNotNull(tiles.homeSlot));
+      if (lock) {
+        await db
+          .select({ id: tiles.id })
+          .from(tiles)
+          .where(where)
+          .orderBy(asc(tiles.id))
+          .for('no key update');
+      }
+      const rows = await db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          homeSlot: tiles.homeSlot,
+          nodeResource: tiles.nodeResource,
+          // Spelled out: a one-table select drops column qualifiers in sql``.
+          ownerUserId: tiles.ownerUserId,
+          takenSpots: sql<number[]>`array(
+            select b.spot from ${buildings} b where b.tile_id = ${tiles}.id order by b.spot
+          )`,
+        })
+        .from(tiles)
+        .where(where)
+        .orderBy(asc(tiles.q), asc(tiles.r));
+      return rows.map((row) => ({
+        ...row,
+        homeSlot: row.homeSlot ?? 0,
+        takenSpots: row.takenSpots.map(Number),
+      }));
+    },
+
+    addHomeNode: async (tileId, resource) => {
+      const changed = await db
+        .update(tiles)
+        .set({ nodeResource: resource })
+        .where(and(eq(tiles.id, tileId), isNotNull(tiles.homeSlot), isNull(tiles.nodeResource)))
+        .returning({ id: tiles.id });
       return changed.length > 0;
     },
 
@@ -646,6 +719,22 @@ function queries(db: Executor): MapsRepo {
             eq(maps.kind, 'multiplayer'),
           ),
         );
+      return row ?? null;
+    },
+
+    findInviteByCode: async (code) => {
+      const [row] = await db
+        .select({
+          id: inviteCodes.id,
+          mapId: inviteCodes.mapId,
+          createdByUserId: inviteCodes.createdByUserId,
+          expiresAt: inviteCodes.expiresAt,
+          revokedAt: inviteCodes.revokedAt,
+        })
+        .from(inviteCodes)
+        .innerJoin(maps, eq(maps.id, inviteCodes.mapId))
+        .where(and(eq(inviteCodes.code, code), eq(maps.kind, 'multiplayer')))
+        .limit(1);
       return row ?? null;
     },
 

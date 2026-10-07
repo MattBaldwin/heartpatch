@@ -152,9 +152,8 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
   async function plainHomeTile(server: FastifyInstance, who: Player, mapId: string) {
     const res = await call(server, 'GET', `/maps/${mapId}/home`, who);
     expect(res.statusCode).toBe(200);
-    const tile = HomeResponseSchema.parse(res.json()).tiles.find(
-      (t) => !t.heartSeed && t.nodeResource === null,
-    )!;
+    // Any ring tile: its node takes the middle, so tests build on spots 1–6.
+    const tile = HomeResponseSchema.parse(res.json()).tiles.find((t) => !t.heartSeed)!;
     return { q: tile.q, r: tile.r };
   }
 
@@ -288,11 +287,14 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     expect(opened).not.toContain('building:jack-o-lantern-hearthfire');
 
     await craftAndCollect(server, kid, mapId, 'jack-o-lantern-hearthfire');
-    // Every page but the Training Grounds, which needs Stone this kid hasn't gathered.
+    // Every page but the Training Grounds, which needs Stone this kid hasn't
+    // gathered, and Thanksgiving's leaf charms (no leaves yet).
     expect(await book(server, kid)).toEqual(
       recipeBookPages()
         .map((p) => p.key)
-        .filter((key) => key !== 'building:training-grounds'),
+        .filter(
+          (key) => key !== 'building:training-grounds' && key !== 'recipe:leafy-heart-charms',
+        ),
     );
     const tile = await plainHomeTile(server, kid, mapId);
     const res = await place(server, kid, mapId, {
