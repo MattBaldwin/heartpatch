@@ -193,7 +193,9 @@ export class MapCamera {
   private readonly onStrayDown = (e: PointerEvent): void => {
     if (e.pointerType !== 'touch' || e.target === this.canvas) return;
     if (!(e.target instanceof Element)) return;
-    if (!e.target.closest('button') || e.target.closest('[role="dialog"]')) return;
+    if (!e.target.closest('button, [role="button"]') || e.target.closest('[role="dialog"]')) {
+      return;
+    }
     this.strays.set(e.pointerId, this.localPos(e));
   };
 

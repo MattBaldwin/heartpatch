@@ -36,7 +36,8 @@ export class TapDetector {
   pointerMove(p: PointerSample): void {
     const c = this.candidate;
     // A finger pressed on a map button that joined a pinch (MapCamera hands
-    // its pointer to the canvas mid-press): a second finger after all.
+    // its pointer to the canvas mid-press) is a second finger after all, once
+    // it moves; a perfectly still one isn't seen here.
     if (c && !this.down.has(p.id)) this.candidate = null;
     if (c?.id !== p.id) return;
     if (Math.abs(p.x - c.x) > TAP_MAX_MOVE_PX || Math.abs(p.y - c.y) > TAP_MAX_MOVE_PX) {
