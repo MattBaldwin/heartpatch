@@ -65,12 +65,7 @@ import {
 } from './repo.js';
 import { takeDownOnLostLand } from '../buildings/service.js';
 import { createFencesRepo } from '../fences/repo.js';
-import {
-  FENCE_DATA,
-  sumRefunds,
-  takeDownFencesOnCapture,
-  toPlacedFence,
-} from '../fences/service.js';
+import { FENCE_DATA, takeDownFencesOnCapture, toPlacedFence } from '../fences/service.js';
 import { createLandTending, type LandTendingService } from './tending.js';
 
 /*
@@ -711,22 +706,18 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         : [];
       const refund = lostFires.find((l) => l.ownerUserId === tile.ownerUserId)?.refund ?? null;
       if (refund) await repo.setLostFireRefund(attack.id, refund);
-      // So do its fence segments still standing (#203), for the take-down
-      // share, and the capturer's own that faced it, now on inner edges
-      // of their land (owner decision on #244).
-      const lostFences = await takeDownFencesOnCapture(
+      // Its fence segments still standing are destroyed, nothing back
+      // (#203, owner decision 2026-10-07); the capturer's own that faced it,
+      // now on inner edges of their land, come down for the take-down share
+      // (owner decision on #244).
+      const fences = await takeDownFencesOnCapture(
         tx,
         attack.mapId,
         tile,
-        attack.attackerUserId,
+        { capturerUserId: attack.attackerUserId, attackId: attack.id, battleId: battle.id },
         await repo.listTiles(attack.mapId),
       );
-      const fenceRefund = sumRefunds(
-        lostFences.filter((l) => l.ownerUserId === tile.ownerUserId).map((l) => l.refund),
-      );
-      if (Object.keys(fenceRefund).length > 0) {
-        await repo.setLostFenceRefund(attack.id, fenceRefund);
-      }
+      if (fences.broken.length > 0) await repo.setLostFences(attack.id, fences.broken.length);
       const event: NewGameEvent<'tile.captured'> = {
         mapId: attack.mapId,
         type: 'tile.captured',
@@ -747,7 +738,12 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       // Battles rolls the capture's found clothing (#84) once it has locked
       // the squishies; Gentle's share scales the chance like the XP.
       return {
-        events: [event, ...lostFires.map((l) => l.event), ...lostFences.map((l) => l.event)],
+        events: [
+          event,
+          ...lostFires.map((l) => l.event),
+          ...fences.broken,
+          ...fences.inner.map((l) => l.event),
+        ],
         xpPercent,
         drop: { tileId: tile.id, percent: attack.rewardPercent },
         refunds: [
@@ -756,7 +752,11 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
             items: l.refund,
             refId: l.event.payload.buildingRowId,
           })),
-          ...lostFences.map((l) => ({ userId: l.ownerUserId, items: l.refund, refId: l.fenceId })),
+          ...fences.inner.map((l) => ({
+            userId: l.ownerUserId,
+            items: l.refund,
+            refId: l.fenceId,
+          })),
         ].filter((r) => Object.keys(r.items).length > 0),
       };
     },

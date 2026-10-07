@@ -461,16 +461,20 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
         cooldownUntil: fenceAttack!.cooldownUntil,
       });
 
-      // The rival's other segments came down with the land, for half back.
+      // The rival's other segments were destroyed with the land, nothing
+      // back (owner decision 2026-10-07): one fence.broken each.
       expect(await segmentsOn(near.id)).toEqual([]);
       const standing = edges.length - 1;
-      expect(sumOf(await ledgerOf(mapId, rival.id, 'build-refund'))).toEqual({
-        emberwood: 3 * standing,
-        timber: 1 * standing,
+      expect(await ledgerOf(mapId, rival.id, 'build-refund')).toEqual([]);
+      const events = await eventsOf(mapId);
+      expect(events.filter((e) => e.type === 'fence.broken')).toHaveLength(1 + standing);
+      expect(events.filter((e) => e.type === 'fence.removed')).toEqual([]);
+      const lastBroken = events.filter((e) => e.type === 'fence.broken').at(-1)!;
+      expect(parseGameEventPayload('fence.broken', lastBroken.payload)).toMatchObject({
+        userId: rival.id,
+        attackerUserId: kid.id,
+        attackId: guardAttack!.id,
       });
-      const types = (await eventsOf(mapId)).map((e) => e.type);
-      expect(types).toContain('fence.broken');
-      expect(types.filter((t) => t === 'fence.removed')).toHaveLength(standing);
 
       // The rival's Challenge report: the fence broken, then the land taken.
       await runConsumer(db, createRaidsConsumer(), mapId);
@@ -481,7 +485,7 @@ describe.skipIf(!url)('fences (needs DATABASE_URL)', () => {
         ['taken', null],
         ['lost', { buildingId: 'emberwood-palisade', broken: true, percent: 0 }],
       ]);
-      expect(report.raids[0]!.lostFences).toEqual({ emberwood: 3 * standing, timber: standing });
+      expect(report.raids[0]!.lostFences).toBe(standing);
     });
 
     it('only breaks the fence when nobody is left to fight the guard: a second visit takes it', async () => {

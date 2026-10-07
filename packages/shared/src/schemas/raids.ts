@@ -59,8 +59,11 @@ export const RaidSchema = z.object({
     })
     .nullable()
     .optional(),
-  /** My fence segments there came down when it was taken (#203): what came back. Null: none. */
-  lostFences: ItemCountsSchema.nullable().optional(),
+  /**
+   * My fence segments there were destroyed when it was taken (#203, owner
+   * decision 2026-10-07: nothing comes back): how many. Null: none.
+   */
+  lostFences: z.number().int().min(1).nullable().optional(),
 });
 export type Raid = z.infer<typeof RaidSchema>;
 

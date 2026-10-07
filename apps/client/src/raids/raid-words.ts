@@ -75,11 +75,13 @@ export function raidFireLine(raid: Pick<Raid, 'lostFire'>): string | null {
     : 'Your fire there went out when the land changed hands. You got some things back 🔥';
 }
 
-/** My fences that came down with the land (#203), or null when there were none there. */
+/** My fences destroyed when the land was taken (#203), or null when there were none there. */
 export function raidFencesLine(raid: Partial<Pick<Raid, 'lostFences'>>): string | null {
-  return raid.lostFences
-    ? 'Your fences there came down when the land changed hands. You got some things back 🪵'
-    : null;
+  const n = raid.lostFences ?? 0;
+  if (n === 0) return null;
+  return n === 1
+    ? 'Your fence there was lost when the land changed hands. 🪵'
+    : `Your ${String(n)} fences there were lost when the land changed hands. 🪵`;
 }
 
 /** "Bold" etc. for a raid's style, or null when guardians stood in. */

@@ -900,9 +900,9 @@ export const tileAttacks = pgTable(
     fenceHpBefore: smallint('fence_hp_before'),
     fenceMaxHp: smallint('fence_max_hp'),
     fenceHpAfter: smallint('fence_hp_after'),
-    // A capture took the defender's other fence segments on the tile down:
-    // what came back to them. Null: none.
-    lostFenceRefund: jsonb('lost_fence_refund').$type<Record<string, number>>(),
+    // A capture destroyed the defender's fence segments on the tile, nothing
+    // back (owner decision 2026-10-07): how many. Null: none.
+    lostFences: smallint('lost_fences'),
   },
   (t) => [
     unique('tile_attacks_battle_id_key').on(t.battleId),

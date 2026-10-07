@@ -253,10 +253,7 @@ export function createRaidReport(options: RaidReportOptions): RaidReportScreen {
                         ]
                       : []),
                     ...(raid.lostFences
-                      ? [
-                          el('p', { class: 'raid-line' }, raidFencesLine(raid) ?? ''),
-                          el('p', { class: 'raid-style-line' }, describeItems(raid.lostFences)),
-                        ]
+                      ? [el('p', { class: 'raid-line' }, raidFencesLine(raid) ?? '')]
                       : []),
                     ...(style && !raid.fence ? [el('p', { class: 'raid-style-line' }, style)] : []),
                   ),

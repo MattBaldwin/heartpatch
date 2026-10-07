@@ -320,7 +320,7 @@ export async function takeDownFencesOnLostLand(
   tx: Executor,
   mapId: string,
   tileIds: readonly string[],
-  lost: 'captured' | 'wild' | 'left',
+  lost: 'wild' | 'left',
 ): Promise<LostFence[]> {
   const repo = createFencesRepo(tx);
   const rows = await repo.lockOnTiles(tileIds);
@@ -328,46 +328,75 @@ export async function takeDownFencesOnLostLand(
   return rows.map((row) => lostFence(mapId, row, lost));
 }
 
+/** What a capture did to fences (`takeDownFencesOnCapture`). */
+export interface CaptureFences {
+  /** The old owner's segments on the tile: destroyed, nothing back. */
+  readonly broken: readonly NewGameEvent<'fence.broken'>[];
+  /** The capturer's own segments that faced it, for the take-down share. */
+  readonly inner: readonly LostFence[];
+}
+
 /**
- * A capture (#203, owner decision on #244): the old owner's segments on the
- * tile come down (`captured`), and so do the capturer's own segments on
- * their tiles next to it that faced it, now inner edges of their land
- * (`inner`). Both for the take-down share, in the capture's transaction
- * after its tile lock. One lock over every tile involved (step 8, id
- * order), so two captures side by side can't lock each other's rows in
- * opposite orders. `tiles` is the map as it is now, the capture applied.
+ * A capture (#203). The old owner's segments on the tile are destroyed with
+ * nothing back (owner decision 2026-10-07): one `fence.broken` each, the
+ * capture's attack and battle on it (internal only). The capturer's own
+ * segments on their tiles next to it that faced it now stand on inner edges
+ * of their land, so they come down for the take-down share (`inner`, owner
+ * decision on #244). In the capture's transaction after its tile lock; one
+ * lock over every tile involved (step 8, id order), so two captures side by
+ * side can't lock each other's rows in opposite orders. `tiles` is the map
+ * as it is now, the capture applied.
  */
 export async function takeDownFencesOnCapture(
   tx: Executor,
   mapId: string,
   tile: { id: string; q: number; r: number },
-  capturerUserId: string,
+  capture: { capturerUserId: string; attackId: string; battleId: string },
   tiles: readonly { id: string; q: number; r: number; ownerUserId: string | null }[],
-): Promise<LostFence[]> {
+): Promise<CaptureFences> {
   const repo = createFencesRepo(tx);
   const captured = hexKey(tile);
   const mine = tiles.filter(
-    (t) => t.id !== tile.id && t.ownerUserId === capturerUserId && hexDistance(t, tile) === 1,
+    (t) =>
+      t.id !== tile.id && t.ownerUserId === capture.capturerUserId && hexDistance(t, tile) === 1,
   );
   const rows = await repo.lockOnTiles([tile.id, ...mine.map((t) => t.id)]);
-  const lost = rows.flatMap((row): LostFence[] => {
-    if (row.tileId === tile.id) return [lostFence(mapId, row, 'captured')];
-    const inward =
-      row.ownerUserId === capturerUserId &&
-      isHexEdge(row.edge) &&
-      hexKey(edgeNeighbor(row, row.edge)) === captured;
-    return inward ? [lostFence(mapId, row, 'inner')] : [];
-  });
-  await repo.deleteFences(lost.map((l) => l.fenceId));
-  return lost;
+  const destroyed = rows.filter(
+    (row) => row.tileId === tile.id && row.ownerUserId !== capture.capturerUserId,
+  );
+  const inner = rows
+    .filter(
+      (row) =>
+        row.tileId !== tile.id &&
+        row.ownerUserId === capture.capturerUserId &&
+        isHexEdge(row.edge) &&
+        hexKey(edgeNeighbor(row, row.edge)) === captured,
+    )
+    .map((row) => lostFence(mapId, row, 'inner'));
+  await repo.deleteFences([...destroyed.map((r) => r.id), ...inner.map((l) => l.fenceId)]);
+  return {
+    broken: destroyed.map((row) => ({
+      mapId,
+      type: 'fence.broken',
+      actorUserId: capture.capturerUserId,
+      payload: {
+        userId: row.ownerUserId,
+        attackerUserId: capture.capturerUserId,
+        attackId: capture.attackId,
+        battleId: capture.battleId,
+        fenceId: row.id,
+        buildingId: row.buildingId,
+        q: row.q,
+        r: row.r,
+        edge: row.edge,
+      },
+    })),
+    inner,
+  };
 }
 
 /** A segment coming down with the take-down share back, and its event. */
-function lostFence(
-  mapId: string,
-  row: FenceRow,
-  lost: 'captured' | 'wild' | 'left' | 'inner',
-): LostFence {
+function lostFence(mapId: string, row: FenceRow, lost: 'wild' | 'left' | 'inner'): LostFence {
   const refund = fenceRefund(row);
   return {
     ownerUserId: row.ownerUserId,

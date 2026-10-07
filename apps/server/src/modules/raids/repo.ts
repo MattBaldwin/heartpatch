@@ -30,7 +30,7 @@ export interface RaidRow {
   fenceMaxHp: number | null;
   fenceHpAfter: number | null;
   /** My fence segments there came down with the capture (#203): what came back. */
-  lostFences: Record<string, number> | null;
+  lostFences: number | null;
 }
 
 export interface NewRaid {
@@ -113,7 +113,7 @@ const raidColumns = {
   fenceBuildingId: tileAttacks.fenceBuildingId,
   fenceMaxHp: tileAttacks.fenceMaxHp,
   fenceHpAfter: tileAttacks.fenceHpAfter,
-  lostFences: tileAttacks.lostFenceRefund,
+  lostFences: tileAttacks.lostFences,
 };
 
 export function createRaidsRepo(db: Executor): RaidsRepo {

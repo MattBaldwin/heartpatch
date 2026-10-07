@@ -456,10 +456,11 @@ export const GAME_EVENTS = {
   },
   /**
    * A fence segment came down (#203): its owner took it down for part of
-   * its cost back, or it came down with the land under it (`lost`, as
-   * buildings do in #202) and gave the same back. `inner`: its owner
-   * captured the land beyond it, so it stood on an inner edge (owner
-   * decision on #244); public, so their client can say so.
+   * its cost back, or it came down with land that went wild or a member who
+   * left (`lost`, as buildings do in #202) and gave the same back. `inner`:
+   * its owner captured the land beyond it, so it stood on an inner edge
+   * (owner decision on #244); public, so their client can say so. A rival's
+   * capture destroys the segments on the tile instead (`fence.broken`).
    */
   'fence.removed': {
     internal: z.strictObject({
@@ -469,14 +470,14 @@ export const GAME_EVENTS = {
       ...coords,
       edge: HexEdgeSchema,
       refund: z.record(z.string(), z.number().int().min(1)),
-      lost: z.enum(['captured', 'wild', 'left', 'inner']).optional(),
+      lost: z.enum(['wild', 'left', 'inner']).optional(),
     }),
     public: z.object({
       userId: z.uuid(),
       fenceId: z.uuid(),
       ...coords,
       edge: HexEdgeSchema,
-      lost: z.enum(['captured', 'wild', 'left', 'inner']).optional(),
+      lost: z.enum(['wild', 'left', 'inner']).optional(),
     }),
   },
   /** A squishy moved into a habitat, or out of one (`habitatId` null) (#18). */

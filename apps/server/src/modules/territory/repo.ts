@@ -146,8 +146,8 @@ export interface TerritoryRepo {
   ) => Promise<(TileAttackRow & { q: number; r: number })[]>;
   /** What the fence had left when its battle ended (0: broken). */
   setFenceResult: (attackId: string, hpAfter: number) => Promise<void>;
-  /** The capture took the defender's other fence segments down (#203): what came back. */
-  setLostFenceRefund: (attackId: string, refund: Record<string, number>) => Promise<void>;
+  /** The capture destroyed the defender's fence segments on the tile (#203): how many. */
+  setLostFences: (attackId: string, count: number) => Promise<void>;
   findAttack: (battleId: string) => Promise<TileAttackRow | null>;
   touchAttack: (battleId: string, at: Date) => Promise<void>;
   endAttack: (battleId: string, outcome: TileAttackOutcome, at: Date) => Promise<void>;
@@ -408,11 +408,8 @@ function queries(db: Executor): TerritoryRepo {
         .where(eq(tileAttacks.id, attackId));
     },
 
-    setLostFenceRefund: async (attackId, refund) => {
-      await db
-        .update(tileAttacks)
-        .set({ lostFenceRefund: refund })
-        .where(eq(tileAttacks.id, attackId));
+    setLostFences: async (attackId, count) => {
+      await db.update(tileAttacks).set({ lostFences: count }).where(eq(tileAttacks.id, attackId));
     },
 
     findAttack: async (battleId) => {

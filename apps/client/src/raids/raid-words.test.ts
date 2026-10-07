@@ -49,10 +49,13 @@ describe('fences in the report (#203)', () => {
     for (const r of [held, stopped, broke]) expect(findAvoidedWords(raidLine(r))).toEqual([]);
   });
 
-  it('says fences came down with the land, only when some did', () => {
+  it('says fences were lost with the land, only when some were', () => {
     expect(raidFencesLine(raid())).toBeNull();
-    const line = raidFencesLine(raid({ outcome: 'taken', lostFences: { greens: 4 } }));
-    expect(line).toContain('fences there came down');
+    expect(raidFencesLine(raid({ outcome: 'taken', lostFences: 1 }))).toBe(
+      'Your fence there was lost when the land changed hands. 🪵',
+    );
+    const line = raidFencesLine(raid({ outcome: 'taken', lostFences: 3 }));
+    expect(line).toBe('Your 3 fences there were lost when the land changed hands. 🪵');
     expect(findAvoidedWords(line ?? '')).toEqual([]);
   });
 });
