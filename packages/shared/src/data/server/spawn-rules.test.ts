@@ -22,5 +22,11 @@ describe('spawn rules', () => {
         ],
       }).join(),
     ).toMatch(/earliest first/);
+    expect(checkSpawnRules({ ...SPAWN_RULES, rarityLevelDiscount: { rare: -1 } }).join()).not.toBe(
+      '',
+    );
+    expect(checkSpawnRules({ ...SPAWN_RULES, rarityLevelDiscount: { shiny: 1 } }).join()).not.toBe(
+      '',
+    );
   });
 });

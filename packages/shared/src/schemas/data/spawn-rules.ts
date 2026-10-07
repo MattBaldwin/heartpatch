@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isSpawnWindowHours } from '../../spawns/window.js';
+import { RaritySchema } from './common.js';
 import { formatDataIssues } from './issues.js';
 import { SpawnTableSchema } from './spawn-tables.js';
 
@@ -41,6 +42,14 @@ export const SpawnRulesSchema = z.strictObject({
     })
     .refine((o) => o.min <= o.max, { message: 'min must not be more than max', path: ['max'] })
     .optional(),
+  /**
+   * Levels taken off a Partner-matched wild squishy by its rarity, after the
+   * `partnerOffset` roll and before the `levels.min` floor (#208). Rarer base
+   * forms have bigger base stats, so this is the knob if they ever need to be
+   * gentler at the Partner's level. A rarity left out takes off 0. Plain
+   * levels (no Partner) ignore it. Not shipped (owner decision 2026-10-07).
+   */
+  rarityLevelDiscount: z.partialRecord(RaritySchema, z.number().int().min(0).max(99)).optional(),
   /**
    * Map-local hours where each time of day starts, earliest first, from 0.
    * A window's time of day is judged at its middle.
