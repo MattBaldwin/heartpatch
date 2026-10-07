@@ -643,7 +643,9 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
         type: 'item',
         item: 'brave-brew',
       });
-      expect(myActive(after).boosts.attack).toBe(25);
+      expect(myActive(after).boosts.attack).toBe(
+        GAME_DATA.resources.find((r) => r.id === 'brave-brew')!.battleEffect!.attackPercent,
+      );
       expect(await countOf(kid, mapId, 'brave-brew')).toBe(1);
       expect(
         (await ledgerFor(battle.id)).map(({ itemId, delta, reason }) => ({

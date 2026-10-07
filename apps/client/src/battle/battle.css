@@ -25,6 +25,8 @@
 
 .battle-hud[hidden],
 .battle-plate-status[hidden],
+.battle-chip[hidden],
+.battle-item-count[hidden],
 .battle-caption[hidden],
 .battle-controls[hidden],
 .battle-hud .battle-result[hidden] {
@@ -152,6 +154,32 @@
   font-size: 11px;
   font-weight: 700;
   color: #7a2d55;
+}
+
+/* Potion chips (#214): ⚔️+ and 🛡️+ for the rest of the battle, ✨ while the
+   sparkle shield is up. */
+.battle-chip {
+  flex: none;
+  padding: 1px var(--hp-pad-y);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+}
+
+.battle-chip-attack {
+  background: #ffe3bf;
+  color: #84470f;
+}
+
+.battle-chip-defense {
+  background: #d9ecff;
+  color: #1f4f7a;
+}
+
+.battle-chip-shield {
+  background: #efe2ff;
+  color: #5a3a8c;
 }
 
 /* Saturday Morning Smackdown's comic callout: bold, outlined, a little tilted. */
@@ -316,6 +344,58 @@
 
 .battle-button-soft:active {
   box-shadow: 0 1px 0 #e2cfc1;
+}
+
+/* The potion picker (#214): three tiles in a row, each with a count badge in
+   its corner (inside, so no text touches an edge). */
+.battle-items {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.battle-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 96px;
+  /* The emoji's glyph box runs taller than its line: a little extra on top. */
+  padding: calc(var(--hp-pad-y) + 4px) 6px var(--hp-pad-y);
+  border-radius: 18px;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.battle-item-icon {
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.battle-item-tag {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8a6a8e;
+}
+
+.battle-item-count {
+  position: absolute;
+  top: var(--hp-pad-y);
+  right: var(--hp-pad-y);
+  min-width: 24px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #5a3a5d;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 20px;
+  color: #fff;
+}
+
+.battle-button-empty .battle-item-count {
+  background: #b9a3ba;
 }
 
 /* The Heart Charm button with an empty bag: still there, dimmed, and it

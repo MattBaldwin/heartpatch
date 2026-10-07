@@ -167,6 +167,8 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   if (state.phase === 'turn' && (await page.getByTestId('battle-swap').count()) > 0) {
     const swap = page.getByTestId('battle-swap').first();
     await expect(swap).toHaveText(/Swap: /);
+    // On a short phone the sheet's second line (Swap, Run away) scrolls into view (#214).
+    await swap.scrollIntoViewIfNeeded();
     const box = (await swap.boundingBox())!;
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     state = await settled(page);

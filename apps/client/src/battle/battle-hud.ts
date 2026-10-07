@@ -2,6 +2,14 @@ import { ELEMENTS, FEELINGS, type BattleSideId, type PlayerBattleAction } from '
 import { el } from '../ui/dom.js';
 import type { SafeRegion } from './camera-director.js';
 import { charmButton, noCharmsLine } from './heart-charm.js';
+import {
+  CHIP_LOOKS,
+  itemButtonLabel,
+  NO_CHIPS,
+  pickLine,
+  type PlateChips,
+  type PotionTile,
+} from './potions.js';
 import './battle.css';
 
 // The battle HUD (tech spec §6: a DOM overlay for sharp text and big
@@ -20,6 +28,8 @@ export interface PlateInfo {
   percent: number;
   energyText: string;
   status: string | null;
+  /** Potion chips (#214): ⚔️+ and 🛡️+ for the battle, ✨ while the shield is up. */
+  chips?: PlateChips;
 }
 
 export type ControlMode =
@@ -33,6 +43,11 @@ export type ControlMode =
        * always shown with the bag's count (null while it loads); null elsewhere.
        */
       capture: { charms: number | null } | null;
+      /**
+       * Potions (#214): "Use item" with every potion in the bag (null while
+       * it loads), and the picker's tiles. Null in a replay.
+       */
+      items: { total: number | null; tiles: PotionTile[]; who: string } | null;
     }
   /** Their squishy is tuckered out: pick who comes out. */
   | { type: 'replace'; bench: { slot: number; name: string }[] }
@@ -77,6 +92,11 @@ export interface BattleHudOptions {
    * HUD knows): the screen checks the bag again and explains or goes ahead.
    */
   onNoCharms: () => void;
+  /**
+   * A dimmed potion was tapped (none in the bag, or already had one): the
+   * screen checks the bag again and explains or goes ahead.
+   */
+  onNoItem: (tile: PotionTile) => void;
 }
 
 /** Which side a plate shows, for the dev hook and tests. */
@@ -126,6 +146,23 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     const element = el('span', { class: 'battle-badge', role: 'img' });
     const feeling = el('span', { class: 'battle-badge', role: 'img' });
     const status = el('span', { class: 'battle-plate-status' });
+    const chip = (kind: keyof PlateChips) => {
+      const look = CHIP_LOOKS[kind];
+      const node = el(
+        'span',
+        {
+          class: `battle-chip battle-chip-${kind}`,
+          role: 'img',
+          'aria-label': look.label,
+          title: look.label,
+          'data-testid': `battle-chip-${kind}-${side}`,
+        },
+        look.text,
+      );
+      node.hidden = true;
+      return node;
+    };
+    const chips = { attack: chip('attack'), defense: chip('defense'), shield: chip('shield') };
     const callout = el('span', { class: 'battle-callout', role: 'status' });
     const node = el(
       'div',
@@ -137,10 +174,19 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         el('div', { class: 'battle-energy', role: 'progressbar', 'aria-label': 'Energy' }, bar),
         el('span', { class: 'battle-badges' }, element, feeling),
       ),
-      el('div', { class: 'battle-plate-row battle-plate-foot' }, level, energy, status),
+      el(
+        'div',
+        { class: 'battle-plate-row battle-plate-foot' },
+        level,
+        energy,
+        status,
+        chips.attack,
+        chips.defense,
+        chips.shield,
+      ),
       callout,
     );
-    return { node, name, level, bar, energy, element, feeling, status, callout, timer: 0 };
+    return { node, name, level, bar, energy, element, feeling, status, chips, callout, timer: 0 };
   };
   const plates = { mine: plate('mine'), theirs: plate('theirs') };
 
@@ -222,6 +268,61 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     options.onAction(action);
   };
 
+  /**
+   * The potion picker (#214), inside the sheet like Run away's check, so the
+   * fight stays in view. A dimmed tile still answers a tap: the screen
+   * explains why, or finds the bag has one after all.
+   */
+  const openPicker = (
+    mode: Extract<ControlMode, { type: 'choose' }>,
+    items: NonNullable<Extract<ControlMode, { type: 'choose' }>['items']>,
+  ): void => {
+    problem.textContent = '';
+    const tiles = el('div', { class: 'battle-items' });
+    for (const tile of items.tiles) {
+      const count = el(
+        'span',
+        { class: 'battle-item-count' },
+        tile.count === null ? '' : String(tile.count),
+      );
+      count.hidden = tile.count === null;
+      const node = el(
+        'button',
+        {
+          type: 'button',
+          class: `battle-button battle-item${tile.state === 'ready' ? '' : ' battle-button-empty'}`,
+          'data-testid': 'battle-item-pick',
+          'data-item': tile.id,
+          'data-state': tile.state,
+        },
+        el('span', { class: 'battle-item-icon', 'aria-hidden': 'true' }, tile.icon),
+        tile.name,
+        el('span', { class: 'battle-item-tag' }, tile.tag),
+        count,
+      );
+      node.addEventListener('click', () => {
+        if (tile.state === 'ready') act({ type: 'item', item: tile.id });
+        else options.onNoItem(tile);
+      });
+      tiles.append(node);
+    }
+    controls.replaceChildren(
+      el('p', { class: 'battle-ask' }, pickLine(items.who)),
+      tiles,
+      el(
+        'div',
+        { class: 'battle-row' },
+        button(
+          'Back',
+          () => {
+            setControls(mode);
+          },
+          { soft: true, small: true, testId: 'battle-item-back' },
+        ),
+      ),
+    );
+  };
+
   const setControls = (mode: ControlMode): void => {
     controls.replaceChildren();
     controls.hidden = mode.type === 'hidden';
@@ -266,6 +367,20 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
             hint.id = 'battle-capture-hint';
           }
           row.append(node);
+        }
+        if (mode.items) {
+          const items = mode.items;
+          row.append(
+            button(
+              itemButtonLabel(items.total),
+              () => {
+                openPicker(mode, items);
+              },
+              { small: true, testId: 'battle-item' },
+            ),
+          );
+          // None in the bag: still there, dimmed, like the Heart Charm (#214).
+          if (items.total === 0) row.lastElementChild?.classList.add('battle-button-empty');
         }
         for (const { slot, name } of mode.bench) {
           row.append(
@@ -361,6 +476,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       p.feeling.setAttribute('aria-label', p.feeling.title);
       p.status.textContent = info.status ?? '';
       p.status.hidden = info.status === null;
+      const chips = info.chips ?? NO_CHIPS;
+      p.chips.attack.hidden = !chips.attack;
+      p.chips.defense.hidden = !chips.defense;
+      p.chips.shield.hidden = !chips.shield;
       p.node.classList.toggle('battle-plate-tuckered', info.percent === 0);
       // A longer name or a status chip can grow the pill: measure again.
       forget();
