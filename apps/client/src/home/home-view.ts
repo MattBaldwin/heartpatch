@@ -1,5 +1,6 @@
 import {
   buildCost,
+  buildingEffects,
   fuelCost,
   HOME_BASE_RULES as RULES,
   freeSpots,
@@ -12,6 +13,7 @@ import {
   shortfall,
   upgradeCost,
   type Building,
+  type BuildingEffect,
   type BuildingSlot,
   type HomeResponse,
   type HomeSquishy,
@@ -20,6 +22,7 @@ import {
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
 import { itemIcon } from '../inventory/item-icons.js';
+import { ELEMENT_GLYPH } from '../ui/glyphs.js';
 
 // What the home-base screen says and offers (copy follows docs/STYLE_GUIDE.md).
 // Pure, so every case is unit-tested; the server decides everything again
@@ -27,6 +30,8 @@ import { itemIcon } from '../inventory/item-icons.js';
 
 export const BUILDING_DATA = new Map<string, Building>(GAME_DATA.buildings.map((b) => [b.id, b]));
 const SEASON_NAMES = new Map(GAME_DATA.seasons.map((s) => [s.id, s.name]));
+const ELEMENT_NAMES = new Map(GAME_DATA.elements.map((e) => [e.id, e.name]));
+const FEELING_NAMES = new Map(GAME_DATA.feelings.map((f) => [f.id, f.name]));
 
 /** Picture for a building on buttons and cards. */
 export function buildingIcon(buildingId: string): string {
@@ -183,13 +188,6 @@ export function landTileOffer(
   };
 }
 
-/** The build card's line for a fire out on my land. */
-export function landFireLine(building: Building): string {
-  const step = building.levels[0];
-  const reach = step && 'safeRadius' in step ? step.safeRadius : 1;
-  return `It goes in the middle of this tile 🔥 and keeps everyone within ${String(reach)} ${reach === 1 ? 'tile' : 'tiles'} cozy at night.`;
-}
-
 /** The home's top line (owner decision 2026-10-07): the Heart Seed keeps home safe. */
 export const HOME_SAFE_LINE = 'Your Heart Seed keeps home safe 💗';
 
@@ -253,10 +251,42 @@ export type BuildOption =
 export interface BuildRow {
   readonly building: Building;
   readonly icon: string;
+  /** What it's for, in a line (#207). */
+  readonly description: string;
+  /** What it does, as chips worked out from its data (#207): "🛡️ Safe 1 tile around". */
+  readonly effects: readonly string[];
   readonly needs: readonly NeedChip[];
   readonly option: BuildOption;
   /** Which spots it takes (#204): "Fires go in the middle of a tile 🔥". */
   readonly where: string;
+}
+
+/** One effect as a build-menu chip (#207; owner-approved words, 2026-10-07). */
+export function effectChip(effect: BuildingEffect): string {
+  switch (effect.kind) {
+    case 'safe':
+      return effect.radius === 0
+        ? '🛡️ Keeps its own tile safe'
+        : `🛡️ Safe ${String(effect.radius)} ${effect.radius === 1 ? 'tile' : 'tiles'} around`;
+    case 'fuel':
+      return '🪵 Needs fuel each night';
+    case 'grows': {
+      const who = [
+        ...effect.elements.map((e) => `${ELEMENT_GLYPH[e] ?? '✨'} ${ELEMENT_NAMES.get(e) ?? e}`),
+        ...effect.feelings.map((f) => FEELING_NAMES.get(f) ?? f),
+      ];
+      return `✨ Faster growing: ${who.join(' · ')}`;
+    }
+    case 'room':
+      return `🏠 Room for ${String(effect.capacity)}`;
+    case 'training':
+      return `🏋️ ${String(effect.capacity)} ${effect.capacity === 1 ? 'squishy' : 'squishies'} · ${String(effect.xpPerHour)} XP/hr`;
+  }
+}
+
+/** A building's chips at a level (1: just built), for the build menu and the fire sheet. */
+export function effectChips(building: Building, level = 1): string[] {
+  return buildingEffects(building, level).map(effectChip);
 }
 
 /** Where a building goes on a tile, in a line (#204). */
@@ -319,6 +349,8 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
       return {
         building,
         icon: buildingIcon(building.id),
+        description: building.description,
+        effects: effectChips(building),
         needs: option.kind === 'built' || option.kind === 'land' ? [] : needChips(home.items, cost),
         option,
         where: building.placement === 'land' ? '' : slotLine(building),

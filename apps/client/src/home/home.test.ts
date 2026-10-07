@@ -18,11 +18,12 @@ import {
   atHome,
   buildingNote,
   buildRows,
+  effectChip,
+  effectChips,
   FIRES_ON_LAND,
   HOME_SAFE_LINE,
   freeHomeSpots,
   fuelAllOffer,
-  landFireLine,
   landFires,
   landTileOffer,
   LAND_FIRE,
@@ -181,9 +182,11 @@ describe('home screen copy', () => {
       FIRES_ON_LAND,
       buildingNote(fire()),
       buildingNote(meadow()),
-      ...buildRows(homeWith({ items: {} })).map((r) =>
+      ...buildRows(homeWith({ items: {} })).flatMap((r) => [
         r.option.kind === 'blocked' ? r.option.note : '',
-      ),
+        r.description,
+        ...r.effects,
+      ]),
     ];
     for (const line of lines) expect(findAvoidedWords(line), line).toEqual([]);
   });
@@ -406,8 +409,42 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
       building: { id: 'jack-o-lantern-hearthfire' },
       needs: [{ ok: true }],
     });
-    expect(landFireLine(LAND_FIRE!)).toBe(
-      'It goes in the middle of this tile 🔥 and keeps everyone within 1 tile cozy at night.',
+  });
+});
+
+describe('what each building does (#207)', () => {
+  it('gives every build-menu row its description and effect chips, in data order', () => {
+    const rows = buildRows(homeWith({ items: {} }));
+    const byId = new Map(rows.map((r) => [r.building.id, r]));
+    expect(rows[0]?.building.id).toBe('hearthfire');
+    expect(byId.get('hearthfire')).toMatchObject({
+      description: 'Keeps squishies out on your land safe from the Hollow Man at night.',
+      effects: ['🛡️ Safe 1 tile around', '🪵 Needs fuel each night'],
+    });
+    expect(byId.get('ember-den')?.effects).toEqual([
+      '✨ Faster growing: 🔥 Fire · Cozy',
+      '🏠 Room for 3',
+    ]);
+    expect(byId.get('cozy-meadow')?.effects).toEqual([
+      '✨ Faster growing: 🍃 Leaf · Cozy · Sleepy',
+      '🏠 Room for 3',
+    ]);
+    expect(byId.get('training-grounds')?.effects).toEqual(['🏋️ 2 squishies · 5 XP/hr']);
+  });
+
+  it('words each effect for any number', () => {
+    expect(effectChip({ kind: 'safe', radius: 0 })).toBe('🛡️ Keeps its own tile safe');
+    expect(effectChip({ kind: 'safe', radius: 2 })).toBe('🛡️ Safe 2 tiles around');
+    expect(effectChip({ kind: 'training', capacity: 1, xpPerHour: 8 })).toBe(
+      '🏋️ 1 squishy · 8 XP/hr',
     );
+    expect(effectChip({ kind: 'grows', elements: ['water'], feelings: [] })).toBe(
+      '✨ Faster growing: 💧 Water',
+    );
+  });
+
+  it('shows a fire’s chips on the land fire sheet, at level 1', () => {
+    expect(effectChips(LAND_FIRE!)).toEqual(['🛡️ Safe 1 tile around', '🪵 Needs fuel each night']);
+    expect(effectChips(LAND_FIRE!, 2)[0]).toBe('🛡️ Safe 2 tiles around');
   });
 });
