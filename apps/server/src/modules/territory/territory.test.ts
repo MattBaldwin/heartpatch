@@ -495,7 +495,10 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(spent.triesResetAt).toBe('2026-10-03T06:00:00.000Z');
       const more = await attack(server, kid, mapId, edge[TERRITORY_RULES.attemptsPerDay]!);
       expect(more.statusCode).toBe(409);
-      expect(errorOf(more).message).toMatch(/all your tries for today/);
+      expect(errorOf(more).message).toBe(
+        "You've used all your tries for today. New tries come at your patch's midnight 🌙",
+      );
+      expect(errorOf(more).message).not.toMatch(/tomorrow/);
       // 23:59 Denver is still today; one minute later is tomorrow.
       clock.setTime(Date.parse('2026-10-03T05:59:00Z'));
       expect((await attack(server, kid, mapId, edge.at(-1)!)).statusCode).toBe(409);
