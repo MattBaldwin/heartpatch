@@ -1,19 +1,16 @@
-import { formatAppVersion, type BuildInfo } from '@heartpatch/shared';
+import type { BuildInfo } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
 import { versionView, type AppUpdates, type ServerBuild } from './app-updates.js';
 import '../ui/auth/auth.css';
 
 // The version in the profile menu (#198): a quiet line under the name, which
-// copies itself for bug reports, and an "Update now" row when a newer version
-// is ready. Both are made once and refreshed each time the menu opens.
-
-/** TUNE: how long the line says "Copied!". */
-const COPIED_MS = 1500;
+// opens What's new (#220, where a Copy chip copies it for bug reports), and
+// an "Update now" row when a newer version is ready. Both are made once and
+// refreshed each time the menu opens.
 
 export const VERSION_TEXT = {
-  copied: 'Copied!',
-  notCopied: "Couldn't copy. Write it down instead!",
   updateNow: 'Update now',
+  label: (version: string) => `Version ${version}. Tap to see what's new.`,
 } as const;
 
 export interface VersionMenu {
@@ -27,14 +24,13 @@ export function mountVersionMenu(deps: {
   client: BuildInfo | null;
   updates: AppUpdates;
   fetchServer: () => Promise<ServerBuild>;
-  copy: (text: string) => Promise<void>;
+  /** The line was tapped: What's new opens (#220; copying lives in that sheet). */
+  onOpen: () => void;
 }): VersionMenu {
   const line = el('button', {
     type: 'button',
     class: 'auth-chip-version',
     'data-testid': 'app-version',
-    // VoiceOver hears "Copied!" too.
-    'aria-live': 'polite',
   });
   const updateRow = el(
     'button',
@@ -44,38 +40,15 @@ export function mountVersionMenu(deps: {
   );
 
   let server: ServerBuild | null = null;
-  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
   const render = () => {
     const view = versionView(deps.client, server, deps.updates.workerWaiting);
-    if (copiedTimer === undefined) line.textContent = view.text;
-    line.setAttribute('aria-label', `Version ${view.text}. Tap to copy.`);
+    line.textContent = view.text;
+    line.setAttribute('aria-label', VERSION_TEXT.label(view.text));
     updateRow.hidden = !view.updateReady;
     updateRow.disabled = deps.updates.applying;
   };
 
-  /** Says `note` on the line for a moment, then the version again. */
-  const flash = (note: string) => {
-    clearTimeout(copiedTimer);
-    line.textContent = note;
-    // The label is the button's name, so VoiceOver reads the note only if it changes too.
-    line.setAttribute('aria-label', note);
-    copiedTimer = setTimeout(() => {
-      copiedTimer = undefined;
-      render();
-    }, COPIED_MS);
-  };
-  line.addEventListener('click', () => {
-    // Just the version, for a bug report.
-    deps.copy(formatAppVersion(deps.client)).then(
-      () => {
-        flash(VERSION_TEXT.copied);
-      },
-      () => {
-        // The words stay on screen, as the recovery code's Copy does.
-        flash(VERSION_TEXT.notCopied);
-      },
-    );
-  });
+  line.addEventListener('click', deps.onOpen);
   updateRow.addEventListener('click', () => {
     deps.updates.apply();
     render();
