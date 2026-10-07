@@ -44,21 +44,24 @@ export const RESOURCES: Resource[] = [
   {
     id: 'water',
     name: 'Water',
-    description: 'Cool, clear water from a lakeside well.',
+    description:
+      'Cool, clear water from a lakeside well. Leave it out in the cold at home to freeze it into Ice!',
     kind: 'gathered',
     gather: { seconds: 20 * 60, quantity: 3 }, // TUNE: like Treats
   },
   {
     id: 'greens',
     name: 'Greens',
-    description: 'Leafy bundles of grass and clover from meadows and forests.',
+    description:
+      'Leafy bundles of grass and clover from meadows and forests, for growing leafy things.',
     kind: 'gathered',
     gather: { seconds: 15 * 60, quantity: 4 }, // TUNE: a little less than Stone
   },
   {
     id: 'ice',
     name: 'Ice',
-    description: 'Glittery, chilly chunks from the mountains. They never melt in your bag!',
+    description:
+      'Chilly chunks from the mountains, for building frosty things. They never melt in your bag!',
     kind: 'gathered',
     gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Emberwood
   },

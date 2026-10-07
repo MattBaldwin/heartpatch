@@ -123,6 +123,11 @@ export interface NodelessTileRow {
   nodeResource: null;
   /** A building stands in its middle (a fire on captured land): no node fits yet. */
   middleTaken: boolean;
+  /**
+   * A squishy gathers here (a job on bare land): a node would change what
+   * its work pays, finished cycles included, so it waits until the job ends.
+   */
+  worked: boolean;
 }
 
 export interface PendingRequestRow {
@@ -463,6 +468,9 @@ function queries(db: Executor): MapsRepo {
           terrain: tiles.terrain,
           middleTaken: sql<boolean>`exists (
             select 1 from ${buildings} b where b.tile_id = ${tiles}.id and b.spot = 0
+          )`,
+          worked: sql<boolean>`exists (
+            select 1 from ${squishies} s where s.work_tile_id = ${tiles}.id
           )`,
         })
         .from(tiles)

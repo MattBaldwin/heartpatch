@@ -155,6 +155,39 @@ describe.skipIf(!url)('new gatherables (#238, needs DATABASE_URL)', () => {
     expect(await nodesOf(mapId)).toEqual(made);
   });
 
+  it('waits for a gatherer on bare land to finish, so its work never changes what it pays', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const made = await nodesOf(mapId);
+    const extra = (await tilesOf(mapId)).find(
+      (t) => t.homeSlot === null && EXTRA.has(`${t.terrain}:${String(t.nodeResource)}`),
+    )!;
+    // As it was before #238, and my squishy farming the bare land there.
+    await db.execute(
+      `update tiles set node_resource = null, owner_user_id = '${kid.id}' where id = '${extra.id}'`,
+    );
+    const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
+      level: 10,
+      speciesId: 'thistlepip',
+    });
+    expect(granted.statusCode, granted.body).toBe(201);
+    const squishyId = (granted.json() as { squishy: { id: string } }).squishy.id;
+    await db.execute(
+      `update squishies set team_slot = null, work_tile_id = '${extra.id}', work_since = now(), work_started_at = now() where id = '${squishyId}'`,
+    );
+    const key = `${String(extra.q)},${String(extra.r)}`;
+
+    await seedExtraNodes(db, mapId);
+    expect((await nodesOf(mapId)).get(key)).toBeNull();
+    // The job ends: the node comes on the next read.
+    await db.execute(
+      `update squishies set work_tile_id = null, work_since = null, work_started_at = null where id = '${squishyId}'`,
+    );
+    expect(await seedExtraNodes(db, mapId)).toBe(1);
+    expect((await nodesOf(mapId)).get(key)).toBe(made.get(key));
+  });
+
   it('two readers at once add each node once', async () => {
     const server = await start();
     const kid = await player();

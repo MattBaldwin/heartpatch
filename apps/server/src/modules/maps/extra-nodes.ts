@@ -8,7 +8,14 @@ import { createMapsRepo } from './repo.js';
  * time it's read, instead of a backfill job (CLAUDE.md rule 4). A new map
  * gets the same nodes when it's generated: both run shared `extraNodes` on
  * the map seed, rolled per tile. A tile with a building in its middle (a fire
- * on captured land) waits until the middle is free, since a node takes it.
+ * on captured land) waits until the middle is free, since a node takes it,
+ * and so does a tile a squishy gathers on: a node would change what its work
+ * pays, cycles already finished included. Starting a job locks the tile the
+ * same way (jobs `lockTiles`), so the check under the lock below holds.
+ *
+ * A future "cleared" mark (#242, clearing land to repurpose it) is one more
+ * flag here: a tile the player cleared is filtered out with these two, so the
+ * next read doesn't plant its node back.
  *
  * Cheap when there's nothing to add (one read). Otherwise one transaction:
  * the tiles it adds to (step 6, id order, the lock building takes), planned
@@ -28,7 +35,7 @@ export async function seedExtraNodes(db: Executor, mapId: string): Promise<numbe
   const seed = stored ?? deriveSeed('hand-authored-map', mapId);
   const plan = (rows: typeof tiles) =>
     extraNodes(
-      rows.filter((t) => !t.middleTaken),
+      rows.filter((t) => !t.middleTaken && !t.worked),
       GAME_DATA.terrains,
       seed,
     );
