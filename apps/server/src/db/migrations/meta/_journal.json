@@ -204,6 +204,13 @@
       "when": 1791371703714,
       "tag": "0028_flippant_synch",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791382697055,
+      "tag": "0029_far_living_tribunal",
+      "breakpoints": true
     }
   ]
 }
