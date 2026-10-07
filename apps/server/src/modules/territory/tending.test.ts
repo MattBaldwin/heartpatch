@@ -15,7 +15,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { keepers, mapMembers, sessions, users } from '../../db/schema.js';
+import { buildings, keepers, mapMembers, sessions, users } from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -289,6 +289,60 @@ describe.skipIf(!url)('land that misses you (needs DATABASE_URL)', () => {
     const types = (await eventsOf(mapId)).map((e) => e.type);
     // Its land went wild first, so the map hears `tile.rewilded` (and resyncs), not a job change.
     expect(types.slice(-2)).toEqual(['work.collected', 'tile.rewilded']);
+  });
+
+  it('takes my fire down with land that goes wild, gives back half and its fuel (#202)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid);
+    const [far] = await landAt(mapId, kid, [5], ['forest', 'meadow', 'hills']);
+    const land = createLandTending({ db, clock: () => clock });
+    await land.nightfall(mapId, '2026-10-02');
+    // A fire there, with two nights of fuel left when the land goes, and a
+    // gatherer, so the refund and its banking lock the bag together.
+    const [fire] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: far!.id,
+        buildingId: 'hearthfire',
+        kind: 'hearthfire',
+        spot: 0,
+        fuelledThrough: '2026-10-16',
+      })
+      .returning({ id: buildings.id });
+    const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, { level: 5 });
+    const gatherer = SquishyResponseSchema.parse(granted.json()).squishy;
+    const job = await call(server, 'POST', `/maps/${mapId}/squishies/${gatherer.id}/job`, kid, {
+      job: 'gatherer',
+      q: far!.q,
+      r: far!.r,
+    });
+    expect(job.statusCode, job.body).toBe(200);
+
+    advance(RULES.wildAfterDays);
+    expect(await land.nightfall(mapId, '2026-10-14')).toEqual({ wild: 1 });
+    expect(await db.query.buildings.findMany({ where: (t, { eq }) => eq(t.id, fire!.id) })).toEqual(
+      [],
+    );
+    const refund = { timber: 2, stone: 2, emberwood: 2 };
+    const ledger = await db.query.resourceLedger.findMany({
+      where: (t, { and, eq }) =>
+        and(eq(t.mapId, mapId), eq(t.userId, kid.id), eq(t.reason, 'build-refund')),
+    });
+    expect(Object.fromEntries(ledger.map((l) => [l.itemId, l.delta]))).toEqual(refund);
+    const removed = (await eventsOf(mapId)).find((e) => e.type === 'building.removed')!;
+    expect(parseGameEventPayload('building.removed', removed.payload)).toMatchObject({
+      buildingRowId: fire!.id,
+      refund,
+      lost: 'wild',
+    });
+    // The welcome-back card says so.
+    const back = tendingOf(await call(server, 'GET', `/maps/${mapId}/territory/tending`, kid));
+    expect(back.wentWild).toEqual([
+      { q: far!.q, r: far!.r, night: '2026-10-14', lostFire: refund },
+    ]);
   });
 
   it('still banks my own gather that finished before its land went wild', async () => {

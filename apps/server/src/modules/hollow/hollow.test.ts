@@ -5,6 +5,7 @@ import {
   BattleResponseSchema,
   DevNightfallResponseSchema,
   HOLLOW_RULES,
+  hexDistance,
   HollowResponseSchema,
   JoinMapResponseSchema,
   MapResponseSchema,
@@ -18,6 +19,7 @@ import {
   type RescueGuardianRules,
 } from '@heartpatch/shared';
 import { RESCUE_GUARDIANS, SERVER_GAME_DATA } from '@heartpatch/shared/server';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -311,6 +313,54 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(publicViewFor(PUBLIC_VIEWS, hollowed!, { userId: friend.id })).toMatchObject({
         squishyId: taken,
       });
+    });
+
+    it('keeps a gatherer safe under a fire on captured land, and not one beyond it (#202)', async () => {
+      const server = await start();
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(server, kid, [friend]);
+      // Two of the kid's outer tiles, far apart; a lit fire stands on the first.
+      const wild = await db.query.tiles.findMany({
+        where: (t, { and, eq, isNull }) =>
+          and(eq(t.mapId, mapId), isNull(t.homeSlot), isNull(t.ownerUserId)),
+        orderBy: (t, { asc }) => [asc(t.q), asc(t.r)],
+      });
+      const lit = wild[0]!;
+      const far = wild.find((t) => hexDistance(t, lit) >= 3)!;
+      await db.execute(
+        `update tiles set owner_user_id = '${kid.id}' where id in ('${lit.id}', '${far.id}')`,
+      );
+      await db.insert(buildings).values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: lit.id,
+        buildingId: 'hearthfire',
+        kind: 'hearthfire',
+        spot: 0,
+        fuelledThrough: TONIGHT,
+      });
+      const work = (tileId: string) => ({
+        workTileId: tileId,
+        workSince: clock,
+        workStartedAt: clock,
+      });
+      const near = await squishy(mapId, kid);
+      const out = await squishy(mapId, kid);
+      await db.update(squishies).set(work(lit.id)).where(eq(squishies.id, near));
+      await db.update(squishies).set(work(far.id)).where(eq(squishies.id, out));
+      // No fire at home: the outer fire's light doesn't reach the Heart Seed.
+      const atHome = await squishy(mapId, kid);
+
+      expect(await hollowService().runNightfall(mapId, TONIGHT)).toEqual({ taken: 1 });
+      const [night] = await nightsOf(mapId);
+      expect(night!.outcomes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ userId: kid.id, exposed: 2, sheltered: 1 }),
+        ]),
+      );
+      expect(await stateOf(near)).toBe('active');
+      expect([await stateOf(out), await stateOf(atHome)].sort()).toEqual(['active', 'hollowed']);
     });
 
     it('runs once per map and night, however often it is asked (idempotent)', async () => {

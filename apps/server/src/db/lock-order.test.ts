@@ -1246,4 +1246,91 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .where(eq(clothingOwned.userId, kid.id));
     expect(pieces).toEqual([{ source: 'rescue' }]);
   });
+
+  /**
+   * Fires on several of a player's outer tiles (#202), stored highest id
+   * first, and those tiles, also stored highest id first. Two of the tiles
+   * are home tiles, for the home-plus-target lock.
+   */
+  async function fires() {
+    const { mapId, userId } = await patch();
+    const tileIds = [randomUUID(), randomUUID(), randomUUID()].sort();
+    await db.insert(tiles).values(
+      [...tileIds].reverse().map((id, i) => ({
+        id,
+        mapId,
+        q: 10 + i,
+        r: 0,
+        terrain: 'meadow',
+        ownerUserId: userId,
+        homeSlot: i < 2 ? 0 : null,
+      })),
+    );
+    const fireIds = [randomUUID(), randomUUID(), randomUUID()].sort();
+    await db.insert(buildings).values(
+      [...fireIds].reverse().map((id, i) => ({
+        id,
+        mapId,
+        ownerUserId: userId,
+        tileId: tileIds[i]!,
+        buildingId: 'hearthfire',
+        kind: 'hearthfire',
+        spot: 0,
+      })),
+    );
+    return { mapId, userId, tileIds, fireIds };
+  }
+
+  const lockBuildingRow = (tx: Transaction, id: string) =>
+    tx.select({ id: buildings.id }).from(buildings).where(eq(buildings.id, id)).for('update');
+  const lockTileRow = (tx: Transaction, id: string) =>
+    tx.select({ id: tiles.id }).from(tiles).where(eq(tiles.id, id)).for('update');
+
+  /** Holds the lowest row, runs `command`, then takes the others in id order. */
+  async function rowsAgainst(
+    lock: (tx: Transaction, id: string) => Promise<unknown>,
+    ids: string[],
+    command: () => Promise<unknown>,
+  ): Promise<void> {
+    let running: Promise<unknown> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`set local lock_timeout = '10s'`);
+      await lock(tx, ids[0]!);
+      const pid = await backendPid(tx);
+      running = command();
+      await waitUntilBlockedBy(db, pid);
+      for (const id of ids.slice(1)) await lock(tx, id);
+    });
+    await running;
+  }
+
+  it('locks the fires on lost land in id order (buildings `lockOnTiles`, #202)', async () => {
+    const { tileIds, fireIds } = await fires();
+    let locked: string[] = [];
+    await rowsAgainst(lockBuildingRow, fireIds, async () => {
+      locked = (
+        await unplanned((tx) => createBuildingsRepo(tx).lockOnTiles([...tileIds].reverse()))
+      ).map((b) => b.id);
+    });
+    expect(locked).toEqual(fireIds);
+  });
+
+  it("locks a player's fires in id order for Fuel all fires (buildings `lockFires`, #202)", async () => {
+    const { mapId, userId, fireIds } = await fires();
+    let locked: string[] = [];
+    await rowsAgainst(lockBuildingRow, fireIds, async () => {
+      locked = (await unplanned((tx) => createBuildingsRepo(tx).lockFires(mapId, userId))).map(
+        (b) => b.id,
+      );
+    });
+    expect(locked).toEqual(fireIds);
+  });
+
+  it('locks home tiles and the target tile together in id order (buildings `lockHomeTilesAnd`, #202)', async () => {
+    const { mapId, userId, tileIds } = await fires();
+    // The target (an outer tile, q 12) has the lowest id; the home tiles the two above.
+    await rowsAgainst(lockTileRow, tileIds, () =>
+      unplanned((tx) => createBuildingsRepo(tx).lockHomeTilesAnd(mapId, userId, { q: 12, r: 0 })),
+    );
+  });
 });
