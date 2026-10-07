@@ -1,4 +1,4 @@
-import type { BuildInfo } from '@heartpatch/shared';
+import { formatAppVersion, type BuildInfo } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
 import { versionView, type AppUpdates, type ServerBuild } from './app-updates.js';
 import '../ui/auth/auth.css';
@@ -33,6 +33,8 @@ export function mountVersionMenu(deps: {
     type: 'button',
     class: 'auth-chip-version',
     'data-testid': 'app-version',
+    // VoiceOver hears "Copied!" too.
+    'aria-live': 'polite',
   });
   const updateRow = el(
     'button',
@@ -61,8 +63,8 @@ export function mountVersionMenu(deps: {
     }, COPIED_MS);
   };
   line.addEventListener('click', () => {
-    const text = versionView(deps.client, server, deps.updates.workerWaiting).text;
-    deps.copy(text).then(
+    // Just the version, for a bug report.
+    deps.copy(formatAppVersion(deps.client)).then(
       () => {
         flash(VERSION_TEXT.copied);
       },

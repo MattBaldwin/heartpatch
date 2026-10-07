@@ -21,7 +21,8 @@ const ConfigSchema = z.object({
     z
       .string()
       .regex(/^[0-9a-f]{7,40}$/)
-      .transform((sha) => ShortCommitSchema.parse(sha.slice(0, 7)))
+      .transform((sha) => sha.slice(0, 7))
+      .pipe(ShortCommitSchema)
       .optional(),
   ),
   // Required, so a missing value stops the server rather than failing on first query.

@@ -334,6 +334,12 @@
   display: none;
 }
 
+/* "Update now" waiting for a recovery code to be put away (#47, #198). */
+.auth-chip-menu > button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .hp-trays-on .auth-chip-body > .auth-button {
   min-height: 48px;
 }
