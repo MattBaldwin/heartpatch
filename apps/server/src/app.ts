@@ -6,6 +6,8 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 import type { Config } from './config.js';
 import { registerErrorHandling } from './lib/errors.js';
 import { serializerCompiler, validatorCompiler } from './lib/zod.js';
+import { accountHelpersRoutes } from './modules/account-helpers/routes.js';
+import { createAccountHelpersService } from './modules/account-helpers/service.js';
 import { createAuthHooks, registerRequestGuards } from './modules/auth/hooks.js';
 import type { Database } from './db/client.js';
 import { createClock, type Clock } from './lib/time.js';
@@ -175,6 +177,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         );
 
         await api.register(signupCodesRoutes(signupCodes, { hooks: authHooks }));
+        await api.register(
+          accountHelpersRoutes(createAccountHelpersService({ db, clock }), { hooks: authHooks }),
+        );
 
         const keepers = createKeepersService({ db, clock });
         await api.register(keepersRoutes(keepers, { hooks: authHooks }));

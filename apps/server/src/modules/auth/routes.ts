@@ -1,6 +1,8 @@
 import {
   LoginRequestSchema,
   MeResponseSchema,
+  NewRecoveryCodeRequestSchema,
+  NewRecoveryCodeResponseSchema,
   RecoverRequestSchema,
   RecoveryCodeResponseSchema,
   SessionResponseSchema,
@@ -9,10 +11,15 @@ import {
 import { normalizeIP } from '@fastify/rate-limit';
 import type { FastifyPluginCallback, FastifyRequest, preHandlerAsyncHookHandler } from 'fastify';
 import { z } from 'zod';
-import { rateLimit } from '../../lib/rate-limit.js';
+import { playerRateLimit, rateLimit } from '../../lib/rate-limit.js';
 import type { ZodTypeProvider } from '../../lib/zod.js';
-import { clearSessionCookie, setSessionCookie, type AuthHooks } from './hooks.js';
-import { AUTH_RATE_LIMITS, SESSION_COOKIE, type AuthAction } from './limits.js';
+import { clearSessionCookie, requireUser, setSessionCookie, type AuthHooks } from './hooks.js';
+import {
+  ACCOUNT_RATE_LIMITS,
+  AUTH_RATE_LIMITS,
+  SESSION_COOKIE,
+  type AuthAction,
+} from './limits.js';
 import type { AuthService } from './service.js';
 
 /** The lowercased username from an already-validated body, if any. */
@@ -91,6 +98,28 @@ export const authRoutes =
         const result = await service.recover(request.body);
         setSessionCookie(reply, result.session, secureCookies);
         return reply.send({ user: result.user, recoveryCode: result.recoveryCode });
+      },
+    );
+
+    const accountRateLimit = playerRateLimit(fastify, 'account', ACCOUNT_RATE_LIMITS);
+
+    // A new recovery code for a logged-in player who types their password (#197).
+    app.post(
+      '/auth/recovery-code',
+      {
+        schema: {
+          body: NewRecoveryCodeRequestSchema,
+          response: { 200: NewRecoveryCodeResponseSchema },
+        },
+        preHandler: [options.hooks.requireAuth, accountRateLimit('recoveryCode')],
+      },
+      async (request, reply) => {
+        const result = await service.replaceRecoveryCode(
+          requireUser(request),
+          request.body.password,
+        );
+        // Shown once; keep it out of any cache.
+        return reply.header('cache-control', 'no-store').send(result);
       },
     );
 

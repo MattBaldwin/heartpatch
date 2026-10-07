@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { draws, hook, idle } from './dev-hook.js';
 import { expectRoomyLabels, settled } from './layout.js';
-import { skipCinematic, TEST_PASSWORD, uniqueName, visitPatch } from './players.js';
+import { savedCode, skipCinematic, TEST_PASSWORD, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 
 /**
@@ -69,7 +69,7 @@ async function signUp(page: Page, name: string): Promise<void> {
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  await overlay.getByRole('button', { name: 'I saved it!' }).tap();
+  await savedCode(overlay);
   // Straight on to the lobby after the pick: the story has its own spec.
   await skipCinematic(page);
 }
