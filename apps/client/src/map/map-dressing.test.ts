@@ -118,6 +118,29 @@ describe('dressTile', () => {
     }
   });
 
+  it('puts a #238 node in the middle and keeps every other prop clear of it', () => {
+    for (const [terrain, middle] of [
+      ['mountains', 'ice-crystals'],
+      ['lake', 'well'],
+      ['forest', 'greens-patch'],
+    ] as const) {
+      for (const tile of wildTiles.filter((t) => t.terrain === terrain).slice(0, 8)) {
+        const c = hexToWorld(tile, HEX_SIZE);
+        const [first, ...rest] = dressTile(tile, terrain, HEX_SIZE, { ...OFF, middle });
+        expect(first).toMatchObject({ kind: middle, at: { x: c.x, z: c.z }, scale: 1 });
+        for (const p of rest) {
+          expect(Math.hypot(p.at.x - c.x, p.at.z - c.z)).toBeGreaterThanOrEqual(
+            HEX_SIZE * 0.42 - 1e-9,
+          );
+        }
+        // The same props as without the node, only moved out of its way.
+        expect(rest.map((p) => p.kind)).toEqual(
+          dressTile(tile, terrain, HEX_SIZE, OFF).map((p) => p.kind),
+        );
+      }
+    }
+  });
+
   it("turns some pumpkins into jack-o'-lanterns while Halloween is on, and only then", () => {
     const fields = wildTiles.filter((t) => t.terrain === 'pumpkin-fields');
     const kinds = (options: { halloween: boolean }) =>

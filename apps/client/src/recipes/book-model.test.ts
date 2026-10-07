@@ -38,6 +38,12 @@ const view = (key: string, over: Partial<BookContext> = {}) => {
   return pageView(page, ctx(over));
 };
 
+/**
+ * Made things with no use yet, and where their use comes from (#241's
+ * guard): one named entry each. #203 removes "ice" with the Ice Wall.
+ */
+const NO_USE_YET: Readonly<Record<string, string>> = { ice: 'used by the Ice Wall (#203)' };
+
 describe('recipe book pages', () => {
   it('keep have/need per ingredient, capped for the 0/1 display', () => {
     const charm = view('recipe:heart-charm', { bag: { timber: 5, treats: 0 } });
@@ -218,7 +224,10 @@ describe('where to find it', () => {
   it('names terrains, the home ring, bonuses and recipes', () => {
     expect(whereText('timber')).toBe("Forest, Juniper's Gap and your home ring.");
     expect(whereText('witch-dust')).toBe('A surprise bonus when you gather Emberwood or Pumpkins.');
-    expect(whereText('treats')).toBe('Your home ring, or make Pumpkin Treats.');
+    expect(whereText('treats')).toBe('Your home ring, or make Cooked Treats or Pumpkin Treats.');
+    // The nesting economy (#238): land a gatherer works, unless its spots say it already.
+    expect(whereText('ice')).toBe('A squishy gathering on Mountains, or make Frozen Water.');
+    expect(whereText('greens')).toBe('Forest, or a squishy gathering on Meadow.');
     expect(whereText('pumpkins')).toBe('Pumpkin Fields and your home ring.');
     expect(whereText('magic-fallen-leaves')).toBe(
       'Your home ring, or a surprise bonus when you gather Timber.',
@@ -362,10 +371,29 @@ describe('ribbon tabs', () => {
       { id: 'none', label: 'Nothing yet', color: '#fff', outputs: ['no-such-thing'] },
     ]);
     expect(tabs.map((t) => t.label)).toEqual(['Treats & food', 'Charms']);
-    expect(views.filter(tabs[0]!.matches).map((p) => p.key)).toEqual(['recipe:pumpkin-treats']);
+    expect(views.filter(tabs[0]!.matches).map((p) => p.key)).toEqual([
+      'recipe:cook-treats',
+      'recipe:pumpkin-treats',
+    ]);
+  });
+
+  it('names only things a page still makes as having no use yet', () => {
+    for (const made of Object.keys(NO_USE_YET)) {
+      const pages = GAME_DATA.recipes.filter((r) => r.output.resource === made);
+      expect(pages.length, `${made} is made by no recipe page`).toBeGreaterThan(0);
+    }
   });
 
   it('say what every page makes is for (#241)', () => {
-    expect(views.every((v) => v.effect !== null && v.effect.chips.length > 0)).toBe(true);
+    for (const v of views) {
+      const made = GAME_DATA.recipes.find((r) => `recipe:${r.id}` === v.key)?.output.resource;
+      const waiting = made === undefined ? undefined : NO_USE_YET[made];
+      if (waiting) {
+        // Self-expiring: once it has a use, this fails until its entry goes.
+        expect(v.effect?.chips ?? [], `${made}: ${waiting}`).toEqual([]);
+      } else {
+        expect(v.effect !== null && v.effect.chips.length > 0, v.key).toBe(true);
+      }
+    }
   });
 });

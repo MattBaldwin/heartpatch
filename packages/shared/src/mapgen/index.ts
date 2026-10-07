@@ -1,4 +1,6 @@
 export * from './home-ring.js';
+export * from './extra-nodes.js';
+import { extraNodes } from './extra-nodes.js';
 
 import {
   hex,
@@ -242,5 +244,21 @@ export function generateMap(data: MapGenData, options: GenerateMapOptions): Gene
     };
   });
 
-  return { playerCount, radius: layout.radius, tiles: result, homes, hollowEntrance: center };
+  // Water, Greens and Ice (#238): the same pass older maps get on read, so
+  // the main pass above (and every map made before it) stays as it was.
+  const added = new Map(
+    extraNodes(result, data.terrains, seed).map((n) => [hexKey(n), n.resource]),
+  );
+  const tilesWithExtras = result.map((t) => {
+    const resource = added.get(hexKey(t));
+    return resource === undefined ? t : { ...t, nodeResource: resource };
+  });
+
+  return {
+    playerCount,
+    radius: layout.radius,
+    tiles: tilesWithExtras,
+    homes,
+    hollowEntrance: center,
+  };
 }
