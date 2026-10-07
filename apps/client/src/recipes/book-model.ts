@@ -26,6 +26,7 @@ import { buildingIcon, effectChips } from '../home/home-view.js';
 // Player-facing text (style guide §2, §6).
 export const BOOK_TEXT = {
   homeRing: 'your home ring',
+  gatherer: (land: string) => `a squishy gathering on ${land}`,
   bonus: (from: string) => `a surprise bonus when you gather ${from}`,
   madeBy: (what: string) => `or make ${what}`,
   nowhere: 'Nobody has found any yet. Keep exploring!',
@@ -64,6 +65,17 @@ export function whereText(resourceId: string): string {
   if (facts.homeRing) places.push(BOOK_TEXT.homeRing);
   const parts: string[] = [];
   if (places.length > 0) parts.push(listWords(places));
+  // Land that gives it to a gatherer, unless its spots are named already.
+  const land = facts.gatheredOn.filter((t) => !facts.terrains.includes(t));
+  if (land.length > 0) {
+    const gatherer = BOOK_TEXT.gatherer(
+      listWords(
+        land.map((t) => TERRAIN_NAMES.get(t) ?? t),
+        'or',
+      ),
+    );
+    parts.push(parts.length > 0 ? `or ${gatherer}` : gatherer);
+  }
   if (facts.bonusFrom.length > 0) {
     const bonus = BOOK_TEXT.bonus(listWords(facts.bonusFrom.map(itemName), 'or'));
     parts.push(parts.length > 0 ? `or ${bonus}` : bonus);

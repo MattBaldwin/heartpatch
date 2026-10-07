@@ -190,6 +190,7 @@ describe('whereToFind', () => {
   it('points at terrains, home rings, bonuses and recipes', () => {
     expect(whereToFind('timber')).toEqual({
       terrains: ['forest', 'junipers-gap'],
+      gatheredOn: ['forest'],
       homeRing: true,
       bonusFrom: [],
       madeBy: [],
@@ -197,12 +198,27 @@ describe('whereToFind', () => {
     });
     expect(whereToFind('witch-dust')).toEqual({
       terrains: [],
+      gatheredOn: [],
       homeRing: false,
       bonusFrom: ['emberwood', 'pumpkins'],
       madeBy: [],
       season: 'halloween',
     });
-    expect(whereToFind('treats')).toMatchObject({ homeRing: true, madeBy: ['pumpkin-treats'] });
+    expect(whereToFind('treats')).toMatchObject({
+      homeRing: true,
+      gatheredOn: [],
+      madeBy: ['cook-treats', 'pumpkin-treats'],
+    });
+    // The nesting economy (#238): a terrain's primary resource is its land's.
+    expect(whereToFind('ice')).toMatchObject({
+      terrains: [],
+      gatheredOn: ['mountains'],
+      madeBy: ['freeze-water'],
+    });
+    expect(whereToFind('greens')).toMatchObject({
+      terrains: ['forest'],
+      gatheredOn: ['meadow'],
+    });
     expect(whereToFind('jack-o-lantern-hearthfire')).toMatchObject({
       madeBy: ['jack-o-lantern-hearthfire'],
     });
@@ -215,6 +231,7 @@ describe('whereToFind', () => {
   it('knows nothing about made-up items', () => {
     expect(whereToFind('golden-ticket')).toEqual({
       terrains: [],
+      gatheredOn: [],
       homeRing: false,
       bonusFrom: [],
       madeBy: [],

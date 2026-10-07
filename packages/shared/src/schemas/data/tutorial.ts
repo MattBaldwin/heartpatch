@@ -5,6 +5,7 @@ import type { GameData } from './game-data.js';
 import { BattleAiPolicySchema } from './battle.js';
 import { ContentIdSchema, DisplayNameSchema } from './common.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Path, type Report } from './issues.js';
+import { terrainNodeResources } from './terrains.js';
 
 // The single-player tutorial, "The First Patch" (design doc §26; tech spec §7
 // "Tutorial maps" and "Tutorial step engine"). Steps are data: adding one
@@ -262,7 +263,7 @@ function checkLayout(
       if (isHome) ringNodes.add(tile.nodeResource);
       const terrain = terrains.get(tile.terrain);
       // Home ring nodes are guaranteed whatever the terrain, as mapgen does (design doc §11).
-      if (!isHome && terrain && !terrain.nodeResources.includes(tile.nodeResource)) {
+      if (!isHome && terrain && !terrainNodeResources(terrain).includes(tile.nodeResource)) {
         report(
           [...path, 'nodeResource'],
           `"${tile.terrain}" tiles can't have a "${tile.nodeResource}" node`,

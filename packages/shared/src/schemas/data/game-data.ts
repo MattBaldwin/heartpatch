@@ -212,6 +212,11 @@ export const GameDataSchema = z
     });
 
     data.terrains.forEach((t, i) => {
+      t.extraNodes?.forEach((extra, j) => {
+        const at = ['terrains', i, 'extraNodes', j, 'resource'];
+        checkRef(resources, 'resource', extra.resource, at, report);
+        checkGatherable(extra.resource, at);
+      });
       t.nodeResources.forEach((id, j) => {
         checkRef(resources, 'resource', id, ['terrains', i, 'nodeResources', j], report);
         checkGatherable(id, ['terrains', i, 'nodeResources', j]);
