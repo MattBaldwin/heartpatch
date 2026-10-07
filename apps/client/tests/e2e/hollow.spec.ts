@@ -7,10 +7,10 @@ import { trayButton } from './trays.js';
 
 /**
  * The Hollow Man on an iPhone (issue #21): home is always safe (the Heart
- * Seed, #202), so a new player claims land and sends a gatherer out there;
+ * Seed, #202), so a new player claims land and posts a guard out there;
  * with no fire lit on it they get a nudge to light one, and two nights of
  * grace (owner decision 2026-10-03). Then night falls (the dev route), he
- * visits the map once, takes the gatherer sleeping in the dark to the Hollow,
+ * visits the map once, takes the guard standing in the dark to the Hollow,
  * the morning report says so kindly, and a rescue sets off from anywhere.
  * Checked through the dev hook's signals, never pixels or timing.
  */
@@ -65,7 +65,7 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   const hint = await trayButton(page, 'hollow-fire-hint');
   await expect(hint).toBeHidden();
 
-  // Land of their own, and a gatherer out there with no fire lit: exposed.
+  // Land of their own, and a guard out there with no fire lit: exposed.
   const land = await claimLand(page, mapId);
   const squishy = { speciesId: STARTERS.speciesIds[0], level: 5 };
   const granted = await api<{ squishy: { id: string } }>(
@@ -75,17 +75,16 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
     squishy,
   );
   expect(granted.status).toBe(201);
-  const job = await api(page, 'POST', `/maps/${mapId}/squishies/${granted.body.squishy.id}/job`, {
-    job: 'gatherer',
+  // On watch out there with no fire lit (owner decision 2026-10-07: guards need its light too).
+  const posted = await api(page, 'POST', `/maps/${mapId}/defenders`, {
     ...land,
+    squishyIds: [granted.body.squishy.id],
   });
-  expect(job.status).toBe(200);
+  expect(posted.status, JSON.stringify(posted.body)).toBe(200);
   // The nudge, once the hollow status is read again (unless it's night on the server's clock).
   await page.reload();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
-  await expect
-    .poll(async () => (await mapState(page))?.live, { timeout: 30_000 })
-    .toBe('live');
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
   if (!(await hollowState(page))!.night) {
     await expect(hint).toBeVisible();
     await expect(hint).toContainText('A friend sleeps out in the dark. Light a fire there!');
