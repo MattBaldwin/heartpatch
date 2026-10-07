@@ -11,6 +11,8 @@ import {
   MapViewSchema,
   type JobsView,
   type PublicTile,
+  extraNodes,
+  GAME_DATA,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -178,12 +180,15 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
   ): Promise<PublicTile> {
     const all = await tilesOf(server, who, mapId);
     const home = all.filter((t) => t.homeSlot !== null);
+    const seed = (await db.query.maps.findFirst({ where: (m, { eq }) => eq(m.id, mapId) }))!.seed!;
     const far = all.find(
       (t) =>
         t.ownerUserId === null &&
         t.homeSlot === null &&
         !skip.some((s) => s.q === t.q && s.r === t.r) &&
-        home.every((h) => hexDistance(h, t) >= 4),
+        home.every((h) => hexDistance(h, t) >= 4) &&
+        // Bare even after #238's extra pass would roll this terrain here.
+        extraNodes([{ ...t, terrain, nodeResource: null }], GAME_DATA.terrains, seed).length === 0,
     );
     expect(far).toBeDefined();
     await run(
@@ -293,7 +298,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       expect(jobOf(view, idle)).toMatchObject({ job: 'resting', habitatId: null, work: null });
       expect(view.team).toEqual([]);
       expect(view.rules).toEqual({ teamSize: 3, maxStoredCycles: JOB_RULES.work.maxStoredCycles });
-      // Home nodes and the meadow (Treats) can be worked; home land without a node can't.
+      // Home nodes and the meadow (Greens since #238) can be worked; home land without a node can't.
       const spots = view.spots.map((s) => `${s.resource}/${s.from}`).sort();
       expect(spots).toEqual(
         expect.arrayContaining([
@@ -301,7 +306,7 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
           'stone/node',
           'timber/node',
           'treats/node',
-          'treats/land',
+          'greens/land',
         ]),
       );
       // Home is always safe (the Heart Seed, owner decision 2026-10-07); land needs a fire.
@@ -395,6 +400,41 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       expect(jobOf(body.jobs, pet).work?.nextReadyAt).toBe(
         new Date(started + 2 * cycle).toISOString(),
       );
+    });
+
+    it('works the land’s main resource out on the map, whatever its spot; home spots as ever (#238)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      // Out on the land, spots are the Keeper's: a forest's Greens spot, a mountain's Glimmer.
+      const forest = await farLand(server, kid, mapId, 'forest');
+      const mountain = await farLand(server, kid, mapId, 'mountains', [forest]);
+      await run(
+        `update tiles set node_resource = 'greens' where id = '${await tileIdAt(mapId, forest)}'`,
+      );
+      await run(
+        `update tiles set node_resource = 'glimmer' where id = '${await tileIdAt(mapId, mountain)}'`,
+      );
+      const home = await homeNode(server, kid, mapId, 'stone');
+      const [a, b, c] = [
+        await squishy(mapId, kid),
+        await squishy(mapId, kid),
+        await squishy(mapId, kid),
+      ];
+      const work = async (id: string, at: { q: number; r: number }) => {
+        const res = await setJob(server, kid, mapId, id, { job: 'gatherer', q: at.q, r: at.r });
+        expect(res.statusCode, res.body).toBe(200);
+        return jobOf(JobsViewSchema.parse(res.json()), id).work;
+      };
+      expect(await work(a, forest)).toMatchObject({ resource: 'timber', from: 'land' });
+      expect(await work(b, mountain)).toMatchObject({ resource: 'ice', from: 'land' });
+      // In the home ring, a spot is still what a gatherer works.
+      expect(await work(c, home)).toMatchObject({ resource: 'stone', from: 'node' });
+      // The job board's spots say the same.
+      const spots = (await jobs(server, kid, mapId)).spots;
+      const at = (t: { q: number; r: number }) => spots.find((s) => s.q === t.q && s.r === t.r);
+      expect(at(forest)).toMatchObject({ resource: 'timber', from: 'land' });
+      expect(at(mountain)).toMatchObject({ resource: 'ice', from: 'land' });
     });
 
     it('farms territory by terrain, one gatherer per tile, only on my land', async () => {

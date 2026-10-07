@@ -20,6 +20,10 @@ const ICONS: Readonly<Record<string, string>> = {
   'brave-brew': '🧪',
   'cozy-cocoa': '☕',
   'hearty-soup': '🍲',
+  // New things to gather (#238).
+  water: '💧',
+  greens: '🌿',
+  ice: '🧊',
 };
 
 export const FALLBACK_ICON = '✨';

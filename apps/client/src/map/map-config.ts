@@ -35,7 +35,11 @@ export type PropKind =
   | 'jack-o-lantern'
   // Seasonal home nodes: Halloween's pumpkin patch, Thanksgiving's leaf pile.
   | 'pumpkin-patch'
-  | 'leaf-pile';
+  | 'leaf-pile'
+  // New things to gather (#238): a lakeside well, a patch of greens, ice crystals.
+  | 'well'
+  | 'greens-patch'
+  | 'ice-crystals';
 
 export interface TerrainLook {
   /** Top colour, sRGB hex. */

@@ -14,16 +14,18 @@ export const JOB_RULES: JobRules = {
     // TUNE: like the habitat match (DECISIONS "XP maths is whole percents").
     match: { onePercent: 135, bothPercent: 175 },
   },
-  // TUNE: land without a node gives less than a node does (design doc §12 sources).
-  // Meadows grow a few Treats; lakes and Juniper's Gap give nothing to a gatherer.
+  // TUNE: land without a node gives its terrain's primary resource; gather
+  // spots are the rarer secondary (owner decision on #238, the nesting
+  // economy). Treats are cooked from Greens or grown on farm plots. Juniper's
+  // Gap gives nothing to a gatherer.
   terrainYields: [
-    { terrain: 'meadow', resource: 'treats', quantity: 1, seconds: 20 * 60 }, // TUNE:
+    { terrain: 'meadow', resource: 'greens', quantity: 2, seconds: 15 * 60 }, // TUNE:
     { terrain: 'forest', resource: 'timber', quantity: 2, seconds: 15 * 60 }, // TUNE:
     { terrain: 'old-forest', resource: 'emberwood', quantity: 1, seconds: 30 * 60 }, // TUNE:
     { terrain: 'hills', resource: 'stone', quantity: 2, seconds: 15 * 60 }, // TUNE:
-    // TUNE: slow, so Glimmer stays special (a Glimmer node is 1 an hour). Mountains
-    // without a node gave Stone; hills, Stone nodes and the home ring still do.
-    { terrain: 'mountains', resource: 'glimmer', quantity: 1, seconds: 90 * 60 },
+    // TUNE: Ice replaces the slow Glimmer (#238); Glimmer stays on mountain spots.
+    { terrain: 'mountains', resource: 'ice', quantity: 1, seconds: 20 * 60 },
+    { terrain: 'lake', resource: 'water', quantity: 2, seconds: 15 * 60 }, // TUNE:
     { terrain: 'pumpkin-fields', resource: 'pumpkins', quantity: 1, seconds: 20 * 60 }, // TUNE:
   ],
   // TUNE: who is quick at what. Element side first, then feeling.
@@ -38,7 +40,11 @@ export const JOB_RULES: JobRules = {
       feelings: ['joy'],
       seasons: [],
     },
-    { resource: 'treats', icon: '🍪', elements: ['water'], feelings: ['silly'], seasons: [] },
+    // #238: Water squishies fetch Water now that land grows no Treats. Every
+    // feeling already has a resource, so Greens and Ice share theirs. TUNE:
+    { resource: 'water', icon: '💧', elements: ['water'], feelings: ['silly'], seasons: [] },
+    { resource: 'greens', icon: '🌿', elements: ['leaf'], feelings: ['cozy'], seasons: [] },
+    { resource: 'ice', icon: '🧊', elements: ['frost'], feelings: ['sleepy'], seasons: [] },
     {
       resource: 'pumpkins',
       icon: '🎃',

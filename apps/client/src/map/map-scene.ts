@@ -773,7 +773,15 @@ export class MapScene {
       if (tile.homeSlot !== null) continue;
       const top = topOf(tile);
       const key = hexKey(tile);
-      for (const prop of dressTile(tile, tile.terrain, HEX_SIZE, { halloween: this.halloween })) {
+      // A #238 node (a well, greens, ice) stands in the middle, as a prop, so
+      // it's muted on wild land and sits at the tile's own height.
+      const node = tile.nodeResource;
+      const middle = node !== null && LAND_NODES.has(node) ? NODE_PROPS[node] : undefined;
+      const dressing = dressTile(tile, tile.terrain, HEX_SIZE, {
+        halloween: this.halloween,
+        ...(middle !== undefined && { middle }),
+      });
+      for (const prop of dressing) {
         let built = meshes.get(prop.kind);
         if (!built) {
           built = buildProp(this.scene, prop.kind);
@@ -901,7 +909,8 @@ export class MapScene {
 // Each home base's resource nodes (Timber, Stone, Emberwood, the farm plot),
 // drawn in the middle of their tile as on the Home view, so "tap the tree
 // tile" has a tree to tap. Kept apart from the terrain props above, which
-// skip home tiles.
+// skip home tiles. The #238 nodes (Water, Greens, Ice) out on the land are
+// drawn with those props (`buildProps`, `LAND_NODES`).
 
 /** Node resources drawn as props in the middle of their tile (the map and Home). */
 export const NODE_PROPS: Readonly<Record<string, PropKind>> = {
@@ -913,7 +922,18 @@ export const NODE_PROPS: Readonly<Record<string, PropKind>> = {
   // carved one, so it reads apart from the farm plot, and Thanksgiving's leaf pile.
   pumpkins: 'pumpkin-patch',
   'magic-fallen-leaves': 'leaf-pile',
+  // #238: out on the land these are drawn with the terrain props (`LAND_NODES`).
+  water: 'well',
+  greens: 'greens-patch',
+  ice: 'ice-crystals',
 };
+
+/**
+ * Nodes drawn out on the land too, not only at home (#238, owner-approved
+ * mockup 2026-10-07): a lake with a well says "you can gather here" at a
+ * glance. They stand in the tile's middle with the terrain props.
+ */
+export const LAND_NODES: ReadonlySet<string> = new Set(['water', 'greens', 'ice']);
 
 const NODE_SEASONS = new Map(GAME_DATA.resources.map((r) => [r.id, r.season]));
 

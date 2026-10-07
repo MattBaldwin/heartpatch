@@ -4,6 +4,7 @@ import { RESOURCES } from '../data/resources.js';
 import { TUTORIAL_OVERRIDES } from '../data/tutorial/overrides.js';
 import {
   canGather,
+  craftSecondsFor,
   gatherSeconds,
   gatherYield,
   inSeason,
@@ -51,6 +52,28 @@ describe('gathering rules', () => {
     expect(gatherSeconds(resource('timber'), TUTORIAL_OVERRIDES)).toBe(
       TUTORIAL_OVERRIDES.gatherSeconds,
     );
+  });
+
+  it('makes a craft quicker with the right squishy on the team (#238)', () => {
+    const freeze = RECIPES.find((r) => r.id === 'freeze-water')!;
+    expect(freeze.fasterWith).toEqual({ element: 'frost', percent: 50 });
+    expect(craftSecondsFor(freeze, [])).toBe(freeze.craftSeconds);
+    expect(craftSecondsFor(freeze, ['fire', 'water'])).toBe(freeze.craftSeconds);
+    expect(craftSecondsFor(freeze, ['fire', 'frost'])).toBe(freeze.craftSeconds / 2);
+    // No speed-up on the recipe: always its own time.
+    const charm = RECIPES.find((r) => r.id === 'heart-charm')!;
+    expect(craftSecondsFor(charm, ['frost'])).toBe(charm.craftSeconds);
+    // Rounded up, so a speed-up never makes a craft instant.
+    expect(
+      craftSecondsFor({ craftSeconds: 7, fasterWith: { element: 'frost', percent: 50 } }, [
+        'frost',
+      ]),
+    ).toBe(4);
+    expect(
+      craftSecondsFor({ craftSeconds: 1, fasterWith: { element: 'frost', percent: 90 } }, [
+        'frost',
+      ]),
+    ).toBe(1);
   });
 
   it('only unlocks the Jack-o-Lantern recipe in season', () => {

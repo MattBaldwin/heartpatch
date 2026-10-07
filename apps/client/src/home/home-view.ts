@@ -137,6 +137,10 @@ const MIDDLE_THINGS: Readonly<Record<string, string>> = {
   pumpkins: 'a pumpkin patch',
   'magic-fallen-leaves': 'a leaf pile',
   glimmer: 'some Glimmer crystals',
+  // #238
+  water: 'a little well',
+  greens: 'a patch of greens',
+  ice: 'some ice crystals',
 };
 
 /** "a Timber pile", "a farm plot": the resource spot in a tile's middle. */
