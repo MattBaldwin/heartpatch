@@ -21,6 +21,7 @@ import {
   liveFamilyCodes,
 } from './family-codes.js';
 import { forgetPatch, patchToResume, rememberPatch } from './last-patch.js';
+import { closeListTo, LOBBY_PEEK_TEXT, lobbyChrome, type LobbyMode } from './lobby-chrome.js';
 import { lobbyApi } from './lobby-api.js';
 import { joinedSince, listKey, WAITING_POLL_MS } from './lobby-poll.js';
 import '../auth/auth.css';
@@ -96,6 +97,12 @@ export interface LobbyOptions {
   listHeader?: () => Node[];
   /** Rows on the Settings screen (the tutorial's replay, #47). */
   settings?: () => Node[];
+  /**
+   * True while a patch is on screen behind the lobby (#212): "Look around the
+   * world" then goes back to it, and the "Back to my patches" pill stays
+   * away. main.ts knows (the map's HUD); defaults to none.
+   */
+  patchOpen?: () => boolean;
   /** Where the "My patches" button goes over a map (the trays' corner); defaults to `root`. */
   buttonRoot?: HTMLElement;
   /**
@@ -121,8 +128,24 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     'My patches',
   );
   openButton.hidden = true;
-  root.append(panel);
+  // While peeking at the world with no patch open, the way back is big and
+  // plain (#212); the corner button still works too.
+  const backPill = el(
+    'button',
+    { type: 'button', class: 'auth-button lobby-back', 'data-testid': 'lobby-back' },
+    LOBBY_PEEK_TEXT.back,
+  );
+  backPill.hidden = true;
+  root.append(panel, backPill);
   (options.buttonRoot ?? root).append(openButton);
+
+  /** Shows the panel, corner button and back pill for `mode` (lobby-chrome.ts). */
+  const setMode = (mode: LobbyMode) => {
+    const chrome = lobbyChrome(mode);
+    panel.hidden = !chrome.panel;
+    openButton.hidden = !chrome.openButton;
+    backPill.hidden = !chrome.backPill;
+  };
 
   let user: PublicUser | null = null;
   /** Which screen to come back to after a refresh. */
@@ -153,8 +176,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     onForm = false;
     shown += 1;
     card.replaceChildren(...children);
-    panel.hidden = false;
-    openButton.hidden = true;
+    setMode('list');
     card.scrollTop = 0;
   };
 
@@ -258,8 +280,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       forgetPatch(who.id);
       return false;
     }
-    panel.hidden = true;
-    openButton.hidden = false;
+    setMode('map');
     return true;
   }
 
@@ -350,11 +371,10 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     const close = el(
       'button',
       { type: 'button', class: 'auth-link', 'data-testid': 'lobby-close' },
-      'Peek at the world',
+      LOBBY_PEEK_TEXT.lookAround,
     );
     close.addEventListener('click', () => {
-      panel.hidden = true;
-      openButton.hidden = false;
+      setMode(closeListTo(options.patchOpen?.() ?? false));
     });
     show(
       title('Your patches'),
@@ -511,8 +531,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         act(status, visit, async () => {
           await onOpen(map.id);
           if (user) rememberPatch(user.id, map.id);
-          panel.hidden = true;
-          openButton.hidden = false;
+          setMode('map');
         });
       });
       sections.push(el('div', { class: 'auth-actions' }, visit));
@@ -1010,6 +1029,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
   );
 
   openButton.addEventListener('click', () => void showList());
+  backPill.addEventListener('click', () => void showList());
   // iOS pauses background tabs; catch up when the player comes back (tech spec §5).
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && user && !panel.hidden) refresh();
@@ -1023,8 +1043,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         void showList();
       } else {
         show(); // clears the card (and any hold on updates)
-        panel.hidden = true;
-        openButton.hidden = true;
+        setMode('away');
       }
     },
     showMessage: (message) => {
@@ -1046,14 +1065,12 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       if (!user) return;
       releaseUpdates?.();
       releaseUpdates = null;
-      panel.hidden = true;
-      openButton.hidden = false;
+      setMode('map');
     },
     stepOut: () => {
       releaseUpdates?.();
       releaseUpdates = null;
-      panel.hidden = true;
-      openButton.hidden = true;
+      setMode('away');
     },
     showSettings,
     get isOpen() {
