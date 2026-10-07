@@ -423,7 +423,8 @@ export const GAME_EVENTS = {
   },
   /**
    * A challenger fought a fence segment and it held (#203): it keeps the
-   * energy it lost (owner decision 2026-10-07). `userId` is its owner.
+   * energy it lost (owner decision 2026-10-07). `userId` is its owner. Who
+   * challenged stays internal: the owner's report says "someone".
    */
   'fence.damaged': {
     internal: z.strictObject({
@@ -433,11 +434,12 @@ export const GAME_EVENTS = {
       battleId: z.uuid(),
       fence: PlacedFenceStrictSchema,
     }),
-    public: z.object({ userId: z.uuid(), attackerUserId: z.uuid(), fence: PlacedFenceSchema }),
+    public: z.object({ userId: z.uuid(), fence: PlacedFenceSchema }),
   },
   /**
    * A challenger broke a fence segment (#203): it's gone, with nothing back.
-   * The land is still its owner's. `userId` is its owner.
+   * The land is still its owner's. `userId` is its owner; who broke it stays
+   * internal ("Someone broke your fence!").
    */
   'fence.broken': {
     internal: z.strictObject({
@@ -450,13 +452,7 @@ export const GAME_EVENTS = {
       ...coords,
       edge: HexEdgeSchema,
     }),
-    public: z.object({
-      userId: z.uuid(),
-      attackerUserId: z.uuid(),
-      fenceId: z.uuid(),
-      ...coords,
-      edge: HexEdgeSchema,
-    }),
+    public: z.object({ userId: z.uuid(), fenceId: z.uuid(), ...coords, edge: HexEdgeSchema }),
   },
   /**
    * A fence segment came down (#203): its owner took it down for part of

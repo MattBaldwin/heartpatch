@@ -273,7 +273,7 @@ describe('MapState', () => {
     expect(tileOf().fences?.[0]?.hp).toBe(70);
     const broke = event(
       'fence.broken',
-      { ...by, attackerUserId: userId(2), fenceId: fence(0).id, q: tile.q, r: tile.r, edge: 0 },
+      { ...by, fenceId: fence(0).id, q: tile.q, r: tile.r, edge: 0 },
       6,
     );
     expect(state.apply(broke)).toBe('redraw');

@@ -49,6 +49,50 @@ describe('public views', () => {
     ).toEqual({ name: 'Pumpkin Hollow', pvpMode: 'gentle' });
   });
 
+  it('never tells anyone who broke or bumped a fence, the owner included (#203)', () => {
+    const owner = '0190a8c4-0000-7000-8000-000000000002';
+    const attacker = '0190a8c4-0000-7000-8000-000000000004';
+    const fenceId = '0190a8c4-0000-7000-8000-000000000005';
+    const ids = {
+      attackerUserId: attacker,
+      attackId: '0190a8c4-0000-7000-8000-000000000006',
+      battleId: '0190a8c4-0000-7000-8000-000000000007',
+    };
+    const fence = {
+      id: fenceId,
+      edge: 2,
+      buildingId: 'stone-wall',
+      level: 1,
+      hp: 42,
+      maxHp: 70,
+      q: 3,
+      r: -1,
+    };
+    const broken = event('fence.broken', {
+      userId: owner,
+      ...ids,
+      fenceId,
+      buildingId: 'stone-wall',
+      q: 3,
+      r: -1,
+      edge: 2,
+    });
+    const damaged = event('fence.damaged', { userId: owner, ...ids, fence });
+    for (const viewer of [owner, attacker, 'someone-else']) {
+      expect(publicViewFor(PUBLIC_VIEWS, broken, { userId: viewer })).toEqual({
+        userId: owner,
+        fenceId,
+        q: 3,
+        r: -1,
+        edge: 2,
+      });
+      expect(publicViewFor(PUBLIC_VIEWS, damaged, { userId: viewer })).toEqual({
+        userId: owner,
+        fence,
+      });
+    }
+  });
+
   it('tells only the owner which squishy went to the Hollow or came home (#21)', () => {
     const owner = '0190a8c4-0000-7000-8000-000000000002';
     const squishyId = '0190a8c4-0000-7000-8000-000000000003';
