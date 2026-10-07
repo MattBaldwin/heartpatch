@@ -310,6 +310,7 @@ Add anything else only with a one-line justification in the PR.
 | `PUBLIC_ORIGIN` | `https://play.pumpkinpatchgames.com` | CORS, cookies |
 | `LOG_LEVEL` | `info` | |
 | `APP_VERSION` | `2026.10.02-abc123` | set by deploy (image tag); reported by `/api/v1/health` |
+| `APP_BUILD`, `APP_COMMIT` | `214`, `cb04682` | Docker build args set by deploy (#198): commits on `main` (`git rev-list --count HEAD`, full-history checkout) and the short sha. The server reports them as `build` and `commit` on `/api/v1/health`; the client build bakes them into the profile menu's version line (`v0.<build> · <sha> · <UTC date>`; `APP_MAJOR` in shared data). Unset, the client reads git, else shows `v0.dev` |
 | `TRUST_PROXY` | `true` | `true` behind Caddy so `request.ip` is the player's IP (per-IP rate limits) |
 | `HP_DEV_NOW` | `2026-12-20T20:59:00-05:00` | dev/test only |
 | `HP_DEV_SIGNUP_LIMIT_PER_IP` | `500` | dev/test only; raises the per-IP signup limit for e2e (Playwright sets it) |

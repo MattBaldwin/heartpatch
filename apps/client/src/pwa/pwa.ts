@@ -1,3 +1,4 @@
+import { appUpdates } from './app-updates.js';
 import { createInstallGuide, type InstallGuide } from './install-guide.js';
 import { registerServiceWorker } from './register.js';
 import { mountUpdatePrompt } from './update-prompt.js';
@@ -11,7 +12,11 @@ import './pwa.css';
 export function startPwa(root: HTMLElement): InstallGuide {
   const guide = createInstallGuide();
   const prompt = mountUpdatePrompt(root);
-  registerServiceWorker(prompt.show).catch((err: unknown) => {
+  // The pill and the profile menu's "Update now" (#198) both offer it.
+  registerServiceWorker((apply) => {
+    appUpdates.offer(apply);
+    prompt.show(apply);
+  }).catch((err: unknown) => {
     // The game works without it, just not offline.
     console.warn('Service worker registration failed', err);
   });

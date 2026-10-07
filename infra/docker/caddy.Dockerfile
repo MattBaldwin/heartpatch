@@ -16,6 +16,12 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/client apps/client
+# The version line in the profile menu (#198): the build number (commits on
+# main) and short sha, from the deploy's build args (the build context has no
+# .git); a build stage sees its ARGs as env vars. Unset, the client says
+# `v0.dev`. Declared here so the install layer above stays cached.
+ARG APP_BUILD=
+ARG APP_COMMIT=
 RUN pnpm --filter @heartpatch/client build
 
 FROM caddy:2-alpine AS caddy
