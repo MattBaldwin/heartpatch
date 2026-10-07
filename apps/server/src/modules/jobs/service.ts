@@ -1,4 +1,6 @@
 import {
+  battleXpPercent,
+  GROWTH_RULES,
   BATTLE_RULES,
   GAME_DATA,
   gameplayOverrides,
@@ -34,7 +36,8 @@ import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
-import { mapLocalTime, type Clock } from '../../lib/time.js';
+import { mapLocalTime, nextLocalMidnight, type Clock } from '../../lib/time.js';
+import { createBattlesRepo } from '../battles/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
@@ -249,6 +252,8 @@ export async function leaveWork(
   squishyIds: readonly string[],
   job: SquishyJobId,
   at: Date,
+  /** More grants the caller will make right after (a lost fire's refund, #202): locked with these. */
+  alsoLock: readonly { userId: string; items: ItemCounts }[] = [],
 ): Promise<NewGameEvent[]> {
   const repo = createSquishyJobsRepo(tx);
   const rows = (await repo.listByIds(squishyIds)).filter((r) => r.workTile !== null);
@@ -257,13 +262,12 @@ export async function leaveWork(
   // Nightfall calls this for a squishy it just took: its day's work still
   // counts. Work on land that changed hands banks what finished before then.
   const works = rows.map((row) => ({ row, work: bankableWork(row, map, at, true) }));
-  await lockGrantRows(
-    tx,
-    map.id,
-    works.flatMap(({ row, work }) =>
+  await lockGrantRows(tx, map.id, [
+    ...works.flatMap(({ row, work }) =>
       work ? [{ userId: row.squishy.ownerUserId, items: work.ready }] : [],
     ),
-  );
+    ...alsoLock,
+  ]);
   for (const { row, work } of works) {
     const owner = row.squishy.ownerUserId;
     if (work && !isEmpty(work.ready)) {
@@ -345,14 +349,10 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
       createBuildingsRepo(tx).listOnMap(map.id),
       repo.homeTiles(map.id),
     ]);
-    const homes = new Map<string, { q: number; r: number }[]>();
-    for (const { ownerUserId, q, r } of homeTiles) {
-      homes.set(ownerUserId, [...(homes.get(ownerUserId) ?? []), { q, r }]);
-    }
     const night = tonightOf(mapLocalTime(at, map.timeZone), HOME_BASE_RULES);
     return litSafeTiles(
       fires.filter((b) => b.kind === 'hearthfire'),
-      (owner) => homes.get(owner) ?? [],
+      homeTiles,
       { date: night, minute: 0 },
     );
   };
@@ -370,6 +370,15 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
       firelitTiles(tx, repo, map, at),
       createBuildingsRepo(tx).listOwned(map.id, userId),
     ]);
+    // Who has won its full-XP battles today (#201): wins pay less until the
+    // patch's next midnight (the battles service's falloff, the same count).
+    const wins = await createBattlesRepo(tx).winsToday(
+      map.id,
+      userId,
+      rows.map((r) => r.squishy.id),
+      at,
+    );
+    const fullXpBack = nextLocalMidnight(at, map.timeZone).toISOString();
     const seasons = new Set(seasonsOn(at, map.timeZone));
     const workers = new Map<string, string>();
     const squishies: JobSquishy[] = rows.map((row) => {
@@ -412,6 +421,8 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         habitatId: row.habitatBuildingId,
         work: status,
         training: trainingStatus,
+        fullXpResetAt:
+          battleXpPercent(wins.get(row.squishy.id) ?? 0, GROWTH_RULES) < 100 ? fullXpBack : null,
       };
     });
     // One per home (`maxPerHome: 1`, checked by the data tests).

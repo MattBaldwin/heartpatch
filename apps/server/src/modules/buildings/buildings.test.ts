@@ -149,9 +149,27 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
     expect(tiles).toHaveLength(7);
     const seed = tiles.find((t) => t.heartSeed)!;
     const plain = tiles.filter((t) => !t.heartSeed);
-    expect(plain.length).toBeGreaterThan(0);
+    expect(plain.length).toBeGreaterThan(1);
     const at = (t: { q: number; r: number }) => ({ q: t.q, r: t.r });
-    return { seed: at(seed), plain: at(plain[0]!), tiles };
+    return { seed: at(seed), plain: at(plain[0]!), plain2: at(plain[1]!), tiles };
+  }
+
+  /**
+   * Captured land for fires (#202: Hearthfires stand only out there, owner
+   * decision 2026-10-07): `count` neutral outer tiles with a free middle,
+   * handed to `who` as if claimed, far from anyone's home.
+   */
+  async function landFor(mapId: string, who: Player, count = 1) {
+    const wild = await db.query.tiles.findMany({
+      where: (t, { and, eq, isNull }) =>
+        and(eq(t.mapId, mapId), isNull(t.homeSlot), isNull(t.ownerUserId), isNull(t.nodeResource)),
+      orderBy: (t, { asc }) => [asc(t.q), asc(t.r)],
+    });
+    const picked = wild.slice(0, count);
+    for (const t of picked) {
+      await db.execute(`update tiles set owner_user_id = '${who.id}' where id = '${t.id}'`);
+    }
+    return picked.map((t) => ({ q: t.q, r: t.r }));
   }
 
   const place = (
@@ -228,7 +246,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(probe.statusCode).toBe(404);
       const { plain } = await homeTiles(server, kid, mapId);
       const build = await place(server, stranger, mapId, {
-        buildingId: 'hearthfire',
+        buildingId: 'cozy-meadow',
         q: plain.q,
         r: plain.r,
         spot: 1,
@@ -238,29 +256,41 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
   });
 
   describe('placing', () => {
-    it('builds a Hearthfire on a home spot, pays in the same transaction and shows everyone', async () => {
+    it('builds a Hearthfire on my land, never at home, pays in the same transaction and shows everyone', async () => {
       const server = await start();
       const [kid, friend] = [await player(), await player()];
       const mapId = await newMap(server, kid);
       await join(server, kid, friend, mapId);
       await give(mapId, kid, PLENTY);
-      const { seed } = await homeTiles(server, kid, mapId);
+      const { seed, plain: ring } = await homeTiles(server, kid, mapId);
+      const [plain] = await landFor(mapId, kid);
 
-      // The Heart Seed stands in the middle of its tile: spot 0 is taken there.
-      const middle = await place(server, kid, mapId, {
+      // The Heart Seed keeps home safe: no fires there (owner decision 2026-10-07).
+      for (const at of [
+        { ...seed, spot: 0 },
+        { ...ring, spot: 2 },
+      ]) {
+        const res = await place(server, kid, mapId, { buildingId: 'hearthfire', ...at });
+        expect(res.statusCode).toBe(403);
+        expect(errorOf(res).message).toBe(
+          'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!',
+        );
+      }
+      // A fire is a light: only a tile's middle takes one (#204).
+      const offMiddle = await place(server, kid, mapId, {
         buildingId: 'hearthfire',
-        q: seed.q,
-        r: seed.r,
-        spot: 0,
+        q: plain!.q,
+        r: plain!.r,
+        spot: 2,
       });
-      expect(middle.statusCode).toBe(409);
-      expect(errorOf(middle).message).toBe('Something is already there. Try another spot!');
+      expect(offMiddle.statusCode).toBe(409);
+      expect(errorOf(offMiddle).message).toBe('Hearthfires go in the middle of a tile!');
 
       const fire = await placed(server, kid, mapId, {
         buildingId: 'hearthfire',
-        q: seed.q,
-        r: seed.r,
-        spot: 2,
+        q: plain!.q,
+        r: plain!.r,
+        spot: 0,
       });
       expect(fire).toMatchObject({
         buildingId: 'hearthfire',
@@ -288,7 +318,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
 
       // Fires are public: on the friend's map view too.
       const shown = (await view(server, friend, mapId)).tiles.find(
-        (t) => t.q === seed.q && t.r === seed.r,
+        (t) => t.q === plain!.q && t.r === plain!.r,
       )!;
       expect(shown.buildings).toEqual([
         {
@@ -296,7 +326,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
           buildingId: 'hearthfire',
           kind: 'hearthfire',
           level: 1,
-          spot: 2,
+          spot: 0,
           lit: false,
           safeRadius: 1,
         },
@@ -305,7 +335,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(event).toMatchObject({ type: 'building.placed', actorUserId: kid.id });
       expect(publicViewFor(PUBLIC_VIEWS, event, { userId: friend.id })).toEqual({
         userId: kid.id,
-        building: { ...shown.buildings[0], q: seed.q, r: seed.r },
+        building: { ...shown.buildings[0], q: plain!.q, r: plain!.r },
       });
     });
 
@@ -330,30 +360,31 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         expect(errorOf(res).message).toBe('You can only build on your home base.');
       }
 
-      // A ring tile's node stands in its middle, like the Heart Seed.
+      // A habitat goes around a tile's middle (#204); the middle holds the node.
       const node = await place(server, kid, mapId, {
         buildingId: 'cozy-meadow',
         q: plain.q,
         r: plain.r,
         spot: 0,
       });
-      expect(errorOf(node).message).toBe('Something is already there. Try another spot!');
-      await placed(server, kid, mapId, { buildingId: 'hearthfire', ...plain, spot: 3 });
-      const taken = await place(server, kid, mapId, {
+      expect(errorOf(node).message).toBe('The Cozy Meadow goes around the middle of a tile!');
+      await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...plain, spot: 1 });
+      const twice = await place(server, kid, mapId, {
+        buildingId: 'ember-den',
+        q: plain.q,
+        r: plain.r,
+        spot: 1,
+      });
+      expect(errorOf(twice).message).toBe('Something is already there. Try another spot!');
+      await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...plain, spot: 2 });
+      const third = await place(server, kid, mapId, {
         buildingId: 'cozy-meadow',
         q: plain.q,
         r: plain.r,
         spot: 3,
       });
-      expect(errorOf(taken).message).toBe('Something is already there. Try another spot!');
-      const second = await place(server, kid, mapId, {
-        buildingId: 'hearthfire',
-        q: plain.q,
-        r: plain.r,
-        spot: 1,
-      });
-      expect(second.statusCode).toBe(409);
-      expect(errorOf(second).message).toBe('Your home already has all the Hearthfire it can hold!');
+      expect(third.statusCode).toBe(409);
+      expect(errorOf(third).message).toBe('Your home already has all the Cozy Meadow it can hold!');
 
       const unknown = await place(server, kid, mapId, {
         buildingId: 'castle',
@@ -388,8 +419,8 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, { 'jack-o-lantern-hearthfire': 1 });
-      const { plain } = await homeTiles(server, kid, mapId);
-      const body = { buildingId: 'jack-o-lantern-hearthfire', q: plain.q, r: plain.r, spot: 4 };
+      const [land] = await landFor(mapId, kid);
+      const body = { buildingId: 'jack-o-lantern-hearthfire', q: land!.q, r: land!.r, spot: 0 };
 
       clock.setTime(Date.parse('2026-12-15T18:00:00Z'));
       const late = await place(server, kid, mapId, body);
@@ -429,11 +460,11 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const mapId = await newMap(server, kid);
       await join(server, kid, friend, mapId);
       await give(mapId, kid, PLENTY);
-      const { plain } = await homeTiles(server, kid, mapId);
+      const [land] = await landFor(mapId, kid);
       const fire = await placed(server, kid, mapId, {
         buildingId: 'hearthfire',
-        ...plain,
-        spot: 1,
+        ...land!,
+        spot: 0,
       });
 
       const res = await fuel(server, kid, mapId, fire.id, 3);
@@ -473,7 +504,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(await nightsAt('2026-10-06T12:00:00Z')).toBe(1); // Oct 6, before nightfall
       expect(await nightsAt('2026-10-07T03:00:00Z')).toBe(0);
       const out = (await view(server, friend, mapId)).tiles.find(
-        (t) => t.q === plain.q && t.r === plain.r,
+        (t) => t.q === land!.q && t.r === land!.r,
       )!;
       expect(out.buildings[0]).toMatchObject({ lit: false });
       await reconciled(mapId, kid.id);
@@ -484,11 +515,11 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const { plain } = await homeTiles(server, kid, mapId);
+      const [land] = await landFor(mapId, kid);
       const fire = await placed(server, kid, mapId, {
         buildingId: 'hearthfire',
-        ...plain,
-        spot: 1,
+        ...land!,
+        spot: 0,
       });
       // Oct 31, noon in Denver (MDT): 2 nights, Oct 31 and Nov 1.
       clock.setTime(Date.parse('2026-10-31T18:00:00Z'));
@@ -511,10 +542,11 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       await give(mapId, kid, PLENTY);
       await give(mapId, friend, PLENTY);
       const { plain } = await homeTiles(server, kid, mapId);
+      const [land] = await landFor(mapId, kid);
       const fire = await placed(server, kid, mapId, {
         buildingId: 'hearthfire',
-        ...plain,
-        spot: 1,
+        ...land!,
+        spot: 0,
       });
       const meadow = await placed(server, kid, mapId, {
         buildingId: 'cozy-meadow',
@@ -528,38 +560,46 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
   });
 
   describe('moving and taking down', () => {
-    it('moves a building to a free spot on another home tile', async () => {
+    it('moves a building to a free spot of its kind on another home tile', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const { seed, plain } = await homeTiles(server, kid, mapId);
+      const { seed, plain, plain2 } = await homeTiles(server, kid, mapId);
+      const [land] = await landFor(mapId, kid);
       const fire = await placed(server, kid, mapId, {
         buildingId: 'hearthfire',
-        ...plain,
-        spot: 1,
+        ...land!,
+        spot: 0,
       });
       const den = await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 2 });
-      const move = (body: object) =>
-        call(server, 'POST', `/maps/${mapId}/buildings/${fire.id}/move`, kid, body);
+      await placed(server, kid, mapId, { buildingId: 'cozy-meadow', ...plain, spot: 3 });
+      const move = (id: string, body: object) =>
+        call(server, 'POST', `/maps/${mapId}/buildings/${id}/move`, kid, body);
 
-      expect(errorOf(await move({ q: plain.q, r: plain.r, spot: 2 })).message).toBe(
+      expect(errorOf(await move(den.id, { q: plain.q, r: plain.r, spot: 3 })).message).toBe(
         'Something is already there. Try another spot!',
       );
-      const moved = await move({ q: seed.q, r: seed.r, spot: 6 });
+      expect(errorOf(await move(den.id, { q: plain2.q, r: plain2.r, spot: 0 })).message).toBe(
+        'The Ember Den goes around the middle of a tile!',
+      );
+      // A fire out on my land stays put; it never comes home (owner decision 2026-10-07).
+      expect(errorOf(await move(fire.id, { q: seed.q, r: seed.r, spot: 6 })).message).toBe(
+        'A fire on your land stays where it is. Take it down to build it somewhere else.',
+      );
+      const moved = await move(den.id, { q: seed.q, r: seed.r, spot: 6 });
       expect(moved.statusCode).toBe(200);
       expect(
-        HomeResponseSchema.parse(moved.json()).buildings.find((b) => b.id === fire.id),
+        HomeResponseSchema.parse(moved.json()).buildings.find((b) => b.id === den.id),
       ).toMatchObject({ q: seed.q, r: seed.r, spot: 6 });
       expect((await eventsOf(mapId)).at(-1)).toMatchObject({
         type: 'building.moved',
-        payload: { from: { q: plain.q, r: plain.r, spot: 1 }, building: { spot: 6 } },
+        payload: { from: { q: plain.q, r: plain.r, spot: 2 }, building: { spot: 6 } },
       });
       // Back where it was: a no-op move writes no event.
       const seq = (await eventsOf(mapId)).length;
-      expect((await move({ q: seed.q, r: seed.r, spot: 6 })).statusCode).toBe(200);
+      expect((await move(den.id, { q: seed.q, r: seed.r, spot: 6 })).statusCode).toBe(200);
       expect(await eventsOf(mapId)).toHaveLength(seq);
-      expect(den.id).not.toBe(fire.id);
     });
 
     it('gives back half the cost and any unburned fuel, and moves residents out', async () => {
@@ -568,10 +608,11 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const mapId = await newMap(server, kid);
       await give(mapId, kid, { timber: 9, stone: 7, emberwood: 3 });
       const { plain } = await homeTiles(server, kid, mapId);
+      const [land] = await landFor(mapId, kid);
       const fire = await placed(server, kid, mapId, {
         buildingId: 'hearthfire',
-        ...plain,
-        spot: 1,
+        ...land!,
+        spot: 0,
       });
       await fuel(server, kid, mapId, fire.id, 3);
       const den = await placed(server, kid, mapId, {
@@ -625,7 +666,8 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       await join(server, kid, friend, mapId);
       await give(mapId, friend, PLENTY);
       const { plain } = await homeTiles(server, friend, mapId);
-      await placed(server, friend, mapId, { buildingId: 'hearthfire', ...plain, spot: 1 });
+      const [land] = await landFor(mapId, friend);
+      await placed(server, friend, mapId, { buildingId: 'hearthfire', ...land!, spot: 0 });
       const pal = await squishy(mapId, friend);
       const meadow = await placed(server, friend, mapId, {
         buildingId: 'cozy-meadow',
@@ -653,10 +695,11 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const { plain } = await homeTiles(server, kid, mapId);
+      const [land] = await landFor(mapId, kid);
+      // One fire a tile: two taps on the same land, one fire.
       const results = await Promise.allSettled(
-        [1, 2].map((spot) =>
-          place(server, kid, mapId, { buildingId: 'hearthfire', ...plain, spot }),
+        [1, 2].map(() =>
+          place(server, kid, mapId, { buildingId: 'hearthfire', ...land!, spot: 0 }),
         ),
       );
       const codes = results.map((r) => (r.status === 'fulfilled' ? r.value.statusCode : 0));
@@ -696,7 +739,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
   });
 
   describe('safe tiles for nightfall (#21)', () => {
-    it("protects each lit fire's own home base plus its radius, across players", async () => {
+    it('keeps every home safe, and land within a lit fire’s radius, across players', async () => {
       const server = await start();
       const [kid, friend] = [await player(), await player()];
       const mapId = await newMap(server, kid);
@@ -705,29 +748,30 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       await give(mapId, friend, PLENTY);
       const mine = await homeTiles(server, kid, mapId);
       const theirs = await homeTiles(server, friend, mapId);
+      const [myLand, theirLand] = await landFor(mapId, kid, 2);
+      await db.execute(
+        `update tiles set owner_user_id = '${friend.id}' where map_id = '${mapId}' and q = ${String(theirLand!.q)} and r = ${String(theirLand!.r)}`,
+      );
       const fire = await placed(server, kid, mapId, {
         buildingId: 'hearthfire',
-        ...mine.seed,
-        spot: 1,
+        ...myLand!,
+        spot: 0,
       });
-      await placed(server, friend, mapId, { buildingId: 'hearthfire', ...theirs.seed, spot: 1 });
+      await placed(server, friend, mapId, { buildingId: 'hearthfire', ...theirLand!, spot: 0 });
       await fuel(server, kid, mapId, fire.id, 1); // only the kid's fire is lit
 
       const repo = createBuildingsRepo(db);
       const fires = (await repo.listOnMap(mapId)).filter((b) => b.kind === 'hearthfire');
       expect(fires).toHaveLength(2);
-      const homes = new Map([
-        [kid.id, mine.tiles],
-        [friend.id, theirs.tiles],
-      ]);
+      const homes = [...mine.tiles, ...theirs.tiles];
       const local = mapLocalTime(clock, ZONE);
-      const safe = litSafeTiles(fires, (owner) => homes.get(owner) ?? [], local);
+      const safe = litSafeTiles(fires, homes, local);
       expect([...safe].sort()).toEqual(
-        mine.tiles.map((t) => `${String(t.q)},${String(t.r)}`).sort(),
+        [...new Set([...homes.map(hexKey), ...hexSpiral(myLand!, 1).map(hexKey)])].sort(),
       );
-      // After tonight's nightfall the fire is out: nothing is protected.
+      // After tonight's nightfall the fire is out: only the homes stay safe.
       const later = mapLocalTime(new Date('2026-10-03T12:00:00Z'), ZONE);
-      expect(litSafeTiles(fires, (owner) => homes.get(owner) ?? [], later).size).toBe(0);
+      expect([...litSafeTiles(fires, homes, later)].sort()).toEqual(homes.map(hexKey).sort());
       expect(fireStateAt('2026-10-02', clock, ZONE)).toMatchObject({
         lit: true,
         nightsLeft: 1,
@@ -745,8 +789,13 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const mapId = await newMap(server, kid);
       await join(server, kid, friend, mapId);
       await give(mapId, kid, { timber: 35, stone: 30, emberwood: 1 });
-      const { seed, tiles } = await homeTiles(server, kid, mapId);
-      const fire = await placed(server, kid, mapId, { buildingId: 'hearthfire', ...seed, spot: 1 });
+      const { tiles } = await homeTiles(server, kid, mapId);
+      const [land] = await landFor(mapId, kid);
+      const fire = await placed(server, kid, mapId, {
+        buildingId: 'hearthfire',
+        ...land!,
+        spot: 0,
+      });
       await fuel(server, kid, mapId, fire.id, 1);
 
       const res = await upgrade(server, kid, mapId, fire.id);
@@ -781,7 +830,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         building: { id: fire.id, level: 2, safeRadius: 2 },
       });
       const shown = (await view(server, friend, mapId)).tiles.find(
-        (t) => t.q === seed.q && t.r === seed.r,
+        (t) => t.q === land!.q && t.r === land!.r,
       )!;
       expect(shown.buildings[0]).toMatchObject({ level: 2, safeRadius: 2 });
 
@@ -789,8 +838,10 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const fires = (await createBuildingsRepo(db).listOnMap(mapId)).filter(
         (b) => b.kind === 'hearthfire',
       );
-      const safe = litSafeTiles(fires, () => tiles, mapLocalTime(clock, ZONE));
-      expect([...safe].sort()).toEqual(hexSpiral(seed, 2).map(hexKey).sort());
+      const safe = litSafeTiles(fires, tiles, mapLocalTime(clock, ZONE));
+      expect([...safe].sort()).toEqual(
+        [...new Set([...tiles.map(hexKey), ...hexSpiral(land!, 2).map(hexKey)])].sort(),
+      );
     });
 
     it('needs Glimmer for level 3, changes nothing when short, and stops at the top', async () => {
@@ -798,8 +849,12 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, { timber: 35, stone: 30 });
-      const { seed } = await homeTiles(server, kid, mapId);
-      const fire = await placed(server, kid, mapId, { buildingId: 'hearthfire', ...seed, spot: 1 });
+      const [land] = await landFor(mapId, kid);
+      const fire = await placed(server, kid, mapId, {
+        buildingId: 'hearthfire',
+        ...land!,
+        spot: 0,
+      });
       expect((await upgrade(server, kid, mapId, fire.id)).statusCode).toBe(200);
 
       const short = await upgrade(server, kid, mapId, fire.id);
@@ -944,11 +999,12 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       await join(server, kid, friend, mapId);
       await give(mapId, kid, PLENTY);
       const { plain } = await homeTiles(server, kid, mapId);
+      const [land] = await landFor(mapId, kid);
       const den = await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 1 });
       const fire = await placed(server, kid, mapId, {
         buildingId: 'hearthfire',
-        ...plain,
-        spot: 2,
+        ...land!,
+        spot: 0,
       });
       expect(den).toMatchObject({ capacity: 3, residents: 0 });
       const house = (who: Player, squishyId: string, habitatId: string | null) =>

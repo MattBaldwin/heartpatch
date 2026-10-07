@@ -86,6 +86,7 @@ export function createRaidsService(options: RaidsServiceOptions): RaidsService {
     resolvedAt: row.resolvedAt.toISOString(),
     seenAt: row.seenAt?.toISOString() ?? null,
     replayable: replayable(row),
+    lostFire: row.lostFire ?? null,
   });
 
   const report = async (user: PublicUser, mapId: string): Promise<RaidReport> => {

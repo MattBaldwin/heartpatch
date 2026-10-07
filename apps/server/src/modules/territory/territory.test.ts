@@ -10,6 +10,7 @@ import {
   MapResponseSchema,
   MapViewSchema,
   parseGameEventPayload,
+  RaidReportResponseSchema,
   SquishyResponseSchema,
   STARTERS,
   TERRITORY_RULES,
@@ -31,11 +32,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, users } from '../../db/schema.js';
+import { buildings, keepers, sessions, users } from '../../db/schema.js';
+import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService, type TileBattleEnd } from '../battles/service.js';
+import { createRaidsConsumer } from '../raids/consumer.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createTerritoryService, createTileBattlePort, defaultGuardianData } from './service.js';
 
@@ -135,11 +138,13 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
     TerritoryResponseSchema.parse(res.json()).territory;
 
   /** A patch for `owner` (and `others`, joined through invite → approve). */
-  async function patch(server: FastifyInstance, owner: Player, others: Player[] = []) {
-    const res = await call(server, 'POST', '/maps', owner, {
-      name: 'Land Patch',
-      timeZone: 'America/Denver',
-    });
+  async function patch(
+    server: FastifyInstance,
+    owner: Player,
+    others: Player[] = [],
+    timeZone = 'America/Denver',
+  ) {
+    const res = await call(server, 'POST', '/maps', owner, { name: 'Land Patch', timeZone });
     expect(res.statusCode, res.body).toBe(201);
     const map: MapDetail = MapResponseSchema.parse(res.json()).map;
     for (const other of others) {
@@ -429,6 +434,25 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
     });
   });
 
+  describe('when tries come back (#201)', () => {
+    // The patch's next local midnight, from `maps.time_zone`, never the player's.
+    it.each([
+      // Daylight saving ends in Los Angeles on Nov 1: that day lasts 25 hours.
+      ['America/Los_Angeles', '2026-11-01T03:00:00Z', '2026-11-01T07:00:00.000Z'],
+      ['America/Los_Angeles', '2026-11-01T20:00:00Z', '2026-11-02T08:00:00.000Z'],
+      // Far ahead of UTC (+13 in October): already tomorrow there.
+      ['Pacific/Auckland', '2026-10-06T10:00:00Z', '2026-10-06T11:00:00.000Z'],
+      // Auckland springs forward on Sep 27 (+12 to +13): a 23-hour day.
+      ['Pacific/Auckland', '2026-09-26T13:00:00Z', '2026-09-27T11:00:00.000Z'],
+    ])('in %s at %s, tries refill at %s', async (timeZone, at, expected) => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid, [], timeZone);
+      clock.setTime(Date.parse(at));
+      expect((await status(server, kid, mapId)).triesResetAt).toBe(expected);
+    });
+  });
+
   describe('raid rules (design doc §11)', () => {
     it('puts the tile on cooldown for everyone after a battle starts, win or lose', async () => {
       const server = await start();
@@ -468,10 +492,16 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       for (const tile of edge.slice(0, TERRITORY_RULES.attemptsPerDay)) {
         await forfeit(server, kid, battleOf(await attack(server, kid, mapId, tile)));
       }
-      expect((await status(server, kid, mapId)).attemptsLeft).toBe(0);
+      const spent = await status(server, kid, mapId);
+      expect(spent.attemptsLeft).toBe(0);
+      // The sheet's "New tries in …" counts down to the moment they refill (#201).
+      expect(spent.triesResetAt).toBe('2026-10-03T06:00:00.000Z');
       const more = await attack(server, kid, mapId, edge[TERRITORY_RULES.attemptsPerDay]!);
       expect(more.statusCode).toBe(409);
-      expect(errorOf(more).message).toMatch(/all your tries for today/);
+      expect(errorOf(more).message).toBe(
+        "You've used all your tries for today. New tries come at your patch's midnight 🌙",
+      );
+      expect(errorOf(more).message).not.toMatch(/tomorrow/);
       // 23:59 Denver is still today; one minute later is tomorrow.
       clock.setTime(Date.parse('2026-10-03T05:59:00Z'));
       expect((await attack(server, kid, mapId, edge.at(-1)!)).statusCode).toBe(409);
@@ -656,6 +686,63 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await attack(server, kid, mapId, near2)).statusCode).toBe(201);
     });
 
+    it("takes the defender's fire down on a capture and gives it back to them, never the rival (#202)", async () => {
+      const server = await start();
+      const { kid, rival, mapId, near } = await rivals(server);
+      // The rival's fire on the land the kid is about to win, three nights of fuel left
+      // (the clock is past the new-player shield: Oct 4).
+      const [fire] = await db
+        .insert(buildings)
+        .values({
+          mapId,
+          ownerUserId: rival.id,
+          tileId: near.id,
+          buildingId: 'hearthfire',
+          kind: 'hearthfire',
+          spot: 0,
+          fuelledThrough: '2026-10-06',
+        })
+        .returning({ id: buildings.id });
+
+      const res = await attack(server, kid, mapId, near);
+      expect(res.statusCode, res.body).toBe(201);
+      await playOut(server, kid, battleOf(res));
+      expect((await tileAt(mapId, near)).ownerUserId).toBe(kid.id);
+
+      // Down in the same transaction: no fire on the tile, the rival's bag got it back.
+      expect(
+        await db.query.buildings.findMany({ where: (t, { eq }) => eq(t.tileId, near.id) }),
+      ).toEqual([]);
+      const refund = { timber: 2, stone: 2, emberwood: 3 };
+      const ledgerOf = (userId: string) =>
+        db.query.resourceLedger.findMany({
+          where: (t, { and, eq }) =>
+            and(eq(t.mapId, mapId), eq(t.userId, userId), eq(t.reason, 'build-refund')),
+        });
+      expect(
+        Object.fromEntries((await ledgerOf(rival.id)).map((l) => [l.itemId, l.delta])),
+      ).toEqual(refund);
+      expect(await ledgerOf(kid.id)).toEqual([]);
+      const events = await eventsOf(mapId);
+      const types = events.map((e) => e.type);
+      expect(types.indexOf('building.removed')).toBeGreaterThan(types.indexOf('tile.captured'));
+      const removed = events.find((e) => e.type === 'building.removed')!;
+      expect(parseGameEventPayload('building.removed', removed.payload)).toMatchObject({
+        userId: rival.id,
+        buildingRowId: fire!.id,
+        refund,
+        lost: 'captured',
+      });
+      // The Challenge report tells the rival.
+      expect((await attacksOf(mapId)).at(-1)).toMatchObject({ lostFireRefund: refund });
+      await runConsumer(db, createRaidsConsumer(), mapId);
+      const report = await call(server, 'GET', `/maps/${mapId}/raids`, rival);
+      expect(RaidReportResponseSchema.parse(report.json()).report.raids[0]).toMatchObject({
+        outcome: 'taken',
+        lostFire: refund,
+      });
+    });
+
     it('counts a challenge still going toward the daily loss cap', async () => {
       const server = await start();
       const { kid, mapId, near, near2 } = await rivals(server);
@@ -785,6 +872,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(done.rewards).toEqual({
         xp: ended.xp,
         percent: TERRITORY_RULES.gentle.rewardPercent,
+        fullXpResetAt: null,
       });
       for (const award of base) {
         const half = Math.floor((award.xp * TERRITORY_RULES.gentle.rewardPercent) / 100);

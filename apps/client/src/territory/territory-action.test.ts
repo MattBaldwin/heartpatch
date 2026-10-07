@@ -9,7 +9,8 @@ import {
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
-import { shieldUntil, territoryAction } from './territory-action.js';
+import { shieldUntil, territoryAction, watchInTheDark } from './territory-action.js';
+import { formatWait } from '../inventory/game-clock.js';
 import { TERRITORY_TEXT } from './territory-screen.js';
 
 const ME = userId(1);
@@ -19,6 +20,7 @@ const NOW = Date.parse('2026-10-05T12:00:00.000Z');
 const status = (over: Partial<TerritoryStatus> = {}): TerritoryStatus => ({
   attemptsLeft: 7,
   attemptsPerDay: 10,
+  triesResetAt: '2026-10-06T06:00:00.000Z',
   shieldUntil: null,
   defenders: [],
   squishies: [],
@@ -51,6 +53,8 @@ describe('territoryAction', () => {
     expect(territoryAction(tile, view, ME, status(), NOW)).toEqual({
       kind: 'claim',
       attemptsLeft: 7,
+      // When tries refill, for the sheet's countdown (#201).
+      triesResetAt: '2026-10-06T06:00:00.000Z',
     });
   });
 
@@ -137,6 +141,37 @@ describe('territoryAction', () => {
   });
 });
 
+describe('watchInTheDark', () => {
+  it('warns on my land no lit fire reaches, never on a home tile', () => {
+    const { view, tile } = setup(() => ({ ownerUserId: ME }));
+    expect(watchInTheDark(tile, view)).toBe(true);
+    const home = view.tiles.find((t) => t.homeSlot !== null && t.ownerUserId === ME)!;
+    expect(watchInTheDark(home, view)).toBe(false);
+    const fire = {
+      id: '0190a8c4-0000-7000-8000-000000000101',
+      buildingId: 'hearthfire',
+      kind: 'hearthfire' as const,
+      level: 1,
+      spot: 0,
+      lit: true,
+      safeRadius: 1,
+    };
+    const lit: MapView = {
+      ...view,
+      tiles: view.tiles.map((t) => (t === tile ? { ...t, buildings: [fire] } : t)),
+    };
+    expect(watchInTheDark(tile, lit)).toBe(false);
+    // A fire out of fuel lights nothing.
+    const out: MapView = {
+      ...view,
+      tiles: view.tiles.map((t) =>
+        t === tile ? { ...t, buildings: [{ ...fire, lit: false }] } : t,
+      ),
+    };
+    expect(watchInTheDark(tile, out)).toBe(true);
+  });
+});
+
 const strings = (value: unknown): string[] =>
   typeof value === 'string'
     ? [value]
@@ -152,6 +187,19 @@ describe('territory words (style guide)', () => {
     expect(texts.flatMap((t) => findAvoidedWords(t))).toEqual([]);
     expect(TERRITORY_TEXT.claim).toBe('Claim');
     expect(TERRITORY_TEXT.challenge).toBe('Challenge');
+  });
+
+  it('says when tries and a resting tile come back, relatively (#201)', () => {
+    const MIN = 60_000;
+    expect(TERRITORY_TEXT.triesLeft(2, formatWait(200 * MIN))).toBe(
+      '2 tries left · new tries in 3h 20m',
+    );
+    expect(TERRITORY_TEXT.triesLeft(1, formatWait(25 * MIN))).toBe('1 try left · new tries in 25m');
+    expect(TERRITORY_TEXT.noTries(formatWait(200 * MIN))).toBe('New tries in 3h 20m 🌙');
+    expect(TERRITORY_TEXT.resting(formatWait(65 * MIN))).toBe(
+      'This land needs a rest. Try again in 1h 05m.',
+    );
+    expect(TERRITORY_TEXT.noTries(formatWait(30_000))).toBe('New tries in less than a minute 🌙');
   });
 
   it('keeps buttons short', () => {

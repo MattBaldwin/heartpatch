@@ -1,10 +1,12 @@
 import {
   attackTargetProblem,
+  hexKey,
   TERRITORY_RULES,
   type MapView,
   type PublicTile,
   type TerritoryStatus,
 } from '@heartpatch/shared';
+import { mapSafeTiles } from '../home/home-layout.js';
 
 // What the tile panel offers for land (design doc §11): claim wild land next
 // to yours, challenge a neighbour's, or pick who stands watch on your own.
@@ -15,13 +17,13 @@ export type TerritoryAction =
   /** Nothing to offer (too far, a home base, nothing known yet). */
   | { readonly kind: 'none' }
   /** Wild land next to yours: "Claim". */
-  | { readonly kind: 'claim'; readonly attemptsLeft: number }
+  | { readonly kind: 'claim'; readonly attemptsLeft: number; readonly triesResetAt: string }
   /** Someone's land next to yours: "Challenge". */
-  | { readonly kind: 'challenge'; readonly attemptsLeft: number }
+  | { readonly kind: 'challenge'; readonly attemptsLeft: number; readonly triesResetAt: string }
   /** Battled for recently: it rests until then. */
   | { readonly kind: 'resting'; readonly until: string }
   /** No tries left today. */
-  | { readonly kind: 'no-tries' }
+  | { readonly kind: 'no-tries'; readonly triesResetAt: string }
   /** Someone's land, but challenges are off on this map. */
   | { readonly kind: 'pvp-off' }
   /** A new Keeper's land: nobody can challenge it until then (design doc §11). */
@@ -56,10 +58,12 @@ export function territoryAction(
   if (tile.cooldownUntil !== null && Date.parse(tile.cooldownUntil) > now) {
     return { kind: 'resting', until: tile.cooldownUntil };
   }
-  if (status.attemptsLeft === 0) return { kind: 'no-tries' };
+  // When tries refill (#201), for the sheet's countdown.
+  const { attemptsLeft, triesResetAt } = status;
+  if (attemptsLeft === 0) return { kind: 'no-tries', triesResetAt };
   return tile.ownerUserId === null
-    ? { kind: 'claim', attemptsLeft: status.attemptsLeft }
-    : { kind: 'challenge', attemptsLeft: status.attemptsLeft };
+    ? { kind: 'claim', attemptsLeft, triesResetAt }
+    : { kind: 'challenge', attemptsLeft, triesResetAt };
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -79,4 +83,13 @@ export function shieldUntil(
   if (!owner) return null;
   const until = Date.parse(owner.joinedAt) + TERRITORY_RULES.newPlayerShieldHours * HOUR_MS;
   return until > now ? new Date(until).toISOString() : null;
+}
+
+/**
+ * A guard on this tile would spend the night in the dark: no lit Hearthfire
+ * reaches it, so the Hollow Man may take one (owner decision 2026-10-07).
+ * Home tiles are always safe. What the map shows; nightfall decides.
+ */
+export function watchInTheDark(tile: Pick<PublicTile, 'q' | 'r'>, view: MapView): boolean {
+  return !mapSafeTiles(view).has(hexKey(tile));
 }

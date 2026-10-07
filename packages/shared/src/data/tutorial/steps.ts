@@ -8,9 +8,10 @@ import { STARTERS } from '../starters.js';
  * step finishes the tutorial. Ids are stored in `users.tutorial_step`, so
  * never rename one.
  *
- * Design doc steps: 1 `plant`, 2 `gather`, 3 `hearthfire`, 4 `first-battle`,
- * 5 `befriend` + `name-partner`, 6 `care`, 7 `habitat`, 8 `territory`,
- * 9 `defend`, 10 `nightfall`, 11 `evolve`, 12 `wardrobe`, 13 `graduation`,
+ * Design doc steps: 1 `plant`, 2 `gather`, 3 `hearthfire` (the Heart Seed
+ * keeps home safe), 4 `first-battle`, 5 `befriend` + `name-partner`, 6
+ * `care`, 7 `habitat`, 8 `territory` + `land-fire`, 9 `defend`, 10
+ * `nightfall`, 11 `evolve`, 12 `wardrobe`, 13 `graduation`,
  * after Sprout's `welcome`. A step that waits on gameplay never blocks it: a
  * failed battle or a short bag just means trying again (nothing is lost).
  */
@@ -54,14 +55,20 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     completeOn: { eventType: 'resource.gathered', actor: 'player', where: [] },
   },
   {
+    // Was "Light a Hearthfire" at home. The Heart Seed keeps home safe now
+    // (owner decision 2026-10-07), so the fire waits for land: `land-fire`.
     id: 'hearthfire',
-    goal: 'Light a Hearthfire',
+    goal: 'Your Heart Seed keeps you safe',
     sproutLines: [
-      'A fire keeps squishies safe at night. Open My Home on the right, then Home, and build one!',
-      'Then gather Emberwood from the old forest tile, and tap Add fuel.',
+      'Your Heart Seed glows all night long. Your home is always safe from the Hollow Man!',
+      "Land out past your home gets dark. We'll light a fire out there soon!",
     ],
-    highlightTarget: 'build-button',
-    completeOn: { eventType: 'building.fueled', actor: 'player', where: [] },
+    highlightTarget: 'heart-seed',
+    completeOn: {
+      eventType: 'tutorial.acknowledged',
+      actor: 'player',
+      where: [{ op: 'equals', field: 'stepId', value: 'hearthfire' }],
+    },
   },
   {
     id: 'first-battle',
@@ -140,6 +147,17 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     completeOn: { eventType: 'tile.captured', actor: 'player', where: [] },
   },
   {
+    // After the first claim (owner decision 2026-10-07): fires light up land.
+    id: 'land-fire',
+    goal: 'Light a fire on your land',
+    sproutLines: [
+      'Your new land is out in the dark. Tap it, then Build a fire right in its middle!',
+      'Then gather Emberwood from the old forest tile, tap your land again and Add fuel.',
+    ],
+    highlightTarget: 'build-button',
+    completeOn: { eventType: 'building.fueled', actor: 'player', where: [] },
+  },
+  {
     id: 'defend',
     goal: 'Guard your new land',
     sproutLines: [
@@ -158,7 +176,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     goal: 'Watch the night come',
     sproutLines: [
       "Pebblesnooze is on watch. Brrr, now it's getting dark!",
-      "Your fire keeps everyone safe from the Hollow Man. Tap Night falls when you're ready.",
+      "Your Heart Seed keeps home safe, and your fire lights up your land. Tap Night falls when you're ready!",
     ],
     highlightTarget: 'hearthfire',
     completeOn: { eventType: 'hollow.nightfall', actor: 'anyone', where: [] },

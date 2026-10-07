@@ -19,6 +19,7 @@ import { inventoryApi } from '../inventory/inventory-api.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
+import { formatWait } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
 import { ManualClock, realClock, type BattleClock } from './battle-clock.js';
@@ -43,6 +44,7 @@ import {
 } from './battle-view.js';
 import { BEFRIEND_NUDGE, HEART_CHARM, noCharmsLine } from './heart-charm.js';
 import { keeperReaction } from './keeper-reaction.js';
+import { resultLine } from './result-line.js';
 
 // The battle screen (#13): starts or resumes a PvE battle, draws it, plays the
 // server's log back step by step, and sends the player's taps as intents. The
@@ -86,6 +88,8 @@ export interface BattleScreenOptions {
   charms?: (mapId: string) => Promise<number>;
   /** The player's squishies' nicknames on a map, by squishy id (#141). */
   nicknames?: (mapId: string) => Promise<ReadonlyMap<string, string>>;
+  /** True for the Tutorial Glade, where a wild squishy never wanders off (#24). */
+  isGlade?: (mapId: string) => boolean;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -143,15 +147,13 @@ const MESSAGES = {
   resultLand: 'This land is yours!',
   resultLost: 'Aw, tuckered out.',
   resultScooted: 'You scooted home.',
-  scootedSub: 'Maybe next time!',
   resultDraw: "It's a tie!",
   resultFriend: 'A new friend!',
   resultNoContest: 'No contest!',
-  wonSub: 'Everyone had a great time.',
-  wildWonSub: "It's tuckered out and toddles away!",
   gentleNote: (percent: number) =>
     `Gentle patch: ${percent === 50 ? 'half' : `${String(percent)}%`} XP for playing a smaller Keeper.`,
-  lostSub: 'A nap and a snack, and they’ll be ready again.',
+  // Past today's full-XP wins (#201, `battleXpFalloff`): relative, never a clock time.
+  fullXpNote: (wait: string) => `Full XP again in ${wait}.`,
   drawSub: 'Everyone needs a nap.',
   noContestSub: 'The squishies got distracted. Nobody won or lost.',
   noXp: 'No XP this time.',
@@ -478,6 +480,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         const name = squishy ? plateName(names, squishy, nicknames) : 'Your squishy';
         return `${name} earned ${String(award.xp)} XP!`;
       });
+    const glade = options.isGlade?.(b.mapId) ?? false;
     const outcome =
       b.status === 'no-contest' || !result
         ? { title: MESSAGES.resultNoContest, subtitle: MESSAGES.noContestSub }
@@ -490,15 +493,18 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
                 ? { title: MESSAGES.resultRescued, subtitle: MESSAGES.rescuedSub }
                 : {
                     title: TILE_BATTLE_KINDS.has(b.kind) ? MESSAGES.resultLand : MESSAGES.resultWon,
-                    // A beaten wild squishy wanders off (owner decision 2026-10-03).
-                    subtitle: b.kind === 'wild' ? MESSAGES.wildWonSub : MESSAGES.wonSub,
+                    subtitle: resultLine(b.kind, 'won', glade),
                   }
             : result.reason === 'forfeit'
-              ? { title: MESSAGES.resultScooted, subtitle: MESSAGES.scootedSub }
-              : { title: MESSAGES.resultLost, subtitle: MESSAGES.lostSub };
+              ? { title: MESSAGES.resultScooted, subtitle: resultLine(b.kind, 'scooted', glade) }
+              : { title: MESSAGES.resultLost, subtitle: resultLine(b.kind, 'lost', glade) };
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
+    // The device clock is close enough for an hours-and-minutes note.
+    const fullXpAt = b.rewards?.fullXpResetAt;
+    const fullXpLeft = fullXpAt ? Date.parse(fullXpAt) - Date.now() : 0;
+    if (fullXpLeft > 0) lines.push(MESSAGES.fullXpNote(formatWait(fullXpLeft)));
     // Won a wild battle without befriending it: say how (owner decision 2026-10-04).
     const nudge =
       b.kind === 'wild' && result?.winner === b.mySide && result.reason !== 'captured'

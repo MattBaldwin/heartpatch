@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ItemCountsSchema } from './inventory.js';
 import { HexSchema } from '../hex/index.js';
 import { SpeciesSchema } from './data/species.js';
 import { OwnedSquishySchema } from './squishies.js';
@@ -44,6 +45,12 @@ export const TerritoryStatusSchema = z.object({
   /** Tile battles left today (map-local day). */
   attemptsLeft: z.number().int().min(0),
   attemptsPerDay: z.number().int().min(1),
+  /**
+   * When tries refill (#201): the patch's next local midnight
+   * (`maps.time_zone`), worked out on the server so the client never does
+   * time zones. The daily loss cap turns over then too.
+   */
+  triesResetAt: z.iso.datetime(),
   /** My land can't be challenged until then (new-player shield); null once it's over. */
   shieldUntil: z.iso.datetime().nullable(),
   /** My tiles with squishies on watch. */
@@ -80,6 +87,8 @@ export const WentWildTileSchema = z.object({
   r: HexSchema.shape.r,
   /** The map-local night it went wild. */
   night: LocalDateSchema,
+  /** My fire there came down with it (#202): what came back to my bag. Null: no fire. */
+  lostFire: ItemCountsSchema.nullable(),
 });
 export type WentWildTile = z.infer<typeof WentWildTileSchema>;
 

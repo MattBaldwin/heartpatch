@@ -109,7 +109,10 @@ export const HomeResponseSchema = z.object({
 });
 export type HomeResponse = z.infer<typeof HomeResponseSchema>;
 
-/** `POST /maps/:mapId/buildings`: build on a spot of one of my home tiles. */
+/**
+ * `POST /maps/:mapId/buildings`: build on a spot of one of my home tiles, or
+ * (a building with `placement: 'land'` or `'owned'`, #202) of a tile I own.
+ */
 export const PlaceBuildingRequestSchema = z.strictObject({
   buildingId: ContentIdSchema,
   q: HexSchema.shape.q,
@@ -146,3 +149,19 @@ export const RemoveBuildingResponseSchema = z.object({
   home: HomeResponseSchema,
 });
 export type RemoveBuildingResponse = z.infer<typeof RemoveBuildingResponseSchema>;
+
+/**
+ * `POST /maps/:mapId/buildings/fuel-all` (#202): tops up every one of my
+ * fires, the ones with the fewest nights first, one night at a time, until
+ * they're full or my bag runs out (`planFuelAll`).
+ */
+export const FuelAllResponseSchema = z.object({
+  /** Fires that got fuel. */
+  fires: z.number().int().min(0),
+  /** Nights of fuel added across them. */
+  nights: z.number().int().min(0),
+  /** Some fire still has room: the bag ran out first. */
+  short: z.boolean(),
+  home: HomeResponseSchema,
+});
+export type FuelAllResponse = z.infer<typeof FuelAllResponseSchema>;

@@ -20,8 +20,28 @@ const buildingBase = {
    * built stays and keeps working after the season ends (keepsakes, §15).
    */
   season: ContentIdSchema.optional(),
-  /** How many of this building one home base can have. */
-  maxPerHome: z.number().int().positive(),
+  /**
+   * How many of this building one home base can have. Required unless it
+   * stands only on captured land (`checkGameData`).
+   */
+  maxPerHome: z.number().int().positive().optional(),
+  /**
+   * Where it can stand (#202): `home` on the home base only; `land` only on
+   * captured land outside it (Hearthfires: the Heart Seed keeps home safe,
+   * owner decision 2026-10-07); `owned` on any tile its owner holds.
+   */
+  placement: z.enum(['home', 'land', 'owned']),
+  /**
+   * How many can stand on one tile outside the home base. Required unless
+   * it's `placement: 'home'` (`checkGameData`).
+   */
+  maxPerTile: z.number().int().positive().optional(),
+  /**
+   * Which spots it takes on a tile (#204): the middle (`centre`, lights such
+   * as a Hearthfire), the six around it (`ring`), or a hex edge (`edge`,
+   * fences, #203).
+   */
+  slot: z.enum(['centre', 'ring', 'edge']),
   /**
    * Percent of what it cost that comes back when it's taken down (rounded
    * down per item). Defaults to `HOME_BASE_RULES.removeRefundPercent`.
@@ -73,5 +93,12 @@ export const BuildingSchema = z.discriminatedUnion('kind', [
 ]);
 export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];
+export type BuildingSlot = Building['slot'];
+export type BuildingPlacement = Building['placement'];
+
+/** Can this building stand on a home tile? (Not one for captured land only.) */
+export function buildsAtHome(building: Pick<Building, 'placement'>): boolean {
+  return building.placement !== 'land';
+}
 export type HearthfireBuilding = z.infer<typeof HearthfireBuildingSchema>;
 export type HabitatBuilding = z.infer<typeof HabitatBuildingSchema>;

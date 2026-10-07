@@ -92,3 +92,43 @@ export function addFuel(
   const next = addDays(from, nights);
   return next > cap ? cap : next;
 }
+
+/** One fire as "Fuel all fires" sees it (#202). */
+export interface FuelAllFire {
+  readonly id: string;
+  readonly fuelResource: string;
+  readonly fuelPerNight: number;
+  /** Nights it has left now, tonight included. */
+  readonly nightsLeft: number;
+  /** Nights that still fit (`fuelSpace`). */
+  readonly space: number;
+}
+
+/**
+ * How many nights "Fuel all fires" gives each fire (#202, owner-approved):
+ * one night at a time to the fire with the fewest nights (ties by id), until
+ * every fire is full or the bag can't pay for another night. So a short bag
+ * keeps as many fires lit as it can. `have` is the bag's count per resource.
+ * Fires that get nothing are left out.
+ */
+export function planFuelAll(
+  fires: readonly FuelAllFire[],
+  have: Readonly<Record<string, number>>,
+): Map<string, number> {
+  const left = { ...have };
+  const nights = new Map<string, number>();
+  const added = (id: string) => nights.get(id) ?? 0;
+  for (;;) {
+    let next: FuelAllFire | null = null;
+    for (const fire of fires) {
+      if (added(fire.id) >= fire.space) continue;
+      if ((left[fire.fuelResource] ?? 0) < fire.fuelPerNight) continue;
+      const level = fire.nightsLeft + added(fire.id);
+      const best = next === null ? Infinity : next.nightsLeft + added(next.id);
+      if (level < best || (level === best && next !== null && fire.id < next.id)) next = fire;
+    }
+    if (next === null) return nights;
+    nights.set(next.id, added(next.id) + 1);
+    left[next.fuelResource] = (left[next.fuelResource] ?? 0) - next.fuelPerNight;
+  }
+}
