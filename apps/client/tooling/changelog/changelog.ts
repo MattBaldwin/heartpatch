@@ -77,7 +77,8 @@ export function buildOf(
   git: Git,
 ): { build: number | null; date: string | null } {
   const path = relative(repo, file);
-  const added = git(['log', '--diff-filter=A', '--format=%H %cI', '--', path], repo);
+  // --follow: a renamed entry keeps the build it was first added at.
+  const added = git(['log', '--follow', '--diff-filter=A', '--format=%H %cI', '--', path], repo);
   // Oldest last: the first time the file was added.
   const first = added?.split('\n').filter(Boolean).at(-1);
   const [sha, when] = first?.split(' ') ?? [];

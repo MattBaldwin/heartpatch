@@ -156,29 +156,34 @@ export function createWhatsNew(options: WhatsNewOptions): WhatsNew {
   card.hidden = true;
   options.root.append(card);
 
-  let copiedTimer: unknown;
+  // The chip answers when the clipboard does, then goes back to "Copy"; a
+  // newer tap's answer wins over an older one's.
+  let copyTaps = 0;
   copyChip.addEventListener('click', () => {
+    const tap = (copyTaps += 1);
+    const answer = (text: string) => {
+      if (tap !== copyTaps) return;
+      copyChip.textContent = text;
+      setTimer(() => {
+        if (tap === copyTaps) copyChip.textContent = WHATS_NEW_TEXT.copy;
+      }, COPIED_MS);
+    };
     options.copy(version).then(
       () => {
-        copyChip.textContent = WHATS_NEW_TEXT.copied;
+        answer(WHATS_NEW_TEXT.copied);
       },
       () => {
-        copyChip.textContent = WHATS_NEW_TEXT.notCopied;
+        answer(WHATS_NEW_TEXT.notCopied);
       },
     );
-    if (copiedTimer === undefined) {
-      copiedTimer = setTimer(() => {
-        copiedTimer = undefined;
-        copyChip.textContent = WHATS_NEW_TEXT.copy;
-      }, COPIED_MS);
-    }
   });
 
   const close = () => {
     card.hidden = true;
     mode = null;
     shown += 1;
-    popUp.closed();
+    // Seen only if it showed the entries, not "Couldn't load".
+    if (entries !== null) popUp.closed();
     options.onChange?.();
   };
   closeX.addEventListener('click', close);

@@ -98,11 +98,13 @@ describe('readChangelog (#220)', () => {
     commit('changes/first.md', entry('First')); // build 2
     commit('README', 'three'); // build 3
     commit('changes/second.md', entry('Second', 'land')); // build 4
-    // Editing an entry later keeps the build it was added at.
+    // Editing an entry later keeps the build it was added at, and so does renaming it.
     commit('changes/first.md', entry('First, edited'));
+    git('mv', 'changes/second.md', 'changes/second-renamed.md');
+    commit('README', 'six');
     const entries = readChangelog(join(repo, 'changes'), repo, runGit);
     expect(entries.map((e) => [e.slug, e.build, e.date, e.title])).toEqual([
-      ['second', 4, '2026-10-08', 'Second'],
+      ['second-renamed', 4, '2026-10-08', 'Second'],
       ['first', 2, '2026-10-08', 'First, edited'],
     ]);
     // What the client reads.

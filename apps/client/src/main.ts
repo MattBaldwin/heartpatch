@@ -879,6 +879,7 @@ const whatsNew = createWhatsNew({
     care.isOpen ||
     closeUp.isOpen ||
     (wardrobe.debug?.open ?? false) ||
+    recipeBook.isOpen ||
     raidReportOpen ||
     (land.debug?.welcome ?? false) ||
     lorebook.debug.showing !== null ||
