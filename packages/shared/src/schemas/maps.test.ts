@@ -63,8 +63,11 @@ describe('PublicTileSchema guardianHint', () => {
   it('is a count and one of three difficulty words, or null', () => {
     for (const difficulty of ['easy', 'tough', 'very-tough']) {
       const parsed = PublicTileSchema.parse({ ...tile, guardianHint: { count: 2, difficulty } });
-      expect(parsed.guardianHint).toEqual({ count: 2, difficulty });
+      // An older server sends no feelings: they read as none (#216).
+      expect(parsed.guardianHint).toEqual({ count: 2, difficulty, feelings: [] });
     }
+    const felt = { count: 2, difficulty: 'easy', feelings: ['joy', 'sleepy'] };
+    expect(PublicTileSchema.parse({ ...tile, guardianHint: felt }).guardianHint).toEqual(felt);
     expect(PublicTileSchema.parse({ ...tile, guardianHint: null }).guardianHint).toBeNull();
   });
 
@@ -73,6 +76,9 @@ describe('PublicTileSchema guardianHint', () => {
       { count: 2, difficulty: 'scary' },
       { count: 0, difficulty: 'easy' },
       { count: 1.5, difficulty: 'easy' },
+      // One feeling per guardian, and only real feelings.
+      { count: 2, difficulty: 'easy', feelings: ['joy'] },
+      { count: 1, difficulty: 'easy', feelings: ['grumpy'] },
     ]) {
       expect(PublicTileSchema.safeParse({ ...tile, guardianHint }).success).toBe(false);
     }

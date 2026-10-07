@@ -140,7 +140,7 @@ describe('MapState', () => {
           ? {
               ...t,
               gathering: { readyAt: 'x' },
-              guardianHint: { count: 2, difficulty: 'tough' as const },
+              guardianHint: { count: 2, difficulty: 'tough' as const, feelings: [] },
             }
           : t,
       ),
