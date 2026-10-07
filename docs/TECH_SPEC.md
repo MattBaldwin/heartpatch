@@ -321,6 +321,8 @@ Add anything else only with a one-line justification in the PR.
 
 Parsed and validated by `apps/server/src/config.ts` (zod); the server refuses to start on invalid config. Keep `.env.example` current.
 
+**What's new (#220).** Each player-visible change adds `changes/<issue>-<slug>.md` (front matter `title` and `area`: battles, land, home, squishies, account or other; a line or two; a `**Try it:**` line). `apps/client/tooling/changelog` turns them into `changelog.json` (shape: `ChangelogSchema` in shared): a Vite plugin serves it in dev and emits it in the build, or `pnpm --filter @heartpatch/client changelog` writes `apps/client/public/changelog.json` (gitignored), which the plugin then keeps. An entry's build is the commit count at the commit that added its file (`git log --diff-filter=A`), so it matches the version line; without git history (the Docker context has no `.git`) entries have no build, which is why deploy writes the file before the image build. The client lists entries newest first from the version line, and pops up once per newer build (`heartpatch.whatsNewSeenBuild` in localStorage) when the map is on screen and nothing else owns it.
+
 ## 11. Infrastructure (AWS)
 
 Small and cheap on purpose: one server for a few families.

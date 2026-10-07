@@ -37,6 +37,7 @@ import { appUpdates } from './pwa/app-updates.js';
 import { CLIENT_BUILD } from './pwa/build-info.js';
 import { startPwa } from './pwa/pwa.js';
 import { mountVersionMenu } from './pwa/version-menu.js';
+import { createWhatsNew } from './whats-new/whats-new.js';
 import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
@@ -418,6 +419,8 @@ const maps = createMapScreen({
   ),
   onHudChange: (mapId) => {
     hudMapId = mapId;
+    // The map is up: a new build's What's new may pop up now (#220).
+    if (mapId !== null) whatsNew.maybePop();
     trays.setVisible(mapId !== null);
     recipeBook.setMap(mapId);
     // Hidden, then shown: the Team and Jobs row checks the map (not on the Glade).
@@ -846,13 +849,31 @@ const menuRow = (icon: string, label: string, onTap: () => void): HTMLButtonElem
   row.addEventListener('click', onTap);
   return row;
 };
+// What's new (#220): the version line opens it, and after an update it pops
+// up once over the map, never over a battle, the tutorial, another card or a
+// held screen (#47).
+const whatsNew = createWhatsNew({
+  root: document.body,
+  client: CLIENT_BUILD,
+  busy: () =>
+    updateHold.held ||
+    lobby.isOpen ||
+    battles.debug !== null ||
+    (tutorial.debug !== null && tutorial.debug.phase !== 'closed') ||
+    lorebook.debug.showing !== null ||
+    milestones.debug.showing !== null ||
+    hollowReportOpen(),
+  // async: a missing clipboard (an http page) rejects instead of throwing.
+  copy: async (text) => navigator.clipboard.writeText(text),
+});
 // The game's version under the name, and "Update now" when one is ready (#198).
 const version = mountVersionMenu({
   client: CLIENT_BUILD,
   updates: appUpdates,
   fetchServer: () => fetchHealth(),
-  // async: a missing clipboard (an http page) rejects instead of throwing.
-  copy: async (text) => navigator.clipboard.writeText(text),
+  onOpen: () => {
+    whatsNew.open();
+  },
 });
 mountAuth(document.body, {
   menuHead: () => {
@@ -959,6 +980,7 @@ if (import.meta.env.DEV) {
     starter: () => starters.debug,
     lore: () => lorebook.debug,
     milestones: () => milestones.debug,
+    whatsNew: () => whatsNew.debug,
     audio: () => audio.debug,
   };
 
