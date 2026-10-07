@@ -30,13 +30,13 @@ import {
   buildingName,
   buildingNote,
   buildRows,
+  effectChips,
   costText,
   upgradeOffer,
   upgradeReach,
   HOME_SAFE_LINE,
   freeHomeSpots,
   fuelAllOffer,
-  landFireLine,
   landTileOffer,
   BUILDING_DATA,
   likesHabitat,
@@ -574,46 +574,50 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           el(
             'ul',
             { class: 'home-list', 'data-testid': 'home-build-list' },
-            ...buildRows(current).map(({ building, icon, needs, option, where }) => {
-              let action: Node;
-              if (option.kind === 'ready' || option.kind === 'short') {
-                const build = button(
-                  HOME_TEXT.build,
-                  () => {
-                    setMode({ kind: 'placing', buildingId: building.id });
-                  },
-                  { 'data-build': building.id },
+            ...buildRows(current).map(
+              ({ building, icon, description, effects, needs, option, where }) => {
+                let action: Node;
+                if (option.kind === 'ready' || option.kind === 'short') {
+                  const build = button(
+                    HOME_TEXT.build,
+                    () => {
+                      setMode({ kind: 'placing', buildingId: building.id });
+                    },
+                    { 'data-build': building.id },
+                  );
+                  if (option.kind === 'short') build.disabled = true;
+                  action = build;
+                } else if (option.kind === 'craft' && options.onRecipeBook) {
+                  action = button(
+                    HOME_TEXT.recipeBook,
+                    () => {
+                      close();
+                      options.onRecipeBook?.();
+                    },
+                    { 'data-recipe-for': building.id },
+                    true,
+                  );
+                } else {
+                  action = el('span', { class: 'home-list-note' }, '');
+                }
+                const note = 'note' in option ? option.note : null;
+                return el(
+                  'li',
+                  { class: 'home-list-row home-build-row', 'data-build-row': building.id },
+                  el(
+                    'span',
+                    { class: 'home-list-name' },
+                    `${icon} ${building.name}`,
+                    el('span', { class: 'home-build-about' }, description),
+                    effectRow(effects),
+                    ...(needs.length > 0 ? [needRow(needs)] : []),
+                    ...(note ? [el('span', { class: 'home-list-sub' }, note)] : []),
+                    ...(where ? [el('span', { class: 'home-list-sub' }, where)] : []),
+                  ),
+                  action,
                 );
-                if (option.kind === 'short') build.disabled = true;
-                action = build;
-              } else if (option.kind === 'craft' && options.onRecipeBook) {
-                action = button(
-                  HOME_TEXT.recipeBook,
-                  () => {
-                    close();
-                    options.onRecipeBook?.();
-                  },
-                  { 'data-recipe-for': building.id },
-                  true,
-                );
-              } else {
-                action = el('span', { class: 'home-list-note' }, '');
-              }
-              const note = 'note' in option ? option.note : null;
-              return el(
-                'li',
-                { class: 'home-list-row', 'data-build-row': building.id },
-                el(
-                  'span',
-                  { class: 'home-list-name' },
-                  `${icon} ${building.name}`,
-                  ...(needs.length > 0 ? [needRow(needs)] : []),
-                  ...(note ? [el('span', { class: 'home-list-sub' }, note)] : []),
-                  ...(where ? [el('span', { class: 'home-list-sub' }, where)] : []),
-                ),
-                action,
-              );
-            }),
+              },
+            ),
           ),
           row(
             button(
@@ -926,6 +930,15 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   }
 
   /** Have/need chips ("🪵 12/10 ✓"), green when there's enough. */
+  /** What a building does, as chips (#207). */
+  function effectRow(effects: readonly string[]): HTMLElement {
+    return el(
+      'span',
+      { class: 'home-effects' },
+      ...effects.map((e) => el('span', { class: 'home-effect' }, e)),
+    );
+  }
+
   function needRow(needs: readonly NeedChip[]): HTMLElement {
     return el(
       'span',
@@ -1271,7 +1284,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           'div',
           { class: 'home-card' },
           cardHead({ buildingId: chosen.building.id }, 1),
-          el('p', { class: 'home-card-note' }, landFireLine(chosen.building)),
+          el('p', { class: 'home-card-note' }, chosen.building.description),
+          effectRow(effectChips(chosen.building)),
           needRow(chosen.needs),
           tileRow(
             go,

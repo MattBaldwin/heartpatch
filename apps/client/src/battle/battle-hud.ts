@@ -1,5 +1,6 @@
 import { ELEMENTS, FEELINGS, type BattleSideId, type PlayerBattleAction } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
+import { ELEMENT_GLYPH, FEELING_GLYPH } from '../ui/glyphs.js';
 import type { SafeRegion } from './camera-director.js';
 import { charmButton, noCharmsLine } from './heart-charm.js';
 import {
@@ -113,25 +114,6 @@ const CALLOUT_MS = 1100; // TUNE: long enough to read "Super cozy!"
  */
 export const SHEET_SHARE = 0.35; // TUNE
 
-/** Little badges for an element and a feeling (vector-free glyphs the system renders crisply). */
-const ELEMENT_GLYPH: Readonly<Record<string, string>> = {
-  fire: '🔥',
-  water: '💧',
-  leaf: '🍃',
-  frost: '❄️',
-  spark: '⚡',
-  stone: '🪨',
-  shadow: '🌙',
-  light: '✨',
-};
-const FEELING_GLYPH: Readonly<Record<string, string>> = {
-  joy: '😄',
-  cozy: '☺️',
-  brave: '😤',
-  silly: '🤪',
-  sleepy: '😴',
-  spooky: '👻',
-};
 const ELEMENT_NAMES = new Map<string, string>(ELEMENTS.map((e) => [e.id, e.name]));
 const FEELING_NAMES = new Map<string, string>(FEELINGS.map((f) => [f.id, f.name]));
 
