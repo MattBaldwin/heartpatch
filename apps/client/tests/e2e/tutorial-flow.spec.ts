@@ -126,6 +126,58 @@ async function expectClearOfButtons(page: Page): Promise<void> {
   expect(hits).toEqual([]);
 }
 
+/** The map's own limit for a tap (map/tap-detector.ts `TAP_MAX_MS`). */
+const TAP_MAX_MS = 400;
+
+/**
+ * Taps the middle of the spotlight hole (the spotlit tile) until `opened`
+ * shows. The canvas times the press itself: one it saw as longer than a tap
+ * isn't one, since a slow box can stretch Playwright's round trips between
+ * the press and the lift past TAP_MAX_MS (as in taps.spec.ts), so it is
+ * pressed again rather than counted. A press the map took as a tap that still
+ * opens nothing fails, saying what was under the finger and what got picked.
+ */
+async function tapSpotlitTile(page: Page, opened: Locator): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    const hole = (await overlay(page))?.hole;
+    expect(hole).toBeTruthy();
+    const x = hole!.x + hole!.width / 2;
+    const y = hole!.y + hole!.height / 2;
+    const under = await page.evaluate(
+      ({ px, py }) => {
+        const w = window as unknown as { __mapPress?: number[] };
+        const press: number[] = [];
+        w.__mapPress = press;
+        const canvas = document.querySelector('#game');
+        for (const type of ['pointerdown', 'pointerup']) {
+          canvas?.addEventListener(type, (e) => press.push(e.timeStamp), { once: true });
+        }
+        return document
+          .elementsFromPoint(px, py)
+          .slice(0, 3)
+          .map((el) => el.getAttribute('data-testid') ?? el.tagName.toLowerCase());
+      },
+      { px: x, py: y },
+    );
+    await realTapAt(page, x, y);
+    if (
+      await opened.waitFor({ timeout: 5_000 }).then(
+        () => true,
+        () => false,
+      )
+    )
+      return;
+    const press = await page.evaluate(() => {
+      const [down, up] = (window as unknown as { __mapPress: number[] }).__mapPress;
+      return down === undefined || up === undefined ? null : Math.round(up - down);
+    });
+    if (press !== null && press > TAP_MAX_MS && attempt < 3) continue;
+    const picked = (await hook<{ selected: string | null }>(page, 'map'))?.selected ?? null;
+    const what = `a press of ${String(press)} ms at (${String(Math.round(x))}, ${String(Math.round(y))}) on [${under.join(', ')}] picked ${String(picked)}`;
+    await expect(opened, what).toBeVisible();
+  }
+}
+
 async function playTutorial(page: Page): Promise<void> {
   const aborted: string[] = [];
   page.on('requestfailed', (request) => {
@@ -227,12 +279,9 @@ async function playTutorial(page: Page): Promise<void> {
   // Picking a tile needs the scene drawn and the camera's arrival glide over
   // (the spotlight moves with the tile until then).
   await expect.poll(() => idle(page), { timeout: 60_000 }).toBe(true);
-  const hole = (await overlay(page))?.hole;
-  expect(hole).toBeTruthy();
-  await realTapAt(page, hole!.x + hole!.width / 2, hole!.y + hole!.height / 2);
   const panel = page.getByTestId('tile-panel');
   const gather = panel.getByTestId('tile-gather');
-  await expect(gather).toBeVisible();
+  await tapSpotlitTile(page, gather);
   await expect.poll(async () => (await overlay(page))?.spotlightOn).toBe('resource-node');
   await expect.poll(() => takesTaps(gather)).toBe(true);
   await tapOn(gather);
