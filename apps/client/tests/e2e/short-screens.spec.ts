@@ -9,7 +9,7 @@ import { openTray, traysState, traySettled, type TraySide } from './trays.js';
 // on an iPhone on its side, the old button column ran off the top, and an
 // open tray hid its last rows below the fold). Measured as boxes, not pixels.
 
-const SCREENS = [
+const SHORT_SCREENS = [
   { name: 'iPhone landscape', width: 844, height: 390 },
   { name: 'iPhone SE landscape', width: 667, height: 375 },
   { name: 'iPhone portrait', width: 390, height: 844 },
@@ -117,7 +117,7 @@ test('the map’s controls fit short and tall screens', async ({ browser }) => {
   await page.getByTestId('tray-hint-ok').tap();
   await expect(page.getByTestId('tray-hint')).toBeHidden();
 
-  for (const size of SCREENS) {
+  for (const size of SHORT_SCREENS) {
     await test.step(size.name, async () => {
       await page.setViewportSize({ width: size.width, height: size.height });
       const screen: Box = { id: 'screen', l: 0, t: 0, r: size.width, b: size.height };
