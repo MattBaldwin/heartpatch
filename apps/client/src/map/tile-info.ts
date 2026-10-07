@@ -1,5 +1,6 @@
 import {
   FEELINGS,
+  JOB_RULES,
   RESOURCES,
   TERRAINS,
   type GuardianDifficulty,
@@ -24,6 +25,11 @@ export interface TileInfo {
   readonly resource: string | null;
   /** Wild land's guardians today: how many and how tough (owner decision 10). */
   readonly guardians: string | null;
+  /**
+   * What a squishy gatherer picks on this land, whether or not it has a
+   * Keeper spot (#238's nesting economy): "Squishies gather 🌲 Timber here."
+   */
+  readonly gatherer: string | null;
   readonly home: boolean;
 }
 
@@ -64,8 +70,26 @@ export function describeTile(
     owner,
     resource: resource ? `Find ${resource.name} here.` : null,
     guardians: guardianLine(tile.guardianHint),
+    gatherer: gathererLine(tile),
     home,
   };
+}
+
+/**
+ * What a squishy gatherer picks on this land, from `JOB_RULES.terrainYields`
+ * and the affinity icons (#238): the terrain's primary resource. Home land
+ * gives a gatherer nothing without a spot, nor does land with no yield.
+ */
+export function gathererLine(
+  tile: Pick<PublicTile, 'terrain' | 'homeSlot'>,
+  rules: Pick<typeof JOB_RULES, 'terrainYields' | 'affinities'> = JOB_RULES,
+): string | null {
+  if (tile.homeSlot !== null) return null;
+  const yieldHere = rules.terrainYields.find((y) => y.terrain === tile.terrain);
+  if (!yieldHere) return null;
+  const name = RESOURCES.find((r) => r.id === yieldHere.resource)?.name ?? yieldHere.resource;
+  const icon = rules.affinities.find((a) => a.resource === yieldHere.resource)?.icon;
+  return `Squishies gather ${icon ? `${icon} ` : ''}${name} here.`;
 }
 
 const DIFFICULTY_WORDS: Readonly<Record<GuardianDifficulty, string>> = {

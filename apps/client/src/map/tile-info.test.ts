@@ -1,7 +1,7 @@
-import type { PublicTile } from '@heartpatch/shared';
+import { JOB_RULES, type PublicTile } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { MapState } from './map-state.js';
-import { describeTile, guardianLine, type TileInfo } from './tile-info.js';
+import { describeTile, gathererLine, guardianLine, type TileInfo } from './tile-info.js';
 import { testView, userId } from './test-view.js';
 
 const state = new MapState(testView(2));
@@ -27,7 +27,14 @@ const AVOIDED =
   /\b(die|dead|death|kill|faint|hurt|injure|wound|bleed|blood|damage|destroy|crush|slash|stab|bite|attack|weapon|enemy|hate|stupid|loser)\b/i;
 
 function allText(info: TileInfo): string {
-  return [info.title, info.about, info.owner, info.resource ?? '', info.guardians ?? ''].join(' ');
+  return [
+    info.title,
+    info.about,
+    info.owner,
+    info.resource ?? '',
+    info.guardians ?? '',
+    info.gatherer ?? '',
+  ].join(' ');
 }
 
 describe('describeTile', () => {
@@ -74,6 +81,33 @@ describe('describeTile', () => {
       'Find Timber here.',
     );
     expect(describeTile(tile({}), lookup, null).resource).toBeNull();
+  });
+
+  it('says what a squishy gatherer picks on the land, from the job rules (#238)', () => {
+    // With or without a Keeper spot: a forest's Greens spot doesn't hide its Timber.
+    const forest = describeTile(tile({ terrain: 'forest', nodeResource: 'greens' }), lookup, null);
+    expect(forest.resource).toBe('Find Greens here.');
+    expect(forest.gatherer).toBe('Squishies gather 🌲 Timber here.');
+    expect(describeTile(tile({ terrain: 'meadow' }), lookup, null).gatherer).toBe(
+      'Squishies gather 🌿 Greens here.',
+    );
+    expect(
+      describeTile(tile({ terrain: 'lake', nodeResource: 'water' }), lookup, null).gatherer,
+    ).toBe('Squishies gather 💧 Water here.');
+    expect(describeTile(tile({ terrain: 'mountains' }), lookup, null).gatherer).toBe(
+      'Squishies gather 🧊 Ice here.',
+    );
+    // Home land gives a gatherer nothing without a spot; Juniper's Gap has no yield.
+    expect(
+      describeTile(tile({ terrain: 'forest', homeSlot: 0 }), lookup, null).gatherer,
+    ).toBeNull();
+    expect(describeTile(tile({ terrain: 'junipers-gap' }), lookup, null).gatherer).toBeNull();
+    // Every yield in the rules reads from data, icon included.
+    for (const y of JOB_RULES.terrainYields) {
+      const icon = JOB_RULES.affinities.find((a) => a.resource === y.resource)?.icon;
+      expect(icon, y.resource).toBeDefined();
+      expect(gathererLine({ terrain: y.terrain, homeSlot: null })).toContain(icon!);
+    }
   });
 
   it("copes with terrain and owners it doesn't know", () => {
