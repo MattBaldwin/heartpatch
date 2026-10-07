@@ -103,8 +103,9 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   const overlay = friend.getByTestId('auth-overlay');
   await expect(overlay.getByRole('heading', { name: 'Welcome to Heartpatch!' })).toBeVisible();
   await overlay.getByRole('button', { name: 'Log in' }).tap();
-  await overlay.getByLabel('Name').fill(friendName);
-  await overlay.getByLabel('Password').fill(temporary);
+  // The friend's device remembers their name (#197).
+  await overlay.getByRole('button', { name: friendName }).tap();
+  await overlay.getByLabel(`Password for ${friendName}`).fill(temporary);
   await overlay.getByRole('button', { name: 'Log in' }).tap();
   await expect(friendLobby.getByRole('button', { name: /Spooky Glade/ })).toBeVisible();
 

@@ -86,6 +86,31 @@ Only the spine that other tables reference is designed here (tech spec §4, `doc
 
 One active code per user: a partial unique index on `user_id` where `used_at is null` (tech spec §9).
 
+### `account_helpers`
+Grown-up helper links (migration 0029, #197). The player asks, the helper says yes; only an `active` link lets the helper see the name and reset the password.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → users | The player who asked. Cascade delete. Indexed |
+| `helper_user_id` | uuid → users | Cascade delete. Indexed |
+| `status` | `account_helper_status` | `pending`, `active`, `declined`, `removed`. Ended rows stay for audit |
+| `created_at` | timestamptz | When the player asked |
+| `answered_at` | timestamptz, null | When the helper said yes or no |
+| `ended_at` | timestamptz, null | When either side removed it |
+
+One live link per pair: a partial unique index on (`user_id`, `helper_user_id`) where `status in ('pending', 'active')`. A check keeps `user_id <> helper_user_id`. Caps (2 helpers per player, 10 players per helper, asks included) live in `HELPER_RULES`.
+
+### `account_helper_resets`
+Each helper password reset (migration 0029, #197), written in the reset's transaction. The helper's daily cap (3 in a rolling 24 hours) counts these rows, so it survives restarts.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `user_id` | uuid → users | Who was reset. Cascade delete |
+| `helper_user_id` | uuid → users | Who reset them. Cascade delete. Indexed with `created_at` |
+| `created_at` | timestamptz | |
+
 ### `admin_totp`
 An admin's authenticator app (#196), made and confirmed only by `ops/enrol-totp.ts`.
 

@@ -1,5 +1,5 @@
 // Session and rate-limit settings for accounts (tech spec §5).
-import type { RateLimit } from '../../lib/rate-limit.js';
+import type { RateLimit, RateLimitTable } from '../../lib/rate-limit.js';
 import { MINUTE_MS } from '../../lib/time.js';
 
 const DAY_MS = 24 * 60 * MINUTE_MS;
@@ -31,3 +31,14 @@ export const AUTH_RATE_LIMITS = {
 } as const satisfies Record<string, { perIp: RateLimit; perUsername: RateLimit }>;
 
 export type AuthAction = keyof typeof AUTH_RATE_LIMITS;
+
+/**
+ * Logged-in account actions (#197). A new recovery code checks the password,
+ * so it is held to about the login limit.
+ */
+export const ACCOUNT_RATE_LIMITS = {
+  recoveryCode: {
+    perIp: { max: 30, windowMs: 15 * MINUTE_MS }, // TUNE: guess
+    perUser: { max: 5, windowMs: 15 * MINUTE_MS }, // TUNE: guess
+  },
+} as const satisfies RateLimitTable;

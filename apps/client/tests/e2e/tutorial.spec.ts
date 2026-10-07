@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
 import { expectClear } from './layout.js';
-import { newPlayer, TEST_PASSWORD, uniqueName } from './players.js';
+import { newPlayer, savedCode, TEST_PASSWORD, uniqueName } from './players.js';
 import { realTap } from './touch.js';
 import { openTray, traysState, traySettled } from './trays.js';
 
@@ -208,8 +208,9 @@ test("an update can't reload away a new account's recovery code", async ({ page 
 
   await expect(overlay.getByTestId('auth-recovery-code')).toBeVisible();
   expect(await updatesHeld(page)).toBe(true);
-  await overlay.getByRole('button', { name: 'I saved it!' }).tap();
-  expect(await updatesHeld(page)).toBe(false);
+  await savedCode(overlay);
+  // "Next" lets go once the helper check (#197) answers.
+  await expect.poll(() => updatesHeld(page)).toBe(false);
 });
 
 test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, graduate', async ({

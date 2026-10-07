@@ -138,6 +138,66 @@ export const recoveryCodes = pgTable(
 );
 
 /**
+ * A grown-up helper link (#197, owner decisions 2026-10-07). The player asks,
+ * the helper says yes; only an `active` link lets the helper see the name and
+ * reset the password. `declined` and `removed` rows stay for audit.
+ */
+export const accountHelperStatus = pgEnum('account_helper_status', [
+  'pending',
+  'active',
+  'declined',
+  'removed',
+]);
+
+export const accountHelpers = pgTable(
+  'account_helpers',
+  {
+    id: id(),
+    // The player who asked for help.
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    helperUserId: uuid('helper_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: accountHelperStatus('status').notNull().default('pending'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    // When the helper said yes or no.
+    answeredAt: timestamptz('answered_at'),
+    // When either side removed it (or the player took back an ask).
+    endedAt: timestamptz('ended_at'),
+  },
+  (t) => [
+    // One live link per pair; ended ones can be asked again.
+    uniqueIndex('account_helpers_one_live_key')
+      .on(t.userId, t.helperUserId)
+      .where(sql`${t.status} in ('pending', 'active')`),
+    index('account_helpers_user_id_idx').on(t.userId),
+    index('account_helpers_helper_user_id_idx').on(t.helperUserId),
+    check('account_helpers_not_self', sql`${t.userId} <> ${t.helperUserId}`),
+  ],
+);
+
+/**
+ * Each helper reset (#197): the record of who reset whom, and the helper's
+ * daily cap (`HELPER_RULES.resetsPerDay`) counts these rows.
+ */
+export const accountHelperResets = pgTable(
+  'account_helper_resets',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    helperUserId: uuid('helper_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('account_helper_resets_helper_user_id_idx').on(t.helperUserId, t.createdAt)],
+);
+
+/**
  * An admin's authenticator app (#196, owner decision 2026-10-07: TOTP on
  * every admin sign-in). Made and confirmed only by `ops/enrol-totp.ts` on the
  * host. The secret has to be readable to check codes, so it is never sent

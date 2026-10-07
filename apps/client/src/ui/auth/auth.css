@@ -343,3 +343,169 @@
 .hp-trays-on .auth-chip-body > .auth-button {
   min-height: 48px;
 }
+
+/* Account help (#197): remembered names, the save-your-code screen and the
+   "Forgot your name?" sheet. Same colours and 44pt+ targets as above. */
+.auth-center {
+  text-align: center;
+}
+
+.auth-names {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: var(--hp-pad-y) 16px;
+  border: 2px solid #ecd3e2;
+  border-radius: 18px;
+  background: #fff;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  color: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.auth-name[aria-pressed='true'] {
+  border-color: #b8487a;
+  background: #fdf0f6;
+}
+
+.auth-name-face {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(#6b4b6e 0 36%, #f6d2b8 36%);
+  box-shadow: inset 0 0 0 2px #fffafc;
+}
+
+.auth-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.auth-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.auth-tick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 2px solid #ecd3e2;
+  border-radius: 18px;
+  background: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.auth-tick-on {
+  border-color: #b8487a;
+  background: #fdf0f6;
+}
+
+.auth-tick input {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  accent-color: #b8487a;
+}
+
+.auth-picture {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 22px;
+  box-shadow: 0 12px 30px rgb(74 49 80 / 25%);
+  /* Press and hold to save it (iOS). */
+  -webkit-touch-callout: default;
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+
+.auth-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(74 49 80 / 35%);
+}
+
+.auth-sheet {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 20px 20px calc(env(safe-area-inset-bottom) + 20px);
+  border-radius: 28px 28px 0 0;
+  background: #fffafc;
+  box-shadow: 0 -10px 40px rgb(74 49 80 / 25%);
+}
+
+.auth-sheet:focus {
+  outline: none;
+}
+
+.auth-sheet .auth-subtitle {
+  margin: 0;
+}
+
+.auth-way {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: #fdf0f6;
+}
+
+.auth-way-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 20px;
+}
+
+.auth-way-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  color: #6b4b6e;
+}
+
+.auth-way-text strong {
+  font-size: 17px;
+  color: #4a3150;
+}
