@@ -34,6 +34,7 @@ interface KeeperGalleryHook {
   playing(i: number): boolean;
   play(move: 'jiggle' | 'wobble' | 'bounce'): void;
   animating(): boolean;
+  shadersReady(): boolean;
 }
 
 type Hooks = { __heartpatchKeepers?: KeeperGalleryHook };
@@ -52,31 +53,70 @@ const GOLDEN_CONFIG: KeeperConfig = {
 const GOLDEN_HASH = '9efc3ab44341fc2c668962479b508477';
 
 /**
- * Babylon's report of a shader variant that failed to link, which it then
- * recovers from with a fallback: "Unable to compile effect:", its Uniforms /
- * Attributes / Defines dump, an `Error:` whose compile log is empty (only a
- * stack follows), and "Trying next fallback.". Headless WebKit in CI has no
- * GPU and intermittently fails to link a variant this way (#17's CI on PR
- * #75), so these lines alone aren't a failure. Every other console error or
- * Babylon warning still is, and the tests' own assertions (every slot on
- * every base, hashes) still catch a Keeper that didn't build.
+ * Babylon's report of a shader variant that failed to compile or link, which
+ * it then recovers from with a fallback: "Unable to compile effect:", its
+ * Uniforms / Attributes / Defines dump, the variant's vertex and fragment code
+ * when the failed pipeline still holds it ("Vertex code:", then the code), an
+ * `Error:` and "Trying next fallback.". Headless WebKit in CI has no GPU and
+ * intermittently fails a variant this way (#17's CI on PR #75; #224 and #226
+ * with the squish plugin's variants), so these lines alone aren't a failure.
+ *
+ * Babylon logs the error's `stack`, and WebKit's stack leaves out the message,
+ * so the `Error:` line never shows the GL log. `watchErrors` prints the real
+ * shader and program info logs to the test's output instead.
+ *
+ * Every other console error or Babylon warning still fails a test. So does a
+ * variant whose fallbacks all fail: `openGallery` waits for every shown mesh's
+ * shader to be ready. The tests' own assertions (every slot on every base,
+ * hashes) still catch a Keeper that didn't build.
  */
 const SHADER_FALLBACK_NOISE = [
   /^Unable to compile effect:/,
   /^(Uniforms|Attributes|Defines):/,
-  /^Error: [\w$.<>]*@\S+:\d+:\d+/, // an empty compile log: the message is just a stack
+  /^(Vertex|Fragment) code:$/,
+  /^#version 300 es\n/, // the code itself
+  /^Error: [\w$.<>]*@\S+:\d+:\d+/, // WebKit: the stack, without the message
   /^Trying next fallback\.$/,
 ];
+
+const GL_INFO_LOG = 'GL info log: ';
 
 function isShaderFallbackNoise(text: string): boolean {
   const body = text.replace(/^BJS - \[[\d:]+\]: /, '');
   return text.startsWith('BJS -') && SHADER_FALLBACK_NOISE.some((re) => re.test(body));
 }
 
-function watchErrors(page: Page): string[] {
+/**
+ * Collects console errors and Babylon warnings, less the shader fallback
+ * report. Non-empty shader and program info logs (what a failed variant's
+ * `Error:` line can't show on WebKit) go to the test's output.
+ */
+async function watchErrors(page: Page): Promise<string[]> {
   const errors: string[] = [];
+  await page.addInitScript((prefix) => {
+    const proto = WebGL2RenderingContext.prototype;
+    const report = (name: string, log: string | null) => {
+      if (log?.trim()) console.info(`${prefix}${name}: ${log.trim()}`);
+      return log;
+    };
+    type InfoLog<T> = (this: WebGL2RenderingContext, of: T) => string | null;
+    const original = <T>(name: string) =>
+      Object.getOwnPropertyDescriptor(proto, name)!.value as InfoLog<T>;
+    const shaderLog = original<WebGLShader>('getShaderInfoLog');
+    const programLog = original<WebGLProgram>('getProgramInfoLog');
+    proto.getShaderInfoLog = function (this: WebGL2RenderingContext, shader: WebGLShader) {
+      return report('shader', shaderLog.call(this, shader));
+    };
+    proto.getProgramInfoLog = function (this: WebGL2RenderingContext, program: WebGLProgram) {
+      return report('program', programLog.call(this, program));
+    };
+  }, GL_INFO_LOG);
   page.on('pageerror', (err) => errors.push(err.message));
   page.on('console', (msg) => {
+    if (msg.text().startsWith(GL_INFO_LOG)) {
+      console.log(`[${test.info().project.name}] ${msg.text()}`);
+      return;
+    }
     const babylonWarning = msg.type() === 'warning' && msg.text().startsWith('BJS -');
     if ((msg.type() === 'error' || babylonWarning) && !isShaderFallbackNoise(msg.text())) {
       errors.push(msg.text());
@@ -93,6 +133,13 @@ async function openGallery(page: Page, query = ''): Promise<Stats> {
       timeout: 30_000,
     })
     .not.toBeNull();
+  // A variant that failed may still be compiling a fallback; one whose
+  // fallbacks all failed never gets here.
+  await expect
+    .poll(() => page.evaluate(() => (window as Hooks).__heartpatchKeepers!.shadersReady()), {
+      timeout: 30_000,
+    })
+    .toBe(true);
   return (await page.evaluate(() => (window as Hooks).__heartpatchKeepers!.stats()))!;
 }
 
@@ -113,7 +160,7 @@ async function waitForIdle(page: Page, quietMs = 500): Promise<void> {
 
 test('shows all 12 Keeper bases, with no errors', async ({ page }) => {
   test.setTimeout(90_000); // first load compiles shaders; CI renders in software
-  const errors = watchErrors(page);
+  const errors = await watchErrors(page);
   const stats = await openGallery(page);
   await expect(page.locator('#game')).toHaveAttribute('data-renderer', 'webgl2');
   const info = await page.evaluate(() => {
@@ -130,7 +177,7 @@ test('shows all 12 Keeper bases, with no errors', async ({ page }) => {
 
 test('every hairstyle draws on a Keeper, each one different', async ({ page }) => {
   test.setTimeout(90_000);
-  const errors = watchErrors(page);
+  const errors = await watchErrors(page);
   const stats = await openGallery(page, '?base=pip&hair=all');
   expect(stats).toMatchObject({ keepers: 12 });
   const info = await page.evaluate(() => {
@@ -146,7 +193,7 @@ test('every wardrobe slot attaches to every base (no clothing is body-type locke
   page,
 }) => {
   test.setTimeout(120_000);
-  const errors = watchErrors(page);
+  const errors = await watchErrors(page);
   await openGallery(page, '?items=all');
   const worn = await page.evaluate(() => {
     const h = (window as Hooks).__heartpatchKeepers!;

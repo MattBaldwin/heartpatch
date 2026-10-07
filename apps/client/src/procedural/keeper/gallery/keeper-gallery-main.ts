@@ -273,4 +273,5 @@ window.__heartpatchKeepers = {
   },
   play: playAll,
   animating: () => animating,
+  shadersReady: () => !!stage && stage.scene.meshes.every((m) => !m.isEnabled() || m.isReady(true)),
 };
