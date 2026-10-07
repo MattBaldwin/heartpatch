@@ -182,13 +182,7 @@ describe('whereToFind', () => {
         where.bonusFrom.length > 0 ||
         where.madeBy.length > 0;
       // Heartdust comes from rescues and seasonal extras from events: no node, bonus or recipe yet.
-      const elsewhere = [
-        'heartdust',
-        'magic-fallen-leaves',
-        'turkey-feathers',
-        'presents',
-        'fireworks',
-      ];
+      const elsewhere = ['heartdust', 'turkey-feathers', 'presents', 'fireworks'];
       expect(found, r.id).toBe(!elsewhere.includes(r.id));
     }
   });

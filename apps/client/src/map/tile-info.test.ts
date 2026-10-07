@@ -31,6 +31,17 @@ function allText(info: TileInfo): string {
 }
 
 describe('describeTile', () => {
+  it('names a seasonal home node only in its season (owner decision 2026-10-06)', () => {
+    const patch = tile({ homeSlot: 0, ownerUserId: userId(1), nodeResource: 'pumpkins' });
+    expect(describeTile(patch, lookup, userId(1), ['halloween']).resource).toBe(
+      'Find Pumpkins here.',
+    );
+    expect(describeTile(patch, lookup, userId(1), ['thanksgiving']).resource).toBeNull();
+    // Pumpkin Fields out on the map still say so all year.
+    const field = tile({ terrain: 'pumpkin-fields', nodeResource: 'pumpkins' });
+    expect(describeTile(field, lookup, userId(1), []).resource).toBe('Find Pumpkins here.');
+  });
+
   it('names the terrain from the shared table', () => {
     const info = describeTile(tile({ terrain: 'old-forest' }), lookup, userId(1));
     expect(info.title).toBe('Old Forest');

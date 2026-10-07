@@ -297,6 +297,15 @@ export const MOVES: Move[] = [
   },
   // Light
   {
+    // Thanksgiving's move: Crunchkin's line pops out of a leaf pile.
+    id: 'leaf-pile-leap',
+    name: 'Leaf Pile Leap',
+    description: 'Dives into a leaf pile and pops out on top of you. Crunch!',
+    element: 'leaf',
+    power: 65, // TUNE:
+    accuracy: 95, // TUNE:
+  },
+  {
     id: 'sunny-beam',
     name: 'Sunny Beam',
     description: 'A warm beam of morning sunshine.',
@@ -1299,5 +1308,77 @@ export const SPECIES: Species[] = [
       attackPart: 'tail',
     },
     habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
+  },
+
+  // Thanksgiving (season `thanksgiving`): drawn by the season's leaf piles.
+
+  // Leaf + Joy. A baby squirrel that dives into every Magic Fallen Leaves pile.
+  {
+    id: 'crunchkin',
+    name: 'Crunchkin',
+    description: 'A baby squirrel in an acorn hat. It jumps into every leaf pile it sees. Crunch!',
+    element: 'leaf',
+    feeling: 'joy',
+    rarity: 'uncommon',
+    season: 'thanksgiving',
+    baseStats: { hp: 55, attack: 60, defense: 45, speed: 60 }, // TUNE:
+    moves: ['leafy-tickle', 'leaf-pile-leap', 'zoomies'],
+    evolutions: [{ into: 'maplecrunch', level: 18 }], // TUNE:
+    visual: {
+      body: 'bean',
+      palette: ['#e8a066', '#fff1dc', '#b5693a', '#7cc96a'],
+      parts: [
+        'happy-eyes',
+        'smile',
+        'blush-cheeks',
+        'round-ears',
+        'acorn-cap',
+        'stuck-leaf',
+        'stubby-arms',
+        'biped-legs',
+        'bushy-tail',
+      ],
+      head: { body: 'orb', size: 1.12, forward: 0.1, up: 0.55 },
+      stance: 0.12,
+      pose: 'sit',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
+  },
+  {
+    id: 'maplecrunch',
+    name: 'Maplecrunch',
+    description:
+      'A big, bouncy squirrel with a mane of maple leaves. It can leap a whole leaf pile.',
+    element: 'leaf',
+    feeling: 'joy',
+    rarity: 'rare',
+    season: 'thanksgiving',
+    baseStats: { hp: 75, attack: 85, defense: 63, speed: 85 }, // TUNE:
+    moves: ['leafy-tickle', 'leaf-pile-leap', 'zoomies', 'sunny-beam'],
+    evolutions: [],
+    visual: {
+      body: 'pear',
+      palette: ['#e59a5c', '#fff1dc', '#c4562e', '#7cc96a'],
+      parts: [
+        'happy-eyes',
+        'brave-brows',
+        'smirk',
+        'fangs',
+        'pointy-ears',
+        'acorn-cap',
+        'maple-mane',
+        'stuck-leaf',
+        'strong-arms',
+        'biped-legs',
+        'bushy-tail',
+      ],
+      size: 1.3,
+      head: { body: 'orb', size: 0.74, forward: 0.12, up: 0.78 },
+      stance: 0.35,
+      pose: 'upright',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
   },
 ];

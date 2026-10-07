@@ -33,6 +33,7 @@ import {
   CORNER,
   DOME,
   meshFrom,
+  homeNodeShown,
   NODE_PROPS,
   overlayMaterial,
   placeAt,
@@ -611,10 +612,15 @@ export class HomeScene {
     const seed = buildHeartSeed(this.#scene);
     setInstances(seed, [placeAt(0, (HOME_LOOK.height + 0.15) * k, 0, s)]);
 
-    // Each home node (Timber, Stone, Emberwood, the farm plot) in its tile's middle.
+    // Each home node (Timber, Stone, Emberwood, the farm plot, and the seasonal
+    // ones in their season) in its tile's middle.
     const byKind = new Map<PropKind, Matrix[]>();
+    const seasons = new Set(home.seasons);
     for (const t of home.tiles) {
-      const kind = t.nodeResource ? NODE_PROPS[t.nodeResource] : undefined;
+      const kind =
+        t.nodeResource && homeNodeShown(t.nodeResource, seasons)
+          ? NODE_PROPS[t.nodeResource]
+          : undefined;
       if (!kind) continue;
       const p = local(t);
       const list = byKind.get(kind) ?? [];

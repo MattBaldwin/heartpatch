@@ -64,7 +64,8 @@ describe('tileAction', () => {
   });
 
   it('lets pumpkin patches sleep outside Halloween', () => {
-    const patch = tile({ terrain: 'pumpkin-fields', nodeResource: 'pumpkins' });
+    // My land out in the fields (not home).
+    const patch = tile({ terrain: 'pumpkin-fields', nodeResource: 'pumpkins', homeSlot: null });
     expect(tileAction(patch, me, none, NOW)).toMatchObject({ kind: 'gather' });
     const asleep = tileAction(patch, me, { gathers: [], seasons: ['thanksgiving'] }, NOW);
     expect(asleep).toEqual({
@@ -72,6 +73,19 @@ describe('tileAction', () => {
       note: 'Pumpkins only turn up around Halloween!',
     });
     expect(asleep.kind === 'sleeping' && findAvoidedWords(asleep.note)).toEqual([]);
+  });
+
+  it('hides a seasonal home node out of its season (owner decision 2026-10-06)', () => {
+    const pumpkins = tile({ terrain: 'meadow', nodeResource: 'pumpkins' });
+    expect(tileAction(pumpkins, me, none, NOW)).toMatchObject({ kind: 'gather' });
+    const later = { gathers: [], seasons: ['thanksgiving'] };
+    expect(tileAction(pumpkins, me, later, NOW)).toEqual({ kind: 'none' });
+    const leaves = tile({ terrain: 'meadow', nodeResource: 'magic-fallen-leaves' });
+    expect(tileAction(leaves, me, none, NOW)).toEqual({ kind: 'none' });
+    expect(tileAction(leaves, me, later, NOW)).toEqual({
+      kind: 'gather',
+      yields: { 'magic-fallen-leaves': 3 },
+    });
   });
 
   it("shows someone else's gather, and nothing on bare or wild land", () => {

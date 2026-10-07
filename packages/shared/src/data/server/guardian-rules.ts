@@ -109,5 +109,17 @@ export const GUARDIAN_RULES: GuardianRules = {
         { species: 'brightboo', weight: 1 },
       ],
     },
+    {
+      id: 'thanksgiving-guardians',
+      terrains: ['forest', 'old-forest'],
+      season: 'thanksgiving',
+      entries: [{ species: 'crunchkin', weight: 2 }], // TUNE:
+    },
+    {
+      id: 'thanksgiving-gap-guardians',
+      terrains: ['junipers-gap'],
+      season: 'thanksgiving',
+      entries: [{ species: 'maplecrunch', weight: 2 }], // TUNE:
+    },
   ],
 };
