@@ -4,3 +4,4 @@ export * from './safe-tiles.js';
 export * from './grid.js';
 export * from './costs.js';
 export * from './building-effects.js';
+export * from './item-effects.js';

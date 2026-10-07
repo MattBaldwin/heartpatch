@@ -69,7 +69,8 @@ export const RECIPES: Recipe[] = [
   {
     id: 'jack-o-lantern-hearthfire',
     name: "Jack-o'-Lantern",
-    description: 'Carve a big pumpkin with a glowing grin. Then build it into a fire at home. Boo!',
+    description:
+      'Carve a big pumpkin with a glowing grin. Then build it into a fire out on your land. Boo!',
     inputs: { pumpkins: 3, emberwood: 2, 'witch-dust': 1 }, // TUNE:
     output: { resource: 'jack-o-lantern-hearthfire', quantity: 1 }, // built at home (#18)
     craftSeconds: 5 * 60, // TUNE:

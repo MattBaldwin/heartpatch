@@ -20,7 +20,8 @@
 }
 
 .care[hidden],
-.care-celebrate[hidden] {
+.care-celebrate[hidden],
+.care-rarity[hidden] {
   display: none;
 }
 
@@ -197,6 +198,12 @@
 
 .care-name {
   margin: 0;
+}
+
+/* The rarity chip, centred under the name (#240). */
+.care-rarity {
+  display: flex;
+  justify-content: center;
 }
 
 .care-mood,

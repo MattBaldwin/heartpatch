@@ -22,6 +22,7 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import type { SquishyDetail } from '../procedural/config.js';
 import { heroLodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
+import { rarityChip } from '../ui/rarity/rarity.js';
 import { blurredBackdrop } from './backdrop.js';
 import {
   BREATHING_FRAME_MS,
@@ -185,7 +186,14 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   const title = el('h1', { class: 'close-up-name', id: 'close-up-title' });
   // Name and Back sit at the top of the bottom card: reachable one-handed
   // (style guide §3.2), and clear of the account chip at the top right.
-  const top = el('header', { class: 'close-up-top' }, title, back);
+  // The rarity chip sits under the name (#240).
+  const rarity = el('div', { class: 'close-up-rarity', 'data-testid': 'close-up-rarity' });
+  const top = el(
+    'header',
+    { class: 'close-up-top' },
+    el('div', { class: 'close-up-titles' }, title, rarity),
+    back,
+  );
   const bubbles = el('div', { class: 'close-up-bubbles', 'aria-hidden': 'true' });
   const mood = el('p', { class: 'care-mood', 'data-testid': 'close-up-mood' });
   const heartsFill = el('div', { class: 'care-meter-fill care-hearts' });
@@ -391,6 +399,8 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     const now = serverNow();
     const model = infoCard(squishy, reply, now);
     title.textContent = model.name;
+    rarity.replaceChildren(...(model.rarity ? [rarityChip(model.rarity)] : []));
+    rarity.hidden = model.rarity === null;
     mood.textContent = model.mood;
     heartsFill.style.width = `${String(Math.round(model.hearts * 100))}%`;
     level.textContent = model.level;

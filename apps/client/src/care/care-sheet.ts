@@ -3,6 +3,7 @@ import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
+import { rarityChip } from '../ui/rarity/rarity.js';
 import { careApi, type CareApi } from './care-api.js';
 import {
   CARE_TEXT,
@@ -85,6 +86,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   );
   const stage = el('div', { class: 'care-stage' }, blob, sparkles);
   const name = el('h1', { class: 'auth-title care-name', id: 'care-title' });
+  // The rarity chip under the name (#240).
+  const rarity = el('div', { class: 'care-rarity', 'data-testid': 'care-rarity' });
   const mood = el('p', { class: 'care-mood', 'data-testid': 'care-mood' });
   const heartsFill = el('div', { class: 'care-meter-fill care-hearts' });
   const hearts = el('div', { class: 'care-meter', 'aria-hidden': 'true' }, heartsFill);
@@ -138,6 +141,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       { class: 'auth-card care-card' },
       stage,
       name,
+      rarity,
       mood,
       hearts,
       level,
@@ -193,6 +197,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     closeUpButton.hidden = !options.onCloseUp || !reply || !squishy;
     if (!reply || !squishy) {
       name.textContent = '';
+      rarity.replaceChildren();
+      rarity.hidden = true;
       mood.textContent = CARE_TEXT.noneYet;
       actions.replaceChildren();
       return;
@@ -202,6 +208,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     blob.style.background = model.color;
     face.set(faceFor(squishy.speciesId, speciesById(reply)));
     name.textContent = model.name;
+    rarity.replaceChildren(...(model.rarity ? [rarityChip(model.rarity)] : []));
+    rarity.hidden = model.rarity === null;
     mood.textContent = model.mood;
     heartsFill.style.width = `${String(Math.round(model.hearts * 100))}%`;
     level.textContent = model.level;

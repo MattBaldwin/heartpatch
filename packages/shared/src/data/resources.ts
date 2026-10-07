@@ -136,7 +136,7 @@ export const RESOURCES: Resource[] = [
     // the build sheet doesn't read "to build X you need X".
     id: 'jack-o-lantern-hearthfire',
     name: "Jack-o'-Lantern",
-    description: 'A carved, grinning pumpkin. Build it into a Hearthfire at home!',
+    description: 'A carved, grinning pumpkin. Build it into a Hearthfire out on your land!',
     kind: 'crafted',
   },
   // Battle potions (#214, owner decisions 2026-10-07): drinking one takes the
@@ -159,7 +159,7 @@ export const RESOURCES: Resource[] = [
   {
     id: 'hearty-soup',
     name: 'Hearty Soup',
-    description: 'A big bowl of yum that brings back lots of energy.',
+    description: 'A big bowl of yum. Sip it in a battle to get lots of energy back!',
     kind: 'crafted',
     battleEffect: { healPercent: 40, shieldPercent: 75 }, // TUNE:
   },

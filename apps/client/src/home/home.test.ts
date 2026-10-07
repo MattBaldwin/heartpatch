@@ -1,5 +1,6 @@
 import {
   findAvoidedWords,
+  GAME_DATA,
   hexDistance,
   hexKey,
   type HomeResponse,
@@ -29,6 +30,8 @@ import {
   LAND_FIRE,
   likesHabitat,
   refundPreview,
+  speciesMap,
+  squishyRarity,
   trainCost,
   upgradeOffer,
   upgradeReach,
@@ -324,6 +327,28 @@ describe('build menu', () => {
     expect(likesHabitat(pal, 'cozy-meadow')).toBe(true);
     expect(likesHabitat(pal, 'ember-den')).toBe(false);
     expect(likesHabitat(pal, 'hearthfire')).toBe(false);
+  });
+
+  it("gives a squishy's rarity for its dot in the home lists, secret ones too (#240)", () => {
+    const pal = {
+      id: ID(9),
+      speciesId: 'puddlepuff',
+      element: 'water' as const,
+      feeling: 'joy' as const,
+      nickname: null,
+      level: 1,
+      habitatId: null,
+      trainingId: null,
+      job: 'resting' as const,
+    };
+    const rare = GAME_DATA.species.find((s) => s.rarity === 'rare');
+    if (!rare) throw new Error('no rare species');
+    const secret = { ...rare, id: 'heartlet', name: 'Heartlet', rarity: 'secret' as const };
+    const species = speciesMap(homeWith({ speciesDefs: [secret] }));
+    expect(squishyRarity(pal, species)).toBe('common');
+    expect(squishyRarity({ ...pal, speciesId: rare.id }, species)).toBe('rare');
+    expect(squishyRarity({ ...pal, speciesId: 'heartlet' }, species)).toBe('secret');
+    expect(squishyRarity({ ...pal, speciesId: 'who-knows' }, species)).toBeNull();
   });
 });
 

@@ -18,6 +18,7 @@ import {
   type HomeResponse,
   type HomeSquishy,
   type MyBuilding,
+  type Rarity,
   type Species,
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
@@ -497,6 +498,14 @@ export function speciesMap(home: Pick<HomeResponse, 'speciesDefs'>): Map<string,
 /** A squishy's name: its nickname, else its species', else a friendly stand-in. */
 export function squishyName(squishy: HomeSquishy, species: ReadonlyMap<string, Species>): string {
   return squishy.nickname ?? species.get(squishy.speciesId)?.name ?? 'Mystery squishy';
+}
+
+/** A squishy's rarity for its dot (#240), or null when the client has no row for its species. */
+export function squishyRarity(
+  squishy: HomeSquishy,
+  species: ReadonlyMap<string, Species>,
+): Rarity | null {
+  return species.get(squishy.speciesId)?.rarity ?? null;
 }
 
 /** One line about a building on its card. */

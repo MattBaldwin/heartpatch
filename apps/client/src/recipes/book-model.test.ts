@@ -1,5 +1,6 @@
 import {
   findAvoidedWords,
+  GAME_DATA,
   recipeBookPages,
   RECIPE_BOOK,
   type PublicTile,
@@ -78,6 +79,42 @@ describe('recipe book pages', () => {
     expect(jack.hint).toMatch(/Emberwood and Pumpkin/);
   });
 
+  it("say what a recipe's item does, from its data (#241)", () => {
+    const brew = view('recipe:brave-brew');
+    expect(brew.effect?.purpose).toBe(
+      GAME_DATA.resources.find((r) => r.id === 'brave-brew')?.description,
+    );
+    expect(brew.effect?.chips).toEqual([
+      { text: '💪 +40% oomph all battle', battle: true },
+      { text: '🫧 Next bump 75% softer', battle: true },
+      { text: '🎒 Use it in a battle', battle: false },
+    ]);
+    // The recipe's own line stays, as flavour.
+    expect(brew.flavour).toBe(GAME_DATA.recipes.find((r) => r.id === 'brave-brew')?.description);
+    expect(view('recipe:jack-o-lantern-hearthfire').effect?.chips.map((c) => c.text)).toEqual([
+      "🎃 Builds a Jack-o'-Lantern Hearthfire",
+      '🛡️ Safe 2 tiles around',
+      '🪵 Needs fuel each night',
+    ]);
+  });
+
+  it("don't repeat what a recipe is made from (#241)", () => {
+    const chips = view('recipe:pumpkin-treats').effect?.chips.map((c) => c.text) ?? [];
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.some((t) => t.startsWith('🥣'))).toBe(false);
+  });
+
+  it('say what a building does like the build menu (#241)', () => {
+    const grounds = view('building:training-grounds');
+    const building = GAME_DATA.buildings.find((b) => b.id === 'training-grounds');
+    expect(grounds.effect).toEqual({
+      purpose: building?.description,
+      chips: [{ text: '🏋️ 2 squishies · 5 XP/hr', battle: false }],
+    });
+    // Said once: the purpose line, not again as flavour.
+    expect(grounds.flavour).toBe('');
+  });
+
   it('say buildings are built at home', () => {
     const den = view('building:ember-den', { bag: { timber: 5, stone: 3 } });
     expect(den.section).toBe('build');
@@ -97,7 +134,15 @@ describe('recipe book pages', () => {
   it('use kind words only', () => {
     for (const page of PAGES) {
       const v = pageView(page, ctx({ unlocked: new Set(PAGES.map((p) => p.key)) }));
-      const words = [v.name, v.flavour, v.meta, v.hint, ...v.ingredients.map((i) => i.where)];
+      const words = [
+        v.name,
+        v.flavour,
+        v.meta,
+        v.hint,
+        ...v.ingredients.map((i) => i.where),
+        v.effect?.purpose ?? '',
+        ...(v.effect?.chips.map((c) => c.text) ?? []),
+      ];
       expect(findAvoidedWords(words.join(' ')), page.key).toEqual([]);
     }
   });
@@ -326,7 +371,7 @@ describe('ribbon tabs', () => {
     ]);
   });
 
-  it('leave the effect line empty until something has one', () => {
-    expect(views.every((v) => v.effect === null)).toBe(true);
+  it('say what every page makes is for (#241)', () => {
+    expect(views.every((v) => v.effect !== null && v.effect.chips.length > 0)).toBe(true);
   });
 });

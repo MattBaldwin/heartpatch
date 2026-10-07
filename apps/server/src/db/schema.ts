@@ -51,6 +51,11 @@ export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'appr
 export const battleKind = pgEnum('battle_kind', ['wild', 'tile', 'rival-tile', 'rescue']);
 /** `no-contest`: the server called it off (content re-tuned mid-battle). */
 export const battleStatus = pgEnum('battle_status', ['active', 'finished', 'no-contest']);
+/**
+ * Account role (#196). `admin` opens the operator console; only the host
+ * script `ops/grant-admin.ts` sets it, never an HTTP route.
+ */
+export const userRole = pgEnum('user_role', ['player', 'admin']);
 
 export const users = pgTable(
   'users',
@@ -81,6 +86,7 @@ export const users = pgTable(
     // operator's codes, `HP_SIGNUP_CODE` and accounts from before #195.
     signupCodeId: uuid('signup_code_id').references((): AnyPgColumn => signupCodes.id),
     invitedBy: uuid('invited_by').references((): AnyPgColumn => users.id),
+    role: userRole('role').notNull().default('player'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -189,6 +195,73 @@ export const accountHelperResets = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [index('account_helper_resets_helper_user_id_idx').on(t.helperUserId, t.createdAt)],
+);
+
+/**
+ * An admin's authenticator app (#196, owner decision 2026-10-07: TOTP on
+ * every admin sign-in). Made and confirmed only by `ops/enrol-totp.ts` on the
+ * host. The secret has to be readable to check codes, so it is never sent
+ * over HTTP. `last_step` is the newest 30-second step a code was accepted
+ * for, so a code can't be used twice.
+ */
+export const adminTotp = pgTable('admin_totp', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  // Base32, as authenticator apps take it.
+  secret: text('secret').notNull(),
+  createdAt: timestamptz('created_at').notNull().defaultNow(),
+  // Null until the operator confirms a code from the app; sign-in needs it.
+  enrolledAt: timestamptz('enrolled_at'),
+  lastStep: bigint('last_step', { mode: 'number' }),
+});
+
+/**
+ * Admin console sessions (#196): apart from `sessions`, with their own
+ * `hp_admin` cookie on the admin API's path. They end after a short idle
+ * time (`last_seen_at`) and at `expires_at`, whichever comes first.
+ */
+export const adminSessions = pgTable(
+  'admin_sessions',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Hash of the `hp_admin` cookie token; the raw token is never stored.
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    lastSeenAt: timestamptz('last_seen_at').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+  },
+  (t) => [index('admin_sessions_user_id_idx').on(t.userId)],
+);
+
+/**
+ * Every admin action, sign-in and host-script grant (#196). Written before
+ * the action runs (`pending`) and marked `done` or `failed` after, so no
+ * action goes unrecorded (one left `pending` may have run: its outcome
+ * couldn't be written). Never holds a secret. `actor_user_id` is null for
+ * the host scripts.
+ */
+export const adminAuditOutcome = pgEnum('admin_audit_outcome', ['pending', 'done', 'failed']);
+
+export const adminAudit = pgTable(
+  'admin_audit',
+  {
+    id: id(),
+    // `set null`, so a record never blocks deleting an account later.
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    action: text('action').notNull(),
+    targetUserId: uuid('target_user_id').references(() => users.id, { onDelete: 'set null' }),
+    targetMapId: uuid('target_map_id').references(() => maps.id, { onDelete: 'set null' }),
+    // Non-secret detail (a lookup's search, a code's label).
+    detail: jsonb('detail').notNull().default({}),
+    outcome: adminAuditOutcome('outcome').notNull().default('pending'),
+    ip: text('ip'),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('admin_audit_created_at_idx').on(t.createdAt)],
 );
 
 /**

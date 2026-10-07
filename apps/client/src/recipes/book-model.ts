@@ -2,6 +2,7 @@ import {
   canMakeNow,
   GAME_DATA,
   hexDistance,
+  itemEffects,
   sealedHint,
   shortfall,
   whereToFind,
@@ -12,8 +13,9 @@ import {
   type RecipeBookPage,
 } from '@heartpatch/shared';
 import { bagCrafts, itemName, type BagCraft } from '../inventory/bag-view.js';
+import { itemChip, type ItemChip } from '../inventory/item-chips.js';
 import { itemIcon } from '../inventory/item-icons.js';
-import { buildingIcon } from '../home/home-view.js';
+import { buildingIcon, effectChips } from '../home/home-view.js';
 
 // The recipe book's pages as the player reads them (owner decision
 // 2026-10-05). Pure: the pages come from shared data, what's unlocked from
@@ -115,6 +117,7 @@ export interface PageView {
   readonly kind: RecipeBookPage['kind'];
   readonly id: string;
   readonly name: string;
+  /** How it's made, in italics: a recipe's own line; empty on a building page (#241). */
   readonly flavour: string;
   /** The game's own icon for what it makes. */
   readonly icon: string;
@@ -122,10 +125,11 @@ export interface PageView {
   /** What it makes: an item id, or the building's id. */
   readonly output: string;
   /**
-   * What it does for squishies ("Loved by Fire squishies · +XP next battle"),
-   * shown under the name when set. Nothing has one yet; foods will.
+   * What it's for, shown under the name (#241): the item's or building's
+   * description, plus chips worked out from its data. Null when the data has
+   * neither.
    */
-  readonly effect: string | null;
+  readonly effect: PageEffect | null;
   /** The page's season's name ("Halloween"), or null. */
   readonly season: string | null;
   readonly sealed: boolean;
@@ -140,6 +144,34 @@ export interface PageView {
   readonly note: string | null;
   /** Opened since the player last looked (the "New page!" moment). */
   readonly isNew: boolean;
+}
+
+export interface PageEffect {
+  readonly purpose: string;
+  readonly chips: readonly ItemChip[];
+}
+
+const BUILDINGS = new Map(GAME_DATA.buildings.map((b) => [b.id, b]));
+const RESOURCES = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
+
+/**
+ * What a page's thing is for (#241): an item's description and chips, or a
+ * building's description and its build-menu chips, word for word.
+ */
+export function pageEffect(page: RecipeBookPage): PageEffect | null {
+  if (page.output.kind === 'building') {
+    const building = BUILDINGS.get(page.output.building);
+    if (!building) return null;
+    return {
+      purpose: building.description,
+      chips: effectChips(building).map((text) => ({ text, battle: false })),
+    };
+  }
+  const item = RESOURCES.get(page.output.resource);
+  if (!item) return null;
+  // The page's own ingredients already say what it's made from.
+  const effects = itemEffects(item.id).filter((e) => e.kind !== 'made-from');
+  return { purpose: item.description, chips: effects.map(itemChip) };
 }
 
 export interface BookContext {
@@ -196,11 +228,12 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
     kind: page.kind,
     id: page.id,
     name: page.name,
-    flavour: page.description,
+    // A building's description is its purpose line, so it isn't said twice.
+    flavour: page.kind === 'building' ? '' : page.description,
     icon: page.output.kind === 'item' ? itemIcon(page.output.resource) : buildingIcon(page.id),
     section: page.kind === 'recipe' ? 'make' : 'build',
     output: page.output.kind === 'item' ? page.output.resource : page.output.building,
-    effect: null,
+    effect: pageEffect(page),
     season,
     sealed,
     hint: sealedHint(page.key) ?? BOOK_TEXT.sealed,
