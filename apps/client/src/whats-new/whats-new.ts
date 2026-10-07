@@ -12,16 +12,16 @@ import {
   groupByBuild,
   groupLabel,
   isNewSince,
-  popUpPlan,
   type SeenStore,
 } from './whats-new-model.js';
+import { createPopUp } from './whats-new-popup.js';
 import './whats-new.css';
 
 // "What's new" (#220): every change since the version a tester last saw, with
 // what to try. Tapping the version line opens it (owner decision 2026-10-07);
 // after an update it pops up once, never over a battle, the tutorial or a
-// held screen (#47): it waits for the map. `changelog.json` is fetched only
-// when it's needed.
+// held screen (#47): it waits for the map, and only comes when an entry is
+// new (whats-new-popup.ts). `changelog.json` is fetched only when it's needed.
 
 export const WHATS_NEW_TEXT = {
   title: 'What’s new',
@@ -30,7 +30,7 @@ export const WHATS_NEW_TEXT = {
   youreOn: (version: string) => `You’re on ${version}`,
   copy: 'Copy',
   copied: 'Copied!',
-  notCopied: 'Couldn’t copy',
+  notCopied: 'Write it down instead',
   newSince: 'New since you last looked',
   seenBefore: 'You’ve seen these',
   tryIt: 'Try it:',
@@ -70,6 +70,10 @@ export interface WhatsNewOptions {
   client: BuildInfo | null;
   /** Something owns the screen (a battle, the tutorial, a held screen): the pop-up waits. */
   busy: () => boolean;
+  /** The sheet opened or closed (one card at a time, #129: others wait for it). */
+  onChange?: () => void;
+  /** False without a clipboard (an http page): no Copy chip. */
+  canCopy: boolean;
   copy: (text: string) => Promise<void>;
   fetchChangelog?: () => Promise<unknown>;
   seen?: SeenStore;
@@ -86,7 +90,7 @@ export interface WhatsNewDebug {
 export interface WhatsNew {
   /** The version line was tapped. */
   open: () => void;
-  /** The map is on screen: pop up once if this build is newer than the last one seen. */
+  /** The map is on screen: pop up once if an entry is newer than the last build seen. */
   maybePop: () => void;
   readonly debug: WhatsNewDebug;
 }
@@ -105,13 +109,26 @@ export function createWhatsNew(options: WhatsNewOptions): WhatsNew {
 
   let mode: WhatsNewDebug['mode'] = null;
   let shown = 0;
-  let poppedThisRun = false;
-  let retrying = false;
   let entries: ChangeEntryView[] | null = null;
+
+  /** The changelog's entries, fetched once; null when it can't be fetched. */
+  async function load(): Promise<ChangeEntryView[] | null> {
+    if (entries !== null) return entries;
+    try {
+      entries = ChangelogSchema.parse(await fetchChangelog()).entries;
+    } catch {
+      return null;
+    }
+    return entries;
+  }
 
   const title = el('h2', { class: 'whats-new-title', id: 'whats-new-title' });
   const sub = el('p', { class: 'whats-new-sub' });
-  const copyChip = el('button', { type: 'button', class: 'whats-new-copy' }, WHATS_NEW_TEXT.copy);
+  const copyChip = el(
+    'button',
+    { type: 'button', class: 'whats-new-copy', 'aria-live': 'polite' },
+    WHATS_NEW_TEXT.copy,
+  );
   const closeX = el(
     'button',
     { type: 'button', class: 'whats-new-x', 'aria-label': WHATS_NEW_TEXT.close },
@@ -161,8 +178,8 @@ export function createWhatsNew(options: WhatsNewOptions): WhatsNew {
     card.hidden = true;
     mode = null;
     shown += 1;
-    // Everything up to this build has been seen now.
-    if (options.client) seen.write(options.client.number);
+    popUp.closed();
+    options.onChange?.();
   };
   closeX.addEventListener('click', close);
   done.addEventListener('click', close);
@@ -229,15 +246,17 @@ export function createWhatsNew(options: WhatsNewOptions): WhatsNew {
     title.textContent = how === 'update' ? WHATS_NEW_TEXT.popTitle : WHATS_NEW_TEXT.title;
     sub.replaceChildren(
       how === 'update' ? WHATS_NEW_TEXT.popSub : WHATS_NEW_TEXT.youreOn(version),
-      ...(how === 'menu' ? [' ', copyChip] : []),
+      ...(how === 'menu' && options.canCopy ? [' ', copyChip] : []),
     );
+    copyChip.textContent = WHATS_NEW_TEXT.copy;
+    const opening = card.hidden;
     card.hidden = false;
     list.scrollTop = 0;
+    if (opening) options.onChange?.();
     if (entries === null) {
       list.replaceChildren(el('p', { class: 'whats-new-note' }, WHATS_NEW_TEXT.loading));
-      try {
-        entries = ChangelogSchema.parse(await fetchChangelog()).entries;
-      } catch {
+      // A newer open (or a close) wins over this one's late answer.
+      if ((await load()) === null) {
         if (at === shown)
           list.replaceChildren(el('p', { class: 'whats-new-note' }, WHATS_NEW_TEXT.failed));
         return;
@@ -246,28 +265,19 @@ export function createWhatsNew(options: WhatsNewOptions): WhatsNew {
     if (at === shown) render(since);
   }
 
-  const tryPop = () => {
-    if (poppedThisRun) return;
-    const plan = popUpPlan(options.client?.number ?? null, seen.read());
-    if (plan.remember !== null) seen.write(plan.remember);
-    if (!plan.pop) return;
-    if (options.busy() || !card.hidden) {
-      if (!retrying) {
-        retrying = true;
-        setTimer(() => {
-          retrying = false;
-          tryPop();
-        }, BUSY_RETRY_MS);
-      }
-      return;
-    }
-    poppedThisRun = true;
-    void show('update', plan.since);
-  };
+  const popUp = createPopUp({
+    current: options.client?.number ?? null,
+    seen,
+    busy: () => options.busy() || !card.hidden,
+    load,
+    show: (since) => void show('update', since),
+    setTimer,
+    retryMs: BUSY_RETRY_MS,
+  });
 
   return {
     open: () => void show('menu', seen.read()),
-    maybePop: tryPop,
+    maybePop: popUp.maybePop,
     get debug() {
       return { open: !card.hidden, mode, entries: entries?.length ?? 0 };
     },

@@ -1,46 +1,36 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
+import type { ChangeAreaId, ChangeEntryView } from '@heartpatch/shared';
+import { runGit } from '../version/build-info.js';
 
 // "What's new" (#220): every change a tester can see gets one entry,
 // `changes/<slug>.md`, written in the PR that makes it. This turns them into
 // `changelog.json` for the client. An entry's build number is the commit
 // count at the commit that added its file, the same count the version line
 // shows (`v0.<build>`, #198), so it comes from git, never from the author.
-// Without git history (a Docker build context, a fresh copy) entries have no
+// Without git history (a copy with `changes/` but no .git) entries have no
 // build and the app lists them as "Coming next".
+//
+// The shape is shared's `ChangeEntrySchema`. Only its types are imported:
+// this runs in the Vite config and the deploy's CLI, where the shared
+// package may not be built yet. changelog.test.ts checks every real entry
+// against the schema itself.
 
-export const CHANGE_AREAS = ['battles', 'land', 'home', 'squishies', 'account', 'other'] as const;
-export type ChangeArea = (typeof CHANGE_AREAS)[number];
+/** Every area once: the compiler checks this against shared's `ChangeAreaSchema`. */
+const AREAS: Readonly<Record<ChangeAreaId, true>> = {
+  battles: true,
+  land: true,
+  home: true,
+  squishies: true,
+  account: true,
+  other: true,
+};
+export const CHANGE_AREAS = Object.keys(AREAS) as ChangeAreaId[];
 
-export interface ChangeEntry {
-  slug: string;
-  title: string;
-  area: ChangeArea;
-  /** What changed, as plain text (kid-readable, STYLE_GUIDE). */
-  body: string;
-  /** The "**Try it:**" line, without its label; null if the entry has none. */
-  tryIt: string | null;
-  /** Commit count at the commit that added the file; null without git. */
-  build: number | null;
-  /** That commit's UTC date (YYYY-MM-DD); null without git. */
-  date: string | null;
-}
+export type ChangeEntry = ChangeEntryView;
 
 /** Runs git in `cwd`; its trimmed output, or null if git can't answer. */
 export type Git = (args: string[], cwd: string) => string | null;
-
-export const runGit: Git = (args, cwd) => {
-  try {
-    return execFileSync('git', args, {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return null;
-  }
-};
 
 const TRY_IT = /^\*\*Try it:\*\*\s*(.+)$/;
 
@@ -54,12 +44,13 @@ export function parseEntry(text: string, file: string): Omit<ChangeEntry, 'build
   const [, head = '', rest = ''] = match ?? [];
   const fields = new Map<string, string>();
   for (const line of head.split(/\r?\n/)) {
-    const field = /^([a-zA-Z]+):\s*(.*?)\s*(#.*)?$/.exec(line);
+    const field = /^([a-zA-Z]+):\s*(.*?)\s*$/.exec(line);
     if (field?.[1]) fields.set(field[1], field[2] ?? '');
   }
   const title = fields.get('title') ?? '';
   if (title === '') fail('front matter needs a title');
-  const area = fields.get('area') ?? '';
+  // The area line may carry a ` # battles | land | …` reminder; a title keeps its #.
+  const area = (fields.get('area') ?? '').replace(/\s+#.*$/, '');
   if (!(CHANGE_AREAS as readonly string[]).includes(area)) {
     fail(`area must be one of ${CHANGE_AREAS.join(', ')} (got "${area}")`);
   }
@@ -67,15 +58,16 @@ export function parseEntry(text: string, file: string): Omit<ChangeEntry, 'build
   const body: string[] = [];
   for (const line of rest.split(/\r?\n/)) {
     const found = TRY_IT.exec(line.trim());
-    if (found?.[1]) tryIt = found[1].trim();
-    else body.push(line);
+    if (!found?.[1]) body.push(line);
+    else if (tryIt !== null) fail('has two **Try it:** lines; keep one');
+    else tryIt = found[1].trim();
   }
   const words = body
     .join('\n')
     .trim()
     .replace(/\s*\n\s*/g, ' ');
   if (words === '') fail('needs a line or two about what changed');
-  return { slug: basename(file, '.md'), title, area: area as ChangeArea, body: words, tryIt };
+  return { slug: basename(file, '.md'), title, area: area as ChangeAreaId, body: words, tryIt };
 }
 
 /** The commit count and UTC date at the commit that first added `file`. */

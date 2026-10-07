@@ -45,6 +45,7 @@
 }
 
 .whats-new-copy {
+  position: relative;
   min-height: 32px;
   margin-left: 4px;
   padding: 2px 12px;
@@ -56,6 +57,13 @@
   font-weight: 800;
   color: #7a2d55;
   cursor: pointer;
+}
+
+/* The chip looks small, but its tap target is 44px tall, like every button. */
+.whats-new-copy::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
 }
 
 .whats-new-x {

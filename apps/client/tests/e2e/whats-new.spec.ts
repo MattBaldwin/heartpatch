@@ -46,7 +46,9 @@ test('tapping the version line opens What’s new with the real entries', async 
   await expect(page.getByTestId('keeper-menu')).toHaveAttribute('aria-expanded', 'false');
   await expect(sheet.getByRole('heading', { name: 'What’s new' })).toBeVisible();
   await expect(sheet.locator('[data-entry="220-whats-new"]')).toBeVisible();
-  await expect(sheet.getByRole('button', { name: 'Copy' })).toBeVisible();
+  // The browser may refuse the clipboard; either way the chip answers.
+  await sheet.getByRole('button', { name: 'Copy' }).tap();
+  await expect(sheet.locator('.whats-new-copy')).toHaveText(/^(Copied!|Write it down instead)$/);
   expect((await hook<{ mode: string }>(page, 'whatsNew'))?.mode).toBe('menu');
 
   await sheet.getByRole('button', { name: 'Yay!' }).tap();

@@ -8,6 +8,7 @@ import {
   popUpPlan,
   SEEN_BUILD_KEY,
 } from './whats-new-model.js';
+import { WHATS_NEW_TEXT } from './whats-new.js';
 
 const entry = (
   slug: string,
@@ -89,7 +90,11 @@ describe('the pop-up after an update (#220)', () => {
 });
 
 describe('words', () => {
-  it('uses no avoided words', () => {
-    expect(findAvoidedWords(groupLabel({ build: null, date: null }, 0))).toEqual([]);
+  it('uses no avoided words (style guide §9)', () => {
+    const lines = [
+      ...Object.values(WHATS_NEW_TEXT).map((t) => (typeof t === 'string' ? t : t('v0.1'))),
+      groupLabel({ build: null, date: null }, 0),
+    ];
+    for (const line of lines) expect(findAvoidedWords(line), line).toEqual([]);
   });
 });

@@ -2,9 +2,11 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ChangelogSchema } from '@heartpatch/shared';
+import { fileURLToPath } from 'node:url';
+import { ChangelogSchema, findAvoidedWords } from '@heartpatch/shared';
 import { afterAll, describe, expect, it } from 'vitest';
-import { changelogJson, parseEntry, readChangelog, runGit } from './changelog.js';
+import { runGit } from '../version/build-info.js';
+import { changelogJson, parseEntry, readChangelog } from './changelog.js';
 
 const entry = (title: string, area = 'battles', extra = '') =>
   `---\ntitle: ${title}\narea: ${area}   # battles | land | ...\n---\nSomething changed.\n${extra}`;
@@ -38,6 +40,31 @@ describe('parseEntry (#220)', () => {
     expect(() => parseEntry('---\ntitle: Hi\narea: land\n---\n', 'changes/d.md')).toThrow(
       /d\.md: needs a line/,
     );
+    expect(() =>
+      parseEntry(entry('Hi', 'land', '**Try it:** one.\n**Try it:** two.\n'), 'changes/e.md'),
+    ).toThrow(/e\.md: has two \*\*Try it:\*\* lines/);
+  });
+
+  it('keeps a # in a title (only the area line takes a # reminder)', () => {
+    expect(parseEntry(entry('Win your #1 badge'), 'changes/f.md').title).toBe('Win your #1 badge');
+  });
+});
+
+describe('the real changes/ entries (#220)', () => {
+  const repo = fileURLToPath(new URL('../../../../', import.meta.url));
+  const entries = readChangelog(join(repo, 'changes'), repo, () => null);
+
+  it('all parse and match the shared schema the app reads', () => {
+    expect(entries.length).toBeGreaterThan(0);
+    expect(() => ChangelogSchema.parse(JSON.parse(changelogJson(entries)))).not.toThrow();
+  });
+
+  it('use kind words (style guide §9)', () => {
+    for (const e of entries) {
+      for (const line of [e.title, e.body, e.tryIt ?? '']) {
+        expect(findAvoidedWords(line), `${e.slug}: ${line}`).toEqual([]);
+      }
+    }
   });
 });
 
@@ -58,7 +85,10 @@ describe('readChangelog (#220)', () => {
   const commit = (file: string, text: string) => {
     writeFileSync(join(repo, file), text);
     git('add', '-A');
-    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', file);
+    git(
+      ...['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false'],
+      ...['commit', '-qm', file],
+    );
   };
 
   it('numbers each entry by the commit that added it, newest first, with its UTC date', () => {

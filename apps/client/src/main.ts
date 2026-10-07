@@ -257,6 +257,8 @@ const closeUp = createCloseUpScreen({
 });
 /** #16's raid report is open: the Hollow's morning report waits its turn (#21). */
 let raidReportOpen = false;
+/** What's new (#220) is open: the other cards wait for it (one card at a time, #129). */
+let whatsNewOpen = false;
 // Territory (#15): Claim, Challenge and guards in the tile panel. A tile
 // battle opens the battle screen, unless another screen sits over the map.
 // The raid report (#16) rides along with territory onto every map: challenges
@@ -316,10 +318,13 @@ const hollow = createHollowScreen({
     },
   },
   // One card at a time (#129): the morning report waits behind the raid
-  // report, a found lore page and a milestone party. (`lorebook` and
-  // `milestones` are made below; this is only read at render time.)
+  // report, a found lore page, a milestone party and What's new. (`lorebook`
+  // and `milestones` are made below; this is only read at render time.)
   otherReportOpen: () =>
-    raidReportOpen || lorebook.debug.showing !== null || milestones.debug.showing !== null,
+    raidReportOpen ||
+    whatsNewOpen ||
+    lorebook.debug.showing !== null ||
+    milestones.debug.showing !== null,
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
   },
@@ -533,18 +538,22 @@ const tutorial = createTutorialScreen({
 });
 // Found lore pages (design doc §16). Mounted after the tutorial, so its card
 // sits over Sprout's layer. One card at a time (#129): a page waits behind a
-// battle, a milestone party and the morning report, and tells the report
-// when it's gone.
+// battle, a milestone party, the morning report and What's new, and tells the
+// report when it's gone.
 const lorebook = createLorebook({
   root: document.body,
-  busy: () => battles.debug !== null || milestones.debug.showing !== null || hollowReportOpen(),
+  busy: () =>
+    battles.debug !== null ||
+    milestones.debug.showing !== null ||
+    hollowReportOpen() ||
+    whatsNewOpen,
   onChange: () => {
     hollow.otherReportChanged();
   },
 });
 // A milestone earned (#44): a little party, but never over a battle, a lore
-// page, the morning report, an evolution's "Whoa!" or the wardrobe (one card
-// at a time, #129).
+// page, the morning report, What's new, an evolution's "Whoa!" or the wardrobe
+// (one card at a time, #129).
 // Nor over a form the player just asked for (the lobby's "Make a patch").
 const milestones = createMilestoneCelebration({
   root: document.body,
@@ -552,6 +561,7 @@ const milestones = createMilestoneCelebration({
     battles.debug !== null ||
     lorebook.debug.showing !== null ||
     hollowReportOpen() ||
+    whatsNewOpen ||
     (care.debug?.celebrating ?? false) ||
     (wardrobe.debug?.open ?? false) ||
     lobby.formOpen,
@@ -850,20 +860,33 @@ const menuRow = (icon: string, label: string, onTap: () => void): HTMLButtonElem
   return row;
 };
 // What's new (#220): the version line opens it, and after an update it pops
-// up once over the map, never over a battle, the tutorial, Sprout's tray
-// hint, another card or a held screen (#47).
+// up once over the map: never with no map up, over a battle, the tutorial,
+// Sprout's tray hint, a screen over the map, another card (#129) or a held
+// screen (#47). Those cards wait for it in turn (`whatsNewOpen`).
 const whatsNew = createWhatsNew({
   root: document.body,
   client: CLIENT_BUILD,
   busy: () =>
+    hudMapId === null ||
     updateHold.held ||
     lobby.isOpen ||
     battles.debug !== null ||
     (tutorial.debug !== null && tutorial.debug.phase !== 'closed') ||
     trays.debug.hint ||
+    catalog.isOpen ||
+    care.isOpen ||
+    closeUp.isOpen ||
+    (wardrobe.debug?.open ?? false) ||
+    raidReportOpen ||
+    (land.debug?.welcome ?? false) ||
     lorebook.debug.showing !== null ||
     milestones.debug.showing !== null ||
     hollowReportOpen(),
+  onChange: () => {
+    whatsNewOpen = whatsNew.debug.open;
+    hollow.otherReportChanged();
+  },
+  canCopy: 'clipboard' in navigator,
   // async: a missing clipboard (an http page) rejects instead of throwing.
   copy: async (text) => navigator.clipboard.writeText(text),
 });
