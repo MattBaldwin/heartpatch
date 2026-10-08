@@ -38,9 +38,10 @@ export interface TileInfo {
   readonly gatherer: string | null;
   /**
    * A trading post (#269): how this player reaches it ("🔗 Your land reaches
-   * it!", "🧭 3 tiles from your land…") and what's coming there. Null elsewhere.
+   * it!", "🧭 3 tiles from your land…") and what's coming there (null on a
+   * post a journey away: its journey shows instead, #270). Null elsewhere.
    */
-  readonly post: { readonly reach: string | null; readonly soon: string } | null;
+  readonly post: { readonly reach: string | null; readonly soon: string | null } | null;
   readonly home: boolean;
 }
 
@@ -87,7 +88,11 @@ export function describeTile(
     resource: resource ? `Find ${resource.name} here.` : null,
     guardians: guardianLine(tile.guardianHint),
     gatherer: gathererLine(tile),
-    post: post ? { reach: postReachLine(reach), soon: POST_SOON } : null,
+    // A post my land doesn't reach shows its journey instead (#270, mockup
+    // screen b; `trading/journey-screen.ts`), which says "soon" once I'm in.
+    post: post
+      ? { reach: postReachLine(reach), soon: reach?.kind === 'journey' ? null : POST_SOON }
+      : null,
     home,
   };
 }

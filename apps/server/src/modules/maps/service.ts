@@ -42,6 +42,7 @@ import { INVITE_CODE_TTL_MS } from './limits.js';
 import { requireMember } from './members.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
+import { listPostViews } from '../journeys/service.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
@@ -434,6 +435,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
               exploredAt.get(`${String(tile.q)},${String(tile.r)}`),
             ),
           ),
+          // How this viewer reaches each trading post (#270).
+          posts: await listPostViews(tx, { mapId, userId: user.id, tiles, at }),
           seq: map.eventSeq,
         };
       });
