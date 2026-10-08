@@ -24,6 +24,12 @@ export interface BattleSquishy {
   /** Has been out in this battle, so it earns battle XP. */
   readonly joined: boolean;
   /**
+   * A fence segment (#203), by building id: it has energy and toughness but
+   * never makes a move, can't be befriended, and its feeling is ignored in
+   * the maths (its matchup is its material's element).
+   */
+  readonly fence?: string;
+  /**
    * Potion boosts in percent (#214): Brave Brew's attack, Cozy Cocoa's
    * defense. They last the rest of the battle, swaps included.
    */
@@ -141,6 +147,8 @@ export interface BattleState {
   readonly contentHash: string;
   /** Turns resolved so far. */
   readonly turn: number;
+  /** Turns it lasts at most, when less than the rules' `maxTurns` (a fence battle, #203). */
+  readonly turnLimit?: number;
   readonly rng: RngState;
   readonly sides: Readonly<Record<BattleSideId, BattleSide>>;
   readonly phase: BattlePhase;

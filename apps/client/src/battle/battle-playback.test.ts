@@ -1,7 +1,7 @@
 import type { BattleEventView, PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { findAvoidedWords } from '@heartpatch/shared';
-import { applyStep, playbackSteps, shownFrom } from './battle-playback.js';
+import { applyStep, FENCE_LINES, playbackSteps, shownFrom } from './battle-playback.js';
 import { BattleContent, benchOf, energyPercent, natureLine, plateName } from './battle-view.js';
 
 /** A small battle view, with species and moves the public tables don't have. */
@@ -148,6 +148,38 @@ describe('playbackSteps', () => {
     expect(steps[10]).toMatchObject({ kind: 'tuckered', energy: 0 });
     expect(steps[5]).toMatchObject({ kind: 'swap', to: 1 });
     expect(steps.every((s) => s.ms > 0)).toBe(true);
+  });
+
+  it('words a fence (#203): it creaks when hit and cracks when it falls, never "Wild"', () => {
+    const fenced = battle([
+      { turn: 1, type: 'hit', side: 'b', slot: 0, energy: 20, effectiveness: 'super' },
+      { turn: 1, type: 'tuckered-out', side: 'b', slot: 0 },
+    ] as BattleEventView[]);
+    const fence = fenced.view.sides.b.squishies[0];
+    if (!fence) throw new Error('no fence');
+    fenced.view.sides.b.squishies[0] = {
+      ...fence,
+      speciesId: 'hedge',
+      element: 'leaf',
+      fence: 'hedge',
+    };
+    const steps = playbackSteps(fenced, new BattleContent(fenced), 0);
+    expect(steps.map((s) => s.text)).toEqual([
+      FENCE_LINES.hit('The Hedge'),
+      FENCE_LINES.down('The Hedge'),
+    ]);
+    expect(steps[0]?.text).toBe('The Hedge creaks…');
+    const end = (winner: 'a' | 'b', reason: 'forfeit' | 'turn-limit' | 'tuckered-out') => {
+      const b = battle([{ turn: 6, type: 'battle-end', winner, reason }]);
+      b.view.sides.b.squishies[0] = { ...fence, speciesId: 'hedge', fence: 'hedge' };
+      return playbackSteps(b, new BattleContent(b), 0)[0]?.text;
+    };
+    expect(end('a', 'tuckered-out')).toBe(FENCE_LINES.broke);
+    expect(end('b', 'turn-limit')).toBe(FENCE_LINES.held);
+    expect(end('b', 'forfeit')).toBe(FENCE_LINES.stopped);
+    expect(natureLine({ element: 'leaf', feeling: 'sleepy', fence: 'hedge' })).toBe('Leaf fence');
+    expect(plateName(new BattleContent(fenced), { id: 'x', speciesId: 'hedge' })).toBe('Hedge');
+    for (const text of steps.map((s) => s.text)) expect(findAvoidedWords(text)).toEqual([]);
   });
 
   it('says scooted home after running away, tuckered out otherwise', () => {

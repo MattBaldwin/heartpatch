@@ -30,6 +30,7 @@ import { canonicalTimeZone, type Clock } from '../../lib/time.js';
 import { createAuthRepo } from '../auth/repo.js';
 import { seedHomeRingNodes, type HomeRingLog } from '../buildings/home-ring.js';
 import { listPublicBuildings, removeMemberBuildings } from '../buildings/service.js';
+import { listPublicFences, removeMemberFences } from '../fences/service.js';
 import { seedExtraNodes } from './extra-nodes.js';
 import { createKeepersRepo } from '../keepers/repo.js';
 import { starterPick } from '../starters/service.js';
@@ -125,6 +126,7 @@ function toPublicTile(
   tile: TileViewRow,
   guardianHint: GuardianHint | null,
   buildings: PublicTile['buildings'],
+  fences: NonNullable<PublicTile['fences']>,
 ): PublicTile {
   return {
     q: tile.q,
@@ -139,6 +141,7 @@ function toPublicTile(
     workers: tile.workers,
     guardianHint,
     buildings,
+    fences,
   };
 }
 
@@ -277,7 +280,12 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       // (#18); fires on their captured land give back what a lost fire does (#202).
       const map = await repo.findMap(mapId);
       const lostFires = map ? await removeMemberBuildings(tx, map, memberId, now()) : [];
+      // Their fences come down too, with the take-down share back (#203).
+      // After the buildings' grants: safe, as every fence command takes the
+      // tile lock first, and this transaction already holds their tiles.
+      const lostFences = await removeMemberFences(tx, mapId, memberId);
       for (const event of lostFires) await repo.appendEvent(event);
+      for (const event of lostFences) await repo.appendEvent(event);
       await repo.appendEvent({
         mapId,
         type,
@@ -365,11 +373,13 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();
-        const [members, tiles, buildings, seed] = await Promise.all([
+        const [members, tiles, buildings, fences, seed] = await Promise.all([
           repo.listMembers(mapId),
           repo.listTiles(mapId),
           // Fires and habitats (#18), with `lit` as of now.
           listPublicBuildings(tx, mapId, at, map.timeZone),
+          // Fence segments on edges (#203), with their energy.
+          listPublicFences(tx, mapId),
           createTerritoryRepo(tx).mapSeed(mapId),
         ]);
         // Neutral land's guardians today (#15's team), as a count, a word
@@ -398,6 +408,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
               tile,
               hintFor(tile),
               buildings.get(`${String(tile.q)},${String(tile.r)}`) ?? [],
+              fences.get(`${String(tile.q)},${String(tile.r)}`) ?? [],
             ),
           ),
           seq: map.eventSeq,

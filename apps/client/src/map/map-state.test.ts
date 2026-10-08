@@ -245,4 +245,40 @@ describe('MapState', () => {
     expect(tileOf(other).buildings).toEqual([]);
     expect(state.apply(event('building.placed', { userId: userId(1) }, 7))).toBe('resync');
   });
+
+  it('applies fence events to the tile they stand on (#203)', () => {
+    const state = new MapState(testView(1));
+    const tile = state.view.tiles.find((t) => t.homeSlot === null)!;
+    const tileOf = () => state.tileAt(hexKey(tile))!;
+    const fence = (edge: number, hp = 70) => ({
+      id: `0190a8c4-0000-7000-8000-00000000010${String(edge)}`,
+      edge,
+      buildingId: 'hedge',
+      level: 1,
+      hp,
+      maxHp: 70,
+      q: tile.q,
+      r: tile.r,
+    });
+    const by = { userId: userId(1) };
+    expect(state.apply(event('fence.built', { ...by, fence: fence(3) }))).toBe('redraw');
+    state.apply(event('fence.built', { ...by, fence: fence(0) }, 3));
+    expect(tileOf().fences?.map((f) => f.edge)).toEqual([0, 3]);
+    // A challenger bumped it: it keeps the energy it lost.
+    state.apply(event('fence.damaged', { ...by, fence: fence(0, 42) }, 4));
+    expect(tileOf().fences?.[0]).toMatchObject({ edge: 0, hp: 42 });
+    state.apply(event('fence.repaired', { ...by, fence: fence(0) }, 5));
+    expect(tileOf().fences?.[0]?.hp).toBe(70);
+    const broke = event(
+      'fence.broken',
+      { ...by, fenceId: fence(0).id, q: tile.q, r: tile.r, edge: 0 },
+      6,
+    );
+    expect(state.apply(broke)).toBe('redraw');
+    state.apply(
+      event('fence.removed', { ...by, fenceId: fence(3).id, q: tile.q, r: tile.r, edge: 3 }, 7),
+    );
+    expect(tileOf().fences).toEqual([]);
+    expect(state.apply(event('fence.built', { ...by }, 8))).toBe('resync');
+  });
 });

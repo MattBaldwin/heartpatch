@@ -21,7 +21,10 @@ describe('the Bag item card (#241)', () => {
   it("answers what's Glimmer for, and where it turns up", () => {
     const glimmer = itemDetail('glimmer', 2);
     expect(glimmer.purpose).not.toBe('');
-    expect(glimmer.chips.map((c) => c.text)).toEqual(['⬆️ Upgrades a Hearthfire']);
+    expect(glimmer.chips.map((c) => c.text)).toEqual([
+      '🔨 For building Glimmer Rail and Lantern Fence',
+      '⬆️ Upgrades Hearthfire, Hedge and more',
+    ]);
     expect(glimmer.where).toMatch(/Mountain/);
   });
 

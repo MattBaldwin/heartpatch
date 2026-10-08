@@ -22,6 +22,26 @@ export interface MapFillKid {
   readonly playDays: readonly number[];
   /** Whether the kid taps Visit (tends all their land) on a play day when some land misses them. */
   readonly visits: boolean;
+  /**
+   * Challenges (#203's model): the kid's win chance (%) against a rival
+   * tile's guard, and how many squishies they bring. With 2 or more, one
+   * breaks a fence and another fights the guard in the same challenge.
+   */
+  readonly guardWinPercent: number;
+  readonly team: number;
+  /** Fence segments the kid can afford on a play day (Emberwood they don't burn as fuel). */
+  readonly fencesPerDay: number;
+}
+
+/**
+ * Fences in the model (#203): a fence fight is a seeded roll, not an engine
+ * battle. `breakPercent` is the chance the breaker breaks a segment at full
+ * energy (it rises as the segment loses energy); a segment that holds loses
+ * `holdLossPercent` of its energy, until its owner repairs it on a play day.
+ */
+export interface MapFillFences {
+  readonly breakPercent: number;
+  readonly holdLossPercent: number;
 }
 
 export interface MapFillRules {
@@ -30,6 +50,10 @@ export interface MapFillRules {
   readonly pvpMode: PvpMode;
   /** Null: land never fades (the shipped game before this change). */
   readonly tending: TerritoryRules['tending'] | null;
+  /** Kids challenge a rival's land once nothing neutral is left next to theirs (#203). */
+  readonly challenges: boolean;
+  /** Kids fence their borders facing rivals (#203); null: no fences. */
+  readonly fences: MapFillFences | null;
 }
 
 /** One kid in a scenario: their kind, and the day they stop playing (null: never). */
@@ -51,6 +75,9 @@ export const ENGAGED: MapFillKid = {
   winPercent: [100, 100, 95, 85, 50], // TUNE: guess, see winPercent
   playDays: [1, 2, 3, 4, 5, 6, 7],
   visits: true,
+  guardWinPercent: 60, // TUNE: guess; evenly matched kids, the defender's guard on watch
+  team: 3,
+  fencesPerDay: 2, // TUNE: guess; ~12 spare Emberwood a day after fuel
 };
 
 export const CASUAL: MapFillKid = {
@@ -58,6 +85,9 @@ export const CASUAL: MapFillKid = {
   winPercent: [100, 95, 85, 70, 40], // TUNE: guess, see winPercent
   playDays: [1, 2, 3, 4, 5, 6, 7], // the progression model's casual kid plays every day
   visits: true,
+  guardWinPercent: 45, // TUNE: guess
+  team: 2,
+  fencesPerDay: 1, // TUNE: guess
 };
 
 /** A casual kid who only plays three days a week: the hardest case for keeping land. */
@@ -83,6 +113,14 @@ export const NO_FADING: MapFillRules = {
   attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
   pvpMode: 'gentle',
   tending: null,
+  challenges: false,
+  fences: null,
+};
+
+/** The fence model's numbers (#203). */
+export const FENCE_MODEL: MapFillFences = {
+  breakPercent: 60, // TUNE: guess; a level-matched breaker with a neutral matchup, 6 turns
+  holdLossPercent: 40, // TUNE: guess; what a failed fence fight knocks off
 };
 
 export const FADING_GENTLE: MapFillRules = {
@@ -90,11 +128,33 @@ export const FADING_GENTLE: MapFillRules = {
   attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
   pvpMode: 'gentle',
   tending: TERRITORY_RULES.tending,
+  challenges: false,
+  fences: null,
 };
 
 export const FADING_ON: MapFillRules = { ...FADING_GENTLE, label: 'fades, On', pvpMode: 'on' };
 
-export const MAP_FILL_RULES: readonly MapFillRules[] = [NO_FADING, FADING_GENTLE, FADING_ON];
+/** Gentle, fading, and kids challenge each other once the map is full (#203's baseline). */
+export const CHALLENGES_GENTLE: MapFillRules = {
+  ...FADING_GENTLE,
+  label: 'challenges, Gentle',
+  challenges: true,
+};
+
+/** The same, with fences on borders facing rivals (#203). */
+export const FENCES_GENTLE: MapFillRules = {
+  ...CHALLENGES_GENTLE,
+  label: 'fences, Gentle',
+  fences: FENCE_MODEL,
+};
+
+export const MAP_FILL_RULES: readonly MapFillRules[] = [
+  NO_FADING,
+  FADING_GENTLE,
+  FADING_ON,
+  CHALLENGES_GENTLE,
+  FENCES_GENTLE,
+];
 
 const playing = (kid: MapFillKid): Seat => ({ kid, stopsAfterDay: null });
 const stopping = (kid: MapFillKid): Seat => ({ kid, stopsAfterDay: STOPS_AFTER_DAY });

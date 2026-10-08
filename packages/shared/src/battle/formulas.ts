@@ -66,10 +66,10 @@ export function matchupMultiplier(
   attacker: BattleSquishy,
   defender: BattleSquishy,
 ): number {
-  return (
-    content.elementMatrix[move.element][defender.element] *
-    content.feelingMatrix[attacker.feeling][defender.feeling]
-  );
+  // A fence (#203) has no feelings: only its material's element counts.
+  const feeling =
+    defender.fence === undefined ? content.feelingMatrix[attacker.feeling][defender.feeling] : 1;
+  return content.elementMatrix[move.element][defender.element] * feeling;
 }
 
 /** The callout tier id for a matchup multiplier (battle rules `effectiveness`). */

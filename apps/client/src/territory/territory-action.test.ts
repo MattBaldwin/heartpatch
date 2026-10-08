@@ -1,15 +1,17 @@
 import {
   findAvoidedWords,
   hexKey,
+  edgeNeighbor,
   hexNeighbors,
   TERRITORY_RULES,
+  type PublicFence,
   type MapView,
   type PublicTile,
   type TerritoryStatus,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
-import { shieldUntil, territoryAction, watchInTheDark } from './territory-action.js';
+import { fenceToBreak, shieldUntil, territoryAction, watchInTheDark } from './territory-action.js';
 import { formatWait } from '../inventory/game-clock.js';
 import { TERRITORY_TEXT } from './territory-screen.js';
 
@@ -46,6 +48,61 @@ function setup(change: (tile: PublicTile) => Partial<PublicTile> = () => ({})) {
   const tile = view.tiles.find((t) => t.q === edge.q && t.r === edge.r)!;
   return { view, tile };
 }
+
+const RIVAL = userId(2);
+const segment = (edge: number, hp = 70): PublicFence => ({
+  id: `0190a8c4-0000-7000-8000-00000000060${String(edge)}`,
+  edge,
+  buildingId: 'hedge',
+  level: 1,
+  hp,
+  maxHp: 70,
+});
+/** Edges of `tile` that face player 1's land. */
+const facingMe = (view: MapView, tile: PublicTile) => {
+  const mine = new Set(view.tiles.filter((t) => t.ownerUserId === ME).map(hexKey));
+  return [0, 1, 2, 3, 4, 5].filter((e) => mine.has(hexKey(edgeNeighbor(tile, e as 0))));
+};
+
+describe('challenging a fenced tile (#203)', () => {
+  it('breaks the weakest segment facing my land first, once it is fenced all round', () => {
+    const { view, tile } = setup(() => ({ ownerUserId: RIVAL }));
+    const toMe = facingMe(view, tile);
+    expect(toMe.length).toBeGreaterThan(0);
+    const weakEdge = toMe[0] ?? 0;
+    // A weaker segment that doesn't face me isn't the one I fight.
+    const away = [0, 1, 2, 3, 4, 5].find((e) => !toMe.includes(e)) ?? 5;
+    const fences = [0, 1, 2, 3, 4, 5].map((e) =>
+      segment(e, e === weakEdge ? 40 : e === away ? 10 : 70),
+    );
+    const fenced = { ...tile, fences };
+    const fencedView = { ...view, tiles: view.tiles.map((t) => (t === tile ? fenced : t)) };
+    const action = territoryAction(fenced, fencedView, ME, status(), NOW);
+    expect(action).toMatchObject({ kind: 'challenge', fence: { edge: weakEdge, hp: 40 } });
+    // A gap anywhere: not fenced, a plain challenge.
+    const gappy = { ...tile, fences: fences.slice(1) };
+    expect(fenceToBreak(gappy, view, ME)).toBeNull();
+    // My own tile, or wild land, has nothing to break.
+    expect(fenceToBreak({ ...fenced, ownerUserId: ME }, view, ME)).toBeNull();
+    expect(fenceToBreak({ ...fenced, ownerUserId: null }, view, ME)).toBeNull();
+  });
+
+  it('offers Keep going after I broke the fence, despite the rest and no tries', () => {
+    const until = new Date(NOW + 10 * 60_000).toISOString();
+    const { view, tile } = setup(() => ({
+      ownerUserId: RIVAL,
+      cooldownUntil: new Date(NOW + 4 * 3600_000).toISOString(),
+    }));
+    const broke = status({ attemptsLeft: 0, fenceBroken: [{ q: tile.q, r: tile.r, until }] });
+    expect(territoryAction(tile, view, ME, broke, NOW)).toEqual({ kind: 'keep-going', until });
+    // Too late: the tile rests as usual.
+    expect(territoryAction(tile, view, ME, broke, Date.parse(until) + 1).kind).toBe('resting');
+    // The owner fenced it up again meanwhile: no keep going.
+    const refenced = { ...tile, fences: [0, 1, 2, 3, 4, 5].map((e) => segment(e)) };
+    const refencedView = { ...view, tiles: view.tiles.map((t) => (t === tile ? refenced : t)) };
+    expect(territoryAction(refenced, refencedView, ME, broke, NOW).kind).toBe('resting');
+  });
+});
 
 describe('territoryAction', () => {
   it('offers Claim on wild land next to yours, with tries left', () => {

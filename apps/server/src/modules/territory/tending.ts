@@ -20,6 +20,7 @@ import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { localDate, type Clock } from '../../lib/time.js';
 import { takeDownOnLostLand } from '../buildings/service.js';
+import { takeDownFencesOnLostLand } from '../fences/service.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { leaveWork } from '../jobs/service.js';
@@ -228,13 +229,22 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
           'wild',
         );
         for (const lost of lostFires) await repo.setLostFire(lost.tileId, lost.refund);
-        const refunds = lostFires
-          .filter((l) => Object.keys(l.refund).length > 0)
-          .map((l) => ({
+        // And their fence segments (#203, step 8 after the fires), for the
+        // same take-down share back.
+        const lostFences = await takeDownFencesOnLostLand(
+          tx,
+          mapId,
+          going.map((t) => t.id),
+          'wild',
+        );
+        const refunds = [
+          ...lostFires.map((l) => ({
             userId: l.ownerUserId,
             items: l.refund,
             refId: l.event.payload.buildingRowId,
-          }));
+          })),
+          ...lostFences.map((l) => ({ userId: l.ownerUserId, items: l.refund, refId: l.fenceId })),
+        ].filter((r) => Object.keys(r.items).length > 0);
         // Gatherers bank what they had ready and rest (as when land changes hands).
         const workers = await repo.workersOn(going.map((t) => t.id));
         await createSquishyJobsRepo(tx).lockSquishies(workers);
@@ -244,7 +254,7 @@ export function createLandTending(options: LandTendingOptions): LandTendingServi
         for (const { userId, items, refId } of refunds) {
           await grantItems(tx, { mapId, userId }, items, 'build-refund', refId);
         }
-        events.push(...lostFires.map((l) => l.event));
+        events.push(...lostFires.map((l) => l.event), ...lostFences.map((l) => l.event));
         for (const [userId, list] of owned) {
           const payload: GameEventPayload<'tile.rewilded'> = {
             userId,

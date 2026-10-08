@@ -6,7 +6,7 @@ import type { Building } from './buildings.js';
 // data edit (CLAUDE.md rule 5).
 
 /** Building kinds a player can put up today (Training Grounds: owner decision 2026-10-06). */
-export const BuildableKindSchema = z.enum(['hearthfire', 'habitat', 'training-grounds']);
+export const BuildableKindSchema = z.enum(['hearthfire', 'habitat', 'training-grounds', 'fence']);
 export type BuildableKind = z.infer<typeof BuildableKindSchema>;
 
 export const HomeBaseRulesSchema = z.strictObject({

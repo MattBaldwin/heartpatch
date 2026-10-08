@@ -218,6 +218,13 @@
       "when": 1791398400152,
       "tag": "0030_striped_apocalypse",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791414187200,
+      "tag": "0031_strong_brother_voodoo",
+      "breakpoints": true
     }
   ]
 }

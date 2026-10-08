@@ -44,6 +44,7 @@ import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
 import { createTerritoryScreen } from './territory/territory-screen.js';
+import { createFenceScreen, withFences } from './fences/fence-screen.js';
 import { tutorialApi } from './tutorial/tutorial-api.js';
 import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.js';
 import { el } from './ui/dom.js';
@@ -278,13 +279,20 @@ const raidReport = createRaidReport({
     hollow.otherReportChanged();
   },
 });
-const territory = withRaidReport(
-  createTerritoryScreen({
-    openBattle: (battle) => {
-      if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
-    },
-  }),
-  raidReport,
+// Fences (#203) ride along too: building, repairing and taking down the
+// fences on my land's edges, from the tile panel.
+const fences = createFenceScreen();
+const territory = withFences(
+  withRaidReport(
+    createTerritoryScreen({
+      openBattle: (battle) => {
+        if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen)
+          battles.open(battle);
+      },
+    }),
+    raidReport,
+  ),
+  fences,
 );
 // Land that misses you (owner decision 2026-10-06): my fading land drawn on
 // the map, the "Some land misses you!" chip with Visit, and the welcome-back
@@ -425,6 +433,7 @@ const maps = createMapScreen({
     inventory.tileActions,
     home.tileActions,
     land.tileActions,
+    fences.tileActions,
     territory.tileActions,
     jobs.tileActions,
   ),
@@ -449,6 +458,7 @@ const maps = createMapScreen({
     wardrobe.liveEvent(event);
     hollow.liveEvent(event);
     land.liveEvent(event);
+    fences.liveEvent(event);
     chat.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
@@ -985,6 +995,7 @@ if (import.meta.env.DEV) {
     catalog: () => catalog.debug,
     inventory: () => inventory.debug,
     territory: () => territory.debug,
+    fences: () => fences.debug,
     hollow: () => hollow.debug,
     land: () => land.debug,
     chat: () => chat.debug,

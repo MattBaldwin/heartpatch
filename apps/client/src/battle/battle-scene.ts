@@ -1,4 +1,5 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
+import type { Material } from '@babylonjs/core/Materials/material';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
@@ -31,6 +32,8 @@ import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
+import { buildFence } from '../map/fence-props.js';
+import { vinyl } from '../map/map-scene.js';
 import { arenaPlan, arenaSeed } from './arena-layout.js';
 import { buildArena, type Arena, type ArenaStats } from './arena.js';
 import { BATTLE_CAMERA, CHOREO, FIGHTER, HOMES, SHIELD_BUBBLE } from './battle-config.js';
@@ -118,16 +121,29 @@ export interface BattleSceneOptions {
   readonly safe: () => SafeRegion;
 }
 
-/** A squishy that may come out for a side. */
+/** A squishy that may come out for a side (or a fence, #203: its building id). */
 export interface TeamMember {
   readonly speciesId: string;
   readonly instanceId: string;
+  /** A fence's level, for its look. */
+  readonly level?: number;
 }
 
 interface Fighter {
   readonly handle: SquishyHandle;
   readonly species: Species;
   readonly feeling: FeelingId;
+  readonly height: number;
+  readonly radius: number;
+}
+
+/**
+ * A fence segment standing in for a squishy (#203): its model from the map's
+ * fence looks, scaled up. It never moves by itself, but rides the rig, so a
+ * hit wobbles it and tuckering out lays it flat.
+ */
+interface FenceStand {
+  readonly mesh: Mesh;
   readonly height: number;
   readonly radius: number;
 }
@@ -147,6 +163,9 @@ interface Rig {
   readonly phase: number;
   readonly bench: Map<string, Fighter>;
   out: Fighter | null;
+  /** Fences built for this side (#203), by id, and the one out (null: none). */
+  readonly fences: Map<string, FenceStand>;
+  fence: FenceStand | null;
   act: Act | null;
   pose: Pose;
   /** Flopped over (tuckered out). */
@@ -190,6 +209,8 @@ export class BattleScene {
   /** A potion's sparkle shield over each side's squishy (#214), made with the scene. */
   readonly #bubbles: Record<BattleSideId, Mesh>;
   readonly #bubbleMaterial: StandardMaterial;
+  /** Shared by every fence (#203); made with the first. */
+  #fenceMaterial: Material | null = null;
   readonly #shielded: Record<BattleSideId, boolean> = { a: false, b: false };
   readonly #camera: CameraDirector;
   readonly #shadows: Mesh;
@@ -353,6 +374,8 @@ export class BattleScene {
       phase,
       bench: new Map(),
       out: null,
+      fences: new Map(),
+      fence: null,
       act: null,
       pose: REST,
       down: false,
@@ -364,7 +387,11 @@ export class BattleScene {
    * `sendOut`), so a swap mid-turn makes no meshes.
    */
   prewarm(side: BattleSideId, team: readonly TeamMember[]): void {
-    for (const member of team) this.#fighter(side, member.speciesId, member.instanceId);
+    for (const member of team) {
+      if (!this.#fighter(side, member.speciesId, member.instanceId)) {
+        this.#fenceStand(side, member.speciesId, member.instanceId, member.level ?? 1);
+      }
+    }
     this.#rigs[side].field.flush();
   }
 
@@ -391,14 +418,50 @@ export class BattleScene {
     return fighter;
   }
 
-  /** Puts `speciesId` out for `side` (replacing whoever was out). */
-  sendOut(side: BattleSideId, speciesId: string, instanceId: string): void {
+  /** A fence for `side` (#203), built hidden the first time; null when `id` isn't a fence. */
+  #fenceStand(
+    side: BattleSideId,
+    id: string,
+    instanceId: string,
+    level: number,
+  ): FenceStand | null {
+    const rig = this.#rigs[side];
+    const known = rig.fences.get(instanceId);
+    if (known) return known;
+    if (!this.#options.content.fences.has(id)) return null;
+    const length = FIGHTER.fence.length;
+    const mesh = buildFence(this.#scene, id, level, length);
+    mesh.material = this.#fenceMaterial ??= vinyl(this.#scene, 'battle-fence-mat', {
+      color: '#ffffff',
+    });
+    mesh.parent = rig.turn;
+    mesh.scaling.setAll(FIGHTER.fence.scale);
+    // Across the line between the fighters, a little towards the camera.
+    mesh.rotation.y = -rig.yaw;
+    mesh.isPickable = false;
+    mesh.setEnabled(false);
+    const { maximum } = mesh.getBoundingInfo().boundingBox;
+    const stand: FenceStand = {
+      mesh,
+      height: Math.max(0.6, maximum.y * FIGHTER.fence.scale),
+      radius: (length * FIGHTER.fence.scale) / 4,
+    };
+    rig.fences.set(instanceId, stand);
+    return stand;
+  }
+
+  /** Puts `speciesId` out for `side` (replacing whoever was out); a fence id puts a fence up. */
+  sendOut(side: BattleSideId, speciesId: string, instanceId: string, level = 1): void {
     const rig = this.#rigs[side];
     const next = this.#fighter(side, speciesId, instanceId);
     if (rig.out && rig.out !== next) {
       rig.field.move(rig.out.handle, { x: 0, z: 0, yaw: 0, scale: 0 });
     }
     rig.out = next;
+    const fence = next ? null : this.#fenceStand(side, speciesId, instanceId, level);
+    if (rig.fence && rig.fence !== fence) rig.fence.mesh.setEnabled(false);
+    rig.fence = fence;
+    fence?.mesh.setEnabled(true);
     rig.down = false;
     if (next) rig.field.move(next.handle, { x: 0, z: 0, yaw: 0, scale: FIGHTER.scale });
     rig.act = null;
@@ -526,7 +589,7 @@ export class BattleScene {
       const swap = this.#pendingSwaps[i];
       if (swap && swap.at <= now) {
         this.#pendingSwaps.splice(i, 1);
-        this.sendOut(swap.side, swap.member.speciesId, swap.member.instanceId);
+        this.sendOut(swap.side, swap.member.speciesId, swap.member.instanceId, swap.member.level);
       }
     }
     // Acts that came due start from the pose the fighter is in now.
@@ -670,6 +733,7 @@ export class BattleScene {
     this.#effects.dispose();
     for (const side of SIDES) this.#bubbles[side].dispose();
     this.#bubbleMaterial.dispose();
+    this.#fenceMaterial?.dispose();
     this.#keepers.dispose();
     for (const side of SIDES) {
       const rig = this.#rigs[side];
@@ -687,7 +751,13 @@ export class BattleScene {
   #reach(rig: Rig): number {
     const other = this.#rigs[rig.side === 'a' ? 'b' : 'a'];
     const gap = Math.hypot(other.home.x - rig.home.x, other.home.z - rig.home.z);
-    return Math.max(0.4, gap - (rig.out?.radius ?? 1) - (other.out?.radius ?? 1) - 0.05);
+    return Math.max(
+      0.4,
+      gap -
+        ((rig.out ?? rig.fence)?.radius ?? 1) -
+        ((other.out ?? other.fence)?.radius ?? 1) -
+        0.05,
+    );
   }
 
   #startAct(cue: ActCueAt): void {
@@ -714,7 +784,7 @@ export class BattleScene {
   #spawn(c: EffectCueAt): void {
     const { cue } = c;
     const rig = this.#rigs[cue.side];
-    const fighter = rig.out;
+    const fighter = rig.out ?? rig.fence;
     if (!fighter) return;
     const other = this.#rigs[cue.side === 'a' ? 'b' : 'a'];
     const at = { ...this.#centre(rig, rig.pose, fighter) };
@@ -728,9 +798,11 @@ export class BattleScene {
     if (cue.kind === 'dizzy' && rig.down) at.y = Math.max(0.3, fighter.height * 0.3);
     if (cue.kind === 'charm') {
       const k = this.#keeper ? this.#keepers.centre(this.#keeper) : null;
-      to = k ? { x: k.x, y: k.y + 0.3, z: k.z } : this.#centre(other, other.pose, other.out);
+      to = k
+        ? { x: k.x, y: k.y + 0.3, z: k.z }
+        : this.#centre(other, other.pose, other.out ?? other.fence);
     }
-    if (cue.kind === 'bolt') to = this.#centre(other, other.pose, other.out);
+    if (cue.kind === 'bolt') to = this.#centre(other, other.pose, other.out ?? other.fence);
     if (cue.kind === 'trail') {
       const act = rig.act;
       path = (t) => this.#centre(rig, act ? actPose(act, t) : rig.pose, fighter);
@@ -753,7 +825,7 @@ export class BattleScene {
     );
   }
 
-  #centre(rig: Rig, p: Pose, fighter: Fighter | null): Point {
+  #centre(rig: Rig, p: Pose, fighter: Pick<Fighter, 'height'> | null): Point {
     const h = fighter?.height ?? 2;
     return {
       x: rig.home.x + rig.fx * p.forward + rig.fz * p.side,

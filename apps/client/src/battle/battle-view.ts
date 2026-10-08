@@ -41,6 +41,11 @@ export function energyPercent(squishy: Pick<BattleSquishyView, 'energy' | 'stats
   return Math.max(0, Math.min(100, Math.round((squishy.energy / squishy.stats.hp) * 100)));
 }
 
+/** Fence names by building id (#203). */
+const FENCE_NAMES: ReadonlyMap<string, string> = new Map(
+  GAME_DATA.buildings.filter((b) => b.kind === 'fence').map((b) => [b.id, b.name]),
+);
+
 /**
  * Names and looks for everything in a battle: the public tables plus the rows
  * the server sent along (`speciesDefs`, `moveDefs`) for species the client
@@ -49,6 +54,8 @@ export function energyPercent(squishy: Pick<BattleSquishyView, 'energy' | 'stats
 export class BattleContent {
   readonly species: ReadonlyMap<string, Species>;
   readonly moves: ReadonlyMap<string, Move>;
+  /** Fence names by building id (#203): a fence stands in for a squishy. */
+  readonly fences: ReadonlyMap<string, string> = FENCE_NAMES;
 
   constructor(battle: Pick<PlayerBattle, 'speciesDefs' | 'moveDefs'>) {
     this.species = new Map(
@@ -60,7 +67,7 @@ export class BattleContent {
   }
 
   speciesName(id: string): string {
-    return this.species.get(id)?.name ?? 'Mystery squishy';
+    return this.species.get(id)?.name ?? this.fences.get(id) ?? 'Mystery squishy';
   }
 
   moveName(id: string): string {
@@ -83,8 +90,13 @@ export function plateName(
 const ELEMENT_NAMES = new Map(ELEMENTS.map((e) => [e.id, e.name]));
 const FEELING_NAMES = new Map(FEELINGS.map((f) => [f.id, f.name]));
 
-/** "Shadow · Sleepy", for the info line under a nameplate. */
-export function natureLine(squishy: Pick<BattleSquishyView, 'element' | 'feeling'>): string {
+/** "Shadow · Sleepy", for the info line under a nameplate; "Leaf fence" for a fence (#203). */
+export function natureLine(
+  squishy: Pick<BattleSquishyView, 'element' | 'feeling' | 'fence'>,
+): string {
+  if (squishy.fence !== undefined) {
+    return `${ELEMENT_NAMES.get(squishy.element) ?? squishy.element} fence`;
+  }
   return `${ELEMENT_NAMES.get(squishy.element) ?? squishy.element} · ${
     FEELING_NAMES.get(squishy.feeling) ?? squishy.feeling
   }`;

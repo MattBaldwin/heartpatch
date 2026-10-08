@@ -59,6 +59,14 @@ export const TerritoryStatusSchema = z.object({
   squishies: z.array(OwnedSquishySchema),
   /** Rows the public species table doesn't have, for my own squishies (a secret one I befriended). */
   speciesDefs: z.array(SpeciesSchema),
+  /**
+   * Tiles where I just broke the fence (#203): a guard battle there before
+   * `until` finishes the same challenge, with no new try ("Keep going!").
+   * Optional only so older fixtures parse; the server always sends it.
+   */
+  fenceBroken: z
+    .array(z.object({ q: HexSchema.shape.q, r: HexSchema.shape.r, until: z.iso.datetime() }))
+    .optional(),
   /** The server's clock: cooldowns count down against it. */
   now: z.iso.datetime(),
 });

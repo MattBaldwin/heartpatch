@@ -109,6 +109,7 @@ const MESSAGES = {
   habitatFull: (name: string) => `The ${name} is full! Try another home.`,
   onWatch: (name: string) => `Bring ${name} home from watch first!`,
   topLevel: (name: string) => `Your ${name} is as big as it gets!`,
+  fenceOnEdge: 'Fences go on the edges of a tile. Tap 🪵 Fences on your land!',
 } as const;
 
 /** What to call one of my squishies in a message: its nickname, else its species. */
@@ -379,6 +380,8 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
 
     place: (user, mapId, request) => {
       const building = requireBuildingData(request.buildingId);
+      // Fences go on a tile's edges, through the fences module (#203).
+      if (building.kind === 'fence') throw new AppError('CONFLICT', MESSAGES.fenceOnEdge);
       if (!isBuildable(HOME_BASE_RULES, building)) throw new AppError('CONFLICT', MESSAGES.notYet);
       return command(
         user,

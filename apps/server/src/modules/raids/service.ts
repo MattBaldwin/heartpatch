@@ -1,5 +1,6 @@
 import {
   otherSide,
+  fencePercent,
   RAID_RULES,
   RaidSchema,
   startBattle,
@@ -15,7 +16,7 @@ import {
 import type { Executor } from '../../db/client.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
-import { createBattlesRepo } from '../battles/repo.js';
+import { createBattlesRepo, setupOf } from '../battles/repo.js';
 import { defaultBattleContent, PLAYER_SIDE, playerBattleView } from '../battles/service.js';
 import { requireMember } from '../maps/members.js';
 import { createRaidsRepo, type RaidRow } from './repo.js';
@@ -59,6 +60,17 @@ const MESSAGES = {
   tooOld: 'That showdown is from before the squishies learned new tricks, so it can’t be replayed.',
 } as const;
 
+/** A fence battle's line in my report (#203): broken, or how much energy it has left. */
+function fenceLine(row: RaidRow): Raid['fence'] {
+  if (row.fenceBuildingId === null || row.fenceHpAfter === null) return null;
+  const broken = row.fenceHpAfter === 0;
+  return {
+    buildingId: row.fenceBuildingId,
+    broken,
+    percent: broken ? 0 : fencePercent(row.fenceHpAfter, row.fenceMaxHp ?? row.fenceHpAfter),
+  };
+}
+
 /** The defender sees the challenger as side `a`; their own squishies are the other side. */
 const DEFENDER_SIDE = otherSide(PLAYER_SIDE);
 
@@ -87,6 +99,8 @@ export function createRaidsService(options: RaidsServiceOptions): RaidsService {
     seenAt: row.seenAt?.toISOString() ?? null,
     replayable: replayable(row),
     lostFire: row.lostFire ?? null,
+    fence: fenceLine(row),
+    lostFences: row.lostFences ?? null,
   });
 
   const report = async (user: PublicUser, mapId: string): Promise<RaidReport> => {
@@ -131,7 +145,7 @@ export function createRaidsService(options: RaidsServiceOptions): RaidsService {
       if (!battle) throw new AppError('NOT_FOUND', MESSAGES.noRaid);
       // The first turn from the stored seed and setup; the screen then plays
       // the finished battle's log from there (the same path as a live battle).
-      const first = startBattle(content, { seed: battle.seed, sides: battle.setup });
+      const first = startBattle(content, setupOf(battle));
       return {
         start: playerBattleView(content, battle, { mySide: DEFENDER_SIDE, state: first }),
         end: playerBattleView(content, battle, { mySide: DEFENDER_SIDE }),

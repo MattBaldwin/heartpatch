@@ -15,6 +15,15 @@ export interface MapFillSummary {
   readonly wentWild: number;
   /** Tiles that had gone wild and were claimed again. */
   readonly reclaimed: number;
+  /** Tiles won from a rival (#203's model). */
+  readonly captured: number;
+  /** Fence segments broken, and fence fights the fence won. */
+  readonly fenceBreaks: number;
+  readonly fenceHolds: number;
+  /** The last day a tile changed hands by a challenge (null: never): the map never freezes. */
+  readonly lastCapture: number | null;
+  /** Outer tiles fenced on the last day, all kids. */
+  readonly fencedAtEnd: number;
 }
 
 export function summariseMapFill(run: MapFillRun): MapFillSummary {
@@ -30,6 +39,11 @@ export function summariseMapFill(run: MapFillRun): MapFillSummary {
     lostByPlayers: sum((d) => keeps.reduce((t, s) => t + (d.wentWild[s] ?? 0), 0)),
     wentWild: sum((d) => d.wentWild.reduce((t, n) => t + n, 0)),
     reclaimed: sum((d) => d.reclaimed.reduce((t, n) => t + n, 0)),
+    captured: sum((d) => d.captured.reduce((t, n) => t + n, 0)),
+    fenceBreaks: sum((d) => d.fenceBreaks),
+    fenceHolds: sum((d) => d.fenceHolds),
+    lastCapture: [...run.days].reverse().find((d) => d.captured.some((n) => n > 0))?.day ?? null,
+    fencedAtEnd: run.days.at(-1)?.fenced.reduce((t, n) => t + n, 0) ?? 0,
   };
 }
 
@@ -59,7 +73,7 @@ export function renderMapFill(
   const header = (first: string) =>
     `| ${first} | ${rules.map((r) => r.label).join(' | ')} |\n|---|${rules.map(() => '---:').join('|')}|`;
   const lines: string[] = [];
-  lines.push('# Map-fill model: land that misses you');
+  lines.push('# Map-fill model: land that misses you, challenges and fences');
   lines.push('');
   lines.push(
     `${String(runs.length)} runs of ${String(options.days)} days in ${options.seconds.toFixed(1)} s. ` +
@@ -116,6 +130,34 @@ export function renderMapFill(
     lines.push(`| ${sc.title} | ${row.join(' | ')} |`);
   }
   lines.push('');
+
+  const fighting = rules.filter((r) => r.challenges);
+  if (fighting.length > 0) {
+    lines.push('## Challenges and fences (#203)');
+    lines.push('');
+    lines.push(
+      'Once nothing neutral is left next to their land, kids challenge a rival’s. Each cell: ' +
+        'tiles won from a rival · fence segments broken · fence fights the fence won · ' +
+        'outer tiles fenced on the last day · the last day a tile changed hands (the map never freezes).',
+    );
+    lines.push('');
+    lines.push(
+      `| Scenario | ${fighting.map((r) => r.label).join(' | ')} |\n|---|${fighting.map(() => '---:').join('|')}|`,
+    );
+    for (const sc of scenarios) {
+      const row = fighting.map((r) => {
+        const run = runOf(sc.id, r.label);
+        if (!run) return '—';
+        const s = summariseMapFill(run);
+        return (
+          `${String(s.captured)} won · ${String(s.fenceBreaks)} broken · ${String(s.fenceHolds)} held · ` +
+          `${String(s.fencedAtEnd)} fenced · last day ${cell(s.lastCapture)}`
+        );
+      });
+      lines.push(`| ${sc.title} | ${row.join(' | ')} |`);
+    }
+    lines.push('');
+  }
 
   lines.push('## Tiles a kid keeps after stopping (home ring included)');
   lines.push('');

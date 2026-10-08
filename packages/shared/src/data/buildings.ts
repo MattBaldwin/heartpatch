@@ -84,4 +84,144 @@ export const BUILDINGS: Building[] = [
       { cost: { timber: 16, stone: 16 }, capacity: 3, xpPerHour: 8 }, // TUNE:
     ],
   },
+  // Fences (#203; owner decisions 2026-10-07, second mockup): one per
+  // element, made from that element's stuff and weak to whatever beats it
+  // in ELEMENT_MATRIX. Every fence has the same energy and toughness at a
+  // level, so only the element differs and no fence is simply best.
+  {
+    id: 'hedge',
+    kind: 'fence',
+    name: 'Hedge',
+    description:
+      'A leafy hedge that keeps other Keepers out. Fire and Frost squishies get through it fast!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
+    element: 'leaf',
+    levels: [
+      { cost: { greens: 8, timber: 1 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { greens: 10, timber: 2 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { greens: 12, glimmer: 2 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
+  {
+    id: 'moat',
+    kind: 'fence',
+    name: 'Moat',
+    description:
+      'A splashy moat that keeps other Keepers out. Leaf and Spark squishies cross it fast!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
+    element: 'water',
+    levels: [
+      { cost: { water: 8, stone: 2 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { water: 10, stone: 4 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { water: 12, stone: 4, glimmer: 2 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
+  {
+    id: 'stone-wall',
+    kind: 'fence',
+    name: 'Stone Wall',
+    description:
+      'A sturdy wall that keeps other Keepers out. Water and Leaf squishies wash it away!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
+    element: 'stone',
+    levels: [
+      { cost: { stone: 8, timber: 3 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { stone: 10, timber: 5 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { stone: 12, timber: 5, glimmer: 2 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
+  {
+    id: 'emberwood-palisade',
+    kind: 'fence',
+    name: 'Emberwood Palisade',
+    description:
+      'Warm log stakes that keep other Keepers out. Water and Stone squishies topple them fast!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
+    element: 'fire',
+    levels: [
+      { cost: { emberwood: 6, timber: 2 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { emberwood: 8, timber: 4 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { emberwood: 10, timber: 4, glimmer: 2 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
+  {
+    id: 'glimmer-rail',
+    kind: 'fence',
+    name: 'Glimmer Rail',
+    description:
+      'A fizzy rail that keeps other Keepers out. Stone and Shadow squishies fizzle it fast!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
+    element: 'spark',
+    levels: [
+      { cost: { glimmer: 2, timber: 4 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { glimmer: 3, timber: 6 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { glimmer: 5, timber: 6 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
+  {
+    id: 'lantern-fence',
+    kind: 'fence',
+    name: 'Lantern Fence',
+    description:
+      'Glowing lanterns that keep other Keepers out. Spark and Shadow squishies dim them fast!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
+    element: 'light',
+    levels: [
+      { cost: { glimmer: 2, timber: 5 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { glimmer: 3, timber: 6, emberwood: 2 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { glimmer: 4, timber: 6, emberwood: 4 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
+  {
+    id: 'bramble-hedge',
+    kind: 'fence',
+    name: 'Bramble Hedge',
+    description:
+      'A curly purple tangle that keeps other Keepers out. Frost and Light squishies get through it fast!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
+    element: 'shadow',
+    levels: [
+      { cost: { greens: 6, emberwood: 3 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { greens: 8, emberwood: 4 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { greens: 8, emberwood: 4, 'witch-dust': 2 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
+  {
+    id: 'ice-wall',
+    kind: 'fence',
+    name: 'Ice Wall',
+    description:
+      'Chunky ice blocks that keep other Keepers out. Fire and Light squishies melt them fast!',
+    placement: 'owned',
+    slot: 'edge',
+    maxPerTile: 6, // one a hex edge
+    maxPerHome: 42, // not read for fences: one segment per edge is their only cap
+    element: 'frost',
+    levels: [
+      { cost: { ice: 6, stone: 2 }, hp: 70, defense: 14 }, // TUNE:
+      { cost: { ice: 8, stone: 3 }, hp: 100, defense: 18 }, // TUNE:
+      { cost: { ice: 10, stone: 3, glimmer: 2 }, hp: 140, defense: 22 }, // TUNE:
+    ],
+  },
 ];

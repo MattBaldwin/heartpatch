@@ -52,12 +52,34 @@ export type ControlMode =
        * it loads), and the picker's tiles. Null in a replay.
        */
       items: { total: number | null; tiles: PotionTile[]; who: string } | null;
+      /** Breaking a fence (#203): the turn it is, and the most it lasts. Null elsewhere. */
+      fence?: { turn: number; limit: number } | null;
     }
   /** Their squishy is tuckered out: pick who comes out. */
   | { type: 'replace'; bench: { slot: number; name: string }[] }
   /** The log is playing, or the server is thinking. */
   | { type: 'waiting' }
   | { type: 'hidden' };
+
+const PLAIN_RUN = {
+  run: 'Run away',
+  ask: 'Scoot away from this one?',
+  yes: 'Yes, scoot!',
+  stay: 'Stay and play',
+} as const;
+
+/** At a fence (#203, the owner-approved mockup). */
+export const FENCE_RUN = {
+  run: 'Stop for now',
+  ask: 'Stop for now? The fence keeps the energy it lost.',
+  yes: 'Yes, stop',
+  stay: 'Keep at it',
+} as const;
+
+/** "Turn 3 of 6 · it holds if it's still standing then." */
+export function fenceTurnLine(turn: number, limit: number): string {
+  return `Turn ${String(Math.min(turn, limit))} of ${String(limit)} · a fence still standing then holds.`;
+}
 
 export interface ResultInfo {
   title: string;
@@ -423,24 +445,26 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
             ),
           );
         }
-        // Forgiving (style guide §3): running away asks first.
+        // Forgiving (style guide §3): running away asks first. At a fence
+        // (#203) it's "Stop for now": the fence keeps what it lost.
+        const words = mode.fence ? FENCE_RUN : PLAIN_RUN;
         const run = button(
-          'Run away',
+          words.run,
           () => {
             controls.replaceChildren(
-              el('p', { class: 'battle-ask' }, 'Scoot away from this one?'),
+              el('p', { class: 'battle-ask' }, words.ask),
               el(
                 'div',
                 { class: 'battle-row' },
                 button(
-                  'Yes, scoot!',
+                  words.yes,
                   () => {
                     act({ type: 'forfeit' });
                   },
                   { small: true, testId: 'battle-run-confirm' },
                 ),
                 button(
-                  'Stay and play',
+                  words.stay,
                   () => {
                     setControls(mode);
                   },
@@ -454,6 +478,15 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         row.append(run);
         controls.append(moves, row);
         if (hint) controls.append(hint);
+        if (mode.fence) {
+          controls.append(
+            el(
+              'p',
+              { class: 'battle-hint', 'data-testid': 'battle-fence-turns' },
+              fenceTurnLine(mode.fence.turn, mode.fence.limit),
+            ),
+          );
+        }
         break;
       }
       case 'replace': {

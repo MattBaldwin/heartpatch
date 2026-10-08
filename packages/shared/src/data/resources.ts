@@ -45,7 +45,7 @@ export const RESOURCES: Resource[] = [
     id: 'water',
     name: 'Water',
     description:
-      'Cool, clear water from a lakeside well. Leave it out in the cold at home to freeze it into Ice!',
+      'Cool, clear water from a lakeside well. Build a Moat with it, or freeze it into Ice at home!',
     kind: 'gathered',
     gather: { seconds: 20 * 60, quantity: 3 }, // TUNE: like Treats
   },
@@ -53,7 +53,7 @@ export const RESOURCES: Resource[] = [
     id: 'greens',
     name: 'Greens',
     description:
-      'Leafy bundles of grass and clover from meadows and forests. Stir them into yummy Treats!',
+      'Leafy bundles of grass and clover from meadows and forests. Grow a Hedge, or stir them into yummy Treats!',
     kind: 'gathered',
     gather: { seconds: 15 * 60, quantity: 4 }, // TUNE: a little less than Stone
   },
@@ -61,7 +61,7 @@ export const RESOURCES: Resource[] = [
     id: 'ice',
     name: 'Ice',
     description:
-      'Cold and sparkly chunks from the mountains. Fences will want them soon! They never melt in your bag.',
+      'Cold and sparkly chunks from the mountains, for building an Ice Wall. They never melt in your bag!',
     kind: 'gathered',
     gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Emberwood
   },

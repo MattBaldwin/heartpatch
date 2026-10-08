@@ -34,6 +34,7 @@ import {
   type PublicUser,
   type Species,
   type StartWildBattleRequest,
+  setupSpecies,
 } from '@heartpatch/shared';
 import { SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
@@ -109,6 +110,14 @@ export interface TileOpponent {
    * events it returns are appended after `battle.started`.
    */
   started: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
+  /**
+   * Who of the player's team fights, when not all of them (#203): the
+   * first squishy alone breaks a fence, and the guard battle after it is
+   * fought by the rest. Never empty.
+   */
+  team?: TeamSquishyRow[];
+  /** Turns the battle lasts at most (a fence battle, #203). */
+  turnLimit?: number;
 }
 
 /**
@@ -118,7 +127,7 @@ export interface TileOpponent {
  */
 export type PrepareTileBattle = (
   tx: Executor,
-  context: { map: MapRow; at: Date },
+  context: { map: MapRow; at: Date; team: readonly TeamSquishyRow[] },
 ) => Promise<TileOpponent>;
 
 /**
@@ -135,7 +144,8 @@ export interface TileBattlePort {
   acted: (tx: Executor, battleId: string, at: Date) => Promise<void>;
   /**
    * The battle is over (won, lost or left): records it, and on a win the tile
-   * changes hands. Lock order: battle (held), tile, then `maps` via events.
+   * changes hands. `battle.state` is its final state (a fence battle, #203,
+   * reads the energy its fence has left). Lock order: battle (held), tile, then `maps` via events.
    * Returns events to append after `battle.ended`, the share of the battle's
    * XP to grant (Gentle's `rewardPercent`: owner decision 2026-10-03), and,
    * on a capture, the found-clothing roll for battles to make (#84). The port
@@ -266,6 +276,9 @@ interface Opponent {
   /** Where the battle happens; null for the player's Heart Seed (see `arenaFor`). */
   tile: Hex | null;
   started?: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
+  /** Who of the team fights, when not all of them (`TileOpponent.team`). */
+  team?: TeamSquishyRow[];
+  turnLimit?: number;
 }
 
 // Kid-readable messages (style guide §6).
@@ -526,7 +539,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // in this transaction. Lock order: battle, tile, squishies, then `maps`.
     const tile =
       TILE_BATTLE_KINDS.has(row.kind) && options.tileBattles
-        ? await options.tileBattles.ended(tx, row, result.winner, at)
+        ? await options.tileBattles.ended(tx, { ...row, state }, result.winner, at)
         : { events: [], xpPercent: 100, drop: null };
     // Gentle mode's share (owner decision 2026-10-03): challenging a much
     // smaller player pays part of the battle's XP, win or lose.
@@ -699,7 +712,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   const startWith = async (
     user: PublicUser,
     mapId: string,
-    opponentFor: (tx: Executor, map: MapRow, at: Date) => Promise<Opponent>,
+    opponentFor: (
+      tx: Executor,
+      map: MapRow,
+      at: Date,
+      team: readonly TeamSquishyRow[],
+    ) => Promise<Opponent>,
     soloTeam?: (tx: Executor) => Promise<TeamSquishyRow[]>,
   ): Promise<StartResult> => {
     await requireMember(db, user, mapId);
@@ -727,10 +745,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         }
 
         const at = now();
-        const opponent = await opponentFor(tx, map, at);
+        const opponent = await opponentFor(tx, map, at, team);
+        const fielded = opponent.team ?? team;
         const setup: BattleSetup = {
           seed: newSeed(),
-          sides: { a: { controller: { type: 'player' }, squishies: team }, b: opponent.side },
+          sides: { a: { controller: { type: 'player' }, squishies: fielded }, b: opponent.side },
+          ...(opponent.turnLimit !== undefined && { turnLimit: opponent.turnLimit }),
         };
         const state = startBattle(content, setup);
         const arena = await arenaFor(repo, {
@@ -757,7 +777,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         await createSpawnsRepo(tx).markSeen(
           mapId,
           user.id,
-          opponent.side.squishies.map((s) => s.speciesId),
+          setupSpecies(opponent.side.squishies),
           row.startedAt,
         );
         await repo.appendEvent({
@@ -768,8 +788,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             battleId: row.id,
             kind: row.kind,
             userId: user.id,
-            teamSpecies: team.map((s) => s.speciesId),
-            opponentSpecies: opponent.side.squishies.map((s) => s.speciesId),
+            teamSpecies: fielded.map((s) => s.speciesId),
+            opponentSpecies: setupSpecies(opponent.side.squishies),
           },
         });
         for (const event of events) await repo.appendEvent(event);
@@ -834,8 +854,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     startAgainst,
 
     startTile: (user, mapId, prepare) =>
-      startWith(user, mapId, async (tx, map, at) => {
-        const opponent = await prepare(tx, { map, at });
+      startWith(user, mapId, async (tx, map, at, team) => {
+        const opponent = await prepare(tx, { map, at, team });
         return { ...opponent, spawn: null };
       }),
 
