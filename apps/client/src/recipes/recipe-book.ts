@@ -921,7 +921,8 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
                   : RECIPE_BOOK_TEXT.morePages,
             },
             ...body,
-            el('span', { class: 'rbook-page-number' }, String(n)),
+            // One page at a time, the nav's "Page 5 of 25" already says it.
+            ...(two ? [el('span', { class: 'rbook-page-number' }, String(n))] : []),
           ),
         );
       });

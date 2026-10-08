@@ -54,7 +54,9 @@ export const FACTORY_TEXT = {
   started: (n: number, icon: string) => `Off it goes! ${String(n)} ${icon} on the way.`,
   stopTitle: 'Stop this batch?',
   stopKeep: (n: number, name: string) =>
-    n === 0 ? `Nothing's made yet.` : `You keep the ${String(n)} ${name} already made.`,
+    n === 0
+      ? `Nothing's made yet.`
+      : `You keep the ${String(n)} ${manyOf(name, n)} already made.`,
   stopBack: (n: number, what: string) =>
     `${String(n)} ${n === 1 ? "isn't" : "aren't"} finished yet (the one being made too). You get back ${what}.`,
   stopYes: 'Stop batch',
@@ -74,6 +76,14 @@ export const FACTORY_TEXT = {
   seeFactory: 'See Factory',
   sproutTip: "Ooh, a Factory! It makes lots of things while you're away.",
 } as const;
+
+// Names that already read as "lots of" (Treats) or never take an s (Water).
+const NO_S = /(s|Water)$/;
+
+/** A recipe's name for n of them: "3 Shovels", "3 Cooked Treats", "3 Frozen Water". */
+export function manyOf(name: string, n: number): string {
+  return n === 1 || NO_S.test(name) ? name : `${name}s`;
+}
 
 /** A recipe's name, or what it makes when the recipe is gone from the data. */
 export function recipeName(recipeId: string): string {
