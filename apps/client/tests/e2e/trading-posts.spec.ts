@@ -193,6 +193,30 @@ interface PostDebug {
 }
 const postState = (page: Page) => hook<PostDebug>(page, 'post');
 
+/**
+ * Names on the post screen whose words break across lines, e.g. "Pebblesno"
+ * then "oze": each word's text range should draw on a single line box.
+ */
+function wordsSplit(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const split: string[] = [];
+    for (const node of document.querySelectorAll('[data-testid="post"] .post-fit')) {
+      const text = node.firstChild;
+      if (!(text instanceof Text)) continue;
+      let at = 0;
+      for (const word of text.data.split(' ')) {
+        const range = document.createRange();
+        range.setStart(text, at);
+        range.setEnd(text, at + word.length);
+        const tops = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
+        if (tops.size > 1) split.push(word);
+        at += word.length + 1;
+      }
+    }
+    return split;
+  });
+}
+
 /** Shuts an open side tray, which covers part of the map and the tile panel. */
 async function shutTrays(page: Page): Promise<void> {
   const open = (await traysState(page))?.open ?? null;
@@ -270,6 +294,11 @@ test('trades and gifts at a post: offer, say yes, and pick up from the mailbox (
   expect(
     (await api(lee, 'POST', `/maps/${mapId}/dev/items`, { items: { timber: 3 } })).status,
   ).toBe(201);
+  const long = await api(sam, 'POST', `/maps/${mapId}/dev/squishies`, {
+    speciesId: 'pebblesnooze',
+    level: 7,
+  });
+  expect(long.status).toBe(201);
   expect((await api(sam, 'POST', `/maps/${mapId}/dev/items`, { items: { stone: 2 } })).status).toBe(
     201,
   );
@@ -278,6 +307,9 @@ test('trades and gifts at a post: offer, say yes, and pick up from the mailbox (
   await visitPost(lee);
   const leePost = lee.getByTestId('post');
   await expect.poll(async () => (await postState(lee))?.mate).not.toBeNull();
+  // Long names stay whole: no word wraps inside itself (owner, #271), e.g. Sam's Pebblesnooze.
+  await expect(leePost.getByTestId('post-want')).toContainText('Pebblesnooze');
+  expect(await wordsSplit(lee)).toEqual([]);
   await leePost
     .getByTestId('post-give')
     .getByRole('button', { name: /Emberbun/ })

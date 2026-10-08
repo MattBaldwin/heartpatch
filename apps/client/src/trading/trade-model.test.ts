@@ -10,6 +10,7 @@ import {
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import {
+  fitName,
   lineKey,
   lineLook,
   linesInWords,
@@ -185,6 +186,19 @@ describe('trade model (#271)', () => {
     );
     expect(tradeEventForMe(ev('mailbox.collected', { userId: ME }), ME)).toBe(true);
     expect(tradeEventForMe(ev('chat.said', { userId: ME }), ME)).toBe(false);
+  });
+
+  it('shrinks a long name to fit its box whole, never splitting a word (owner, #271)', () => {
+    // Fits already: as is.
+    expect(fitName(60, 80, 13)).toEqual({ px: 13, ellipsis: false });
+    // "Pebblesnooze" is 100px wide at 13px in a 76px cell: 9.5px (half-pixel steps) fits.
+    const fit = fitName(100, 76, 13, 9);
+    expect(fit).toEqual({ px: 9.5, ellipsis: false });
+    expect((100 * fit.px) / 13).toBeLessThanOrEqual(76);
+    // Too long even at the smallest size: the smallest size, on one line with "…".
+    expect(fitName(300, 76, 13)).toEqual({ px: 10, ellipsis: true });
+    // Nothing measured yet (a hidden sheet): leave it.
+    expect(fitName(100, 0, 13)).toEqual({ px: 13, ellipsis: false });
   });
 
   it('keeps every line kid-safe', () => {

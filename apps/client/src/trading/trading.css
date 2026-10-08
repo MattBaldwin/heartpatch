@@ -270,6 +270,8 @@
 
 .post-slot {
   display: grid;
+  /* The cell's width, never a long word's (names shrink to fit instead). */
+  grid-template-columns: minmax(0, 1fr);
   justify-items: center;
   gap: 2px;
   width: 100%;
@@ -299,7 +301,23 @@ button.post-slot {
   font-size: 13px;
   font-weight: 800;
   line-height: 1.1;
-  overflow-wrap: anywhere;
+}
+
+/* Names wrap only between words; a long word shrinks to fit (`fitNames`). */
+.post-fit {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: manual;
+}
+
+.post-fit.post-ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .post-slot-wrap {

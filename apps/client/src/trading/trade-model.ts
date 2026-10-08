@@ -131,6 +131,26 @@ export function lineLook(line: TradeLineView): LineLook {
   };
 }
 
+/** The smallest a name may shrink to before it ends in "…" (owner, #271). */
+export const NAME_MIN_PX = 10; // TUNE:
+
+/**
+ * A name's font size so its longest word fits the box whole (owner decision
+ * on the #271 screens: never "Pebblesno-oze"). `widestWord` is that word's
+ * width at `fontPx`. Shrinks in half-pixel steps down to `minPx`; past that
+ * the name keeps `minPx` and ends in "…" on one line.
+ */
+export function fitName(
+  widestWord: number,
+  box: number,
+  fontPx: number,
+  minPx = NAME_MIN_PX,
+): { readonly px: number; readonly ellipsis: boolean } {
+  if (widestWord <= box || widestWord <= 0 || box <= 0) return { px: fontPx, ellipsis: false };
+  const px = Math.max(minPx, Math.floor(((fontPx * box) / widestWord) * 2) / 2);
+  return { px, ellipsis: (widestWord * px) / fontPx > box };
+}
+
 /** A few lines in words: "Fizz, Timber ×3 and Pom-Pom Beanie". */
 export function linesInWords(lines: readonly TradeLineView[]): string {
   const names = lines.map((l) => lineLook(l).name);

@@ -14,6 +14,7 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { tradeApi, type TradeApi } from './trade-api.js';
 import {
+  fitName,
   lineKey,
   lineLook,
   linesInWords,
@@ -101,6 +102,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   /** Bumped by every open, close and user change, so a late reply is dropped. */
   let generation = 0;
   let ticker: number | undefined;
+  let canvas: CanvasRenderingContext2D | null | undefined;
+  /** A 2D context to measure words with (made once). */
+  const measure = () => (canvas ??= document.createElement('canvas').getContext('2d'));
 
   const sendDeps = {
     newKey: newIdempotencyKey,
@@ -244,7 +248,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     if (opts.testId) attrs['data-testid'] = opts.testId;
     const parts: Node[] = [
       picture(line),
-      el('span', { class: 'post-slot-name' }, look.name),
+      el('span', { class: 'post-slot-name post-fit' }, look.name),
       ...(look.sub ? [el('span', { class: 'post-tiny' }, look.sub)] : []),
     ];
     if (!opts.onTap) return el('div', attrs, ...parts, ...(opts.extra ?? []));
@@ -432,7 +436,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       'div',
       { class: 'post-card post-card-cream', 'data-testid': 'post-offer-out' },
       el('b', {}, TRADE_TEXT.waitingFor(nameOf(offer.toUserId))),
-      el('div', { class: 'post-small' }, linesInWords(offer.give)),
+      el('div', { class: 'post-small post-fit' }, linesInWords(offer.give)),
       button(TRADE_TEXT.callOff, 'post-cancel', 'secondary', () => {
         void command((key) => api.cancel(mapId(), offer.id, key), TRADE_TEXT.calledOff);
       }),
@@ -545,8 +549,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         el(
           'div',
           { class: 'post-grow' },
-          el('b', {}, mailboxTitle(entry, nameOf)),
-          el('div', { class: 'post-small' }, linesInWords(entry.lines)),
+          el('b', { class: 'post-fit' }, mailboxTitle(entry, nameOf)),
+          el('div', { class: 'post-small post-fit' }, linesInWords(entry.lines)),
         ),
         el(
           'div',
@@ -686,6 +690,26 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           ? giftTab(trades, my)
           : mailboxTab(trades);
     body.replaceChildren(...parts);
+    fitNames(body);
+  }
+
+  /** Shrinks each name until its longest word fits its box whole (owner, #271). */
+  function fitNames(root: HTMLElement): void {
+    const ctx = measure();
+    if (!ctx) return;
+    for (const node of root.querySelectorAll<HTMLElement>('.post-fit')) {
+      node.style.fontSize = '';
+      node.classList.remove('post-ellipsis');
+      const box = node.clientWidth;
+      const style = getComputedStyle(node);
+      const fontPx = parseFloat(style.fontSize);
+      ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const words = node.textContent.split(/\s+/);
+      const widest = Math.max(0, ...words.map((w) => ctx.measureText(w).width));
+      const fit = fitName(widest, box, fontPx);
+      if (fit.px !== fontPx) node.style.fontSize = `${String(fit.px)}px`;
+      node.classList.toggle('post-ellipsis', fit.ellipsis);
+    }
   }
 
   /** Counts the visit pass down, only while a pass's post is open. */
