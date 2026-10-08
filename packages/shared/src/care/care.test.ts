@@ -15,6 +15,7 @@ import {
   addXp,
   battleXpPercent,
   befriendedLevel,
+  joiningSpecies,
   carePercent,
   evolutionAt,
   grantedXp,
@@ -305,6 +306,33 @@ describe('battleXpPercent (owner decision 2026-10-06)', () => {
 
   it('is on in the shipped data', () => {
     expect(GROWTH_RULES.battleXpFalloff).toEqual({ fullWinsPerDay: 7, afterPercent: 10 });
+  });
+});
+
+describe('joiningSpecies (owner decision 2026-10-08, #279)', () => {
+  // A three-stage chain: the shipped roster has none yet, so the rule is pinned here.
+  const steps = [
+    { from: 'puff', into: 'mallow', level: 16 },
+    { from: 'mallow', into: 'cloud', level: 32 },
+    { from: 'puff', into: 'secret-puff', level: 20 },
+  ];
+
+  it('joins one evolution back: stage 3 as stage 2, stage 2 as its base form', () => {
+    expect(joiningSpecies('cloud', steps)).toBe('mallow');
+    expect(joiningSpecies('mallow', steps)).toBe('puff');
+    expect(joiningSpecies('secret-puff', steps)).toBe('puff');
+  });
+
+  it('keeps a base form, or a species with no evolutions, as itself', () => {
+    expect(joiningSpecies('puff', steps)).toBe('puff');
+    expect(joiningSpecies('pebble', steps)).toBe('pebble');
+  });
+
+  it('caps the level below the joined species’ own next evolution', () => {
+    const cap = { befriendBelowEvolution: 1 };
+    // A level-40 stage 3 joins as a level-31 stage 2; a stage 2 as a level-15 base.
+    expect(befriendedLevel(joiningSpecies('cloud', steps), 40, steps, cap)).toBe(31);
+    expect(befriendedLevel(joiningSpecies('mallow', steps), 18, steps, cap)).toBe(15);
   });
 });
 

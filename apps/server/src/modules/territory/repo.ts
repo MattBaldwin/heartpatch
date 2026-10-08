@@ -130,6 +130,8 @@ export interface TerritoryRepo {
   cooldownUntil: (tileId: string) => Promise<Date | null>;
 
   insertAttack: (attack: NewTileAttack) => Promise<TileAttackRow>;
+  /** The player's battles for this tile started at or after `since`, oldest first. */
+  myAttacksSince: (tileId: string, attackerUserId: string, since: Date) => Promise<TileAttackRow[]>;
   /**
    * The player's fence attack on this tile that broke the fence and ended
    * after `since`, with no guard battle after it yet (#203): a guard battle
@@ -378,6 +380,19 @@ function queries(db: Executor): TerritoryRepo {
       if (!row) throw new Error('insertAttack: insert returned no row');
       return row;
     },
+
+    myAttacksSince: (tileId, attackerUserId, since) =>
+      db
+        .select(attackColumns)
+        .from(tileAttacks)
+        .where(
+          and(
+            eq(tileAttacks.tileId, tileId),
+            eq(tileAttacks.attackerUserId, attackerUserId),
+            gte(tileAttacks.startedAt, since),
+          ),
+        )
+        .orderBy(asc(tileAttacks.startedAt), asc(tileAttacks.id)),
 
     brokenFenceFor: async (tileId, attackerUserId, since) => {
       const [row] = await db

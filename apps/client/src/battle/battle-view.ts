@@ -24,14 +24,14 @@ export function activeOf(battle: PlayerBattle, side: BattleSideId): BattleSquish
   return squishy;
 }
 
-/** Squishies on `side`'s bench that could come out: not active, not tuckered out. */
+/** Squishies on `side`'s bench that could come out: not active, tuckered out or befriended (#279). */
 export function benchOf(
   battle: PlayerBattle,
   side: BattleSideId,
 ): { slot: number; squishy: BattleSquishyView }[] {
   const { squishies, active } = battle.view.sides[side];
   return squishies.flatMap((squishy, slot) =>
-    slot !== active && squishy.energy > 0 ? [{ slot, squishy }] : [],
+    slot !== active && squishy.energy > 0 && squishy.befriended !== true ? [{ slot, squishy }] : [],
   );
 }
 

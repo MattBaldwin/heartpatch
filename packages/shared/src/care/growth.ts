@@ -147,6 +147,16 @@ export function evolutionAt(
 }
 
 /**
+ * The species a befriended land guardian joins as (owner decision
+ * 2026-10-08, #279): one evolution back from the form it fought as, so a
+ * stage 3 joins as its stage 2 and a stage 2 as its base form. A base form
+ * stays itself.
+ */
+export function joiningSpecies(speciesId: string, steps: readonly EvolutionStep[]): string {
+  return steps.find((step) => step.into === speciesId)?.from ?? speciesId;
+}
+
+/**
  * The level a befriended squishy joins at: its battle level, but at most
  * `befriendBelowEvolution` below its species' first evolution (the lowest
  * level in `steps` from it). A species that never evolves keeps its level.

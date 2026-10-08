@@ -45,7 +45,13 @@ import {
   plateName,
 } from './battle-view.js';
 import type { SafeRegion } from './camera-director.js';
-import { BEFRIEND_NUDGE, HEART_CHARM, noCharmsLine } from './heart-charm.js';
+import {
+  BEFRIEND_NUDGE,
+  HEART_CHARM,
+  joinedLine,
+  newFriends,
+  noCharmsLine,
+} from './heart-charm.js';
 import {
   NO_CHIPS,
   noPotionLine,
@@ -237,13 +243,6 @@ function devArena(): { terrain: string; timeOfDay: BattleTimeOfDay } | null {
   const [terrain, time] = value.split('/');
   const timeOfDay = BattleTimeOfDaySchema.safeParse(time);
   return terrain ? { terrain, timeOfDay: timeOfDay.success ? timeOfDay.data : 'day' } : null;
-}
-
-/** "Moonpuff joined your patch!": the squishy the player just befriended. */
-function friendLine(b: PlayerBattle, names: BattleContent): string {
-  const wild = b.view.sides[otherSide(b.mySide)];
-  const friend = wild.squishies[wild.active];
-  return `${friend ? names.speciesName(friend.speciesId) : 'Your new squishy'} joined your patch!`;
 }
 
 export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
@@ -601,20 +600,25 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         : null,
     );
     const glade = options.isGlade?.(b.mapId) ?? false;
+    const friends = newFriends(b).map((id) => names.speciesName(id));
+    const joined = friends.length > 0;
     const outcome =
       b.status === 'no-contest' || !result
         ? { title: MESSAGES.resultNoContest, subtitle: MESSAGES.noContestSub }
         : result.winner === 'draw'
           ? { title: MESSAGES.resultDraw, subtitle: MESSAGES.drawSub }
           : result.winner === b.mySide
-            ? result.reason === 'captured'
-              ? { title: MESSAGES.resultFriend, subtitle: friendLine(b, names) }
-              : b.kind === 'rescue'
-                ? { title: MESSAGES.resultRescued, subtitle: MESSAGES.rescuedSub }
-                : {
-                    title: TILE_BATTLE_KINDS.has(b.kind) ? MESSAGES.resultLand : MESSAGES.resultWon,
-                    subtitle: resultLine(b.kind, 'won', glade),
-                  }
+            ? TILE_BATTLE_KINDS.has(b.kind)
+              ? // Land claimed, maybe with its guardians as new friends (#279).
+                {
+                  title: MESSAGES.resultLand,
+                  subtitle: joined ? joinedLine(friends) : resultLine(b.kind, 'won', glade),
+                }
+              : result.reason === 'captured'
+                ? { title: MESSAGES.resultFriend, subtitle: joinedLine(friends) }
+                : b.kind === 'rescue'
+                  ? { title: MESSAGES.resultRescued, subtitle: MESSAGES.rescuedSub }
+                  : { title: MESSAGES.resultWon, subtitle: resultLine(b.kind, 'won', glade) }
             : result.reason === 'forfeit'
               ? { title: MESSAGES.resultScooted, subtitle: resultLine(b.kind, 'scooted', glade) }
               : { title: MESSAGES.resultLost, subtitle: resultLine(b.kind, 'lost', glade) };
@@ -629,6 +633,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     if (b.kind === 'journey') options.journey?.ended(b.id, result?.winner === b.mySide);
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
+    // Guardians befriended before the land was lost still came along (#279).
+    if (joined && result?.winner !== b.mySide) lines.unshift(joinedLine(friends));
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
     // The device clock is close enough for an hours-and-minutes note.
     const fullXpAt = b.rewards?.fullXpResetAt;
@@ -650,7 +656,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   };
 
   /**
-   * Counts the bag's Heart Charms for a wild battle, then redraws the
+   * Counts the bag's Heart Charms for a battle that takes them, then redraws the
    * buttons if the player can act. A failed count leaves it unknown (the
    * button still works; the server has the final say).
    */

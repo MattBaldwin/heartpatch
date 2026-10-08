@@ -24,6 +24,7 @@ import {
 import {
   activeSquishy,
   benchOf,
+  inPlay,
   otherSide,
   type BattleEndReason,
   type BattleBoostStat,
@@ -221,8 +222,8 @@ class Step {
       if (choice?.type === 'item') this.useItem(side, choice.item);
     }
 
-    // Heart Charms next; a squishy that says yes ends the battle. Also the
-    // side's whole turn.
+    // Heart Charms next; a squishy that says yes leaves the fight (#279), and
+    // the battle ends if it was the last one. Also the side's whole turn.
     for (const side of SIDES) {
       const choice = picked[side];
       if (choice?.type !== 'capture') continue;
@@ -349,8 +350,11 @@ class Step {
 
   /**
    * `side` offers a Heart Charm to the other side's squishy: one seeded roll
-   * against `captureChance` (none when `sure`). Caught ends the battle with
-   * `side` the winner.
+   * against `captureChance` (none when `sure`). Caught, it's befriended and
+   * leaves the fight like a knockout (owner decision on #279): the next one
+   * steps in at the end of the turn, and if nobody is left the battle ends
+   * with `side` the winner. A wild battle has one squishy, so a catch still
+   * ends it at once.
    */
   private capture(side: BattleSideId, sure: boolean): void {
     const foeSide = otherSide(side);
@@ -359,7 +363,13 @@ class Step {
     const caught =
       sure || this.rng.chance(captureChance(target, species.rarity, this.content.rules));
     this.emit({ ...this.at(foeSide), type: 'capture', caught });
-    if (caught) this.end(side, 'captured');
+    if (!caught) return;
+    // The last one standing ends the battle `captured` while still out, as
+    // wild befriends always have (so their stored bytes are unchanged); only
+    // one that leaves mid-battle is marked.
+    const others = this.state.sides[foeSide].squishies.some((s) => s !== target && inPlay(s));
+    if (others) target.befriended = true;
+    else this.end(side, 'captured');
   }
 
   // ── Moves ────────────────────────────────────────────────────────────
@@ -384,7 +394,7 @@ class Step {
 
   private useMove(side: BattleSideId, move: Move): void {
     const user = this.active(side);
-    if (user.energy === 0 || !this.canAct(side)) return;
+    if (!inPlay(user) || !this.canAct(side)) return;
     const foeSide = otherSide(side);
     const target = this.active(foeSide);
 
@@ -458,7 +468,7 @@ class Step {
 
   private checkForWinner(): void {
     for (const side of SIDES) {
-      if (this.state.sides[side].squishies.every((s) => s.energy === 0)) {
+      if (!this.state.sides[side].squishies.some(inPlay)) {
         this.end(otherSide(side), 'tuckered-out');
         return;
       }
@@ -473,7 +483,7 @@ class Step {
     }
     const waiting: BattleSideId[] = [];
     for (const side of SIDES) {
-      if (this.active(side).energy > 0) continue;
+      if (inPlay(this.active(side))) continue;
       const { controller } = this.state.sides[side];
       if (controller.type === 'player') {
         waiting.push(side);
@@ -507,7 +517,8 @@ class Step {
     const share = (side: BattleSideId) => {
       const squishies = this.state.sides[side].squishies;
       return {
-        left: squishies.reduce((sum, s) => sum + s.energy, 0),
+        // A befriended squishy (#279) has left: none of its energy counts.
+        left: squishies.reduce((sum, s) => sum + (s.befriended ? 0 : s.energy), 0),
         full: squishies.reduce((sum, s) => sum + s.stats.hp, 0),
       };
     };
