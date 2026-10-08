@@ -1,8 +1,10 @@
-import { RECIPES, RESOURCES } from '@heartpatch/shared';
+import { RECIPES, RESOURCES, type BattleSquishyView, type PlayerBattle } from '@heartpatch/shared';
+import { otherSide } from './battle-view.js';
 
-// The "Use Heart Charm" button in wild battles (owner decision 2026-10-04):
-// always there, with how many are in the bag, so a player learns that
-// befriending exists even before they have a charm. Pure words for the HUD.
+// The "Use Heart Charm" button in wild battles (owner decision 2026-10-04)
+// and against neutral land's guardians (#279): always there, with how many
+// are in the bag, so a player learns that befriending exists even before
+// they have a charm. Pure words for the HUD.
 
 /** What a capture costs (the server's `HEART_CHARM`). */
 export const HEART_CHARM = 'heart-charm';
@@ -41,3 +43,29 @@ export function noCharmsLine(): string {
 
 /** After a won wild battle where nobody was befriended. */
 export const BEFRIEND_NUDGE = 'Weaken a wild squishy, then use a Heart Charm to befriend it!';
+
+/**
+ * Who joined the player in `battle`, in team order (#279): guardians
+ * befriended mid-battle (they left the fight), then the one befriended last,
+ * still out when the battle ended `captured` (a wild squishy is only that).
+ */
+export function newFriends(battle: PlayerBattle): BattleSquishyView[] {
+  const { squishies, active } = battle.view.sides[otherSide(battle.mySide)];
+  const { phase } = battle.view;
+  const last =
+    phase.type === 'over' &&
+    phase.result.reason === 'captured' &&
+    phase.result.winner === battle.mySide;
+  return squishies.filter((s, slot) => s.befriended === true || (last && slot === active));
+}
+
+/** "Moonpuff joined your patch!", "Moonpuff and Snoozlet joined your patch!" */
+export function joinedLine(names: readonly string[]): string {
+  const who =
+    names.length === 0
+      ? 'Your new squishy'
+      : names.length === 1
+        ? names[0]!
+        : `${names.slice(0, -1).join(', ')} and ${names.at(-1)!}`;
+  return `${who} joined your patch!`;
+}

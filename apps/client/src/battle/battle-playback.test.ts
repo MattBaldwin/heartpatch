@@ -290,6 +290,15 @@ describe('view helpers', () => {
     expect(natureLine(b.view.sides.a.squishies[0]!)).toBe('Shadow · Sleepy');
     expect(benchOf(b, 'a').map((x) => x.slot)).toEqual([1]);
     expect(benchOf(b, 'b')).toEqual([]);
+    // A guardian that left as a new friend (#279) never comes back out.
+    const [g1, g2] = [b.view.sides.b.squishies[0]!, { ...b.view.sides.b.squishies[0]!, id: 'g2' }];
+    const guarded = battle([], {
+      sides: {
+        ...b.view.sides,
+        b: { ...b.view.sides.b, squishies: [g1, { ...g2, befriended: true }], active: 0 },
+      },
+    });
+    expect(benchOf(guarded, 'b')).toEqual([]);
     expect(energyPercent({ energy: 10, stats: { hp: 40, attack: 1, defense: 1, speed: 1 } })).toBe(
       25,
     );

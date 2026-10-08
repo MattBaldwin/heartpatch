@@ -1,6 +1,13 @@
-import { findAvoidedWords, RECIPES } from '@heartpatch/shared';
+import { findAvoidedWords, RECIPES, type PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { BEFRIEND_NUDGE, charmButton, HEART_CHARM, noCharmsLine } from './heart-charm.js';
+import {
+  BEFRIEND_NUDGE,
+  charmButton,
+  HEART_CHARM,
+  joinedLine,
+  newFriends,
+  noCharmsLine,
+} from './heart-charm.js';
 
 describe('the Heart Charm button', () => {
   it('shows how many charms are in the bag', () => {
@@ -30,5 +37,49 @@ describe('noCharmsLine', () => {
       expect(findAvoidedWords(line)).toEqual([]);
       expect(line.split(' ').length).toBeLessThanOrEqual(14);
     }
+  });
+});
+
+describe('who joined the patch (#279)', () => {
+  /** Just what `newFriends` reads: the other side's team and how it ended. */
+  const ended = (
+    squishies: { id: string; befriended?: true }[],
+    active: number,
+    phase: PlayerBattle['view']['phase'],
+  ) =>
+    ({
+      mySide: 'a',
+      view: { phase, sides: { b: { squishies, active } } },
+    }) as unknown as PlayerBattle;
+  const over = (reason: 'captured' | 'tuckered-out', winner: 'a' | 'b' = 'a') =>
+    ({ type: 'over', result: { winner, reason, contentHash: 'x', turns: 2, xp: [] } }) as const;
+
+  it('is the wild squishy that said yes', () => {
+    const b = ended([{ id: 'wild' }], 0, over('captured'));
+    expect(newFriends(b).map((s) => s.id)).toEqual(['wild']);
+  });
+
+  it('is every guardian befriended, the last one still out', () => {
+    const b = ended([{ id: 'g1', befriended: true }, { id: 'g2' }], 1, over('captured'));
+    expect(newFriends(b).map((s) => s.id)).toEqual(['g1', 'g2']);
+  });
+
+  it('keeps the ones that came along before a knockout win, or a loss', () => {
+    const team = [{ id: 'g1', befriended: true as const }, { id: 'g2' }];
+    expect(newFriends(ended(team, 1, over('tuckered-out'))).map((s) => s.id)).toEqual(['g1']);
+    expect(newFriends(ended(team, 1, over('tuckered-out', 'b'))).map((s) => s.id)).toEqual(['g1']);
+    expect(newFriends(ended(team, 1, { type: 'turn' })).map((s) => s.id)).toEqual(['g1']);
+  });
+
+  it('is nobody after a plain win', () => {
+    expect(newFriends(ended([{ id: 'wild' }], 0, over('tuckered-out')))).toEqual([]);
+  });
+
+  it('says who in one short line', () => {
+    expect(joinedLine(['Moonpuff'])).toBe('Moonpuff joined your patch!');
+    expect(joinedLine(['Moonpuff', 'Snoozlet'])).toBe('Moonpuff and Snoozlet joined your patch!');
+    expect(joinedLine(['A', 'B', 'C'])).toBe('A, B and C joined your patch!');
+    expect(joinedLine([])).toBe('Your new squishy joined your patch!');
+    expect(findAvoidedWords(joinedLine(['Moonpuff', 'Snoozlet']))).toEqual([]);
   });
 });
