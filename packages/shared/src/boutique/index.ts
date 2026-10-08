@@ -1,4 +1,4 @@
-import type { BoutiqueRules } from '../schemas/data/coins.js';
+import { sellableRarity, type BoutiqueRules } from '../schemas/data/coins.js';
 import type { ClothingItem } from '../schemas/data/clothing.js';
 import type { LocalDate } from '../schemas/time.js';
 import { deriveSeed, Rng, type Seed } from '../rng/index.js';
@@ -37,7 +37,7 @@ function pickSome(items: readonly ClothingItem[], count: number, rng: Rng): stri
 
 /**
  * The racks for one shop on one day: `dailySlots` everyday pieces with a
- * `boutiquePrice`, and `seasonalSlots` of each season's priced pieces while
+ * `boutiquePrice` (never a Mythic one), and `seasonalSlots` of each season's priced pieces while
  * it's on. Each rack rolls from its own child seed, so a new season's rack
  * never reshuffles today's.
  */
@@ -46,7 +46,10 @@ export function boutiqueStock(
   context: BoutiqueStockContext,
   rules: Pick<BoutiqueRules, 'dailySlots' | 'seasonalSlots'>,
 ): BoutiqueStock {
-  const priced = catalog.filter((item) => item.boutiquePrice !== undefined);
+  // A Mythic piece never reaches a rack, even if it somehow had a price.
+  const priced = catalog.filter(
+    (item) => item.boutiquePrice !== undefined && sellableRarity(item.rarity),
+  );
   const rack = (...labels: string[]) =>
     Rng.fromSeed(deriveSeed(context.seed, 'boutique', context.date, ...labels));
   const daily = pickSome(

@@ -139,6 +139,7 @@ export const WARDROBE_TEXT = {
     rare: RARITY_NAMES.rare,
     epic: RARITY_NAMES.epic,
     legendary: RARITY_NAMES.legendary,
+    mythic: RARITY_NAMES.mythic,
   } satisfies Record<RarityFilter, string>,
   empty: 'Nothing here yet. Keep exploring to find some!',
   emptyRarity: 'None like that yet. Keep exploring!',

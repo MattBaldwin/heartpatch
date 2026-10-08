@@ -15,8 +15,20 @@ export const DisplayNameSchema = z.string().trim().min(1).max(32);
 /** Player-facing descriptions: one or two short sentences (style guide §2). */
 export const DescriptionSchema = z.string().trim().min(1).max(160);
 
-/** Squishy rarity (design doc §4). */
-export const RaritySchema = z.enum(['common', 'uncommon', 'rare', 'epic', 'legendary', 'secret']);
+/**
+ * Rarity (design doc §4), commonest first. `mythic` sits above `legendary`
+ * for everything (owner decision on #261); `secret` stays a separate, hidden
+ * tier for squishies, never a step on the ladder.
+ */
+export const RaritySchema = z.enum([
+  'common',
+  'uncommon',
+  'rare',
+  'epic',
+  'legendary',
+  'mythic',
+  'secret',
+]);
 export type Rarity = z.infer<typeof RaritySchema>;
 
 /** Resource amounts keyed by resource id, e.g. `{ timber: 3, stone: 1 }`. */

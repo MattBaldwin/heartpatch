@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CLOTHING_RARITIES, type ClothingItem } from './clothing.js';
+import { CLOTHING_RARITIES, type ClothingItem, type ClothingRarity } from './clothing.js';
 import { formatDataIssues } from './issues.js';
 
 // Patch Coins and the Boutique (design doc §23; issue #45). Coins are earned
@@ -66,6 +66,14 @@ export const BoutiqueRulesSchema = z
   });
 export type BoutiqueRules = z.infer<typeof BoutiqueRulesSchema>;
 
+/** Rarities the Boutique never sells: Mythic pieces are found-only (owner decision, #261). */
+export const NEVER_SOLD_RARITIES: readonly ClothingRarity[] = ['mythic'];
+
+/** True if the Boutique may ever sell a piece of this rarity. */
+export function sellableRarity(rarity: ClothingRarity): boolean {
+  return !NEVER_SOLD_RARITIES.includes(rarity);
+}
+
 /** Readable problems with the coin rules, or `[]` if they're all good. */
 export function checkCoinRules(input: unknown): string[] {
   const result = CoinRulesSchema.safeParse(input);
@@ -75,7 +83,8 @@ export function checkCoinRules(input: unknown): string[] {
 /**
  * Readable problems with the Boutique rules and the catalog's prices, or
  * `[]`: every price in range, a rarer piece never cheaper than a commoner
- * one, and enough everyday pieces to fill today's rack.
+ * one, no Mythic piece for sale, and enough everyday pieces to fill today's
+ * rack.
  */
 export function checkBoutiqueData(input: unknown, catalog: readonly ClothingItem[]): string[] {
   const result = BoutiqueRulesSchema.safeParse(input);
@@ -84,6 +93,9 @@ export function checkBoutiqueData(input: unknown, catalog: readonly ClothingItem
   const problems: string[] = [];
   const priced = catalog.filter((item) => item.boutiquePrice !== undefined);
   for (const item of priced) {
+    if (!sellableRarity(item.rarity)) {
+      problems.push(`clothing ${item.id}: ${item.rarity} pieces are found-only, never sold`);
+    }
     const price = item.boutiquePrice ?? 0;
     if (price < rules.minPrice || price > rules.maxPrice) {
       problems.push(

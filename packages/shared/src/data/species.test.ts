@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createBattleContent } from '../battle/content.js';
 import { autoplayBattle } from '../battle/engine.js';
+import { RaritySchema } from '../schemas/data/common.js';
 import { ElementIdSchema, FeelingIdSchema } from '../schemas/data/elements.js';
 import type { Species } from '../schemas/data/species.js';
 import { BATTLE_RULES } from './battle.js';
@@ -25,7 +26,7 @@ const everyday = bases.filter((s) => s.season === undefined);
 const evolvedFormOf = (s: Species): Species => byId.get(s.evolutions[0]!.into)!;
 const statTotal = (s: Species) =>
   s.baseStats.hp + s.baseStats.attack + s.baseStats.defense + s.baseStats.speed;
-const RARITY_ORDER = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+const RARITY_ORDER: readonly string[] = RaritySchema.options.filter((r) => r !== 'secret');
 
 describe('launch roster (issue #10)', () => {
   it('has 12–15 everyday lines plus 4 Halloween lines', () => {
@@ -64,7 +65,10 @@ describe('launch roster (issue #10)', () => {
   });
 
   it('has varied rarity: every public rarity appears, most lines start common or uncommon', () => {
-    expect(new Set(SPECIES.map((s) => s.rarity))).toEqual(new Set(RARITY_ORDER));
+    // The launch roster runs Common to Legendary; no species is Mythic yet (#261).
+    expect(new Set(SPECIES.map((s) => s.rarity))).toEqual(
+      new Set(RARITY_ORDER.filter((r) => r !== 'mythic')),
+    );
     const easy = bases.filter((s) => s.rarity === 'common' || s.rarity === 'uncommon');
     expect(easy.length).toBeGreaterThan(bases.length / 2);
   });
