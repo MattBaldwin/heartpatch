@@ -239,6 +239,48 @@ export function workProgress(
   };
 }
 
+/** A stretch of time a gatherer earned nothing in: a paused homestead (#199). Null `toMs`: still paused. */
+export interface WorkPause {
+  readonly fromMs: number;
+  readonly toMs: number | null;
+}
+
+/**
+ * `workProgress` with a pause left out (#199: a homestead cut off from home
+ * pauses its gathering, and paused time never pays). Time inside the pause
+ * doesn't count: cycles finished before it are kept, and counting carries
+ * on from where it stopped once the pause ends. Every time it returns is
+ * real time again. With no pause it's `workProgress`.
+ */
+export function workProgressAround(
+  sinceMs: number,
+  nowMs: number,
+  cycleSeconds: number,
+  rules: Pick<JobRules, 'work'>,
+  pause: WorkPause | null,
+): WorkProgress {
+  if (!pause) return workProgress(sinceMs, nowMs, cycleSeconds, rules);
+  const { fromMs } = pause;
+  const toMs = pause.toMs ?? Number.POSITIVE_INFINITY;
+  const paused = pause.toMs === null;
+  // Real time → working time: the pause's span is cut out.
+  const worked = (t: number) => (t <= fromMs ? t : t - (Math.min(t, toMs) - fromMs));
+  // Working time → real time. Still paused, nothing happens past its start.
+  const real = (w: number) => (w <= fromMs ? w : paused ? fromMs : w + (toMs - fromMs));
+  const p = workProgress(worked(sinceMs), worked(nowMs), cycleSeconds, rules);
+  // Still paused, the next cycle can't finish until the pause ends.
+  const nextReady =
+    p.nextReadyMs === null || (paused && p.nextReadyMs > fromMs) ? null : p.nextReadyMs;
+  return {
+    cycles: p.cycles,
+    full: p.full,
+    nextReadyMs: nextReady === null ? null : real(nextReady),
+    // Full stops the count, as `workProgress` does: it starts again from now.
+    nextSinceMs: p.full ? nowMs : real(p.nextSinceMs),
+    finishedMs: p.finishedMs.map(real),
+  };
+}
+
 /**
  * What finished cycles yield: per cycle, the source's resource while its
  * season is on (Pumpkins only around Halloween), plus the resource's in-season

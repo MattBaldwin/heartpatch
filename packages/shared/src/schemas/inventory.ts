@@ -38,6 +38,8 @@ export const ItemChangeReasonSchema = z.enum([
   'battle-item',
   /** Mending a fence segment (#203), ledgered against the segment. */
   'repair',
+  /** Exploring your land (#199): finds, and the wear on the tool a search used. */
+  'explore',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

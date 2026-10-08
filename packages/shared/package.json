@@ -26,6 +26,7 @@
     "sim:map-fill": "tsx scripts/sim/map-fill-cli.ts",
     "sim:potions": "tsx scripts/sim/potions-cli.ts",
     "sim:fuel": "tsx scripts/sim/fuel-cli.ts",
+    "sim:economy": "tsx scripts/sim/economy-cli.ts",
     "sim:costumes": "tsx scripts/sim/costumes-cli.ts"
   },
   "dependencies": {

@@ -4,6 +4,7 @@ import {
   UNCAPPED_BEFRIEND_RULES,
   CURRENT_RULES,
   NO_TRAINING_RULES,
+  WITH_EXPLORE_RULES,
   PROGRESSION_CONFIG,
   type ProgressionConfig,
 } from './progression-config.js';
@@ -76,6 +77,20 @@ describe('headline numbers (a short run, so data changes show up here)', () => {
       }
     }
     expect(CURRENT_RULES.training).toEqual({ slots: 3, xpPerDay: 192 });
+  });
+
+  it('moves no target by more than a day with exploring (#199, owner decision 2026-10-07 Q6)', () => {
+    const month: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 30, estimateGames: 4 };
+    for (const kid of [casual!, engaged!]) {
+      const now = summarise(runProgression(data, month, CURRENT_RULES, kid, 4), month);
+      const exploring = summarise(runProgression(data, month, WITH_EXPLORE_RULES, kid, 4), month);
+      for (const key of ['evolves', 'bigAndBouncy', 'gapReady'] as const) {
+        expect(Math.abs((exploring[key] ?? 0) - (now[key] ?? 0))).toBeLessThanOrEqual(1);
+      }
+      for (const day of [14, 30]) {
+        expect((exploring.level[day] ?? 0) - (now.level[day] ?? 0)).toBeLessThanOrEqual(1);
+      }
+    }
   });
 
   it('keeps befriended squishies below their evolution with the shipped cap', () => {
