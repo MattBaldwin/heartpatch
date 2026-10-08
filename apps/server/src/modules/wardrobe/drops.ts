@@ -12,17 +12,20 @@ import { grantClothing } from './service.js';
 
 /*
  * Found clothing (design doc §23 "Getting clothing"; issue #43): a small,
- * server-side chance of a piece when a player gathers, captures a tile or
- * rescues a squishy. The tables are secret (`@heartpatch/shared/server`,
+ * server-side chance of a piece when a player gathers, captures a tile,
+ * rescues a squishy, wins a wild battle or explores (#261). The tables are secret (`@heartpatch/shared/server`,
  * CLAUDE.md rule 6) and never leave the server; players only ever see what
  * they found. Seasonal pieces only drop in their season (design doc §15),
  * using the map's local date and the game clock (so `HP_DEV_NOW` tests it).
  */
 
-/** What found something: a gather, a Hollow rescue (#21) or a tile capture (#84). */
+/**
+ * What found something: a gather, a Hollow rescue (#21), a tile capture
+ * (#84), a won wild battle or an explore find (#261, #199).
+ */
 export interface FoundDropEvent {
   source: ClothingDropSource;
-  /** The gather, capture or rescue: at most one piece per event, ever. */
+  /** The gather, capture, rescue, battle or find: at most one piece per event, ever. */
   refId: string;
   userId: string;
   mapId: string;
@@ -34,6 +37,8 @@ export interface FoundDropEvent {
    * `HP_DEV_DROP_CHANCE` too.
    */
   percent?: number;
+  /** A capture of a rival's land: the table's `rivalChance` instead of its `chance` (#261). */
+  rival?: boolean;
   at: Date;
 }
 
@@ -77,7 +82,8 @@ export async function rollFoundDrop(
     terrain: place.terrain ?? undefined,
   };
   const percent = Math.min(100, Math.max(0, event.percent ?? 100));
-  const rolled = { ...table, chance: Math.floor(((devChance ?? table.chance) * percent) / 100) };
+  const base = event.rival && table.rivalChance !== undefined ? table.rivalChance : table.chance;
+  const rolled = { ...table, chance: Math.floor(((devChance ?? base) * percent) / 100) };
   const rng = options.rng ?? Rng.fromSeed(newSeed());
   const itemId = pickClothingDrop(rolled, context, CLOTHING_BY_ID, rng);
   if (!itemId) return null;

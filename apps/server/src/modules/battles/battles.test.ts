@@ -3,6 +3,7 @@ import {
   BATTLE_RULES,
   BattleResponseSchema,
   CARE_RULES,
+  CLOTHING_BY_ID,
   contentmentAt,
   createBattleContent,
   CurrentBattleResponseSchema,
@@ -602,6 +603,51 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       expect(row.result).toEqual(result);
       expect(row.log).toEqual(over.view.log);
       expect(over.seed).toBe(row.seed);
+    });
+  });
+
+  describe('found costumes (#261)', () => {
+    /** A won wild battle, at `when`; returns its id and what it found. */
+    async function winAt(when: string) {
+      clock.setTime(Date.parse(when));
+      const server = app ?? (await start({ HP_DEV_DROP_CHANCE: '100' }));
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId, { speciesId: SECRET_IDS[1], level: 20 });
+      const battle = await pickFight(server, kid, mapId, {
+        opponent: { speciesId: SECRET_IDS[0], level: 3 },
+      });
+      const over = await playOut(server, kid, battle);
+      expect(over.view.phase.type === 'over' && over.view.phase.result.winner).toBe('a');
+      const events = await eventsOf(mapId);
+      return { battle, kid, events, found: events.filter((e) => e.type === 'clothing.found') };
+    }
+
+    it('a won wild battle can find a Halloween costume, just before battle.ended', async () => {
+      const { battle, kid, events, found } = await winAt('2026-10-20T18:00:00Z');
+      expect(found).toHaveLength(1);
+      const { payload } = found[0]!;
+      expect(payload).toMatchObject({ userId: kid.id, source: 'battle', refId: battle.id });
+      const item = CLOTHING_BY_ID.get((payload as { itemId: string }).itemId)!;
+      expect(item).toMatchObject({ slot: 'costume', season: 'halloween' });
+      const types = events.map((e) => e.type);
+      expect(types.indexOf('clothing.found')).toBe(types.indexOf('battle.ended') - 1);
+    });
+
+    it('finds nothing outside the Halloween window (the battle table is costumes only)', async () => {
+      const { found } = await winAt('2026-09-25T18:00:00Z');
+      expect(found).toEqual([]);
+    });
+
+    it('finds nothing on a loss', async () => {
+      const server = await start({ HP_DEV_DROP_CHANCE: '100' });
+      clock.setTime(Date.parse('2026-10-20T18:00:00Z'));
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await grant(server, kid, mapId);
+      const battle = await pickFight(server, kid, mapId);
+      expect((await act(server, kid, battle, { type: 'forfeit' })).statusCode).toBe(200);
+      expect((await eventsOf(mapId)).some((e) => e.type === 'clothing.found')).toBe(false);
     });
   });
 

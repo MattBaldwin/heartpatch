@@ -13,7 +13,7 @@ import {
   type PublicTile,
   type Wardrobe,
 } from '@heartpatch/shared';
-import type { ClothingDropTable } from '@heartpatch/shared/server';
+import { CLOTHING_DROPS, type ClothingDropTable } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -513,6 +513,73 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
         'witch-hat',
       );
       expect((await piecesOf(kid.id)).map((p) => p.itemId)).toEqual(['witch-hat', 'witch-hat']);
+    });
+
+    it('every #261 drop source can award a costume, only in the Halloween window', async () => {
+      await start();
+      const kid = await player();
+      const mapId = await newMap(app!, kid);
+      const at = (devNow: string) =>
+        createClock(loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, HP_DEV_NOW: devNow }))();
+      let n = 0;
+      for (const source of ['gather', 'capture', 'battle', 'explore'] as const) {
+        // The shipped table's Halloween costume rows, at a sure chance.
+        const shipped = CLOTHING_DROPS.find((t) => t.source === source)!;
+        const costumes: ClothingDropTable[] = [
+          {
+            source,
+            chance: 100,
+            entries: shipped.entries.filter((e) => {
+              const item = CLOTHING_BY_ID.get(e.item);
+              return item?.slot === 'costume' && item.season === 'halloween';
+            }),
+          },
+        ];
+        const roll = (when: string) => {
+          const refId = `00000000-0000-7000-8000-${String((n += 1)).padStart(12, '0')}`;
+          return withTransaction(db, (tx) =>
+            rollFoundDrop(
+              tx,
+              { source, refId, userId: kid.id, mapId, tileId: null, at: at(when) },
+              { tables: costumes, rng: Rng.fromSeed(refId) },
+            ),
+          );
+        };
+        const found = await roll('2026-10-31T18:00:00-06:00');
+        expect(CLOTHING_BY_ID.get(found ?? '')?.slot, source).toBe('costume');
+        expect(await roll('2026-11-10T09:00:00-07:00'), source).toBeNull();
+      }
+      const pieces = await piecesOf(kid.id);
+      expect(pieces.map((p) => p.source).toSorted()).toEqual([
+        'battle',
+        'capture',
+        'explore',
+        'gather',
+      ]);
+    });
+
+    it('rolls the rival chance when a capture takes a rival’s land', async () => {
+      await start();
+      const kid = await player();
+      const mapId = await newMap(app!, kid);
+      const rivalOnly: ClothingDropTable[] = [
+        {
+          source: 'capture',
+          chance: 0,
+          rivalChance: 100,
+          entries: [{ item: 'big-bow', weight: 1 }],
+        },
+      ];
+      const roll = (refId: string, rival: boolean) =>
+        withTransaction(db, (tx) =>
+          rollFoundDrop(
+            tx,
+            { source: 'capture', refId, userId: kid.id, mapId, tileId: null, rival, at: clock },
+            { tables: rivalOnly },
+          ),
+        );
+      expect(await roll('00000000-0000-7000-8000-0000000000d1', false)).toBeNull();
+      expect(await roll('00000000-0000-7000-8000-0000000000d2', true)).toBe('big-bow');
     });
 
     it('grants at most one piece per gather, however often it is rolled', async () => {

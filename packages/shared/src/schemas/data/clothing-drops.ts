@@ -27,6 +27,11 @@ export const ClothingDropTableSchema = z.strictObject({
   source: ClothingDropSourceSchema,
   /** Percent chance that one of these events finds anything at all. */
   chance: z.number().int().min(0).max(100),
+  /**
+   * Captures only: the chance when the land is taken from another player
+   * (a `rival-tile` battle), so challenging a rival pays off (#261).
+   */
+  rivalChance: z.number().int().min(0).max(100).optional(),
   entries: z.array(ClothingDropEntrySchema).min(1),
 });
 export type ClothingDropTable = z.infer<typeof ClothingDropTableSchema>;
@@ -51,6 +56,9 @@ export function checkClothingDrops(
     const dropped = new Set<string>();
     tables.forEach((table, i) => {
       if (sources.has(table.source)) report(['drops', i, 'source'], 'one table per source');
+      if (table.rivalChance !== undefined && table.source !== 'capture') {
+        report(['drops', i, 'rivalChance'], 'only captures take land from a rival');
+      }
       sources.add(table.source);
       const seen = new Set<string>();
       table.entries.forEach((entry, j) => {

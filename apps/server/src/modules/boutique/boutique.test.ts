@@ -255,6 +255,41 @@ describe.skipIf(!url)('Boutique (needs DATABASE_URL)', () => {
       expect(await balanceOf(kid.id)).toBe(500);
     });
 
+    it('sells a #261 costume for exactly its price, and never the Mythic Hollow Man', async () => {
+      const server = await start();
+      // Racks are per player: find one whose Halloween rack has a costume today.
+      let kid = await player();
+      const costumeOn = (who: Player) =>
+        stockFor(who.id, '2026-10-02').seasonal[0]?.items.find(
+          (id) => CLOTHING_BY_ID.get(id)?.slot === 'costume' && id !== 'ghost-sheet',
+        );
+      for (let i = 0; i < 40 && !costumeOn(kid); i++) kid = await player();
+      const itemId = costumeOn(kid)!;
+      expect(itemId).toBeDefined();
+      const price = priceOf(itemId);
+      expect(price).toBeGreaterThanOrEqual(120);
+      await coins(server, kid, price);
+      const res = await buy(server, kid, itemId);
+      expect(res.statusCode, res.body).toBe(200);
+      expect(BuyClothingResponseSchema.parse(res.json()).boutique.coins.balance).toBe(0);
+      const spent = (await ledgerOf(kid.id)).filter((r) => r.source === 'boutique');
+      expect(spent).toMatchObject([{ amount: -price }]);
+      expect(await piecesOf(kid.id)).toMatchObject([{ itemId, refId: spent[0]!.refId }]);
+      expect(await balanceOf(kid.id)).toBe(0);
+
+      // The Hollow Man is found-only: never on a rack, and refused if asked for.
+      await coins(server, kid, 500);
+      for (let day = 1; day <= 31; day++) {
+        const date = `2026-10-${String(day).padStart(2, '0')}`;
+        const racks = stockFor(kid.id, date);
+        expect([...racks.daily, ...racks.seasonal.flatMap((r) => r.items)]).not.toContain(
+          'hollow-man-costume',
+        );
+      }
+      expect((await buy(server, kid, 'hollow-man-costume')).statusCode).toBe(404);
+      expect(await balanceOf(kid.id)).toBe(500);
+    });
+
     it('refuses a piece the player already has, bought or found', async () => {
       const server = await start();
       const kid = await player();
