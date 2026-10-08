@@ -13,7 +13,9 @@ import {
   tonightOf,
   trainingProgress,
   workCycleSeconds,
-  workProgress,
+  workProgressAround,
+  EXPLORE_RULES,
+  homesteadQuantity,
   workSource,
   workSpeedPercent,
   workYield,
@@ -41,6 +43,8 @@ import { createBattlesRepo } from '../battles/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
 import { createBuildingsRepo, type BuildingRow } from '../buildings/repo.js';
 import { applyXp, growthEvents, type Growth } from '../care/service.js';
+import { homesteadOf, workPauseOf } from '../explore/homesteads.js';
+import { createExploreRepo } from '../explore/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { grantItems, lockGrantRows, seasonsOn } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
@@ -73,6 +77,7 @@ const MESSAGES = {
   inHollow: (name: string) => `${name} is in the Hollow. Rescue them first!`,
   noTile: "We couldn't find that spot.",
   notYours: 'Squishies can only gather on your own land.',
+  napping: 'This homestead is napping. Join it back up to home first!',
   nothingHere: "There's nothing to gather here.",
   outOfSeason: (resource: string, season: string) => `${resource} only turn up around ${season}!`,
   spotTaken: (name: string) => `${name} is already gathering here!`,
@@ -115,8 +120,15 @@ const seasonsAtFor = (timeZone: string) => (ms: number) =>
 function workAt(row: JobRow, map: JobMap, at: Date, justTaken = false) {
   const active = row.squishy.state === 'active' || justTaken;
   if (!row.atWork || !active || !row.workTile || !row.workSince) return null;
-  const source = workSource(row.workTile, GAME_DATA.resources, JOB_RULES);
-  if (!source) return null;
+  const found = workSource(row.workTile, GAME_DATA.resources, JOB_RULES);
+  if (!found) return null;
+  // A homestead (#199): +1 a cycle while it's joined to home, and nothing
+  // while it's cut off (the pause is left out of the count).
+  const homestead = row.workTile.homestead ?? null;
+  const source =
+    homesteadOf(homestead) === 'joined'
+      ? { ...found, quantity: homesteadQuantity(found.quantity, EXPLORE_RULES) }
+      : found;
   const speedPercent = workSpeedPercent(traitsOf(row.squishy), source.resource, JOB_RULES);
   const cycleSeconds = workCycleSeconds(
     source.seconds,
@@ -124,7 +136,13 @@ function workAt(row: JobRow, map: JobMap, at: Date, justTaken = false) {
     JOB_RULES,
     gameplayOverrides(map.kind),
   );
-  const progress = workProgress(row.workSince.getTime(), at.getTime(), cycleSeconds, JOB_RULES);
+  const progress = workProgressAround(
+    row.workSince.getTime(),
+    at.getTime(),
+    cycleSeconds,
+    JOB_RULES,
+    homestead ? workPauseOf(homestead) : null,
+  );
   const ready = workYield(
     source,
     progress.finishedMs,
@@ -364,12 +382,19 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     userId: string,
     at: Date,
   ): Promise<JobsView> => {
-    const [rows, owned, safe, buildings] = await Promise.all([
+    const [rows, owned, safe, buildings, explored] = await Promise.all([
       repo.listMine(map.id, userId),
       repo.listOwnedTiles(map.id, userId),
       firelitTiles(tx, repo, map, at),
       createBuildingsRepo(tx).listOwned(map.id, userId),
+      createExploreRepo(tx).listOwnersExplored(map.id),
     ]);
+    // My homesteads (#199): +1 a cycle while joined to home.
+    const joined = new Set(
+      explored
+        .filter((e) => homesteadOf(e) === 'joined')
+        .map((e) => `${String(e.q)},${String(e.r)}`),
+    );
     // Who has won its full-XP battles today (#201): wins pay less until the
     // patch's next midnight (the battles service's falloff, the same count).
     const wins = await createBattlesRepo(tx).winsToday(
@@ -443,7 +468,9 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           terrain: tile.terrain,
           resource: source.resource,
           from: source.from,
-          quantity: source.quantity,
+          quantity: joined.has(`${String(tile.q)},${String(tile.r)}`)
+            ? homesteadQuantity(source.quantity, EXPLORE_RULES)
+            : source.quantity,
           seconds: source.seconds,
           inSeason: resource ? inSeason(resource, seasons) : false,
           workerId: workers.get(tile.id) ?? null,
@@ -622,6 +649,10 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           if (workTile.ownerUserId !== user.id) throw new AppError('FORBIDDEN', MESSAGES.notYours);
           source = workSource(workTile, GAME_DATA.resources, JOB_RULES);
           if (!source) throw new AppError('CONFLICT', MESSAGES.nothingHere);
+          // A homestead cut off from home naps (#199), as for the Keeper.
+          if (homesteadOf(await createExploreRepo(tx).findRow(user.id, workTile.id)) === 'paused') {
+            throw new AppError('CONFLICT', MESSAGES.napping);
+          }
           const resource = GAME_DATA.resources.find((r) => r.id === source?.resource);
           if (resource && !inSeason(resource, new Set(seasonsOn(at, map.timeZone)))) {
             const season = SEASON_NAMES.get(resource.season ?? '') ?? 'their season';

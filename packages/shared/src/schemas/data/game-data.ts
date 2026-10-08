@@ -156,6 +156,9 @@ export const GameDataSchema = z
       if (r.battleEffect && r.kind !== 'crafted') {
         report(['resources', i, 'battleEffect'], 'only crafted things can be used in battle');
       }
+      if (r.tool !== undefined && (r.kind !== 'crafted' || r.id !== r.tool)) {
+        report(['resources', i, 'tool'], 'a tool is a crafted item whose id is the tool id');
+      }
       r.gather?.extras?.forEach((extra, j) => {
         checkRef(
           resources,

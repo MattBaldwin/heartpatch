@@ -40,6 +40,8 @@ import { starterPick } from '../starters/service.js';
 import { newResetCredentials } from '../auth/secrets.js';
 import { INVITE_CODE_TTL_MS } from './limits.js';
 import { requireMember } from './members.js';
+import { homesteadOf } from '../explore/homesteads.js';
+import { createExploreRepo } from '../explore/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
@@ -131,6 +133,7 @@ function toPublicTile(
   buildings: PublicTile['buildings'],
   fences: NonNullable<PublicTile['fences']>,
   post: TradingPostLabel | null,
+  explore: Pick<PublicTile, 'explored' | 'homestead'> = { explored: false, homestead: null },
 ): PublicTile {
   return {
     q: tile.q,
@@ -147,6 +150,8 @@ function toPublicTile(
     buildings,
     fences,
     post: post ? { index: post.index, name: post.name } : null,
+    explored: explore.explored ?? false,
+    homestead: explore.homestead ?? null,
   };
 }
 
@@ -378,7 +383,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       return store.snapshot(async (repo, tx) => {
         const map = await requireViewer(tx, user, mapId);
         const at = now();
-        const [members, tiles, buildings, fences, seed] = await Promise.all([
+        const [members, tiles, buildings, fences, seed, explored] = await Promise.all([
           repo.listMembers(mapId),
           repo.listTiles(mapId),
           // Fires and habitats (#18), with `lit` as of now.
@@ -386,9 +391,17 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           // Fence segments on edges (#203), with their energy.
           listPublicFences(tx, mapId),
           createTerritoryRepo(tx).mapSeed(mapId),
+          // Land its owner has fully explored, and their homesteads (#199).
+          createExploreRepo(tx).listOwnersExplored(mapId),
         ]);
         // Trading posts (#269), named by their place in (q, r) order.
         const posts = tradingPostLabels(tiles, GAME_DATA.mapGen.tradingPosts);
+        const exploredAt = new Map(
+          explored.map((row) => [
+            `${String(row.q)},${String(row.r)}`,
+            { explored: true, homestead: homesteadOf(row) },
+          ]),
+        );
         // Neutral land's guardians today (#15's team), as a count, a word
         // (owner decision 10) and their feelings (#216): the same for every
         // member, and never who.
@@ -418,6 +431,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
               buildings.get(`${String(tile.q)},${String(tile.r)}`) ?? [],
               fences.get(`${String(tile.q)},${String(tile.r)}`) ?? [],
               posts.get(`${String(tile.q)},${String(tile.r)}`) ?? null,
+              exploredAt.get(`${String(tile.q)},${String(tile.r)}`),
             ),
           ),
           seq: map.eventSeq,

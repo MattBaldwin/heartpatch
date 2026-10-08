@@ -1054,16 +1054,15 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(await piecesOf(kid.id)).toMatchObject([{ source: 'capture', refId: battle.id }]);
     });
 
-    it('scales the chance by Gentle’s share for picking on a much smaller player', async () => {
-      // A sure find, so only the share decides.
-      const server = await start(dropChance(100));
-      const { kid, mapId, near, near2 } = await rivals(server);
-      for (const tile of (await edgeOf(mapId, kid)).slice(0, 6)) await setOwner(tile.id, kid.id);
-      // The real port, recording the drop it hands battles; `share` then
-      // overrides what battles rolls with, to show it uses the port's share.
+    /**
+     * The real tile port, recording the drop it hands battles. `share()`, when
+     * not null, overrides the share battles rolls with, to show it uses the
+     * port's. `begin` starts a challenge and `finish` plays it out, so a test
+     * can act in between; `fight` does both and checks the land changed hands.
+     */
+    function recordingFights(kid: Player, mapId: string, share: () => number | null = () => null) {
       const real = createTileBattlePort();
       const drops: (TileBattleEnd['drop'] | undefined)[] = [];
-      let share: number | null = null;
       const fights = createBattlesService({
         db,
         clock: () => clock,
@@ -1072,15 +1071,15 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
           ended: async (...args) => {
             const end = await real.ended(...args);
             drops.push(end.drop);
-            return end.drop && share !== null
-              ? { ...end, drop: { ...end.drop, percent: share } }
-              : end;
+            const percent = share();
+            return end.drop && percent !== null ? { ...end, drop: { ...end.drop, percent } } : end;
           },
         },
       });
       const territory = createTerritoryService({ db, clock: () => clock, battles: fights });
-      const fight = async (tile: Tile) => {
-        let battle = (await territory.attack(kid, mapId, tile)).battle;
+      const begin = async (tile: Tile) => (await territory.attack(kid, mapId, tile)).battle;
+      const finish = async (started: Awaited<ReturnType<typeof begin>>) => {
+        let battle = started;
         for (let i = 0; i < BATTLE_RULES.maxTurns + 5 && battle.status === 'active'; i++) {
           const side = battle.view.sides[battle.mySide];
           const action: PlayerBattleAction =
@@ -1089,8 +1088,42 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
               : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
           battle = await fights.act(kid, battle.id, { action, turn: battle.view.turn });
         }
+        return battle;
+      };
+      const fight = async (tile: Tile) => {
+        await finish(await begin(tile));
         expect((await tileAt(mapId, tile)).ownerUserId).toBe(kid.id);
       };
+      return { drops, begin, finish, fight };
+    }
+
+    it('rolls the plain chance for neutral land, and for land its owner left mid-challenge (#261)', async () => {
+      const server = await start(dropChance(100));
+      const { kid, rival, mapId, near } = await rivals(server);
+      const { drops, begin, finish, fight } = recordingFights(kid, mapId);
+
+      // Neutral land: nobody to take it from.
+      const [neutral] = await edgeOf(mapId, kid);
+      await fight(neutral!);
+      expect(drops).toEqual([expect.objectContaining({ tileId: neutral!.id, fromRival: false })]);
+
+      // A rival's land, but they leave the patch before the challenge ends:
+      // the land is let go, so it's taken from nobody.
+      const battle = await begin(near);
+      expect(battle.kind).toBe('rival-tile');
+      expect((await call(server, 'POST', `/maps/${mapId}/leave`, rival)).statusCode).toBe(204);
+      await finish(battle);
+      expect((await tileAt(mapId, near)).ownerUserId).toBe(kid.id);
+      expect(drops.at(-1)).toEqual(expect.objectContaining({ tileId: near.id, fromRival: false }));
+    });
+
+    it('scales the chance by Gentle’s share for picking on a much smaller player', async () => {
+      // A sure find, so only the share decides.
+      const server = await start(dropChance(100));
+      const { kid, mapId, near, near2 } = await rivals(server);
+      for (const tile of (await edgeOf(mapId, kid)).slice(0, 6)) await setOwner(tile.id, kid.id);
+      let share: number | null = null;
+      const { drops, fight } = recordingFights(kid, mapId, () => share);
 
       // Gentle hands battles half the chance…
       share = 0;

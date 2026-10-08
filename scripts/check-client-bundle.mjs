@@ -50,7 +50,7 @@ const bannedText = [
 /** Source files of server-only data, as source maps list them. */
 const bannedSources = [
   /[\\/]data[\\/]server[\\/]/,
-  /[\\/]schemas[\\/]data[\\/](clothing-drops|guardian-rules|lore-pages|server-game-data|spawn-rules|spawn-tables)\.ts$/,
+  /[\\/]schemas[\\/]data[\\/](clothing-drops|explore-finds|guardian-rules|lore-pages|server-game-data|spawn-rules|spawn-tables)\.ts$/,
   /[\\/]lore[\\/]index\.ts$/,
   /[\\/]shared[\\/]src[\\/]milestones[\\/]index\.ts$/,
   // The code that reads the secret tables (`@heartpatch/shared/server` exports it).
@@ -58,6 +58,7 @@ const bannedSources = [
   /[\\/]shared[\\/]src[\\/]territory[\\/]guardians\.ts$/,
   /[\\/]shared[\\/]src[\\/]hollow[\\/]rescue-guardians\.ts$/,
   /[\\/]shared[\\/]src[\\/]wardrobe[\\/]/,
+  /[\\/]shared[\\/]src[\\/]explore[\\/]finds\.ts$/,
 ];
 
 const wordPattern = new RegExp(`\\b(${bannedWords.join('|')})\\b`, 'g');

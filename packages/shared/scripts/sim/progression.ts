@@ -9,12 +9,14 @@ import {
   type EvolutionStep,
 } from '../../src/care/growth.js';
 import { BATTLE_RULES } from '../../src/data/battle.js';
+import { EXPLORE_RULES } from '../../src/data/explore.js';
 import { GAME_DATA } from '../../src/data/index.js';
+import { searchSpots } from '../../src/explore/index.js';
 import { GUARDIAN_RULES } from '../../src/data/server/guardian-rules.js';
 import { SERVER_GAME_DATA, serverBattleData } from '../../src/data/server/index.js';
 import { SPAWN_TABLES } from '../../src/data/server/spawn-tables.js';
 import { hexKey, hexNeighbors, type HexKey } from '../../src/hex/index.js';
-import { generateMap } from '../../src/mapgen/index.js';
+import { generateMap, type MapTile } from '../../src/mapgen/index.js';
 import { deriveSeed } from '../../src/rng/index.js';
 import type { BattleSideSetup } from '../../src/schemas/battle.js';
 import type { Species } from '../../src/schemas/data/species.js';
@@ -52,6 +54,7 @@ export const MODEL_LIMITS = [
   'care and habitat stay at one multiplier per kid',
   'a won wild battle stands in for a successful Heart Charm',
   'no gathering, crafting or the Hollow Man',
+  'exploring: the kid always has the tools, and finds are not counted',
   'no challenges between the two kids once neutral land runs out',
 ] as const;
 
@@ -288,6 +291,18 @@ export function runProgression(
   const neutralLeft = () => neutralTiles.filter((t) => owner.get(hexKey(t)) === null);
 
   const records: DayRecord[][] = kids.map(() => []);
+  // Exploring: each tile's spot count (0 where you can't explore), and spots searched so far.
+  const spotCounts = new Map<HexKey, number>();
+  const spotCount = (t: MapTile): number => {
+    const key = hexKey(t);
+    let n = spotCounts.get(key);
+    if (n === undefined) {
+      n = searchSpots(config.mapSeed, t, EXPLORE_RULES)?.length ?? 0;
+      spotCounts.set(key, n);
+    }
+    return n;
+  };
+  const searched = kids.map(() => 0);
   for (let day = 1; day <= config.days; day++) {
     const date = dateOf(config, day);
     const guardianWindow = spawnWindowAt({ date, hour: 12 }, GUARDIAN_RULES.windowHours);
@@ -300,6 +315,19 @@ export function runProgression(
           grow(data, member, rules, rules.training.xpPerDay);
         }
       }
+    }
+    // Exploring their land (plain XP, like training), each spot once ever.
+    if (rules.explore) {
+      const perDay = rules.explore.searchesPerDay[profile.id] ?? 0;
+      kids.forEach((kid, k) => {
+        const spots = tiles
+          .filter((t) => owner.get(hexKey(t)) === k)
+          .reduce((n, t) => n + spotCount(t), 0);
+        const now = Math.min(perDay, spots - (searched[k] ?? 0));
+        searched[k] = (searched[k] ?? 0) + now;
+        const xp = now * (rules.explore?.xpPerSquishy ?? 0);
+        if (xp > 0) for (const member of kid.team) grow(data, member, rules, xp);
+      });
     }
     const tileBattles = kids.map(() => 0);
     const partnerXp = kids.map(() => 0);

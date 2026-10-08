@@ -146,6 +146,33 @@ export const SHEET_SHARE = 0.35; // TUNE
 const ELEMENT_NAMES = new Map<string, string>(ELEMENTS.map((e) => [e.id, e.name]));
 const FEELING_NAMES = new Map<string, string>(FEELINGS.map((f) => [f.id, f.name]));
 
+/** What `watchLayout` listens with: the window and the `ResizeObserver` class (tests pass fakes). */
+export interface LayoutWatchEnv {
+  readonly win: Pick<Window, 'addEventListener' | 'removeEventListener'>;
+  readonly Observer: new (
+    callback: ResizeObserverCallback,
+  ) => Pick<ResizeObserver, 'observe' | 'disconnect'>;
+}
+
+/**
+ * Calls `onChange` when the window resizes or any of `nodes` changes size,
+ * and returns the cleanup that stops both, so a disposed HUD leaves no
+ * listener or observer behind.
+ */
+export function watchLayout(
+  nodes: readonly Element[],
+  onChange: () => void,
+  env: LayoutWatchEnv = { win: window, Observer: ResizeObserver },
+): () => void {
+  env.win.addEventListener('resize', onChange);
+  const boxes = new env.Observer(onChange);
+  for (const node of nodes) boxes.observe(node);
+  return () => {
+    env.win.removeEventListener('resize', onChange);
+    boxes.disconnect();
+  };
+}
+
 export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): BattleHud {
   const plate = (side: 'mine' | 'theirs') => {
     const name = el('span', { class: 'battle-plate-name' });
@@ -254,9 +281,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   const forget = () => {
     safe = null;
   };
-  window.addEventListener('resize', forget);
-  const boxes = new ResizeObserver(forget);
-  for (const node of [hud, plates.mine.node, plates.theirs.node]) boxes.observe(node);
+  const stopWatching = watchLayout([hud, plates.mine.node, plates.theirs.node], forget);
 
   const button = (
     label: string,
@@ -622,7 +647,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
       return !hud.hidden;
     },
     dispose: () => {
-      window.removeEventListener('resize', forget);
+      stopWatching();
       for (const p of Object.values(plates)) window.clearTimeout(p.timer);
       hud.remove();
     },
