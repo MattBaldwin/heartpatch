@@ -80,7 +80,7 @@ New players experience this story in the opening cinematic (§25) and the tutori
 
 Each squishy is an instance of a **species**. Species are data, not code.
 
-**Species fields (minimum):** `id`, `name`, `element`, `feeling` (default/base), `rarity` (common, uncommon, rare, epic, legendary, secret), `season` (optional), `baseStats` (hp, attack, defense, speed), `moves`, `evolutions` (see §8), `visual` (procedural parameters, see §19), `habitatPreferences`. Spawn rules live in server-only spawn tables, not on the species, so they can't be datamined (tech spec §2). **Secret species** (rarity `secret`) and secret evolution forms are server-only too: the client receives a species definition only when the player meets it.
+**Species fields (minimum):** `id`, `name`, `element`, `feeling` (default/base), `rarity` (common, uncommon, rare, epic, legendary, mythic, secret; mythic is the top of the ladder, secret a separate hidden tier), `season` (optional), `baseStats` (hp, attack, defense, speed), `moves`, `evolutions` (see §8), `visual` (procedural parameters, see §19), `habitatPreferences`. Spawn rules live in server-only spawn tables, not on the species, so they can't be datamined (tech spec §2). **Secret species** (rarity `secret`) and secret evolution forms are server-only too: the client receives a species definition only when the player meets it.
 
 **Instance fields:** `id`, `speciesId`, `ownerId`, `nickname`, `level`, `xp`, `element`, `feeling` (can shift with care), `contentment`, `lastCaredAt`, `careHistoryScore`, `habitatId`, `state` (active, hollowed, in-trade…), `accessories` (items from the shared Wardrobe catalog, §23), `stats` (with small individual variance).
 
@@ -359,7 +359,7 @@ Every player is represented by a **Keeper**, a character drawn in the same soft 
 
 ### Wardrobe and clothing
 - **Slots:** hat, hair accessory, top, bottom, shoes, back (capes, backpacks, wings), held item (lantern, wand, net), and a full-body **costume** slot that overrides the others.
-- **Rarity:** common, uncommon, rare, epic, legendary, matching squishy rarity colors.
+- **Rarity:** common, uncommon, rare, epic, legendary, mythic, matching squishy rarity colors. Mythic pieces are found-only, never sold (#261).
 - **Outfits:** players can save **[DEFAULT: 3]** outfit presets and swap between them.
 - **Squishy accessories** (tiny hats, bows, scarves) live in the same Wardrobe and inventory system, so one item catalog and one trading flow cover both.
 - Clothing is **cosmetic only**. It never affects battle stats, so no one can buy or trade their way to power.

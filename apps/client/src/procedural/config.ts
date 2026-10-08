@@ -112,12 +112,18 @@ export const FINISH = {
   sparkle: { cells: 11, density: 0.16, strength: 0.9 }, // TUNE
   /** Iridescent rim: strength and how tightly it hugs the edge. */
   iridescent: { strength: 0.55, falloff: 2.2 }, // TUNE
+  /**
+   * Mythic shimmer (#261): iridescent plus pearly bands that glide over the
+   * vinyl as the view turns. Band count across a body height, how much of
+   * each band is lit, its strength, and the pearl tint (linear RGB).
+   */
+  shimmer: { bands: 2.6, width: 0.22, strength: 0.42, tint: [1, 0.9, 0.98] }, // TUNE
   /** Glow: how much of the vinyl's own colour is added back as light. */
   glow: 0.28, // TUNE
 } as const;
 
 /** Codes in `squishEvent`'s spare `w`: the finish, plus 4 when the instance glows. */
-export const FINISH_CODE = { vinyl: 0, sparkle: 1, iridescent: 2, glow: 4 } as const;
+export const FINISH_CODE = { vinyl: 0, sparkle: 1, iridescent: 2, shimmer: 3, glow: 4 } as const;
 
 /** Event animations. Each shader formula decays to rest within its duration. */
 export type SquishMove = 'jiggle' | 'wobble' | 'bounce';

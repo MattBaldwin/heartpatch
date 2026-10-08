@@ -26,7 +26,8 @@ import {
  *   look (`SQUISH_LOOK_CODE`: normal, or a rescue guardian's shadow look).
  * - `squishEvent`: the current move's start time (s), kind code and strength,
  *   and in `w` the instance's material tier and glow (`FINISH_CODE`,
- *   ART_BIBLE §1.4): sparkle flecks, an iridescent rim, light from inside.
+ *   ART_BIBLE §1.4): sparkle flecks, an iridescent rim, Mythic shimmer,
+ *   light from inside.
  *
  * The vertex shader squashes around the ground point, keeping volume
  * (x and z scale by 1/√s when y scales by s), and corrects normals with the
@@ -157,6 +158,13 @@ if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
     float fiRim = pow(1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0), ${num(FINISH.iridescent.falloff)});
     vec3 fiHue = 0.5 + 0.5 * cos(6.2831853 * (fiRim * 1.3 + vSquishLocal.y * 0.7 + vec3(0.0, 0.33, 0.67)));
     finalColor.rgb += fiHue * fiRim * ${num(FINISH.iridescent.strength)};
+  }
+  if (fiTier > 2.5) {
+    // Mythic shimmer: pearly bands slide over the vinyl as the view turns
+    // (never on a timer, so an idle scene stays idle).
+    float fiBand = fract(dot(vSquishLocal, vec3(0.55, 1.0, 0.35)) * ${num(FINISH.shimmer.bands)} + dot(viewDirectionW, vec3(0.9, 0.6, 0.7)));
+    float fiSheen = smoothstep(0.0, ${num(FINISH.shimmer.width)}, fiBand) * smoothstep(${num(FINISH.shimmer.width * 2)}, ${num(FINISH.shimmer.width)}, fiBand);
+    finalColor.rgb += ${vec3(FINISH.shimmer.tint)} * fiSheen * ${num(FINISH.shimmer.strength)};
   }
 }
 if (vSquishLook > ${num(SQUISH_LOOK_CODE.shadow)} - 0.5) {

@@ -1406,6 +1406,7 @@ export const ART_RULES: ArtRules = {
     rare: 'vinyl',
     epic: 'sparkle',
     legendary: 'iridescent',
+    mythic: 'shimmer',
     secret: 'iridescent',
   },
   glowByElement: { light: 'body', fire: 'accent' },
