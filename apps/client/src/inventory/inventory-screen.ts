@@ -834,7 +834,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
                   () => {
                     openFactory(recipe.id);
                   },
-                  { 'data-queue': recipe.id, class: 'auth-button-soft' },
+                  { 'data-queue': recipe.id, class: 'auth-button bag-action auth-button-soft' },
                 ),
               ]
             : [];
