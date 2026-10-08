@@ -50,7 +50,10 @@ function registryView(type: GameEventType): PublicView {
 }
 
 /** A registry view sent only to the player the event is about (`payload.userId`). */
-function ownerOnlyView(type: 'squishy.hollowed' | 'squishy.rescued' | 'team.picked'): PublicView {
+function ownerOnlyView(
+  type:
+    'squishy.hollowed' | 'squishy.rescued' | 'team.picked' | 'journey.started' | 'journey.ended',
+): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
     build: (event, recipient) => {
@@ -75,6 +78,9 @@ export const PUBLIC_VIEWS: PublicViews = {
   'squishy.rescued': ownerOnlyView('squishy.rescued'),
   // A player's battle team is their own business (squishy jobs).
   'team.picked': ownerOnlyView('team.picked'),
+  // Journeys (#270): only the player; everyone else sees `battle.*`.
+  'journey.started': ownerOnlyView('journey.started'),
+  'journey.ended': ownerOnlyView('journey.ended'),
 };
 
 /**

@@ -340,6 +340,47 @@ export const GAME_EVENTS = {
     public: z.object({ tiles: z.array(z.object(coords)) }),
   },
   /**
+   * A player set off on a journey to a trading post (#270). Only they hear it
+   * (`ownerOnlyView`); everyone else already sees `battle.started`.
+   */
+  'journey.started': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      journeyId: z.uuid(),
+      battleId: z.uuid(),
+      ...coords,
+      distance: z.number().int().min(1),
+      level: z.number().int().min(1),
+      teamSize: z.number().int().min(1),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      ...coords,
+      distance: z.number().int().min(1),
+    }),
+  },
+  /**
+   * A journey ended (#270): won (a visit pass until `visitUntil`), lost
+   * (nothing lost but time) or called off as no contest. Only the player
+   * hears it (`ownerOnlyView`).
+   */
+  'journey.ended': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      journeyId: z.uuid(),
+      battleId: z.uuid(),
+      ...coords,
+      result: z.enum(['won', 'lost', 'no-contest']),
+      visitUntil: z.iso.datetime().nullable(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      ...coords,
+      result: z.enum(['won', 'lost', 'no-contest']),
+      visitUntil: z.iso.datetime().nullable(),
+    }),
+  },
+  /**
    * A player searched one spot on their own land (#199). One per search, so
    * the Seeker track can count them. What it found stays internal except a
    * `notable` find's kind (patch feed: "Lee found a lore page!"); `lorePage`

@@ -74,7 +74,7 @@ Maps (players say "patches") live in `src/modules/maps` (issue #4; design doc §
 | `GET /api/v1/maps` | → `{ maps, requests }`: my maps and my unanswered join requests |
 | `POST /api/v1/maps` | Name + IANA zone → 201 `{ map }`. Generates the map once (`generateMap` for `max_players` seats, secret seed), stores every tile, gives the owner home slot 0, makes the first invite code, appends `map.created` — one transaction |
 | `GET /api/v1/maps/:mapId` | → `{ map }` (members; `admin` with the code and pending requests for the owner) |
-| `GET /api/v1/maps/:mapId/view` | → `MapView`: map, members, public tiles (no seed, no guardian strength) and `seq`, all from one read-only `repeatable read` snapshot (`repo.snapshot`), so the view holds every event up to `seq` and none after. Before the snapshot it tops up any home ring missing a `homeRingNodes` node (`seedHomeRingNodes`, owner decision 2026-10-06): a one-time write per older patch. When no bare ring tile has a free middle, the building there moves to a side spot on the same tile first and `building.moved` is appended; homes with no room at all wait and are logged once |
+| `GET /api/v1/maps/:mapId/view` | → `MapView`: map, members, public tiles (no seed, no guardian strength), the viewer's trading posts (`posts`, #270: reach, journey level and team size, visit pass) and `seq`, all from one read-only `repeatable read` snapshot (`repo.snapshot`), so the view holds every event up to `seq` and none after. Before the snapshot it tops up any home ring missing a `homeRingNodes` node (`seedHomeRingNodes`, owner decision 2026-10-06): a one-time write per older patch. When no bare ring tile has a free middle, the building there moves to a side spot on the same tile first and `building.moved` is appended; homes with no room at all wait and are logged once |
 | `POST /api/v1/maps/join` | `{ code }` → 201 `{ request }` (200 with the existing one if already pending) |
 | `POST /api/v1/maps/:mapId/invite` | Owner: a fresh code (7 days); the old one stops working |
 | `POST /api/v1/maps/:mapId/invite/revoke` | Owner: → 204, no live code |
@@ -356,6 +356,21 @@ Lock order: the night's row, squishies, then `maps` (events).
 **Rescues** start through the battles service's `startRescue` (shadows from the secret `RESCUE_GUARDIANS`, fixed per squishy per map-local day, at the player's strongest level plus an offset; if every squishy is in the Hollow, the one being rescued fights). The `hollow` event consumer settles them from `battle.ended` (kind `rescue`): a win brings the squishy home (`state = 'active'`) and grants `HOLLOW_RULES.rescue.heartdust` through `grantItems(…, 'rescue')` if the player has rescues left today (counted by the battle's end, map-local day), and rolls #43's `rescue` clothing drop (`rollFoundDrop`) for those rewarded rescues only; a loss or no contest leaves it waiting. TODO(#19): reset its contentment once care exposes a call.
 
 **Events:** `hollow.nightfall` (everyone: the night and who lost someone, never which squishy), `squishy.hollowed` and `squishy.rescued` (only the owner gets them live; `PUBLIC_VIEWS` overrides).
+
+## Journeys to trading posts
+
+`src/modules/journeys` (issue #270; owner decisions 2 and 3 on #30; design doc §10). A trading post (#269) that isn't connected to my land (shared `postReach`) is visited by winning a **journey**: a `journey` battle against trail squishies whose level is `JOURNEY_RULES.baseLevel + levelsPerTile × distance` (uncapped, up to `GROWTH_RULES.maxLevel`) and whose number comes from `teamSize` (`journeyFor`). A win opens a **visit pass** for `visitMinutes`; a loss costs nothing.
+
+| Endpoint | Does |
+|---|---|
+| `POST /api/v1/maps/:mapId/posts/journey` | `{ q, r }` → 201 `{ battle }` (a `journey` battle), or 200 with the battle already going. `NOT_FOUND` for a tile that isn't a post (or a stranger); `CONFLICT` when my land already reaches it ("No journey needed!"), when my pass for it is still open, or with no land. Takes an `Idempotency-Key` |
+
+- **The trail team** comes from the public `JOURNEY_RULES.trail` pool (common and uncommon base forms, `checkJourneyRules`), picked with `deriveSeed(mapSeed, 'journey', q, r, userId, windowId)` (window: `JOURNEY_RULES.windowHours`, map-local), so a retry in the same window meets the same team (`journeyTeam`). Never revealed.
+- **What it costs and pays:** no daily try, no tile cooldown, no Heart Charm (`journey` isn't in `CAPTURABLE_BATTLE_KINDS`), no coins (`COIN_RULES.battleWin.journey` is 0) and no found clothing. XP as a wild win, with the daily falloff (its wins count in `winsToday`). The arena is the post's own terrain.
+- **The finish** (`createJourneyBattlePort`, the battles service's `journeys` hook): after the battle's lock, it locks the `journeys` row (tech spec §7 step 5b), sets its outcome and, on a win, `visit_until = ended_at + visitMinutes`, and returns `journey.ended`, appended after `battle.ended`. A no-contest ends the row the same way, with no pass.
+- **The post check** for later post commands: `requirePostAccess(tx, { mapId, userId, post, at })` passes for a connected post or an open pass, and throws `FORBIDDEN` otherwise (`NOT_FOUND` for a tile that isn't a post). It reads tiles and passes without locks: a reach or pass that held when the command started is honoured.
+- **`MapView.posts`** (`listPostViews`, in the map view's snapshot): each post's index, how the viewer reaches it, the distance, level and team size of its journey, and the viewer's open pass.
+- **Events:** `journey.started` (after `battle.started`) and `journey.ended`, only to the player (`PUBLIC_VIEWS` overrides); everyone else sees `battle.*`.
 
 ## Care, levels and evolution
 

@@ -32,7 +32,13 @@ export type CoinSource = z.infer<typeof CoinSourceSchema>;
 
 export const CoinRulesSchema = z.strictObject({
   /** Coins for a battle won, by battle kind (Gentle's share scales it, like XP). */
-  battleWin: z.strictObject({ wild: coins, tile: coins, 'rival-tile': coins, rescue: coins }),
+  battleWin: z.strictObject({
+    wild: coins,
+    tile: coins,
+    'rival-tile': coins,
+    rescue: coins,
+    journey: coins,
+  }),
   /**
    * Coins for befriending a wild squishy, and for claiming a tile (neutral or
    * a rival's; Gentle's share scales it, like found clothing).

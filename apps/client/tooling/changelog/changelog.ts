@@ -88,17 +88,53 @@ export function buildOf(
   return { build: Number(count), date: new Date(when).toISOString().slice(0, 10) };
 }
 
+type Build = ReturnType<typeof buildOf>;
+
 /** Every entry in `dir`, newest build first ("Coming next" ones on top), then by slug. */
-export function readChangelog(dir: string, repo: string, git: Git = runGit): ChangeEntry[] {
+export function readChangelog(
+  dir: string,
+  repo: string,
+  git: Git = runGit,
+  build: (file: string) => Build = (file) => buildOf(file, repo, git),
+): ChangeEntry[] {
   if (!existsSync(dir)) return [];
   const entries = readdirSync(dir)
     .filter((name) => name.endsWith('.md'))
     .map((name) => {
       const file = join(dir, name);
-      return { ...parseEntry(readFileSync(file, 'utf8'), file), ...buildOf(file, repo, git) };
+      return { ...parseEntry(readFileSync(file, 'utf8'), file), ...build(file) };
     });
   const rank = (e: ChangeEntry) => e.build ?? Number.MAX_SAFE_INTEGER;
   return entries.sort((a, b) => rank(b) - rank(a) || a.slug.localeCompare(b.slug));
+}
+
+/**
+ * `readChangelog` for the dev server, which serves it on every page load
+ * (#296). `buildOf` runs two git commands per entry (`--follow` walks the
+ * whole history), synchronously, so it once stalled every request behind it
+ * and grew with each new entry. A file's build only changes when a commit
+ * does, so builds are kept per file until HEAD moves: one cheap `rev-parse`
+ * per read. Entry words are still read fresh, so edits show at once.
+ */
+export function changelogReader(dir: string, repo: string, git: Git = runGit): () => ChangeEntry[] {
+  let head: string | null | undefined;
+  const builds = new Map<string, Build>();
+  return () => {
+    const now = git(['rev-parse', 'HEAD'], repo);
+    if (now !== head) {
+      head = now;
+      builds.clear();
+    }
+    return readChangelog(dir, repo, git, (file) => {
+      let found = builds.get(file);
+      if (!found) {
+        found = buildOf(file, repo, git);
+        // No build yet (not committed, or git didn't answer): ask again next time.
+        if (found.build !== null) builds.set(file, found);
+      }
+      return found;
+    });
+  };
 }
 
 /** `changelog.json`'s text. */

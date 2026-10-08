@@ -26,3 +26,69 @@
 .post-flag[hidden] {
   display: none;
 }
+
+/* The journey preview in the tile panel (#270, the owner-approved mockup's
+   screen b): a cream card with the trail, the trail squishies and a lantern
+   meter, my team and a chance chip. Text never touches an edge (style guide §3). */
+.journey-card {
+  display: grid;
+  gap: 6px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 2px solid #f6e6c9;
+  border-radius: 16px;
+  background: #fff8ec;
+  color: #4a3150;
+}
+
+.journey-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.journey-lanterns {
+  display: inline-flex;
+  gap: 2px;
+  font-size: 16px;
+}
+
+.journey-lantern.off {
+  filter: grayscale(1);
+  opacity: 0.35;
+}
+
+.journey-chance {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.journey-chance-good {
+  background: #d9f2d0;
+  color: #2f6a2a;
+}
+
+.journey-chance-try {
+  background: #ffefc2;
+  color: #7a5410;
+}
+
+.journey-chance-tough {
+  background: #f6dceb;
+  color: #7a2d55;
+}
+
+.journey-stakes {
+  margin: 0;
+  font-size: 13px;
+  color: #6b4b6e;
+}
+
+.journey-open {
+  font-weight: 800;
+}

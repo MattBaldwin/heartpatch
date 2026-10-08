@@ -7,6 +7,7 @@ import {
   HOLLOW_RULES,
   hexDistance,
   HollowResponseSchema,
+  isTradingPost,
   JoinMapResponseSchema,
   MapResponseSchema,
   parseGameEventPayload,
@@ -49,7 +50,17 @@ import { createHollowService, type HollowService } from './service.js';
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
-const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
+const TEST_KEEPER = {
+  base: 'pip',
+  hairColor: 'honey',
+  eyeColor: 'sky',
+  outfit: 'sunflower',
+  skinTone: 'tone-1',
+  eyes: 'round' as const,
+  brows: 'arched',
+  mouth: 'smile',
+  extras: [],
+};
 /** A secret squishy: the owner's Hollow status carries its row since they've met it (rule 6). */
 const SECRET = SERVER_GAME_DATA.secretSpecies[0]!;
 // Noon in Denver on Oct 2 (MDT, UTC−6): tonight's nightfall is 01:00Z on Oct 3.
@@ -253,8 +264,16 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       orderBy: (t, { asc }) => [asc(t.q), asc(t.r)],
     });
     const held = all.filter((t) => t.ownerUserId !== null);
+    // Plain land only: no resource node and no trading post. A node tile a
+    // fire can never reach (a lake of wells at the rim) is land he can't win
+    // back (#277's `nodesBlockFires`), so a random map seed made tests that
+    // count reclaimed land fail now and then.
     const tile = all.find(
-      (t) => t.ownerUserId === null && held.every((h) => hexDistance(h, t) >= 3),
+      (t) =>
+        t.ownerUserId === null &&
+        t.nodeResource === null &&
+        !isTradingPost(t) &&
+        held.every((h) => hexDistance(h, t) >= 3),
     )!;
     await db.execute(`update tiles set owner_user_id = '${who.id}' where id = '${tile.id}'`);
     return tile.id;

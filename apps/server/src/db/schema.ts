@@ -48,7 +48,13 @@ export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'appr
  * (`tile`, #15), another player's tile defenders (`rival-tile`, #15) and the
  * Hollow's shadow guardians (`rescue`, #21).
  */
-export const battleKind = pgEnum('battle_kind', ['wild', 'tile', 'rival-tile', 'rescue']);
+export const battleKind = pgEnum('battle_kind', [
+  'wild',
+  'tile',
+  'rival-tile',
+  'rescue',
+  'journey',
+]);
 /** `no-contest`: the server called it off (content re-tuned mid-battle). */
 export const battleStatus = pgEnum('battle_status', ['active', 'finished', 'no-contest']);
 /**
@@ -825,6 +831,18 @@ export const keepers = pgTable('keepers', {
   // A hairstyle id from the shared Keeper data, or null for the base's own
   // style (every Keeper saved before styles could be picked).
   hairstyle: text('hairstyle'),
+  // The Keeper builder (#289): ids from the shared Keeper data. Rows saved
+  // before it were filled from their base (the starting look), so no Keeper
+  // changed.
+  skinTone: text('skin_tone').notNull(),
+  eyes: text('eyes').notNull(),
+  brows: text('brows').notNull(),
+  mouth: text('mouth').notNull(),
+  /** Face extras the player picked (ids), in data order. */
+  extras: text('extras')
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
   // The milestone title shown on their profile card (#44, design doc §24): a
   // title id from the milestone data they've earned, or null for none.
   titleId: text('title_id'),
@@ -1342,6 +1360,57 @@ export const hollowRescues = pgTable(
     index('hollow_rescues_map_id_user_id_idx').on(t.mapId, t.userId, t.endedAt),
     index('hollow_rescues_squishy_id_idx').on(t.squishyId),
     check('hollow_rescues_heartdust_nonnegative', sql`${t.heartdust} >= 0`),
+  ],
+);
+
+export const journeyOutcome = pgEnum('journey_outcome', ['active', 'won', 'lost', 'no-contest']);
+
+/**
+ * Journeys to trading posts (#270, owner decisions 2 and 3 on #30): one row
+ * per `journey` battle, with the post it heads for, the distance, level and
+ * team size it was started at, and how it went. A win's `visit_until`
+ * (`ended_at` + `JOURNEY_RULES.visitMinutes`) is the visit pass every post
+ * command checks, worked out on read. Settled in the battle's finish
+ * (battle, then this row: tech spec §7 step 5b).
+ */
+export const journeys = pgTable(
+  'journeys',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    postTileId: uuid('post_tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    battleId: uuid('battle_id')
+      .notNull()
+      .references(() => battles.id, { onDelete: 'cascade' }),
+    distance: smallint('distance').notNull(),
+    level: smallint('level').notNull(),
+    teamSize: smallint('team_size').notNull(),
+    outcome: journeyOutcome('outcome').notNull().default('active'),
+    startedAt: timestamptz('started_at').notNull(),
+    endedAt: timestamptz('ended_at'),
+    visitUntil: timestamptz('visit_until'),
+  },
+  (t) => [
+    unique('journeys_battle_id_key').on(t.battleId),
+    foreignKey({
+      name: 'journeys_user_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    // A player's visit passes on a map (the post check and `MapView.posts`).
+    index('journeys_map_id_user_id_post_tile_id_idx').on(
+      t.mapId,
+      t.userId,
+      t.postTileId,
+      t.visitUntil,
+    ),
+    check('journeys_distance_positive', sql`${t.distance} >= 1`),
+    check('journeys_visit_won', sql`${t.visitUntil} is null or ${t.outcome} = 'won'`),
   ],
 );
 

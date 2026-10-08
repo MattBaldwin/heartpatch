@@ -2,7 +2,10 @@ import type {
   HairPiece,
   KeeperBase,
   KeeperData,
+  KeeperFaceExtra,
+  KeeperFaceLine,
   KeeperHairstyle,
+  KeeperSkinTone,
   KeeperSwatch,
   OutfitPalette,
 } from '../schemas/data/keepers.js';
@@ -264,13 +267,123 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
   },
 ];
 
+// TUNE: all skin tones (owner 2026-10-08, #289): ten, light to deep; Hazel's is
+// the deepest. Shown with no names.
+export const KEEPER_SKIN_TONES: KeeperSkinTone[] = [
+  { id: 'tone-1', color: '#fde3cf' },
+  { id: 'tone-2', color: '#f3d6c6' },
+  { id: 'tone-3', color: '#f6cfae' },
+  { id: 'tone-4', color: '#eab48c' },
+  { id: 'tone-5', color: '#c8a27c' },
+  { id: 'tone-6', color: '#d39a6c' },
+  { id: 'tone-7', color: '#b97c52' },
+  { id: 'tone-8', color: '#a5683f' },
+  { id: 'tone-9', color: '#9a603b' },
+  { id: 'tone-10', color: '#7a4a2c' },
+];
+
+// TUNE: brow and mouth lines (#289). All thin, dark lines on every skin tone.
+export const KEEPER_BROWS: KeeperFaceLine[] = [
+  { id: 'arched', name: 'Arched', shape: 'arc', size: [0.13, 0.03], depth: 1, roll: 180 },
+  { id: 'straight', name: 'Straight', shape: 'capsule', size: [0.11, 0.022], depth: 1, roll: 0 },
+  { id: 'soft', name: 'Soft', shape: 'arc', size: [0.09, 0.04], depth: 1.4, roll: 180 },
+];
+
+export const KEEPER_MOUTHS: KeeperFaceLine[] = [
+  { id: 'smile', name: 'Smile', shape: 'arc', size: [0.15, 0.06], depth: 1.6, roll: 0 },
+  {
+    id: 'small-smile',
+    name: 'Small smile',
+    shape: 'arc',
+    size: [0.09, 0.045],
+    depth: 1.6,
+    roll: 0,
+  },
+  {
+    id: 'big-smile',
+    name: 'Big smile',
+    shape: 'arc',
+    size: [0.19, 0.05],
+    depth: 1.6,
+    roll: 0,
+    lift: -0.01,
+  },
+];
+
+// TUNE: face extras (#289). Off unless picked; every Keeper can pick any.
+export const KEEPER_FACE_EXTRAS: KeeperFaceExtra[] = [
+  {
+    id: 'blush',
+    name: 'Blush',
+    pieces: [
+      {
+        shape: 'ellipsoid',
+        at: [0.3, -0.14],
+        size: [0.15, 0.08, 0.035],
+        color: '#ff9db5',
+        mirror: true,
+      },
+    ],
+  },
+  {
+    id: 'freckles',
+    name: 'Freckles',
+    pieces: [
+      {
+        shape: 'ellipsoid',
+        at: [0.265, -0.09],
+        size: [0.024, 0.024, 0.012],
+        color: '#b0705a',
+        mirror: true,
+      },
+      {
+        shape: 'ellipsoid',
+        at: [0.3, -0.07],
+        size: [0.024, 0.024, 0.012],
+        color: '#b0705a',
+        mirror: true,
+      },
+      {
+        shape: 'ellipsoid',
+        at: [0.335, -0.09],
+        size: [0.024, 0.024, 0.012],
+        color: '#b0705a',
+        mirror: true,
+      },
+    ],
+  },
+  {
+    id: 'lashes',
+    name: 'Lashes',
+    pieces: [
+      {
+        shape: 'capsule',
+        at: [0.255, 0.03],
+        size: [0.016, 0.05, 0.012],
+        color: 'line',
+        roll: 40,
+        mirror: true,
+      },
+    ],
+  },
+  {
+    id: 'heart-sticker',
+    name: 'Heart sticker',
+    pieces: [
+      { shape: 'ellipsoid', at: [0.282, -0.108], size: [0.04, 0.04, 0.012], color: '#ff6f91' },
+      { shape: 'ellipsoid', at: [0.318, -0.108], size: [0.04, 0.04, 0.012], color: '#ff6f91' },
+      { shape: 'capsule', at: [0.3, -0.132], size: [0.03, 0.045, 0.012], color: '#ff6f91' },
+    ],
+  },
+];
+
 // TUNE: all bases. Skin tones run light to deep; shapes run small and round
 // to tall and slim, so every kid can find one that feels like them.
 export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'pip',
     name: 'Pip',
-    skin: '#fde3cf',
+    skinTone: 'tone-1',
     body: {
       height: 0.88,
       head: 0.56,
@@ -282,7 +395,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.17,
       limbs: 0.08,
     },
-    face: { eyes: 'round' },
+    face: { eyes: 'round', brows: 'arched', mouth: 'smile' },
     hairstyle: 'spiky',
     hairColor: 'honey',
     eyeColor: 'sky',
@@ -291,7 +404,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'clover',
     name: 'Clover',
-    skin: '#f6cfae',
+    skinTone: 'tone-3',
     body: {
       height: 1,
       head: 0.5,
@@ -303,7 +416,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.2,
       limbs: 0.08,
     },
-    face: { eyes: 'oval' },
+    face: { eyes: 'oval', brows: 'arched', mouth: 'smile' },
     hairstyle: 'bob',
     hairColor: 'ginger',
     eyeColor: 'leaf',
@@ -312,7 +425,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'rowan',
     name: 'Rowan',
-    skin: '#7a4a2c',
+    skinTone: 'tone-10',
     body: {
       height: 1.12,
       head: 0.43,
@@ -324,7 +437,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.25,
       limbs: 0.07,
     },
-    face: { eyes: 'oval' },
+    face: { eyes: 'oval', brows: 'arched', mouth: 'smile' },
     hairstyle: 'crew-cut',
     hairColor: 'midnight',
     eyeColor: 'hazel',
@@ -333,7 +446,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'maple',
     name: 'Maple',
-    skin: '#eab48c',
+    skinTone: 'tone-4',
     body: {
       height: 1.12,
       head: 0.44,
@@ -345,7 +458,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.24,
       limbs: 0.07,
     },
-    face: { eyes: 'happy' },
+    face: { eyes: 'happy', brows: 'arched', mouth: 'smile' },
     hairstyle: 'long',
     hairColor: 'cocoa',
     eyeColor: 'cocoa',
@@ -354,7 +467,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'basil',
     name: 'Basil',
-    skin: '#c8a27c',
+    skinTone: 'tone-5',
     body: {
       height: 1.04,
       head: 0.47,
@@ -366,7 +479,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.22,
       limbs: 0.1,
     },
-    face: { eyes: 'happy' },
+    face: { eyes: 'happy', brows: 'arched', mouth: 'smile' },
     hairstyle: 'side-part',
     hairColor: 'cocoa',
     eyeColor: 'cocoa',
@@ -375,7 +488,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'wren',
     name: 'Wren',
-    skin: '#d39a6c',
+    skinTone: 'tone-6',
     body: {
       height: 0.9,
       head: 0.52,
@@ -387,7 +500,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.18,
       limbs: 0.075,
     },
-    face: { eyes: 'round' },
+    face: { eyes: 'round', brows: 'arched', mouth: 'smile' },
     hairstyle: 'pigtails',
     hairColor: 'berry',
     eyeColor: 'hazel',
@@ -396,7 +509,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'acorn',
     name: 'Acorn',
-    skin: '#a5683f',
+    skinTone: 'tone-8',
     body: {
       height: 0.84,
       head: 0.58,
@@ -408,7 +521,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.15,
       limbs: 0.1,
     },
-    face: { eyes: 'round' },
+    face: { eyes: 'round', brows: 'arched', mouth: 'smile' },
     hairstyle: 'short-curls',
     hairColor: 'midnight',
     eyeColor: 'cocoa',
@@ -417,7 +530,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'bramble',
     name: 'Bramble',
-    skin: '#b97c52',
+    skinTone: 'tone-7',
     body: {
       height: 1.08,
       head: 0.48,
@@ -429,7 +542,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.21,
       limbs: 0.11,
     },
-    face: { eyes: 'oval' },
+    face: { eyes: 'oval', brows: 'arched', mouth: 'smile' },
     hairstyle: 'curly',
     hairColor: 'midnight',
     eyeColor: 'cocoa',
@@ -438,7 +551,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'sunny',
     name: 'Sunny',
-    skin: '#9a603b',
+    skinTone: 'tone-9',
     body: {
       height: 0.96,
       head: 0.5,
@@ -450,7 +563,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.19,
       limbs: 0.085,
     },
-    face: { eyes: 'happy' },
+    face: { eyes: 'happy', brows: 'arched', mouth: 'smile' },
     hairstyle: 'puff',
     hairColor: 'midnight',
     eyeColor: 'plum',
@@ -459,7 +572,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'juniper',
     name: 'Juniper',
-    skin: '#f3d6c6',
+    skinTone: 'tone-2',
     body: {
       height: 0.94,
       head: 0.5,
@@ -471,7 +584,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.19,
       limbs: 0.065,
     },
-    face: { eyes: 'sleepy' },
+    face: { eyes: 'sleepy', brows: 'arched', mouth: 'smile' },
     hairstyle: 'messy-mop',
     hairColor: 'sky',
     eyeColor: 'sky',
@@ -480,7 +593,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'hazel',
     name: 'Hazel',
-    skin: '#7a4a2c',
+    skinTone: 'tone-10',
     body: {
       height: 1.15,
       head: 0.45,
@@ -492,7 +605,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.25,
       limbs: 0.075,
     },
-    face: { eyes: 'sleepy' },
+    face: { eyes: 'sleepy', brows: 'arched', mouth: 'smile' },
     hairstyle: 'bun',
     hairColor: 'lilac',
     eyeColor: 'violet',
@@ -501,7 +614,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'moss',
     name: 'Moss',
-    skin: '#9a603b',
+    skinTone: 'tone-9',
     body: {
       height: 1.02,
       head: 0.49,
@@ -513,7 +626,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.21,
       limbs: 0.09,
     },
-    face: { eyes: 'round' },
+    face: { eyes: 'round', brows: 'arched', mouth: 'smile' },
     hairstyle: 'swoop',
     hairColor: 'mint',
     eyeColor: 'leaf',
@@ -524,6 +637,10 @@ export const KEEPER_BASES: KeeperBase[] = [
 /** Every Keeper table, checked by `checkKeeperData` in tests. */
 export const KEEPER_DATA: KeeperData = {
   bases: KEEPER_BASES,
+  skinTones: KEEPER_SKIN_TONES,
+  brows: KEEPER_BROWS,
+  mouths: KEEPER_MOUTHS,
+  faceExtras: KEEPER_FACE_EXTRAS,
   hairstyles: KEEPER_HAIRSTYLES,
   hairColors: KEEPER_HAIR_COLORS,
   eyeColors: KEEPER_EYE_COLORS,

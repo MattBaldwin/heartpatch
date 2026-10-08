@@ -7,9 +7,11 @@ const testDir = './tests/e2e';
 /**
  * CI's e2e groups, one job each per device. Playwright's own --shard splits by
  * test count in file order, which put every heavy WebGL spec on shard 1 (12 min
- * on iPad). These are balanced by measured iPad WebKit time instead: about
- * 4-5 min each on 2 workers, first-session alone being 4.5 min. Rebalance from
- * the CI list reporter's durations when a group gets slow.
+ * on iPad). These are balanced by measured WebKit time instead (iPhone and
+ * iPad, 2 workers): about 5-10 min each, the floor being tutorial-flow's
+ * 9-min reload run. A spec file runs on one worker, so a slow file sets its
+ * group's length. Rebalance from the CI list reporter's durations when a
+ * group gets slow; the catch-all last group grew to 28 min before (#296).
  *
  * CI sets HP_E2E_GROUP=<i>/<n>. The last group is every spec not listed here,
  * so a new spec always runs; a listed spec that no longer exists, or a group
@@ -17,9 +19,33 @@ const testDir = './tests/e2e';
  */
 const E2E_GROUPS = [
   ['audio', 'first-session', 'smoke', 'starter', 'wardrobe'],
-  ['auth', 'battle', 'care', 'cinematic', 'hollow'],
-  ['capture', 'close-up', 'inventory', 'keeper', 'keeper-gallery', 'milestones', 'raids'],
-  ['chat', 'home', 'jobs', 'lobby', 'pwa', 'renderer-error', 'territory'],
+  ['auth', 'battle', 'care', 'cinematic', 'hollow', 'battle-ui', 'map', 'potions', 'recipe-book'],
+  [
+    'capture',
+    'close-up',
+    'inventory',
+    'keeper',
+    'keeper-gallery',
+    'milestones',
+    'raids',
+    'trading-posts',
+    'whats-new',
+  ],
+  [
+    'chat',
+    'home',
+    'jobs',
+    'lobby',
+    'pwa',
+    'renderer-error',
+    'territory',
+    'account-help',
+    'squishy-gallery',
+    'version',
+    'wild-picker',
+  ],
+  // tutorial-flow's two runs go side by side (its describe mode is parallel).
+  ['tutorial-flow', 'tray-layout', 'admin', 'boutique', 'fences'],
 ];
 
 function e2eGroup(value: string | undefined): { testMatch?: string[]; testIgnore?: string[] } {

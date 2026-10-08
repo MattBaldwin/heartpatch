@@ -24,6 +24,8 @@ interface TutorialDebug {
     hole: { x: number; y: number; width: number; height: number } | null;
     held: boolean;
     docked: boolean;
+    /** The sheets Sprout waits behind. */
+    sheets: string[];
   };
   sprout: string | null;
 }
@@ -513,8 +515,19 @@ test("Sprout's tucked chip steps aside for an open tray, so its rows take taps",
   while ((await main.isVisible()) && (await main.textContent()) === 'Next') await main.tap();
   await main.tap(); // Let's go!
   await expect(page.getByTestId('tutorial')).toHaveClass(/tutorial-tucked/);
-  const chip = await bubble.boundingBox();
-  expect(chip).not.toBeNull();
+  // Measure the chip in its own place, settled: not waiting as the orb behind
+  // a card that turned up late (the orb sits clear of every button, so it
+  // would cover no row below), and not still moving between two samples.
+  let chip = null as { x: number; y: number; width: number; height: number } | null;
+  await expect(async () => {
+    const state = await overlay();
+    expect(state?.held, `Sprout waits behind ${JSON.stringify(state?.sheets)}`).toBe(false);
+    expect(state?.docked).toBe(false);
+    const [a, b] = [await bubble.boundingBox(), await bubble.boundingBox()];
+    expect(a).not.toBeNull();
+    expect(a).toEqual(b);
+    chip = a;
+  }).toPass({ timeout: 15_000 });
 
   // Adventure isn't on this step's way: Sprout waits in its orb, clear of the tray.
   await openTray(page, 'adventure');
@@ -534,7 +547,16 @@ test("Sprout's tucked chip steps aside for an open tray, so its rows take taps",
     }
     return out;
   }, chip!);
-  expect(covered.length).toBeGreaterThan(0);
+  const rows = await tray.evaluate((node) =>
+    [...node.querySelectorAll<HTMLElement>('button[data-testid]')].map((row) => {
+      const r = row.getBoundingClientRect();
+      return `${row.dataset['testid'] ?? ''}@${String(Math.round(r.y))}+${String(Math.round(r.height))}`;
+    }),
+  );
+  expect(
+    covered.length,
+    `chip ${JSON.stringify(chip)} over rows ${rows.join(' ')}`,
+  ).toBeGreaterThan(0);
 
   const clearOfTray = async () => {
     await expect(async () => {

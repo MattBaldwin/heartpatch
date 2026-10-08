@@ -23,7 +23,9 @@ import type { Species } from '../../src/schemas/data/species.js';
 import { resolveWildSpawn, type SpawnData } from '../../src/spawns/resolve.js';
 import { spawnWindowAt, type SpawnWindow } from '../../src/spawns/window.js';
 import { resolveGuardians, type GuardianData } from '../../src/territory/guardians.js';
+import { journeyFor, journeyTeam } from '../../src/territory/journeys.js';
 import { isTradingPost } from '../../src/territory/reach.js';
+import type { JourneyRules } from '../../src/schemas/data/journeys.js';
 import type { KidProfile, ProgressionConfig, ProgressionRules } from './progression-config.js';
 
 /*
@@ -82,6 +84,8 @@ export interface DayRecord {
   readonly partnerSpecies: string;
   /** Every team member's level, Partner first. */
   readonly levels: readonly number[];
+  /** The team at the end of the day, Partner first (journey odds replay it). */
+  readonly team: readonly { readonly speciesId: string; readonly level: number }[];
   /** Tiles the kid owns, home ring included. */
   readonly tiles: number;
   /** Which tiles those are, for models built on this one (`pnpm sim:fuel`). */
@@ -430,6 +434,7 @@ export function runProgression(
         partnerLevel: kid.team[0]?.level ?? 0,
         partnerSpecies: kid.team[0]?.speciesId ?? '',
         levels: kid.team.map((m) => m.level),
+        team: kid.team.map((m) => ({ speciesId: m.speciesId, level: m.level })),
         tiles: land.length,
         land: land.map(hexKey),
         neutralLeft: left.length,
@@ -505,5 +510,76 @@ export function wildOdds(
         return { offset, percent: Math.floor((wins * 100) / games) };
       }),
     };
+  });
+}
+
+/** One row of the journey table (#270): a kid's team on a day, and its win rate (%) by distance. */
+export interface JourneyOddsRow {
+  readonly kid: string;
+  readonly day: number;
+  /** The team's levels, Partner first. */
+  readonly levels: readonly number[];
+  readonly odds: readonly { distance: number; level: number; size: number; percent: number }[];
+}
+
+/**
+ * How often each kid's team (kid 0 of their run, as it stood at the end of
+ * `days`) wins a journey at each distance, `games` engine games per cell. The
+ * trail team comes from the shipped `journeyTeam`, with a fresh seed a game
+ * (the server fixes one per post, player and window), on the `wild` AI.
+ */
+export function journeyOdds(
+  data: ModelData,
+  config: ProgressionConfig,
+  runs: readonly ProgressionRun[],
+  rules: JourneyRules,
+  options: { days: readonly number[]; distances: readonly number[]; games: number },
+): JourneyOddsRow[] {
+  return runs.flatMap((run) => {
+    const lead = run.kids[0];
+    if (!lead) return [];
+    return options.days.flatMap((day) => {
+      const record = lead.days.find((d) => d.day === day);
+      if (!record) return [];
+      const kid: Kid = {
+        profile: run.profile,
+        slot: 0,
+        team: record.team.map((m, i) => ({
+          id: `team-${String(i + 1)}`,
+          ...m,
+          xp: 0,
+          winsToday: 0,
+        })),
+      };
+      return [
+        {
+          kid: run.profile.id,
+          day,
+          levels: record.levels,
+          odds: options.distances.map((distance) => {
+            const { level, teamSize } = journeyFor(distance, rules, run.rules.growth.maxLevel);
+            let wins = 0;
+            for (let i = 0; i < options.games; i++) {
+              const seed = deriveSeed(config.rootSeed, 'journey', run.profile.id, day, distance, i);
+              const opponent: BattleSideSetup = {
+                controller: { type: 'ai', policy: 'wild' },
+                squishies: journeyTeam(
+                  { seed: deriveSeed(seed, 'trail'), distance },
+                  rules,
+                  run.rules.growth.maxLevel,
+                ),
+              };
+              if (play(data, kid, config, opponent, deriveSeed(seed, 'battle')).won) wins += 1;
+            }
+            return {
+              distance,
+              level,
+              size: teamSize,
+              percent: Math.floor((wins * 100) / options.games),
+            };
+          }),
+        },
+      ];
+    });
   });
 }

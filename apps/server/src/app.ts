@@ -35,6 +35,8 @@ import { createSettleService } from './modules/settle/service.js';
 import { settleRoutes } from './modules/settle/routes.js';
 import { createSquishyJobsService } from './modules/jobs/service.js';
 import { hollowRoutes } from './modules/hollow/routes.js';
+import { journeysRoutes } from './modules/journeys/routes.js';
+import { createJourneyBattlePort, createJourneysService } from './modules/journeys/service.js';
 import { createHollowService, type HollowService } from './modules/hollow/service.js';
 import { createGatheringService } from './modules/gathering/service.js';
 import { inventoryRoutes } from './modules/inventory/routes.js';
@@ -247,6 +249,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           clock,
           findWildEncounter: spawns.findWildEncounter,
           tileBattles: createTileBattlePort(),
+          // Journeys to trading posts (#270): the visit pass in the finish.
+          journeys: createJourneyBattlePort(),
           ...(wsHub ? { publish: wsHub.publish } : {}),
         });
         const idempotencyStore = createIdempotencyStore(db);
@@ -328,6 +332,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             hooks: authHooks,
             idempotency,
           }),
+        );
+        // Journeys to trading posts (#270).
+        await api.register(
+          journeysRoutes(createJourneysService({ battles }), { hooks: authHooks, idempotency }),
         );
         // The Hollow Man (#21): nightfall runs as a job (`src/index.ts`), and
         // rescues are battles the `hollow` event consumer settles.
