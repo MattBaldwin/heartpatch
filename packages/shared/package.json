@@ -27,7 +27,8 @@
     "sim:potions": "tsx scripts/sim/potions-cli.ts",
     "sim:fuel": "tsx scripts/sim/fuel-cli.ts",
     "sim:economy": "tsx scripts/sim/economy-cli.ts",
-    "sim:costumes": "tsx scripts/sim/costumes-cli.ts"
+    "sim:costumes": "tsx scripts/sim/costumes-cli.ts",
+    "sim:factory": "tsx scripts/sim/factory-cli.ts"
   },
   "dependencies": {
     "zod": "^4.6.5"

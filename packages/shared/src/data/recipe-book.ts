@@ -57,6 +57,10 @@ export const RECIPE_BOOK: RecipeBookData = {
       line: 'Gather some Timber and Stone, and this page opens!',
     },
     {
+      page: 'building:crafting-factory',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
       page: 'building:hedge',
       line: 'Get Greens from a meadow (a squishy gatherer picks them) and some Timber, and this page opens!',
     },

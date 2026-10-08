@@ -223,6 +223,47 @@ export const GAME_EVENTS = {
     public: z.object({ userId: z.uuid(), recipeId: z.string() }),
   },
   /**
+   * A Crafting Factory batch started (#294): its inputs were paid, and it
+   * finishes at `doneAt`. Only who and what is public.
+   */
+  'factory.started': {
+    internal: z.strictObject({
+      queueId: z.uuid(),
+      userId: z.uuid(),
+      recipeId: z.string(),
+      total: z.number().int().min(1),
+      doneAt: z.iso.datetime(),
+    }),
+    public: z.object({ userId: z.uuid(), recipeId: z.string() }),
+  },
+  /** Things a Factory batch made landed in the bag (#294): once per batch per settle. */
+  'factory.crafted': {
+    internal: z.strictObject({
+      queueId: z.uuid(),
+      userId: z.uuid(),
+      recipeId: z.string(),
+      count: z.number().int().min(1),
+      items: z.record(z.string(), z.number().int().min(1)),
+    }),
+    public: z.object({ userId: z.uuid(), recipeId: z.string() }),
+  },
+  /**
+   * A Factory batch stopped before it finished (#294): the kid stopped it,
+   * took the Factory down, or left the patch. What was made was kept;
+   * everything not finished came back (`refunded`).
+   */
+  'factory.stopped': {
+    internal: z.strictObject({
+      queueId: z.uuid(),
+      userId: z.uuid(),
+      recipeId: z.string(),
+      kept: z.number().int().min(0),
+      refunded: z.record(z.string(), z.number().int().min(1)),
+      reason: z.enum(['stopped', 'taken-down', 'left']),
+    }),
+    public: z.object({ userId: z.uuid(), recipeId: z.string() }),
+  },
+  /**
    * A player started a battle for a tile (#15): a neutral tile's guardians
    * (`defenderUserId` null) or another player's land. It used one of their
    * daily attempts and put the tile on cooldown until `cooldownUntil`.
