@@ -64,6 +64,7 @@ All tiers are the same shared vinyl (§4) plus a per-instance code in the squish
 | **Glow** | Light (whole squishy), Fire (its flames, the `accent` parts); others may opt in (Glowgourd's lantern body) | lit from inside: albedo added back as emission, so it reads at dusk and night | ~3 ALU |
 
 - Face parts (eyes, brows, mouth, cheeks) never sparkle or glow, so faces stay clean.
+- **Keeper costumes wear their rarity's tier too** (owner, #261): a Mythic costume shimmers, a Legendary one has the rainbow rim. Other clothing stays plain vinyl, and a costume piece may glow (the Hollow Man's eyes, the Glow Moth's wing spots) through the same code.
 - The tier decodes from a varying with uniform control flow per instance; fragments on vinyl squishies skip the branches. The rescue guardians' shadow look still wins over every tier.
 - WebGPU (opt-in) has no squish plugin yet, so tiers fall back to plain vinyl there, like the rim and the squash today.
 

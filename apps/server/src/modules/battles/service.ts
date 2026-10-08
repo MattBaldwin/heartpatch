@@ -629,7 +629,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // A capture may turn up a piece of clothing (#84), rolled here rather
     // than in the port: after the squishy locks above, since its
     // `clothing.found` is this transaction's first event and takes `maps`.
-    // One piece per battle, however often a finish is retried.
+    // Taking a rival's land finds more (#261). A won wild battle rolls its
+    // own table (#261). One piece per battle, however often a finish is retried.
     if (tile.drop) {
       await rollFoundDrop(tx, {
         source: 'capture',
@@ -638,6 +639,16 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         mapId: row.mapId,
         tileId: tile.drop.tileId,
         percent: tile.drop.percent,
+        rival: row.kind === 'rival-tile',
+        at,
+      });
+    } else if (row.kind === 'wild' && result.winner === PLAYER_SIDE) {
+      await rollFoundDrop(tx, {
+        source: 'battle',
+        refId: row.id,
+        userId: row.playerUserId,
+        mapId: row.mapId,
+        tileId: null,
         at,
       });
     }

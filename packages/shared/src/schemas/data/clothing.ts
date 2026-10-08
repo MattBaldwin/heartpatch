@@ -46,11 +46,18 @@ export const ClothingSourceSchema = z.enum([
 export type ClothingSource = z.infer<typeof ClothingSourceSchema>;
 
 /**
- * What can turn up a `found` item: a gather, a tile capture or a rescue. Game
- * events name it, so it's public; the drop tables themselves are server-only
+ * What can turn up a `found` item: a gather, a tile capture, a rescue, a won
+ * wild battle or an explore find (#261, #199). Game events name it, so it's
+ * public; the drop tables themselves are server-only
  * (`schemas/data/clothing-drops.ts`, `data/server/clothing-drops.ts`).
  */
-export const ClothingDropSourceSchema = z.enum(['gather', 'capture', 'rescue']);
+export const ClothingDropSourceSchema = z.enum([
+  'gather',
+  'capture',
+  'rescue',
+  'battle',
+  'explore',
+]);
 export type ClothingDropSource = z.infer<typeof ClothingDropSourceSchema>;
 
 /** Sources whose items stay with the account: never `tradable`. */
@@ -65,8 +72,31 @@ const SizeSchema = z.tuple([z.number().positive(), z.number().positive(), z.numb
  * part it sits on, so one item fits every base and nothing is made per body
  * type. Squishy accessories use the squishy's body size the same way.
  */
+/**
+ * Where a costume piece sits (#261): a body part's socket, so a head-to-toe
+ * costume lines up on every base. `head` is the head itself (its centre and
+ * diameters); `legs`, `arms` and `hands` are mirrored pairs like `shoes`.
+ */
+export const CostumeAnchorSchema = z.enum([
+  'head',
+  'hat',
+  'top',
+  'bottom',
+  'shoes',
+  'legs',
+  'arms',
+  'hands',
+  'back',
+  'held',
+]);
+export type CostumeAnchor = z.infer<typeof CostumeAnchorSchema>;
+
 export const ClothingPieceSchema = z.strictObject({
   shape: PartShapeSchema,
+  /** Costumes only: the socket this piece sits on (default: the whole-body costume box). */
+  on: CostumeAnchorSchema.optional(),
+  /** Lit from inside (eyes, glowing wing spots), like a glowing squishy. */
+  glow: z.literal(true).optional(),
   /** Centre, from the socket's anchor, in socket sizes (+x is the viewer's right, +y up, −z the front). */
   at: Vec3Schema,
   /** Size of the primitive, in socket sizes. */
@@ -81,9 +111,13 @@ export type ClothingPiece = z.infer<typeof ClothingPieceSchema>;
 export const SquishyAnchorSchema = z.enum(['crown', 'neck']);
 export type SquishyAnchor = z.infer<typeof SquishyAnchorSchema>;
 
+/** Most pieces an item has; a head-to-toe costume may have up to `MAX_COSTUME_PIECES`. */
+export const MAX_ITEM_PIECES = 12;
+export const MAX_COSTUME_PIECES = 24;
+
 /** Soft vinyl-toy primitives (design doc §19), a few per item so they stay cheap. */
 export const ClothingVisualSchema = z.strictObject({
-  pieces: z.array(ClothingPieceSchema).min(1).max(12),
+  pieces: z.array(ClothingPieceSchema).min(1).max(MAX_COSTUME_PIECES),
   /** Squishy accessories only. */
   anchor: SquishyAnchorSchema.optional(),
 });
@@ -153,6 +187,14 @@ export function checkClothingData(input: unknown, seasons: readonly string[]): s
       }
       if ((item.visual.anchor !== undefined) !== (item.slot === SQUISHY_SLOT)) {
         report(at('visual'), 'squishy accessories need an anchor, and only they have one');
+      }
+      if (item.slot !== 'costume') {
+        if (item.visual.pieces.length > MAX_ITEM_PIECES) {
+          report(at('visual'), `only costumes have more than ${String(MAX_ITEM_PIECES)} pieces`);
+        }
+        if (item.visual.pieces.some((p) => p.on !== undefined)) {
+          report(at('visual'), 'only costumes place pieces on body sockets (`on`)');
+        }
       }
     });
     // The wardrobe is never empty (design doc §23): every account starts with some.

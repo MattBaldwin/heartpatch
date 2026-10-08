@@ -7,6 +7,7 @@ import { boutiqueStock, inStock } from './index.js';
 
 const SEED = 'player-1';
 const OCTOBER = { seed: SEED, date: '2026-10-15', seasons: ['halloween'] };
+const price = (id: string) => CLOTHING_BY_ID.get(id)?.boutiquePrice ?? 0;
 const all = (stock: ReturnType<typeof boutiqueStock>) => [
   ...stock.daily,
   ...stock.seasonal.flatMap((r) => r.items),
@@ -19,9 +20,14 @@ describe('boutique data', () => {
   });
 
   it('prices only clothing the Boutique sells, and keeps legendaries found-only', () => {
+    // The owner put one Legendary on the costume rack (#261); the rest stay found-only.
+    const soldLegendaries = new Set(['marigold-calavera']);
     for (const item of CLOTHING) {
       expect(item.boutiquePrice !== undefined, item.id).toBe(item.sources.includes('boutique'));
-      if (item.rarity === 'legendary') expect(item.boutiquePrice, item.id).toBeUndefined();
+      if (item.rarity === 'legendary' && !soldLegendaries.has(item.id)) {
+        expect(item.boutiquePrice, item.id).toBeUndefined();
+      }
+      if (item.rarity === 'mythic') expect(item.boutiquePrice, item.id).toBeUndefined();
     }
     // Every Halloween rack has something to sell.
     expect(CLOTHING.some((i) => i.season === 'halloween' && i.boutiquePrice)).toBe(true);
@@ -33,7 +39,7 @@ describe('boutique data', () => {
       id: 'mythic-onesie',
       rarity: 'mythic',
       sources: ['found', 'boutique'],
-      boutiquePrice: 200,
+      boutiquePrice: 320,
     };
     expect(checkBoutiqueData(BOUTIQUE_RULES, [...CLOTHING, mythic])).toEqual([
       'clothing mythic-onesie: mythic pieces are found-only, never sold',
@@ -44,6 +50,31 @@ describe('boutique data', () => {
       const stock = boutiqueStock([...CLOTHING, mythic], { ...OCTOBER, date }, BOUTIQUE_RULES);
       expect(all(stock)).not.toContain('mythic-onesie');
     }
+  });
+
+  it('prices the #261 costumes at 3 to 8 busy days, rarer dearer, the Hollow Man never', () => {
+    const price = (id: string) => CLOTHING_BY_ID.get(id)?.boutiquePrice;
+    expect(
+      [
+        'patch-scarecrow',
+        'candy-corn-cutie',
+        'star-striker',
+        'cozy-mummy',
+        'moonbroom-witch',
+        'bat-buddy',
+        'zippy-hedgehog',
+        'glow-moth',
+        'marigold-calavera',
+        'hollow-man-costume',
+      ].map(price),
+    ).toEqual([120, 120, 160, 160, 210, 210, 260, 260, 320, undefined]);
+    expect(BOUTIQUE_RULES.maxPrice).toBeGreaterThanOrEqual(320);
+  });
+
+  it('compares prices within a slot: a whole costume may cost more than rarer wings', () => {
+    // Bat Wings (epic back piece) cost less than a Common costume, and that's fine.
+    expect(price('bat-wings')).toBeLessThan(price('candy-corn-cutie'));
+    expect(checkBoutiqueData(BOUTIQUE_RULES, CLOTHING)).toEqual([]);
   });
 
   it('flags prices out of range, a rarer piece that costs less, and too few to fill a rack', () => {

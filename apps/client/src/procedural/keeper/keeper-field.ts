@@ -9,7 +9,7 @@ import { Logger } from '@babylonjs/core/Misc/logger';
 import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Scene } from '@babylonjs/core/scene';
 import type { KeeperConfig, KeeperData, PartShape } from '@heartpatch/shared';
-import { CONTACT_SHADOW, VINYL, type SquishMove, type SquishyLod } from '../config.js';
+import { CONTACT_SHADOW, FINISH_CODE, VINYL, type SquishMove, type SquishyLod } from '../config.js';
 import { createContactShadowMesh } from '../contact-shadow.js';
 import { eventAttribute, eventRunning, type SquishEvent } from '../motion.js';
 import { partArrays } from '../part-shapes.js';
@@ -75,6 +75,8 @@ interface Instance {
   readonly owner: Keeper;
   readonly matrix: Matrix;
   readonly color: readonly [number, number, number, number];
+  /** `FINISH_CODE` sum: the piece's finish, plus glow. */
+  readonly finish: number;
 }
 
 interface Keeper {
@@ -305,6 +307,7 @@ export class KeeperField {
         owner: keeper,
         matrix: local.multiply(keeper.world),
         color: linear(p.color),
+        finish: (p.finish ? FINISH_CODE[p.finish] : 0) + (p.glow ? FINISH_CODE.glow : 0),
       };
       const batch = this.#batch(p.shape);
       batch.instances.push(instance);
@@ -359,6 +362,7 @@ export class KeeperField {
       colors.set(inst.color, i * 4);
       origins.set(inst.owner.origin, i * 4);
       events.set(eventAttribute(inst.owner.event), i * 4);
+      events[i * 4 + 3] = inst.finish;
     });
     mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
     mesh.thinInstanceSetBuffer('color', colors, 4, true);

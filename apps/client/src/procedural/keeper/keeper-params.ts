@@ -1,8 +1,11 @@
 import {
+  ART_RULES,
   deriveSeed,
   hashString,
   Rng,
   WARDROBE_SLOTS,
+  type CostumeAnchor,
+  type Finish,
   type KeeperBase,
   type KeeperConfig,
   type KeeperData,
@@ -12,7 +15,7 @@ import {
 } from '@heartpatch/shared';
 import { hexToRgb, type Rgb, type Vec3 } from '../params.js';
 import { KEEPER } from './keeper-config.js';
-import type { KeeperItem } from './keeper-items.js';
+import type { KeeperItem, KeeperItemPiece } from './keeper-items.js';
 
 /**
  * Turns a Keeper config (design doc §23) into the pieces that draw it and the
@@ -40,7 +43,30 @@ export interface KeeperPiece {
   readonly turn: Vec3;
   readonly color: Rgb;
   readonly layer: KeeperLayer;
+  /** Costumes wear their rarity's finish (ART_BIBLE §1.4); everything else is plain vinyl. */
+  readonly finish?: Finish;
+  /** Lit from inside. */
+  readonly glow?: boolean;
 }
+
+/**
+ * Where an item's pieces sit: one anchor or a mirrored pair (left first),
+ * each with a roll in degrees (the arms hang splayed) and its sine and
+ * cosine, and the size of the body part, which scales the pieces.
+ */
+interface PieceSocket {
+  readonly anchors: readonly {
+    readonly at: Vec3;
+    readonly roll: number;
+    readonly sin: number;
+    readonly cos: number;
+  }[];
+  readonly size: Vec3;
+}
+
+/** Anchors that sit straight (no roll). */
+const upright = (points: readonly Vec3[]): PieceSocket['anchors'] =>
+  points.map((at) => ({ at, roll: 0, sin: 0, cos: 1 }));
 
 /**
  * Where a wardrobe slot's items go: one anchor, or two mirrored ones (shoes,
@@ -216,11 +242,11 @@ export function keeperParams(
   };
 
   // ── Body and starter outfit ───────────────────────────────────────────
+  const legBottom = shoe[1] * 0.6;
+  const legTop = hipY + th * 0.15;
   for (const side of [-1, 1]) {
     const x = side * legX;
     piece('outfit', 'ellipsoid', [x, shoe[1] / 2, -t * 0.3], shoe, shoes);
-    const legBottom = shoe[1] * 0.6;
-    const legTop = hipY + th * 0.15;
     piece('body', 'capsule', [x, (legBottom + legTop) / 2, 0], [t, legTop - legBottom, t], skin);
     // Shorts legs, so the bottom reads as clothing.
     piece('outfit', 'capsule', [x, hipY - t * 0.35, 0], [t * 1.3, t * 1.4, t * 1.3], bottom);
@@ -251,11 +277,13 @@ export function keeperParams(
   const out = 0.2419; // sin 14°
   const down = 0.9703; // cos 14°
   const hands: Vec3[] = [];
+  const armMids: PieceSocket['anchors'][number][] = [];
   for (const side of [-1, 1]) {
     const shoulder: Vec3 = [side * (torso[0] / 2 - t * 0.15), hipY + th * 0.82, 0];
     const along = (k: number): Vec3 =>
       add(shoulder, [side * out * armLength * k, -down * armLength * k, 0]);
     const roll = -side * KEEPER.armSplayDeg;
+    armMids.push({ at: along(0.5), roll, sin: -side * out, cos: down });
     piece('body', 'capsule', along(0.5), [t * 0.95, armLength, t * 0.95], skin, [0, 0, roll]);
     const sleeve = KEEPER.sleeve;
     piece('outfit', 'capsule', along(sleeve / 2), [t * 1.3, armLength * sleeve, t * 1.3], top, [
@@ -408,29 +436,66 @@ export function keeperParams(
     },
   };
 
+  // Costume pieces may sit on any body part (#261), so a head-to-toe costume
+  // follows each base's own head, limbs and hands.
+  const handSize = t * KEEPER.hand;
+  const socketOf = (slot: WardrobeSlot): PieceSocket => ({
+    anchors: upright(sockets[slot].anchors),
+    size: sockets[slot].size,
+  });
+  const bodySockets: Record<CostumeAnchor, PieceSocket> = {
+    head: { anchors: upright([head.c]), size: [2 * head.r[0], 2 * head.r[1], 2 * head.r[2]] },
+    hat: socketOf('hat'),
+    top: socketOf('top'),
+    bottom: socketOf('bottom'),
+    shoes: socketOf('shoes'),
+    legs: {
+      anchors: upright([-1, 1].map((side): Vec3 => [side * legX, (legBottom + legTop) / 2, 0])),
+      size: [t, legTop - legBottom, t],
+    },
+    arms: { anchors: armMids, size: [t, armLength, t] },
+    hands: { anchors: upright(hands), size: [handSize, handSize, handSize] },
+    back: socketOf('back'),
+    held: socketOf('held'),
+  };
+
   // ── Clothing ──────────────────────────────────────────────────────────
   const bySlot = new Map<WardrobeSlot, KeeperItem>();
   for (const item of items) bySlot.set(item.slot, item);
   const costume = bySlot.get('costume');
   const worn = costume ? [costume] : WARDROBE_SLOTS.flatMap((slot) => bySlot.get(slot) ?? []);
   for (const item of worn) {
-    const socket = sockets[item.slot];
-    socket.anchors.forEach((anchor, i) => {
-      // The first of two anchors is the left one: mirror the item onto it.
-      const mirror = socket.anchors.length === 2 && i === 0 ? -1 : 1;
-      for (const p of item.pieces) {
-        const offset = times(p.at, socket.size);
-        const turn = p.turn ?? NO_TURN;
-        piece(
-          item.slot,
-          p.shape,
-          add(anchor, [offset[0] * mirror, offset[1], offset[2]]),
-          times(p.size, socket.size),
-          hexToRgb(p.color),
-          [turn[0], turn[1] * mirror, turn[2] * mirror],
-        );
-      }
-    });
+    // Costumes wear their rarity's finish (owner, #261); other clothing is plain vinyl.
+    const finish = item.slot === 'costume' ? ART_RULES.finishByRarity[item.rarity] : 'vinyl';
+    // Pieces grouped by socket, in order: each anchor in turn, then its pieces.
+    const groups = new Map<CostumeAnchor | undefined, KeeperItemPiece[]>();
+    for (const p of item.pieces) groups.set(p.on, [...(groups.get(p.on) ?? []), p]);
+    for (const [on, group] of groups) {
+      const socket = on === undefined ? socketOf(item.slot) : bodySockets[on];
+      socket.anchors.forEach((anchor, i) => {
+        // The first of two anchors is the left one: mirror the item onto it.
+        const mirror = socket.anchors.length === 2 && i === 0 ? -1 : 1;
+        for (const p of group) {
+          const offset = times(p.at, socket.size);
+          const x = offset[0] * mirror;
+          const turn = p.turn ?? NO_TURN;
+          pieces.push({
+            shape: p.shape,
+            // Turned with the anchor: (0, −1) goes to (−sin, −cos), like the arm itself.
+            at: add(anchor.at, [
+              x * anchor.cos + offset[1] * anchor.sin,
+              -x * anchor.sin + offset[1] * anchor.cos,
+              offset[2],
+            ]),
+            size: times(p.size, socket.size),
+            turn: [turn[0], turn[1] * mirror, turn[2] * mirror + anchor.roll],
+            color: hexToRgb(p.color),
+            layer: item.slot,
+            ...(p.glow ? { glow: true } : finish === 'vinyl' ? {} : { finish }),
+          });
+        }
+      });
+    }
   }
 
   return {
