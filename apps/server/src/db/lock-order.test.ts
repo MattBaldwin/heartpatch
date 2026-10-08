@@ -5,6 +5,7 @@ import {
   applyBattleAction,
   BATTLE_RULES,
   GAME_DATA,
+  hexDistance,
   hexKey,
   hexNeighbors,
   STARTERS,
@@ -28,6 +29,7 @@ import { createHollowConsumer } from '../modules/hollow/consumer.js';
 import { createHollowRepo } from '../modules/hollow/repo.js';
 import { createHollowService } from '../modules/hollow/service.js';
 import { grantItems } from '../modules/inventory/service.js';
+import { createJourneyBattlePort, createJourneysService } from '../modules/journeys/service.js';
 import { createLoreConsumer } from '../modules/lore/consumer.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
 import { createMilestonesConsumer } from '../modules/milestones/consumer.js';
@@ -61,6 +63,7 @@ import {
   tileExplore,
   gatherJobs,
   inventories,
+  journeys,
   loreFound,
   mapMembers,
   maps,
@@ -461,6 +464,81 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     expect(finishing).not.toBeNull();
     return { kid, mapId, heroId, target, battle, fights, finishing: finishing! };
   }
+
+  /** A journey (#270) to the kid's nearest trading post, one move from winning. */
+  async function journeyOneMoveFromWinning(prefix: string) {
+    const kid = await player(prefix);
+    const map = await createMapsService({
+      db,
+      tutorialRequired: false,
+      keeperRequired: false,
+    }).create(kid, { name: 'Lock Patch', timeZone: 'UTC' });
+    const mapId = map.id;
+    const [hero] = await db
+      .insert(squishies)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: STARTERS.speciesIds[0]!,
+        element: 'fire',
+        feeling: 'cozy',
+        level: 40,
+      })
+      .returning({ id: squishies.id });
+    const all = await db.select().from(tiles).where(eq(tiles.mapId, mapId));
+    const mine = all.filter((t) => t.ownerUserId === kid.id);
+    const near = (t: (typeof all)[number]) => Math.min(...mine.map((m) => hexDistance(m, t)));
+    const post = all
+      .filter((t) => t.terrain === 'trading-post')
+      .sort((a, b) => near(a) - near(b))[0]!;
+
+    const content = defaultBattleContent();
+    const fights = createBattlesService({ db, content, journeys: createJourneyBattlePort() });
+    const { battle } = await createJourneysService({ battles: fights }).start(kid, mapId, {
+      q: post.q,
+      r: post.r,
+    });
+    let finishing: { action: PlayerBattleAction; turn: number } | null = null;
+    for (let i = 0; i < content.rules.maxTurns + 5 && !finishing; i++) {
+      const { state } = (await createBattlesRepo(db).findBattle(battle.id))!;
+      const side = state.sides.a;
+      const move = side.squishies[side.active]!.moves[0]!;
+      const action: PlayerBattleAction = { type: 'move', move };
+      const next = applyBattleAction(content, state, {
+        type: 'turn',
+        choices: { a: { type: 'move', move } },
+      });
+      if (next.phase.type === 'over') {
+        expect(next.phase.result.winner).toBe('a');
+        finishing = { action, turn: state.turn };
+      } else {
+        await fights.act(kid, battle.id, { action, turn: state.turn });
+      }
+    }
+    if (!finishing) throw new Error('the journey never got one move from winning');
+    return { kid, mapId, heroId: hero!.id, battle, fights, finishing };
+  }
+
+  it("takes a journey's row after the battle and before the squishies (battles `finish`, #270 step 5b)", async () => {
+    const { kid, heroId, battle, fights, finishing } = await journeyOneMoveFromWinning('wanderer');
+    // Hold the journey's row (another finish of it), let the winning move
+    // queue there holding the battle, then take the hero as nightfall would:
+    // the finish must not hold the squishy yet. Out of order, Postgres would
+    // report a deadlock (40P01) or the lock timeout would fail it.
+    await holdThen(
+      (tx) =>
+        tx
+          .select({ id: journeys.id })
+          .from(journeys)
+          .where(eq(journeys.battleId, battle.id))
+          .for('update'),
+      () => fights.act(kid, battle.id, finishing),
+      (tx) => lockSquishy(tx, heroId),
+    );
+    const [row] = await db.select().from(journeys).where(eq(journeys.battleId, battle.id));
+    expect(row).toMatchObject({ outcome: 'won' });
+    expect(row!.visitUntil).not.toBeNull();
+  });
 
   it("rolls a capture's found clothing after the battle's squishy locks (battles `finish`, #84)", async () => {
     const { kid, mapId, heroId, target, battle, fights, finishing } =

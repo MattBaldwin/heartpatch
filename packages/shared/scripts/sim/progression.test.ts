@@ -8,8 +8,9 @@ import {
   PROGRESSION_CONFIG,
   type ProgressionConfig,
 } from './progression-config.js';
-import { gapWin, renderProgression, summarise } from './progression-report.js';
-import { modelData, runProgression, wildOdds } from './progression.js';
+import { JOURNEY_RULES } from '../../src/data/journeys.js';
+import { gapWin, journeyGateMisses, renderProgression, summarise } from './progression-report.js';
+import { journeyOdds, modelData, runProgression, wildOdds } from './progression.js';
 
 /** A short run: the same model, a few days and a small odds estimate. */
 const SMALL: ProgressionConfig = { ...PROGRESSION_CONFIG, days: 6, estimateGames: 4 };
@@ -107,6 +108,31 @@ describe('wildOdds', () => {
     expect(odds).toEqual(wildOdds(data, SMALL, [-2, 1], 4));
     expect(odds).toHaveLength(3);
     for (const row of odds) expect(row.odds.map((o) => o.offset)).toEqual([-2, 1]);
+  });
+});
+
+describe('journeyOdds (#270)', () => {
+  const runs = [casual!, engaged!].map((kid) => runProgression(data, SMALL, CURRENT_RULES, kid, 4));
+  const options = { days: [3], distances: [1, 2, 3, 4, 8], games: 40 };
+
+  it('gives the same table each time, with the data’s level and team size', () => {
+    const rows = journeyOdds(data, SMALL, runs, JOURNEY_RULES, options);
+    expect(rows).toEqual(journeyOdds(data, SMALL, runs, JOURNEY_RULES, options));
+    expect(rows.map((r) => r.kid)).toEqual(['casual', 'engaged']);
+    expect(rows[0]!.odds.map((o) => [o.distance, o.size, o.level])).toEqual([
+      [1, 1, 6],
+      [2, 1, 8],
+      [3, 2, 10],
+      [4, 2, 12],
+      [8, 3, 20],
+    ]);
+  });
+
+  it('passes the sim gate: a casual kid wins at distance ≤ 4 at least 60 % of the time on day 3', () => {
+    const rows = journeyOdds(data, SMALL, runs, JOURNEY_RULES, options);
+    expect(journeyGateMisses(rows)).toEqual([]);
+    // Far posts stay a stretch for a casual kid on day 3 (owner decision 3: uncapped).
+    expect(rows[0]!.odds.at(-1)!.percent).toBeLessThan(60);
   });
 });
 

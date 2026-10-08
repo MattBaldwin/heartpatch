@@ -97,3 +97,4 @@ export function isOnWatch(
 export * from './tending.js';
 export * from './fences.js';
 export * from './reach.js';
+export * from './journeys.js';
