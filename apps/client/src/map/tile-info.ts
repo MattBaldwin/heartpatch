@@ -1,4 +1,5 @@
 import {
+  isTradingPost,
   FEELINGS,
   JOB_RULES,
   RESOURCES,
@@ -7,10 +8,12 @@ import {
   type GuardianDifficulty,
   type GuardianHint,
   type MapMember,
+  type PostReach,
   type PublicTile,
   type Resource,
 } from '@heartpatch/shared';
 import { itemIcon } from '../inventory/item-icons.js';
+import { POST_SOON, postReachLine } from '../trading/post-model.js';
 
 // What the tile info panel says about a tile (copy follows docs/STYLE_GUIDE.md).
 // Pure, so every case is unit-tested. Home bases can never be claimed (design
@@ -33,6 +36,11 @@ export interface TileInfo {
    * Keeper spot (#238's nesting economy): "Squishies gather 🌲 Timber here."
    */
   readonly gatherer: string | null;
+  /**
+   * A trading post (#269): how this player reaches it ("🔗 Your land reaches
+   * it!", "🧭 3 tiles from your land…") and what's coming there. Null elsewhere.
+   */
+  readonly post: { readonly reach: string | null; readonly soon: string } | null;
   readonly home: boolean;
 }
 
@@ -42,6 +50,8 @@ export function describeTile(
   me: string | null,
   /** Seasons on for the map: a seasonal home node only shows in its own (owner decision 2026-10-06). */
   seasons: readonly string[] = [],
+  /** How this player reaches the tile, when it's a trading post (shared `postReach`). */
+  reach: PostReach | null = null,
 ): TileInfo {
   const terrain = TERRAINS.find((t) => t.id === tile.terrain);
   const found = RESOURCES.find((r) => r.id === tile.nodeResource);
@@ -54,8 +64,11 @@ export function describeTile(
   const mine = me !== null && tile.ownerUserId === me;
   const home = tile.homeSlot !== null;
 
+  const post = isTradingPost(tile);
   let owner: string;
-  if (home) {
+  if (post) {
+    owner = 'A trading post for every Keeper. Nobody can claim it!';
+  } else if (home) {
     if (mine) owner = 'Your home base. Nobody can ever take it!';
     else if (ownerName !== null) owner = `${ownerName}'s home base. Nobody can ever take it!`;
     else owner = 'A cozy home spot, waiting for a new Keeper.';
@@ -68,12 +81,13 @@ export function describeTile(
   }
 
   return {
-    title: terrain?.name ?? 'Mystery land',
+    title: (post ? tile.post?.name : undefined) ?? terrain?.name ?? 'Mystery land',
     about: terrain?.description ?? 'Nobody knows much about this spot yet.',
     owner,
     resource: resource ? `Find ${resource.name} here.` : null,
     guardians: guardianLine(tile.guardianHint),
     gatherer: gathererLine(tile),
+    post: post ? { reach: postReachLine(reach), soon: POST_SOON } : null,
     home,
   };
 }

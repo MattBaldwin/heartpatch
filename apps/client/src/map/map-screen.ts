@@ -1,6 +1,8 @@
 import {
   hexKey,
   hexToWorld,
+  isTradingPost,
+  postReach,
   type Hex,
   type HexKey,
   type HighlightTarget,
@@ -199,6 +201,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         (id) => state.member(id),
         user?.id ?? null,
         seasonsOn(state.view.map.timeZone, options.now?.() ?? new Date()),
+        isTradingPost(tile) && user ? postReach(tile, state.view.tiles, user.id) : null,
       ),
     );
     options.tileActions?.show(panel.actions, tile, state.view);

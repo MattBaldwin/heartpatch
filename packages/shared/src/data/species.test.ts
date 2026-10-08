@@ -10,6 +10,7 @@ import { GUARDIAN_RULES } from './server/guardian-rules.js';
 import { SERVER_GAME_DATA } from './server/index.js';
 import { SPAWN_TABLES } from './server/spawn-tables.js';
 import { MOVES, SPECIES } from './species.js';
+import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
 /*
  * The launch roster (issue #10, design doc §4). Schema and reference checks
@@ -101,7 +102,8 @@ describe('where the roster lives (server-only tables)', () => {
   });
 
   it('has someone to find on every terrain on any day of the year', () => {
-    for (const terrain of GAME_DATA.terrains) {
+    // Trading posts (#269) are never wild: nobody spawns there.
+    for (const terrain of GAME_DATA.terrains.filter((t) => t.id !== TRADING_POST_TERRAIN)) {
       const everyDay = SPAWN_TABLES.filter(
         (t) => t.terrains.includes(terrain.id) && !t.season && !t.timeOfDay,
       ).flatMap((t) => t.entries.filter((e) => byId.get(e.species)?.season === undefined));

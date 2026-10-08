@@ -2,6 +2,7 @@ import {
   activeSeasons,
   GAME_DATA,
   hexToWorld,
+  isTradingPost,
   type Hex,
   type PublicTile,
 } from '@heartpatch/shared';
@@ -147,7 +148,8 @@ export function tileJitter(tile: Hex, terrain: string): TileJitter {
 
 /** True when a tile is drawn muted: wild land nobody owns. Juniper's Gap always glows in colour. */
 export function isMuted(tile: Pick<PublicTile, 'ownerUserId' | 'terrain'>): boolean {
-  return tile.ownerUserId === null && tile.terrain !== 'junipers-gap';
+  // A trading post (#269) belongs to everyone, so it's never wild-looking.
+  return tile.ownerUserId === null && tile.terrain !== 'junipers-gap' && !isTradingPost(tile);
 }
 
 export type Rgb = readonly [number, number, number];

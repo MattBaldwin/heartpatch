@@ -4,6 +4,7 @@ import {
   KEEPER_BASES,
   MAP_MAX_PLAYERS,
   generateMap,
+  tradingPostLabels,
   type MapMember,
   type MapView,
   type PublicTile,
@@ -34,6 +35,8 @@ export function member(n: number, homeSlot: number): MapMember {
 export function testView(players = 1, seed = 'map-render-test'): MapView {
   const generated = generateMap(GAME_DATA, { seed, playerCount: MAP_MAX_PLAYERS });
   const members = Array.from({ length: players }, (_, i) => member(i + 1, i));
+  // Trading posts (#269) named as the server names them.
+  const posts = tradingPostLabels(generated.tiles, GAME_DATA.mapGen.tradingPosts);
   const tiles: PublicTile[] = generated.tiles
     .map((t) => ({
       q: t.q,
@@ -47,6 +50,7 @@ export function testView(players = 1, seed = 'map-render-test'): MapView {
       defenders: 0,
       guardianHint: null,
       buildings: [],
+      post: posts.get(`${String(t.q)},${String(t.r)}`) ?? null,
     }))
     .sort((a, b) => a.q - b.q || a.r - b.r);
   return {

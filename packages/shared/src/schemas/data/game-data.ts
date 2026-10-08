@@ -10,6 +10,7 @@ import { ResourceSchema } from './resources.js';
 import { SeasonSchema } from './seasons.js';
 import { SpeciesSchema } from './species.js';
 import { TerrainSchema } from './terrains.js';
+import { TRADING_POST_TERRAIN } from '../../territory/reach.js';
 import { ArtRulesSchema, checkArtRules, checkRosterArt, checkSpeciesArt } from './art-rules.js';
 import { BodySchema, checkSpeciesVisual, PartSchema, visualRegistry } from './visuals.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Path, type Report } from './issues.js';
@@ -234,6 +235,18 @@ export const GameDataSchema = z
     const gapTerrain = data.terrains.find((t) => t.id === mapGen.gapTerrain);
     if (gapTerrain !== undefined && gapTerrain.weight !== 0) {
       report(['mapGen', 'gapTerrain'], "Juniper's Gap terrain must have weight 0");
+    }
+    // Trading posts (#269): their terrain is only placed on purpose and holds
+    // nothing to gather.
+    const postTerrain = data.terrains.find((t) => t.id === TRADING_POST_TERRAIN);
+    if (postTerrain === undefined) {
+      report(['terrains'], `the trading-post terrain "${TRADING_POST_TERRAIN}" is missing`);
+    } else if (
+      postTerrain.weight !== 0 ||
+      postTerrain.nodeChance !== 0 ||
+      (postTerrain.extraNodes ?? []).length > 0
+    ) {
+      report(['terrains'], 'trading posts must have weight 0 and no nodes');
     }
     mapGen.homeRingNodes.forEach((id, i) => {
       checkRef(resources, 'resource', id, ['mapGen', 'homeRingNodes', i], report);

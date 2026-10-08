@@ -272,6 +272,15 @@ export const GAME_EVENTS = {
     }),
   },
   /**
+   * Trading posts (#269) came to an older map: the boot pass turned these
+   * neutral tiles into posts. New maps are made with theirs and write none.
+   * Land is public, so members see the same.
+   */
+  'post.placed': {
+    internal: z.strictObject({ tiles: z.array(z.strictObject(coords)).min(1) }),
+    public: z.object({ tiles: z.array(z.object(coords)) }),
+  },
+  /**
    * A player changed who stands watch on one of their tiles (#15). Members
    * see how many; which squishies stays internal.
    */

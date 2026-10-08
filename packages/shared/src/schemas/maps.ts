@@ -288,6 +288,14 @@ export const PublicTileSchema = z.object({
    * parse; the server always sends it.
    */
   fences: z.array(PublicFenceSchema).optional(),
+  /**
+   * A trading post (#269): its index on the map (in (q, r) order) and name.
+   * Null on every other tile. Optional only so older servers' views parse.
+   */
+  post: z
+    .object({ index: z.number().int().min(0), name: z.string() })
+    .nullable()
+    .optional(),
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 

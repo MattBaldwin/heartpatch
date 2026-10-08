@@ -45,8 +45,9 @@ describe('MapScene', () => {
     const tileMeshes = scene.meshes.filter((m) => m.name.startsWith('tiles-')) as Mesh[];
     expect(map.stats.tiles).toBe(469);
     expect(tileMeshes).toHaveLength(map.stats.tileMeshes);
-    // 8 terrains plus home tiles, however many tiles there are.
-    expect(tileMeshes.length).toBeLessThanOrEqual(9);
+    // 9 terrains (trading posts too, #269) plus home tiles, however many tiles there are.
+    expect(tileMeshes.length).toBeLessThanOrEqual(10);
+    expect(scene.getMeshByName('tiles-trading-post')).toBeTruthy();
     expect(tileMeshes.reduce((n, m) => n + m.thinInstanceCount, 0)).toBe(469);
     expect(scene.getMeshByName('tiles-home')).toBeTruthy();
   });
@@ -82,7 +83,8 @@ describe('MapScene', () => {
     // add one each per kind, however many tiles.
     for (const halloween of [false, true]) {
       const { scene } = build(testView(4), { halloween });
-      expect(scene.meshes.filter((m) => m.isEnabled()).length).toBeLessThan(55);
+      // Trading posts (#269) add two: their tile look and the hut.
+      expect(scene.meshes.filter((m) => m.isEnabled()).length).toBeLessThan(57);
     }
   });
 
@@ -214,8 +216,8 @@ describe('MapScene', () => {
     const muted = map.stats.mutedTiles;
     const mutedProps = () => map.stats.mutedProps;
     const before = mutedProps();
-    // Everything but the home ring and the Gap is wild.
-    expect(muted).toBe(469 - 7 - 7);
+    // Everything but the home ring, the Gap and the 4 trading posts (#269) is wild.
+    expect(muted).toBe(469 - 7 - 7 - 4);
     expect(before).toBeGreaterThan(0);
     // Someone claims a forest tile: it and its trees come back in colour.
     const view = testView(1);

@@ -28,7 +28,9 @@
 .tile-panel[hidden],
 .tile-panel-resource[hidden],
 .tile-panel-guardians[hidden],
-.tile-panel-gatherer[hidden] {
+.tile-panel-gatherer[hidden],
+.tile-panel-post[hidden],
+.tile-panel-post-soon[hidden] {
   display: none;
 }
 
@@ -159,7 +161,9 @@
 .tile-panel-about,
 .tile-panel-resource,
 .tile-panel-guardians,
-.tile-panel-gatherer {
+.tile-panel-gatherer,
+.tile-panel-post,
+.tile-panel-post-soon {
   margin: 4px 0 0;
   font-size: 15px;
   line-height: 1.35;
@@ -167,6 +171,19 @@
 
 .tile-panel-about:first-child {
   margin-top: 0;
+}
+
+.tile-panel-post {
+  font-weight: 700;
+}
+
+/* A trading post (#269): what opens there, in a cozy cream note. */
+.tile-panel-post-soon {
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #fff8ec;
+  color: #7a5410;
+  font-weight: 600;
 }
 
 .tile-panel-resource {

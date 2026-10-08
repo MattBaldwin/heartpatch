@@ -2,6 +2,7 @@ import { hexKey, hexNeighbors, type Hex } from '../hex/index.js';
 import type { TerritoryRules } from '../schemas/data/territory.js';
 import type { PvpMode } from '../schemas/maps.js';
 import type { SquishyState } from '../schemas/squishies.js';
+import { isTradingPost } from './reach.js';
 
 // Territory rules (design doc §11, decisions B and C), shared so the server
 // decides and the client explains with the same logic. Pure: the server
@@ -12,17 +13,20 @@ export interface TerritoryTile extends Hex {
   readonly ownerUserId: string | null;
   /** Set on a home base's tiles; those can never be battled for. */
   readonly homeSlot: number | null;
+  /** Terrain id: a trading post can never be battled for either (#269). Optional for older callers. */
+  readonly terrain?: string;
 }
 
 /**
  * Why a player can't battle for a tile, or null if they can (time-based
  * limits, like cooldowns and daily caps, are checked separately):
  * - `home`: a Heart Seed or its ring, never taken (design doc §11).
+ * - `post`: a trading post, shared and never owned (#269).
  * - `mine`: it's already theirs.
  * - `too-far`: not next to their land (outposts come in Phase 2).
  * - `pvp-off`: another player's land, and the map's PvP mode is Off.
  */
-export type AttackTargetProblem = 'home' | 'mine' | 'too-far' | 'pvp-off';
+export type AttackTargetProblem = 'home' | 'post' | 'mine' | 'too-far' | 'pvp-off';
 
 export function attackTargetProblem(
   target: TerritoryTile,
@@ -31,6 +35,7 @@ export function attackTargetProblem(
   pvpMode: PvpMode,
 ): AttackTargetProblem | null {
   if (target.homeSlot !== null) return 'home';
+  if (target.terrain !== undefined && isTradingPost({ terrain: target.terrain })) return 'post';
   if (target.ownerUserId === userId) return 'mine';
   const mine = new Set(tiles.filter((t) => t.ownerUserId === userId).map(hexKey));
   if (!hexNeighbors(target).some((n) => mine.has(hexKey(n)))) return 'too-far';
@@ -90,3 +95,4 @@ export function isOnWatch(
 }
 export * from './tending.js';
 export * from './fences.js';
+export * from './reach.js';

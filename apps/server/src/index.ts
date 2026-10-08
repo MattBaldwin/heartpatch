@@ -8,6 +8,7 @@ import { createLoreConsumer } from './modules/lore/consumer.js';
 import { createMilestonesConsumer } from './modules/milestones/consumer.js';
 import { createMilestonesService } from './modules/milestones/service.js';
 import { relayoutHomes } from './modules/buildings/layout.js';
+import { placeMissingTradingPosts } from './modules/maps/trading-posts.js';
 import type { HollowService } from './modules/hollow/service.js';
 import { createRaidsConsumer } from './modules/raids/consumer.js';
 import { createLandTending } from './modules/territory/tending.js';
@@ -85,6 +86,23 @@ relayoutHomes(db.db, clock, (owner, err) => {
   },
   (err: unknown) => {
     app.log.error({ err }, 'home re-layout failed');
+  },
+);
+// Trading posts (#269) for patches made before them. Idempotent, so every
+// boot can run it; it never blocks start. A patch with no fair spot free is
+// skipped (no land is ever taken) and tried again next boot.
+placeMissingTradingPosts(db.db, (mapId, err) => {
+  app.log.error({ err, mapId }, 'trading-post pass skipped a patch');
+}).then(
+  (done) => {
+    if (done.placed > 0)
+      app.log.info({ placed: done.placed }, 'placed trading posts on older patches');
+    if (done.skipped.length > 0) {
+      app.log.warn({ mapIds: done.skipped }, 'no fair spot free for trading posts yet');
+    }
+  },
+  (err: unknown) => {
+    app.log.error({ err }, 'trading-post pass failed');
   },
 );
 // Closing the app (shutdown or failed start) stops the jobs, then drains the DB pool.
