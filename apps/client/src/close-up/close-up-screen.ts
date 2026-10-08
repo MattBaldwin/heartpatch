@@ -789,13 +789,20 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   /** The camera when Back was pressed. */
   let leaveFrom: { pose: ClosePose; drop: number } = framed;
 
+  /** A resize came while About was open: frame again once it shuts (#267). */
+  let reframeSkipped = false;
   /**
    * Frames the squishy in the space above the card (as it is with About
    * shut, so opening it doesn't move the squishy). On open and on resize.
    */
   function reframe(): void {
     const s = scene3d;
-    if (!s || about.open) return;
+    if (!s) return;
+    if (about.open) {
+      reframeSkipped = true;
+      return;
+    }
+    reframeSkipped = false;
     const v = view();
     const cardTop = card.getBoundingClientRect().top - layer.getBoundingClientRect().top;
     framed = frameFor(CAMERA_POSES.face, s.height, v, cardTop > 0 ? cardTop : v.height);
@@ -813,6 +820,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   new ResizeObserver(resized).observe(layer);
   about.addEventListener('toggle', () => {
     card.classList.toggle('close-up-reading', about.open);
+    if (!about.open && reframeSkipped && isOpen()) reframe();
   });
 
   /** Starts the frame loop if it isn't running. */
