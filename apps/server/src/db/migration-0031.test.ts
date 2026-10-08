@@ -20,7 +20,7 @@ interface Journal {
 describe.skipIf(!url)('migration 0031 on an existing patch (#204, needs DATABASE_URL)', () => {
   const name = `heartpatch_m0031_${String(process.pid)}_${String(Date.now())}`;
   let admin: DbClient;
-  let client: DbClient;
+  let client: DbClient | undefined;
   let before: string;
 
   beforeAll(async () => {
@@ -47,28 +47,31 @@ describe.skipIf(!url)('migration 0031 on an existing patch (#204, needs DATABASE
   });
 
   afterAll(async () => {
-    await client.close();
+    await client?.close();
     await admin.db.execute(`drop database if exists "${name}" with (force)`);
     await admin.close();
   });
 
   /** Every pre-0031 row this test made, as JSON, for a before/after compare. */
   const snapshot = async () => {
-    const rows = await client.db.execute(
+    const rows = await client!.db.execute(
       `select json_build_object(
          'tiles', (select json_agg(t order by t.id) from tiles t),
          'members', (select json_agg(m order by m.user_id) from map_members m),
          'buildings', (select json_agg(b order by b.id) from buildings b),
-         'attacks', (select json_agg(json_build_object(
-           'id', a.id, 'tile', a.tile_id, 'outcome', a.outcome, 'ended', a.ended_at,
-           'fire', a.lost_fire_refund) order by a.id) from tile_attacks a)
+         'attacks', (select json_agg(to_jsonb(a) - array['part', 'follows_attack_id',
+           'fence_segment_id', 'fence_building_id', 'fence_hp_before', 'fence_max_hp',
+           'fence_hp_after', 'lost_fences'] order by a.id) from tile_attacks a)
        ) as s`,
     );
     return JSON.stringify((rows[0] as { s: unknown }).s);
   };
 
   it('keeps every home, tile, building and challenge, and adds no fences', async () => {
-    const db = client.db;
+    const db = client!.db;
+    // Seeded through the code schema, which lists every column it knows: a
+    // later migration that adds a column to these tables needs raw SQL here,
+    // as tile_attacks already does.
     const now = new Date().toISOString();
     const user = async (username: string) =>
       (
