@@ -665,13 +665,18 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
   });
 
   it('counts each search towards the Seeker track (#199)', async () => {
-    // Milestones judge membership at the event's game time, so this patch
-    // plays on today's clock, kept up with the real one.
+    // Milestones judge membership at the event's game time (its database
+    // time, shifted by the clock). Play on today's clock and have both
+    // members join an hour back, as the milestones tests do, so clock skew
+    // between the app and the database can't decide it.
     clock.setTime(Date.now());
     const server = await start();
     const me = await player();
     const friend = await player();
     const mapId = await patch(server, me, [friend]);
+    await db.execute(
+      `update map_members set joined_at = now() - interval '1 hour' where map_id = '${mapId}'`,
+    );
     const { first } = await lineFromHome(mapId, me);
     await ownMeadow(first, me);
     const hands = (await view(server, me, mapId, first)).spots.filter((s) => s.tool === null);
