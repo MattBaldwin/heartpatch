@@ -63,9 +63,6 @@ export type KeeperHairstyle = z.infer<typeof KeeperHairstyleSchema>;
 export const KeeperEyesSchema = z.enum(['round', 'oval', 'happy', 'sleepy']);
 export type KeeperEyes = z.infer<typeof KeeperEyesSchema>;
 
-export const KeeperMouthSchema = z.enum(['smile', 'grin', 'tiny', 'cat']);
-export type KeeperMouth = z.infer<typeof KeeperMouthSchema>;
-
 /** A proportion of the Keeper's standard height (about 1.6 world units). */
 const proportion = (min: number, max: number) => z.number().min(min).max(max);
 
@@ -94,12 +91,12 @@ export const KeeperBodySchema = z.strictObject({
 });
 export type KeeperBody = z.infer<typeof KeeperBodySchema>;
 
+/**
+ * A preset's face (#289). Every Keeper has the same line face: ink brows, a
+ * flat ink nose and a smile line. Only the eyes differ.
+ */
 export const KeeperFaceSchema = z.strictObject({
   eyes: KeeperEyesSchema,
-  mouth: KeeperMouthSchema,
-  freckles: z.boolean(),
-  /** Soft eyebrows over the eyes. */
-  brows: z.boolean(),
 });
 export type KeeperFace = z.infer<typeof KeeperFaceSchema>;
 

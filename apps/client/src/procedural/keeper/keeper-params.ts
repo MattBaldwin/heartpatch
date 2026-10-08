@@ -197,7 +197,7 @@ export function keeperParams(
   const shoes = hexToRgb(outfit.shoes);
   const trim = hexToRgb(outfit.trim);
   const skin = hexToRgb(base.skin);
-  const ink = hexToRgb(KEEPER.colors.ink);
+  const line = hexToRgb(KEEPER.colors.faceLine);
   const white = hexToRgb(KEEPER.colors.white);
 
   // Seeded by the whole config, so the same config is always the same Keeper.
@@ -311,79 +311,44 @@ export function keeperParams(
     piece('face', shape, p.at, size, color, [p.turn[0], p.turn[1], p.turn[2] + roll]);
     return p.at;
   };
+  // Lines are flat: thin enough to read as drawn on the face, not stuck on it.
+  const flat = 0.012 * d;
   for (const side of [-1, 1]) {
     const ex = side * f.eyeSpread;
     switch (base.face.eyes) {
       case 'round':
       case 'oval': {
+        // Soft eyes (#289): small and shallow, so they sit on the face.
         const size: Vec3 =
           base.face.eyes === 'round'
-            ? [0.15 * d, 0.17 * d, 0.07 * d]
-            : [0.11 * d, 0.2 * d, 0.07 * d];
+            ? [0.11 * d, 0.125 * d, 0.035 * d]
+            : [0.085 * d, 0.145 * d, 0.035 * d];
         const at = feature('ellipsoid', ex, f.eyeHeight, size, eye);
-        // A glossy glint, up and to the right on both eyes.
+        // A small glint, up and to the right on both eyes.
         piece(
           'face',
           'ellipsoid',
-          add(at, [size[0] * 0.22, size[1] * 0.22, -size[2] * 0.4]),
-          [size[0] * 0.38, size[0] * 0.38, size[2] * 0.4],
+          add(at, [size[0] * 0.2, size[1] * 0.22, -size[2] * 0.45]),
+          [size[0] * 0.3, size[0] * 0.3, size[2] * 0.3],
           white,
         );
         break;
       }
       case 'happy':
         // Closed, smiling eyes: an arc upside down (∩).
-        feature('arc', ex, f.eyeHeight, [0.16 * d, 0.075 * d, 0.05 * d], eye, 180);
+        feature('arc', ex, f.eyeHeight, [0.16 * d, 0.075 * d, 0.05 * d], line, 180);
         break;
       case 'sleepy':
-        feature('arc', ex, f.eyeHeight - 0.01, [0.17 * d, 0.06 * d, 0.05 * d], eye);
+        feature('arc', ex, f.eyeHeight - 0.01, [0.17 * d, 0.06 * d, 0.05 * d], line);
         break;
     }
-    if (base.face.brows) {
-      feature('capsule', ex, f.browHeight, [0.03 * d, 0.12 * d, 0.03 * d], hair, 90 - side * 10);
-    }
-    feature(
-      'ellipsoid',
-      side * f.cheekSpread,
-      f.cheekHeight,
-      [0.15 * d, 0.08 * d, 0.035 * d],
-      hexToRgb(KEEPER.colors.blush),
-    );
-    if (base.face.freckles) {
-      for (let i = 0; i < KEEPER.freckles.count; i++) {
-        const spread = KEEPER.freckles.spread;
-        feature(
-          'ellipsoid',
-          side * f.cheekSpread + wobble(rng, spread),
-          f.cheekHeight + 0.05 + wobble(rng, spread * 0.5),
-          [0.024 * d, 0.024 * d, 0.012 * d],
-          hexToRgb(KEEPER.colors.freckle),
-        );
-      }
-    }
+    // Brows: a gentle arch (∩) over each eye, never sloping towards the nose.
+    feature('arc', ex, f.browHeight, [0.13 * d, 0.03 * d, flat], line, 180);
   }
-  switch (base.face.mouth) {
-    case 'smile':
-      feature('arc', 0, f.mouthHeight, [0.17 * d, 0.075 * d, 0.05 * d], ink);
-      break;
-    case 'grin':
-      feature(
-        'ellipsoid',
-        0,
-        f.mouthHeight,
-        [0.14 * d, 0.1 * d, 0.05 * d],
-        hexToRgb(KEEPER.colors.mouth),
-      );
-      break;
-    case 'tiny':
-      feature('arc', 0, f.mouthHeight, [0.09 * d, 0.045 * d, 0.045 * d], ink);
-      break;
-    case 'cat':
-      for (const side of [-1, 1]) {
-        feature('arc', side * 0.04, f.mouthHeight, [0.08 * d, 0.045 * d, 0.04 * d], ink);
-      }
-      break;
-  }
+  // Nose: a short flat stroke, a touch off-centre like a drawn line.
+  feature('capsule', 0.008, f.noseHeight, [0.018 * d, 0.06 * d, flat], line, 8);
+  // Mouth: one curved line, a smile.
+  feature('arc', 0, f.mouthHeight, [0.15 * d, 0.06 * d, flat * 1.6], line);
 
   // ── Hair ──────────────────────────────────────────────────────────────
   const j = KEEPER.jitter;

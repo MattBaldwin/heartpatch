@@ -10,6 +10,7 @@ import {
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { hexToRgb } from '../params.js';
+import { KEEPER } from './keeper-config.js';
 import { keeperItems } from './keeper-items.js';
 import { keeperHash, keeperParams, type KeeperParams, type KeeperPiece } from './keeper-params.js';
 
@@ -84,6 +85,23 @@ describe('keeperParams', () => {
     }
   });
 
+  it('draws the same line face on every Keeper: no coloured mouth or blush (#289)', () => {
+    const line = hexToRgb(KEEPER.colors.faceLine).join();
+    const white = hexToRgb(KEEPER.colors.white).join();
+    for (const base of BASES) {
+      for (const eyeColor of KEEPER_DATA.eyeColors) {
+        const p = keeperParams({ ...defaultKeeperConfig(base), eyeColor: eyeColor.id }, KEEPER_DATA);
+        const eye = hexToRgb(eyeColor.color).join();
+        const face = piecesOf(p, 'face');
+        // Every face piece is a drawn line, an eye or a glint; nothing else.
+        for (const piece of face) expect([line, eye, white]).toContain(piece.color.join());
+        // Brows, nose and smile are always there: at least four lines.
+        const lines = face.filter((piece) => piece.color.join() === line);
+        expect(lines.length, base.id).toBeGreaterThanOrEqual(4);
+      }
+    }
+  });
+
   it('uses the picked colours for hair, eyes and outfit', () => {
     const config: KeeperConfig = {
       base: 'pip',
@@ -149,7 +167,7 @@ describe('keeperParams', () => {
   // Keeper) is a deliberate one. The e2e test checks the same hash in WebKit.
   it('keeps its build stable', () => {
     expect(keeperHash(keeperParams(GOLDEN_CONFIG, KEEPER_DATA))).toMatchInlineSnapshot(
-      `"9efc3ab44341fc2c668962479b508477"`,
+      `"f67f57c65bda360a6505de085f1de322"`,
     );
   });
 });
