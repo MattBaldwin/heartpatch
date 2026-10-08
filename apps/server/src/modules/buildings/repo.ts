@@ -5,6 +5,7 @@ import {
   type BuildingRowKind,
   type ElementId,
   type FeelingId,
+  type SquishyState,
 } from '@heartpatch/shared';
 import { and, asc, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
@@ -59,7 +60,7 @@ export interface HomeSquishyRow {
   feeling: FeelingId;
   nickname: string | null;
   level: number;
-  state: 'active' | 'hollowed';
+  state: SquishyState;
   habitatBuildingId: string | null;
   /** The Training Grounds it practices at, or null (owner decision 2026-10-06). */
   trainingBuildingId: string | null;

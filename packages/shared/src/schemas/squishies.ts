@@ -8,7 +8,8 @@ import { ElementIdSchema, FeelingIdSchema } from './data/elements.js';
 /** `/maps/:mapId/squishies/:squishyId/…` routes (care, habitats, the wardrobe). */
 export const SquishyParamsSchema = z.object({ mapId: z.uuid(), squishyId: z.uuid() });
 
-export const SquishyStateSchema = z.enum(['active', 'hollowed']);
+/** `in-trade` (#271): held in escrow for a trade or gift, off every job and out of every battle. */
+export const SquishyStateSchema = z.enum(['active', 'hollowed', 'in-trade']);
 export type SquishyState = z.infer<typeof SquishyStateSchema>;
 
 export const OwnedSquishySchema = z.object({

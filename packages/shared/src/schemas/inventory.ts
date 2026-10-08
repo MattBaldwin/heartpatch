@@ -40,6 +40,10 @@ export const ItemChangeReasonSchema = z.enum([
   'repair',
   /** Exploring your land (#199): finds, and the wear on the tool a search used. */
   'explore',
+  /** Trades and gifts (#271): held for an offer, landed by it, or given back. */
+  'trade-escrow',
+  'trade',
+  'trade-return',
   /**
    * Crafting Factory batches (#294): paid when one starts, things made as
    * they land, and what comes back when one stops. Ledgered against the batch.

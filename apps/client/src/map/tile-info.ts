@@ -13,7 +13,7 @@ import {
   type Resource,
 } from '@heartpatch/shared';
 import { itemIcon } from '../inventory/item-icons.js';
-import { POST_SOON, postReachLine } from '../trading/post-model.js';
+import { postReachLine } from '../trading/post-model.js';
 
 // What the tile info panel says about a tile (copy follows docs/STYLE_GUIDE.md).
 // Pure, so every case is unit-tested. Home bases can never be claimed (design
@@ -41,7 +41,7 @@ export interface TileInfo {
    * it!", "🧭 3 tiles from your land…") and what's coming there (null on a
    * post a journey away: its journey shows instead, #270). Null elsewhere.
    */
-  readonly post: { readonly reach: string | null; readonly soon: string | null } | null;
+  readonly post: { readonly reach: string | null } | null;
   readonly home: boolean;
 }
 
@@ -88,11 +88,9 @@ export function describeTile(
     resource: resource ? `Find ${resource.name} here.` : null,
     guardians: guardianLine(tile.guardianHint),
     gatherer: gathererLine(tile),
-    // A post my land doesn't reach shows its journey instead (#270, mockup
-    // screen b; `trading/journey-screen.ts`), which says "soon" once I'm in.
-    post: post
-      ? { reach: postReachLine(reach), soon: reach?.kind === 'journey' ? null : POST_SOON }
-      : null,
+    // The panel's actions add the journey (#270, mockup screen b) or "Visit
+    // post" (#271) under this line (`trading/journey-screen.ts`).
+    post: post ? { reach: postReachLine(reach) } : null,
     home,
   };
 }

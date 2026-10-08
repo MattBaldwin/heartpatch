@@ -25,7 +25,8 @@ import {
   journeyTeamLevels,
   LANTERNS,
 } from './journey-model.js';
-import { POST_SOON } from './post-model.js';
+import type { OpenPost } from './post-screen.js';
+import { VISIT_POST } from './post-model.js';
 import './trading.css';
 
 // Journeys to trading posts in the tile panel (#270; the owner-approved
@@ -38,6 +39,8 @@ import './trading.css';
 export interface JourneyScreenOptions {
   /** A journey started (or one going came back): the battle screen takes over. */
   openBattle: (battle: PlayerBattle) => void;
+  /** "Visit post" (#271): the post's screen opens, my land reaches it or I hold a pass. */
+  openPost?: (post: OpenPost, view: MapView) => void;
   api?: JourneyApi;
   jobs?: Pick<JobsApi, 'view'>;
   /** Device wall clock in ms (tests pass a fake). Close enough for a minutes countdown. */
@@ -150,6 +153,20 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
   const line = (text: string, testId: string, extra = '') =>
     el('p', { class: `tile-action-note ${extra}`.trim(), 'data-testid': testId }, text);
 
+  /** "Visit post": into the post's screen (Trade, Gift, Mailbox). */
+  const visitButton = (tile: PublicTile, view: MapView, passUntil: string | null) => {
+    const visit = el(
+      'button',
+      { type: 'button', class: 'auth-button bag-action', 'data-testid': 'post-visit' },
+      VISIT_POST,
+    );
+    visit.addEventListener('click', () => {
+      const name = tile.post?.name ?? JOURNEY_TEXT.somePost;
+      options.openPost?.({ q: tile.q, r: tile.r, name, passUntil }, view);
+    });
+    return visit;
+  };
+
   function render(): void {
     previewShown = null;
     if (!panel) {
@@ -166,14 +183,18 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
     const pass = passFor(tile, view);
     if (pass) {
       container.replaceChildren(
+        visitButton(tile, view, pass),
         line(JOURNEY_TEXT.open(Date.parse(pass) - now()), 'journey-open', 'journey-open'),
-        line(POST_SOON, 'journey-soon', 'journey-soon'),
       );
       syncTicker(true);
       return;
     }
     syncTicker(false);
     const reach = postReach(tile, view.tiles, me);
+    if (reach?.kind === 'connected') {
+      container.replaceChildren(visitButton(tile, view, null));
+      return;
+    }
     if (reach?.kind !== 'journey') {
       container.replaceChildren();
       return;
