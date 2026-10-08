@@ -4,6 +4,8 @@ import { KEEPER_DATA } from '../../data/keepers.js';
 import { MapMemberSchema } from '../maps.js';
 import {
   checkKeeperData,
+  compactKeeperConfig,
+  completeKeeperConfig,
   defaultKeeperConfig,
   KeeperConfigSchema,
   KeeperEyesSchema,
@@ -32,13 +34,25 @@ describe('checkKeeperData', () => {
     const distinct = (pick: (b: KeeperData['bases'][number]) => unknown) =>
       new Set(KEEPER_DATA.bases.map((b) => JSON.stringify(pick(b)))).size;
     // Ten skin tones, light to deep (owner 2026-10-08, #289): two presets share one.
-    expect(distinct((b) => b.skin)).toBe(10);
+    expect(distinct((b) => b.skinTone)).toBe(KEEPER_DATA.skinTones.length);
+    expect(KEEPER_DATA.skinTones).toHaveLength(10);
     expect(distinct((b) => b.hairstyle)).toBe(count);
     expect(distinct((b) => b.body)).toBe(count);
     // Every Keeper shares the line face (#289); the eyes are what differ.
     expect(distinct((b) => b.face.eyes)).toBe(KeeperEyesSchema.options.length);
     const heights = KEEPER_DATA.bases.map((b) => b.body.height);
     expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.2);
+  });
+
+  it('reports a starting look whose skin tone, brows or mouth is unknown (#289)', () => {
+    const data = copy();
+    data.bases[0]!.skinTone = 'tone-99';
+    data.bases[1]!.face.brows = 'unibrow';
+    data.bases[2]!.face.mouth = 'grin';
+    const problems = checkKeeperData(data).join('\n');
+    expect(problems).toContain('tone-99');
+    expect(problems).toContain('unibrow');
+    expect(problems).toContain('grin');
   });
 
   it('reports unknown starting colours and duplicate ids by name', () => {
@@ -125,6 +139,79 @@ describe('Keeper configs', () => {
     expect(keeperConfigProblem({ ...ok, eyeColor: 'laser' }, KEEPER_DATA)).toBe('eyeColor');
     expect(keeperConfigProblem({ ...ok, outfit: 'armor' }, KEEPER_DATA)).toBe('outfit');
     expect(keeperConfigProblem({ ...ok, hairstyle: 'mohawk' }, KEEPER_DATA)).toBe('hairstyle');
+    expect(keeperConfigProblem({ ...ok, skinTone: 'tone-99' }, KEEPER_DATA)).toBe('skinTone');
+    expect(keeperConfigProblem({ ...ok, brows: 'unibrow' }, KEEPER_DATA)).toBe('brows');
+    expect(keeperConfigProblem({ ...ok, mouth: 'grin' }, KEEPER_DATA)).toBe('mouth');
+    expect(keeperConfigProblem({ ...ok, extras: ['blush', 'tattoo'] }, KEEPER_DATA)).toBe('extras');
+  });
+
+  it('lets any starting look take any skin tone, eyes, brows, mouth and extras (#289)', () => {
+    const all = KEEPER_DATA.faceExtras.map((e) => e.id);
+    for (const base of KEEPER_DATA.bases) {
+      for (const tone of KEEPER_DATA.skinTones) {
+        for (const eyes of KeeperEyesSchema.options) {
+          const config = {
+            ...defaultKeeperConfig(base),
+            skinTone: tone.id,
+            eyes,
+            brows: KEEPER_DATA.brows.at(-1)!.id,
+            mouth: KEEPER_DATA.mouths.at(-1)!.id,
+            extras: all,
+          };
+          expect(KeeperConfigSchema.parse(config)).toEqual(config);
+          expect(keeperConfigProblem(config, KEEPER_DATA)).toBeNull();
+        }
+      }
+    }
+  });
+
+  it('starts with no extras, and every starting look uses a smile line and today’s brows', () => {
+    for (const base of KEEPER_DATA.bases) {
+      expect(defaultKeeperConfig(base).extras).toEqual([]);
+      expect(base.face.mouth).toBe('smile');
+      expect(base.face.brows).toBe('arched');
+    }
+  });
+
+  it('completes a config from its starting look, extras in data order (#289)', () => {
+    // An older app sends only today's fields: the starting look fills the rest.
+    const old = { base: pip.id, hairColor: 'mint', eyeColor: 'sky', outfit: 'meadow' };
+    expect(completeKeeperConfig(old, KEEPER_DATA)).toEqual({
+      ...old,
+      skinTone: pip.skinTone,
+      eyes: pip.face.eyes,
+      brows: pip.face.brows,
+      mouth: pip.face.mouth,
+      extras: [],
+    });
+    const picked = completeKeeperConfig(
+      { ...old, brows: 'soft', extras: ['heart-sticker', 'blush'] },
+      KEEPER_DATA,
+    );
+    expect(picked.brows).toBe('soft');
+    expect(picked.extras).toEqual(['blush', 'heart-sticker']);
+  });
+
+  it('sends a starting look’s own choices as before the builder, and completes them back (#289)', () => {
+    for (const base of KEEPER_DATA.bases) {
+      const own = defaultKeeperConfig(base);
+      // Exactly the reply an app from before the builder reads.
+      expect(compactKeeperConfig(own, KEEPER_DATA)).toEqual({
+        base: base.id,
+        hairColor: base.hairColor,
+        eyeColor: base.eyeColor,
+        outfit: base.outfit,
+      });
+      const built = { ...own, skinTone: 'tone-10', brows: 'straight', extras: ['lashes'] };
+      const sent = compactKeeperConfig(built, KEEPER_DATA);
+      expect(sent).not.toHaveProperty('mouth');
+      expect(completeKeeperConfig(sent, KEEPER_DATA)).toEqual(built);
+    }
+  });
+
+  it('refuses an extra picked twice', () => {
+    const ok = defaultKeeperConfig(pip);
+    expect(KeeperConfigSchema.safeParse({ ...ok, extras: ['blush', 'blush'] }).success).toBe(false);
   });
 
   it('takes any hairstyle on any base, or none (the base’s own)', () => {

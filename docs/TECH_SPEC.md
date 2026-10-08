@@ -127,6 +127,7 @@ Add anything else only with a one-line justification in the PR.
 | `lore_found` (migration 0017) | lore pages each player has found, one row per page (design doc §16) | #24 |
 | `keepers` | each account's Keeper | #42 |
 | `keepers.hairstyle` (text, nullable, migration 0023) | the hairstyle the player picked; null for the base's own style (every Keeper saved before styles could be picked) | Keeper hair styles PR |
+| `keepers.skin_tone`, `eyes`, `brows`, `mouth` (text, not null) and `extras` (text[], not null, default empty), migration 0035 | the Keeper builder's choices (ids from `KEEPER_DATA`); rows saved before it were filled from their base, the starting look. Replies leave out a choice that is the starting look's own (and no extras), so an older app reads an untouched Keeper as before | #289 |
 | `inventories`, `resource_ledger`, `gather_jobs`, `crafts` | bag, every change to it, gathers and crafts | #17 |
 | `species_seen` | the catalog, per map | #14 |
 | `buildings` | home-base buildings, and Hearthfires on owned land (#202: one a tile, in its middle, so `buildings_tile_id_spot_key` holds it), Hearthfire `fuelled_through` | #18 |
@@ -370,7 +371,7 @@ Small and cheap on purpose: one server for a few families.
 
 - **`ci.yml`** on every PR. Since PR #100 it has three parts:
   - **`fast`:** format, lint, typecheck, migration check, unit and DB tests, coverage, build and the db scripts.
-  - **`e2e`:** a matrix of `iphone-webkit` / `ipad-webkit` × group 1–5. The groups are spec-file lists balanced by measured duration (`E2E_GROUPS` in `apps/client/playwright.config.ts`, picked by `HP_E2E_GROUP`), not Playwright's `--shard`, which splits by test count and piled every heavy WebGL spec into one shard. Group 5 is every spec not listed, so a new spec always runs; the config fails the run if a listed spec is missing or the group count doesn't match. Each leg takes about 5–7 min and has its own Postgres service container.
+  - **`e2e`:** a matrix of `iphone-webkit` / `ipad-webkit` × group 1–6. The groups are spec-file lists balanced by measured duration (`E2E_GROUPS` in `apps/client/playwright.config.ts`, picked by `HP_E2E_GROUP`), not Playwright's `--shard`, which splits by test count and piled every heavy WebGL spec into one shard. Group 6 is every spec not listed, so a new spec always runs; the config fails the run if a listed spec is missing or the group count doesn't match. A spec file runs on one worker, so a slow file sets its group's length (tutorial-flow runs its two tests in parallel mode for that reason). Each leg takes about 5–10 min and has its own Postgres service container; rebalance when one grows past that (the catch-all reached 28 min before #296).
   - **`check`:** an aggregator that is green only when `fast` and every `e2e` leg are. It stays the one status to gate on.
   - Build sessions can't edit `.github/workflows`; the coordinator makes CI changes.
 - **`deploy.yml`** on push to `main`:

@@ -834,6 +834,18 @@ export const keepers = pgTable('keepers', {
   // A hairstyle id from the shared Keeper data, or null for the base's own
   // style (every Keeper saved before styles could be picked).
   hairstyle: text('hairstyle'),
+  // The Keeper builder (#289): ids from the shared Keeper data. Rows saved
+  // before it were filled from their base (the starting look), so no Keeper
+  // changed.
+  skinTone: text('skin_tone').notNull(),
+  eyes: text('eyes').notNull(),
+  brows: text('brows').notNull(),
+  mouth: text('mouth').notNull(),
+  /** Face extras the player picked (ids), in data order. */
+  extras: text('extras')
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
   // The milestone title shown on their profile card (#44, design doc §24): a
   // title id from the milestone data they've earned, or null for none.
   titleId: text('title_id'),
