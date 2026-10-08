@@ -1,4 +1,7 @@
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
+import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
+import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
@@ -7,16 +10,16 @@ import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { Scene } from '@babylonjs/core/scene';
 import {
-  EXPLORE_RULES,
   hexKey,
   KEEPER_DATA,
   type ExploreTileResponse,
   type KeeperConfig,
-  type PublicSearchSpot,
   type PublicTile,
   type Species,
+  type ToolId,
   type VisualRegistry,
   type WorldPoint,
 } from '@heartpatch/shared';
@@ -49,26 +52,49 @@ import type { SquishyLod } from '../procedural/config.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
-import { EXPLORE_VIEW } from './explore-config.js';
+import { EXPLORE_CAMERA, EXPLORE_TOOL, EXPLORE_VIEW } from './explore-config.js';
+import {
+  cameraGoal,
+  cameraSettled,
+  collidersOf,
+  decorPlaces,
+  followStep,
+  spotRadius,
+  type Collider,
+  type DecorKind,
+  type FollowCamera,
+} from './explore-world.js';
 
-// The explore view (#199, owner design 2026-10-07): one of my tiles up
-// close, its search spots drawn from the terrain's prop kit, its buildings,
-// my Keeper walking about and my team trailing behind. Positions come from
-// the server (CLAUDE.md rule 1); the screen moves the Keeper and asks this
-// scene to draw it. Render on demand (tech spec §6): nothing moves while the
-// Keeper stands still, so an idle tile draws nothing.
+// The explore view (#199; cozy-sim feel #291, owner mockup 2026-10-08): one
+// of my tiles up close, its search spots drawn from the terrain's prop kit
+// (the rocks, trees and mounds *are* the spots, and glint until searched),
+// grass, pebbles and flowers grown from the tile's seed, its buildings, my
+// Keeper with the tool in hand, and my team trailing behind. A camera
+// follows the Keeper, close and tilted. Positions come from the server
+// (CLAUDE.md rule 1); the screen moves the Keeper and asks this scene to
+// draw it. Render on demand (tech spec §6): an idle tile draws nothing.
 
 /** Read-only numbers for the dev hook (Playwright asserts on these, not pixels). */
 export interface ExploreSceneStats {
   readonly spots: number;
   readonly done: number;
+  /** Spots still glinting (not searched yet). */
+  readonly glints: number;
   readonly buildings: number;
   readonly keeper: boolean;
   readonly followers: number;
   /** Prop draw calls (one per kind of spot on the tile). */
   readonly propMeshes: number;
-  /** The spot ringed as the one in reach, or null. */
+  /** Decor thin instances by kind (one draw call each). */
+  readonly decor: Readonly<Record<DecorKind, number>>;
+  /** The spot with the soft halo (in front of the Keeper), or null. */
   readonly highlighted: number | null;
+  /** The tool in the Keeper's hand, or null. */
+  readonly held: ToolId | null;
+  /** The camera: tile-local target and zoom (1, or less while nudged in). */
+  readonly camera: { readonly x: number; readonly z: number; readonly zoom: number };
+  /** Draw calls in the last frame drawn (`SceneInstrumentation`, as the battle measures). */
+  readonly drawCalls: number;
 }
 
 export interface ExploreSceneOptions {
@@ -105,6 +131,11 @@ type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave';
 const ISLAND_DEPTH = 0.12;
 const SHAPES: ReadonlySet<string> = new Set<ExploreShape>(['mound', 'pond', 'ledge', 'cave']);
 const isShape = (kind: PropKind | ExploreShape): kind is ExploreShape => SHAPES.has(kind);
+const TOOLS: readonly ToolId[] = ['shovel', 'net', 'rope', 'lantern'];
+/** The camera looks at about the Keeper's middle, not its feet (world units). TUNE */
+const AIM_HEIGHT = 0.5;
+/** The Keeper leans back a little so its face reads under the tilted camera. TUNE */
+const KEEPER_LEAN = 0.06;
 
 /** The Keeper's trail: followers stand on its points, one gap apart. */
 interface Follower {
@@ -118,17 +149,19 @@ export class ExploreScene {
   readonly #size = EXPLORE_VIEW.hexSize;
   readonly #k = EXPLORE_VIEW.hexSize / HEX_SIZE;
   readonly #ground: number;
-  /** Markers sit just over the tile's rounded top (it peaks in the middle). */
-  readonly #markY: number;
-  /** A spot's ring fits between two spots (`placement.minGap` apart). */
-  readonly #markSize = EXPLORE_RULES.placement.minGap * EXPLORE_VIEW.hexSize;
   readonly #props = new Map<string, Mesh>();
-  readonly #sparkle: Mesh;
-  readonly #doneMark: Mesh;
-  readonly #ring: Mesh;
+  readonly #decor: Record<DecorKind, number>;
+  readonly #glints: Mesh;
+  readonly #halo: Mesh;
+  readonly #tools: Record<ToolId, Mesh>;
+  readonly #colliders: Collider[];
   readonly #buildings: BuildingField;
   readonly #keepers: KeeperField;
   readonly #squishies: SquishyField;
+  readonly #instrumentation: SceneInstrumentation;
+  readonly #beforeRender: Observer<Scene>;
+  readonly #afterRender: Observer<Scene>;
+  readonly #lookAt = new Vector3();
   #keeper: KeeperHandle | null = null;
   readonly #followers: Follower[] = [];
   /** Tile-local points the Keeper walked through, newest first. */
@@ -137,66 +170,85 @@ export class ExploreScene {
   #at: WorldPoint = EXPLORE_VIEW.start;
   #yaw = 0;
   #highlighted: number | null = null;
+  #held: ToolId | null = null;
+  /** When the tool's last swing started (ms), or null. */
+  #swingAt: number | null = null;
+  #swing = 0;
+  #nudged = false;
+  #camera: FollowCamera;
+  #lastStep: number | null = null;
+  #drawCalls = 0;
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
     this.#tile = tile;
     scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
+    this.#instrumentation = new SceneInstrumentation(scene);
     const look = TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
     this.#ground = (look.height + DOME * 0.5) * this.#k;
-    this.#markY = (look.height + DOME) * this.#k + 0.02;
 
     this.#buildGround(tile.terrain);
-    this.#buildProps(tile);
-
-    // Spots still to search sparkle (a soft pink ring); searched ones keep a
-    // pale ring, so a kid sees at a glance what's left.
-    this.#sparkle = CreateTorus(
-      'explore-sparkle',
-      { diameter: this.#markSize, thickness: 0.06, tessellation: 28 },
-      scene,
-    );
-    const sparkleMat = overlayMaterial(scene, 'explore-sparkle-mat');
-    sparkleMat.emissiveColor = linear('#ff6f9f');
-    this.#sparkle.material = sparkleMat;
-    this.#sparkle.isPickable = false;
-    this.#doneMark = CreateDisc(
-      'explore-done',
-      { radius: this.#markSize * 0.45, tessellation: 24 },
-      scene,
-    );
-    this.#doneMark.rotation.x = Math.PI / 2;
-    this.#doneMark.bakeCurrentTransformIntoVertices();
-    const doneMat = overlayMaterial(scene, 'explore-done-mat');
-    doneMat.emissiveColor = linear('#fff6e0');
-    doneMat.alpha = 0.55;
-    this.#doneMark.material = doneMat;
-    this.#doneMark.isPickable = false;
-    this.#ring = CreateTorus(
-      'explore-ring',
-      { diameter: this.#markSize * 1.25, thickness: 0.09, tessellation: 36 },
-      scene,
-    );
-    this.#ring.material = vinyl(scene, 'explore-ring-mat', { color: '#ff6f9f' });
-    this.#ring.isPickable = false;
-    this.#ring.setEnabled(false);
+    const propMaterial = vinyl(scene, 'explore-prop-mat', { color: '#ffffff' });
+    this.#buildProps(tile, propMaterial);
 
     // The tile's own buildings (a fire out on the land, #202), on their spots.
+    const buildingsAt = (options.mapTile?.buildings ?? []).map((b) => ({
+      b,
+      at: spotWorld({ q: 0, r: 0 }, b.spot, this.#size),
+    }));
     this.#buildings = new BuildingField(scene);
     this.#buildings.set(
-      (options.mapTile?.buildings ?? []).map((b) => {
-        const at = spotWorld({ q: 0, r: 0 }, b.spot, this.#size);
-        return {
-          buildingId: b.buildingId,
-          level: b.level,
-          lit: b.lit,
-          x: at.x,
-          z: at.z,
-          y: this.#ground,
-          scale: EXPLORE_VIEW.buildingScale,
-        };
-      }),
+      buildingsAt.map(({ b, at }) => ({
+        buildingId: b.buildingId,
+        level: b.level,
+        lit: b.lit,
+        x: at.x,
+        z: at.z,
+        y: this.#ground,
+        scale: EXPLORE_VIEW.buildingScale,
+      })),
     );
+    this.#colliders = collidersOf(
+      tile.spots,
+      buildingsAt.map(({ at }) => ({ x: at.x / this.#size, z: at.z / this.#size })),
+    );
+
+    // Grass tufts, pebbles and flowers (#291): thin instances, one draw call a kind.
+    const places = decorPlaces(tile, this.#colliders);
+    this.#decor = { tufts: 0, pebbles: 0, flowers: 0 };
+    for (const kind of ['tufts', 'pebbles', 'flowers'] as const) {
+      const mesh = buildDecor(scene, kind);
+      mesh.material = propMaterial;
+      setInstances(
+        mesh,
+        places[kind].map((p) => {
+          const at = this.#world(p);
+          const s = p.scale;
+          return placeAt(
+            at.x,
+            this.#ground,
+            at.z,
+            new Vector3(s, s, s),
+            Quaternion.RotationYawPitchRoll(p.yaw, 0, 0),
+          );
+        }),
+      );
+      this.#decor[kind] = places[kind].length;
+    }
+
+    // Unsearched spots glint (#291): a little star over each, turned to the camera.
+    this.#glints = buildGlint(scene);
+    this.#glints.material = overlayMaterial(scene, 'explore-glint-mat');
+    // The soft halo under the spot in front of the Keeper.
+    this.#halo = CreateDisc('explore-halo', { radius: 1, tessellation: 32 }, scene);
+    this.#halo.rotation.x = Math.PI / 2;
+    this.#halo.bakeCurrentTransformIntoVertices();
+    const haloMat = overlayMaterial(scene, 'explore-halo-mat');
+    haloMat.emissiveColor = linear('#fffbe0');
+    haloMat.alpha = 0.6;
+    this.#halo.material = haloMat;
+    this.#halo.isPickable = false;
+    this.#halo.setEnabled(false);
 
     this.#keepers = new KeeperField(scene, { data: KEEPER_DATA, lod: options.lod });
     this.#squishies = new SquishyField(scene, {
@@ -217,10 +269,35 @@ export class ExploreScene {
       this.#followers.push({ handle, at });
     });
 
-    // The camera stays put: the whole tile is on screen.
-    // Aimed a little past the middle, so the tile sits below the header.
-    const aim = EXPLORE_VIEW.cameraAim * this.#size;
-    this.content = { bounds: { minX: 0, maxX: 0, minZ: aim, maxZ: aim }, start: { x: 0, z: aim } };
+    // The tools the Keeper can hold (#291): one small mesh each, one shown.
+    this.#tools = {
+      shovel: buildTool(scene, 'shovel'),
+      net: buildTool(scene, 'net'),
+      rope: buildTool(scene, 'rope'),
+      lantern: buildTool(scene, 'lantern'),
+    };
+    for (const tool of TOOLS) {
+      this.#tools[tool].material = propMaterial;
+      this.#tools[tool].setEnabled(false);
+    }
+
+    // The follow camera (#291): the stage's camera gets no input (the HUD's
+    // ground layer covers the canvas), so its shot is written just before
+    // each render, as the battle does.
+    this.#camera = { target: cameraGoal(this.#at), zoom: 1 };
+    this.#beforeRender = scene.onBeforeRenderObservable.add(() => {
+      this.#applyCamera();
+    });
+    this.#afterRender = scene.onAfterRenderObservable.add(() => {
+      this.#drawCalls = this.#instrumentation.drawCallsCounter.current;
+    });
+    scene.onDisposeObservable.addOnce(() => {
+      scene.onBeforeRenderObservable.remove(this.#beforeRender);
+      scene.onAfterRenderObservable.remove(this.#afterRender);
+      this.#instrumentation.dispose();
+    });
+
+    this.content = { bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 }, start: { x: 0, z: 0 } };
     this.update(tile);
   }
 
@@ -228,11 +305,16 @@ export class ExploreScene {
     return {
       spots: this.#tile.spots.length,
       done: this.#tile.spots.filter((s) => s.done).length,
+      glints: this.#tile.spots.filter((s) => !s.done).length,
       buildings: this.#buildings.stats.buildings,
       keeper: this.#keeper !== null,
       followers: this.#followers.length,
       propMeshes: this.#props.size,
+      decor: { ...this.#decor },
       highlighted: this.#highlighted,
+      held: this.#held,
+      camera: { ...this.#camera.target, zoom: this.#camera.zoom },
+      drawCalls: this.#drawCalls,
     };
   }
 
@@ -241,19 +323,27 @@ export class ExploreScene {
     return this.#at;
   }
 
-  /** Redraws which spots are done from a fresh view of the tile. */
+  /** The spots' and buildings' colliders, tile-local. */
+  get colliders(): readonly Collider[] {
+    return this.#colliders;
+  }
+
+  /** Redraws which spots still glint from a fresh view of the tile. */
   update(tile: ExploreTileResponse): void {
     this.#tile = tile;
-    const lift = this.#markY;
-    const local = (s: PublicSearchSpot) => this.#world(s);
+    const scale = this.#k * EXPLORE_VIEW.propScale;
+    const size = EXPLORE_VIEW.glintSize;
     setInstances(
-      this.#sparkle,
-      tile.spots.filter((s) => !s.done).map((s) => placeAt(local(s).x, lift, local(s).z)),
-      true,
-    );
-    setInstances(
-      this.#doneMark,
-      tile.spots.filter((s) => s.done).map((s) => placeAt(local(s).x, lift, local(s).z)),
+      this.#glints,
+      tile.spots
+        .filter((s) => !s.done)
+        .map((s) => {
+          const at = this.#world(s);
+          const lift = (EXPLORE_VIEW.glintLift[s.kind] ?? 0.25) * scale;
+          // Off to one side of the prop, as on the boards.
+          const side = spotRadius(s.kind) * this.#size * 0.6;
+          return placeAt(at.x + side, this.#ground + lift, at.z, new Vector3(size, size, size));
+        }),
       true,
     );
     if (this.#highlighted !== null && tile.spots.find((s) => s.index === this.#highlighted)?.done) {
@@ -261,18 +351,28 @@ export class ExploreScene {
     }
   }
 
-  /** Rings the spot in reach (null: none). */
+  /** The soft halo under the spot in front (null: none). */
   highlight(index: number | null): void {
     this.#highlighted = index;
     const spot = index === null ? undefined : this.#tile.spots.find((s) => s.index === index);
     if (!spot) {
       this.#highlighted = null;
-      this.#ring.setEnabled(false);
+      this.#halo.setEnabled(false);
       return;
     }
     const at = this.#world(spot);
-    this.#ring.position.set(at.x, this.#markY + 0.02, at.z);
-    this.#ring.setEnabled(true);
+    const r = spotRadius(spot.kind) * this.#size * 1.5;
+    this.#halo.position.set(at.x, this.#ground + 0.02, at.z);
+    this.#halo.scaling.set(r, 1, r);
+    this.#halo.setEnabled(true);
+  }
+
+  /** The tool in the Keeper's hand (null: hands). */
+  hold(tool: ToolId | null): void {
+    if (tool === this.#held) return;
+    this.#held = tool;
+    for (const t of TOOLS) this.#tools[t].setEnabled(t === tool);
+    this.#placeTool();
   }
 
   /**
@@ -283,6 +383,7 @@ export class ExploreScene {
     this.#at = at;
     if (yaw !== undefined) this.#yaw = yaw;
     if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
+    this.#placeTool();
     const head = this.#trail[0];
     const gap = EXPLORE_VIEW.followGap;
     if (!head || (head.x - at.x) ** 2 + (head.z - at.z) ** 2 >= gap * gap) {
@@ -298,17 +399,46 @@ export class ExploreScene {
     });
   }
 
-  /** A little hop for the Keeper and the team when a search starts or finds something. */
+  /** The camera leans in while a tool is in use (#291), and back out after. */
+  nudge(on: boolean): void {
+    this.#nudged = on;
+  }
+
+  /** One swing of the tool (a scoop, a shake, a step up the rope) and a little jiggle. */
+  useTool(now: number): void {
+    this.#swingAt = now;
+    if (this.#keeper) this.#keepers.play(this.#keeper, 'jiggle', now, 0.6);
+  }
+
+  /** A little hop for the Keeper and the team when a search finds something. */
   cheer(now: number): void {
     if (this.#keeper) this.#keepers.play(this.#keeper, 'bounce', now);
     for (const f of this.#followers) this.#squishies.play(f.handle, 'wobble', now);
   }
 
-  /** Steps animations; true while anything still moves (keep drawing). */
+  /** Steps animations and the follow camera; true while anything still moves (keep drawing). */
   step(now: number): boolean {
+    const dt = this.#lastStep === null ? 0 : Math.min(0.05, (now - this.#lastStep) / 1000);
+    this.#lastStep = now;
+    const goal = this.#cameraGoal();
+    this.#camera = followStep(this.#camera, goal, dt);
+    const following = !cameraSettled(this.#camera, goal);
+    let swinging = false;
+    if (this.#swingAt !== null) {
+      const t = (now - this.#swingAt) / EXPLORE_TOOL.swingMs;
+      if (t >= 1 || t < 0) {
+        this.#swingAt = null;
+        this.#swing = 0;
+      } else {
+        this.#swing = Math.sin(t * Math.PI) * EXPLORE_TOOL.swingAngle;
+        swinging = true;
+      }
+      this.#placeTool();
+    }
     const keeper = this.#keepers.update(now);
     const squishies = this.#squishies.update(now);
-    return keeper || squishies;
+    if (!following && !swinging) this.#lastStep = null;
+    return keeper || squishies || following || swinging;
   }
 
   setLod(lod: SquishyLod): void {
@@ -320,6 +450,7 @@ export class ExploreScene {
   groundAt(x: number, y: number): WorldPoint | null {
     const camera = this.#scene.activeCamera;
     if (!camera) return null;
+    this.#applyCamera();
     const ray = CreatePickingRay(this.#scene, x, y, null, camera);
     if (ray.direction.y >= 0) return null;
     const t = (this.#ground - ray.origin.y) / ray.direction.y;
@@ -330,24 +461,63 @@ export class ExploreScene {
   }
 
   /**
-   * Where a tile-local point is on screen (CSS pixels from the canvas's top
-   * left), or null if the camera can't see it. The dev hook's taps use it.
+   * Where a tile-local point (`lift` world units over the ground) is on
+   * screen, CSS pixels from the page's top left, or null if the camera can't
+   * see it. The lantern's light, the finds' flight and the dev hook use it.
    */
-  screenOf(p: WorldPoint): { x: number; y: number } | null {
+  screenOf(p: WorldPoint, lift = 0): { x: number; y: number } | null {
     const camera = this.#scene.activeCamera;
     const canvas = this.#scene.getEngine().getRenderingCanvas();
     if (!camera || !canvas) return null;
     const box = canvas.getBoundingClientRect();
     if (box.width <= 0 || box.height <= 0) return null;
+    this.#applyCamera();
     const at = this.#world(p);
     const s = Vector3.Project(
-      new Vector3(at.x, this.#ground, at.z),
+      new Vector3(at.x, this.#ground + lift, at.z),
       Matrix.IdentityReadOnly,
       camera.getTransformationMatrix(),
       camera.viewport.toGlobal(box.width, box.height),
     );
     if (s.z < 0 || s.z > 1) return null;
     return { x: box.left + s.x, y: box.top + s.y };
+  }
+
+  #cameraGoal(): FollowCamera {
+    return { target: cameraGoal(this.#at), zoom: this.#nudged ? EXPLORE_CAMERA.nudge : 1 };
+  }
+
+  /** Writes the follow camera's shot into the stage's camera. */
+  #applyCamera(): void {
+    const camera = this.#scene.activeCamera;
+    if (!(camera instanceof TargetCamera)) return;
+    const { pitch, distance } = EXPLORE_CAMERA;
+    const d = distance * this.#camera.zoom;
+    const tx = this.#camera.target.x * this.#size;
+    const tz = this.#camera.target.z * this.#size;
+    const ty = this.#ground + AIM_HEIGHT;
+    // Yaw 0: looking towards +z, down by `pitch`.
+    camera.position.set(tx, ty + Math.sin(pitch) * d, tz - Math.cos(pitch) * d);
+    camera.setTarget(this.#lookAt.set(tx, ty, tz));
+  }
+
+  /** The held tool at the Keeper's hand, following its position and heading. */
+  #placeTool(): void {
+    const tool = this.#held ? this.#tools[this.#held] : null;
+    if (!tool || !this.#keeper) return;
+    const anchor = this.#keeper.params.sockets.held.anchors[0] ?? [0.2, 0.5, 0];
+    const p = this.#keeperPlacement();
+    const world = Matrix.Compose(
+      new Vector3(p.scale, p.scale, p.scale),
+      Quaternion.RotationYawPitchRoll(p.yaw, p.lean, 0),
+      new Vector3(p.x, p.y, p.z),
+    );
+    const hand = Vector3.TransformCoordinates(new Vector3(anchor[0], anchor[1], anchor[2]), world);
+    tool.position.copyFrom(hand);
+    const s = p.scale * EXPLORE_TOOL.scale;
+    tool.scaling.set(s, s, s);
+    // A swing tips the tool forward, the way the Keeper faces.
+    tool.rotationQuaternion = Quaternion.RotationYawPitchRoll(p.yaw, -this.#swing, 0);
   }
 
   #world(p: WorldPoint): WorldPoint {
@@ -359,7 +529,7 @@ export class ExploreScene {
     if (point) return point;
     // Before the Keeper has walked: the team waits in a little line behind it.
     const behind = n * EXPLORE_VIEW.followGap;
-    return { x: this.#at.x + (n % 2 === 0 ? 0.05 : -0.05), z: this.#at.z - behind };
+    return { x: this.#at.x + (n % 2 === 0 ? 0.02 : -0.02), z: this.#at.z - behind };
   }
 
   #keeperPlacement() {
@@ -370,7 +540,7 @@ export class ExploreScene {
       y: this.#ground,
       yaw: this.#yaw,
       scale: EXPLORE_VIEW.keeperScale,
-      lean: 0.12,
+      lean: KEEPER_LEAN,
     };
   }
 
@@ -407,7 +577,7 @@ export class ExploreScene {
     island.isPickable = false;
   }
 
-  #buildProps(tile: ExploreTileResponse): void {
+  #buildProps(tile: ExploreTileResponse, material: ReturnType<typeof vinyl>): void {
     const byKind = new Map<PropKind | ExploreShape, Matrix[]>();
     const scale = this.#k * EXPLORE_VIEW.propScale;
     for (const spot of tile.spots) {
@@ -421,7 +591,6 @@ export class ExploreScene {
       list.push(placeAt(at.x, this.#ground, at.z, new Vector3(scale, scale, scale), turn));
       byKind.set(kind, list);
     }
-    const material = vinyl(this.#scene, 'explore-prop-mat', { color: '#ffffff' });
     for (const [kind, matrices] of byKind) {
       const mesh = isShape(kind)
         ? buildShape(this.#scene, kind)
@@ -438,6 +607,257 @@ function spinOf(tile: { q: number; r: number }, index: number): number {
   let h = 2166136261;
   for (const c of `${hexKey(tile)}:${String(index)}`) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
   return ((h >>> 0) / 4294967296) * Math.PI * 2;
+}
+
+/** Paints a mesh one colour with an alpha (for the glint's soft glow). */
+function tinted(mesh: Mesh, hex: string, alpha: number): Mesh {
+  painted(mesh, hex);
+  const colors = mesh.getVerticesData(VertexBuffer.ColorKind);
+  if (colors) {
+    for (let i = 3; i < colors.length; i += 4) colors[i] = alpha;
+    mesh.setVerticesData(VertexBuffer.ColorKind, colors);
+  }
+  return mesh;
+}
+
+/**
+ * The glint (#291, boards a and IPad): a four-point star in a soft glow,
+ * 1 across, stood up and tipped to face the follow camera (which never turns).
+ */
+function buildGlint(scene: Scene): Mesh {
+  const diamond = (sx: number, sy: number, z: number, hex: string, alpha: number) => {
+    const m = CreateDisc('explore-glint-part', { radius: 0.5, tessellation: 4 }, scene);
+    m.scaling.set(sx, sy, 1);
+    m.position.z = z;
+    return tinted(m, hex, alpha);
+  };
+  const glow = CreateDisc('explore-glint-part', { radius: 0.5, tessellation: 20 }, scene);
+  const mesh = merged('explore-glints', [
+    tinted(glow, '#fffbe0', 0.45),
+    diamond(0.34, 1, -0.01, '#ffe7a0', 1),
+    diamond(1, 0.34, -0.01, '#ffe7a0', 1),
+    diamond(0.2, 0.62, -0.02, '#fffdf0', 1),
+    diamond(0.62, 0.2, -0.02, '#fffdf0', 1),
+  ]);
+  mesh.rotation.x = EXPLORE_CAMERA.pitch;
+  mesh.bakeCurrentTransformIntoVertices();
+  mesh.hasVertexAlpha = true;
+  return mesh;
+}
+
+/** The decor kinds (#291), vinyl-toy style, about knee-high on the Keeper or less. TUNE */
+function buildDecor(scene: Scene, kind: DecorKind): Mesh {
+  switch (kind) {
+    case 'tufts': {
+      const blade = (h: number, lean: number, turn: number, hex: string) => {
+        const m = CreateSphere('explore-tuft-blade', { diameter: 1, segments: 4 }, scene);
+        m.scaling.set(0.06, h, 0.03);
+        m.position.y = h / 2;
+        m.bakeCurrentTransformIntoVertices();
+        m.rotation.set(0, turn, lean);
+        return painted(m, hex);
+      };
+      return merged('explore-tufts', [
+        blade(0.22, 0, 0, '#8cc472'),
+        blade(0.17, 0.5, 0.4, '#7ab562'),
+        blade(0.17, -0.5, -0.4, '#7ab562'),
+        blade(0.14, 0.35, 1.9, '#9bd07f'),
+      ]);
+    }
+    case 'pebbles': {
+      const pebble = (d: number, x: number, z: number, hex: string) => {
+        const m = CreateSphere('explore-pebble', { diameter: d, segments: 5 }, scene);
+        m.scaling.set(1.2, 0.55, 1);
+        m.position.set(x, d * 0.2, z);
+        return painted(m, hex);
+      };
+      return merged('explore-pebbles', [
+        pebble(0.12, 0, 0, '#cbbfae'),
+        pebble(0.08, 0.1, 0.05, '#bdb1a2'),
+        pebble(0.06, -0.06, 0.09, '#d8cec0'),
+      ]);
+    }
+    case 'flowers': {
+      const flower = (x: number, z: number, h: number, hex: string) => {
+        const stem = CreateCylinder(
+          'explore-flower-stem',
+          { height: h, diameter: 0.018, tessellation: 5 },
+          scene,
+        );
+        stem.position.set(x, h / 2, z);
+        const bloom = CreateSphere('explore-flower-bloom', { diameter: 0.09, segments: 5 }, scene);
+        bloom.scaling.y = 0.7;
+        bloom.position.set(x, h, z);
+        return [painted(stem, '#6aa84f'), painted(bloom, hex)];
+      };
+      return merged('explore-flowers', [
+        ...flower(0, 0, 0.16, '#ff8fab'),
+        ...flower(0.08, 0.05, 0.12, '#ffd166'),
+        ...flower(-0.06, 0.07, 0.13, '#b8a6ff'),
+      ]);
+    }
+  }
+}
+
+/**
+ * The tools in hand (#291), at Keeper scale 1 (about 1.6 tall), held at the
+ * hand: the grip is the origin, the tool hangs down and a little forward
+ * (−z is the way the Keeper faces).
+ */
+function buildTool(scene: Scene, tool: ToolId): Mesh {
+  const stick = (length: number, hex: string) => {
+    const m = CreateCylinder(
+      `explore-${tool}-part`,
+      { height: length, diameter: 0.045, tessellation: 8 },
+      scene,
+    );
+    m.position.y = 0.12 - length / 2;
+    return painted(m, hex);
+  };
+  const at = (m: Mesh, x: number, y: number, z: number, rx = 0) => {
+    m.position.set(x, y, z);
+    m.rotation.x = rx;
+    return m;
+  };
+  let mesh: Mesh;
+  switch (tool) {
+    case 'shovel':
+      mesh = merged('explore-shovel', [
+        stick(0.7, '#a77a52'),
+        painted(
+          at(
+            CreateBox(`explore-${tool}-part`, { width: 0.18, height: 0.22, depth: 0.03 }, scene),
+            0,
+            -0.66,
+            0,
+          ),
+          '#c9ced8',
+        ),
+        painted(
+          at(CreateSphere(`explore-${tool}-part`, { diameter: 0.08 }, scene), 0, 0.14, 0),
+          '#a77a52',
+        ),
+      ]);
+      break;
+    case 'net':
+      mesh = merged('explore-net', [
+        stick(0.6, '#a77a52'),
+        painted(
+          at(
+            CreateTorus(
+              `explore-${tool}-part`,
+              { diameter: 0.28, thickness: 0.03, tessellation: 18 },
+              scene,
+            ),
+            0,
+            -0.6,
+            0,
+            Math.PI / 2,
+          ),
+          '#ff8fab',
+        ),
+        painted(
+          at(
+            CreateSphere(`explore-${tool}-part`, { diameter: 0.26, segments: 6 }, scene),
+            0,
+            -0.6,
+            0.06,
+          ),
+          '#f4ecf6',
+        ),
+      ]);
+      // The bag of the net is soft and shallow.
+      break;
+    case 'rope':
+      mesh = merged('explore-rope', [
+        painted(
+          at(
+            CreateTorus(
+              `explore-${tool}-part`,
+              { diameter: 0.26, thickness: 0.06, tessellation: 16 },
+              scene,
+            ),
+            0,
+            -0.14,
+            0,
+            Math.PI / 2,
+          ),
+          '#d8b27a',
+        ),
+        painted(
+          at(
+            CreateTorus(
+              `explore-${tool}-part`,
+              { diameter: 0.2, thickness: 0.05, tessellation: 16 },
+              scene,
+            ),
+            0,
+            -0.14,
+            0.04,
+            Math.PI / 2,
+          ),
+          '#c99a62',
+        ),
+      ]);
+      break;
+    case 'lantern':
+      mesh = merged('explore-lantern', [
+        painted(
+          at(
+            CreateTorus(
+              `explore-${tool}-part`,
+              { diameter: 0.1, thickness: 0.018, tessellation: 12 },
+              scene,
+            ),
+            0,
+            0,
+            0,
+            Math.PI / 2,
+          ),
+          '#8b93a3',
+        ),
+        painted(
+          at(
+            CreateCylinder(
+              `explore-${tool}-part`,
+              { height: 0.04, diameter: 0.16, tessellation: 12 },
+              scene,
+            ),
+            0,
+            -0.07,
+            0,
+          ),
+          '#7a2d55',
+        ),
+        painted(
+          at(
+            CreateSphere(`explore-${tool}-part`, { diameter: 0.15, segments: 8 }, scene),
+            0,
+            -0.16,
+            0,
+          ),
+          '#ffe3a3',
+        ),
+        painted(
+          at(
+            CreateCylinder(
+              `explore-${tool}-part`,
+              { height: 0.04, diameter: 0.16, tessellation: 12 },
+              scene,
+            ),
+            0,
+            -0.25,
+            0,
+          ),
+          '#7a2d55',
+        ),
+      ]);
+      break;
+  }
+  // Tipped forward a little, the way a tool is carried.
+  mesh.rotation.x = -0.25;
+  mesh.bakeCurrentTransformIntoVertices();
+  return mesh;
 }
 
 /**

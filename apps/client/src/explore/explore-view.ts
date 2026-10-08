@@ -26,30 +26,35 @@ export { TOOL_WORDS, usesLine } from '../inventory/tool-uses.js';
 export const EXPLORE_TEXT = {
   explore: 'Explore',
   back: 'Back',
-  withTeam: (names: readonly string[]) =>
-    names.length === 0
-      ? 'Exploring with your Keeper'
-      : `Exploring with ${listOf(names.slice(0, 3))}`,
-  walkHint: 'Tap the ground or drag to walk. Find a sparkle!',
-  nothingNear: 'Walk up to a sparkle to search it!',
-  allDone: 'You searched every spot here! ✨',
+  /** Under the joystick (#291). */
+  walkHint: 'Or drag anywhere, or tap to walk',
+  /** The big button with nothing in front of the Keeper. */
+  nothingNear: 'Find a glint',
+  allDone: 'All found!',
   ta: 'Ta-da!',
-  worm: 'Just a wiggly worm! 🪱 Nothing else this time.',
-  teamLearned: 'Your team learned something!',
+  worm: 'Just a wiggly worm! 🪱',
   lorePage: 'A lore page!',
   clothing: 'Something to wear!',
-  keepGoing: 'Keep exploring',
   recipeBook: 'Open recipe book',
-  somethingElse: 'Explore something else here',
-  makeOne: 'Make one in the recipe book, then come back.',
   tileExplored: (name: string) => `You explored every spot in this ${name}! ✨`,
-  joinedHome: 'It joined your home! 🏡 Its gatherers bring back a little extra now.',
+  joinedTitle: (name: string) => `${name} joined your home!`,
+  joinedHome: 'Its gatherers bring back a little extra now.',
   homestead: '🏡 Homestead: part of your home. Its gatherers bring back a little extra!',
   bigSplash: 'Big splash! 💦',
   pausedHome: 'This homestead is napping zZ. Win back the land between it and home to wake it up!',
   easy: 'Easy way',
+  notNow: 'Not now',
+  yay: 'Yay!',
   searching: 'Searching…',
   explored: '✨ Fully explored',
+  /** The header chip with no tool in hand. */
+  hands: 'Hands',
+  /** The bag in the header, where finds land. */
+  bag: 'Your bag',
+  /** The lantern (#291, board g). */
+  grab: 'Grab it',
+  lanternHint: 'Walk your light around. Look for a glint!',
+  glint: 'A glint!',
 } as const;
 
 /** The action button for a spot: its icon and verb. */
@@ -87,9 +92,22 @@ export function toolUses(tool: ToolId): number {
   return EXPLORE_RULES.tools.find((t) => t.id === tool)?.uses ?? 1;
 }
 
-/** "You need a Rope to climb up there!" */
-export function needLine(tool: ToolId): string {
-  return `You need a ${toolName(tool)} ${TOOL_WORDS[tool].needs}!`;
+/** A spot kind's name in a sentence: "mound", "hollow log". */
+export function spotName(kind: string): string {
+  return (EXPLORE_RULES.spotKinds.find((k) => k.id === kind)?.name ?? 'spot').toLowerCase();
+}
+
+/** The missing-tool hint (#291, board h): "This mound needs a Shovel!" */
+export function needsHere(kind: string, tool: ToolId): string {
+  return `This ${spotName(kind)} needs a ${toolName(tool)}!`;
+}
+
+/** The header chip (#291): "Shovel · 18 digs", "Shovel · Resting zZ", or "Hands". */
+export function toolChip(tool: ToolId | null, uses: number): string {
+  if (tool === null) return EXPLORE_TEXT.hands;
+  if (uses <= 0) return `${toolName(tool)} · Resting zZ`;
+  const words = TOOL_WORDS[tool];
+  return `${toolName(tool)} · ${String(uses)} ${uses === 1 ? words.one : words.many}`;
 }
 
 /** The tool just wore out: "Your Shovel needs a rest! …" (owner decision 2026-10-06). */
@@ -116,6 +134,15 @@ export function toolRecipeRows(tool: ToolId, bag: ItemCounts): NeedRow[] {
       enough: have >= need,
     };
   });
+}
+
+/**
+ * The hint's recipe line: "Make one: 🪵 Timber 2/2 · 🪨 Stone 1/2". Without
+ * the bag yet, just what it takes: "🪵 Timber ×2".
+ */
+export function makeOneLine(rows: readonly NeedRow[], counted: boolean): string {
+  const parts = rows.map((row) => (counted ? row.text : row.text.replace(/ \d+\/(\d+)$/, ' ×$1')));
+  return parts.length === 0 ? '' : `Make one: ${parts.join(' · ')}`;
 }
 
 /** The terrain's name for the header ("Meadow"). */
@@ -171,6 +198,46 @@ export function xpLines(
   return xp
     .filter((x) => x.xp > 0)
     .map((x) => `${names[x.squishyId] ?? 'Your squishy'} +${String(x.xp)} XP`);
+}
+
+/**
+ * A rare find gets the full card (#291, board i): a lore page, something to
+ * wear, a notable find, or the search that finished the tile. Everything
+ * else is a small toast while the world keeps going.
+ */
+export function findShowsCard(found: SearchSpotResponse): boolean {
+  return found.lore !== null || found.clothing !== null || found.notable !== null || found.explored;
+}
+
+/** The find toast (#291, board c): "+2 Timber · +1 Stone", then "Puddlepuff +6 XP". */
+export function findToast(
+  found: SearchSpotResponse,
+  names: Readonly<Record<string, string>>,
+  bigSplash = false,
+): { readonly main: string; readonly extra: string } {
+  const items = Object.entries(found.found)
+    .filter(([, n]) => n > 0)
+    .map(([id, n]) => `+${String(n)} ${itemName(id)}`);
+  const main = items.length === 0 ? EXPLORE_TEXT.worm : items.join(' · ');
+  const extra = [...xpLines(found.xp, names)];
+  if (found.tool && found.tool.usesLeft === 0) extra.push(restLine(found.tool.id));
+  return { main: bigSplash ? `${EXPLORE_TEXT.bigSplash} ${main}` : main, extra: extra.join(' · ') };
+}
+
+/** How many things a search put in the bag (the bag's "+2"). */
+export function foundCount(found: SearchSpotResponse): number {
+  return Object.values(found.found).reduce((sum, n) => sum + Math.max(0, n), 0);
+}
+
+/** The rare card's title: the tile joining home, the tile done, or the rare thing found. */
+export function rareTitle(found: SearchSpotResponse, terrain: string): string {
+  if (found.explored && found.homestead === 'joined') {
+    return EXPLORE_TEXT.joinedTitle(terrainName(terrain));
+  }
+  if (found.explored) return EXPLORE_TEXT.tileExplored(terrainName(terrain));
+  if (found.lore) return EXPLORE_TEXT.lorePage;
+  if (found.clothing) return EXPLORE_TEXT.clothing;
+  return EXPLORE_TEXT.ta;
 }
 
 /** The tile with one more spot done and the bag after a search (no refetch needed). */
@@ -235,41 +302,6 @@ export function insideTile(p: WorldPoint, margin: number = EXPLORE_VIEW.edgeMarg
   return (c.x - p.x) * (c.x - p.x) + (c.z - p.z) * (c.z - p.z) < 1e-9;
 }
 
-/** The nearest spot not searched yet within `reach` of the Keeper, or null. */
-export function nearestSpot<T extends Pick<PublicSearchSpot, 'x' | 'z' | 'done'>>(
-  at: WorldPoint,
-  spots: readonly T[],
-  reach: number = EXPLORE_VIEW.reach,
-): T | null {
-  let best: T | null = null;
-  let bestD = reach * reach;
-  for (const s of spots) {
-    if (s.done) continue;
-    const d = (s.x - at.x) * (s.x - at.x) + (s.z - at.z) * (s.z - at.z);
-    if (d <= bestD) {
-      best = s;
-      bestD = d;
-    }
-  }
-  return best;
-}
-
-/**
- * The spot the action button offers: the one the player tapped, while it's
- * in reach and not searched yet, else the nearest in reach. Two spots can sit
- * side by side; tapping a mound means "dig here", not the rock next to it.
- */
-export function spotInReach<T extends Pick<PublicSearchSpot, 'index' | 'x' | 'z' | 'done'>>(
-  at: WorldPoint,
-  spots: readonly T[],
-  aimed: number | null,
-  reach: number = EXPLORE_VIEW.reach,
-): T | null {
-  const wanted = aimed === null ? undefined : spots.find((s) => s.index === aimed);
-  if (wanted && nearestSpot(at, [wanted], reach)) return wanted;
-  return nearestSpot(at, spots, reach);
-}
-
 /** One step of `distance` from `from` towards `to` (stopping on it), kept inside the tile. */
 export function stepToward(from: WorldPoint, to: WorldPoint, distance: number): WorldPoint {
   const dx = to.x - from.x;
@@ -280,20 +312,7 @@ export function stepToward(from: WorldPoint, to: WorldPoint, distance: number): 
 }
 
 /**
- * Where a walk to a spot stops: just short of it on the Keeper's side, so
- * the Keeper stands beside the rock rather than on it.
- */
-export function standBeside(from: WorldPoint, spot: WorldPoint): WorldPoint {
-  const dx = from.x - spot.x;
-  const dz = from.z - spot.z;
-  const d = Math.sqrt(dx * dx + dz * dz);
-  const keep = EXPLORE_VIEW.reach * 0.6;
-  if (d <= keep) return clampToTile(from);
-  return clampToTile({ x: spot.x + (dx / d) * keep, z: spot.z + (dz / d) * keep });
-}
-
-/**
- * The floating joystick (owner decision 2026-10-07): the drag from where the
+ * The joystick (owner decision 2026-10-07; always shown, #291): the drag from where the
  * finger landed, as a direction on the ground scaled 0–1. Screen up walks
  * away from the camera (+z); a drag inside the dead zone stands still.
  */
@@ -308,9 +327,4 @@ export function joystickVector(
   if (amount <= deadZone || d === 0) return { x: 0, z: 0 };
   const speed = (amount - deadZone) / (1 - deadZone);
   return { x: (dx / d) * speed, z: (-dy / d) * speed };
-}
-
-function listOf(names: readonly string[]): string {
-  if (names.length <= 1) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`;
 }
