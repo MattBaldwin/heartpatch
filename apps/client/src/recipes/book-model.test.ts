@@ -1,5 +1,6 @@
 import {
   findAvoidedWords,
+  GAME_DATA,
   recipeBookPages,
   RECIPE_BOOK,
   type PublicTile,
@@ -78,6 +79,42 @@ describe('recipe book pages', () => {
     expect(jack.hint).toMatch(/Emberwood and Pumpkin/);
   });
 
+  it("say what a recipe's item does, from its data (#241)", () => {
+    const brew = view('recipe:brave-brew');
+    expect(brew.effect?.purpose).toBe(
+      GAME_DATA.resources.find((r) => r.id === 'brave-brew')?.description,
+    );
+    expect(brew.effect?.chips).toEqual([
+      { text: '💪 +40% oomph all battle', battle: true },
+      { text: '🫧 Next bump 75% softer', battle: true },
+      { text: '🎒 Use it in a battle', battle: false },
+    ]);
+    // The recipe's own line stays, as flavour.
+    expect(brew.flavour).toBe(GAME_DATA.recipes.find((r) => r.id === 'brave-brew')?.description);
+    expect(view('recipe:jack-o-lantern-hearthfire').effect?.chips.map((c) => c.text)).toEqual([
+      "🎃 Builds a Jack-o'-Lantern Hearthfire",
+      '🛡️ Safe 2 tiles around',
+      '🪵 Needs fuel each night',
+    ]);
+  });
+
+  it("don't repeat what a recipe is made from (#241)", () => {
+    const chips = view('recipe:pumpkin-treats').effect?.chips.map((c) => c.text) ?? [];
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.some((t) => t.startsWith('🥣'))).toBe(false);
+  });
+
+  it('say what a building does like the build menu (#241)', () => {
+    const grounds = view('building:training-grounds');
+    const building = GAME_DATA.buildings.find((b) => b.id === 'training-grounds');
+    expect(grounds.effect).toEqual({
+      purpose: building?.description,
+      chips: [{ text: '🏋️ 2 squishies · 5 XP/hr', battle: false }],
+    });
+    // Said once: the purpose line, not again as flavour.
+    expect(grounds.flavour).toBe('');
+  });
+
   it('say buildings are built at home', () => {
     const den = view('building:ember-den', { bag: { timber: 5, stone: 3 } });
     expect(den.section).toBe('build');
@@ -97,7 +134,15 @@ describe('recipe book pages', () => {
   it('use kind words only', () => {
     for (const page of PAGES) {
       const v = pageView(page, ctx({ unlocked: new Set(PAGES.map((p) => p.key)) }));
-      const words = [v.name, v.flavour, v.meta, v.hint, ...v.ingredients.map((i) => i.where)];
+      const words = [
+        v.name,
+        v.flavour,
+        v.meta,
+        v.hint,
+        ...v.ingredients.map((i) => i.where),
+        v.effect?.purpose ?? '',
+        ...(v.effect?.chips.map((c) => c.text) ?? []),
+      ];
       expect(findAvoidedWords(words.join(' ')), page.key).toEqual([]);
     }
   });
@@ -173,7 +218,10 @@ describe('where to find it', () => {
   it('names terrains, the home ring, bonuses and recipes', () => {
     expect(whereText('timber')).toBe("Forest, Juniper's Gap and your home ring.");
     expect(whereText('witch-dust')).toBe('A surprise bonus when you gather Emberwood or Pumpkins.');
-    expect(whereText('treats')).toBe('Your home ring, or make Pumpkin Treats.');
+    expect(whereText('treats')).toBe('Your home ring, or make Cooked Treats or Pumpkin Treats.');
+    // The nesting economy (#238): land a gatherer works, unless its spots say it already.
+    expect(whereText('ice')).toBe('A squishy gathering on Mountains, or make Frozen Water.');
+    expect(whereText('greens')).toBe('Forest, or a squishy gathering on Meadow.');
     expect(whereText('pumpkins')).toBe('Pumpkin Fields and your home ring.');
     expect(whereText('magic-fallen-leaves')).toBe(
       'Your home ring, or a surprise bonus when you gather Timber.',
@@ -317,10 +365,14 @@ describe('ribbon tabs', () => {
       { id: 'none', label: 'Nothing yet', color: '#fff', outputs: ['no-such-thing'] },
     ]);
     expect(tabs.map((t) => t.label)).toEqual(['Treats & food', 'Charms']);
-    expect(views.filter(tabs[0]!.matches).map((p) => p.key)).toEqual(['recipe:pumpkin-treats']);
+    expect(views.filter(tabs[0]!.matches).map((p) => p.key)).toEqual([
+      'recipe:cook-treats',
+      'recipe:pumpkin-treats',
+    ]);
   });
 
-  it('leave the effect line empty until something has one', () => {
-    expect(views.every((v) => v.effect === null)).toBe(true);
+  it('say what every page makes is for (#241)', () => {
+    // Names any page that says nothing, so a failure points at the content to fix.
+    expect(views.filter((v) => !v.effect?.chips.length).map((v) => v.key)).toEqual([]);
   });
 });

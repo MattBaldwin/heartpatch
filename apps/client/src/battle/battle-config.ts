@@ -23,6 +23,11 @@ export const FIGHTER = {
   facing: { mine: 0.5, theirs: 0.62 }, // TUNE
   /** The player's Keeper stands at their squishy's back, nearly upright under the low camera. */
   keeper: { offset: { x: 1.25, z: 3.4 }, yaw: -0.25, leanShare: 0.3 }, // TUNE
+  /**
+   * A fence segment standing in for a squishy (#203): the map's fence look,
+   * built `length` long and scaled up to about a squishy's height.
+   */
+  fence: { length: 0.6, scale: 7 }, // TUNE
 } as const;
 
 /** Timings for playing the server's resolved log back, ms. */

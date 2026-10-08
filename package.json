@@ -16,6 +16,7 @@
     "sim:map-fill": "pnpm --filter @heartpatch/shared sim:map-fill",
     "sim:fuel": "pnpm --filter @heartpatch/shared sim:fuel",
     "sim:economy": "pnpm --filter @heartpatch/shared sim:economy",
+    "sim:costumes": "pnpm --filter @heartpatch/shared sim:costumes",
     "lint": "eslint . --max-warnings 0 && node scripts/check-filenames.mjs && node scripts/check-procedural-rules.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "prettier --write .",

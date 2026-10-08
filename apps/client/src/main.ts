@@ -5,6 +5,7 @@ import { createRenderer, parseRendererPreference } from './engine/renderer.js';
 import { pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
+import { createWildPicker } from './battle/wild-picker.js';
 import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
@@ -43,6 +44,7 @@ import { updateHold } from './pwa/update-hold.js';
 import { createRaidReport, withRaidReport } from './raids/raid-report.js';
 import { createStarterScreen } from './starters/starter-screen.js';
 import { createTerritoryScreen } from './territory/territory-screen.js';
+import { createFenceScreen, withFences } from './fences/fence-screen.js';
 import { tutorialApi } from './tutorial/tutorial-api.js';
 import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.js';
 import { el } from './ui/dom.js';
@@ -277,13 +279,20 @@ const raidReport = createRaidReport({
     hollow.otherReportChanged();
   },
 });
-const territory = withRaidReport(
-  createTerritoryScreen({
-    openBattle: (battle) => {
-      if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
-    },
-  }),
-  raidReport,
+// Fences (#203) ride along too: building, repairing and taking down the
+// fences on my land's edges, from the tile panel.
+const fences = createFenceScreen();
+const territory = withFences(
+  withRaidReport(
+    createTerritoryScreen({
+      openBattle: (battle) => {
+        if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen)
+          battles.open(battle);
+      },
+    }),
+    raidReport,
+  ),
+  fences,
 );
 // Land that misses you (owner decision 2026-10-06): my fading land drawn on
 // the map, the "Some land misses you!" chip with Visit, and the welcome-back
@@ -397,6 +406,8 @@ const home = createHomeScreen({
   },
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
+// Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
+const wildPicker = createWildPicker({ meet: (mapId, tile) => battles.meetWild(mapId, tile) });
 const maps = createMapScreen({
   root: document.body,
   showScene,
@@ -416,10 +427,13 @@ const maps = createMapScreen({
     home.setMap(null);
     lobby.showMessage(message);
   },
+  // Meet it first (#209): the tuft the player tapped is what they came for.
   tileActions: combineTileActions(
+    wildPicker.tileActions,
     inventory.tileActions,
     home.tileActions,
     land.tileActions,
+    fences.tileActions,
     territory.tileActions,
     jobs.tileActions,
   ),
@@ -444,6 +458,7 @@ const maps = createMapScreen({
     wardrobe.liveEvent(event);
     hollow.liveEvent(event);
     land.liveEvent(event);
+    fences.liveEvent(event);
     chat.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
@@ -575,6 +590,10 @@ const milestones = createMilestoneCelebration({
 const battles = createBattleScreen({
   root: document.body,
   isGlade: (mapId) => mapId === glade,
+  onWildHints: (mapId, tiles) => {
+    wildPicker.setHints(mapId, tiles);
+    maps.setWild(mapId, tiles);
+  },
   // Find a squishy and the Catalog live in the Adventure tray.
   entryRoot: trays.slot('battle'),
   showScene,
@@ -953,6 +972,47 @@ mountAuth(document.body, {
   },
 });
 
+if (import.meta.env.DEV) {
+  // Read-only hook for the Playwright tests; dev builds only. Installed
+  // before boot() so it exists before the first drawn frame marks the canvas
+  // ready: the getters read whichever stage is on screen (null or 0 before one).
+  window.__heartpatch = {
+    renderer: () => stage?.renderer.kind ?? null,
+    quality: () => stage?.quality.snapshot ?? null,
+    camera: () => stage?.camera.state ?? null,
+    draws: () => stage?.draws ?? 0,
+    idle: () => stage?.idle ?? false,
+    invalidate: () => stage?.invalidate(),
+    map: () => maps.debug,
+    trays: () => trays.debug,
+    recipeBook: () => recipeBook.debug,
+    tutorial: () => tutorial.debug,
+    updatesHeld: () => updateHold.held,
+    battle: () => battles.debug,
+    battleDev: () => battles.dev,
+    keeper: () => keeper.debug,
+    cinematic: () => cinematic.debug,
+    catalog: () => catalog.debug,
+    inventory: () => inventory.debug,
+    territory: () => territory.debug,
+    fences: () => fences.debug,
+    hollow: () => hollow.debug,
+    land: () => land.debug,
+    chat: () => chat.debug,
+    raids: () => raidReport.debug,
+    home: () => home.debug,
+    care: () => care.debug,
+    closeUp: () => closeUp.debug,
+    wardrobe: () => wardrobe.debug,
+    jobs: () => jobs.debug,
+    starter: () => starters.debug,
+    lore: () => lorebook.debug,
+    milestones: () => milestones.debug,
+    whatsNew: () => whatsNew.debug,
+    audio: () => audio.debug,
+  };
+}
+
 await boot(canvas, {
   preference: parseRendererPreference(params.get('renderer')),
   createRenderer,
@@ -977,45 +1037,6 @@ if (import.meta.env.DEV) {
     .catch(() => {
       badge.textContent = 'server: offline';
     });
-
-  // Read-only hook for the Playwright smoke test; dev builds only. Installed
-  // before anything else here awaits: the stage marks the canvas ready on its
-  // first drawn frame, which the tests wait for before reading the hook, and
-  // that frame is only a task away once boot() has resolved.
-  window.__heartpatch = {
-    renderer: () => stage?.renderer.kind ?? null,
-    quality: () => stage?.quality.snapshot ?? null,
-    camera: () => stage?.camera.state ?? null,
-    draws: () => stage?.draws ?? 0,
-    idle: () => stage?.idle ?? false,
-    invalidate: () => stage?.invalidate(),
-    map: () => maps.debug,
-    trays: () => trays.debug,
-    recipeBook: () => recipeBook.debug,
-    tutorial: () => tutorial.debug,
-    updatesHeld: () => updateHold.held,
-    battle: () => battles.debug,
-    battleDev: () => battles.dev,
-    keeper: () => keeper.debug,
-    cinematic: () => cinematic.debug,
-    catalog: () => catalog.debug,
-    inventory: () => inventory.debug,
-    territory: () => territory.debug,
-    hollow: () => hollow.debug,
-    land: () => land.debug,
-    chat: () => chat.debug,
-    raids: () => raidReport.debug,
-    home: () => home.debug,
-    care: () => care.debug,
-    closeUp: () => closeUp.debug,
-    wardrobe: () => wardrobe.debug,
-    jobs: () => jobs.debug,
-    starter: () => starters.debug,
-    lore: () => lorebook.debug,
-    milestones: () => milestones.debug,
-    whatsNew: () => whatsNew.debug,
-    audio: () => audio.debug,
-  };
 
   const { mountDevOverlay } = await import('./engine/dev-overlay.js');
   mountDevOverlay(() => stage);

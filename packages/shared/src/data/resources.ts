@@ -40,6 +40,31 @@ export const RESOURCES: Resource[] = [
     kind: 'gathered',
     gather: { seconds: 60 * 60, quantity: 1 }, // TUNE: rarer than Stone
   },
+  // #238: new things to gather, for the element fences (#203).
+  {
+    id: 'water',
+    name: 'Water',
+    description:
+      'Cool, clear water from a lakeside well. Build a Moat with it, or freeze it into Ice at home!',
+    kind: 'gathered',
+    gather: { seconds: 20 * 60, quantity: 3 }, // TUNE: like Treats
+  },
+  {
+    id: 'greens',
+    name: 'Greens',
+    description:
+      'Leafy bundles of grass and clover from meadows and forests. Grow a Hedge, or stir them into yummy Treats!',
+    kind: 'gathered',
+    gather: { seconds: 15 * 60, quantity: 4 }, // TUNE: a little less than Stone
+  },
+  {
+    id: 'ice',
+    name: 'Ice',
+    description:
+      'Cold and sparkly chunks from the mountains, for building an Ice Wall. They never melt in your bag!',
+    kind: 'gathered',
+    gather: { seconds: 30 * 60, quantity: 2 }, // TUNE: like Emberwood
+  },
   {
     id: 'heartdust',
     name: 'Heartdust',
@@ -111,7 +136,7 @@ export const RESOURCES: Resource[] = [
     // the build sheet doesn't read "to build X you need X".
     id: 'jack-o-lantern-hearthfire',
     name: "Jack-o'-Lantern",
-    description: 'A carved, grinning pumpkin. Build it into a Hearthfire at home!',
+    description: 'A carved, grinning pumpkin. Build it into a Hearthfire out on your land!',
     kind: 'crafted',
   },
   // Battle potions (#214, owner decisions 2026-10-07): drinking one takes the
@@ -134,7 +159,7 @@ export const RESOURCES: Resource[] = [
   {
     id: 'hearty-soup',
     name: 'Hearty Soup',
-    description: 'A big bowl of yum that brings back lots of energy.',
+    description: 'A big bowl of yum. Sip it in a battle to get lots of energy back!',
     kind: 'crafted',
     battleEffect: { healPercent: 40, shieldPercent: 75 }, // TUNE:
   },

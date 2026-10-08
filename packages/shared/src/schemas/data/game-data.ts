@@ -202,8 +202,9 @@ export const GameDataSchema = z
       if (b.placement !== 'land' && b.maxPerHome === undefined) {
         report(['buildings', i, 'maxPerHome'], `"${b.id}" can stand at home: give it maxPerHome`);
       }
-      if (b.placement !== 'home' && b.slot === 'edge') {
-        report(['buildings', i, 'slot'], `"${b.id}": edges come with fences (#203)`);
+      // Fences, and only fences, stand on edges (#203, #204).
+      if ((b.slot === 'edge') !== (b.kind === 'fence')) {
+        report(['buildings', i, 'slot'], `"${b.id}": fences go on edges, and only fences`);
       }
     });
 
@@ -212,6 +213,11 @@ export const GameDataSchema = z
     });
 
     data.terrains.forEach((t, i) => {
+      t.extraNodes?.forEach((extra, j) => {
+        const at = ['terrains', i, 'extraNodes', j, 'resource'];
+        checkRef(resources, 'resource', extra.resource, at, report);
+        checkGatherable(extra.resource, at);
+      });
       t.nodeResources.forEach((id, j) => {
         checkRef(resources, 'resource', id, ['terrains', i, 'nodeResources', j], report);
         checkGatherable(id, ['terrains', i, 'nodeResources', j]);

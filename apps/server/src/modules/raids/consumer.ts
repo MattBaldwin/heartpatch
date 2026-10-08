@@ -1,6 +1,7 @@
 import {
   otherSide,
   parseGameEventPayload,
+  setupSpecies,
   stanceOfPolicy,
   type BattleSideId,
   type RaidOutcome,
@@ -82,7 +83,7 @@ export function createRaidsConsumer(): EventConsumer {
         await createSpawnsRepo(tx).markSeen(
           event.mapId,
           challenge.defenderUserId,
-          battle.setup[ended.playerSide].squishies.map((s) => s.speciesId),
+          setupSpecies(battle.setup[ended.playerSide].squishies),
           battle.endedAt ?? event.createdAt,
         );
       }

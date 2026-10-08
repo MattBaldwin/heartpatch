@@ -89,3 +89,4 @@ export function isOnWatch(
   );
 }
 export * from './tending.js';
+export * from './fences.js';

@@ -5,8 +5,10 @@ export const TERRAINS: Terrain[] = [
   {
     id: 'meadow',
     name: 'Meadow',
-    description: 'Soft, open grass. A lovely spot to build.',
+    description: 'Soft, open grass full of Greens. A lovely spot to build.',
     weight: 30, // TUNE:
+    // No gather spot, so a fire always fits (#238): a gatherer on the land
+    // picks its Greens (JOB_RULES.terrainYields).
     nodeChance: 0,
     nodeResources: [],
   },
@@ -17,6 +19,8 @@ export const TERRAINS: Terrain[] = [
     weight: 20, // TUNE:
     nodeChance: 40, // TUNE:
     nodeResources: ['timber'],
+    // A rarer Greens spot on some forests (#238), so the Keeper can pick Greens too.
+    extraNodes: [{ resource: 'greens', chance: 25 }], // TUNE: #238
   },
   {
     id: 'old-forest',
@@ -37,7 +41,7 @@ export const TERRAINS: Terrain[] = [
   {
     id: 'mountains',
     name: 'Mountains',
-    description: 'Big, rocky peaks with Glimmer tucked inside.',
+    description: 'Big, chilly peaks of Ice, with Glimmer tucked inside.',
     weight: 8, // TUNE:
     nodeChance: 50, // TUNE:
     nodeResources: ['stone', 'glimmer'],
@@ -49,6 +53,7 @@ export const TERRAINS: Terrain[] = [
     weight: 8, // TUNE:
     nodeChance: 0,
     nodeResources: [],
+    extraNodes: [{ resource: 'water', chance: 100 }], // TUNE: #238, a well on every lake
   },
   {
     id: 'pumpkin-fields',

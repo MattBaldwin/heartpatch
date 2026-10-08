@@ -4,6 +4,9 @@ import { CLOTHING, CLOTHING_BY_ID, STARTER_CLOTHING } from '../../data/clothing.
 import { SEASONS } from '../../data/seasons.js';
 import {
   checkClothingData,
+  CLOTHING_RARITIES,
+  MAX_COSTUME_PIECES,
+  MAX_ITEM_PIECES,
   ClothingItemSchema,
   isKeeperClothing,
   SQUISHY_SLOT,
@@ -59,11 +62,48 @@ describe('the clothing catalog', () => {
     expect(ClothingItemSchema.safeParse(withStats).success).toBe(false);
   });
 
-  it('uses every rarity, so the filter always has something to show', () => {
+  it('ranks clothing from Common to Mythic, never Secret (#261)', () => {
+    expect(CLOTHING_RARITIES).toEqual([
+      'common',
+      'uncommon',
+      'rare',
+      'epic',
+      'legendary',
+      'mythic',
+    ]);
+    expect(
+      ClothingItemSchema.safeParse({ ...byId('cloud-onesie'), rarity: 'mythic' }).success,
+    ).toBe(true);
+    expect(
+      ClothingItemSchema.safeParse({ ...byId('cloud-onesie'), rarity: 'secret' }).success,
+    ).toBe(false);
+  });
+
+  it('uses every rarity, Mythic included (#261), so the filter always has something to show', () => {
     const rarities = new Set(CLOTHING.map((i) => i.rarity));
-    expect([...rarities].toSorted()).toEqual(
-      ['common', 'epic', 'legendary', 'rare', 'uncommon'].toSorted(),
-    );
+    expect([...rarities].toSorted()).toEqual([...CLOTHING_RARITIES].toSorted());
+  });
+
+  it('keeps everyday items to 12 pieces and body sockets for costumes (#261)', () => {
+    for (const item of CLOTHING) {
+      expect(item.visual.pieces.length, item.id).toBeLessThanOrEqual(
+        item.slot === 'costume' ? MAX_COSTUME_PIECES : MAX_ITEM_PIECES,
+      );
+    }
+    const items = copy();
+    const hat = items.find((i) => i.id === 'witch-hat')!;
+    hat.visual.pieces[0]!.on = 'head';
+    hat.visual.pieces.push(...Array.from({ length: 10 }, () => hat.visual.pieces[1]!));
+    expect(checkClothingData(items, SEASON_IDS)).toEqual([
+      expect.stringContaining('only costumes have more than 12 pieces'),
+      expect.stringContaining('only costumes place pieces on body sockets'),
+    ]);
+    const sleeves = copy();
+    const hollow = sleeves.find((i) => i.id === 'hollow-man-costume')!;
+    hollow.visual.pieces.find((p) => p.on === 'arms')!.turn = [20, 0, 0];
+    expect(checkClothingData(sleeves, SEASON_IDS)).toEqual([
+      expect.stringContaining('pieces on the arms may only roll'),
+    ]);
   });
 
   it('has no avoided words in names or descriptions (style guide §9)', () => {

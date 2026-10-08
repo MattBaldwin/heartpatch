@@ -80,7 +80,7 @@ New players experience this story in the opening cinematic (§25) and the tutori
 
 Each squishy is an instance of a **species**. Species are data, not code.
 
-**Species fields (minimum):** `id`, `name`, `element`, `feeling` (default/base), `rarity` (common, uncommon, rare, epic, legendary, secret), `season` (optional), `baseStats` (hp, attack, defense, speed), `moves`, `evolutions` (see §8), `visual` (procedural parameters, see §19), `habitatPreferences`. Spawn rules live in server-only spawn tables, not on the species, so they can't be datamined (tech spec §2). **Secret species** (rarity `secret`) and secret evolution forms are server-only too: the client receives a species definition only when the player meets it.
+**Species fields (minimum):** `id`, `name`, `element`, `feeling` (default/base), `rarity` (common, uncommon, rare, epic, legendary, mythic, secret; mythic is the top of the ladder, secret a separate hidden tier), `season` (optional), `baseStats` (hp, attack, defense, speed), `moves`, `evolutions` (see §8), `visual` (procedural parameters, see §19), `habitatPreferences`. Spawn rules live in server-only spawn tables, not on the species, so they can't be datamined (tech spec §2). **Secret species** (rarity `secret`) and secret evolution forms are server-only too: the client receives a species definition only when the player meets it.
 
 **Instance fields:** `id`, `speciesId`, `ownerId`, `nickname`, `level`, `xp`, `element`, `feeling` (can shift with care), `contentment`, `lastCaredAt`, `careHistoryScore`, `habitatId`, `state` (active, hollowed, in-trade…), `accessories` (items from the shared Wardrobe catalog, §23), `stats` (with small individual variance).
 
@@ -201,7 +201,10 @@ Resources vary by terrain, making certain tiles worth fighting over.
 | Emberwood | Old forest | Hearthfire fuel (nightly upkeep) |
 | Glimmer | Mountains, caves | Hearthfire level 3, advanced habitats, decorations |
 | Heartdust | Rescuing Hollowed squishies, events | Heart Snack (care), nurseries, evolution boosters (rare) |
-| Treats | Grown on farm plots | Feeding squishies, raising care |
+| Treats | Grown on farm plots (the best way), or cooked from Greens at home (2 Greens → 3 Treats) (#238) | Feeding squishies, raising care |
+| Water | A well on every lake (#238) | Moats; freezing into Ice; later, watering farm plots |
+| Greens | Meadow land, worked by a squishy gatherer; a Greens spot on about 1 forest in 4 (#238) | Hedges and Bramble Hedges; cooking Treats |
+| Ice | Mountain land, worked by a squishy gatherer, or 3 Water frozen at home (half the time with a Frost squishy on your team) (#238) | Ice Walls |
 
 **Seasonal resources** (special uses, see §15): Pumpkins, Witch Dust, Magic Fallen Leaves, Turkey Feathers, Presents, Fireworks.
 
@@ -209,10 +212,10 @@ Gathering is timer-based (start a gather on an owned node; when it's done it goe
 
 **Recipe book.** Every craft recipe and every building you can put up has a page. A page opens the first time your account has collected everything it needs, on any patch, and stays open. The Heart Charm, the Hearthfire and both habitats are open from the start (the tutorial uses them). A sealed page can't be crafted or built yet and shows a short hint about where its missing pieces turn up (DECISIONS "Recipe book and unlocks"). One thing cooks at a time per patch; the book shows what's cooking with a countdown, and it pops into your bag when it's done.
 
-**Squishy gatherers.** The Keeper still gathers by hand. On top of that, each squishy given the gatherer job works one more tile of the player's land **on its own, again and again**, until it's moved: a node, or **owned territory** outside the home base, which yields by terrain (forest → Timber, hills → Stone, mountains → Glimmer (slowly), old forest → Emberwood, meadow → Treats, pumpkin fields → Pumpkins in season; `JOB_RULES.terrainYields`, **[DEFAULT]**). More squishies and more land mean more resources, which is why capturing squishies and holding territory both matter.
+**Squishy gatherers.** The Keeper still gathers by hand. On top of that, each squishy given the gatherer job works one more tile of the player's land **on its own, again and again**, until it's moved: a spot in the home ring, or **owned territory** outside the home base, which yields its terrain's **primary resource** (meadow → Greens, forest → Timber, old forest → Emberwood, hills → Stone, mountains → Ice, lake → Water, pumpkin fields → Pumpkins in season; `JOB_RULES.terrainYields`, **[DEFAULT]**). Gather spots are the rarer **secondary** (Glimmer and Stone on mountains, Greens on some forests). **Out on the land, squishies gather the land's main resource; spots are the Keeper's.** In the home ring, a squishy works its spot (home land itself yields nothing). Juniper's Gap has no land yield, so a squishy there works its spot, as before. Treats are cooked from Greens or grown on farm plots (the nesting economy, owner decision on #238). More squishies and more land mean more resources, which is why capturing squishies and holding territory both matter.
 
 - One gatherer per tile, one job per squishy. A squishy's gather takes about **[DEFAULT: twice]** the Keeper's time per cycle; finished cycles go into the bag by themselves; if nobody visits, up to **[DEFAULT: 4]** wait, then it naps until you're back.
-- **Matches gather faster**, like the habitat match (§7): a squishy whose element (or a Halloween squishy, for Pumpkins) matches the resource is 1.35× as quick, and 1.75× when its feeling matches too (Leaf/Brave → Timber, Stone/Sleepy → Stone, Fire/Cozy → Emberwood, Light or Spark/Joy → Glimmer, Water/Silly → Treats, Shadow or Halloween/Spooky → Pumpkins; **[DEFAULT]**). The job board shows each squishy's best jobs: "Great at gathering Timber 🌲", "Strong fighter 💪".
+- **Matches gather faster**, like the habitat match (§7): a squishy whose element (or a Halloween squishy, for Pumpkins) matches the resource is 1.35× as quick, and 1.75× when its feeling matches too (Leaf/Brave → Timber, Stone/Sleepy → Stone, Fire/Cozy → Emberwood, Light or Spark/Joy → Glimmer, Water/Silly → Water, Leaf/Cozy → Greens, Frost/Sleepy → Ice, Shadow or Halloween/Spooky → Pumpkins; **[DEFAULT]**). The job board shows each squishy's best jobs: "Great at gathering Timber 🌲", "Strong fighter 💪".
 - Taking a gatherer off its tile puts what it had ready in the bag; a half-done gather is let go. If its land changes hands, what it finished before then still goes in the bag; the unfinished cycle is lost, as with the Keeper's own gathers.
 - **Night risk:** a gatherer spends the night on its tile, so outside a lit Hearthfire's safe radius it's exposed to the Hollow Man like any squishy outside the firelight (§14). The job board warns before assigning.
 
@@ -356,19 +359,21 @@ Every player is represented by a **Keeper**, a character drawn in the same soft 
 
 ### Wardrobe and clothing
 - **Slots:** hat, hair accessory, top, bottom, shoes, back (capes, backpacks, wings), held item (lantern, wand, net), and a full-body **costume** slot that overrides the others.
-- **Rarity:** common, uncommon, rare, epic, legendary, matching squishy rarity colors.
+- **Rarity:** common, uncommon, rare, epic, legendary, mythic, matching squishy rarity colors. Mythic pieces are found-only, never sold (#261).
 - **Outfits:** players can save **[DEFAULT: 3]** outfit presets and swap between them.
 - **Squishy accessories** (tiny hats, bows, scarves) live in the same Wardrobe and inventory system, so one item catalog and one trading flow cover both.
 - Clothing is **cosmetic only**. It never affects battle stats, so no one can buy or trade their way to power.
 
 ### Getting clothing
-1. **Found:** small chance from capturing tiles, opening resource nodes, rescuing Hollowed squishies, and (Phase 3) presents. Some items only drop in specific terrain or seasons.
+1. **Found:** small chance from capturing tiles (better when the land is taken from another player), opening resource nodes, rescuing Hollowed squishies, winning wild battles, exploring, and (Phase 3) presents. Some items only drop in specific terrain or seasons.
 2. **Awarded through milestones:** see §24. Milestone items are signature pieces you can't get any other way, so wearing them shows what you've achieved.
 3. **Purchased** in the **Boutique** using **Patch Coins**, an in-game currency earned from battles, captures, daily care and milestones. Patch Coins belong to the **account** (like the wardrobe), with daily earning caps **[DEFAULT]** so extra maps or accounts aren't a coin farm. Patch Coins can **never be bought with real money** (§15). The Boutique stock rotates **[DEFAULT: daily]**, with seasonal racks during each season.
 4. **Traded and gifted** between players, using the same escrow, fair-trade bonus, generosity/warmth and regret-window rules as squishy trades (§10). Milestone items are **account-bound** and can't be traded, so they stay meaningful.
 
 ### Seasonal clothing
 Each season brings its own items: Halloween costumes (pumpkin hoods, ghost capes, witch hats, squishy onesies), Thanksgiving scarves and leaf crowns, Christmas sweaters and elf hats, New Year party hats. Like seasonal resources, seasonal clothing stays wearable year-round as keepsakes; it's just only *obtainable* during its season.
+
+**Special Halloween costumes (#261):** ten head-to-toe costumes from Common to Mythic. Common to Legendary also sell on the Boutique's Halloween rack at 3 to 8 busy days of coins; the Mythic Hollow Man is found-only. Costumes wear their rarity's material finish (sparkle, rainbow rim, Mythic shimmer), and each piece sits on a body socket so a costume fits every Keeper base. `pnpm sim:costumes` shows how long each tier takes to find or buy.
 
 ### Implementation notes
 - **Procedural Keepers:** a parametric base body (a few preset meshes) with attachment bones/sockets per slot, so clothing is modular meshes plus material/palette swaps driven from data, the same approach as squishy parts.

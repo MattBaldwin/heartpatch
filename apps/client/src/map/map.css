@@ -27,7 +27,8 @@
 .map-hud-login[hidden],
 .tile-panel[hidden],
 .tile-panel-resource[hidden],
-.tile-panel-guardians[hidden] {
+.tile-panel-guardians[hidden],
+.tile-panel-gatherer[hidden] {
   display: none;
 }
 
@@ -71,6 +72,16 @@
   max-height: calc(45dvh - 62px - env(safe-area-inset-bottom));
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Wide enough that the panel (470px at most, centred) clears both handles
+   (96px each, ui/trays) beside it: it only has to stay under the corner
+   buttons (56px from the top), so a phone on its side shows "Go home"
+   without scrolling (#138). */
+@media (min-width: 662px) {
+  .tile-panel {
+    max-height: calc(100dvh - 76px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
 }
 
 .tile-panel-home {
@@ -147,7 +158,8 @@
 
 .tile-panel-about,
 .tile-panel-resource,
-.tile-panel-guardians {
+.tile-panel-guardians,
+.tile-panel-gatherer {
   margin: 4px 0 0;
   font-size: 15px;
   line-height: 1.35;
@@ -158,6 +170,12 @@
 }
 
 .tile-panel-resource {
+  font-weight: 600;
+  color: #6b8a3a;
+}
+
+/* What a squishy gatherer picks here (#238): the land's own green. */
+.tile-panel-gatherer {
   font-weight: 600;
   color: #6b8a3a;
 }
@@ -175,4 +193,35 @@
 
 .tile-panel-actions:not(:has(.tile-actions-slot > *)) {
   display: none;
+}
+
+/* Something's rustling here! (#209): a soft leafy line over Meet it, like the tuft. */
+.wild-rustle {
+  margin: 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #eef7e6;
+  font-size: 15px;
+  font-weight: 800;
+  color: #3f6b3a;
+}
+
+/* A phone on its side (#209): the panel's lines first, then its big buttons
+   two to a row, so the card stays low between the side trays. The same query
+   as the trays (#136, trays.css). */
+@media (max-height: 520px) and (min-width: 640px) {
+  /* Only a panel with something in it: an empty one stays hidden (above). */
+  .tile-panel .tile-panel-actions:has(.tile-actions-slot > *) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tile-panel .tile-actions-slot > * {
+    grid-column: 1 / -1;
+  }
+
+  .tile-panel .tile-actions-slot > .bag-action {
+    grid-column: auto;
+    order: 1;
+  }
 }

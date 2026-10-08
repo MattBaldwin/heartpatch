@@ -36,6 +36,8 @@ export const ItemChangeReasonSchema = z.enum([
   'upgrade',
   /** A potion drunk in battle (#214), ledgered against the battle. */
   'battle-item',
+  /** Mending a fence segment (#203), ledgered against the segment. */
+  'repair',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 

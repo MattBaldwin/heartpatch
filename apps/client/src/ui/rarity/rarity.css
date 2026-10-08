@@ -1,5 +1,6 @@
 /* Rarity colours, from plain to sparkly (design doc §23), shared by squishies
-   (#240) and clothing (wardrobe, Boutique). Secret is squishies only. */
+   (#240) and clothing (wardrobe, Boutique). Mythic sits above Legendary
+   (#261); Secret is squishies only. */
 .rarity-common {
   --rarity: #8fbf8a;
 }
@@ -14,6 +15,9 @@
 }
 .rarity-legendary {
   --rarity: #e0a12a;
+}
+.rarity-mythic {
+  --rarity: #2aa6b8;
 }
 .rarity-secret {
   --rarity: #d9468b;
@@ -53,6 +57,14 @@
   width: 12px;
   height: 12px;
   vertical-align: middle;
+}
+
+/* Mythic's dot is a little opal, like the shimmer finish it brings (#261). */
+.rarity-mythic.rarity-chip::before,
+.rarity-mythic.rarity-dot,
+.rarity-mythic.wardrobe-rarity:not(.rarity-all)::before {
+  background: conic-gradient(from 200deg, #ffd27a, #ff9ec7, #b39ddb, var(--rarity), #ffd27a);
+  box-shadow: 0 0 0 1px var(--rarity);
 }
 
 /* Secret glows a little, so it reads as special. */

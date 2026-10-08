@@ -3,6 +3,7 @@ import { tapCanvas } from './claim-land.js';
 import { hook } from './dev-hook.js';
 import { expectRoomyLabels, settled, still } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { touch, type Point } from './touch.js';
 import { openTray, traysState, traySettled, type TraySide } from './trays.js';
 
 // Every map control stays on screen and in reach on short screens too (#136:
@@ -34,6 +35,7 @@ const ROWS = [
 ].join(', ');
 
 const mapState = (page: Page) => hook<{ selected: string | null }>(page, 'map');
+const zoom = async (page: Page) => (await hook<{ distance: number }>(page, 'camera'))?.distance;
 
 type Box = { id: string; l: number; t: number; r: number; b: number };
 
@@ -71,6 +73,39 @@ function expectReachable(list: Box[], screen: Box): void {
     }
   }
   expect(problems).toEqual([]);
+}
+
+/**
+ * A pinch with one finger on each map control and the other on the map
+ * zooms, and opens nothing (#159: a finger on a button turned the pinch into
+ * a pan). The button finger rests, as a thumb holding the phone does; the
+ * map finger spreads away from it, then back.
+ */
+async function pinchFromControls(page: Page, hud: Box[], screen: Box): Promise<void> {
+  const mid = { x: screen.r / 2, y: screen.b / 2 };
+  for (const control of hud) {
+    const thumb = { x: (control.l + control.r) / 2, y: (control.t + control.b) / 2 };
+    // Away from the thumb, from near the middle of the screen.
+    const len = Math.hypot(mid.x - thumb.x, mid.y - thumb.y);
+    const away = { x: (mid.x - thumb.x) / len, y: (mid.y - thumb.y) / len };
+    const reach = Math.min(screen.r, screen.b) / 5;
+    const finger = (k: number): Point => ({ x: mid.x + away.x * k, y: mid.y + away.y * k });
+    const spread = (from: number, to: number) =>
+      Array.from({ length: 9 }, (_, i) => ({
+        1: thumb,
+        2: finger(from + ((to - from) * i) / 8),
+      }));
+    const before = await zoom(page);
+    await touch(page, spread(-reach, reach), { hitTest: true });
+    const zoomedIn = await zoom(page);
+    expect(zoomedIn, `pinch out from ${control.id}`).toBeLessThan(before! * 0.9);
+    await touch(page, spread(reach, -reach), { hitTest: true });
+    expect(await zoom(page), `pinch in from ${control.id}`).toBeGreaterThan(zoomedIn! * 1.1);
+    expect((await traysState(page))?.open ?? null, `${control.id} opened a tray`).toBeNull();
+    expect((await mapState(page))?.selected ?? null, `${control.id} picked a tile`).toBeNull();
+    const sheets = await boxes(page, '[role="dialog"]');
+    expect(sheets.map(show), `${control.id} opened a sheet`).toEqual([]);
+  }
 }
 
 /** Every row of the open tray is in its body's view without scrolling. */
@@ -131,6 +166,7 @@ test('the map’s controls fit short and tall screens', async ({ browser }) => {
         'tray-handle-heartpatch',
       ]);
       expectReachable(hud, screen);
+      await pinchFromControls(page, hud, screen);
 
       for (const side of ['adventure', 'heartpatch'] as const) {
         await checkTray(page, side, screen);
@@ -150,6 +186,12 @@ test('the map’s controls fit short and tall screens', async ({ browser }) => {
       }).toPass({ timeout: 30_000 });
       const panelBox = (await boxes(page, '[data-testid="tile-panel"]'))[0]!;
       expect(inside(panelBox, screen), show(panelBox)).toBe(true);
+      // Its own controls fit it without scrolling (#138: "Go home" stuck out
+      // of the bottom on a phone on its side).
+      const panelControls = await boxes(page, '[data-testid="tile-panel"] button');
+      expect(panelControls.length).toBeGreaterThan(0);
+      const cut = panelControls.filter((c) => !inside(c, panelBox)).map(show);
+      expect(cut, `cut off by the tile panel ${show(panelBox)}`).toEqual([]);
       const under = (await boxes(page, HUD)).filter((c) => overlap(c, panelBox)).map(show);
       expect(under, `under the tile panel ${show(panelBox)}`).toEqual([]);
       await panel.getByRole('button', { name: 'Close' }).tap();

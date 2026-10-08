@@ -3,17 +3,25 @@ import {
   challengeRewardPercent,
   dailyLossCap,
   deriveSeed,
+  exposedSegments,
+  fenceBattleSetup,
+  fenceMaxHp,
+  FENCE_RULES,
   GAME_DATA,
+  isTileFenced,
   landCount,
+  weakestSegment,
   RAID_RULES,
   stancePolicy,
   TERRITORY_RULES,
   tileBattleKindFor,
   type AttackTargetProblem,
   type AttackTileRequest,
+  type BattleSideId,
   type BattleSideSetup,
   type BattleSquishySetup,
   type DefenseStance,
+  type FenceRules,
   type PublicUser,
   type SetDefendersRequest,
   type Species,
@@ -36,10 +44,12 @@ import {
   spawnWindowFor,
   type Clock,
 } from '../../lib/time.js';
+import { createBattlesRepo, type BattleRow } from '../battles/repo.js';
 import type {
   BattlesService,
   PrepareTileBattle,
   StartResult,
+  TileBattleEnd,
   TileBattlePort,
 } from '../battles/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
@@ -51,8 +61,11 @@ import {
   createTerritoryRepo,
   type DefenderRow,
   type TerritoryTileRow,
+  type TileAttackRow,
 } from './repo.js';
 import { takeDownOnLostLand } from '../buildings/service.js';
+import { createFencesRepo } from '../fences/repo.js';
+import { FENCE_DATA, takeDownFencesOnCapture, toPlacedFence } from '../fences/service.js';
 import { createLandTending, type LandTendingService } from './tending.js';
 
 /*
@@ -89,9 +102,10 @@ export interface TerritoryServiceOptions {
   clock?: Clock;
   /** Live sync (`wsHub.publish`), called after commit. Never rejects. */
   publish?: (mapId: string) => Promise<void>;
-  /** Tests pass their own raid rules and guardians. */
+  /** Tests pass their own raid rules, guardians and fence rules. */
   rules?: TerritoryRules;
   guardians?: GuardianData;
+  fenceRules?: FenceRules;
 }
 
 // Kid-readable messages (style guide §3, §6, §9: "Claim" and "Challenge").
@@ -117,6 +131,9 @@ const MESSAGES = {
   notYourSquishy: "That's not one of your squishies.",
   inHollow: 'That squishy is in the Hollow. Rescue them first!',
   housed: (name: string) => `Move ${name} out of their habitat first!`,
+  // Fences (#203): the guard battle after a broken fence needs someone fresh.
+  nobodyLeft:
+    'Your fence breaker needs a rest! Pick another squishy for your team to beat the guard.',
 } as const;
 
 const PROBLEMS: Record<AttackTargetProblem, { code: 'FORBIDDEN' | 'CONFLICT'; message: string }> = {
@@ -199,6 +216,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
   const { db } = options;
   const now = options.clock ?? (() => new Date());
   const rules = options.rules ?? TERRITORY_RULES;
+  const fenceRules = options.fenceRules ?? FENCE_RULES;
   const guardianData = options.guardians ?? defaultGuardianData();
   const store = createTerritoryRepo(db);
   const land = createLandTending({
@@ -229,7 +247,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
   /** Raid rules, checked in the battle's start transaction (see `PrepareTileBattle`). */
   const prepare =
     (user: PublicUser, target: AttackTileRequest): PrepareTileBattle =>
-    async (tx, { map, at }) => {
+    async (tx, { map, at, team }) => {
       const repo = createTerritoryRepo(tx);
       const seen = await repo.findTile(map.id, target.q, target.r);
       if (!seen) throw new AppError('NOT_FOUND', MESSAGES.noTile);
@@ -248,11 +266,35 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       const problem = attackTargetProblem(tile, tiles, user.id, map.pvpMode);
       if (problem) throw new AppError(PROBLEMS[problem].code, PROBLEMS[problem].message);
 
-      const cooldown = await repo.cooldownUntil(tile.id);
-      if (cooldown && cooldown > at) throw new AppError('CONFLICT', MESSAGES.cooldown);
+      // Fences (#203): the defender's segments on this tile, and whether it's
+      // fenced (every edge facing land they don't hold has one).
+      const segments = defenderId === null ? [] : await createFencesRepo(tx).listOnTile(tile.id);
+      const fenced =
+        defenderId !== null &&
+        segments.length > 0 &&
+        isTileFenced(
+          tile,
+          tiles.filter((t) => t.ownerUserId === defenderId),
+          segments,
+          tiles,
+        );
+      // The guard battle straight after I broke this tile's fence finishes
+      // that challenge (#203): no new try, and the fence's cooldown stands.
+      // Not if the owner has fenced it up again meanwhile.
+      const brokeFence = fenced
+        ? null
+        : await repo.brokenFenceFor(
+            tile.id,
+            user.id,
+            new Date(at.getTime() - fenceRules.keepGoingMinutes * MINUTE_MS),
+          );
       const today = localDate(at, map.timeZone);
-      const used = await repo.attemptsOn(map.id, user.id, today, map.timeZone);
-      if (used >= rules.attemptsPerDay) throw new AppError('CONFLICT', MESSAGES.noAttempts);
+      if (!brokeFence) {
+        const cooldown = await repo.cooldownUntil(tile.id);
+        if (cooldown && cooldown > at) throw new AppError('CONFLICT', MESSAGES.cooldown);
+        const used = await repo.attemptsOn(map.id, user.id, today, map.timeZone);
+        if (used >= rules.attemptsPerDay) throw new AppError('CONFLICT', MESSAGES.noAttempts);
+      }
 
       let rewardPercent = 100;
       let defenders: DefenderRow[] = [];
@@ -289,12 +331,51 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       );
       if (side.squishies.length === 0) throw new AppError('CONFLICT', MESSAGES.nobodyGuards);
       const kind = tileBattleKindFor(tile);
-      const cooldownUntil = new Date(at.getTime() + rules.cooldownHours * HOUR_MS);
+
+      // A fenced tile (#203): first break the weakest segment between my land
+      // and it, with my first squishy alone (owner decisions 2026-10-06).
+      const weakest = fenced
+        ? weakestSegment(
+            exposedSegments(
+              tile,
+              segments,
+              tiles.filter((t) => t.ownerUserId === user.id),
+            ),
+          )
+        : null;
+      const fence = weakest ? FENCE_DATA.get(weakest.buildingId) : undefined;
+      const fencePart = weakest && fence ? { segment: weakest, fence } : null;
+      // Then the rest of my team beats the guard: never the fence breaker.
+      const breakers = new Set(brokeFence ? await breakersOf(tx, brokeFence.battleId) : []);
+      const fighters = fencePart
+        ? team.slice(0, 1)
+        : brokeFence
+          ? team.filter((s) => !breakers.has(s.id))
+          : undefined;
+      if (fighters?.length === 0) throw new AppError('CONFLICT', MESSAGES.nobodyLeft);
+
+      const cooldownUntil =
+        brokeFence?.cooldownUntil ?? new Date(at.getTime() + rules.cooldownHours * HOUR_MS);
 
       return {
         kind,
-        side,
+        side: fencePart
+          ? {
+              controller: { type: 'ai', policy: 'guardian' },
+              squishies: [
+                fenceBattleSetup(
+                  fencePart.segment.id,
+                  fencePart.fence,
+                  fencePart.segment.level,
+                  fencePart.segment.hp,
+                  fenceRules,
+                ),
+              ],
+            }
+          : side,
         tile: { q: tile.q, r: tile.r },
+        ...(fighters && { team: fighters }),
+        ...(fencePart && { turnLimit: fenceRules.battleTurns }),
         started: async (startTx, battle) => {
           const attack = await createTerritoryRepo(startTx).insertAttack({
             mapId: map.id,
@@ -305,6 +386,12 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
             rewardPercent,
             startedAt: battle.startedAt,
             cooldownUntil,
+            part: fencePart ? 'fence' : 'guard',
+            followsAttackId: brokeFence?.id ?? null,
+            fenceSegmentId: fencePart?.segment.id ?? null,
+            fenceBuildingId: fencePart?.fence.id ?? null,
+            fenceHpBefore: fencePart?.segment.hp ?? null,
+            fenceMaxHp: fencePart ? fenceMaxHp(fencePart.fence, fencePart.segment.level) : null,
           });
           const event: NewGameEvent<'tile.attacked'> = {
             mapId: map.id,
@@ -329,11 +416,13 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
   const status = async (tx: Executor, user: PublicUser, map: MapRow): Promise<TerritoryStatus> => {
     const repo = createTerritoryRepo(tx);
     const at = now();
-    const [used, joinedAt, defenders, squishies] = await Promise.all([
+    const window = fenceRules.keepGoingMinutes * MINUTE_MS;
+    const [used, joinedAt, defenders, squishies, broken] = await Promise.all([
       repo.attemptsOn(map.id, user.id, localDate(at, map.timeZone), map.timeZone),
       repo.joinedAt(map.id, user.id),
       repo.myDefenders(map.id, user.id),
       repo.mySquishies(map.id, user.id),
+      repo.myBrokenFences(map.id, user.id, new Date(at.getTime() - window)),
     ]);
     const shieldEnds =
       joinedAt === null
@@ -353,6 +442,11 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         const species = SPECIES_BY_ID.get(id);
         return species && !PUBLIC_SPECIES.has(id) ? [species] : [];
       }),
+      fenceBroken: broken.flatMap((b) =>
+        b.endedAt
+          ? [{ q: b.q, r: b.r, until: new Date(b.endedAt.getTime() + window).toISOString() }]
+          : [],
+      ),
       now: at.toISOString(),
     };
   };
@@ -455,6 +549,76 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
   };
 }
 
+/** Who broke a fence in that fence battle (#203): its player side's squishies. */
+async function breakersOf(tx: Executor, battleId: string): Promise<string[]> {
+  const battle = await createBattlesRepo(tx).findBattle(battleId);
+  return battle ? battle.setup.a.squishies.map((s) => s.id) : [];
+}
+
+/**
+ * A fence battle ended (#203). Won: the segment is broken (gone, nothing
+ * back; owner rule 5) and the land is still the defender's. Lost or left:
+ * the segment keeps the energy it lost (owner decision 2026-10-07; if its
+ * owner mended it meanwhile, it loses that much from now). Lock order: the
+ * battle (held), the tile, then the segment (step 8).
+ */
+async function endFenceBattle(
+  tx: Executor,
+  attack: TileAttackRow,
+  battle: BattleRow,
+  winner: BattleSideId | 'draw',
+  at: Date,
+): Promise<TileBattleEnd> {
+  const repo = createTerritoryRepo(tx);
+  const fences = createFencesRepo(tx);
+  const xpPercent = attack.rewardPercent;
+  await repo.lockTile(attack.tileId);
+  const segment = attack.fenceSegmentId ? await fences.lockFence(attack.fenceSegmentId) : null;
+  const wall = battle.state.sides.b.squishies.find((s) => s.fence !== undefined);
+  const left = wall?.energy ?? 0;
+  const lost = Math.max(0, (attack.fenceHpBefore ?? left) - left);
+  const broken = winner === 'a';
+  await repo.setFenceResult(attack.id, broken ? 0 : left);
+  await repo.endAttack(battle.id, broken ? 'won' : 'lost', at);
+  // Taken down, or the land changed hands, meanwhile: nothing left to mark.
+  if (!segment || attack.defenderUserId === null || segment.ownerUserId !== attack.defenderUserId) {
+    return { events: [], xpPercent, drop: null };
+  }
+  const who = {
+    userId: segment.ownerUserId,
+    attackerUserId: attack.attackerUserId,
+    attackId: attack.id,
+    battleId: battle.id,
+  };
+  if (broken) {
+    await fences.deleteFence(segment.id);
+    const event: NewGameEvent<'fence.broken'> = {
+      mapId: attack.mapId,
+      type: 'fence.broken',
+      actorUserId: attack.attackerUserId,
+      payload: {
+        ...who,
+        fenceId: segment.id,
+        buildingId: segment.buildingId,
+        q: segment.q,
+        r: segment.r,
+        edge: segment.edge,
+      },
+    };
+    return { events: [event], xpPercent, drop: null };
+  }
+  if (lost === 0) return { events: [], xpPercent, drop: null };
+  const hp = Math.max(1, segment.hp - lost);
+  await fences.setHp(segment.id, hp);
+  const event: NewGameEvent<'fence.damaged'> = {
+    mapId: attack.mapId,
+    type: 'fence.damaged',
+    actorUserId: attack.attackerUserId,
+    payload: { ...who, fence: toPlacedFence({ ...segment, hp }) },
+  };
+  return { events: [event], xpPercent, drop: null };
+}
+
 /**
  * Squishies just posted on watch leave their other job: off the team, off
  * their work tile with what they had ready banked (jobs' `leaveWork`), or
@@ -507,6 +671,8 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       const repo = createTerritoryRepo(tx);
       const attack = await repo.findAttack(battle.id);
       if (!attack) return { events: [], xpPercent: 100, drop: null };
+      // The first part of a fenced tile's challenge (#203).
+      if (attack.part === 'fence') return endFenceBattle(tx, attack, battle, winner, at);
       // Gentle's share applies to the battle's XP too, win or lose (owner
       // decision 2026-10-03), as well as to the capture rewards.
       const xpPercent = attack.rewardPercent;
@@ -541,6 +707,18 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         : [];
       const refund = lostFires.find((l) => l.ownerUserId === tile.ownerUserId)?.refund ?? null;
       if (refund) await repo.setLostFireRefund(attack.id, refund);
+      // Its fence segments still standing are destroyed, nothing back
+      // (#203, owner decision 2026-10-07); the capturer's own that faced it,
+      // now on inner edges of their land, come down for the take-down share
+      // (owner decision on #244).
+      const fences = await takeDownFencesOnCapture(
+        tx,
+        attack.mapId,
+        tile,
+        { capturerUserId: attack.attackerUserId, attackId: attack.id, battleId: battle.id },
+        await repo.listTiles(attack.mapId),
+      );
+      if (fences.broken.length > 0) await repo.setLostFences(attack.id, fences.broken.length);
       const event: NewGameEvent<'tile.captured'> = {
         mapId: attack.mapId,
         type: 'tile.captured',
@@ -561,16 +739,31 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       // Battles rolls the capture's found clothing (#84) once it has locked
       // the squishies; Gentle's share scales the chance like the XP.
       return {
-        events: [event, ...lostFires.map((l) => l.event)],
+        events: [
+          event,
+          ...lostFires.map((l) => l.event),
+          ...fences.broken,
+          ...fences.inner.map((l) => l.event),
+        ],
         xpPercent,
-        drop: { tileId: tile.id, percent: attack.rewardPercent },
-        refunds: lostFires
-          .filter((l) => Object.keys(l.refund).length > 0)
-          .map((l) => ({
+        // Taken from a player (not land they left behind) finds more (#261).
+        drop: {
+          tileId: tile.id,
+          percent: attack.rewardPercent,
+          fromRival: tile.ownerUserId !== null,
+        },
+        refunds: [
+          ...lostFires.map((l) => ({
             userId: l.ownerUserId,
             items: l.refund,
             refId: l.event.payload.buildingRowId,
           })),
+          ...fences.inner.map((l) => ({
+            userId: l.ownerUserId,
+            items: l.refund,
+            refId: l.fenceId,
+          })),
+        ].filter((r) => Object.keys(r.items).length > 0),
       };
     },
   };

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { PublicUserSchema, RECOVERY_CODE_ALPHABET } from './auth.js';
 import { PublicBuildingSchema } from './buildings.js';
+import { PublicFenceSchema } from './fences.js';
 import { ContentIdSchema, DisplayNameSchema } from './data/common.js';
 import { FeelingIdSchema } from './data/elements.js';
 import { PublicKeeperSchema } from './data/keepers.js';
@@ -281,6 +282,12 @@ export const PublicTileSchema = z.object({
    * habitats. `lit` is as of the view (or the event that carried it).
    */
   buildings: z.array(PublicBuildingSchema),
+  /**
+   * Fence segments on this tile's edges (#203), in edge order: everyone sees
+   * them and how much energy each has left. Optional only so older fixtures
+   * parse; the server always sends it.
+   */
+  fences: z.array(PublicFenceSchema).optional(),
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 

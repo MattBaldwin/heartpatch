@@ -1,10 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { draws, hook, idle, invalidate } from './dev-hook.js';
-
-interface Point {
-  x: number;
-  y: number;
-}
+import { holdResizes, turnLikeIos } from './layout.js';
+import { touch, type Point } from './touch.js';
 
 interface CameraState {
   target: { x: number; z: number };
@@ -22,50 +19,24 @@ interface DevHook {
   draws(): number;
 }
 
+/** The part of the dev-only hook the turn test reads inside the page. */
+interface TurnHook {
+  quality(): { renderScale: number } | null;
+}
+
+/** One frame seen by the turn test (#251). */
+interface TurnFrame {
+  /** The drawing buffer has the canvas box's shape. */
+  fits: boolean;
+  landscape: boolean;
+  /** The resolution governor's render scale at that frame. */
+  scale: number;
+}
+
 async function cameraState(page: Page): Promise<CameraState> {
   const state = await hook<CameraState>(page, 'camera');
   if (!state) throw new Error('camera not ready');
   return state;
-}
-
-/**
- * Plays touch pointer frames on the canvas, 16 ms apart. Each frame lists
- * every active finger's position; fingers missing from the next frame lift.
- * Synthetic PointerEvents behave the same in WebKit and Chromium. Frames are
- * spaced with a busy-wait, not timers: CI renders in software, where a 16 ms
- * timer can take 300 ms and every flick would look like a slow drag.
- */
-async function touch(page: Page, frames: Record<number, Point>[]): Promise<void> {
-  await page.evaluate((frames) => {
-    const canvas = document.querySelector('#game')!;
-    const fire = (type: string, id: number, p: Point) => {
-      canvas.dispatchEvent(
-        new PointerEvent(type, {
-          pointerId: id,
-          pointerType: 'touch',
-          isPrimary: id === 1,
-          clientX: p.x,
-          clientY: p.y,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-    };
-    let prev: Record<number, Point> = {};
-    for (const frame of [...frames, {}]) {
-      for (const [id, p] of Object.entries(frame)) {
-        fire(id in prev ? 'pointermove' : 'pointerdown', Number(id), p);
-      }
-      for (const [id, p] of Object.entries(prev)) {
-        if (!(id in frame)) fire('pointerup', Number(id), p);
-      }
-      prev = frame;
-      const until = performance.now() + 16;
-      while (performance.now() < until) {
-        // spin: keeps event timestamps 16 ms apart regardless of frame rate
-      }
-    }
-  }, frames);
 }
 
 /**
@@ -163,8 +134,12 @@ test('renders the Babylon scene and reaches the server', async ({ page }) => {
   expect(box?.height).toBe(viewport?.height);
 
   await expect(page.locator('[data-testid="dev-status"]')).toHaveText(/server: ok/);
+  // Any tier: the game starts on high (tiers.test.ts), but a cold load on a
+  // software renderer can crawl (every frame over a second while shaders
+  // compile), and the governor then drops straight to low (governor.ts `crawl`)
+  // and may climb back through medium.
   await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(
-    /^(\d+ fps|idle) · WebGL2 · high · \d\.\d\dx$/,
+    /^(\d+ fps|idle) · WebGL2 · (high|medium|low) · \d\.\d\dx$/,
     { timeout: 15_000 },
   );
   expect(errors).toEqual([]);
@@ -254,6 +229,10 @@ test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }
   test.setTimeout(180_000); // software rendering at iPad resolution is slow in CI
   await page.goto('/');
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // Gestures go to the stage on screen, so wait until it has drawn a frame.
+  // Software rendering at iPad size can block the page for several seconds
+  // right after the first frame (shader work), so one read can take that long.
+  await expect.poll(() => draws(page), { timeout: 30_000 }).toBeGreaterThan(0);
   const vp = page.viewportSize()!;
   const mid = { x: vp.width / 2, y: vp.height / 2 };
   // Gestures scale with the screen so iPhone and iPad move the map by similar amounts.
@@ -316,4 +295,57 @@ test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }
     overscroll: 'none',
     scroll: [0, 0],
   });
+});
+
+test('keeps its shape when the phone turns (#251)', async ({ page }) => {
+  test.setTimeout(90_000); // first load compiles shaders; CI renders in software
+  await holdResizes(page);
+  await page.goto('/');
+  const canvas = page.locator('#game');
+  await expect(canvas).toHaveAttribute('data-ready', 'true');
+  await waitForIdle(page);
+  const vp = page.viewportSize()!;
+  const turned = vp.height > vp.width;
+  let before = 0;
+
+  // The early resize is left to settle first, so its frames can't pick up
+  // the new size by chance.
+  await turnLikeIos(page, async () => {
+    await waitForIdle(page);
+    // Every frame from here: does the drawing buffer (which the camera's
+    // aspect is worked out from) have the canvas's shape, and the governor's
+    // render scale. The governor resizes the engine whenever it rescales,
+    // which can mend the shape by chance on a slow renderer; a mend that came
+    // with a rescale doesn't count.
+    await page.evaluate(() => {
+      const c = document.querySelector<HTMLCanvasElement>('#game')!;
+      const dev = (window as unknown as { __heartpatch: TurnHook }).__heartpatch;
+      const frames: TurnFrame[] = [];
+      (window as unknown as { __turnFrames: TurnFrame[] }).__turnFrames = frames;
+      const tick = (): void => {
+        frames.push({
+          fits: Math.abs(c.width / c.height - c.clientWidth / c.clientHeight) < 0.01,
+          landscape: c.clientWidth > c.clientHeight,
+          scale: dev.quality()?.renderScale ?? 0,
+        });
+        if (frames.length < 900) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    before = await draws(page);
+  });
+
+  const firstFit = () =>
+    page.evaluate((turned) => {
+      const frames = (window as unknown as { __turnFrames: TurnFrame[] }).__turnFrames;
+      const i = frames.findIndex((f) => f.landscape === turned && f.fits);
+      if (i < 0) return null;
+      return { rescaled: i > 0 && frames[i - 1]!.scale !== frames[i]!.scale };
+    }, turned);
+  await expect.poll(firstFit).not.toBeNull();
+  expect(await firstFit(), 'only a resolution change mended the shape').toEqual({
+    rescaled: false,
+  });
+  // And a frame is drawn at the new shape.
+  await expect.poll(() => draws(page)).toBeGreaterThan(before);
 });

@@ -1,7 +1,9 @@
+import { FENCE_RULES } from '../data/fences.js';
 import { Rng } from '../rng/index.js';
 import {
   BattleSetupSchema,
   BattleSideIdSchema,
+  isFenceSetup,
   type BattleAction,
   type BattleChoice,
   type BattleSetup,
@@ -60,10 +62,35 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
         `side ${side} brings ${squishies.length} squishies; the limit is ${content.rules.teamSize}`,
       );
     }
+    // A fence (#203) stands alone, played by the engine: it never chooses.
+    if (squishies.some(isFenceSetup) && (squishies.length > 1 || controller.type !== 'ai')) {
+      throw new BattleRuleError(`side ${side}: a fence stands alone on an AI side`);
+    }
     return {
       controller: { ...controller },
       active: 0,
       squishies: squishies.map((s, slot) => {
+        if (isFenceSetup(s)) {
+          if (s.energy > s.stats.hp) {
+            throw new BattleRuleError(`fence "${s.id}" starts with more energy than it holds`);
+          }
+          return {
+            id: s.id,
+            speciesId: s.fence,
+            level: s.level,
+            element: s.element,
+            feeling: FENCE_RULES.battle.feeling,
+            stats: { ...s.stats },
+            moves: [],
+            energy: s.energy,
+            stages: freshStages(),
+            status: null,
+            joined: slot === 0,
+            boosts: noBoosts(),
+            shield: 0,
+            fence: s.fence,
+          };
+        }
         const species = getSpecies(content, s.speciesId);
         for (const move of species.moves) getMove(content, move);
         const stats = s.stats ?? statsAtLevel(species.baseStats, s.level, content.rules);
@@ -90,6 +117,8 @@ export function startBattle(content: BattleContent, input: BattleSetup): BattleS
     version: 1,
     contentHash: content.contentHash,
     turn: 0,
+    ...(setup.turnLimit !== undefined &&
+      setup.turnLimit < content.rules.maxTurns && { turnLimit: setup.turnLimit }),
     rng: Rng.fromSeed(setup.seed).state(),
     sides: { a: sideFrom('a'), b: sideFrom('b') },
     phase: { type: 'turn' },
@@ -116,6 +145,7 @@ function draftOf(state: BattleState): Draft<BattleState> {
     version: state.version,
     contentHash: state.contentHash,
     turn: state.turn,
+    ...(state.turnLimit !== undefined && { turnLimit: state.turnLimit }),
     rng: [...state.rng],
     sides: { a: copySide(state.sides.a), b: copySide(state.sides.b) },
     phase: structuredPhase(state.phase),
@@ -181,29 +211,29 @@ class Step {
     // Swaps happen before moves; a swap is the side's whole turn.
     for (const side of SIDES) {
       const choice = picked[side];
-      if (choice.type === 'swap') this.swap(side, choice.slot);
+      if (choice?.type === 'swap') this.swap(side, choice.slot);
     }
 
     // Battle items next (potions, #214): the side's whole turn too, before
     // any move, so a shield is up for this turn's hit.
     for (const side of SIDES) {
       const choice = picked[side];
-      if (choice.type === 'item') this.useItem(side, choice.item);
+      if (choice?.type === 'item') this.useItem(side, choice.item);
     }
 
     // Heart Charms next; a squishy that says yes ends the battle. Also the
     // side's whole turn.
     for (const side of SIDES) {
       const choice = picked[side];
-      if (choice.type !== 'capture') continue;
+      if (choice?.type !== 'capture') continue;
       this.capture(side, choice.sure === true);
       if (this.over) return;
     }
 
-    const movers = SIDES.filter((side) => picked[side].type === 'move');
+    const movers = SIDES.filter((side) => picked[side]?.type === 'move');
     for (const side of this.speedOrder(movers)) {
       const choice = picked[side];
-      if (choice.type !== 'move') continue;
+      if (choice?.type !== 'move') continue;
       this.useMove(side, getMove(this.content, choice.move));
       this.checkForWinner();
       if (this.over) return;
@@ -211,9 +241,16 @@ class Step {
     this.endTurn();
   }
 
-  /** The player's validated choice, or the AI's pick for an AI side. */
-  private choiceFor(side: BattleSideId, given: BattleChoice | undefined): BattleChoice {
+  /**
+   * The player's validated choice, or the AI's pick for an AI side. A fence
+   * (#203) picks nothing: it just stands there.
+   */
+  private choiceFor(side: BattleSideId, given: BattleChoice | undefined): BattleChoice | null {
     const { controller } = this.state.sides[side];
+    if (this.active(side).fence !== undefined) {
+      if (given) throw new BattleRuleError(`side ${side} is a fence; leave its choice out`);
+      return null;
+    }
     if (controller.type === 'ai') {
       if (given) throw new BattleRuleError(`side ${side} is AI-controlled; leave its choice out`);
       return chooseAiChoice(this.content, this.state, side, controller.policy, this.rng);
@@ -222,6 +259,9 @@ class Step {
     if (given.type === 'capture') {
       if (this.state.sides[otherSide(side)].controller.type !== 'ai') {
         throw new BattleRuleError(`side ${side} can only befriend an AI side's squishy`);
+      }
+      if (this.active(otherSide(side)).fence !== undefined) {
+        throw new BattleRuleError(`side ${side} can't befriend a fence`);
       }
     } else if (given.type === 'item') {
       this.checkItem(side, given.item);
@@ -426,8 +466,9 @@ class Step {
   }
 
   private endTurn(): void {
-    if (this.state.turn >= this.content.rules.maxTurns) {
-      this.end(this.energyLeader(), 'turn-limit');
+    const limit = Math.min(this.state.turnLimit ?? Infinity, this.content.rules.maxTurns);
+    if (this.state.turn >= limit) {
+      this.end(this.fenceHolder() ?? this.energyLeader(), 'turn-limit');
       return;
     }
     const waiting: BattleSideId[] = [];
@@ -450,6 +491,15 @@ class Step {
     this.checkBenchSlot(side, slot);
     this.sendOut(side, slot);
     this.emit({ ...this.at(side), type: 'replace' });
+  }
+
+  /** A side whose fence (#203) is still standing: at the turn limit, it held. */
+  private fenceHolder(): BattleSideId | null {
+    return (
+      SIDES.find((side) =>
+        this.state.sides[side].squishies.some((s) => s.fence !== undefined && s.energy > 0),
+      ) ?? null
+    );
   }
 
   /** The side with more of its total energy left; equal shares are a draw. */
@@ -615,8 +665,16 @@ export type ClientBattleView = Omit<BattleState, 'rng'>;
  * let a client predict every roll, so they never leave the server.
  */
 export function clientBattleView(state: BattleState): ClientBattleView {
-  const { version, contentHash, turn, sides, phase, log } = state;
-  return { version, contentHash, turn, sides, phase, log };
+  const { version, contentHash, turn, turnLimit, sides, phase, log } = state;
+  return {
+    version,
+    contentHash,
+    turn,
+    ...(turnLimit !== undefined && { turnLimit }),
+    sides,
+    phase,
+    log,
+  };
 }
 
 /**
@@ -676,6 +734,8 @@ export function legalChoices(
   content?: BattleContent,
 ): BattleChoice[] {
   if (state.phase.type !== 'turn') return [];
+  // A fence (#203) never chooses anything.
+  if (activeSquishy(state, side).fence !== undefined) return [];
   const items =
     content && state.sides[side].controller.type === 'player'
       ? [...content.items.keys()].filter((item) => !itemRefusal(content, state, side, item))
@@ -684,7 +744,8 @@ export function legalChoices(
     ...activeSquishy(state, side).moves.map((move): BattleChoice => ({ type: 'move', move })),
     ...benchOf(state, side).map(({ slot }): BattleChoice => ({ type: 'swap', slot })),
     ...(state.sides[side].controller.type === 'player' &&
-    state.sides[otherSide(side)].controller.type === 'ai'
+    state.sides[otherSide(side)].controller.type === 'ai' &&
+    activeSquishy(state, otherSide(side)).fence === undefined
       ? [{ type: 'capture' } as const]
       : []),
     ...items.map((item): BattleChoice => ({ type: 'item', item })),

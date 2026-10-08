@@ -15,6 +15,7 @@ import {
   type MapSceneOptions,
 } from './map-scene.js';
 import { testView, userId } from './test-view.js';
+import { wildMarkers } from './wild-markers.js';
 
 describe('MapScene', () => {
   const engine = new NullEngine({
@@ -50,6 +51,32 @@ describe('MapScene', () => {
     expect(scene.getMeshByName('tiles-home')).toBeTruthy();
   });
 
+  it('draws every wild-squishy tuft from one instanced mesh, swaying on the terrain clock (#209)', () => {
+    const view = testView(1);
+    const { scene, map, mesh, instances } = build(view);
+    expect(instances('wild-tuft')).toBe(0);
+    expect(mesh('wild-tuft')?.isEnabled()).toBe(false);
+    const tiles = new Map(view.tiles.map((t) => [`${String(t.q)},${String(t.r)}`, t]));
+    const hints = view.tiles.slice(0, 12).map(({ q, r }) => ({ q, r }));
+    const before = scene.meshes.length;
+
+    map.setWild(wildMarkers(hints, (key) => tiles.get(key)));
+    expect(instances('wild-tuft')).toBe(12);
+    expect(map.stats.wildMarkers).toBe(12);
+    expect(scene.meshes.length).toBe(before);
+    // Each tuft sways in the map's breeze: the terrain plugin's sway turns on
+    // for a mesh with per-instance `terrainAmbient` (terrain-plugin.ts).
+    expect(mesh('wild-tuft')!.isVerticesDataPresent('terrainAmbient')).toBe(true);
+
+    // Fewer, then none: same mesh, nothing left over.
+    map.setWild(wildMarkers(hints.slice(0, 3), (key) => tiles.get(key)));
+    expect(instances('wild-tuft')).toBe(3);
+    map.setWild([]);
+    expect(instances('wild-tuft')).toBe(0);
+    expect(map.stats.wildMarkers).toBe(0);
+    expect(scene.meshes.length).toBe(before);
+  });
+
   it('keeps the whole map to a few dozen meshes (draw calls)', () => {
     // About 30 before the terrain visual pass; its props, motes and backdrop
     // add one each per kind, however many tiles.
@@ -71,6 +98,61 @@ describe('MapScene', () => {
       }
       expect(triangles).toBeLessThan(720_000);
     }
+  });
+
+  it('draws fence segments with one instanced mesh per look and level, in budget', () => {
+    // Every home tile of a 4-player map fenced on all six edges, every look
+    // and level in turn: far more fence than a real map carries.
+    const looks = [
+      'hedge',
+      'moat',
+      'stone-wall',
+      'emberwood-palisade',
+      'glimmer-rail',
+      'lantern-fence',
+      'bramble-hedge',
+      'ice-wall',
+    ];
+    let n = 0;
+    const base = testView(4);
+    const view: MapView = {
+      ...base,
+      tiles: base.tiles.map((t) =>
+        t.ownerUserId === null
+          ? t
+          : {
+              ...t,
+              fences: [0, 1, 2, 3, 4, 5].map((edge) => {
+                n++;
+                return {
+                  id: `0190a8c4-0000-7000-8000-${String(n).padStart(12, '0')}`,
+                  edge,
+                  buildingId: looks[n % looks.length] ?? 'hedge',
+                  level: (n % 3) + 1,
+                  hp: 70,
+                  maxHp: 70,
+                };
+              }),
+            },
+      ),
+    };
+    const { scene, map } = build(view);
+    expect(n).toBeGreaterThan(24);
+    expect(map.stats.fences).toBe(n);
+    const fenceMeshes = scene.meshes.filter((m) => m.name.startsWith('fence-')) as Mesh[];
+    expect(fenceMeshes.length).toBeLessThanOrEqual(24);
+    expect(fenceMeshes.reduce((sum, m) => sum + m.thinInstanceCount, 0)).toBe(n);
+    // Fences have their own budget on top of the map's: a few hundred
+    // triangles a segment, so even this much fence costs under 50k.
+    const triangles = fenceMeshes.reduce(
+      (sum, m) => sum + (m.getTotalIndices() / 3) * m.thinInstanceCount,
+      0,
+    );
+    expect(triangles).toBeLessThan(50_000);
+    // Taking them all down clears every segment.
+    map.update(base);
+    expect(map.stats.fences).toBe(0);
+    expect(fenceMeshes.reduce((sum, m) => sum + m.thinInstanceCount, 0)).toBe(0);
   });
 
   it('starts still under reduced motion and off on the low tier, before any frame', () => {

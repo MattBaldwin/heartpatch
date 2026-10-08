@@ -1,6 +1,10 @@
 import {
   attackTargetProblem,
+  exposedSegments,
   hexKey,
+  isTileFenced,
+  weakestSegment,
+  type PublicFence,
   TERRITORY_RULES,
   type MapView,
   type PublicTile,
@@ -18,8 +22,18 @@ export type TerritoryAction =
   | { readonly kind: 'none' }
   /** Wild land next to yours: "Claim". */
   | { readonly kind: 'claim'; readonly attemptsLeft: number; readonly triesResetAt: string }
-  /** Someone's land next to yours: "Challenge". */
-  | { readonly kind: 'challenge'; readonly attemptsLeft: number; readonly triesResetAt: string }
+  /**
+   * Someone's land next to yours: "Challenge". On a fenced tile (#203),
+   * `fence` is the segment my first squishy has to break first.
+   */
+  | {
+      readonly kind: 'challenge';
+      readonly attemptsLeft: number;
+      readonly triesResetAt: string;
+      readonly fence: PublicFence | null;
+    }
+  /** I just broke this tile's fence (#203): "Keep going!" beats the guard, no new try. */
+  | { readonly kind: 'keep-going'; readonly until: string }
   /** Battled for recently: it rests until then. */
   | { readonly kind: 'resting'; readonly until: string }
   /** No tries left today. */
@@ -55,6 +69,14 @@ export function territoryAction(
   const shield = shieldUntil(tile, view, now);
   if (shield !== null) return { kind: 'shielded', until: shield };
   if (problem === 'too-far') return { kind: 'too-far' };
+  // The guard battle after I broke the fence finishes that challenge: the
+  // tile's rest and my tries don't stop it (the server's `brokenFenceFor`).
+  // Not once the owner has fenced it up again.
+  const broke = status.fenceBroken?.find((b) => b.q === tile.q && b.r === tile.r);
+  const fence = fenceToBreak(tile, view, me);
+  if (broke && Date.parse(broke.until) > now && !fence) {
+    return { kind: 'keep-going', until: broke.until };
+  }
   if (tile.cooldownUntil !== null && Date.parse(tile.cooldownUntil) > now) {
     return { kind: 'resting', until: tile.cooldownUntil };
   }
@@ -63,7 +85,27 @@ export function territoryAction(
   if (attemptsLeft === 0) return { kind: 'no-tries', triesResetAt };
   return tile.ownerUserId === null
     ? { kind: 'claim', attemptsLeft, triesResetAt }
-    : { kind: 'challenge', attemptsLeft, triesResetAt };
+    : { kind: 'challenge', attemptsLeft, triesResetAt, fence };
+}
+
+/**
+ * The fence segment a challenge on `tile` breaks first (#203), as the server
+ * picks it: when the owner has fenced the tile all round, the weakest segment
+ * between it and my land. Null when it isn't fenced.
+ */
+export function fenceToBreak(
+  tile: PublicTile,
+  view: Pick<MapView, 'tiles'>,
+  me: string,
+): PublicFence | null {
+  const owner = tile.ownerUserId;
+  const segments = (tile.fences ?? []).map((f) => ({ ...f, q: tile.q, r: tile.r }));
+  if (owner === null || owner === me || segments.length === 0) return null;
+  const theirs = view.tiles.filter((t) => t.ownerUserId === owner);
+  if (!isTileFenced(tile, theirs, segments, view.tiles)) return null;
+  const mine = view.tiles.filter((t) => t.ownerUserId === me);
+  const weakest = weakestSegment(exposedSegments(tile, segments, mine));
+  return weakest ? ((tile.fences ?? []).find((f) => f.id === weakest.id) ?? null) : null;
 }
 
 const HOUR_MS = 60 * 60 * 1000;

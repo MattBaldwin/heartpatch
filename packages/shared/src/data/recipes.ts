@@ -9,6 +9,28 @@ export const RECIPES: Recipe[] = [
     output: { resource: 'heart-charm', quantity: 1 },
     craftSeconds: 60, // TUNE:
   },
+  // #238: Treats cooked from Greens (owner decision, the nesting economy);
+  // farm plots still grow them, and that stays the best way.
+  {
+    id: 'cook-treats',
+    name: 'Cooked Treats',
+    description: 'Stir up some Greens into yummy Treats for your squishies.',
+    inputs: { greens: 2 }, // TUNE:
+    output: { resource: 'treats', quantity: 3 }, // TUNE:
+    craftSeconds: 60, // TUNE:
+  },
+  // #238: Ice without mountains. Slow on its own; a Frost squishy on the
+  // team freezes it twice as fast.
+  {
+    id: 'freeze-water',
+    name: 'Frozen Water',
+    description:
+      'Leave Water out in the cold until it turns into sparkly Ice. A Frost squishy on your team makes it twice as fast!',
+    inputs: { water: 3 }, // TUNE:
+    output: { resource: 'ice', quantity: 1 },
+    craftSeconds: 30 * 60, // TUNE:
+    fasterWith: { element: 'frost', percent: 50 }, // TUNE:
+  },
   // Battle potions (#214): farm Treats plus something gathered. Year-round
   // inputs, so a potion never needs a season.
   {
@@ -47,9 +69,10 @@ export const RECIPES: Recipe[] = [
   {
     id: 'jack-o-lantern-hearthfire',
     name: "Jack-o'-Lantern",
-    description: 'Carve a big pumpkin with a glowing grin. Then build it into a fire at home. Boo!',
+    description:
+      'Carve a big pumpkin with a glowing grin. Then build it into a fire out on your land. Boo!',
     inputs: { pumpkins: 3, emberwood: 2, 'witch-dust': 1 }, // TUNE:
-    output: { resource: 'jack-o-lantern-hearthfire', quantity: 1 }, // built at home (#18)
+    output: { resource: 'jack-o-lantern-hearthfire', quantity: 1 }, // built into a fire out on your land (#202)
     craftSeconds: 5 * 60, // TUNE:
     season: 'halloween',
   },

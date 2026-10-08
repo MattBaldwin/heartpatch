@@ -25,6 +25,12 @@ export interface RaidRow {
   contentHash: string;
   /** My fire there came down with the capture (#202): what came back. */
   lostFire: Record<string, number> | null;
+  /** A fence battle (#203): my segment's kind, its full energy and what it had left (0: broken). */
+  fenceBuildingId: string | null;
+  fenceMaxHp: number | null;
+  fenceHpAfter: number | null;
+  /** My fence segments there came down with the capture (#203): what came back. */
+  lostFences: number | null;
 }
 
 export interface NewRaid {
@@ -103,6 +109,11 @@ const raidColumns = {
   contentHash: battles.contentHash,
   // The capture took my fire down (#202): what came back.
   lostFire: tileAttacks.lostFireRefund,
+  // Fences (#203): the fence part's result, and segments the capture took down.
+  fenceBuildingId: tileAttacks.fenceBuildingId,
+  fenceMaxHp: tileAttacks.fenceMaxHp,
+  fenceHpAfter: tileAttacks.fenceHpAfter,
+  lostFences: tileAttacks.lostFences,
 };
 
 export function createRaidsRepo(db: Executor): RaidsRepo {

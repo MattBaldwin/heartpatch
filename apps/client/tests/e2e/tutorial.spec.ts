@@ -108,15 +108,6 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   // Near the top of the screen, away from Sprout's bubble at the bottom.
   const width = page.viewportSize()?.width ?? 390;
   expect(await testIdAt(page, width / 2, 160)).toBe('tutorial-blocker');
-  // ...except "Log out": nobody is ever stuck in the tutorial. Over the map
-  // it's in the Keeper menu in the corner, which takes taps too.
-  const menu = page.getByTestId('keeper-menu');
-  if (await menu.isVisible()) {
-    expect(await takesTaps(page, menu)).toBe(true);
-    await menu.tap();
-  }
-  expect(await takesTaps(page, page.getByRole('button', { name: 'Log out' }))).toBe(true);
-  if (await menu.isVisible()) await menu.tap();
   // Sprout joins the scene once the renderer is up.
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   await expect.poll(async () => (await debug(page))?.sprout).toMatch(/^[0-9a-f]{32}$/);
@@ -124,14 +115,28 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   const run = (await debug(page))?.mapId;
   expect(run).toBeTruthy();
   await expect.poll(() => drawnMap(page)).toBe(run);
+  // ...except "Log out": nobody is ever stuck in the tutorial. Over the map
+  // it's in the Keeper menu in the corner, which takes taps too. The menu
+  // replaces the chip only once the map's trays are up, so wait for them:
+  // a "Log out" read mid-switch would wait on a button folded into the menu.
+  await expect.poll(async () => (await traysState(page))?.visible).toBe(true);
+  const menu = page.getByTestId('keeper-menu');
+  expect(await takesTaps(page, menu)).toBe(true);
+  await menu.tap();
+  expect(await takesTaps(page, page.getByRole('button', { name: 'Log out' }))).toBe(true);
+  await menu.tap();
 
   await bubble.getByRole('button', { name: 'Next' }).tap();
   expect((await debug(page))?.line).toBe(1);
 
-  // Quitting keeps your place: a reload lands on the same step.
+  // Quitting keeps your place: a reload lands on the same step. A reload
+  // boots the whole app again (sign-in, Keeper, story, tutorial check, each a
+  // round trip), slow on a software-rendered iPad: wait for the stage and the
+  // run's step from the dev hook, with the reload budget hollow.spec uses.
   await page.reload();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
+  await expect.poll(async () => (await debug(page))?.stepId, { timeout: 30_000 }).toBe('welcome');
   await expect(tutorial).toBeVisible();
-  await expect.poll(async () => (await debug(page))?.stepId).toBe('welcome');
 
   await bubble.getByRole('button', { name: 'Next' }).tap();
   await bubble.getByRole('button', { name: 'Got it!' }).tap();

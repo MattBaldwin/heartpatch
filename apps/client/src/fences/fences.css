@@ -1,0 +1,115 @@
+/* The fence sheet in the tile panel (#203): the territory picker's big
+   toggles and colours (44pt+ targets). */
+
+.fence-list,
+.fence-materials {
+  list-style: none;
+  margin: 0.25rem 0 0.5rem;
+  padding: 0;
+  display: grid;
+  gap: 0.375rem;
+}
+
+.fence-materials {
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.fence-row {
+  width: 100%;
+  text-align: left;
+}
+
+.fence-material,
+.fence-edge {
+  min-height: 44px;
+  border: 2px solid #f3dbe7;
+  background: #fffafc;
+  color: #7a2d55;
+  font: inherit;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.fence-material {
+  width: 100%;
+  display: grid;
+  gap: 0.125rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.fence-edge {
+  padding: 0.375rem 0.75rem;
+  border-radius: 999px;
+}
+
+.fence-material[aria-pressed='true'],
+.fence-edge[aria-pressed='true'] {
+  border-color: #d0578f;
+  background: #ffe9f3;
+}
+
+.fence-material:disabled,
+.fence-edge:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.fence-material-name {
+  font-weight: 700;
+}
+
+.fence-material-about,
+.fence-material-cost {
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+.fence-material-cost.fence-short {
+  color: #b23a3a;
+  opacity: 1;
+}
+
+.fence-edges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.fence-card-title {
+  margin: 0;
+  font-weight: 700;
+  color: #7a2d55;
+}
+
+.fence-energy-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.fence-energy {
+  flex: 1;
+  height: 0.75rem;
+  accent-color: #d0578f;
+}
+
+.fence-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+/* A cost in the label ("Upgrade (10 🌿 Greens, 2 🪵 Timber)") can be wider
+   than a phone's panel: the buttons share the row and wrap their words
+   instead of running past the card's edge. */
+.fence-actions > .auth-button {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  text-wrap: balance;
+}

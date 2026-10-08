@@ -304,10 +304,21 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
 
     await craftAndCollect(server, kid, mapId, 'jack-o-lantern-hearthfire');
     // Every page but the Training Grounds, which needs Stone this kid hasn't
-    // gathered, Thanksgiving's leaf charms (no leaves yet), and the battle
-    // potions (#214), which all need Treats.
+    // gathered, Thanksgiving's leaf charms (no leaves yet), the battle
+    // potions (#214), which all need Treats, cooking Greens and freezing
+    // Water (#238), and the fences (#203), which need Timber or Stone.
     const notYet = new Set([
       'building:training-grounds',
+      'recipe:cook-treats',
+      'recipe:freeze-water',
+      'building:hedge',
+      'building:moat',
+      'building:stone-wall',
+      'building:emberwood-palisade',
+      'building:glimmer-rail',
+      'building:lantern-fence',
+      'building:bramble-hedge',
+      'building:ice-wall',
       'recipe:leafy-heart-charms',
       'recipe:brave-brew',
       'recipe:cozy-cocoa',

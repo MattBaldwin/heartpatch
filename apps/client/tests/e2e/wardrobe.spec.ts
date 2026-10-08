@@ -156,6 +156,50 @@ test('tries clothes on, filters, layers a costume and saves an outfit', async ({
   await page.context().close();
 });
 
+test('wears a #261 costume over everything and takes it off again', async ({ browser }) => {
+  test.setTimeout(120_000);
+  const page = await newPlayer(browser, uniqueName('spooky'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  // Found pieces (the dev grant stands in for finds).
+  const granted = await api(page, 'POST', '/dev/wardrobe/items', {
+    items: ['witch-hat', 'hollow-man-costume'],
+  });
+  expect(granted.status).toBe(201);
+
+  await openWardrobe(page);
+  await tab(page, 'Hats').tap();
+  await item(page, 'Witch Hat').tap();
+  await settled(page, ['witch-hat']);
+  const hatOnly = (await wardrobeState(page))!.preview;
+
+  // The Mythic chip shows (a Mythic piece is owned) with its opal dot.
+  await tab(page, 'Costumes').tap();
+  const mythic = rarity(page, 'mythic');
+  await expect(mythic).toBeVisible();
+  expect(
+    await mythic.evaluate((node) => getComputedStyle(node, '::before').backgroundImage),
+  ).toMatch(/conic-gradient/);
+  await mythic.tap();
+  expect((await wardrobeState(page))!.shown).toEqual(['hollow-man-costume']);
+
+  // On: the hat hides under the costume, but stays worn.
+  await item(page, 'Hollow Man').tap();
+  await settled(page, ['witch-hat', 'hollow-man-costume']);
+  expect((await wardrobeState(page))!.preview).not.toBe(hatOnly);
+  await rarity(page, 'all').tap();
+  await tab(page, 'Hats').tap();
+  await expect(item(page, 'Witch Hat')).toContainText('Under costume');
+
+  // Off: the hat comes back, exactly as before.
+  await tab(page, 'Costumes').tap();
+  await item(page, 'Hollow Man').tap();
+  await settled(page, ['witch-hat']);
+  expect((await wardrobeState(page))!.preview).toBe(hatOnly);
+  expect(errors).toEqual([]);
+  await page.context().close();
+});
+
 test('other players see the outfit on the map, live', async ({ browser }) => {
   test.setTimeout(150_000); // two players and a map build; CI renders in software
   const owner = await newPlayer(browser, uniqueName('host'));
