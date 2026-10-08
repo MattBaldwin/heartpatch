@@ -46,6 +46,25 @@ const state = (page: Page) => hook<CloseUpDebug>(page, 'closeUp');
 const homeOpen = async (page: Page) => (await hook<{ open: boolean }>(page, 'home'))?.open ?? false;
 const mapOpen = async (page: Page) => (await hook<{ id: string }>(page, 'map'))?.id ?? null;
 
+/** Where the squishy sits once the layout has settled. */
+async function framedTarget(page: Page): Promise<Target> {
+  await still(page, '[data-testid="close-up-touch"], [data-testid="close-up"] .close-up-card');
+  return (await state(page))!.target!;
+}
+
+/**
+ * The squishy is framed for the screen as it is now: a resize heard now
+ * measures afresh and doesn't move it (beyond its breathing).
+ */
+async function expectFreshFraming(page: Page): Promise<void> {
+  const now = await framedTarget(page);
+  await freshResize(page);
+  const fresh = await framedTarget(page);
+  for (const key of ['x', 'y', 'rx', 'ry'] as const) {
+    expect(Math.abs(now[key] - fresh[key]), key).toBeLessThan(4);
+  }
+}
+
 /** A fresh player on their own patch with a squishy friend and a bag of stuff (dev tools). */
 async function playerWithFriend(page: Page): Promise<void> {
   const lobby = page.getByTestId('lobby');
@@ -343,18 +362,25 @@ test('keeps the squishy framed when the phone turns (#263)', async ({ browser })
   await playerWithFriend(page);
   await openFromHome(page);
 
-  // Where the squishy sits once the turned layout has settled.
-  const framed = async () => {
-    await still(page, '[data-testid="close-up-touch"], [data-testid="close-up"] .close-up-card');
-    return (await state(page))!.target!;
-  };
   await turnLikeIos(page);
-  const turned = await framed();
-  // A resize the screen hears now measures afresh: the framing it gives is
-  // what the turn should already have.
-  await freshResize(page);
-  const fresh = await framed();
-  for (const key of ['x', 'y', 'rx', 'ry'] as const) {
-    expect(Math.abs(turned[key] - fresh[key]), key).toBeLessThan(4);
-  }
+  await expectFreshFraming(page);
+});
+
+test('frames the squishy again when About shuts after a turn (#267)', async ({ browser }) => {
+  test.setTimeout(240_000); // a map build and the close-up; CI renders in software
+  const page = await newPlayer(browser, uniqueName('aboutt'));
+  await playerWithFriend(page);
+  await openFromHome(page);
+
+  // Turned while About is open: the close-up can't frame then (opening About
+  // never moves the squishy), so it must once About shuts.
+  const about = page.getByTestId('close-up-about');
+  await about.locator('summary').tap();
+  await expect(about).toHaveJSProperty('open', true);
+  const vp = page.viewportSize()!;
+  await page.setViewportSize({ width: vp.height, height: vp.width });
+  await still(page, '[data-testid="close-up-touch"], [data-testid="close-up"] .close-up-card');
+  await about.locator('summary').tap();
+  await expect(about).toHaveJSProperty('open', false);
+  await expectFreshFraming(page);
 });
