@@ -85,6 +85,10 @@ test('builds a fence on every open edge, upgrades one, and takes one down', asyn
   await expect.poll(async () => (await fenceState(page))?.mode).toBe('fence');
   await expect(page.getByTestId('fence-percent')).toContainText('100%');
   await expect(page.getByTestId('fence-upgrade-preview')).toContainText('70/70 → 100/100');
+  // Its cost can make a long label: the button still stays inside the card.
+  const card = (await page.getByTestId('tile-panel').boundingBox())!;
+  const upgrade = (await page.getByTestId('fence-upgrade').boundingBox())!;
+  expect(upgrade.x + upgrade.width).toBeLessThanOrEqual(card.x + card.width);
   await page.getByTestId('fence-upgrade').tap();
   await expect(page.getByTestId('fence-note')).toContainText('Level 2');
   await expect

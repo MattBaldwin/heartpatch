@@ -233,7 +233,7 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
         : []),
       el(
         'div',
-        { class: 'territory-row' },
+        { class: 'territory-row fence-actions' },
         ...(open.length > 0
           ? [
               button(
@@ -447,11 +447,11 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
     } else {
       nodes.push(line(FENCE_TEXT.topLevel));
     }
-    if (row.length > 0) nodes.push(el('div', { class: 'territory-row' }, ...row));
+    if (row.length > 0) nodes.push(el('div', { class: 'territory-row fence-actions' }, ...row));
     nodes.push(
       el(
         'div',
-        { class: 'territory-row' },
+        { class: 'territory-row fence-actions' },
         button(
           FENCE_TEXT.takeDown,
           () => {
@@ -491,7 +491,7 @@ export function createFenceScreen(options: FenceScreenOptions = {}): FenceScreen
       line(words ? FENCE_TEXT.refund(words) : FENCE_TEXT.noRefund),
       el(
         'div',
-        { class: 'territory-row' },
+        { class: 'territory-row fence-actions' },
         button(
           FENCE_TEXT.keep,
           () => {
