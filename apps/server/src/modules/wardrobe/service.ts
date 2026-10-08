@@ -50,6 +50,7 @@ const MESSAGES = {
   noSquishy: "We couldn't find that squishy.",
   notAccessory: "That one's for Keepers, not squishies!",
   hollowed: 'That squishy is in the Hollow. Rescue them first, then dress them up!',
+  inTrade: 'That squishy is waiting at a trading post right now. 📬',
 } as const;
 
 const problemMessage = (problem: WearingProblem): string => {
@@ -208,6 +209,7 @@ export function createWardrobeService(options: WardrobeServiceOptions): Wardrobe
         if (squishy?.mapId !== mapId || squishy.ownerUserId !== user.id) {
           throw new AppError('NOT_FOUND', MESSAGES.noSquishy);
         }
+        if (squishy.state === 'in-trade') throw new AppError('CONFLICT', MESSAGES.inTrade);
         if (squishy.state !== 'active') throw new AppError('CONFLICT', MESSAGES.hollowed);
         if (itemId !== null && !(await ownedBy(repo, user.id)).has(itemId)) {
           throw new AppError('FORBIDDEN', MESSAGES.notOwned);

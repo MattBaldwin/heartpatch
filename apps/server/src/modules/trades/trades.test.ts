@@ -3,6 +3,7 @@ import {
   GAME_DATA,
   heartSeedOf,
   hexDistance,
+  JobsViewSchema,
   JoinMapResponseSchema,
   MapResponseSchema,
   PostAtRequestSchema,
@@ -22,7 +23,14 @@ import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
 import type { GameEvent } from '../../db/game-events.js';
-import { keepers, sessions, squishies, squishyAccessories, users } from '../../db/schema.js';
+import {
+  buildings,
+  keepers,
+  sessions,
+  squishies,
+  squishyAccessories,
+  users,
+} from '../../db/schema.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -549,6 +557,147 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
     // Not a member: neither the caller nor the shelf's owner.
     expect((await shelfOf(stranger, sam)).statusCode).toBe(404);
     expect((await shelfOf(lee, stranger)).statusCode).toBe(404);
+  });
+
+  it('keeps an escrowed squishy off every job, the team and care, and masks a secret one (acceptance)', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const { mapId, postOf } = await patch(server, lee, sam);
+    const pip = await pet(mapId, lee, 7);
+    await pet(mapId, lee, 4); // stays home
+    const secret = await pet(mapId, sam, 3, SECRET);
+    await pet(mapId, sam, 3);
+    // Pip lives in Lee's habitat: a resting squishy there may go (Decisions).
+    const home = (await tilesOf(mapId)).find(
+      (t) => t.ownerUserId === lee.id && t.homeSlot !== null,
+    )!;
+    const [meadow] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: lee.id,
+        tileId: home.id,
+        buildingId: 'cozy-meadow',
+        kind: 'habitat',
+        spot: 1,
+      })
+      .returning({ id: buildings.id });
+    await db.execute(
+      `update squishies set habitat_building_id = '${meadow!.id}' where id = '${pip}'`,
+    );
+
+    const sent = await offer(server, mapId, lee, postOf(lee), {
+      kind: 'trade',
+      toUserId: sam.id,
+      give: [{ kind: 'squishy', squishyId: pip }],
+      want: [{ kind: 'squishy', squishyId: secret }],
+    });
+    expect(sent.statusCode, sent.body).toBe(201);
+    const offerId = tradesOf(sent).offers[0]!.id;
+    // Lee hasn't met Sam's secret species: the offer shows a mystery.
+    const leeLines = tradesOf(await call(server, 'GET', `/maps/${mapId}/trades`, lee)).offers[0]!;
+    expect(leeLines.want[0]).toMatchObject({ kind: 'squishy', squishyId: secret, speciesId: null });
+    expect(JSON.stringify(leeLines)).not.toContain(SECRET);
+
+    // While Pip waits at the post: not on Lee's job board, and no job, team or care.
+    const jobs = await call(server, 'GET', `/maps/${mapId}/jobs`, lee);
+    expect(jobs.statusCode, jobs.body).toBe(200);
+    expect(JobsViewSchema.parse(jobs.json()).squishies.map((s) => s.squishy.id)).not.toContain(pip);
+    const team = await call(server, 'POST', `/maps/${mapId}/team`, lee, { squishyIds: [pip] });
+    expect(team.statusCode).toBe(409);
+    expect(errorOf(team).message).toMatch(/waiting at a trading post/);
+    const job = await call(server, 'POST', `/maps/${mapId}/squishies/${pip}/job`, lee, {
+      job: 'team',
+    });
+    expect(job.statusCode).toBe(409);
+    expect(errorOf(job).message).toMatch(/waiting at a trading post/);
+    expect(JSON.stringify(await call(server, 'GET', `/maps/${mapId}/jobs`, lee))).not.toMatch(
+      /Hollow/,
+    );
+
+    // A yes: Pip moves to Sam and leaves Lee's habitat; Sam's secret waits in
+    // Lee's mailbox, off Lee's board and still a mystery until pickup.
+    const yes = await call(
+      server,
+      'POST',
+      `/maps/${mapId}/trades/${offerId}/accept`,
+      sam,
+      postOf(sam),
+    );
+    expect(yes.statusCode, yes.body).toBe(200);
+    expect(await squishyRow(pip)).toMatchObject({ ownerUserId: sam.id, habitatBuildingId: null });
+    const leeJobs = JobsViewSchema.parse(
+      (await call(server, 'GET', `/maps/${mapId}/jobs`, lee)).json(),
+    );
+    expect(leeJobs.squishies.map((s) => s.squishy.id)).not.toContain(secret);
+    expect(JSON.stringify(leeJobs)).not.toContain(SECRET);
+    const mail = tradesOf(await call(server, 'GET', `/maps/${mapId}/trades`, lee)).mailbox;
+    expect(mail[0]!.lines[0]).toMatchObject({ squishyId: secret, speciesId: null });
+  });
+
+  it('says no to a gift, refuses a yes once the asked-for side changed, and takes a last piece off squishies', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const { mapId, postOf } = await patch(server, lee, sam);
+    const pip = await pet(mapId, lee);
+    await pet(mapId, lee);
+    const fizz = await pet(mapId, sam);
+    await pet(mapId, sam);
+    await grant(mapId, lee, { timber: 4 });
+    // Lee's only scarf is on Pip, who stays home; giving it takes it off Pip.
+    const scarf = await piece(lee, ACCESSORY);
+    await db
+      .insert(squishyAccessories)
+      .values({ squishyId: pip, userId: lee.id, itemId: ACCESSORY });
+
+    // A gift Sam turns down: the waiting row goes and the timber comes home.
+    const gift = await offer(server, mapId, lee, postOf(lee), {
+      kind: 'gift',
+      toUserId: sam.id,
+      give: [{ kind: 'item', itemId: 'timber', quantity: 3 }],
+      want: [],
+    });
+    expect(gift.statusCode, gift.body).toBe(201);
+    const giftId = tradesOf(gift).offers[0]!.id;
+    expect(await bag(mapId, lee)).toEqual({ timber: 1 });
+    const no = await call(server, 'POST', `/maps/${mapId}/trades/${giftId}/decline`, sam);
+    expect(no.statusCode, no.body).toBe(200);
+    expect(
+      await db.query.mailbox.findMany({
+        where: (t, { and, eq }) => and(eq(t.offerId, giftId), eq(t.kind, 'gift')),
+      }),
+    ).toEqual([]);
+    expect(await bag(mapId, lee)).toEqual({ timber: 4 });
+    expect(
+      (await db.query.tradeOffers.findFirst({ where: (t, { eq }) => eq(t.id, giftId) }))!.status,
+    ).toBe('declined');
+    await reconcile(mapId);
+
+    // Lee offers the scarf for Fizz: off Pip the moment it's held.
+    const sent = await offer(server, mapId, lee, postOf(lee), {
+      kind: 'trade',
+      toUserId: sam.id,
+      give: [{ kind: 'clothing', clothingId: scarf }],
+      want: [{ kind: 'squishy', squishyId: fizz }],
+    });
+    expect(sent.statusCode, sent.body).toBe(201);
+    const offerId = tradesOf(sent).offers[0]!.id;
+    expect(
+      await db.query.squishyAccessories.findMany({ where: (t, { eq }) => eq(t.squishyId, pip) }),
+    ).toEqual([]);
+    // Sam puts Fizz on the team: Fizz is busy now, so the yes is refused and nothing moves.
+    await db.execute(`update squishies set team_slot = 0 where id = '${fizz}'`);
+    const yes = await call(
+      server,
+      'POST',
+      `/maps/${mapId}/trades/${offerId}/accept`,
+      sam,
+      postOf(sam),
+    );
+    expect(yes.statusCode).toBe(409);
+    expect(errorOf(yes).message).toMatch(/busy/);
+    expect(await squishyRow(fizz)).toMatchObject({ ownerUserId: sam.id, state: 'active' });
+    expect(await pieceRow(scarf)).toMatchObject({ userId: lee.id, heldByOfferId: offerId });
   });
 
   it('joins my land to the nearest post with the dev route (e2e, phone testing)', async () => {

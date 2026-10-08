@@ -23,7 +23,7 @@ import {
   type TradesView,
 } from '@heartpatch/shared';
 import type { Executor, Transaction } from '../../db/client.js';
-import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
+import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
 import { consumeItems, grantItems, lockGrantRows } from '../inventory/service.js';
@@ -34,6 +34,7 @@ import { createSpawnsRepo } from '../spawns/repo.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { createWardrobeRepo, WORN } from '../wardrobe/repo.js';
 import {
+  appendTradeEvent,
   createTradesRepo,
   type LineRow,
   type MailboxRow,
@@ -127,8 +128,8 @@ export interface TradesService {
   pickup: (user: PublicUser, mapId: string, request: PickupRequest) => Promise<TradesView>;
   /** The patch owner's switch; off calls off every open offer. */
   setTrading: (user: PublicUser, mapId: string, on: boolean) => Promise<boolean>;
-  /** A player left (or was removed): their open offers, both ways, go back. */
-  memberLeft: (mapId: string, userId: string) => Promise<void>;
+  /** A player left (or the owner, `actorUserId`, removed them): their open offers, both ways, go back. */
+  memberLeft: (mapId: string, userId: string, actorUserId: string) => Promise<void>;
 }
 
 export interface TradesServiceOptions {
@@ -164,7 +165,7 @@ async function appendAll(tx: Transaction, events: readonly NewGameEvent[]): Prom
     .sort((a, b) =>
       a.event.mapId === b.event.mapId ? a.i - b.i : a.event.mapId < b.event.mapId ? -1 : 1,
     );
-  for (const { event } of ordered) await appendGameEvent(tx, event);
+  for (const { event } of ordered) await appendTradeEvent(tx, event);
   return sortedIds(events.map((e) => e.mapId));
 }
 
@@ -581,6 +582,15 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
 
       const gifts = pieceIds(give);
       if (gifts.length > 0) await createWardrobeRepo(tx).lockWorn(user.id); // step 4
+      // Escrow, under locks, checked again with what the locks hold. Locked
+      // before the offer's lines go in: their foreign keys would otherwise
+      // take key-share locks on the pieces first (tech spec §7, lock first).
+      const pets = await repo.lockSquishies(squishyIds(give)); // step 10
+      const pieces = await repo.lockPieces(gifts); // step 10b
+      refuse(sideProblem(give, await sideOf(repo, mapId, user.id, pets), rules));
+      if (pieces.some((p) => p.userId !== user.id || p.heldByOfferId !== null)) {
+        refuse('not-theirs');
+      }
       const offer = await repo.insertOffer({
         mapId,
         kind: request.kind,
@@ -603,13 +613,6 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
         });
       }
 
-      // Escrow, under locks, checked again with what the locks hold.
-      const pets = await repo.lockSquishies(squishyIds(give)); // step 10
-      const pieces = await repo.lockPieces(gifts); // step 10b
-      refuse(sideProblem(give, await sideOf(repo, mapId, user.id, pets), rules));
-      if (pieces.some((p) => p.userId !== user.id || p.heldByOfferId !== null)) {
-        refuse('not-theirs');
-      }
       await repo.setSquishyState(squishyIds(give), 'in-trade');
       await repo.movePieces(gifts, user.id, offer.id);
       await takeOffGone(
@@ -897,19 +900,22 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
           const repo = createTradesRepo(tx);
           if ((await repo.tradingEnabled(mapId)) === on) return;
           await repo.setTrading(mapId, on);
+          // The patch's other settings as this transaction reads them, not as
+          // they stood before it (a PvP change in between stays).
+          const pvpMode = (await createMapsRepo(tx).findMap(mapId))?.pvpMode ?? map.pvpMode;
           events.push({
             mapId,
             type: 'map.updated',
             actorUserId: user.id,
-            payload: { pvpMode: map.pvpMode, tradingEnabled: on },
+            payload: { pvpMode, tradingEnabled: on },
           });
         },
       );
       return on;
     },
 
-    memberLeft: async (mapId, userId) => {
-      await callOff(mapId, userId, 'left', (repo) => repo.lockOpenOffers(mapId, { userId }));
+    memberLeft: async (mapId, userId, actorUserId) => {
+      await callOff(mapId, actorUserId, 'left', (repo) => repo.lockOpenOffers(mapId, { userId }));
     },
   };
 }

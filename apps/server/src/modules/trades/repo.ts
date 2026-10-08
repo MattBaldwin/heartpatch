@@ -9,6 +9,7 @@ import {
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
+import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
   clothingOwned,
   inventories,
@@ -150,6 +151,12 @@ function lineOf(row: {
  * the rules and the lock order (tech spec §7: offers then mailbox at step 9b,
  * squishies at 10, clothing at 10b, inventory at 11, `maps` last).
  */
+/** `appendGameEvent` in this transaction; events are its last writes (`maps` last). */
+export const appendTradeEvent = <T extends NewGameEvent['type']>(
+  tx: Transaction,
+  event: NewGameEvent<T>,
+): Promise<GameEvent> => appendGameEvent(tx, event);
+
 export function createTradesRepo(db: Executor) {
   return {
     /** Dev only (`HP_DEV_SQUISHY_GRANTS`): hands these neutral tiles to the player. */

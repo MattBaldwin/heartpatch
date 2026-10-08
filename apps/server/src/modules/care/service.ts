@@ -99,6 +99,7 @@ const MESSAGES = {
   unknownAction: "We don't know that kind of care.",
   noSquishy: "We couldn't find that squishy.",
   inHollow: 'That squishy is in the Hollow right now. Rescue them first!',
+  inTrade: 'That squishy is waiting at a trading post right now. 📬',
   tooSoon: (name: string) => `${name} needs a tiny moment. Try again soon!`,
 } as const;
 
@@ -413,6 +414,7 @@ export function createCareService(options: CareServiceOptions): CareService {
     if (!row || row.mapId !== mapId || row.ownerUserId !== user.id) {
       throw new AppError('NOT_FOUND', MESSAGES.noSquishy);
     }
+    if (row.state === 'in-trade') throw new AppError('CONFLICT', MESSAGES.inTrade);
     if (row.state !== 'active') throw new AppError('CONFLICT', MESSAGES.inHollow);
     return row;
   }

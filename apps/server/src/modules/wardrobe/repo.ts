@@ -1,4 +1,4 @@
-import { and, isNull, asc, count, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, count, eq, isNotNull, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';

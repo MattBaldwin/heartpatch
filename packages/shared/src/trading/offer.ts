@@ -1,4 +1,5 @@
 import type { TradeRules } from '../schemas/data/trading.js';
+import type { SquishyState } from '../schemas/squishies.js';
 import type { TradeKind, TradeLine } from '../schemas/trading.js';
 
 // What can go into a trade or a gift (#271; owner decisions Q1 and Q2 on
@@ -9,8 +10,8 @@ import type { TradeKind, TradeLine } from '../schemas/trading.js';
 export interface OfferSquishy {
   readonly id: string;
   /** `active`, `hollowed` or already `in-trade`. */
-  readonly state: string;
-  /** Resting: no team slot, watch, gathering, training or habitat. */
+  readonly state: SquishyState;
+  /** Resting: no team slot, watch, gathering or training (a habitat is fine). */
   readonly resting: boolean;
   /** Their patch starter (the Partner) stays with them (Q1). */
   readonly starter: boolean;

@@ -135,6 +135,7 @@ const MESSAGES = {
   tooMany: (max: number) => `Up to ${String(max)} squishies can stand watch on one spot.`,
   notYourSquishy: "That's not one of your squishies.",
   inHollow: 'That squishy is in the Hollow. Rescue them first!',
+  inTrade: 'That squishy is waiting at a trading post right now. 📬',
   housed: (name: string) => `Move ${name} out of their habitat first!`,
   // Fences (#203): the guard battle after a broken fence needs someone fresh.
   nobodyLeft:
@@ -539,6 +540,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         for (const id of request.squishyIds) {
           const squishy = mine.get(id);
           if (!squishy) throw new AppError('FORBIDDEN', MESSAGES.notYourSquishy);
+          if (squishy.state === 'in-trade') throw new AppError('CONFLICT', MESSAGES.inTrade);
           if (squishy.state !== 'active') throw new AppError('CONFLICT', MESSAGES.inHollow);
           // Housed or on watch, not both (owner decision 2026-10-03). One
           // already here from before that rule may stay; it counts as on

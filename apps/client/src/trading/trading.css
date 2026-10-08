@@ -315,8 +315,8 @@ button.post-slot {
 }
 
 .post-stepper .post-button {
-  min-height: 32px;
-  min-width: 32px;
+  min-height: 44px;
+  min-width: 44px;
   padding: 0 8px;
 }
 
@@ -402,7 +402,7 @@ button.post-slot {
 }
 
 .post-note-chip {
-  min-height: 36px;
+  min-height: 44px;
   border: none;
   font: inherit;
   font-size: 13px;
@@ -506,11 +506,11 @@ button.post-slot {
 
 .post-stack {
   display: grid;
-  gap: 6px;
+  gap: 10px;
 }
 
 .post-stack .post-button {
-  min-height: 40px;
+  min-height: 44px;
   padding: 6px 14px;
   font-size: 14px;
 }

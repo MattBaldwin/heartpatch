@@ -128,6 +128,8 @@ const PLACES = {
     shelter: 'exposed',
   },
   hollowed: { state: 'hollowed', sleepsAt: DARK_TILE, post: null, shelter: 'hollowed' },
+  // Held in a trade (#271): away at the post, so the Hollow Man never takes it.
+  'in-trade': { state: 'in-trade', sleepsAt: DARK_TILE, post: null, shelter: 'hollowed' },
 } as const;
 type Place = keyof typeof PLACES;
 const PLACE_NAMES = Object.keys(PLACES) as Place[];

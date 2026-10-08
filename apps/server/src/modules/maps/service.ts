@@ -90,9 +90,10 @@ export interface MapsServiceOptions {
   guardians?: GuardianData;
   /**
    * After a player leaves or is removed (committed): the trades module calls
-   * off their open offers (#271) in its own transaction. Never rejects.
+   * off their open offers (#271) in its own transaction, recorded as the
+   * actor's doing (the owner, for a removal). Never rejects.
    */
-  departed?: (mapId: string, userId: string) => Promise<void>;
+  departed?: (mapId: string, userId: string, actorUserId: string) => Promise<void>;
 }
 
 /** The maps the maps API manages; tutorial maps are the tutorial module's. */
@@ -271,9 +272,9 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
    * Their open offers go back (#271). Its own transaction after the leave
    * commits: a failure is logged and the offers still expire on time.
    */
-  const afterDeparture = async (mapId: string, userId: string) => {
+  const afterDeparture = async (mapId: string, userId: string, actorUserId: string) => {
     try {
-      await options.departed?.(mapId, userId);
+      await options.departed?.(mapId, userId, actorUserId);
     } catch (error) {
       options.log?.warn({ mapId, userId, error }, 'trades: calling off a leaver’s offers failed');
     }
@@ -594,7 +595,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       await requireOwner(db, user, mapId);
       if (memberId === user.id) throw new AppError('FORBIDDEN', MESSAGES.removeSelf);
       await depart(mapId, memberId, user, 'member.removed');
-      await afterDeparture(mapId, memberId);
+      await afterDeparture(mapId, memberId, user.id);
       published(mapId);
     },
 
@@ -602,7 +603,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
       const { role } = await requireMember(db, user, mapId, PATCHES);
       if (role === 'owner') throw new AppError('FORBIDDEN', MESSAGES.ownerLeave);
       await depart(mapId, user.id, user, 'member.left');
-      await afterDeparture(mapId, user.id);
+      await afterDeparture(mapId, user.id, user.id);
       published(mapId);
     },
 
