@@ -155,12 +155,14 @@
   display: none;
 }
 
-/* The night's chips sit under the map's name pill, centred, and wrap rather
-   than hang off a narrow phone. */
+/* The night's chips sit at the bottom middle, under the cards (84 px up) and
+   the tile panel, which cover them while open. The top middle is the gather
+   countdown's (108 px), and a chip mid-screen would catch a pinch's finger
+   on a short phone on its side. They wrap rather than hang off a narrow phone. */
 .night-chips {
   position: fixed;
-  z-index: 3;
-  top: calc(env(safe-area-inset-top) + 116px);
+  z-index: 2;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
