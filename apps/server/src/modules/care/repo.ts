@@ -4,6 +4,7 @@ import {
   GAME_DATA,
   type ElementId,
   type FeelingId,
+  type SquishyState,
 } from '@heartpatch/shared';
 import { and, asc, desc, eq, gt, inArray, isNull, max, notInArray, sql, sum } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
@@ -29,7 +30,7 @@ export interface CareSquishyRow {
   xp: number;
   /** The level it joined at (#205); null for rows from before it was kept. */
   joinedLevel: number | null;
-  state: 'active' | 'hollowed';
+  state: SquishyState;
   habitatBuildingId: string | null;
   /**
    * Standing watch on its owner's land (decision C). A squishy is housed or

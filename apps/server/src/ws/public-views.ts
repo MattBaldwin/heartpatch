@@ -52,7 +52,12 @@ function registryView(type: GameEventType): PublicView {
 /** A registry view sent only to the player the event is about (`payload.userId`). */
 function ownerOnlyView(
   type:
-    'squishy.hollowed' | 'squishy.rescued' | 'team.picked' | 'journey.started' | 'journey.ended',
+    | 'squishy.hollowed'
+    | 'squishy.rescued'
+    | 'team.picked'
+    | 'journey.started'
+    | 'journey.ended'
+    | 'mailbox.pickedUp',
 ): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
@@ -62,6 +67,33 @@ function ownerOnlyView(
     },
   });
 }
+
+/** A registry view sent only to an offer's two players (`fromUserId`, `toUserId`; #271). */
+function twoPlayerView(type: 'trade.offered' | 'trade.cancelled' | 'trade.expired'): PublicView {
+  return definePublicView({
+    schema: GAME_EVENTS[type].public,
+    build: (event, recipient) => {
+      const payload = parseGameEventPayload(type, event.payload);
+      const theirs = [payload.fromUserId, payload.toUserId].includes(recipient.userId);
+      return theirs ? payload : null;
+    },
+  });
+}
+
+/**
+ * A trade's answer (#271): the two players hear which, with the offer; everyone
+ * else hears only that a trade happened, and nothing of a "no thanks".
+ */
+const tradeAnsweredView = definePublicView({
+  schema: GAME_EVENTS['trade.answered'].public,
+  build: (event, recipient) => {
+    const payload = parseGameEventPayload('trade.answered', event.payload);
+    if ([payload.fromUserId, payload.toUserId].includes(recipient.userId)) return payload;
+    if (payload.answer !== 'accepted') return null;
+    const { fromUserId, toUserId, answer } = payload;
+    return { fromUserId, toUserId, answer };
+  },
+});
 
 /**
  * The views live sync sends: one per type in the shared event registry
@@ -81,6 +113,13 @@ export const PUBLIC_VIEWS: PublicViews = {
   // Journeys (#270): only the player; everyone else sees `battle.*`.
   'journey.started': ownerOnlyView('journey.started'),
   'journey.ended': ownerOnlyView('journey.ended'),
+  // Trades (#271): what an offer holds is the two players' business; others
+  // hear "Lee and Sam traded!" and "Sam got a gift from Lee", never what.
+  'trade.offered': twoPlayerView('trade.offered'),
+  'trade.answered': tradeAnsweredView,
+  'trade.cancelled': twoPlayerView('trade.cancelled'),
+  'trade.expired': twoPlayerView('trade.expired'),
+  'mailbox.pickedUp': ownerOnlyView('mailbox.pickedUp'),
 };
 
 /**

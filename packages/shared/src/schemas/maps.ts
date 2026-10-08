@@ -86,6 +86,16 @@ export type CreateMapRequest = z.infer<typeof CreateMapRequestSchema>;
 export const JoinMapRequestSchema = z.object({ code: InviteCodeSchema });
 export type JoinMapRequest = z.infer<typeof JoinMapRequestSchema>;
 
+/**
+ * `POST /api/v1/maps/:mapId/trading` (#271, owner Q5 on #30): the patch
+ * owner turns trading on or off. Off cancels every open offer, and their
+ * things go straight back.
+ */
+export const SetTradingRequestSchema = z.strictObject({ tradingEnabled: z.boolean() });
+export type SetTradingRequest = z.infer<typeof SetTradingRequestSchema>;
+export const TradingResponseSchema = z.object({ tradingEnabled: z.boolean() });
+export type TradingResponse = z.infer<typeof TradingResponseSchema>;
+
 /** `POST /api/v1/maps/:mapId/pvp-mode` */
 export const SetPvpModeRequestSchema = z.object({ pvpMode: PvpModeSchema });
 export type SetPvpModeRequest = z.infer<typeof SetPvpModeRequestSchema>;
@@ -164,6 +174,8 @@ export const MapDetailSchema = z.object({
   name: z.string(),
   timeZone: z.string(),
   pvpMode: PvpModeSchema,
+  /** Trading at the posts is on (#271, the owner's switch). Optional so older servers' details parse. */
+  tradingEnabled: z.boolean().optional(),
   role: MapRoleSchema,
   maxPlayers: z.number().int(),
   members: z.array(MapMemberSchema),

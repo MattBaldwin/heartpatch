@@ -10,6 +10,7 @@ import { MoodIdSchema } from './data/care.js';
 import { ToolIdSchema } from './data/explore.js';
 import { HollowStageSchema, WalkKindSchema } from './hollow-stage.js';
 import { RaidOutcomeSchema } from './raids.js';
+import { TradeKindSchema, TradeLineSchema } from './trading.js';
 import { LocalDateSchema } from './time.js';
 
 /**
@@ -35,7 +36,11 @@ interface GameEventSchemas {
   public: z.ZodObject;
 }
 
-const MapSettingsSchema = z.strictObject({ pvpMode: PvpModeSchema });
+const MapSettingsSchema = z.strictObject({
+  pvpMode: PvpModeSchema,
+  /** The owner's trading switch (#271), when it's what changed (or on any newer update). */
+  tradingEnabled: z.boolean().optional(),
+});
 const DepartedSchema = z.strictObject({
   userId: z.uuid(),
   /** Tiles that went back to neutral (their home base and any land they held). */
@@ -297,6 +302,85 @@ export const GAME_EVENTS = {
   'post.placed': {
     internal: z.strictObject({ tiles: z.array(z.strictObject(coords)).min(1) }),
     public: z.object({ tiles: z.array(z.object(coords)) }),
+  },
+  /**
+   * A trade offer or a gift was sent at a trading post (#271). What it holds
+   * stays internal; only the two players hear of it (`twoPlayerView`).
+   */
+  'trade.offered': {
+    internal: z.strictObject({
+      offerId: z.uuid(),
+      kind: TradeKindSchema,
+      fromUserId: z.uuid(),
+      toUserId: z.uuid(),
+      noteId: z.string().nullable(),
+      give: z.array(TradeLineSchema),
+      want: z.array(TradeLineSchema),
+    }),
+    public: z.object({
+      offerId: z.uuid(),
+      kind: TradeKindSchema,
+      fromUserId: z.uuid(),
+      toUserId: z.uuid(),
+    }),
+  },
+  /**
+   * The patch-mate said yes or no to a trade offer (#271). The two players
+   * hear which; everyone else hears only that a trade happened ("Lee and Sam
+   * traded!"), never what moved, and nothing of a "no thanks".
+   */
+  'trade.answered': {
+    internal: z.strictObject({
+      offerId: z.uuid(),
+      kind: TradeKindSchema,
+      fromUserId: z.uuid(),
+      toUserId: z.uuid(),
+      answer: z.enum(['accepted', 'declined']),
+    }),
+    public: z.object({
+      offerId: z.uuid().optional(),
+      fromUserId: z.uuid(),
+      toUserId: z.uuid(),
+      answer: z.enum(['accepted', 'declined']),
+    }),
+  },
+  /**
+   * An open offer was called off (#271): its sender cancelled it, the owner
+   * turned trading off, or one of the two left the patch. Its things went
+   * straight back. Only the two players hear of it.
+   */
+  'trade.cancelled': {
+    internal: z.strictObject({
+      offerId: z.uuid(),
+      fromUserId: z.uuid(),
+      toUserId: z.uuid(),
+      reason: z.enum(['cancelled', 'trading-off', 'left']),
+    }),
+    public: z.object({
+      offerId: z.uuid(),
+      fromUserId: z.uuid(),
+      toUserId: z.uuid(),
+      reason: z.enum(['cancelled', 'trading-off', 'left']),
+    }),
+  },
+  /** An offer nobody answered in time went back to its sender (#271). Only the two players hear of it. */
+  'trade.expired': {
+    internal: z.strictObject({ offerId: z.uuid(), fromUserId: z.uuid(), toUserId: z.uuid() }),
+    public: z.object({ offerId: z.uuid(), fromUserId: z.uuid(), toUserId: z.uuid() }),
+  },
+  /** A gift was picked up (#271): members hear "Sam got a gift from Lee 🎁", never what. */
+  'gift.pickedUp': {
+    internal: z.strictObject({ offerId: z.uuid(), fromUserId: z.uuid(), toUserId: z.uuid() }),
+    public: z.object({ fromUserId: z.uuid(), toUserId: z.uuid() }),
+  },
+  /** A player picked up what waited in their mailbox (#271). Only they hear it (`ownerOnlyView`). */
+  'mailbox.pickedUp': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      mailboxIds: z.array(z.uuid()).min(1),
+      offerIds: z.array(z.uuid()).min(1),
+    }),
+    public: z.object({ userId: z.uuid(), mailboxIds: z.array(z.uuid()) }),
   },
   /**
    * A player set off on a journey to a trading post (#270). Only they hear it

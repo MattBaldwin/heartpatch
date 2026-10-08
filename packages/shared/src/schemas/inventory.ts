@@ -40,6 +40,10 @@ export const ItemChangeReasonSchema = z.enum([
   'repair',
   /** Exploring your land (#199): finds, and the wear on the tool a search used. */
   'explore',
+  /** Trades and gifts (#271): held for an offer, landed by it, or given back. */
+  'trade-escrow',
+  'trade',
+  'trade-return',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
