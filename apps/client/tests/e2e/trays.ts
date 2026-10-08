@@ -55,6 +55,14 @@ export async function openTray(
   await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBe(side);
 }
 
+/** Shuts whichever tray is open, so the map (and what floats over it) is in reach. */
+export async function closeTrays(page: Page, tap: TapHandle = instantTap): Promise<void> {
+  const open = (await traysState(page))?.open ?? null;
+  if (open === null) return;
+  await tap(page.getByTestId(`tray-handle-${open}`));
+  await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBeNull();
+}
+
 /** The button `testId` in its tray, with the tray open. */
 export async function trayButton(
   page: Page,

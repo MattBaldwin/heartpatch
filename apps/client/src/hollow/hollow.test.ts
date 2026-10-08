@@ -60,13 +60,17 @@ describe('the morning report', () => {
     expect(unseenReports(reports, '2026-10-31')).toEqual([]);
   });
 
+  const texts = (r: { lines: readonly { text: string }[] }) => r.lines.map((l) => l.text);
+
   it('says he let them be on a grace night, and asks for a fire (#134)', () => {
-    expect(reportText([night('2026-10-28', { exposed: 1 })], () => '')).toEqual({
-      title: HOLLOW_TEXT.passedBy,
-      lines: [HOLLOW_TEXT.spared, HOLLOW_TEXT.fireHint],
-    });
+    const spared = reportText([night('2026-10-28', { exposed: 1 })], () => '');
+    expect(spared.title).toBe(HOLLOW_TEXT.passedBy);
+    expect(spared.lines).toEqual([
+      { icon: '🌙', text: HOLLOW_TEXT.spared },
+      { icon: '🔥', text: HOLLOW_TEXT.fireHint },
+    ]);
     // A fire lit since: no nagging.
-    expect(reportText([night('2026-10-28', { exposed: 1 })], () => '', false).lines).toEqual([
+    expect(texts(reportText([night('2026-10-28', { exposed: 1 })], () => '', false))).toEqual([
       HOLLOW_TEXT.spared,
     ]);
     // Once someone is taken, that line is the news; the spared night needs no line of its own.
@@ -77,14 +81,14 @@ describe('the morning report', () => {
       ],
       () => 'Moonpuff',
     );
-    expect(mixed.lines).toEqual(['He took Moonpuff to the Hollow. You can rescue them!']);
+    expect(texts(mixed)).toEqual(['He took Moonpuff to the Hollow. You can rescue them!']);
   });
 
   it('always follows "taken to the Hollow" with "you can rescue them"', () => {
     const one = reportText([night('2026-10-31', { taken: [takenOne(1)] })], () => 'Moonpuff');
     expect(one).toEqual({
       title: HOLLOW_TEXT.visitedOne,
-      lines: ['He took Moonpuff to the Hollow. You can rescue them!'],
+      lines: [{ icon: '🌫️', text: 'He took Moonpuff to the Hollow. You can rescue them!' }],
     });
     const many = reportText(
       [
@@ -94,37 +98,56 @@ describe('the morning report', () => {
       () => 'Moonpuff',
     );
     expect(many.title).toBe(HOLLOW_TEXT.visitedMany);
-    expect(many.lines[1]).toBe("He took Moonpuff to the Hollow, but they're home again!");
+    expect(many.lines[1]).toEqual({
+      icon: '🏡',
+      text: "He took Moonpuff to the Hollow, but they're home again!",
+    });
     expect(reportText([night('2026-10-31', { sheltered: 1 })], () => '')).toEqual({
       title: HOLLOW_TEXT.passedBy,
-      lines: [HOLLOW_TEXT.safe],
+      lines: [
+        { icon: '🔥', text: 'Your fires kept 1 squishy safe.' },
+        { icon: '💖', text: HOLLOW_TEXT.safe },
+      ],
     });
   });
 
-  it('says when dark land went wild, and asks for fire light everywhere (#277)', () => {
+  it('tells the fires, the land that went wild, then who he took (#277, mockup screen 5)', () => {
     const lost = reportText(
       [
         night('2026-10-31', {
           taken: [takenOne(1), takenOne(2)],
+          sheltered: 5,
           reclaimed: [
             { q: 3, r: 0 },
             { q: 4, r: 0 },
           ],
+          walk: [
+            { q: 1, r: 0, kind: 'enter' },
+            { q: 1, r: 0, kind: 'recoil' },
+            { q: 2, r: 0, kind: 'recoil' },
+            { q: 3, r: 0, kind: 'strike' },
+            { q: 4, r: 0, kind: 'strike' },
+            { q: 4, r: 0, kind: 'leave' },
+          ],
+          lostBuildings: { fires: 1, fences: 1, trainingGrounds: 0 },
         }),
       ],
-      () => 'Moonpuff',
+      () => 'Pip',
     );
     expect(lost.title).toBe(HOLLOW_TEXT.visitedOne);
     expect(lost.lines).toEqual([
-      'He took Moonpuff to the Hollow. You can rescue them!',
-      'He took Moonpuff to the Hollow. You can rescue them!',
-      HOLLOW_TEXT.reclaimed(2),
-      HOLLOW_TEXT.lightAll,
+      { icon: '🔥', text: 'Your fires kept 5 squishies safe. He backed away 2 times!' },
+      {
+        icon: '🌿',
+        text: '2 bits of your dark land went wild again. Your fence and fire there came back to your bag.',
+      },
+      // Everyone he took, in one line (mockup screen 5).
+      { icon: '🌫️', text: 'He took Pip and Pip to the Hollow. You can rescue them!' },
     ]);
     const land = reportText([night('2026-10-31', { reclaimed: [{ q: 3, r: 0 }] })], () => '');
     expect(land).toEqual({
       title: HOLLOW_TEXT.visitedOne,
-      lines: [HOLLOW_TEXT.reclaimed(1), HOLLOW_TEXT.lightAll],
+      lines: [{ icon: '🌿', text: 'A bit of your dark land went wild again.' }],
     });
     expect(
       unseenReports([night('2026-10-31', { reclaimed: [{ q: 3, r: 0 }] })], null),
@@ -230,6 +253,6 @@ describe('the Hollow Man on the map', () => {
     const layer = new HollowLayer({ invalidate: () => undefined });
     expect(layer.visit()).toBe(false);
     layer.setNight(true);
-    expect(layer.debug).toEqual({ night: true, visiting: false, visits: 0 });
+    expect(layer.debug).toEqual({ night: true, visiting: false, visits: 0, walking: 0, steps: 0 });
   });
 });
