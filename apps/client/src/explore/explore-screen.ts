@@ -40,6 +40,7 @@ import {
   missingTool,
   nearestSpot,
   needLine,
+  spotInReach,
   progressLine,
   restLine,
   standBeside,
@@ -219,6 +220,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let yaw = 0;
   /** Where a tap sent the Keeper (beside a spot, if it tapped one). */
   let walkTo: WorldPoint | null = null;
+  /** The spot the player last tapped: the action button offers it once in reach. */
+  let aimed: number | null = null;
   let stick: { id: number; x0: number; y0: number; x: number; y: number } | null = null;
   let near: PublicSearchSpot | null = null;
   let playing: { spot: PublicSearchSpot; state: InteractionState } | null = null;
@@ -323,6 +326,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // phone held in one hand; anywhere is easier for small thumbs).
     stick = { id: e.pointerId, x0: press.x, y0: press.y, x: p.x, y: p.y };
     walkTo = null;
+    aimed = null;
     showStick();
     wake();
   });
@@ -362,6 +366,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!point || !tile) return;
     const spot = nearestSpot(point, tile.spots, EXPLORE_VIEW.reach * 1.4);
     walkTo = spot ? standBeside(keeperAt, spot) : clampToTile(point);
+    aimed = spot?.index ?? null;
     wake();
   }
 
@@ -416,7 +421,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   /** The spot in reach drives the action button and the ring. */
   function findNear(): void {
-    const next = tile ? nearestSpot(keeperAt, tile.spots) : null;
+    const next = tile ? spotInReach(keeperAt, tile.spots, aimed) : null;
     if (next?.index === near?.index) return;
     near = next;
     scene3d?.highlight(near?.index ?? null);
@@ -937,6 +942,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     keeperAt = EXPLORE_VIEW.start;
     yaw = 0;
     walkTo = null;
+    aimed = null;
     stick = null;
     playing = null;
     card = null;

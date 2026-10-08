@@ -17,6 +17,7 @@ import {
   missingTool,
   nearestSpot,
   needLine,
+  spotInReach,
   progressLine,
   restLine,
   standBeside,
@@ -162,6 +163,15 @@ describe('walking on the tile', () => {
     const spots = [spot(0, 0.05, 0, true), spot(1, 0.1, 0), spot(2, 0.6, 0)];
     expect(nearestSpot({ x: 0, z: 0 }, spots)?.index).toBe(1);
     expect(nearestSpot({ x: -0.5, z: 0 }, spots)).toBeNull();
+  });
+
+  it('offers the spot the player tapped over a nearer one beside it', () => {
+    const spots = [spot(0, 0.05, 0), spot(1, 0.12, 0), spot(2, 0.12, 0, true)];
+    expect(spotInReach({ x: 0, z: 0 }, spots, null)?.index).toBe(0);
+    expect(spotInReach({ x: 0, z: 0 }, spots, 1)?.index).toBe(1);
+    // Searched already, or out of reach: the nearest again.
+    expect(spotInReach({ x: 0, z: 0 }, spots, 2)?.index).toBe(0);
+    expect(spotInReach({ x: -0.5, z: 0 }, [spot(1, 0.3, 0)], 1)).toBeNull();
   });
 
   it('reads the joystick as a direction on the ground', () => {

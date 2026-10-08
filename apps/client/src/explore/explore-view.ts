@@ -254,6 +254,22 @@ export function nearestSpot<T extends Pick<PublicSearchSpot, 'x' | 'z' | 'done'>
   return best;
 }
 
+/**
+ * The spot the action button offers: the one the player tapped, while it's
+ * in reach and not searched yet, else the nearest in reach. Two spots can sit
+ * side by side; tapping a mound means "dig here", not the rock next to it.
+ */
+export function spotInReach<T extends Pick<PublicSearchSpot, 'index' | 'x' | 'z' | 'done'>>(
+  at: WorldPoint,
+  spots: readonly T[],
+  aimed: number | null,
+  reach: number = EXPLORE_VIEW.reach,
+): T | null {
+  const wanted = aimed === null ? undefined : spots.find((s) => s.index === aimed);
+  if (wanted && nearestSpot(at, [wanted], reach)) return wanted;
+  return nearestSpot(at, spots, reach);
+}
+
 /** One step of `distance` from `from` towards `to` (stopping on it), kept inside the tile. */
 export function stepToward(from: WorldPoint, to: WorldPoint, distance: number): WorldPoint {
   const dx = to.x - from.x;

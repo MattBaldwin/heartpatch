@@ -87,7 +87,7 @@ export const TOP_RINGS: readonly ProfileRing[] = [
 ];
 export const CORNER = 0.2; // TUNE: corner rounding, fraction of the radius
 export const SEGMENTS = 3;
-/** Overlays (selection, safe glow) float this far above the tile so they never z-fight. */
+/** Overlays (selection, safe glow, homesteads) float this far above the tile so they never z-fight. */
 const TINT_LIFT = 0.012;
 /** Fences stand near a tile's rim, where its rounded top has dropped a little. TUNE */
 const FENCE_LIFT = DOME * 0.2;
