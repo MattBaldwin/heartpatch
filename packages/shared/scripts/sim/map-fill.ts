@@ -1,5 +1,6 @@
 import { GAME_DATA } from '../../src/data/index.js';
 import { heartSeedOf } from '../../src/hollow/index.js';
+import { isTradingPost } from '../../src/territory/reach.js';
 import { hexDistance, hexKey, hexNeighbors, type HexKey } from '../../src/hex/index.js';
 import { generateMap, type MapTile } from '../../src/mapgen/index.js';
 import { deriveSeed, Rng } from '../../src/rng/index.js';
@@ -116,7 +117,8 @@ export function runMapFill(
       owned.set(hexKey(t), { owner: t.homeSlot, tendedAt: new Date(DAY_ONE) });
     }
   }
-  const neutral = tiles.filter((t) => t.homeSlot === null);
+  // Trading posts (#269) are never claimed.
+  const neutral = tiles.filter((t) => t.homeSlot === null && !isTradingPost(t));
   const neutralLeft = () => neutral.filter((t) => !owned.has(hexKey(t)));
   const wentWildBefore = new Set<HexKey>();
   const rng = Rng.fromSeed(deriveSeed(config.rootSeed, scenario.id, rules.label));

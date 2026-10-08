@@ -558,6 +558,7 @@ export function startAdmin(root: HTMLElement): void {
         fact('Owner', patch.owner ?? '—'),
         fact('Players', `${String(patch.members)} of ${String(patch.maxPlayers)} seats`),
         fact('PvP mode', isTutorial ? '—' : pvpLabel(patch.pvpMode)),
+        fact('Trading posts', isTutorial ? '—' : tradingPostsLabel(patch.tradingPosts)),
         fact('Made', shortDate(patch.createdAt)),
       ),
       section('Players', membersList(detail)),
@@ -565,6 +566,12 @@ export function startAdmin(root: HTMLElement): void {
       section('Invite code', inviteBox(detail)),
       section('Recent nights', nightsList(detail)),
     );
+  }
+
+  /** "4", or why there are none yet (#269: an older patch waits for a fair spot). */
+  function tradingPostsLabel(n: number | undefined): string {
+    if (n === undefined) return '—';
+    return n > 0 ? String(n) : 'None yet (no fair spot free)';
   }
 
   function fact(label: string, value: string): HTMLElement {

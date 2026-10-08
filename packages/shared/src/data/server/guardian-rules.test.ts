@@ -4,6 +4,7 @@ import { GAME_DATA } from '../index.js';
 import { MAP_GEN } from '../map-gen.js';
 import { checkGuardianRules } from '../../schemas/data/guardian-rules.js';
 import { hintForGuardians } from '../../territory/guardians.js';
+import { TRADING_POST_TERRAIN } from '../../territory/reach.js';
 import { GUARDIAN_RULES } from './guardian-rules.js';
 import { SECRET_SPECIES } from './secret-species.js';
 
@@ -30,7 +31,8 @@ describe('guardian rules', () => {
     for (const table of GUARDIAN_RULES.tables) {
       for (const entry of table.entries) expect(species).toContain(entry.species);
     }
-    for (const terrain of GAME_DATA.terrains) {
+    // Trading posts (#269) have no guardians: they can never be claimed.
+    for (const terrain of GAME_DATA.terrains.filter((t) => t.id !== TRADING_POST_TERRAIN)) {
       // Year-round: a terrain is guarded outside every season too.
       expect(GUARDIAN_RULES.tables.some((t) => !t.season && t.terrains.includes(terrain.id))).toBe(
         true,

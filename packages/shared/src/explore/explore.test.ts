@@ -77,14 +77,15 @@ describe('explore rules data', () => {
     expect(checkExploreRules(tooMany, GAME_DATA)).not.toEqual([]);
   });
 
-  it('lets you explore every terrain but Juniper’s Gap (owner decision 2026-10-07)', () => {
+  it('lets you explore every terrain but Juniper’s Gap and trading posts (owner decision 2026-10-07, #269)', () => {
     const explorable = GAME_DATA.terrains
       .map((t) => t.id)
       .filter((id) => isExplorable(id, EXPLORE_RULES));
     expect(explorable.sort()).toEqual(
       GAME_DATA.terrains
         .map((t) => t.id)
-        .filter((id) => id !== 'junipers-gap')
+        // Nobody owns a trading post (#269), so nobody explores one.
+        .filter((id) => id !== 'junipers-gap' && id !== 'trading-post')
         .sort(),
     );
   });

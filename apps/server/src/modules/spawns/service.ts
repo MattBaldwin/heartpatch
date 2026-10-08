@@ -5,6 +5,7 @@ import {
   STARTERS,
   hexKey,
   hexNeighbors,
+  isTradingPost,
   type Catalog,
   type Hex,
   type PublicUser,
@@ -111,7 +112,10 @@ export function createSpawnsService(options: SpawnsServiceOptions): SpawnsServic
     const own = tiles.filter((t) => t.ownerUserId === userId);
     const ownKeys = new Set(own.map(hexKey));
     const frontier = new Set(own.flatMap((t) => hexNeighbors(t).map(hexKey)));
-    const next = tiles.filter((t) => !ownKeys.has(hexKey(t)) && frontier.has(hexKey(t)));
+    // Never a trading post (#269): no wild squishy waits there, whatever the tables say.
+    const next = tiles.filter(
+      (t) => !ownKeys.has(hexKey(t)) && frontier.has(hexKey(t)) && !isTradingPost(t),
+    );
     return [...own, ...next];
   };
 

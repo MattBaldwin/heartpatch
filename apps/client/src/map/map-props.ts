@@ -531,6 +531,26 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         0.26,
       );
     }
+    case 'trading-post':
+      // The trading post's hut (#269): cream walls, a plum roof, a pink door,
+      // a signpost with a heart and a lantern on a pole. One per post, four a
+      // map, so a few more parts than most props are fine.
+      return done(
+        [
+          painted(at(box(0.27, 0.18, 0.22), 0, 0.09, 0), '#f6d7a8'),
+          painted(
+            at(cylinder(0.15, 0, 0.36, 4), 0, 0.255, 0, 1, 1, 0.82, { y: Math.PI / 4 }),
+            '#7a2d55',
+          ),
+          painted(at(box(0.075, 0.11, 0.012), 0, 0.055, 0.112), '#b8487a'),
+          painted(at(box(0.02, 0.2, 0.02), 0.2, 0.1, 0.06), '#8a5a3a'),
+          painted(at(box(0.13, 0.065, 0.016), 0.2, 0.2, 0.06), '#fff8ec'),
+          painted(at(sphere(0.035), 0.2, 0.2, 0.072, 1, 1, 0.4), '#ff6f9f'),
+          painted(at(box(0.018, 0.2, 0.018), -0.19, 0.1, 0.07), '#8a5a3a'),
+          painted(at(sphere(0.06), -0.19, 0.215, 0.07), '#ffc94d'),
+        ],
+        0.36,
+      );
     case 'jack-o-lantern':
       // A grinning pumpkin; its material glows (brighter at night).
       return done(

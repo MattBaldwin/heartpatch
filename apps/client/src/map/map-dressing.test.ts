@@ -220,9 +220,10 @@ describe('wild land is muted, owned land in full colour', () => {
   it('follows ownership in a real view: only the home rings are in colour', () => {
     const view = testView(2);
     const coloured = view.tiles.filter((t) => !isMuted(t));
-    // Two home rings of 7, plus the Gap's tiles.
+    // Two home rings of 7, plus the Gap's tiles and the 4 trading posts (#269),
+    // which belong to everyone and are never wild.
     const gap = view.tiles.filter((t) => t.terrain === 'junipers-gap').length;
-    expect(coloured).toHaveLength(14 + gap);
+    expect(coloured).toHaveLength(14 + gap + 4);
   });
 });
 

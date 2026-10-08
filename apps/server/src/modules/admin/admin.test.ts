@@ -477,6 +477,8 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
     expect(detail.members.map((m) => m.username)).toEqual([owner.username]);
     expect(detail.requests.map((r) => r.username)).toEqual([waiting.username]);
     expect(detail.invite).not.toBeNull();
+    // A new patch is made with its trading posts (#269).
+    expect(detail.patch.tradingPosts).toBe(4);
     // The invite code itself isn't on the page.
     expect(JSON.stringify(detail)).not.toMatch(/"code"/);
 

@@ -1,0 +1,28 @@
+/* A flag over every trading post (#269): placed with the map's tile
+   projection, under every panel and sheet, never in the way of a tap. */
+.post-flag {
+  position: fixed;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(255 250 252 / 92%);
+  box-shadow: 0 2px 6px rgb(107 75 110 / 25%);
+  color: #4a3150;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* My land reaches it: gold, like its ring on the map. */
+.post-flag-connected {
+  background: rgb(255 241 201 / 95%);
+}
+
+.post-flag[hidden] {
+  display: none;
+}

@@ -64,6 +64,16 @@ export const TERRAINS: Terrain[] = [
     nodeResources: ['pumpkins'],
   },
   {
+    // Trading posts (#269): shared, never owned, the post's hut on its centre
+    // spot. Only placed by `placeTradingPosts`, never scattered.
+    id: 'trading-post',
+    name: 'Trading Post',
+    description: 'A cozy little post where Keepers swap and share.',
+    weight: 0,
+    nodeChance: 0,
+    nodeResources: [],
+  },
+  {
     id: 'junipers-gap',
     name: "Juniper's Gap",
     description: 'The valley where the Heartpatch once glowed.',
