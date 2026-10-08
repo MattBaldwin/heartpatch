@@ -112,22 +112,33 @@ async function keeperStill(page: Page): Promise<void> {
 
 /**
  * Walks up to a spot by tapping: the spot itself once a tap there reaches
- * the ground, else the ground on the way to it (the camera follows). Stops
- * early once any spot in `orAny` is in front.
+ * the ground, else the ground on the way to it (the camera follows). True
+ * once it (or any spot in `orAny`) is in front; false if taps can't get
+ * there (tap-to-walk slides round one rock at a time, it doesn't path round
+ * a cluster: a player steers round with the joystick).
  */
-async function walkTo(page: Page, index: number, orAny: readonly number[] = []): Promise<void> {
+async function walkTo(page: Page, index: number, orAny: readonly number[] = []): Promise<boolean> {
   const done = (near: number | null | undefined) =>
     near === index || (near != null && orAny.includes(near));
-  for (let tries = 0; tries < 12; tries++) {
+  for (let tries = 0; tries < 10; tries++) {
     const state = (await exploreState(page))!;
-    if (done(state.near)) return;
+    if (done(state.near)) return true;
     const spot = state.spots.find((s) => s.index === index)!;
     const tap = await waypoint(page, spot);
-    if (!tap) throw new Error(`no ground to tap towards spot ${String(index)}`);
+    if (!tap) return false;
     await realTapAt(page, tap.x, tap.y);
     await keeperStill(page);
   }
-  await expect.poll(async () => done((await exploreState(page))?.near), slow).toBe(true);
+  return done((await exploreState(page))?.near);
+}
+
+/** Spots by how far they are from the Keeper, nearest first. */
+function nearestFirst<T extends { x: number; z: number }>(
+  spots: T[],
+  from: { x: number; z: number },
+): T[] {
+  const d = (s: T) => (s.x - from.x) ** 2 + (s.z - from.z) ** 2;
+  return [...spots].sort((a, b) => d(a) - d(b));
 }
 
 test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
@@ -189,14 +200,22 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   // to wear) gets the card, so try the next hand spot until a toast shows.
   const action = page.getByTestId('explore-action');
   const sheet = page.getByTestId('explore-sheet');
-  const handSpots = first.spots.filter((s) => s.tool === null);
+  const handSpots = nearestFirst(
+    first.spots.filter((s) => s.tool === null),
+    first.keeper,
+  );
   let searched = 0;
   let toasted = false;
-  for (const hands of handSpots.slice(0, 4)) {
-    await walkTo(page, hands.index);
-    // The camera followed the Keeper.
-    const walked = (await exploreState(page))!;
-    expect(walked.scene?.camera.z).not.toBe(first.scene?.camera.z);
+  for (const hands of handSpots.slice(0, 5)) {
+    if (!(await walkTo(page, hands.index))) continue;
+    // The camera follows the Keeper: it settles looking just ahead of it.
+    await expect
+      .poll(async () => {
+        const s = (await exploreState(page))!;
+        const cam = s.scene!.camera;
+        return Math.hypot(cam.x - s.keeper.x, cam.z - s.keeper.z);
+      }, slow)
+      .toBeLessThan(0.25);
     await slowExpect(action).toBeEnabled();
     await action.tap();
     // A light overlay, not a card: the chip, the easy way and "Not now".
@@ -253,11 +272,15 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   );
 
   // A mound needs a Shovel: a hint above a disabled button says how to make one.
-  const mounds = first.spots.filter((s) => s.tool === 'shovel').map((s) => s.index);
-  const mound = mounds[0];
-  if (mound !== undefined) {
+  const mounds = first.spots.filter((s) => s.tool === 'shovel');
+  if (mounds.length > 0) {
+    const ids = mounds.map((s) => s.index);
     // Any mound will do: a neighbour's hint can cover the one aimed at.
-    await walkTo(page, mound, mounds);
+    let reached = false;
+    for (const mound of nearestFirst(mounds, (await exploreState(page))!.keeper).slice(0, 4)) {
+      if ((reached = await walkTo(page, mound.index, ids))) break;
+    }
+    expect(reached, 'walked up to a mound').toBe(true);
     await expect.poll(async () => (await exploreState(page))?.hint, slow).toBe('shovel');
     const hint = page.getByTestId('explore-need');
     await slowExpect(hint).toContainText('This mound needs a Shovel!');
