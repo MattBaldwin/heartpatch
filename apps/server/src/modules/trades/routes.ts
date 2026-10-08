@@ -46,7 +46,8 @@ export const tradesRoutes =
       '/maps/:mapId/trades',
       {
         schema: { params: MapIdParamsSchema, response: { 200: TradesResponseSchema } },
-        preHandler: requireAuth,
+        // A read that may expire offers first (a write): limited like the shelf.
+        preHandler: [requireAuth, rateLimit('read')],
       },
       async (request) => ({
         trades: await service.view(requireUser(request), request.params.mapId),

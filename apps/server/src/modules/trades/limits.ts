@@ -6,7 +6,7 @@ import { MINUTE_MS } from '../../lib/time.js';
 export const TRADE_RATE_LIMITS = {
   read: {
     perIp: { max: 300, windowMs: MINUTE_MS }, // TUNE: guess
-    perUser: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess; every shelf the post screen opens
+    perUser: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess; a post screen loads its view and two shelves
   },
   send: {
     perIp: { max: 200, windowMs: 15 * MINUTE_MS }, // TUNE: guess
