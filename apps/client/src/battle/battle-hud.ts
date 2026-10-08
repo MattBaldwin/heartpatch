@@ -247,12 +247,16 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   hud.hidden = true;
   root.append(hud);
 
-  // The safe region is measured at most once per layout change, not per frame.
+  // The safe region is measured at most once per layout change, not per frame:
+  // on a resize, and when the HUD's or a pill's box changes (iOS sends
+  // `resize` before a turned layout settles and none after, #251, #263).
   let safe: SafeRegion | null = null;
   const forget = () => {
     safe = null;
   };
   window.addEventListener('resize', forget);
+  const boxes = new ResizeObserver(forget);
+  for (const node of [hud, plates.mine.node, plates.theirs.node]) boxes.observe(node);
 
   const button = (
     label: string,

@@ -44,6 +44,7 @@ import {
   otherSide,
   plateName,
 } from './battle-view.js';
+import type { SafeRegion } from './camera-director.js';
 import { BEFRIEND_NUDGE, HEART_CHARM, noCharmsLine } from './heart-charm.js';
 import {
   NO_CHIPS,
@@ -131,6 +132,8 @@ export interface BattleDebug {
   readonly potions: Readonly<Record<string, number>> | null;
   /** The battle clock now, ms (a manual clock in dev captures). */
   readonly clock: number;
+  /** The band the camera fits the fight into (`BattleHud.safe`), as the camera reads it now. */
+  readonly safe: SafeRegion;
 }
 
 /** Dev-only controls over the battle clock (`?battle-clock=manual`), for frame-exact captures. */
@@ -1014,6 +1017,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         charms,
         potions,
         clock: now(),
+        safe: hud.safe(),
       };
     },
     get dev(): BattleDevControls | null {
