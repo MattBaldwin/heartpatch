@@ -102,9 +102,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   /** Bumped by every open, close and user change, so a late reply is dropped. */
   let generation = 0;
   let ticker: number | undefined;
-  let canvas: CanvasRenderingContext2D | null | undefined;
+  let measureCtx: CanvasRenderingContext2D | null | undefined;
   /** A 2D context to measure words with (made once). */
-  const measure = () => (canvas ??= document.createElement('canvas').getContext('2d'));
+  const measure = () => (measureCtx ??= document.createElement('canvas').getContext('2d'));
 
   const sendDeps = {
     newKey: newIdempotencyKey,
@@ -697,20 +697,37 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   function fitNames(root: HTMLElement): void {
     const ctx = measure();
     if (!ctx) return;
-    for (const node of root.querySelectorAll<HTMLElement>('.post-fit')) {
+    const nodes = [...root.querySelectorAll<HTMLElement>('.post-fit')];
+    // Reset all, then read all, then write all: one layout, not one per name.
+    // No box's width depends on its name's size (`minmax(0, 1fr)`, `min-width: 0`).
+    for (const node of nodes) {
       node.style.fontSize = '';
       node.classList.remove('post-ellipsis');
-      const box = node.clientWidth;
+    }
+    const fits = nodes.map((node) => {
       const style = getComputedStyle(node);
       const fontPx = parseFloat(style.fontSize);
       ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
       const words = node.textContent.split(/\s+/);
       const widest = Math.max(0, ...words.map((w) => ctx.measureText(w).width));
-      const fit = fitName(widest, box, fontPx);
+      return { fontPx, fit: fitName(widest, node.clientWidth, fontPx) };
+    });
+    nodes.forEach((node, i) => {
+      const { fontPx, fit } = fits[i] ?? { fontPx: 0, fit: { px: 0, ellipsis: false } };
       if (fit.px !== fontPx) node.style.fontSize = `${String(fit.px)}px`;
       node.classList.toggle('post-ellipsis', fit.ellipsis);
-    }
+    });
   }
+
+  // A turn, Split View or the iPad side panel changes the sheet's width: fit
+  // the names again. Only a width change counts (a new font size changes heights).
+  let fittedWidth = 0;
+  new ResizeObserver(([entry]) => {
+    const width = entry?.contentRect.width ?? 0;
+    if (width === fittedWidth) return;
+    fittedWidth = width;
+    if (!sheet.hidden) fitNames(body);
+  }).observe(body);
 
   /** Counts the visit pass down, only while a pass's post is open. */
   function syncTicker(on: boolean): void {

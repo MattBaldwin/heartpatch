@@ -217,6 +217,15 @@ function wordsSplit(page: Page): Promise<string[]> {
   });
 }
 
+/** Names cut off without a "…": wider than their box after fitting. */
+function namesClipped(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('[data-testid="post"] .post-fit')]
+      .filter((n) => !n.classList.contains('post-ellipsis') && n.scrollWidth > n.clientWidth + 1)
+      .map((n) => n.textContent),
+  );
+}
+
 /** Shuts an open side tray, which covers part of the map and the tile panel. */
 async function shutTrays(page: Page): Promise<void> {
   const open = (await traysState(page))?.open ?? null;
@@ -310,6 +319,14 @@ test('trades and gifts at a post: offer, say yes, and pick up from the mailbox (
   // Long names stay whole: no word wraps inside itself (owner, #271), e.g. Sam's Pebblesnooze.
   await expect(leePost.getByTestId('post-want')).toContainText('Pebblesnooze');
   expect(await wordsSplit(lee)).toEqual([]);
+  expect(await namesClipped(lee)).toEqual([]);
+  // Turned on its side, the names fit the new width too.
+  const size = lee.viewportSize()!;
+  await lee.setViewportSize({ width: size.height, height: size.width });
+  await expect.poll(() => namesClipped(lee)).toEqual([]);
+  expect(await wordsSplit(lee)).toEqual([]);
+  await lee.setViewportSize(size);
+  await expect.poll(() => namesClipped(lee)).toEqual([]);
   await leePost
     .getByTestId('post-give')
     .getByRole('button', { name: /Emberbun/ })
