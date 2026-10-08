@@ -372,6 +372,29 @@ Lock order: the night's row, squishies, then `maps` (events).
 - **`MapView.posts`** (`listPostViews`, in the map view's snapshot): each post's index, how the viewer reaches it, the distance, level and team size of its journey, and the viewer's open pass.
 - **Events:** `journey.started` (after `battle.started`) and `journey.ended`, only to the player (`PUBLIC_VIEWS` overrides); everyone else sees `battle.*`.
 
+## Trades, gifts and the mailbox
+
+`src/modules/trades` (issue #271; owner decisions on #30; design doc §10). Patch-mates trade and gift at trading posts. The shared rules are `TRADE_RULES` and `offerProblem`/`sideProblem` (`packages/shared/src/trading/offer.ts`); tools and account-bound clothing are never tradable (`isTradableResource`, `ClothingItem.tradable`).
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/trades` | `{ trades }`: my open offers both ways, my mailbox and recent returns (lazy expiry first) |
+| `GET /api/v1/maps/:mapId/trades/shelf/:userId` | `{ shelf }`: what that member (or I) could trade now, secret species masked for the viewer. `NOT_FOUND` unless both are members. Read rate limit |
+| `POST /api/v1/maps/:mapId/trades` | `{ q, r, kind, toUserId, give, want, noteId? }` → 201 `{ trades }`, at a post I can use (`requirePostAccess`). The give side goes into escrow. `NOT_FOUND` for a stranger, `CONFLICT` with a kid-readable reason (`offerProblem`) |
+| `POST /api/v1/maps/:mapId/trades/:offerId/accept` | `{ q, r }`: the receiver says yes at a post; both sides move in one transaction. A gift is `CONFLICT` (picked up from the mailbox) |
+| `POST /api/v1/maps/:mapId/trades/:offerId/decline` / `cancel` | anywhere: the receiver's no (trades and gifts) or the sender's call-off; the held things go straight back |
+| `POST /api/v1/maps/:mapId/mailbox/pickup` | `{ q, r, ids? }`: picks up everything waiting (or `ids`) at a post; works with trading off |
+| `POST /api/v1/maps/:mapId/trading` | `{ tradingEnabled }`, owner only: off calls off every open offer |
+| `POST /api/v1/maps/:mapId/dev/posts/connect` | dev only (`HP_DEV_SQUISHY_GRANTS`): claims the neutral tiles on the straight way from my Heart Seed to the nearest post; returns its `{ q, r }`. No events: the map shows it on its next load |
+
+- **Escrow:** a squishy keeps its owner and waits `in-trade` (off every job; the Hollow Man passes it by); items are consumed into the offer (`trade-escrow`); clothing is held by `held_by_offer_id` (the wardrobe's counts skip held pieces). Giving the last piece of an item takes it off the Keeper (`outfit.changed` on each of the player's maps) and off their squishies.
+- **A yes:** the sender's side lands with the receiver now (`trade`; a squishy turns active, its habitat cleared); the receiver's side moves to the sender as `in-trade`/held and waits in the sender's mailbox. **Pickup** makes squishies active, grants items (`trade`) and marks species caught.
+- **Gifts** are a mailbox row from the moment they're sent; pickup is the acceptance (status `accepted`, `gift.pickedUp`).
+- **Going back** (`sendBack`: no, call-off, expiry, the owner's switch, a leave): squishies rest at home again, items come back (`trade-return`), pieces are freed, a gift's waiting row goes, and a `return` note is written. Expiry is lazy, in its own transaction (actor null) before every read and command; a leave runs the call-off in its own transaction after the leave commits (the maps service's `departed` hook), with expiry as the backstop.
+- **Ledger:** `trade_ledger`, one row per offer, event and actor (`UNIQUE NULLS NOT DISTINCT`).
+- **Events:** `trade.offered`, `trade.cancelled`, `trade.expired` (the two players only), `trade.answered` (others hear only "accepted"), `gift.pickedUp` (members, never what), `mailbox.pickedUp` (the player only).
+- **Lock order:** tech spec §7 "Trades (#271)".
+
 ## Care, levels and evolution
 
 Care (design doc §7–8; issue #19; DECISIONS G and "Care (#19)") lives in `src/modules/care`. Contentment is stored as its value at the last care action (`squishies.contentment_at_last_care`) plus `last_cared_at`, and today's value is worked out on read with shared `contentmentAt` (CLAUDE.md rule 4). Every care action is a `care_log` row, which counts a squishy's actions per day (diminishing returns; rare treats marked `outsideDailyCare`, the Heart Snack, aren't counted and always give full contentment) and an account's Patch Coins from care per day (the cap); the day is the account's (`users.time_zone`).

@@ -435,7 +435,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     );
   }
 
-  function sendButton(kind: TradeKind): HTMLElement[] {
+  function sendButton(kind: TradeKind): HTMLElement {
     const to = mate;
     const problem = sendProblem(kind, give, want);
     const name = to === null ? '' : nameOf(to);
@@ -462,7 +462,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           : kind === 'gift'
             ? TRADE_TEXT.giftWaits(name)
             : TRADE_TEXT.waitsSafely(name);
-    return [b, el('p', { class: 'post-tiny center', 'data-testid': 'post-send-hint' }, hint)];
+    // Stuck to the sheet's bottom, so "Send" is on screen while picking (style guide §3).
+    return el(
+      'div',
+      { class: 'post-send-bar' },
+      b,
+      el('p', { class: 'post-tiny center', 'data-testid': 'post-send-hint' }, hint),
+    );
   }
 
   // ---- tabs ----------------------------------------------------------------
@@ -498,7 +504,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         ),
       ),
       notes(),
-      ...sendButton('trade'),
+      sendButton('trade'),
       ...offersFromMe(view, my, 'trade').map(outgoing),
     ];
   }
@@ -519,7 +525,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         ),
       ),
       notes(),
-      ...sendButton('gift'),
+      sendButton('gift'),
       ...offersFromMe(view, my, 'gift').map(outgoing),
     ];
   }

@@ -101,7 +101,8 @@
   z-index: 5;
   left: calc(env(safe-area-inset-left) + 8px);
   right: calc(env(safe-area-inset-right) + 8px);
-  top: calc(env(safe-area-inset-top) + 8px);
+  /* Under the corner buttons (56px from the top), like the Bag. */
+  top: calc(env(safe-area-inset-top) + 68px);
   bottom: calc(env(safe-area-inset-bottom) + 8px);
   box-sizing: border-box;
   max-width: 520px;
@@ -127,7 +128,7 @@
   .post-sheet {
     left: auto;
     right: calc(env(safe-area-inset-right) + 16px);
-    top: calc(env(safe-area-inset-top) + 16px);
+    top: calc(env(safe-area-inset-top) + 72px);
     bottom: calc(env(safe-area-inset-bottom) + 16px);
     width: 430px;
     margin: 0;
@@ -346,6 +347,8 @@ button.post-slot {
 .post-mates {
   display: flex;
   gap: 6px;
+  /* Room for the picked one's outline inside the scroller. */
+  padding: 4px;
   overflow-x: auto;
 }
 
@@ -542,4 +545,16 @@ button.post-slot {
 
 .post-tiny.center {
   text-align: center;
+}
+
+.post-send-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+  margin: 0 -16px;
+  padding: 10px 16px 4px;
+  background: #fffafc;
+  box-shadow: 0 -6px 12px rgb(255 250 252 / 90%);
 }
