@@ -105,7 +105,18 @@ export function mountStage(
     loaded = false;
     frames.invalidate();
   };
+  /** The governor asked for a new resolution or tier after the last draw. */
+  let rescalePending = false;
   engine.runRenderLoop(() => {
+    // The governor's rescale, at the top of the frame like a resize: setting
+    // the canvas size clears its buffer, so after a draw it would show a
+    // blank frame (#260). First, so a resize in the same frame (which
+    // re-applies the pixel ratio) can't take its tier change without the
+    // reload a recompiled post-process needs.
+    if (rescalePending) {
+      rescalePending = false;
+      if (quality.applyPending()) reload();
+    }
     if (resizePending) {
       resizePending = false;
       quality.refreshPixelRatio();
@@ -122,7 +133,7 @@ export function mountStage(
     const { draw, frameMs } = frames.next(performance.now(), busy);
     if (!draw) return;
     scene.render();
-    if (frameMs !== null && quality.sample(frameMs)) reload();
+    if (frameMs !== null && quality.sample(frameMs)) rescalePending = true;
   });
 
   return {

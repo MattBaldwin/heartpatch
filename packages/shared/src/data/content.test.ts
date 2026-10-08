@@ -60,7 +60,7 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
     ]);
   });
 
-  it('has the design doc terrain set plus the Gap', () => {
+  it('has the design doc terrain set plus trading posts (#269) and the Gap', () => {
     expect(TERRAINS.map((t) => t.id)).toEqual([
       'meadow',
       'forest',
@@ -69,6 +69,7 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
       'mountains',
       'lake',
       'pumpkin-fields',
+      'trading-post',
       'junipers-gap',
     ]);
   });

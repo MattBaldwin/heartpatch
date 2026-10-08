@@ -92,6 +92,12 @@ export const AdminCodeParamsSchema = z.object({ codeId: z.uuid() });
 export const AdminPatchDetailSchema = z.object({
   patch: AdminPatchSummarySchema.extend({
     timeZone: z.string(),
+    /**
+     * Trading posts on the patch (#269): 0 on a tutorial run, and on an older
+     * patch until the boot pass finds a fair spot free. Optional only so an
+     * older server's reply parses.
+     */
+    tradingPosts: z.number().int().nonnegative().optional(),
     /** "Hollow Man strength" (#277): scales his strike chances, 100 by default, 0 turns him off. */
     hollowStrengthPercent: z.number().int().min(0).max(300),
   }),

@@ -2,8 +2,8 @@ import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Scene } from '@babylonjs/core/scene';
-import { afterEach, describe, expect, it } from 'vitest';
-import { createPostProcessing } from './render-quality.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPostProcessing, RenderQuality } from './render-quality.js';
 
 describe('createPostProcessing', () => {
   const engine = new NullEngine();
@@ -32,5 +32,40 @@ describe('createPostProcessing', () => {
     expect(pipeline.fxaaEnabled).toBe(true);
     const names = camera._postProcesses.map((p) => p?.name);
     expect(names).not.toContain('imageProcessing');
+  });
+});
+
+describe('RenderQuality', () => {
+  const engine = new NullEngine();
+  // Client unit tests run in Node: just the bits of the DOM it listens to.
+  beforeEach(() => {
+    vi.stubGlobal('window', { devicePixelRatio: 2, addEventListener: vi.fn() });
+    vi.stubGlobal('document', { addEventListener: vi.fn() });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  it('asks for a rescale after a draw, and only applies it when told (#260)', () => {
+    const scene = new Scene(engine);
+    const quality = new RenderQuality(
+      scene,
+      new TargetCamera('cam', Vector3.Zero(), scene),
+      'high',
+    );
+    const scaling = vi.spyOn(engine, 'setHardwareScalingLevel');
+    // 25 fps, past the grace and a whole window: the governor wants less.
+    let asked = false;
+    for (let i = 0; i < 500 && !asked; i++) asked = quality.sample(40);
+    expect(asked).toBe(true);
+    // sample() runs right after a draw: resizing the canvas then would clear
+    // the frame about to be shown.
+    expect(scaling).not.toHaveBeenCalled();
+    expect(quality.applyPending()).toBe(true);
+    expect(scaling).toHaveBeenCalledTimes(1);
+    expect(quality.snapshot.renderScale).toBeLessThan(1);
+    expect(quality.applyPending()).toBe(false);
   });
 });

@@ -39,6 +39,29 @@ export const GuardianStrengthSchema = z
   .refine((g) => g.gap > g.max, "Juniper's Gap guardians must be the strongest");
 export type GuardianStrength = z.infer<typeof GuardianStrengthSchema>;
 
+/**
+ * Trading posts (#30, #269; owner decisions 2026-10-07): 4 shared posts a
+ * map, never owned, spread fairly so every home slot has one nearby. Placed
+ * by `placeTradingPosts`, on new maps when they're made and on older maps by
+ * the server's boot pass, by the same rule.
+ */
+export const TradingPostRulesSchema = z
+  .strictObject({
+    /** Posts on every patch map. */
+    perMap: z.number().int().min(1).max(8),
+    /** Every home slot has a post at most this many steps from its Heart Seed. */
+    maxFromSeed: z.number().int().min(2),
+    /** No post closer than this to any Heart Seed (never touching a home ring on day 1). */
+    minFromSeed: z.number().int().min(2),
+    /** Posts stand at least this many steps apart. */
+    minApart: z.number().int().min(1),
+    /** What each post is called, by its index on the map (in (q, r) order). */
+    names: z.array(z.string().min(1).max(40)).min(1),
+  })
+  .refine((t) => t.minFromSeed <= t.maxFromSeed, 'minFromSeed must not exceed maxFromSeed')
+  .refine((t) => t.names.length >= t.perMap, 'every post needs a name');
+export type TradingPostRules = z.infer<typeof TradingPostRulesSchema>;
+
 /** Settings for the seeded map generator (`generateMap`). */
 export const MapGenSettingsSchema = z.strictObject({
   /** One layout per supported player count. */
@@ -57,5 +80,6 @@ export const MapGenSettingsSchema = z.strictObject({
   /** Average tiles per terrain patch: bigger means fewer, larger patches. */
   patchSize: z.number().int().positive(),
   guardianStrength: GuardianStrengthSchema,
+  tradingPosts: TradingPostRulesSchema,
 });
 export type MapGenSettings = z.infer<typeof MapGenSettingsSchema>;

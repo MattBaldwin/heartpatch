@@ -306,11 +306,12 @@ export function createAdminService(options: AdminServiceOptions) {
     patch: async (mapId: string): Promise<AdminPatchDetail> => {
       const row = await repo.findPatch(mapId);
       if (!row) throw new AppError('NOT_FOUND', MESSAGES.notFoundPatch);
-      const [members, requests, invite, nights] = await Promise.all([
+      const [members, requests, invite, nights, tradingPosts] = await Promise.all([
         repo.patchMembers(mapId),
         repo.pendingRequests(mapId),
         mapsRepo.liveInvite(mapId, gameNow()),
         repo.recentNights(mapId, ADMIN_RULES.nightsShown),
+        repo.tradingPosts(mapId),
       ]);
       const outcomes = nights.map((n) => ({
         night: n.night,
@@ -323,6 +324,7 @@ export function createAdminService(options: AdminServiceOptions) {
         patch: {
           ...toPatch(row),
           timeZone: row.timeZone,
+          tradingPosts,
           hollowStrengthPercent: row.hollowStrengthPercent,
         },
         members: members.map((m) => ({

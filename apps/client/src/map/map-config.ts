@@ -39,7 +39,9 @@ export type PropKind =
   // New things to gather (#238): a lakeside well, a patch of greens, ice crystals.
   | 'well'
   | 'greens-patch'
-  | 'ice-crystals';
+  | 'ice-crystals'
+  // Trading posts (#269): the post's hut on its centre spot.
+  | 'trading-post';
 
 export interface TerrainLook {
   /** Top colour, sRGB hex. */
@@ -77,6 +79,8 @@ export const TERRAIN_LOOKS: Readonly<Record<string, TerrainLook>> = {
   mountains: look('#c9bddb', 0.42, { prop: 'peak', propsPerTile: [1, 1] }), // TUNE
   lake: look('#9fd6f5', 0.12, { roughness: 0.2, clearCoat: true }), // TUNE
   'pumpkin-fields': look('#f4d68e', 0.22, { prop: 'pumpkin', propsPerTile: [2, 3] }), // TUNE
+  // Trading posts (#269): cream-gold and a little lit, never washed out (nobody owns one).
+  'trading-post': look('#fbe2a2', 0.25, { roughness: 0.5, glow: 0.12 }), // TUNE
   'junipers-gap': look('#e6cdfc', 0.3, { glow: 0.25 }), // TUNE
 };
 
@@ -86,11 +90,40 @@ export const FALLBACK_LOOK: TerrainLook = TERRAIN_LOOKS['meadow'] ?? look('#c2ea
 /** Home base tiles: a cosy cream patch, a little raised, never a terrain look. */
 export const HOME_LOOK: TerrainLook = look('#fff0d4', 0.27, { roughness: 0.5 }); // TUNE
 
-/** One colour per home slot, for territory tint and the Heart Seed. Bright enough to read on pastels. */
+/** One colour per home slot, for territory borders and the Heart Seed. Bright enough to read on pastels. */
 export const PLAYER_COLORS: readonly string[] = ['#ff6f9f', '#4fa3ff', '#a77bff', '#ff9d3d']; // TUNE
 
-/** Territory tint opacity: the middle of a tile, and the soft border band near its edge. */
-export const TINT = { fill: 0.32, edge: 0.78 } as const; // TUNE
+/** How a Keeper's border line is drawn (#278), so colour is never the only signal. */
+export type BorderLine = 'solid' | 'dash' | 'dot' | 'double';
+/** A Keeper's icon on their land and in the map legend (#278). */
+export type KeeperIcon = 'heart' | 'star' | 'flower' | 'diamond';
+
+/**
+ * Land borders (#278, owner decision 2026-10-08: direction D). A light, even
+ * wash over a Keeper's land and a thick soft ribbon along its outer edges,
+ * with a line style and an icon per home slot, as colour is. Scales are
+ * shares of the drawn tile radius; lifts are world units above the tile top.
+ */
+export const BORDER = {
+  /** Wash opacity over every owned tile, with no rim of its own. */
+  wash: 0.26, // TUNE
+  /** Ribbon: fades in from `fade`, solid from `inner` out to `outer` (past the rim, over the gap). */
+  ribbon: { fade: 0.7, inner: 0.82, outer: 1.035, alpha: 0.96 }, // TUNE
+  /**
+   * Above the tile top: the wash, the ribbon and the icon badges. Each stays
+   * clear of a lake's bob (`AMBIENT.water.bob`); the safe glow and selection
+   * still draw on top (border-field.ts `alphaIndex`).
+   */
+  lift: { wash: 0.016, ribbon: 0.017, icon: 0.018 }, // TUNE
+  /** One per home slot, in `PLAYER_COLORS` order. */
+  lines: ['solid', 'dash', 'dot', 'double'] as readonly BorderLine[], // TUNE
+  icons: ['heart', 'star', 'flower', 'diamond'] as readonly KeeperIcon[], // TUNE
+  /** An icon badge on every this-many-th border tile (home tiles never), and its size (world units). */
+  iconEvery: 4, // TUNE
+  iconSize: 0.15, // TUNE
+  /** How much the borders dim at night (0 = not at all), so #277's fire light reads. */
+  night: 0.25, // TUNE
+} as const;
 
 /** The soft island everything sits on. */
 export const ISLAND = { color: '#a9d897', margin: 1.2, thickness: 0.6 } as const; // TUNE
@@ -213,6 +246,14 @@ export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
     tints: ['#ffffff', '#fff1dc', '#ffe8d2', '#fff8e6'],
     jitter: { color: 0.05, height: 0.012 },
   },
+  // Trading posts (#269): the hut stands in the middle (`middle`), with a few
+  // flowers round it. No height wobble, so the connected ring sits flush.
+  'trading-post': {
+    count: [2, 3],
+    items: [item('flowers', 3, [0.9, 1.2]), item('grass', 2, [0.8, 1.1])],
+    tints: ['#ffffff', '#fff6e0', '#ffeef6'],
+    jitter: { color: 0.02, height: 0 },
+  },
   'junipers-gap': {
     count: [2, 3],
     items: [item('crystal', 3, [1, 1.4]), item('flowers', 2, [1.1, 1.4])],
@@ -306,8 +347,8 @@ export const AMBIENT = {
   checkMs: 500, // TUNE
   /**
    * The lake's gentle bob (world units) and glint strength. Keep `bob` under
-   * the territory tint's lift above the tile (`TINT_LIFT`, 0.012 in
-   * map-scene.ts), or wave crests poke through the tint on owned lakes.
+   * the border wash's lift above the tile (`BORDER.lift.wash`), or wave
+   * crests poke through the wash on owned lakes.
    */
   water: { bob: 0.008, glint: 0.14 }, // TUNE
 } as const;

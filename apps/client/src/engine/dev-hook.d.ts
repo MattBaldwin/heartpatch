@@ -23,6 +23,7 @@ import type { StarterDebug } from '../starters/starter-screen.js';
 import type { TraysDebug } from '../ui/trays/trays.js';
 import type { RecipeBookDebug } from '../recipes/recipe-book.js';
 import type { JobsDebug } from '../squishies/jobs/index.js';
+import type { PostFlags } from '../trading/post-flags.js';
 import type { MapCameraState } from './camera/map-camera.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 
@@ -84,6 +85,8 @@ declare global {
       wardrobe?(): WardrobeDebug | null;
       /** Squishy jobs: the job board and team picker (open, jobs, team, ready work). */
       jobs?(): JobsDebug;
+      /** Trading posts on the map (#269): flags on screen and gold rings. */
+      posts?(): Pick<PostFlags, 'shown' | 'rings' | 'onScreen'>;
       starter?(): StarterDebug | null;
       lore?(): LorebookDebug;
       /** The milestone celebration (#44): the card showing and how many wait. */

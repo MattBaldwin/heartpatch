@@ -23,13 +23,113 @@
 }
 
 .map-hud[hidden],
+.map-legend[hidden],
+.map-hud-legend[hidden],
 .map-hud-status[hidden],
 .map-hud-login[hidden],
 .tile-panel[hidden],
 .tile-panel-resource[hidden],
 .tile-panel-guardians[hidden],
-.tile-panel-gatherer[hidden] {
+.tile-panel-gatherer[hidden],
+.tile-panel-post[hidden],
+.tile-panel-post-soon[hidden] {
   display: none;
+}
+
+/* The name and the Keepers' icons, which open the legend (#278). */
+.map-hud-title {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 32px;
+}
+
+.map-hud-legend {
+  display: flex;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* A bigger tap than it looks: the whole name row (44pt tall), placed on
+   `.map-hud-title`, so the "Log in again" button below keeps its own. */
+.map-hud-legend::before {
+  content: '';
+  position: absolute;
+  inset: -6px -16px;
+}
+
+.map-hud-legend:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+.map-legend-icons {
+  display: flex;
+  flex: none;
+  gap: 1px;
+}
+
+.map-legend-icons:empty {
+  display: none;
+}
+
+/* Under the name, over the chips below it while open; any tap closes it. */
+.map-legend {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 200px;
+  padding: 10px 14px 12px;
+  border-radius: 20px;
+  background: #fffafc;
+  box-shadow: 0 10px 26px rgb(74 49 80 / 26%);
+  text-align: left;
+  pointer-events: auto;
+}
+
+.map-legend-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #8a5f86;
+}
+
+.map-legend-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.map-legend-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-legend-mine .map-legend-name {
+  font-weight: 800;
 }
 
 .map-hud-name {
@@ -159,7 +259,9 @@
 .tile-panel-about,
 .tile-panel-resource,
 .tile-panel-guardians,
-.tile-panel-gatherer {
+.tile-panel-gatherer,
+.tile-panel-post,
+.tile-panel-post-soon {
   margin: 4px 0 0;
   font-size: 15px;
   line-height: 1.35;
@@ -167,6 +269,19 @@
 
 .tile-panel-about:first-child {
   margin-top: 0;
+}
+
+.tile-panel-post {
+  font-weight: 700;
+}
+
+/* A trading post (#269): what opens there, in a cozy cream note. */
+.tile-panel-post-soon {
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #fff8ec;
+  color: #7a5410;
+  font-weight: 600;
 }
 
 .tile-panel-resource {

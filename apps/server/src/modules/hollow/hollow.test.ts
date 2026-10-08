@@ -940,6 +940,11 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       for (const t of near) {
         await db.execute(`update tiles set node_resource = 'timber' where id = '${t.id}'`);
       }
+      // A trading post next door (#269) has no node, but no fire can stand on it.
+      const post = near.find((t) => t.id !== tile.id && t.ownerUserId === null)!;
+      await db.execute(
+        `update tiles set terrain = 'trading-post', node_resource = null where id = '${post.id}'`,
+      );
       expect(await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT)).toBeTruthy();
       expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
       // Once nodes can be cleared (#242), it's ordinary dark land.

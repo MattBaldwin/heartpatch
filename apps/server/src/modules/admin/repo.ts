@@ -31,8 +31,10 @@ import {
   recoveryCodes,
   sessions,
   signupCodes,
+  tiles,
   users,
 } from '../../db/schema.js';
+import { TRADING_POST_TERRAIN } from '@heartpatch/shared';
 
 // The admin console's reads and its own writes (#196). Commands that already
 // exist elsewhere (resets, join requests, invites, family codes) go through
@@ -176,6 +178,8 @@ export interface AdminRepo {
   patchMembers: (mapId: string) => Promise<PatchMemberRow[]>;
   pendingRequests: (mapId: string) => Promise<PendingRequestRow[]>;
   recentNights: (mapId: string, limit: number) => Promise<{ night: string; outcomes: unknown }[]>;
+  /** How many trading posts the patch has (#269): 0 until the boot pass finds a fair spot. */
+  tradingPosts: (mapId: string) => Promise<number>;
   usernames: (ids: readonly string[]) => Promise<Map<string, string>>;
   // Players
   listPlayers: (
@@ -598,6 +602,14 @@ export function createAdminRepo(db: Executor): AdminRepo {
         .innerJoin(users, eq(users.id, joinRequests.userId))
         .where(and(eq(joinRequests.mapId, mapId), eq(joinRequests.status, 'pending')))
         .orderBy(asc(joinRequests.createdAt)),
+
+    tradingPosts: async (mapId: string) => {
+      const [row] = await db
+        .select({ n: count() })
+        .from(tiles)
+        .where(and(eq(tiles.mapId, mapId), eq(tiles.terrain, TRADING_POST_TERRAIN)));
+      return row?.n ?? 0;
+    },
 
     recentNights: async (mapId: string, limit: number) =>
       db

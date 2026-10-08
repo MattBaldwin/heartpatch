@@ -1,6 +1,7 @@
 import { GAME_DATA } from '../../src/data/index.js';
 import { HOLLOW_RULES } from '../../src/data/hollow.js';
 import { heartSeedOf, pickReclaimed, rollStrikes, strengthOf } from '../../src/hollow/index.js';
+import { isTradingPost } from '../../src/territory/reach.js';
 import { hexDistance, hexKey, hexNeighbors, type HexKey } from '../../src/hex/index.js';
 import { generateMap, type MapTile } from '../../src/mapgen/index.js';
 import { deriveSeed, Rng } from '../../src/rng/index.js';
@@ -125,7 +126,8 @@ export function runMapFill(
       owned.set(hexKey(t), { owner: t.homeSlot, tendedAt: new Date(DAY_ONE) });
     }
   }
-  const neutral = tiles.filter((t) => t.homeSlot === null);
+  // Trading posts (#269) are never claimed.
+  const neutral = tiles.filter((t) => t.homeSlot === null && !isTradingPost(t));
   const neutralLeft = () => neutral.filter((t) => !owned.has(hexKey(t)));
   const wentWildBefore = new Set<HexKey>();
   const rng = Rng.fromSeed(deriveSeed(config.rootSeed, scenario.id, rules.label));
@@ -333,7 +335,9 @@ export function runMapFill(
       );
       const dark = [...owned].flatMap(([k, o]) => {
         const t = byKey.get(k);
-        return o.owner === s && t && t.homeSlot === null ? [{ id: k, q: t.q, r: t.r }] : [];
+        return o.owner === s && t && t.homeSlot === null && !isTradingPost(t)
+          ? [{ id: k, q: t.q, r: t.r }]
+          : [];
       });
       for (const g of pickReclaimed(
         dark,

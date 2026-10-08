@@ -14,6 +14,7 @@ import {
   isLocalBefore,
   isNightAt,
   isOnWatch,
+  isTradingPost,
   keeperNightOf,
   lastNightOf,
   minutesUntilNightChange,
@@ -181,7 +182,10 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
    */
   const lightableOn = (mapTiles: readonly NightTileRow[]): Set<HexKey> | null => {
     if (!rules.strength.nodesBlockFires) return null;
-    const sites = mapTiles.filter((t) => t.homeSlot === null && t.nodeResource === null);
+    // A trading post (#269) is never owned, so no fire stands on one.
+    const sites = mapTiles.filter(
+      (t) => t.homeSlot === null && t.nodeResource === null && !isTradingPost(t),
+    );
     return safeTiles(sites.map((t) => ({ at: t, radius: MAX_FIRE_RADIUS })));
   };
 
@@ -305,6 +309,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         (t) =>
           t.ownerUserId === userId &&
           t.homeSlot === null &&
+          !isTradingPost(t) &&
           !safe.has(hexKey(t)) &&
           !cooling.has(t.id) &&
           (lightable === null || lightable.has(hexKey(t))),

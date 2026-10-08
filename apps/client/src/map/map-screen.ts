@@ -1,6 +1,8 @@
 import {
   hexKey,
   hexToWorld,
+  isTradingPost,
+  postReach,
   type Hex,
   type HexKey,
   type HighlightTarget,
@@ -24,6 +26,7 @@ import { HEX_SIZE } from './map-config.js';
 import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
 import { isHalloween, seasonsOn } from './map-dressing.js';
+import { mountMapLegend } from './map-legend.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
@@ -156,6 +159,46 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   };
 
   const hudName = el('span', { class: 'map-hud-name' });
+  // Whose land is whose (#278): each Keeper's icon beside the name opens
+  // the legend card (the whole name row is its tap); any other tap closes it.
+  // The button's name is its own, never the patch's, so a patch named
+  // "Collect Patch" doesn't make a button that reads "Collect".
+  const legend = mountMapLegend();
+  const legendButton = el(
+    'button',
+    {
+      type: 'button',
+      class: 'map-hud-legend',
+      'aria-label': 'Whose land?',
+      'aria-controls': 'map-legend',
+      'aria-expanded': 'false',
+      'data-testid': 'map-legend-button',
+    },
+    legend.icons,
+  );
+  const hudTitle = el('div', { class: 'map-hud-title' }, hudName, legendButton);
+  const setLegend = (open: boolean): void => {
+    legend.setOpen(open);
+    legendButton.setAttribute('aria-expanded', legend.open ? 'true' : 'false');
+  };
+  const showLegend = (members: MapView['members']): void => {
+    legend.show(members, user?.id ?? null);
+    // Nobody's land to tell apart: no icons, and nothing to open.
+    legendButton.hidden = legend.icons.childElementCount === 0;
+  };
+  legendButton.addEventListener('click', () => {
+    setLegend(!legend.open);
+  });
+  // Once for the app's life: the map screen is made once (main.ts).
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      if (!legend.open || !(e.target instanceof Node)) return;
+      if (legendButton.contains(e.target) || legend.card.contains(e.target)) return;
+      setLegend(false);
+    },
+    { capture: true },
+  );
   const hudStatus = el('span', { class: 'map-hud-status', role: 'status' });
   const login = el(
     'button',
@@ -165,7 +208,14 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   login.addEventListener('click', () => {
     window.location.reload();
   });
-  const hud = el('div', { class: 'map-hud', 'data-testid': 'map-hud' }, hudName, hudStatus, login);
+  const hud = el(
+    'div',
+    { class: 'map-hud', 'data-testid': 'map-hud' },
+    hudTitle,
+    hudStatus,
+    login,
+    legend.card,
+  );
   hud.hidden = true;
   options.root.append(hud);
 
@@ -199,6 +249,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         (id) => state.member(id),
         user?.id ?? null,
         seasonsOn(state.view.map.timeZone, options.now?.() ?? new Date()),
+        isTradingPost(tile) && user ? postReach(tile, state.view.tiles, user.id) : null,
       ),
     );
     options.tileActions?.show(panel.actions, tile, state.view);
@@ -227,6 +278,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     socket: liveSocket,
     onRedraw: (state) => {
       scene3d?.update(state.view);
+      showLegend(state.view.members);
       drawWild();
       for (const layer of options.layers ?? []) layer.update?.(state.view);
       if (selected) showTile(state, selected);
@@ -299,6 +351,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = null;
     panel.hide();
     options.tileActions?.hide();
+    setLegend(false);
     hud.hidden = true;
     options.onHudChange?.(null);
     options.showScene(null);
@@ -319,6 +372,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       options.tileActions?.hide();
       options.showScene(build);
       hudName.textContent = state.view.map.name;
+      showLegend(state.view.members);
       hud.hidden = false;
       options.onHudChange?.(state.id);
       setStatus(liveSocket().status);

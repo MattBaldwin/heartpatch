@@ -9,6 +9,8 @@ import {
 } from '../../../tests/fixtures/sample-content.js';
 import { GAME_DATA } from '../../data/index.js';
 import { SERVER_GAME_DATA } from '../../data/server/index.js';
+import { GUARDIAN_RULES } from '../../data/server/guardian-rules.js';
+import { checkGuardianRules } from './guardian-rules.js';
 import { checkServerGameData, type ServerGameData } from './server-game-data.js';
 
 /** Shipped public data plus the test-only species and moves the cases below edit. */
@@ -70,6 +72,19 @@ describe('checkServerGameData', () => {
     const problems = checkServerGameData({ ...noSecrets, spawnTables: [table] }, gameData);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/^spawnTables\["fixture-forest-day"\]\.entries\[0\]\.weight: /);
+  });
+
+  it('refuses a spawn or guardian table on a trading post (#269)', () => {
+    const table = structuredClone(FIXTURE_SPAWN_TABLES[0]!);
+    table.terrains = ['forest', 'trading-post'];
+    expect(checkServerGameData({ ...noSecrets, spawnTables: [table] }, gameData)).toEqual([
+      'spawnTables["fixture-forest-day"].terrains[1]: nothing spawns on or guards a trading post',
+    ]);
+    const guardians = structuredClone(GUARDIAN_RULES);
+    guardians.tables[0]!.terrains = ['trading-post'];
+    expect(checkGuardianRules(guardians).join()).toMatch(
+      /nothing spawns on or guards a trading post/,
+    );
   });
 
   it('names spawn table terrains that are not in the terrain table', () => {

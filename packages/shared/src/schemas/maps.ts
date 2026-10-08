@@ -289,6 +289,14 @@ export const PublicTileSchema = z.object({
    */
   fences: z.array(PublicFenceSchema).optional(),
   /**
+   * A trading post (#269): its index on the map (in (q, r) order) and name.
+   * Null on every other tile. Optional only so older servers' views parse.
+   */
+  post: z
+    .object({ index: z.number().int().min(0), name: z.string() })
+    .nullable()
+    .optional(),
+  /**
    * The owner's exploring (#199): `explored` once they've searched every
    * spot (the map's ✨), and the tile's homestead state, `joined` (part of
    * their home) or `paused` (cut off from home; its gathering naps). Null on
