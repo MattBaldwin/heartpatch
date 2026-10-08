@@ -15,6 +15,7 @@ import { RESCUE_GUARDIANS, type LoreEntry } from '@heartpatch/shared/server';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
+import { createExploreRepo } from '../modules/explore/repo.js';
 import { createFencesRepo } from '../modules/fences/repo.js';
 import { createBoutiqueService, stockFor } from '../modules/boutique/service.js';
 import { createBuildingsService, removeMemberBuildings } from '../modules/buildings/service.js';
@@ -57,6 +58,7 @@ import {
   coinLedger,
   fenceSegments,
   gameEvents,
+  tileExplore,
   gatherJobs,
   inventories,
   loreFound,
@@ -1351,6 +1353,40 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       ).map((f) => f.id);
     });
     expect(locked).toEqual(fenceIds);
+  });
+
+  it("locks players' explored rows in (user, tile) order (explore `lockExplored`, #199)", async () => {
+    const { mapId, tileIds } = await fires();
+    const players = [randomUUID(), randomUUID()].sort();
+    // Every (player, tile) pair, stored last first, so a scan meets them out of order.
+    const keys = players.flatMap((userId) => tileIds.map((tileId) => ({ userId, tileId })));
+    await db.insert(tileExplore).values(
+      [...keys].reverse().map((k) => ({
+        ...k,
+        mapId,
+        layout: 1,
+        terrain: 'meadow',
+        spotCount: 1,
+        searched: 1,
+        completedAt: new Date(),
+      })),
+    );
+    const name = (k: { userId: string; tileId: string }) => `${k.userId}/${k.tileId}`;
+    const lockExploreRow = (tx: Transaction, key: string) => {
+      const [userId, tileId] = key.split('/');
+      return tx
+        .select({ userId: tileExplore.userId })
+        .from(tileExplore)
+        .where(and(eq(tileExplore.userId, userId!), eq(tileExplore.tileId, tileId!)))
+        .for('update');
+    };
+    let locked: string[] = [];
+    await rowsAgainst(lockExploreRow, keys.map(name), async () => {
+      locked = (
+        await unplanned((tx) => createExploreRepo(tx).lockExplored(mapId, [...players].reverse()))
+      ).map(name);
+    });
+    expect(locked).toEqual(keys.map(name));
   });
 
   it("locks a player's fires in id order for Fuel all fires (buildings `lockFires`, #202)", async () => {
