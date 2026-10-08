@@ -24,6 +24,7 @@
 
 .map-hud[hidden],
 .map-legend[hidden],
+.map-hud-legend[hidden],
 .map-hud-status[hidden],
 .map-hud-login[hidden],
 .tile-panel[hidden],
@@ -33,7 +34,7 @@
   display: none;
 }
 
-/* The name and the Keepers' icons: a button that opens the legend (#278). */
+/* The name and the Keepers' icons, which open the legend (#278). */
 .map-hud-title {
   position: relative;
   display: flex;
@@ -41,6 +42,11 @@
   gap: 6px;
   max-width: 100%;
   min-height: 32px;
+}
+
+.map-hud-legend {
+  display: flex;
+  flex: none;
   padding: 0;
   border: 0;
   background: none;
@@ -50,15 +56,15 @@
   pointer-events: auto;
 }
 
-/* A bigger tap than it looks (44pt tall), on its own row only: the
-   "Log in again" button below stays its own target. */
-.map-hud-title::before {
+/* A bigger tap than it looks: the whole name row (44pt tall), placed on
+   `.map-hud-title`, so the "Log in again" button below keeps its own. */
+.map-hud-legend::before {
   content: '';
   position: absolute;
   inset: -6px -16px;
 }
 
-.map-hud-title:focus-visible {
+.map-hud-legend:focus-visible {
   outline: 3px solid #b8487a;
   outline-offset: 4px;
   border-radius: 999px;

@@ -172,17 +172,28 @@ describe('borderArrays', () => {
         ...look,
         line,
       });
+      // Points through each triangle, not only its middle: the tightest spot
+      // can sit anywhere on a long sliver.
+      const weights = [
+        [1 / 3, 1 / 3, 1 / 3],
+        [0.5, 0.5, 0],
+        [0.5, 0, 0.5],
+        [0, 0.5, 0.5],
+        [0.8, 0.1, 0.1],
+        [0.1, 0.8, 0.1],
+        [0.1, 0.1, 0.8],
+      ];
       for (let t = 0; t < indices.length; t += 3) {
         const v = [0, 1, 2].map((j) => indices[t + j]! * 3);
-        const x = v.reduce((sum, i) => sum + positions[i]!, 0) / 3;
-        const y = v.reduce((sum, i) => sum + positions[i + 1]!, 0) / 3;
-        const z = v.reduce((sum, i) => sum + positions[i + 2]!, 0) / 3;
-        const scale = scaleOf(x, z);
-        if (scale > 1) continue; // over the gap between tiles
-        expect(
-          y - (0.2 + profileAt(shape, scale)),
-          `${line} at ${scale.toFixed(3)}`,
-        ).toBeGreaterThan(AMBIENT.water.bob);
+        for (const w of weights) {
+          const mix = (k: number) => v.reduce((sum, i, j) => sum + positions[i + k]! * w[j]!, 0);
+          const scale = scaleOf(mix(0), mix(2));
+          if (scale > 1) continue; // over the gap between tiles
+          expect(
+            mix(1) - (0.2 + profileAt(shape, scale)),
+            `${line} at ${scale.toFixed(3)}`,
+          ).toBeGreaterThan(AMBIENT.water.bob);
+        }
       }
     }
   });

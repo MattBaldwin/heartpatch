@@ -157,33 +157,42 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   };
 
   const hudName = el('span', { class: 'map-hud-name' });
-  // Whose land is whose (#278): the name pill shows each Keeper's icon and
-  // opens the legend card; any other tap closes it.
+  // Whose land is whose (#278): each Keeper's icon beside the name opens
+  // the legend card (the whole name row is its tap); any other tap closes it.
+  // The button's name is its own, never the patch's, so a patch named
+  // "Collect Patch" doesn't make a button that reads "Collect".
   const legend = mountMapLegend();
-  const hudTitle = el(
+  const legendButton = el(
     'button',
     {
       type: 'button',
-      class: 'map-hud-title',
+      class: 'map-hud-legend',
+      'aria-label': 'Whose land?',
       'aria-controls': 'map-legend',
       'aria-expanded': 'false',
-      'data-testid': 'map-hud-title',
+      'data-testid': 'map-legend-button',
     },
-    hudName,
     legend.icons,
   );
+  const hudTitle = el('div', { class: 'map-hud-title' }, hudName, legendButton);
   const setLegend = (open: boolean): void => {
     legend.setOpen(open);
-    hudTitle.setAttribute('aria-expanded', legend.open ? 'true' : 'false');
+    legendButton.setAttribute('aria-expanded', legend.open ? 'true' : 'false');
   };
-  hudTitle.addEventListener('click', () => {
+  const showLegend = (members: MapView['members']): void => {
+    legend.show(members, user?.id ?? null);
+    // Nobody's land to tell apart: no icons, and nothing to open.
+    legendButton.hidden = legend.icons.childElementCount === 0;
+  };
+  legendButton.addEventListener('click', () => {
     setLegend(!legend.open);
   });
+  // Once for the app's life: the map screen is made once (main.ts).
   document.addEventListener(
     'pointerdown',
     (e) => {
       if (!legend.open || !(e.target instanceof Node)) return;
-      if (hudTitle.contains(e.target) || legend.card.contains(e.target)) return;
+      if (legendButton.contains(e.target) || legend.card.contains(e.target)) return;
       setLegend(false);
     },
     { capture: true },
@@ -266,7 +275,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     socket: liveSocket,
     onRedraw: (state) => {
       scene3d?.update(state.view);
-      legend.show(state.view.members, user?.id ?? null);
+      showLegend(state.view.members);
       drawWild();
       for (const layer of options.layers ?? []) layer.update?.(state.view);
       if (selected) showTile(state, selected);
@@ -360,7 +369,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       options.tileActions?.hide();
       options.showScene(build);
       hudName.textContent = state.view.map.name;
-      legend.show(state.view.members, user?.id ?? null);
+      showLegend(state.view.members);
       hud.hidden = false;
       options.onHudChange?.(state.id);
       setStatus(liveSocket().status);

@@ -130,7 +130,7 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
 
   // The legend (#278): the name pill opens a card saying whose land is
   // whose, by colour, icon and line; a tap on the map closes it.
-  await friend.getByTestId('map-hud-title').tap();
+  await friend.getByTestId('map-legend-button').tap();
   const legend = friend.getByTestId('map-legend');
   await expect(legend).toBeVisible();
   await expect(legend).toContainText(`${ownerName}'s land`);

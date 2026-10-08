@@ -121,9 +121,11 @@ function item<T>(list: readonly T[], i: number): T {
 }
 
 /**
- * The wash's rings: the tile's own from its shoulder out to just inside its
- * rim, so no pale rim shows round each tile. The dome inside 0.5 is a
- * straight step from the middle, which `BORDER.lift.wash` clears.
+ * The wash's rings: the tile's own from 0.8 out to just inside its rim, so
+ * no pale rim shows round each tile. Inside 0.8 it steps straight from the
+ * middle, under the tile's dome (its 0.5 ring) by most of `BORDER.lift.wash`:
+ * it clears a lake's bob by under 0.001, so raise the lift before lowering it
+ * (border-layout.test.ts checks it).
  */
 function washRings(shape: BorderShape): number[] {
   return shape.rings.map((r) => r.scale).filter((s) => s > 0.5 && s < 1);

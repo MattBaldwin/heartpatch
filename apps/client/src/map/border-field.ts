@@ -78,6 +78,8 @@ export class BorderField {
     }
     for (const slot of new Set([...bySlot.keys(), ...this.drawn.keys()])) {
       const land = bySlot.get(slot) ?? [];
+      // Which tiles they hold is all that changes a border in play: a tile's
+      // terrain and home slot (its height and badge) are fixed for a map.
       const key = land.map(hexKey).sort().join(';');
       if ((this.drawn.get(slot) ?? '') === key) continue;
       this.drawn.set(slot, key);
