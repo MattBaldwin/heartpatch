@@ -90,6 +90,11 @@ export class RenderQuality {
     return this.apply();
   }
 
+  /**
+   * The governor's tier and scale, which can be a frame ahead of what's
+   * applied (`applyPending` runs at the top of the next frame); `pixelRatio`
+   * is what the engine draws at now.
+   */
   get snapshot(): QualitySnapshot {
     return {
       tier: this.state.tier,

@@ -108,17 +108,20 @@ export function mountStage(
   /** The governor asked for a new resolution or tier after the last draw. */
   let rescalePending = false;
   engine.runRenderLoop(() => {
+    // The governor's rescale, at the top of the frame like a resize: setting
+    // the canvas size clears its buffer, so after a draw it would show a
+    // blank frame (#260). First, so a resize in the same frame (which
+    // re-applies the pixel ratio) can't take its tier change without the
+    // reload a recompiled post-process needs.
+    if (rescalePending) {
+      rescalePending = false;
+      if (quality.applyPending()) reload();
+    }
     if (resizePending) {
       resizePending = false;
       quality.refreshPixelRatio();
       engine.resize();
       frames.invalidate();
-    }
-    // Likewise the governor's rescale: setting the canvas size clears its
-    // buffer, so after a draw it would show a blank frame (#260).
-    if (rescalePending) {
-      rescalePending = false;
-      if (quality.applyPending()) reload();
     }
     // Keep drawing until every shader, texture and post-process is ready,
     // then draw a few more: the frames drawn while loading may be empty.

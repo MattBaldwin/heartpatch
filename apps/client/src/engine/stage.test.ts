@@ -15,12 +15,19 @@ describe('mountStage frame order', () => {
   let engine: NullEngine;
   let frame: () => void;
   let stage: Stage | null = null;
+  /** The stubbed window's addEventListener, to fire what the stage listens for. */
+  let windowListen: ReturnType<typeof vi.fn>;
   const order: string[] = [];
 
   beforeEach(() => {
     // Client unit tests run in Node: just the bits of the DOM the stage uses.
-    vi.stubGlobal('window', { devicePixelRatio: 2, addEventListener: vi.fn() });
-    vi.stubGlobal('document', { addEventListener: vi.fn() });
+    windowListen = vi.fn();
+    vi.stubGlobal('window', {
+      devicePixelRatio: 2,
+      addEventListener: windowListen,
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('document', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
     vi.stubGlobal(
       'ResizeObserver',
       class {
@@ -41,6 +48,7 @@ describe('mountStage frame order', () => {
   afterEach(() => {
     stage?.dispose();
     stage = null;
+    engine.dispose();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -93,5 +101,28 @@ describe('mountStage frame order', () => {
     expect(order[0]).toBe('rescale');
     expect(order).toContain('render');
     expect(order.indexOf('rescale')).toBeLessThan(order.indexOf('render'));
+  });
+
+  it('applies a pending rescale before a resize in the same frame, so it still reloads', () => {
+    stage = mount();
+    const quality = stage.quality;
+    vi.spyOn(quality, 'sample').mockReturnValueOnce(true).mockReturnValue(false);
+    const applyPending = vi.spyOn(quality, 'applyPending').mockImplementation(() => {
+      order.push('rescale');
+      return true;
+    });
+    stage.invalidate();
+    frame();
+    frame();
+    // The window resizes before the next frame: the resize re-applies the
+    // pixel ratio (and so whatever the governor wants) in that frame too.
+    const onResize = windowListen.mock.calls.find(([type]) => type === 'resize')?.[1] as () => void;
+    onResize();
+    order.length = 0;
+    frame();
+    expect(applyPending).toHaveBeenCalledTimes(1);
+    expect(order.indexOf('rescale')).toBe(0);
+    expect(order.indexOf('rescale')).toBeLessThan(order.indexOf('resize'));
+    expect(order.indexOf('resize')).toBeLessThan(order.lastIndexOf('render'));
   });
 });
