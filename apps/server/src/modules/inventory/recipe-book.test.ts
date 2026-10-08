@@ -306,8 +306,13 @@ describe.skipIf(!url)('recipe book unlocks (needs DATABASE_URL)', () => {
     // Every page but the Training Grounds, which needs Stone this kid hasn't
     // gathered, Thanksgiving's leaf charms (no leaves yet), the battle
     // potions (#214), which all need Treats, cooking Greens and freezing
-    // Water (#238), and the fences (#203), which need Timber or Stone.
+    // Water (#238), the fences (#203), which need Timber or Stone, and the
+    // explore tools (#199), which need Stone, Greens or Glimmer.
     const notYet = new Set([
+      'recipe:shovel',
+      'recipe:net',
+      'recipe:rope',
+      'recipe:lantern',
       'building:training-grounds',
       'recipe:cook-treats',
       'recipe:freeze-water',

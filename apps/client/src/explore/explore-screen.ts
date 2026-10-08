@@ -54,7 +54,6 @@ import {
 import {
   interactionProgress,
   lit,
-  netGlowing,
   startInteraction,
   stepInteraction,
   type InteractionInput,
@@ -129,6 +128,8 @@ type Card =
       readonly kind: 'find';
       readonly found: SearchSpotResponse;
       readonly interaction: SpotInteraction;
+      /** A net swiped while the water glowed: just for fun, the find is the same. */
+      readonly bigSplash: boolean;
     }
   | { readonly kind: 'missing'; readonly tool: ToolId; readonly bag: ItemCounts | null };
 
@@ -223,6 +224,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let playing: { spot: PublicSearchSpot; state: InteractionState } | null = null;
   let card: Card | null = null;
   let working = false;
+  let opening = false;
   let frame = 0;
   let lastFrame = 0;
   let panel: { container: HTMLElement; tile: PublicTile } | null = null;
@@ -408,8 +410,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (playing) feed({ type: 'tick', t: now });
     const animating = s.step(now);
     options.invalidate();
-    const holding =
-      playing !== null && (playing.state.holdSince !== null || playing.state.kind === 'scoop');
+    const holding = playing !== null && playing.state.holdSince !== null;
     if (walking || animating || holding) frame = requestAnimationFrame(tick);
   }
 
@@ -465,19 +466,23 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!playing) return;
     const before = playing.state;
     const state = stepInteraction(before, input);
-    if (state === before && input.type === 'tick' && state.kind !== 'scoop') return;
+    if (state === before && input.type === 'tick') return;
     playing = { ...playing, state };
     if (state.done) {
       const { spot } = playing;
       playing = null;
-      void search(spot, state.kind);
+      void search(spot, state.kind, state.bigSplash);
       return;
     }
     renderPlay();
-    if (state.holdSince !== null || state.kind === 'scoop') wake();
+    if (state.holdSince !== null) wake();
   }
 
-  async function search(spot: PublicSearchSpot, interaction: SpotInteraction): Promise<void> {
+  async function search(
+    spot: PublicSearchSpot,
+    interaction: SpotInteraction,
+    bigSplash = false,
+  ): Promise<void> {
     const id = mapId;
     const t = tile;
     if (!id || !t || working) return;
@@ -498,10 +503,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         (key) => api.search(id, { q: t.q, r: t.r, spot: spot.index }, key),
         () => at === generation,
       );
-      if (at !== generation || !found || !tile) return;
+      if (at !== generation || !found || tile?.q !== t.q || tile.r !== t.r) return;
       tile = afterSearch(tile, found);
       scene3d?.update(tile);
-      card = { kind: 'find', found, interaction };
+      card = { kind: 'find', found, interaction, bigSplash };
       say('');
       options.onFound?.(id);
     } catch (err) {
@@ -614,13 +619,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (playStage) {
       if (s.kind === 'light') {
         const lightAt = s.light;
-        const r = INTERACTION.lightRadius * 100;
+        // The light's radius on screen matches the rule `lit` uses.
+        const r = INTERACTION.lightRadius * playStage.clientWidth;
         playStage.style.setProperty(
           '--light',
           s.revealed && lightAt === null
             ? 'none'
             : lightAt
-              ? `radial-gradient(circle at ${pct(lightAt.x, s.stage.width)} ${pct(lightAt.y, s.stage.height)}, transparent ${String(r * 0.6)}%, rgb(28 20 40 / 92%) ${String(r * 1.4)}%)`
+              ? `radial-gradient(circle ${String(Math.round(r))}px at ${pct(lightAt.x, s.stage.width)} ${pct(lightAt.y, s.stage.height)}, transparent 60%, rgb(28 20 40 / 92%) 100%)`
               : 'linear-gradient(rgb(28 20 40 / 92%), rgb(28 20 40 / 92%))',
         );
         if (playGlint) {
@@ -628,9 +634,6 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
           playGlint.style.left = pct(s.glint.x, s.stage.width);
           playGlint.style.top = pct(s.glint.y, s.stage.height);
         }
-      }
-      if (s.kind === 'scoop') {
-        playStage.classList.toggle('explore-glow', netGlowing(s, performance.now()));
       }
       if (s.kind === 'dig' || s.kind === 'shake') {
         playStage.style.setProperty('--wiggle', String(s.count));
@@ -663,6 +666,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         '✨',
       );
       playGlint.hidden = true;
+      // A keyboard or switch control clicks it without a pointer.
+      playGlint.addEventListener('click', () => {
+        const g = playing?.state.glint;
+        if (g) feed({ type: 'down', x: g.x, y: g.y, t: performance.now() });
+      });
       playStage.append(playGlint);
     }
     const stagePoint = (e: PointerEvent) => {
@@ -755,7 +763,13 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const nodes: Node[] = [
       el('p', { class: 'explore-card-progress' }, progressLine(found.progress)),
       el('h3', { class: 'explore-sheet-title', id: 'explore-sheet-title' }, EXPLORE_TEXT.ta),
-      el('p', { class: 'explore-headline' }, foundHeadline(c.interaction)),
+      el(
+        'p',
+        { class: 'explore-headline' },
+        c.bigSplash
+          ? `${EXPLORE_TEXT.bigSplash} ${foundHeadline(c.interaction)}`
+          : foundHeadline(c.interaction),
+      ),
       el(
         'ul',
         { class: 'explore-finds', 'data-testid': 'explore-finds' },
@@ -888,7 +902,17 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   async function open(at: { q: number; r: number }): Promise<void> {
     const id = mapId;
-    if (!id || isOpen) return;
+    // A second quick tap on Explore waits for the first.
+    if (!id || isOpen || opening) return;
+    opening = true;
+    try {
+      await openTile(id, at);
+    } finally {
+      opening = false;
+    }
+  }
+
+  async function openTile(id: string, at: { q: number; r: number }): Promise<void> {
     const ask = generation;
     let fresh: ExploreTileResponse;
     try {
@@ -926,6 +950,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   function hide(): void {
     isOpen = false;
+    // A reply still on its way (a search, a bag read) belongs to this visit:
+    // it must never land on the next tile opened.
+    generation += 1;
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
     press = null;
@@ -959,13 +986,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
     const nodes: Node[] = [];
     if (t.homestead === 'joined') {
-      nodes.push(
-        el(
-          'p',
-          { class: 'tile-action-note' },
-          '🏡 Homestead: part of your home. Its gatherers bring back a little extra!',
-        ),
-      );
+      nodes.push(el('p', { class: 'tile-action-note' }, EXPLORE_TEXT.homestead));
     } else if (t.homestead === 'paused') {
       nodes.push(el('p', { class: 'tile-action-note' }, `zZ ${EXPLORE_TEXT.pausedHome}`));
     }

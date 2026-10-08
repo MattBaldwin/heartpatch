@@ -1,9 +1,9 @@
 import { GAME_DATA } from '@heartpatch/shared';
-import { usesLine } from '../explore/explore-view.js';
 import { whereText } from '../recipes/book-model.js';
 import { itemName } from './bag-view.js';
 import { itemChips, type ItemChip } from './item-chips.js';
 import { itemIcon } from './item-icons.js';
+import { usesLine } from './tool-uses.js';
 
 // The card a tapped Bag item opens (#241): what it's for, as a line and
 // chips, and where a gathered or seasonal one turns up. Pure, so it's

@@ -507,6 +507,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     );
   }
 
+  /** A tool's durability bar (#199): what's left of the one in hand. */
+  function usesBar(share: number): HTMLElement {
+    const fill = el('span', { class: 'bag-item-uses-fill' });
+    fill.style.width = `${String(Math.round(share * 100))}%`;
+    return el('span', { class: 'bag-item-uses', 'aria-hidden': 'true' }, fill);
+  }
+
   function renderBag(): void {
     bagCountdowns = [];
     if (sheet.hidden || !state) return;
@@ -525,8 +532,14 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
                 'aria-pressed': String(item.id === picked),
               },
               el('span', { class: 'bag-item-icon', 'aria-hidden': 'true' }, item.icon),
-              el('span', { class: 'bag-item-count' }, String(item.count)),
+              el(
+                'span',
+                { class: 'bag-item-count' },
+                String(item.tool ? item.tool.tools : item.count),
+              ),
               el('span', { class: 'bag-item-name' }, item.name),
+              // A tool's durability bar: what's left of the one in hand (#199).
+              ...(item.tool ? [usesBar(item.tool.share)] : []),
             );
             tile.addEventListener('click', () => {
               picked = picked === item.id ? null : item.id;

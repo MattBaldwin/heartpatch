@@ -95,7 +95,7 @@
 
 .explore-progress {
   margin: 0;
-  padding: 6px 10px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   border-radius: 999px;
   background: #fff1c9;
   font-size: 15px;
@@ -116,7 +116,7 @@
 }
 
 .explore-tool {
-  padding: 4px 10px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   border-radius: 999px;
   background: #e7f6e3;
   font-size: 13px;
@@ -244,13 +244,21 @@
 
 .explore-stage-scoop {
   background: #bfe6fa;
-  transition: box-shadow 200ms;
+  /* The water glows on the net's cycle (INTERACTION: netCycleMs 1600, the
+     first netGlowMs 650 of it). CSS draws it, so the 3D scene draws nothing. */
+  animation: explore-glow 1600ms step-end infinite;
 }
 
-.explore-stage-scoop.explore-glow {
-  box-shadow:
-    inset 0 0 0 6px #fff3a8,
-    inset 0 0 40px #fff3a8;
+@keyframes explore-glow {
+  0% {
+    box-shadow:
+      inset 0 0 0 6px #fff3a8,
+      inset 0 0 40px #fff3a8;
+  }
+
+  41% {
+    box-shadow: none;
+  }
 }
 
 .explore-stage-climb {
@@ -316,6 +324,7 @@
 
 .explore-not-now {
   min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
   margin-top: 4px;
   border: none;
   background: none;

@@ -104,6 +104,7 @@ type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave';
 /** The island under the tile: shallow, so the tile reads as a little diorama. TUNE */
 const ISLAND_DEPTH = 0.12;
 const SHAPES: ReadonlySet<string> = new Set<ExploreShape>(['mound', 'pond', 'ledge', 'cave']);
+const isShape = (kind: PropKind | ExploreShape): kind is ExploreShape => SHAPES.has(kind);
 
 /** The Keeper's trail: followers stand on its points, one gap apart. */
 interface Follower {
@@ -407,7 +408,7 @@ export class ExploreScene {
   }
 
   #buildProps(tile: ExploreTileResponse): void {
-    const byKind = new Map<string, Matrix[]>();
+    const byKind = new Map<PropKind | ExploreShape, Matrix[]>();
     const scale = this.#k * EXPLORE_VIEW.propScale;
     for (const spot of tile.spots) {
       const shape = SPOT_PROPS[spot.kind] ?? 'rock';
@@ -422,9 +423,9 @@ export class ExploreScene {
     }
     const material = vinyl(this.#scene, 'explore-prop-mat', { color: '#ffffff' });
     for (const [kind, matrices] of byKind) {
-      const mesh = SHAPES.has(kind)
-        ? buildShape(this.#scene, kind as ExploreShape)
-        : buildProp(this.#scene, kind as PropKind).mesh;
+      const mesh = isShape(kind)
+        ? buildShape(this.#scene, kind)
+        : buildProp(this.#scene, kind).mesh;
       mesh.material = material;
       setInstances(mesh, matrices);
       this.#props.set(kind, mesh);

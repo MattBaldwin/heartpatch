@@ -246,12 +246,6 @@ export const PROP_SWAY: Readonly<Partial<Record<PropKind, { tip: number; top: nu
 };
 
 /**
- * The wild-squishy tuft (#209) on a tile in reach with a wild squishy. It
- * stands off the tile's middle (where the Heart Seed and the props crowd),
- * and sways in the map's breeze a little more than grass, so it looks like
- * something's moving in there. No motion of its own beyond the terrain clock.
- */
-/**
  * Homesteads (#199): fully explored land joined to home wears home's cream
  * glow; one cut off from home (napping) a pale lavender. Linear RGB, alpha.
  */
@@ -267,6 +261,12 @@ export const EXPLORED_MARK = {
   scale: 1, // TUNE
 } as const;
 
+/**
+ * The wild-squishy tuft (#209) on a tile in reach with a wild squishy. It
+ * stands off the tile's middle (where the Heart Seed and the props crowd),
+ * and sways in the map's breeze a little more than grass, so it looks like
+ * something's moving in there. No motion of its own beyond the terrain clock.
+ */
 export const WILD_MARKER = {
   /** Offset from the tile's middle (world units). */
   offset: { x: -0.17, z: -0.17 }, // TUNE

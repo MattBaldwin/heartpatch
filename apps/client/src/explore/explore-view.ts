@@ -13,7 +13,10 @@ import {
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
 import { itemIcon } from '../inventory/item-icons.js';
+import { TOOL_WORDS } from '../inventory/tool-uses.js';
 import { EXPLORE_VIEW } from './explore-config.js';
+
+export { TOOL_WORDS, usesLine } from '../inventory/tool-uses.js';
 
 // What the explore view says and where the Keeper may walk (#199). Pure, so
 // every case is unit-tested; copy follows docs/STYLE_GUIDE.md. The server
@@ -41,21 +44,13 @@ export const EXPLORE_TEXT = {
   makeOne: 'Make one in the recipe book, then come back.',
   tileExplored: (name: string) => `You explored every spot in this ${name}! ✨`,
   joinedHome: 'It joined your home! 🏡 Its gatherers bring back a little extra now.',
+  homestead: '🏡 Homestead: part of your home. Its gatherers bring back a little extra!',
+  bigSplash: 'Big splash! 💦',
   pausedHome: 'This homestead is napping zZ. Win back the land between it and home to wake it up!',
   easy: 'Easy way',
   searching: 'Searching…',
   explored: '✨ Fully explored',
 } as const;
-
-/** Each tool in words: what it's for, and what one use of it is called. */
-export const TOOL_WORDS: Readonly<
-  Record<ToolId, { icon: string; verb: string; one: string; many: string; needs: string }>
-> = {
-  shovel: { icon: '🪏', verb: 'Dig', one: 'dig', many: 'digs', needs: 'to dig there' },
-  net: { icon: '🥅', verb: 'Scoop', one: 'scoop', many: 'scoops', needs: 'to scoop there' },
-  rope: { icon: '🪢', verb: 'Climb', one: 'climb', many: 'climbs', needs: 'to climb up there' },
-  lantern: { icon: '🪔', verb: 'Light', one: 'cave', many: 'caves', needs: 'to peek in there' },
-};
 
 /** The action button for a spot: its icon and verb. */
 export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
@@ -80,13 +75,6 @@ export function progressLine(progress: { searched: number; total: number }): str
     return `All ${String(progress.total)} found! ✨`;
   }
   return `${String(progress.searched)} of ${String(progress.total)} found 🔍`;
-}
-
-/** "12 scoops left", "1 dig left", or "Resting zZ" when it's used up. */
-export function usesLine(tool: ToolId, uses: number): string {
-  if (uses <= 0) return 'Resting zZ';
-  const words = TOOL_WORDS[tool];
-  return `${String(uses)} ${uses === 1 ? words.one : words.many} left`;
 }
 
 /** A tool's name from the rules (the Bag's name for the same item). */
