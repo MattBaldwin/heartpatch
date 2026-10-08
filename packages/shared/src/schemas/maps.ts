@@ -309,6 +309,26 @@ export const PublicTileSchema = z.object({
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 
 /**
+ * How the viewer reaches one trading post (#270): `connected` (their land
+ * joined to home touches it) or `journey` at `distance` tiles from their
+ * nearest land, with the trail team's `level` and `teamSize` from
+ * `JOURNEY_RULES` (worked out with the shared `postReach` and `journeyFor`).
+ * `reach` is null when they own no land here. `visitUntil` is their visit
+ * pass from a won journey, while it's still good; null otherwise.
+ */
+export const PostViewSchema = z.object({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  index: z.number().int().min(0),
+  reach: z.enum(['connected', 'journey']).nullable(),
+  distance: z.number().int().min(1).nullable(),
+  level: z.number().int().min(1).nullable(),
+  teamSize: z.number().int().min(1).nullable(),
+  visitUntil: z.iso.datetime().nullable(),
+});
+export type PostView = z.infer<typeof PostViewSchema>;
+
+/**
  * `GET /api/v1/maps/:mapId/view`: everything needed to draw the map. Never the seed.
  * One consistent snapshot: it holds every event up to `seq` and none after.
  */
@@ -323,6 +343,11 @@ export const MapViewSchema = z.object({
   members: z.array(MapMemberSchema),
   /** Every tile, sorted by `q` then `r`. */
   tiles: z.array(PublicTileSchema),
+  /**
+   * The map's trading posts as the viewer reaches them (#270), in index
+   * order. Optional only so older servers' views parse.
+   */
+  posts: z.array(PostViewSchema).optional(),
   /**
    * The map's latest event seq this view includes (`maps.event_seq`). Live
    * sync subscribes with it as `afterSeq` (tech spec §5 "WebSocket").

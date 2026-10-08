@@ -24,22 +24,22 @@ export const KEEPER = {
   face: {
     eyeSpread: 0.19, // TUNE: eye centre from the middle, of head width
     eyeHeight: -0.02, // TUNE: of head height, from its middle
+    browHeight: 0.07, // TUNE: just above the eyes, clear of the fringe
+    noseHeight: -0.12, // TUNE
+    noseShift: 0.008, // TUNE: a touch off-centre, like a drawn line
+    noseRollDeg: 8, // TUNE
+    /** Brows, nose and smile are this deep (of head size): drawn on the face, not stuck on it. */
+    lineDepth: 0.012, // TUNE
     mouthHeight: -0.22, // TUNE
-    cheekSpread: 0.3, // TUNE
-    cheekHeight: -0.14, // TUNE
-    browHeight: 0.13, // TUNE
     /** How far features stand out of the head surface, of their own depth. */
     standOut: 0.35, // TUNE
   },
-  /** Freckles: how many per cheek and how far they wander (head fractions), seeded. */
-  freckles: { count: 3, spread: 0.06 }, // TUNE
   /** Fixed toy colours (sRGB hex). */
   colors: {
     ink: '#3b2a3f', // TUNE: the squishies' plum ink
+    /** The face's lines (#289): a step darker than ink so they read on the deepest skin. */
+    faceLine: '#24151d', // TUNE
     white: '#ffffff',
-    blush: '#ff9db5', // TUNE
-    mouth: '#8a3b55', // TUNE: an open mouth's inside
-    freckle: '#b0705a', // TUNE
   },
   /** Seeded wobble so two Keepers with one config are identical, but hair isn't ruler-straight. */
   jitter: { hairDeg: 6, hairSize: 0.06 }, // TUNE

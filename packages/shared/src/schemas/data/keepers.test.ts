@@ -6,6 +6,7 @@ import {
   checkKeeperData,
   defaultKeeperConfig,
   KeeperConfigSchema,
+  KeeperEyesSchema,
   keeperConfigProblem,
   WARDROBE_SLOTS,
   type KeeperData,
@@ -26,14 +27,16 @@ describe('checkKeeperData', () => {
     expect(KEEPER_DATA.outfits).toHaveLength(6);
   });
 
-  it('varies body shape, skin tone, face and hairstyle across the bases', () => {
+  it('varies body shape, skin tone, eyes and hairstyle across the bases', () => {
     const count = KEEPER_DATA.bases.length;
     const distinct = (pick: (b: KeeperData['bases'][number]) => unknown) =>
       new Set(KEEPER_DATA.bases.map((b) => JSON.stringify(pick(b)))).size;
-    expect(distinct((b) => b.skin)).toBe(count);
+    // Ten skin tones, light to deep (owner 2026-10-08, #289): two presets share one.
+    expect(distinct((b) => b.skin)).toBe(10);
     expect(distinct((b) => b.hairstyle)).toBe(count);
     expect(distinct((b) => b.body)).toBe(count);
-    expect(distinct((b) => b.face)).toBeGreaterThanOrEqual(6);
+    // Every Keeper shares the line face (#289); the eyes are what differ.
+    expect(distinct((b) => b.face.eyes)).toBe(KeeperEyesSchema.options.length);
     const heights = KEEPER_DATA.bases.map((b) => b.body.height);
     expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.2);
   });

@@ -1,4 +1,4 @@
-import type { MapView } from '@heartpatch/shared';
+import { activeSeasons, GAME_DATA, inSeason, type MapView } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { hook } from './dev-hook.js';
@@ -212,9 +212,20 @@ test('a busy tile’s five buttons fit a phone on its side (#264)', async ({ bro
     const mapId = /\/maps\/([^/]+)\/wild/.exec(route.request().url())![1]!;
     const view = (await (await page.request.get(`/api/v1/maps/${mapId}/view`)).json()) as MapView;
     const me = view.members[0]!;
-    const tile = view.tiles.find(
-      (t) => t.homeSlot === me.homeSlot && t.ownerUserId === me.user.id && t.nodeResource !== null,
-    )!;
+    // A node in season: a seasonal node on home land sleeps out of its
+    // season, with no Gather (owner decision 2026-10-06), so a map that put
+    // Magic Fallen Leaves on the home ring had only three buttons.
+    const today = new Date().toISOString().slice(0, 10);
+    const active = new Set(activeSeasons(GAME_DATA.seasons, today).map((s) => s.id));
+    const tile = view.tiles.find((t) => {
+      const resource = GAME_DATA.resources.find((r) => r.id === t.nodeResource);
+      return (
+        t.homeSlot === me.homeSlot &&
+        t.ownerUserId === me.user.id &&
+        resource !== undefined &&
+        inSeason(resource, active)
+      );
+    })!;
     busy = { q: tile.q, r: tile.r };
     const response = await route.fetch();
     const body = (await response.json()) as { wild: { tiles: { q: number; r: number }[] } };
