@@ -172,6 +172,27 @@ describe('MapState', () => {
     expect(state.apply(event('tile.captured', { q: 'here' }))).toBe('resync');
   });
 
+  it('follows explored land and homesteads live (#199)', () => {
+    const view = testView(1);
+    const land = view.tiles.find((t) => t.ownerUserId === null && t.homeSlot === null)!;
+    const at = { q: land.q, r: land.r };
+    const state = new MapState(view);
+    const explored = { userId: userId(1), ...at, terrain: land.terrain };
+    expect(state.apply(event('tile.explored', explored))).toBe('redraw');
+    expect(state.tileAt(hexKey(at))?.explored).toBe(true);
+    const tiles = { userId: userId(1), tiles: [at] };
+    expect(state.apply(event('homestead.joined', tiles, 3))).toBe('redraw');
+    expect(state.tileAt(hexKey(at))?.homestead).toBe('joined');
+    expect(state.apply(event('homestead.paused', tiles, 4))).toBe('redraw');
+    expect(state.tileAt(hexKey(at))?.homestead).toBe('paused');
+    expect(state.apply(event('homestead.resumed', tiles, 5))).toBe('redraw');
+    expect(state.tileAt(hexKey(at))?.homestead).toBe('joined');
+    // Taken by someone else: the old owner's look goes with it.
+    state.apply(event('tile.captured', { userId: userId(2), fromUserId: userId(1), ...at }, 6));
+    expect(state.tileAt(hexKey(at))).toMatchObject({ explored: false, homestead: null });
+    expect(state.apply(event('homestead.joined', { tiles: 'x' }, 7))).toBe('resync');
+  });
+
   it('swaps in a fresh view and re-indexes it', () => {
     const state = new MapState(testView(1));
     state.replace(testView(2));

@@ -251,6 +251,22 @@ export const PROP_SWAY: Readonly<Partial<Record<PropKind, { tip: number; top: nu
  * and sways in the map's breeze a little more than grass, so it looks like
  * something's moving in there. No motion of its own beyond the terrain clock.
  */
+/**
+ * Homesteads (#199): fully explored land joined to home wears home's cream
+ * glow; one cut off from home (napping) a pale lavender. Linear RGB, alpha.
+ */
+export const HOMESTEAD_GLOW = {
+  joined: { rgb: [1, 0.93, 0.78], fill: 0.34, edge: 0.8 },
+  paused: { rgb: [0.74, 0.7, 0.86], fill: 0.26, edge: 0.6 },
+} as const; // TUNE
+
+/** The little gold sparkle on a fully explored tile (#199). */
+export const EXPLORED_MARK = {
+  /** Offset from the tile's middle (world units): the corner across from the wild tuft. */
+  offset: { x: 0.18, z: 0.16 }, // TUNE
+  scale: 1, // TUNE
+} as const;
+
 export const WILD_MARKER = {
   /** Offset from the tile's middle (world units). */
   offset: { x: -0.17, z: -0.17 }, // TUNE

@@ -122,7 +122,28 @@ export class MapState {
           guardianHint: null,
           // The old owner's gatherer there stopped (squishy jobs).
           workers: 0,
+          // Explored and homestead belong to the owner (#199): the new
+          // owner's homestead events follow, and a refresh fills the rest.
+          explored: false,
+          homestead: null,
         });
+        return changed ? 'redraw' : 'none';
+      }
+      case 'tile.explored': {
+        // Its owner searched every spot (#199): the map shows a sparkle.
+        const parsed = GAME_EVENTS['tile.explored'].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        return this.patchTile(parsed.data, { explored: true }) ? 'redraw' : 'none';
+      }
+      case 'homestead.joined':
+      case 'homestead.paused':
+      case 'homestead.resumed': {
+        // Homesteads joined home, napped when cut off, or woke up (#199).
+        const parsed = GAME_EVENTS[event.type].public.safeParse(event.data);
+        if (!parsed.success) return 'resync';
+        const homestead = event.type === 'homestead.paused' ? 'paused' : 'joined';
+        let changed = false;
+        for (const t of parsed.data.tiles) changed = this.patchTile(t, { homestead }) || changed;
         return changed ? 'redraw' : 'none';
       }
       case 'squishy.assigned': {

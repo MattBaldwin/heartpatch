@@ -1,4 +1,5 @@
 import { GAME_DATA } from '@heartpatch/shared';
+import { usesLine } from '../explore/explore-view.js';
 import { whereText } from '../recipes/book-model.js';
 import { itemName } from './bag-view.js';
 import { itemChips, type ItemChip } from './item-chips.js';
@@ -13,7 +14,7 @@ export interface ItemDetail {
   readonly name: string;
   readonly icon: string;
   readonly count: number;
-  /** "You have 2". */
+  /** "You have 2", or a tool's uses: "12 scoops left" (#199). */
   readonly have: string;
   /** The item's description: what it's for. */
   readonly purpose: string;
@@ -31,7 +32,7 @@ export function itemDetail(id: string, count: number): ItemDetail {
     name: itemName(id),
     icon: itemIcon(id),
     count,
-    have: `You have ${String(count)}`,
+    have: item?.tool ? usesLine(item.tool, count) : `You have ${String(count)}`,
     purpose: item?.description ?? '',
     chips: itemChips(id),
     where: item && item.kind !== 'crafted' ? whereText(id) : null,

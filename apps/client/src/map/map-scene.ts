@@ -37,9 +37,11 @@ import { loftRoundedHex, type MeshArrays, type ProfileRing } from './hex-mesh.js
 import { MapAmbient, type AmbientStats } from './map-ambient.js';
 import {
   CRYSTAL_GLOW,
+  EXPLORED_MARK,
   FALLBACK_LOOK,
   HALLOWEEN,
   HEX_SIZE,
+  HOMESTEAD_GLOW,
   HOME_LOOK,
   ISLAND,
   LAND_FADE,
@@ -135,6 +137,11 @@ export interface MapSceneStats {
   readonly motes: AmbientStats['motes'];
   /** Wild-squishy tufts drawn (#209), all from one instanced mesh. */
   readonly wildMarkers: number;
+  /** Homestead tiles (#199): joined to home, and napping (cut off). */
+  readonly homesteads: number;
+  readonly pausedHomesteads: number;
+  /** Fully explored tiles wearing a sparkle (#199). */
+  readonly explored: number;
 }
 
 export interface MapSceneOptions {
@@ -292,12 +299,24 @@ export class MapScene {
   private readonly fences: FenceField;
   /** The soft glow over tiles a lit Hearthfire keeps safe (#18). */
   private readonly safeGlow: Mesh;
+  /** Homestead glows (#199): joined, then napping. */
+  private readonly homesteadGlow: Mesh;
+  private readonly pausedGlow: Mesh;
+  private readonly exploredMark: Mesh;
   /** The player's home node the tutorial points at (`homeNodeRect`), until `update`. */
   private homeNode: { userId: string | null; tile: PublicTile | null } | null = null;
   /** Resource nodes drawn on home bases (`buildHomeNodes`). */
   private readonly homeNodes: number;
   private tileMeshes = 0;
-  private counts = { tinted: 0, homes: 0, claimedHomes: 0, safeTiles: 0 };
+  private counts = {
+    tinted: 0,
+    homes: 0,
+    claimedHomes: 0,
+    safeTiles: 0,
+    homesteads: 0,
+    pausedHomesteads: 0,
+    explored: 0,
+  };
   /** My land that misses me: how far each tile has faded (0–1), by tile. */
   private landFade = new Map<HexKey, number>();
   /** Ambient time: every terrain material reads it (terrain-plugin.ts). */
@@ -404,6 +423,11 @@ export class MapScene {
     );
     this.safeGlow.material = overlayMaterial(scene, 'safe-glow-mat');
     this.safeGlow.setEnabled(false);
+    this.homesteadGlow = buildTileGlow(scene, 'homestead-glow', HOMESTEAD_GLOW.joined);
+    this.pausedGlow = buildTileGlow(scene, 'homestead-paused-glow', HOMESTEAD_GLOW.paused);
+    this.exploredMark = buildSparkle(scene);
+    this.exploredMark.material = vinyl(scene, 'explored-mark-mat', { color: '#ffffff' });
+    setInstances(this.exploredMark, []);
 
     this.wildMesh = buildWildTuft(scene);
     const wildMat = vinyl(scene, 'wild-tuft-mat', { color: '#ffffff' });
@@ -626,11 +650,37 @@ export class MapScene {
       safe.push(placeAt(p.x, topOf(tile) + TINT_LIFT * 1.5, p.z));
     }
     setInstances(this.safeGlow, safe, true);
+    // Homesteads and fully explored land (#199), as the server worked them out.
+    const joined: Matrix[] = [];
+    const napping: Matrix[] = [];
+    const explored: Matrix[] = [];
+    const mark = new Vector3(EXPLORED_MARK.scale, EXPLORED_MARK.scale, EXPLORED_MARK.scale);
+    for (const tile of this.tiles.values()) {
+      const p = hexToWorld(tile, HEX_SIZE);
+      if (tile.homestead === 'joined') joined.push(placeAt(p.x, topOf(tile) + TINT_LIFT * 2, p.z));
+      if (tile.homestead === 'paused') napping.push(placeAt(p.x, topOf(tile) + TINT_LIFT * 2, p.z));
+      if (tile.explored === true) {
+        explored.push(
+          placeAt(
+            p.x + EXPLORED_MARK.offset.x,
+            topOf(tile) + DOME * 0.5,
+            p.z + EXPLORED_MARK.offset.z,
+            mark,
+          ),
+        );
+      }
+    }
+    setInstances(this.homesteadGlow, joined, true);
+    setInstances(this.pausedGlow, napping, true);
+    setInstances(this.exploredMark, explored, true);
     this.counts = {
       tinted,
       homes: homes.length,
       claimedHomes: seeds.length,
       safeTiles: safe.length,
+      homesteads: joined.length,
+      pausedHomesteads: napping.length,
+      explored: explored.length,
     };
   }
 
@@ -990,6 +1040,50 @@ export class MapScene {
     tree.material = mat;
     tree.freezeWorldMatrix();
   }
+}
+
+/**
+ * A soft glow over a whole tile (homesteads, #199), built like the safe
+ * glow: brightest at the rim, so the tile's own colour still shows.
+ */
+function buildTileGlow(
+  scene: Scene,
+  name: string,
+  look: { readonly rgb: readonly number[]; readonly fill: number; readonly edge: number },
+): Mesh {
+  const mesh = meshFrom(
+    scene,
+    name,
+    loftRoundedHex(
+      TILE_RADIUS,
+      [
+        { scale: 0.5, y: DOME * 0.75, alpha: look.fill },
+        { scale: 0.8, y: DOME * 0.25, alpha: look.fill },
+        { scale: 0.92, y: -BEVEL * 0.25, alpha: look.edge },
+        { scale: 1, y: -BEVEL, alpha: 0 },
+      ],
+      {
+        corner: CORNER,
+        segments: SEGMENTS,
+        centre: { y: DOME, alpha: look.fill },
+        rgb: [look.rgb[0] ?? 1, look.rgb[1] ?? 1, look.rgb[2] ?? 1],
+      },
+    ),
+  );
+  mesh.material = overlayMaterial(scene, `${name}-mat`);
+  setInstances(mesh, []);
+  return mesh;
+}
+
+/** A little gold four-point sparkle on a fully explored tile (#199), about 0.12 across. */
+function buildSparkle(scene: Scene): Mesh {
+  const ray = (sx: number, sy: number) => {
+    const m = CreateSphere('sparkle-part', { diameter: 0.12, segments: 6 }, scene);
+    m.scaling.set(sx, sy, 0.3);
+    m.position.y = 0.09;
+    return painted(m, '#ffd166');
+  };
+  return merged('explored-sparkle', [ray(0.28, 1), ray(1, 0.28)]);
 }
 
 // ── Home nodes ────────────────────────────────────────────────────────────
