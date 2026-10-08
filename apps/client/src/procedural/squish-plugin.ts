@@ -163,7 +163,7 @@ if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
     // Mythic shimmer: pearly bands slide over the vinyl as the view turns
     // (never on a timer, so an idle scene stays idle).
     float fiBand = fract(dot(vSquishLocal, vec3(0.55, 1.0, 0.35)) * ${num(FINISH.shimmer.bands)} + dot(viewDirectionW, vec3(0.9, 0.6, 0.7)));
-    float fiSheen = smoothstep(0.0, ${num(FINISH.shimmer.width)}, fiBand) * smoothstep(${num(FINISH.shimmer.width * 2)}, ${num(FINISH.shimmer.width)}, fiBand);
+    float fiSheen = smoothstep(0.0, ${num(FINISH.shimmer.width)}, fiBand) * (1.0 - smoothstep(${num(FINISH.shimmer.width)}, ${num(FINISH.shimmer.width * 2)}, fiBand));
     finalColor.rgb += ${vec3(FINISH.shimmer.tint)} * fiSheen * ${num(FINISH.shimmer.strength)};
   }
 }

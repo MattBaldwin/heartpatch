@@ -77,10 +77,10 @@ describe('the clothing catalog', () => {
     ).toBe(false);
   });
 
-  it('uses every rarity, so the filter always has something to show', () => {
+  it('uses every rarity up to Legendary (Mythic arrives with the #261 costumes)', () => {
     const rarities = new Set(CLOTHING.map((i) => i.rarity));
     expect([...rarities].toSorted()).toEqual(
-      ['common', 'epic', 'legendary', 'rare', 'uncommon'].toSorted(),
+      CLOTHING_RARITIES.filter((r) => r !== 'mythic').toSorted(),
     );
   });
 

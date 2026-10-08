@@ -117,7 +117,7 @@ export const FINISH = {
    * vinyl as the view turns. Band count across a body height, how much of
    * each band is lit, its strength, and the pearl tint (linear RGB).
    */
-  shimmer: { bands: 2.6, width: 0.22, strength: 0.42, tint: [1, 0.9, 0.98] }, // TUNE
+  shimmer: { bands: 3.2, width: 0.12, strength: 0.26, tint: [1, 0.9, 0.98] }, // TUNE
   /** Glow: how much of the vinyl's own colour is added back as light. */
   glow: 0.28, // TUNE
 } as const;
