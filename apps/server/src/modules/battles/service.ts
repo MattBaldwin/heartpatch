@@ -205,6 +205,45 @@ export interface PrepareRescueBattle {
   soloTeam: (tx: Executor) => Promise<TeamSquishyRow[]>;
 }
 
+/** The other side of a journey (#270), built by the journeys module in the start transaction. */
+export interface JourneyOpponent {
+  /** The trail squishies, and who plays them. */
+  side: BattleSideSetup;
+  /** The trading post the journey heads for: the arena is drawn as its terrain. */
+  tile: Hex;
+  /** After the battle row, in the same transaction: the journey's own row. Events go after `battle.started`. */
+  started: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
+}
+
+/**
+ * Checks a journey under the start transaction and builds the other side;
+ * throws `AppError` to refuse (then nothing is used up). Runs only when
+ * there's no battle going to resume. A journey uses no try and starts no
+ * tile cooldown (#270).
+ */
+export type PrepareJourneyBattle = (
+  tx: Executor,
+  context: { map: MapRow; at: Date },
+) => Promise<JourneyOpponent>;
+
+/**
+ * The journeys module's side of a journey's end (#270). The battles service
+ * calls it inside its own transactions, right after the battle's lock and
+ * before the squishies' (tech spec §7 step 5b), so the visit pass commits with
+ * the battle (CLAUDE.md rule 7). It returns events to append after
+ * `battle.ended`.
+ */
+export interface JourneyBattlePort {
+  ended: (
+    tx: Executor,
+    battle: BattleRow,
+    winner: BattleSideId | 'draw',
+    at: Date,
+  ) => Promise<NewGameEvent[]>;
+  /** Called off by the server (DECISIONS #13): no pass, nothing lost. */
+  noContest: (tx: Executor, battle: BattleRow, at: Date) => Promise<NewGameEvent[]>;
+}
+
 /** What a capture try costs (design doc §6): one Heart Charm. */
 export const HEART_CHARM = 'heart-charm';
 
@@ -233,6 +272,12 @@ export interface BattlesService {
     user: PublicUser,
     mapId: string,
     prepare: PrepareRescueBattle,
+  ) => Promise<StartResult>;
+  /** Sets off on a journey to a trading post (#270) against what `prepare` builds, or resumes the battle going. */
+  startJourney: (
+    user: PublicUser,
+    mapId: string,
+    prepare: PrepareJourneyBattle,
   ) => Promise<StartResult>;
   /** Applies one player action; the AI side answers inside the same step. */
   act: (user: PublicUser, battleId: string, request: BattleActionRequest) => Promise<PlayerBattle>;
@@ -266,6 +311,8 @@ export interface BattlesServiceOptions {
   findWildEncounter?: (context: WildEncounterContext) => Promise<WildEncounter | null>;
   /** Tile battles' attempt log and captures (#15, `modules/territory`). */
   tileBattles?: TileBattlePort;
+  /** Journeys' visit passes (#270, `modules/journeys`). */
+  journeys?: JourneyBattlePort;
 }
 
 /** The other side of a new battle, as `startWith` takes it. */
@@ -398,6 +445,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     at: Date,
   ): Promise<void> => {
     if (TILE_BATTLE_KINDS.has(row.kind)) await options.tileBattles?.noContest(tx, row.id, at);
+    // A journey's row (#270) right after the battle's lock (step 5b).
+    const journeyEvents =
+      row.kind === 'journey' ? ((await options.journeys?.noContest(tx, row, at)) ?? []) : [];
     await repo.finish(row.id, {
       status: 'no-contest',
       actions: row.actions,
@@ -422,6 +472,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         xp: [],
       },
     });
+    for (const event of journeyEvents) await repo.appendEvent(event);
   };
 
   /**
@@ -541,6 +592,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       TILE_BATTLE_KINDS.has(row.kind) && options.tileBattles
         ? await options.tileBattles.ended(tx, { ...row, state }, result.winner, at)
         : { events: [], xpPercent: 100, drop: null };
+    // A journey (#270): its row after the battle's lock and before the
+    // squishies' (tech spec §7 step 5b); a win opens the visit pass.
+    const journeyEvents =
+      row.kind === 'journey' && options.journeys
+        ? await options.journeys.ended(tx, { ...row, state }, result.winner, at)
+        : [];
     // Gentle mode's share (owner decision 2026-10-03): challenging a much
     // smaller player pays part of the battle's XP, win or lose.
     const awards = result.xp
@@ -699,6 +756,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       });
     }
     for (const event of tile.events) await repo.appendEvent(event);
+    for (const event of journeyEvents) await repo.appendEvent(event);
   };
 
   /**
@@ -870,6 +928,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         },
         prepare.soloTeam,
       ),
+
+    startJourney: (user, mapId, prepare) =>
+      startWith(user, mapId, async (tx, map, at) => {
+        const opponent = await prepare(tx, { map, at });
+        return { kind: 'journey', ...opponent, spawn: null };
+      }),
 
     act: async (user, battleId, request) => {
       const { row: next, mapId } = await store.transaction(async (repo, tx) => {

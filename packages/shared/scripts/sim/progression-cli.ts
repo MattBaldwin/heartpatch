@@ -17,8 +17,15 @@ import {
   UNCAPPED_BEFRIEND_RULES,
   WITH_EXPLORE_RULES,
 } from './progression-config.js';
-import { renderProgression, summarise } from './progression-report.js';
-import { modelData, runProgression, wildOdds, type ProgressionRun } from './progression.js';
+import { JOURNEY_RULES } from '../../src/data/journeys.js';
+import { journeyGateMisses, renderProgression, summarise } from './progression-report.js';
+import {
+  journeyOdds,
+  modelData,
+  runProgression,
+  wildOdds,
+  type ProgressionRun,
+} from './progression.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const { values } = parseArgs({
@@ -44,11 +51,18 @@ for (const rules of [
   }
 }
 const odds = wildOdds(data, PROGRESSION_CONFIG, [-2, -1, 0, 1], 200);
+// Journeys (#270): the shipped rules on the 4-seat map, both kids.
+const journeyRuns = runs.filter((r) => r.rules === CURRENT_RULES && r.seats === 4);
+const journeys = journeyOdds(data, PROGRESSION_CONFIG, journeyRuns, JOURNEY_RULES, {
+  days: [3, 7, 14],
+  distances: [1, 2, 3, 4, 5, 6, 7, 8, 10],
+  games: 200,
+});
 const seconds = (performance.now() - started) / 1000;
 
 mkdirSync(outDir, { recursive: true });
 const reportPath = resolve(outDir, 'progression-report.md');
-writeFileSync(reportPath, renderProgression(runs, PROGRESSION_CONFIG, { seconds, odds }));
+writeFileSync(reportPath, renderProgression(runs, PROGRESSION_CONFIG, { seconds, odds, journeys }));
 
 console.log(`${String(runs.length)} runs in ${seconds.toFixed(1)} s.`);
 for (const s of runs.map((run) => summarise(run, PROGRESSION_CONFIG))) {
@@ -58,4 +72,14 @@ for (const s of runs.map((run) => summarise(run, PROGRESSION_CONFIG))) {
       `land full day ${String(s.landFull)}, Lv ${String(s.level[14])} / ${String(s.level[30])} on days 14 / 30`,
   );
 }
+for (const row of journeys) {
+  console.log(
+    `  journeys ${row.kid.padEnd(7)} day ${String(row.day).padStart(2)} (${row.levels.join('/')}): ` +
+      row.odds.map((o) => `d${String(o.distance)} ${String(o.percent)}%`).join(' '),
+  );
+}
+const misses = journeyGateMisses(journeys);
+console.log(
+  misses.length === 0 ? '  journey gate: passes' : `  journey gate MISSES: ${misses.join('; ')}`,
+);
 console.log(`Report: ${reportPath}`);

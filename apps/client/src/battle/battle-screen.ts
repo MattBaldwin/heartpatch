@@ -56,6 +56,7 @@ import {
 } from './potions.js';
 import { keeperReaction } from './keeper-reaction.js';
 import { fenceResult, resultLine } from './result-line.js';
+import { JOURNEY_TEXT, journeyResult } from '../trading/journey-model.js';
 
 // The battle screen (#13): starts or resumes a PvE battle, draws it, plays the
 // server's log back step by step, and sends the player's taps as intents. The
@@ -103,6 +104,14 @@ export interface BattleScreenOptions {
   nicknames?: (mapId: string) => Promise<ReadonlyMap<string, string>>;
   /** True for the Tutorial Glade, where a wild squishy never wanders off (#24). */
   isGlade?: (mapId: string) => boolean;
+  /**
+   * Journeys to trading posts (#270): the post a journey battle heads for (its
+   * result card names it), and word that one has ended, won or not.
+   */
+  journey?: {
+    postName: (battleId: string) => string | null;
+    ended: (battleId: string, won: boolean) => void;
+  };
   /** Fresh wild hints for the map on screen (#209): the map draws a tuft on each. */
   onWildHints?: (mapId: string, tiles: readonly Hex[]) => void;
 }
@@ -609,6 +618,15 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
             : result.reason === 'forfeit'
               ? { title: MESSAGES.resultScooted, subtitle: resultLine(b.kind, 'scooted', glade) }
               : { title: MESSAGES.resultLost, subtitle: resultLine(b.kind, 'lost', glade) };
+    // A journey (#270, the mockup's screen c): made it, or nothing lost.
+    const journey =
+      b.kind === 'journey' && b.status !== 'no-contest' && result && result.winner !== 'draw'
+        ? journeyResult(
+            result.winner === b.mySide ? 'won' : result.reason === 'forfeit' ? 'scooted' : 'lost',
+            options.journey?.postName(b.id) ?? null,
+          )
+        : null;
+    if (b.kind === 'journey') options.journey?.ended(b.id, result?.winner === b.mySide);
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
@@ -623,9 +641,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         : undefined;
     hud.showResult({
       ...outcome,
+      ...(journey ? { title: journey.title, subtitle: journey.subtitle } : {}),
       xp: lines,
       evolving,
-      done: MESSAGES.done,
+      done: journey?.done ?? MESSAGES.done,
       ...(nudge ? { nudge } : {}),
     });
   };
@@ -714,7 +733,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
               ? MESSAGES.rivalStart
               : battle.kind === 'rescue'
                 ? MESSAGES.shadowsStart
-                : MESSAGES.wildStart,
+                : battle.kind === 'journey'
+                  ? JOURNEY_TEXT.startCaption
+                  : MESSAGES.wildStart,
         );
       }
     } else {

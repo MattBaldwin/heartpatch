@@ -61,12 +61,14 @@ describe('describeTile', () => {
     expect(far.title).toBe('Lantern Post');
     expect(far.owner).toBe('A trading post for every Keeper. Nobody can claim it!');
     expect(far.post?.reach).toMatch(/3 tiles from your land/);
-    expect(far.post?.soon).toMatch(/soon/);
+    // A journey away, its journey shows instead of "soon" (#270).
+    expect(far.post?.soon).toBeNull();
     expect(far.guardians).toBeNull();
     expect(far.gatherer).toBeNull();
-    expect(allText(far) + far.post!.reach! + far.post!.soon).not.toMatch(AVOIDED);
+    expect(allText(far) + far.post!.reach!).not.toMatch(AVOIDED);
     const near = describeTile(post, lookup, userId(1), [], { kind: 'connected' });
     expect(near.post?.reach).toMatch(/Your land reaches it/);
+    expect(near.post?.soon).toMatch(/soon/);
     // Everywhere else: no post line.
     expect(describeTile(tile({}), lookup, userId(1)).post).toBeNull();
   });

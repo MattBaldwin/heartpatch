@@ -108,7 +108,7 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
       postReachText.textContent = info.post?.reach ?? '';
       postReachText.hidden = !info.post?.reach;
       postSoon.textContent = info.post?.soon ?? '';
-      postSoon.hidden = info.post === null;
+      postSoon.hidden = !info.post?.soon;
       panel.classList.toggle('tile-panel-home', info.home);
       panel.classList.toggle('tile-panel-trading-post', info.post !== null);
       panel.hidden = false;

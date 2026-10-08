@@ -232,6 +232,13 @@
       "when": 1791458792928,
       "tag": "0032_gray_slipstream",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791474768849,
+      "tag": "0033_left_whizzer",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,7 @@ import { createWildPicker } from './battle/wild-picker.js';
 import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
+import { createJourneyScreen } from './trading/journey-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -310,6 +311,13 @@ const land = createLandScreen({
 const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
 // Trading posts' flags and rings on the map (#269), for whoever is signed in.
 const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
+// Journeys to trading posts (#270): the preview in a post's tile panel, and
+// a journey opens the battle screen like a tile battle.
+const journeys = createJourneyScreen({
+  openBattle: (battle) => {
+    if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
+  },
+});
 const hollow = createHollowScreen({
   root: document.body,
   entryRoot: trays.slot('adventure'),
@@ -439,6 +447,7 @@ const maps = createMapScreen({
     fences.tileActions,
     territory.tileActions,
     jobs.tileActions,
+    journeys.tileActions,
   ),
   onHudChange: (mapId) => {
     hudMapId = mapId;
@@ -465,6 +474,7 @@ const maps = createMapScreen({
     chat.liveEvent(event);
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
+    journeys.liveEvent(event);
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
@@ -593,6 +603,10 @@ const milestones = createMilestoneCelebration({
 const battles = createBattleScreen({
   root: document.body,
   isGlade: (mapId) => mapId === glade,
+  journey: {
+    postName: (battleId) => journeys.postFor(battleId)?.name ?? null,
+    ended: journeys.ended,
+  },
   onWildHints: (mapId, tiles) => {
     wildPicker.setHints(mapId, tiles);
     maps.setWild(mapId, tiles);
@@ -626,6 +640,9 @@ const battles = createBattleScreen({
         void care.celebrateNews(mapId);
         // And earn a milestone that waited for the battle to close (#44).
         milestones.check();
+        // Made it to a trading post (#270, "Open the post"): show its panel.
+        const arrived = journeys.takeArrival();
+        if (arrived) maps.focus(arrived);
         return Promise.all([
           inventory.setMap(mapId),
           territory.setMap(mapId),
@@ -954,6 +971,7 @@ mountAuth(document.body, {
     inventory.setUser(user);
     recipeBook.setUser(user);
     territory.setUser(user);
+    journeys.setUser(user);
     hollow.setUser(user);
     land.setUser(user);
     chat.setUser(user);
@@ -1008,6 +1026,7 @@ if (import.meta.env.DEV) {
     closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,
     jobs: () => jobs.debug,
+    journey: () => journeys.debug,
     posts: () => ({
       shown: postFlags.shown,
       rings: postFlags.rings,
