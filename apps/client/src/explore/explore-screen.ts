@@ -990,6 +990,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       container.replaceChildren();
       return;
     }
+    // The button first: it pairs with Go home on one row (map.css), and the
+    // lines about the tile sit under the pair.
     const nodes: Node[] = [];
     if (t.homestead === 'joined') {
       nodes.push(el('p', { class: 'tile-action-note' }, EXPLORE_TEXT.homestead));
@@ -999,14 +1001,17 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (t.explored) nodes.push(el('p', { class: 'tile-action-note' }, EXPLORE_TEXT.explored));
     const go = el(
       'button',
-      { type: 'button', class: 'auth-button bag-action', 'data-testid': 'tile-explore' },
+      {
+        type: 'button',
+        class: 'auth-button bag-action tile-action-pair',
+        'data-testid': 'tile-explore',
+      },
       `🔍 ${EXPLORE_TEXT.explore}`,
     );
     go.addEventListener('click', () => {
       void open(t);
     });
-    nodes.push(go);
-    container.replaceChildren(...nodes);
+    container.replaceChildren(go, ...nodes);
   }
 
   return {

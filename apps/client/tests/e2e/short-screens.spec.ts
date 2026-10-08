@@ -201,12 +201,12 @@ test('the map’s controls fit short and tall screens', async ({ browser }) => {
   }
 });
 
-test('a busy tile’s four buttons fit a phone on its side (#264)', async ({ browser }) => {
+test('a busy tile’s five buttons fit a phone on its side (#264)', async ({ browser }) => {
   test.setTimeout(240_000); // a map build at two sizes; CI renders in software
   const page = await newPlayer(browser, uniqueName('busy'));
   // A wild squishy on my home tile that has a node, every time (spawns are
-  // rolled per window): its panel has all four buttons, Send a gatherer,
-  // Meet it, Gather and Go home.
+  // rolled per window): its panel has all five buttons, Send a gatherer,
+  // Meet it, Gather, Go home and Explore (#199).
   let busy: { q: number; r: number } | null = null;
   await page.route('**/api/v1/maps/*/wild', async (route) => {
     const mapId = /\/maps\/([^/]+)\/wild/.exec(route.request().url())![1]!;
@@ -251,13 +251,13 @@ test('a busy tile’s four buttons fit a phone on its side (#264)', async ({ bro
       await expect(panel.getByTestId('tile-meet-wild')).toBeVisible({ timeout: 5_000 });
     }).toPass({ timeout: 30_000 });
     // Gather and Go home render once the bag and home data arrive, which can
-    // be after Meet it: wait for all four before measuring.
-    for (const id of ['tile-send-gatherer', 'tile-gather', 'tile-home']) {
+    // be after Meet it: wait for all five before measuring.
+    for (const id of ['tile-send-gatherer', 'tile-gather', 'tile-home', 'tile-explore']) {
       await expect(panel.getByTestId(id)).toBeVisible();
     }
     const panelBox = (await boxes(page, '[data-testid="tile-panel"]'))[0]!;
     const buttons = await boxes(page, '[data-testid="tile-panel"] .tile-panel-actions button');
-    expect(buttons.length, 'Send a gatherer, Meet it, Gather and Go home').toBe(4);
+    expect(buttons.length, 'Send a gatherer, Meet it, Gather, Go home and Explore').toBe(5);
     const cut = buttons.filter((b) => !inside(b, panelBox)).map(show);
     expect(cut, `cut off by the tile panel ${show(panelBox)}`).toEqual([]);
     await expect(panel).toHaveJSProperty('scrollTop', 0);

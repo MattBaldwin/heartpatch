@@ -28,7 +28,7 @@ interface ExploreDebug {
 }
 
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
-const mapState = (page: Page) => hook<{ tiles: number }>(page, 'map');
+const mapState = (page: Page) => hook<{ tiles: number; selected: string | null }>(page, 'map');
 
 /** Where a spot is on screen now (the dev hook projects it). */
 async function spotOnScreen(page: Page, index: number): Promise<{ x: number; y: number }> {
@@ -65,11 +65,19 @@ test('explores a home tile: walk, search the easy way, a find card, a missing Sh
   await slowExpect(lobby).toBeHidden();
   await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(469);
 
-  // The camera starts on the Heart Seed: tap it, then Explore.
+  await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+
+  // The camera starts on the Heart Seed: tap it, then Explore. A busy WebKit
+  // runner can miss the first tap while the map settles, so tap again only
+  // while nothing is picked (a second tap on the picked Heart Seed opens Home).
   const box = (await page.locator('#game').boundingBox())!;
-  await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
   const explore = page.getByTestId('tile-explore');
-  await slowExpect(explore).toBeVisible();
+  await expect(async () => {
+    if ((await mapState(page))?.selected == null) {
+      await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect(explore).toBeVisible({ timeout: 5_000 });
+  }).toPass(slow);
   await explore.tap();
 
   await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
