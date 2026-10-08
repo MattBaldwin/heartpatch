@@ -108,7 +108,7 @@ export type ExploreRules = z.infer<typeof ExploreRulesSchema>;
  */
 export function checkExploreRules(
   input: unknown,
-  data: Pick<GameData, 'terrains' | 'resources'>,
+  data: Pick<GameData, 'terrains' | 'resources' | 'recipes'>,
 ): string[] {
   const result = ExploreRulesSchema.safeParse(input);
   if (!result.success) return formatDataIssues(input, result.error);
@@ -128,6 +128,14 @@ export function checkExploreRules(
     // The bag holds a tool as an item counted in uses (`Resource.tool`).
     if (!data.resources.some((r) => r.tool === t.id)) {
       problems.push(`tools[${String(i)}]: no item with tool "${t.id}"`);
+    }
+    // A recipe makes one whole tool: exactly its uses.
+    for (const recipe of data.recipes) {
+      if (recipe.output.resource === t.id && recipe.output.quantity !== t.uses) {
+        problems.push(
+          `tools[${String(i)}]: recipe "${recipe.id}" makes ${String(recipe.output.quantity)} uses, not ${String(t.uses)}`,
+        );
+      }
     }
   });
 

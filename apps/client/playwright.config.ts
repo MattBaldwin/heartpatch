@@ -18,7 +18,7 @@ const testDir = './tests/e2e';
  * count that doesn't match, fails the run. Unset (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  ['audio', 'first-session', 'smoke', 'starter', 'wardrobe'],
+  ['audio', 'first-session', 'smoke', 'starter', 'wardrobe', 'explore'],
   ['auth', 'battle', 'care', 'cinematic', 'hollow', 'battle-ui', 'map', 'potions', 'recipe-book'],
   [
     'capture',
@@ -45,7 +45,7 @@ const E2E_GROUPS = [
     'wild-picker',
   ],
   // tutorial-flow's two runs go side by side (its describe mode is parallel).
-  ['tutorial-flow', 'tray-layout', 'admin', 'boutique', 'fences'],
+  ['tutorial-flow', 'tray-layout', 'admin', 'boutique', 'fences', 'factory'],
 ];
 
 function e2eGroup(value: string | undefined): { testMatch?: string[]; testIgnore?: string[] } {

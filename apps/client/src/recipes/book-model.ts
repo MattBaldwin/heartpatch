@@ -15,6 +15,7 @@ import {
 import { bagCrafts, itemName, type BagCraft } from '../inventory/bag-view.js';
 import { itemChip, type ItemChip } from '../inventory/item-chips.js';
 import { itemIcon } from '../inventory/item-icons.js';
+import { toolMakes } from '../inventory/tool-uses.js';
 import { buildingIcon, effectChips } from '../home/home-view.js';
 
 // The recipe book's pages as the player reads them (owner decision
@@ -140,6 +141,11 @@ export interface PageView {
   readonly ingredients: readonly IngredientView[];
   /** Open, in season, and the bag holds everything. */
   readonly canMake: boolean;
+  /**
+   * A recipe the Crafting Factory could take now (#294): open, in season and
+   * the bag holds one run, whatever the pot is doing.
+   */
+  readonly queueable: boolean;
   /** Why it can't be made right now, or null. */
   readonly note: string | null;
   /** Opened since the player last looked (the "New page!" moment). */
@@ -221,7 +227,10 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
   }
   const meta =
     page.output.kind === 'item'
-      ? `${BOOK_TEXT.makes(page.output.quantity, itemName(page.output.resource))} · ${craftTime(page.seconds ?? 0)}`
+      ? `${
+          toolMakes(page.output.resource, page.output.quantity, itemName(page.output.resource)) ??
+          BOOK_TEXT.makes(page.output.quantity, itemName(page.output.resource))
+        } · ${craftTime(page.seconds ?? 0)}`
       : BOOK_TEXT.build;
   return {
     key: page.key,
@@ -240,6 +249,7 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
     meta,
     ingredients,
     canMake,
+    queueable: page.kind === 'recipe' && !sealed && inSeason && hasAll,
     note,
     isNew: !sealed && ctx.unseen.has(page.key),
   };

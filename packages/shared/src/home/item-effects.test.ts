@@ -46,13 +46,24 @@ describe('itemEffects (#241)', () => {
   });
 
   it('lists what a gathered thing goes into', () => {
-    // Glimmer builds two fences and takes the others (and the fire) to their top level (#203).
+    // Glimmer builds two fences and takes the others (the fire and the
+    // Factory too, #294) to their top level (#203), and goes into the
+    // explorer's Lantern (#199).
     expect(itemEffects('glimmer')).toEqual([
       { kind: 'build-with', buildings: ['glimmer-rail', 'lantern-fence'] },
       {
         kind: 'upgrades',
-        buildings: ['hearthfire', 'hedge', 'moat', 'stone-wall', 'emberwood-palisade', 'ice-wall'],
+        buildings: [
+          'hearthfire',
+          'crafting-factory',
+          'hedge',
+          'moat',
+          'stone-wall',
+          'emberwood-palisade',
+          'ice-wall',
+        ],
       },
+      { kind: 'recipes', recipes: ['lantern'] },
     ]);
     const ember = itemEffects('emberwood');
     expect(ember).toContainEqual({

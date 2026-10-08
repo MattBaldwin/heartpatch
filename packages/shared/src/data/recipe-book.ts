@@ -57,6 +57,10 @@ export const RECIPE_BOOK: RecipeBookData = {
       line: 'Gather some Timber and Stone, and this page opens!',
     },
     {
+      page: 'building:crafting-factory',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
       page: 'building:hedge',
       line: 'Get Greens from a meadow (a squishy gatherer picks them) and some Timber, and this page opens!',
     },
@@ -87,6 +91,22 @@ export const RECIPE_BOOK: RecipeBookData = {
     {
       page: 'building:ice-wall',
       line: 'Get Ice from the mountains (a squishy gatherer chips it) or freeze Water, plus some Stone, and this page opens!',
+    },
+    {
+      page: 'recipe:shovel',
+      line: 'Gather some Timber and Stone, and this page opens!',
+    },
+    {
+      page: 'recipe:net',
+      line: 'Get Greens from a meadow (a squishy gatherer picks them) and some Timber, and this page opens!',
+    },
+    {
+      page: 'recipe:rope',
+      line: 'Get some Greens from a meadow (a squishy gatherer picks them), and this page opens!',
+    },
+    {
+      page: 'recipe:lantern',
+      line: 'Find Glimmer in the mountains, plus Timber and Emberwood, and this page opens!',
     },
   ],
 };

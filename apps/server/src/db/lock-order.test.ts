@@ -17,6 +17,7 @@ import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
 import { createExploreRepo } from '../modules/explore/repo.js';
+import { createFactoryRepo } from '../modules/factory/repo.js';
 import { createFencesRepo } from '../modules/fences/repo.js';
 import { createBoutiqueService, stockFor } from '../modules/boutique/service.js';
 import { createBuildingsService, removeMemberBuildings } from '../modules/buildings/service.js';
@@ -60,6 +61,7 @@ import {
   buildings,
   clothingOwned,
   coinLedger,
+  factoryQueues,
   fenceSegments,
   gameEvents,
   tileExplore,
@@ -1478,6 +1480,46 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       );
     });
     expect(locked).toEqual(fireIds);
+  });
+
+  it("locks a player's Factory batches in id order (factory `lockRunning`, `lockRunningIn`, #294)", async () => {
+    const { mapId, userId, fireIds } = await fires();
+    const factoryId = fireIds[0]!;
+    // Stored highest id first, so a scan meets them out of id order.
+    const batchIds = [randomUUID(), randomUUID(), randomUUID()].sort();
+    await db.insert(factoryQueues).values(
+      [...batchIds].reverse().map((id) => ({
+        id,
+        mapId,
+        userId,
+        buildingId: factoryId,
+        recipeId: 'heart-charm',
+        total: 3,
+        itemSeconds: 60,
+        output: { 'heart-charm': 1 },
+        inputs: { timber: 2, treats: 1 },
+        startedAt: new Date(),
+      })),
+    );
+    const lockBatchRow = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: factoryQueues.id })
+        .from(factoryQueues)
+        .where(eq(factoryQueues.id, id))
+        .for('update');
+    let locked: string[] = [];
+    await rowsAgainst(lockBatchRow, batchIds, async () => {
+      locked = (await unplanned((tx) => createFactoryRepo(tx).lockRunning({ mapId, userId }))).map(
+        (b) => b.id,
+      );
+    });
+    expect(locked).toEqual(batchIds);
+    await rowsAgainst(lockBatchRow, batchIds, async () => {
+      locked = (await unplanned((tx) => createFactoryRepo(tx).lockRunningIn(factoryId))).map(
+        (b) => b.id,
+      );
+    });
+    expect(locked).toEqual(batchIds);
   });
 
   it('locks home tiles and the target tile together in id order (buildings `lockHomeTilesAnd`, #202)', async () => {

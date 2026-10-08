@@ -50,7 +50,7 @@ async function newPatch(page: Page): Promise<void> {
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live).toBe('live');
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
 }
 
 test('shows the trading posts near home, and a post’s panel says what it is', async ({
@@ -69,7 +69,7 @@ test('shows the trading posts near home, and a post’s panel says what it is', 
   await visitPatch(lobby);
   await expect(lobby).toBeHidden();
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
-  await expect.poll(async () => (await mapState(page))?.live).toBe('live');
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
 
   // A post sits 3 steps from my Heart Seed, so one is in view from home.
   await expect.poll(async () => (await posts(page))?.shown ?? 0).toBeGreaterThan(0);

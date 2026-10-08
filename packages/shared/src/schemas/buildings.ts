@@ -15,7 +15,7 @@ import { LocalDateSchema } from './time.js';
 export const BuildingSpotSchema = z.number().int().min(0).max(6);
 
 /** Kinds of `buildings` row. Fences (#203) are segments on edges, in their own rows. */
-export const BuildingKindSchema = z.enum(['hearthfire', 'habitat', 'training-grounds']);
+export const BuildingKindSchema = z.enum(['hearthfire', 'habitat', 'training-grounds', 'factory']);
 export type BuildingRowKind = z.infer<typeof BuildingKindSchema>;
 
 /**

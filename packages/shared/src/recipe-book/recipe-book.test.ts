@@ -182,17 +182,7 @@ describe('whereToFind', () => {
         where.bonusFrom.length > 0 ||
         where.madeBy.length > 0;
       // Heartdust comes from rescues and seasonal extras from events: no node, bonus or recipe yet.
-      // The explore tools' recipes come with the explore view (#199, its second PR).
-      const elsewhere = [
-        'heartdust',
-        'turkey-feathers',
-        'presents',
-        'fireworks',
-        'shovel',
-        'net',
-        'rope',
-        'lantern',
-      ];
+      const elsewhere = ['heartdust', 'turkey-feathers', 'presents', 'fireworks'];
       expect(found, r.id).toBe(!elsewhere.includes(r.id));
     }
   });

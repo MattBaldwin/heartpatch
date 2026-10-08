@@ -29,6 +29,8 @@ import { createCareService } from './modules/care/service.js';
 import { createBattlesService } from './modules/battles/service.js';
 import { gatheringRoutes } from './modules/gathering/routes.js';
 import { squishyJobsRoutes } from './modules/jobs/routes.js';
+import { factoryRoutes } from './modules/factory/routes.js';
+import { createFactoryService } from './modules/factory/service.js';
 import { createSettleService } from './modules/settle/service.js';
 import { settleRoutes } from './modules/settle/routes.js';
 import { createSquishyJobsService } from './modules/jobs/service.js';
@@ -291,6 +293,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // (owner decision 2026-10-06).
         await api.register(
           settleRoutes(createSettleService({ db, clock, ...publish }), { hooks: authHooks }),
+        );
+        // The Crafting Factory (#294): batches that go on while the kid is away.
+        await api.register(
+          factoryRoutes(createFactoryService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
         );
         // Squishy jobs (owner decisions 2026-10-04): the team, gatherers, the job board.
         await api.register(

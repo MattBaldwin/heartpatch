@@ -299,6 +299,23 @@
   display: none;
 }
 
+/* Everything in the panel takes a full row, except Go home and Explore on
+   your own home tile, which share one so a small phone's panel stays short
+   (iPhone SE: the Heart Seed's panel fits without scrolling). On their own,
+   each still fills the row. */
+.tile-panel .tile-panel-actions:has(.tile-actions-slot > *) {
+  flex-flow: row wrap;
+}
+
+.tile-panel .tile-actions-slot > * {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.tile-panel .tile-actions-slot > .tile-action-pair {
+  flex-basis: 40%;
+}
+
 /* Something's rustling here! (#209): a soft leafy line over Meet it, like the tuft. */
 .wild-rustle {
   margin: 0;
@@ -329,5 +346,16 @@
   .tile-panel .tile-actions-slot > button {
     grid-column: auto;
     order: 1;
+  }
+
+  /* On your own home tile Go home and Explore join in (#199): three buttons
+     to a row, the last row's stretching, so a busy tile's five still fit two
+     rows. */
+  .tile-panel .tile-panel-actions:has(.tile-action-pair):has(.tile-actions-slot > *) {
+    display: flex;
+  }
+
+  .tile-panel .tile-panel-actions:has(.tile-action-pair) .tile-actions-slot > button {
+    flex: 1 1 28%;
   }
 }

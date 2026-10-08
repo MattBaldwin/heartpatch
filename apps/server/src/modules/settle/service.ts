@@ -18,6 +18,7 @@ import {
   grantItems,
   lockGrantRows,
 } from '../inventory/service.js';
+import { applyBatchPlans, planGrants, planSettleBatches } from '../factory/service.js';
 import { bankableWork, landTraining, squishyName } from '../jobs/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { requireMember } from '../maps/members.js';
@@ -35,7 +36,8 @@ import { createSettleRepo } from './repo.js';
  * Collect wrote (`item.crafted`, `resource.gathered`, `work.collected`), and
  * a gather's roll for found clothing. Training Grounds XP lands here too
  * (owner decision 2026-10-06: `squishy.trained`, plain XP per hour, capped at
- * `JOB_RULES.training.maxHours`). Settling twice, or from two phones at
+ * `JOB_RULES.training.maxHours`). Crafting Factory batches (#294) bank
+ * what they've made since the last settle (`factory.crafted`). Settling twice, or from two phones at
  * once, banks each thing once: the member row lock runs settles one at a
  * time, and each row is re-read under its lock.
  */
@@ -74,7 +76,8 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
       const result = await createSettleRepo(db).transaction(async (repo, tx) => {
         const { map } = await requireMember(tx, user, mapId);
         // Lock order (tech spec §7): the member row (one settle at a time per
-        // player), tiles, gathers, the craft, squishies, inventory rows, `maps`.
+        // player), tiles, gathers, the craft, Factory batches, squishies,
+        // inventory rows, `maps`.
         if (!(await createMapsRepo(tx).lockMember(map.id, user.id))) {
           throw new AppError('NOT_FOUND', MESSAGES.noMap);
         }
@@ -108,6 +111,8 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
         await jobs.lockTiles([...tileIds].sort());
         const gathers = await gathering.lockToSettle(gathersBefore.map((g) => g.id));
         const crafts = await inventory.lockActiveCrafts(owner);
+        // Factory batches after the craft (step 8, id order).
+        const batches = await planSettleBatches(tx, owner, at);
         // Gatherers and trainees together, in id order (tech spec §7).
         await jobs.lockSquishies(
           [...new Set([...workersBefore, ...traineesBefore].map((r) => r.squishy.id))].sort(),
@@ -134,11 +139,12 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
           ...workPlans.flatMap((p) =>
             p.work && p.work.progress.cycles > 0 ? [{ userId: user.id, items: p.work.ready }] : [],
           ),
+          ...planGrants(batches.plans),
         ]);
 
         const landed: Landed[] = [];
         const events: NewGameEvent[] = [];
-        const due: number[] = [];
+        const due: number[] = [...batches.due];
 
         for (const { craft, ready } of craftPlans) {
           if (!ready) {
@@ -212,6 +218,10 @@ export function createSettleService(options: SettleServiceOptions): SettleServic
             payload: { userId: user.id, squishyIds: workedIds, items: worked },
           });
         }
+        // Factory batches: what each made since last time.
+        const factory = await applyBatchPlans(tx, batches.plans, at);
+        landed.push(...factory.landed);
+        events.push(...factory.events);
         events.push(...training.events);
         for (const event of events) await repo.appendEvent(event);
 

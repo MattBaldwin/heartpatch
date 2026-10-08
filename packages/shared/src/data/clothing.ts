@@ -1111,6 +1111,58 @@ const MILESTONE: ClothingItem[] = [
       ],
     },
   },
+  // Seeker (#199): exploring your land, search spot by search spot.
+  {
+    id: 'seekers-bandana',
+    name: "Seeker's Bandana",
+    description: 'Keeps the leaves out of your eyes while you peek under rocks.',
+    slot: 'hair-accessory',
+    rarity: 'uncommon',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'capsule', at: [0, 0.02, 0], size: [1.24, 0.2, 1.1], color: '#7fc8a9' },
+        { shape: 'ellipsoid', at: [0.12, -0.04, 0.58], size: [0.26, 0.2, 0.12], color: '#7fc8a9' },
+        { shape: 'capsule', at: [0.2, -0.22, 0.6], size: [0.12, 0.32, 0.08], color: '#5aa889' },
+      ],
+    },
+  },
+  {
+    id: 'trail-pack',
+    name: 'Trail Pack',
+    description: 'A pocket for every shiny thing you dug up.',
+    slot: 'back',
+    rarity: 'rare',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'ellipsoid', at: [0, -0.3, 0.5], size: [0.85, 0.95, 0.5], color: '#c9a36b' },
+        { shape: 'ellipsoid', at: [0, -0.05, 0.56], size: [0.88, 0.3, 0.52], color: '#7a4f2c' },
+        { shape: 'capsule', at: [0, -0.62, 0.78], size: [0.6, 0.12, 0.12], color: '#ffd166' },
+        { shape: 'ellipsoid', at: [0, 0.42, 0], size: [1.1, 0.16, 1.1], color: '#7a4f2c' },
+      ],
+    },
+  },
+  {
+    id: 'mossy-crown',
+    name: 'Mossy Crown',
+    description: 'Grown from every corner of land you know by heart.',
+    slot: 'hat',
+    rarity: 'epic',
+    sources: ['milestone'],
+    tradable: false,
+    visual: {
+      pieces: [
+        { shape: 'capsule', at: [0, 0.02, 0.04], size: [0.98, 0.24, 0.98], color: '#93d6a0' },
+        { shape: 'ellipsoid', at: [-0.3, 0.2, -0.24], size: [0.26, 0.22, 0.26], color: '#ffd6f0' },
+        { shape: 'ellipsoid', at: [0.3, 0.2, -0.24], size: [0.26, 0.22, 0.26], color: '#fff3a8' },
+        { shape: 'ellipsoid', at: [0, 0.24, -0.4], size: [0.3, 0.26, 0.3], color: '#ff8fab' },
+        { shape: 'cone', at: [0, 0.3, 0.3], size: [0.18, 0.3, 0.18], color: '#6a9a5a' },
+      ],
+    },
+  },
   {
     id: 'lightbringer-wings',
     name: 'Lightbringer Wings',

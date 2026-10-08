@@ -372,3 +372,13 @@
   gap: 8px;
   justify-content: flex-start;
 }
+
+/* Sprout's one-time Factory tip (#294). */
+.home-sprout-tip {
+  margin: 0;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #fff3d6;
+  font-size: 15px;
+  font-weight: 700;
+}

@@ -287,6 +287,22 @@ export const PROP_SWAY: Readonly<Partial<Record<PropKind, { tip: number; top: nu
 };
 
 /**
+ * Homesteads (#199): fully explored land joined to home wears home's cream
+ * glow; one cut off from home (napping) a pale lavender. Linear RGB, alpha.
+ */
+export const HOMESTEAD_GLOW = {
+  joined: { rgb: [1, 0.95, 0.82], fill: 0.62, edge: 1 },
+  paused: { rgb: [0.74, 0.7, 0.86], fill: 0.55, edge: 0.95 },
+} as const; // TUNE
+
+/** The little gold sparkle on a fully explored tile (#199). */
+export const EXPLORED_MARK = {
+  /** Offset from the tile's middle (world units): the corner across from the wild tuft. */
+  offset: { x: 0.18, z: 0.16 }, // TUNE
+  scale: 1.8, // TUNE: readable at the map's start zoom
+} as const;
+
+/**
  * The wild-squishy tuft (#209) on a tile in reach with a wild squishy. It
  * stands off the tile's middle (where the Heart Seed and the props crowd),
  * and sways in the map's breeze a little more than grass, so it looks like
