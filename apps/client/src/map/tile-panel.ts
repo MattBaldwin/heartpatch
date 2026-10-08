@@ -51,6 +51,11 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
     class: 'tile-panel-guardians',
     'data-testid': 'tile-panel-guardians',
   });
+  // What a squishy gatherer picks here (#238), out on the card, not folded away.
+  const gatherer = el('p', {
+    class: 'tile-panel-gatherer',
+    'data-testid': 'tile-panel-gatherer',
+  });
   const actions = el('div', { class: 'tile-panel-actions', 'data-testid': 'tile-panel-actions' });
   const close = el(
     'button',
@@ -74,6 +79,7 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
       close,
     ),
     guardians,
+    gatherer,
     details,
     actions,
   );
@@ -89,6 +95,8 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
       resource.hidden = info.resource === null;
       guardians.textContent = info.guardians ?? '';
       guardians.hidden = info.guardians === null;
+      gatherer.textContent = info.gatherer ?? '';
+      gatherer.hidden = info.gatherer === null;
       panel.classList.toggle('tile-panel-home', info.home);
       panel.hidden = false;
     },

@@ -81,14 +81,30 @@ export interface WorkSource {
 }
 
 /**
- * What a gatherer would work on a tile: its node if it has a gatherable one,
- * else the terrain's yield on land outside the home base, else nothing.
+ * What a gatherer would work on a tile (owner decision on #238, the nesting
+ * economy): out on the land, the terrain's primary resource
+ * (`terrainYields`), whatever spot the tile has, since spots there are the
+ * Keeper's to tap; in the home ring, its spot, as before (home land yields
+ * nothing). A terrain with no yield outside home (Juniper's Gap) keeps its
+ * spot for a gatherer, as before #238. Nothing otherwise.
  */
 export function workSource(
   tile: WorkTile,
   resources: readonly Resource[],
   rules: Pick<JobRules, 'terrainYields'>,
 ): WorkSource | null {
+  const land =
+    tile.homeSlot === null
+      ? rules.terrainYields.find((y) => y.terrain === tile.terrain)
+      : undefined;
+  if (land) {
+    return {
+      resource: land.resource,
+      quantity: land.quantity,
+      seconds: land.seconds,
+      from: 'land',
+    };
+  }
   if (tile.nodeResource !== null) {
     const gather = resources.find((r) => r.id === tile.nodeResource)?.gather;
     if (gather) {
@@ -100,11 +116,7 @@ export function workSource(
       };
     }
   }
-  if (tile.homeSlot !== null) return null;
-  const land = rules.terrainYields.find((y) => y.terrain === tile.terrain);
-  return land
-    ? { resource: land.resource, quantity: land.quantity, seconds: land.seconds, from: 'land' }
-    : null;
+  return null;
 }
 
 /** A squishy as the job rules see it. */

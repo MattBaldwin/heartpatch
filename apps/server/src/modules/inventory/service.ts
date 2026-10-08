@@ -1,5 +1,7 @@
 import {
   activeSeasons,
+  BATTLE_RULES,
+  craftSecondsFor,
   GAME_DATA,
   inSeason,
   isPageUnlocked,
@@ -25,6 +27,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { localDate, type Clock } from '../../lib/time.js';
+import { createBattlesRepo } from '../battles/repo.js';
 import { createGatheringRepo, type GatherRow } from '../gathering/repo.js';
 import { requireMember } from '../maps/members.js';
 import { createInventoryRepo, type CraftRow, type ItemOwner } from './repo.js';
@@ -280,12 +283,21 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
           ]);
           const banked: NewGameEvent[] = [];
           for (const done of active) banked.push(await bankCraft(tx, done, at));
+          // Quicker with the right squishy on the team as it starts (#238: a
+          // Frost squishy freezes Water). A plain read: no squishy locks.
+          const team = recipe.fasterWith
+            ? await createBattlesRepo(tx).listTeam(mapId, user.id, BATTLE_RULES.teamSize)
+            : [];
+          const seconds = craftSecondsFor(
+            recipe,
+            team.map((s) => s.element),
+          );
           const craft = await repo.insertCraft({
             ...owner,
             recipeId: recipe.id,
             items: { [recipe.output.resource]: recipe.output.quantity },
             startedAt: at,
-            readyAt: new Date(at.getTime() + recipe.craftSeconds * 1000),
+            readyAt: new Date(at.getTime() + seconds * 1000),
           });
           // Short of anything: CONFLICT, and the craft row rolls back with it.
           await consumeItems(tx, owner, recipe.inputs, 'craft', craft.id);

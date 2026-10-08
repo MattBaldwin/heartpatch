@@ -42,7 +42,15 @@ export const BATTLE_RULES: BattleRules = {
   capture: {
     atFull: 15,
     nearlyOut: 90,
-    rarity: { common: 100, uncommon: 85, rare: 70, epic: 55, legendary: 40, secret: 40 },
+    rarity: {
+      common: 100,
+      uncommon: 85,
+      rare: 70,
+      epic: 55,
+      legendary: 40,
+      mythic: 30,
+      secret: 40,
+    },
   },
 
   // TUNE: a win pays 20 × the opponents' levels × 1.5 (×1 on a loss). How

@@ -17,6 +17,7 @@ export const RARITY_NAMES = {
   rare: 'Rare',
   epic: 'Epic',
   legendary: 'Legendary',
+  mythic: 'Mythic',
   secret: 'Secret',
 } as const satisfies Record<Rarity, string>;
 

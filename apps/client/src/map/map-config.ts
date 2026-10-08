@@ -35,7 +35,11 @@ export type PropKind =
   | 'jack-o-lantern'
   // Seasonal home nodes: Halloween's pumpkin patch, Thanksgiving's leaf pile.
   | 'pumpkin-patch'
-  | 'leaf-pile';
+  | 'leaf-pile'
+  // New things to gather (#238): a lakeside well, a patch of greens, ice crystals.
+  | 'well'
+  | 'greens-patch'
+  | 'ice-crystals';
 
 export interface TerrainLook {
   /** Top colour, sRGB hex. */
@@ -240,6 +244,20 @@ export const PROP_SWAY: Readonly<Partial<Record<PropKind, { tip: number; top: nu
   reeds: { tip: 0.035, top: 0.3 }, // TUNE
   'lily-pad': { tip: 0, top: 0.02 }, // bobs with the water instead
 };
+
+/**
+ * The wild-squishy tuft (#209) on a tile in reach with a wild squishy. It
+ * stands off the tile's middle (where the Heart Seed and the props crowd),
+ * and sways in the map's breeze a little more than grass, so it looks like
+ * something's moving in there. No motion of its own beyond the terrain clock.
+ */
+export const WILD_MARKER = {
+  /** Offset from the tile's middle (world units). */
+  offset: { x: -0.17, z: -0.17 }, // TUNE
+  scale: 1.5, // TUNE
+  /** As `PROP_SWAY`: how far the top sways, and that top's height (before scale). */
+  sway: { tip: 0.05, top: 0.26 }, // TUNE
+} as const;
 
 /**
  * Wild land (no owner) is drawn soft and grey-ish; claimed land is in full

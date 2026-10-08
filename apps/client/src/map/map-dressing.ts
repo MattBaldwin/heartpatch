@@ -30,6 +30,11 @@ export interface DressingPlacement extends PropPlacement {
 export interface DressOptions {
   /** Halloween is on (map-local date): some pumpkins become jack-o'-lanterns. */
   readonly halloween: boolean;
+  /**
+   * A node standing in the tile's middle (#238: a well, greens, ice): it's
+   * placed there, and the other props keep clear of it.
+   */
+  readonly middle?: PropKind;
 }
 
 /** What grows on `terrain` (a terrain this client doesn't know gets the meadow's). */
@@ -51,7 +56,8 @@ function pick(items: readonly DressingItem[], roll: number): DressingItem | unde
  * Props for one tile: a hash-seeded count, mix and spots, spread around the
  * middle so they don't poke over the edge. Edge items (reeds, the dock) sit
  * near the rim facing out. Juniper's Gap's centre tile keeps its middle clear
- * for the glowing tree. Home tiles get none (the caller skips them).
+ * for the glowing tree, and a tile with a `middle` node for that node (#238).
+ * Home tiles get none (the caller skips them).
  */
 export function dressTile(
   tile: Hex,
@@ -65,9 +71,19 @@ export function dressTile(
   const count = min + Math.floor(hash01(q, r, 1) * (max - min + 1));
   const centre = hexToWorld(tile, size);
   const start = hash01(q, r, 2) * Math.PI * 2;
-  const clearMiddle = terrain === 'junipers-gap' && q === 0 && r === 0;
+  const clearMiddle =
+    (terrain === 'junipers-gap' && q === 0 && r === 0) || options.middle !== undefined;
   const used = new Set<PropKind>();
   const props: DressingPlacement[] = [];
+  if (options.middle !== undefined) {
+    props.push({
+      kind: options.middle,
+      at: { x: centre.x, z: centre.z },
+      scale: 1,
+      turn: hash01(q, r, 90) * Math.PI * 2,
+      tint: '#ffffff',
+    });
+  }
   for (let i = 0; i < count; i++) {
     const lead = i === 0 && dressing.lead !== undefined;
     const pool = lead

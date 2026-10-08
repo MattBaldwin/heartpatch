@@ -51,6 +51,20 @@ export function gatherSeconds(
   return overrides?.gatherSeconds ?? resource.gather?.seconds ?? 0;
 }
 
+/**
+ * How long a craft takes (#238): the recipe's time, `fasterWith.percent`
+ * less (rounded up) when a squishy of that element is on the player's team
+ * as it starts.
+ */
+export function craftSecondsFor(
+  recipe: Pick<Recipe, 'craftSeconds' | 'fasterWith'>,
+  teamElements: readonly string[],
+): number {
+  const faster = recipe.fasterWith;
+  if (!faster || !teamElements.includes(faster.element)) return recipe.craftSeconds;
+  return Math.ceil((recipe.craftSeconds * (100 - faster.percent)) / 100);
+}
+
 /** Ids the player is short of for `cost`, and by how much. Empty = affordable. */
 export function shortfall(have: ItemCounts, cost: ItemCounts): ItemCounts {
   const short: ItemCounts = {};

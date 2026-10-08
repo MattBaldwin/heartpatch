@@ -17,6 +17,16 @@ describe('battle rules', () => {
     expect(checkBattleRules(FIXTURE_BATTLE_RULES)).toEqual([]);
   });
 
+  it('has capture odds for every rarity, Mythic shyest on the ladder (#261)', () => {
+    const shy = BATTLE_RULES.capture.rarity;
+    expect(shy.mythic).toBeLessThan(shy.legendary);
+    expect(
+      problemsAfter((r) => {
+        delete (r.capture.rarity as Partial<BattleRules['capture']['rarity']>).mythic;
+      }),
+    ).toEqual([expect.stringContaining('capture.rarity.mythic')]);
+  });
+
   it('uses design doc §6 defaults: teams of 3, variance 0.9–1.1', () => {
     expect(BATTLE_RULES.teamSize).toBe(3);
     expect(BATTLE_RULES.damage).toMatchObject({ varianceMin: 0.9, varianceMax: 1.1 });

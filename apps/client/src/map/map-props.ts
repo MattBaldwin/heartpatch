@@ -295,6 +295,96 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
       }
       return done(parts, 0.12);
     }
+    case 'well':
+      // A little wooden well with a pink roof and a bucket (#238). Few
+      // segments: there's one on every lake.
+      return done(
+        [
+          painted(at(cylinder(0.1, 0.2, 0.22, 6), 0, 0.05, 0), '#b8b2c2'),
+          painted(at(cylinder(0.012, 0.15, 0.15, 6), 0, 0.1, 0), '#6fb6e8'),
+          painted(at(box(0.03, 0.22, 0.03), -0.09, 0.2, 0), '#9a6234'),
+          painted(at(box(0.03, 0.22, 0.03), 0.09, 0.2, 0), '#9a6234'),
+          painted(
+            at(cylinder(0.12, 0, 0.3, 4), 0, 0.36, 0, 1, 1, 0.75, { y: Math.PI / 4 }),
+            '#d0628f',
+          ),
+          painted(at(box(0.05, 0.05, 0.05), 0, 0.2, 0), '#d39a5c'),
+        ],
+        0, // its stone base sits on the ground
+      );
+    case 'greens-patch': {
+      // A leafy mound with grass tufts and a clover (#238). Three-sided
+      // blades and few segments, so a forest full of them stays cheap.
+      const parts: Mesh[] = [painted(at(cylinder(0.05, 0.24, 0.32, 6), 0, 0.02, 0), '#6fbf63')];
+      const tufts = [
+        [-0.08, 0.04, 1],
+        [0.07, 0.05, 1.2],
+        [0.01, -0.08, 1.05],
+      ] as const;
+      for (const [tx, tz, size] of tufts) {
+        for (let i = 0; i < 3; i++) {
+          const a = (i / 3) * Math.PI * 2 + tx * 10;
+          const h = 0.17 * size;
+          parts.push(
+            painted(
+              at(
+                cylinder(h, 0, 0.06, 3),
+                tx + Math.cos(a) * 0.02,
+                0.03 + h / 2,
+                tz + Math.sin(a) * 0.02,
+                1,
+                1,
+                1,
+                {
+                  x: Math.sin(a) * 0.4,
+                  z: -Math.cos(a) * 0.4,
+                },
+              ),
+              i % 2 === 0 ? '#4f9a52' : '#5fae5c',
+            ),
+          );
+        }
+      }
+      // A clover: three flat leaves.
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + 0.5;
+        parts.push(
+          painted(
+            at(
+              cylinder(0.02, 0.07, 0.07, 5),
+              0.09 + Math.cos(a) * 0.035,
+              0.055,
+              -0.06 + Math.sin(a) * 0.035,
+            ),
+            '#8fd47a',
+          ),
+        );
+      }
+      return done(parts, 0); // the mound is its own footing
+    }
+    case 'ice-crystals': {
+      // A cluster of icy blue spires (#238), cooler than Glimmer's pink crystal.
+      const parts: Mesh[] = [];
+      const shards = [
+        [0, 0, 0.34, 0, '#bfe6ff'],
+        [0.08, 0.04, 0.24, 0.3, '#d8f0ff'],
+        [-0.08, 0.03, 0.2, -0.35, '#a8dcff'],
+      ] as const;
+      for (const [x, z, h, tilt, color] of shards) {
+        parts.push(
+          painted(at(cylinder(h, 0.08, 0.09, 5), x, h / 2, z, 1, 1, 1, { z: tilt }), color),
+        );
+        parts.push(
+          painted(
+            at(cylinder(0.09, 0, 0.08, 5), x - Math.sin(tilt) * h, h + 0.04, z, 1, 1, 1, {
+              z: tilt,
+            }),
+            color,
+          ),
+        );
+      }
+      return done(parts, 0.16);
+    }
     case 'hay-bale':
       return done(
         [
@@ -460,4 +550,34 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
         0.18,
       );
   }
+}
+
+/**
+ * The wild-squishy marker (#209): a rustling tuft of three glossy leaves on a
+ * soft cream disc, so it reads on any terrain. Every tuft is the same (no
+ * species, CLAUDE.md rule 6); one merged mesh, drawn with thin instances.
+ * About 0.26 tall before `WILD_MARKER.scale`. TUNE: every size and colour.
+ */
+export function buildWildTuft(scene: Scene): Mesh {
+  const leaf = (height: number, lean: number, turn: number, hex: string): Mesh => {
+    const m = CreateSphere('wild-tuft-leaf', { diameter: 1, segments: 6 }, scene);
+    m.scaling.set(0.07, height, 0.035);
+    m.position.y = height / 2;
+    m.bakeCurrentTransformIntoVertices();
+    // Pivots at its base now: lean out from the middle, so the leaves fan open.
+    m.rotation.set(0, turn, lean);
+    return painted(m, hex);
+  };
+  const disc = CreateCylinder(
+    'wild-tuft-disc',
+    { height: 0.014, diameter: 0.26, tessellation: 16 },
+    scene,
+  );
+  disc.position.y = 0.007;
+  return merged('wild-tuft', [
+    painted(disc, '#fff4dc'),
+    leaf(0.26, 0, 0, '#8fcf7a'),
+    leaf(0.2, 0.55, 0.35, '#78b866'),
+    leaf(0.2, -0.55, -0.35, '#78b866'),
+  ]);
 }

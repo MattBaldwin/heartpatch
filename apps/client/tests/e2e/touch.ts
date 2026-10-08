@@ -104,3 +104,62 @@ export async function realTapThrough(
     await page.mouse.up();
   }
 }
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/**
+ * Plays touch pointer frames, 16 ms apart. Each frame lists every active
+ * finger's position; fingers missing from the next frame lift. By default
+ * every finger lands on the map's canvas, whatever is over it; with
+ * `hitTest` each lands on the element under it, as a finger does, and keeps
+ * sending there (a touch's implicit capture). Synthetic PointerEvents behave
+ * the same in WebKit and Chromium. Frames are spaced with a busy-wait, not
+ * timers: CI renders in software, where a 16 ms timer can take 300 ms and
+ * every flick would look like a slow drag.
+ */
+export async function touch(
+  page: Page,
+  frames: Record<number, Point>[],
+  { hitTest = false } = {},
+): Promise<void> {
+  await page.evaluate(
+    ({ frames, hitTest }) => {
+      const canvas = document.querySelector('#game')!;
+      const landed = new Map<number, Element>();
+      const fire = (type: string, id: number, p: Point) => {
+        if (type === 'pointerdown') {
+          landed.set(id, (hitTest && document.elementFromPoint(p.x, p.y)) || canvas);
+        }
+        landed.get(id)!.dispatchEvent(
+          new PointerEvent(type, {
+            pointerId: id,
+            pointerType: 'touch',
+            isPrimary: id === 1,
+            clientX: p.x,
+            clientY: p.y,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      };
+      let prev: Record<number, Point> = {};
+      for (const frame of [...frames, {}]) {
+        for (const [id, p] of Object.entries(frame)) {
+          fire(id in prev ? 'pointermove' : 'pointerdown', Number(id), p);
+        }
+        for (const [id, p] of Object.entries(prev)) {
+          if (!(id in frame)) fire('pointerup', Number(id), p);
+        }
+        prev = frame;
+        const until = performance.now() + 16;
+        while (performance.now() < until) {
+          // spin: keeps event timestamps 16 ms apart regardless of frame rate
+        }
+      }
+    },
+    { frames, hitTest },
+  );
+}

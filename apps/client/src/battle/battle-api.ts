@@ -5,6 +5,7 @@ import {
   WildHintsResponseSchema,
   type DevGrantSquishyRequest,
   type DevStartBattleRequest,
+  type Hex,
   type OwnedSquishy,
   type PlayerBattle,
   type PlayerBattleAction,
@@ -22,17 +23,22 @@ export const battleApi = {
       schema: CurrentBattleResponseSchema,
     }).then((res) => res.battle),
 
-  /** How many tiles in reach have a wild squishy right now (no species: a hint). */
-  wildNearby: (mapId: string): Promise<number> =>
+  /** Tiles in reach with a wild squishy right now, nearest first (no species: a hint). */
+  wildHints: (mapId: string): Promise<readonly Hex[]> =>
     apiCallFor(`/maps/${mapId}/wild`, { method: 'GET', schema: WildHintsResponseSchema }).then(
-      (res) => res.wild.tiles.length,
+      (res) => res.wild.tiles,
     ),
 
-  /** Picks a fight with the nearest wild squishy (or resumes the one going). */
-  startWild: (mapId: string): Promise<PlayerBattle> =>
-    apiCallFor(`/maps/${mapId}/battles`, { method: 'POST', schema: BattleResponseSchema }).then(
-      battleOf,
-    ),
+  /**
+   * Meets a wild squishy (or resumes the battle going): the one on `tile`
+   * (#209, picked on the map), else the nearest. The server checks reach.
+   */
+  startWild: (mapId: string, tile?: Hex): Promise<PlayerBattle> =>
+    apiCallFor(`/maps/${mapId}/battles`, {
+      method: 'POST',
+      ...(tile ? { body: { tile: { q: tile.q, r: tile.r } } } : {}),
+      schema: BattleResponseSchema,
+    }).then(battleOf),
 
   get: (battleId: string): Promise<PlayerBattle> =>
     apiCallFor(`/battles/${battleId}`, { method: 'GET', schema: BattleResponseSchema }).then(

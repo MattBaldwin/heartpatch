@@ -23,7 +23,11 @@ export const WARDROBE_TABS: readonly WardrobeTab[] = [...WARDROBE_SLOTS, SQUISHY
 
 /** `all` or one rarity. */
 export type RarityFilter = ClothingRarity | 'all';
-export const RARITY_FILTERS: readonly RarityFilter[] = ['all', ...CLOTHING_RARITIES];
+/** `all`, then each rarity the catalog has a piece of, so no chip is always empty. */
+export const RARITY_FILTERS: readonly RarityFilter[] = [
+  'all',
+  ...CLOTHING_RARITIES.filter((r) => CLOTHING.some((item) => item.rarity === r)),
+];
 
 const RARITY_ORDER = new Map(CLOTHING_RARITIES.map((r, i) => [r, i]));
 const CATALOG_ORDER = new Map(CLOTHING.map((item, i) => [item.id, i]));
