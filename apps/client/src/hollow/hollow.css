@@ -192,6 +192,8 @@
 }
 
 .night-chip-tap {
+  justify-content: center;
+  min-width: 44px;
   cursor: pointer;
   pointer-events: auto;
 }

@@ -462,13 +462,16 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const stage: HollowStage = status.tonight.stage;
     const minutes = minutesToNight();
     const dusk = !status.night.isNight && minutes !== null && minutes <= DUSK_MINUTES;
-    const stageChip = chip(
-      NIGHT_TEXT.stageChip(stage),
-      () => {
-        strengthOpen = true;
-        render();
-      },
-      'night-stage-chip',
+    const openStrength = () => {
+      strengthOpen = true;
+      render();
+    };
+    const stageChip = chip(NIGHT_TEXT.stageChip(stage), openStrength, 'night-stage-chip');
+    // At dusk the row is full: he's just his moon, still a tap away (mockup screen 7, "anytime").
+    const moonChip = chip(STAGES[stage].moon, openStrength, 'night-stage-chip');
+    moonChip.setAttribute(
+      'aria-label',
+      NIGHT_TEXT.stageChip(stage).slice(STAGES[stage].moon.length + 1),
     );
     const darkChip = first
       ? chip(
@@ -480,7 +483,10 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const row: HTMLElement[] = status.night.isNight
       ? [chip(NIGHT_TEXT.night, null, 'night-time-chip'), stageChip]
       : dusk
-        ? [chip(NIGHT_TEXT.nightIn(minutes), null, 'night-time-chip'), darkChip ?? stageChip]
+        ? [
+            chip(NIGHT_TEXT.nightIn(minutes), null, 'night-time-chip'),
+            ...(darkChip ? [darkChip, moonChip] : [stageChip]),
+          ]
         : [...(darkChip ? [darkChip] : []), stageChip];
     const labels = row.map((c) => c.textContent).join('|');
     if (chips.dataset['labels'] !== labels) {
