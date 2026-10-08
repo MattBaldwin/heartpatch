@@ -164,12 +164,14 @@ export function besideSpot(
 
 // ── The follow camera ─────────────────────────────────────────────────────
 
-/** Where the camera looks: a little ahead of the Keeper, kept inside the tile's edge. */
-export function cameraGoal(keeper: WorldPoint): WorldPoint {
-  return clampToTile(
-    { x: keeper.x, z: keeper.z + EXPLORE_CAMERA.lookAhead },
-    EXPLORE_CAMERA.edgeMargin,
-  );
+/**
+ * Where the camera looks: a little ahead of the Keeper, kept inside the
+ * tile's edge. While a tool is in use, between the Keeper and the spot, so
+ * both stay in view above the gesture overlay.
+ */
+export function cameraGoal(keeper: WorldPoint, focus: WorldPoint | null = null): WorldPoint {
+  const at = focus ? { x: (keeper.x + focus.x) / 2, z: (keeper.z + focus.z) / 2 } : keeper;
+  return clampToTile({ x: at.x, z: at.z + EXPLORE_CAMERA.lookAhead }, EXPLORE_CAMERA.edgeMargin);
 }
 
 export interface FollowCamera {

@@ -168,13 +168,14 @@ export class ExploreScene {
   #trail: WorldPoint[] = [];
   #tile: ExploreTileResponse;
   #at: WorldPoint = EXPLORE_VIEW.start;
-  #yaw = 0;
+  #yaw: number = EXPLORE_VIEW.startYaw;
   #highlighted: number | null = null;
   #held: ToolId | null = null;
   /** When the tool's last swing started (ms), or null. */
   #swingAt: number | null = null;
   #swing = 0;
-  #nudged = false;
+  /** The spot a tool is being used on (the camera leans in on it), or null. */
+  #focus: WorldPoint | null = null;
   #camera: FollowCamera;
   #lastStep: number | null = null;
   #drawCalls = 0;
@@ -399,9 +400,9 @@ export class ExploreScene {
     });
   }
 
-  /** The camera leans in while a tool is in use (#291), and back out after. */
-  nudge(on: boolean): void {
-    this.#nudged = on;
+  /** The camera leans in on a spot while a tool is in use (#291); null leans back out. */
+  nudge(spot: WorldPoint | null): void {
+    this.#focus = spot;
   }
 
   /** One swing of the tool (a scoop, a shake, a step up the rope) and a little jiggle. */
@@ -418,7 +419,10 @@ export class ExploreScene {
 
   /** Steps animations and the follow camera; true while anything still moves (keep drawing). */
   step(now: number): boolean {
-    const dt = this.#lastStep === null ? 0 : Math.min(0.05, (now - this.#lastStep) / 1000);
+    const dt =
+      this.#lastStep === null
+        ? 0
+        : Math.min(EXPLORE_VIEW.maxFrameStep, (now - this.#lastStep) / 1000);
     this.#lastStep = now;
     const goal = this.#cameraGoal();
     this.#camera = followStep(this.#camera, goal, dt);
@@ -484,7 +488,10 @@ export class ExploreScene {
   }
 
   #cameraGoal(): FollowCamera {
-    return { target: cameraGoal(this.#at), zoom: this.#nudged ? EXPLORE_CAMERA.nudge : 1 };
+    return {
+      target: cameraGoal(this.#at, this.#focus),
+      zoom: this.#focus ? EXPLORE_CAMERA.nudge : 1,
+    };
   }
 
   /** Writes the follow camera's shot into the stage's camera. */

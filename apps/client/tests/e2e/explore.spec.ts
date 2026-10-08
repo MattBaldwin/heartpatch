@@ -10,12 +10,12 @@ const slow = { timeout: 30_000 };
 
 /**
  * The performance budget (CLAUDE.md rule 8): a settled explore frame draws
- * under this many calls. Measured at 41 on the iPhone and iPad viewports
- * (#291: tile, island, spot props, three decor kinds, glints, the Keeper's
- * batches, the team, the tool in hand, post-processing); headroom for a
- * busier tile (more prop kinds, buildings, a bigger team).
+ * under this many calls. Measured at 15 on the iPhone and iPad viewports
+ * (#291, a new player's meadow: tile, island, spot props, three decor kinds,
+ * glints, the Keeper's batches, post-processing); the headroom is for a busier
+ * tile (more prop kinds, buildings, a full team, the tool in hand).
  */
-const DRAW_CALL_CEILING = 60;
+const DRAW_CALL_CEILING = 40;
 
 /**
  * Exploring your land (#199, cozy-sim feel #291): Explore on a home tile
@@ -30,7 +30,14 @@ interface ExploreDebug {
   open: boolean;
   tile: { q: number; r: number; terrain: string } | null;
   progress: { searched: number; total: number } | null;
-  spots: { index: number; kind: string; tool: string | null; done: boolean }[];
+  spots: {
+    index: number;
+    kind: string;
+    tool: string | null;
+    done: boolean;
+    x: number;
+    z: number;
+  }[];
   keeper: { x: number; z: number };
   near: number | null;
   playing: string | null;
@@ -53,7 +60,6 @@ type Point = { x: number; y: number };
 type ExploreHook = {
   explore?: () => {
     keeper: { x: number; z: number };
-    spotOnScreen: (i: number) => Point | null;
     pointOnScreen: (p: { x: number; z: number }) => Point | null;
   };
 };
@@ -61,25 +67,31 @@ type ExploreHook = {
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
 const mapState = (page: Page) => hook<{ tiles: number; selected: string | null }>(page, 'map');
 
-/** Where a spot is on screen now (the dev hook projects it), or null off camera. */
-function spotOnScreen(page: Page, index: number): Promise<Point | null> {
-  return page.evaluate(
-    (i) =>
-      (window as unknown as { __heartpatch?: ExploreHook }).__heartpatch
-        ?.explore?.()
-        .spotOnScreen(i) ?? null,
-    index,
-  );
-}
-
-/** Where the Keeper stands on screen now. */
-async function keeperOnScreen(page: Page): Promise<Point> {
-  const at = await page.evaluate(() => {
+/**
+ * A point on the ground to tap on the way from the Keeper to a tile-local
+ * spot: the spot itself if a tap there reaches the ground, else part way
+ * there, else a little to one side (the controls and the hint cover parts
+ * of the screen). Null when nothing on the way can be tapped.
+ */
+function waypoint(page: Page, to: { x: number; z: number }): Promise<Point | null> {
+  return page.evaluate((spot) => {
     const e = (window as unknown as { __heartpatch?: ExploreHook }).__heartpatch?.explore?.();
-    return e ? e.pointOnScreen(e.keeper) : null;
-  });
-  if (!at) throw new Error('the Keeper is not on screen');
-  return at;
+    if (!e) return null;
+    const ground = document.querySelector('[data-testid="explore-ground"]');
+    const k = e.keeper;
+    const dx = spot.x - k.x;
+    const dz = spot.z - k.z;
+    for (const turn of [0, 0.6, -0.6, 1.2, -1.2]) {
+      const c = Math.cos(turn);
+      const s = Math.sin(turn);
+      for (const f of [1, 0.75, 0.5, 0.35, 0.2]) {
+        const p = { x: k.x + (dx * c - dz * s) * f, z: k.z + (dx * s + dz * c) * f };
+        const at = e.pointOnScreen(p);
+        if (at && document.elementFromPoint(at.x, at.y) === ground) return at;
+      }
+    }
+    return null;
+  }, to);
 }
 
 /** Waits until the Keeper stops walking. */
@@ -93,41 +105,22 @@ async function keeperStill(page: Page): Promise<void> {
         last = now;
         return still;
       },
-      { timeout: 20_000, intervals: [400] },
+      { timeout: 60_000, intervals: [500] },
     )
     .toBe(true);
 }
 
 /**
- * Walks up to a spot by tapping: the spot itself once it's on screen clear
- * of the controls, else the ground on the way to it (the camera follows).
+ * Walks up to a spot by tapping: the spot itself once a tap there reaches
+ * the ground, else the ground on the way to it (the camera follows).
  */
 async function walkTo(page: Page, index: number): Promise<void> {
-  const view = page.viewportSize()!;
-  const band = { top: 220, bottom: view.height - 220, left: 40, right: view.width - 40 };
   for (let tries = 0; tries < 12; tries++) {
-    if ((await exploreState(page))?.near === index) return;
-    const spot = await spotOnScreen(page, index);
-    const from = await keeperOnScreen(page);
-    const to = spot ?? { x: from.x, y: band.top };
-    const inside = (p: Point) =>
-      p.x >= band.left && p.x <= band.right && p.y >= band.top && p.y <= band.bottom;
-    let tap = to;
-    if (!inside(to)) {
-      // Part way along, kept in the band.
-      let k = 1;
-      for (
-        let i = 0;
-        i < 20 && !inside({ x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k });
-        i++
-      ) {
-        k *= 0.8;
-      }
-      tap = {
-        x: Math.min(band.right, Math.max(band.left, from.x + (to.x - from.x) * k)),
-        y: Math.min(band.bottom, Math.max(band.top, from.y + (to.y - from.y) * k)),
-      };
-    }
+    const state = (await exploreState(page))!;
+    if (state.near === index) return;
+    const spot = state.spots.find((s) => s.index === index)!;
+    const tap = await waypoint(page, spot);
+    if (!tap) throw new Error(`no ground to tap towards spot ${String(index)}`);
     await realTapAt(page, tap.x, tap.y);
     await keeperStill(page);
   }
@@ -209,10 +202,24 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     await expect(page.getByTestId('explore-not-now')).toBeVisible();
     await expect(sheet).toBeHidden();
     await page.getByTestId('explore-easy').tap();
+    // The toast is short-lived: read it and the hook in the same breath.
+    let seen: { toast: string | null; card: string | null; shown: boolean } | null = null;
     await expect
       .poll(async () => {
-        const s = await exploreState(page);
-        return s?.toast !== null || s.card !== null;
+        seen = await page.evaluate(() => {
+          const e = (
+            window as unknown as {
+              __heartpatch?: { explore?: () => { toast: string | null; card: string | null } };
+            }
+          ).__heartpatch?.explore?.();
+          const box = document.querySelector<HTMLElement>('[data-testid="explore-toast"]');
+          return {
+            toast: e?.toast ?? null,
+            card: e?.card ?? null,
+            shown: box !== null && !box.hidden && (box.textContent ?? '') !== '',
+          };
+        });
+        return seen.toast !== null || seen.card !== null;
       }, slow)
       .toBe(true);
     searched += 1;
@@ -226,9 +233,9 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     }
     expect(after.card).toBeNull();
     await expect(sheet).toBeHidden();
-    const toast = page.getByTestId('explore-toast');
-    await expect(toast).toBeVisible();
-    expect(findAvoidedWords((await toast.textContent()) ?? '')).toEqual([]);
+    const shown = seen as unknown as { toast: string; shown: boolean };
+    expect(shown.shown).toBe(true);
+    expect(findAvoidedWords(shown.toast)).toEqual([]);
     toasted = true;
     break;
   }

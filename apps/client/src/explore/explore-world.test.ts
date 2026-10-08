@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
-import { insideTile } from './explore-view.js';
+import { clampToTile, insideTile } from './explore-view.js';
 import {
   besideSpot,
   blocked,
@@ -70,6 +70,14 @@ describe('colliders', () => {
     expect(slid.x).toBeGreaterThan(from.x);
     // Open ground: straight there.
     expect(slideMove({ x: 0.5, z: 0 }, { x: 0.52, z: 0 }, [rock])).toEqual({ x: 0.52, z: 0 });
+  });
+
+  it('never steps further in one frame than a collider is wide', () => {
+    const smallest = Math.min(
+      ...Object.values(EXPLORE_VIEW.spotRadius),
+      EXPLORE_VIEW.buildingRadius,
+    );
+    expect(EXPLORE_VIEW.walkSpeed * EXPLORE_VIEW.maxFrameStep).toBeLessThan(smallest);
   });
 
   it('stays put when squeezed between two', () => {
@@ -147,6 +155,21 @@ describe('the follow camera', () => {
     const goal = cameraGoal({ x: 0, z: 0 });
     expect(goal.x).toBeCloseTo(0);
     expect(goal.z).toBeCloseTo(EXPLORE_CAMERA.lookAhead);
+  });
+
+  it('keeps the Keeper near the middle even at the tile edge (it stays on a phone screen)', () => {
+    for (const angle of [0, 0.7, 1.5, 2.6, 3.4, 4.7, 5.6]) {
+      const keeper = clampToTile({ x: Math.cos(angle), z: Math.sin(angle) });
+      const goal = cameraGoal(keeper);
+      // About 1 world unit: well inside a portrait phone's half-width at the Keeper.
+      expect(Math.abs(goal.x - keeper.x), `angle ${String(angle)}`).toBeLessThan(0.14);
+    }
+  });
+
+  it('frames the Keeper and the spot together while a tool is in use', () => {
+    const goal = cameraGoal({ x: 0, z: 0 }, { x: 0.1, z: -0.1 });
+    expect(goal.x).toBeCloseTo(0.05);
+    expect(goal.z).toBeCloseTo(-0.05 + EXPLORE_CAMERA.lookAhead);
   });
 
   it('clamps to the tile, short of its edge', () => {

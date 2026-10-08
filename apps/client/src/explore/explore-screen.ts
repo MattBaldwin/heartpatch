@@ -118,7 +118,7 @@ export interface ExploreDebug {
   readonly open: boolean;
   readonly tile: { readonly q: number; readonly r: number; readonly terrain: string } | null;
   readonly progress: { readonly searched: number; readonly total: number } | null;
-  readonly spots: readonly Pick<PublicSearchSpot, 'index' | 'kind' | 'tool' | 'done'>[];
+  readonly spots: readonly Pick<PublicSearchSpot, 'index' | 'kind' | 'tool' | 'done' | 'x' | 'z'>[];
   readonly keeper: WorldPoint;
   /** The Keeper's heading, radians (0 faces the camera). */
   readonly yaw: number;
@@ -196,9 +196,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let scene3d: ExploreScene | null = null;
   let lastTier: QualityTier | null = null;
   let keeperAt: WorldPoint = EXPLORE_VIEW.start;
-  let yaw = 0;
+  let yaw: number = EXPLORE_VIEW.startYaw;
   /** Where a tap sent the Keeper (beside a spot, if it tapped one). */
   let walkTo: WorldPoint | null = null;
+  /** The closest a tap-walk has got so far, and how long since it got closer (s). */
+  let walkBest = Infinity;
+  let walkStall = 0;
   /** The spot the player last tapped: the action button offers it once in reach. */
   let aimed: number | null = null;
   /** The drag steering the Keeper: from where (CSS pixels in the ground layer) to where. */
@@ -442,7 +445,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const point = scene3d?.groundAt(x, y);
     if (!point || !tile) return;
     const spot = spotAtTap(point, tile.spots);
-    walkTo = spot ? besideSpot(keeperAt, spot) : clampToTile(point);
+    const goal = spot ? besideSpot(keeperAt, spot) : clampToTile(point);
+    // Never aim inside a rock: the Keeper would bump it forever.
+    walkTo = scene3d ? slideMove(goal, goal, scene3d.colliders) : goal;
+    walkBest = Infinity;
+    walkStall = 0;
     aimed = spot?.index ?? null;
     wake();
   }
@@ -465,7 +472,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       lastTier = tier;
       s.setLod(lodFor('closeUp', tier));
     }
-    const dt = Math.min(0.05, Math.max(0, (now - lastFrame) / 1000));
+    const dt = Math.min(EXPLORE_VIEW.maxFrameStep, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
     let walking = false;
     const step = EXPLORE_VIEW.walkSpeed * dt;
@@ -487,8 +494,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       next = slideMove(keeperAt, stepToward(keeperAt, walkTo, step), s.colliders);
       const moved = next.x !== keeperAt.x || next.z !== keeperAt.z;
       if (moved) heading = yawToward(keeperAt, next);
-      const arrived = (next.x - walkTo.x) ** 2 + (next.z - walkTo.z) ** 2 < 1e-8;
-      if (arrived || !moved) {
+      const left = Math.hypot(next.x - walkTo.x, next.z - walkTo.z);
+      const arrived = left < 1e-4;
+      // Sliding round a rock is progress; going nowhere for a moment is not.
+      if (left < walkBest - 1e-3) {
+        walkBest = left;
+        walkStall = 0;
+      } else {
+        walkStall += dt;
+      }
+      if (arrived || !moved || walkStall > EXPLORE_VIEW.walkGiveUp) {
         walkTo = null;
         // Walked up to a tapped spot: turn to it.
         const spot = tile?.spots.find((x) => x.index === aimed);
@@ -572,7 +587,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     playing = { spot, state };
     lastHeld = spot.tool ?? lastHeld;
     s.hold(spot.tool);
-    s.nudge(true);
+    s.nudge(spot);
     s.useTool(now);
     buildPlay(kind);
     render();
@@ -610,7 +625,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   function stopPlaying(): void {
     playing = null;
-    scene3d?.nudge(false);
+    scene3d?.nudge(null);
     render();
     wake();
   }
@@ -659,7 +674,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     } finally {
       if (at === generation) {
         working = false;
-        scene3d?.nudge(false);
+        scene3d?.nudge(null);
         front = null;
         findFront();
         render();
@@ -1110,7 +1125,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
     tile = fresh;
     keeperAt = EXPLORE_VIEW.start;
-    yaw = 0;
+    yaw = EXPLORE_VIEW.startYaw;
     walkTo = null;
     aimed = null;
     stick = null;
@@ -1226,11 +1241,13 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         open: isOpen,
         tile: tile ? { q: tile.q, r: tile.r, terrain: tile.terrain } : null,
         progress: tile ? { ...tile.progress } : null,
-        spots: (tile?.spots ?? []).map(({ index, kind, tool, done }) => ({
+        spots: (tile?.spots ?? []).map(({ index, kind, tool, done, x, z }) => ({
           index,
           kind,
           tool,
           done,
+          x,
+          z,
         })),
         keeper: { ...keeperAt },
         yaw,

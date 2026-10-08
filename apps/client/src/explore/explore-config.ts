@@ -16,11 +16,21 @@ export const EXPLORE_VIEW = {
   /** Building scale (a fire on the land, #202). */
   buildingScale: 1.6, // TUNE
   /** Search-spot props, as a share of the tile's size (map props are drawn for a 0.65 tile). */
-  propScale: 0.28, // TUNE
+  propScale: 0.34, // TUNE
   /** Where the Keeper starts: just below the tile's middle (tile-local units). */
   start: { x: 0, z: -0.42 },
+  /** It starts facing into the tile, three-quarters from behind (board a), so its face still shows. */
+  startYaw: Math.PI * 0.75, // TUNE
   /** Walking speed, tile-local units a second. */
   walkSpeed: 0.3, // TUNE
+  /** A tap-walk that gets no closer for this long stops (it's stuck behind something), seconds. */
+  walkGiveUp: 0.6, // TUNE
+  /**
+   * The longest step one frame may take, seconds: a slow frame still walks,
+   * yet a step (speed × this) stays far shorter than any collider, so the
+   * Keeper can't skip through a rock.
+   */
+  maxFrameStep: 0.1, // TUNE
   /**
    * Close enough to a spot to use it: the gap between the Keeper's edge and
    * the spot's, tile-local units.
@@ -85,15 +95,15 @@ export const EXPLORE_VIEW = {
  */
 export const EXPLORE_CAMERA = {
   /** Looking down from the horizontal, radians. */
-  pitch: (48 * Math.PI) / 180, // TUNE
+  pitch: (40 * Math.PI) / 180, // TUNE
   /** Camera to target, world units. */
-  distance: 7.6, // TUNE
+  distance: 6.6, // TUNE
   /** The target sits this far ahead of the Keeper (tile-local +z), so it walks low on the screen. */
-  lookAhead: 0.07, // TUNE
+  lookAhead: 0.13, // TUNE
   /** The target stays this far inside the tile's edge, tile-local units. */
-  edgeMargin: 0.28, // TUNE
+  edgeMargin: 0.12, // TUNE: more pushes the Keeper off a phone held upright near the edge
   /** Using a tool nudges the camera in to this share of `distance`. */
-  nudge: 0.8, // TUNE
+  nudge: 0.86, // TUNE
   /** Follow lag: the time constant of the ease, seconds. */
   follow: 0.14, // TUNE
   /** Closer than this (tile-local, and share of distance) counts as there: drawing stops. */
