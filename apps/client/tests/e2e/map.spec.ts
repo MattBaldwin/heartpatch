@@ -9,6 +9,7 @@ interface MapDebug {
   tiles: number;
   tileMeshes: number;
   tinted: number;
+  borderMeshes: number;
   homes: number;
   claimedHomes: number;
   selected: string | null;
@@ -80,6 +81,7 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
     .toMatchObject({
       tiles: 469,
       tinted: 7,
+      borderMeshes: 1,
       homes: 4,
       claimedHomes: 1,
       selected: null,
@@ -124,7 +126,18 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
   await openPatch(friend, 'Moonlit Patch');
   await expect
     .poll(() => mapState(friend), { timeout: 30_000 })
-    .toMatchObject({ tiles: 469, tinted: 14, claimedHomes: 2 });
+    .toMatchObject({ tiles: 469, tinted: 14, borderMeshes: 2, claimedHomes: 2 });
+
+  // The legend (#278): the name pill opens a card saying whose land is
+  // whose, by colour, icon and line; a tap on the map closes it.
+  await friend.getByTestId('map-legend-button').tap();
+  const legend = friend.getByTestId('map-legend');
+  await expect(legend).toBeVisible();
+  await expect(legend).toContainText(`${ownerName}'s land`);
+  await expect(legend).toContainText('Your land');
+  const friendBox = (await friend.locator('#game').boundingBox())!;
+  await tapCanvas(friend, friendBox.width / 2, friendBox.height * 0.7);
+  await expect(legend).toBeHidden();
 
   // The owner removes the friend: the friend's map closes with a kind note,
   // and the owner's map un-tints their land live.

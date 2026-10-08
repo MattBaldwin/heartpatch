@@ -1,5 +1,8 @@
 import {
   defaultKeeperConfig,
+  hexDistance,
+  hexKey,
+  hexNeighbors,
   GAME_DATA,
   KEEPER_BASES,
   MAP_MAX_PLAYERS,
@@ -61,4 +64,42 @@ export function testView(players = 1, seed = 'map-render-test'): MapView {
     tiles,
     seq: players,
   };
+}
+
+/**
+ * A busy 4-Keeper patch (#278): `testView(4)` with each Keeper's land grown
+ * out from their home, nearest tiles first, `extra` tiles each, so rivals'
+ * land meets and neutral land lies between. Juniper's Gap stays neutral. The
+ * same land every run.
+ */
+export function testPatch(extra = 48): MapView {
+  const view = testView(4);
+  const tiles = view.tiles.map((t) => ({ ...t }));
+  const byKey = new Map(tiles.map((t) => [hexKey(t), t]));
+  const seeds = view.members.map(
+    (m) =>
+      tiles.find(
+        (t) =>
+          t.homeSlot === m.homeSlot &&
+          hexNeighbors(t).every((n) => byKey.get(hexKey(n))?.homeSlot === m.homeSlot),
+      ) ?? tiles[0],
+  );
+  const left = view.members.map(() => extra);
+  for (let round = 0; round < extra; round++) {
+    view.members.forEach((m, i) => {
+      const seed = seeds[i];
+      if (!seed || (left[i] ?? 0) <= 0) return;
+      let best: PublicTile | null = null;
+      for (const t of tiles) {
+        if (t.ownerUserId !== null || t.homeSlot !== null || t.terrain === 'junipers-gap') continue;
+        if (!hexNeighbors(t).some((n) => byKey.get(hexKey(n))?.ownerUserId === m.user.id)) continue;
+        const score = (x: PublicTile) => hexDistance(x, seed) * 100 + x.q * 3 + x.r;
+        if (!best || score(t) < score(best)) best = t;
+      }
+      if (!best) return;
+      best.ownerUserId = m.user.id;
+      left[i] = (left[i] ?? 0) - 1;
+    });
+  }
+  return { ...view, tiles };
 }
