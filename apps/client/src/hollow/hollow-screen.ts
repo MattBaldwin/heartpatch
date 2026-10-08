@@ -66,6 +66,8 @@ export interface HollowScreenOptions {
   pvpMode?: () => PvpMode | null;
   /** The tutorial's Glade has its own nightfall: no night chips there. */
   isGlade?: (mapId: string) => boolean;
+  /** The night's status came in (what `reclaimed` answers may have changed). */
+  onStatus?: () => void;
   /** A rescue battle started (or one going came back): the battle screen takes over. */
   openBattle: (battle: PlayerBattle) => void;
   api?: HollowApi;
@@ -124,6 +126,8 @@ export interface HollowScreen {
   otherReportChanged: () => void;
   /** The map on screen redrew (my dark land may have changed): the chips and the nudge follow. */
   viewChanged: () => void;
+  /** He won this land of mine back on `night` (#277): his report tells it. */
+  reclaimed: (night: string, h: Hex) => boolean;
   readonly debug: HollowDebug | null;
 }
 
@@ -831,6 +835,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       scheduleNightCheck(fresh.night.changesInMinutes);
       report = unseenReports(fresh.reports, seenNight());
       joinTonight(fresh);
+      options.onStatus?.();
     } catch (err) {
       if (at === generation) note = messageOf(err);
     }
@@ -941,6 +946,11 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       options.layer.setNight(false);
       render();
     },
+
+    reclaimed: (night, h) =>
+      status?.reports.some(
+        (r) => r.night === night && r.reclaimed.some((t) => t.q === h.q && t.r === h.r),
+      ) ?? false,
 
     viewChanged: () => {
       if (!mapId || !status) return;

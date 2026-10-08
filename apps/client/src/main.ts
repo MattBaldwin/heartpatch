@@ -307,6 +307,8 @@ const land = createLandScreen({
     maps.setLandFade(fade);
   },
   view: () => maps.view,
+  // Land the Hollow Man won back is his report's and his show's to tell (#277).
+  toldElsewhere: (tile) => hollow.reclaimed(tile.night, tile),
 });
 // The Hollow Man (#21): the night on the map, his visit when night falls,
 // the morning report, and rescues (a rescue battle opens the battle screen).
@@ -389,6 +391,9 @@ const hollow = createHollowScreen({
   },
   pvpMode: () => maps.view?.map.pvpMode ?? null,
   isGlade: (mapId) => mapId === glade,
+  onStatus: () => {
+    land.redraw();
+  },
   // One card at a time (#129): the morning report waits behind the raid
   // report, a found lore page, a milestone party and What's new. (`lorebook`
   // and `milestones` are made below; this is only read at render time.)
