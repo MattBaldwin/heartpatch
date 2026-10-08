@@ -192,6 +192,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   let asking = false;
   /** The morning replay is playing: the report waits and the map shows night. */
   let replaying = false;
+  /** Status requests made, and the newest whose reply is shown. */
+  let asks = 0;
+  let shownAsk = 0;
   /** Night just fell live: its walks wait for the status to say it's night. */
   let pendingFall: { night: string; at: number; receivedAt: number; walks: ShowWalk[] } | null =
     null;
@@ -878,9 +881,12 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const at = generation;
     if (!id) return;
     const askedAt = now();
+    const asked = (asks += 1);
     try {
       const fresh = await api.status(id);
-      if (at !== generation) return;
+      // A reply older than one already shown (night fell as a timer asked) is stale.
+      if (at !== generation || asked < shownAsk) return;
+      shownAsk = asked;
       status = fresh;
       clockOffset = Date.parse(fresh.now) - now();
       options.layer.setNight(replaying || fresh.night.isNight);
@@ -933,9 +939,17 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     });
     if (plan === 'visit') visit();
     if (plan === 'replay') {
-      // The Glade's scripted nightfall is by day: the walk plays at the replay's pace.
-      if (!show.play(fall.walks, now(), null, showEnded(fall.night, generation))) visit();
-      else showNight = fall.night;
+      // The Glade's scripted nightfall is by day: the sky dims (design doc §26
+      // step 10) and the walk plays at the replay's pace.
+      replaying = true;
+      options.layer.setNight(true);
+      if (show.play(fall.walks, now(), null, showEnded(fall.night, generation))) {
+        showNight = fall.night;
+      } else {
+        replaying = false;
+        options.layer.setNight(fresh.night.isNight);
+        visit();
+      }
     }
     if (plan !== 'live') return;
     const startedAt = liveStart({

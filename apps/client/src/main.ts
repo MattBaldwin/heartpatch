@@ -323,9 +323,9 @@ const darkLand = createDarkLand(
   },
 );
 /** Glides the camera to a tile (at once with reduced motion). */
+const stillPans = window.matchMedia('(prefers-reduced-motion: reduce)');
 const panToTile = (h: Hex): void => {
-  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  stage?.camera.panTo(hexToWorld(h, HEX_SIZE), still);
+  stage?.camera.panTo(hexToWorld(h, HEX_SIZE), stillPans.matches);
 };
 // Trading posts' flags and rings on the map (#269), for whoever is signed in.
 const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
