@@ -115,12 +115,22 @@ describe.skipIf(!url)('new gatherables (#238, needs DATABASE_URL)', () => {
 
   it('gives a map made before them the same nodes a new map gets, once', async () => {
     const server = await start();
-    const kid = await player();
-    const mapId = await patch(server, kid);
+    const extrasOf = async (id: string) =>
+      (await tilesOf(id)).filter(
+        (t) => t.homeSlot === null && EXTRA.has(`${t.terrain}:${String(t.nodeResource)}`),
+      );
+    const hasWell = async (id: string) =>
+      (await extrasOf(id)).some((t) => t.nodeResource === 'water');
+    // About 1 map in 2,500 has no lake at all, so no well (CI drew one): then
+    // another Keeper makes another patch. Five such maps in a row: ~1 in 10^17.
+    let kid = await player();
+    let mapId = await patch(server, kid);
+    for (let tries = 0; tries < 4 && !(await hasWell(mapId)); tries++) {
+      kid = await player();
+      mapId = await patch(server, kid);
+    }
     const made = await nodesOf(mapId);
-    const extras = (await tilesOf(mapId)).filter(
-      (t) => t.homeSlot === null && EXTRA.has(`${t.terrain}:${String(t.nodeResource)}`),
-    );
+    const extras = await extrasOf(mapId);
     expect(extras.some((t) => t.nodeResource === 'water')).toBe(true);
 
     // As it was before #238: no extra nodes, and a fire in one tile's middle.
