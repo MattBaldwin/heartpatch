@@ -28,7 +28,7 @@ export const PoseSchema = z.enum(['sit', 'stand', 'upright', 'slither', 'hover']
 export type Pose = z.infer<typeof PoseSchema>;
 
 /** Rarity material tiers (ART_BIBLE §1.4). */
-export const FinishSchema = z.enum(['vinyl', 'sparkle', 'iridescent']);
+export const FinishSchema = z.enum(['vinyl', 'sparkle', 'iridescent', 'shimmer']);
 export type Finish = z.infer<typeof FinishSchema>;
 
 /** What glows (ART_BIBLE §1.4): the whole squishy, or only its `accent` parts. */

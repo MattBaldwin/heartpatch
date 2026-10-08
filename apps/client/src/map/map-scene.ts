@@ -51,6 +51,7 @@ import {
   TINT,
   type PropKind,
   type TerrainLook,
+  WILD_MARKER,
 } from './map-config.js';
 import { dressTile, hexRgb, isMuted, muteRgb, tileColor, tileJitter } from './map-dressing.js';
 import {
@@ -61,7 +62,8 @@ import {
   slotsByUser,
   tintSlot,
 } from './map-layout.js';
-import { buildProp, linear, merged, painted } from './map-props.js';
+import { buildProp, buildWildTuft, linear, merged, painted } from './map-props.js';
+import type { WildMarker } from './wild-markers.js';
 import { AMBIENT_ATTRIBUTE, attachTerrainPlugin, TerrainClock } from './terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
 
@@ -131,6 +133,8 @@ export interface MapSceneStats {
   /** Ambient life: `live`, `still` (reduced motion) or `off` (low tier or a slow device). */
   readonly ambient: AmbientMode;
   readonly motes: AmbientStats['motes'];
+  /** Wild-squishy tufts drawn (#209), all from one instanced mesh. */
+  readonly wildMarkers: number;
 }
 
 export interface MapSceneOptions {
@@ -313,6 +317,9 @@ export class MapScene {
   private readonly judge = new AmbientJudge();
   /** Wall-clock ms at ambient-time zero (the first `tick`). */
   private clockStart: number | null = null;
+  /** The wild-squishy tufts (#209): one mesh, a thin instance per marked tile. */
+  private readonly wildMesh: Mesh;
+  private wild: readonly WildMarker[] = [];
 
   constructor(scene: Scene, view: MapView, options: MapSceneOptions = {}) {
     this.scene = scene;
@@ -397,6 +404,12 @@ export class MapScene {
     );
     this.safeGlow.material = overlayMaterial(scene, 'safe-glow-mat');
     this.safeGlow.setEnabled(false);
+
+    this.wildMesh = buildWildTuft(scene);
+    const wildMat = vinyl(scene, 'wild-tuft-mat', { color: '#ffffff' });
+    attachTerrainPlugin(wildMat, this.clock);
+    this.wildMesh.material = wildMat;
+    setInstances(this.wildMesh, []);
     this.update(view);
   }
 
@@ -422,7 +435,53 @@ export class MapScene {
       night: this.night,
       ambient: this.mode,
       motes: this.ambient.stats.motes,
+      wildMarkers: this.wild.length,
     };
+  }
+
+  /**
+   * Draws a rustling tuft on each marked tile (#209), replacing the last set.
+   * One mesh however many: a thin instance each, swaying on the terrain clock
+   * (`terrainAmbient`), so an idle map stays idle.
+   */
+  setWild(markers: readonly WildMarker[]): void {
+    const placed = markers.flatMap((m) => {
+      const tile = this.tiles.get(m.key);
+      return tile ? [{ marker: m, tile }] : [];
+    });
+    // A redraw (any live event) with the same tufts: nothing to rebuild.
+    const same =
+      placed.length === this.wild.length &&
+      placed.every((p, i) => p.marker.key === this.wild[i]?.key);
+    if (same) return;
+    this.wild = placed.map((p) => p.marker);
+    const { offset, scale, sway } = WILD_MARKER;
+    const size = new Vector3(scale, scale, scale);
+    setInstances(
+      this.wildMesh,
+      placed.map(({ tile }) => {
+        const p = hexToWorld(tile, HEX_SIZE);
+        return placeAt(p.x + offset.x, topOf(tile) + DOME * 0.5, p.z + offset.z, size);
+      }),
+      true,
+    );
+    if (placed.length === 0) return;
+    // terrainAmbient: sway coefficient (tip / top², as props), phase, never muted, no bob.
+    const k = sway.tip / (sway.top * sway.top);
+    const ambient = new Float32Array(placed.length * 4);
+    placed.forEach(({ marker }, i) => {
+      ambient.set([k, marker.phase, 0, 0], i * 4);
+    });
+    this.wildMesh.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, ambient, 4, false);
+  }
+
+  /** Where each tuft's tile is on screen (CSS pixels), for the dev hook; unseen ones are left out. */
+  wildRects(): { key: HexKey; rect: ScreenRect }[] {
+    return this.wild.flatMap((m) => {
+      const tile = this.tiles.get(m.key);
+      const rect = tile ? tileScreenRectOf(this.scene, tile) : null;
+      return rect ? [{ key: m.key, rect }] : [];
+    });
   }
 
   /**

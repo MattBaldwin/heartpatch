@@ -27,6 +27,25 @@ describe('boutique data', () => {
     expect(CLOTHING.some((i) => i.season === 'halloween' && i.boutiquePrice)).toBe(true);
   });
 
+  it('never sells a Mythic piece (#261)', () => {
+    const mythic: ClothingItem = {
+      ...CLOTHING_BY_ID.get('cloud-onesie')!,
+      id: 'mythic-onesie',
+      rarity: 'mythic',
+      sources: ['found', 'boutique'],
+      boutiquePrice: 200,
+    };
+    expect(checkBoutiqueData(BOUTIQUE_RULES, [...CLOTHING, mythic])).toEqual([
+      'clothing mythic-onesie: mythic pieces are found-only, never sold',
+    ]);
+    // Even priced by mistake, it never reaches a rack, on any day.
+    for (let day = 1; day <= 28; day++) {
+      const date = `2026-10-${String(day).padStart(2, '0')}`;
+      const stock = boutiqueStock([...CLOTHING, mythic], { ...OCTOBER, date }, BOUTIQUE_RULES);
+      expect(all(stock)).not.toContain('mythic-onesie');
+    }
+  });
+
   it('flags prices out of range, a rarer piece that costs less, and too few to fill a rack', () => {
     const cheapRare: ClothingItem = { ...CLOTHING_BY_ID.get('starry-crown')!, boutiquePrice: 6 };
     const problems = checkBoutiqueData({ ...BOUTIQUE_RULES, maxPrice: 50 }, [

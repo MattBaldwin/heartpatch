@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ART_RULES, BODIES, PARTS } from '../../data/visuals.js';
 import {
+  ArtRulesSchema,
   checkRosterArt,
   checkSpeciesArt,
   contrastRatio,
@@ -18,7 +19,7 @@ interface Row {
   id: string;
   element: ElementId;
   feeling: 'silly' | 'cozy' | 'joy' | 'sleepy' | 'brave' | 'spooky';
-  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+  rarity: 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
   visual: SpeciesVisual;
   evolutions: { into: string }[];
 }
@@ -123,6 +124,20 @@ describe('checkSpeciesArt', () => {
     expect(speciesProblems(row({ visual: { finish: 'iridescent' } }))).toEqual([
       expect.stringContaining('common squishies use the "vinyl" finish'),
     ]);
+    // Mythic (#261) wears the shimmer, above Legendary's iridescent.
+    expect(speciesProblems(row({ rarity: 'mythic', visual: { finish: 'shimmer' } }))).toEqual([]);
+    expect(speciesProblems(row({ rarity: 'mythic', visual: { finish: 'iridescent' } }))).toEqual([
+      expect.stringContaining('mythic squishies use the "shimmer" finish'),
+    ]);
+  });
+
+  it('needs a finish for every rarity, Mythic included (#261)', () => {
+    expect(ART_RULES.finishByRarity.mythic).toBe('shimmer');
+    const finishes: Partial<typeof ART_RULES.finishByRarity> = { ...ART_RULES.finishByRarity };
+    delete finishes.mythic;
+    const result = ArtRulesSchema.safeParse({ ...ART_RULES, finishByRarity: finishes });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((i) => i.path.join('.'))).toEqual(['finishByRarity.mythic']);
   });
 
   it('makes Light and Fire glow, and lets others opt in', () => {

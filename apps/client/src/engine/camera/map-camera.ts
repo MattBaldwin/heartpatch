@@ -60,6 +60,8 @@ export class MapCamera {
   /** A glide to a spot ("Find on map") in progress, or null. */
   private glide: Glide | null = null;
   private readonly pointers = new Map<number, PointerPos>();
+  /** Fingers resting on a map button, not (yet) part of a gesture. */
+  private readonly strays = new Map<number, PointerPos>();
   private samples: MotionSample[] = [];
   private readonly scratchTarget = new Vector3();
   private readonly beforeRender: Observer<Scene> | null;
@@ -93,9 +95,14 @@ export class MapCamera {
 
     const signal = this.abort.signal;
     canvas.addEventListener('pointerdown', this.onPointerDown, { signal });
-    canvas.addEventListener('pointermove', this.onPointerMove, { signal });
-    canvas.addEventListener('pointerup', this.onPointerUp, { signal });
-    canvas.addEventListener('pointercancel', this.onPointerUp, { signal });
+    // A finger on a map button can still be half of a pinch (#159), so its
+    // moves are heard wherever they land; the map's own are captured to the
+    // canvas and pass through here once.
+    const anywhere = { signal, capture: true };
+    window.addEventListener('pointerdown', this.onStrayDown, anywhere);
+    window.addEventListener('pointermove', this.onPointerMove, anywhere);
+    window.addEventListener('pointerup', this.onPointerUp, anywhere);
+    window.addEventListener('pointercancel', this.onPointerUp, anywhere);
     canvas.addEventListener('wheel', this.onWheel, { signal, passive: false });
 
     this.beforeRender = scene.onBeforeRenderObservable.add(() => {
@@ -176,7 +183,42 @@ export class MapCamera {
     this.samples = [];
   };
 
+  /**
+   * A finger that lands on a button over the map (a tray handle, a corner
+   * button; not a sheet's) stays a tap until either finger moves while one
+   * finger is on the map: then it joins that finger's pinch, as a finger
+   * resting on the map would, and the canvas takes its pointer so the
+   * button gets no click.
+   */
+  private readonly onStrayDown = (e: PointerEvent): void => {
+    if (e.pointerType !== 'touch' || e.target === this.canvas) return;
+    if (!(e.target instanceof Element)) return;
+    if (!e.target.closest('button, [role="button"]') || e.target.closest('[role="dialog"]')) {
+      return;
+    }
+    this.strays.set(e.pointerId, this.localPos(e));
+  };
+
+  private joinStray(): void {
+    const [entry] = this.strays;
+    if (!entry) return;
+    const [id, pos] = entry;
+    this.strays.delete(id);
+    this.pointers.set(id, pos);
+    try {
+      this.canvas.setPointerCapture(id);
+    } catch {
+      // Synthetic pointers can't be captured; their moves still reach window.
+    }
+    this.samples = [];
+  }
+
   private readonly onPointerMove = (e: PointerEvent): void => {
+    if (this.strays.has(e.pointerId) && this.pointers.size !== 1) {
+      this.strays.set(e.pointerId, this.localPos(e));
+      return;
+    }
+    if (this.pointers.size === 1) this.joinStray();
     const prev = this.pointers.get(e.pointerId);
     if (!prev) return;
     const next = this.localPos(e);
@@ -192,6 +234,7 @@ export class MapCamera {
   };
 
   private readonly onPointerUp = (e: PointerEvent): void => {
+    this.strays.delete(e.pointerId);
     if (!this.pointers.delete(e.pointerId)) return;
     if (this.pointers.size === 0) {
       const perDistance = this.distance;

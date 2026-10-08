@@ -4,6 +4,7 @@ import { CLOTHING, CLOTHING_BY_ID, STARTER_CLOTHING } from '../../data/clothing.
 import { SEASONS } from '../../data/seasons.js';
 import {
   checkClothingData,
+  CLOTHING_RARITIES,
   ClothingItemSchema,
   isKeeperClothing,
   SQUISHY_SLOT,
@@ -59,10 +60,27 @@ describe('the clothing catalog', () => {
     expect(ClothingItemSchema.safeParse(withStats).success).toBe(false);
   });
 
-  it('uses every rarity, so the filter always has something to show', () => {
+  it('ranks clothing from Common to Mythic, never Secret (#261)', () => {
+    expect(CLOTHING_RARITIES).toEqual([
+      'common',
+      'uncommon',
+      'rare',
+      'epic',
+      'legendary',
+      'mythic',
+    ]);
+    expect(
+      ClothingItemSchema.safeParse({ ...byId('cloud-onesie'), rarity: 'mythic' }).success,
+    ).toBe(true);
+    expect(
+      ClothingItemSchema.safeParse({ ...byId('cloud-onesie'), rarity: 'secret' }).success,
+    ).toBe(false);
+  });
+
+  it('uses every rarity up to Legendary (Mythic arrives with the #261 costumes)', () => {
     const rarities = new Set(CLOTHING.map((i) => i.rarity));
     expect([...rarities].toSorted()).toEqual(
-      ['common', 'epic', 'legendary', 'rare', 'uncommon'].toSorted(),
+      CLOTHING_RARITIES.filter((r) => r !== 'mythic').toSorted(),
     );
   });
 
