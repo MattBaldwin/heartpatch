@@ -25,7 +25,7 @@ import {
   replayBattleRecord,
   startBattle,
 } from './engine.js';
-import { befriendedBetween, type BattleEvent, type BattleState } from './state.js';
+import { befriendedBetween, befriendedOf, type BattleEvent, type BattleState } from './state.js';
 
 const move = (id: string): BattleChoice => ({ type: 'move', move: `fixture-${id}` });
 const swap = (slot: number): BattleChoice => ({ type: 'swap', slot });
@@ -765,6 +765,21 @@ describe('befriending a guardian counts as a knockout (#279)', () => {
     expect(xp.filter((award) => award.side === 'a')).toEqual([
       { side: 'a', squishyId: 'a:emberbun', xp: content.rules.xp.minimum },
     ]);
+  });
+
+  it('befriendedOf names everyone who joined so far, the last one still out', () => {
+    const state = guardians('of', 'snoozlet', 'twirlysprout');
+    expect(befriendedOf(state, 'b')).toEqual([]);
+    const first = turn(state, sure);
+    expect(befriendedOf(first, 'b').map((s) => s.id)).toEqual(['b:snoozlet']);
+    const last = turn(first, sure);
+    expect(befriendedOf(last, 'b').map((s) => s.id)).toEqual(['b:snoozlet', 'b:twirlysprout']);
+    // The client's view reads the same.
+    expect(befriendedOf(clientBattleView(last), 'b').map((s) => s.id)).toEqual([
+      'b:snoozlet',
+      'b:twirlysprout',
+    ]);
+    expect(befriendedOf(last, 'a')).toEqual([]);
   });
 
   it('befriendedBetween names who joined in each step: mid-battle, then the last one', () => {

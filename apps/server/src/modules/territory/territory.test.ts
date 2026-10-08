@@ -9,6 +9,7 @@ import {
   GROWTH_RULES,
   hexKey,
   hexNeighbors,
+  joiningSpecies,
   JoinMapResponseSchema,
   MapResponseSchema,
   MapViewSchema,
@@ -27,6 +28,7 @@ import {
 import {
   CLOTHING_DROPS,
   GUARDIAN_RULES,
+  type GuardianData,
   SERVER_GAME_DATA,
   serverBattleData,
 } from '@heartpatch/shared/server';
@@ -40,6 +42,7 @@ import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { createBattlesRepo } from '../battles/repo.js';
 import { createBattlesService, HEART_CHARM, type TileBattleEnd } from '../battles/service.js';
 import { EVOLUTION_STEPS } from '../care/service.js';
 import { createRaidsConsumer } from '../raids/consumer.js';
@@ -719,10 +722,12 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await tileAt(mapId, target!)).ownerUserId).toBeNull();
       const joined = (await squishiesOf(kid, mapId)).filter((s) => s.level !== 40);
       expect(joined).toHaveLength(1);
-      // As it was in the battle, but below its first evolution.
+      // One evolution back if it's an evolved form, and below its next evolution.
+      const joinsAs = (id: string) => joiningSpecies(id, EVOLUTION_STEPS);
+      const firstAs = joinsAs(guardians[0]!.speciesId);
       expect(joined[0]).toMatchObject({
-        speciesId: guardians[0]!.speciesId,
-        level: befriendedLevel(guardians[0]!.speciesId, 30, EVOLUTION_STEPS, GROWTH_RULES),
+        speciesId: firstAs,
+        level: befriendedLevel(firstAs, 30, EVOLUTION_STEPS, GROWTH_RULES),
       });
       const midway = (await eventsOf(mapId)).filter((e) => e.type === 'squishy.captured');
       expect(midway.map((e) => parseGameEventPayload('squishy.captured', e.payload))).toEqual([
@@ -730,15 +735,14 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
           battleId: battle.id,
           userId: kid.id,
           squishyId: joined[0]!.id,
-          speciesId: guardians[0]!.speciesId,
+          speciesId: firstAs,
           level: joined[0]!.level,
         },
       ]);
       // The catalog has it (the Heart Charm milestones count these events).
       expect(
         await db.query.speciesSeen.findFirst({
-          where: (t, { and, eq }) =>
-            and(eq(t.userId, kid.id), eq(t.speciesId, guardians[0]!.speciesId)),
+          where: (t, { and, eq }) => and(eq(t.userId, kid.id), eq(t.speciesId, firstAs)),
         }),
       ).toMatchObject({ firstCaughtAt: clock });
 
@@ -757,7 +761,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       // One new friend per guardian, one charm per try.
       const friends = (await squishiesOf(kid, mapId)).filter((s) => s.level !== 40);
       expect(friends.map((s) => s.speciesId).sort()).toEqual(
-        guardians.map((g) => g.speciesId).sort(),
+        guardians.map((g) => joinsAs(g.speciesId)).sort(),
       );
       expect(await charmsOf(kid, mapId)).toBe(1);
       const events = await eventsOf(mapId);
@@ -772,6 +776,153 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         COIN_RULES.capture.tile,
       ]);
       expect(await piecesOf(kid.id)).toMatchObject([{ source: 'capture', refId: battle.id }]);
+    });
+
+    /** Battles where every Heart Charm works, on land these guardians guard. */
+    function sureServices(
+      guardians: GuardianData['rules']['tables'] | null,
+      count: number,
+      level: number,
+    ) {
+      const battles = createBattlesService({
+        db,
+        clock: () => clock,
+        content: createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA), {
+          ...BATTLE_RULES,
+          capture: {
+            atFull: 100,
+            nearlyOut: 100,
+            rarity: Object.fromEntries(
+              Object.keys(BATTLE_RULES.capture.rarity).map((rarity) => [rarity, 100]),
+            ) as typeof BATTLE_RULES.capture.rarity,
+          },
+        }),
+        tileBattles: createTileBattlePort(),
+      });
+      const territory = createTerritoryService({
+        db,
+        clock: () => clock,
+        battles,
+        guardians: {
+          ...defaultGuardianData(),
+          rules: {
+            ...GUARDIAN_RULES,
+            ...(guardians ? { tables: guardians } : {}),
+            strengths: [{ strength: 1, count, levels: { min: level, max: level } }],
+          },
+        },
+      });
+      return { battles, territory };
+    }
+
+    it('keeps a guardian the kid befriended out of their later tries this window (owner decision 2026-10-08)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await grant(server, kid, mapId, 40);
+      await giveCharms(server, kid, mapId, 2);
+      const { battles, territory } = sureServices(null, 2, 3);
+      const [target] = await edgeOf(mapId, kid);
+      const ids = (b: PlayerBattle) => b.view.sides.b.squishies.map((g) => g.id);
+
+      // The first try: one says yes, then the kid scoots home.
+      const { battle } = await territory.attack(kid, mapId, target!);
+      const guardians = battle.view.sides.b.squishies;
+      expect(ids(battle)).toEqual(['guardian-1', 'guardian-2']);
+      const first = await battles.act(kid, battle.id, {
+        action: { type: 'capture' },
+        turn: battle.view.turn,
+      });
+      expect(first.view.sides.b.squishies[0]).toMatchObject({ befriended: true });
+      await battles.act(kid, battle.id, { action: { type: 'forfeit' }, turn: first.view.turn });
+
+      // A later try the same day: only the one still guarding defends.
+      clock.setTime(clock.getTime() + (TERRITORY_RULES.cooldownHours * 60 + 1) * MINUTE_MS);
+      const again = (await territory.attack(kid, mapId, target!)).battle;
+      expect(ids(again)).toEqual(['guardian-2']);
+      expect(again.view.sides.b.squishies[0]!.speciesId).toBe(guardians[1]!.speciesId);
+      // It's in the stored setup, so the battle replays without a lookup.
+      const stored = await createBattlesRepo(db).findBattle(again.id);
+      expect(stored!.setup.b.squishies.map((g) => g.id)).toEqual(['guardian-2']);
+      await battles.act(kid, again.id, { action: { type: 'forfeit' }, turn: again.view.turn });
+
+      // A new guardian window (the patch's next day): the whole team is back.
+      clock.setTime(Date.parse('2026-10-03T18:00:00Z'));
+      expect(ids((await territory.attack(kid, mapId, target!)).battle)).toEqual([
+        'guardian-1',
+        'guardian-2',
+      ]);
+    });
+
+    it('lets each kid befriend a guardian once: another player still meets the whole team', async () => {
+      const server = await start();
+      const kid = await player();
+      const pal = await player();
+      const mapId = await patch(server, kid, [pal]);
+      await grant(server, kid, mapId, 40);
+      await grant(server, pal, mapId, 40);
+      await giveCharms(server, kid, mapId, 1);
+      const { battles, territory } = sureServices(null, 2, 3);
+      // Land next to both of them: the pal holds a wild tile beside it.
+      const [shared] = await edgeOf(mapId, kid);
+      const near = new Set(hexNeighbors(shared!).map(hexKey));
+      const beside = (await tilesOf(mapId)).find(
+        (t) => near.has(hexKey(t)) && t.ownerUserId === null && t.homeSlot === null,
+      );
+      await setOwner(beside!.id, pal.id);
+      const { battle } = await territory.attack(kid, mapId, shared!);
+      const first = await battles.act(kid, battle.id, {
+        action: { type: 'capture' },
+        turn: battle.view.turn,
+      });
+      await battles.act(kid, battle.id, { action: { type: 'forfeit' }, turn: first.view.turn });
+      clock.setTime(clock.getTime() + (TERRITORY_RULES.cooldownHours * 60 + 1) * MINUTE_MS);
+      const theirs = (await territory.attack(pal, mapId, shared!)).battle;
+      expect(theirs.view.sides.b.squishies.map((g) => g.id)).toEqual(['guardian-1', 'guardian-2']);
+    });
+
+    it('welcomes a Juniper’s Gap guardian as the form one step back (owner decision 2026-10-08)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await grant(server, kid, mapId, 40);
+      await giveCharms(server, kid, mapId, 1);
+      const [target] = await edgeOf(mapId, kid);
+      // A gap guardian: Hearthbun, Emberbun's evolution (stage 2), at a gap level.
+      const gap = GUARDIAN_RULES.tables.find((t) => t.id === 'gap-guardians')!;
+      expect(gap.entries.map((e) => e.species)).toContain('hearthbun');
+      const { battles, territory } = sureServices(
+        [{ ...gap, terrains: [target!.terrain], entries: [{ species: 'hearthbun', weight: 1 }] }],
+        1,
+        18,
+      );
+      const { battle } = await territory.attack(kid, mapId, target!);
+      expect(battle.view.sides.b.squishies[0]).toMatchObject({ speciesId: 'hearthbun', level: 18 });
+      const done = await battles.act(kid, battle.id, {
+        action: { type: 'capture' },
+        turn: battle.view.turn,
+      });
+      expect(done.view.phase).toMatchObject({ result: { winner: 'a', reason: 'captured' } });
+
+      // It joins as an Emberbun, below Emberbun's own evolution.
+      const emberbun = GAME_DATA.species.find((sp) => sp.id === 'emberbun')!;
+      const joined = (await squishiesOf(kid, mapId)).filter((sq) => sq.level !== 40);
+      expect(joined).toHaveLength(1);
+      expect(joined[0]).toMatchObject({
+        speciesId: 'emberbun',
+        element: emberbun.element,
+        level: befriendedLevel('emberbun', 18, EVOLUTION_STEPS, GROWTH_RULES),
+      });
+      expect(joined[0]!.level).toBeLessThan(emberbun.evolutions[0]!.level);
+      const captured = (await eventsOf(mapId)).find((e) => e.type === 'squishy.captured')!;
+      expect(parseGameEventPayload('squishy.captured', captured.payload)).toMatchObject({
+        speciesId: 'emberbun',
+      });
+      expect(
+        await db.query.speciesSeen.findFirst({
+          where: (t, { and, eq }) => and(eq(t.userId, kid.id), eq(t.speciesId, 'emberbun')),
+        }),
+      ).toMatchObject({ firstCaughtAt: clock });
     });
 
     it('never offers a Heart Charm on a rival’s land', async () => {

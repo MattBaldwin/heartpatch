@@ -591,7 +591,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         : null,
     );
     const glade = options.isGlade?.(b.mapId) ?? false;
-    const friends = newFriends(b).map((s) => names.speciesName(s.speciesId));
+    const friends = newFriends(b).map((id) => names.speciesName(id));
     const joined = friends.length > 0;
     const outcome =
       b.status === 'no-contest' || !result

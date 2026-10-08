@@ -4,6 +4,7 @@ import {
   itemRefusal,
   battleXpPercent,
   befriendedLevel,
+  joiningSpecies,
   CAPTURABLE_BATTLE_KINDS,
   CARE_RULES,
   ClientBattleViewSchema,
@@ -531,10 +532,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     befriendedBetween(before, after, otherSide(PLAYER_SIDE));
 
   /**
-   * Befriended squishies join the player (design doc §6, #279): as they were
-   * in the battle, but below their first evolution (owner decision
-   * 2026-10-06, `GROWTH_RULES.befriendBelowEvolution`), and the catalog marks
-   * each species caught. Before any event (they take `maps`).
+   * Befriended squishies join the player (design doc §6, #279), and the
+   * catalog marks each species caught. A wild one joins as it was in the
+   * battle; a land guardian one evolution back from the form it fought as
+   * (owner decision 2026-10-08, `joiningSpecies`), in that species' element
+   * and with the guardian's feeling. Either way, below its next evolution
+   * (owner decision 2026-10-06, `GROWTH_RULES.befriendBelowEvolution`).
+   * Before any event (they take `maps`).
    */
   const welcome = async (
     repo: BattlesTxRepo,
@@ -545,19 +549,25 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   ): Promise<OwnedSquishy[]> => {
     const friends: OwnedSquishy[] = [];
     for (const friend of befriended) {
+      const speciesId = TILE_BATTLE_KINDS.has(row.kind)
+        ? joiningSpecies(friend.speciesId, EVOLUTION_STEPS)
+        : friend.speciesId;
       friends.push(
         await repo.insertSquishy({
           mapId: row.mapId,
           ownerUserId: row.playerUserId,
-          speciesId: friend.speciesId,
-          element: friend.element,
+          speciesId,
+          element:
+            speciesId === friend.speciesId
+              ? friend.element
+              : (content.species.get(speciesId)?.element ?? friend.element),
           feeling: friend.feeling,
-          level: befriendedLevel(friend.speciesId, friend.level, EVOLUTION_STEPS, GROWTH_RULES),
+          level: befriendedLevel(speciesId, friend.level, EVOLUTION_STEPS, GROWTH_RULES),
           contentment: CARE_RULES.startContentment,
           at,
         }),
       );
-      await createSpawnsRepo(tx).markCaught(row.mapId, row.playerUserId, friend.speciesId, at);
+      await createSpawnsRepo(tx).markCaught(row.mapId, row.playerUserId, speciesId, at);
     }
     return friends;
   };

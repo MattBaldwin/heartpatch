@@ -41,13 +41,15 @@ describe('noCharmsLine', () => {
 });
 
 describe('who joined the patch (#279)', () => {
-  /** Just what `newFriends` reads: the other side's team and how it ended. */
+  /** Just what `newFriends` reads: the kind, the other side's team and how it ended. */
   const ended = (
-    squishies: { id: string; befriended?: true }[],
+    squishies: { speciesId: string; befriended?: true }[],
     active: number,
     phase: PlayerBattle['view']['phase'],
+    kind: PlayerBattle['kind'] = 'tile',
   ) =>
     ({
+      kind,
       mySide: 'a',
       view: { phase, sides: { b: { squishies, active } } },
     }) as unknown as PlayerBattle;
@@ -59,25 +61,35 @@ describe('who joined the patch (#279)', () => {
     result: { winner, reason, contentHash: 'x', turns: 2, xp: [] },
   });
 
-  it('is the wild squishy that said yes', () => {
-    const b = ended([{ id: 'wild' }], 0, over('captured'));
-    expect(newFriends(b).map((s) => s.id)).toEqual(['wild']);
+  it('is the wild squishy that said yes, as it was', () => {
+    const b = ended([{ speciesId: 'hearthbun' }], 0, over('captured'), 'wild');
+    expect(newFriends(b)).toEqual(['hearthbun']);
   });
 
   it('is every guardian befriended, the last one still out', () => {
-    const b = ended([{ id: 'g1', befriended: true }, { id: 'g2' }], 1, over('captured'));
-    expect(newFriends(b).map((s) => s.id)).toEqual(['g1', 'g2']);
+    const b = ended(
+      [{ speciesId: 'fuzzbolt', befriended: true }, { speciesId: 'emberbun' }],
+      1,
+      over('captured'),
+    );
+    expect(newFriends(b)).toEqual(['fuzzbolt', 'emberbun']);
+  });
+
+  it('names an evolved guardian by the form one step back (owner decision 2026-10-08)', () => {
+    // Juniper's Gap: a Hearthbun guardian joins as an Emberbun.
+    const b = ended([{ speciesId: 'hearthbun' }], 0, over('captured'));
+    expect(newFriends(b)).toEqual(['emberbun']);
   });
 
   it('keeps the ones that came along before a knockout win, or a loss', () => {
-    const team = [{ id: 'g1', befriended: true as const }, { id: 'g2' }];
-    expect(newFriends(ended(team, 1, over('tuckered-out'))).map((s) => s.id)).toEqual(['g1']);
-    expect(newFriends(ended(team, 1, over('tuckered-out', 'b'))).map((s) => s.id)).toEqual(['g1']);
-    expect(newFriends(ended(team, 1, { type: 'turn' })).map((s) => s.id)).toEqual(['g1']);
+    const team = [{ speciesId: 'fuzzbolt', befriended: true as const }, { speciesId: 'emberbun' }];
+    expect(newFriends(ended(team, 1, over('tuckered-out')))).toEqual(['fuzzbolt']);
+    expect(newFriends(ended(team, 1, over('tuckered-out', 'b')))).toEqual(['fuzzbolt']);
+    expect(newFriends(ended(team, 1, { type: 'turn' }))).toEqual(['fuzzbolt']);
   });
 
   it('is nobody after a plain win', () => {
-    expect(newFriends(ended([{ id: 'wild' }], 0, over('tuckered-out')))).toEqual([]);
+    expect(newFriends(ended([{ speciesId: 'fuzzbolt' }], 0, over('tuckered-out')))).toEqual([]);
   });
 
   it('says who in one short line', () => {

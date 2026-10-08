@@ -27,6 +27,8 @@ import {
   type Species,
   type TerritoryRules,
   type TerritoryStatus,
+  befriendedOf,
+  otherSide,
 } from '@heartpatch/shared';
 import {
   GUARDIAN_RULES,
@@ -45,12 +47,13 @@ import {
   type Clock,
 } from '../../lib/time.js';
 import { createBattlesRepo, type BattleRow } from '../battles/repo.js';
-import type {
-  BattlesService,
-  PrepareTileBattle,
-  StartResult,
-  TileBattleEnd,
-  TileBattlePort,
+import {
+  PLAYER_SIDE,
+  type BattlesService,
+  type PrepareTileBattle,
+  type StartResult,
+  type TileBattleEnd,
+  type TileBattlePort,
 } from '../battles/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
@@ -244,6 +247,38 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       guardianData,
     );
 
+  /**
+   * Guardians this player has befriended on the tile this window (owner
+   * decision 2026-10-08, #279), by id (`guardian-1`, …): they stay out of the
+   * player's later fights there until the window turns, like a wild squishy.
+   * Read from the player's earlier battles' stored states; the setup records
+   * who is left, so a replay needs no lookup.
+   */
+  const befriendedHere = async (
+    tx: Executor,
+    map: MapRow,
+    tile: TerritoryTileRow,
+    userId: string,
+    at: Date,
+  ): Promise<Set<string>> => {
+    const hours = guardianData.rules.windowHours;
+    const window = spawnWindowFor(at, map.timeZone, hours).id;
+    // An hour's slack for a day that daylight saving makes 25 hours long.
+    const since = new Date(at.getTime() - (hours + 1) * HOUR_MS);
+    const attacks = await createTerritoryRepo(tx).myAttacksSince(tile.id, userId, since);
+    const battles = createBattlesRepo(tx);
+    const ids = new Set<string>();
+    for (const attack of attacks) {
+      if (spawnWindowFor(attack.startedAt, map.timeZone, hours).id !== window) continue;
+      const battle = await battles.findBattle(attack.battleId);
+      if (battle?.kind !== 'tile') continue;
+      for (const guardian of befriendedOf(battle.state, otherSide(PLAYER_SIDE))) {
+        ids.add(guardian.id);
+      }
+    }
+    return ids;
+  };
+
   /** Raid rules, checked in the battle's start transaction (see `PrepareTileBattle`). */
   const prepare =
     (user: PublicUser, target: AttackTileRequest): PrepareTileBattle =>
@@ -324,9 +359,13 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
       }
 
       // The defender's stance, read under their member lock (#16).
+      // A guardian the player befriended here this window stays out (#279).
+      const guardians = defenders.length === 0 ? await guardiansOf(tx, map, tile, at) : [];
+      const gone =
+        guardians.length > 0 ? await befriendedHere(tx, map, tile, user.id, at) : new Set();
       const side = defendingSide(
         defenders,
-        defenders.length === 0 ? await guardiansOf(tx, map, tile, at) : [],
+        guardians.filter((guardian) => !gone.has(guardian.id)),
         defender?.defenseStance,
       );
       if (side.squishies.length === 0) throw new AppError('CONFLICT', MESSAGES.nobodyGuards);

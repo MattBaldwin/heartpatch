@@ -1,4 +1,13 @@
-import { RECIPES, RESOURCES, type BattleSquishyView, type PlayerBattle } from '@heartpatch/shared';
+import {
+  befriendedOf,
+  GAME_DATA,
+  joiningSpecies,
+  RECIPES,
+  RESOURCES,
+  TILE_BATTLE_KINDS,
+  type EvolutionStep,
+  type PlayerBattle,
+} from '@heartpatch/shared';
 import { otherSide } from './battle-view.js';
 
 // The "Use Heart Charm" button in wild battles (owner decision 2026-10-04)
@@ -44,19 +53,21 @@ export function noCharmsLine(): string {
 /** After a won wild battle where nobody was befriended. */
 export const BEFRIEND_NUDGE = 'Weaken a wild squishy, then use a Heart Charm to befriend it!';
 
+/** Every public evolution, for naming the form a land guardian joins as. */
+const PUBLIC_STEPS: readonly EvolutionStep[] = GAME_DATA.species.flatMap((s) =>
+  s.evolutions.map((e) => ({ from: s.id, into: e.into, level: e.level })),
+);
+
 /**
- * Who joined the player in `battle`, in team order (#279): guardians
- * befriended mid-battle (they left the fight), then the one befriended last,
- * still out when the battle ended `captured` (a wild squishy is only that).
+ * The species that joined the player in `battle`, in team order (#279): a
+ * wild squishy as it was; a land guardian one evolution back from the form
+ * it fought as (owner decision 2026-10-08), as the server grants it.
  */
-export function newFriends(battle: PlayerBattle): BattleSquishyView[] {
-  const { squishies, active } = battle.view.sides[otherSide(battle.mySide)];
-  const { phase } = battle.view;
-  const last =
-    phase.type === 'over' &&
-    phase.result.reason === 'captured' &&
-    phase.result.winner === battle.mySide;
-  return squishies.filter((s, slot) => s.befriended === true || (last && slot === active));
+export function newFriends(battle: PlayerBattle): string[] {
+  const friends = befriendedOf(battle.view, otherSide(battle.mySide));
+  return friends.map((s) =>
+    TILE_BATTLE_KINDS.has(battle.kind) ? joiningSpecies(s.speciesId, PUBLIC_STEPS) : s.speciesId,
+  );
 }
 
 /** "Moonpuff joined your patch!", "Moonpuff and Snoozlet joined your patch!" */

@@ -197,26 +197,45 @@ export function benchOf(
 }
 
 /**
+ * Who on `side` said yes to a Heart Charm in `battle`, in team order (#279):
+ * ones that left mid-battle (flagged), and the last one when the battle ended
+ * `captured` for the other side (it is still out, unflagged). Works on the
+ * stored state and on the client's view alike.
+ */
+export function befriendedOf<S extends { readonly befriended?: true }>(
+  battle: {
+    readonly sides: Readonly<
+      Record<BattleSideId, { readonly squishies: readonly S[]; readonly active: number }>
+    >;
+    readonly phase:
+      | { readonly type: 'turn' | 'replace' }
+      | {
+          readonly type: 'over';
+          readonly result: { readonly winner: BattleSideId | 'draw'; readonly reason: string };
+        };
+  },
+  side: BattleSideId,
+): S[] {
+  const { squishies, active } = battle.sides[side];
+  const { phase } = battle;
+  const last =
+    phase.type === 'over' &&
+    phase.result.reason === 'captured' &&
+    phase.result.winner === otherSide(side);
+  return squishies.filter(
+    (squishy, slot) => squishy.befriended === true || (last && slot === active),
+  );
+}
+
+/**
  * The squishies on `side` that said yes to a Heart Charm between `before`
- * and `after` (one step), in team order: ones that left mid-battle (#279),
- * and the last one when the step ended the battle `captured` (it is still
- * out). Who gets a new friend from that step.
+ * and `after` (one step), in team order. Who gets a new friend from that step.
  */
 export function befriendedBetween(
   before: BattleState,
   after: BattleState,
   side: BattleSideId,
 ): BattleSquishy[] {
-  const was = before.sides[side].squishies;
-  const { squishies, active } = after.sides[side];
-  const { phase } = after;
-  const lastOne =
-    phase.type === 'over' &&
-    phase.result.reason === 'captured' &&
-    phase.result.winner === otherSide(side);
-  return squishies.filter(
-    (squishy, slot) =>
-      (squishy.befriended === true && was[slot]?.befriended !== true) ||
-      (lastOne && slot === active),
-  );
+  const was = new Set(befriendedOf(before, side).map((squishy) => squishy.id));
+  return befriendedOf(after, side).filter((squishy) => !was.has(squishy.id));
 }
