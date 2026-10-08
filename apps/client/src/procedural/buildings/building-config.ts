@@ -36,6 +36,13 @@ export const BUILDING_COLORS = {
   targetRing: '#fff3b0', // TUNE
   post: '#c9a27e', // TUNE
   flag: '#7ab8ff', // TUNE: a level-2 Training Grounds' pennant
+  workshop: '#f8cfa4', // TUNE: Crafting Factory walls (#294), a soft peach
+  workshopRoof: '#e8709f', // TUNE: its rosy roof
+  chimney: '#c98aa8', // TUNE
+  puff: '#fff6fb', // TUNE: the chimney's little puffs
+  porthole: '#cdeefa', // TUNE: round windows
+  gear: '#7aa9c7', // TUNE: the gear in the big window, and the belt
+  crate: '#ff8fb8', // TUNE: a little heart crate riding the belt
 } as const;
 
 /**

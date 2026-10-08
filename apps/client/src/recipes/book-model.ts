@@ -140,6 +140,11 @@ export interface PageView {
   readonly ingredients: readonly IngredientView[];
   /** Open, in season, and the bag holds everything. */
   readonly canMake: boolean;
+  /**
+   * A recipe the Crafting Factory could take now (#294): open, in season and
+   * the bag holds one run, whatever the pot is doing.
+   */
+  readonly queueable: boolean;
   /** Why it can't be made right now, or null. */
   readonly note: string | null;
   /** Opened since the player last looked (the "New page!" moment). */
@@ -240,6 +245,7 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
     meta,
     ingredients,
     canMake,
+    queueable: page.kind === 'recipe' && !sealed && inSeason && hasAll,
     note,
     isNew: !sealed && ctx.unseen.has(page.key),
   };

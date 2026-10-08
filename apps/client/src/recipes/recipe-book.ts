@@ -1,9 +1,13 @@
 import {
+  GAME_DATA,
   recipeBookPages,
   type Hex,
   type InventoryResponse,
   type PublicUser,
 } from '@heartpatch/shared';
+import { createFactoryPanel } from '../factory/factory-panel.js';
+import { createFactoryStrip } from '../factory/factory-strip.js';
+import { FACTORY_TEXT } from '../factory/factory-view.js';
 import { formatTimeLeft } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
@@ -39,6 +43,11 @@ export interface RecipeBookOptions {
     readonly bag: InventoryResponse | null;
     refresh: () => Promise<void>;
     craft: (recipeId: string) => Promise<string | null>;
+    /** A Crafting Factory batch (#294); null once started, else a line saying why not. */
+    queue: (recipeId: string, count: number) => Promise<string | null>;
+    stopBatch: (batchId: string) => Promise<string | null>;
+    /** The game clock now, in ms. */
+    gameNow: () => number;
     /** Ms until an ISO time on the server's clock. */
     msUntil: (iso: string) => number;
   };
@@ -135,6 +144,7 @@ export const RECIPE_BOOK_TEXT = {
 } as const;
 
 const PAGES = recipeBookPages();
+const PAGE_NAMES = new Map(GAME_DATA.recipes.map((r) => [r.id, r.name]));
 const SEEN_KEY = (accountId: string) => `heartpatch.recipe-book.seen.${accountId}`;
 
 function defaultStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
@@ -169,6 +179,8 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
   let say = '';
   let busy = false;
   let generation = 0;
+  /** The recipe whose page shows the Factory's "How many?" (#294), or null. */
+  let queueing: string | null = null;
 
   // ── Entry in the My Home tray ───────────────────────────────────
   const entryBadge = el('span', {
@@ -314,6 +326,25 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
   // the tick rewrites its words.
   const cookingBox = el('div', { class: 'rbook-cooking', 'data-testid': 'recipe-book-cooking' });
   cookingBox.hidden = true;
+  // The Crafting Factory's batches under it (#294), and its "How many?" on a page.
+  const factoryStrip = createFactoryStrip(() => options.inventory.gameNow());
+  factoryStrip.element.classList.add('rbook-factory');
+  const factoryPanel = createFactoryPanel({
+    now: () => options.inventory.gameNow(),
+    start: async (recipeId, count) => {
+      const failure = await options.inventory.queue(recipeId, count);
+      if (failure === null) say = FACTORY_TEXT.started(count, PAGE_NAMES.get(recipeId) ?? '');
+      return failure;
+    },
+    stop: (batchId) => options.inventory.stopBatch(batchId),
+    isOpen: (key) => unlocked.includes(key),
+    onMode: (mode) => {
+      if (mode !== 'pick' && queueing !== null) {
+        queueing = null;
+        render('none');
+      }
+    },
+  });
 
   const book = el(
     'section',
@@ -326,6 +357,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     },
     bar,
     cookingBox,
+    factoryStrip.element,
     tabs,
     stage,
     sayLine,
@@ -513,6 +545,35 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     );
   };
 
+  /** "🏭 Queue in Factory" beside Make it, once the Factory is built (#294). */
+  const queueButton = (page: PageView): HTMLElement[] => {
+    const factory = options.inventory.bag?.factory;
+    if (!factory || page.kind !== 'recipe' || page.sealed) return [];
+    const button = el(
+      'button',
+      {
+        type: 'button',
+        class: page.queueable
+          ? 'rbook-stamp rbook-queue'
+          : 'rbook-stamp rbook-stamp-off rbook-queue',
+        'data-testid': 'recipe-book-queue',
+        'data-page': page.key,
+      },
+      FACTORY_TEXT.queueIn,
+    );
+    button.disabled = !page.queueable || busy;
+    button.addEventListener('click', () => {
+      queueing = page.id;
+      const bag = options.inventory.bag;
+      if (bag?.factory) {
+        factoryPanel.update({ view: bag.factory, items: bag.items, seasons: bag.seasons });
+      }
+      factoryPanel.pick(page.id, true);
+      render('none');
+    });
+    return [button];
+  };
+
   const cta = (page: PageView): HTMLElement[] => {
     const make = page.kind === 'recipe';
     const label = make ? RECIPE_BOOK_TEXT.makeIt : RECIPE_BOOK_TEXT.buildIt;
@@ -555,7 +616,12 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
         ? (page.meta.split(' · ')[1] ?? '')
         : RECIPE_BOOK_TEXT.buildNote
       : (page.note ?? '');
-    return [button, el('p', { class: 'rbook-note' }, note)];
+    const queue = queueButton(page);
+    if (queue.length === 0) return [button, el('p', { class: 'rbook-note' }, note)];
+    return [
+      el('div', { class: 'rbook-ctas' }, button, ...queue),
+      el('p', { class: 'rbook-note' }, page.queueable ? FACTORY_TEXT.bothHint : note),
+    ];
   };
 
   const head = (page: PageView) =>
@@ -597,9 +663,17 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
       : []),
     ...(page.flavour ? [el('p', { class: 'rbook-flavour' }, page.flavour)] : []),
     el('p', { class: 'rbook-meta' }, page.meta),
-    el('h4', { class: 'rbook-need' }, RECIPE_BOOK_TEXT.youNeed),
-    el('ul', { class: 'rbook-ings' }, ...page.ingredients.map((i) => ingredientLine(page, i))),
-    el('div', { class: 'rbook-foot' }, ...cta(page)),
+    ...(queueing === page.id && options.inventory.bag?.factory
+      ? [el('div', { class: 'rbook-foot rbook-factory-pick' }, factoryPanel.element)]
+      : [
+          el('h4', { class: 'rbook-need' }, RECIPE_BOOK_TEXT.youNeed),
+          el(
+            'ul',
+            { class: 'rbook-ings' },
+            ...page.ingredients.map((i) => ingredientLine(page, i)),
+          ),
+          el('div', { class: 'rbook-foot' }, ...cta(page)),
+        ]),
   ];
 
   const sealedPage = (page: PageView) => [
@@ -753,6 +827,11 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
   function render(motion: 'none' | 'next' | 'prev'): void {
     entry.hidden = mapId === null;
     renderCooking();
+    const bag = options.inventory.bag;
+    factoryStrip.update(book.hidden ? null : (bag?.factory ?? null));
+    if (bag?.factory && queueing !== null) {
+      factoryPanel.update({ view: bag.factory, items: bag.items, seasons: bag.seasons });
+    }
     entryBadge.textContent = fresh.length > 0 ? String(fresh.length) : '';
     if (book.hidden) return;
 

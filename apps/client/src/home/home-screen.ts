@@ -10,10 +10,17 @@ import {
   type PublicUser,
   type Species,
 } from '@heartpatch/shared';
+import type { InventoryResponse, SettleResponse } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
+import { factoryApi, type FactoryApi } from '../factory/factory-api.js';
+import { createFactoryPanel } from '../factory/factory-panel.js';
+import { FACTORY_TEXT, goingCount } from '../factory/factory-view.js';
+import { GameClock } from '../inventory/game-clock.js';
+import { inventoryApi } from '../inventory/inventory-api.js';
+import { recipeBookApi } from '../recipes/recipe-book-api.js';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
-import { describeItems } from '../inventory/bag-view.js';
+import { describeItems, landedText } from '../inventory/bag-view.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import type { TileActions } from '../map/map-screen.js';
 import { listenForTaps } from '../map/tap-detector.js';
@@ -95,6 +102,13 @@ export interface HomeScreenOptions {
   api?: HomeApi;
   /** Train and Stop on the Training Grounds card (the job board's own calls). */
   jobs?: Pick<JobsApi, 'setJob'>;
+  /** The Crafting Factory card's calls (#294): its batches come with every settle. */
+  factory?: {
+    api?: FactoryApi;
+    settle?: (mapId: string) => Promise<SettleResponse>;
+    openPages?: () => Promise<readonly string[]>;
+    storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
+  };
 }
 
 type Mode =
@@ -120,6 +134,10 @@ export interface HomeDebug {
   readonly scene: HomeSceneStats | null;
   /** Wander hops started since the home opened. */
   readonly hops: number;
+  /** The Factory card's batches going (#294), null while it's not loaded. */
+  readonly factoryBatches: number | null;
+  /** What the Factory card's panel shows, null when it isn't on screen. */
+  readonly factoryPanel: 'list' | 'pick' | 'stop' | null;
 }
 
 export interface HomeScreen {
@@ -204,6 +222,10 @@ export const HOME_TEXT = {
 
 /** One night of fuel per tap: easy to count, quick to top up. */
 const FUEL_NIGHTS = 1;
+/** Where Sprout remembers it gave the Factory tip (#294), per account. */
+const FACTORY_TIP_KEY = (userId: string) => `heartpatch.factory.tip.${userId}`;
+/** A Factory settle asks a moment after the next one finishes, as the Bag's does. */
+const FACTORY_SETTLE_SLACK_MS = 400; // TUNE: like the Bag's
 
 export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const api = options.api ?? homeApi;
@@ -224,6 +246,34 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let wanderTurn = 0;
   let lastTier: QualityTier | null = null;
   let panel: { container: HTMLElement; tile: PublicTile } | null = null;
+
+  // ── The Crafting Factory card (#294) ─────────────────────────────────
+  const fapi = options.factory?.api ?? factoryApi;
+  const settleFactory = options.factory?.settle ?? ((id: string) => inventoryApi.settle(id));
+  const readPages =
+    options.factory?.openPages ?? (() => recipeBookApi.get().then((res) => res.unlocked));
+  const tipStorage =
+    options.factory?.storage === undefined ? safeStorage() : options.factory.storage;
+  const factoryClock = new GameClock();
+  /** The bag as the Factory card last read it (its batches, items and seasons). */
+  let factoryBag: InventoryResponse | null = null;
+  let factoryPages = new Set<string>();
+  let factoryTimer: number | undefined;
+  /** Read once per map without being asked (a failed read waits for the next tap). */
+  let factoryTried = false;
+  /** The Factory card showing Sprout's one-time tip (#294), or null. */
+  let tipFor: string | null = null;
+  const factoryPanel = createFactoryPanel({
+    now: () => factoryClock.now(),
+    start: (recipeId, count) => factoryCommand((id, key) => fapi.start(id, recipeId, count, key)),
+    stop: (batchId) =>
+      factoryCommand(async (id, key) => {
+        const res = await fapi.stop(id, batchId, key);
+        say(FACTORY_TEXT.stopped(describeItems(res.refunded)));
+        return res;
+      }),
+    isOpen: (key) => factoryPages.has(key),
+  });
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const entry = el(
@@ -309,6 +359,85 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       show(fresh);
     } catch (err) {
       if (at === generation) say(messageOf(err));
+    }
+  }
+
+  /** Reads the Factory's batches (a settle: finished things go in the bag) and redraws its card. */
+  async function loadFactory(): Promise<void> {
+    const id = mapId;
+    const at = generation;
+    if (!id) return;
+    factoryTried = true;
+    try {
+      const [res] = await Promise.all([
+        settleFactory(id),
+        readPages()
+          .then((keys) => {
+            factoryPages = new Set(keys);
+          })
+          .catch(() => undefined),
+      ]);
+      if (at !== generation) return;
+      factoryClock.sync(res.now);
+      factoryBag = res;
+      const landed = landedText(res.landed);
+      if (landed !== '') say(landed);
+      scheduleFactory(res.nextAt);
+      render();
+    } catch (err) {
+      if (at === generation) say(messageOf(err));
+    }
+  }
+
+  /** One settle when the next thing finishes, while the Factory card is up. */
+  function scheduleFactory(nextAt: string | null): void {
+    window.clearTimeout(factoryTimer);
+    factoryTimer = undefined;
+    const batches = factoryBag?.factory?.batches ?? [];
+    const due = [
+      ...(nextAt ? [nextAt] : []),
+      ...batches.flatMap((b) => (b.nextAt ? [b.nextAt] : [])),
+    ].map((iso) => factoryClock.msUntil(iso));
+    if (due.length === 0 || !factoryCardUp()) return;
+    factoryTimer = window.setTimeout(
+      () => {
+        factoryTimer = undefined;
+        if (factoryCardUp()) void loadFactory();
+      },
+      Math.min(...due) + FACTORY_SETTLE_SLACK_MS,
+    );
+  }
+
+  const factoryCardUp = () =>
+    isOpen &&
+    mode.kind === 'selected' &&
+    home?.buildings.find((b) => 'id' in mode && b.id === mode.id)?.kind === 'factory';
+
+  /** A Factory command; its reply is the whole bag. Null once it ran, else why not. */
+  async function factoryCommand(
+    run: (mapId: string, key: string) => Promise<InventoryResponse>,
+  ): Promise<string | null> {
+    const id = mapId;
+    if (!id) return null;
+    const at = generation;
+    try {
+      const res = await sendCommand(
+        sendDeps,
+        (key) => run(id, key),
+        () => at === generation,
+      );
+      if (!res || at !== generation) return null;
+      factoryClock.sync(res.now);
+      factoryBag = res;
+      scheduleFactory(null);
+      // The bag changed: the home's costs and chips read it again.
+      void refresh();
+      return null;
+    } catch (err) {
+      if (at === generation && err instanceof ApiRequestError && err.code === 'CONFLICT') {
+        void loadFactory();
+      }
+      return messageOf(err);
     }
   }
 
@@ -498,9 +627,20 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     say('');
     syncScene();
     render();
+    if (factoryCardUp()) {
+      factoryPanel.showList();
+      void loadFactory();
+    } else {
+      tipFor = null;
+      window.clearTimeout(factoryTimer);
+      factoryTimer = undefined;
+      factoryPanel.pause();
+    }
   };
 
   function render(): void {
+    // The Factory card opened (a tap on it, or just built): read its batches once.
+    if (factoryBag === null && !factoryTried && factoryCardUp()) void loadFactory();
     entry.hidden = mapId === null || isOpen;
     overlay.hidden = !isOpen;
     if (!isOpen || !home) {
@@ -516,7 +656,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       case 'idle': {
         const chips = atHome(current).buildings.map((b) =>
           button(
-            `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}`,
+            `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}${factoryChip(b)}`,
             () => {
               setMode({ kind: 'selected', id: b.id });
             },
@@ -895,6 +1035,17 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ),
       );
     }
+    if (b.kind === 'factory') {
+      // The queue panel (#294): batches going, Start a batch, Stop.
+      if (factoryBag?.factory) {
+        factoryPanel.update({
+          view: factoryBag.factory,
+          items: factoryBag.items,
+          seasons: factoryBag.seasons,
+        });
+      }
+      card.push(...factoryTip(b.id), factoryPanel.element);
+    }
     actions.push(
       button(
         HOME_TEXT.move,
@@ -931,6 +1082,38 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       ),
     );
     return card;
+  }
+
+  /** " · 2 going" on the Factory's chip while batches are going (#294). */
+  function factoryChip(b: MyBuilding): string {
+    const view = factoryBag?.factory;
+    if (b.kind !== 'factory' || !view) return '';
+    const going = goingCount(view, factoryClock.now());
+    return going > 0 ? ` · ${String(going)} going` : '';
+  }
+
+  /** Sprout's tip the first time a kid sees their Factory (#294, owner decision 2026-10-08). */
+  function factoryTip(buildingRowId: string): Node[] {
+    if (!user || !tipStorage) return [];
+    if (tipFor !== buildingRowId) {
+      const key = FACTORY_TIP_KEY(user.id);
+      try {
+        if (tipStorage.getItem(key) !== null) return [];
+        tipStorage.setItem(key, '1');
+      } catch {
+        return [];
+      }
+      // Stays up while this card is open, however often it redraws.
+      tipFor = buildingRowId;
+    }
+    return [
+      el(
+        'p',
+        { class: 'home-sprout-tip', 'data-testid': 'factory-tip' },
+        el('span', { 'aria-hidden': 'true' }, '🌱 '),
+        FACTORY_TEXT.sproutTip,
+      ),
+    ];
   }
 
   /** What a building does, as chips (#207). */
@@ -1461,6 +1644,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     setMap: (next) => {
       if (next === mapId) return;
       generation += 1;
+      factoryBag = null;
+      factoryTried = false;
       mapId = next;
       home = null;
       if (isOpen) hide();
@@ -1470,6 +1655,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       if (next?.id === user?.id) return;
       user = next;
       generation += 1;
+      factoryBag = null;
+      factoryTried = false;
       mapId = null;
       home = null;
       if (isOpen) hide();
@@ -1517,6 +1704,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         squishies: home?.squishies.length ?? 0,
         scene: scene3d?.stats ?? null,
         hops: scene3d?.hops ?? 0,
+        factoryBatches: factoryBag?.factory ? factoryBag.factory.batches.length : null,
+        factoryPanel: factoryPanel.element.isConnected ? factoryPanel.mode : null,
       };
     },
   };
@@ -1530,4 +1719,13 @@ function squishyTitle(
 ): HTMLElement {
   const rarity = squishyRarity(squishy, species);
   return el('span', { class: 'home-list-title' }, ...(rarity ? [rarityDot(rarity)] : []), name);
+}
+
+/** `localStorage`, or null where it throws (private mode, blocked site data). */
+function safeStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
