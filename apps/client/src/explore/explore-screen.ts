@@ -56,6 +56,7 @@ import {
 import {
   besideSpot,
   CAVE_STAGE,
+  freePoint,
   fromCaveStage,
   slideMove,
   spotAtTap,
@@ -1080,6 +1081,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       }),
       mapTile: options.mapTile(tile),
     });
+    // The start can land on a rock: step out before the Keeper is drawn.
+    keeperAt = freePoint(keeperAt, built.colliders);
     built.moveKeeper(keeperAt, yaw);
     scene3d = built;
     scene.onDisposeObservable.addOnce(() => {

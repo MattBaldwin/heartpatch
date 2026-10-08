@@ -50,22 +50,24 @@ export const EXPLORE_VIEW = {
   tapSlop: 10, // TUNE
   /**
    * The Keeper's collider (tile-local radius) and each spot's, by kind. The
-   * Keeper slides round them and never walks through (#291). Spots sit at
-   * least `placement.minGap` (0.16) apart, so two radii plus the Keeper's
-   * stay under it and there is always a way between them.
+   * Keeper slides round them and never walks through (#291). Land spots sit
+   * at least `placement.minGap` (0.16) apart, so two land radii plus the
+   * Keeper's stay under it and there is always a way between them; the pond
+   * is wider, and a flood fill over generated tiles checks every spot can
+   * still be walked up to (explore-world.test.ts).
    */
   keeperRadius: 0.028, // TUNE
   spotRadius: {
     rock: 0.045,
     tree: 0.04,
-    'hollow-log': 0.05,
+    'hollow-log': 0.046,
     'flower-bed': 0.045,
-    'pumpkin-row': 0.05,
+    'pumpkin-row': 0.046,
     mound: 0.045,
     pond: 0.07,
     reeds: 0.04,
-    ledge: 0.055,
-    cave: 0.065,
+    ledge: 0.046,
+    cave: 0.046,
   } as Readonly<Record<string, number>>, // TUNE
   /** Any other kind of spot. */
   spotRadiusDefault: 0.045, // TUNE

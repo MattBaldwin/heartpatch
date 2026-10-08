@@ -1,4 +1,5 @@
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { EXPLORE_RULES, searchSpots } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { clampToTile, insideTile } from './explore-view.js';
@@ -11,6 +12,7 @@ import {
   collidersOf,
   decorPlaces,
   followStep,
+  freePoint,
   fromCaveStage,
   gapTo,
   offFacing,
@@ -38,7 +40,8 @@ const AWAY = Math.PI;
 const RIGHT = -Math.PI / 2;
 
 /** The same heading, whichever way round the circle it's written. */
-const turnBetween = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+const turnBetween = (a: number, b: number) =>
+  Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
 describe('colliders', () => {
   it('turns spots and buildings into circles', () => {
@@ -51,15 +54,76 @@ describe('colliders', () => {
     expect(spotRadius('mystery')).toBe(EXPLORE_VIEW.spotRadiusDefault);
   });
 
-  it('leaves room for the Keeper between two spots `minGap` apart', () => {
-    // The widest pair of land spots that can sit side by side (not the pond).
+  it('leaves room for the Keeper between two land spots `minGap` apart', () => {
+    // The widest pair of land spots that can sit side by side; the pond is
+    // wider, and the flood fill below checks every spot stays reachable.
     const widest = Math.max(
       ...Object.entries(EXPLORE_VIEW.spotRadius)
         .filter(([kind]) => kind !== 'pond')
         .map(([, r]) => r),
     );
-    expect(2 * widest + 2 * EXPLORE_VIEW.keeperRadius).toBeLessThan(0.16 + 0.04);
+    expect(2 * widest + 2 * EXPLORE_VIEW.keeperRadius).toBeLessThan(EXPLORE_RULES.placement.minGap);
   });
+
+  it('can walk up to every spot from the start, on many generated tiles (pond included)', () => {
+    const step = 0.005;
+    const n = Math.ceil(2 / step) + 1;
+    const at = (i: number) => -1 + i * step;
+    let tiles = 0;
+    for (const tile of generatedTiles(3)) {
+      tiles++;
+      const colliders = collidersOf(tile.spots, []);
+      const free = (x: number, z: number) => insideTile({ x, z }) && !blocked({ x, z }, colliders);
+      const start = freePoint(EXPLORE_VIEW.start, colliders);
+      const seen = new Uint8Array(n * n);
+      const first = Math.round((start.x + 1) / step) * n + Math.round((start.z + 1) / step);
+      // The grid cell nearest the start may sit a hair inside a collider.
+      const queue = free(at(Math.floor(first / n)), at(first % n)) ? [first] : [];
+      if (queue.length === 0) {
+        for (let k = 0; k < n * n && queue.length === 0; k++) {
+          const i = Math.floor(k / n);
+          const j = k % n;
+          if (free(at(i), at(j)) && Math.hypot(at(i) - start.x, at(j) - start.z) < step * 2) {
+            queue.push(k);
+          }
+        }
+      }
+      for (const k of queue) seen[k] = 1;
+      while (queue.length > 0) {
+        const k = queue.pop() ?? 0;
+        const i = Math.floor(k / n);
+        const j = k % n;
+        for (const [a, b] of [
+          [i + 1, j],
+          [i - 1, j],
+          [i, j + 1],
+          [i, j - 1],
+        ] as const) {
+          if (a < 0 || b < 0 || a >= n || b >= n) continue;
+          const next = a * n + b;
+          if (seen[next] || !free(at(a), at(b))) continue;
+          seen[next] = 1;
+          queue.push(next);
+        }
+      }
+      for (const spot of tile.spots) {
+        const span = spotRadius(spot.kind) + EXPLORE_VIEW.keeperRadius + EXPLORE_VIEW.reach;
+        let reached = false;
+        for (let i = Math.max(0, Math.floor((spot.x - span + 1) / step)); !reached; i++) {
+          if (i >= n || at(i) > spot.x + span) break;
+          for (let j = Math.max(0, Math.floor((spot.z - span + 1) / step)); j < n; j++) {
+            if (at(j) > spot.z + span) break;
+            if (seen[i * n + j] && gapTo({ x: at(i), z: at(j) }, spot) <= EXPLORE_VIEW.reach) {
+              reached = true;
+              break;
+            }
+          }
+        }
+        expect(reached, `${tile.name}: spot ${String(spot.index)} (${spot.kind})`).toBe(true);
+      }
+    }
+    expect(tiles).toBeGreaterThan(20);
+  }, 30_000);
 
   it('never walks into a rock: it slides along it', () => {
     const rock = { x: 0, z: 0, r: 0.05 };
@@ -90,7 +154,29 @@ describe('colliders', () => {
     const b = { x: 0.04, z: 0, r: 0.05 };
     const from = { x: 0, z: -0.2 };
     const to = slideMove(from, { x: 0, z: 0 }, [a, b]);
-    expect(blocked(to, [a, b])).toBe(false);
+    expect(to).toEqual(from);
+  });
+
+  it('never starts inside a spot, on many generated tiles', () => {
+    let tiles = 0;
+    let moved = 0;
+    for (const tile of generatedTiles(120)) {
+      tiles++;
+      const colliders = collidersOf(tile.spots, []);
+      const start = freePoint(EXPLORE_VIEW.start, colliders);
+      expect(blocked(start, colliders), tile.name).toBe(false);
+      expect(insideTile(start), tile.name).toBe(true);
+      if (start.x !== EXPLORE_VIEW.start.x || start.z !== EXPLORE_VIEW.start.z) {
+        moved++;
+        // A short step out, not across the tile.
+        expect(
+          Math.hypot(start.x - EXPLORE_VIEW.start.x, start.z - EXPLORE_VIEW.start.z),
+        ).toBeLessThan(0.2);
+      }
+    }
+    // The case is real: some generated tiles put a spot on the start.
+    expect(moved).toBeGreaterThan(0);
+    expect(tiles).toBeGreaterThan(200);
   });
 
   it('keeps the Keeper inside the tile while sliding', () => {
@@ -278,3 +364,21 @@ describe('the lantern', () => {
     );
   });
 });
+
+/** Tiles laid out by the server's own rules (`searchSpots`), every explorable terrain. */
+function* generatedTiles(
+  seeds: number,
+): Generator<{ name: string; spots: ReturnType<typeof searchSpots> & object }> {
+  for (let s = 0; s < seeds; s++) {
+    for (const { terrain } of EXPLORE_RULES.terrains) {
+      for (const [q, r] of [
+        [0, 0],
+        [2, -1],
+      ] as const) {
+        const spots = searchSpots(`seed-${String(s)}`, { q, r, terrain }, EXPLORE_RULES);
+        if (spots && spots.length > 0)
+          yield { name: `seed-${String(s)} ${terrain} ${String(q)},${String(r)}`, spots };
+      }
+    }
+  }
+}

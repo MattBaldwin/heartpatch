@@ -1,6 +1,6 @@
 import { hexKey, type PublicSearchSpot, type WorldPoint } from '@heartpatch/shared';
 import { EXPLORE_CAMERA, EXPLORE_DECOR, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
-import { clampToTile } from './explore-view.js';
+import { clampToTile, insideTile } from './explore-view.js';
 
 // The explore view's world (#291, owner mockup 2026-10-08): colliders the
 // Keeper slides along, which spot is in front of it, the follow camera and
@@ -82,6 +82,32 @@ export function blocked(
  */
 export function yawOf(dx: number, dz: number): number {
   return Math.atan2(-dx, -dz);
+}
+
+/**
+ * The nearest place to `p` where the Keeper stands clear of every collider
+ * and inside the tile: `p` itself when it's free, else the first free point
+ * on rings round it (the camera's side first). The Keeper's start can land
+ * on a rock (#291), so it steps out before it's drawn.
+ */
+export function freePoint(
+  p: WorldPoint,
+  colliders: readonly Collider[],
+  radius: number = EXPLORE_VIEW.keeperRadius,
+): WorldPoint {
+  const at = clampToTile(p);
+  if (!blocked(at, colliders, radius)) return at;
+  const step = radius * 0.5;
+  for (let ring = 1; ring * step < 2; ring++) {
+    const d = ring * step;
+    const n = Math.max(8, Math.ceil((2 * Math.PI * d) / step));
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
+      const q = { x: at.x + Math.cos(a) * d, z: at.z + Math.sin(a) * d };
+      if (insideTile(q) && !blocked(q, colliders, radius)) return q;
+    }
+  }
+  return at;
 }
 
 /** The heading that faces from `from` to `to` (0 faces −z, towards the camera). */
@@ -263,7 +289,8 @@ export function tileSeed(tile: { q: number; r: number }, salt: string): number {
 
 /**
  * Where the grass tufts, pebbles and flowers grow (#291): scattered from the
- * tile's seed, kept clear of every collider and the Keeper's start.
+ * tile's seed, kept clear of every collider and the Keeper's start (stepped
+ * clear of the spots, as the screen does).
  */
 export function decorPlaces(
   tile: { q: number; r: number },
@@ -271,7 +298,8 @@ export function decorPlaces(
   counts: Readonly<Record<DecorKind, number>> = EXPLORE_DECOR,
 ): Record<DecorKind, DecorPlace[]> {
   const out: Record<DecorKind, DecorPlace[]> = { tufts: [], pebbles: [], flowers: [] };
-  const keepClear = [...colliders, { ...EXPLORE_VIEW.start, r: EXPLORE_VIEW.keeperRadius * 2 }];
+  const start = freePoint(EXPLORE_VIEW.start, colliders);
+  const keepClear = [...colliders, { ...start, r: EXPLORE_VIEW.keeperRadius * 2 }];
   const { clearance, scale } = EXPLORE_DECOR;
   for (const kind of ['tufts', 'pebbles', 'flowers'] as const) {
     const rand = seededRandom(tileSeed(tile, kind));
