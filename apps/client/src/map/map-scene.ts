@@ -348,6 +348,7 @@ export class MapScene {
         size: HEX_SIZE,
         radius: TILE_RADIUS,
         corner: CORNER,
+        segments: SEGMENTS,
         dome: DOME,
         rings: TOP_RINGS,
       },

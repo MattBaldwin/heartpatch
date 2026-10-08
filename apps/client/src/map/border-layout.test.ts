@@ -6,16 +6,19 @@ import {
   iconOutline,
   linePieces,
   outerEdges,
+  profileAt,
   type BorderLook,
   type BorderShape,
   type BorderTile,
 } from './border-layout.js';
-import { BORDER, type KeeperIcon } from './map-config.js';
+import { roundedHexOutline } from './hex-mesh.js';
+import { AMBIENT, BORDER, type KeeperIcon } from './map-config.js';
 
 const shape: BorderShape = {
   size: 1,
   radius: 0.95,
   corner: 0.2,
+  segments: 3,
   dome: 0.035,
   rings: [
     { scale: 0.5, y: 0.026 },
@@ -110,12 +113,12 @@ describe('borderArrays', () => {
   });
 
   it('puts an icon badge on border tiles away from home, never at home', () => {
-    const home = land(ring(hex(0, 0)), true);
-    const away = land(ring(hex(0, 0)), false);
-    expect(triangles(away)).toBeGreaterThan(triangles(home));
-    // One badge per `iconEvery` border tiles: 6 border tiles here.
-    const badges = Math.ceil(6 / BORDER.iconEvery);
-    expect((triangles(away) - triangles(home)) % badges).toBe(0);
+    const badge = triangles(land([hex(0, 0)], false)) - triangles(land([hex(0, 0)], true));
+    expect(badge).toBeGreaterThan(0);
+    // One badge every `iconEvery` border tiles: the 6 round the middle here.
+    const home = triangles(land(ring(hex(0, 0)), true));
+    const away = triangles(land(ring(hex(0, 0)), false));
+    expect(away - home).toBe(Math.ceil(6 / BORDER.iconEvery) * badge);
   });
 
   it('faces every triangle up, so it draws with back faces culled', () => {
@@ -136,7 +139,52 @@ describe('borderArrays', () => {
       expect(white || (r === 0.9 && g === 0.2 && b === 0.4)).toBe(true);
       alphas.add(a!);
     }
-    expect(alphas).toEqual(new Set([BORDER.wash, 0, BORDER.ribbon.alpha, 1]));
+    // The ribbon fades in from 0 across its inner edge.
+    for (const a of [BORDER.wash, 0, BORDER.ribbon.alpha, 1]) expect(alphas.has(a)).toBe(true);
+    for (const a of alphas) expect(a >= 0 && a <= 1).toBe(true);
+  });
+
+  it('stays clear of a lake’s waves everywhere on the tile, not just at its corners', () => {
+    // A lake's top bobs up to `AMBIENT.water.bob`; every triangle's middle
+    // must sit higher than that over the tile's own (linear-between-rings) top.
+    // The tile's own outline, as map-scene.ts draws it (`SEGMENTS`).
+    const outline = roundedHexOutline(shape.radius, shape.radius * shape.corner, shape.segments);
+    /** How far out a point is, as a share of the outline in its direction. */
+    const scaleOf = (x: number, z: number): number => {
+      const angle = Math.atan2(z, x);
+      for (let i = 0; i < outline.length; i++) {
+        const a = outline[i]!;
+        const b = outline[(i + 1) % outline.length]!;
+        const ta = Math.atan2(a.z, a.x);
+        let span = Math.atan2(b.z, b.x) - ta;
+        if (span < -Math.PI) span += 2 * Math.PI;
+        let into = angle - ta;
+        if (into < -Math.PI) into += 2 * Math.PI;
+        if (into < 0 || into > span) continue;
+        const k = span === 0 ? 0 : into / span;
+        const rim = Math.hypot(a.x + (b.x - a.x) * k, a.z + (b.z - a.z) * k);
+        return Math.hypot(x, z) / rim;
+      }
+      return Math.hypot(x, z) / shape.radius;
+    };
+    for (const line of BORDER.lines) {
+      const { positions, indices } = borderArrays(land([hex(0, 0)], true), shape, {
+        ...look,
+        line,
+      });
+      for (let t = 0; t < indices.length; t += 3) {
+        const v = [0, 1, 2].map((j) => indices[t + j]! * 3);
+        const x = v.reduce((sum, i) => sum + positions[i]!, 0) / 3;
+        const y = v.reduce((sum, i) => sum + positions[i + 1]!, 0) / 3;
+        const z = v.reduce((sum, i) => sum + positions[i + 2]!, 0) / 3;
+        const scale = scaleOf(x, z);
+        if (scale > 1) continue; // over the gap between tiles
+        expect(
+          y - (0.2 + profileAt(shape, scale)),
+          `${line} at ${scale.toFixed(3)}`,
+        ).toBeGreaterThan(AMBIENT.water.bob);
+      }
+    }
   });
 
   it('lies on the tile’s top, above it and never far above', () => {

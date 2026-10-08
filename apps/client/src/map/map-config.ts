@@ -105,8 +105,12 @@ export const BORDER = {
   wash: 0.26, // TUNE
   /** Ribbon: fades in from `fade`, solid from `inner` out to `outer` (past the rim, over the gap). */
   ribbon: { fade: 0.7, inner: 0.82, outer: 1.035, alpha: 0.96 }, // TUNE
-  /** Above the tile top: the wash, the ribbon and the icon badges. Under the safe glow (0.018). */
-  lift: { wash: 0.012, ribbon: 0.015, icon: 0.016 }, // TUNE
+  /**
+   * Above the tile top: the wash, the ribbon and the icon badges. Each stays
+   * clear of a lake's bob (`AMBIENT.water.bob`); the safe glow and selection
+   * still draw on top (border-field.ts `alphaIndex`).
+   */
+  lift: { wash: 0.016, ribbon: 0.017, icon: 0.018 }, // TUNE
   /** One per home slot, in `PLAYER_COLORS` order. */
   lines: ['solid', 'dash', 'dot', 'double'] as readonly BorderLine[], // TUNE
   icons: ['heart', 'star', 'flower', 'diamond'] as readonly KeeperIcon[], // TUNE

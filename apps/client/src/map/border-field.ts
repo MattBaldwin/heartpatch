@@ -1,4 +1,3 @@
-import { Color3 } from '@babylonjs/core/Maths/math.color';
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
@@ -14,7 +13,10 @@ export interface BorderFieldOptions {
   readonly shape: BorderShape;
   /** The height of a tile's top, as the map draws it. */
   readonly topOf: (tile: PublicTile) => number;
-  /** Unlit, vertex-coloured and alpha-blended (the map's overlay material). */
+  /**
+   * Unlit, vertex-coloured and alpha-blended (an `overlayMaterial`), used by
+   * the borders alone: `setNight` dims it, so sharing it would dim others too.
+   */
   readonly material: StandardMaterial;
   readonly meshFrom: (scene: Scene, name: string, arrays: MeshArrays) => Mesh;
 }
@@ -87,7 +89,7 @@ export class BorderField {
   setNight(dim: number): void {
     // Unlit: the colour is emissive × vertex colour, so the emissive dims it.
     const keep = 1 - Math.min(1, Math.max(0, dim));
-    this.options.material.emissiveColor = new Color3(keep, keep, keep);
+    this.options.material.emissiveColor.set(keep, keep, keep);
   }
 
   private draw(slot: number, land: readonly PublicTile[]): void {

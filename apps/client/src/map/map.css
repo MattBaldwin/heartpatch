@@ -35,6 +35,7 @@
 
 /* The name and the Keepers' icons: a button that opens the legend (#278). */
 .map-hud-title {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -49,7 +50,8 @@
   pointer-events: auto;
 }
 
-/* A bigger tap than it looks: the whole pill round it (`.map-hud` is the positioned box). */
+/* A bigger tap than it looks (44pt tall), on its own row only: the
+   "Log in again" button below stays its own target. */
 .map-hud-title::before {
   content: '';
   position: absolute;

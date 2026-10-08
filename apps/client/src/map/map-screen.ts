@@ -173,8 +173,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     legend.icons,
   );
   const setLegend = (open: boolean): void => {
-    if (open) legend.toggle();
-    else legend.close();
+    legend.setOpen(open);
     hudTitle.setAttribute('aria-expanded', legend.open ? 'true' : 'false');
   };
   hudTitle.addEventListener('click', () => {

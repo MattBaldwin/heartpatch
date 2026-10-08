@@ -308,7 +308,7 @@ describe('MapScene', () => {
     expect(map.stats).toMatchObject({ tinted: 7, borderMeshes: 1 });
   });
 
-  it('keeps a busy 4-Keeper patch’s borders to 4 draw calls and under 30k triangles (#278)', () => {
+  it('keeps a busy 4-Keeper patch’s borders to 4 draw calls and about 33k triangles (#278)', () => {
     const view = testPatch();
     const { scene, map } = build(view);
     const owned = view.tiles.filter((t) => t.ownerUserId !== null).length;
@@ -317,9 +317,10 @@ describe('MapScene', () => {
     const borders = scene.meshes.filter((m) => m.name.startsWith('border-') && m.isEnabled());
     expect(borders).toHaveLength(4);
     expect(map.stats.borderMeshes).toBe(4);
-    // About 26k: one mesh each, never per tile. The per-tile tint it replaced
+    // About 34k: one mesh each, never per tile, following the tile's top
+    // closely enough to clear a lake's waves. The per-tile tint it replaced
     // drew 216 a tile (47.5k on this patch).
-    expect(map.stats.borderTriangles).toBeLessThan(30_000);
+    expect(map.stats.borderTriangles).toBeLessThan(35_000);
     expect(map.stats.borderTriangles).toBeGreaterThan(20_000);
   });
 

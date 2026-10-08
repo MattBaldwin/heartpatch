@@ -109,8 +109,7 @@ export interface MapLegend {
   readonly card: HTMLElement;
   /** Draws the legend for the map's members now. */
   show: (members: readonly MapMember[], userId: string | null) => void;
-  toggle: () => void;
-  close: () => void;
+  setOpen: (open: boolean) => void;
   readonly open: boolean;
 }
 
@@ -147,11 +146,8 @@ export function mountMapLegend(): MapLegend {
         ),
       );
     },
-    toggle: () => {
-      card.hidden = !card.hidden;
-    },
-    close: () => {
-      card.hidden = true;
+    setOpen: (open) => {
+      card.hidden = !open;
     },
     get open() {
       return !card.hidden;

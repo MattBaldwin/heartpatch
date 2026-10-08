@@ -30,8 +30,9 @@ export interface BorderShape {
   /** Hex size (`hexToWorld`) and the drawn radius of a tile. */
   readonly size: number;
   readonly radius: number;
-  /** Corner radius as a fraction of `radius`. */
+  /** Corner radius as a fraction of `radius`, and segments per rounded corner (the tile's own). */
   readonly corner: number;
+  readonly segments: number;
   /** The rounded top's height at its middle, and its rings outward (the tile's own profile). */
   readonly dome: number;
   readonly rings: readonly ProfileRing[];
@@ -45,12 +46,8 @@ export interface BorderLook {
   readonly icon: KeeperIcon;
 }
 
-/** Points per rounded corner of the ribbon's outline: even, so the corner's tip is a point. */
-const RIBBON_SEGMENTS = 4;
-/** The wash's corners: it's faint, so fewer points do. */
+/** The wash's corners: it's faint, so fewer points than the tile's do. */
 const WASH_SEGMENTS = 2;
-/** Where the wash follows the tile's dome (shares of the radius). */
-const WASH_RINGS = [0.8, 0.92, 0.985];
 /** Points round an icon and its white badge. */
 const ICON_POINTS = 32;
 const BADGE_POINTS = 20;
@@ -123,8 +120,17 @@ function item<T>(list: readonly T[], i: number): T {
   return value;
 }
 
+/**
+ * The wash's rings: the tile's own from its shoulder out to just inside its
+ * rim, so no pale rim shows round each tile. The dome inside 0.5 is a
+ * straight step from the middle, which `BORDER.lift.wash` clears.
+ */
+function washRings(shape: BorderShape): number[] {
+  return shape.rings.map((r) => r.scale).filter((s) => s > 0.5 && s < 1);
+}
+
 /** Height of the tile's top at `scale` of its radius, from its dome and rings (linear between). */
-function profileAt(shape: BorderShape, scale: number): number {
+export function profileAt(shape: BorderShape, scale: number): number {
   let s0 = 0;
   let y0 = shape.dome;
   for (const ring of shape.rings) {
@@ -168,13 +174,16 @@ export function borderArrays(
   // Same order on every device, whatever order the view listed them in.
   const sorted = [...tiles].sort((a, b) => a.q - b.q || a.r - b.r);
   const wash = roundedHexOutline(shape.radius, shape.radius * shape.corner, WASH_SEGMENTS);
-  const outline = roundedHexOutline(shape.radius, shape.radius * shape.corner, RIBBON_SEGMENTS);
+  // The tile's own outline, so the ribbon lies on its top all the way round.
+  const outline = roundedHexOutline(shape.radius, shape.radius * shape.corner, shape.segments);
 
   for (const tile of sorted) {
     const c = hexToWorld(tile, shape.size);
     const y = tile.top + BORDER.lift.wash;
     const centre = out.vertex(c.x, y + shape.dome, c.z, look.rgb, BORDER.wash);
-    const rings = WASH_RINGS.map((scale) =>
+    // The tile's own rings, so the wash stays clear of its top everywhere
+    // (a lake's waves bob under it, `AMBIENT.water.bob`).
+    const rings = washRings(shape).map((scale) =>
       wash.map((p) =>
         out.vertex(
           c.x + p.x * scale,
@@ -218,13 +227,25 @@ export function borderArrays(
 }
 
 /** The outline's points along `edge`: the second half of the corner before it, the first half of its own. */
-function edgePoints(outline: readonly { x: number; z: number }[], edge: HexEdge) {
-  const per = RIBBON_SEGMENTS + 1;
-  const half = RIBBON_SEGMENTS / 2;
+function edgePoints(
+  outline: readonly { x: number; z: number }[],
+  edge: HexEdge,
+  segments: number,
+): { x: number; z: number }[] {
+  const per = segments + 1;
+  const half = segments / 2;
+  /** The corner's tip: its middle point, or halfway along its middle segment. */
+  const tip = (corner: number) => {
+    const a = item(outline, corner * per + Math.floor(half));
+    const b = item(outline, corner * per + Math.ceil(half));
+    return { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+  };
   const before = (edge + 5) % 6;
-  const points: { x: number; z: number }[] = [];
-  for (let s = half; s <= RIBBON_SEGMENTS; s++) points.push(item(outline, before * per + s));
-  for (let s = 0; s <= half; s++) points.push(item(outline, edge * per + s));
+  const points = [tip(before)];
+  for (let s = Math.floor(half) + 1; s <= segments; s++)
+    points.push(item(outline, before * per + s));
+  for (let s = 0; s < Math.ceil(half); s++) points.push(item(outline, edge * per + s));
+  points.push(tip(edge));
   return points;
 }
 
@@ -237,7 +258,7 @@ function ribbon(
   look: BorderLook,
 ): void {
   const c = hexToWorld(tile, shape.size);
-  const points = edgePoints(outline, edge);
+  const points = edgePoints(outline, edge, shape.segments);
   const along = [0];
   for (let i = 1; i < points.length; i++) {
     const a = item(points, i - 1);
@@ -260,24 +281,35 @@ function ribbon(
     };
   };
   for (const piece of linePieces(look.line)) {
-    // About one step per outline point: enough to follow the rounded corners.
-    const steps = Math.max(1, Math.ceil((piece.to - piece.from) * (points.length - 1)));
+    // Across the ribbon: its own edges plus every ring of the tile's top in
+    // between, so it follows the bevel and keeps its whole lift.
+    const across = [
+      ...new Set([
+        piece.fade,
+        piece.inner,
+        piece.outer,
+        ...shape.rings
+          .map((r) => r.scale)
+          // Not right beside an edge row: that would make sliver triangles.
+          .filter((s) => s > piece.fade + 0.01 && s < piece.outer - 0.01),
+      ]),
+    ].sort((a, b) => a - b);
+    const alphaAt = (scale: number) =>
+      scale >= piece.inner
+        ? BORDER.ribbon.alpha
+        : (BORDER.ribbon.alpha * (scale - piece.fade)) / (piece.inner - piece.fade);
+    // Along it: the piece's ends and every outline point between, so it
+    // bends where the tile's corners do and never cuts across one.
+    const bends = along.map((d) => d / length).filter((t) => t > piece.from && t < piece.to);
     let last: number[] | null = null;
-    for (let s = 0; s <= steps; s++) {
-      const t = piece.from + ((piece.to - piece.from) * s) / steps;
-      const row = (
-        [
-          [piece.fade, 0],
-          [piece.inner, BORDER.ribbon.alpha],
-          [piece.outer, BORDER.ribbon.alpha],
-        ] as const
-      ).map(([scale, alpha]) => {
+    for (const t of [piece.from, ...bends, piece.to]) {
+      const row = across.map((scale) => {
         const p = at(t, scale);
-        return out.vertex(p.x, p.y, p.z, look.rgb, alpha);
+        return out.vertex(p.x, p.y, p.z, look.rgb, alphaAt(scale));
       });
       if (last) {
         // As `loftRoundedHex` joins two rings: rows run in outline order.
-        for (let j = 0; j < 2; j++) {
+        for (let j = 0; j < row.length - 1; j++) {
           out.up(item(last, j), item(row, j + 1), item(row, j));
           out.up(item(last, j), item(last, j + 1), item(row, j + 1));
         }
