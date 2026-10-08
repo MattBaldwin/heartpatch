@@ -18,6 +18,8 @@ export interface FactoryConfig {
   readonly charmsPerDay: Readonly<Record<string, number>>;
   /** The guardrail: a casual kid can build level 1 by this day (owner rule, #294). */
   readonly levelOneByDay: number;
+  /** And level 2 by this day (owner decision 2026-10-08: about day 10). */
+  readonly levelTwoByDay: number;
 }
 
 export const FACTORY_CONFIG: FactoryConfig = {
@@ -28,4 +30,5 @@ export const FACTORY_CONFIG: FactoryConfig = {
   firstBuilds: ['cozy-meadow', 'ember-den', 'training-grounds'],
   charmsPerDay: { casual: 3, engaged: 6 }, // TUNE: guess
   levelOneByDay: 7, // the issue's "a casual kid can build level 1 in their first week"
+  levelTwoByDay: 10, // owner decision 2026-10-08: level 2 has no Glimmer, about day 6–10
 };

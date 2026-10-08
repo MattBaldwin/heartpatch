@@ -97,10 +97,11 @@ export const BUILDINGS: Building[] = [
     placement: 'home',
     slot: 'ring',
     // Costs from the #294 mockup (`pnpm sim:factory`): a casual kid builds
-    // level 1 in their first week; Glimmer paces levels 2 and 3.
+    // level 1 in their first week and level 2 (no Glimmer, owner decision
+    // 2026-10-08) around day 6; Glimmer paces level 3.
     levels: [
       { cost: { timber: 30, stone: 20 }, queues: 2 }, // TUNE:
-      { cost: { timber: 60, stone: 50, glimmer: 5 }, queues: 3 }, // TUNE:
+      { cost: { timber: 60, stone: 50 }, queues: 3 }, // TUNE:
       { cost: { timber: 120, stone: 90, glimmer: 12 }, queues: 4 }, // TUNE:
     ],
   },

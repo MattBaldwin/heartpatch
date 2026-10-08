@@ -126,7 +126,7 @@ export function renderFactory(
       (r) => `| ${String(r.seats)} | ${r.kid} | ${r.levelDays.map((d) => day(d)).join(' | ')} |`,
     ),
     '',
-    `Guardrail: a casual kid builds level 1 by day ${String(config.levelOneByDay)}.`,
+    `Guardrails: a casual kid builds level 1 by day ${String(config.levelOneByDay)} and level 2 by day ${String(config.levelTwoByDay)}.`,
     '',
     '## Not modelled',
     '',
