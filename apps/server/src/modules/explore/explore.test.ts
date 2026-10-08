@@ -25,7 +25,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { gameEvents, keepers, sessions, tileExplore, users } from '../../db/schema.js';
+import { keepers, sessions, tileExplore, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
@@ -218,13 +218,15 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
   async function exploreAll(server: FastifyInstance, who: Player, mapId: string, t: Tile) {
     const spots = (await view(server, who, mapId, t)).spots;
     await give(mapId, who, { shovel: 20 });
-    let last;
+    const found = [];
     for (const s of spots) {
       const res = await search(server, who, mapId, t, s.index);
       expect(res.statusCode, res.body).toBe(200);
-      last = SearchSpotResponseSchema.parse(res.json());
+      found.push(SearchSpotResponseSchema.parse(res.json()));
     }
-    return last!;
+    const last = found.at(-1);
+    if (!last) throw new Error('a tile with no spots');
+    return last;
   }
 
   const eventsOf = async (mapId: string, type: string) =>
@@ -419,7 +421,6 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       completedAt: null,
     });
     expect(BATTLE_RULES.teamSize).toBeGreaterThan(0);
-    void gameEvents;
   });
 
   /** Cuts `second` off from `me`'s home: `first`, between them, becomes the rival's. */

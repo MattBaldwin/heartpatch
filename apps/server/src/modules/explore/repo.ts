@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm';
-import type { Executor } from '../../db/client.js';
+import { withTransaction, type Executor } from '../../db/client.js';
+import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { tileExplore, tiles } from '../../db/schema.js';
 
 /** A tile as exploring needs it (read only: tiles belong to the maps module). */
@@ -211,6 +212,22 @@ export function createExploreRepo(db: Executor) {
 }
 
 export type ExploreRepo = ReturnType<typeof createExploreRepo>;
+
+/** The repo inside `exploreTransaction`: the only place it can write game events. */
+export type ExploreTxRepo = ExploreRepo & {
+  /** `appendGameEvent` in this transaction; call it as the last write. */
+  appendEvent: (event: NewGameEvent) => Promise<unknown>;
+};
+
+/** Runs `fn` in one transaction (a savepoint inside one), with the repo on it. */
+export function exploreTransaction<T>(
+  db: Executor,
+  fn: (repo: ExploreTxRepo, tx: Executor) => Promise<T>,
+): Promise<T> {
+  return withTransaction(db, (tx) =>
+    fn({ ...createExploreRepo(tx), appendEvent: (event) => appendGameEvent(tx, event) }, tx),
+  );
+}
 
 /**
  * The homestead columns a SQL query can read for a work or gather tile: its

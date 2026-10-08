@@ -21,8 +21,8 @@ import {
 } from '@heartpatch/shared';
 import { EXPLORE_FINDS, LORE_PAGES, rollExploreFind } from '@heartpatch/shared/server';
 import { uuidv7 } from 'uuidv7';
-import { withTransaction, type Database, type Executor } from '../../db/client.js';
-import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
+import type { Database, Executor } from '../../db/client.js';
+import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import { newSeed } from '../../lib/rng.js';
 import type { Clock } from '../../lib/time.js';
@@ -35,7 +35,12 @@ import { requireMember } from '../maps/members.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { homesteadOf, refreshHomesteads } from './homesteads.js';
-import { createExploreRepo, type ExploreRow, type ExploreTileRow } from './repo.js';
+import {
+  createExploreRepo,
+  exploreTransaction,
+  type ExploreRow,
+  type ExploreTileRow,
+} from './repo.js';
 
 /*
  * Exploring your land (#199, owner design 2026-10-07): zoom into a tile you
@@ -165,9 +170,8 @@ export function createExploreService(options: ExploreServiceOptions) {
       request: SearchSpotRequest,
     ): Promise<SearchSpotResponse> => {
       const at = now();
-      const result = await withTransaction(options.db, async (tx) => {
+      const result = await exploreTransaction(options.db, async (repo, tx) => {
         await requireMember(tx, user, mapId, ['multiplayer']);
-        const repo = createExploreRepo(tx);
         const seed = await seedOf(tx, mapId);
         // Step 6: the tile, so its owner can't change mid-search.
         const { tile, spots } = tileSpots(
@@ -298,7 +302,7 @@ export function createExploreService(options: ExploreServiceOptions) {
           ...homesteadEvents,
           ...growthEvents(growths),
         ];
-        for (const event of events) await appendGameEvent(tx, event);
+        for (const event of events) await repo.appendEvent(event);
 
         const items = await createInventoryRepo(tx).list(owner);
         const homestead = homesteadOf(await repo.findRow(user.id, tile.id));

@@ -24,6 +24,11 @@ const ICONS: Readonly<Record<string, string>> = {
   water: '💧',
   greens: '🌿',
   ice: '🧊',
+  // Explore tools (#199).
+  shovel: '⛏️',
+  net: '🥅',
+  rope: '🪢',
+  lantern: '🪔',
 };
 
 export const FALLBACK_ICON = '✨';
