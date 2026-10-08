@@ -1,3 +1,4 @@
+import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { describe, expect, it } from 'vitest';
 import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { clampToTile, insideTile } from './explore-view.js';
@@ -19,6 +20,7 @@ import {
   spotInFront,
   spotRadius,
   toCaveStage,
+  yawOf,
   yawToward,
 } from './explore-world.js';
 
@@ -31,9 +33,12 @@ const spot = (index: number, x: number, z: number, done = false, kind = 'rock') 
   done,
 });
 
-/** Facing +z (away from the camera), +x and −x. */
+/** Facing +z (away from the camera) and +x (the Keeper's face looks along its local −z). */
 const AWAY = Math.PI;
-const RIGHT = Math.PI / 2;
+const RIGHT = -Math.PI / 2;
+
+/** The same heading, whichever way round the circle it's written. */
+const turnBetween = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
 
 describe('colliders', () => {
   it('turns spots and buildings into circles', () => {
@@ -96,11 +101,30 @@ describe('colliders', () => {
 
 describe('what is in front of the Keeper', () => {
   it('faces the way it walks', () => {
-    expect(yawToward({ x: 0, z: 0 }, { x: 0, z: 1 })).toBeCloseTo(AWAY);
+    expect(turnBetween(yawToward({ x: 0, z: 0 }, { x: 0, z: 1 }), AWAY)).toBeCloseTo(0);
     expect(yawToward({ x: 0, z: 0 }, { x: 1, z: 0 })).toBeCloseTo(RIGHT);
+    expect(yawToward({ x: 0, z: 0 }, { x: -1, z: 0 })).toBeCloseTo(-RIGHT);
     expect(yawToward({ x: 0, z: 0 }, { x: 0, z: -1 })).toBeCloseTo(0);
     expect(offFacing({ x: 0, z: 0 }, AWAY, { x: 0, z: 1 })).toBeCloseTo(0);
     expect(offFacing({ x: 0, z: 0 }, AWAY, { x: 0, z: -1 })).toBeCloseTo(Math.PI);
+  });
+
+  it('turns the face (local −z) the way the logic says it faces', () => {
+    for (const [dx, dz] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+      [0.6, -0.8],
+      [-0.3, 0.95],
+    ] as const) {
+      const m = new Matrix();
+      Matrix.FromQuaternionToRef(Quaternion.RotationYawPitchRoll(yawOf(dx, dz), 0, 0), m);
+      const face = Vector3.TransformNormal(new Vector3(0, 0, -1), m);
+      const len = Math.hypot(dx, dz);
+      expect(face.x, `${String(dx)},${String(dz)}`).toBeCloseTo(dx / len);
+      expect(face.z, `${String(dx)},${String(dz)}`).toBeCloseTo(dz / len);
+    }
   });
 
   it('measures reach edge to edge', () => {

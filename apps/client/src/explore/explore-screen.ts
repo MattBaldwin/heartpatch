@@ -61,6 +61,7 @@ import {
   spotAtTap,
   spotInFront,
   toCaveStage,
+  yawOf,
   yawToward,
 } from './explore-world.js';
 import {
@@ -487,7 +488,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
           s.colliders,
         );
         // Faces the way the stick points, even pressed against a rock.
-        heading = Math.atan2(v.x, -v.z);
+        heading = yawOf(v.x, v.z);
       }
       walking = true; // keep reading the stick while it's held
     } else if (walkTo && !gesturing()) {

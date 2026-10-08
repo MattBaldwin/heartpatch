@@ -63,6 +63,7 @@ import {
   type Collider,
   type DecorKind,
   type FollowCamera,
+  yawOf,
 } from './explore-world.js';
 
 // The explore view (#199; cozy-sim feel #291, owner mockup 2026-10-08): one
@@ -394,7 +395,7 @@ export class ExploreScene {
       const to = this.#trailPoint(i + 1);
       if (to.x === f.at.x && to.z === f.at.z) return;
       const ahead = i === 0 ? at : (this.#followers[i - 1]?.at ?? at);
-      const yawTo = Math.atan2(ahead.x - to.x, -(ahead.z - to.z));
+      const yawTo = yawOf(ahead.x - to.x, ahead.z - to.z);
       f.at = to;
       this.#squishies.move(f.handle, this.#squishyPlacement(to, yawTo));
     });

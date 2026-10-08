@@ -74,9 +74,19 @@ export function blocked(
   return colliders.some((c) => (p.x - c.x) ** 2 + (p.z - c.z) ** 2 < (c.r + radius) ** 2 - 1e-9);
 }
 
+/**
+ * The heading (`RotationYawPitchRoll`'s yaw) that turns the Keeper's face,
+ * which looks along its local −z, to the ground direction (dx, dz): 0 faces
+ * −z (the camera), π/2 faces −x, −π/2 faces +x. The battle's formula
+ * (battle-scene.ts), so what the logic thinks is in front is what shows.
+ */
+export function yawOf(dx: number, dz: number): number {
+  return Math.atan2(-dx, -dz);
+}
+
 /** The heading that faces from `from` to `to` (0 faces −z, towards the camera). */
 export function yawToward(from: WorldPoint, to: WorldPoint): number {
-  return Math.atan2(to.x - from.x, -(to.z - from.z));
+  return yawOf(to.x - from.x, to.z - from.z);
 }
 
 /** The gap between the Keeper's edge and a spot's edge (negative: overlapping). */
