@@ -72,7 +72,15 @@ const captureRules = (percent: number): BattleRules => ({
   capture: {
     atFull: percent,
     nearlyOut: percent,
-    rarity: { common: 100, uncommon: 100, rare: 100, epic: 100, legendary: 100, mythic: 100, secret: 100 },
+    rarity: {
+      common: 100,
+      uncommon: 100,
+      rare: 100,
+      epic: 100,
+      legendary: 100,
+      mythic: 100,
+      secret: 100,
+    },
   },
 });
 const contentWith = (rules: BattleRules) =>
