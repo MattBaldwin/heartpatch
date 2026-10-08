@@ -514,16 +514,16 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       const hints = (await spawns.wildHints(kid, mapId)).tiles;
       expect(hints.length).toBeGreaterThan(0);
       expect(hints).not.toContainEqual({ q: post.q, r: post.r });
-      const found = await spawns
-        .findWildEncounter({
+      // Looking there is refused: the post isn't a tile anyone looks for squishies on.
+      await expect(
+        spawns.findWildEncounter({
           mapId,
           userId: kid.id,
           mapKind: 'multiplayer',
           now: clock,
           tile: { q: post.q, r: post.r },
-        })
-        .catch((err: unknown) => err);
-      expect(found === null || found instanceof Error).toBe(true);
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
     it('hints at tiles with someone on them, with no species', async () => {

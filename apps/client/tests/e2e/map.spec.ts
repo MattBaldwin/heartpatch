@@ -85,7 +85,8 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
       selected: null,
     });
   const drawn = (await mapState(owner))!;
-  expect(drawn.tileMeshes).toBeLessThanOrEqual(9);
+  // 9 terrain looks (trading posts too, #269) plus home tiles, however many tiles.
+  expect(drawn.tileMeshes).toBeLessThanOrEqual(10);
   await expect(owner.locator('#game')).toHaveAttribute('data-ready', 'true');
   await expect.poll(async () => (await mapState(owner))?.live).toBe('live');
 
