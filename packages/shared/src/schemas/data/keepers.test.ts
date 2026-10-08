@@ -31,7 +31,8 @@ describe('checkKeeperData', () => {
     const count = KEEPER_DATA.bases.length;
     const distinct = (pick: (b: KeeperData['bases'][number]) => unknown) =>
       new Set(KEEPER_DATA.bases.map((b) => JSON.stringify(pick(b)))).size;
-    expect(distinct((b) => b.skin)).toBe(count);
+    // Ten skin tones, light to deep (owner 2026-10-08, #289): two presets share one.
+    expect(distinct((b) => b.skin)).toBe(10);
     expect(distinct((b) => b.hairstyle)).toBe(count);
     expect(distinct((b) => b.body)).toBe(count);
     // Every Keeper shares the line face (#289); the eyes are what differ.
