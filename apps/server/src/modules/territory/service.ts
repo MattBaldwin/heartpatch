@@ -460,13 +460,16 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
     const repo = createTerritoryRepo(tx);
     const at = now();
     const window = fenceRules.keepGoingMinutes * MINUTE_MS;
-    const [used, joinedAt, defenders, squishies, broken] = await Promise.all([
+    const [used, joinedAt, defenders, owned, broken] = await Promise.all([
       repo.attemptsOn(map.id, user.id, localDate(at, map.timeZone), map.timeZone),
       repo.joinedAt(map.id, user.id),
       repo.myDefenders(map.id, user.id),
       repo.mySquishies(map.id, user.id),
       repo.myBrokenFences(map.id, user.id, new Date(at.getTime() - window)),
     ]);
+    // A squishy in a trade (#271) waits at the post: no guard to pick, and one
+    // heading my way stays a surprise (its species too) until I pick it up.
+    const squishies = owned.filter((s) => s.state !== 'in-trade');
     const shieldEnds =
       joinedAt === null
         ? null

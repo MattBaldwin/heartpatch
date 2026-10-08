@@ -633,6 +633,10 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
     expect(JSON.stringify(leeJobs)).not.toContain(SECRET);
     const mail = tradesOf(await call(server, 'GET', `/maps/${mapId}/trades`, lee)).mailbox;
     expect(mail[0]!.lines[0]).toMatchObject({ squishyId: secret, speciesId: null });
+    const territory = await call(server, 'GET', `/maps/${mapId}/territory`, lee);
+    expect(territory.statusCode, territory.body).toBe(200);
+    expect(territory.body).not.toContain(SECRET);
+    expect(territory.body).not.toContain(secret);
   });
 
   it('says no to a gift, refuses a yes once the asked-for side changed, and takes a last piece off squishies', async () => {

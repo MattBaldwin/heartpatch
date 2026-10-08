@@ -783,9 +783,12 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
           user.id,
           wanted.map((m) => m.id),
         )
-      ).filter(
-        (m) => m.kind !== 'gift' || offers.find((o) => o.id === m.offerId)?.status === 'open',
-      );
+      ).filter((m) => {
+        if (m.kind !== 'gift') return true;
+        // A gift still open and in time (one that ran out just now goes home instead).
+        const gift = offers.find((o) => o.id === m.offerId);
+        return gift?.status === 'open' && gift.expiresAt > at;
+      });
       if (rows.length === 0) return;
       const gifts = offers.filter((o) => o.kind === 'gift' && rows.some((m) => m.offerId === o.id));
       const lines = rows.flatMap((m) => m.lines);
