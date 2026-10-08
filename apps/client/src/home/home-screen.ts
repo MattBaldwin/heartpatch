@@ -10,7 +10,7 @@ import {
   type PublicUser,
   type Species,
 } from '@heartpatch/shared';
-import type { InventoryResponse, SettleResponse } from '@heartpatch/shared';
+import type { InventoryResponse } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
 import { factoryApi, type FactoryApi } from '../factory/factory-api.js';
 import { createFactoryPanel } from '../factory/factory-panel.js';
@@ -20,7 +20,7 @@ import { inventoryApi } from '../inventory/inventory-api.js';
 import { recipeBookApi } from '../recipes/recipe-book-api.js';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
-import { describeItems, landedText } from '../inventory/bag-view.js';
+import { describeItems } from '../inventory/bag-view.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import type { TileActions } from '../map/map-screen.js';
 import { listenForTaps } from '../map/tap-detector.js';
@@ -105,7 +105,12 @@ export interface HomeScreenOptions {
   /** The Crafting Factory card's calls (#294): its batches come with every settle. */
   factory?: {
     api?: FactoryApi;
-    settle?: (mapId: string) => Promise<SettleResponse>;
+    /**
+     * Reads the bag, batches included, with no side effects. Home never
+     * settles: the Bag screen does (one settle loop, and the welcome-back
+     * card sees what landed), when the kid is back on the map.
+     */
+    read?: (mapId: string) => Promise<InventoryResponse>;
     openPages?: () => Promise<readonly string[]>;
     storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
   };
@@ -224,8 +229,6 @@ export const HOME_TEXT = {
 const FUEL_NIGHTS = 1;
 /** Where Sprout remembers it gave the Factory tip (#294), per account. */
 const FACTORY_TIP_KEY = (userId: string) => `heartpatch.factory.tip.${userId}`;
-/** A Factory settle asks a moment after the next one finishes, as the Bag's does. */
-const FACTORY_SETTLE_SLACK_MS = 400; // TUNE: like the Bag's
 
 export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const api = options.api ?? homeApi;
@@ -249,7 +252,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
 
   // ── The Crafting Factory card (#294) ─────────────────────────────────
   const fapi = options.factory?.api ?? factoryApi;
-  const settleFactory = options.factory?.settle ?? ((id: string) => inventoryApi.settle(id));
+  const readFactory = options.factory?.read ?? ((id: string) => inventoryApi.get(id));
   const readPages =
     options.factory?.openPages ?? (() => recipeBookApi.get().then((res) => res.unlocked));
   const tipStorage =
@@ -258,7 +261,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   /** The bag as the Factory card last read it (its batches, items and seasons). */
   let factoryBag: InventoryResponse | null = null;
   let factoryPages = new Set<string>();
-  let factoryTimer: number | undefined;
   /** Read once per map without being asked (a failed read waits for the next tap). */
   let factoryTried = false;
   /** The Factory card showing Sprout's one-time tip (#294), or null. */
@@ -362,7 +364,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     }
   }
 
-  /** Reads the Factory's batches (a settle: finished things go in the bag) and redraws its card. */
+  /**
+   * Reads the Factory's batches and redraws its card. A read, not a settle:
+   * counts and countdowns run on the game clock, and what's made lands in
+   * the bag through the Bag screen's settle (or as the next batch starts).
+   */
   async function loadFactory(): Promise<void> {
     const id = mapId;
     const at = generation;
@@ -370,7 +376,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     factoryTried = true;
     try {
       const [res] = await Promise.all([
-        settleFactory(id),
+        readFactory(id),
         readPages()
           .then((keys) => {
             factoryPages = new Set(keys);
@@ -380,32 +386,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       if (at !== generation) return;
       factoryClock.sync(res.now);
       factoryBag = res;
-      const landed = landedText(res.landed);
-      if (landed !== '') say(landed);
-      scheduleFactory(res.nextAt);
       render();
     } catch (err) {
       if (at === generation) say(messageOf(err));
     }
-  }
-
-  /** One settle when the next thing finishes, while the Factory card is up. */
-  function scheduleFactory(nextAt: string | null): void {
-    window.clearTimeout(factoryTimer);
-    factoryTimer = undefined;
-    const batches = factoryBag?.factory?.batches ?? [];
-    const due = [
-      ...(nextAt ? [nextAt] : []),
-      ...batches.flatMap((b) => (b.nextAt ? [b.nextAt] : [])),
-    ].map((iso) => factoryClock.msUntil(iso));
-    if (due.length === 0 || !factoryCardUp()) return;
-    factoryTimer = window.setTimeout(
-      () => {
-        factoryTimer = undefined;
-        if (factoryCardUp()) void loadFactory();
-      },
-      Math.min(...due) + FACTORY_SETTLE_SLACK_MS,
-    );
   }
 
   const factoryCardUp = () =>
@@ -429,7 +413,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       if (!res || at !== generation) return null;
       factoryClock.sync(res.now);
       factoryBag = res;
-      scheduleFactory(null);
       // The bag changed: the home's costs and chips read it again.
       void refresh();
       return null;
@@ -632,8 +615,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       void loadFactory();
     } else {
       tipFor = null;
-      window.clearTimeout(factoryTimer);
-      factoryTimer = undefined;
       factoryPanel.pause();
     }
   };

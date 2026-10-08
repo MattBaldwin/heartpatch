@@ -10,6 +10,7 @@ import {
   hasRoom,
   nextLevelRoom,
   pickRows,
+  recipeIcon,
   soonestFreeMs,
   stopPreview,
   type BatchRow,
@@ -76,7 +77,14 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
   let line = '';
   let ticker: number | undefined;
   /** The countdown texts on screen: one Text node each, rewritten in place (DECISIONS, Fix PR #173). */
-  let ticking: { text: Text; bar: HTMLElement | null; row: BatchRow; done: number }[] = [];
+  let ticking: {
+    text: Text;
+    count: Text;
+    bar: HTMLElement;
+    row: BatchRow;
+  }[] = [];
+  /** "Factory's full! One finishes in …": its countdown, rewritten in place too. */
+  let fullText: Text | null = null;
 
   const element = el('div', { class: 'factory', 'data-testid': 'factory-panel' });
   const say = el('p', { class: 'factory-say', role: 'status', 'data-testid': 'factory-say' });
@@ -128,8 +136,9 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
     ticking = [];
     const batches = rows.map((row) => {
       const text = document.createTextNode(batchTimeLine(row, now));
+      const count = document.createTextNode(`${String(row.done)}/${String(row.total)}`);
       const bar = el('i', { style: `width:${String(row.percent)}%` });
-      ticking.push({ text, bar, row, done: row.done });
+      ticking.push({ text, count, bar, row });
       return el(
         'li',
         {
@@ -144,11 +153,7 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
           { class: 'factory-batch-name' },
           row.name,
           ' ',
-          el(
-            'em',
-            { class: 'factory-count', 'data-testid': 'factory-count' },
-            `${String(row.done)}/${String(row.total)}`,
-          ),
+          el('em', { class: 'factory-count', 'data-testid': 'factory-count' }, count),
         ),
         row.finished
           ? el('span', { class: 'factory-batch-stop' })
@@ -185,13 +190,7 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
               true,
             ),
           ]
-        : [
-            el(
-              'p',
-              { class: 'factory-full' },
-              FACTORY_TEXT.full(formatTimeLeft(soonestFreeMs(current.view, now))),
-            ),
-          ]),
+        : [el('p', { class: 'factory-full' }, fullCountdown(current.view, now))]),
       ...(next
         ? [el('p', { class: 'factory-locked' }, FACTORY_TEXT.locked(next.level, next.slots))]
         : []),
@@ -253,7 +252,7 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
                   void run(
                     () => deps.start(id, n),
                     () => {
-                      line = FACTORY_TEXT.started(n, chosen.recipe.name);
+                      line = FACTORY_TEXT.started(n, recipeIcon(id));
                       mode = 'list';
                       deps.onMode?.('list');
                     },
@@ -329,6 +328,11 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
     ];
   }
 
+  function fullCountdown(view: FactoryView, now: number): Text {
+    fullText = document.createTextNode(FACTORY_TEXT.full(formatTimeLeft(soonestFreeMs(view, now))));
+    return fullText;
+  }
+
   function renderStop(current: FactoryState): Node[] {
     const batch = current.view.batches.find((b) => b.id === stopping);
     if (!batch) {
@@ -376,6 +380,7 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
 
   function render(): void {
     ticking = [];
+    fullText = null;
     if (!state) {
       element.replaceChildren();
       syncTicker();
@@ -388,26 +393,37 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
     syncTicker();
   }
 
-  /** Once a second: rewrite the times and bars; redraw when a count moves on. */
+  /**
+   * Once a second: rewrite the times, counts and bars in place (one Text node
+   * each, never replaced, so a finger resting on Stop keeps its button:
+   * DECISIONS, Fix PR #173). Redraw only when a batch finishes (its Stop goes)
+   * or a spot frees up.
+   */
   function tick(): void {
-    if (!element.isConnected) {
+    if (!element.isConnected || !state) {
       pause();
       return;
     }
     const now = deps.now();
+    const rows = batchRows(state.view, now);
+    let redraw = false;
     for (const t of ticking) {
-      const [row] = state ? batchRows({ ...state.view, batches: [t.row.batch] }, now) : [];
+      const row = rows.find((r) => r.batch.id === t.row.batch.id);
       if (!row) continue;
-      if (row.done !== t.done) {
-        render();
-        return;
-      }
+      if (row.finished !== t.row.finished) redraw = true;
+      t.count.data = `${String(row.done)}/${String(row.total)}`;
+      t.bar.style.width = `${String(row.percent)}%`;
       t.text.data = batchTimeLine(row, now);
     }
+    if (fullText) {
+      if (hasRoom(state.view, now)) redraw = true;
+      else fullText.data = FACTORY_TEXT.full(formatTimeLeft(soonestFreeMs(state.view, now)));
+    }
+    if (redraw) render();
   }
 
   function syncTicker(): void {
-    const counting = mode === 'list' && ticking.some((t) => !t.row.finished);
+    const counting = mode === 'list' && (fullText !== null || ticking.some((t) => !t.row.finished));
     if (counting && ticker === undefined) ticker = window.setInterval(tick, 1000);
     else if (!counting) pause();
   }

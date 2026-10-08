@@ -445,7 +445,9 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         showToast([landedText(popped), trainedText(trained)].filter((t) => t !== '').join(' '));
         if (landed.length > 0) options.onCollected?.();
       }
-      markSeen(id);
+      // Only while the kid can see it: a tab left open in the background
+      // keeps settling, and that isn't being here.
+      if (document.visibilityState === 'visible') markSeen(id);
       if (!newest) return;
       render();
       scheduleSettle();

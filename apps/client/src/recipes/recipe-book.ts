@@ -1,5 +1,4 @@
 import {
-  GAME_DATA,
   recipeBookPages,
   type Hex,
   type InventoryResponse,
@@ -7,7 +6,7 @@ import {
 } from '@heartpatch/shared';
 import { createFactoryPanel } from '../factory/factory-panel.js';
 import { createFactoryStrip } from '../factory/factory-strip.js';
-import { FACTORY_TEXT } from '../factory/factory-view.js';
+import { FACTORY_TEXT, recipeIcon } from '../factory/factory-view.js';
 import { formatTimeLeft } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import {
@@ -144,7 +143,6 @@ export const RECIPE_BOOK_TEXT = {
 } as const;
 
 const PAGES = recipeBookPages();
-const PAGE_NAMES = new Map(GAME_DATA.recipes.map((r) => [r.id, r.name]));
 const SEEN_KEY = (accountId: string) => `heartpatch.recipe-book.seen.${accountId}`;
 
 function defaultStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
@@ -333,7 +331,7 @@ export function createRecipeBook(options: RecipeBookOptions): RecipeBook {
     now: () => options.inventory.gameNow(),
     start: async (recipeId, count) => {
       const failure = await options.inventory.queue(recipeId, count);
-      if (failure === null) say = FACTORY_TEXT.started(count, PAGE_NAMES.get(recipeId) ?? '');
+      if (failure === null) say = FACTORY_TEXT.started(count, recipeIcon(recipeId));
       return failure;
     },
     stop: (batchId) => options.inventory.stopBatch(batchId),

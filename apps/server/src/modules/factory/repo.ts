@@ -155,7 +155,11 @@ function queries(db: Executor): FactoryRepo {
     setBanked: async (batchId, banked, end) => {
       await db
         .update(factoryQueues)
-        .set({ banked, ...(end ? { endedAt: end.at, endReason: end.reason } : {}) })
+        // Never backwards (the service clamps too): a banked thing stays banked.
+        .set({
+          banked: sql`greatest(${factoryQueues.banked}, ${banked})`,
+          ...(end ? { endedAt: end.at, endReason: end.reason } : {}),
+        })
         .where(eq(factoryQueues.id, batchId));
     },
 

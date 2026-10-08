@@ -98,7 +98,7 @@ export const BUILDINGS: Building[] = [
     slot: 'ring',
     // Costs from the #294 mockup (`pnpm sim:factory`): a casual kid builds
     // level 1 in their first week and level 2 (no Glimmer, owner decision
-    // 2026-10-08) around day 6; Glimmer paces level 3.
+    // 2026-10-08) around day 6, guarded by day 10; Glimmer paces level 3.
     levels: [
       { cost: { timber: 30, stone: 20 }, queues: 2 }, // TUNE:
       { cost: { timber: 60, stone: 50 }, queues: 3 }, // TUNE:

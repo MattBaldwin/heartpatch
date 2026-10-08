@@ -51,7 +51,7 @@ export const FACTORY_TEXT = {
   start: 'Start batch',
   back: 'Back',
   noRecipes: 'Nothing to make yet. Gather a little more and come back!',
-  started: (n: number, name: string) => `Off it goes! ${String(n)} ${name} on the way.`,
+  started: (n: number, icon: string) => `Off it goes! ${String(n)} ${icon} on the way.`,
   stopTitle: 'Stop this batch?',
   stopKeep: (n: number, name: string) =>
     n === 0 ? `Nothing's made yet.` : `You keep the ${String(n)} ${name} already made.`,

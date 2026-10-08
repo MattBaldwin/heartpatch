@@ -16,7 +16,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, users } from '../../db/schema.js';
+import { keepers, sessions, squishies, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
@@ -97,11 +97,12 @@ describe.skipIf(!url)('the Crafting Factory (#294, needs DATABASE_URL)', () => {
     path: string,
     who: Player | null,
     payload?: object,
+    headers: Record<string, string> = {},
   ) {
     return server.inject({
       method,
       url: `/api/v1${path}`,
-      headers: HEADERS,
+      headers: { ...HEADERS, ...headers },
       ...(who ? { cookies: { [SESSION_COOKIE]: who.token } } : {}),
       ...(payload ? { payload } : {}),
     });
@@ -380,7 +381,7 @@ describe.skipIf(!url)('the Crafting Factory (#294, needs DATABASE_URL)', () => {
     expect(stopped.factory?.batches).toEqual([]);
     const again = await call(server, 'POST', stopPath, kid);
     expect(again.statusCode).toBe(409);
-    expect(errorOf(again).message).toBe('That batch is already finished!');
+    expect(errorOf(again).message).toBe("That batch isn't running any more!");
     expect((await eventsOf(mapId)).at(-1)).toMatchObject({
       type: 'factory.stopped',
       payload: { kept: 4, refunded: { timber: 12, treats: 6 }, reason: 'stopped' },
@@ -469,6 +470,121 @@ describe.skipIf(!url)('the Crafting Factory (#294, needs DATABASE_URL)', () => {
     const stopped = (await eventsOf(mapId)).find((e) => e.type === 'factory.stopped');
     expect(stopped?.payload).toMatchObject({ kept: 1, refunded: { greens: 4 }, reason: 'left' });
     await reconciled(mapId, kid.id);
+  });
+
+  it('never banks twice when a settle with an older clock comes in after a newer one', async () => {
+    // A command reads its clock before it waits for the member lock, so two
+    // from one player can commit out of time order (a settle timer and the
+    // app coming back, two phones). The later one must not count back.
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    await buildFactory(server, kid, mapId);
+    await give(mapId, kid, { timber: 20, treats: 10 });
+    const started = await queued(server, kid, mapId, 'heart-charm', 10);
+    const charms = started.items['heart-charm'] ?? 0;
+    later(3 * MINUTE_MS);
+    expect((await settle(server, kid, mapId)).items['heart-charm']).toBe(charms + 3);
+    // The older request: 2.9 minutes in.
+    clock.setTime(Date.parse(START) + 2.9 * MINUTE_MS);
+    const stale = await settle(server, kid, mapId);
+    expect(stale.landed.filter((l) => l.kind === 'factory')).toEqual([]);
+    const [row] = await db.query.factoryQueues.findMany({
+      where: (t, { eq }) => eq(t.id, started.queue.id),
+    });
+    expect(row?.banked).toBe(3);
+    // Stopping then gives back only the 7 never made, not the 3 banked ones too.
+    const res = await call(
+      server,
+      'POST',
+      `/maps/${mapId}/factory/queues/${started.queue.id}/stop`,
+      kid,
+    );
+    const stopped = StopFactoryQueueResponseSchema.parse(res.json());
+    expect(stopped.kept).toBe(3);
+    expect(stopped.refunded).toEqual({ timber: 14, treats: 7 });
+    later(DAY_MS);
+    expect((await settle(server, kid, mapId)).items['heart-charm']).toBe(charms + 3);
+    await reconciled(mapId, kid.id);
+  });
+
+  it('a retried start or stop with the same Idempotency-Key pays and refunds once', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    await buildFactory(server, kid, mapId);
+    await give(mapId, kid, { timber: 20, treats: 10 });
+    const body = { recipeId: 'heart-charm', count: 4 };
+    const path = `/maps/${mapId}/factory/queues`;
+    const key = { 'idempotency-key': 'factory-start-retry-1' };
+    const first = await call(server, 'POST', path, kid, body, key);
+    const again = await call(server, 'POST', path, kid, body, key);
+    expect(first.statusCode).toBe(201);
+    expect(again.statusCode).toBe(201);
+    const { queue } = FactoryQueueResponseSchema.parse(first.json());
+    expect(FactoryQueueResponseSchema.parse(again.json()).queue.id).toBe(queue.id);
+    expect(batchesIn(await bag(server, kid, mapId))).toHaveLength(1);
+    const stopPath = `/maps/${mapId}/factory/queues/${queue.id}/stop`;
+    const stopKey = { 'idempotency-key': 'factory-stop-retry-1' };
+    expect((await call(server, 'POST', stopPath, kid, undefined, stopKey)).statusCode).toBe(200);
+    expect((await call(server, 'POST', stopPath, kid, undefined, stopKey)).statusCode).toBe(200);
+    const ledger = await reconciled(mapId, kid.id);
+    // Paid once (8 Timber), refunded once (8 Timber).
+    const timber = ledger.filter((l) => l.reason === 'factory' && l.itemId === 'timber');
+    expect(timber.map((l) => l.delta).sort((a, b) => a - b)).toEqual([-8, 8]);
+  });
+
+  it('a seasonal batch started in season keeps going after the season ends', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    await buildFactory(server, kid, mapId);
+    await give(mapId, kid, { pumpkins: 4 });
+    // Pumpkin Treats (Halloween): started in season.
+    const started = await queued(server, kid, mapId, 'pumpkin-treats', 4);
+    const treats = started.items['treats'] ?? 0;
+    // Mid-November: Halloween's over. What it made still lands.
+    clock.setTime(Date.parse('2026-11-15T18:00:00Z'));
+    const after = await settle(server, kid, mapId);
+    expect(after.items['treats']).toBe(treats + 12);
+    expect(after.factory?.batches).toEqual([]);
+    // A new one can't start now.
+    await give(mapId, kid, { pumpkins: 1 });
+    const late = await queue(server, kid, mapId, 'pumpkin-treats', 1);
+    expect(late.statusCode).toBe(409);
+    expect(errorOf(late).message).toMatch(/only works around Halloween/);
+  });
+
+  it('fixes a Frost squishy speed-up when the batch starts', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    await buildFactory(server, kid, mapId);
+    await give(mapId, kid, { water: 12 });
+    const freeze = GAME_DATA.recipes.find((r) => r.id === 'freeze-water')!;
+    const [frost] = await db
+      .insert(squishies)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: 'test-squishy',
+        element: 'frost',
+        feeling: 'sleepy',
+        teamSlot: 0,
+      })
+      .returning({ id: squishies.id });
+    const fast = await queued(server, kid, mapId, 'freeze-water', 2);
+    expect(batchesIn(fast)[0]?.itemSeconds).toBe(freeze.craftSeconds / 2);
+    // Gone from the team mid-batch (an empty team falls back to resting
+    // squishies, so it's away in the Hollow): the batch keeps its speed; a new one doesn't get it.
+    await db.execute(
+      `update squishies set team_slot = null, state = 'hollowed' where id = '${frost!.id}'`,
+    );
+    const slow = await queued(server, kid, mapId, 'freeze-water', 2);
+    expect(batchesIn(slow).map((b) => b.itemSeconds)).toEqual([
+      freeze.craftSeconds / 2,
+      freeze.craftSeconds,
+    ]);
   });
 
   it('shows my Factory on the home screen like any building', async () => {

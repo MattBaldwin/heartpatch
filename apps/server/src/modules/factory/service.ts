@@ -9,8 +9,9 @@ import {
   factoryQueues,
   GAME_DATA,
   inSeason,
+  needMoreText,
   recipePageKey,
-  stopRuns,
+  shortfall,
   timesItems,
   type FactoryQueueResponse,
   type InventoryResponse,
@@ -68,7 +69,7 @@ const MESSAGES = {
   full: 'Your Factory is busy! A spot frees up when a batch finishes.',
   outOfSeason: (season: string) => `That recipe only works around ${season}!`,
   noBatch: "We couldn't find that batch.",
-  ended: 'That batch is already finished!',
+  ended: "That batch isn't running any more!",
 } as const;
 
 /** Why batches end, as events say it. `left` is stored as `taken-down`. */
@@ -86,9 +87,18 @@ export interface BatchPlan {
 
 const isEmpty = (items: ItemCounts) => Object.keys(items).length === 0;
 
+/**
+ * How many are made by `at`, never fewer than are banked already: a command
+ * reads its clock before it waits for the member lock, so one that waited
+ * can come in with an older `at` than the settle that went first. Counting
+ * back would bank things twice and refund runs already banked.
+ */
+const madeBy = (row: BatchRow, at: Date): number =>
+  Math.max(row.banked, factoryDone(timing(row), at.getTime()));
+
 /** A settle: bank what's made since last time; a finished batch ends. */
 export function settlePlan(row: BatchRow, at: Date): BatchPlan {
-  const done = factoryDone(timing(row), at.getTime());
+  const done = madeBy(row, at);
   return {
     row,
     done,
@@ -100,7 +110,8 @@ export function settlePlan(row: BatchRow, at: Date): BatchPlan {
 
 /** Stopping: bank what's made, give back every run not finished (owner decision 2026-10-08). */
 export function stopPlan(row: BatchRow, at: Date, reason: BatchStop): BatchPlan {
-  const { kept, refunded } = stopRuns(timing(row), at.getTime());
+  const kept = madeBy(row, at);
+  const refunded = row.total - kept;
   return {
     row,
     done: kept,
@@ -284,7 +295,12 @@ export function createFactoryService(options: FactoryServiceOptions): FactorySer
         const asked = request.count === 'max' ? FACTORY_RULES.maxBatch : request.count;
         const runs = affordableRuns(have, recipe.inputs, Math.min(asked, FACTORY_RULES.maxBatch));
         // Can't pay for one: the usual "You need 1 more Treats first!".
-        if (runs === 0) await consumeItems(tx, owner, recipe.inputs, 'factory', null);
+        if (runs === 0) {
+          throw new AppError(
+            'CONFLICT',
+            needMoreText(shortfall(have, recipe.inputs), GAME_DATA.resources),
+          );
+        }
         // Quicker with the right squishy on the team as it starts, fixed for
         // the whole batch (owner decision 2026-10-08). A plain read: no squishy locks.
         const team = recipe.fasterWith
