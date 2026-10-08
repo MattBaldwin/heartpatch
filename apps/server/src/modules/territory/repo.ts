@@ -604,6 +604,8 @@ export interface TendingRepo {
   outerTiles: (mapId: string, userId?: string) => Promise<TendingTileRow[]>;
   /** Marks these tiles tended at `at` (never moves a later time back), in tile id order. */
   tend: (mapId: string, tileIds: readonly string[], at: Date) => Promise<void>;
+  /** A capture (#277): the tile is tended and claimed at `at`, so it's safe on its first night. */
+  claim: (mapId: string, tileId: string, at: Date) => Promise<void>;
   /**
    * Visit's first lock: the player's tiles outside their home base, in id
    * order (`FOR NO KEY UPDATE`, like jobs), so a Visit and a nightfall that
@@ -709,6 +711,19 @@ function tendingQueries(db: Executor): TendingRepo {
         .onConflictDoUpdate({
           target: tileTending.tileId,
           set: { tendedAt: sql`greatest(${tileTending.tendedAt}, excluded.tended_at)` },
+        });
+    },
+
+    claim: async (mapId, tileId, at) => {
+      await db
+        .insert(tileTending)
+        .values({ tileId, mapId, tendedAt: at, claimedAt: at })
+        .onConflictDoUpdate({
+          target: tileTending.tileId,
+          set: {
+            tendedAt: sql`greatest(${tileTending.tendedAt}, excluded.tended_at)`,
+            claimedAt: at,
+          },
         });
     },
 

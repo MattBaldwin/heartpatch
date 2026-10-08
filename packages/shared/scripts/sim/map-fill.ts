@@ -1,5 +1,6 @@
 import { GAME_DATA } from '../../src/data/index.js';
-import { heartSeedOf } from '../../src/hollow/index.js';
+import { HOLLOW_RULES } from '../../src/data/hollow.js';
+import { heartSeedOf, pickReclaimed, rollStrikes, strengthOf } from '../../src/hollow/index.js';
 import { isTradingPost } from '../../src/territory/reach.js';
 import { hexDistance, hexKey, hexNeighbors, type HexKey } from '../../src/hex/index.js';
 import { generateMap, type MapTile } from '../../src/mapgen/index.js';
@@ -43,7 +44,13 @@ export const MAP_FILL_LIMITS = [
   'a kid plays once a day, so the 4-hour tile cooldown is a day',
   'fences cost a fixed number of segments a play day, not modelled Emberwood',
   'gatherers and guards are folded into how much land a kid tends',
+  "a kid who plays keeps all their land lit (`pnpm sim:fuel`'s gate); one away longer than a fire's stored fuel has all of it dark",
 ] as const;
+
+/** Nights of fuel a Hearthfire stores: how long a kid's land stays lit while they're away (#277). */
+const FUEL_NIGHTS = Math.min(
+  ...GAME_DATA.buildings.flatMap((b) => (b.kind === 'hearthfire' ? [b.maxFuelNights] : [])),
+);
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Day 1 at noon UTC, a Monday; nightfall is 9 hours later. */
@@ -62,8 +69,10 @@ export interface MapFillDay {
   readonly neutralLeftOutsideGap: number;
   /** Seats that played today and had an attempt left but no neutral tile next to their land. */
   readonly nothingToClaim: readonly boolean[];
-  /** Tiles each seat had go wild at tonight's nightfall. */
+  /** Tiles each seat had go wild at tonight's nightfall (untended, or won back by the Hollow Man). */
   readonly wentWild: readonly number[];
+  /** Of those, tiles the Hollow Man won back in the dark (#277). */
+  readonly hollowWild: readonly number[];
   /** Tiles each seat claimed today that had gone wild before. */
   readonly reclaimed: readonly number[];
   /** Tiles each seat won from a rival today (#203's model). */
@@ -132,9 +141,14 @@ export function runMapFill(
     isTileFenced(t, tilesOf(s), segments.get(hexKey(t)) ?? [], tiles);
 
   const days: MapFillDay[] = [];
+  /** The last day each kid played (fuelled their fires). */
+  const lastPlayed = seats.map(() => 0);
   for (let day = 1; day <= config.days; day++) {
     const noon = new Date(DAY_ONE + (day - 1) * DAY_MS);
     const playing = seats.map((seat) => plays(seat, day));
+    playing.forEach((p, s) => {
+      if (p) lastPlayed[s] = day;
+    });
     const nothingToClaim = seats.map(() => false);
     const reclaimed = seats.map(() => 0);
     const done = seats.map((_, s) => !playing[s]);
@@ -304,8 +318,42 @@ export function runMapFill(
       });
     }
 
-    // Nightfall: land untended long enough goes wild again.
+    // Nightfall, first the Hollow Man (#277): a kid's land is dark once their
+    // fires' stored fuel has run out, and he wins back the farthest tiles,
+    // as bold as their night on the patch (they joined on day 1) allows.
     const wentWild = seats.map(() => 0);
+    const hollowWild = seats.map(() => 0);
+    const strength = HOLLOW_RULES.strength;
+    seats.forEach((_, s) => {
+      if (day - (lastPlayed[s] ?? 0) < FUEL_NIGHTS) return;
+      const cap = rules.pvpMode === 'gentle' ? strength.gentleCap : strength.cap;
+      const strikes = rollStrikes(
+        strengthOf(day, HOLLOW_RULES).chances,
+        100,
+        cap,
+        deriveSeed(config.rootSeed, scenario.id, rules.label, 'hollow', day, s),
+      );
+      const dark = [...owned].flatMap(([k, o]) => {
+        const t = byKey.get(k);
+        return o.owner === s && t && t.homeSlot === null && !isTradingPost(t)
+          ? [{ id: k, q: t.q, r: t.r }]
+          : [];
+      });
+      for (const g of pickReclaimed(
+        dark,
+        seeds[s] ?? null,
+        Math.min(strikes, strength.landLostPerNight),
+      )) {
+        owned.delete(g.id);
+        segments.delete(g.id);
+        wentWildBefore.add(g.id);
+        hollowWild[s] = (hollowWild[s] ?? 0) + 1;
+        wentWild[s] = (wentWild[s] ?? 0) + 1;
+      }
+    });
+
+    // Then land untended long enough goes wild again, within one cap a
+    // night for all land lost (owner decision 2026-10-08, Q6).
     if (tending) {
       const night = new Date(noon.getTime() + NIGHTFALL_MS);
       const candidates = [...owned].flatMap(([k, o]) => {
@@ -322,13 +370,13 @@ export function runMapFill(
             ]
           : [];
       });
-      const going = tilesGoingWild(
-        candidates,
-        seedByOwner,
-        night,
-        wildPerNight(tending, rules.pvpMode),
-        tending,
-      );
+      const cap = Math.min(wildPerNight(tending, rules.pvpMode), strength.landLostPerNight);
+      const left = seats.map((_, s) => cap - (hollowWild[s] ?? 0));
+      const going = tilesGoingWild(candidates, seedByOwner, night, cap, tending).filter((g) => {
+        const s = Number(g.ownerUserId);
+        left[s] = (left[s] ?? 0) - 1;
+        return (left[s] ?? 0) >= 0;
+      });
       for (const g of going) {
         owned.delete(hexKey(g));
         segments.delete(hexKey(g));
@@ -345,6 +393,7 @@ export function runMapFill(
       neutralLeftOutsideGap: left.filter((t) => t.terrain !== 'junipers-gap').length,
       nothingToClaim,
       wentWild,
+      hollowWild,
       reclaimed,
       captured,
       fenceBreaks,

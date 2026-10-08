@@ -58,8 +58,8 @@ describe('local dates', () => {
 
 describe('Hearthfire fuel (tech spec §7)', () => {
   it('belongs to tonight before nightfall and to tomorrow after it', () => {
-    expect(tonightOf(at('2026-10-31', 20, 59), RULES)).toBe('2026-10-31');
-    expect(tonightOf(at('2026-10-31', 21, 0), RULES)).toBe('2026-11-01');
+    expect(tonightOf(at('2026-10-31', 18, 59), RULES)).toBe('2026-10-31');
+    expect(tonightOf(at('2026-10-31', 19, 0), RULES)).toBe('2026-11-01');
     expect(tonightOf(at('2026-12-31', 23, 30), RULES)).toBe('2027-01-01');
     expect(tonightOf(at('2026-10-31', 0, 5), RULES)).toBe('2026-10-31');
   });
@@ -70,7 +70,7 @@ describe('Hearthfire fuel (tech spec §7)', () => {
       nightsLeft: 0,
       lit: false,
     });
-    expect(fuelSpace(fire, null, at('2026-10-02', 12), RULES)).toBe(5);
+    expect(fuelSpace(fire, null, at('2026-10-02', 12), RULES)).toBe(8);
   });
 
   it('counts down one night per nightfall without anything being decremented', () => {
@@ -78,11 +78,11 @@ describe('Hearthfire fuel (tech spec §7)', () => {
     const through = addFuel(fire, null, at('2026-10-02', 12), 3, RULES);
     expect(through).toBe('2026-10-04');
     const left = (local: MapLocalTime) => hearthfireState(through, local, RULES).nightsLeft;
-    expect(left(at('2026-10-02', 20))).toBe(3);
-    expect(left(at('2026-10-02', 21))).toBe(2); // tonight's nightfall has happened
+    expect(left(at('2026-10-02', 18))).toBe(3);
+    expect(left(at('2026-10-02', 19))).toBe(2); // tonight's nightfall has happened
     expect(left(at('2026-10-03', 9))).toBe(2);
-    expect(left(at('2026-10-04', 20, 59))).toBe(1);
-    expect(left(at('2026-10-04', 21))).toBe(0);
+    expect(left(at('2026-10-04', 18, 59))).toBe(1);
+    expect(left(at('2026-10-04', 19))).toBe(0);
     expect(hearthfireState(through, at('2026-10-05', 9), RULES).lit).toBe(false);
     // What nightfall (#21) asks: is the night being resolved covered?
     expect(protectsNight(through, '2026-10-04')).toBe(true);
@@ -92,13 +92,13 @@ describe('Hearthfire fuel (tech spec §7)', () => {
 
   it('caps at the most nights it can hold, counted from tonight', () => {
     const local = at('2026-10-02', 12);
-    expect(addFuel(fire, null, local, 9, RULES)).toBe('2026-10-06'); // 5 nights: Oct 2–6
-    const full = addFuel(fire, null, local, 5, RULES);
+    expect(addFuel(fire, null, local, 9, RULES)).toBe('2026-10-09'); // 8 nights: Oct 2–9
+    const full = addFuel(fire, null, local, 8, RULES);
     expect(fuelSpace(fire, full, local, RULES)).toBe(0);
     expect(addFuel(fire, full, local, 1, RULES)).toBe(full);
     // A night later one more fits.
     expect(fuelSpace(fire, full, at('2026-10-03', 12), RULES)).toBe(1);
-    expect(addFuel(fire, full, at('2026-10-03', 12), 1, RULES)).toBe('2026-10-07');
+    expect(addFuel(fire, full, at('2026-10-03', 12), 1, RULES)).toBe('2026-10-10');
   });
 
   it('tops up from tonight when the fire went out long ago', () => {
@@ -142,7 +142,7 @@ describe('safe tiles (design doc §14)', () => {
     expect(safe.size).toBe(7 + 7);
   });
 
-  it('reaches further from a Jack-o-Lantern fire', () => {
+  it('lights its ring from a Jack-o-Lantern fire (#277: radius 1, like a new Hearthfire)', () => {
     const radius = lantern.levels[0]!.safeRadius;
     const safe = safeTiles([{ at: hex(5, -2), radius }]);
     expect(safe.size).toBe(1 + 3 * radius * (radius + 1));
@@ -150,7 +150,7 @@ describe('safe tiles (design doc §14)', () => {
       const [q, r] = key.split(',').map(Number);
       expect(hexDistance(hex(q!, r!), hex(5, -2))).toBeLessThanOrEqual(radius);
     }
-    expect(radius).toBeGreaterThan(fire.levels[0]!.safeRadius);
+    expect(radius).toBe(fire.levels[0]!.safeRadius);
   });
 
   it('is empty with no homes and no lit fires, and joins several', () => {
@@ -242,12 +242,12 @@ describe('building costs and refunds', () => {
 
   it('costs the next level to upgrade, and nothing past the top', () => {
     expect(upgradeCost(fire, 1)).toEqual({ timber: 10, stone: 10 });
-    expect(upgradeCost(fire, 2)).toEqual({ timber: 20, stone: 15, glimmer: 2 });
+    expect(upgradeCost(fire, 2)).toEqual({ timber: 20, stone: 15, glimmer: 1 });
     expect(upgradeCost(fire, 3)).toBeNull();
     expect(upgradeCost(lantern, 1)).toBeNull();
     expect(upgradeCost(building('cozy-meadow'), 1)).toEqual({ timber: 8, stone: 4 });
     // What an upgraded building cost in all is what a take-down refunds from.
-    expect(spentOn(fire, 3)).toEqual({ timber: 35, stone: 30, glimmer: 2 });
+    expect(spentOn(fire, 3)).toEqual({ timber: 35, stone: 30, glimmer: 1 });
   });
 
   it('always gives the carved pumpkin back whole', () => {

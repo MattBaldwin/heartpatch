@@ -16,7 +16,7 @@ export const HomeBaseRulesSchema = z.strictObject({
    * stand in the middle of their tile, so spot 0 there is taken.
    */
   spotsPerTile: z.literal(7),
-  /** Nightfall, in minutes after map-local midnight (design doc §14: 9:00 PM). */
+  /** Nightfall, in minutes after map-local midnight (design doc §14: 7:00 PM, #277). */
   nightfallMinute: z
     .number()
     .int()

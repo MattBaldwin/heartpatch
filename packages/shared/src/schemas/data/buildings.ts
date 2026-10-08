@@ -59,8 +59,8 @@ export const HearthfireBuildingSchema = z.strictObject({
   fuelResource: ContentIdSchema,
   fuelPerNight: z.number().int().positive(),
   maxFuelNights: z.number().int().positive(),
-  /** `safeRadius` is in hex tiles. */
-  levels: levels({ safeRadius: z.number().int().min(0).max(6) }),
+  /** `safeRadius` is in hex tiles; every fire lights at least its ring (#277 guardrail a). */
+  levels: levels({ safeRadius: z.number().int().min(1).max(6) }),
 });
 
 /** Habitats house squishies; matching tags earn the habitat multiplier. */
