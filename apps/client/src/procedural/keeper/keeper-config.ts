@@ -26,6 +26,10 @@ export const KEEPER = {
     eyeHeight: -0.02, // TUNE: of head height, from its middle
     browHeight: 0.07, // TUNE: just above the eyes, clear of the fringe
     noseHeight: -0.12, // TUNE
+    noseShift: 0.008, // TUNE: a touch off-centre, like a drawn line
+    noseRollDeg: 8, // TUNE
+    /** Brows, nose and smile are this deep (of head size): drawn on the face, not stuck on it. */
+    lineDepth: 0.012, // TUNE
     mouthHeight: -0.22, // TUNE
     /** How far features stand out of the head surface, of their own depth. */
     standOut: 0.35, // TUNE

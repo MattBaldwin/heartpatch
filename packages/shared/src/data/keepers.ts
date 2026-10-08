@@ -90,9 +90,10 @@ export const KEEPER_OUTFITS: OutfitPalette[] = [
 
 /** The top and back of the head; it sits up and back so the face stays clear under the fringe. */
 const CAP: HairPiece = { shape: 'ellipsoid', at: [0, 0.28, 0.16], size: [1.08, 0.92, 1.08] };
+/** It sits high enough that the brows always show under it, whatever the seeded jitter (#289). */
 const FRINGE: HairPiece = {
   shape: 'ellipsoid',
-  at: [0, 0.5, -0.5],
+  at: [0, 0.58, -0.5],
   size: [1.12, 0.5, 0.6],
   turn: [-25, 0, 0],
 };
@@ -216,8 +217,9 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
   {
     id: 'puff',
     name: 'Puff',
-    volume: { top: 1.62, width: 1.34 },
-    pieces: [{ shape: 'ellipsoid', at: [0, 0.48, 0.24], size: [1.34, 1.14, 1.24] }],
+    volume: { top: 1.72, width: 1.34 },
+    // Sits a little high so the brows show under it (#289).
+    pieces: [{ shape: 'ellipsoid', at: [0, 0.58, 0.24], size: [1.34, 1.14, 1.24] }],
   },
   {
     id: 'bob',

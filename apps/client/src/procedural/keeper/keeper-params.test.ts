@@ -90,14 +90,22 @@ describe('keeperParams', () => {
     const white = hexToRgb(KEEPER.colors.white).join();
     for (const base of BASES) {
       for (const eyeColor of KEEPER_DATA.eyeColors) {
-        const p = keeperParams({ ...defaultKeeperConfig(base), eyeColor: eyeColor.id }, KEEPER_DATA);
+        const p = keeperParams(
+          { ...defaultKeeperConfig(base), eyeColor: eyeColor.id },
+          KEEPER_DATA,
+        );
         const eye = hexToRgb(eyeColor.color).join();
         const face = piecesOf(p, 'face');
         // Every face piece is a drawn line, an eye or a glint; nothing else.
         for (const piece of face) expect([line, eye, white]).toContain(piece.color.join());
-        // Brows, nose and smile are always there: at least four lines.
+        // Exactly two brows, a nose and a smile.
         const lines = face.filter((piece) => piece.color.join() === line);
-        expect(lines.length, base.id).toBeGreaterThanOrEqual(4);
+        expect(lines.length, base.id).toBe(4);
+        // The picked eye colour always shows, whatever the eye shape.
+        expect(
+          face.some((piece) => piece.color.join() === eye),
+          base.id,
+        ).toBe(true);
       }
     }
   });
@@ -167,7 +175,7 @@ describe('keeperParams', () => {
   // Keeper) is a deliberate one. The e2e test checks the same hash in WebKit.
   it('keeps its build stable', () => {
     expect(keeperHash(keeperParams(GOLDEN_CONFIG, KEEPER_DATA))).toMatchInlineSnapshot(
-      `"f67f57c65bda360a6505de085f1de322"`,
+      `"4c9ed66e81af00f0cc5379ce835aa96d"`,
     );
   });
 });

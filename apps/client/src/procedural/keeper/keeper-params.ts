@@ -311,8 +311,7 @@ export function keeperParams(
     piece('face', shape, p.at, size, color, [p.turn[0], p.turn[1], p.turn[2] + roll]);
     return p.at;
   };
-  // Lines are flat: thin enough to read as drawn on the face, not stuck on it.
-  const flat = 0.012 * d;
+  const flat = f.lineDepth * d;
   for (const side of [-1, 1]) {
     const ex = side * f.eyeSpread;
     switch (base.face.eyes) {
@@ -336,17 +335,17 @@ export function keeperParams(
       }
       case 'happy':
         // Closed, smiling eyes: an arc upside down (∩).
-        feature('arc', ex, f.eyeHeight, [0.16 * d, 0.075 * d, 0.05 * d], line, 180);
+        feature('arc', ex, f.eyeHeight, [0.16 * d, 0.075 * d, 0.05 * d], eye, 180);
         break;
       case 'sleepy':
-        feature('arc', ex, f.eyeHeight - 0.01, [0.17 * d, 0.06 * d, 0.05 * d], line);
+        feature('arc', ex, f.eyeHeight - 0.01, [0.17 * d, 0.06 * d, 0.05 * d], eye);
         break;
     }
     // Brows: a gentle arch (∩) over each eye, never sloping towards the nose.
     feature('arc', ex, f.browHeight, [0.13 * d, 0.03 * d, flat], line, 180);
   }
-  // Nose: a short flat stroke, a touch off-centre like a drawn line.
-  feature('capsule', 0.008, f.noseHeight, [0.018 * d, 0.06 * d, flat], line, 8);
+  // Nose: a short flat stroke.
+  feature('capsule', f.noseShift, f.noseHeight, [0.018 * d, 0.06 * d, flat], line, f.noseRollDeg);
   // Mouth: one curved line, a smile.
   feature('arc', 0, f.mouthHeight, [0.15 * d, 0.06 * d, flat * 1.6], line);
 
