@@ -13,7 +13,7 @@ export const JOURNEY_RULES: JourneyRules = {
     { fromDistance: 3, size: 2 }, // TUNE:
     { fromDistance: 6, size: 3 }, // TUNE:
   ],
-  windowHours: 4, // TUNE: like wild spawns (SPAWN_RULES.windowHours)
+  windowHours: 4, // TUNE: the same 4-hour window as wild spawns
   visitMinutes: 20, // TUNE: long enough to pick up, trade and shop
   // TUNE: the common and uncommon base forms that aren't seasonal. Rare and
   // rarer base forms are a step harder (owner decision 2026-10-07), which

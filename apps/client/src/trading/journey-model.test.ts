@@ -123,16 +123,23 @@ describe('the visit pass countdown', () => {
 describe('journey words (style guide §9)', () => {
   it('uses no avoided word', () => {
     const texts = [
-      ...Object.values(JOURNEY_TEXT).flatMap((v) =>
-        typeof v === 'string'
-          ? [v]
-          : typeof v === 'function'
-            ? [
-                (v as (...a: unknown[]) => string)('Lantern Post', 3),
-                (v as (...a: unknown[]) => string)(3, 3),
-              ]
-            : Object.values(v),
-      ),
+      JOURNEY_TEXT.heading('Lantern Post'),
+      JOURNEY_TEXT.trail(3, 10),
+      JOURNEY_TEXT.team(12),
+      JOURNEY_TEXT.noTeam,
+      ...Object.values(JOURNEY_TEXT.chance),
+      JOURNEY_TEXT.stakes(20),
+      JOURNEY_TEXT.start,
+      JOURNEY_TEXT.open(20 * 60_000),
+      JOURNEY_TEXT.wonTitle('Lantern Post'),
+      JOURNEY_TEXT.wonSub(20),
+      JOURNEY_TEXT.wonDone,
+      JOURNEY_TEXT.lostTitle,
+      JOURNEY_TEXT.lostSub,
+      JOURNEY_TEXT.scootedTitle,
+      JOURNEY_TEXT.scootedSub,
+      JOURNEY_TEXT.startCaption,
+      JOURNEY_TEXT.somePost,
     ];
     for (const text of texts) expect(findAvoidedWords(text), text).toEqual([]);
   });

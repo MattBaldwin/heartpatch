@@ -2,6 +2,7 @@ import {
   ApiErrorSchema,
   BATTLE_RULES,
   BattleResponseSchema,
+  createBattleContent,
   GAME_DATA,
   GROWTH_RULES,
   heartSeedOf,
@@ -18,6 +19,7 @@ import {
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { SERVER_GAME_DATA, serverBattleData } from '@heartpatch/shared/server';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
@@ -25,8 +27,9 @@ import { keepers, sessions, squishies, tileAttacks, users } from '../../db/schem
 import { AppError } from '../../lib/errors.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
+import { createBattlesService } from '../battles/service.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { requirePostAccess } from './service.js';
+import { createJourneyBattlePort, requirePostAccess } from './service.js';
 
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
@@ -309,6 +312,35 @@ describe.skipIf(!url)('journeys to trading posts (#270, needs DATABASE_URL)', ()
     expect(
       (await viewOf(server, kid, mapId)).posts!.find((p) => p.q === post.q)?.visitUntil,
     ).toBeNull();
+  });
+
+  it('ends as no contest with no pass when the content is re-tuned mid-journey', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await patch(server, kid, 3);
+    const { post } = await nearestPost(mapId, kid);
+    const battle = battleOf(
+      await call(server, 'POST', `/maps/${mapId}/posts/journey`, kid, { q: post.q, r: post.r }),
+    );
+    const retuned = createBattlesService({
+      db,
+      clock: () => clock,
+      journeys: createJourneyBattlePort(),
+      content: createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA), {
+        ...BATTLE_RULES,
+        damage: { ...BATTLE_RULES.damage, flat: BATTLE_RULES.damage.flat + 1 },
+      }),
+    });
+    expect((await retuned.get(kid, battle.id)).status).toBe('no-contest');
+    const [journey] = await journeysOf(mapId);
+    expect(journey).toMatchObject({ outcome: 'no-contest', visitUntil: null, endedAt: clock });
+    const events = await eventsOf(mapId);
+    expect(events.slice(-2).map((e) => e.type)).toEqual(['battle.ended', 'journey.ended']);
+    expect(parseGameEventPayload('journey.ended', events.at(-1)!.payload)).toMatchObject({
+      result: 'no-contest',
+      visitUntil: null,
+    });
+    await expect(access(mapId, kid, post)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('needs no journey to a connected post (acceptance)', async () => {

@@ -134,7 +134,9 @@ export function createJourneyScreen(options: JourneyScreenOptions): JourneyScree
         stillHere,
       );
       if (battle && stillHere()) {
-        started.set(battle.id, { name, q: tile.q, r: tile.r });
+        // A battle already going comes back instead (one at a time): only a
+        // journey's is this post's.
+        if (battle.kind === 'journey') started.set(battle.id, { name, q: tile.q, r: tile.r });
         options.openBattle(battle);
       }
     } catch (err) {

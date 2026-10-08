@@ -20,7 +20,6 @@ export const JOURNEY_TEXT = {
   chance: { good: 'Good chance! 👍', try: 'Worth a try! 🤞', tough: 'Tough one! 💪' },
   stakes: (minutes: number) =>
     `Win and the post is yours to use for ${String(minutes)} minutes. Tuckered out? Nothing's lost. Just try again.`,
-  notNow: 'Not now',
   start: 'Start journey',
   /** A visit pass's time left, in whole minutes rounded up (a kid-readable countdown). */
   open: (ms: number) => {
