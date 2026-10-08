@@ -1,11 +1,12 @@
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { hexToWorld, type MapView } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HEX_SIZE, type PropKind } from './map-config.js';
+import { BORDER, HEX_SIZE, type PropKind } from './map-config.js';
 import { findHomeBases } from './map-layout.js';
 import {
   buildProp,
@@ -14,7 +15,7 @@ import {
   tileScreenRectOf,
   type MapSceneOptions,
 } from './map-scene.js';
-import { testView, userId } from './test-view.js';
+import { testPatch, testView, userId } from './test-view.js';
 import { wildMarkers } from './wild-markers.js';
 
 describe('MapScene', () => {
@@ -280,32 +281,73 @@ describe('MapScene', () => {
     expect(map.tick(3000)).toBe(false);
   });
 
-  it('tints each player’s land in their slot colour', () => {
-    const { map, instances } = build(testView(1));
-    expect(map.stats.tinted).toBe(7);
-    expect(instances('tint-0')).toBe(7);
+  it('draws each player’s land in their slot colour, one border mesh each (#278)', () => {
+    const { map, mesh } = build(testView(1));
+    expect(map.stats).toMatchObject({ tinted: 7, borderMeshes: 1 });
+    expect(mesh('border-0')?.isEnabled()).toBe(true);
 
     map.update(testView(2));
-    expect(map.stats.tinted).toBe(14);
-    expect(instances('tint-0')).toBe(7);
-    expect(instances('tint-1')).toBe(7);
+    expect(map.stats).toMatchObject({ tinted: 14, borderMeshes: 2 });
+    expect(mesh('border-1')?.isEnabled()).toBe(true);
   });
 
-  it('clears a leaver’s tint when their land goes wild', () => {
-    const { map, instances } = build(testView(2));
+  it('clears a leaver’s border when their land goes wild', () => {
+    const { map, mesh } = build(testView(2));
     map.update(testView(1));
-    expect(map.stats.tinted).toBe(7);
-    expect(instances('tint-1')).toBe(0);
+    expect(map.stats).toMatchObject({ tinted: 7, borderMeshes: 1 });
+    expect(mesh('border-1')?.isEnabled()).toBe(false);
   });
 
-  it('leaves tiles owned by someone outside the member list untinted', () => {
+  it('leaves tiles owned by someone outside the member list uncoloured', () => {
     const view = testView(1);
     const stray = {
       ...view,
       tiles: view.tiles.map((t) => (t.homeSlot === 2 ? { ...t, ownerUserId: userId(7) } : t)),
     };
     const { map } = build(stray);
-    expect(map.stats.tinted).toBe(7);
+    expect(map.stats).toMatchObject({ tinted: 7, borderMeshes: 1 });
+  });
+
+  it('keeps a busy 4-Keeper patch’s borders to 4 draw calls and under 30k triangles (#278)', () => {
+    const view = testPatch();
+    const { scene, map } = build(view);
+    const owned = view.tiles.filter((t) => t.ownerUserId !== null).length;
+    expect(owned).toBeGreaterThan(200);
+    expect(map.stats.tinted).toBe(owned);
+    const borders = scene.meshes.filter((m) => m.name.startsWith('border-') && m.isEnabled());
+    expect(borders).toHaveLength(4);
+    expect(map.stats.borderMeshes).toBe(4);
+    // About 26k: one mesh each, never per tile. The per-tile tint it replaced
+    // drew 216 a tile (47.5k on this patch).
+    expect(map.stats.borderTriangles).toBeLessThan(30_000);
+    expect(map.stats.borderTriangles).toBeGreaterThan(20_000);
+  });
+
+  it('rebuilds only the borders whose land changed', () => {
+    const view = testPatch();
+    const { map, mesh } = build(view);
+    const before = [0, 1, 2, 3].map((s) =>
+      mesh(`border-${String(s)}`)?.getVerticesData('position'),
+    );
+    // Bramble (slot 1) loses a tile to the wild; nobody else's land changes.
+    const lost = view.tiles.find((t) => t.ownerUserId === userId(2) && t.homeSlot === null);
+    map.update({
+      ...view,
+      tiles: view.tiles.map((t) => (t === lost ? { ...t, ownerUserId: null } : t)),
+    });
+    const after = [0, 1, 2, 3].map((s) => mesh(`border-${String(s)}`)?.getVerticesData('position'));
+    expect(after[1]).not.toBe(before[1]);
+    for (const s of [0, 2, 3]) expect(after[s]).toBe(before[s]);
+  });
+
+  it('dims the borders at night, so the fire light reads (#277)', () => {
+    const { map, mesh } = build(testView(1));
+    const material = () => mesh('border-0')?.material as StandardMaterial;
+    expect(material().emissiveColor.r).toBe(1);
+    map.setNight(true);
+    expect(material().emissiveColor.r).toBeCloseTo(1 - BORDER.night);
+    map.setNight(false);
+    expect(material().emissiveColor.r).toBe(1);
   });
 
   it('marks claimed home bases with a Heart Seed and free ones with an empty plot', () => {

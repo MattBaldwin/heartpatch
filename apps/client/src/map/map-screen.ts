@@ -24,6 +24,7 @@ import { HEX_SIZE } from './map-config.js';
 import { mapApi } from './map-api.js';
 import { AmbientDriver } from './ambient-driver.js';
 import { isHalloween, seasonsOn } from './map-dressing.js';
+import { mountMapLegend } from './map-legend.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
@@ -156,6 +157,38 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   };
 
   const hudName = el('span', { class: 'map-hud-name' });
+  // Whose land is whose (#278): the name pill shows each Keeper's icon and
+  // opens the legend card; any other tap closes it.
+  const legend = mountMapLegend();
+  const hudTitle = el(
+    'button',
+    {
+      type: 'button',
+      class: 'map-hud-title',
+      'aria-controls': 'map-legend',
+      'aria-expanded': 'false',
+      'data-testid': 'map-hud-title',
+    },
+    hudName,
+    legend.icons,
+  );
+  const setLegend = (open: boolean): void => {
+    if (open) legend.toggle();
+    else legend.close();
+    hudTitle.setAttribute('aria-expanded', legend.open ? 'true' : 'false');
+  };
+  hudTitle.addEventListener('click', () => {
+    setLegend(!legend.open);
+  });
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      if (!legend.open || !(e.target instanceof Node)) return;
+      if (hudTitle.contains(e.target) || legend.card.contains(e.target)) return;
+      setLegend(false);
+    },
+    { capture: true },
+  );
   const hudStatus = el('span', { class: 'map-hud-status', role: 'status' });
   const login = el(
     'button',
@@ -165,7 +198,14 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   login.addEventListener('click', () => {
     window.location.reload();
   });
-  const hud = el('div', { class: 'map-hud', 'data-testid': 'map-hud' }, hudName, hudStatus, login);
+  const hud = el(
+    'div',
+    { class: 'map-hud', 'data-testid': 'map-hud' },
+    hudTitle,
+    hudStatus,
+    login,
+    legend.card,
+  );
   hud.hidden = true;
   options.root.append(hud);
 
@@ -227,6 +267,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     socket: liveSocket,
     onRedraw: (state) => {
       scene3d?.update(state.view);
+      legend.show(state.view.members, user?.id ?? null);
       drawWild();
       for (const layer of options.layers ?? []) layer.update?.(state.view);
       if (selected) showTile(state, selected);
@@ -299,6 +340,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     selected = null;
     panel.hide();
     options.tileActions?.hide();
+    setLegend(false);
     hud.hidden = true;
     options.onHudChange?.(null);
     options.showScene(null);
@@ -319,6 +361,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       options.tileActions?.hide();
       options.showScene(build);
       hudName.textContent = state.view.map.name;
+      legend.show(state.view.members, user?.id ?? null);
       hud.hidden = false;
       options.onHudChange?.(state.id);
       setStatus(liveSocket().status);

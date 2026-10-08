@@ -23,6 +23,7 @@
 }
 
 .map-hud[hidden],
+.map-legend[hidden],
 .map-hud-status[hidden],
 .map-hud-login[hidden],
 .tile-panel[hidden],
@@ -30,6 +31,95 @@
 .tile-panel-guardians[hidden],
 .tile-panel-gatherer[hidden] {
   display: none;
+}
+
+/* The name and the Keepers' icons: a button that opens the legend (#278). */
+.map-hud-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* A bigger tap than it looks: the whole pill round it (`.map-hud` is the positioned box). */
+.map-hud-title::before {
+  content: '';
+  position: absolute;
+  inset: -6px -16px;
+}
+
+.map-hud-title:focus-visible {
+  outline: 3px solid #b8487a;
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
+.map-legend-icons {
+  display: flex;
+  flex: none;
+  gap: 1px;
+}
+
+.map-legend-icons:empty {
+  display: none;
+}
+
+/* Under the name, over the chips below it while open; any tap closes it. */
+.map-legend {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 200px;
+  padding: 10px 14px 12px;
+  border-radius: 20px;
+  background: #fffafc;
+  box-shadow: 0 10px 26px rgb(74 49 80 / 26%);
+  text-align: left;
+  pointer-events: auto;
+}
+
+.map-legend-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #8a5f86;
+}
+
+.map-legend-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.map-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.map-legend-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-legend-mine .map-legend-name {
+  font-weight: 800;
 }
 
 .map-hud-name {
