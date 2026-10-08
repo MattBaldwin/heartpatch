@@ -234,6 +234,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     );
     const lightable = lightableOn(mapTiles);
     const canTake = gameplayOverrides(map.kind)?.hollowManCanTake ?? true;
+    const canStrike = canTake && percent > 0;
     // Kid-safety caps (owner decision 2026-10-08): the admin percent never raises them.
     const cap = map.pvpMode === 'gentle' ? rules.strength.gentleCap : rules.strength.cap;
     const asNight = (s: (typeof squishyRows)[number]): NightSquishy => ({
@@ -266,7 +267,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           : 0;
       // Where he can't strike (the Glade, or a patch at 0 %) he only watches:
       // the same stage `tonight` shows, and no walk to play.
-      const stage = canTake && percent > 0 ? strength.stage : 'watching';
+      const stage = canStrike ? strength.stage : 'watching';
       return { userId, keeperNight: nightNo, stage, grace, strikes };
     });
     const outcomes = nightfall(
@@ -323,7 +324,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         return where ? [where] : [];
       });
       const land = mapTiles.filter((t) => t.ownerUserId === userId);
-      const walk = !(canTake && percent > 0)
+      const walk = !canStrike
         ? []
         : hollowWalk({
             land,
@@ -621,7 +622,12 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         },
         tonight: {
           night: showNight,
-          stage: strikes ? stageOn(showNight) : 'watching',
+          // A night that has fallen keeps the stage it was decided with
+          // (the admin percent may have changed since).
+          stage:
+            (showNight === lastNight
+              ? mine.find((n) => n.night === lastNight)?.outcome.stage
+              : undefined) ?? (strikes ? stageOn(showNight) : 'watching'),
           ...showTimes(map, showNight, at),
         },
         reports,

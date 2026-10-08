@@ -568,6 +568,10 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect((await hollowService().dueNightfalls()).map((d) => d.mapId)).not.toContain(mapId);
       expect(await hollowService().runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
       expect(await stateOf(id)).toBe('active');
+      // He only watches in the Glade (#277): no strike, no walk.
+      expect((await nightsOf(mapId))[0]!.outcomes).toEqual([
+        expect.objectContaining({ stage: 'watching', walk: [], reclaimed: [] }),
+      ]);
       // Both at home (the Glade friend too), safe by the Heart Seed.
       expect((await nightsOf(mapId))[0]!.outcomes).toEqual([
         expect.objectContaining({ userId: kid.id, taken: [], exposed: 0, sheltered: 2 }),
@@ -890,7 +894,16 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(parseGameEventPayload('hollow.nightfall', fell.payload).walks).toEqual([
         { userId: kid.id, stage: 'watching', reclaimed: [], walk: [] },
       ]);
-      expect((await statusOf(server, kid, mapId)).tonight.stage).toBe('watching');
+      // Noon on Oct 5, the kid's night 4: the shipped curve says Curious,
+      // but turned off he only watches.
+      clock.setTime(Date.parse('2026-10-05T18:00:00Z'));
+      expect((await statusOf(server, kid, mapId)).tonight).toMatchObject({
+        night: '2026-10-05',
+        stage: 'watching',
+      });
+      await db.execute(`update maps set hollow_strength_percent = 100 where id = '${mapId}'`);
+      expect((await statusOf(server, kid, mapId)).tonight.stage).toBe('curious');
+      clock.setTime(Date.parse(START));
       await db.execute(`update maps set hollow_strength_percent = 300 where id = '${mapId}'`);
       expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 2 });
     });
