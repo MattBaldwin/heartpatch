@@ -662,9 +662,14 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       await grant(server, kid, mapId, 40);
       await giveCharms(server, kid, mapId, 3);
       // Every Heart Charm works, and two guardians stand on the land.
+      const published: string[] = [];
       const battles = createBattlesService({
         db,
         clock: () => clock,
+        publish: (id) => {
+          published.push(id);
+          return Promise.resolve();
+        },
         content: createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA), {
           ...BATTLE_RULES,
           capture: {
@@ -695,11 +700,14 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect(guardians).toHaveLength(2);
 
       // The first says yes: it leaves like a knockout and joins the kid now.
+      const startedPublishes = published.length;
       const first = await battles.act(kid, battle.id, {
         action: { type: 'capture' },
         turn: battle.view.turn,
       });
       expect(first.status).toBe('active');
+      // Its event goes out live, though the battle goes on.
+      expect(published.slice(startedPublishes)).toEqual([mapId]);
       expect(first.view.sides.b.squishies[0]).toMatchObject({ befriended: true });
       expect(first.view.sides.b.active).toBe(1);
       expect(first.view.log).toContainEqual(

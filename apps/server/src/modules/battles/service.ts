@@ -897,13 +897,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       ),
 
     act: async (user, battleId, request) => {
-      const { row: next, mapId } = await store.transaction(async (repo, tx) => {
+      const {
+        row: next,
+        mapId,
+        befriended,
+      } = await store.transaction(async (repo, tx) => {
         const { row, map } = await requireOwn(tx, await repo.lockBattle(battleId), user);
         if (row.status !== 'active') throw new AppError('CONFLICT', MESSAGES.over);
         const at = now();
         // Re-tuned content or a tile battle left: it ends instead (see `settle`).
         if (await settle(repo, tx, row, at)) {
-          return { row: await repo.findBattle(row.id), mapId: row.mapId };
+          return { row: await repo.findBattle(row.id), mapId: row.mapId, befriended: false };
         }
         // A stale or repeated submit (the client acted on an older turn) is
         // refused rather than applied to the turn after. Retries of the same
@@ -915,7 +919,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           // befriended: never a rival's squishies or fences. Each try uses a Heart Charm
           // (#17's inventory, ledgered against this battle), in this
           // transaction: a refused step gives it back. Lock order: battle,
-          // inventory, squishies, then `maps` via appendEvent.
+          // inventory, a tile battle's tile, squishies, `species_seen`, then
+          // `maps` via appendEvent.
           if (!CAPTURABLE_BATTLE_KINDS.has(row.kind))
             throw new AppError('CONFLICT', MESSAGES.noCapture);
           await consumeItems(
@@ -952,6 +957,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           throw err;
         }
         const actions = [...row.actions, action];
+        let befriended = false;
         if (state.phase.type === 'over') {
           await finish(repo, tx, row, actions, state, at);
         } else {
@@ -961,11 +967,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           // player's whatever happens next. Its event is the last write.
           const friends = await welcome(repo, tx, row, befriendedIn(row.state, state), at);
           for (const friend of friends) await appendCaptured(repo, row, friend);
+          befriended = friends.length > 0;
         }
-        return { row: await repo.findBattle(row.id), mapId: row.mapId };
+        return { row: await repo.findBattle(row.id), mapId: row.mapId, befriended };
       });
       if (!next) throw new AppError('NOT_FOUND', MESSAGES.notFound);
-      if (next.status !== 'active') published(mapId);
+      // An ended battle wrote events, and so did a guardian befriended mid-battle.
+      if (next.status !== 'active' || befriended) published(mapId);
       return toPlayerBattle(next);
     },
 
