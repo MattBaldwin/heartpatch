@@ -240,14 +240,19 @@ describe('build menu', () => {
       from: 1,
       to: 2,
       affordable: true,
-      radius: 2,
-      line: 'Its light will reach 2 tiles. Squishies out there stay safe at night!',
-      next: 'Next time: Level 3 reaches 3 tiles and needs 💎 Glimmer.',
+      radius: 1,
+      line: 'Same glow for now. At level 3 it reaches 2 tiles!',
+      next: 'Next time: Level 3 reaches 2 tiles and needs 💎 Glimmer.',
     });
     expect(upgradeOffer(home, fire())?.needs.map((n) => n.label)).toEqual(['🪵 12/10', '🪨 10/10']);
-    const two = upgradeOffer(home, fire({ level: 2, safeRadius: 2 }));
-    expect(two).toMatchObject({ to: 3, affordable: false, next: null });
-    expect(upgradeOffer(home, fire({ level: 3, safeRadius: 3 }))).toBeNull();
+    const two = upgradeOffer(home, fire({ level: 2, safeRadius: 1 }));
+    expect(two).toMatchObject({
+      to: 3,
+      affordable: false,
+      next: null,
+      line: 'Its light will reach 2 tiles. Squishies out there stay safe at night!',
+    });
+    expect(upgradeOffer(home, fire({ level: 3, safeRadius: 2 }))).toBeNull();
     expect(upgradeOffer(home, meadow())).toMatchObject({
       to: 2,
       line: 'Room for 5 squishies (now 3).',
@@ -470,6 +475,7 @@ describe('what each building does (#207)', () => {
 
   it('shows a fire’s chips on the land fire sheet, at level 1', () => {
     expect(effectChips(LAND_FIRE!)).toEqual(['🛡️ Safe 1 tile around', '🪵 Needs fuel each night']);
-    expect(effectChips(LAND_FIRE!, 2)[0]).toBe('🛡️ Safe 2 tiles around');
+    expect(effectChips(LAND_FIRE!, 2)[0]).toBe('🛡️ Safe 1 tile around');
+    expect(effectChips(LAND_FIRE!, 3)[0]).toBe('🛡️ Safe 2 tiles around');
   });
 });

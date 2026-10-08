@@ -109,6 +109,7 @@ export * from './spawns/window.js';
 export * from './schemas/spawns.js';
 export * from './schemas/territory.js';
 export * from './schemas/hollow.js';
+export * from './schemas/hollow-stage.js';
 export * from './schemas/raids.js';
 export * from './schemas/quick-messages.js';
 export * from './schemas/starters.js';

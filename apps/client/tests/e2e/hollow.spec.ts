@@ -146,11 +146,17 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await (await trayButton(page, 'raid-open')).tap();
   const raidSheet = page.getByTestId('raid-report');
   await expect(raidSheet).toBeVisible();
-  const fell = await api(page, 'POST', `/maps/${mapId}/dev/nightfall`);
+  // He grows bolder night by night (#277): from night 3 a rising chance,
+  // sure by night 6, of taking the guard out in the dark.
+  const fall = () => api<{ taken: number }>(page, 'POST', `/maps/${mapId}/dev/nightfall`);
+  let fell = await fall();
+  for (let night = 3; night < 6 && fell.body.taken === 0; night++) {
+    fell = await fall();
+  }
   expect(fell).toMatchObject({ status: 200, body: { taken: 1 } });
 
-  // He visits once, live, and the map stops drawing when he's gone.
-  await expect.poll(async () => (await hollowState(page))?.visits).toBe(visitsBefore + 1);
+  // He visits live each night, and the map stops drawing when he's gone.
+  await expect.poll(async () => (await hollowState(page))?.visits).toBeGreaterThan(visitsBefore);
   await expect
     .poll(async () => (await hollowState(page))?.visiting, { timeout: 30_000 })
     .toBe(false);
@@ -163,10 +169,13 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await expect(raidSheet).toBeHidden();
   // The morning report: gentle, and always "you can rescue them".
   await expect(report).toBeVisible();
-  await expect(report).toContainText('The Hollow Man visited last night');
+  await expect(report).toContainText(
+    /The Hollow Man (visited last night|came by while you were away)/,
+  );
   await expect(report).toContainText('You can rescue them!');
   expect(findAvoidedWords((await report.textContent()) ?? '')).toEqual([]);
-  expect(await hollowState(page)).toMatchObject({ hollowed: 1, report: [expect.any(String)] });
+  expect(await hollowState(page)).toMatchObject({ hollowed: 1 });
+  expect((await hollowState(page))!.report.length).toBeGreaterThan(0);
   await page.getByTestId('hollow-report-ok').tap();
   await expect(report).toBeHidden();
 

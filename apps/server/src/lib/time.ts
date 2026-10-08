@@ -1,4 +1,5 @@
 import {
+  isLocalBefore,
   spawnWindowAt,
   type LocalDate,
   type MapLocalTime,
@@ -126,4 +127,22 @@ export function nextLocalMidnight(at: Date, timeZone: string): Date {
     else after = mid;
   }
   return new Date(after);
+}
+
+/**
+ * The instant the clock in `timeZone` first reads `local` (map-local wall
+ * time), looked for within two days of `near` (#277: tonight's nightfall
+ * and strike for the client's show). Exact to the minute; a time skipped by
+ * daylight saving gives the first instant after it.
+ */
+export function instantOfLocal(local: MapLocalTime, timeZone: string, near: Date): Date {
+  const span = 2 * 24 * 60 * MINUTE_MS;
+  let before = near.getTime() - span;
+  let after = near.getTime() + span;
+  while (after - before > MINUTE_MS / 2) {
+    const mid = before + Math.floor((after - before) / 2);
+    if (isLocalBefore(mapLocalTime(new Date(mid), timeZone), local)) before = mid;
+    else after = mid;
+  }
+  return new Date(Math.floor(after / MINUTE_MS) * MINUTE_MS);
 }

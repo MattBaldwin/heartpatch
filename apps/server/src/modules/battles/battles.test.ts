@@ -1021,7 +1021,7 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
       const mapId = await newMap(server, kid);
       await grant(server, kid, mapId);
       const tile = await awayTile(mapId, (await seedTile(mapId, kid)).terrain);
-      clock.setTime(Date.parse('2026-10-03T02:00:00Z')); // 8 PM in Denver
+      clock.setTime(Date.parse('2026-10-03T00:00:00Z')); // 6 PM in Denver, nightfall at 7 (#277)
       const service = createBattlesService({ db, clock: () => clock });
       const { battle } = await service.startTile(
         { id: kid.id, username: kid.username },

@@ -1,4 +1,9 @@
-import { GAME_DATA, type MorningReport, type WsEventMessage } from '@heartpatch/shared';
+import {
+  GAME_DATA,
+  type MorningReport,
+  type TakenSquishy,
+  type WsEventMessage,
+} from '@heartpatch/shared';
 
 /** The Heart Snack, Heartdust's use (owner decision 2026-10-06): what it's called and costs. */
 const SNACK = GAME_DATA.careActions.find(
@@ -16,6 +21,13 @@ export const HOLLOW_TEXT = {
   taken: (name: string) => `He took ${name} to the Hollow. You can rescue them!`,
   home: (name: string) => `He took ${name} to the Hollow, but they're home again!`,
   safe: 'Everyone stayed safe and cozy. Nice planning!',
+  /** Dark land he won back went wild (#277). */
+  reclaimed: (n: number) =>
+    n === 1
+      ? 'He found a dark spot, and that bit of land went wild again.'
+      : `He found ${String(n)} dark spots, and that land went wild again.`,
+  /** Light every bit of land and he can't get anything (#277). */
+  lightAll: 'Keep every bit of your land in fire light!',
   /** Squishies were out in the dark, but he took nobody (first-night grace, or a last friend). */
   spared: 'He came by, but took nobody this time.',
   ok: 'Okay!',
@@ -60,7 +72,7 @@ export function unseenReports(
   return reports.filter(
     (r) =>
       (seenNight === null || r.night > seenNight) &&
-      (r.taken !== null || r.sheltered > 0 || r.exposed > 0),
+      (r.taken.length > 0 || r.sheltered > 0 || r.exposed > 0 || r.reclaimed.length > 0),
   );
 }
 
@@ -71,12 +83,13 @@ export function unseenReports(
  */
 export function reportText(
   reports: readonly MorningReport[],
-  nameOf: (taken: NonNullable<MorningReport['taken']>) => string,
+  nameOf: (taken: TakenSquishy) => string,
   fireHint = true,
 ): { title: string; lines: string[] } {
-  const taken = reports.flatMap((r) => (r.taken ? [r.taken] : []));
+  const taken = reports.flatMap((r) => r.taken);
+  const reclaimed = reports.reduce((n, r) => n + r.reclaimed.length, 0);
   const title =
-    taken.length === 0
+    taken.length === 0 && reclaimed === 0
       ? HOLLOW_TEXT.passedBy
       : reports.length > 1
         ? HOLLOW_TEXT.visitedMany
@@ -84,11 +97,12 @@ export function reportText(
   const lines = taken.map((t) =>
     t.inHollow ? HOLLOW_TEXT.taken(nameOf(t)) : HOLLOW_TEXT.home(nameOf(t)),
   );
+  if (reclaimed > 0) lines.push(HOLLOW_TEXT.reclaimed(reclaimed), HOLLOW_TEXT.lightAll);
   if (lines.length === 0) {
     // Nobody taken: either everyone was sheltered, or some were out in the
     // dark and he let them be (first-night grace), which is the moment to
     // say "light a fire" (owner decision 2026-10-03).
-    if (reports.some((r) => r.taken === null && r.exposed > 0)) {
+    if (reports.some((r) => r.taken.length === 0 && r.exposed > 0)) {
       lines.push(HOLLOW_TEXT.spared, ...(fireHint ? [HOLLOW_TEXT.fireHint] : []));
     } else {
       lines.push(HOLLOW_TEXT.safe);
