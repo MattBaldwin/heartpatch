@@ -1051,7 +1051,10 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       // Gentle hands battles half the chance…
       share = 0;
       await fight(near);
-      expect(drops).toEqual([{ tileId: near.id, percent: TERRITORY_RULES.gentle.rewardPercent }]);
+      // A rival's land, so the capture rolls its `rivalChance` (#261).
+      expect(drops).toEqual([
+        { tileId: near.id, percent: TERRITORY_RULES.gentle.rewardPercent, fromRival: true },
+      ]);
       // …and battles rolls with the share it's given: none finds nothing,
       // even at 100%; the full share finds a piece.
       expect(await piecesOf(kid.id)).toEqual([]);
@@ -1060,7 +1063,7 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const mode = await call(server, 'POST', `/maps/${mapId}/pvp-mode`, kid, { pvpMode: 'on' });
       expect(mode.statusCode).toBe(200);
       await fight(near2);
-      expect(drops.at(-1)).toEqual({ tileId: near2.id, percent: 100 });
+      expect(drops.at(-1)).toEqual({ tileId: near2.id, percent: 100, fromRival: true });
       expect(await piecesOf(kid.id)).toHaveLength(1);
     });
   });

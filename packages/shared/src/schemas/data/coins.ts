@@ -83,7 +83,7 @@ export function checkCoinRules(input: unknown): string[] {
 /**
  * Readable problems with the Boutique rules and the catalog's prices, or
  * `[]`: every price in range, a rarer piece never cheaper than a commoner
- * one, no Mythic piece for sale, and enough everyday pieces to fill today's
+ * one in the same slot, no Mythic piece for sale, and enough everyday pieces to fill today's
  * rack.
  */
 export function checkBoutiqueData(input: unknown, catalog: readonly ClothingItem[]): string[] {
@@ -104,9 +104,14 @@ export function checkBoutiqueData(input: unknown, catalog: readonly ClothingItem
     }
   }
   const rank = (item: ClothingItem) => CLOTHING_RARITIES.indexOf(item.rarity);
+  // Within a slot: a whole costume (#261) costs more than a rarer hat.
   for (const a of priced) {
     for (const b of priced) {
-      if (rank(a) < rank(b) && (a.boutiquePrice ?? 0) > (b.boutiquePrice ?? 0)) {
+      if (
+        a.slot === b.slot &&
+        rank(a) < rank(b) &&
+        (a.boutiquePrice ?? 0) > (b.boutiquePrice ?? 0)
+      ) {
         problems.push(
           `clothing ${b.id}: a ${b.rarity} piece costs less than ${a.id} (${a.rarity})`,
         );

@@ -2,6 +2,7 @@ import {
   CLOTHING_BY_ID,
   isKeeperClothing,
   type ClothingPiece,
+  type ClothingRarity,
   type WardrobeSlot,
 } from '@heartpatch/shared';
 
@@ -19,6 +20,7 @@ export type KeeperItemPiece = ClothingPiece;
 export interface KeeperItem {
   readonly id: string;
   readonly slot: WardrobeSlot;
+  readonly rarity: ClothingRarity;
   readonly pieces: readonly KeeperItemPiece[];
 }
 
@@ -31,7 +33,7 @@ export function keeperItems(wearing: readonly string[]): KeeperItem[] {
   return wearing.flatMap((id) => {
     const item = CLOTHING_BY_ID.get(id);
     return item && isKeeperClothing(item)
-      ? [{ id: item.id, slot: item.slot, pieces: item.visual.pieces }]
+      ? [{ id: item.id, slot: item.slot, rarity: item.rarity, pieces: item.visual.pieces }]
       : [];
   });
 }

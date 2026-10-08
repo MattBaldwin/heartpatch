@@ -365,13 +365,15 @@ Every player is represented by a **Keeper**, a character drawn in the same soft 
 - Clothing is **cosmetic only**. It never affects battle stats, so no one can buy or trade their way to power.
 
 ### Getting clothing
-1. **Found:** small chance from capturing tiles, opening resource nodes, rescuing Hollowed squishies, and (Phase 3) presents. Some items only drop in specific terrain or seasons.
+1. **Found:** small chance from capturing tiles (better when the land is taken from another player), opening resource nodes, rescuing Hollowed squishies, winning wild battles, exploring, and (Phase 3) presents. Some items only drop in specific terrain or seasons.
 2. **Awarded through milestones:** see §24. Milestone items are signature pieces you can't get any other way, so wearing them shows what you've achieved.
 3. **Purchased** in the **Boutique** using **Patch Coins**, an in-game currency earned from battles, captures, daily care and milestones. Patch Coins belong to the **account** (like the wardrobe), with daily earning caps **[DEFAULT]** so extra maps or accounts aren't a coin farm. Patch Coins can **never be bought with real money** (§15). The Boutique stock rotates **[DEFAULT: daily]**, with seasonal racks during each season.
 4. **Traded and gifted** between players, using the same escrow, fair-trade bonus, generosity/warmth and regret-window rules as squishy trades (§10). Milestone items are **account-bound** and can't be traded, so they stay meaningful.
 
 ### Seasonal clothing
 Each season brings its own items: Halloween costumes (pumpkin hoods, ghost capes, witch hats, squishy onesies), Thanksgiving scarves and leaf crowns, Christmas sweaters and elf hats, New Year party hats. Like seasonal resources, seasonal clothing stays wearable year-round as keepsakes; it's just only *obtainable* during its season.
+
+**Special Halloween costumes (#261):** ten head-to-toe costumes from Common to Mythic. Common to Legendary also sell on the Boutique's Halloween rack at 3 to 8 busy days of coins; the Mythic Hollow Man is found-only. Costumes wear their rarity's material finish (sparkle, rainbow rim, Mythic shimmer), and each piece sits on a body socket so a costume fits every Keeper base. `pnpm sim:costumes` shows how long each tier takes to find or buy.
 
 ### Implementation notes
 - **Procedural Keepers:** a parametric base body (a few preset meshes) with attachment bones/sockets per slot, so clothing is modular meshes plus material/palette swaps driven from data, the same approach as squishy parts.

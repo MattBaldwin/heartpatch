@@ -9,6 +9,7 @@ import {
   type WardrobeSlot,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { hexToRgb } from '../params.js';
 import { keeperItems } from './keeper-items.js';
 import { keeperHash, keeperParams, type KeeperParams, type KeeperPiece } from './keeper-params.js';
 
@@ -17,6 +18,9 @@ const BASES = KEEPER_DATA.bases;
 const ALL_BUT_COSTUME = keeperItems(STARTER_CLOTHING);
 const itemFor = (slot: WardrobeSlot) => ALL_BUT_COSTUME.filter((i) => i.slot === slot);
 const GHOST_SHEET = keeperItems(['ghost-sheet']);
+/** Costume sockets that are mirrored pairs (#261). */
+const PAIRED = new Set(['shoes', 'legs', 'arms', 'hands']);
+const SLIPPERS = hexToRgb('#ffb84d');
 
 /**
  * Same config as `GOLDEN_CONFIG` in tests/e2e/keeper-gallery.spec.ts. This
@@ -257,8 +261,12 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
       for (const item of CLOTHING.filter(isKeeperClothing)) {
         const p = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, keeperItems([item.id]));
         const pieces = piecesOf(p, item.slot);
-        const copies = item.slot === 'shoes' ? 2 : 1;
-        expect(pieces.length, `${base.id} ${item.id}`).toBe(item.visual.pieces.length * copies);
+        // Shoes, and costume pieces on legs, arms, hands or shoes, come in mirrored pairs.
+        const copies = item.visual.pieces.reduce(
+          (n, piece) => n + (item.slot === 'shoes' || PAIRED.has(piece.on ?? 'costume') ? 2 : 1),
+          0,
+        );
+        expect(pieces.length, `${base.id} ${item.id}`).toBe(copies);
         for (const piece of pieces) {
           // Inside a box around the Keeper: nothing floats off on a small or tall base.
           expect(Math.abs(piece.at[0]), `${base.id} ${item.id} x`).toBeLessThan(bare.width * 1.6);
@@ -268,6 +276,41 @@ describe('wardrobe sockets (design doc §23: everything fits every Keeper)', () 
         }
       }
     }
+  });
+
+  it('puts head-to-toe costume pieces on the right body part of every base (#261)', () => {
+    for (const base of BASES) {
+      const p = keeperParams(
+        defaultKeeperConfig(base),
+        KEEPER_DATA,
+        keeperItems(['zippy-hedgehog']),
+      );
+      const pieces = piecesOf(p, 'costume');
+      const hood = pieces[0]!;
+      // The orange slippers (`on: 'shoes'`), one per foot.
+      const feet = pieces.filter((piece) => piece.color.join() === SLIPPERS.join());
+      expect(hood.at[1], base.id).toBeGreaterThan(p.height * 0.45);
+      expect(feet.length, base.id).toBe(2);
+      for (const foot of feet) expect(foot.at[1], base.id).toBeLessThan(p.height * 0.15);
+      expect(piecesOf(p, 'hair')).toEqual([]);
+    }
+  });
+
+  it('gives costumes their rarity finish and glowing pieces their glow (#261)', () => {
+    const base = BASES[0]!;
+    const wearing = (id: string) =>
+      piecesOf(keeperParams(defaultKeeperConfig(base), KEEPER_DATA, keeperItems([id])), 'costume');
+    const hollow = wearing('hollow-man-costume');
+    const eyes = hollow.filter((piece) => piece.glow);
+    expect(eyes.length).toBeGreaterThanOrEqual(2);
+    for (const eye of eyes) expect(eye.finish).toBeUndefined();
+    for (const piece of hollow.filter((x) => !x.glow)) expect(piece.finish).toBe('shimmer');
+    for (const piece of wearing('marigold-calavera')) expect(piece.finish).toBe('iridescent');
+    for (const piece of wearing('zippy-hedgehog')) expect(piece.finish).toBe('sparkle');
+    for (const piece of wearing('candy-corn-cutie')) expect(piece.finish).toBeUndefined();
+    // Other clothing stays plain vinyl, however rare (owner, #261).
+    const wings = keeperParams(defaultKeeperConfig(base), KEEPER_DATA, keeperItems(['bat-wings']));
+    for (const piece of piecesOf(wings, 'back')) expect(piece.finish).toBeUndefined();
   });
 
   it('draws worn ids from the catalog, skipping ones this client does not know', () => {

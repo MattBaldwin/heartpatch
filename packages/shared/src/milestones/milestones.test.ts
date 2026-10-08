@@ -189,6 +189,12 @@ describe('milestoneCredits', () => {
     expect(
       credits('clothing.found', { userId: KID, itemId: 'cloud-onesie' }).map((c) => c.trackId),
     ).toEqual(['lucky-star']);
+    // A Mythic find (#261) is rarer still, so it counts too.
+    expect(
+      credits('clothing.found', { userId: KID, itemId: 'hollow-man-costume' }).map(
+        (c) => c.trackId,
+      ),
+    ).toEqual(['lucky-star']);
   });
 
   it('ignores events no track reads, and payloads without a player', () => {

@@ -611,7 +611,7 @@ export const GAME_EVENTS = {
   },
   /**
    * A player found a piece of clothing (#43): a lucky drop from a gather, a rescue
-   * (#21) or a tile capture (#84). Clothing is account-level; the event goes on
+   * (#21), a tile capture (#84), a won wild battle or an explore find (#261). Clothing is account-level; the event goes on
    * the map where it was found. What caused it stays internal.
    */
   'clothing.found': {
@@ -619,7 +619,7 @@ export const GAME_EVENTS = {
       userId: z.uuid(),
       itemId: ContentIdSchema,
       source: ClothingDropSourceSchema,
-      /** The gather, capture or rescue that found it. */
+      /** The gather, capture, rescue, battle or explore find that found it. */
       refId: z.uuid(),
     }),
     public: z.object({ userId: z.uuid(), itemId: ContentIdSchema }),

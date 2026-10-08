@@ -19,5 +19,5 @@ export const BOUTIQUE_RULES: BoutiqueRules = {
   dailySlots: 6, // TUNE: design doc §23 [DEFAULT: daily]
   seasonalSlots: 4, // TUNE:
   minPrice: 5, // TUNE:
-  maxPrice: 200, // TUNE:
+  maxPrice: 320, // TUNE: the Legendary costume (#261)
 };

@@ -9,9 +9,9 @@ import type { MilestoneTrack } from '../../schemas/data/milestones.js';
  * give a secret away. TUNE: all of them.
  */
 
-/** Legendary pieces that can turn up as finds. */
+/** Legendary pieces, and the rarer Mythic ones (#261), that can turn up as finds. */
 const LEGENDARY_FINDS = CLOTHING.filter(
-  (c) => c.rarity === 'legendary' && c.sources.includes('found'),
+  (c) => (c.rarity === 'legendary' || c.rarity === 'mythic') && c.sources.includes('found'),
 ).map((c) => c.id);
 
 export const SECRET_MILESTONES: MilestoneTrack[] = [
@@ -103,7 +103,7 @@ export const SECRET_MILESTONES: MilestoneTrack[] = [
     tiers: [
       {
         threshold: 1,
-        goal: 'Find a legendary piece of clothing.',
+        goal: 'Find a Legendary or Mythic piece of clothing.',
         title: { id: 'lucky-star', name: 'Lucky Star' },
         coins: 50,
       },
