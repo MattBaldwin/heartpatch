@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { HollowStageSchema } from '../hollow-stage.js';
 import { formatDataIssues } from './issues.js';
 import { SpawnTableSchema } from './spawn-tables.js';
 
@@ -37,7 +38,7 @@ const HollowRulesShape = z.strictObject({
           z.strictObject({
             from: z.number().int().min(1),
             /** What kids see (moon stages on the "getting bolder" sheet). */
-            stage: z.enum(['watching', 'curious', 'bold', 'boldest']),
+            stage: HollowStageSchema,
             chances: z.array(z.number().int().min(1).max(100)).max(6),
           }),
         )

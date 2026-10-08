@@ -450,19 +450,39 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       const at = now();
       // Every owned tile, homesteads included (untended land's `outerTiles`
       // leaves them out: they never fade, but he can win them back).
-      const picked = (await createHollowRepo(tx).nightTiles(mapId)).flatMap((t) =>
+      const hollowRepo = createHollowRepo(tx);
+      const picked = (await hollowRepo.nightTiles(mapId)).flatMap((t) =>
         t.ownerUserId !== null && t.homeSlot === null && wanted.has(`${t.ownerUserId}/${hexKey(t)}`)
           ? [{ ...t, ownerUserId: t.ownerUserId, tendedAt: null }]
           : [],
       );
       if (picked.length === 0) return { wild: 0 };
       // Lock order (tech spec §7): the tiles (id order), their tending rows,
-      // then `rewildTiles` (defenders, buildings, fences, squishies, bags, `maps`).
+      // then `rewildTiles` (defenders, homesteads, buildings, fences,
+      // squishies, bags, `maps`).
       const ids = picked.map((t) => t.id);
       const owners = new Map((await repo.lockTiles(ids)).map((t) => [t.id, t.ownerUserId]));
       await repo.lockTending(ids);
-      // Still theirs (a retry finds the land already wild and skips it).
-      const going = picked.filter((t) => owners.get(t.id) === t.ownerUserId);
+      // Read again under the locks: a capture writes `claimed_at` under its tile's lock.
+      const claimed = new Map(
+        (await hollowRepo.nightTiles(mapId))
+          .filter((t) => ids.includes(t.id))
+          .map((t) => [t.id, t.claimedAt]),
+      );
+      const cooling = await hollowRepo.coolingTiles(mapId, at);
+      const decidedAt = row?.ranAt ?? at;
+      // Still theirs (a retry finds the land already wild and skips it), not
+      // claimed since the night was decided (won back after an earlier run of
+      // this step: theirs anew, never his again on a retry), and no battle
+      // for it since (a retry can come minutes later).
+      const going = picked.filter((t) => {
+        const claimedAt = claimed.get(t.id) ?? null;
+        return (
+          owners.get(t.id) === t.ownerUserId &&
+          (claimedAt === null || claimedAt <= decidedAt) &&
+          !cooling.has(t.id)
+        );
+      });
       if (going.length === 0) return { wild: 0 };
       const events = await rewildTiles(tx, map, going, night, at, 'hollow');
       for (const event of events) await repo.appendEvent(event);
@@ -553,6 +573,10 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       const takenRows = new Map((await store.squishiesById(takenIds)).map((s) => [s.id, s]));
       const stageOn = (night: LocalDate) =>
         joinedAt ? stageOf(keeperNight(map, joinedAt, night), rules) : 'watching';
+      // Where he can't strike (the Glade, or turned off at 0 %), he only watches.
+      const strikes =
+        (gameplayOverrides(map.kind)?.hollowManCanTake ?? true) &&
+        (await store.strengthPercent(mapId)) > 0;
       const reports: MorningReport[] = mine.map(({ night, outcome }) => ({
         night,
         taken: outcome.taken.flatMap((id) => {
@@ -590,7 +614,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         },
         tonight: {
           night: showNight,
-          stage: stageOn(showNight),
+          stage: strikes ? stageOn(showNight) : 'watching',
           ...showTimes(map, showNight, at),
         },
         reports,

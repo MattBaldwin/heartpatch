@@ -1,6 +1,8 @@
 import {
   ElementIdSchema,
   FeelingIdSchema,
+  HollowStageSchema,
+  WalkKindSchema,
   type LocalDate,
   type OwnedSquishy,
 } from '@heartpatch/shared';
@@ -43,7 +45,7 @@ const StoredOutcomeSchema = z.strictObject({
   /** The Keeper's night on the patch (#277), and how many strikes it rolled. */
   keeperNight: z.number().int().optional(),
   strikes: z.number().int().min(0).optional(),
-  stage: z.enum(['watching', 'curious', 'bold', 'boldest']).optional(),
+  stage: HollowStageSchema.optional(),
   /** Dark tiles he won back (applied by the night's reclaim step). */
   reclaimed: z.array(coords).optional(),
   walk: z
@@ -51,7 +53,7 @@ const StoredOutcomeSchema = z.strictObject({
       z.strictObject({
         q: z.number().int(),
         r: z.number().int(),
-        kind: z.enum(['enter', 'recoil', 'strike', 'leave']),
+        kind: WalkKindSchema,
       }),
     )
     .optional(),

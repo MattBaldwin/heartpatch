@@ -8,6 +8,7 @@ import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
 import { HexEdgeSchema, PlacedFenceSchema } from './fences.js';
 import { MoodIdSchema } from './data/care.js';
 import { ToolIdSchema } from './data/explore.js';
+import { HollowStageSchema, WalkKindSchema } from './hollow-stage.js';
 import { RaidOutcomeSchema } from './raids.js';
 import { LocalDateSchema } from './time.js';
 
@@ -81,9 +82,9 @@ const coords = { q: z.number().int(), r: z.number().int() };
 const walkSchema = (object: typeof z.object | typeof z.strictObject) =>
   object({
     userId: z.uuid(),
-    stage: z.enum(['watching', 'curious', 'bold', 'boldest']),
+    stage: HollowStageSchema,
     reclaimed: z.array(object(coords)),
-    walk: z.array(object({ ...coords, kind: z.enum(['enter', 'recoil', 'strike', 'leave']) })),
+    walk: z.array(object({ ...coords, kind: WalkKindSchema })),
   });
 
 /** A find worth telling the patch about (#199): never which items or how many. */

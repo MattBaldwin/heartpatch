@@ -324,6 +324,8 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         where: (t, { eq }) => eq(t.tileId, claimedId),
       });
       expect(tended?.tendedAt).toEqual(clock);
+      // …and records when, so the Hollow Man leaves it be on its first night (#277).
+      expect(tended?.claimedAt).toEqual(clock);
 
       // Events: started, attacked … ended, captured — in the battle's transaction.
       // (A level-40 starter also grows up here; #19's growth events sit in between.)

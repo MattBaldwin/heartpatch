@@ -24,7 +24,16 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, sessions, squishies, tileDefenders, users } from '../../db/schema.js';
+import {
+  battles,
+  buildings,
+  keepers,
+  sessions,
+  squishies,
+  tileAttacks,
+  tileDefenders,
+  users,
+} from '../../db/schema.js';
 import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -32,6 +41,8 @@ import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService } from '../battles/service.js';
 import { setDevDropChance } from '../wardrobe/drops.js';
 import { createHollowConsumer } from './consumer.js';
+import { homesteadOf, refreshHomesteads } from '../explore/homesteads.js';
+import { createTendingRepo } from '../territory/repo.js';
 import { createLandTending } from '../territory/tending.js';
 import { createHollowService, type HollowService } from './service.js';
 
@@ -41,13 +52,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
 /** A secret squishy: the owner's Hollow status carries its row since they've met it (rule 6). */
 const SECRET = SERVER_GAME_DATA.secretSpecies[0]!;
-// Noon in Denver on Oct 2 (MDT, UTC−6): tonight's nightfall is 03:00Z on Oct 3.
+// Noon in Denver on Oct 2 (MDT, UTC−6): tonight's nightfall is 01:00Z on Oct 3.
 const START = '2026-10-02T18:00:00Z';
 const TONIGHT = '2026-10-02';
-/**
- * No first-night grace, and one strike every night (#277's curve has its own
- * tests below): a patch made this afternoon can lose a squishy tonight.
- */
 /** The shipped grace, then one strike every night (the shipped curve rolls for it). */
 const GRACE_THEN_ONE: HollowRules = {
   ...HOLLOW_RULES,
@@ -59,6 +66,10 @@ const GRACE_THEN_ONE: HollowRules = {
     ],
   },
 };
+/**
+ * No first-night grace, and one strike every night (#277's curve has its own
+ * tests below): a patch made this afternoon can lose a squishy tonight.
+ */
 const NO_GRACE: HollowRules = {
   ...HOLLOW_RULES,
   graceNights: 0,
@@ -754,6 +765,98 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         `select completed_at from tile_explore where tile_id = '${tile.id}' and user_id = '${kid.id}'`,
       )) as unknown as { completed_at: unknown }[];
       expect(row?.completed_at).not.toBeNull();
+    });
+
+    it('skips land mid-fight, pauses homesteads cut off from home, and never rewilds land won back since', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid); // gentle: one strike a night
+      const home = await homeTilesOf(mapId, kid);
+      const seed = { q: home[3]!.q, r: home[3]!.r };
+      const all = await db.query.tiles.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) });
+      // A chain out from home: A next to the home ring, B one tile further.
+      const a = all.find(
+        (t) =>
+          t.homeSlot === null &&
+          t.ownerUserId === null &&
+          hexDistance(t, seed) === 2 &&
+          all.some(
+            (b) =>
+              b.homeSlot === null &&
+              b.ownerUserId === null &&
+              hexDistance(b, seed) === 3 &&
+              hexDistance(b, t) === 1,
+          ),
+      )!;
+      const b = all.find(
+        (t) =>
+          t.homeSlot === null &&
+          t.ownerUserId === null &&
+          hexDistance(t, seed) === 3 &&
+          hexDistance(t, a) === 1,
+      )!;
+      for (const t of [a, b]) {
+        await db.execute(`update tiles set owner_user_id = '${kid.id}' where id = '${t.id}'`);
+        // Both explored and joined: homesteads.
+        await db.execute(
+          `insert into tile_explore (user_id, tile_id, map_id, layout, terrain, searched, spot_count, completed_at, joined_at)
+           values ('${kid.id}', '${t.id}', '${mapId}', 1, '${t.terrain}', 7, 3, '${clock.toISOString()}', '${clock.toISOString()}')`,
+        );
+      }
+      // B, the farthest, is in a battle's cooldown: he can't win it back tonight.
+      const [battle] = await db
+        .insert(battles)
+        .values({
+          mapId,
+          kind: 'tile',
+          playerUserId: kid.id,
+          seed: 's',
+          contentHash: 'c',
+          setup: {},
+          state: {},
+        })
+        .returning({ id: battles.id });
+      await db.insert(tileAttacks).values({
+        mapId,
+        tileId: b.id,
+        attackerUserId: kid.id,
+        battleId: battle!.id,
+        startedAt: clock,
+        cooldownUntil: new Date(clock.getTime() + DAY_MS),
+        lastActionAt: clock,
+      });
+      const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
+      await hollow.runNightfall(mapId, TONIGHT);
+      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([{ q: a.q, r: a.r }]);
+      expect(await hollow.reclaim(mapId, TONIGHT)).toEqual({ wild: 1 });
+      expect(await ownerOf(a.id)).toBeNull();
+      // B is cut off from home: it pauses (#199), and everyone hears so.
+      const exploreOf = async (tileId: string) =>
+        (await db.query.tileExplore.findFirst({
+          where: (t, { and, eq }) => and(eq(t.tileId, tileId), eq(t.userId, kid.id)),
+        }))!;
+      expect((await exploreOf(b.id)).pausedAt).not.toBeNull();
+      const paused = (await eventsOf(mapId)).filter((e) => e.type === 'homestead.paused');
+      expect(paused.map((e) => e.payload)).toEqual([
+        { userId: kid.id, tiles: [{ q: b.q, r: b.r }] },
+      ]);
+      // A keeps its explore progress: won back, it's a homestead again at once.
+      expect((await exploreOf(a.id)).joinedAt).not.toBeNull();
+      clock.setTime(clock.getTime() + 60_000);
+      await db.transaction(async (tx) => {
+        await tx.execute(`update tiles set owner_user_id = '${kid.id}' where id = '${a.id}'`);
+        await createTendingRepo(tx).claim(mapId, a.id, clock);
+        await refreshHomesteads(tx, mapId, [kid.id], clock);
+      });
+      expect(homesteadOf(await exploreOf(a.id))).toBe('joined');
+      expect(homesteadOf(await exploreOf(b.id))).toBe('joined');
+      expect(
+        (await db.query.tileTending.findFirst({ where: (t, { eq }) => eq(t.tileId, a.id) }))!
+          .claimedAt,
+      ).toEqual(clock);
+      // A retry of tonight's step leaves the land won back alone.
+      expect(await hollow.reclaim(mapId, TONIGHT)).toEqual({ wild: 0 });
+      expect(await ownerOf(a.id)).toBe(kid.id);
     });
 
     it('strikes at most once a night on a gentle patch, whatever the curve', async () => {

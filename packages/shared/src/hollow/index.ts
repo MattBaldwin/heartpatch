@@ -337,7 +337,7 @@ export function hollowWalk(input: {
   const mine = new Set(input.land.map(hexKey));
   const border = input.land
     .filter((h) => hexNeighbors(h).some((n) => !mine.has(hexKey(n))))
-    .sort((a, b) => (a.q - b.q) * 1000 + (a.r - b.r));
+    .sort((a, b) => a.q - b.q || a.r - b.r);
   const struck = new Set(input.strikes.map(hexKey));
   const lit = border.filter((h) => input.safe.has(hexKey(h)) && !struck.has(hexKey(h)));
   const rng = Rng.fromSeed(input.seed);

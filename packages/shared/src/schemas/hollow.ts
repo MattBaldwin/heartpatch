@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
+import { HollowStageSchema, WalkKindSchema } from './hollow-stage.js';
 import { SpeciesSchema } from './data/species.js';
 import { ItemCountsSchema } from './inventory.js';
 import { OwnedSquishySchema } from './squishies.js';
@@ -11,14 +12,11 @@ import { LocalDateSchema } from './time.js';
 // squishies from the Hollow. The night's seed, who was exposed on other
 // players' land and the shadow guardians never appear here (CLAUDE.md rule 6).
 
-/** The moon stage the Hollow Man is at for a Keeper (#277): Watching, Curious, Bold, Boldest. */
-export const HollowStageSchema = z.enum(['watching', 'curious', 'bold', 'boldest']);
-
 /** One stop on the Hollow Man's walk (#277), which the client plays as a show. */
 export const WalkPointSchema = z.object({
   q: HexSchema.shape.q,
   r: HexSchema.shape.r,
-  kind: z.enum(['enter', 'recoil', 'strike', 'leave']),
+  kind: WalkKindSchema,
 });
 export type WalkPointView = z.infer<typeof WalkPointSchema>;
 
