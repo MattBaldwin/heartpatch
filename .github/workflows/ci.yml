@@ -90,18 +90,19 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.63.0-noble # = PLAYWRIGHT_VERSION
       options: --ipc=host
     # Room for the image pull and setup (about 5 min) and the slowest group's
-    # tests (group 5, the catch-all, about 25 min and growing; see #246).
+    # tests (about 10 min since #296 rebalanced them; the catch-all had grown
+    # to 28 min).
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         project: [iphone-webkit, ipad-webkit]
-        # Five groups of spec files balanced by measured duration (E2E_GROUPS
-        # in apps/client/playwright.config.ts); group 5 is every spec not
+        # Six groups of spec files balanced by measured duration (E2E_GROUPS
+        # in apps/client/playwright.config.ts); group 6 is every spec not
         # listed there. Playwright's --shard splits by test count in file
         # order, which left ipad shard 1 of 3 at ~12 min while the others took
         # 3-4. The config fails the run if this count doesn't match its own.
-        group: [1, 2, 3, 4, 5]
+        group: [1, 2, 3, 4, 5, 6]
     services:
       # Named "db" like the compose service, which the seed script's
       # refuse-a-remote-database guard allows.
@@ -153,9 +154,9 @@ jobs:
       - run: pnpm --filter @heartpatch/shared build
       - run: pnpm db:migrate && pnpm db:seed
 
-      - name: E2E (${{ matrix.project }}, group ${{ matrix.group }}/5)
+      - name: E2E (${{ matrix.project }}, group ${{ matrix.group }}/6)
         env:
-          HP_E2E_GROUP: ${{ matrix.group }}/5
+          HP_E2E_GROUP: ${{ matrix.group }}/6
         run: >-
           pnpm --filter @heartpatch/client exec playwright test
           --project=${{ matrix.project }}

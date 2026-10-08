@@ -46,6 +46,12 @@ test('tapping the version line opens What’s new with the real entries', async 
   await expect(page.getByTestId('keeper-menu')).toHaveAttribute('aria-expanded', 'false');
   // Level 2: the sheet's own title. An entry can be called "What's new" too.
   await expect(sheet.getByRole('heading', { name: 'What’s new', level: 2 })).toBeVisible();
+  // The title shows at once; the entries follow once changelog.json has loaded.
+  await expect
+    .poll(async () => (await hook<{ entries: number }>(page, 'whatsNew'))?.entries, {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(0);
   await expect(sheet.locator('[data-entry="220-whats-new"]')).toBeVisible();
   // The browser may refuse the clipboard; either way the chip answers.
   await sheet.getByRole('button', { name: 'Copy' }).tap();

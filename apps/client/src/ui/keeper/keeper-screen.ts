@@ -1,7 +1,11 @@
 import {
+  completeKeeperConfig,
   defaultKeeperConfig,
   KEEPER_DATA,
+  KeeperEyesSchema,
   type KeeperConfig,
+  type KeeperEyes,
+  type KeeperFaceLine,
   type KeeperSwatch,
   type PublicUser,
 } from '@heartpatch/shared';
@@ -74,6 +78,25 @@ export const KEEPER_TEXT = {
   settingsButton: 'Change Keeper',
   /** Back in the lobby after a change. */
   changed: 'Looking good, Keeper!',
+  /** The rows (#289), in order down the card. */
+  rows: {
+    look: 'Starting look',
+    skin: 'Skin',
+    eyes: 'Eyes',
+    eyeColor: 'Eye color',
+    brows: 'Brows',
+    mouth: 'Mouth',
+    extras: 'Extras',
+    hairstyle: 'Hair style',
+    hair: 'Hair',
+    outfit: 'Outfit',
+  },
+  /** Skin tones have no names: "Skin tone 1" (lightest) to "Skin tone 10". */
+  skinTone: (n: number) => `Skin tone ${String(n)}`,
+  eyeShapes: { round: 'Round', oval: 'Oval', happy: 'Happy', sleepy: 'Sleepy' } satisfies Record<
+    KeeperEyes,
+    string
+  >,
 } as const;
 
 const bases = KEEPER_DATA.bases;
@@ -89,12 +112,8 @@ export function styleOf(config: KeeperConfig): string | undefined {
 
 /** `config` wearing hairstyle `id`; the base's own style is stored as none. */
 export function withHairstyle(config: KeeperConfig, id: string): KeeperConfig {
-  const rest: KeeperConfig = {
-    base: config.base,
-    hairColor: config.hairColor,
-    eyeColor: config.eyeColor,
-    outfit: config.outfit,
-  };
+  const rest: KeeperConfig = { ...config };
+  delete rest.hairstyle;
   const own = bases.find((b) => b.id === config.base)?.hairstyle;
   return id === own ? rest : { ...rest, hairstyle: id };
 }
@@ -172,7 +191,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   };
 
   const pick = (next: KeeperConfig) => {
-    picked = next;
+    picked = completeKeeperConfig(next, KEEPER_DATA);
     refresh();
     preview?.show(picked, performance.now(), true);
     options.invalidate();
@@ -241,10 +260,28 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
 
   function renderRows(): void {
     choices = [];
+    const toneOf = (id: string) => KEEPER_DATA.skinTones.find((t) => t.id === id)?.color ?? '';
     const hairOf = (id: string) => KEEPER_DATA.hairColors.find((c) => c.id === id)?.color ?? '';
+    const T = KEEPER_TEXT.rows;
+    /** A row of named line styles (brows or mouths). */
+    const lineRow = (legend: string, lines: readonly KeeperFaceLine[], field: 'brows' | 'mouth') =>
+      row(
+        legend,
+        ...lines.map((l) =>
+          choice(
+            `${legend}: ${l.name}`,
+            () => picked[field] === l.id,
+            () => {
+              pick({ ...picked, [field]: l.id });
+            },
+            'keeper-style',
+            el('span', { class: 'keeper-base-name' }, l.name),
+          ),
+        ),
+      );
     rows.replaceChildren(
       row(
-        'Keeper',
+        T.look,
         ...bases.map((b) =>
           choice(
             b.name,
@@ -257,17 +294,70 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
             el(
               'span',
               { class: 'keeper-faces' },
-              dot(b.skin),
+              dot(toneOf(b.skinTone)),
               dot(hairOf(b.hairColor), 'keeper-hair-dot'),
             ),
             el('span', { class: 'keeper-base-name' }, b.name),
           ),
         ),
       ),
-      // Any Keeper can wear any style (owner decision 2026-10-06); picking a
-      // Keeper above goes back to its own.
+      // The Keeper builder (#289): every part is a choice, for every Keeper.
       row(
-        'Hair style',
+        T.skin,
+        ...KEEPER_DATA.skinTones.map((tone, i) =>
+          choice(
+            KEEPER_TEXT.skinTone(i + 1),
+            () => picked.skinTone === tone.id,
+            () => {
+              pick({ ...picked, skinTone: tone.id });
+            },
+            'keeper-swatch',
+            dot(tone.color),
+          ),
+        ),
+      ),
+      row(
+        T.eyes,
+        ...KeeperEyesSchema.options.map((eyes) =>
+          choice(
+            `${T.eyes}: ${KEEPER_TEXT.eyeShapes[eyes]}`,
+            () => picked.eyes === eyes,
+            () => {
+              pick({ ...picked, eyes });
+            },
+            'keeper-style',
+            el('span', { class: 'keeper-base-name' }, KEEPER_TEXT.eyeShapes[eyes]),
+          ),
+        ),
+      ),
+      swatchRow(T.eyeColor, KEEPER_DATA.eyeColors, 'eyeColor'),
+      lineRow(T.brows, KEEPER_DATA.brows, 'brows'),
+      lineRow(T.mouth, KEEPER_DATA.mouths, 'mouth'),
+      // Any number, all off to start, and every Keeper can pick any.
+      row(
+        T.extras,
+        ...KEEPER_DATA.faceExtras.map((extra) =>
+          choice(
+            `${T.extras}: ${extra.name}`,
+            () => picked.extras?.includes(extra.id) ?? false,
+            () => {
+              const on = picked.extras ?? [];
+              pick({
+                ...picked,
+                extras: on.includes(extra.id)
+                  ? on.filter((id) => id !== extra.id)
+                  : [...on, extra.id],
+              });
+            },
+            'keeper-style',
+            el('span', { class: 'keeper-base-name' }, extra.name),
+          ),
+        ),
+      ),
+      // Any Keeper can wear any style (owner decision 2026-10-06); picking a
+      // starting look above goes back to its own.
+      row(
+        T.hairstyle,
         ...KEEPER_DATA.hairstyles.map((h) =>
           choice(
             `Hair style: ${h.name}`,
@@ -280,10 +370,9 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
           ),
         ),
       ),
-      swatchRow('Hair', KEEPER_DATA.hairColors, 'hairColor'),
-      swatchRow('Eyes', KEEPER_DATA.eyeColors, 'eyeColor'),
+      swatchRow(T.hair, KEEPER_DATA.hairColors, 'hairColor'),
       row(
-        'Outfit',
+        T.outfit,
         ...KEEPER_DATA.outfits.map((o) =>
           choice(
             `Outfit: ${o.name}`,
@@ -370,7 +459,8 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     save.textContent = KEEPER_TEXT.saving;
     error.textContent = '';
     try {
-      saved = await api.save(picked);
+      // The server leaves out choices that are the starting look's own (#289).
+      saved = completeKeeperConfig(await api.save(picked), KEEPER_DATA);
       if (mine !== session) return;
       const first = mode === 'first';
       close(true);
@@ -399,7 +489,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     try {
       const keeper = await api.get();
       if (mine !== session) return;
-      saved = keeper;
+      saved = keeper && completeKeeperConfig(keeper, KEEPER_DATA);
       if (keeper) {
         close(false);
         options.onReady(who);
