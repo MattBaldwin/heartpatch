@@ -1006,8 +1006,8 @@ export class MapScene {
 }
 
 /**
- * A soft glow over a whole tile (homesteads, #199), built like the safe
- * glow: brightest at the rim, so the tile's own colour still shows.
+ * A soft glow over a tile's middle (homesteads, #199): a bright ring
+ * inside the owner's border, so the tile's colour and border still show.
  */
 function buildTileGlow(
   scene: Scene,
@@ -1020,10 +1020,11 @@ function buildTileGlow(
     loftRoundedHex(
       TILE_RADIUS,
       [
+        // Brightest in a ring, then gone before the owner's border ribbon
+        // (#278, `BORDER.ribbon.inner`), so its line style and icon still show.
         { scale: 0.5, y: DOME * 0.75, alpha: look.fill },
-        { scale: 0.8, y: DOME * 0.25, alpha: look.fill },
-        { scale: 0.92, y: -BEVEL * 0.25, alpha: look.edge },
-        { scale: 1, y: -BEVEL, alpha: 0 },
+        { scale: 0.66, y: DOME * 0.5, alpha: look.edge },
+        { scale: 0.8, y: DOME * 0.25, alpha: 0 },
       ],
       {
         corner: CORNER,
