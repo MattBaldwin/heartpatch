@@ -962,35 +962,10 @@ mountAuth(document.body, {
   },
 });
 
-await boot(canvas, {
-  preference: parseRendererPreference(params.get('renderer')),
-  createRenderer,
-  freshCanvas,
-  mount: (renderer, target) => {
-    stage = mounted(mountStage(renderer, target, sceneBuilder, tier));
-    return currentStage;
-  },
-  onError: showRendererError,
-}).catch(showRendererError);
-
 if (import.meta.env.DEV) {
-  const badge = document.createElement('div');
-  badge.className = 'dev-status';
-  badge.dataset['testid'] = 'dev-status';
-  badge.textContent = 'server: …';
-  document.body.append(badge);
-  fetchHealth()
-    .then((health) => {
-      badge.textContent = `server: ${health.status} (${health.version})`;
-    })
-    .catch(() => {
-      badge.textContent = 'server: offline';
-    });
-
-  // Read-only hook for the Playwright smoke test; dev builds only. Installed
-  // before anything else here awaits: the stage marks the canvas ready on its
-  // first drawn frame, which the tests wait for before reading the hook, and
-  // that frame is only a task away once boot() has resolved.
+  // Read-only hook for the Playwright tests; dev builds only. Installed
+  // before boot() so it exists before the first drawn frame marks the canvas
+  // ready: the getters read whichever stage is on screen (null or 0 before one).
   window.__heartpatch = {
     renderer: () => stage?.renderer.kind ?? null,
     quality: () => stage?.quality.snapshot ?? null,
@@ -1025,6 +1000,32 @@ if (import.meta.env.DEV) {
     whatsNew: () => whatsNew.debug,
     audio: () => audio.debug,
   };
+}
+
+await boot(canvas, {
+  preference: parseRendererPreference(params.get('renderer')),
+  createRenderer,
+  freshCanvas,
+  mount: (renderer, target) => {
+    stage = mounted(mountStage(renderer, target, sceneBuilder, tier));
+    return currentStage;
+  },
+  onError: showRendererError,
+}).catch(showRendererError);
+
+if (import.meta.env.DEV) {
+  const badge = document.createElement('div');
+  badge.className = 'dev-status';
+  badge.dataset['testid'] = 'dev-status';
+  badge.textContent = 'server: …';
+  document.body.append(badge);
+  fetchHealth()
+    .then((health) => {
+      badge.textContent = `server: ${health.status} (${health.version})`;
+    })
+    .catch(() => {
+      badge.textContent = 'server: offline';
+    });
 
   const { mountDevOverlay } = await import('./engine/dev-overlay.js');
   mountDevOverlay(() => stage);

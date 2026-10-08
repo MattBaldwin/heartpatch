@@ -134,8 +134,12 @@ test('renders the Babylon scene and reaches the server', async ({ page }) => {
   expect(box?.height).toBe(viewport?.height);
 
   await expect(page.locator('[data-testid="dev-status"]')).toHaveText(/server: ok/);
+  // Any tier: the game starts on high (tiers.test.ts), but a cold load on a
+  // software renderer can crawl (every frame over a second while shaders
+  // compile), and the governor then drops straight to low (governor.ts `crawl`)
+  // and may climb back through medium.
   await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(
-    /^(\d+ fps|idle) · WebGL2 · high · \d\.\d\dx$/,
+    /^(\d+ fps|idle) · WebGL2 · (high|medium|low) · \d\.\d\dx$/,
     { timeout: 15_000 },
   );
   expect(errors).toEqual([]);
@@ -225,6 +229,10 @@ test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }
   test.setTimeout(180_000); // software rendering at iPad resolution is slow in CI
   await page.goto('/');
   await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  // Gestures go to the stage on screen, so wait until it has drawn a frame.
+  // Software rendering at iPad size can block the page for several seconds
+  // right after the first frame (shader work), so one read can take that long.
+  await expect.poll(() => draws(page), { timeout: 30_000 }).toBeGreaterThan(0);
   const vp = page.viewportSize()!;
   const mid = { x: vp.width / 2, y: vp.height / 2 };
   // Gestures scale with the screen so iPhone and iPad move the map by similar amounts.
