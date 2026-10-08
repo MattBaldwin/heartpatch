@@ -32,6 +32,7 @@ describe('trading posts at mapgen (#269)', () => {
     ]);
   });
 
+  // 600 whole maps: about 5 s under CI's coverage run, so more than the 5 s default.
   it('keeps the hard rules and the fairness check on 200 seeds of every layout', () => {
     for (const n of PLAYER_COUNTS) {
       const { radius } = mapLayout(GAME_DATA, n);
@@ -55,7 +56,7 @@ describe('trading posts at mapgen (#269)', () => {
         expect(Math.max(...nearest) - Math.min(...nearest)).toBeLessThanOrEqual(1);
       }
     }
-  });
+  }, 30_000);
 
   it('makes post tiles neutral with no node and no guardians', () => {
     for (const n of PLAYER_COUNTS) {
