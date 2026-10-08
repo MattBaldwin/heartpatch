@@ -54,9 +54,7 @@ export const FACTORY_TEXT = {
   started: (n: number, icon: string) => `Off it goes! ${String(n)} ${icon} on the way.`,
   stopTitle: 'Stop this batch?',
   stopKeep: (n: number, name: string) =>
-    n === 0
-      ? `Nothing's made yet.`
-      : `You keep the ${String(n)} ${manyOf(name, n)} already made.`,
+    n === 0 ? `Nothing's made yet.` : `You keep the ${String(n)} ${manyOf(name, n)} already made.`,
   stopBack: (n: number, what: string) =>
     `${String(n)} ${n === 1 ? "isn't" : "aren't"} finished yet (the one being made too). You get back ${what}.`,
   stopYes: 'Stop batch',
