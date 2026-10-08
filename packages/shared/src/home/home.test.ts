@@ -70,7 +70,7 @@ describe('Hearthfire fuel (tech spec §7)', () => {
       nightsLeft: 0,
       lit: false,
     });
-    expect(fuelSpace(fire, null, at('2026-10-02', 12), RULES)).toBe(7);
+    expect(fuelSpace(fire, null, at('2026-10-02', 12), RULES)).toBe(8);
   });
 
   it('counts down one night per nightfall without anything being decremented', () => {
@@ -92,13 +92,13 @@ describe('Hearthfire fuel (tech spec §7)', () => {
 
   it('caps at the most nights it can hold, counted from tonight', () => {
     const local = at('2026-10-02', 12);
-    expect(addFuel(fire, null, local, 9, RULES)).toBe('2026-10-08'); // 7 nights: Oct 2–8
-    const full = addFuel(fire, null, local, 7, RULES);
+    expect(addFuel(fire, null, local, 9, RULES)).toBe('2026-10-09'); // 8 nights: Oct 2–9
+    const full = addFuel(fire, null, local, 8, RULES);
     expect(fuelSpace(fire, full, local, RULES)).toBe(0);
     expect(addFuel(fire, full, local, 1, RULES)).toBe(full);
     // A night later one more fits.
     expect(fuelSpace(fire, full, at('2026-10-03', 12), RULES)).toBe(1);
-    expect(addFuel(fire, full, at('2026-10-03', 12), 1, RULES)).toBe('2026-10-09');
+    expect(addFuel(fire, full, at('2026-10-03', 12), 1, RULES)).toBe('2026-10-10');
   });
 
   it('tops up from tonight when the fire went out long ago', () => {

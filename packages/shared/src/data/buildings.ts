@@ -18,7 +18,7 @@ export const BUILDINGS: Building[] = [
     slot: 'centre',
     fuelResource: 'emberwood',
     fuelPerNight: 1, // TUNE:
-    maxFuelNights: 7, // TUNE: owner decision 2026-10-08 (#277): a week away keeps every fire lit
+    maxFuelNights: 8, // TUNE: owner decision 2026-10-08 (#277): a full week away, home after 7 PM, keeps every fire lit
     levels: [
       // Radii 1 / 1 / 2 (owner decision 2026-10-08, #277): every bit of land
       // needs a fire's light, so one fire covers less.
@@ -41,7 +41,7 @@ export const BUILDINGS: Building[] = [
     refundPercent: 100, // TUNE:
     fuelResource: 'emberwood',
     fuelPerNight: 1, // TUNE:
-    maxFuelNights: 7, // TUNE: same as a plain Hearthfire
+    maxFuelNights: 8, // TUNE: same as a plain Hearthfire
     // TUNE: owner decision 2026-10-08 (#277): lights its ring, like a new Hearthfire.
     levels: [{ cost: { 'jack-o-lantern-hearthfire': 1 }, safeRadius: 1 }],
   },
