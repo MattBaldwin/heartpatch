@@ -10,6 +10,7 @@ import {
   jobOf,
   teamProblem,
   trainingProgress,
+  trainingProgressAround,
   workCycleSeconds,
   workProgress,
   workProgressAround,
@@ -332,6 +333,47 @@ describe('Training Grounds XP (owner decision 2026-10-06)', () => {
     expect(full).toEqual({ xp: 120, full: true, nextSinceMs: 30 * HOUR });
     expect(trainingProgress(0, 24 * HOUR, 5, rules)).toMatchObject({ xp: 120, full: true });
     expect(JOB_RULES.training.maxHours).toBe(24);
+  });
+});
+
+describe('trainingProgressAround (#277: a trainee on a napping homestead earns nothing)', () => {
+  const HOUR = 60 * 60 * 1000;
+  const rules = { training: { maxHours: 24 } };
+
+  it('is trainingProgress with no pause', () => {
+    expect(trainingProgressAround(0, 3 * HOUR, 5, rules, null)).toEqual(
+      trainingProgress(0, 3 * HOUR, 5, rules),
+    );
+  });
+
+  it('leaves an ended pause out of the count', () => {
+    // 2 hours of training, 3 napping, 1 more: 3 hours' worth.
+    const p = trainingProgressAround(0, 6 * HOUR, 5, rules, { fromMs: 2 * HOUR, toMs: 5 * HOUR });
+    expect(p).toEqual({ xp: 15, full: false, nextSinceMs: 6 * HOUR });
+  });
+
+  it('earns nothing past a pause that is still on, and counts on once it ends', () => {
+    const pause = { fromMs: 2 * HOUR, toMs: null };
+    const napping = trainingProgressAround(0, 9 * HOUR, 5, rules, pause);
+    expect(napping).toEqual({ xp: 10, full: false, nextSinceMs: 2 * HOUR });
+    // Settled while napping: nothing more lands until it wakes.
+    expect(trainingProgressAround(napping.nextSinceMs, 12 * HOUR, 5, rules, pause).xp).toBe(0);
+    const woke = { fromMs: 2 * HOUR, toMs: 12 * HOUR };
+    expect(trainingProgressAround(napping.nextSinceMs, 13 * HOUR, 5, rules, woke).xp).toBe(5);
+  });
+
+  it('never pays a point twice across settles around a pause', () => {
+    const pause = { fromMs: 90 * 60 * 1000, toMs: 4 * HOUR };
+    let since = 0;
+    let total = 0;
+    let last = 0;
+    for (let now = 0; now <= 8 * HOUR; now += 11 * 60 * 1000 + 7) {
+      const step = trainingProgressAround(since, now, 8, rules, pause);
+      total += step.xp;
+      since = step.nextSinceMs;
+      last = now;
+    }
+    expect(total).toBe(trainingProgressAround(0, last, 8, rules, pause).xp);
   });
 });
 

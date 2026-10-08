@@ -66,7 +66,7 @@ import {
   type TerritoryTileRow,
   type TileAttackRow,
 } from './repo.js';
-import { takeDownOnLostLand } from '../buildings/service.js';
+import { finishLostTraining, takeDownOnLostLand } from '../buildings/service.js';
 import { createFencesRepo } from '../fences/repo.js';
 import { FENCE_DATA, takeDownFencesOnCapture, toPlacedFence } from '../fences/service.js';
 import { refreshHomesteads } from '../explore/homesteads.js';
@@ -758,8 +758,16 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       const lostFires = map
         ? await takeDownOnLostLand(tx, attack.mapId, [tile.id], at, map.timeZone, 'captured')
         : [];
-      const refund = lostFires.find((l) => l.ownerUserId === tile.ownerUserId)?.refund ?? null;
-      if (refund) await repo.setLostFireRefund(attack.id, refund);
+      // The Challenge report's line: a fire and Training Grounds (#277) on
+      // the tile come back together.
+      const mine = lostFires.filter((l) => l.ownerUserId === tile.ownerUserId);
+      if (mine.length > 0) {
+        const refund: Record<string, number> = {};
+        for (const l of mine) {
+          for (const [id, n] of Object.entries(l.refund)) refund[id] = (refund[id] ?? 0) + n;
+        }
+        await repo.setLostFireRefund(attack.id, refund);
+      }
       // Its fence segments still standing are destroyed, nothing back
       // (#203, owner decision 2026-10-07); the capturer's own that faced it,
       // now on inner edges of their land, come down for the take-down share
@@ -818,6 +826,9 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
             refId: l.fenceId,
           })),
         ].filter((r) => Object.keys(r.items).length > 0),
+        // Trainees at Training Grounds that came down land what they earned (#277).
+        squishies: lostFires.flatMap((l) => l.trainees),
+        afterRefunds: (inner, when) => finishLostTraining(inner, attack.mapId, lostFires, when),
       };
     },
   };

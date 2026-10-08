@@ -11,7 +11,7 @@ import {
   jobOf,
   teamProblem,
   tonightOf,
-  trainingProgress,
+  trainingProgressAround,
   workCycleSeconds,
   workProgressAround,
   EXPLORE_RULES,
@@ -84,7 +84,8 @@ const MESSAGES = {
   teamFull: 'Your team is full! Take someone off first.',
   changed: 'Something just changed. Try again!',
   notReady: 'Nothing ready yet. Check back soon!',
-  noGrounds: 'Build Training Grounds at home first!',
+  noGrounds: 'Build Training Grounds on a homestead first! 🏡',
+  groundsNapping: 'These Training Grounds are napping. Join their homestead back up to home first!',
   groundsFull: 'The Training Grounds are full! Upgrade them for more room.',
   groundsFullTop: 'The Training Grounds are full! Give someone else a turn first.',
 } as const;
@@ -165,19 +166,52 @@ export function trainingLevelOf(
   return grounds?.levels[Math.min(row.level, grounds.levels.length) - 1] ?? null;
 }
 
+/**
+ * The Training Grounds a Train command means (read before the tile locks, and
+ * checked again under them): the one asked for, else the first of mine with
+ * room on a homestead that isn't napping, else my first. Null: none of mine.
+ */
+async function pickGrounds(
+  tx: Executor,
+  mapId: string,
+  userId: string,
+  buildingRowId: string | undefined,
+): Promise<BuildingRow | null> {
+  const mine = (await createBuildingsRepo(tx).listOwned(mapId, userId)).filter(
+    (b) => trainingLevelOf(b) !== null,
+  );
+  if (buildingRowId !== undefined) return mine.find((b) => b.id === buildingRowId) ?? null;
+  const explore = createExploreRepo(tx);
+  const jobs = createSquishyJobsRepo(tx);
+  for (const b of mine) {
+    const room = (trainingLevelOf(b)?.capacity ?? 0) > (await jobs.countTrainees(b.id));
+    if (room && homesteadOf(await explore.findRow(userId, b.tileId)) === 'joined') return b;
+  }
+  return mine[0] ?? null;
+}
+
 /** A trainee's XP at `at`: how much per hour, and what's waiting to land. Null if it isn't training. */
 export function trainingAt(row: Pick<JobRow, 'training'>, at: Date) {
   const training = row.training;
   if (!training) return null;
   const level = trainingLevelOf({ buildingId: training.buildingId, level: training.level });
   if (!level) return null;
-  const progress = trainingProgress(
+  // A homestead cut off from home naps (#277): the pause is left out of the count.
+  const homestead = training.homestead;
+  const progress = trainingProgressAround(
     training.since.getTime(),
     at.getTime(),
     level.xpPerHour,
     JOB_RULES,
+    homestead ? workPauseOf(homestead) : null,
   );
-  return { buildingRowId: training.buildingRowId, xpPerHour: level.xpPerHour, progress };
+  return {
+    buildingRowId: training.buildingRowId,
+    tile: training.tile,
+    xpPerHour: level.xpPerHour,
+    napping: homesteadOf(homestead) === 'paused',
+    progress,
+  };
 }
 
 /**
@@ -429,6 +463,10 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
       const training = trainingAt(row, at);
       const trainingStatus: TrainingStatus | null = training && {
         buildingId: training.buildingRowId,
+        q: training.tile.q,
+        r: training.tile.r,
+        firelit: safe.has(hexKey(training.tile)),
+        napping: training.napping,
         xpPerHour: training.xpPerHour,
         xpReady: training.progress.xp,
         full: training.progress.full,
@@ -450,9 +488,28 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           battleXpPercent(wins.get(row.squishy.id) ?? 0, GROWTH_RULES) < 100 ? fullXpBack : null,
       };
     });
-    // One per home (`maxPerHome: 1`, checked by the data tests).
-    const grounds = buildings.find((b) => trainingLevelOf(b) !== null);
-    const groundsLevel = grounds ? trainingLevelOf(grounds) : null;
+    // One a homestead (#277), each with its room and its night.
+    const napping = new Set(
+      explored
+        .filter((e) => homesteadOf(e) === 'paused')
+        .map((e) => `${String(e.q)},${String(e.r)}`),
+    );
+    const grounds = buildings.flatMap((b) => {
+      const level = trainingLevelOf(b);
+      if (!level) return [];
+      const key = `${String(b.q)},${String(b.r)}`;
+      return [
+        {
+          id: b.id,
+          q: b.q,
+          r: b.r,
+          capacity: level.capacity,
+          used: rows.filter((r) => r.training?.buildingRowId === b.id).length,
+          firelit: safe.has(hexKey(b)),
+          napping: napping.has(key),
+        },
+      ];
+    });
     const team = rows
       .filter((r) => r.teamSlot !== null)
       .sort((a, b) => (a.teamSlot ?? 0) - (b.teamSlot ?? 0))
@@ -483,14 +540,7 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
       names: Object.fromEntries(rows.map((r) => [r.squishy.id, squishyName(r.squishy)])),
       team,
       spots,
-      trainingGrounds:
-        grounds && groundsLevel
-          ? {
-              id: grounds.id,
-              capacity: groundsLevel.capacity,
-              used: rows.filter((r) => r.training?.buildingRowId === grounds.id).length,
-            }
-          : null,
+      trainingGrounds: grounds,
       rules: { teamSize: BATTLE_RULES.teamSize, maxStoredCycles: JOB_RULES.work.maxStoredCycles },
       now: at.toISOString(),
     };
@@ -528,6 +578,7 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     for (const row of before) {
       if (row.post) tileIds.add(row.post.tileId);
       if (row.workTile) tileIds.add(row.workTile.id);
+      if (row.training) tileIds.add(row.training.tile.id);
     }
     const tiles = new Map(
       (await repo.lockTiles([...tileIds].sort())).map((tile) => [tile.id, tile]),
@@ -610,15 +661,18 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         const target =
           request.job === 'gatherer' ? await repo.tileAt(map.id, request.q, request.r) : null;
         if (request.job === 'gatherer' && !target) throw new AppError('NOT_FOUND', MESSAGES.noTile);
-        // My Training Grounds: its tile is locked with the others, so taking
-        // it down (which locks every home tile first) can't race this. One per
-        // home (`maxPerHome: 1`, checked by the data tests); a second would
-        // need setJob to pick the one with room.
+        // The Training Grounds asked for (one a homestead, #277), else my first
+        // with room. Its tile is locked with the others, so taking it down or
+        // losing its land (both lock that tile first) can't race this.
         const groundsBefore =
           request.job === 'training'
-            ? ((await createBuildingsRepo(tx).listOwned(map.id, user.id)).find(
-                (b) => trainingLevelOf(b) !== null,
-              ) ?? null)
+            ? await pickGrounds(
+                tx,
+                map.id,
+                user.id,
+                // Already training and none asked for: it stays where it is.
+                request.buildingId ?? before.training?.buildingRowId,
+              )
             : null;
         if (request.job === 'training' && !groundsBefore) {
           throw new AppError('CONFLICT', MESSAGES.noGrounds);
@@ -668,13 +722,21 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           );
           if (other) throw new AppError('CONFLICT', MESSAGES.spotTaken(squishyName(other.squishy)));
         } else if (request.job === 'training') {
-          if (current === 'training') return buildView(tx, repo, map, user.id, at);
+          if (current === 'training' && row.training?.buildingRowId === groundsBefore?.id) {
+            return buildView(tx, repo, map, user.id, at);
+          }
           // Read again under the tile lock: still mine, and room for one more.
           const grounds = (await createBuildingsRepo(tx).listOwned(map.id, user.id)).find(
             (b) => b.id === groundsBefore?.id,
           );
           const level = grounds ? trainingLevelOf(grounds) : null;
           if (!grounds || !level) throw new AppError('CONFLICT', MESSAGES.noGrounds);
+          // A homestead cut off from home naps (#277): no new trainees there.
+          if (
+            homesteadOf(await createExploreRepo(tx).findRow(user.id, grounds.tileId)) !== 'joined'
+          ) {
+            throw new AppError('CONFLICT', MESSAGES.groundsNapping);
+          }
           if ((await repo.countTrainees(grounds.id)) >= level.capacity) {
             // Only suggest an upgrade when there's a level to upgrade to.
             const top =
@@ -708,25 +770,27 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         const events = await leaveOldJobs(repo, tx, map, user.id, [row], request.job, at);
         if (row.teamSlot !== null) await repo.setTeamSlot(row.squishy.id, null);
         if (request.job === 'team') await repo.setTeamSlot(row.squishy.id, slot);
+        // Out on the land, gathering or training (it sleeps on its homestead,
+        // #277), it leaves its habitat bed (housed or working, not both).
+        const outOnLand = (request.job === 'gatherer' && workTile) || request.job === 'training';
+        if (outOnLand && row.habitatBuildingId !== null) {
+          await createBuildingsRepo(tx).setHabitat(row.squishy.id, null);
+          events.push({
+            mapId: map.id,
+            type: 'squishy.housed',
+            actorUserId: user.id,
+            payload: {
+              userId: user.id,
+              squishyId: row.squishy.id,
+              habitatId: null,
+              fromHabitatId: row.habitatBuildingId,
+            },
+          });
+        }
         if (request.job === 'gatherer' && workTile) {
-          // Out on the land, it leaves its habitat bed (housed or working, not both).
-          if (row.habitatBuildingId !== null) {
-            await createBuildingsRepo(tx).setHabitat(row.squishy.id, null);
-            events.push({
-              mapId: map.id,
-              type: 'squishy.housed',
-              actorUserId: user.id,
-              payload: {
-                userId: user.id,
-                squishyId: row.squishy.id,
-                habitatId: null,
-                fromHabitatId: row.habitatBuildingId,
-              },
-            });
-          }
           await repo.startWork(row.squishy.id, workTile.id, at);
         }
-        // A trainee keeps its habitat bed: it sleeps at home, like a team member.
+        // It sleeps on its homestead now (#277), in that tile's firelight or not.
         if (request.job === 'training' && groundsBefore) {
           await repo.startTraining(row.squishy.id, groundsBefore.id, at);
         }

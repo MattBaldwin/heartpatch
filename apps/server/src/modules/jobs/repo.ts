@@ -55,7 +55,16 @@ export interface JobRow {
    * that building's content id and level, and when the current count of XP
    * started; null when it isn't training.
    */
-  training: { buildingRowId: string; buildingId: string; level: number; since: Date } | null;
+  training: {
+    buildingRowId: string;
+    buildingId: string;
+    level: number;
+    since: Date;
+    /** Its homestead tile (#277): it sleeps there. */
+    tile: { id: string; q: number; r: number };
+    /** Its owner's row for that tile: the homestead's pauses (training naps while cut off). */
+    homestead: { joinedAt: Date | null; pausedAt: Date | null; resumedAt: Date | null } | null;
+  } | null;
 }
 
 /**
@@ -169,6 +178,8 @@ export interface SquishyJobsTxRepo extends SquishyJobsRepo {
 const workTile = alias(tiles, 'job_work_tile');
 const postTile = alias(tiles, 'job_post_tile');
 const trainingBuilding = alias(buildings, 'job_training_building');
+const trainingTile = alias(tiles, 'job_training_tile');
+const trainingExplore = alias(tileExplore, 'job_training_explore');
 
 const tileColumns = {
   id: tiles.id,
@@ -226,6 +237,13 @@ function queries(db: Executor): SquishyJobsRepo {
         trainingContentId: trainingBuilding.buildingId,
         trainingLevel: trainingBuilding.level,
         trainingSince: squishies.trainingSince,
+        trainingTileId: trainingTile.id,
+        trainingQ: trainingTile.q,
+        trainingR: trainingTile.r,
+        trainingExplored: trainingExplore.completedAt,
+        trainingJoinedAt: trainingExplore.joinedAt,
+        trainingPausedAt: trainingExplore.pausedAt,
+        trainingResumedAt: trainingExplore.resumedAt,
       })
       .from(squishies)
       .leftJoin(workTile, eq(workTile.id, squishies.workTileId))
@@ -240,7 +258,17 @@ function queries(db: Executor): SquishyJobsRepo {
       )
       .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))
       .leftJoin(postTile, eq(postTile.id, tileDefenders.tileId))
-      .leftJoin(trainingBuilding, eq(trainingBuilding.id, squishies.trainingBuildingId));
+      .leftJoin(trainingBuilding, eq(trainingBuilding.id, squishies.trainingBuildingId))
+      .leftJoin(trainingTile, eq(trainingTile.id, trainingBuilding.tileId))
+      // The owner's own row for the Training Grounds' homestead: its pauses (#277).
+      .leftJoin(
+        trainingExplore,
+        and(
+          eq(trainingExplore.tileId, trainingBuilding.tileId),
+          eq(trainingExplore.userId, squishies.ownerUserId),
+          isNotNull(trainingExplore.completedAt),
+        ),
+      );
 
   type Raw = Awaited<ReturnType<ReturnType<typeof selectJobs>['execute']>>[number];
   const toJob = (r: Raw): JobRow => ({
@@ -291,13 +319,25 @@ function queries(db: Executor): SquishyJobsRepo {
       r.trainingRowId === null ||
       r.trainingContentId === null ||
       r.trainingLevel === null ||
-      r.trainingSince === null
+      r.trainingSince === null ||
+      r.trainingTileId === null ||
+      r.trainingQ === null ||
+      r.trainingR === null
         ? null
         : {
             buildingRowId: r.trainingRowId,
             buildingId: r.trainingContentId,
             level: r.trainingLevel,
             since: r.trainingSince,
+            tile: { id: r.trainingTileId, q: r.trainingQ, r: r.trainingR },
+            homestead:
+              r.trainingExplored === null
+                ? null
+                : {
+                    joinedAt: r.trainingJoinedAt,
+                    pausedAt: r.trainingPausedAt,
+                    resumedAt: r.trainingResumedAt,
+                  },
           },
   });
 

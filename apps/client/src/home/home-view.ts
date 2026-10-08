@@ -193,12 +193,66 @@ export function landTileOffer(
   };
 }
 
+/** Training Grounds: they stand only on a homestead (owner decision 4 on #277). */
+export const GROUNDS = GAME_DATA.buildings.find((b) => b.placement === 'homestead');
+
+/** What a homestead's tile panel offers for Training Grounds (#277, mockup screen 6). */
+export type GroundsTileOffer =
+  | { readonly kind: 'grounds'; readonly grounds: MyBuilding; readonly napping: boolean }
+  | {
+      readonly kind: 'build';
+      readonly building: Building;
+      readonly needs: readonly NeedChip[];
+      /** The first free ring spot on the tile. */
+      readonly spot: number;
+    }
+  /** A homestead cut off from home: nothing new goes up until it joins again. */
+  | { readonly kind: 'napping' };
+
+/**
+ * Training Grounds on one of my tiles out on the land: the ones standing
+ * there, or the offer to build one on a homestead with a free ring spot.
+ * Null: not a homestead, or no room.
+ */
+export function groundsTileOffer(
+  tile: {
+    q: number;
+    r: number;
+    nodeResource: string | null;
+    homestead?: 'joined' | 'paused' | null;
+    buildings: readonly { spot: number }[];
+  },
+  home: HomeResponse,
+): GroundsTileOffer | null {
+  const napping = tile.homestead === 'paused';
+  const grounds = home.buildings.find(
+    (b) => b.kind === 'training-grounds' && b.q === tile.q && b.r === tile.r,
+  );
+  if (grounds) return { kind: 'grounds', grounds, napping };
+  if (!GROUNDS || !tile.homestead) return null;
+  if (napping) return { kind: 'napping' };
+  const taken = new Set(tile.buildings.map((b) => b.spot));
+  const features = { heartSeed: false, nodeResource: tile.nodeResource };
+  const spot = freeSpots(RULES, features, taken, GROUNDS.slot)[0];
+  if (spot === undefined) return null;
+  return {
+    kind: 'build',
+    building: GROUNDS,
+    needs: needChips(home.items, buildCost(GROUNDS)),
+    spot,
+  };
+}
+
 /** The home's top line (owner decision 2026-10-07): the Heart Seed keeps home safe. */
 export const HOME_SAFE_LINE = 'Your Heart Seed keeps home safe 💗';
 
 /** Where fires go, on the build sheet (fires stand only on captured land). */
 export const FIRES_ON_LAND =
   'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!';
+
+/** Where Training Grounds go, on the build sheet (owner decision 4 on #277). */
+export const GROUNDS_ON_HOMESTEAD =
+  'Goes on a homestead 🏡. Explore a tile next to home, then tap it on the map to build!';
 
 /**
  * One ingredient as have/need ("🪵 12/5"), so a kid sees at a glance what's
@@ -251,6 +305,8 @@ export type BuildOption =
   | { readonly kind: 'built'; readonly note: string }
   /** Built only out on my land, from the map's tile panel (fires, #202). */
   | { readonly kind: 'land'; readonly note: string }
+  /** Built only on a homestead, from its tile panel (Training Grounds, #277). */
+  | { readonly kind: 'homestead'; readonly note: string }
   | { readonly kind: 'blocked'; readonly note: string };
 
 export interface BuildRow {
@@ -337,6 +393,8 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
           };
         } else if (building.placement === 'land') {
           option = { kind: 'land', note: FIRES_ON_LAND };
+        } else if (building.placement === 'homestead') {
+          option = { kind: 'homestead', note: GROUNDS_ON_HOMESTEAD };
         } else if (owned >= (building.maxPerHome ?? 0)) {
           option = {
             kind: 'built',
@@ -364,7 +422,10 @@ export function buildRows(everything: HomeResponse): BuildRow[] {
           needs:
             option.kind === 'built' || option.kind === 'land' ? [] : needChips(home.items, cost),
           option,
-          where: building.placement === 'land' ? '' : slotLine(building),
+          where:
+            building.placement === 'land' || building.placement === 'homestead'
+              ? ''
+              : slotLine(building),
         };
       })
   );
@@ -539,23 +600,6 @@ export function buildingNote(b: MyBuilding): string {
   const room = b.capacity ?? 0;
   if (living === 0) return `Room for ${String(room)} squishies.`;
   return `${String(living)} of ${String(room)} squishies live here.`;
-}
-
-/**
- * What sending a squishy to train would stop, said before the tap (the job
- * board's `teamCost` words), or '' when it isn't doing anything else.
- */
-export function trainCost(squishy: Pick<HomeSquishy, 'job'>): string {
-  switch (squishy.job) {
-    case 'guard':
-      return 'On watch · Train ends it';
-    case 'gatherer':
-      return 'Gathering · Train stops it';
-    case 'team':
-      return 'On the team · Train takes them off';
-    default:
-      return '';
-  }
 }
 
 /** Does a squishy like this habitat (matching element or feeling tag)? */

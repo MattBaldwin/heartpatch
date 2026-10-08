@@ -781,8 +781,49 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
       await hollow.runNightfall(mapId, TONIGHT);
       expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([{ q: tile.q, r: tile.r }]);
+      // Training Grounds there (#277), with a trainee two hours in when the
+      // land goes wild: they land their XP, and it comes down for half back.
+      const [grounds] = await db
+        .insert(buildings)
+        .values({
+          mapId,
+          ownerUserId: kid.id,
+          tileId: tile.id,
+          buildingId: 'training-grounds',
+          kind: 'training-grounds',
+          spot: 1,
+        })
+        .returning({ id: buildings.id });
+      const trainee = await squishy(mapId, kid);
+      await db.execute(
+        `update squishies set training_building_id = '${grounds!.id}',
+           training_since = '${new Date(clock.getTime() - 2 * 60 * 60 * 1000).toISOString()}'
+         where id = '${trainee}'`,
+      );
+      const xpBefore = (await db.query.squishies.findFirst({
+        where: (t, { eq }) => eq(t.id, trainee),
+      }))!.xp;
       expect(await hollow.reclaim(mapId, TONIGHT)).toEqual({ wild: 1 });
       expect(await ownerOf(tile.id)).toBeNull();
+      expect(
+        await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, grounds!.id) }),
+      ).toBeUndefined();
+      const after = (await db.query.squishies.findFirst({
+        where: (t, { eq }) => eq(t.id, trainee),
+      }))!;
+      expect(after).toMatchObject({ trainingBuildingId: null, trainingSince: null });
+      expect(after.xp).toBeGreaterThan(xpBefore);
+      const removed = (await eventsOf(mapId))
+        .filter((e) => e.type === 'building.removed')
+        .map((e) => parseGameEventPayload('building.removed', e.payload));
+      expect(removed).toContainEqual(
+        expect.objectContaining({
+          buildingId: 'training-grounds',
+          lost: 'wild',
+          refund: { timber: 4, stone: 4 },
+          movedOut: [trainee],
+        }),
+      );
       // Winning it back later makes it a homestead again at once: the row stays.
       const [row] = (await db.execute(
         `select completed_at from tile_explore where tile_id = '${tile.id}' and user_id = '${kid.id}'`,

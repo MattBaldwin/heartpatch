@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { BuildingSchema } from './buildings.js';
+import { BuildingSchema, buildsAtHome } from './buildings.js';
 import { CareActionSchema } from './care-actions.js';
 import { ElementIdSchema, ElementSchema, FeelingIdSchema, FeelingSchema } from './elements.js';
 import { MapGenSettingsSchema } from './map-gen.js';
@@ -203,7 +203,7 @@ export const GameDataSchema = z
           `"${b.id}" can stand on owned land: give it maxPerTile`,
         );
       }
-      if (b.placement !== 'land' && b.maxPerHome === undefined) {
+      if (buildsAtHome(b) && b.maxPerHome === undefined) {
         report(['buildings', i, 'maxPerHome'], `"${b.id}" can stand at home: give it maxPerHome`);
       }
       // Fences, and only fences, stand on edges (#203, #204).

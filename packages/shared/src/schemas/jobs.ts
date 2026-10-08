@@ -39,6 +39,12 @@ export type WorkStatus = z.infer<typeof WorkStatusSchema>;
 export const TrainingStatusSchema = z.object({
   /** The Training Grounds building row it practices at. */
   buildingId: z.uuid(),
+  /** Its homestead (#277): it sleeps there at night. */
+  ...TileSchema.shape,
+  /** A lit Hearthfire keeps it safe tonight. */
+  firelit: z.boolean(),
+  /** Its homestead is cut off from home: it earns nothing until it joins up again. */
+  napping: z.boolean(),
   xpPerHour: z.number().int().min(1),
   /** XP waiting to land at the next settle. */
   xpReady: z.number().int().min(0),
@@ -99,14 +105,22 @@ export const JobsViewSchema = z.object({
   /** My team in slot order (squishy ids). Empty: battles take my strongest resting squishies. */
   team: z.array(z.uuid()),
   spots: z.array(WorkSpotSchema),
-  /** My Training Grounds and how full it is, or null if I haven't built one. */
-  trainingGrounds: z
-    .object({
+  /**
+   * My Training Grounds, one a homestead (owner decision 4 on #277), each
+   * with how full it is and whether its trainees sleep in fire light.
+   */
+  trainingGrounds: z.array(
+    z.object({
       id: z.uuid(),
+      ...TileSchema.shape,
       capacity: z.number().int().min(1),
       used: z.number().int().min(0),
-    })
-    .nullable(),
+      /** A lit Hearthfire keeps its trainees safe tonight (they sleep there). */
+      firelit: z.boolean(),
+      /** Its homestead is cut off from home: training there naps. */
+      napping: z.boolean(),
+    }),
+  ),
   rules: z.object({
     teamSize: z.number().int().min(1),
     maxStoredCycles: z.number().int().min(1),
@@ -120,8 +134,11 @@ export const SetJobRequestSchema = z.discriminatedUnion('job', [
   z.strictObject({ job: z.literal('resting') }),
   z.strictObject({ job: z.literal('team') }),
   z.strictObject({ job: z.literal('gatherer'), ...TileSchema.shape }),
-  /** At my Training Grounds (one per home base). */
-  z.strictObject({ job: z.literal('training') }),
+  /**
+   * At one of my Training Grounds (`buildingId`, a building row id). Left
+   * out: the first of mine with room.
+   */
+  z.strictObject({ job: z.literal('training'), buildingId: z.uuid().optional() }),
 ]);
 export type SetJobRequest = z.infer<typeof SetJobRequestSchema>;
 

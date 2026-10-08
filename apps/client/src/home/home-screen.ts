@@ -6,6 +6,8 @@ import {
   type HomeSquishy,
   type KeeperConfig,
   type MyBuilding,
+  hexKey,
+  type MapView,
   type PublicTile,
   type PublicUser,
   type Species,
@@ -23,8 +25,7 @@ import { lodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
 import { rarityDot } from '../ui/rarity/rarity.js';
 import { WANDER } from './home-config.js';
-import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
-import { JOBS_TEXT } from '../squishies/jobs/jobs-view.js';
+import { mapSafeTiles } from './home-layout.js';
 import { homeApi, type HomeApi } from './home-api.js';
 import { HomeScene, type HomeSceneStats } from './home-scene.js';
 import {
@@ -40,14 +41,15 @@ import {
   HOME_SAFE_LINE,
   freeHomeSpots,
   fuelAllOffer,
+  groundsTileOffer,
   landTileOffer,
+  type GroundsTileOffer,
   BUILDING_DATA,
   likesHabitat,
   refundPreview,
   speciesMap,
   squishyName,
   squishyRarity,
-  trainCost,
   type HomeSpot,
   type NeedChip,
   type ReachTile,
@@ -83,8 +85,11 @@ export interface HomeScreenOptions {
   onCare?: (mapId: string, squishyId: string) => void;
   /** A squishy itself was tapped: open it up close (#20). */
   onCloseUp?: (mapId: string, squishyId: string) => void;
-  /** "Jobs & team": opens the squishy job board (temporary entry; the trays move it). */
-  onJobs?: (mapId: string) => void;
+  /**
+   * "Jobs & team": opens the squishy job board (temporary entry; the trays
+   * move it). `at`: Training Grounds on that homestead come first (#277).
+   */
+  onJobs?: (mapId: string, at?: { q: number; r: number }) => void;
   /** Whether "Jobs & team" shows on this map (not on the Tutorial Glade). */
   showJobs?: (mapId: string) => boolean;
   /**
@@ -93,8 +98,6 @@ export interface HomeScreenOptions {
    */
   onRecipeBook?: () => void;
   api?: HomeApi;
-  /** Train and Stop on the Training Grounds card (the job board's own calls). */
-  jobs?: Pick<JobsApi, 'setJob'>;
 }
 
 type Mode =
@@ -149,11 +152,6 @@ export const HOME_TEXT = {
   addFuel: 'Add fuel',
   moveIn: 'Move in',
   moveOut: 'Move out',
-  train: 'Train',
-  stop: 'Stop',
-  practicing: (level: number) => `Practicing · Level ${String(level)}`,
-  trained: JOBS_TEXT.offToTrain,
-  stopped: (name: string) => `${name} stopped for a rest.`,
   upgrade: '⬆️ Upgrade',
   upgradeNow: 'Upgrade!',
   notNow: 'Not now',
@@ -200,6 +198,17 @@ export const HOME_TEXT = {
     `Your bag ran out! ${String(n)} ${n === 1 ? 'fire' : 'fires'} got more. The lowest went first. 🔥`,
   fireBuilt: 'Ta-da! Your fire is built. Add Emberwood to light it!',
   landFuel: '🔥 Add fuel',
+  // Training Grounds on a homestead (#277, mockup screen 6).
+  buildGrounds: '🎯 Build Training Grounds',
+  buildGroundsHere: '🎯 Build',
+  groundsBuilt: 'Ta-da! Your Training Grounds are ready. Send someone to practice!',
+  trainHere: '🎯 Train here',
+  groundsLit: '🔥 In fire light',
+  groundsDark: '🌙 Dark at night',
+  groundsNight:
+    "Trainees sleep here at night. Keep a fire nearby so the Hollow Man can't reach them!",
+  groundsLose: 'If you lose this land, the Training Grounds come down and you get half back.',
+  groundsNapping: 'zZ This homestead is napping, so practice stops until it joins home again.',
 } as const;
 
 /** One night of fuel per tap: easy to count, quick to top up. */
@@ -207,7 +216,6 @@ const FUEL_NIGHTS = 1;
 
 export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const api = options.api ?? homeApi;
-  const jobs = options.jobs ?? jobsApi;
   const registry = visualRegistry(GAME_DATA);
 
   let user: PublicUser | null = null;
@@ -223,7 +231,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let frame = 0;
   let wanderTurn = 0;
   let lastTier: QualityTier | null = null;
-  let panel: { container: HTMLElement; tile: PublicTile } | null = null;
+  let panel: { container: HTMLElement; tile: PublicTile; view: MapView } | null = null;
 
   // ── DOM ───────────────────────────────────────────────────────────────
   const entry = el(
@@ -424,21 +432,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       () => ({ mode: { kind: 'idle' }, say: HOME_TEXT.removed(back) }),
     );
   };
-
-  /** Train or stop one of my squishies at the Training Grounds, then read the home again. */
-  const practice = (squishyId: string, train: boolean, name: string, groundsId: string) =>
-    act(
-      async (id, send) => {
-        const done = await send((key) =>
-          jobs.setJob(id, squishyId, { job: train ? 'training' : 'resting' }, key),
-        );
-        return done ? api.get(id) : null;
-      },
-      () => ({
-        mode: { kind: 'selected', id: groundsId },
-        say: train ? HOME_TEXT.trained(name) : HOME_TEXT.stopped(name),
-      }),
-    );
 
   const house = (squishyId: string, habitatId: string | null, name: string, where: string) =>
     act(
@@ -849,52 +842,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             ),
       );
     }
-    if (b.kind === 'training-grounds') {
-      const species = speciesMap(current);
-      const full = (b.residents ?? 0) >= (b.capacity ?? 0);
-      card.push(
-        current.squishies.length === 0
-          ? el('p', { class: 'home-empty' }, HOME_TEXT.noSquishies)
-          : el(
-              'ul',
-              { class: 'home-list', 'data-testid': 'home-trainees' },
-              ...current.squishies.map((s) => {
-                const name = squishyName(s, species);
-                const here = s.trainingId === b.id;
-                const action = here
-                  ? button(
-                      HOME_TEXT.stop,
-                      () => void practice(s.id, false, name, b.id),
-                      {
-                        'data-trainee': s.id,
-                      },
-                      true,
-                    )
-                  : full
-                    ? el('span', { class: 'home-list-note' }, HOME_TEXT.full)
-                    : button(HOME_TEXT.train, () => void practice(s.id, true, name, b.id), {
-                        'data-trainee': s.id,
-                      });
-                return el(
-                  'li',
-                  { class: 'home-list-row' },
-                  el(
-                    'span',
-                    { class: 'home-list-name' },
-                    squishyTitle(s, name, species),
-                    el(
-                      'span',
-                      { class: 'home-list-sub' },
-                      // Says what Train would stop (watch, gathering, the team).
-                      here ? HOME_TEXT.practicing(s.level) : trainCost(s),
-                    ),
-                  ),
-                  action,
-                );
-              }),
-            ),
-      );
-    }
     actions.push(
       button(
         HOME_TEXT.move,
@@ -1138,6 +1085,8 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   let tileMode: TileMode = 'card';
   /** Which fire the build step is for (the Hearthfire or the Jack-o'-Lantern). */
   let tileBuilding = '';
+  /** Whose card a step is for: the tile's fire, or its Training Grounds (#277). */
+  let tileTarget: 'fire' | 'grounds' = 'fire';
   let tileNote = '';
   let tileWorking = false;
 
@@ -1229,8 +1178,226 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       el('span', { class: 'home-level' }, HOME_TEXT.level(level)),
     );
 
-  /** A fire out on my land, or the offer to build one (#202). */
+  /**
+   * My tile out on the land: its fire (or the offer to build one), and on a
+   * homestead its Training Grounds (#277). A step of either card has the
+   * panel to itself.
+   */
   function landTileNodes(tile: PublicTile): Node[] {
+    if (!home) return [];
+    const grounds = groundsTileOffer(tile, home);
+    if (tileMode !== 'card' && tileTarget === 'grounds' && grounds) {
+      return groundsNodes(tile, grounds);
+    }
+    const fire = fireTileNodes(tile);
+    if (tileMode !== 'card' || !grounds) return fire;
+    return [...fire, ...groundsNodes(tile, grounds)];
+  }
+
+  /** Training Grounds on a homestead, or the offer to build them (#277, mockup screen 6). */
+  function groundsNodes(tile: PublicTile, offer: GroundsTileOffer): Node[] {
+    const current = home;
+    if (!current) return [];
+    const note =
+      tileMode !== 'card' && tileNote
+        ? [el('p', { class: 'tile-action-note', role: 'status' }, tileNote)]
+        : [];
+    if (offer.kind === 'napping') {
+      return [el('p', { class: 'tile-action-note' }, HOME_TEXT.groundsNapping)];
+    }
+    const lit = panel ? mapSafeTiles(panel.view).has(hexKey(tile)) : false;
+    const light = el(
+      'span',
+      {
+        class: `home-effect ${lit ? 'home-grounds-lit' : 'home-grounds-dark'}`,
+        'data-testid': 'tile-grounds-light',
+      },
+      lit ? HOME_TEXT.groundsLit : HOME_TEXT.groundsDark,
+    );
+    if (offer.kind === 'build') {
+      if (tileMode !== 'build') {
+        return [
+          tileButton(
+            HOME_TEXT.buildGrounds,
+            () => {
+              tileMode = 'build';
+              tileTarget = 'grounds';
+              tileNote = '';
+              renderTile();
+            },
+            'tile-build-grounds',
+            true,
+          ),
+        ];
+      }
+      const go = tileButton(
+        HOME_TEXT.buildGroundsHere,
+        () =>
+          void tileAct(
+            (id, send) =>
+              send((key) =>
+                api.place(
+                  id,
+                  { buildingId: offer.building.id, q: tile.q, r: tile.r, spot: offer.spot },
+                  key,
+                ),
+              ),
+            HOME_TEXT.groundsBuilt,
+          ),
+        'tile-build-grounds-confirm',
+      );
+      if (!offer.needs.every((n) => n.ok)) go.disabled = true;
+      return [
+        el(
+          'div',
+          { class: 'home-card', 'data-testid': 'tile-grounds-build' },
+          cardHead({ buildingId: offer.building.id }, 1),
+          el('p', { class: 'home-card-note' }, offer.building.description),
+          effectRow(effectChips(offer.building)),
+          el('span', { class: 'home-effects' }, light),
+          el('p', { class: 'home-card-note' }, HOME_TEXT.groundsNight),
+          needRow(offer.needs),
+          tileRow(
+            go,
+            tileButton(
+              HOME_TEXT.notNow,
+              () => {
+                tileMode = 'card';
+                renderTile();
+              },
+              'tile-build-grounds-cancel',
+              true,
+            ),
+          ),
+        ),
+        ...note,
+      ];
+    }
+    const { grounds, napping } = offer;
+    const card: Node[] = [cardHead(grounds, grounds.level)];
+    const upgradeAt = upgradeOffer(current, grounds);
+    if (tileMode === 'upgrade' && upgradeAt) {
+      const go = tileButton(
+        HOME_TEXT.upgradeNow,
+        () =>
+          void tileAct(
+            (id, send) => send((key) => api.upgrade(id, grounds.id, key)),
+            HOME_TEXT.upgraded(buildingName(grounds.buildingId), upgradeAt.to),
+          ),
+        'tile-grounds-upgrade-confirm',
+      );
+      if (!upgradeAt.affordable) go.disabled = true;
+      card.push(
+        el('p', { class: 'home-card-note' }, upgradeAt.line),
+        needRow(upgradeAt.needs),
+        tileRow(
+          go,
+          tileButton(
+            HOME_TEXT.notNow,
+            () => {
+              tileMode = 'card';
+              renderTile();
+            },
+            'tile-grounds-upgrade-cancel',
+            true,
+          ),
+        ),
+      );
+    } else if (tileMode === 'confirm') {
+      const back = costText(refundPreview(grounds));
+      card.push(
+        el(
+          'p',
+          { class: 'home-card-note' },
+          HOME_TEXT.confirm(buildingName(grounds.buildingId), back),
+        ),
+        tileRow(
+          tileButton(
+            HOME_TEXT.yes,
+            () => {
+              let refund = '';
+              void tileAct(
+                async (id, send) => {
+                  const res = await send((key) => api.remove(id, grounds.id, key));
+                  if (!res) return null;
+                  refund = describeItems(res.refund);
+                  return res.home;
+                },
+                () => HOME_TEXT.removed(refund),
+              );
+            },
+            'tile-grounds-remove-confirm',
+          ),
+          tileButton(
+            HOME_TEXT.keep,
+            () => {
+              tileMode = 'card';
+              renderTile();
+            },
+            'tile-grounds-keep',
+            true,
+          ),
+        ),
+      );
+    } else {
+      const train = tileButton(
+        HOME_TEXT.trainHere,
+        () => {
+          if (mapId) options.onJobs?.(mapId, { q: tile.q, r: tile.r });
+        },
+        'tile-grounds-train',
+        'small',
+      );
+      if (napping || !options.onJobs) train.disabled = true;
+      card.push(
+        el('span', { class: 'home-effects' }, light),
+        el(
+          'p',
+          { class: 'home-card-note', 'data-testid': 'tile-grounds-note' },
+          buildingNote(grounds),
+        ),
+        el(
+          'p',
+          { class: 'home-card-note' },
+          napping ? HOME_TEXT.groundsNapping : HOME_TEXT.groundsNight,
+        ),
+        el('p', { class: 'home-card-note' }, HOME_TEXT.groundsLose),
+        tileRow(
+          train,
+          ...(upgradeAt
+            ? [
+                tileButton(
+                  HOME_TEXT.upgrade,
+                  () => {
+                    tileMode = 'upgrade';
+                    tileTarget = 'grounds';
+                    tileNote = '';
+                    renderTile();
+                  },
+                  'tile-grounds-upgrade',
+                  'small',
+                ),
+              ]
+            : []),
+          tileButton(
+            HOME_TEXT.takeDown,
+            () => {
+              tileMode = 'confirm';
+              tileTarget = 'grounds';
+              tileNote = '';
+              renderTile();
+            },
+            'tile-grounds-remove',
+            true,
+          ),
+        ),
+      );
+    }
+    return [el('div', { class: 'home-card', 'data-testid': 'tile-grounds' }, ...card), ...note];
+  }
+
+  /** A fire out on my land, or the offer to build one (#202). */
+  function fireTileNodes(tile: PublicTile): Node[] {
     if (!home) return [];
     const offer = landTileOffer(tile, home);
     const note = tileNote ? [el('p', { class: 'tile-action-note', role: 'status' }, tileNote)] : [];
@@ -1243,6 +1410,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         // a carved pumpkin (or anything else) by accident.
         const pick = (buildingId: string) => () => {
           tileMode = 'build';
+          tileTarget = 'fire';
           tileBuilding = buildingId;
           tileNote = '';
           renderTile();
@@ -1402,6 +1570,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   HOME_TEXT.upgrade,
                   () => {
                     tileMode = 'upgrade';
+                    tileTarget = 'fire';
                     tileNote = '';
                     renderTile();
                   },
@@ -1415,6 +1584,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
             HOME_TEXT.takeDown,
             () => {
               tileMode = 'confirm';
+              tileTarget = 'fire';
               tileNote = '';
               renderTile();
             },
@@ -1481,15 +1651,16 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     },
     open,
     tileActions: {
-      show: (container, tile) => {
+      show: (container, tile, view) => {
         // Another tile: back to its card, with nothing said yet.
         if (panel?.tile.q !== tile.q || panel.tile.r !== tile.r) {
           tileMode = 'card';
+          tileTarget = 'fire';
           tileNote = '';
           // Read my fires and bag afresh for a tile of mine out on my land.
           if (!isOpen && tile.homeSlot === null && tile.ownerUserId === user?.id) home = null;
         }
-        panel = { container, tile };
+        panel = { container, tile, view };
         renderTile();
         render();
       },

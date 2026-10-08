@@ -6,7 +6,9 @@ import { newIdempotencyKey } from '../../net/idempotency-key.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { jobsApi, type JobsApi } from './jobs-api.js';
 import {
+  canTrain,
   colorOf,
+  groundsLabel,
   hintLines,
   countsDown,
   jobLine,
@@ -46,7 +48,7 @@ export interface JobBoardDebug {
 }
 
 export interface JobBoard {
-  /** Opens the board for my squishies on this map; `spot` opens its gatherer picker there. */
+  /** Opens the board for my squishies on this map; `spot` puts that tile first in the pickers. */
   open: (mapId: string, spot?: { q: number; r: number }) => Promise<void>;
   close: () => void;
   readonly isOpen: boolean;
@@ -72,6 +74,8 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   let view: JobsView | null = null;
   /** The squishy picking a spot to gather, or null. */
   let picking: string | null = null;
+  /** The squishy picking Training Grounds (#277: one a homestead), or null. */
+  let pickingGrounds: string | null = null;
   /** A spot to offer first (opened from the tile panel). */
   let wantSpot: { q: number; r: number } | null = null;
   let working = false;
@@ -168,6 +172,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       if (!res) return;
       setView(res);
       picking = null;
+      pickingGrounds = null;
       say(done);
     });
 
@@ -230,6 +235,51 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     );
   }
 
+  /**
+   * The Training Grounds this squishy could practice at (#277), with the
+   * firelight warning before it goes: a trainee sleeps on its homestead.
+   */
+  function groundsPicker(squishy: JobSquishy, current: JobsView): HTMLElement {
+    const name = nameOf(current, squishy);
+    const first = (g: { q: number; r: number }) =>
+      wantSpot && g.q === wantSpot.q && g.r === wantSpot.r ? 0 : 1;
+    const rows = [...current.trainingGrounds]
+      .sort((a, b) => first(a) - first(b))
+      .map((g) => {
+        const go = button(
+          groundsLabel(current, g.id),
+          () => {
+            void assign(squishy, { job: 'training', buildingId: g.id }, JOBS_TEXT.offToTrain(name));
+          },
+          { 'data-testid': 'jobs-grounds', 'data-q': String(g.q), 'data-r': String(g.r) },
+        );
+        const here = squishy.training?.buildingId === g.id;
+        if (here || g.napping || g.used >= g.capacity) go.disabled = true;
+        return el(
+          'li',
+          { class: 'jobs-spot' },
+          go,
+          g.napping
+            ? el('p', { class: 'jobs-dark' }, JOBS_TEXT.groundsNapping)
+            : el(
+                'p',
+                { class: g.firelit ? 'jobs-safe' : 'jobs-dark' },
+                g.firelit ? JOBS_TEXT.groundsLit : JOBS_TEXT.groundsDark,
+              ),
+        );
+      });
+    return el(
+      'div',
+      { class: 'jobs-picker', 'data-testid': 'jobs-grounds-picker' },
+      el('p', { class: 'jobs-small' }, JOBS_TEXT.pickGrounds),
+      el('ul', { class: 'jobs-spots' }, ...rows),
+      button(JOBS_TEXT.cancel, () => {
+        pickingGrounds = null;
+        render();
+      }),
+    );
+  }
+
   function render(): void {
     window.clearTimeout(ticker);
     ticker = undefined;
@@ -246,9 +296,9 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     }
     lines = new Map();
     const tg = current.trainingGrounds;
-    const tgFull = tg !== null && tg.used >= tg.capacity;
-    trainHint.textContent = tg === null ? JOBS_TEXT.noGrounds : JOBS_TEXT.groundsFull;
-    trainHint.hidden = (tg !== null && !tgFull) || current.squishies.length === 0;
+    const trainable = canTrain(current);
+    trainHint.textContent = tg.length === 0 ? JOBS_TEXT.noGrounds : JOBS_TEXT.groundsFull;
+    trainHint.hidden = trainable || current.squishies.length === 0;
     list.replaceChildren(
       ...current.squishies.map((s) => {
         const name = nameOf(current, s);
@@ -265,15 +315,20 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
             `🧺 ${JOBS_TEXT.gather}`,
             () => {
               picking = s.squishy.id;
+              pickingGrounds = null;
               render();
             },
             { 'data-job': 'gatherer' },
           ),
-          // Owner decision 2026-10-06: practice at the Training Grounds. Without
-          // one (or when it's full) the server says so in a friendly line.
+          // Owner decision 2026-10-06: practice at the Training Grounds, one a
+          // homestead (#277): pick which, seeing whether it's lit at night.
           button(
             `🎯 ${JOBS_TEXT.train}`,
-            () => void assign(s, { job: 'training' }, JOBS_TEXT.offToTrain(name)),
+            () => {
+              pickingGrounds = s.squishy.id;
+              picking = null;
+              render();
+            },
             { 'data-job': 'training' },
           ),
           button(
@@ -282,13 +337,13 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
             { 'data-job': 'resting' },
           ),
         );
-        // Train needs Training Grounds with room (the server checks again).
-        const grounds = current.trainingGrounds;
-        const noRoom = grounds === null || grounds.used >= grounds.capacity;
+        // Train needs Training Grounds with room (the server checks again);
+        // a trainee may move to other Training Grounds.
         for (const b of actions.querySelectorAll('button')) {
           const job = b.getAttribute('data-job');
-          if (away || (job !== 'gatherer' && job === s.job)) b.disabled = true;
-          if (job === 'training' && noRoom) b.disabled = true;
+          const again = job !== 'gatherer' && job !== 'training' && job === s.job;
+          if (away || again) b.disabled = true;
+          if (job === 'training' && !trainable) b.disabled = true;
         }
         return el(
           'li',
@@ -305,7 +360,17 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
           ...(s.work && outOfSeason(current, s.work)
             ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.outOfSeason)]
             : []),
-          picking === s.squishy.id ? spotPicker(s, current) : actions,
+          // A trainee sleeps on its homestead (#277): in the dark, or napping.
+          ...(s.training?.napping
+            ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.trainingNapping)]
+            : s.training && !s.training.firelit
+              ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.dark)]
+              : []),
+          picking === s.squishy.id
+            ? spotPicker(s, current)
+            : pickingGrounds === s.squishy.id
+              ? groundsPicker(s, current)
+              : actions,
         );
       }),
     );
@@ -376,6 +441,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     mapId = null;
     view = null;
     picking = null;
+    pickingGrounds = null;
     say('');
   }
 
@@ -386,6 +452,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       mapId = id;
       wantSpot = spot ?? null;
       picking = null;
+      pickingGrounds = null;
       sheet.hidden = false;
       say('');
       render();

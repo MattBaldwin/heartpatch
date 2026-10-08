@@ -44,6 +44,8 @@ import {
   requirePageOpen,
   seasonsOn,
 } from '../inventory/service.js';
+import { homesteadOf } from '../explore/homesteads.js';
+import { createExploreRepo } from '../explore/repo.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
@@ -87,6 +89,9 @@ const MESSAGES = {
   notYet: "That one isn't ready to build yet. Soon!",
   outOfSeason: (name: string, season: string) => `${name} can only be built around ${season}!`,
   notHome: 'You can only build on your home base.',
+  notHomestead: (name: string) =>
+    `${name} go on a homestead 🏡. Explore all of a tile next to home to make one!`,
+  homesteadNapping: 'This homestead is napping zZ. Join it back up to home first!',
   notMine: 'You can only build on your own land.',
   fireAtHome: 'Fires go on your land, in the middle of a tile 🔥. Your Heart Seed keeps home safe!',
   spotTaken: 'Something is already there. Try another spot!',
@@ -96,7 +101,8 @@ const MESSAGES = {
       ? `${building.name}s go in the middle of a tile!`
       : `The ${building.name} goes around the middle of a tile!`,
   tileHasOne: (name: string) => `This tile already has a ${name}!`,
-  staysPut: 'A fire on your land stays where it is. Take it down to build it somewhere else.',
+  staysPut: (name: string) =>
+    `Your ${name} stays where it is. Take it down to build it somewhere else.`,
   noFires: 'You have no fires to fuel yet. Build one first!',
   allFull: 'All your fires are full! Come back after a night or two.',
   tooMany: (name: string) => `Your home already has all the ${name} it can hold!`,
@@ -286,8 +292,16 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     target: { q: number; r: number; spot: number },
     outer: TargetTileRow | null = null,
     moving: string | null = null,
+    homestead: 'joined' | 'paused' | null = null,
   ): HomeTileRow {
     const homeTile = home.find((t) => t.q === target.q && t.r === target.r);
+    // Training Grounds stand only on a homestead (owner decision 4 on #277).
+    if (building.placement === 'homestead') {
+      if (homeTile || outer?.ownerUserId !== userId || homestead === null) {
+        throw new AppError('FORBIDDEN', MESSAGES.notHomestead(building.name));
+      }
+      if (homestead === 'paused') throw new AppError('CONFLICT', MESSAGES.homesteadNapping);
+    }
     // Fires stand only on captured land (owner decision 2026-10-07).
     if (homeTile && !buildsAtHome(building)) throw new AppError('FORBIDDEN', MESSAGES.fireAtHome);
     if (!homeTile) {
@@ -357,6 +371,21 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     return result;
   }
 
+  /**
+   * Where one of my buildings stands, read before the command's locks: a
+   * building out on my land (Training Grounds on a homestead, #277) has its
+   * tile locked with my home tiles, as assigning a trainee there locks it,
+   * so the two take turns. Buildings never leave their tile out on land.
+   */
+  async function tileOf(
+    mapId: string,
+    userId: string,
+    buildingRowId: string,
+  ): Promise<{ q: number; r: number } | null> {
+    const row = (await store.listOwned(mapId, userId)).find((b) => b.id === buildingRowId);
+    return row && row.homeSlot === null ? { q: row.q, r: row.r } : null;
+  }
+
   async function lockMine(
     repo: BuildingsRepo,
     mapId: string,
@@ -395,8 +424,14 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           // Moves, removals and fuel aren't gated.
           const page = recipeBookPage(buildingPageKey(building.id));
           if (page) await requirePageOpen(tx, user.id, page);
+          // A homestead (#199) is its owner's explore row for the tile, read
+          // after the tile locks and before the buildings (tech spec §7 step 6).
+          const homestead =
+            building.placement === 'homestead' && outer
+              ? homesteadOf(await createExploreRepo(tx).findRow(user.id, outer.id))
+              : null;
           const owned = await repo.listOwned(mapId, user.id);
-          const tile = checkSpot(user.id, home, owned, building, request, outer);
+          const tile = checkSpot(user.id, home, owned, building, request, outer, null, homestead);
           const same = owned.filter((b) => b.buildingId === building.id);
           const homeIds = new Set(home.map((t) => t.id));
           if (homeIds.has(tile.id)) {
@@ -436,11 +471,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     move: (user, mapId, buildingRowId, request) =>
       command(user, mapId, async ({ repo, tx, at, local, timeZone, home }) => {
         const row = await lockMine(repo, mapId, user.id, buildingRowId);
-        // A fire out on my land stays put (#202); home buildings move within home.
-        if (!home.some((t) => t.id === row.tileId))
-          throw new AppError('CONFLICT', MESSAGES.staysPut);
-        const owned = await repo.listOwned(mapId, user.id);
+        // A building out on my land stays put (#202, #277); home ones move within home.
         const building = requireBuildingData(row.buildingId);
+        if (!home.some((t) => t.id === row.tileId))
+          throw new AppError('CONFLICT', MESSAGES.staysPut(building.name));
+        const owned = await repo.listOwned(mapId, user.id);
         const tile = checkSpot(user.id, home, owned, building, request, null, row.id);
         if (tile.id !== row.tileId || request.spot !== row.spot) {
           await repo.moveBuilding(row.id, { tileId: tile.id, spot: request.spot });
@@ -461,38 +496,43 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         return homeView(repo, tx, mapId, user.id, at, timeZone);
       }),
 
-    remove: (user, mapId, buildingRowId) =>
-      command(user, mapId, async ({ repo, tx, at, local, timeZone }) => {
-        const row = await lockMine(repo, mapId, user.id, buildingRowId);
-        const refund = takeDownRefund(row, local);
-        const movedOut = await repo.moveOutAll(row.id);
-        const trainees = await repo.lockTrainees(row.id);
-        // Inventory rows before `species_seen` (tech spec §7 step 11): the
-        // refund first, then trainees land what they earned (an evolution
-        // writes `species_seen`) and stop, then the building goes.
-        if (Object.keys(refund).length > 0) {
-          await grantItems(tx, { mapId, userId: user.id }, refund, 'build-refund', row.id);
-        }
-        const training =
-          trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, true) : null;
-        await repo.deleteBuilding(row.id);
-        await repo.appendEvent({
-          mapId,
-          type: 'building.removed',
-          actorUserId: user.id,
-          payload: {
-            userId: user.id,
-            buildingRowId: row.id,
-            buildingId: row.buildingId,
-            q: row.q,
-            r: row.r,
-            refund,
-            movedOut: [...new Set([...movedOut, ...trainees])].sort(),
-          },
-        });
-        for (const event of training?.events ?? []) await repo.appendEvent(event);
-        return { refund, home: await homeView(repo, tx, mapId, user.id, at, timeZone) };
-      }),
+    remove: async (user, mapId, buildingRowId) =>
+      command(
+        user,
+        mapId,
+        async ({ repo, tx, at, local, timeZone }) => {
+          const row = await lockMine(repo, mapId, user.id, buildingRowId);
+          const refund = takeDownRefund(row, local);
+          const movedOut = await repo.moveOutAll(row.id);
+          const trainees = await repo.lockTrainees(row.id);
+          // Inventory rows before `species_seen` (tech spec §7 step 11): the
+          // refund first, then trainees land what they earned (an evolution
+          // writes `species_seen`) and stop, then the building goes.
+          if (Object.keys(refund).length > 0) {
+            await grantItems(tx, { mapId, userId: user.id }, refund, 'build-refund', row.id);
+          }
+          const training =
+            trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, true) : null;
+          await repo.deleteBuilding(row.id);
+          await repo.appendEvent({
+            mapId,
+            type: 'building.removed',
+            actorUserId: user.id,
+            payload: {
+              userId: user.id,
+              buildingRowId: row.id,
+              buildingId: row.buildingId,
+              q: row.q,
+              r: row.r,
+              refund,
+              movedOut: [...new Set([...movedOut, ...trainees])].sort(),
+            },
+          });
+          for (const event of training?.events ?? []) await repo.appendEvent(event);
+          return { refund, home: await homeView(repo, tx, mapId, user.id, at, timeZone) };
+        },
+        await tileOf(mapId, user.id, buildingRowId),
+      ),
 
     fuel: (user, mapId, buildingRowId, nights) =>
       command(user, mapId, async ({ repo, tx, at, local, timeZone }) => {
@@ -595,39 +635,44 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         };
       }),
 
-    upgrade: (user, mapId, buildingRowId) =>
-      command(user, mapId, async ({ repo, tx, at, local, timeZone }) => {
-        const row = await lockMine(repo, mapId, user.id, buildingRowId);
-        const building = requireBuildingData(row.buildingId);
-        const cost = upgradeCost(building, row.level);
-        if (!cost) throw new AppError('CONFLICT', MESSAGES.topLevel(building.name));
-        // Trainees (squishies, step 10) are locked before the cost's inventory
-        // rows (step 11).
-        const trainees =
-          building.kind === 'training-grounds' ? await repo.lockTrainees(row.id) : [];
-        // Short of anything: CONFLICT ("You need 2 more Glimmer first!"), nothing changes.
-        await consumeItems(tx, { mapId, userId: user.id }, cost, 'upgrade', row.id);
-        // Training XP is worked out from the level, so the whole XP earned at
-        // the old rate lands before the level changes; only the part of a
-        // point still in progress (minutes) carries on at the new rate.
-        const training =
-          trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, false) : null;
-        const level = row.level + 1;
-        await repo.setLevel(row.id, level);
-        await repo.appendEvent({
-          mapId,
-          type: 'building.upgraded',
-          actorUserId: user.id,
-          payload: {
-            userId: user.id,
-            building: placed({ ...row, level }, local),
-            fromLevel: row.level,
-            cost,
-          },
-        });
-        for (const event of training?.events ?? []) await repo.appendEvent(event);
-        return homeView(repo, tx, mapId, user.id, at, timeZone);
-      }),
+    upgrade: async (user, mapId, buildingRowId) =>
+      command(
+        user,
+        mapId,
+        async ({ repo, tx, at, local, timeZone }) => {
+          const row = await lockMine(repo, mapId, user.id, buildingRowId);
+          const building = requireBuildingData(row.buildingId);
+          const cost = upgradeCost(building, row.level);
+          if (!cost) throw new AppError('CONFLICT', MESSAGES.topLevel(building.name));
+          // Trainees (squishies, step 10) are locked before the cost's inventory
+          // rows (step 11).
+          const trainees =
+            building.kind === 'training-grounds' ? await repo.lockTrainees(row.id) : [];
+          // Short of anything: CONFLICT ("You need 2 more Glimmer first!"), nothing changes.
+          await consumeItems(tx, { mapId, userId: user.id }, cost, 'upgrade', row.id);
+          // Training XP is worked out from the level, so the whole XP earned at
+          // the old rate lands before the level changes; only the part of a
+          // point still in progress (minutes) carries on at the new rate.
+          const training =
+            trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, false) : null;
+          const level = row.level + 1;
+          await repo.setLevel(row.id, level);
+          await repo.appendEvent({
+            mapId,
+            type: 'building.upgraded',
+            actorUserId: user.id,
+            payload: {
+              userId: user.id,
+              building: placed({ ...row, level }, local),
+              fromLevel: row.level,
+              cost,
+            },
+          });
+          for (const event of training?.events ?? []) await repo.appendEvent(event);
+          return homeView(repo, tx, mapId, user.id, at, timeZone);
+        },
+        await tileOf(mapId, user.id, buildingRowId),
+      ),
 
     house: (user, mapId, squishyId, habitatRowId) =>
       command(user, mapId, async ({ repo, tx, at, timeZone, mapKind }) => {
@@ -660,16 +705,21 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           await repo.setHabitat(squishy.id, habitatRowId);
           // A gatherer moving in stops work (housed or working, not both;
           // owner decisions 2026-10-04); what it had ready goes in the bag.
+          // A trainee sleeps on its homestead (#277), so it stops training
+          // too, landing what it earned.
           const jobEvents =
             habitatRowId === null
               ? []
-              : await leaveWork(
-                  tx,
-                  { id: mapId, kind: mapKind, timeZone },
-                  [squishy.id],
-                  'resting',
-                  at,
-                );
+              : [
+                  ...(await leaveWork(
+                    tx,
+                    { id: mapId, kind: mapKind, timeZone },
+                    [squishy.id],
+                    'resting',
+                    at,
+                  )),
+                  ...(await landTraining(tx, { id: mapId }, [squishy.id], at, true)).events,
+                ];
           for (const event of jobEvents) await repo.appendEvent(event);
           await repo.appendEvent({
             mapId,
@@ -713,16 +763,23 @@ export interface LostBuilding {
   readonly refund: ItemCounts;
   /** `building.removed`, `lost` set: append it with the caller's other events. */
   readonly event: NewGameEvent<'building.removed'>;
+  /**
+   * A Training Grounds' trainees (#277; empty for anything else): the caller
+   * locks them with its own squishies (step 10), then `finishLostTraining`
+   * lands what they earned and takes the building down.
+   */
+  readonly trainees: readonly string[];
 }
 
 /**
  * Land changed hands or went wild (#202): its buildings come down in the
  * caller's transaction, after its tile locks. Locks them (tech spec §7 step
- * 8, id order) and deletes them; the caller grants each `refund` to its
+ * 8, id order) and deletes its fires; the caller grants each `refund` to its
  * owner at step 11 (after any squishy locks) and appends the events, so the
  * rival never gets the fire and nothing is lost but the fire itself.
- * Buildings on captured land are fires (placement `land`): nobody lives
- * in them.
+ * Training Grounds on a homestead (#277) stay until `finishLostTraining`:
+ * deleting one now would clear its trainees' rows (the foreign key) before
+ * their XP lands, and before the caller has locked them.
  */
 export async function takeDownOnLostLand(
   tx: Executor,
@@ -737,11 +794,14 @@ export async function takeDownOnLostLand(
   const down: LostBuilding[] = [];
   for (const row of await repo.lockOnTiles(tileIds)) {
     const refund = takeDownRefund(row, local);
-    await repo.deleteBuilding(row.id);
+    // Under the tile lock nobody starts training here, so this list holds.
+    const trainees = row.kind === 'training-grounds' ? await repo.traineesOf(row.id) : [];
+    if (row.kind !== 'training-grounds') await repo.deleteBuilding(row.id);
     down.push({
       ownerUserId: row.ownerUserId,
       tileId: row.tileId,
       refund,
+      trainees,
       event: {
         mapId,
         type: 'building.removed',
@@ -753,13 +813,38 @@ export async function takeDownOnLostLand(
           q: row.q,
           r: row.r,
           refund,
-          movedOut: [],
+          movedOut: [...trainees],
           lost,
         },
       },
     });
   }
   return down;
+}
+
+/**
+ * The rest of `takeDownOnLostLand` for Training Grounds (#277): after the
+ * caller has locked their trainees (step 10) and granted the refunds (step
+ * 11), the trainees land what they earned and stop (an evolution writes
+ * `species_seen`, after the bag's rows), and the buildings go. Returns the
+ * training events to append after the caller's own.
+ */
+export async function finishLostTraining(
+  tx: Executor,
+  mapId: string,
+  lost: readonly LostBuilding[],
+  at: Date,
+): Promise<NewGameEvent[]> {
+  const grounds = lost.filter(
+    (l) => BUILDING_DATA.get(l.event.payload.buildingId)?.kind === 'training-grounds',
+  );
+  if (grounds.length === 0) return [];
+  const trainees = grounds.flatMap((l) => l.trainees);
+  const events =
+    trainees.length > 0 ? (await landTraining(tx, { id: mapId }, trainees, at, true)).events : [];
+  const repo = createBuildingsRepo(tx);
+  for (const l of grounds) await repo.deleteBuilding(l.event.payload.buildingRowId);
+  return events;
 }
 
 /**

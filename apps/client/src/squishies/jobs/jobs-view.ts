@@ -30,8 +30,13 @@ export const JOBS_TEXT = {
   rest: 'Rest',
   train: 'Train',
   offToTrain: (name: string) => `${name} is off to practice!`,
-  noGrounds: 'Build Training Grounds at home to train.',
+  noGrounds: 'Build Training Grounds on a homestead to train 🏡',
   groundsFull: 'The Training Grounds are full right now.',
+  pickGrounds: 'Where should they practice? They sleep there at night.',
+  groundsLit: '🔥 Safe by the fire tonight',
+  groundsDark: "🌙 It's dark here at night. Build a fire nearby to keep trainees safe! 🔥",
+  groundsNapping: 'zZ Napping. Join this homestead back up to home!',
+  trainingNapping: 'zZ Its homestead is napping, so no practice for now.',
   pickSpot: 'Where should they gather?',
   noSpots: 'No spots to gather yet. Win some land!',
   cancel: 'Never mind',
@@ -136,6 +141,22 @@ export function hintLines(s: JobSquishy): string[] {
   return jobHints({ ...s.squishy, season: species?.season }, species, JOB_RULES, BATTLE_RULES).map(
     (hint) => jobHintText(hint, RESOURCES),
   );
+}
+
+/** Training Grounds on the picker: "🎯 Training Grounds · room for 1", numbered when there are more. */
+export function groundsLabel(view: Pick<JobsView, 'trainingGrounds'>, id: string): string {
+  const all = view.trainingGrounds;
+  const at = all.findIndex((g) => g.id === id);
+  const g = all[at];
+  if (!g) return '🎯 Training Grounds';
+  const name = all.length > 1 ? `Training Grounds ${String(at + 1)}` : 'Training Grounds';
+  const room = Math.max(0, g.capacity - g.used);
+  return `🎯 ${name} · ${room === 0 ? 'full' : `room for ${String(room)}`}`;
+}
+
+/** Can a squishy start training somewhere (Training Grounds with room, not napping)? */
+export function canTrain(view: Pick<JobsView, 'trainingGrounds'>): boolean {
+  return view.trainingGrounds.some((g) => !g.napping && g.used < g.capacity);
 }
 
 /** A spot to gather, in words: "🌲 Timber (Forest)". */
