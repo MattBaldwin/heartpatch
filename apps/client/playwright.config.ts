@@ -18,7 +18,7 @@ const testDir = './tests/e2e';
  * count that doesn't match, fails the run. Unset (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  ['audio', 'first-session', 'smoke', 'starter', 'wardrobe'],
+  ['audio', 'first-session', 'smoke', 'starter', 'wardrobe', 'explore'],
   ['auth', 'battle', 'care', 'cinematic', 'hollow', 'battle-ui', 'map', 'potions', 'recipe-book'],
   [
     'capture',
