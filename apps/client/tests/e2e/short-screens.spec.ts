@@ -250,7 +250,11 @@ test('a busy tile’s four buttons fit a phone on its side (#264)', async ({ bro
       }
       await expect(panel.getByTestId('tile-meet-wild')).toBeVisible({ timeout: 5_000 });
     }).toPass({ timeout: 30_000 });
-    await expect(panel.getByTestId('tile-send-gatherer')).toBeVisible();
+    // Gather and Go home render once the bag and home data arrive, which can
+    // be after Meet it: wait for all four before measuring.
+    for (const id of ['tile-send-gatherer', 'tile-gather', 'tile-home']) {
+      await expect(panel.getByTestId(id)).toBeVisible();
+    }
     const panelBox = (await boxes(page, '[data-testid="tile-panel"]'))[0]!;
     const buttons = await boxes(page, '[data-testid="tile-panel"] .tile-panel-actions button');
     expect(buttons.length, 'Send a gatherer, Meet it, Gather and Go home').toBe(4);
