@@ -13,6 +13,8 @@ export interface MapFillSummary {
   readonly lostByPlayers: number;
   /** Tiles that went wild in all. */
   readonly wentWild: number;
+  /** Of those, won back by the Hollow Man in the dark (#277). */
+  readonly hollowWild: number;
   /** Tiles that had gone wild and were claimed again. */
   readonly reclaimed: number;
   /** Tiles won from a rival (#203's model). */
@@ -38,6 +40,7 @@ export function summariseMapFill(run: MapFillRun): MapFillSummary {
     nothingToClaim: keeps.map((s) => run.days.filter((d) => d.nothingToClaim[s]).length),
     lostByPlayers: sum((d) => keeps.reduce((t, s) => t + (d.wentWild[s] ?? 0), 0)),
     wentWild: sum((d) => d.wentWild.reduce((t, n) => t + n, 0)),
+    hollowWild: sum((d) => d.hollowWild.reduce((t, n) => t + n, 0)),
     reclaimed: sum((d) => d.reclaimed.reduce((t, n) => t + n, 0)),
     captured: sum((d) => d.captured.reduce((t, n) => t + n, 0)),
     fenceBreaks: sum((d) => d.fenceBreaks),
@@ -125,7 +128,7 @@ export function renderMapFill(
       const run = runOf(sc.id, r.label);
       if (!run) return '—';
       const s = summariseMapFill(run);
-      return `${String(s.lostByPlayers)} lost · ${String(s.wentWild)} wild · ${String(s.reclaimed)} reclaimed`;
+      return `${String(s.lostByPlayers)} lost · ${String(s.wentWild)} wild (${String(s.hollowWild)} by the Hollow Man) · ${String(s.reclaimed)} reclaimed`;
     });
     lines.push(`| ${sc.title} | ${row.join(' | ')} |`);
   }

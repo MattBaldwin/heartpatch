@@ -47,13 +47,15 @@ const jobs = await startJobs({
     createLoreConsumer({ clock }),
     createMilestonesConsumer({ clock }),
   ],
-  // The Hollow Man (#21): night falls on each map at 21:00 map time. Then
-  // untended land goes wild; a retry finds the Hollow's night done and only
-  // tops land up to the night's cap.
+  // The Hollow Man (#21): night falls on each map at 19:00 map time (#277).
+  // Then the dark land he won back goes wild, then untended land does, up
+  // to one cap a night between them; a retry finds the Hollow's night done,
+  // skips land already gone and only tops land up to the night's cap.
   nightfall: {
     due: hollow.dueNightfalls,
     run: async (mapId, night) => {
       const taken = await hollow.runNightfall(mapId, night);
+      await hollow.reclaim(mapId, night);
       await land.nightfall(mapId, night);
       return taken;
     },

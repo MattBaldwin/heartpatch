@@ -4,13 +4,17 @@ import { generateMap } from '../../src/mapgen/index.js';
 import { GAME_DATA } from '../../src/data/index.js';
 import { hexKey } from '../../src/hex/index.js';
 import type { FuelConfig } from './fuel-config.js';
+import { COVER_LIMITS, coverDay, type CoverDay } from './fuel-cover.js';
 import { FUEL_LIMITS, FUEL_PER_NIGHT, emberwoodLand, fuelDay, type FuelDay } from './fuel.js';
+
+/** A day of fuel, and whether all the land can be lit (#277). */
+export type FuelCoverDay = FuelDay & { readonly cover: CoverDay };
 
 /** One kind of kid on one map size. */
 export interface FuelRow {
   readonly seats: number;
   readonly kid: string;
-  readonly days: readonly FuelDay[];
+  readonly days: readonly FuelCoverDay[];
 }
 
 /** The progression model's land (shipped rules, kid 0 of each run), then fuel on it. */
@@ -33,7 +37,11 @@ export function runFuel(config: FuelConfig, progression: ProgressionConfig): Fue
         days: config.days.map((day) => {
           const today = record[day - 1];
           if (!today) throw new Error(`no day ${String(day)} in the progression run`);
-          return fuelDay(day, profile, emberwoodLand(today.land, tiles));
+          const fuel = fuelDay(day, profile, emberwoodLand(today.land, tiles));
+          return {
+            ...fuel,
+            cover: coverDay(profile, day, today.land, tiles, fuel.fuelFires),
+          };
         }),
       });
     }
@@ -62,12 +70,45 @@ export function renderFuel(
       );
     }
   }
+  lines.push(
+    '',
+    '## Lighting all the land (#277)',
+    '',
+    'Every bit of land outside home needs a lit fire, or the Hollow Man can win it back. Fires laid where they light the most (level 1, or level 3 where fuel is short), paid from the share of Timber, Stone and Glimmer banked by that day.',
+    '',
+    '| Seats | Kid | Day | Fires | Of them level 3 | Emberwood / day | Build cost | Banked for fires | Out of reach | **All lit?** |',
+    '|---|---|---|---|---|---|---|---|---|---|',
+  );
+  const items = (r: Record<string, number>) =>
+    Object.entries(r)
+      .filter(([, n]) => n > 0)
+      .map(([item, n]) => `${String(n)} ${item}`)
+      .join(', ') || 'nothing';
+  for (const row of rows) {
+    for (const d of row.days) {
+      const c = d.cover;
+      const verdict = c.fuelOk && c.costOk ? 'yes' : !c.fuelOk ? 'no: fuel' : 'no: build cost';
+      lines.push(
+        `| ${String(row.seats)} | ${row.kid} | ${String(d.day)} | ${String(c.fires)} | ${String(c.wideFires)} | ${String(d.keeper + d.gatherers)} | ${items(c.cost)} | ${items(c.budget)} | ${String(c.outOfReach)} | **${verdict}** |`,
+      );
+    }
+  }
   lines.push('', '## Profiles', '');
   for (const p of config.profiles) {
     lines.push(
-      `- **${p.id}:** sessions at ${p.sessions.map((h) => `${String(h)}:00`).join(', ')}; the Keeper taps ${p.keeperNodes >= 99 ? 'every' : String(p.keeperNodes)} Emberwood node(s); ${String(p.gatherers)} gatherer(s) at ${String(p.gathererSpeedPercent)} % speed.`,
+      `- **${p.id}:** sessions at ${p.sessions.map((h) => `${String(h)}:00`).join(', ')}; the Keeper taps ${p.keeperNodes >= 99 ? 'every' : String(p.keeperNodes)} Emberwood node(s); ${String(p.gatherers)} gatherer(s) at ${String(p.gathererSpeedPercent)} % speed; build nodes tapped a session: ${Object.entries(
+        p.buildNodes,
+      )
+        .map(([r, n]) => `${String(n)} ${r}`)
+        .join(', ')}, ${String(p.buildShare)} % for fires.`,
     );
   }
-  lines.push('', '## Not modelled', '', ...FUEL_LIMITS.map((l) => `- ${l}`), '');
+  lines.push(
+    '',
+    '## Not modelled',
+    '',
+    ...[...FUEL_LIMITS, ...COVER_LIMITS].map((l) => `- ${l}`),
+    '',
+  );
   return lines.join('\n');
 }
