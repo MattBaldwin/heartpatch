@@ -150,6 +150,7 @@
 
 .night-chips[hidden],
 .night-caption[hidden],
+.night-caption.night-caption-held,
 .dark-moon[hidden] {
   display: none;
 }

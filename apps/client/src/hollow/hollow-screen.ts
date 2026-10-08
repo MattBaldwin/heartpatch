@@ -184,6 +184,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   let asking = false;
   /** The morning replay is playing: the report waits and the map shows night. */
   let replaying = false;
+  /** Night just fell live: its walks wait for the status to say it's night. */
+  let pendingFall: { night: string; at: number; walks: ShowWalk[] } | null = null;
   const serverNow = () => now() + clockOffset;
 
   const openButton = el(
@@ -265,12 +267,14 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   });
   strength.hidden = true;
   options.root.append(chips, nudge, strength);
+  /** The narrator's card: it steps back while another Hollow card is open. */
+  let caption: ReturnType<typeof domCaption> | null = null;
   const show = createNightShow({
     now,
     caption: (onSkip) =>
-      domCaption(options.root, onSkip, () =>
+      (caption = domCaption(options.root, onSkip, () =>
         (showReport()?.taken ?? []).filter((t) => t.inHollow).map((t) => token(t.speciesId, true)),
-      ),
+      )),
     stage: {
       walk: (keeper, beat, seed, still, done) =>
         options.layer.walk(keeper, beat, seed, still, done),
@@ -796,6 +800,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
 
   function renderNight(): void {
     const heldBack = options.otherReportOpen?.() ?? false;
+    caption?.setHeld(strengthOpen || !sheet.hidden || heldBack);
     renderStrength(heldBack || replaying);
     renderNudge(
       heldBack || show.playing || strengthOpen || !reportBox.hidden || !sheet.hidden || replaying,
@@ -834,12 +839,47 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       options.layer.setNight(replaying || fresh.night.isNight);
       scheduleNightCheck(fresh.night.changesInMinutes);
       report = unseenReports(fresh.reports, seenNight());
+      const fall = pendingFall;
+      pendingFall = null;
+      if (fall) startFall(fresh, fall);
       joinTonight(fresh);
       options.onStatus?.();
     } catch (err) {
       if (at === generation) note = messageOf(err);
+      if (at === generation && pendingFall) {
+        pendingFall = null;
+        visit();
+      }
     }
     if (at === generation) render();
+  }
+
+  /** His old visit: night fell with no walk to show. */
+  function visit(): void {
+    const at = generation;
+    visitPlaying = options.layer.visit(() => {
+      if (at !== generation) return;
+      visitPlaying = false;
+      render();
+    });
+  }
+
+  /**
+   * Night fell live (#277): every Keeper's walk plays from nightfall, while
+   * it's night (dev builds play it whenever the dev route makes night fall).
+   * Tonight's show runs from tonight's nightfall, so a server that catches
+   * up at 7:40 shows it already over; a night with no walk is his old visit.
+   */
+  function startFall(
+    fresh: HollowStatus,
+    fall: { night: string; at: number; walks: ShowWalk[] },
+  ): void {
+    if (!fresh.night.isNight && options.devTools !== true) return;
+    const startedAt =
+      fall.night === fresh.tonight.night
+        ? Math.min(fall.at, Date.parse(fresh.tonight.nightfallAt) - clockOffset)
+        : fall.at;
+    if (!playLive(fall.night, fall.walks, startedAt)) visit();
   }
 
   /**
@@ -923,6 +963,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       strengthOpen = false;
       replaying = false;
       outNames = null;
+      pendingFall = null;
       if (!next) options.layer.setNight(false);
       render();
       await refresh();
@@ -943,6 +984,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       strengthOpen = false;
       replaying = false;
       outNames = null;
+      pendingFall = null;
       options.layer.setNight(false);
       render();
     },
@@ -970,25 +1012,24 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         // Live, not a replay after reconnecting: the show plays every
         // Keeper's walk from nightfall (#277), and the report follows when
         // it's over. A night with no walk at all is his old visit.
-        const at = generation;
         if (now() - Date.parse(event.at) < VISIT_FRESH_MS) {
           const fell = GAME_EVENTS['hollow.nightfall'].public.safeParse(event.data);
-          const night = fell.success ? fell.data.night : null;
-          const walks: ShowWalk[] = (fell.success ? (fell.data.walks ?? []) : []).map((w) => ({
-            userId: w.userId,
-            walk: w.walk,
-            reclaimed: w.reclaimed,
-            seed: options.show?.seedOf(w.userId) ?? null,
-            story: w.userId === user?.id && night ? storyFor(night) : null,
-          }));
-          const played = night !== null && playLive(night, walks, Date.parse(event.at));
-          if (!played) {
-            visitPlaying = options.layer.visit(() => {
-              if (at !== generation) return;
-              visitPlaying = false;
-              render();
-            });
-          }
+          if (fell.success) {
+            const { night } = fell.data;
+            // Played once the status says whether it's really night now
+            // (a server catching up on a missed night by day plays no show).
+            pendingFall = {
+              night,
+              at: Date.parse(event.at),
+              walks: (fell.data.walks ?? []).map((w) => ({
+                userId: w.userId,
+                walk: w.walk,
+                reclaimed: w.reclaimed,
+                seed: options.show?.seedOf(w.userId) ?? null,
+                story: w.userId === user?.id ? storyFor(night) : null,
+              })),
+            };
+          } else visit();
         }
         void refresh();
       } else if (event.type === 'squishy.hollowed' || event.type === 'squishy.rescued') {

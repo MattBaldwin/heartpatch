@@ -63,7 +63,7 @@ export function domCaption(
   root: HTMLElement,
   onSkip: () => void,
   tokens: () => HTMLElement[],
-): ShowCaption {
+): ShowCaption & { setHeld: (held: boolean) => void } {
   const who = el('span', { class: 'night-caption-who' }, SHOW_TEXT.narrator);
   const text = el('span', { class: 'night-caption-line', 'data-testid': 'night-caption-line' });
   const pics = el('span', { class: 'night-caption-tokens' });
@@ -94,6 +94,10 @@ export function domCaption(
     },
     get shown() {
       return !card.hidden;
+    },
+    /** Another card is open over the map: the narrator waits, the show goes on. */
+    setHeld: (held) => {
+      card.classList.toggle('night-caption-held', held);
     },
   };
 }
