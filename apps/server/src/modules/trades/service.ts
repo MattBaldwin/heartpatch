@@ -16,9 +16,10 @@ import {
   type TradeLine,
   type TradeLineView,
   type TradeRules,
+  type TradeShelf,
   type TradesView,
 } from '@heartpatch/shared';
-import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
+import type { Executor, Transaction } from '../../db/client.js';
 import { appendGameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
@@ -61,7 +62,8 @@ const MESSAGES = {
   notPatchMate: "We couldn't find that patch-mate.",
   self: "You can't trade with yourself, silly!",
   badNote: "We don't know that note. Pick one from the list!",
-  tooManyOpen: (n: number) => `You have ${String(n)} offers waiting already. Give them a little time!`,
+  tooManyOpen: (n: number) =>
+    `You have ${String(n)} offers waiting already. Give them a little time!`,
   onePerPair: 'You already have an offer waiting with them. One at a time!',
   noOffer: "We couldn't find that offer.",
   answered: 'That offer was already answered.',
@@ -92,6 +94,11 @@ const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
 export interface TradesService {
   /** My open offers, my mailbox and recent returns (expires what's due first). */
   view: (user: PublicUser, mapId: string) => Promise<TradesView>;
+  /**
+   * What `targetUserId` could trade right now (me or a patch-mate), with
+   * secret species I haven't met hidden. NOT_FOUND unless we're both members.
+   */
+  shelf: (user: PublicUser, mapId: string, targetUserId: string) => Promise<TradeShelf>;
   /** Sends a trade offer or a gift at the post at (q, r); the give side goes into escrow. */
   send: (user: PublicUser, mapId: string, request: SendOfferRequest) => Promise<TradesView>;
   /** Says yes to a trade at the post at (q, r): both sides move now. */
@@ -143,7 +150,9 @@ const sortedIds = (ids: readonly string[]) => [...new Set(ids)].sort();
 async function appendAll(tx: Transaction, events: readonly NewGameEvent[]): Promise<string[]> {
   const ordered = events
     .map((event, i) => ({ event, i }))
-    .sort((a, b) => (a.event.mapId === b.event.mapId ? a.i - b.i : a.event.mapId < b.event.mapId ? -1 : 1));
+    .sort((a, b) =>
+      a.event.mapId === b.event.mapId ? a.i - b.i : a.event.mapId < b.event.mapId ? -1 : 1,
+    );
   for (const { event } of ordered) await appendGameEvent(tx, event);
   return sortedIds(events.map((e) => e.mapId));
 }
@@ -160,7 +169,7 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
   const run = async <T>(
     fn: (tx: Transaction, events: NewGameEvent[]) => Promise<T>,
   ): Promise<T> => {
-    const { result, mapIds } = await withTransaction(db, async (tx) => {
+    const { result, mapIds } = await createTradesRepo(db).transaction(async (tx) => {
       const events: NewGameEvent[] = [];
       const result = await fn(tx, events);
       return { result, mapIds: await appendAll(tx, events) };
@@ -194,7 +203,12 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     if (wearing.length === worn.length) return;
     await wardrobe.saveOutfit(userId, { preset: WORN, name: null, wearing }, now());
     for (const mapId of await wardrobe.activeMapIds(userId)) {
-      events.push({ mapId, type: 'outfit.changed', actorUserId: userId, payload: { userId, wearing } });
+      events.push({
+        mapId,
+        type: 'outfit.changed',
+        actorUserId: userId,
+        payload: { userId, wearing },
+      });
     }
   };
 
@@ -250,11 +264,18 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     }
     // Inventory (step 11): every row first, then the grants.
     const grants = offers.map((o) => ({ userId: o.fromUserId, items: itemCounts(giveOf(o.id)) }));
-    await lockGrantRows(tx, offers[0]!.mapId, grants);
+    const [first] = offers;
+    if (first) await lockGrantRows(tx, first.mapId, grants);
     for (const [i, offer] of offers.entries()) {
-      const items = grants[i]!.items;
+      const items = grants[i]?.items ?? {};
       if (hasAny(items)) {
-        await grantItems(tx, { mapId: offer.mapId, userId: offer.fromUserId }, items, 'trade-return', offer.id);
+        await grantItems(
+          tx,
+          { mapId: offer.mapId, userId: offer.fromUserId },
+          items,
+          'trade-return',
+          offer.id,
+        );
       }
     }
     await repo.setStatus(ids, status, at);
@@ -373,7 +394,10 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
         );
       } else {
         const piece = pieceById.get(line.clothingId);
-        out.set(line, piece ? { kind: 'clothing', clothingId: piece.id, itemId: piece.itemId } : null);
+        out.set(
+          line,
+          piece ? { kind: 'clothing', clothingId: piece.id, itemId: piece.itemId } : null,
+        );
       }
     }
     return out;
@@ -410,7 +434,11 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
         kind: m.kind,
         // The patch-mate it came from; a return note is from me.
         fromUserId:
-          m.kind === 'return' || !p ? m.userId : p.fromUserId === m.userId ? p.toUserId : p.fromUserId,
+          m.kind === 'return' || !p
+            ? m.userId
+            : p.fromUserId === m.userId
+              ? p.toUserId
+              : p.fromUserId,
         lines: shown(m.lines),
         readyAt: m.readyAt.toISOString(),
         pickedUpAt: m.pickedUpAt?.toISOString() ?? null,
@@ -440,6 +468,42 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     await requireMember(db, user, mapId);
     await expireDue(mapId);
     return viewOf(db, mapId, user.id);
+  };
+
+  const shelf = async (user: PublicUser, mapId: string, targetUserId: string) => {
+    await requireMember(db, user, mapId);
+    const repo = createTradesRepo(db);
+    if (!(await repo.isActiveMember(mapId, targetUserId))) {
+      throw new AppError('NOT_FOUND', MESSAGES.notPatchMate);
+    }
+    await expireDue(mapId);
+    const [pets, bag, pieces, starter, seen] = await Promise.all([
+      repo.squishiesOf(mapId, targetUserId),
+      repo.bagOf(mapId, targetUserId),
+      repo.piecesOf(targetUserId),
+      repo.starterOf(mapId, targetUserId),
+      repo.seenOf(mapId, user.id),
+    ]);
+    const known = (speciesId: string) => PUBLIC_SPECIES.has(speciesId) || seen.has(speciesId);
+    return {
+      userId: targetUserId,
+      squishies: pets
+        .filter((s) => s.state === 'active' && jobOf(s) === 'resting' && s.id !== starter)
+        .map((s) => ({
+          kind: 'squishy' as const,
+          squishyId: s.id,
+          speciesId: known(s.speciesId) ? s.speciesId : null,
+          level: s.level,
+          nickname: s.nickname,
+        })),
+      items: Object.entries(bag)
+        .filter(([itemId, quantity]) => quantity > 0 && TRADABLE_ITEMS.has(itemId))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([itemId, quantity]) => ({ kind: 'item' as const, itemId, quantity })),
+      clothing: pieces
+        .filter((p) => p.heldByOfferId === null && CLOTHING_BY_ID.get(p.itemId)?.tradable === true)
+        .map((p) => ({ kind: 'clothing' as const, clothingId: p.id, itemId: p.itemId })),
+    };
   };
 
   // ---- commands -------------------------------------------------------------
@@ -512,7 +576,12 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       }
       await repo.setSquishyState(squishyIds(give), 'in-trade');
       await repo.movePieces(gifts, user.id, offer.id);
-      await takeOffGone(tx, user.id, pieces.map((p) => p.itemId), events);
+      await takeOffGone(
+        tx,
+        user.id,
+        pieces.map((p) => p.itemId),
+        events,
+      );
       const items = itemCounts(give);
       if (hasAny(items)) {
         await consumeItems(tx, { mapId, userId: user.id }, items, 'trade-escrow', offer.id); // step 11
@@ -579,7 +648,12 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       // My side goes to the sender's mailbox, held until they pick it up.
       await repo.moveSquishies(squishyIds(want), offer.fromUserId, 'in-trade');
       await repo.movePieces(pieceIds(want), offer.fromUserId, offer.id);
-      await takeOffGone(tx, user.id, wantPieces.map((p) => p.itemId), events);
+      await takeOffGone(
+        tx,
+        user.id,
+        wantPieces.map((p) => p.itemId),
+        events,
+      );
       await repo.insertMailbox({
         mapId,
         userId: offer.fromUserId,
@@ -619,12 +693,7 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
   };
 
   /** Decline and cancel: the offer goes back, from anywhere (no post needed). */
-  const answerNo = async (
-    user: PublicUser,
-    mapId: string,
-    offerId: string,
-    who: 'to' | 'from',
-  ) => {
+  const answerNo = async (user: PublicUser, mapId: string, offerId: string, who: 'to' | 'from') => {
     await requireMember(db, user, mapId);
     await expireDue(mapId);
     await run(async (tx, events) => {
@@ -669,7 +738,13 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       if (wanted.length === 0 || !tile) return;
       // Offers then mailbox rows (step 9b), each in id order.
       const offers = await repo.lockOffers(wanted.map((m) => m.offerId));
-      const rows = (await repo.lockWaiting(mapId, user.id, wanted.map((m) => m.id))).filter(
+      const rows = (
+        await repo.lockWaiting(
+          mapId,
+          user.id,
+          wanted.map((m) => m.id),
+        )
+      ).filter(
         (m) => m.kind !== 'gift' || offers.find((o) => o.id === m.offerId)?.status === 'open',
       );
       if (rows.length === 0) return;
@@ -679,10 +754,16 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       const pets = await repo.lockSquishies(squishyIds(lines)); // step 10
       const pieces = await repo.lockPieces(pieceIds(lines)); // step 10b
       const heldPets = pets.filter((p) => p.state === 'in-trade');
-      await repo.moveSquishies(heldPets.map((p) => p.id), user.id, 'active');
+      await repo.moveSquishies(
+        heldPets.map((p) => p.id),
+        user.id,
+        'active',
+      );
       const offerIds = new Set(rows.map((m) => m.offerId));
       await repo.movePieces(
-        pieces.filter((p) => p.heldByOfferId !== null && offerIds.has(p.heldByOfferId)).map((p) => p.id),
+        pieces
+          .filter((p) => p.heldByOfferId !== null && offerIds.has(p.heldByOfferId))
+          .map((p) => p.id),
         user.id,
         null,
       );
@@ -697,10 +778,24 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       const spawns = createSpawnsRepo(tx);
       for (const pet of heldPets) await spawns.markCaught(mapId, user.id, pet.speciesId, at);
 
-      await repo.pickedUp(rows.map((m) => m.id), at, tile.id);
-      await repo.setStatus(gifts.map((g) => g.id), 'accepted', at);
+      await repo.pickedUp(
+        rows.map((m) => m.id),
+        at,
+        tile.id,
+      );
+      await repo.setStatus(
+        gifts.map((g) => g.id),
+        'accepted',
+        at,
+      );
       for (const row of rows) {
-        await repo.ledger({ mapId, offerId: row.offerId, event: 'picked-up', actorUserId: user.id, at });
+        await repo.ledger({
+          mapId,
+          offerId: row.offerId,
+          event: 'picked-up',
+          actorUserId: user.id,
+          at,
+        });
       }
       for (const gift of gifts) {
         events.push({
@@ -745,6 +840,7 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
 
   return {
     view,
+    shelf,
     send,
     accept,
     decline: (user, mapId, offerId) => answerNo(user, mapId, offerId, 'to'),

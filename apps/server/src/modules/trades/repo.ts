@@ -8,7 +8,7 @@ import {
 } from '@heartpatch/shared';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Executor } from '../../db/client.js';
+import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import {
   clothingOwned,
   inventories,
@@ -134,9 +134,12 @@ function lineOf(row: {
   quantity: number | null;
   clothingId: string | null;
 }): TradeLine | null {
-  if (row.kind === 'squishy') return row.squishyId ? { kind: 'squishy', squishyId: row.squishyId } : null;
+  if (row.kind === 'squishy')
+    return row.squishyId ? { kind: 'squishy', squishyId: row.squishyId } : null;
   if (row.kind === 'item') {
-    return row.itemId && row.quantity ? { kind: 'item', itemId: row.itemId, quantity: row.quantity } : null;
+    return row.itemId && row.quantity
+      ? { kind: 'item', itemId: row.itemId, quantity: row.quantity }
+      : null;
   }
   return row.clothingId ? { kind: 'clothing', clothingId: row.clothingId } : null;
 }
@@ -148,6 +151,8 @@ function lineOf(row: {
  */
 export function createTradesRepo(db: Executor) {
   return {
+    /** Runs `fn` in one transaction (the service keeps tech spec §7's lock order). */
+    transaction: <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> => withTransaction(db, fn),
     tradingEnabled: async (mapId: string): Promise<boolean> => {
       const [row] = await db
         .select({ on: maps.tradingEnabled })
@@ -233,7 +238,10 @@ export function createTradesRepo(db: Executor) {
 
     setSquishyState: async (ids: readonly string[], state: SquishyState): Promise<void> => {
       if (ids.length === 0) return;
-      await db.update(squishies).set({ state }).where(inArray(squishies.id, [...ids]));
+      await db
+        .update(squishies)
+        .set({ state })
+        .where(inArray(squishies.id, [...ids]));
     },
 
     /**
@@ -310,7 +318,10 @@ export function createTradesRepo(db: Executor) {
       await db
         .delete(squishyAccessories)
         .where(
-          and(eq(squishyAccessories.userId, userId), inArray(squishyAccessories.itemId, [...itemIds])),
+          and(
+            eq(squishyAccessories.userId, userId),
+            inArray(squishyAccessories.itemId, [...itemIds]),
+          ),
         );
     },
 
@@ -415,7 +426,10 @@ export function createTradesRepo(db: Executor) {
             eq(tradeOffers.status, 'open'),
             filter.expiredBy ? lte(tradeOffers.expiresAt, filter.expiredBy) : undefined,
             filter.userId
-              ? or(eq(tradeOffers.fromUserId, filter.userId), eq(tradeOffers.toUserId, filter.userId))
+              ? or(
+                  eq(tradeOffers.fromUserId, filter.userId),
+                  eq(tradeOffers.toUserId, filter.userId),
+                )
               : undefined,
           ),
         )
@@ -441,7 +455,11 @@ export function createTradesRepo(db: Executor) {
     offerParties: async (ids: readonly string[]) => {
       if (ids.length === 0) return new Map<string, { fromUserId: string; toUserId: string }>();
       const rows = await db
-        .select({ id: tradeOffers.id, fromUserId: tradeOffers.fromUserId, toUserId: tradeOffers.toUserId })
+        .select({
+          id: tradeOffers.id,
+          fromUserId: tradeOffers.fromUserId,
+          toUserId: tradeOffers.toUserId,
+        })
         .from(tradeOffers)
         .where(inArray(tradeOffers.id, [...ids]));
       return new Map(rows.map(({ id, ...parties }) => [id, parties]));
@@ -519,7 +537,9 @@ export function createTradesRepo(db: Executor) {
       const rows = await db
         .select(mailboxColumns)
         .from(mailbox)
-        .where(and(eq(mailbox.mapId, mapId), eq(mailbox.userId, userId), isNull(mailbox.pickedUpAt)))
+        .where(
+          and(eq(mailbox.mapId, mapId), eq(mailbox.userId, userId), isNull(mailbox.pickedUpAt)),
+        )
         .orderBy(asc(mailbox.readyAt), asc(mailbox.id));
       return rows.map(toMailbox);
     },

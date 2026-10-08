@@ -135,3 +135,24 @@ export const PickupRequestSchema = z.strictObject({
 export type PickupRequest = z.infer<typeof PickupRequestSchema>;
 
 export const OfferParamsSchema = z.object({ mapId: z.uuid(), offerId: z.uuid() });
+
+export const ShelfParamsSchema = z.object({ mapId: z.uuid(), userId: z.uuid() });
+
+/**
+ * `GET /maps/:mapId/trades/shelf/:userId`: what a patch-mate (or I) could
+ * trade right now, to build an offer from (#271). Only trade-ready things:
+ * resting squishies (not the patch starter, nothing busy, Hollowed or in a
+ * trade; a secret species the viewer hasn't met is `speciesId: null`),
+ * tradable items in the bag, and tradable clothing pieces not held by an
+ * offer. The server checks it all again on send.
+ */
+export const TradeShelfSchema = z.object({
+  userId: z.uuid(),
+  squishies: z.array(TradeLineViewSchema.options[0]),
+  items: z.array(TradeLineViewSchema.options[1]),
+  clothing: z.array(TradeLineViewSchema.options[2]),
+});
+export type TradeShelf = z.infer<typeof TradeShelfSchema>;
+
+export const TradeShelfResponseSchema = z.object({ shelf: TradeShelfSchema });
+export type TradeShelfResponse = z.infer<typeof TradeShelfResponseSchema>;

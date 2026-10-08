@@ -1554,7 +1554,11 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     const ids = Array.from({ length: 4 }, () => randomUUID()).sort();
     const owners = [sam, lee, sam, lee];
     await db.insert(squishies).values(
-      [...ids.map((id, i) => ({ id, owner: owners[i]! })), { id: randomUUID(), owner: lee }, { id: randomUUID(), owner: sam }]
+      [
+        ...ids.map((id, i) => ({ id, owner: owners[i]! })),
+        { id: randomUUID(), owner: lee },
+        { id: randomUUID(), owner: sam },
+      ]
         .reverse()
         .map(({ id, owner }) => ({
           id,
@@ -1630,7 +1634,9 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     });
     const results = await Promise.all([
       outcome(trades.accept(sam, mapId, offerId, post)),
-      outcome(trades.accept(lee, mapId, back.offers.find((o) => o.fromUserId === sam.id)!.id, post)),
+      outcome(
+        trades.accept(lee, mapId, back.offers.find((o) => o.fromUserId === sam.id)!.id, post),
+      ),
     ]);
     expect(results).toEqual(['ok', 'ok']);
     const owners = await db

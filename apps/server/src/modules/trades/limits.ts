@@ -4,6 +4,10 @@ import type { RateLimitTable } from '../../lib/rate-limit.js';
 import { MINUTE_MS } from '../../lib/time.js';
 
 export const TRADE_RATE_LIMITS = {
+  read: {
+    perIp: { max: 300, windowMs: MINUTE_MS }, // TUNE: guess
+    perUser: { max: 60, windowMs: MINUTE_MS }, // TUNE: guess; every shelf the post screen opens
+  },
   send: {
     perIp: { max: 200, windowMs: 15 * MINUTE_MS }, // TUNE: guess
     perUser: { max: 40, windowMs: 15 * MINUTE_MS }, // TUNE: guess; 5 open at a time

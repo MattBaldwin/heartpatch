@@ -5,6 +5,8 @@ import {
   PostAtRequestSchema,
   SendOfferRequestSchema,
   SetTradingRequestSchema,
+  ShelfParamsSchema,
+  TradeShelfResponseSchema,
   TradesResponseSchema,
   TradingResponseSchema,
 } from '@heartpatch/shared';
@@ -44,6 +46,18 @@ export const tradesRoutes =
       async (request) => ({
         trades: await service.view(requireUser(request), request.params.mapId),
       }),
+    );
+
+    app.get(
+      '/maps/:mapId/trades/shelf/:userId',
+      {
+        schema: { params: ShelfParamsSchema, response: { 200: TradeShelfResponseSchema } },
+        preHandler: [requireAuth, rateLimit('read')],
+      },
+      async (request) => {
+        const { mapId, userId } = request.params;
+        return { shelf: await service.shelf(requireUser(request), mapId, userId) };
+      },
     );
 
     app.post(
