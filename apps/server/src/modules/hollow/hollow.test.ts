@@ -879,7 +879,18 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       await db.execute(`update maps set hollow_strength_percent = 0 where id = '${mapId}'`);
       const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
       expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
-      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
+      // Turned off, he only watches: no strike, no walk, and every view says so.
+      expect(await outcomeOf(mapId, kid)).toMatchObject({
+        reclaimed: [],
+        strikes: 0,
+        stage: 'watching',
+        walk: [],
+      });
+      const fell = (await eventsOf(mapId)).at(-1)!;
+      expect(parseGameEventPayload('hollow.nightfall', fell.payload).walks).toEqual([
+        { userId: kid.id, stage: 'watching', reclaimed: [], walk: [] },
+      ]);
+      expect((await statusOf(server, kid, mapId)).tonight.stage).toBe('watching');
       await db.execute(`update maps set hollow_strength_percent = 300 where id = '${mapId}'`);
       expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 2 });
     });

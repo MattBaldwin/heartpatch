@@ -13,6 +13,7 @@ import {
   isFreshTile,
   isLocalBefore,
   isNightAt,
+  isOnWatch,
   keeperNightOf,
   lastNightOf,
   minutesUntilNightChange,
@@ -263,7 +264,10 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
               deriveSeed(seed, 'hollow-strength', night, userId),
             )
           : 0;
-      return { userId, keeperNight: nightNo, stage: strength.stage, grace, strikes };
+      // Where he can't strike (the Glade, or a patch at 0 %) he only watches:
+      // the same stage `tonight` shows, and no walk to play.
+      const stage = canTake && percent > 0 ? strength.stage : 'watching';
+      return { userId, keeperNight: nightNo, stage, grace, strikes };
     });
     const outcomes = nightfall(
       keepers.map(({ userId, grace, strikes }) => ({
@@ -314,17 +318,20 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         const row = squishyRows.find((s) => s.id === id);
         if (!row) return [];
         const sq = asNight(row);
-        const where = sq.post?.at ?? sq.sleepsAt;
+        // Where it spent the night, as `shelterOf` reads it.
+        const where = sq.post && isOnWatch(sq, sq.post) ? sq.post.at : sq.sleepsAt;
         return where ? [where] : [];
       });
       const land = mapTiles.filter((t) => t.ownerUserId === userId);
-      const walk = hollowWalk({
-        land,
-        safe,
-        strikes: [...reclaimed, ...takenAt],
-        heartSeed,
-        seed: deriveSeed(seed, 'hollow-walk', night, userId),
-      });
+      const walk = !(canTake && percent > 0)
+        ? []
+        : hollowWalk({
+            land,
+            safe,
+            strikes: [...reclaimed, ...takenAt],
+            heartSeed,
+            seed: deriveSeed(seed, 'hollow-walk', night, userId),
+          });
       const reclaimedAt = reclaimed.map(({ q, r }) => ({ q, r }));
       stored.push({
         ...outcome,
