@@ -27,6 +27,7 @@ import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
 import { MAP_BUILDING_SCALE, MAP_OUTER_FIRE_SCALE, SAFE_GLOW } from '../home/home-config.js';
 import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
+import { BorderField } from './border-field.js';
 import { FenceField } from './fence-field.js';
 import { fenceLength, fencePlacements } from './fence-layout.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
@@ -43,27 +44,19 @@ import {
   HEX_SIZE,
   HOMESTEAD_GLOW,
   HOME_LOOK,
+  BORDER,
   ISLAND,
   LAND_FADE,
   MUTED,
-  PLAYER_COLORS,
   PROP_SWAY,
   TERRAIN_LOOKS,
   TILE_FILL,
-  TINT,
   type PropKind,
   type TerrainLook,
   WILD_MARKER,
 } from './map-config.js';
 import { dressTile, hexRgb, isMuted, muteRgb, tileColor, tileJitter } from './map-dressing.js';
-import {
-  findHomeBases,
-  hash01,
-  mapBounds,
-  mapRadius,
-  slotsByUser,
-  tintSlot,
-} from './map-layout.js';
+import { findHomeBases, hash01, mapBounds, mapRadius } from './map-layout.js';
 import { buildProp, buildWildTuft, linear, merged, painted } from './map-props.js';
 import type { WildMarker } from './wild-markers.js';
 import { AMBIENT_ATTRIBUTE, attachTerrainPlugin, TerrainClock } from './terrain-plugin.js';
@@ -73,16 +66,16 @@ import type { QualityTier } from '../engine/config.js';
 // (home, cinematic, battle) import them from.
 export { buildProp, merged, painted, type BuiltProp } from './map-props.js';
 
-// The world map (#7): instanced hex tiles, territory tint, home bases,
+// The world map (#7): instanced hex tiles, land borders (#278), home bases,
 // Juniper's Gap and props, drawn from the server's map view. One draw call per
-// terrain, per player tint and per prop kind, however many tiles (CLAUDE.md
+// terrain, per Keeper's border and per prop kind, however many tiles (CLAUDE.md
 // rule 8). No textures: soft edges and baked contact shadows are vertex alpha.
 // The terrain visual pass adds per-tile colour and height wobble, wild land
 // drawn muted, many more props, Halloween dressing and ambient life (sway,
 // water, motes), all moved on the GPU by one time uniform (terrain-plugin.ts).
 
 const TILE_RADIUS = HEX_SIZE * TILE_FILL;
-/** Rounded-top profile shared by tiles and the tint laid over them (top at y = 0). */
+/** Rounded-top profile shared by tiles and the overlays laid over them (top at y = 0). */
 export const DOME = 0.035; // TUNE
 export const BEVEL = 0.07; // TUNE
 export const TOP_RINGS: readonly ProfileRing[] = [
@@ -94,7 +87,7 @@ export const TOP_RINGS: readonly ProfileRing[] = [
 ];
 export const CORNER = 0.2; // TUNE: corner rounding, fraction of the radius
 export const SEGMENTS = 3;
-/** Tint floats this far above the tile so it never z-fights. */
+/** Overlays (selection, safe glow) float this far above the tile so they never z-fight. */
 const TINT_LIFT = 0.012;
 /** Fences stand near a tile's rim, where its rounded top has dropped a little. TUNE */
 const FENCE_LIFT = DOME * 0.2;
@@ -106,8 +99,11 @@ export interface MapSceneStats {
   readonly tiles: number;
   /** Resource-node props on home bases (Timber trees, Stone rocks…). */
   readonly homeNodes: number;
-  /** Tiles drawn with a player's tint (home rings included). */
+  /** Tiles drawn in a player's colour (home rings included). */
   readonly tinted: number;
+  /** Land borders (#278): one mesh (draw call) per Keeper with land, and their triangles. */
+  readonly borderMeshes: number;
+  readonly borderTriangles: number;
   readonly homes: number;
   readonly claimedHomes: number;
   /** Meshes drawing tiles: one per terrain look in use, plus home tiles. */
@@ -205,7 +201,7 @@ export function vinyl(
   return m;
 }
 
-/** Unlit, vertex-coloured and alpha-blended: tint, selection and blob shadows. */
+/** Unlit, vertex-coloured and alpha-blended: borders, selection and blob shadows. */
 export function overlayMaterial(scene: Scene, name: string): StandardMaterial {
   const m = new StandardMaterial(name, scene);
   m.disableLighting = true;
@@ -286,8 +282,8 @@ export class MapScene {
   readonly bounds: Bounds;
   private readonly scene: Scene;
   private readonly tiles = new Map<HexKey, PublicTile>();
-  private readonly tintMeshes: Mesh[] = [];
-  private readonly tintMaterial: StandardMaterial;
+  /** Whose land is whose (#278): a wash, a ribbon on the outer edges, and icons. */
+  private readonly borders: BorderField;
   private readonly seedMesh: Mesh;
   private readonly plotMesh: Mesh;
   private readonly selection: Mesh;
@@ -309,7 +305,6 @@ export class MapScene {
   private readonly homeNodes: number;
   private tileMeshes = 0;
   private counts = {
-    tinted: 0,
     homes: 0,
     claimedHomes: 0,
     safeTiles: 0,
@@ -366,7 +361,19 @@ export class MapScene {
     this.share = moteShare(tier);
     this.applyAmbient();
 
-    this.tintMaterial = overlayMaterial(scene, 'tint-mat');
+    this.borders = new BorderField(scene, {
+      shape: {
+        size: HEX_SIZE,
+        radius: TILE_RADIUS,
+        corner: CORNER,
+        segments: SEGMENTS,
+        dome: DOME,
+        rings: TOP_RINGS,
+      },
+      topOf,
+      material: overlayMaterial(scene, 'border-mat'),
+      meshFrom,
+    });
     this.seedMesh = buildHeartSeed(scene);
     this.plotMesh = CreateTorus('home-plot', { diameter: 0.34, thickness: 0.05 }, scene);
     this.plotMesh.material = vinyl(scene, 'home-plot-mat', { color: '#f3dcb0' });
@@ -443,6 +450,9 @@ export class MapScene {
       tileMeshes: this.tileMeshes,
       homeNodes: this.homeNodes,
       ...this.counts,
+      tinted: this.borders.tinted,
+      borderMeshes: this.borders.stats.meshes,
+      borderTriangles: this.borders.stats.triangles,
       keepers: this.keepers.handles.length,
       buildings: this.buildings.stats.buildings,
       litFires: this.buildings.stats.lit,
@@ -554,6 +564,7 @@ export class MapScene {
   setNight(night: boolean): void {
     if (night === this.night) return;
     this.night = night;
+    this.borders.setNight(night ? BORDER.night : 0);
     this.applyAmbient();
   }
 
@@ -569,22 +580,7 @@ export class MapScene {
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
     this.recolour();
     this.homeNode = null;
-    const slots = slotsByUser(view.members);
-    const bySlot = new Map<number, Matrix[]>();
-    let tinted = 0;
-    for (const tile of this.tiles.values()) {
-      const slot = tintSlot(tile, slots);
-      if (slot === null) continue;
-      const p = hexToWorld(tile, HEX_SIZE);
-      let list = bySlot.get(slot);
-      if (!list) bySlot.set(slot, (list = []));
-      list.push(placeAt(p.x, topOf(tile) + TINT_LIFT, p.z));
-      tinted++;
-    }
-    const highest = Math.max(this.tintMeshes.length - 1, ...bySlot.keys());
-    for (let slot = 0; slot <= highest; slot++) {
-      setInstances(this.tintMesh(slot), bySlot.get(slot) ?? [], true);
-    }
+    this.borders.set(this.tiles.values(), view.members);
 
     const homes = findHomeBases([...this.tiles.values()]);
     const seeds: Matrix[] = [];
@@ -674,7 +670,6 @@ export class MapScene {
     setInstances(this.pausedGlow, napping, true);
     setInstances(this.exploredMark, explored, true);
     this.counts = {
-      tinted,
       homes: homes.length,
       claimedHomes: seeds.length,
       safeTiles: safe.length,
@@ -726,38 +721,6 @@ export class MapScene {
     }
     const { tile } = this.homeNode;
     return tile ? tileScreenRectOf(this.scene, tile) : null;
-  }
-
-  private tintMesh(slot: number): Mesh {
-    for (let s = this.tintMeshes.length; s <= slot; s++) {
-      const color = linear(PLAYER_COLORS[s % PLAYER_COLORS.length] ?? '#ffffff');
-      const mesh = meshFrom(
-        this.scene,
-        `tint-${String(s)}`,
-        loftRoundedHex(
-          TILE_RADIUS,
-          [
-            { scale: 0.5, y: DOME * 0.75, alpha: TINT.fill },
-            { scale: 0.8, y: DOME * 0.25, alpha: TINT.fill },
-            { scale: 0.92, y: -BEVEL * 0.25, alpha: TINT.edge },
-            { scale: 0.98, y: -BEVEL * 0.7, alpha: TINT.edge * 0.6 },
-            { scale: 1, y: -BEVEL, alpha: 0 },
-          ],
-          {
-            corner: CORNER,
-            segments: SEGMENTS,
-            centre: { y: DOME, alpha: TINT.fill },
-            rgb: [color.r, color.g, color.b],
-          },
-        ),
-      );
-      mesh.material = this.tintMaterial;
-      mesh.setEnabled(false);
-      this.tintMeshes.push(mesh);
-    }
-    const mesh = this.tintMeshes[slot];
-    if (!mesh) throw new Error(`no tint mesh for slot ${String(slot)}`);
-    return mesh;
   }
 
   private buildIsland(tiles: readonly PublicTile[]): void {
