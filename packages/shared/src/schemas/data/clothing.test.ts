@@ -98,6 +98,12 @@ describe('the clothing catalog', () => {
       expect.stringContaining('only costumes have more than 12 pieces'),
       expect.stringContaining('only costumes place pieces on body sockets'),
     ]);
+    const sleeves = copy();
+    const hollow = sleeves.find((i) => i.id === 'hollow-man-costume')!;
+    hollow.visual.pieces.find((p) => p.on === 'arms')!.turn = [20, 0, 0];
+    expect(checkClothingData(sleeves, SEASON_IDS)).toEqual([
+      expect.stringContaining('pieces on the arms may only roll'),
+    ]);
   });
 
   it('has no avoided words in names or descriptions (style guide §9)', () => {

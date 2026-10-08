@@ -1,6 +1,24 @@
 import type { ClothingDropTable } from '../../schemas/data/clothing-drops.js';
 
 /**
+ * The #261 Halloween costumes, in every table that finds them: rarer is much
+ * rarer, the Mythic rarest of all (weights ×10, so it can be 1). One list, so
+ * the ladder can't drift between tables.
+ */
+const HALLOWEEN_COSTUMES = [
+  { item: 'patch-scarecrow', weight: 30 }, // TUNE: every weight
+  { item: 'candy-corn-cutie', weight: 30 },
+  { item: 'star-striker', weight: 20 },
+  { item: 'cozy-mummy', weight: 20 },
+  { item: 'moonbroom-witch', weight: 12 },
+  { item: 'bat-buddy', weight: 12 },
+  { item: 'zippy-hedgehog', weight: 6 },
+  { item: 'glow-moth', weight: 6 },
+  { item: 'marigold-calavera', weight: 3 },
+  { item: 'hollow-man-costume', weight: 1 },
+] as const satisfies readonly ClothingDropTable['entries'][number][];
+
+/**
  * Found clothing drop tables (design doc §23). Secret (CLAUDE.md rule 6):
  * server-only, so players can't read the odds or where things hide. Halloween
  * items carry `season: 'halloween'` in the catalog and only drop in that
@@ -44,17 +62,7 @@ export const CLOTHING_DROPS: ClothingDropTable[] = [
       { item: 'ghost-sheet', weight: 30, terrains: ['old-forest'] },
       { item: 'bat-wings', weight: 10, terrains: ['old-forest', 'mountains'] },
       { item: 'squishy-onesie', weight: 10 },
-      // Halloween costumes (#261): rarer is much rarer, the Mythic rarest of all.
-      { item: 'patch-scarecrow', weight: 30 },
-      { item: 'candy-corn-cutie', weight: 30 },
-      { item: 'star-striker', weight: 20 },
-      { item: 'cozy-mummy', weight: 20 },
-      { item: 'moonbroom-witch', weight: 12 },
-      { item: 'bat-buddy', weight: 12 },
-      { item: 'zippy-hedgehog', weight: 6 },
-      { item: 'glow-moth', weight: 6 },
-      { item: 'marigold-calavera', weight: 3 },
-      { item: 'hollow-man-costume', weight: 1 },
+      ...HALLOWEEN_COSTUMES,
     ],
   },
   {
@@ -75,17 +83,7 @@ export const CLOTHING_DROPS: ClothingDropTable[] = [
       { item: 'tiny-witch-hat', weight: 30 },
       { item: 'bat-wings', weight: 10 },
       { item: 'squishy-onesie', weight: 10 },
-      // Halloween costumes (#261): rarer is much rarer, the Mythic rarest of all.
-      { item: 'patch-scarecrow', weight: 30 },
-      { item: 'candy-corn-cutie', weight: 30 },
-      { item: 'star-striker', weight: 20 },
-      { item: 'cozy-mummy', weight: 20 },
-      { item: 'moonbroom-witch', weight: 12 },
-      { item: 'bat-buddy', weight: 12 },
-      { item: 'zippy-hedgehog', weight: 6 },
-      { item: 'glow-moth', weight: 6 },
-      { item: 'marigold-calavera', weight: 3 },
-      { item: 'hollow-man-costume', weight: 1 },
+      ...HALLOWEEN_COSTUMES,
     ],
   },
   {
@@ -106,36 +104,12 @@ export const CLOTHING_DROPS: ClothingDropTable[] = [
     // outside the window a win finds nothing.
     source: 'battle',
     chance: 6, // TUNE
-    entries: [
-      // Halloween costumes (#261): rarer is much rarer, the Mythic rarest of all.
-      { item: 'patch-scarecrow', weight: 30 },
-      { item: 'candy-corn-cutie', weight: 30 },
-      { item: 'star-striker', weight: 20 },
-      { item: 'cozy-mummy', weight: 20 },
-      { item: 'moonbroom-witch', weight: 12 },
-      { item: 'bat-buddy', weight: 12 },
-      { item: 'zippy-hedgehog', weight: 6 },
-      { item: 'glow-moth', weight: 6 },
-      { item: 'marigold-calavera', weight: 3 },
-      { item: 'hollow-man-costume', weight: 1 },
-    ],
+    entries: [...HALLOWEEN_COSTUMES],
   },
   {
     // An explore find (#199 calls `rollFoundDrop` with `source: 'explore'`).
     source: 'explore',
     chance: 10, // TUNE
-    entries: [
-      // Halloween costumes (#261): rarer is much rarer, the Mythic rarest of all.
-      { item: 'patch-scarecrow', weight: 30 },
-      { item: 'candy-corn-cutie', weight: 30 },
-      { item: 'star-striker', weight: 20 },
-      { item: 'cozy-mummy', weight: 20 },
-      { item: 'moonbroom-witch', weight: 12 },
-      { item: 'bat-buddy', weight: 12 },
-      { item: 'zippy-hedgehog', weight: 6 },
-      { item: 'glow-moth', weight: 6 },
-      { item: 'marigold-calavera', weight: 3 },
-      { item: 'hollow-man-costume', weight: 1 },
-    ],
+    entries: [...HALLOWEEN_COSTUMES],
   },
 ];

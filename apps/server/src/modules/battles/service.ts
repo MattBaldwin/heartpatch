@@ -156,8 +156,11 @@ export interface TileBattlePort {
 export interface TileBattleEnd {
   events: NewGameEvent[];
   xpPercent: number;
-  /** A capture's chance of found clothing: the tile, and Gentle's share of the chance. */
-  drop: { tileId: string; percent: number } | null;
+  /**
+   * A capture's chance of found clothing: the tile, Gentle's share of the
+   * chance, and whether the land was taken from another player (#261).
+   */
+  drop: { tileId: string; percent: number; fromRival?: boolean } | null;
   /**
    * Refunds for the defender's fire the capture took down (#202), for
    * battles to grant after its squishy locks (tech spec §7: inventory after
@@ -639,7 +642,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         mapId: row.mapId,
         tileId: tile.drop.tileId,
         percent: tile.drop.percent,
-        rival: row.kind === 'rival-tile',
+        rival: tile.drop.fromRival === true,
         at,
       });
     } else if (row.kind === 'wild' && result.winner === PLAYER_SIDE) {

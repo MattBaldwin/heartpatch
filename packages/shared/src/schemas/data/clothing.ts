@@ -196,6 +196,11 @@ export function checkClothingData(input: unknown, seasons: readonly string[]): s
           report(at('visual'), 'only costumes place pieces on body sockets (`on`)');
         }
       }
+      // An arm piece turns with the arm's splay (a roll), which only adds up
+      // right without a pitch or yaw of its own.
+      if (item.visual.pieces.some((p) => p.on === 'arms' && (p.turn?.[0] || p.turn?.[1]))) {
+        report(at('visual'), 'pieces on the arms may only roll (turn [0, 0, z])');
+      }
     });
     // The wardrobe is never empty (design doc §23): every account starts with some.
     if (!items.some((item) => isKeeperClothing(item) && item.sources.includes('starter'))) {

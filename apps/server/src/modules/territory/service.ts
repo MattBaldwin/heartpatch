@@ -563,7 +563,12 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       return {
         events: [event, ...lostFires.map((l) => l.event)],
         xpPercent,
-        drop: { tileId: tile.id, percent: attack.rewardPercent },
+        // Taken from a player (not land they left behind) finds more (#261).
+        drop: {
+          tileId: tile.id,
+          percent: attack.rewardPercent,
+          fromRival: tile.ownerUserId !== null,
+        },
         refunds: lostFires
           .filter((l) => Object.keys(l.refund).length > 0)
           .map((l) => ({
