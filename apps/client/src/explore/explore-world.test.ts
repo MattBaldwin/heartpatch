@@ -2,6 +2,7 @@ import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { EXPLORE_RULES, searchSpots } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
+import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
 import {
   besideSpot,
@@ -11,10 +12,14 @@ import {
   CAVE_STAGE,
   collidersOf,
   decorPlaces,
+  cameraShot,
   followStep,
   freePoint,
   fromCaveStage,
   gapTo,
+  hidingSpots,
+  lanternGlint,
+  LIGHT_REACH,
   offFacing,
   seededRandom,
   slideMove,
@@ -76,16 +81,16 @@ describe('colliders', () => {
       const free = (x: number, z: number) => insideTile({ x, z }) && !blocked({ x, z }, colliders);
       const start = freePoint(EXPLORE_VIEW.start, colliders);
       const seen = new Uint8Array(n * n);
-      const first = Math.round((start.x + 1) / step) * n + Math.round((start.z + 1) / step);
-      // The grid cell nearest the start may sit a hair inside a collider.
-      const queue = free(at(Math.floor(first / n)), at(first % n)) ? [first] : [];
-      if (queue.length === 0) {
-        for (let k = 0; k < n * n && queue.length === 0; k++) {
-          const i = Math.floor(k / n);
-          const j = k % n;
-          if (free(at(i), at(j)) && Math.hypot(at(i) - start.x, at(j) - start.z) < step * 2) {
-            queue.push(k);
-          }
+      // The free grid cell nearest the start (its own cell may sit a hair inside a collider).
+      const queue: number[] = [];
+      let best = Infinity;
+      for (let k = 0; k < n * n; k++) {
+        const i = Math.floor(k / n);
+        const j = k % n;
+        const d = Math.hypot(at(i) - start.x, at(j) - start.z);
+        if (d < best && d < step * 2 && free(at(i), at(j))) {
+          best = d;
+          queue[0] = k;
         }
       }
       for (const k of queue) seen[k] = 1;
@@ -297,6 +302,12 @@ describe('the follow camera', () => {
     expect(goal.z).toBeCloseTo(-0.05 + EXPLORE_CAMERA.lookAhead);
   });
 
+  it('follows the Keeper itself while the lantern is lit, not the cave', () => {
+    const goal = cameraGoal({ x: 0.1, z: 0 }, { x: -0.3, z: 0.3 }, true);
+    expect(goal.x).toBeCloseTo(0.1);
+    expect(goal.z).toBeCloseTo(EXPLORE_CAMERA.lightLookAhead);
+  });
+
   it('clamps to the tile, short of its edge', () => {
     const goal = cameraGoal({ x: 0.8, z: 0 });
     expect(goal.x).toBeLessThan(0.8);
@@ -317,6 +328,30 @@ describe('the follow camera', () => {
     // No time, no move.
     const still = { target: { x: 0, z: 0 }, zoom: 1 };
     expect(followStep(still, goal, 0)).toEqual(still);
+  });
+});
+
+describe('props in the way', () => {
+  const tall = (kind: string) => (kind === 'tree' ? 0.3 : 0.02);
+  const middle = 0.07;
+  const pitch = cameraShot(0.46).pitch;
+
+  it('fades a tall prop between the camera and the Keeper, and only that', () => {
+    const keeper = { x: 0, z: 0 };
+    const spots = [
+      spot(0, 0, -0.15, false, 'tree'), // in front, on its line: hides it
+      spot(1, 0, 0.15, false, 'tree'), // behind it: never in the way
+      spot(2, 0.4, -0.15, false, 'tree'), // off to the side
+      spot(3, 0, -0.1, false, 'mound'), // low: the Keeper shows over it
+      spot(4, 0, -0.9, false, 'tree'), // far in front: the camera looks over it
+    ];
+    expect([...hidingSpots(keeper, spots, pitch, tall, middle)]).toEqual([0]);
+  });
+
+  it('looks flatter on a phone held upright than on a tablet', () => {
+    expect(cameraShot(0.46).pitch).toBeLessThan(cameraShot(0.7).pitch);
+    expect(cameraShot(0.1)).toEqual(cameraShot(EXPLORE_CAMERA.phone.aspect));
+    expect(cameraShot(2)).toEqual(cameraShot(EXPLORE_CAMERA.tablet.aspect));
   });
 });
 
@@ -346,6 +381,28 @@ describe('decor', () => {
 });
 
 describe('the lantern', () => {
+  it('hides its glint on the tile, where the Keeper can stand within the light', () => {
+    let caves = 0;
+    for (const tile of generatedTiles(40)) {
+      const colliders = collidersOf(tile.spots, []);
+      for (const cave of tile.spots.filter((s) => s.kind === 'cave')) {
+        for (const seed of [0, 0.13, 0.37, 0.5, 0.71, 0.99]) {
+          caves++;
+          const picked = startInteraction('light', CAVE_STAGE, 0, seed).glint;
+          const glint = fromCaveStage(cave, lanternGlint(cave, picked, colliders));
+          const where = `${tile.name} cave ${String(cave.index)} seed ${String(seed)}`;
+          expect(insideTile(glint), where).toBe(true);
+          const stand = freePoint(glint, colliders);
+          expect(blocked(stand, colliders), where).toBe(false);
+          expect(Math.hypot(stand.x - glint.x, stand.z - glint.z), where).toBeLessThanOrEqual(
+            LIGHT_REACH,
+          );
+        }
+      }
+    }
+    expect(caves).toBeGreaterThan(20);
+  });
+
   it('maps the cave stage to the tile and back', () => {
     const cave = { x: 0.2, z: -0.1 };
     expect(toCaveStage(cave, cave)).toEqual({

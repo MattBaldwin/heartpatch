@@ -38,6 +38,10 @@ export const EXPLORE_VIEW = {
   reach: 0.06, // TUNE
   /** "In front": a spot within this angle either side of where the Keeper faces, radians. */
   facingCone: (75 * Math.PI) / 180, // TUNE
+  /** Picking what's in front: each tile-local unit of gap counts as this many radians off-heading. */
+  frontWeight: 4, // TUNE: nearly ahead beats a little closer
+  /** A walk to a spot stops this share of `reach` outside its collider (well in reach). */
+  standOff: 0.4, // TUNE
   /** A tap this close to a spot's middle means that spot, tile-local units. */
   tapPick: 0.1, // TUNE
   /** The Keeper stays this far inside the tile's edge, tile-local units. */
@@ -91,17 +95,21 @@ export const EXPLORE_VIEW = {
 } as const;
 
 /**
- * The follow camera (#291): close behind the Keeper, tilted about 3/4. The
- * Keeper (about 1.2 tall) fills about a fifth of the screen's height at
- * `distance` with the stage camera's 0.75 rad field of view.
+ * The follow camera (#291, board a): behind and above the Keeper, tilted
+ * about 3/4, so its face or profile reads and it stands about a fifth to a
+ * quarter of the screen's height (the stage camera's field of view is 0.75
+ * rad, vertical). A tall, narrow phone looks flatter and closer than a
+ * tablet; screens in between blend the two.
  */
 export const EXPLORE_CAMERA = {
-  /** Looking down from the horizontal, radians. */
-  pitch: (40 * Math.PI) / 180, // TUNE
-  /** Camera to target, world units. */
-  distance: 6.6, // TUNE
+  /** A phone held upright (width ÷ height at or under `aspect`): looking down from the horizontal, radians, and camera to target, world units. */
+  phone: { aspect: 0.5, pitch: (30 * Math.PI) / 180, distance: 5.6 }, // TUNE
+  /** A tablet or wider (at or over `aspect`). */
+  tablet: { aspect: 0.75, pitch: (34 * Math.PI) / 180, distance: 6.2 }, // TUNE
   /** The target sits this far ahead of the Keeper (tile-local +z), so it walks low on the screen. */
   lookAhead: 0.13, // TUNE
+  /** With the lantern lit the Keeper and its light sit higher, clear of the overlay (board g). */
+  lightLookAhead: 0.02, // TUNE
   /** The target stays this far inside the tile's edge, tile-local units. */
   edgeMargin: 0.12, // TUNE: more pushes the Keeper off a phone held upright near the edge
   /** Using a tool nudges the camera in to this share of `distance`. */
@@ -110,6 +118,20 @@ export const EXPLORE_CAMERA = {
   follow: 0.14, // TUNE
   /** Closer than this (tile-local, and share of distance) counts as there: drawing stops. */
   settle: 0.0015, // TUNE
+  /** The glint is baked tipped back by this much to face the camera, radians. */
+  glintTilt: (32 * Math.PI) / 180, // TUNE
+} as const;
+
+/**
+ * Props between the camera and the Keeper fade (#291), so a tree never
+ * hides it: a spot taller than the Keeper's middle, in front of it (towards
+ * the camera) and within this much of its line, tile-local units.
+ */
+export const EXPLORE_FADE = {
+  /** Beside the Keeper's line: this plus the spot's own collider, doubled for its canopy. */
+  side: 0.04, // TUNE
+  /** A faded prop's opacity. */
+  alpha: 0.3, // TUNE
 } as const;
 
 /** Decorative props (#291): thin instances, one draw call per kind, placed from the tile. */
@@ -122,6 +144,8 @@ export const EXPLORE_DECOR = {
   clearance: 0.04, // TUNE
   /** Size range, as a multiple of the base mesh. */
   scale: { min: 0.7, max: 1.3 }, // TUNE
+  /** How far across the tile decor scatters before the edge check, tile-local (x is narrower). */
+  spread: { x: 0.9, z: 1 }, // TUNE
 } as const;
 
 /** The tool in hand and its motion (#291). */

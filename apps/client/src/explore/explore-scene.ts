@@ -1,4 +1,5 @@
 import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
+import { Material } from '@babylonjs/core/Materials/material';
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
@@ -52,13 +53,15 @@ import type { SquishyLod } from '../procedural/config.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
-import { EXPLORE_CAMERA, EXPLORE_TOOL, EXPLORE_VIEW } from './explore-config.js';
+import { EXPLORE_CAMERA, EXPLORE_FADE, EXPLORE_TOOL, EXPLORE_VIEW } from './explore-config.js';
 import {
   cameraGoal,
   cameraSettled,
+  cameraShot,
   collidersOf,
   decorPlaces,
   followStep,
+  hidingSpots,
   spotRadius,
   type Collider,
   type DecorKind,
@@ -96,6 +99,10 @@ export interface ExploreSceneStats {
   readonly camera: { readonly x: number; readonly z: number; readonly zoom: number };
   /** Draw calls in the last frame drawn (`SceneInstrumentation`, as the battle measures). */
   readonly drawCalls: number;
+  /** Spots faded because they stand between the camera and the Keeper. */
+  readonly faded: readonly number[];
+  /** The Keeper's height on screen, as a share of the canvas's height (0: not on screen). */
+  readonly keeperHeight: number;
 }
 
 export interface ExploreSceneOptions {
@@ -128,15 +135,29 @@ const SPOT_PROPS: Readonly<Record<string, PropKind | ExploreShape>> = {
 
 type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave';
 
-/** The island under the tile: shallow, so the tile reads as a little diorama. TUNE */
-const ISLAND_DEPTH = 0.12;
+/** The island under the tile: shallow, so the tile reads as a little diorama. */
+const ISLAND_DEPTH = 0.12; // TUNE:
 const SHAPES: ReadonlySet<string> = new Set<ExploreShape>(['mound', 'pond', 'ledge', 'cave']);
 const isShape = (kind: PropKind | ExploreShape): kind is ExploreShape => SHAPES.has(kind);
 const TOOLS: readonly ToolId[] = ['shovel', 'net', 'rope', 'lantern'];
-/** The camera looks at about the Keeper's middle, not its feet (world units). TUNE */
-const AIM_HEIGHT = 0.5;
-/** The Keeper leans back a little so its face reads under the tilted camera. TUNE */
-const KEEPER_LEAN = 0.06;
+/** The camera looks at about the Keeper's middle, not its feet (world units). */
+const AIM_HEIGHT = 0.5; // TUNE:
+/** The Keeper leans back a little so its face reads under the tilted camera. */
+const KEEPER_LEAN = 0.06; // TUNE:
+
+/** One kind of spot prop: its instances, and a see-through copy for the ones hiding the Keeper. */
+interface PropBatch {
+  readonly mesh: Mesh;
+  readonly faded: Mesh;
+  readonly spots: readonly { readonly index: number; readonly matrix: Matrix }[];
+}
+
+// Scratch for the per-frame tool placement (no allocations while walking).
+const TOOL_WORLD = new Matrix();
+const TOOL_TURN = new Quaternion();
+const TOOL_SCALE = new Vector3();
+const TOOL_AT = new Vector3();
+const TOOL_ANCHOR = new Vector3();
 
 /** The Keeper's trail: followers stand on its points, one gap apart. */
 interface Follower {
@@ -150,7 +171,13 @@ export class ExploreScene {
   readonly #size = EXPLORE_VIEW.hexSize;
   readonly #k = EXPLORE_VIEW.hexSize / HEX_SIZE;
   readonly #ground: number;
-  readonly #props = new Map<string, Mesh>();
+  readonly #props = new Map<string, PropBatch>();
+  /** The spots now faded (between the camera and the Keeper). */
+  #hiding = new Set<number>();
+  /** Prop heights by spot kind, tile-local (for the fade). */
+  readonly #heights = new Map<string, number>();
+  #aspect = 0;
+  #shot = cameraShot(0.5);
   readonly #decor: Record<DecorKind, number>;
   readonly #glints: Mesh;
   readonly #halo: Mesh;
@@ -177,6 +204,8 @@ export class ExploreScene {
   #swing = 0;
   /** The spot a tool is being used on (the camera leans in on it), or null. */
   #focus: WorldPoint | null = null;
+  /** The lantern is lit: the camera follows the Keeper and its light (board g). */
+  #lit = false;
   #camera: FollowCamera;
   #lastStep: number | null = null;
   #drawCalls = 0;
@@ -191,7 +220,11 @@ export class ExploreScene {
 
     this.#buildGround(tile.terrain);
     const propMaterial = vinyl(scene, 'explore-prop-mat', { color: '#ffffff' });
-    this.#buildProps(tile, propMaterial);
+    // A see-through copy for props between the camera and the Keeper (#291).
+    const fadedMaterial = vinyl(scene, 'explore-prop-faded-mat', { color: '#ffffff' });
+    fadedMaterial.alpha = EXPLORE_FADE.alpha;
+    fadedMaterial.transparencyMode = Material.MATERIAL_ALPHABLEND;
+    this.#buildProps(tile, propMaterial, fadedMaterial);
 
     // The tile's own buildings (a fire out on the land, #202), on their spots.
     const buildingsAt = (options.mapTile?.buildings ?? []).map((b) => ({
@@ -317,7 +350,19 @@ export class ExploreScene {
       held: this.#held,
       camera: { ...this.#camera.target, zoom: this.#camera.zoom },
       drawCalls: this.#drawCalls,
+      faded: [...this.#hiding].sort((a, b) => a - b),
+      keeperHeight: this.#keeperHeight(),
     };
+  }
+
+  /** The Keeper's feet to the top of its hair on screen, as a share of the canvas height. */
+  #keeperHeight(): number {
+    const canvas = this.#scene.getEngine().getRenderingCanvas();
+    const h = canvas?.getBoundingClientRect().height ?? 0;
+    if (!this.#keeper || h <= 0) return 0;
+    const feet = this.screenOf(this.#at, 0);
+    const top = this.screenOf(this.#at, this.#keeper.params.height * EXPLORE_VIEW.keeperScale);
+    return feet && top ? Math.abs(feet.y - top.y) / h : 0;
   }
 
   /** Where the Keeper stands now, tile-local. */
@@ -386,6 +431,7 @@ export class ExploreScene {
     if (yaw !== undefined) this.#yaw = yaw;
     if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
     this.#placeTool();
+    this.#fade();
     const head = this.#trail[0];
     const gap = EXPLORE_VIEW.followGap;
     if (!head || (head.x - at.x) ** 2 + (head.z - at.z) ** 2 >= gap * gap) {
@@ -401,9 +447,13 @@ export class ExploreScene {
     });
   }
 
-  /** The camera leans in on a spot while a tool is in use (#291); null leans back out. */
-  nudge(spot: WorldPoint | null): void {
-    this.#focus = spot;
+  /**
+   * The camera leans in on a spot while a tool is in use (#291); null leans
+   * back out. With the lantern lit it follows the Keeper and its light instead.
+   */
+  nudge(spot: WorldPoint | null, lit = false): void {
+    this.#focus = lit ? null : spot;
+    this.#lit = spot !== null && lit;
   }
 
   /** One swing of the tool (a scoop, a shake, a step up the rope) and a little jiggle. */
@@ -490,7 +540,7 @@ export class ExploreScene {
 
   #cameraGoal(): FollowCamera {
     return {
-      target: cameraGoal(this.#at, this.#focus),
+      target: cameraGoal(this.#at, this.#focus, this.#lit),
       zoom: this.#focus ? EXPLORE_CAMERA.nudge : 1,
     };
   }
@@ -499,7 +549,15 @@ export class ExploreScene {
   #applyCamera(): void {
     const camera = this.#scene.activeCamera;
     if (!(camera instanceof TargetCamera)) return;
-    const { pitch, distance } = EXPLORE_CAMERA;
+    const engine = this.#scene.getEngine();
+    const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
+    if (aspect !== this.#aspect) {
+      // The screen's shape picks the tilt (a phone upright looks flatter).
+      this.#aspect = aspect;
+      this.#shot = cameraShot(aspect);
+      this.#fade();
+    }
+    const { pitch, distance } = this.#shot;
     const d = distance * this.#camera.zoom;
     const tx = this.#camera.target.x * this.#size;
     const tz = this.#camera.target.z * this.#size;
@@ -514,18 +572,52 @@ export class ExploreScene {
     const tool = this.#held ? this.#tools[this.#held] : null;
     if (!tool || !this.#keeper) return;
     const anchor = this.#keeper.params.sockets.held.anchors[0] ?? [0.2, 0.5, 0];
-    const p = this.#keeperPlacement();
-    const world = Matrix.Compose(
-      new Vector3(p.scale, p.scale, p.scale),
-      Quaternion.RotationYawPitchRoll(p.yaw, p.lean, 0),
-      new Vector3(p.x, p.y, p.z),
+    const at = this.#world(this.#at);
+    const k = EXPLORE_VIEW.keeperScale;
+    Quaternion.RotationYawPitchRollToRef(this.#yaw, KEEPER_LEAN, 0, TOOL_TURN);
+    Matrix.ComposeToRef(
+      TOOL_SCALE.set(k, k, k),
+      TOOL_TURN,
+      TOOL_AT.set(at.x, this.#ground, at.z),
+      TOOL_WORLD,
     );
-    const hand = Vector3.TransformCoordinates(new Vector3(anchor[0], anchor[1], anchor[2]), world);
-    tool.position.copyFrom(hand);
-    const s = p.scale * EXPLORE_TOOL.scale;
+    Vector3.TransformCoordinatesToRef(
+      TOOL_ANCHOR.set(anchor[0], anchor[1], anchor[2]),
+      TOOL_WORLD,
+      tool.position,
+    );
+    const s = k * EXPLORE_TOOL.scale;
     tool.scaling.set(s, s, s);
     // A swing tips the tool forward, the way the Keeper faces.
-    tool.rotationQuaternion = Quaternion.RotationYawPitchRoll(p.yaw, -this.#swing, 0);
+    tool.rotationQuaternion ??= new Quaternion();
+    Quaternion.RotationYawPitchRollToRef(this.#yaw, -this.#swing, 0, tool.rotationQuaternion);
+  }
+
+  /** Fades the props that stand between the camera and the Keeper; the rest stay solid. */
+  #fade(): void {
+    if (this.#props.size === 0) return;
+    const middle = AIM_HEIGHT / this.#size;
+    const hiding = hidingSpots(
+      this.#at,
+      this.#tile.spots,
+      this.#shot.pitch,
+      (kind) => this.#heights.get(kind) ?? 0,
+      middle,
+    );
+    if (hiding.size === this.#hiding.size && [...hiding].every((i) => this.#hiding.has(i))) return;
+    this.#hiding = hiding;
+    for (const batch of this.#props.values()) {
+      setInstances(
+        batch.mesh,
+        batch.spots.filter((s) => !hiding.has(s.index)).map((s) => s.matrix),
+        true,
+      );
+      setInstances(
+        batch.faded,
+        batch.spots.filter((s) => hiding.has(s.index)).map((s) => s.matrix),
+        true,
+      );
+    }
   }
 
   #world(p: WorldPoint): WorldPoint {
@@ -585,8 +677,12 @@ export class ExploreScene {
     island.isPickable = false;
   }
 
-  #buildProps(tile: ExploreTileResponse, material: ReturnType<typeof vinyl>): void {
-    const byKind = new Map<PropKind | ExploreShape, Matrix[]>();
+  #buildProps(
+    tile: ExploreTileResponse,
+    material: ReturnType<typeof vinyl>,
+    fadedMaterial: ReturnType<typeof vinyl>,
+  ): void {
+    const byKind = new Map<PropKind | ExploreShape, { index: number; matrix: Matrix }[]>();
     const scale = this.#k * EXPLORE_VIEW.propScale;
     for (const spot of tile.spots) {
       const shape = SPOT_PROPS[spot.kind] ?? 'rock';
@@ -596,16 +692,32 @@ export class ExploreScene {
       // Each spot turned its own way, the same for everyone.
       const turn = Quaternion.RotationYawPitchRoll(spinOf(tile, spot.index), 0, 0);
       const list = byKind.get(kind) ?? [];
-      list.push(placeAt(at.x, this.#ground, at.z, new Vector3(scale, scale, scale), turn));
+      list.push({
+        index: spot.index,
+        matrix: placeAt(at.x, this.#ground, at.z, new Vector3(scale, scale, scale), turn),
+      });
       byKind.set(kind, list);
+      // How tall the prop stands, tile-local (its glint floats about at its top).
+      this.#heights.set(
+        spot.kind,
+        ((EXPLORE_VIEW.glintLift[spot.kind] ?? 0.25) * scale) / this.#size,
+      );
     }
-    for (const [kind, matrices] of byKind) {
+    for (const [kind, spots] of byKind) {
       const mesh = isShape(kind)
         ? buildShape(this.#scene, kind)
         : buildProp(this.#scene, kind).mesh;
       mesh.material = material;
-      setInstances(mesh, matrices);
-      this.#props.set(kind, mesh);
+      // Shares the geometry: one more draw call only while something hides the Keeper.
+      const faded = mesh.clone(`${mesh.name}-faded`);
+      faded.material = fadedMaterial;
+      setInstances(
+        mesh,
+        spots.map((s) => s.matrix),
+        true,
+      );
+      setInstances(faded, []);
+      this.#props.set(kind, { mesh, faded, spots });
     }
   }
 }
@@ -647,7 +759,7 @@ function buildGlint(scene: Scene): Mesh {
     diamond(0.2, 0.62, -0.02, '#fffdf0', 1),
     diamond(0.62, 0.2, -0.02, '#fffdf0', 1),
   ]);
-  mesh.rotation.x = EXPLORE_CAMERA.pitch;
+  mesh.rotation.x = EXPLORE_CAMERA.glintTilt;
   mesh.bakeCurrentTransformIntoVertices();
   mesh.hasVertexAlpha = true;
   return mesh;

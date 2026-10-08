@@ -1,5 +1,11 @@
 import { hexKey, type PublicSearchSpot, type WorldPoint } from '@heartpatch/shared';
-import { EXPLORE_CAMERA, EXPLORE_DECOR, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
+import {
+  EXPLORE_CAMERA,
+  EXPLORE_DECOR,
+  EXPLORE_FADE,
+  EXPLORE_VIEW,
+  INTERACTION,
+} from './explore-config.js';
 import { clampToTile, insideTile } from './explore-view.js';
 
 // The explore view's world (#291, owner mockup 2026-10-08): colliders the
@@ -152,7 +158,7 @@ export function spotInFront<T extends FrontSpot>(
     const off = offFacing(at, yaw, s);
     if (off > cone) continue;
     // Nearly ahead beats a little closer.
-    const score = off + Math.max(0, gapTo(at, s)) * 4;
+    const score = off + Math.max(0, gapTo(at, s)) * EXPLORE_VIEW.frontWeight;
     if (score < bestScore) {
       best = s;
       bestScore = score;
@@ -194,7 +200,8 @@ export function besideSpot(
   const dx = from.x - spot.x;
   const dz = from.z - spot.z;
   const d = Math.sqrt(dx * dx + dz * dz);
-  const keep = spotRadius(spot.kind) + EXPLORE_VIEW.keeperRadius + EXPLORE_VIEW.reach * 0.4;
+  const keep =
+    spotRadius(spot.kind) + EXPLORE_VIEW.keeperRadius + EXPLORE_VIEW.reach * EXPLORE_VIEW.standOff;
   // Standing on it already: start from the camera's side.
   const base = d > 1e-9 ? Math.atan2(dz, dx) : -Math.PI / 2;
   let first: WorldPoint | null = null;
@@ -214,9 +221,61 @@ export function besideSpot(
  * tile's edge. While a tool is in use, between the Keeper and the spot, so
  * both stay in view above the gesture overlay.
  */
-export function cameraGoal(keeper: WorldPoint, focus: WorldPoint | null = null): WorldPoint {
+export function cameraGoal(
+  keeper: WorldPoint,
+  focus: WorldPoint | null = null,
+  lit = false,
+): WorldPoint {
+  // The lantern walks: the camera keeps the Keeper and its light in view (board g).
+  if (lit) {
+    return clampToTile(
+      { x: keeper.x, z: keeper.z + EXPLORE_CAMERA.lightLookAhead },
+      EXPLORE_CAMERA.edgeMargin,
+    );
+  }
   const at = focus ? { x: (keeper.x + focus.x) / 2, z: (keeper.z + focus.z) / 2 } : keeper;
   return clampToTile({ x: at.x, z: at.z + EXPLORE_CAMERA.lookAhead }, EXPLORE_CAMERA.edgeMargin);
+}
+
+/**
+ * The camera's tilt and distance for a screen's shape (width ÷ height): a
+ * phone held upright looks flatter and closer, a tablet a little steeper;
+ * in between blends them.
+ */
+export function cameraShot(aspect: number): { readonly pitch: number; readonly distance: number } {
+  const { phone, tablet } = EXPLORE_CAMERA;
+  const t = Math.min(1, Math.max(0, (aspect - phone.aspect) / (tablet.aspect - phone.aspect)));
+  return {
+    pitch: phone.pitch + (tablet.pitch - phone.pitch) * t,
+    distance: phone.distance + (tablet.distance - phone.distance) * t,
+  };
+}
+
+/**
+ * The spots whose props stand between the camera and the Keeper (#291): in
+ * front of it (towards the camera, which looks along +z), near its line,
+ * and tall enough at that distance to cover its middle. `height` is a
+ * prop's height and `middle` the Keeper's, both tile-local.
+ */
+export function hidingSpots(
+  keeper: WorldPoint,
+  spots: readonly Pick<PublicSearchSpot, 'index' | 'kind' | 'x' | 'z'>[],
+  pitch: number,
+  height: (kind: string) => number,
+  middle: number,
+): Set<number> {
+  const out = new Set<number>();
+  const slope = Math.tan(pitch);
+  for (const s of spots) {
+    const r = spotRadius(s.kind);
+    const ahead = keeper.z - s.z; // towards the camera
+    if (ahead < -r) continue;
+    if (Math.abs(s.x - keeper.x) > r * 2 + EXPLORE_FADE.side) continue;
+    // The line of sight to the Keeper's middle climbs `slope` per unit towards the camera.
+    if (height(s.kind) <= middle + Math.max(0, ahead - r) * slope) continue;
+    out.add(s.index);
+  }
+  return out;
 }
 
 export interface FollowCamera {
@@ -300,13 +359,13 @@ export function decorPlaces(
   const out: Record<DecorKind, DecorPlace[]> = { tufts: [], pebbles: [], flowers: [] };
   const start = freePoint(EXPLORE_VIEW.start, colliders);
   const keepClear = [...colliders, { ...start, r: EXPLORE_VIEW.keeperRadius * 2 }];
-  const { clearance, scale } = EXPLORE_DECOR;
+  const { clearance, scale, spread } = EXPLORE_DECOR;
   for (const kind of ['tufts', 'pebbles', 'flowers'] as const) {
     const rand = seededRandom(tileSeed(tile, kind));
     const want = counts[kind];
     // A few tries each; a crowded tile just grows a little less.
     for (let tries = 0; out[kind].length < want && tries < want * 8; tries++) {
-      const p = { x: (rand() * 2 - 1) * 0.9, z: (rand() * 2 - 1) * 1 };
+      const p = { x: (rand() * 2 - 1) * spread.x, z: (rand() * 2 - 1) * spread.z };
       const yaw = rand() * Math.PI * 2;
       const size = scale.min + rand() * (scale.max - scale.min);
       const inside = clampToTile(p, EXPLORE_VIEW.edgeMargin * 0.5);
@@ -341,4 +400,23 @@ export function fromCaveStage(cave: WorldPoint, s: { x: number; y: number }): Wo
     x: cave.x + (s.x - CAVE_STAGE.width / 2) / k,
     z: cave.z - (s.y - CAVE_STAGE.height / 2) / k,
   };
+}
+
+/** The lantern's light on the ground, tile-local radius. */
+export const LIGHT_REACH = INTERACTION.lightRadius * INTERACTION.caveArea;
+
+/**
+ * Where the lantern's glint hides (#291), on the cave's stage: the
+ * reducer's pick, kept on the tile, and moved onto open ground if it fell
+ * where no Keeper can stand within the light's reach of it.
+ */
+export function lanternGlint(
+  cave: WorldPoint,
+  picked: { x: number; y: number },
+  colliders: readonly Collider[],
+): { x: number; y: number } {
+  const at = clampToTile(fromCaveStage(cave, picked));
+  const stand = freePoint(at, colliders);
+  const far = Math.hypot(stand.x - at.x, stand.z - at.z) > LIGHT_REACH * 0.8;
+  return toCaveStage(cave, far ? stand : at);
 }
