@@ -197,7 +197,7 @@ describe('home screen copy', () => {
 });
 
 describe('build menu', () => {
-  it('offers fires, habitats and Training Grounds, and says why one can’t be built', () => {
+  it('offers fires, habitats, Training Grounds and the Factory, and says why one can’t be built', () => {
     const rows = buildRows(homeWith({ buildings: [fire()], items: { timber: 4, stone: 9 } }));
     expect(rows.map((r) => r.building.id)).toEqual([
       'hearthfire',
@@ -205,6 +205,7 @@ describe('build menu', () => {
       'ember-den',
       'cozy-meadow',
       'training-grounds',
+      'crafting-factory',
     ]);
     const byId = new Map(rows.map((r) => [r.building.id, r]));
     // Fires go out on land, never at home (owner decision 2026-10-07): no Build, no cost line.

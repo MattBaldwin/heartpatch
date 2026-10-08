@@ -47,6 +47,8 @@ export function buildingIcon(buildingId: string): string {
       return '🌼';
     case 'training-grounds':
       return '🎯';
+    case 'crafting-factory':
+      return '🏭';
     default:
       return '🏠';
   }
@@ -344,6 +346,8 @@ export function effectChip(effect: BuildingEffect): string {
       return `🏋️ ${String(effect.capacity)} ${effect.capacity === 1 ? 'squishy' : 'squishies'} · ${String(effect.xpPerHour)} XP/hr`;
     case 'fence':
       return `🪵 Keeps other Keepers out · ${String(effect.hp)} energy`;
+    case 'batches':
+      return `🏭 ${String(effect.queues)} batches at once`;
   }
 }
 
@@ -467,6 +471,8 @@ export function upgradeOffer(home: HomeResponse, b: MyBuilding): UpgradeOffer | 
       now && 'safeRadius' in now && now.safeRadius === radius && after && 'safeRadius' in after
         ? `Same glow for now. At level ${String(to + 1)} it reaches ${tiles(after.safeRadius)}!`
         : `Its light will reach ${tiles(radius)}. Squishies out there stay safe at night!`;
+  } else if ('queues' in step) {
+    line = `Room for ${String(step.queues)} batches at once. Even more while you're away!`;
   } else if ('xpPerHour' in step) {
     line = `Room for ${String(step.capacity)} squishies, and they learn a little faster.`;
   } else if ('capacity' in step) {
@@ -589,6 +595,9 @@ export function buildingNote(b: MyBuilding): string {
     const nights = b.nightsLeft ?? 0;
     if (nights === 0) return "It's out. Add Emberwood to light it!";
     return `Lit! ${String(nights)} ${nights === 1 ? 'night' : 'nights'} of fuel left.`;
+  }
+  if (b.kind === 'factory') {
+    return "Makes lots of things at once, even while you're away!";
   }
   if (b.kind === 'training-grounds') {
     const n = b.residents ?? 0;

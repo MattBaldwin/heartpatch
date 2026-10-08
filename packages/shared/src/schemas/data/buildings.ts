@@ -105,11 +105,23 @@ export const FenceBuildingSchema = z.strictObject({
   }),
 });
 
+/**
+ * The Crafting Factory (#294, owner decision 2026-10-08): batches of the
+ * pot's recipes that go on while the kid is away. `queues` is how many
+ * batches run at once at that level.
+ */
+export const FactoryBuildingSchema = z.strictObject({
+  ...buildingBase,
+  kind: z.literal('factory'),
+  levels: levels({ queues: z.number().int().min(1).max(8) }),
+});
+
 export const BuildingSchema = z.discriminatedUnion('kind', [
   HearthfireBuildingSchema,
   HabitatBuildingSchema,
   TrainingGroundsBuildingSchema,
   FenceBuildingSchema,
+  FactoryBuildingSchema,
 ]);
 export type Building = z.infer<typeof BuildingSchema>;
 export type BuildingKind = Building['kind'];

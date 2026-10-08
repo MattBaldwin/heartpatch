@@ -25,7 +25,9 @@ export type BuildingEffect =
    * A fence (#203): keeps challengers out until they break it. `hp` is its
    * energy at this level; `element` its material's (what cracks it fast).
    */
-  | { readonly kind: 'fence'; readonly hp: number; readonly element: ElementId };
+  | { readonly kind: 'fence'; readonly hp: number; readonly element: ElementId }
+  /** The Crafting Factory (#294): how many batches it runs at once. */
+  | { readonly kind: 'batches'; readonly queues: number };
 
 /**
  * What `building` does at `level` (1 = just built), in the order a row shows
@@ -55,5 +57,7 @@ export function buildingEffects(building: Building, level = 1): BuildingEffect[]
     }
     case 'fence':
       return [{ kind: 'fence', hp: at(building.levels).hp, element: building.element }];
+    case 'factory':
+      return [{ kind: 'batches', queues: at(building.levels).queues }];
   }
 }

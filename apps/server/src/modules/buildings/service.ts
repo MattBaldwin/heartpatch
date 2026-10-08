@@ -46,6 +46,8 @@ import {
 } from '../inventory/service.js';
 import { homesteadOf } from '../explore/homesteads.js';
 import { createExploreRepo } from '../explore/repo.js';
+import { createFactoryRepo } from '../factory/repo.js';
+import { applyBatchPlans, planGrants, stopPlan } from '../factory/service.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
@@ -503,14 +505,27 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         async ({ repo, tx, at, local, timeZone }) => {
           const row = await lockMine(repo, mapId, user.id, buildingRowId);
           const refund = takeDownRefund(row, local);
+          // A Crafting Factory's batches stop (#294): what's made is kept, the
+          // rest comes back. Its batches after the building (step 8, id order).
+          const batches =
+            row.kind === 'factory'
+              ? (await createFactoryRepo(tx).lockRunningIn(row.id)).map((b) =>
+                  stopPlan(b, at, 'taken-down'),
+                )
+              : [];
           const movedOut = await repo.moveOutAll(row.id);
           const trainees = await repo.lockTrainees(row.id);
           // Inventory rows before `species_seen` (tech spec §7 step 11): the
           // refund first, then trainees land what they earned (an evolution
           // writes `species_seen`) and stop, then the building goes.
+          await lockGrantRows(tx, mapId, [
+            { userId: user.id, items: refund },
+            ...planGrants(batches),
+          ]);
           if (Object.keys(refund).length > 0) {
             await grantItems(tx, { mapId, userId: user.id }, refund, 'build-refund', row.id);
           }
+          const stopped = await applyBatchPlans(tx, batches, at);
           const training =
             trainees.length > 0 ? await landTraining(tx, { id: mapId }, trainees, at, true) : null;
           await repo.deleteBuilding(row.id);
@@ -529,6 +544,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             },
           });
           for (const event of training?.events ?? []) await repo.appendEvent(event);
+          for (const event of stopped.events) await repo.appendEvent(event);
           return { refund, home: await homeView(repo, tx, mapId, user.id, at, timeZone) };
         },
         await tileOf(mapId, user.id, buildingRowId),
@@ -862,24 +878,29 @@ export async function removeMemberBuildings(
   map: { id: string; timeZone: string },
   userId: string,
   at: Date,
-): Promise<NewGameEvent<'building.removed'>[]> {
+): Promise<NewGameEvent[]> {
   const repo = createBuildingsRepo(tx);
   // Read before the delete locks them: every command on these buildings
   // locks their owner's home tiles first, which the caller's release holds.
   const outer = (await repo.listOwned(map.id, userId)).filter((b) => b.homeSlot === null);
   await repo.deleteOwned(map.id, userId);
+  // Their Crafting Factory's batches stop (#294), after the buildings (step 8,
+  // id order): what's made stays in their bag on this patch, the rest comes back.
+  const batches = (await createFactoryRepo(tx).lockRunning({ mapId: map.id, userId })).map((b) =>
+    stopPlan(b, at, 'left'),
+  );
   const local = mapLocalTime(at, map.timeZone);
   const lost = outer.map((row) => ({ row, refund: takeDownRefund(row, local) }));
   const grants = lost.filter((l) => Object.keys(l.refund).length > 0);
-  await lockGrantRows(
-    tx,
-    map.id,
-    grants.map((l) => ({ userId, items: l.refund })),
-  );
+  await lockGrantRows(tx, map.id, [
+    ...grants.map((l) => ({ userId, items: l.refund })),
+    ...planGrants(batches),
+  ]);
   for (const { row, refund } of grants) {
     await grantItems(tx, { mapId: map.id, userId }, refund, 'build-refund', row.id);
   }
-  return lost.map(({ row, refund }) => ({
+  const stopped = await applyBatchPlans(tx, batches, at);
+  const removed: NewGameEvent<'building.removed'>[] = lost.map(({ row, refund }) => ({
     mapId: map.id,
     type: 'building.removed',
     actorUserId: null,
@@ -894,6 +915,7 @@ export async function removeMemberBuildings(
       lost: 'left',
     },
   }));
+  return [...removed, ...stopped.events];
 }
 
 /**
