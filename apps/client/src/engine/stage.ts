@@ -70,27 +70,22 @@ export function mountStage(
 
   const frames = new FrameScheduler(SETTLE_FRAMES);
   const abort = new AbortController();
-  // One resize path, at most once a frame. The canvas's own box is watched:
-  // iOS sends `resize` before a turned layout settles and none after, so the
-  // buffer and the camera's aspect kept the old shape until the map was
-  // remounted (#251). Window `resize` still covers a pixel-ratio change (a
-  // window moving screens) that leaves the box as it was.
-  let resizeFrame = 0;
+  // One resize path, run at the top of the next frame, so the resize and
+  // the draw it needs share it (resizing after a draw clears the buffer
+  // that frame shows). The canvas's own box is watched: iOS sends `resize`
+  // before a turned layout settles and none after, so the buffer and the
+  // camera's aspect kept the old shape until the map was remounted (#251).
+  // Window `resize` still covers a pixel-ratio change (a window moving
+  // screens) that leaves the box as it was.
+  let resizePending = false;
   const onResize = (): void => {
-    if (resizeFrame !== 0) return;
-    resizeFrame = requestAnimationFrame(() => {
-      resizeFrame = 0;
-      quality.refreshPixelRatio();
-      engine.resize();
-      frames.invalidate();
-    });
+    resizePending = true;
   };
   window.addEventListener('resize', onResize, { signal: abort.signal });
   const canvasBox = new ResizeObserver(onResize);
   canvasBox.observe(canvas);
   abort.signal.addEventListener('abort', () => {
     canvasBox.disconnect();
-    cancelAnimationFrame(resizeFrame);
   });
 
   scene.onAfterRenderObservable.addOnce(() => {
@@ -111,6 +106,12 @@ export function mountStage(
     frames.invalidate();
   };
   engine.runRenderLoop(() => {
+    if (resizePending) {
+      resizePending = false;
+      quality.refreshPixelRatio();
+      engine.resize();
+      frames.invalidate();
+    }
     // Keep drawing until every shader, texture and post-process is ready,
     // then draw a few more: the frames drawn while loading may be empty.
     if (!loaded && scene.isReady(true) && quality.ready) {
