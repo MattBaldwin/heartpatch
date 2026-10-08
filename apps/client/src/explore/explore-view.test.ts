@@ -25,6 +25,8 @@ import {
   restLine,
   stepToward,
   toolChip,
+  toolChipShort,
+  isIconName,
   toolRecipeRows,
   usesLine,
   xpLines,
@@ -81,6 +83,19 @@ describe('explore text', () => {
     expect(actionFor({ kind: 'tree', tool: null }).label).toBe('Shake');
   });
 
+  it('shows each spot its own icon, drawn or an emoji every iPhone has', () => {
+    expect(actionFor({ kind: 'mound', tool: 'shovel' }).icon).toBe('shovel');
+    expect(actionFor({ kind: 'flower-bed', tool: null }).icon).toBe('🌷');
+    expect(actionFor({ kind: 'tree', tool: null }).icon).toBe('🌳');
+    expect(actionFor({ kind: 'rock', tool: null }).icon).toBe('rock');
+    for (const kind of EXPLORE_RULES.spotKinds) {
+      const { icon } = actionFor({ kind: kind.id, tool: kind.tool });
+      if (isIconName(icon)) continue;
+      // Emoji 12 and newer (U+1FA70 on) can be an empty box before iOS 14.2.
+      for (const ch of icon) expect(ch.codePointAt(0) ?? 0, kind.id).toBeLessThan(0x1fa70);
+    }
+  });
+
   it('lists a tool recipe against the bag', () => {
     const rows = toolRecipeRows('rope', { greens: 1 });
     expect(rows).toEqual([{ id: 'greens', text: '🌿 Greens 1/4', enough: false }]);
@@ -92,6 +107,9 @@ describe('explore text', () => {
     expect(toolChip('lantern', 1)).toBe('Lantern · 1 cave');
     expect(toolChip('net', 0)).toBe('Net · Resting zZ');
     expect(toolChip(null, 0)).toBe('Hands');
+    expect(toolChipShort('lantern', 20)).toBe('20');
+    expect(toolChipShort('net', 0)).toBe('zZ');
+    expect(toolChipShort(null, 0)).toBe('');
   });
 
   it('says what makes a missing tool, counted once the bag is read', () => {

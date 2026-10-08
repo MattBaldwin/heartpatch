@@ -15,7 +15,7 @@ const slow = { timeout: 30_000 };
  * glints, the Keeper's batches, post-processing); the headroom is for a busier
  * tile (more prop kinds, buildings, a full team, the tool in hand).
  */
-const DRAW_CALL_CEILING = 40;
+const DRAW_CALL_CEILING = 26;
 
 /**
  * Exploring your land (#199, cozy-sim feel #291): Explore on a home tile
@@ -53,6 +53,7 @@ interface ExploreDebug {
     decor: { tufts: number; pebbles: number; flowers: number };
     camera: { x: number; z: number; zoom: number };
     drawCalls: number;
+    keeperHeight: number;
   } | null;
 }
 
@@ -180,6 +181,20 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   await expect(page.getByTestId('explore-progress')).toHaveText(
     `0 of ${String(first.spots.length)} found 🔍`,
   );
+  // Exploring owns the screen: the "Hi, name! Log out" chip steps aside, and
+  // the header fits one row, the tile's name and progress never cut off.
+  await expect(page.locator('.auth-chip')).toBeHidden();
+  for (const sel of ['.explore-title', '.explore-progress']) {
+    const fits = await page
+      .locator(sel)
+      .evaluate((e) => e.scrollWidth <= e.clientWidth && e.clientWidth > 0);
+    expect(fits, `${sel} fits`).toBe(true);
+  }
+  // The camera frames the Keeper about a fifth to a quarter of the screen tall (board a).
+  await expect
+    .poll(async () => (await exploreState(page))?.scene?.keeperHeight ?? 0, slow)
+    .toBeGreaterThan(0.17);
+  expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.3);
   // Every unsearched spot glints, the tile grows decor, and the joystick is always there.
   expect(first.scene?.glints).toBe(first.spots.length);
   expect(first.scene?.decor.tufts).toBeGreaterThan(0);

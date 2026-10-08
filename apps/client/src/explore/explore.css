@@ -48,11 +48,17 @@
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 
+/* Exploring owns the screen (#291, board a): the "Hi, name! Log out" chip
+   steps aside while it's open, as it does for the story (cinematic.css);
+   Back is how out. `:has()` needs Safari 15.4+ (the PWA's floor). */
+body:has(.explore:not([hidden])) .auth-chip {
+  display: none;
+}
+
 .explore-top {
   position: fixed;
   z-index: 5;
-  /* Under the "Hi, name! Log out" chip, never behind it (#157). */
-  top: calc(env(safe-area-inset-top) + 68px);
+  top: calc(env(safe-area-inset-top) + 12px);
   left: calc(env(safe-area-inset-left) + 16px);
   right: calc(env(safe-area-inset-right) + 16px);
   max-width: 640px;
@@ -81,6 +87,8 @@
 }
 
 .explore-names {
+  /* The tile's name and progress come first: the chip beside them stays small. */
+  flex: 0 1 auto;
   min-width: 0;
   padding: 6px 14px;
   border-radius: 999px;
@@ -102,16 +110,46 @@
   font-weight: 800;
   color: #7a5f80;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* The tool in hand, short: its icon and the uses left ("🪔 20"). */
 .explore-tool {
+  flex: none;
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  box-sizing: border-box;
   padding: var(--hp-pad-y) var(--hp-pad-x);
   border-radius: 999px;
   background: #e7f6e3;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 900;
   white-space: nowrap;
+}
+
+.explore-tool-icon {
+  display: flex;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.explore-tool-uses:empty {
+  display: none;
+}
+
+/* The drawn line icons (tools, a rock, a log), sized by where they sit. */
+.explore-icon {
+  width: 1em;
+  height: 1em;
+}
+
+.explore-tool .explore-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .explore-tool-hands {
@@ -165,7 +203,7 @@
 .explore-toast {
   position: fixed;
   z-index: 6;
-  top: calc(env(safe-area-inset-top) + 128px);
+  top: calc(env(safe-area-inset-top) + 76px);
   left: 50%;
   max-width: calc(100vw - 32px);
   box-sizing: border-box;
@@ -209,7 +247,7 @@
   position: fixed;
   z-index: 5;
   left: calc(env(safe-area-inset-left) + 24px);
-  bottom: calc(env(safe-area-inset-bottom) + 44px);
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 52px);
   width: 120px;
   height: 120px;
   border-radius: 50%;
@@ -239,7 +277,8 @@
   z-index: 5;
   left: calc(env(safe-area-inset-left) + 24px);
   right: calc(env(safe-area-inset-right) + 170px);
-  bottom: calc(env(safe-area-inset-bottom) + 14px);
+  /* Room above the home bar and the bottom edge (board a), under the joystick. */
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 16px);
   margin: 0;
   font-size: 12px;
   font-weight: 700;
@@ -252,7 +291,7 @@
   z-index: 5;
   left: calc(env(safe-area-inset-left) + 16px);
   right: calc(env(safe-area-inset-right) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 186px);
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 190px);
   max-width: 420px;
   margin: 0 auto;
   padding: 10px 14px;
@@ -274,7 +313,7 @@
   position: fixed;
   z-index: 5;
   right: calc(env(safe-area-inset-right) + 20px);
-  bottom: calc(env(safe-area-inset-bottom) + 40px);
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 48px);
   width: 128px;
   height: 128px;
   padding: 10px;
@@ -309,7 +348,14 @@
 }
 
 .explore-action-icon {
+  display: flex;
   font-size: 36px;
+  line-height: 1;
+}
+
+.explore-action-icon .explore-icon {
+  width: 40px;
+  height: 40px;
 }
 
 /* No tool yet (board h): a hint above the button. */
@@ -318,7 +364,7 @@
   z-index: 6;
   left: calc(env(safe-area-inset-left) + 16px);
   right: calc(env(safe-area-inset-right) + 16px);
-  bottom: calc(env(safe-area-inset-bottom) + 186px);
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 190px);
   max-width: 460px;
   margin: 0 auto;
   box-sizing: border-box;
@@ -384,9 +430,31 @@
   gap: 12px;
 }
 
-/* The lantern walks: its overlay sits above the joystick and the button. */
+/* The lantern walks (board g): its line and the easy way sit just above the
+   joystick and the button, small, so the Keeper and its light stay clear. */
 .explore-play[data-kind='light'] {
-  bottom: calc(env(safe-area-inset-bottom) + 186px);
+  bottom: calc(max(env(safe-area-inset-bottom), 8px) + 190px);
+  gap: 8px;
+}
+
+.explore-play[data-kind='light'] .explore-chip {
+  padding: 8px 14px;
+  gap: 8px;
+}
+
+.explore-play[data-kind='light'] .explore-chip-icon {
+  font-size: 20px;
+}
+
+.explore-play[data-kind='light'] .explore-chip-text {
+  font-size: 15px;
+}
+
+.explore-play[data-kind='light'] .explore-easy,
+.explore-play[data-kind='light'] .explore-not-now {
+  min-height: 44px;
+  padding: var(--hp-pad-y) 16px;
+  font-size: 14px;
 }
 
 .explore-chip {
@@ -402,7 +470,9 @@
 }
 
 .explore-chip-icon {
+  display: flex;
   font-size: 26px;
+  line-height: 1;
 }
 
 .explore-chip-text {

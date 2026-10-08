@@ -57,7 +57,46 @@ export const EXPLORE_TEXT = {
   glint: 'A glint!',
 } as const;
 
-/** The action button for a spot: its icon and verb. */
+/**
+ * Line icons drawn as SVG (#291, like the boards' button icons): the tools
+ * and the things a Keeper lifts. Newer emoji (🪏 is Emoji 16, 🪢 and 🪨 are
+ * Emoji 13) show as an empty box on older iPhones, so these never use them.
+ * 24 × 24 stroke paths for `strokeIcon`.
+ */
+export const ICON_PATHS = {
+  shovel: 'M4 20l9-9 M13 11l3-3 4 4-3 3z M3 21l2-2',
+  net: 'M4 20l7.2-7.2 M9.5 9a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0-11 0 M12 6.5l6 5 M12 11.5l6-5',
+  rope: 'M12 5a7 7 0 1 0 7 7 M12 9a3 3 0 1 0 3 3 M19 12v8',
+  lantern: 'M12 2.5v2 M9.5 4.5h5 M8 7h8 M9 7v11h6V7 M12 10.5v4 M7 20h10',
+  rock: 'M4 18l2.5-6 4-4 5 1.5 3.5 4 1 4.5Z',
+  log: 'M6 8h12a4 4 0 0 1 0 8H6 M6 8a4 4 0 0 0 0 8a4 4 0 0 0 0-8 M6 11v2',
+} as const;
+
+export type IconName = keyof typeof ICON_PATHS;
+
+/** True when `icon` names an SVG icon (else it's an emoji or text). */
+export function isIconName(icon: string): icon is IconName {
+  return Object.hasOwn(ICON_PATHS, icon);
+}
+
+/** Each tool's icon (SVG). */
+export const TOOL_ICONS: Readonly<Record<ToolId, IconName>> = {
+  shovel: 'shovel',
+  net: 'net',
+  rope: 'rope',
+  lantern: 'lantern',
+};
+
+/** Each hand-searched spot's icon on the big button: the flower bed is flowers, not a tree. */
+const HAND_ICONS: Readonly<Record<string, string>> = {
+  tree: '🌳',
+  'flower-bed': '🌷',
+  'pumpkin-row': '🎃',
+  'hollow-log': 'log',
+  rock: 'rock',
+};
+
+/** The action button for a spot: its icon (an `ICON_PATHS` name or an emoji) and verb. */
 export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
   readonly icon: string;
   readonly label: string;
@@ -66,12 +105,10 @@ export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
   const kind = EXPLORE_RULES.spotKinds.find((k) => k.id === spot.kind);
   const interaction: SpotInteraction = kind?.interaction ?? 'lift';
   if (spot.tool) {
-    const words = TOOL_WORDS[spot.tool];
-    return { icon: words.icon, label: words.verb, interaction };
+    return { icon: TOOL_ICONS[spot.tool], label: TOOL_WORDS[spot.tool].verb, interaction };
   }
-  return interaction === 'shake'
-    ? { icon: '🌳', label: 'Shake', interaction }
-    : { icon: '🪨', label: 'Lift', interaction };
+  const icon = HAND_ICONS[spot.kind] ?? (interaction === 'shake' ? '🌳' : 'rock');
+  return { icon, label: interaction === 'shake' ? 'Shake' : 'Lift', interaction };
 }
 
 /** "7 of 12 found 🔍", or "All 12 found! ✨" once the tile is done. */
@@ -100,6 +137,15 @@ export function spotName(kind: string): string {
 /** The missing-tool hint (#291, board h): "This mound needs a Shovel!" */
 export function needsHere(kind: string, tool: ToolId): string {
   return `This ${spotName(kind)} needs a ${toolName(tool)}!`;
+}
+
+/**
+ * The header chip's short text (#291): just the uses left ("18"), or "zZ"
+ * once the tool rests; empty for hands. `toolChip` is its spoken label.
+ */
+export function toolChipShort(tool: ToolId | null, uses: number): string {
+  if (tool === null) return '';
+  return uses <= 0 ? 'zZ' : String(uses);
 }
 
 /** The header chip (#291): "Shovel · 18 digs", "Shovel · Resting zZ", or "Hands". */

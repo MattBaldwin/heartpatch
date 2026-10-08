@@ -27,6 +27,7 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { el, messageOf } from '../ui/dom.js';
+import { strokeIcon } from '../ui/trays/trays.js';
 import { EXPLORE_FIND, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { exploreApi, type ExploreApi } from './explore-api.js';
 import { ExploreScene, type ExploreSceneStats } from './explore-scene.js';
@@ -48,8 +49,11 @@ import {
   stepToward,
   terrainName,
   toolChip,
+  toolChipShort,
+  TOOL_ICONS,
   toolRecipeRows,
-  TOOL_WORDS,
+  ICON_PATHS,
+  isIconName,
   xpLines,
   restLine,
 } from './explore-view.js';
@@ -58,6 +62,7 @@ import {
   CAVE_STAGE,
   freePoint,
   fromCaveStage,
+  lanternGlint,
   slideMove,
   spotAtTap,
   spotInFront,
@@ -67,7 +72,6 @@ import {
 } from './explore-world.js';
 import {
   interactionProgress,
-  lit,
   startInteraction,
   stepInteraction,
   type InteractionInput,
@@ -160,10 +164,10 @@ interface RareCard {
 const PLAY_TEXT: Readonly<
   Record<SpotInteraction, { icon: string; hint: string; easy: string; note?: string }>
 > = {
-  dig: { icon: '⬇️', hint: 'Swipe down to dig!', easy: 'tap to dig' },
-  climb: { icon: '🪢', hint: 'Left, right, left, right!', easy: 'hold to climb' },
-  light: { icon: '🪔', hint: EXPLORE_TEXT.lanternHint, easy: 'light it all up' },
-  scoop: { icon: '🥅', hint: 'Swipe through when it glows!', easy: 'Scoop!' },
+  dig: { icon: 'shovel', hint: 'Swipe down to dig!', easy: 'tap to dig' },
+  climb: { icon: 'rope', hint: 'Left, right, left, right!', easy: 'hold to climb' },
+  light: { icon: 'lantern', hint: EXPLORE_TEXT.lanternHint, easy: 'light it all up' },
+  scoop: { icon: 'net', hint: 'Swipe through when it glows!', easy: 'Scoop!' },
   lift: {
     icon: '✊',
     hint: 'Hold to lift!',
@@ -239,7 +243,15 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   });
   const title = el('h2', { class: 'explore-title', id: 'explore-title' });
   const progress = el('p', { class: 'explore-progress', 'data-testid': 'explore-progress' });
-  const toolLine = el('span', { class: 'explore-tool', 'data-testid': 'explore-tool' });
+  // The tool in hand, short ("🪔 20"); its full name and uses are its label.
+  const toolIcon = el('span', { class: 'explore-tool-icon', 'aria-hidden': 'true' });
+  const toolUses = el('span', { class: 'explore-tool-uses', 'aria-hidden': 'true' });
+  const toolLine = el(
+    'span',
+    { class: 'explore-tool', role: 'img', 'data-testid': 'explore-tool' },
+    toolIcon,
+    toolUses,
+  );
   const bagCount = el('span', { class: 'explore-bag-count', 'data-testid': 'explore-bag-count' });
   const bagChip = el(
     'span',
@@ -515,7 +527,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       }
     }
     const moved = next !== keeperAt;
-    if (moved || (heading !== undefined && heading !== yaw)) {
+    const turned = heading !== undefined && heading !== yaw;
+    if (moved || turned) {
       keeperAt = next;
       if (heading !== undefined) yaw = heading;
       s.moveKeeper(keeperAt, yaw);
@@ -531,7 +544,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (playing) feed({ type: 'tick', t: now });
     const animating = s.step(now);
     renderDark();
-    options.invalidate();
+    // A finger resting on the stick (or pressed against a rock) changes nothing: no redraw.
+    if (moved || turned || animating || playing !== null) options.invalidate();
     const holding = playing !== null && playing.state.holdSince !== null;
     if (walking || animating || holding) frame = requestAnimationFrame(tick);
   }
@@ -574,8 +588,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (kind === 'light') {
       // The reducer's stage is a square round the cave; its glint stays on the tile.
       const fresh = startInteraction(kind, CAVE_STAGE, now, seedOf(spot));
-      const hidden = clampToTile(fromCaveStage(spot, fresh.glint));
-      state = { ...fresh, glint: toCaveStage(spot, hidden) };
+      state = { ...fresh, glint: lanternGlint(spot, fresh.glint, s.colliders) };
       state = stepInteraction(state, { type: 'move', ...toCaveStage(spot, keeperAt), t: now });
     } else {
       const rect = ground.getBoundingClientRect();
@@ -589,7 +602,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     playing = { spot, state };
     lastHeld = spot.tool ?? lastHeld;
     s.hold(spot.tool);
-    s.nudge(spot);
+    // The lantern walks: the camera follows the Keeper and its light, not the cave.
+    s.nudge(spot, kind === 'light');
     s.useTool(now);
     buildPlay(kind);
     render();
@@ -800,7 +814,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const held = heldTool();
     if (held) lastHeld = held;
     scene3d?.hold(held);
-    toolLine.textContent = `${held ? `${TOOL_WORDS[held].icon} ` : '✋ '}${toolChip(held, held ? t.tools[held] : 0)}`;
+    const uses = held ? t.tools[held] : 0;
+    toolIcon.replaceChildren(iconNode(held ? TOOL_ICONS[held] : '✋'));
+    toolUses.textContent = toolChipShort(held, uses);
+    toolLine.setAttribute('aria-label', toolChip(held, uses));
     toolLine.classList.toggle('explore-tool-hands', held === null);
     overlay.classList.toggle('explore-gesture', gesturing());
     overlay.classList.toggle('explore-carded', card !== null);
@@ -818,8 +835,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!t) return;
     action.classList.remove('explore-action-ready', 'explore-action-missing');
     if (playing?.state.kind === 'light') {
-      const s = playing.state;
-      const found = s.revealed && lit(s, s.glint.x, s.glint.y);
+      // In step with the glint: both there once the light has found it.
+      const found = playing.state.revealed;
       action.disabled = !found || working;
       action.classList.toggle('explore-action-ready', found);
       actionIcon.textContent = '✨';
@@ -837,7 +854,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const missing = missingTool(front, t.tools) !== null;
     action.disabled = working || missing;
     action.classList.add(missing ? 'explore-action-missing' : 'explore-action-ready');
-    actionIcon.textContent = what.icon;
+    actionIcon.replaceChildren(iconNode(what.icon));
     actionLabel.textContent = what.label;
   }
 
@@ -887,7 +904,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const playChip = el(
       'div',
       { class: `explore-chip explore-chip-${kind}`, 'data-testid': 'explore-chip' },
-      el('span', { class: 'explore-chip-icon', 'aria-hidden': 'true' }, text.icon),
+      el('span', { class: 'explore-chip-icon', 'aria-hidden': 'true' }, iconNode(text.icon)),
       el('span', { class: 'explore-chip-text' }, text.hint),
       playDots,
     );
@@ -965,35 +982,44 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
   }
 
-  /** The lantern's dark and its circle of light round the Keeper (board g). */
+  /** What the lantern's dark last drew, so a still frame redoes nothing. */
+  let darkDrawn = '';
+
+  /** The lantern's dark and its warm circle of light round the Keeper (board g). */
   function renderDark(): void {
     const p = playing;
     const s = p?.state;
     const on = s?.kind === 'light' && !(s.revealed && s.light === null) && card === null;
     dark.hidden = !on;
-    const showGlint = s?.kind === 'light' && (s.revealed || lit(s, s.glint.x, s.glint.y));
+    // The glint shows once the light has found it, as "Grab it" wakes up.
+    const showGlint = s?.kind === 'light' && s.revealed && card === null;
     glint.hidden = !showGlint;
-    if (!p || !s || s.kind !== 'light' || !scene3d) return;
-    if (on) {
-      const at = scene3d.screenOf(keeperAt, 0.6);
-      const edge = scene3d.screenOf(
-        { x: keeperAt.x + INTERACTION.lightRadius * INTERACTION.caveArea, z: keeperAt.z },
-        0.6,
-      );
-      if (at && edge) {
-        const r = Math.max(40, Math.abs(edge.x - at.x));
-        dark.style.setProperty(
-          '--light',
-          `radial-gradient(circle ${String(Math.round(r))}px at ${String(Math.round(at.x))}px ${String(Math.round(at.y))}px, rgb(255 227 163 / 18%) 0%, transparent 70%, rgb(28 20 40 / 94%) 100%)`,
-        );
-      }
+    if (!p || !s || s.kind !== 'light' || !scene3d) {
+      darkDrawn = '';
+      return;
     }
-    if (showGlint) {
-      const g = scene3d.screenOf(fromCaveStage(p.spot, s.glint), 0.1);
-      if (g) {
-        glint.style.left = `${String(g.x)}px`;
-        glint.style.top = `${String(g.y)}px`;
-      }
+    // On the ground (lift 0), so the circle on screen is the light on the ground.
+    const at = scene3d.screenOf(keeperAt, 0);
+    const edge = scene3d.screenOf(
+      { x: keeperAt.x + INTERACTION.lightRadius * INTERACTION.caveArea, z: keeperAt.z },
+      0,
+    );
+    const g = showGlint ? scene3d.screenOf(fromCaveStage(p.spot, s.glint), 0.1) : null;
+    const key = [on, showGlint, at?.x, at?.y, edge?.x, g?.x, g?.y].map(String).join();
+    if (key === darkDrawn) return;
+    darkDrawn = key;
+    if (on && at && edge) {
+      const r = Math.round(Math.max(40, Math.abs(edge.x - at.x)));
+      const x = Math.round(at.x);
+      const y = Math.round(at.y);
+      dark.style.setProperty(
+        '--light',
+        `radial-gradient(circle ${String(r)}px at ${String(x)}px ${String(y)}px, rgb(255 227 163 / 62%) 0%, rgb(205 176 138 / 58%) 55%, rgb(36 28 46 / 95%) 100%)`,
+      );
+    }
+    if (g) {
+      glint.style.left = `${String(g.x)}px`;
+      glint.style.top = `${String(g.y)}px`;
     }
   }
 
@@ -1269,6 +1295,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       };
     },
   };
+}
+
+/** An icon: a drawn line icon (`ICON_PATHS`), else the emoji or text itself. */
+function iconNode(icon: string): Node {
+  if (!isIconName(icon)) return document.createTextNode(icon);
+  const svg = strokeIcon(ICON_PATHS[icon]);
+  svg.classList.add('explore-icon');
+  return svg;
 }
 
 /** Stable 0–1 per spot, so the lantern's glint hides in the same place each time. */
