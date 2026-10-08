@@ -13,6 +13,7 @@ describe('rarity words and colours (#240)', () => {
       'Rare',
       'Epic',
       'Legendary',
+      'Mythic',
       'Secret',
     ]);
     expect(findAvoidedWords(Object.values(RARITY_NAMES).join(' '))).toEqual([]);
@@ -28,6 +29,7 @@ describe('rarity words and colours (#240)', () => {
       rare: '#4f8fd6',
       epic: '#8a62c4',
       legendary: '#e0a12a',
+      mythic: '#2aa6b8',
       secret: '#d9468b',
     });
   });

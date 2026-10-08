@@ -60,6 +60,7 @@ All tiers are the same shared vinyl (§4) plus a per-instance code in the squish
 | Vinyl | common, uncommon, rare | glossy clearcoat + rim (today's look) | — |
 | **Sparkle** | epic | tiny white flecks in the vinyl that twinkle as the view turns; they sit in each mesh's own space, so they stay put as the squishy breathes, bounces and turns | ~12 ALU per fragment (a 3D cell hash), only on sparkly instances |
 | **Iridescent** | legendary, secret | sparkle **plus** a rainbow rim that shifts with view angle | ~20 ALU per fragment |
+| **Shimmer** | mythic (#261) | iridescent **plus** soft pearly bands that glide over the vinyl as the view turns (never on a timer) | ~28 ALU per fragment |
 | **Glow** | Light (whole squishy), Fire (its flames, the `accent` parts); others may opt in (Glowgourd's lantern body) | lit from inside: albedo added back as emission, so it reads at dusk and night | ~3 ALU |
 
 - Face parts (eyes, brows, mouth, cheeks) never sparkle or glow, so faces stay clean.

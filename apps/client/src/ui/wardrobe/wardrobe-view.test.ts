@@ -1,7 +1,8 @@
-import { STARTER_CLOTHING } from '@heartpatch/shared';
+import { CLOTHING, CLOTHING_RARITIES, STARTER_CLOTHING } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import {
   hiddenByCostume,
+  RARITY_FILTERS,
   sameOutfit,
   shownItems,
   tabCounts,
@@ -29,6 +30,13 @@ describe('shownItems', () => {
   it('filters by rarity', () => {
     expect(shownItems(owned, 'hat', 'rare').map((s) => s.item.id)).toEqual(['starry-crown']);
     expect(shownItems(owned, 'hat', 'legendary')).toEqual([]);
+  });
+
+  it('offers a rarity chip only where the catalog has pieces, in ladder order', () => {
+    const used = CLOTHING_RARITIES.filter((r) => CLOTHING.some((i) => i.rarity === r));
+    expect(RARITY_FILTERS).toEqual(['all', ...used]);
+    // Mythic (#261) waits for its first piece, so its chip is never always empty.
+    expect(RARITY_FILTERS.includes('mythic')).toBe(CLOTHING.some((i) => i.rarity === 'mythic'));
   });
 
   it('has a tab per wardrobe slot plus squishy accessories', () => {
