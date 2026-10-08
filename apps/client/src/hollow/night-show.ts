@@ -133,6 +133,11 @@ export interface NightShow {
   /** Ends the show without calling `onEnd` (the map closed). */
   stop: () => void;
   readonly playing: boolean;
+  /**
+   * The live show hasn't reached my last strike yet: who he took is still
+   * the show's to tell (the Hollow's badge waits for it).
+   */
+  readonly strikePending: boolean;
   readonly debug: NightShowDebug;
 }
 
@@ -145,6 +150,8 @@ export function createNightShow(options: {
   /** Timers (tests pass fakes). */
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  /** A stop of my walk played (or was stood at, joining part way). */
+  onBeat?: () => void;
 }): NightShow {
   const now = options.now ?? (() => Date.now());
   const setTimer =
@@ -227,7 +234,7 @@ export function createNightShow(options: {
       mode = prowlMs === null ? 'replay' : 'live';
       ending = onEnd;
       const elapsed = Math.max(0, now() - startedAt);
-      const fresh = elapsed < 10_000;
+      const fresh = elapsed < SHOW.freshMs;
       held = new Map();
       walking = plans.length;
       for (const { w, beats } of plans) {
@@ -235,11 +242,15 @@ export function createNightShow(options: {
         if (mine) myBeats = beats;
         const struck = new Set(beats.filter((b) => b.kind === 'strike').map((b) => hexKey(b)));
         const past = beatIndexAt(beats, elapsed);
+        // Joining part way: he stands where his last stop ended (a stop
+        // only just begun still plays).
+        const since = past >= 0 ? elapsed - (beats[past]?.at ?? 0) : 0;
+        const first = past >= 0 && since >= SHOW.moveMs ? past + 1 : Math.max(0, past);
         // Land he won back stays its Keeper's until his strike there has come.
         for (const h of w.reclaimed) {
           const key = hexKey(h);
           const strikeDone = beats.some(
-            (b, i) => i <= past && b.kind === 'strike' && hexKey(b) === key,
+            (b, i) => i < first && b.kind === 'strike' && hexKey(b) === key,
           );
           if (!strikeDone && struck.has(key)) held.set(key, w.userId);
         }
@@ -257,6 +268,7 @@ export function createNightShow(options: {
             if (!still) stage.cue?.(beat.kind);
             if (!still && (mode === 'replay' || (beat.kind === 'enter' && fresh)))
               stage.pan?.(beat);
+            options.onBeat?.();
           }
           stage.walk(w.userId, beat, w.seed, still, () => {
             if (beat.kind === 'strike') release(w.userId, [hexKey(beat)]);
@@ -275,10 +287,6 @@ export function createNightShow(options: {
             }
           }
         };
-        // Joining part way: he stands where his last stop ended (a stop
-        // only just begun still plays).
-        const since = past >= 0 ? elapsed - (beats[past]?.at ?? 0) : 0;
-        const first = past >= 0 && since >= SHOW.moveMs ? past + 1 : Math.max(0, past);
         if (first > 0) run(first - 1, true);
         for (let i = first; i < beats.length; i++) {
           const beat = beats[i];
@@ -305,6 +313,9 @@ export function createNightShow(options: {
     },
     get playing() {
       return mode !== null;
+    },
+    get strikePending() {
+      return mode === 'live' && myBeats.some((b, i) => i > myBeat && b.kind === 'strike');
     },
     get debug() {
       return {

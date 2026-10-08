@@ -42,6 +42,8 @@ export const SHOW = {
   lean: 0.35, // TUNE
   /** His fade while he waits between stops (0–1). */
   waitAlpha: 0.75, // TUNE
+  /** A live show joined this soon after nightfall glides the camera to his first stop. */
+  freshMs: 10_000, // TUNE
   /** How big he stands on the map. */
   scale: 0.85, // TUNE
 } as const;

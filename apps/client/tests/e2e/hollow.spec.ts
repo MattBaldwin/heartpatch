@@ -130,19 +130,17 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await expect.poll(async () => (await hollowState(page))?.darkSpots).toBe(1);
   const chips = page.getByTestId('night-chips');
   await expect(chips).toContainText(/He's \w+ tonight|1 dark spot/);
-  const stageChip = page.getByTestId('night-stage-chip');
+  // His stage is a tap away at any hour (at dusk, just his moon).
   await closeTrays(page);
-  if (await stageChip.isVisible()) {
-    await stageChip.tap();
-    const strength = page.getByTestId('night-strength');
-    await expect(strength).toBeVisible();
-    await expect(strength).toContainText('The Hollow Man gets bolder');
-    await expect(strength.getByTestId('night-stages').locator('li')).toHaveCount(4);
-    await expect(strength).toContainText("Light every bit of your land and he can't get anything!");
-    expect(findAvoidedWords((await strength.textContent()) ?? '')).toEqual([]);
-    await strength.getByTestId('night-strength-ok').tap();
-    await expect(strength).toBeHidden();
-  }
+  await page.getByTestId('night-stage-chip').tap();
+  const strength = page.getByTestId('night-strength');
+  await expect(strength).toBeVisible();
+  await expect(strength).toContainText('The Hollow Man gets bolder');
+  await expect(strength.getByTestId('night-stages').locator('li')).toHaveCount(4);
+  await expect(strength).toContainText("Light every bit of your land and he can't get anything!");
+  expect(findAvoidedWords((await strength.textContent()) ?? '')).toEqual([]);
+  await strength.getByTestId('night-strength-ok').tap();
+  await expect(strength).toBeHidden();
 
   // First-night grace: the first two nightfalls take nothing.
   for (let night = 0; night < 2; night++) {
@@ -191,19 +189,22 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   }
   expect(fell).toMatchObject({ status: 200, body: { taken: 1 } });
 
-  // He walks live each night; skipped, the map stops drawing when he's gone.
+  // He walks live each night. One card at a time: with the raid report open
+  // the narrator waits its turn, and so does the report.
   await expect
     .poll(async () => (await hollowState(page))?.show.playing, { timeout: 30_000 })
     .toBe(true);
-  await page.getByTestId('night-show-skip').tap();
-  await expect.poll(async () => (await hollowState(page))?.walking).toBe(0);
-  await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
-
-  // One morning report at a time: the Hollow's shows once the raid report closes.
+  await expect(caption).toBeHidden();
   const report = page.getByTestId('hollow-report');
   await expect(report).toBeHidden();
   await raidSheet.getByTestId('raid-done').tap();
   await expect(raidSheet).toBeHidden();
+  await closeTrays(page);
+  // Back on the map, the narrator comes back; skipped, the map stops drawing when he's gone.
+  await expect(caption).toBeVisible();
+  await page.getByTestId('night-show-skip').tap();
+  await expect.poll(async () => (await hollowState(page))?.walking).toBe(0);
+  await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
   // The morning report: gentle, and always "you can rescue them".
   await expect(report).toBeVisible();
   await expect(report).toContainText(
@@ -239,16 +240,11 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
     .toBe(false);
   await expect(report).toBeVisible();
   expect((await hollowState(page))!.replay).toBe(false);
-  // Land still dark (the capture's battle cooldown kept it from going wild)
-  // gets "Light my land"; with none left the report just says okay.
-  const light = page.getByTestId('hollow-report-light');
-  if (await light.isVisible()) {
-    await light.tap();
-    await page.getByTestId('tile-panel').getByRole('button', { name: 'Close' }).tap();
-  } else {
-    await page.getByTestId('hollow-report-ok').tap();
-  }
+  // The capture's battle cooldown (4 h) kept his land from going wild, so it's
+  // still dark: "Light my land" takes the kid there.
+  await page.getByTestId('hollow-report-light').tap();
   await expect(report).toBeHidden();
+  await page.getByTestId('tile-panel').getByRole('button', { name: 'Close' }).tap();
 
   // The Hollow button: who's waiting there, and a rescue from right here.
   const open = await trayButton(page, 'hollow-open');

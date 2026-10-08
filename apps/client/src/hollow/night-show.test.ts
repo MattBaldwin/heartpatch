@@ -363,7 +363,7 @@ describe('the Hollow Man walks the border', () => {
 
 describe('the night show', () => {
   /** A fake clock and timers, and a stage that records what it was told. */
-  function rig() {
+  function rig(onBeat?: () => void) {
     let clock = 1_000_000;
     let timers: { at: number; fn: () => void; id: number }[] = [];
     let ids = 0;
@@ -409,6 +409,7 @@ describe('the night show', () => {
       clearTimer: (id) => {
         timers = timers.filter((t) => t.id !== id);
       },
+      ...(onBeat ? { onBeat } : {}),
     });
     const advance = (ms: number) => {
       const until = clock + ms;
@@ -469,6 +470,32 @@ describe('the night show', () => {
     t.advance(10_000);
     expect(ended).toBe(false);
     expect(t.show.playing).toBe(false);
+  });
+
+  it("keeps who he took the show's to tell until my last strike lands", () => {
+    let beats = 0;
+    const t = rig(() => (beats += 1));
+    t.show.play([mine], t.now(), PROWL, () => undefined);
+    t.advance(0);
+    expect(t.show.strikePending).toBe(true);
+    t.advance(PROWL);
+    // The first strike: one more to come.
+    expect(t.show.strikePending).toBe(true);
+    t.advance(SHOW.strikeGapMs);
+    expect(t.show.strikePending).toBe(false);
+    expect(beats).toBe(5);
+    // The replay is the morning's: nothing is the show's to tell then.
+    t.show.play([mine], t.now(), null, () => undefined);
+    expect(t.show.strikePending).toBe(false);
+  });
+
+  it('keeps a strike he is still reaching for held, joining just as it starts', () => {
+    const t = rig();
+    t.show.play([mine], t.now() - PROWL - 500, PROWL, () => undefined);
+    // Half a second into the first strike: it plays again, its tile still held.
+    expect(t.show.debug.held).toBe(2);
+    t.advance(0);
+    expect(t.held().size).toBe(1);
   });
 
   it('joins part way for a kid who opens the app at 7:14', () => {

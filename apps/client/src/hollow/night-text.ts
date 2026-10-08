@@ -21,7 +21,8 @@ export const STAGES: Record<HollowStage, { moon: string; name: string }> = {
   boldest: { moon: '🌕', name: 'Boldest' },
 };
 
-const ORDER: readonly HollowStage[] = ['watching', 'curious', 'bold', 'boldest'];
+/** The stages from mildest to boldest, as the sheet lists them. */
+export const STAGE_ORDER: readonly HollowStage[] = ['watching', 'curious', 'bold', 'boldest'];
 
 export const NIGHT_TEXT = {
   nightIn: (minutes: number) => `🌇 Night in ${String(minutes)} min`,
@@ -57,19 +58,23 @@ export function stageNights(
   rules: Pick<HollowRules, 'strength'> = HOLLOW_RULES,
 ): Record<HollowStage, string> {
   const rows = rules.strength.nights;
-  const out = {} as Record<HollowStage, string>;
-  for (const stage of ORDER) {
+  const nightsOf = (stage: HollowStage): string => {
     const mine = rows.filter((r) => r.stage === stage);
     const first = mine[0]?.from;
     const after = rows.find(
       (r) => r.from > (mine[mine.length - 1]?.from ?? 0) && r.stage !== stage,
     );
-    if (first === undefined) out[stage] = '';
-    else if (!after) out[stage] = `night ${String(first)} on`;
-    else if (after.from - 1 === first) out[stage] = `night ${String(first)}`;
-    else out[stage] = `nights ${String(first)}–${String(after.from - 1)}`;
-  }
-  return out;
+    if (first === undefined) return '';
+    if (!after) return `night ${String(first)} on`;
+    if (after.from - 1 === first) return `night ${String(first)}`;
+    return `nights ${String(first)}–${String(after.from - 1)}`;
+  };
+  return {
+    watching: nightsOf('watching'),
+    curious: nightsOf('curious'),
+    bold: nightsOf('bold'),
+    boldest: nightsOf('boldest'),
+  };
 }
 
 /**

@@ -229,7 +229,7 @@ export class HollowLayer implements MapLayer {
 
   /**
    * One stop of `keeper`'s walk (#277). `still` stands him where the stop
-   * ends at once (joining a show part way, or reduced motion's enter);
+   * ends at once (joining a show part way);
    * otherwise it plays and `done` is called when it has. False (and no
    * `done`) if no map is drawn.
    */
@@ -378,8 +378,14 @@ export class HollowLayer implements MapLayer {
   }
 }
 
+/** The reduced-motion query, made once (it's read every frame a stop plays). */
+let reducedQuery: MediaQueryList | null | undefined;
 function reducedMotion(): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    : false;
+  if (reducedQuery === undefined) {
+    reducedQuery =
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
+  }
+  return reducedQuery?.matches ?? false;
 }

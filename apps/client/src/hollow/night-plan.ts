@@ -76,7 +76,9 @@ export function liveStart(input: {
   readonly tonight: string;
   readonly nightfallAt: number;
 }): number {
-  return input.fallNight === input.tonight ? Math.min(input.fallAt, input.nightfallAt) : input.fallAt;
+  return input.fallNight === input.tonight
+    ? Math.min(input.fallAt, input.nightfallAt)
+    : input.fallAt;
 }
 
 /**

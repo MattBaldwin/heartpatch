@@ -402,6 +402,15 @@ const hollow = createHollowScreen({
   onStatus: () => {
     land.redraw();
   },
+  // One card at a time (#277): the narrator and the nudge wait while
+  // something else is up over the map.
+  mapBusy: () =>
+    (maps.debug?.selected ?? null) !== null ||
+    trays.debug.open !== null ||
+    care.isOpen ||
+    closeUp.isOpen ||
+    homeOpen() ||
+    (land.debug?.welcome ?? false),
   // One card at a time (#129): the morning report waits behind the raid
   // report, a found lore page, a milestone party and What's new. (`lorebook`
   // and `milestones` are made below; this is only read at render time.)
@@ -512,6 +521,15 @@ const maps = createMapScreen({
     territory.tileActions,
     jobs.tileActions,
     journeys.tileActions,
+    // A tile's panel came up or went away: the night's cards step back or return.
+    {
+      show: () => {
+        hollow.viewChanged();
+      },
+      hide: () => {
+        hollow.viewChanged();
+      },
+    },
   ),
   onHudChange: (mapId) => {
     hudMapId = mapId;

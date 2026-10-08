@@ -21,12 +21,13 @@ import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { hollowApi, type HollowApi } from './hollow-api.js';
-import { DUSK_MINUTES, VISIT_FRESH_MS } from './hollow-config.js';
+import { VISIT_FRESH_MS } from './hollow-config.js';
+import { fallPlan, joinsTonight, liveStart, nightChips, nudgeDue } from './night-plan.js';
 import type { HollowLayer } from './hollow-layer.js';
 import { changesMyNight, HOLLOW_TEXT, reportText, unseenReports } from './hollow-report.js';
 import { placeOf } from './dark-land.js';
 import { createNightShow, domCaption, type NightShowDebug, type ShowWalk } from './night-show.js';
-import { NIGHT_TEXT, reachText, STAGES, stageNights } from './night-text.js';
+import { NIGHT_TEXT, reachText, STAGE_ORDER, STAGES, stageNights } from './night-text.js';
 import type { BeatKind, Narration } from './show-timeline.js';
 import './hollow.css';
 
@@ -66,6 +67,11 @@ export interface HollowScreenOptions {
   pvpMode?: () => PvpMode | null;
   /** The tutorial's Glade has its own nightfall: no night chips there. */
   isGlade?: (mapId: string) => boolean;
+  /**
+   * Something else is up over the map (a tile's panel, a tray, the care or
+   * home sheet): the narrator and the nudge step back, one card at a time.
+   */
+  mapBusy?: () => boolean;
   /** The night's status came in (what `reclaimed` answers may have changed). */
   onStatus?: () => void;
   /** A rescue battle started (or one going came back): the battle screen takes over. */
@@ -143,6 +149,8 @@ const watchedKey = (userId: string, mapId: string) => `heartpatch.hollow.show.${
 const nudgeKey = (userId: string, mapId: string) => `heartpatch.hollow.nudge.${userId}.${mapId}`;
 /** The live show's prowl: he strikes this long after nightfall. */
 const PROWL_MS = HOLLOW_RULES.show.prowlMinutes * 60_000;
+/** How often the night's cards look whether something else is up over the map. */
+const BUSY_TICK_MS = 1_000;
 /** How often the chips' "Night in N min" counts down. */
 const CHIP_TICK_MS = 30_000;
 
@@ -185,7 +193,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   /** The morning replay is playing: the report waits and the map shows night. */
   let replaying = false;
   /** Night just fell live: its walks wait for the status to say it's night. */
-  let pendingFall: { night: string; at: number; walks: ShowWalk[] } | null = null;
+  let pendingFall: { night: string; at: number; receivedAt: number; walks: ShowWalk[] } | null =
+    null;
   const serverNow = () => now() + clockOffset;
 
   const openButton = el(
@@ -271,6 +280,10 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   let caption: ReturnType<typeof domCaption> | null = null;
   const show = createNightShow({
     now,
+    // My strike has landed: the Hollow's badge can count who he took.
+    onBeat: () => {
+      render();
+    },
     caption: (onSkip) =>
       (caption = domCaption(options.root, onSkip, () =>
         (showReport()?.taken ?? []).filter((t) => t.inHollow).map((t) => token(t.speciesId, true)),
@@ -290,11 +303,21 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   let showNight: string | null = null;
   const showReport = (): MorningReport | undefined =>
     status?.reports.find((r) => r.night === showNight);
+  // One timer for the app's life (the screen is made once, main.ts): each
+  // second the cards check whether something else came up over the map,
+  // and every `CHIP_TICK_MS` the "Night in N min" chip counts down.
+  let ticks = 0;
+  let busyBefore = false;
   setInterval(() => {
     if (!mapId || !status) return;
-    renderChips();
-    renderNight();
-  }, CHIP_TICK_MS);
+    ticks += 1;
+    const busy = options.mapBusy?.() ?? false;
+    if (busy !== busyBefore || ticks % (CHIP_TICK_MS / BUSY_TICK_MS) === 0) {
+      busyBefore = busy;
+      renderChips();
+      renderNight();
+    }
+  }, BUSY_TICK_MS);
 
   const speciesName = (speciesId: string): string | undefined => {
     const species: Species | undefined =
@@ -469,7 +492,6 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const first = spots[0];
     const stage: HollowStage = status.tonight.stage;
     const minutes = minutesToNight();
-    const dusk = !status.night.isNight && minutes !== null && minutes <= DUSK_MINUTES;
     const openStrength = () => {
       strengthOpen = true;
       render();
@@ -488,14 +510,25 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
           'night-dark-chip',
         )
       : null;
-    const row: HTMLElement[] = status.night.isNight
-      ? [chip(NIGHT_TEXT.night, null, 'night-time-chip'), stageChip]
-      : dusk
-        ? [
-            chip(NIGHT_TEXT.nightIn(minutes), null, 'night-time-chip'),
-            ...(darkChip ? [darkChip, moonChip] : [stageChip]),
-          ]
-        : [...(darkChip ? [darkChip] : []), stageChip];
+    const kinds = nightChips({
+      isNight: status.night.isNight,
+      minutes,
+      darkCount: spots.length,
+    });
+    const row = kinds.flatMap((kind): HTMLElement[] => {
+      switch (kind) {
+        case 'night':
+          return [chip(NIGHT_TEXT.night, null, 'night-time-chip')];
+        case 'night-in':
+          return [chip(NIGHT_TEXT.nightIn(minutes ?? 0), null, 'night-time-chip')];
+        case 'dark':
+          return darkChip ? [darkChip] : [];
+        case 'stage':
+          return [stageChip];
+        case 'moon':
+          return [moonChip];
+      }
+    });
     const labels = row.map((c) => c.textContent).join('|');
     if (chips.dataset['labels'] !== labels) {
       chips.dataset['labels'] = labels;
@@ -536,12 +569,13 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const due =
       status !== null &&
       night !== null &&
-      !glade() &&
-      !status.night.isNight &&
-      minutes !== null &&
-      minutes <= DUSK_MINUTES &&
       first !== undefined &&
-      stored(nudgeKey) !== night;
+      nudgeDue(
+        { isNight: status.night.isNight, minutes, darkCount: spots.length },
+        night,
+        stored(nudgeKey),
+        glade(),
+      );
     nudge.hidden = !due || blocked;
     if (nudge.hidden) delete nudge.dataset['drawn'];
     if (!due) return;
@@ -583,7 +617,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       el(
         'ol',
         { class: 'night-stages', 'data-testid': 'night-stages' },
-        ...(Object.keys(STAGES) as HollowStage[]).map((s) =>
+        ...STAGE_ORDER.map((s) =>
           el(
             'li',
             {
@@ -631,7 +665,11 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
 
   function render(): void {
     const on = mapId !== null && status !== null;
-    const hollowed = status?.hollowed ?? [];
+    // Tonight's taken are the live show's to tell, at 7:30 (mockup screen 4).
+    const untold = new Set(
+      show.strikePending ? (showReport()?.taken ?? []).map((t) => t.squishyId) : [],
+    );
+    const hollowed = (status?.hollowed ?? []).filter((s) => !untold.has(s.id));
     openButton.hidden = !on || (hollowed.length === 0 && !options.devTools);
     badge.textContent = hollowed.length > 0 ? String(hollowed.length) : '';
     badge.hidden = hollowed.length === 0;
@@ -800,10 +838,18 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
 
   function renderNight(): void {
     const heldBack = options.otherReportOpen?.() ?? false;
-    caption?.setHeld(strengthOpen || !sheet.hidden || heldBack);
+    const busy = options.mapBusy?.() ?? false;
+    busyBefore = busy;
+    caption?.setHeld(strengthOpen || !sheet.hidden || heldBack || busy);
     renderStrength(heldBack || replaying);
     renderNudge(
-      heldBack || show.playing || strengthOpen || !reportBox.hidden || !sheet.hidden || replaying,
+      heldBack ||
+        busy ||
+        show.playing ||
+        strengthOpen ||
+        !reportBox.hidden ||
+        !sheet.hidden ||
+        replaying,
     );
   }
 
@@ -831,6 +877,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const id = mapId;
     const at = generation;
     if (!id) return;
+    const askedAt = now();
     try {
       const fresh = await api.status(id);
       if (at !== generation) return;
@@ -840,8 +887,12 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       scheduleNightCheck(fresh.night.changesInMinutes);
       report = unseenReports(fresh.reports, seenNight());
       const fall = pendingFall;
-      pendingFall = null;
-      if (fall) startFall(fresh, fall);
+      // A status asked for before the event (it answers from before nightfall)
+      // leaves the fall for the refresh the event asked for.
+      if (fall && askedAt >= fall.receivedAt) {
+        pendingFall = null;
+        startFall(fresh, fall);
+      }
       joinTonight(fresh);
       options.onStatus?.();
     } catch (err) {
@@ -874,11 +925,25 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     fresh: HollowStatus,
     fall: { night: string; at: number; walks: ShowWalk[] },
   ): void {
-    if (!fresh.night.isNight && options.devTools !== true) return;
-    const startedAt =
-      fall.night === fresh.tonight.night
-        ? Math.min(fall.at, Date.parse(fresh.tonight.nightfallAt) - clockOffset)
-        : fall.at;
+    const plan = fallPlan({
+      glade: glade(),
+      isNight: fresh.night.isNight,
+      devTools: options.devTools === true,
+      walks: fall.walks.filter((w) => w.walk.length > 0).length,
+    });
+    if (plan === 'visit') visit();
+    if (plan === 'replay') {
+      // The Glade's scripted nightfall is by day: the walk plays at the replay's pace.
+      if (!show.play(fall.walks, now(), null, showEnded(fall.night, generation))) visit();
+      else showNight = fall.night;
+    }
+    if (plan !== 'live') return;
+    const startedAt = liveStart({
+      fallNight: fall.night,
+      fallAt: fall.at,
+      tonight: fresh.tonight.night,
+      nightfallAt: Date.parse(fresh.tonight.nightfallAt) - clockOffset,
+    });
     if (!playLive(fall.night, fall.walks, startedAt)) visit();
   }
 
@@ -889,9 +954,17 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   function joinTonight(fresh: HollowStatus): void {
     const tonight = fresh.tonight;
     const mine = fresh.reports.find((r) => r.night === tonight.night);
-    if (show.playing || !fresh.night.isNight || !mine || mine.walk.length === 0) return;
-    if (serverNow() >= Date.parse(tonight.strikeAt) || stored(watchedKey) === tonight.night) return;
-    const walk = myWalk(mine, false);
+    if (show.playing || !mine) return;
+    const joins = joinsTonight({
+      isNight: fresh.night.isNight,
+      tonight: tonight.night,
+      reportNight: mine.night,
+      walk: mine.walk.length,
+      now: serverNow(),
+      strikeAt: Date.parse(tonight.strikeAt),
+      watched: stored(watchedKey),
+    });
+    const walk = joins ? myWalk(mine, false) : null;
     if (walk) playLive(tonight.night, [walk], Date.parse(tonight.nightfallAt) - clockOffset);
   }
 
@@ -1021,6 +1094,7 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
             pendingFall = {
               night,
               at: Date.parse(event.at),
+              receivedAt: now(),
               walks: (fell.data.walks ?? []).map((w) => ({
                 userId: w.userId,
                 walk: w.walk,
