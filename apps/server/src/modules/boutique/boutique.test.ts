@@ -20,7 +20,17 @@ import { stockFor } from './service.js';
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
-const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
+const TEST_KEEPER = {
+  base: 'pip',
+  hairColor: 'honey',
+  eyeColor: 'sky',
+  outfit: 'sunflower',
+  skinTone: 'tone-1',
+  eyes: 'round' as const,
+  brows: 'arched',
+  mouth: 'smile',
+  extras: [],
+};
 const ZONE = 'America/Denver';
 /** Noon in Denver, in the Halloween window (design doc §15). */
 const START = '2026-10-02T18:00:00Z';
@@ -220,9 +230,11 @@ describe.skipIf(!url)('Boutique (needs DATABASE_URL)', () => {
     it('buys from the seasonal rack in season', async () => {
       const server = await start();
       const kid = await player();
-      await coins(server, kid, 300);
+      // The rack is random per player, and a whole costume can cost more than 300.
       const itemId = (await shop(server, kid)).seasonal[0]!.items[0]!.itemId;
-      expect((await buy(server, kid, itemId)).statusCode).toBe(200);
+      await coins(server, kid, priceOf(itemId));
+      const res = await buy(server, kid, itemId);
+      expect(res.statusCode, res.body).toBe(200);
       expect((await piecesOf(kid.id)).map((p) => p.itemId)).toEqual([itemId]);
     });
 

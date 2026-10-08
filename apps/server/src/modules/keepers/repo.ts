@@ -1,4 +1,4 @@
-import type { KeeperConfig } from '@heartpatch/shared';
+import { KeeperEyesSchema, type CompleteKeeperConfig, type KeeperConfig } from '@heartpatch/shared';
 import { eq } from 'drizzle-orm';
 import type { Executor } from '../../db/client.js';
 import { keepers } from '../../db/schema.js';
@@ -6,8 +6,8 @@ import { keepers } from '../../db/schema.js';
 /** Keeper storage (`keepers`, one row per player). Plain queries; the service checks the ids. */
 export interface KeepersRepo {
   find: (userId: string) => Promise<KeeperConfig | null>;
-  /** Writes the player's Keeper, replacing any earlier one. */
-  save: (userId: string, config: KeeperConfig, at: Date) => Promise<void>;
+  /** Writes the player's Keeper (every builder choice filled in), replacing any earlier one. */
+  save: (userId: string, config: CompleteKeeperConfig, at: Date) => Promise<void>;
 }
 
 export const keeperColumns = {
@@ -16,14 +16,26 @@ export const keeperColumns = {
   eyeColor: keepers.eyeColor,
   outfit: keepers.outfit,
   hairstyle: keepers.hairstyle,
+  skinTone: keepers.skinTone,
+  eyes: keepers.eyes,
+  brows: keepers.brows,
+  mouth: keepers.mouth,
+  extras: keepers.extras,
 };
 
 /** A stored row as a config: no hairstyle (null) means the base's own. */
 export function keeperFromRow({
   hairstyle,
+  eyes,
   ...rest
-}: Omit<KeeperConfig, 'hairstyle'> & { hairstyle: string | null }): KeeperConfig {
-  return hairstyle === null ? rest : { ...rest, hairstyle };
+}: Omit<CompleteKeeperConfig, 'hairstyle' | 'eyes'> & {
+  hairstyle: string | null;
+  eyes: string;
+}): KeeperConfig {
+  // Eyes this server doesn't know (a bad row) fall back to the starting look's.
+  const known = KeeperEyesSchema.safeParse(eyes);
+  const keeper: KeeperConfig = known.success ? { ...rest, eyes: known.data } : rest;
+  return hairstyle === null ? keeper : { ...keeper, hairstyle };
 }
 
 export function createKeepersRepo(db: Executor): KeepersRepo {

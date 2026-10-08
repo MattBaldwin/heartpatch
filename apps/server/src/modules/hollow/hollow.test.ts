@@ -50,7 +50,17 @@ import { createHollowService, type HollowService } from './service.js';
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
-const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
+const TEST_KEEPER = {
+  base: 'pip',
+  hairColor: 'honey',
+  eyeColor: 'sky',
+  outfit: 'sunflower',
+  skinTone: 'tone-1',
+  eyes: 'round' as const,
+  brows: 'arched',
+  mouth: 'smile',
+  extras: [],
+};
 /** A secret squishy: the owner's Hollow status carries its row since they've met it (rule 6). */
 const SECRET = SERVER_GAME_DATA.secretSpecies[0]!;
 // Noon in Denver on Oct 2 (MDT, UTC−6): tonight's nightfall is 01:00Z on Oct 3.
@@ -915,6 +925,28 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       clock.setTime(Date.parse(START));
       await db.execute(`update maps set hollow_strength_percent = 300 where id = '${mapId}'`);
       expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 2 });
+    });
+
+    it('keeps a fallen quiet night at the stage it was decided with', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      // Oct 5 is the kid's night 4 (Curious): nothing of theirs is out, so it's quiet.
+      await hollowService().runNightfall(mapId, '2026-10-05');
+      expect(await outcomeOf(mapId, kid)).toMatchObject({ reclaimed: [], stage: 'curious' });
+      // 20:00 MDT on Oct 5: that night has fallen, and an operator turns him off.
+      clock.setTime(Date.parse('2026-10-06T02:00:00Z'));
+      await db.execute(`update maps set hollow_strength_percent = 0 where id = '${mapId}'`);
+      // The show is about the night as it was decided, not today's percent.
+      expect((await statusOf(server, kid, mapId)).tonight).toMatchObject({
+        night: '2026-10-05',
+        stage: 'curious',
+      });
+      // The stored stage wins over the curve's, too.
+      await db.execute(
+        `update hollow_events set outcomes = jsonb_set(outcomes, '{0,stage}', '"boldest"') where map_id = '${mapId}'`,
+      );
+      expect((await statusOf(server, kid, mapId)).tonight.stage).toBe('boldest');
     });
 
     it('keeps land claimed since the last nightfall safe on its first night (guardrail b)', async () => {

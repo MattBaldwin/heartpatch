@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { ChangelogSchema, findAvoidedWords } from '@heartpatch/shared';
 import { afterAll, describe, expect, it } from 'vitest';
 import { runGit } from '../version/build-info.js';
-import { changelogJson, parseEntry, readChangelog } from './changelog.js';
+import { changelogJson, changelogReader, parseEntry, readChangelog } from './changelog.js';
 
 const entry = (title: string, area = 'battles', extra = '') =>
   `---\ntitle: ${title}\narea: ${area}   # battles | land | ...\n---\nSomething changed.\n${extra}`;
@@ -117,6 +117,37 @@ describe('readChangelog (#220)', () => {
       [null, null],
       [null, null],
     ]);
+  });
+
+  it('the dev server keeps builds until HEAD moves, but reads words fresh (#296)', () => {
+    const calls: string[] = [];
+    const counting = (args: string[], cwd: string) => {
+      calls.push(args[0] ?? '');
+      return runGit(args, cwd);
+    };
+    const read = changelogReader(join(repo, 'changes'), repo, counting);
+    const first = read();
+    const gitPerFirstRead = calls.length;
+    expect(gitPerFirstRead).toBeGreaterThan(2);
+    calls.length = 0;
+    writeFileSync(join(repo, 'changes/first.md'), entry('First, fresh words'));
+    const again = read();
+    expect(calls).toEqual(['rev-parse']);
+    expect(again.map((e) => [e.slug, e.build, e.title])).toEqual([
+      ['second-renamed', 4, 'Second'],
+      ['first', 2, 'First, fresh words'],
+    ]);
+    expect(again.map((e) => e.date)).toEqual(first.map((e) => e.date));
+    // A new commit (here, a new entry) moves HEAD: every build is looked up again.
+    calls.length = 0;
+    git('checkout', '-q', '--', 'changes/first.md');
+    commit('changes/third.md', entry('A third, quite different entry', 'home', 'More words.\n'));
+    expect(read().map((e) => [e.slug, e.build])).toEqual([
+      ['third', 7],
+      ['second-renamed', 4],
+      ['first', 2],
+    ]);
+    expect(calls.length).toBeGreaterThan(gitPerFirstRead);
   });
 
   it('is empty with no changes folder', () => {

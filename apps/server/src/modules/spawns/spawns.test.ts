@@ -43,7 +43,17 @@ import { createSpawnsService, defaultSpawnData, gladeSpawn } from './service.js'
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
-const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
+const TEST_KEEPER = {
+  base: 'pip',
+  hairColor: 'honey',
+  eyeColor: 'sky',
+  outfit: 'sunflower',
+  skinTone: 'tone-1',
+  eyes: 'round' as const,
+  brows: 'arched',
+  mouth: 'smile',
+  extras: [],
+};
 const HOUR_MS = 60 * 60 * 1000;
 /** A secret squishy that isn't a grown-up form, so it can be met wild (CLAUDE.md rule 6). */
 const SECRET_WILD = SERVER_GAME_DATA.secretSpecies.find(

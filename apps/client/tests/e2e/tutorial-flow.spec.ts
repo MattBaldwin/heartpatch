@@ -545,6 +545,10 @@ async function playTutorial(page: Page): Promise<void> {
   expect(aborted).toEqual([]);
 }
 
+// Each run is its own new player, so the two can go on separate workers: back
+// to back on one, they made this file 12-16 min of a CI group (#296).
+test.describe.configure({ mode: 'parallel' });
+
 test('The First Patch, every step tapped for real with a reload at each: Sprout never gets in the way', async ({
   browser,
 }) => {

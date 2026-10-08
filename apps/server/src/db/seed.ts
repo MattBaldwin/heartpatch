@@ -1,4 +1,11 @@
-import { GAME_DATA, generateMap, MAP_MAX_PLAYERS, type KeeperConfig } from '@heartpatch/shared';
+import {
+  completeKeeperConfig,
+  GAME_DATA,
+  generateMap,
+  KEEPER_DATA,
+  MAP_MAX_PLAYERS,
+  type KeeperConfig,
+} from '@heartpatch/shared';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { hashSecret } from '../modules/auth/secrets.js';
 import type { Database } from './client.js';
@@ -160,7 +167,9 @@ export async function seed(db: Database): Promise<SeedResult> {
       .insert(keepers)
       .values(
         SEED_ACCOUNTS.flatMap((a) =>
-          a.keeper === null ? [] : [{ userId: idOf(a.username), ...a.keeper }],
+          a.keeper === null
+            ? []
+            : [{ userId: idOf(a.username), ...completeKeeperConfig(a.keeper, KEEPER_DATA) }],
         ),
       )
       .onConflictDoNothing();

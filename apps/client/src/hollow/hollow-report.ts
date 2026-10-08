@@ -4,6 +4,8 @@ import {
   type TakenSquishy,
   type WsEventMessage,
 } from '@heartpatch/shared';
+import { firesLine, wildLine, type ReportLine } from './night-text.js';
+import { joinNames } from './show-timeline.js';
 
 /** The Heart Snack, Heartdust's use (owner decision 2026-10-06): what it's called and costs. */
 const SNACK = GAME_DATA.careActions.find(
@@ -21,13 +23,6 @@ export const HOLLOW_TEXT = {
   taken: (name: string) => `He took ${name} to the Hollow. You can rescue them!`,
   home: (name: string) => `He took ${name} to the Hollow, but they're home again!`,
   safe: 'Everyone stayed safe and cozy. Nice planning!',
-  /** Dark land he won back went wild (#277). */
-  reclaimed: (n: number) =>
-    n === 1
-      ? 'He found a dark spot, and that bit of land went wild again.'
-      : `He found ${String(n)} dark spots, and that land went wild again.`,
-  /** Light every bit of land and he can't get anything (#277). */
-  lightAll: 'Keep every bit of your land in fire light!',
   /** Squishies were out in the dark, but he took nobody (first-night grace, or a last friend). */
   spared: 'He came by, but took nobody this time.',
   ok: 'Okay!',
@@ -77,35 +72,43 @@ export function unseenReports(
 }
 
 /**
- * The report card's title and lines for these nights (newest first).
- * `fireHint` is the status's own ("a gatherer or guard of mine would spend
- * tonight on dark land"), so a night he let them be asks for a fire only while one would.
+ * The report card's title and lines for these nights (newest first), each
+ * with its little picture (#277, mockup screen 5): what the fires did, the
+ * land that went wild, then who he took. `fireHint` is the status's own ("a
+ * gatherer or guard of mine would spend tonight on dark land"), so a night
+ * he let them be asks for a fire only while one would.
  */
 export function reportText(
   reports: readonly MorningReport[],
   nameOf: (taken: TakenSquishy) => string,
   fireHint = true,
-): { title: string; lines: string[] } {
+): { title: string; lines: ReportLine[] } {
   const taken = reports.flatMap((r) => r.taken);
-  const reclaimed = reports.reduce((n, r) => n + r.reclaimed.length, 0);
+  const wild = wildLine(reports);
   const title =
-    taken.length === 0 && reclaimed === 0
+    taken.length === 0 && !wild
       ? HOLLOW_TEXT.passedBy
       : reports.length > 1
         ? HOLLOW_TEXT.visitedMany
         : HOLLOW_TEXT.visitedOne;
-  const lines = taken.map((t) =>
-    t.inHollow ? HOLLOW_TEXT.taken(nameOf(t)) : HOLLOW_TEXT.home(nameOf(t)),
-  );
-  if (reclaimed > 0) lines.push(HOLLOW_TEXT.reclaimed(reclaimed), HOLLOW_TEXT.lightAll);
-  if (lines.length === 0) {
+  const fires = firesLine(reports);
+  const lines: ReportLine[] = [...(fires ? [fires] : []), ...(wild ? [wild] : [])];
+  // Who he took, in one line each for those still waiting and those home again.
+  const waiting = taken.filter((t) => t.inHollow).map(nameOf);
+  const home = taken.filter((t) => !t.inHollow).map(nameOf);
+  if (waiting.length > 0) lines.push({ icon: '🌫️', text: HOLLOW_TEXT.taken(joinNames(waiting)) });
+  if (home.length > 0) lines.push({ icon: '🏡', text: HOLLOW_TEXT.home(joinNames(home)) });
+  if (taken.length === 0 && !wild) {
     // Nobody taken: either everyone was sheltered, or some were out in the
     // dark and he let them be (first-night grace), which is the moment to
     // say "light a fire" (owner decision 2026-10-03).
     if (reports.some((r) => r.taken.length === 0 && r.exposed > 0)) {
-      lines.push(HOLLOW_TEXT.spared, ...(fireHint ? [HOLLOW_TEXT.fireHint] : []));
+      lines.push(
+        { icon: '🌙', text: HOLLOW_TEXT.spared },
+        ...(fireHint ? [{ icon: '🔥', text: HOLLOW_TEXT.fireHint }] : []),
+      );
     } else {
-      lines.push(HOLLOW_TEXT.safe);
+      lines.push({ icon: '💖', text: HOLLOW_TEXT.safe });
     }
   }
   return { title, lines };
