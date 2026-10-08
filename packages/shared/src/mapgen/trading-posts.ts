@@ -18,7 +18,7 @@ export interface PostPlacementTile extends Hex {
 }
 
 export interface PostPlacementInput {
-  /** Every tile on the map, in a fixed order (the order breaks no ties; the seed does). */
+  /** Every tile on the map, in any order: they're sorted by (q, r) first, and the seed breaks ties. */
   readonly tiles: readonly PostPlacementTile[];
   /** Every home slot's Heart Seed, taken or not ("every possible home spot"). */
   readonly homes: readonly Hex[];
@@ -60,11 +60,15 @@ function isCandidate(tile: PostPlacementTile, gapTerrain: string): boolean {
  */
 export function placeTradingPosts(input: PostPlacementInput): Hex[] | null {
   const { rules, homes } = input;
-  const candidates = input.tiles.filter((t) => {
-    if (!isCandidate(t, input.gapTerrain)) return false;
-    const nearest = Math.min(...homes.map((h) => hexDistance(h, t)));
-    return nearest >= rules.minFromSeed && nearest <= rules.maxFromSeed;
-  });
+  // (q, r) order, so mapgen's spiral and the server's stored rows give the
+  // same posts: the input order never decides anything.
+  const candidates = input.tiles
+    .filter((t) => {
+      if (!isCandidate(t, input.gapTerrain)) return false;
+      const nearest = Math.min(...homes.map((h) => hexDistance(h, t)));
+      return nearest >= rules.minFromSeed && nearest <= rules.maxFromSeed;
+    })
+    .sort((a, b) => a.q - b.q || a.r - b.r);
   if (homes.length === 0 || homes.length > rules.perMap || candidates.length < rules.perMap) {
     return null;
   }

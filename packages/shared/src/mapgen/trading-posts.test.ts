@@ -25,7 +25,11 @@ describe('trading posts at mapgen (#269)', () => {
         .map(hexKey)
         .join(' '),
     );
-    expect(pinned).toEqual(['-1,2 6,2 9,-5 -9,4', '-2,2 8,2 2,-10 -10,8', '4,7 11,-8 -4,-7 -11,9']);
+    expect(pinned).toEqual([
+      '-1,-2 -6,8 9,-4 -9,4',
+      '-7,0 8,2 2,-10 -10,8',
+      '4,7 11,-9 -4,-7 -11,8',
+    ]);
   });
 
   it('keeps the hard rules and the fairness check on 200 seeds of every layout', () => {
@@ -66,18 +70,25 @@ describe('trading posts at mapgen (#269)', () => {
     }
   });
 
-  it('is the same rule on stored tiles: idempotent inputs give the same posts', () => {
+  it('is the same rule on stored tiles, whatever order they come in', () => {
     const map = generateMap(GAME_DATA, { seed: 'stored', playerCount: 3 });
-    // Turn the posts back into meadow, as an older map would be, and place again.
+    // Turn the posts back into meadow, as an older map would be, and place
+    // again from tiles in the server's (q, r) order and in reverse.
     const older = map.tiles.map((t) => (isTradingPost(t) ? { ...t, terrain: 'meadow' } : t));
-    const again = placeTradingPosts({
-      tiles: older,
-      homes: map.homes,
-      gapTerrain: GAME_DATA.mapGen.gapTerrain,
-      rules,
-      seed: 'stored',
-    });
-    expect(again?.map(hexKey).sort()).toEqual(postsOf(map.tiles).map(hexKey).sort());
+    const byQr = [...older].sort((a, b) => a.q - b.q || a.r - b.r);
+    const expected = postsOf(map.tiles)
+      .map(hexKey)
+      .sort((a, b) => (a < b ? -1 : 1));
+    for (const tiles of [byQr, [...byQr].reverse()]) {
+      const again = placeTradingPosts({
+        tiles,
+        homes: map.homes,
+        gapTerrain: GAME_DATA.mapGen.gapTerrain,
+        rules,
+        seed: 'stored',
+      });
+      expect(again?.map(hexKey).sort((a, b) => (a < b ? -1 : 1))).toEqual(expected);
+    }
   });
 });
 

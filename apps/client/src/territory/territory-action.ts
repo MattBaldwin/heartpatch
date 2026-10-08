@@ -64,7 +64,7 @@ export function territoryAction(
   if (problem === 'pvp-off') return { kind: 'pvp-off' };
   // A home base can never be taken, nor a trading post (#269): the tile's
   // info says so already.
-  if (problem === 'home' || problem === 'post') return { kind: 'none' };
+  if (problem === 'home' || problem === 'trading-post') return { kind: 'none' };
   // A new Keeper's shield is the rule the server checks (territory service),
   // from the same public facts: when they joined, and the shield's length.
   const shield = shieldUntil(tile, view, now);

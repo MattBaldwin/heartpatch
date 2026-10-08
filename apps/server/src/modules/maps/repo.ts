@@ -233,7 +233,8 @@ export interface MapsRepo {
   listMapsWithoutPosts: () => Promise<{ id: string; seed: string }[]>;
   /**
    * Every tile on the map as the trading-post pass sees it. With `lockIds`,
-   * those tiles are row-locked first (tech spec §7 step 6, id order).
+   * those tiles are row-locked first (tech spec §7 step 6, id order, `FOR NO
+   * KEY UPDATE` like the extra-nodes top-up).
    */
   listPostPlacementTiles: (
     mapId: string,
@@ -537,7 +538,7 @@ function queries(db: Executor): MapsRepo {
           .from(tiles)
           .where(inArray(tiles.id, [...lockIds]))
           .orderBy(asc(tiles.id))
-          .for('update');
+          .for('no key update');
       }
       return db
         .select({

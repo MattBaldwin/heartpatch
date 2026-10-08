@@ -43,7 +43,7 @@ export function postFlagLabel(flag: PostFlag): string {
 /** The tile panel's line about reaching it. */
 export function postReachLine(reach: PostReach | null): string | null {
   if (reach === null) return null;
-  if (reach.kind === 'connected') return '🔗 Your land reaches it! No journey needed.';
+  if (reach.kind === 'connected') return '🔗 Your land reaches it!';
   return `🧭 ${tiles(reach.distance)} from your land. Claim land toward it to get closer!`;
 }
 

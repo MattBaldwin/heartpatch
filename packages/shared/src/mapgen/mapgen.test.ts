@@ -54,7 +54,7 @@ describe('generateMap: determinism', () => {
     // update the hash on purpose. Changed once on purpose by #269's trading
     // posts; the passes before them are pinned just below, unchanged.
     expect(hashString(JSON.stringify(generate('pinned-seed', 4)))).toBe(
-      'a9401096361cdc6e248bd5a95a38c861',
+      '58d1d50f837ac7ed09788b3db5492ff2',
     );
     expect(
       hashString(

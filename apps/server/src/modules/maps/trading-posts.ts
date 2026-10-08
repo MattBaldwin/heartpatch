@@ -51,11 +51,14 @@ function plan(rows: readonly PostPlacementTileRow[], seed: string): Hex[] | null
 
 /**
  * Places trading posts on every patch that has none, map by map. A map whose
- * pass fails is reported to `onError` and the rest go on.
+ * pass fails is reported to `onError` and the rest go on. `publish` sends a
+ * placed map's `post.placed` to members already watching, after its commit
+ * (the hub's after-commit broadcast), so an open map redraws by itself.
  */
 export async function placeMissingTradingPosts(
   db: Executor,
   onError: (mapId: string, err: unknown) => void,
+  publish?: (mapId: string) => Promise<void>,
 ): Promise<PostsPlaced> {
   const repo = createMapsRepo(db);
   let placed = 0;
@@ -63,8 +66,14 @@ export async function placeMissingTradingPosts(
   for (const map of await repo.listMapsWithoutPosts()) {
     try {
       const done = await placeOne(db, map.id, map.seed);
-      if (done) placed += 1;
-      else skipped.push(map.id);
+      if (done === 'placed') {
+        placed += 1;
+        await publish?.(map.id);
+      } else if (done === 'no-room') {
+        skipped.push(map.id);
+      }
+      // 'moved': another boot placed them, or the land changed under the
+      // lock; nothing to count, and the next boot looks again if need be.
     } catch (err) {
       onError(map.id, err);
     }
@@ -72,23 +81,30 @@ export async function placeMissingTradingPosts(
   return { placed, skipped };
 }
 
-/** One map, in one transaction. True when it got its posts. */
-async function placeOne(db: Executor, mapId: string, seed: string): Promise<boolean> {
+/**
+ * One map, in one transaction: `placed`, `no-room` (no fair spot free) or
+ * `moved` (something changed between the read and the lock).
+ */
+async function placeOne(
+  db: Executor,
+  mapId: string,
+  seed: string,
+): Promise<'placed' | 'no-room' | 'moved'> {
   const first = plan(await createMapsRepo(db).listPostPlacementTiles(mapId), seed);
-  if (first === null) return false;
+  if (first === null) return 'no-room';
   return createMapsRepo(db).transaction(async (repo) => {
     const before = await repo.listPostPlacementTiles(mapId);
     const idAt = new Map(before.map((t) => [`${String(t.q)},${String(t.r)}`, t.id]));
     const ids = first.flatMap((h) => idAt.get(`${String(h.q)},${String(h.r)}`) ?? []);
     // Under the lock: a claim, a gather or another boot may have got there first.
     const locked = await repo.listPostPlacementTiles(mapId, ids);
-    if (locked.some(isTradingPost)) return true;
+    if (locked.some(isTradingPost)) return 'moved';
     const again = plan(locked, seed);
     const keys = (hexes: readonly Hex[]) =>
       hexes.map((h) => `${String(h.q)},${String(h.r)}`).join(' ');
     const same = again !== null && keys(again) === keys(first);
     // Something moved between the read and the lock: leave it for the next boot.
-    if (!same) return false;
+    if (!same) return 'moved';
     const changed = await repo.makeTradingPosts(ids);
     if (changed !== ids.length)
       throw new Error(`placed ${String(changed)} of ${String(ids.length)} posts`);
@@ -98,6 +114,6 @@ async function placeOne(db: Executor, mapId: string, seed: string): Promise<bool
       actorUserId: null,
       payload: { tiles: first.map((h) => ({ q: h.q, r: h.r })) },
     });
-    return true;
+    return 'placed';
   });
 }

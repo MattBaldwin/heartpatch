@@ -1,8 +1,12 @@
 import {
   GAME_DATA,
+  heartSeedOf,
   hexDistance,
+  hexNeighbors,
   MapResponseSchema,
   parseGameEventPayload,
+  placeTradingPosts,
+  STARTERS,
 } from '@heartpatch/shared';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -42,7 +46,11 @@ describe.skipIf(!url)('trading posts on older patches (#269, needs DATABASE_URL)
   });
 
   async function start(): Promise<FastifyInstance> {
-    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: url!,
+      HP_DEV_SQUISHY_GRANTS: 'true',
+    });
     app = await buildApp({ config, db, logger: false });
     return app;
   }
@@ -62,7 +70,7 @@ describe.skipIf(!url)('trading posts on older patches (#269, needs DATABASE_URL)
   }
 
   /** A new patch, then made "older": its posts turned back into meadow. */
-  async function olderPatch(): Promise<{ mapId: string; ownerId: string }> {
+  async function olderPatch(): Promise<{ mapId: string; ownerId: string; token: string }> {
     const server = await start();
     const owner = await player();
     const res = await server.inject({
@@ -77,7 +85,7 @@ describe.skipIf(!url)('trading posts on older patches (#269, needs DATABASE_URL)
     await db.execute(
       `update tiles set terrain = 'meadow' where map_id = '${mapId}' and terrain = 'trading-post'`,
     );
-    return { mapId, ownerId: owner.id };
+    return { mapId, ownerId: owner.id, token: owner.token };
   }
 
   const tilesOf = (mapId: string) =>
@@ -116,6 +124,56 @@ describe.skipIf(!url)('trading posts on older patches (#269, needs DATABASE_URL)
     await pass();
     expect((await postsOf(mapId)).map((t) => t.id)).toEqual(posts.map((t) => t.id));
     expect((await eventsOf(mapId)).filter((e) => e.type === 'post.placed')).toHaveLength(1);
+  });
+
+  it('never puts a post on a tile someone is battling for right now', async () => {
+    const { mapId, ownerId, token } = await olderPatch();
+    const server = app!;
+    const call = (path: string, payload: object) =>
+      server.inject({
+        method: 'POST',
+        url: `/api/v1${path}`,
+        headers: HEADERS,
+        cookies: { [SESSION_COOKIE]: token },
+        payload,
+      });
+    // Where the rule would put the posts on this patch right now.
+    const all = await tilesOf(mapId);
+    const homes = [0, 1, 2, 3].flatMap(
+      (slot) => heartSeedOf(all.filter((t) => t.homeSlot === slot)) ?? [],
+    );
+    const planned = placeTradingPosts({
+      tiles: all,
+      homes,
+      gapTerrain: GAME_DATA.mapGen.gapTerrain,
+      rules: RULES,
+      seed: (await db.query.maps.findFirst({ where: (m, { eq }) => eq(m.id, mapId) }))!.seed!,
+    })!;
+    // Start a claim on one of them: hand the owner the tile between it and
+    // home (not a post spot itself), then challenge its guardians.
+    const target = planned.find((p) => hexDistance(p, homes[0]!) === RULES.minFromSeed)!;
+    const between = all.find(
+      (t) =>
+        t.homeSlot === null &&
+        hexDistance(t, homes[0]!) === RULES.minFromSeed - 1 &&
+        hexNeighbors(target).some((n) => n.q === t.q && n.r === t.r),
+    )!;
+    await db.execute(
+      `update tiles set owner_user_id = '${uuid(ownerId)}' where id = '${uuid(between.id)}'`,
+    );
+    expect(
+      (await call(`/maps/${mapId}/dev/squishies`, { level: 40, speciesId: STARTERS.speciesIds[0] }))
+        .statusCode,
+    ).toBe(201);
+    const claim = await call(`/maps/${mapId}/attacks`, { q: target.q, r: target.r });
+    expect(claim.statusCode, claim.body).toBe(201);
+
+    await pass();
+    // The battle's tile is still meadow, wild and unowned; any posts went elsewhere.
+    const after = (await tilesOf(mapId)).find((t) => t.q === target.q && t.r === target.r)!;
+    expect(after.terrain).not.toBe('trading-post');
+    expect(after.ownerUserId).toBeNull();
+    for (const p of await postsOf(mapId)) expect(p.ownerUserId).toBeNull();
   });
 
   it('never takes owned land, and skips a patch with no fair spot free', async () => {

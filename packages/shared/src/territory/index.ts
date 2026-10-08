@@ -21,12 +21,12 @@ export interface TerritoryTile extends Hex {
  * Why a player can't battle for a tile, or null if they can (time-based
  * limits, like cooldowns and daily caps, are checked separately):
  * - `home`: a Heart Seed or its ring, never taken (design doc §11).
- * - `post`: a trading post, shared and never owned (#269).
+ * - `trading-post`: a trading post, shared and never owned (#269).
  * - `mine`: it's already theirs.
  * - `too-far`: not next to their land (outposts come in Phase 2).
  * - `pvp-off`: another player's land, and the map's PvP mode is Off.
  */
-export type AttackTargetProblem = 'home' | 'post' | 'mine' | 'too-far' | 'pvp-off';
+export type AttackTargetProblem = 'home' | 'trading-post' | 'mine' | 'too-far' | 'pvp-off';
 
 export function attackTargetProblem(
   target: TerritoryTile,
@@ -35,7 +35,8 @@ export function attackTargetProblem(
   pvpMode: PvpMode,
 ): AttackTargetProblem | null {
   if (target.homeSlot !== null) return 'home';
-  if (target.terrain !== undefined && isTradingPost({ terrain: target.terrain })) return 'post';
+  if (target.terrain !== undefined && isTradingPost({ terrain: target.terrain }))
+    return 'trading-post';
   if (target.ownerUserId === userId) return 'mine';
   const mine = new Set(tiles.filter((t) => t.ownerUserId === userId).map(hexKey));
   if (!hexNeighbors(target).some((n) => mine.has(hexKey(n)))) return 'too-far';

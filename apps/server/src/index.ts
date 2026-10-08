@@ -91,9 +91,13 @@ relayoutHomes(db.db, clock, (owner, err) => {
 // Trading posts (#269) for patches made before them. Idempotent, so every
 // boot can run it; it never blocks start. A patch with no fair spot free is
 // skipped (no land is ever taken) and tried again next boot.
-placeMissingTradingPosts(db.db, (mapId, err) => {
-  app.log.error({ err, mapId }, 'trading-post pass skipped a patch');
-}).then(
+placeMissingTradingPosts(
+  db.db,
+  (mapId, err) => {
+    app.log.error({ err, mapId }, 'trading-post pass skipped a patch');
+  },
+  app.wsHub?.publish,
+).then(
   (done) => {
     if (done.placed > 0)
       app.log.info({ placed: done.placed }, 'placed trading posts on older patches');

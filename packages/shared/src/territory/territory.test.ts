@@ -51,7 +51,7 @@ describe('territory rules', () => {
 
   it('never lets anyone battle for a trading post (#269), even right next to their land', () => {
     const post = { ...tile(2, -1), terrain: 'trading-post' };
-    expect(attackTargetProblem(post, TILES, ME, 'on')).toBe('post');
+    expect(attackTargetProblem(post, TILES, ME, 'on')).toBe('trading-post');
     expect(attackTargetProblem({ ...post, terrain: 'meadow' }, TILES, ME, 'on')).toBeNull();
   });
 
