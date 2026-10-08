@@ -44,6 +44,7 @@ import {
 } from '../map/map-scene.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
 import type { SquishyLod } from '../procedural/config.js';
+import { faceYaw } from '../procedural/face-yaw.js';
 import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
@@ -489,7 +490,7 @@ export class HomeScene {
       const { from, to } = r.hop;
       const at = { x: from.x + (to.x - from.x) * t, z: from.z + (to.z - from.z) * t };
       const lift = 4 * t * (1 - t) * WANDER.hopHeight;
-      const yaw = Math.atan2(to.x - from.x, -(to.z - from.z));
+      const yaw = faceYaw(to.x - from.x, to.z - from.z);
       this.#squishies.move(r.handle, this.#placement(at, yaw, lift));
       if (t >= 1) {
         r.at = to;
