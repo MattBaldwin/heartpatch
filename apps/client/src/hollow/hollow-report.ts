@@ -5,6 +5,7 @@ import {
   type WsEventMessage,
 } from '@heartpatch/shared';
 import { firesLine, wildLine, type ReportLine } from './night-text.js';
+import { joinNames } from './show-timeline.js';
 
 /** The Heart Snack, Heartdust's use (owner decision 2026-10-06): what it's called and costs. */
 const SNACK = GAME_DATA.careActions.find(
@@ -91,15 +92,12 @@ export function reportText(
         ? HOLLOW_TEXT.visitedMany
         : HOLLOW_TEXT.visitedOne;
   const fires = firesLine(reports);
-  const lines: ReportLine[] = [
-    ...(fires ? [fires] : []),
-    ...(wild ? [wild] : []),
-    ...taken.map((t) =>
-      t.inHollow
-        ? { icon: '🌫️', text: HOLLOW_TEXT.taken(nameOf(t)) }
-        : { icon: '🏡', text: HOLLOW_TEXT.home(nameOf(t)) },
-    ),
-  ];
+  const lines: ReportLine[] = [...(fires ? [fires] : []), ...(wild ? [wild] : [])];
+  // Who he took, in one line each for those still waiting and those home again.
+  const waiting = taken.filter((t) => t.inHollow).map(nameOf);
+  const home = taken.filter((t) => !t.inHollow).map(nameOf);
+  if (waiting.length > 0) lines.push({ icon: '🌫️', text: HOLLOW_TEXT.taken(joinNames(waiting)) });
+  if (home.length > 0) lines.push({ icon: '🏡', text: HOLLOW_TEXT.home(joinNames(home)) });
   if (taken.length === 0 && !wild) {
     // Nobody taken: either everyone was sheltered, or some were out in the
     // dark and he let them be (first-night grace), which is the moment to

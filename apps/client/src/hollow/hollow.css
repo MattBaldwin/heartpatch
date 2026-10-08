@@ -320,7 +320,7 @@
   text-align: center;
 }
 
-.hollow-replay {
+.hollow-button.hollow-replay {
   width: 100%;
   margin-bottom: 12px;
   background: #ffc94d;

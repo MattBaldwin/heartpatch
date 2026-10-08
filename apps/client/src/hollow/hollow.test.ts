@@ -115,7 +115,7 @@ describe('the morning report', () => {
     const lost = reportText(
       [
         night('2026-10-31', {
-          taken: [takenOne(1)],
+          taken: [takenOne(1), takenOne(2)],
           sheltered: 5,
           reclaimed: [
             { q: 3, r: 0 },
@@ -141,7 +141,8 @@ describe('the morning report', () => {
         icon: '🌿',
         text: '2 bits of your dark land went wild again. Your fence and fire there came back to your bag.',
       },
-      { icon: '🌫️', text: 'He took Pip to the Hollow. You can rescue them!' },
+      // Everyone he took, in one line (mockup screen 5).
+      { icon: '🌫️', text: 'He took Pip and Pip to the Hollow. You can rescue them!' },
     ]);
     const land = reportText([night('2026-10-31', { reclaimed: [{ q: 3, r: 0 }] })], () => '');
     expect(land).toEqual({
