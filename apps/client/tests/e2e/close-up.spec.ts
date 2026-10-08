@@ -338,7 +338,7 @@ test('celebrates an evolution in the close-up, and Back returns to the map', asy
 
 test('keeps the squishy framed when the phone turns (#263)', async ({ browser }) => {
   test.setTimeout(240_000); // a map build and the close-up; CI renders in software
-  const page = await newPlayer(browser, uniqueName('turnclose'));
+  const page = await newPlayer(browser, uniqueName('turncu'));
   await holdResizes(page);
   await playerWithFriend(page);
   await openFromHome(page);

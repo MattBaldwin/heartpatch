@@ -239,7 +239,7 @@ test('a double tap on the tile chip’s × never starts a battle', async ({ brow
 
 test('the fight keeps its safe band when the phone turns (#263)', async ({ browser }) => {
   test.setTimeout(240_000); // a map build and a battle; CI renders in software
-  const page = await newPlayer(browser, uniqueName('turnfight'));
+  const page = await newPlayer(browser, uniqueName('turnbt'));
   await holdResizes(page);
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
@@ -258,7 +258,12 @@ test('the fight keeps its safe band when the phone turns (#263)', async ({ brows
     await still(page, '.battle-plate, [data-testid="battle-sheet"]');
     return (await battleState(page))!.safe;
   };
-  await turnLikeIos(page);
+  // The camera reads the band once more before the layout turns (a frame
+  // drawn in between does the same), so a stale one stays cached unless
+  // something measures again after the turn.
+  await turnLikeIos(page, async () => {
+    await battleState(page);
+  });
   const turned = await band();
   await freshResize(page);
   const fresh = await band();
