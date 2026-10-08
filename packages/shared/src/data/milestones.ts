@@ -244,6 +244,40 @@ export const MILESTONE_TRACKS: MilestoneTrack[] = [
     ],
   },
   {
+    // Search spots explored on your own land (#199; owner decision 2026-10-07:
+    // "Seeker", so the Territory track keeps "Explorer"). One per search.
+    id: 'seeker',
+    name: 'Seeker',
+    secret: false,
+    progress: {
+      from: 'events',
+      sources: [{ eventType: 'explore.searched', where: [], player: 'userId' }],
+    },
+    tiers: [
+      {
+        threshold: 25,
+        goal: 'Search 25 spots on your land.',
+        title: { id: 'rock-flipper', name: 'Rock Flipper' },
+        coins: 25,
+        clothing: 'seekers-bandana',
+      },
+      {
+        threshold: 100,
+        goal: 'Search 100 spots on your land.',
+        title: { id: 'trail-seeker', name: 'Trail Seeker' },
+        coins: 50,
+        clothing: 'trail-pack',
+      },
+      {
+        threshold: 300,
+        goal: 'Search 300 spots on your land.',
+        title: { id: 'seeker-of-secrets', name: 'Seeker of Secrets' },
+        coins: 100,
+        clothing: 'mossy-crown',
+      },
+    ],
+  },
+  {
     // Halloween fun, while the Halloween window is on (design doc §15, §24).
     id: 'halloween',
     name: 'Halloween',

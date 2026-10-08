@@ -69,6 +69,18 @@ describe('explore rules data', () => {
     expect(problems).toContain('spot kind "mound" is on no terrain');
   });
 
+  it('makes each tool recipe give exactly its uses', () => {
+    const shortShovel = {
+      ...GAME_DATA,
+      recipes: GAME_DATA.recipes.map((r) =>
+        r.id === 'shovel' ? { ...r, output: { ...r.output, quantity: 5 } } : r,
+      ),
+    };
+    expect(checkExploreRules(EXPLORE_RULES, shortShovel)).toEqual([
+      'tools[0]: recipe "shovel" makes 5 uses, not 20',
+    ]);
+  });
+
   it('refuses more spots than the progress mask holds', () => {
     const tooMany = {
       ...EXPLORE_RULES,

@@ -76,6 +76,40 @@ export const RECIPES: Recipe[] = [
     craftSeconds: 5 * 60, // TUNE:
     season: 'halloween',
   },
+  // Explore tools (#199): each makes a tool's worth of uses (`EXPLORE_RULES.tools`),
+  // and every search with it spends one.
+  {
+    id: 'shovel',
+    name: 'Shovel',
+    description: 'A sturdy little Shovel for digging up mounds on your land. Lasts 20 digs!',
+    inputs: { timber: 2, stone: 2 }, // TUNE:
+    output: { resource: 'shovel', quantity: 20 },
+    craftSeconds: 60, // TUNE:
+  },
+  {
+    id: 'net',
+    name: 'Net',
+    description: 'Weave Greens onto a Timber pole to scoop ponds and reeds. Lasts 20 scoops!',
+    inputs: { timber: 1, greens: 3 }, // TUNE:
+    output: { resource: 'net', quantity: 20 },
+    craftSeconds: 60, // TUNE:
+  },
+  {
+    id: 'rope',
+    name: 'Rope',
+    description: 'Twist Greens into a strong Rope for climbing up to ledges. Lasts 10 climbs!',
+    inputs: { greens: 4 }, // TUNE:
+    output: { resource: 'rope', quantity: 10 },
+    craftSeconds: 60, // TUNE:
+  },
+  {
+    id: 'lantern',
+    name: 'Lantern',
+    description: 'A glowing Lantern to peek inside dark caves. Lasts 15 caves!',
+    inputs: { timber: 1, glimmer: 1, emberwood: 1 }, // TUNE:
+    output: { resource: 'lantern', quantity: 15 },
+    craftSeconds: 2 * 60, // TUNE:
+  },
   {
     // Thanksgiving's use for Magic Fallen Leaves (owner decision 2026-10-06):
     // cheaper Heart Charms while the season's squishy is out.
