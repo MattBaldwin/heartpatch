@@ -1,10 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { draws, hook, idle, invalidate } from './dev-hook.js';
-
-interface Point {
-  x: number;
-  y: number;
-}
+import { touch, type Point } from './touch.js';
 
 interface CameraState {
   target: { x: number; z: number };
@@ -40,46 +36,6 @@ async function cameraState(page: Page): Promise<CameraState> {
   const state = await hook<CameraState>(page, 'camera');
   if (!state) throw new Error('camera not ready');
   return state;
-}
-
-/**
- * Plays touch pointer frames on the canvas, 16 ms apart. Each frame lists
- * every active finger's position; fingers missing from the next frame lift.
- * Synthetic PointerEvents behave the same in WebKit and Chromium. Frames are
- * spaced with a busy-wait, not timers: CI renders in software, where a 16 ms
- * timer can take 300 ms and every flick would look like a slow drag.
- */
-async function touch(page: Page, frames: Record<number, Point>[]): Promise<void> {
-  await page.evaluate((frames) => {
-    const canvas = document.querySelector('#game')!;
-    const fire = (type: string, id: number, p: Point) => {
-      canvas.dispatchEvent(
-        new PointerEvent(type, {
-          pointerId: id,
-          pointerType: 'touch',
-          isPrimary: id === 1,
-          clientX: p.x,
-          clientY: p.y,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-    };
-    let prev: Record<number, Point> = {};
-    for (const frame of [...frames, {}]) {
-      for (const [id, p] of Object.entries(frame)) {
-        fire(id in prev ? 'pointermove' : 'pointerdown', Number(id), p);
-      }
-      for (const [id, p] of Object.entries(prev)) {
-        if (!(id in frame)) fire('pointerup', Number(id), p);
-      }
-      prev = frame;
-      const until = performance.now() + 16;
-      while (performance.now() < until) {
-        // spin: keeps event timestamps 16 ms apart regardless of frame rate
-      }
-    }
-  }, frames);
 }
 
 /**
