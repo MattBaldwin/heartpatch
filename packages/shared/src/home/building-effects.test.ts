@@ -16,12 +16,12 @@ describe('buildingEffects (#207)', () => {
       { kind: 'safe', radius: 1 },
       { kind: 'fuel', perNight: 1 },
     ]);
-    expect(buildingEffects(fire, 2)[0]).toEqual({ kind: 'safe', radius: 2 });
+    expect(buildingEffects(fire, 2)[0]).toEqual({ kind: 'safe', radius: 1 });
     // Past the last level reads as the last one.
-    expect(buildingEffects(fire, 99)[0]).toEqual({ kind: 'safe', radius: 3 });
+    expect(buildingEffects(fire, 99)[0]).toEqual({ kind: 'safe', radius: 2 });
     expect(buildingEffects(byId('jack-o-lantern-hearthfire'))[0]).toEqual({
       kind: 'safe',
-      radius: 2,
+      radius: 1,
     });
   });
 

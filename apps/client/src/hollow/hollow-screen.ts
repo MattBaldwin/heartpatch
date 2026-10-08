@@ -268,18 +268,16 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         ...told.lines,
         ...(packed ? [...HOLLOW_TEXT.packed, describeItems(packed.refund)] : []),
       ];
-      const waiting = report.flatMap((r) => (r.taken?.inHollow ? [r.taken] : []));
+      const waiting = report.flatMap((r) => r.taken.filter((t) => t.inHollow));
       const rescueFirst = waiting[0];
       reportBox.replaceChildren(
         el('h2', { class: 'hollow-title', id: 'hollow-report-title' }, title),
-        ...(report.some((r) => r.taken)
+        ...(report.some((r) => r.taken.length > 0)
           ? [
               el(
                 'div',
                 { class: 'hollow-tokens' },
-                ...report.flatMap((r) =>
-                  r.taken ? [token(r.taken.speciesId, r.taken.inHollow)] : [],
-                ),
+                ...report.flatMap((r) => r.taken.map((t) => token(t.speciesId, t.inHollow))),
               ),
             ]
           : []),

@@ -31,7 +31,7 @@ for (const row of rows) {
   const days = row.days
     .map(
       (d) =>
-        `day ${String(d.day)}: ${String(d.lit)} lit (land ${String(d.landFires)}, fuel ${String(d.fuelFires)}, Keeper alone ${String(d.keeperFires)})`,
+        `day ${String(d.day)}: ${String(d.lit)} lit (land ${String(d.landFires)}, fuel ${String(d.fuelFires)}, Keeper alone ${String(d.keeperFires)}); all land needs ${String(d.cover.fires)} (${d.cover.fuelOk && d.cover.costOk ? 'ok' : d.cover.fuelOk ? 'short on build' : 'short on fuel'})`,
     )
     .join('; ');
   console.log(`  ${String(row.seats)} seats ${row.kid.padEnd(7)} ${days}`);

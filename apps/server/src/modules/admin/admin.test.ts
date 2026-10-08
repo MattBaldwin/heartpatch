@@ -172,7 +172,7 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
 
   function adminCall(
     server: FastifyInstance,
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PUT',
     path: string,
     adminToken: string | null,
     payload?: object,
@@ -192,7 +192,7 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
 
   function playerCall(
     server: FastifyInstance,
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'PUT',
     path: string,
     who: Player | null,
     payload?: object,
@@ -232,7 +232,7 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
   }
 
   /** Every admin route but sign-in and sign-out, with a plausible request. */
-  const ROUTES: [method: 'GET' | 'POST', path: string, body?: object][] = [
+  const ROUTES: [method: 'GET' | 'POST' | 'PUT', path: string, body?: object][] = [
     ['GET', '/admin/me'],
     ['GET', '/admin/patches'],
     ['GET', `/admin/patches/${ZERO}`],
@@ -240,6 +240,7 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
     ['POST', `/admin/patches/${ZERO}/invite`],
     ['POST', `/admin/patches/${ZERO}/requests/${ZERO}/approve`],
     ['POST', `/admin/patches/${ZERO}/requests/${ZERO}/decline`],
+    ['PUT', `/admin/patches/${ZERO}/hollow-strength`, { percent: 150 }],
     ['GET', '/admin/players'],
     ['GET', `/admin/players/${ZERO}`],
     ['POST', `/admin/players/${ZERO}/reset-password`],
@@ -499,6 +500,46 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
     expect(one.patches).toEqual([expect.objectContaining({ mapId, status: 'requested' })]);
     // Nothing secret about a player ever leaves the server.
     expect(JSON.stringify(one)).not.toMatch(/password|plain:/i);
+  });
+
+  it('turns the Hollow Man up or down on one patch, audited, within 0–300 % (#277)', async () => {
+    const server = await start();
+    const boss = await admin();
+    const token = await signIn(server, boss);
+    const { mapId } = await patch(server, patchName('Ember'));
+    const detailOf = async () =>
+      AdminPatchDetailSchema.parse(
+        (await adminCall(server, 'GET', `/admin/patches/${mapId}`, token)).json(),
+      );
+    expect((await detailOf()).patch.hollowStrengthPercent).toBe(100);
+
+    const set = await adminCall(server, 'PUT', `/admin/patches/${mapId}/hollow-strength`, token, {
+      percent: 200,
+    });
+    expect(set.statusCode, set.body).toBe(204);
+    expect((await detailOf()).patch.hollowStrengthPercent).toBe(200);
+    const [row] = await auditRows('patch.hollow_strength');
+    expect(row).toMatchObject({
+      targetMapId: mapId,
+      outcome: 'done',
+      detail: { percent: 200, was: 100 },
+    });
+
+    for (const percent of [-1, 301, 1.5]) {
+      const bad = await adminCall(server, 'PUT', `/admin/patches/${mapId}/hollow-strength`, token, {
+        percent,
+      });
+      expect(bad.statusCode).toBe(400);
+    }
+    const missing = await adminCall(
+      server,
+      'PUT',
+      `/admin/patches/${ZERO}/hollow-strength`,
+      token,
+      { percent: 50 },
+    );
+    expect(missing.statusCode).toBe(404);
+    expect((await auditRows('patch.hollow_strength'))[0]).toMatchObject({ outcome: 'failed' });
   });
 
   it('writes an audit row for every action, marked done or failed', async () => {

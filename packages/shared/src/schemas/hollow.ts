@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { HexSchema } from '../hex/index.js';
 import { ContentIdSchema } from './data/common.js';
+import { HollowStageSchema, WalkKindSchema } from './hollow-stage.js';
 import { SpeciesSchema } from './data/species.js';
 import { ItemCountsSchema } from './inventory.js';
 import { OwnedSquishySchema } from './squishies.js';
@@ -10,28 +12,50 @@ import { LocalDateSchema } from './time.js';
 // squishies from the Hollow. The night's seed, who was exposed on other
 // players' land and the shadow guardians never appear here (CLAUDE.md rule 6).
 
+/** One stop on the Hollow Man's walk (#277), which the client plays as a show. */
+export const WalkPointSchema = z.object({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  kind: WalkKindSchema,
+});
+export type WalkPointView = z.infer<typeof WalkPointSchema>;
+
+/** A squishy the Hollow Man took. */
+export const TakenSquishySchema = z.object({
+  squishyId: z.uuid(),
+  speciesId: ContentIdSchema,
+  nickname: z.string().nullable(),
+  /** Still waiting in the Hollow (false once rescued). */
+  inHollow: z.boolean(),
+});
+export type TakenSquishy = z.infer<typeof TakenSquishySchema>;
+
 /** What one night did to me (the morning report, design doc §14). */
 export const MorningReportSchema = z.object({
   /** The night, as the map-local date its nightfall fell on. */
   night: LocalDateSchema,
-  /** The squishy the Hollow Man took to the Hollow, or null if everyone stayed safe. */
-  taken: z
-    .object({
-      squishyId: z.uuid(),
-      speciesId: ContentIdSchema,
-      nickname: z.string().nullable(),
-      /** Still waiting in the Hollow (false once rescued). */
-      inHollow: z.boolean(),
-    })
-    .nullable(),
+  /** The squishies the Hollow Man took to the Hollow (#277: up to 3); empty if everyone stayed safe. */
+  taken: z.array(TakenSquishySchema),
   /** My squishies kept safe that night: by a lit fire, or standing watch. */
   sheltered: z.number().int().min(0),
   /**
-   * My squishies left in the dark that night, the taken one included. More
+   * My squishies left in the dark that night, the taken ones included. More
    * than none with nobody taken means he let them be (first-night grace):
    * the report says so and nudges for a fire, so the quiet nights still teach.
    */
   exposed: z.number().int().min(0),
+  /** My dark land he won back that night: it went wild (#277). */
+  reclaimed: z.array(HexSchema),
+  /** How bold he was with me that night. */
+  stage: HollowStageSchema,
+  /** His walk along my border, for the replay (empty for nights before #277). */
+  walk: z.array(WalkPointSchema),
+  /** What stood on the land he won back; it came down and gave back its take-down share. */
+  lostBuildings: z.object({
+    fires: z.number().int().min(0),
+    fences: z.number().int().min(0),
+    trainingGrounds: z.number().int().min(0),
+  }),
 });
 export type MorningReport = z.infer<typeof MorningReportSchema>;
 
@@ -42,6 +66,17 @@ export const HollowStatusSchema = z.object({
     isNight: z.boolean(),
     /** Ask again after this many minutes: night falls or morning comes. */
     changesInMinutes: z.number().int().min(1),
+  }),
+  /**
+   * The coming (or current) night for me (#277): how bold he'll be, and
+   * when the show's strike lands (nightfall plus `HOLLOW_RULES.show`). The
+   * client holds back what he took until then, or until the kid skips.
+   */
+  tonight: z.object({
+    night: LocalDateSchema,
+    stage: HollowStageSchema,
+    nightfallAt: z.iso.datetime(),
+    strikeAt: z.iso.datetime(),
   }),
   /** Nights the Hollow Man has come by lately, newest first. */
   reports: z.array(MorningReportSchema),
@@ -90,7 +125,7 @@ export type StartRescueRequest = z.infer<typeof StartRescueRequestSchema>;
  */
 export const DevNightfallResponseSchema = z.object({
   night: LocalDateSchema,
-  /** How many players lost a squishy. */
+  /** How many squishies were taken. */
   taken: z.number().int().min(0),
 });
 export type DevNightfallResponse = z.infer<typeof DevNightfallResponseSchema>;

@@ -93,9 +93,11 @@ const MESSAGES = {
 /** One player's night, as `hollow_events.outcomes` stores it; a row that doesn't fit is dropped. */
 const NightOutcomeSchema = z.object({
   userId: z.string(),
-  taken: z.string().nullable(),
+  // One id or null before #277; a list since (he can take up to 3).
+  taken: z.union([z.array(z.string()), z.string().nullable()]),
   exposed: z.number().int().nonnegative(),
   sheltered: z.number().int().nonnegative(),
+  reclaimed: z.array(z.unknown()).optional(),
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -319,7 +321,12 @@ export function createAdminService(options: AdminServiceOptions) {
         ...new Set(outcomes.flatMap((n) => n.outcomes.map((o) => o.userId))),
       ]);
       return {
-        patch: { ...toPatch(row), timeZone: row.timeZone, tradingPosts },
+        patch: {
+          ...toPatch(row),
+          timeZone: row.timeZone,
+          tradingPosts,
+          hollowStrengthPercent: row.hollowStrengthPercent,
+        },
         members: members.map((m) => ({
           ...m,
           joinedAt: iso(m.joinedAt),
@@ -331,7 +338,8 @@ export function createAdminService(options: AdminServiceOptions) {
           night: n.night,
           players: n.outcomes.map((o) => ({
             username: names.get(o.userId) ?? '(gone)',
-            taken: o.taken !== null,
+            taken: Array.isArray(o.taken) ? o.taken.length > 0 : o.taken !== null,
+            reclaimed: o.reclaimed?.length ?? 0,
             sheltered: o.sheltered,
             exposed: o.exposed,
           })),
@@ -371,6 +379,29 @@ export function createAdminService(options: AdminServiceOptions) {
           ip: ctx.ip,
         },
         async () => maps.regenerateInvite(await ownerOf(found.patch), mapId),
+      );
+    },
+
+    /**
+     * Sets a patch's "Hollow Man strength" (#277, owner decision 2026-10-08
+     * Q4): his strike chances there, from the next nightfall. Never his caps.
+     */
+    setHollowStrength: async (ctx: AdminContext, mapId: string, percent: number): Promise<void> => {
+      const found = await targets({ mapId });
+      await audited(
+        {
+          actorUserId: ctx.admin.id,
+          action: AUDIT_ACTIONS.hollowStrength,
+          ...found.input,
+          detail: { ...found.missing, percent, was: found.patch?.hollowStrengthPercent ?? null },
+          ip: ctx.ip,
+        },
+        async () => {
+          requirePatch(found.patch);
+          if (!(await repo.setHollowStrength(mapId, percent))) {
+            throw new AppError('NOT_FOUND', MESSAGES.notFoundPatch);
+          }
+        },
       );
     },
 

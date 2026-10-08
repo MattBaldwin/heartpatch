@@ -21,4 +21,5 @@ export const AUDIT_ACTIONS = {
   createCode: 'signup_code.created',
   extendCode: 'signup_code.extended',
   revokeCode: 'signup_code.revoked',
+  hollowStrength: 'patch.hollow_strength',
 } as const;

@@ -18,11 +18,13 @@ export const BUILDINGS: Building[] = [
     slot: 'centre',
     fuelResource: 'emberwood',
     fuelPerNight: 1, // TUNE:
-    maxFuelNights: 5, // TUNE: docs/DECISIONS.md, design doc §14
+    maxFuelNights: 8, // TUNE: owner decision 2026-10-08 (#277): a full week away, home after 7 PM, keeps every fire lit
     levels: [
+      // Radii 1 / 1 / 2 (owner decision 2026-10-08, #277): every bit of land
+      // needs a fire's light, so one fire covers less.
       { cost: { timber: 5, stone: 5 }, safeRadius: 1 }, // TUNE:
-      { cost: { timber: 10, stone: 10 }, safeRadius: 2 }, // TUNE:
-      { cost: { timber: 20, stone: 15, glimmer: 2 }, safeRadius: 3 }, // TUNE:
+      { cost: { timber: 10, stone: 10 }, safeRadius: 1 }, // TUNE:
+      { cost: { timber: 20, stone: 15, glimmer: 1 }, safeRadius: 2 }, // TUNE: Glimmer 2 → 1 (#277 sim gate margin)
     ],
   },
   {
@@ -30,7 +32,7 @@ export const BUILDINGS: Building[] = [
     id: 'jack-o-lantern-hearthfire',
     kind: 'hearthfire',
     name: "Jack-o'-Lantern Hearthfire",
-    description: 'A grinning fire whose light reaches extra far.',
+    description: 'A grinning pumpkin fire. Its light keeps the Hollow Man away!',
     season: 'halloween',
     placement: 'land', // like the Hearthfire (owner decision 2026-10-07)
     maxPerTile: 1, // TUNE:
@@ -39,9 +41,9 @@ export const BUILDINGS: Building[] = [
     refundPercent: 100, // TUNE:
     fuelResource: 'emberwood',
     fuelPerNight: 1, // TUNE:
-    maxFuelNights: 5, // TUNE: same as a plain Hearthfire
-    // TUNE: extra-bright, one tile further than a new Hearthfire.
-    levels: [{ cost: { 'jack-o-lantern-hearthfire': 1 }, safeRadius: 2 }],
+    maxFuelNights: 8, // TUNE: same as a plain Hearthfire
+    // TUNE: owner decision 2026-10-08 (#277): lights its ring, like a new Hearthfire.
+    levels: [{ cost: { 'jack-o-lantern-hearthfire': 1 }, safeRadius: 1 }],
   },
   {
     id: 'ember-den',

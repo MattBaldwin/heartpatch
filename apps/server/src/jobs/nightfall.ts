@@ -28,7 +28,7 @@ const SWEEP_QUEUE = 'nightfall.sweep';
 
 /**
  * The `nightfall` job (tech spec §7; design doc §14): night falls on each map
- * at 21:00 in its own time zone. Rather than one cron per map (zones and
+ * at 19:00 (#277) in its own time zone. Rather than one cron per map (zones and
  * daylight saving move it), a sweep every minute asks which maps' latest
  * nightfall hasn't run, and enqueues one `nightfall` job per map and night,
  * keyed `mapId/night` (`short`: one queued per key; see `boss.ts` for why

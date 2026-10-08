@@ -204,24 +204,24 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
     expect(up.statusCode, up.body).toBe(200);
     expect(
       HomeResponseSchema.parse(up.json()).buildings.find((b) => b.id === lit.id),
-    ).toMatchObject({ level: 2, safeRadius: 2, nightsLeft: 3, lit: true });
+    ).toMatchObject({ level: 2, safeRadius: 1, nightsLeft: 3, lit: true });
 
     // On the shared map, like guards.
     const shown = (await view(server, friend, mapId)).tiles.find(
       (t) => t.q === tile.q && t.r === tile.r,
     )!;
     expect(shown.buildings).toEqual([
-      expect.objectContaining({ id: lit.id, spot: 0, lit: true, safeRadius: 2 }),
+      expect.objectContaining({ id: lit.id, spot: 0, lit: true, safeRadius: 1 }),
     ]);
 
-    // Its light reaches 2 tiles round it (homes are safe on their own).
+    // Its light reaches its ring at level 2 (radii 1 / 1 / 2, #277; homes are safe on their own).
     const fires = await createBuildingsRepo(db).listOnMap(mapId);
     const safe = litSafeTiles(fires, [], mapLocalTime(clock, ZONE));
     expect(safe.has(hexKey(tile))).toBe(true);
     expect(
       [...safe].every((key) => {
         const [q, r] = key.split(',').map(Number);
-        return hexDistance({ q: q!, r: r! }, tile) <= 2;
+        return hexDistance({ q: q!, r: r! }, tile) <= 1;
       }),
     ).toBe(true);
 
@@ -321,8 +321,8 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
     // Enough for everything: every fire full, and then there's nothing to do.
     await give(mapId, kid, { emberwood: 20 });
     const full = FuelAllResponseSchema.parse((await fuelAll(server, kid, mapId)).json());
-    expect(full).toMatchObject({ fires: 3, nights: 1 + 4 + 4, short: false });
-    expect(full.home.items['emberwood']).toBe(11);
+    expect(full).toMatchObject({ fires: 3, nights: 4 + 7 + 7, short: false });
+    expect(full.home.items['emberwood']).toBe(2);
     const done = await fuelAll(server, kid, mapId);
     expect(errorOf(done).message).toBe('All your fires are full! Come back after a night or two.');
   });

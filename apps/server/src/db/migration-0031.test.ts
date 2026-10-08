@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +7,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDbClient, type DbClient } from './client.js';
 import { migrationsFolder, runMigrations } from './migrator.js';
-import { battles, buildings, mapMembers, maps, tiles, users } from './schema.js';
+import { battles, buildings, mapMembers, tiles, users } from './schema.js';
 
 const url = inject('testDatabaseUrl');
 
@@ -81,11 +82,11 @@ describe.skipIf(!url)('migration 0031 on an existing patch (#204, needs DATABASE
           .returning({ id: users.id })
       )[0]!.id;
     const [maple, pip] = [await user('m0031_maple'), await user('m0031_pip')];
-    const [map] = await db
-      .insert(maps)
-      .values({ kind: 'multiplayer', name: 'Old Patch', timeZone: 'UTC' })
-      .returning({ id: maps.id });
-    const mapId = map!.id;
+    // Raw SQL: `maps` gained a column after 0031 (#277).
+    const mapId = randomUUID();
+    await db.execute(
+      sql`insert into maps (id, kind, name, time_zone) values (${mapId}, 'multiplayer', 'Old Patch', 'UTC')`,
+    );
     await db.insert(mapMembers).values({ mapId, userId: maple, role: 'owner', homeSlot: 0 });
     await db.insert(mapMembers).values({ mapId, userId: pip, role: 'member', homeSlot: 1 });
     const tile = async (
