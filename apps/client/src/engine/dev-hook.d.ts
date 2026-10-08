@@ -2,6 +2,7 @@ import type { AudioDebug } from '../audio/audio.js';
 import type { BattleDebug, BattleDevControls } from '../battle/battle-screen.js';
 import type { HollowDebug } from '../hollow/hollow-screen.js';
 import type { LandDebug } from '../land/land-screen.js';
+import type { ExploreDebug } from '../explore/explore-screen.js';
 import type { HomeDebug } from '../home/home-screen.js';
 import type { InventoryDebug } from '../inventory/inventory-screen.js';
 import type { CatalogDebug } from '../catalog/catalog-screen.js';
@@ -76,6 +77,8 @@ declare global {
       raids?(): RaidReportDebug | null;
       /** The home base (#18): open or not, its buildings, squishies and wander hops, or null. */
       home?(): HomeDebug | null;
+      /** Exploring a tile of mine up close (#199), or null off a patch. */
+      explore?(): ExploreDebug | null;
       /** The care sheet (#19): the squishy shown, its mood and level, celebrations, or null. */
       care?(): CareDebug | null;
       /** The close-up view (#20): phase, detail, the squishy's screen spot, care sent and held, or null. */

@@ -327,6 +327,7 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
       caretaker: 1,
       defender: 1,
       rescuer: 1,
+      seeker: 0, // searches count in the explore tests (#199)
       halloween: 2, // the pumpkins and the Witch Hat
     });
     expect(earned(view, 'territory')).toEqual([1]);

@@ -15,6 +15,7 @@ import {
 import { bagCrafts, itemName, type BagCraft } from '../inventory/bag-view.js';
 import { itemChip, type ItemChip } from '../inventory/item-chips.js';
 import { itemIcon } from '../inventory/item-icons.js';
+import { toolMakes } from '../inventory/tool-uses.js';
 import { buildingIcon, effectChips } from '../home/home-view.js';
 
 // The recipe book's pages as the player reads them (owner decision
@@ -221,7 +222,10 @@ export function pageView(page: RecipeBookPage, ctx: BookContext): PageView {
   }
   const meta =
     page.output.kind === 'item'
-      ? `${BOOK_TEXT.makes(page.output.quantity, itemName(page.output.resource))} · ${craftTime(page.seconds ?? 0)}`
+      ? `${
+          toolMakes(page.output.resource, page.output.quantity, itemName(page.output.resource)) ??
+          BOOK_TEXT.makes(page.output.quantity, itemName(page.output.resource))
+        } · ${craftTime(page.seconds ?? 0)}`
       : BOOK_TEXT.build;
   return {
     key: page.key,
