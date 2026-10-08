@@ -55,6 +55,22 @@ describe('describeTile', () => {
     expect(info.about).toContain('Emberwood');
   });
 
+  it('names a trading post, says it’s everyone’s, and how I reach it (#269)', () => {
+    const post = tile({ terrain: 'trading-post', post: { index: 1, name: 'Lantern Post' } });
+    const far = describeTile(post, lookup, userId(1), [], { kind: 'journey', distance: 3 });
+    expect(far.title).toBe('Lantern Post');
+    expect(far.owner).toBe('A trading post for every Keeper. Nobody can claim it!');
+    expect(far.post?.reach).toMatch(/3 tiles from your land/);
+    expect(far.post?.soon).toMatch(/soon/);
+    expect(far.guardians).toBeNull();
+    expect(far.gatherer).toBeNull();
+    expect(allText(far) + far.post!.reach! + far.post!.soon).not.toMatch(AVOIDED);
+    const near = describeTile(post, lookup, userId(1), [], { kind: 'connected' });
+    expect(near.post?.reach).toMatch(/Your land reaches it/);
+    // Everywhere else: no post line.
+    expect(describeTile(tile({}), lookup, userId(1)).post).toBeNull();
+  });
+
   it('says whose land it is', () => {
     expect(describeTile(tile({}), lookup, userId(1)).owner).toBe('Wild land.');
     expect(describeTile(tile({ ownerUserId: userId(1) }), lookup, userId(1)).owner).toBe(

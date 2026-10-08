@@ -71,6 +71,26 @@ describe('fence edges (#203, #204)', () => {
   });
 });
 
+describe('edges facing a trading post (#269)', () => {
+  // A post at (2,0), east of my east tile: nobody can ever own it.
+  const post = { q: 2, r: 0, terrain: 'trading-post' };
+  const map = MAP.map((h) =>
+    h.q === post.q && h.r === post.r ? post : { ...h, terrain: 'meadow' },
+  );
+
+  it('need no fence, like the map’s rim', () => {
+    // East's edge 0 faces the post, so only edges 1 and 5 face land I don’t hold.
+    expect(borderEdges(east, patch, map)).toEqual([1, 5]);
+    expect(borderEdges(east, patch, MAP)).toEqual([0, 1, 5]);
+  });
+
+  it('so a tile next to a post is fully fenced without one there', () => {
+    const segments = [1, 5].map((edge) => ({ ...east, edge }));
+    expect(isTileFenced(east, patch, segments, map)).toBe(true);
+    expect(isTileFenced(east, patch, segments, MAP)).toBe(false);
+  });
+});
+
 describe('isTileFenced (#204: every edge touching land you don’t own has a segment)', () => {
   it('an interior tile needs no fence at all', () => {
     expect(isTileFenced(centre, patch, [], MAP)).toBe(true);

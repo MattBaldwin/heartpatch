@@ -54,6 +54,20 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     haze: '#d9f2c4',
     hills: '#7fb98a',
   },
+  // A trading post (#269): its hut behind the fighters, in a flowery meadow.
+  // Journeys (#270) are fought here.
+  'trading-post': {
+    props: [
+      { kind: 'trading-post', count: 1, ring: ring(13, 14), scale: [12, 12] }, // TUNE
+      { kind: 'tree', count: 10, ring: ring(14, 19), scale: [9.3, 13.6] }, // TUNE
+      { kind: 'bush', count: 8, ring: ring(7, 13), scale: [4, 6] }, // TUNE
+      { kind: 'flowers', count: 26, ring: ring(4.6, 13), scale: [2.4, 3.2], front: true }, // TUNE
+      { kind: 'grass', count: 22, ring: ring(4.2, 14), scale: [2.4, 3.4], front: true }, // TUNE
+    ],
+    water: null,
+    haze: '#f6e7c4',
+    hills: '#9cc58a',
+  },
   forest: {
     props: [
       { kind: 'tree', count: 16, ring: ring(8.5, 16), scale: [9.3, 13.6] }, // TUNE

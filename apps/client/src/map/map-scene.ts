@@ -16,6 +16,7 @@ import {
   GAME_DATA,
   hexKey,
   hexToWorld,
+  isTradingPost,
   worldToHex,
   type Hex,
   type HexKey,
@@ -72,7 +73,7 @@ export { buildProp, merged, painted, type BuiltProp } from './map-props.js';
 // drawn muted, many more props, Halloween dressing and ambient life (sway,
 // water, motes), all moved on the GPU by one time uniform (terrain-plugin.ts).
 
-const TILE_RADIUS = HEX_SIZE * TILE_FILL;
+export const TILE_RADIUS = HEX_SIZE * TILE_FILL;
 /** Rounded-top profile shared by tiles and the overlays laid over them (top at y = 0). */
 export const DOME = 0.035; // TUNE
 export const BEVEL = 0.07; // TUNE
@@ -152,7 +153,8 @@ function lookOf(tile: PublicTile): TerrainLook {
 const toLinear = (v: number): number => Math.pow(v, 2.2);
 
 /** Height of a tile's top: its look's, plus its own small wobble (none on home tiles). */
-function topOf(tile: PublicTile): number {
+/** A tile's top surface height, world units (layers that sit on a tile use it). */
+export function topOf(tile: PublicTile): number {
   const look = lookOf(tile);
   return tile.homeSlot !== null ? look.height : look.height + tileJitter(tile, tile.terrain).height;
 }
@@ -827,7 +829,12 @@ export class MapScene {
       // A #238 node (a well, greens, ice) stands in the middle, as a prop, so
       // it's muted on wild land and sits at the tile's own height.
       const node = tile.nodeResource;
-      const middle = node !== null && LAND_NODES.has(node) ? NODE_PROPS[node] : undefined;
+      // A trading post's hut stands on its centre spot (#269), like a node.
+      const middle: PropKind | undefined = isTradingPost(tile)
+        ? 'trading-post'
+        : node !== null && LAND_NODES.has(node)
+          ? NODE_PROPS[node]
+          : undefined;
       const dressing = dressTile(tile, tile.terrain, HEX_SIZE, {
         halloween: this.halloween,
         ...(middle !== undefined && { middle }),

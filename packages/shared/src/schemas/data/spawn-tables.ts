@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './common.js';
+import { TRADING_POST_TERRAIN } from '../../territory/reach.js';
 
 /**
  * Where and what wild squishies spawn (design doc §4, §16). The schema is
@@ -8,7 +9,16 @@ import { ContentIdSchema } from './common.js';
  */
 export const SpawnTableSchema = z.strictObject({
   id: ContentIdSchema,
-  terrains: z.array(ContentIdSchema).min(1),
+  // Nothing spawns on, or guards, a trading post (#269): nobody claims one,
+  // and no wild squishy waits there. Guardian tables share this schema.
+  terrains: z
+    .array(
+      ContentIdSchema.refine(
+        (id) => id !== TRADING_POST_TERRAIN,
+        'nothing spawns on or guards a trading post',
+      ),
+    )
+    .min(1),
   season: ContentIdSchema.optional(),
   timeOfDay: z.enum(['day', 'dusk', 'night']).optional(),
   entries: z

@@ -429,6 +429,50 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await attack(server, await player(), mapId, far)).statusCode).toBe(404);
     });
 
+    it('never lets anyone claim a trading post, even right next to their land (#269)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await grant(server, kid, mapId, 40);
+      const all = await tilesOf(mapId);
+      const post = all.find((t) => t.terrain === 'trading-post')!;
+      const beside = all.find(
+        (t) =>
+          t.ownerUserId === null &&
+          t.homeSlot === null &&
+          t.terrain !== 'trading-post' &&
+          hexNeighbors(post).some((n) => n.q === t.q && n.r === t.r),
+      )!;
+      await setOwner(beside.id, kid.id);
+      const res = await attack(server, kid, mapId, post);
+      expect(res.statusCode).toBe(403);
+      expect(errorOf(res).message).toMatch(/Trading posts belong to everyone/);
+      expect(await attacksOf(mapId)).toEqual([]);
+      expect((await tileAt(mapId, post)).ownerUserId).toBeNull();
+    });
+
+    it('shows every member the patch’s 4 trading posts, named, with no guardians (#269)', async () => {
+      const server = await start();
+      const kid = await player();
+      const friend = await player();
+      const mapId = await patch(server, kid, [friend]);
+      const mine = await view(server, kid, mapId);
+      const posts = mine.tiles.filter((t) => t.terrain === 'trading-post');
+      expect(posts).toHaveLength(GAME_DATA.mapGen.tradingPosts.perMap);
+      expect(posts.map((t) => t.post?.index)).toEqual([0, 1, 2, 3]);
+      expect(posts.map((t) => t.post?.name)).toEqual(
+        GAME_DATA.mapGen.tradingPosts.names.slice(0, 4),
+      );
+      for (const t of posts) {
+        expect(t).toMatchObject({ ownerUserId: null, homeSlot: null, nodeResource: null });
+        expect(t.guardianHint).toBeNull();
+      }
+      expect(mine.tiles.filter((t) => t.post).length).toBe(4);
+      expect((await view(server, friend, mapId)).tiles.filter((t) => t.post)).toEqual(
+        mine.tiles.filter((t) => t.post),
+      );
+    });
+
     it('needs a squishy first, and uses no attempt without one', async () => {
       const server = await start();
       const kid = await player();

@@ -69,11 +69,13 @@ export class MapState {
       }
       // Members came or went, or untended land went wild again at nightfall
       // (owner decision 2026-10-06): neutral now, with guardians whose hints
-      // come from the map view, so refetch it (once a night at most).
+      // come from the map view, so refetch it (once a night at most). Trading
+      // posts came to this older patch (#269): new terrain and names, from the view.
       case 'member.joined':
       case 'member.left':
       case 'member.removed':
       case 'tile.rewilded':
+      case 'post.placed':
         return 'resync';
       case 'gather.started':
       case 'resource.gathered': {

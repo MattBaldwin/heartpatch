@@ -277,6 +277,15 @@ export const GAME_EVENTS = {
     }),
   },
   /**
+   * Trading posts (#269) came to an older map: the boot pass turned these
+   * neutral tiles into posts. New maps are made with theirs and write none.
+   * Land is public, so members see the same.
+   */
+  'post.placed': {
+    internal: z.strictObject({ tiles: z.array(z.strictObject(coords)).min(1) }),
+    public: z.object({ tiles: z.array(z.object(coords)) }),
+  },
+  /**
    * A player searched one spot on their own land (#199). One per search, so
    * the Seeker track can count them. What it found stays internal except a
    * `notable` find's kind (patch feed: "Lee found a lore page!"); `lorePage`

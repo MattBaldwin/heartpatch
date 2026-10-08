@@ -462,6 +462,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
           'homestead',
           'nodeResource',
           'ownerUserId',
+          'post',
           'q',
           'r',
           'terrain',
@@ -987,14 +988,17 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
 
       // Identical for two members: the hint is the land's, not the viewer's.
       expect(theirs.view.tiles).toEqual(mine.view.tiles);
-      const neutral = mine.view.tiles.filter((t) => t.ownerUserId === null && t.homeSlot === null);
+      // Trading posts (#269) are neutral too, but nobody guards (or claims) them.
+      const claimable = (t: (typeof mine.view.tiles)[number]) =>
+        t.ownerUserId === null && t.homeSlot === null && t.terrain !== 'trading-post';
+      const neutral = mine.view.tiles.filter(claimable);
       expect(neutral.length).toBeGreaterThan(0);
       for (const tile of mine.view.tiles) {
-        if (tile.ownerUserId === null && tile.homeSlot === null) {
+        if (claimable(tile)) {
           expect(tile.guardianHint?.count).toBeGreaterThan(0);
           expect(GUARDIAN_DIFFICULTIES).toContain(tile.guardianHint?.difficulty);
         } else {
-          // Anyone's land and every home base (even a free one): no hint.
+          // Anyone's land, every home base (even a free one) and every post: no hint.
           expect(tile.guardianHint).toBeNull();
         }
       }
@@ -1049,9 +1053,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
 
       // Tomorrow's guardians may differ: worked out on read, by the map's day.
       clock = new Date(clock.getTime() + DAY_MS);
-      const tomorrow = (await view(owner)).view.tiles.filter(
-        (t) => t.ownerUserId === null && t.homeSlot === null,
-      );
+      const tomorrow = (await view(owner)).view.tiles.filter(claimable);
       expect(tomorrow.map((t) => t.guardianHint)).toEqual(expected(clock));
     });
   });

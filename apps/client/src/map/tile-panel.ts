@@ -56,6 +56,12 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
     class: 'tile-panel-gatherer',
     'data-testid': 'tile-panel-gatherer',
   });
+  // A trading post (#269): how I reach it, and what's coming there.
+  const postReachText = el('p', { class: 'tile-panel-post', 'data-testid': 'tile-panel-post' });
+  const postSoon = el('p', {
+    class: 'tile-panel-post-soon',
+    'data-testid': 'tile-panel-post-soon',
+  });
   const actions = el('div', { class: 'tile-panel-actions', 'data-testid': 'tile-panel-actions' });
   const close = el(
     'button',
@@ -80,6 +86,8 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
     ),
     guardians,
     gatherer,
+    postReachText,
+    postSoon,
     details,
     actions,
   );
@@ -97,7 +105,12 @@ export function mountTilePanel(root: HTMLElement, onClose: () => void): TilePane
       guardians.hidden = info.guardians === null;
       gatherer.textContent = info.gatherer ?? '';
       gatherer.hidden = info.gatherer === null;
+      postReachText.textContent = info.post?.reach ?? '';
+      postReachText.hidden = !info.post?.reach;
+      postSoon.textContent = info.post?.soon ?? '';
+      postSoon.hidden = info.post === null;
       panel.classList.toggle('tile-panel-home', info.home);
+      panel.classList.toggle('tile-panel-trading-post', info.post !== null);
       panel.hidden = false;
     },
     hide: () => {
