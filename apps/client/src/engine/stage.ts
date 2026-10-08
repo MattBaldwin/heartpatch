@@ -105,12 +105,20 @@ export function mountStage(
     loaded = false;
     frames.invalidate();
   };
+  /** The governor asked for a new resolution or tier after the last draw. */
+  let rescalePending = false;
   engine.runRenderLoop(() => {
     if (resizePending) {
       resizePending = false;
       quality.refreshPixelRatio();
       engine.resize();
       frames.invalidate();
+    }
+    // Likewise the governor's rescale: setting the canvas size clears its
+    // buffer, so after a draw it would show a blank frame (#260).
+    if (rescalePending) {
+      rescalePending = false;
+      if (quality.applyPending()) reload();
     }
     // Keep drawing until every shader, texture and post-process is ready,
     // then draw a few more: the frames drawn while loading may be empty.
@@ -122,7 +130,7 @@ export function mountStage(
     const { draw, frameMs } = frames.next(performance.now(), busy);
     if (!draw) return;
     scene.render();
-    if (frameMs !== null && quality.sample(frameMs)) reload();
+    if (frameMs !== null && quality.sample(frameMs)) rescalePending = true;
   });
 
   return {
