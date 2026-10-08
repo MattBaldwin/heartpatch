@@ -10,6 +10,7 @@ import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
 import { createExploreScreen } from './explore/explore-screen.js';
+import { createPostFlags } from './trading/post-flags.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
 import { createCatalogScreen } from './catalog/catalog-screen.js';
@@ -311,6 +312,8 @@ const land = createLandScreen({
 // The Hollow Man (#21): the night on the map, his visit when night falls,
 // the morning report, and rescues (a rescue battle opens the battle screen).
 const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
+// Trading posts' flags and rings on the map (#269), for whoever is signed in.
+const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
 const hollow = createHollowScreen({
   root: document.body,
   entryRoot: trays.slot('adventure'),
@@ -514,7 +517,7 @@ const maps = createMapScreen({
     // Sprout points at the handles once, on a patch (the Glade has Sprout already).
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
-  layers: [hollowLayer, jobs.badges, land.layer],
+  layers: [hollowLayer, jobs.badges, land.layer, postFlags],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
   // A piece of clothing found while playing (#43) shows a little note; night
@@ -1082,6 +1085,11 @@ if (import.meta.env.DEV) {
     closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,
     jobs: () => jobs.debug,
+    posts: () => ({
+      shown: postFlags.shown,
+      rings: postFlags.rings,
+      onScreen: postFlags.onScreen,
+    }),
     starter: () => starters.debug,
     lore: () => lorebook.debug,
     milestones: () => milestones.debug,

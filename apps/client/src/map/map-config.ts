@@ -39,7 +39,9 @@ export type PropKind =
   // New things to gather (#238): a lakeside well, a patch of greens, ice crystals.
   | 'well'
   | 'greens-patch'
-  | 'ice-crystals';
+  | 'ice-crystals'
+  // Trading posts (#269): the post's hut on its centre spot.
+  | 'trading-post';
 
 export interface TerrainLook {
   /** Top colour, sRGB hex. */
@@ -77,6 +79,8 @@ export const TERRAIN_LOOKS: Readonly<Record<string, TerrainLook>> = {
   mountains: look('#c9bddb', 0.42, { prop: 'peak', propsPerTile: [1, 1] }), // TUNE
   lake: look('#9fd6f5', 0.12, { roughness: 0.2, clearCoat: true }), // TUNE
   'pumpkin-fields': look('#f4d68e', 0.22, { prop: 'pumpkin', propsPerTile: [2, 3] }), // TUNE
+  // Trading posts (#269): cream-gold and a little lit, never washed out (nobody owns one).
+  'trading-post': look('#fbe2a2', 0.25, { roughness: 0.5, glow: 0.12 }), // TUNE
   'junipers-gap': look('#e6cdfc', 0.3, { glow: 0.25 }), // TUNE
 };
 
@@ -241,6 +245,14 @@ export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
     ],
     tints: ['#ffffff', '#fff1dc', '#ffe8d2', '#fff8e6'],
     jitter: { color: 0.05, height: 0.012 },
+  },
+  // Trading posts (#269): the hut stands in the middle (`middle`), with a few
+  // flowers round it. No height wobble, so the connected ring sits flush.
+  'trading-post': {
+    count: [2, 3],
+    items: [item('flowers', 3, [0.9, 1.2]), item('grass', 2, [0.8, 1.1])],
+    tints: ['#ffffff', '#fff6e0', '#ffeef6'],
+    jitter: { color: 0.02, height: 0 },
   },
   'junipers-gap': {
     count: [2, 3],

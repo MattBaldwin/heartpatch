@@ -21,4 +21,20 @@ export const MAP_GEN: MapGenSettings = {
   homeRingNodes: ['timber', 'stone', 'emberwood', 'treats', 'pumpkins', 'magic-fallen-leaves'],
   patchSize: 6, // TUNE:
   guardianStrength: { min: 1, max: 4, stepsPerLevel: 2, gap: 5 }, // TUNE:
+  // Trading posts (#269, owner decision 4 on #30): 4 a map, every home slot
+  // within 5 steps of one, none touching a home ring on day 1.
+  tradingPosts: {
+    perMap: 4,
+    maxFromSeed: 5, // TUNE: the owner's N, from the Heart Seed (4 from the home ring)
+    minFromSeed: 3, // TUNE: claim one tile toward it and it's connected
+    minApart: 4, // TUNE:
+    names: [
+      'Acorn Crossing',
+      'Lantern Post',
+      'Mossy Mailbox',
+      'Puddle Junction',
+      'Pumpkin Stop',
+      'Snuggle Station',
+    ],
+  },
 };

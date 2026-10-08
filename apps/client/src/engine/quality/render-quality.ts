@@ -69,17 +69,32 @@ export class RenderQuality {
   }
 
   /**
-   * Feeds one real frame time to the governor. Returns true when it changed
-   * resolution or tier, so the caller can draw a frame with the new settings.
+   * Feeds one real frame time to the governor. Returns true when it wants a
+   * new resolution or tier, which `applyPending` then pushes into Babylon.
+   * Never touches the engine itself: it runs right after a draw, and a
+   * resize then would clear the frame about to be shown (#260).
    */
   sample(frameMs: number): boolean {
     this.state = stepGovernor(this.state, frameMs, {
       config: SCALER,
       devicePixelRatio: window.devicePixelRatio,
     });
+    return this.state.tier !== this.appliedTier || this.state.renderScale !== this.appliedScale;
+  }
+
+  /**
+   * Applies what `sample` asked for, before a frame is drawn. True if
+   * anything changed, so the caller draws with the new settings.
+   */
+  applyPending(): boolean {
     return this.apply();
   }
 
+  /**
+   * The governor's tier and scale, which can be a frame ahead of what's
+   * applied (`applyPending` runs at the top of the next frame); `pixelRatio`
+   * is what the engine draws at now.
+   */
   get snapshot(): QualitySnapshot {
     return {
       tier: this.state.tier,

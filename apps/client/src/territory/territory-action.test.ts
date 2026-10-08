@@ -115,6 +115,12 @@ describe('territoryAction', () => {
     });
   });
 
+  it('offers nothing on a trading post, even right next to my land (#269)', () => {
+    const { view, tile } = setup();
+    const post = { ...tile, terrain: 'trading-post' };
+    expect(territoryAction(post, view, ME, status(), NOW)).toEqual({ kind: 'none' });
+  });
+
   it('offers Challenge on a neighbour’s land, unless challenges are off', () => {
     const { view, tile } = setup(() => ({ ownerUserId: userId(2) }));
     expect(territoryAction(tile, view, ME, status(), NOW).kind).toBe('challenge');

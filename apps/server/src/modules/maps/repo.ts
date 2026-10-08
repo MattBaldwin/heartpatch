@@ -1,10 +1,18 @@
-import type { DefenseStance, MapRole, PublicKeeper, PublicTile, PvpMode } from '@heartpatch/shared';
+import {
+  TRADING_POST_TERRAIN,
+  type DefenseStance,
+  type MapRole,
+  type PublicKeeper,
+  type PublicTile,
+  type PvpMode,
+} from '@heartpatch/shared';
 import { and, asc, count, eq, gt, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import {
   buildings,
+  fenceSegments,
   gatherJobs,
   inviteCodes,
   joinRequests,
@@ -40,7 +48,7 @@ export interface NewTile {
 }
 
 /** A tile for the map view, before the service makes it a `PublicTile`. */
-export type TileViewRow = Omit<PublicTile, 'buildings' | 'guardianHint'> & {
+export type TileViewRow = Omit<PublicTile, 'buildings' | 'guardianHint' | 'post'> & {
   /** `tiles.guardian_strength`. Secret: it picks the guardian tier (tech spec §8). */
   guardianStrength: number | null;
 };
@@ -130,6 +138,22 @@ export interface NodelessTileRow {
   worked: boolean;
 }
 
+/** A tile as the trading-post boot pass sees it (#269). */
+export interface PostPlacementTileRow {
+  id: string;
+  q: number;
+  r: number;
+  terrain: string;
+  ownerUserId: string | null;
+  homeSlot: number | null;
+  /**
+   * Something still stands, works or battles here: a building, a fence, a
+   * guard, a gatherer, an unfinished gather or an unfinished battle for it.
+   * A post never goes on such a tile, so nothing is cut off mid-way.
+   */
+  busy: boolean;
+}
+
 export interface PendingRequestRow {
   id: string;
   user: UserRef;
@@ -205,6 +229,19 @@ export interface MapsRepo {
   listNodelessTiles: (mapId: string, lockIds?: readonly string[]) => Promise<NodelessTileRow[]>;
   /** Puts a node on a tile outside home bases that has none; false if it already had one. */
   addTileNode: (tileId: string, resource: string) => Promise<boolean>;
+  /** Patch maps with a seed and no trading post yet (#269's boot pass), in id order. */
+  listMapsWithoutPosts: () => Promise<{ id: string; seed: string }[]>;
+  /**
+   * Every tile on the map as the trading-post pass sees it. With `lockIds`,
+   * those tiles are row-locked first (tech spec §7 step 6, id order, `FOR NO
+   * KEY UPDATE` like the extra-nodes top-up).
+   */
+  listPostPlacementTiles: (
+    mapId: string,
+    lockIds?: readonly string[],
+  ) => Promise<PostPlacementTileRow[]>;
+  /** Turns neutral tiles into trading posts: no node, no guardians. Returns how many changed. */
+  makeTradingPosts: (tileIds: readonly string[]) => Promise<number>;
   /** Gives the player every tile of a home slot; returns those tiles. */
   claimHomeTiles: (
     mapId: string,
@@ -477,6 +514,68 @@ function queries(db: Executor): MapsRepo {
         .where(and(eq(tiles.mapId, mapId), isNull(tiles.homeSlot), isNull(tiles.nodeResource)))
         .orderBy(asc(tiles.q), asc(tiles.r));
       return rows.map((r) => ({ ...r, homeSlot: null, nodeResource: null }));
+    },
+
+    listMapsWithoutPosts: () =>
+      db
+        .select({ id: maps.id, seed: sql<string>`${maps.seed}` })
+        .from(maps)
+        .where(
+          and(
+            eq(maps.kind, 'multiplayer'),
+            isNotNull(maps.seed),
+            sql`not exists (
+              select 1 from ${tiles} t where t.map_id = ${maps.id} and t.terrain = ${TRADING_POST_TERRAIN}
+            )`,
+          ),
+        )
+        .orderBy(asc(maps.id)),
+
+    listPostPlacementTiles: async (mapId, lockIds = []) => {
+      if (lockIds.length > 0) {
+        await db
+          .select({ id: tiles.id })
+          .from(tiles)
+          .where(inArray(tiles.id, [...lockIds]))
+          .orderBy(asc(tiles.id))
+          .for('no key update');
+      }
+      return db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          terrain: tiles.terrain,
+          ownerUserId: tiles.ownerUserId,
+          homeSlot: tiles.homeSlot,
+          busy: sql<boolean>`(
+            exists (select 1 from ${buildings} b where b.tile_id = ${tiles}.id)
+            or exists (select 1 from ${fenceSegments} f where f.tile_id = ${tiles}.id)
+            or exists (select 1 from ${tileDefenders} d where d.tile_id = ${tiles}.id)
+            or exists (select 1 from ${squishies} s where s.work_tile_id = ${tiles}.id)
+            or exists (
+              select 1 from ${gatherJobs} g where g.tile_id = ${tiles}.id and g.ended_at is null
+            )
+            or exists (
+              select 1 from ${tileAttacks} a where a.tile_id = ${tiles}.id and a.ended_at is null
+            )
+          )`,
+        })
+        .from(tiles)
+        .where(eq(tiles.mapId, mapId))
+        .orderBy(asc(tiles.q), asc(tiles.r));
+    },
+
+    makeTradingPosts: async (tileIds) => {
+      if (tileIds.length === 0) return 0;
+      const changed = await db
+        .update(tiles)
+        .set({ terrain: TRADING_POST_TERRAIN, nodeResource: null, guardianStrength: null })
+        .where(
+          and(inArray(tiles.id, [...tileIds]), isNull(tiles.ownerUserId), isNull(tiles.homeSlot)),
+        )
+        .returning({ id: tiles.id });
+      return changed.length;
     },
 
     addTileNode: async (tileId, resource) => {

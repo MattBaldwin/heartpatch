@@ -49,6 +49,12 @@ describe('territory rules', () => {
     expect(attackTargetProblem(at(5, 5), TILES, ME, 'on')).toBe('too-far');
   });
 
+  it('never lets anyone battle for a trading post (#269), even right next to their land', () => {
+    const post = { ...tile(2, -1), terrain: 'trading-post' };
+    expect(attackTargetProblem(post, TILES, ME, 'on')).toBe('trading-post');
+    expect(attackTargetProblem({ ...post, terrain: 'meadow' }, TILES, ME, 'on')).toBeNull();
+  });
+
   it('blocks challenges, not claims, when PvP is Off', () => {
     expect(attackTargetProblem(at(2, 0), TILES, ME, 'off')).toBe('pvp-off');
     expect(attackTargetProblem(at(2, -1), TILES, ME, 'off')).toBeNull();

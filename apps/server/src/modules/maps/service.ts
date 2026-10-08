@@ -5,7 +5,10 @@ import {
   generateMap,
   INVITE_CODE_ALPHABET,
   INVITE_CODE_LENGTH,
+  isTradingPost,
   MAP_MAX_PLAYERS,
+  tradingPostLabels,
+  type TradingPostLabel,
   type CreateMapRequest,
   type GuardianHint,
   type Hex,
@@ -129,6 +132,7 @@ function toPublicTile(
   guardianHint: GuardianHint | null,
   buildings: PublicTile['buildings'],
   fences: NonNullable<PublicTile['fences']>,
+  post: TradingPostLabel | null,
   explore: Pick<PublicTile, 'explored' | 'homestead'> = { explored: false, homestead: null },
 ): PublicTile {
   return {
@@ -145,6 +149,7 @@ function toPublicTile(
     guardianHint,
     buildings,
     fences,
+    post: post ? { index: post.index, name: post.name } : null,
     explored: explore.explored ?? false,
     homestead: explore.homestead ?? null,
   };
@@ -389,6 +394,8 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           // Land its owner has fully explored, and their homesteads (#199).
           createExploreRepo(tx).listOwnersExplored(mapId),
         ]);
+        // Trading posts (#269), named by their place in (q, r) order.
+        const posts = tradingPostLabels(tiles, GAME_DATA.mapGen.tradingPosts);
         const exploredAt = new Map(
           explored.map((row) => [
             `${String(row.q)},${String(row.r)}`,
@@ -398,8 +405,9 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         // Neutral land's guardians today (#15's team), as a count, a word
         // (owner decision 10) and their feelings (#216): the same for every
         // member, and never who.
+        // A trading post (#269) has no guardians: nobody can claim it.
         const hintFor = (tile: TileViewRow): GuardianHint | null =>
-          tile.ownerUserId === null && tile.homeSlot === null
+          tile.ownerUserId === null && tile.homeSlot === null && !isTradingPost(tile)
             ? hintForGuardians(
                 tileGuardians({ ...map, seed }, tile, at, guardians),
                 guardians.rules,
@@ -422,6 +430,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
               hintFor(tile),
               buildings.get(`${String(tile.q)},${String(tile.r)}`) ?? [],
               fences.get(`${String(tile.q)},${String(tile.r)}`) ?? [],
+              posts.get(`${String(tile.q)},${String(tile.r)}`) ?? null,
               exploredAt.get(`${String(tile.q)},${String(tile.r)}`),
             ),
           ),

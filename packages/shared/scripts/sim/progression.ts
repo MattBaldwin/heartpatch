@@ -23,6 +23,7 @@ import type { Species } from '../../src/schemas/data/species.js';
 import { resolveWildSpawn, type SpawnData } from '../../src/spawns/resolve.js';
 import { spawnWindowAt, type SpawnWindow } from '../../src/spawns/window.js';
 import { resolveGuardians, type GuardianData } from '../../src/territory/guardians.js';
+import { isTradingPost } from '../../src/territory/reach.js';
 import type { KidProfile, ProgressionConfig, ProgressionRules } from './progression-config.js';
 
 /*
@@ -285,7 +286,8 @@ export function runProgression(
   const owner = new Map<HexKey, number | null>();
   for (const t of tiles)
     owner.set(hexKey(t), t.homeSlot !== null && t.homeSlot < 2 ? t.homeSlot : null);
-  const neutralTiles = tiles.filter((t) => t.homeSlot === null);
+  // Trading posts (#269) are never claimed.
+  const neutralTiles = tiles.filter((t) => t.homeSlot === null && !isTradingPost(t));
   const neutralLeft = () => neutralTiles.filter((t) => owner.get(hexKey(t)) === null);
 
   const records: DayRecord[][] = kids.map(() => []);

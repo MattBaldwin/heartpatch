@@ -6,6 +6,7 @@ import { terrainNodeResources } from '../schemas/data/terrains.js';
 import {
   extraNodes,
   generateMap,
+  generateMapBeforePosts,
   homeShares,
   mapLayout,
   type GeneratedMap,
@@ -50,16 +51,22 @@ describe('generateMap: determinism', () => {
   it('pins the output for a known seed, so generator changes are deliberate', () => {
     // If this fails, the generator changed: existing seeds now make different
     // maps. That's fine for maps not created yet (tiles are persisted), so
-    // update the hash on purpose.
+    // update the hash on purpose. Changed once on purpose by #269's trading
+    // posts; the passes before them are pinned just below, unchanged.
     expect(hashString(JSON.stringify(generate('pinned-seed', 4)))).toBe(
-      '6b17966c98f2a81970687e78ad3b2d9b',
+      '58d1d50f837ac7ed09788b3db5492ff2',
     );
+    expect(
+      hashString(
+        JSON.stringify(generateMapBeforePosts(GAME_DATA, { seed: 'pinned-seed', playerCount: 4 })),
+      ),
+    ).toBe('6b17966c98f2a81970687e78ad3b2d9b');
   });
 
   it('keeps the main pass as it was before the extra nodes (#238)', () => {
     // Without the extra pass's nodes, the map is the one main made before
     // #238 (its pinned hash then), so no stored map's nodes move.
-    const map = generate('pinned-seed', 4);
+    const map = generateMapBeforePosts(GAME_DATA, { seed: 'pinned-seed', playerCount: 4 });
     expect(hashString(JSON.stringify({ ...map, tiles: withoutExtras(map) }))).toBe(
       '4d809aead0d653d4c4a31c5db548d8b6',
     );
@@ -308,7 +315,9 @@ describe('generateMap: terrain, nodes and guardians', () => {
     for (const map of maps) {
       const stepsToHome = (t: { q: number; r: number }) =>
         Math.min(...map.homes.map((h) => hexDistance(h, t)));
-      const neutral = map.tiles.filter((t) => t.homeSlot === null && t.terrain !== 'junipers-gap');
+      const neutral = map.tiles.filter(
+        (t) => t.homeSlot === null && t.terrain !== 'junipers-gap' && t.terrain !== 'trading-post',
+      );
       for (const tile of neutral) {
         expect(tile.guardianStrength).toBeGreaterThanOrEqual(min);
         expect(tile.guardianStrength).toBeLessThanOrEqual(max);

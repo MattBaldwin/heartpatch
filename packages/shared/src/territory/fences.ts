@@ -4,6 +4,7 @@ import type { FenceBuilding } from '../schemas/data/buildings.js';
 import type { FenceRules } from '../schemas/data/fences.js';
 import type { ItemCounts } from '../gathering/index.js';
 import { spentOn } from '../home/costs.js';
+import { isTradingPost } from './reach.js';
 
 // Fences (#203, #204): segments on a tile's hex edges. Edge `e` of a tile is
 // the side it shares with its neighbour in `HEX_DIRECTIONS[e]`. A segment
@@ -42,19 +43,28 @@ export interface FenceSegmentStats extends FenceSpot {
   readonly hp: number;
 }
 
+/** A map tile as fences see it: where, and (optionally) its terrain. */
+export type FenceMapTile = Hex & { readonly terrain?: string };
+
 /**
  * Edges of `tile` that touch land its owner doesn't hold (neutral, wild or a
  * rival's): the ones a fence has to cover. `ownedTiles` are the owner's;
  * `mapTiles` every tile on the map, so an edge on the map's rim, facing
- * nothing, needs no fence (nobody can come from there).
+ * nothing, needs no fence (nobody can come from there). An edge facing a
+ * trading post counts like the rim (#269): nobody can ever own a post, so no
+ * challenge comes from there. Pass tiles with their `terrain` for that.
  */
 export function borderEdges(
   tile: Hex,
   ownedTiles: readonly Hex[],
-  mapTiles: readonly Hex[],
+  mapTiles: readonly FenceMapTile[],
 ): HexEdge[] {
   const owned = new Set(ownedTiles.map(hexKey));
-  const onMap = new Set(mapTiles.map(hexKey));
+  const onMap = new Set(
+    mapTiles
+      .filter((t) => t.terrain === undefined || !isTradingPost({ terrain: t.terrain }))
+      .map(hexKey),
+  );
   return HEX_EDGES.filter((edge) => {
     const next = hexKey(edgeNeighbor(tile, edge));
     return onMap.has(next) && !owned.has(next);
@@ -65,14 +75,15 @@ export function borderEdges(
  * Is `tile` fenced (#204)? Yes when every edge touching land its owner
  * doesn't hold has a segment. Edges between two of the owner's tiles need
  * none, so an interior tile is fenced already (nobody can reach it anyway),
- * and neither do edges facing off the map. `ownedTiles` and `segments` are
- * the owner's, `mapTiles` the map's. A tile they don't own isn't fenced.
+ * and neither do edges facing off the map or a trading post. `ownedTiles`
+ * and `segments` are the owner's, `mapTiles` the map's. A tile they don't own
+ * isn't fenced.
  */
 export function isTileFenced(
   tile: Hex,
   ownedTiles: readonly Hex[],
   segments: readonly FenceSpot[],
-  mapTiles: readonly Hex[],
+  mapTiles: readonly FenceMapTile[],
 ): boolean {
   if (!ownedTiles.some((t) => t.q === tile.q && t.r === tile.r)) return false;
   const fenced = new Set(

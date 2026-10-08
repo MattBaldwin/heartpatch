@@ -1,6 +1,9 @@
 export * from './home-ring.js';
 export * from './extra-nodes.js';
+export * from './trading-posts.js';
 import { extraNodes } from './extra-nodes.js';
+import { placeTradingPosts } from './trading-posts.js';
+import { TRADING_POST_TERRAIN } from '../territory/reach.js';
 
 import {
   hex,
@@ -134,6 +137,41 @@ function fairestRotations(
  * holding it could predict every tile's guardians and spawns.
  */
 export function generateMap(data: MapGenData, options: GenerateMapOptions): GeneratedMap {
+  const map = generateMapBeforePosts(data, options);
+  // Trading posts (#269): the last pass, with its own seed, so every pass
+  // before it stays as it was. A post's tile keeps no node and no guardians.
+  // Which tiles can hold one depends only on the layout, never the seed, so
+  // a layout that fits once fits every time (the mapgen fairness test).
+  const posts = placeTradingPosts({
+    tiles: map.tiles,
+    homes: map.homes,
+    gapTerrain: data.mapGen.gapTerrain,
+    rules: data.mapGen.tradingPosts,
+    seed: options.seed,
+  });
+  if (posts === null) {
+    throw new RangeError(`no fair trading-post layout for ${options.playerCount} players`);
+  }
+  const postKeys = new Set(posts.map(hexKey));
+  return {
+    ...map,
+    tiles: map.tiles.map((t) =>
+      postKeys.has(hexKey(t))
+        ? { ...t, terrain: TRADING_POST_TERRAIN, nodeResource: null, guardianStrength: null }
+        : t,
+    ),
+  };
+}
+
+/**
+ * The map as `generateMap` made it before trading posts (#269): every pass
+ * but the last. Exported so the pinned-output tests can prove those passes
+ * never move (tiles are stored, so a stored map's nodes and terrain stay put).
+ */
+export function generateMapBeforePosts(
+  data: MapGenData,
+  options: GenerateMapOptions,
+): GeneratedMap {
   const { seed, playerCount } = options;
   const { mapGen } = data;
   const layout = mapLayout(data, playerCount);

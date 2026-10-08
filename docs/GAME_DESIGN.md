@@ -173,6 +173,7 @@ Phase 1 ships simple level-based single-form evolution; branching arrives in Pha
 - **Anti-farming:** diminishing returns and a per-pair daily cap on bonuses.
 - **Clothing** trades and gifts use the same flow, bonuses and caps (see §23). Milestone items are account-bound.
 - **Regret window:** lopsided trades show a gentle "Are you sure?" with a value comparison. Traded squishies have a **24h take-back window**.
+- **Trading posts (owner decisions on #30, 2026-10-07/08; built in parts, #269 first).** Trades and gifts happen only between members of a patch, and wait at **trading posts** until picked up. Every patch map has **[DEFAULT: 4]** posts: shared tiles nobody can ever claim, own, fence, build on or gather, placed fairly at mapgen so every home slot has one within **[DEFAULT: 5]** steps of its Heart Seed and every home's nearest post is the same distance away (older patches get theirs at the next server start, on free neutral land only). A post whose tile touches your land joined to home is part of your community; any other post needs a **journey** battle on every visit, harder the further it is from your nearest land (#270).
 
 ## 11. Territory
 

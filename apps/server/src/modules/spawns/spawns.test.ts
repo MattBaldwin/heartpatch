@@ -495,6 +495,37 @@ describe.skipIf(!url)('wild squishies and capture (needs DATABASE_URL)', () => {
       expect((await at('2026-09-30T12:00:00-06:00')).tiles).toEqual([]);
     });
 
+    it('never puts a wild squishy on a trading post, even when every terrain spawns (#269)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patchWithSquishy(server, kid);
+      const { spawns } = services(); // EVERYWHERE lists every terrain, posts too
+      const tiles = await tilesOf(mapId);
+      const post = tiles.find((t) => t.terrain === 'trading-post')!;
+      const beside = tiles.find(
+        (t) =>
+          t.terrain !== 'trading-post' &&
+          t.homeSlot === null &&
+          hexNeighbors(post).some((n) => n.q === t.q && n.r === t.r),
+      )!;
+      await db.execute(
+        `update tiles set owner_user_id = ${id(kid.id)} where id = ${id(beside.id)}`,
+      );
+      const hints = (await spawns.wildHints(kid, mapId)).tiles;
+      expect(hints.length).toBeGreaterThan(0);
+      expect(hints).not.toContainEqual({ q: post.q, r: post.r });
+      // Looking there is refused: the post isn't a tile anyone looks for squishies on.
+      await expect(
+        spawns.findWildEncounter({
+          mapId,
+          userId: kid.id,
+          mapKind: 'multiplayer',
+          now: clock,
+          tile: { q: post.q, r: post.r },
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
     it('hints at tiles with someone on them, with no species', async () => {
       const server = await start();
       const kid = await player();

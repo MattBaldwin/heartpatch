@@ -90,7 +90,15 @@ export const AdminCodeParamsSchema = z.object({ codeId: z.uuid() });
 
 /** `GET /api/v1/admin/patches/:mapId` */
 export const AdminPatchDetailSchema = z.object({
-  patch: AdminPatchSummarySchema.extend({ timeZone: z.string() }),
+  patch: AdminPatchSummarySchema.extend({
+    timeZone: z.string(),
+    /**
+     * Trading posts on the patch (#269): 0 on a tutorial run, and on an older
+     * patch until the boot pass finds a fair spot free. Optional only so an
+     * older server's reply parses.
+     */
+    tradingPosts: z.number().int().nonnegative().optional(),
+  }),
   members: z.array(
     z.object({
       userId: z.uuid(),
