@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { draws, hook, idle, invalidate } from './dev-hook.js';
+import { holdResizes, turnLikeIos } from './layout.js';
 import { touch, type Point } from './touch.js';
 
 interface CameraState {
@@ -290,53 +291,41 @@ test('the camera pans, flings, pinch-zooms and stays in bounds', async ({ page }
 
 test('keeps its shape when the phone turns (#251)', async ({ page }) => {
   test.setTimeout(90_000); // first load compiles shaders; CI renders in software
-  // iOS sends `resize` before the turned layout settles, and none after it.
-  // Registered before the game's own listener, so it can swallow the real
-  // one once asked to (listeners on the window run in the order added).
-  await page.addInitScript(() => {
-    window.addEventListener('resize', (e) => {
-      if (e.isTrusted && document.documentElement.dataset['swallowResize']) {
-        e.stopImmediatePropagation();
-      }
-    });
-  });
+  await holdResizes(page);
   await page.goto('/');
   const canvas = page.locator('#game');
   await expect(canvas).toHaveAttribute('data-ready', 'true');
   await waitForIdle(page);
   const vp = page.viewportSize()!;
-
-  // The page hears a resize while the canvas still has its old size (left
-  // to settle, so its frames can't pick up the new size by chance), then
-  // nothing when the layout turns.
-  await page.evaluate(() => {
-    window.dispatchEvent(new Event('resize'));
-    document.documentElement.dataset['swallowResize'] = 'true';
-  });
-  await waitForIdle(page);
-  // Every frame from here: does the drawing buffer (which the camera's
-  // aspect is worked out from) have the canvas's shape, and the governor's
-  // render scale. The governor resizes the engine whenever it rescales,
-  // which can mend the shape by chance on a slow renderer; a mend that came
-  // with a rescale doesn't count.
-  await page.evaluate(() => {
-    const c = document.querySelector<HTMLCanvasElement>('#game')!;
-    const dev = (window as unknown as { __heartpatch: TurnHook }).__heartpatch;
-    const frames: TurnFrame[] = [];
-    (window as unknown as { __turnFrames: TurnFrame[] }).__turnFrames = frames;
-    const tick = (): void => {
-      frames.push({
-        fits: Math.abs(c.width / c.height - c.clientWidth / c.clientHeight) < 0.01,
-        landscape: c.clientWidth > c.clientHeight,
-        scale: dev.quality()?.renderScale ?? 0,
-      });
-      if (frames.length < 900) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  });
-  const before = await draws(page);
   const turned = vp.height > vp.width;
-  await page.setViewportSize({ width: vp.height, height: vp.width });
+  let before = 0;
+
+  // The early resize is left to settle first, so its frames can't pick up
+  // the new size by chance.
+  await turnLikeIos(page, async () => {
+    await waitForIdle(page);
+    // Every frame from here: does the drawing buffer (which the camera's
+    // aspect is worked out from) have the canvas's shape, and the governor's
+    // render scale. The governor resizes the engine whenever it rescales,
+    // which can mend the shape by chance on a slow renderer; a mend that came
+    // with a rescale doesn't count.
+    await page.evaluate(() => {
+      const c = document.querySelector<HTMLCanvasElement>('#game')!;
+      const dev = (window as unknown as { __heartpatch: TurnHook }).__heartpatch;
+      const frames: TurnFrame[] = [];
+      (window as unknown as { __turnFrames: TurnFrame[] }).__turnFrames = frames;
+      const tick = (): void => {
+        frames.push({
+          fits: Math.abs(c.width / c.height - c.clientWidth / c.clientHeight) < 0.01,
+          landscape: c.clientWidth > c.clientHeight,
+          scale: dev.quality()?.renderScale ?? 0,
+        });
+        if (frames.length < 900) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    before = await draws(page);
+  });
 
   const firstFit = () =>
     page.evaluate((turned) => {
