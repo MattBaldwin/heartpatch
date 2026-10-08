@@ -1,8 +1,19 @@
-import { RECIPES, RESOURCES } from '@heartpatch/shared';
+import {
+  befriendedOf,
+  GAME_DATA,
+  joiningSpecies,
+  RECIPES,
+  RESOURCES,
+  TILE_BATTLE_KINDS,
+  type EvolutionStep,
+  type PlayerBattle,
+} from '@heartpatch/shared';
+import { otherSide } from './battle-view.js';
 
-// The "Use Heart Charm" button in wild battles (owner decision 2026-10-04):
-// always there, with how many are in the bag, so a player learns that
-// befriending exists even before they have a charm. Pure words for the HUD.
+// The "Use Heart Charm" button in wild battles (owner decision 2026-10-04)
+// and against neutral land's guardians (#279): always there, with how many
+// are in the bag, so a player learns that befriending exists even before
+// they have a charm. Pure words for the HUD.
 
 /** What a capture costs (the server's `HEART_CHARM`). */
 export const HEART_CHARM = 'heart-charm';
@@ -41,3 +52,27 @@ export function noCharmsLine(): string {
 
 /** After a won wild battle where nobody was befriended. */
 export const BEFRIEND_NUDGE = 'Weaken a wild squishy, then use a Heart Charm to befriend it!';
+
+/** Every public evolution, for naming the form a land guardian joins as. */
+const PUBLIC_STEPS: readonly EvolutionStep[] = GAME_DATA.species.flatMap((s) =>
+  s.evolutions.map((e) => ({ from: s.id, into: e.into, level: e.level })),
+);
+
+/**
+ * The species that joined the player in `battle`, in team order (#279): a
+ * wild squishy as it was; a land guardian one evolution back from the form
+ * it fought as (owner decision 2026-10-08), as the server grants it.
+ */
+export function newFriends(battle: PlayerBattle): string[] {
+  const friends = befriendedOf(battle.view, otherSide(battle.mySide));
+  return friends.map((s) =>
+    TILE_BATTLE_KINDS.has(battle.kind) ? joiningSpecies(s.speciesId, PUBLIC_STEPS) : s.speciesId,
+  );
+}
+
+/** "Moonpuff joined your patch!", "Moonpuff and Snoozlet joined your patch!" */
+export function joinedLine(names: readonly string[]): string {
+  const last = names.at(-1) ?? 'Your new squishy';
+  const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${last}` : last;
+  return `${who} joined your patch!`;
+}

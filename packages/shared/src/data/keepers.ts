@@ -90,9 +90,10 @@ export const KEEPER_OUTFITS: OutfitPalette[] = [
 
 /** The top and back of the head; it sits up and back so the face stays clear under the fringe. */
 const CAP: HairPiece = { shape: 'ellipsoid', at: [0, 0.28, 0.16], size: [1.08, 0.92, 1.08] };
+/** It sits high enough that the brows always show under it, whatever the seeded jitter (#289). */
 const FRINGE: HairPiece = {
   shape: 'ellipsoid',
-  at: [0, 0.5, -0.5],
+  at: [0, 0.58, -0.5],
   size: [1.12, 0.5, 0.6],
   turn: [-25, 0, 0],
 };
@@ -125,7 +126,7 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
     name: 'Crew Cut',
     volume: { top: 1.2, width: 1.06 },
     pieces: [
-      { shape: 'ellipsoid', at: [0, 0.26, 0.1], size: [1.05, 0.9, 1.06] },
+      { shape: 'ellipsoid', at: [0, 0.26, 0.18], size: [1.05, 0.9, 1.06] },
       { shape: 'ellipsoid', at: [0, 0.62, 0], size: [0.98, 0.66, 0.98] },
       { shape: 'ellipsoid', at: [0, 0.74, -0.58], size: [0.74, 0.3, 0.34], turn: [-40, 0, 0] },
     ],
@@ -137,7 +138,7 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
     volume: { top: 1.22, width: 1.12 },
     pieces: [
       CAP,
-      { shape: 'ellipsoid', at: [0.1, 0.56, -0.52], size: [1.14, 0.44, 0.58], turn: [-25, 0, -12] },
+      { shape: 'ellipsoid', at: [0.1, 0.62, -0.52], size: [1.14, 0.44, 0.58], turn: [-25, 0, -12] },
       { shape: 'ellipsoid', at: [-0.4, 0.7, -0.36], size: [0.5, 0.42, 0.56], turn: [-20, 0, 20] },
       { shape: 'ellipsoid', at: [0.6, 0.38, -0.5], size: [0.36, 0.5, 0.4], turn: [-10, 0, -30] },
     ],
@@ -148,7 +149,7 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
     name: 'Messy Mop',
     volume: { top: 1.32, width: 1.14 },
     pieces: [
-      { shape: 'ellipsoid', at: [0, 0.3, 0.14], size: [1.1, 0.96, 1.1] },
+      { shape: 'ellipsoid', at: [0, 0.3, 0.22], size: [1.1, 0.96, 1.1] },
       { shape: 'teardrop', at: [-0.42, 0.6, -0.7], size: [0.3, 0.42, 0.28], turn: [-150, 0, -30] },
       { shape: 'teardrop', at: [-0.02, 0.64, -0.76], size: [0.32, 0.44, 0.3], turn: [-155, 0, 12] },
       { shape: 'teardrop', at: [0.4, 0.6, -0.68], size: [0.3, 0.4, 0.28], turn: [-145, 0, 38] },
@@ -168,7 +169,7 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
     name: 'Short Curls',
     volume: { top: 1.26, width: 1.14 },
     pieces: [
-      { shape: 'ellipsoid', at: [0, 0.28, 0.14], size: [1.08, 0.94, 1.08] },
+      { shape: 'ellipsoid', at: [0, 0.28, 0.2], size: [1.08, 0.94, 1.08] },
       ball(0, 1.04, 0.12, 0.34),
       ball(-0.44, 0.94, -0.16, 0.34),
       ball(0.44, 0.94, -0.16, 0.34),
@@ -199,7 +200,7 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
     name: 'Curly',
     volume: { top: 1.38, width: 1.25 },
     pieces: [
-      { shape: 'ellipsoid', at: [0, 0.3, 0.18], size: [1.14, 0.96, 1.12] },
+      { shape: 'ellipsoid', at: [0, 0.3, 0.26], size: [1.14, 0.96, 1.12] },
       FRINGE,
       { shape: 'ellipsoid', at: [0, 1.08, 0.12], size: [0.55, 0.5, 0.55] },
       { shape: 'ellipsoid', at: [-0.6, 0.92, 0.1], size: [0.52, 0.5, 0.52] },
@@ -216,8 +217,9 @@ export const KEEPER_HAIRSTYLES: KeeperHairstyle[] = [
   {
     id: 'puff',
     name: 'Puff',
-    volume: { top: 1.62, width: 1.34 },
-    pieces: [{ shape: 'ellipsoid', at: [0, 0.48, 0.24], size: [1.34, 1.14, 1.24] }],
+    volume: { top: 1.72, width: 1.34 },
+    // Sits a little high so the brows show under it (#289).
+    pieces: [{ shape: 'ellipsoid', at: [0, 0.58, 0.3], size: [1.34, 1.14, 1.24] }],
   },
   {
     id: 'bob',
@@ -280,7 +282,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.17,
       limbs: 0.08,
     },
-    face: { eyes: 'round', mouth: 'grin', freckles: false, brows: false },
+    face: { eyes: 'round' },
     hairstyle: 'spiky',
     hairColor: 'honey',
     eyeColor: 'sky',
@@ -301,7 +303,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.2,
       limbs: 0.08,
     },
-    face: { eyes: 'oval', mouth: 'smile', freckles: true, brows: false },
+    face: { eyes: 'oval' },
     hairstyle: 'bob',
     hairColor: 'ginger',
     eyeColor: 'leaf',
@@ -310,7 +312,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'rowan',
     name: 'Rowan',
-    skin: '#46281a',
+    skin: '#7a4a2c',
     body: {
       height: 1.12,
       head: 0.43,
@@ -322,7 +324,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.25,
       limbs: 0.07,
     },
-    face: { eyes: 'oval', mouth: 'grin', freckles: false, brows: true },
+    face: { eyes: 'oval' },
     hairstyle: 'crew-cut',
     hairColor: 'midnight',
     eyeColor: 'hazel',
@@ -343,7 +345,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.24,
       limbs: 0.07,
     },
-    face: { eyes: 'happy', mouth: 'smile', freckles: false, brows: true },
+    face: { eyes: 'happy' },
     hairstyle: 'long',
     hairColor: 'cocoa',
     eyeColor: 'cocoa',
@@ -364,7 +366,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.22,
       limbs: 0.1,
     },
-    face: { eyes: 'happy', mouth: 'smile', freckles: false, brows: true },
+    face: { eyes: 'happy' },
     hairstyle: 'side-part',
     hairColor: 'cocoa',
     eyeColor: 'cocoa',
@@ -385,7 +387,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.18,
       limbs: 0.075,
     },
-    face: { eyes: 'round', mouth: 'cat', freckles: true, brows: false },
+    face: { eyes: 'round' },
     hairstyle: 'pigtails',
     hairColor: 'berry',
     eyeColor: 'hazel',
@@ -406,7 +408,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.15,
       limbs: 0.1,
     },
-    face: { eyes: 'round', mouth: 'cat', freckles: false, brows: false },
+    face: { eyes: 'round' },
     hairstyle: 'short-curls',
     hairColor: 'midnight',
     eyeColor: 'cocoa',
@@ -427,7 +429,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.21,
       limbs: 0.11,
     },
-    face: { eyes: 'oval', mouth: 'grin', freckles: false, brows: true },
+    face: { eyes: 'oval' },
     hairstyle: 'curly',
     hairColor: 'midnight',
     eyeColor: 'cocoa',
@@ -448,7 +450,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.19,
       limbs: 0.085,
     },
-    face: { eyes: 'happy', mouth: 'tiny', freckles: false, brows: false },
+    face: { eyes: 'happy' },
     hairstyle: 'puff',
     hairColor: 'midnight',
     eyeColor: 'plum',
@@ -469,7 +471,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.19,
       limbs: 0.065,
     },
-    face: { eyes: 'sleepy', mouth: 'grin', freckles: true, brows: false },
+    face: { eyes: 'sleepy' },
     hairstyle: 'messy-mop',
     hairColor: 'sky',
     eyeColor: 'sky',
@@ -490,7 +492,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.25,
       limbs: 0.075,
     },
-    face: { eyes: 'sleepy', mouth: 'smile', freckles: false, brows: true },
+    face: { eyes: 'sleepy' },
     hairstyle: 'bun',
     hairColor: 'lilac',
     eyeColor: 'violet',
@@ -499,7 +501,7 @@ export const KEEPER_BASES: KeeperBase[] = [
   {
     id: 'moss',
     name: 'Moss',
-    skin: '#5b3720',
+    skin: '#9a603b',
     body: {
       height: 1.02,
       head: 0.49,
@@ -511,7 +513,7 @@ export const KEEPER_BASES: KeeperBase[] = [
       arms: 0.21,
       limbs: 0.09,
     },
-    face: { eyes: 'round', mouth: 'tiny', freckles: false, brows: true },
+    face: { eyes: 'round' },
     hairstyle: 'swoop',
     hairColor: 'mint',
     eyeColor: 'leaf',

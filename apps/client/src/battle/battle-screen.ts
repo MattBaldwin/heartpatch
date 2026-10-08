@@ -45,7 +45,13 @@ import {
   plateName,
 } from './battle-view.js';
 import type { SafeRegion } from './camera-director.js';
-import { BEFRIEND_NUDGE, HEART_CHARM, noCharmsLine } from './heart-charm.js';
+import {
+  BEFRIEND_NUDGE,
+  HEART_CHARM,
+  joinedLine,
+  newFriends,
+  noCharmsLine,
+} from './heart-charm.js';
 import {
   NO_CHIPS,
   noPotionLine,
@@ -56,6 +62,7 @@ import {
 } from './potions.js';
 import { keeperReaction } from './keeper-reaction.js';
 import { fenceResult, resultLine } from './result-line.js';
+import { JOURNEY_TEXT, journeyResult } from '../trading/journey-model.js';
 
 // The battle screen (#13): starts or resumes a PvE battle, draws it, plays the
 // server's log back step by step, and sends the player's taps as intents. The
@@ -103,6 +110,14 @@ export interface BattleScreenOptions {
   nicknames?: (mapId: string) => Promise<ReadonlyMap<string, string>>;
   /** True for the Tutorial Glade, where a wild squishy never wanders off (#24). */
   isGlade?: (mapId: string) => boolean;
+  /**
+   * Journeys to trading posts (#270): the post a journey battle heads for (its
+   * result card names it), and word that one has ended, won or not.
+   */
+  journey?: {
+    postName: (battleId: string) => string | null;
+    ended: (battleId: string, won: boolean) => void;
+  };
   /** Fresh wild hints for the map on screen (#209): the map draws a tuft on each. */
   onWildHints?: (mapId: string, tiles: readonly Hex[]) => void;
 }
@@ -228,13 +243,6 @@ function devArena(): { terrain: string; timeOfDay: BattleTimeOfDay } | null {
   const [terrain, time] = value.split('/');
   const timeOfDay = BattleTimeOfDaySchema.safeParse(time);
   return terrain ? { terrain, timeOfDay: timeOfDay.success ? timeOfDay.data : 'day' } : null;
-}
-
-/** "Moonpuff joined your patch!": the squishy the player just befriended. */
-function friendLine(b: PlayerBattle, names: BattleContent): string {
-  const wild = b.view.sides[otherSide(b.mySide)];
-  const friend = wild.squishies[wild.active];
-  return `${friend ? names.speciesName(friend.speciesId) : 'Your new squishy'} joined your patch!`;
 }
 
 export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
@@ -592,25 +600,41 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         : null,
     );
     const glade = options.isGlade?.(b.mapId) ?? false;
+    const friends = newFriends(b).map((id) => names.speciesName(id));
+    const joined = friends.length > 0;
     const outcome =
       b.status === 'no-contest' || !result
         ? { title: MESSAGES.resultNoContest, subtitle: MESSAGES.noContestSub }
         : result.winner === 'draw'
           ? { title: MESSAGES.resultDraw, subtitle: MESSAGES.drawSub }
           : result.winner === b.mySide
-            ? result.reason === 'captured'
-              ? { title: MESSAGES.resultFriend, subtitle: friendLine(b, names) }
-              : b.kind === 'rescue'
-                ? { title: MESSAGES.resultRescued, subtitle: MESSAGES.rescuedSub }
-                : {
-                    title: TILE_BATTLE_KINDS.has(b.kind) ? MESSAGES.resultLand : MESSAGES.resultWon,
-                    subtitle: resultLine(b.kind, 'won', glade),
-                  }
+            ? TILE_BATTLE_KINDS.has(b.kind)
+              ? // Land claimed, maybe with its guardians as new friends (#279).
+                {
+                  title: MESSAGES.resultLand,
+                  subtitle: joined ? joinedLine(friends) : resultLine(b.kind, 'won', glade),
+                }
+              : result.reason === 'captured'
+                ? { title: MESSAGES.resultFriend, subtitle: joinedLine(friends) }
+                : b.kind === 'rescue'
+                  ? { title: MESSAGES.resultRescued, subtitle: MESSAGES.rescuedSub }
+                  : { title: MESSAGES.resultWon, subtitle: resultLine(b.kind, 'won', glade) }
             : result.reason === 'forfeit'
               ? { title: MESSAGES.resultScooted, subtitle: resultLine(b.kind, 'scooted', glade) }
               : { title: MESSAGES.resultLost, subtitle: resultLine(b.kind, 'lost', glade) };
+    // A journey (#270, the mockup's screen c): made it, or nothing lost.
+    const journey =
+      b.kind === 'journey' && b.status !== 'no-contest' && result && result.winner !== 'draw'
+        ? journeyResult(
+            result.winner === b.mySide ? 'won' : result.reason === 'forfeit' ? 'scooted' : 'lost',
+            options.journey?.postName(b.id) ?? null,
+          )
+        : null;
+    if (b.kind === 'journey') options.journey?.ended(b.id, result?.winner === b.mySide);
     hud.setCaption(null);
     const lines = xp.length > 0 ? xp : [MESSAGES.noXp];
+    // Guardians befriended before the land was lost still came along (#279).
+    if (joined && result?.winner !== b.mySide) lines.unshift(joinedLine(friends));
     if (b.rewards && b.rewards.percent < 100) lines.push(MESSAGES.gentleNote(b.rewards.percent));
     // The device clock is close enough for an hours-and-minutes note.
     const fullXpAt = b.rewards?.fullXpResetAt;
@@ -623,15 +647,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         : undefined;
     hud.showResult({
       ...outcome,
+      ...(journey ? { title: journey.title, subtitle: journey.subtitle } : {}),
       xp: lines,
       evolving,
-      done: MESSAGES.done,
+      done: journey?.done ?? MESSAGES.done,
       ...(nudge ? { nudge } : {}),
     });
   };
 
   /**
-   * Counts the bag's Heart Charms for a wild battle, then redraws the
+   * Counts the bag's Heart Charms for a battle that takes them, then redraws the
    * buttons if the player can act. A failed count leaves it unknown (the
    * button still works; the server has the final say).
    */
@@ -714,7 +739,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
               ? MESSAGES.rivalStart
               : battle.kind === 'rescue'
                 ? MESSAGES.shadowsStart
-                : MESSAGES.wildStart,
+                : battle.kind === 'journey'
+                  ? JOURNEY_TEXT.startCaption
+                  : MESSAGES.wildStart,
         );
       }
     } else {

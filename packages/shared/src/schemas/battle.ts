@@ -193,6 +193,8 @@ export const BattleSquishyViewSchema = z.object({
     .object({ attack: z.number().int().min(0), defense: z.number().int().min(0) })
     .default({ attack: 0, defense: 0 }),
   shield: z.number().int().min(0).max(100).default(0),
+  /** Said yes to a Heart Charm and left the fight (#279). */
+  befriended: z.literal(true).optional(),
 });
 export type BattleSquishyView = z.infer<typeof BattleSquishyViewSchema>;
 
@@ -298,10 +300,11 @@ export type BattleStatus = z.infer<typeof BattleStatusSchema>;
 /**
  * Kinds of battle: a wild squishy (#14), a neutral tile's guardians (`tile`,
  * #15), another player's defenders (`rival-tile`, #15) and the Hollow's
- * shadow guardians (`rescue`, #21). Tile battles use one of the player's
- * daily attempts; rescues never cost one (decision C).
+ * shadow guardians (`rescue`, #21) and a trading post's trail squishies
+ * (`journey`, #270). Tile battles use one of the player's daily attempts;
+ * rescues (decision C) and journeys never cost one.
  */
-export const BattleKindSchema = z.enum(['wild', 'tile', 'rival-tile', 'rescue']);
+export const BattleKindSchema = z.enum(['wild', 'tile', 'rival-tile', 'rescue', 'journey']);
 export type BattleKind = z.infer<typeof BattleKindSchema>;
 
 /** Kinds that battle for a tile (#15): they use an attempt, and leaving counts as a loss. */
@@ -309,9 +312,11 @@ export const TILE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['tile', 'riva
 
 /**
  * Kinds whose squishy can be befriended with a Heart Charm (#14): wild ones,
- * never tile guardians (#15) or another player's.
+ * and the guardians of neutral land (#279), where a befriend counts as a
+ * knockout. Never a rival's guard or land guardians (`rival-tile`), so a
+ * Keeper's squishy is never taken, and never a fence (the engine refuses).
  */
-export const CAPTURABLE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['wild']);
+export const CAPTURABLE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['wild', 'tile']);
 
 /**
  * A battle as its player sees it (`GET /battles/:battleId`). `speciesDefs` and

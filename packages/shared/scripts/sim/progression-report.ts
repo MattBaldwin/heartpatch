@@ -6,6 +6,7 @@ import {
   MODEL_LIMITS,
   type DayRecord,
   type KidRun,
+  type JourneyOddsRow,
   type ProgressionRun,
   type WildOddsRow,
 } from './progression.js';
@@ -128,10 +129,54 @@ function markdownTable(head: readonly string[], rows: readonly (readonly string[
   ].join('\n');
 }
 
+/** A casual kid must win a journey this often (%) at these distances from this day (#270). */
+export const JOURNEY_GATE = { kid: 'casual', fromDay: 3, maxDistance: 4, percent: 60 } as const;
+
+/**
+ * Does `rows` pass the #270 sim gate: a casual kid wins a journey to the
+ * nearest post (distance ≤ 4) at least 60 % of the time from day 3? Returns
+ * the cells that miss it (empty: it passes).
+ */
+export function journeyGateMisses(rows: readonly JourneyOddsRow[]): string[] {
+  return rows
+    .filter((row) => row.kid === JOURNEY_GATE.kid && row.day >= JOURNEY_GATE.fromDay)
+    .flatMap((row) =>
+      row.odds
+        .filter((o) => o.distance <= JOURNEY_GATE.maxDistance && o.percent < JOURNEY_GATE.percent)
+        .map(
+          (o) => `day ${String(row.day)}, distance ${String(o.distance)}: ${String(o.percent)} %`,
+        ),
+    );
+}
+
+function journeySection(rows: readonly JourneyOddsRow[]): string {
+  const distances = rows[0]?.odds ?? [];
+  const misses = journeyGateMisses(rows);
+  return [
+    '## Journeys to trading posts (#270)',
+    '',
+    `Team win rate (%) by distance from your nearest land. Trail level and team size come from \`JOURNEY_RULES\` (${distances.map((o) => `${String(o.distance)}: ${String(o.size)} × Lv ${String(o.level)}`).join(', ')}). The kid's team is kid 0's at the end of that day, 4-seat map, shipped rules.`,
+    '',
+    markdownTable(
+      ['Kid', 'Day', 'Team Lv', ...distances.map((o) => `d ${String(o.distance)}`)],
+      rows.map((row) => [
+        row.kid,
+        String(row.day),
+        row.levels.join(' / '),
+        ...row.odds.map((o) => String(o.percent)),
+      ]),
+    ),
+    '',
+    misses.length === 0
+      ? `Gate: a ${JOURNEY_GATE.kid} kid wins at distance ≤ ${String(JOURNEY_GATE.maxDistance)} at least ${String(JOURNEY_GATE.percent)} % of the time from day ${String(JOURNEY_GATE.fromDay)}. **Passes.**`
+      : `Gate: a ${JOURNEY_GATE.kid} kid wins at distance ≤ ${String(JOURNEY_GATE.maxDistance)} at least ${String(JOURNEY_GATE.percent)} % of the time from day ${String(JOURNEY_GATE.fromDay)}. **Misses:** ${misses.join('; ')}.`,
+  ].join('\n');
+}
+
 export function renderProgression(
   runs: readonly ProgressionRun[],
   config: ProgressionConfig,
-  info: { seconds: number; odds?: readonly WildOddsRow[] },
+  info: { seconds: number; odds?: readonly WildOddsRow[]; journeys?: readonly JourneyOddsRow[] },
 ): string {
   const summaries = runs.map((run) => summarise(run, config));
   const ruleSets = [...new Set(runs.map((r) => r.rules))];
@@ -228,6 +273,7 @@ export function renderProgression(
       ),
     );
   }
+  if (info.journeys && info.journeys.length > 0) lines.push('', journeySection(info.journeys));
   for (const rules of ruleSets) {
     for (const seats of config.seats) {
       const these = runs.filter((r) => r.rules === rules && r.seats === seats);
