@@ -1,10 +1,18 @@
 import {
   GAME_DATA,
+  GAME_EVENTS,
+  HOLLOW_RULES,
+  hexKey,
+  type Hex,
+  type HexKey,
+  type HollowStage,
   type HollowStatus,
   type MorningReport,
   type OwnedSquishy,
   type PlayerBattle,
+  type PublicTile,
   type PublicUser,
+  type PvpMode,
   type Species,
   type WsEventMessage,
 } from '@heartpatch/shared';
@@ -13,9 +21,13 @@ import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
 import { hollowApi, type HollowApi } from './hollow-api.js';
-import { VISIT_FRESH_MS } from './hollow-config.js';
+import { DUSK_MINUTES, VISIT_FRESH_MS } from './hollow-config.js';
 import type { HollowLayer } from './hollow-layer.js';
 import { changesMyNight, HOLLOW_TEXT, reportText, unseenReports } from './hollow-report.js';
+import { placeOf } from './dark-land.js';
+import { createNightShow, domCaption, type NightShowDebug, type ShowWalk } from './night-show.js';
+import { NIGHT_TEXT, reachText, STAGES, stageNights } from './night-text.js';
+import type { BeatKind, Narration } from './show-timeline.js';
 import './hollow.css';
 
 // The Hollow Man on the client (#21, design doc §14): the night look on the
@@ -31,7 +43,29 @@ export interface HollowScreenOptions {
   /** Where the fire hint goes (the My Home tray); defaults to `root`. */
   hintRoot?: HTMLElement;
   /** Draws the night and the Hollow Man on the map (`map-screen` layer). */
-  layer: Pick<HollowLayer, 'setNight' | 'visit' | 'debug'>;
+  layer: Pick<HollowLayer, 'setNight' | 'visit' | 'walk' | 'endWalks' | 'debug'>;
+  /**
+   * The night show on the map (#277): land drawn as its Keeper's until he
+   * strikes there (`MapScreen.setHeld`), each Keeper's Heart Seed and tiles,
+   * a sound per stop, and the camera's glide.
+   */
+  show?: {
+    hold: (held: ReadonlyMap<HexKey, string>) => void;
+    seedOf: (userId: string) => Hex | null;
+    tileAt: (h: Hex) => PublicTile | undefined;
+    cue?: (kind: BeatKind) => void;
+    pan?: (h: Hex) => void;
+  };
+  /** My dark land on the map on screen, farthest from home first (#277, `darkTiles`). */
+  darkLand?: () => readonly PublicTile[];
+  /** Glides to a tile; with `panel`, taps it too (its panel builds a fire). */
+  showTile?: (h: Hex, panel: boolean) => void;
+  /** Names of my squishies sleeping out on these tiles tonight (guards and gatherers). */
+  outInDark?: (mapId: string, tiles: readonly Hex[]) => Promise<string[]>;
+  /** The map's PvP mode: a gentle patch caps him at one. */
+  pvpMode?: () => PvpMode | null;
+  /** The tutorial's Glade has its own nightfall: no night chips there. */
+  isGlade?: (mapId: string) => boolean;
   /** A rescue battle started (or one going came back): the battle screen takes over. */
   openBattle: (battle: PlayerBattle) => void;
   api?: HollowApi;
@@ -64,6 +98,20 @@ export interface HollowDebug {
   readonly rewardsLeftToday: number;
   /** The "light a fire" hint is showing (first-night grace). */
   readonly fireHint: boolean;
+  /** The night show (#277). */
+  readonly show: NightShowDebug;
+  /** The chips over the map, as they read. */
+  readonly chips: readonly string[];
+  /** The dark-land nudge before nightfall is showing. */
+  readonly nudge: boolean;
+  /** The "he gets bolder" sheet is open. */
+  readonly strength: boolean;
+  /** The report card offers the replay. */
+  readonly replay: boolean;
+  /** My dark spots on the map now. */
+  readonly darkSpots: number;
+  /** Keepers he's out walking for on the map (the show's figures). */
+  readonly walking: number;
 }
 
 export interface HollowScreen {
@@ -83,6 +131,14 @@ const MAX_NIGHT_CHECK_MS = 30 * 60_000;
 const seenKey = (userId: string, mapId: string) => `heartpatch.hollow.seen.${userId}.${mapId}`;
 /** The packed-home-fire note seen on this device (#202): its `at`. */
 const packedKey = (userId: string, mapId: string) => `heartpatch.hollow.packed.${userId}.${mapId}`;
+/** The last night whose show this device played to the end or skipped (#277). */
+const watchedKey = (userId: string, mapId: string) => `heartpatch.hollow.show.${userId}.${mapId}`;
+/** The last night whose dark-land nudge was answered on this device (#277). */
+const nudgeKey = (userId: string, mapId: string) => `heartpatch.hollow.nudge.${userId}.${mapId}`;
+/** The live show's prowl: he strikes this long after nightfall. */
+const PROWL_MS = HOLLOW_RULES.show.prowlMinutes * 60_000;
+/** How often the chips' "Night in N min" counts down. */
+const CHIP_TICK_MS = 30_000;
 
 function safeStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
   try {
@@ -113,6 +169,16 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   /** Another card was holding the report back at the last render. */
   let heldBackBefore = false;
   let nightTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The server's clock minus this device's, at the last status. */
+  let clockOffset = 0;
+  /** The "he gets bolder" sheet is open. */
+  let strengthOpen = false;
+  /** Names out in the dark for a night (asked once a night). */
+  let outNames: { night: string; names: string[] } | null = null;
+  let asking = false;
+  /** The morning replay is playing: the report waits and the map shows night. */
+  let replaying = false;
+  const serverNow = () => now() + clockOffset;
 
   const openButton = el(
     'button',
@@ -171,6 +237,52 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   (options.entryRoot ?? options.root).append(openButton);
   (options.hintRoot ?? options.root).append(hint);
   options.root.append(reportBox, sheet);
+
+  // The night's chips over the map (#277, mockup screens 1–4): the time,
+  // my dark spots, and how bold he is tonight (tap: the sheet).
+  const chips = el('div', { class: 'night-chips', 'data-testid': 'night-chips' });
+  chips.hidden = true;
+  // The nudge before nightfall (mockup screen 1).
+  const nudge = el('div', {
+    class: 'hollow-card night-nudge',
+    role: 'dialog',
+    'aria-labelledby': 'night-nudge-title',
+    'data-testid': 'night-nudge',
+  });
+  nudge.hidden = true;
+  // "He gets bolder" (mockup screen 7).
+  const strength = el('div', {
+    class: 'hollow-card night-strength',
+    role: 'dialog',
+    'aria-labelledby': 'night-strength-title',
+    'data-testid': 'night-strength',
+  });
+  strength.hidden = true;
+  options.root.append(chips, nudge, strength);
+  const show = createNightShow({
+    now,
+    caption: (onSkip) =>
+      domCaption(options.root, onSkip, () =>
+        (showReport()?.taken ?? []).filter((t) => t.inHollow).map((t) => token(t.speciesId, true)),
+      ),
+    stage: {
+      walk: (keeper, beat, seed, still, done) =>
+        options.layer.walk(keeper, beat, seed, still, done),
+      endWalks: () => {
+        options.layer.endWalks();
+      },
+      hold: (held) => options.show?.hold(held),
+      cue: (kind) => options.show?.cue?.(kind),
+      pan: (h) => options.show?.pan?.(h),
+    },
+  });
+  /** The night the show playing is about. */
+  let showNight: string | null = null;
+  const showReport = (): MorningReport | undefined =>
+    status?.reports.find((r) => r.night === showNight);
+  setInterval(() => {
+    if (mapId && status) renderChips();
+  }, CHIP_TICK_MS);
 
   const speciesName = (speciesId: string): string | undefined => {
     const species: Species | undefined =
@@ -233,6 +345,258 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     }
   };
 
+  const stored = (key: (u: string, m: string) => string): string | null => {
+    if (!user || !mapId) return null;
+    try {
+      return storage?.getItem(key(user.id, mapId)) ?? null;
+    } catch {
+      return null;
+    }
+  };
+  const store = (key: (u: string, m: string) => string, night: string): void => {
+    if (!user || !mapId) return;
+    try {
+      storage?.setItem(key(user.id, mapId), night);
+    } catch {
+      // Private mode or full storage: it may show again next time.
+    }
+  };
+
+  /** My walk's story, read at each stop: the report for `night` once it's in. */
+  const storyFor = (night: string) => (): Narration => {
+    const report = status?.reports.find((r) => r.night === night);
+    return {
+      placeOf: (h) => placeOf(options.show?.tileAt(h)),
+      isHome: (h) => (options.show?.tileAt(h)?.homeSlot ?? null) !== null,
+      reclaimed: new Set((report?.reclaimed ?? []).map(hexKey)),
+      taken: (report?.taken ?? []).filter((t) => t.inHollow).map((t) => nameOf(t)),
+      strikes: (report?.walk ?? []).filter((p) => p.kind === 'strike').length,
+    };
+  };
+
+  /** The show for `night` ended (played out or skipped): it isn't offered again. */
+  const showEnded = (night: string, at: number) => (): void => {
+    if (at !== generation) return;
+    store(watchedKey, night);
+    showNight = null;
+    if (replaying) {
+      replaying = false;
+      options.layer.setNight(status?.night.isNight ?? false);
+    }
+    render();
+  };
+
+  /** Plays walks live from nightfall (`startedAt`, this device's clock). */
+  const playLive = (night: string, walks: ShowWalk[], startedAt: number): boolean => {
+    const played = show.play(walks, startedAt, PROWL_MS, showEnded(night, generation));
+    if (played) showNight = night;
+    return played;
+  };
+
+  /** My walk for `report`, to play. */
+  const myWalk = (report: MorningReport, replay: boolean): ShowWalk | null => {
+    if (!user) return null;
+    return {
+      userId: user.id,
+      walk: report.walk,
+      // In the replay, only land that's still wild is drawn as mine until he strikes.
+      reclaimed: replay
+        ? report.reclaimed.filter((h) => options.show?.tileAt(h)?.ownerUserId === null)
+        : report.reclaimed,
+      seed: options.show?.seedOf(user.id) ?? null,
+      story: storyFor(report.night),
+    };
+  };
+
+  /** The morning replay (mockup screen 5): the same show, sped up and skippable. */
+  const replay = (report: MorningReport): void => {
+    const walk = myWalk(report, true);
+    if (!walk) return;
+    replaying = true;
+    options.layer.setNight(true);
+    const played = show.play([walk], now(), null, showEnded(report.night, generation));
+    if (played) showNight = report.night;
+    else {
+      replaying = false;
+      options.layer.setNight(status?.night.isNight ?? false);
+    }
+    render();
+  };
+
+  /** A report with a walk this device hasn't watched: the newest one. */
+  const replayable = (): MorningReport | undefined => {
+    const newest = report.find((r) => r.walk.length > 0);
+    return newest && stored(watchedKey) !== newest.night ? newest : undefined;
+  };
+
+  const dark = (): readonly PublicTile[] => (mapId ? (options.darkLand?.() ?? []) : []);
+  /** Minutes until tonight's nightfall (null: it has fallen). */
+  const minutesToNight = (): number | null => {
+    if (!status) return null;
+    const ms = Date.parse(status.tonight.nightfallAt) - serverNow();
+    return ms > 0 ? Math.ceil(ms / 60_000) : null;
+  };
+  const glade = () => mapId !== null && (options.isGlade?.(mapId) ?? false);
+
+  function chip(label: string, onClick: (() => void) | null, testId: string): HTMLElement {
+    if (!onClick) return el('span', { class: 'night-chip', 'data-testid': testId }, label);
+    const b = el(
+      'button',
+      { type: 'button', class: 'night-chip night-chip-tap', 'data-testid': testId },
+      label,
+    );
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function renderChips(): void {
+    const on = mapId !== null && status !== null && !glade();
+    chips.hidden = !on;
+    if (!on || !status) return;
+    const spots = dark();
+    const first = spots[0];
+    const stage: HollowStage = status.tonight.stage;
+    const minutes = minutesToNight();
+    const dusk = !status.night.isNight && minutes !== null && minutes <= DUSK_MINUTES;
+    const stageChip = chip(
+      NIGHT_TEXT.stageChip(stage),
+      () => {
+        strengthOpen = true;
+        render();
+      },
+      'night-stage-chip',
+    );
+    const darkChip = first
+      ? chip(
+          NIGHT_TEXT.darkSpots(spots.length),
+          () => options.showTile?.(first, false),
+          'night-dark-chip',
+        )
+      : null;
+    const row: HTMLElement[] = status.night.isNight
+      ? [chip(NIGHT_TEXT.night, null, 'night-time-chip'), stageChip]
+      : dusk
+        ? [chip(NIGHT_TEXT.nightIn(minutes), null, 'night-time-chip'), darkChip ?? stageChip]
+        : [...(darkChip ? [darkChip] : []), stageChip];
+    const labels = row.map((c) => c.textContent).join('|');
+    if (chips.dataset['labels'] !== labels) {
+      chips.dataset['labels'] = labels;
+      chips.replaceChildren(...row);
+    }
+  }
+
+  /** Asks once a night who of mine sleeps out on dark land, for the nudge's title. */
+  function askOutInDark(night: string, spots: readonly PublicTile[]): void {
+    const id = mapId;
+    if (!id || asking || outNames?.night === night || !options.outInDark) return;
+    const out = spots.filter((t) => t.defenders + (t.workers ?? 0) > 0);
+    if (out.length === 0) {
+      outNames = { night, names: [] };
+      return;
+    }
+    asking = true;
+    const at = generation;
+    options
+      .outInDark(id, out)
+      .then((names) => {
+        if (at === generation) outNames = { night, names };
+      })
+      .catch(() => {
+        if (at === generation) outNames = { night, names: [] };
+      })
+      .finally(() => {
+        asking = false;
+        if (at === generation) render();
+      });
+  }
+
+  function renderNudge(blocked: boolean): void {
+    const spots = dark();
+    const first = spots[0];
+    const minutes = minutesToNight();
+    const night = status?.tonight.night ?? null;
+    const due =
+      status !== null &&
+      night !== null &&
+      !glade() &&
+      !status.night.isNight &&
+      minutes !== null &&
+      minutes <= DUSK_MINUTES &&
+      first !== undefined &&
+      stored(nudgeKey) !== night;
+    nudge.hidden = !due || blocked;
+    if (!due) return;
+    askOutInDark(night, spots);
+    if (nudge.hidden) return;
+    const answer = (panel: boolean) => () => {
+      store(nudgeKey, night);
+      options.showTile?.(first, panel);
+      render();
+    };
+    nudge.replaceChildren(
+      el(
+        'h2',
+        { class: 'hollow-title', id: 'night-nudge-title' },
+        NIGHT_TEXT.outInDark(outNames?.night === night ? outNames.names : []),
+      ),
+      el('p', { class: 'hollow-line' }, NIGHT_TEXT.noLight(spots.length)),
+      el(
+        'div',
+        { class: 'hollow-row' },
+        button(NIGHT_TEXT.lightFire, answer(true), { 'data-testid': 'night-nudge-light' }),
+        button(NIGHT_TEXT.showMe, answer(false), {
+          class: 'auth-button-soft',
+          'data-testid': 'night-nudge-show',
+        }),
+      ),
+    );
+  }
+
+  function renderStrength(blocked: boolean): void {
+    strength.hidden = !strengthOpen || status === null || blocked;
+    if (strength.hidden || !status) return;
+    const stage = status.tonight.stage;
+    const nights = stageNights();
+    strength.replaceChildren(
+      el('h2', { class: 'hollow-title', id: 'night-strength-title' }, NIGHT_TEXT.sheetTitle),
+      el('p', { class: 'hollow-line' }, NIGHT_TEXT.sheetIntro),
+      el(
+        'ol',
+        { class: 'night-stages', 'data-testid': 'night-stages' },
+        ...(Object.keys(STAGES) as HollowStage[]).map((s) =>
+          el(
+            'li',
+            {
+              class: `night-stage${s === stage ? ' night-stage-now' : ''}`,
+              ...(s === stage ? { 'aria-current': 'true' } : {}),
+            },
+            el('span', { class: 'night-stage-moon', 'aria-hidden': 'true' }, STAGES[s].moon),
+            el('span', { class: 'night-stage-name' }, STAGES[s].name),
+            el('small', { class: 'night-stage-nights' }, nights[s]),
+          ),
+        ),
+      ),
+      el(
+        'p',
+        { class: 'hollow-line', 'data-testid': 'night-strength-tonight' },
+        el('strong', {}, NIGHT_TEXT.tonight(stage)),
+        ` ${reachText(stage, options.pvpMode?.() ?? null)} ${NIGHT_TEXT.lightAll}`,
+      ),
+      el(
+        'div',
+        { class: 'hollow-row' },
+        button(
+          NIGHT_TEXT.okay,
+          () => {
+            strengthOpen = false;
+            render();
+          },
+          { 'data-testid': 'night-strength-ok' },
+        ),
+      ),
+    );
+  }
+
   const button = (label: string, onClick: () => void, attrs: Record<string, string> = {}) => {
     const { class: more = '', ...rest } = attrs;
     const b = el(
@@ -257,7 +621,14 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     const heldBack = options.otherReportOpen?.() ?? false;
     heldBackBefore = heldBack;
     const packed = packedNote();
-    reportBox.hidden = !on || (report.length === 0 && !packed) || visitPlaying || heldBack;
+    renderChips();
+    reportBox.hidden =
+      !on ||
+      (report.length === 0 && !packed) ||
+      visitPlaying ||
+      show.playing ||
+      strengthOpen ||
+      heldBack;
     if (!reportBox.hidden) {
       const told =
         report.length > 0
@@ -270,8 +641,24 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       ];
       const waiting = report.flatMap((r) => r.taken.filter((t) => t.inHollow));
       const rescueFirst = waiting[0];
+      const replayOf = replayable();
+      const darkFirst = dark()[0];
       reportBox.replaceChildren(
         el('h2', { class: 'hollow-title', id: 'hollow-report-title' }, title),
+        ...(replayOf
+          ? [
+              button(
+                NIGHT_TEXT.watchReplay,
+                () => {
+                  replay(replayOf);
+                },
+                {
+                  class: 'hollow-replay',
+                  'data-testid': 'hollow-report-replay',
+                },
+              ),
+            ]
+          : []),
         ...(report.some((r) => r.taken.length > 0)
           ? [
               el(
@@ -281,7 +668,16 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
               ),
             ]
           : []),
-        ...lines.map((line) => el('p', { class: 'hollow-line' }, line)),
+        ...lines.map((line) =>
+          typeof line === 'string'
+            ? el('p', { class: 'hollow-line' }, line)
+            : el(
+                'p',
+                { class: 'hollow-line hollow-line-icon' },
+                el('span', { class: 'hollow-line-pic', 'aria-hidden': 'true' }, line.icon),
+                el('span', {}, line.text),
+              ),
+        ),
         el(
           'div',
           { class: 'hollow-row' },
@@ -297,15 +693,27 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
                 ),
               ]
             : []),
-          button(HOLLOW_TEXT.ok, dismissReport, {
-            class: rescueFirst ? 'auth-button-soft' : '',
-            'data-testid': 'hollow-report-ok',
-          }),
+          darkFirst
+            ? button(
+                NIGHT_TEXT.lightMyLand,
+                () => {
+                  dismissReport();
+                  options.showTile?.(darkFirst, true);
+                },
+                {
+                  class: rescueFirst ? 'auth-button-soft' : '',
+                  'data-testid': 'hollow-report-light',
+                },
+              )
+            : button(HOLLOW_TEXT.ok, dismissReport, {
+                class: rescueFirst ? 'auth-button-soft' : '',
+                'data-testid': 'hollow-report-ok',
+              }),
         ),
       );
     }
 
-    sheet.hidden = !on || !sheetOpen || !reportBox.hidden || heldBack;
+    sheet.hidden = !on || !sheetOpen || !reportBox.hidden || heldBack || strengthOpen;
     if (!sheet.hidden && status) {
       const reward =
         status.rescue.rewardsLeftToday > 0
@@ -367,6 +775,15 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         ),
       );
     }
+    renderNight();
+  }
+
+  function renderNight(): void {
+    const heldBack = options.otherReportOpen?.() ?? false;
+    renderStrength(heldBack || replaying);
+    renderNudge(
+      heldBack || show.playing || strengthOpen || !reportBox.hidden || !sheet.hidden || replaying,
+    );
   }
 
   function dismissReport(): void {
@@ -397,13 +814,28 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       const fresh = await api.status(id);
       if (at !== generation) return;
       status = fresh;
-      options.layer.setNight(fresh.night.isNight);
+      clockOffset = Date.parse(fresh.now) - now();
+      options.layer.setNight(replaying || fresh.night.isNight);
       scheduleNightCheck(fresh.night.changesInMinutes);
       report = unseenReports(fresh.reports, seenNight());
+      joinTonight(fresh);
     } catch (err) {
       if (at === generation) note = messageOf(err);
     }
     if (at === generation) render();
+  }
+
+  /**
+   * Opening the app during tonight's prowl (#277): the show joins part way,
+   * from nightfall, with my own walk (others' walks only come live).
+   */
+  function joinTonight(fresh: HollowStatus): void {
+    const tonight = fresh.tonight;
+    const mine = fresh.reports.find((r) => r.night === tonight.night);
+    if (show.playing || !fresh.night.isNight || !mine || mine.walk.length === 0) return;
+    if (serverNow() >= Date.parse(tonight.strikeAt) || stored(watchedKey) === tonight.night) return;
+    const walk = myWalk(mine, false);
+    if (walk) playLive(tonight.night, [walk], Date.parse(tonight.nightfallAt) - clockOffset);
   }
 
   const sendDeps = {
@@ -469,6 +901,11 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       note = '';
       working = false;
       visitPlaying = false;
+      show.stop();
+      showNight = null;
+      strengthOpen = false;
+      replaying = false;
+      outNames = null;
       if (!next) options.layer.setNight(false);
       render();
       await refresh();
@@ -484,6 +921,11 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       report = [];
       sheetOpen = false;
       visitPlaying = false;
+      show.stop();
+      showNight = null;
+      strengthOpen = false;
+      replaying = false;
+      outNames = null;
       options.layer.setNight(false);
       render();
     },
@@ -497,15 +939,28 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
     liveEvent: (event) => {
       if (event.mapId !== mapId) return;
       if (event.type === 'hollow.nightfall') {
-        // Live, not a replay after reconnecting: he comes by once, and the
-        // report follows when he has gone.
+        // Live, not a replay after reconnecting: the show plays every
+        // Keeper's walk from nightfall (#277), and the report follows when
+        // it's over. A night with no walk at all is his old visit.
         const at = generation;
         if (now() - Date.parse(event.at) < VISIT_FRESH_MS) {
-          visitPlaying = options.layer.visit(() => {
-            if (at !== generation) return;
-            visitPlaying = false;
-            render();
-          });
+          const fell = GAME_EVENTS['hollow.nightfall'].public.safeParse(event.data);
+          const night = fell.success ? fell.data.night : null;
+          const walks: ShowWalk[] = (fell.success ? (fell.data.walks ?? []) : []).map((w) => ({
+            userId: w.userId,
+            walk: w.walk,
+            reclaimed: w.reclaimed,
+            seed: options.show?.seedOf(w.userId) ?? null,
+            story: w.userId === user?.id && night ? storyFor(night) : null,
+          }));
+          const played = night !== null && playLive(night, walks, Date.parse(event.at));
+          if (!played) {
+            visitPlaying = options.layer.visit(() => {
+              if (at !== generation) return;
+              visitPlaying = false;
+              render();
+            });
+          }
         }
         void refresh();
       } else if (event.type === 'squishy.hollowed' || event.type === 'squishy.rescued') {
@@ -514,6 +969,10 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         // A fire, gatherer or guard of mine changed: the "light a fire" hint
         // may come on or be done now.
         void refresh();
+      } else {
+        // Land or fires may have changed: the dark spots and the nudge follow.
+        renderChips();
+        renderNight();
       }
     },
 
@@ -530,6 +989,13 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
         visits: layer.visits,
         rewardsLeftToday: status.rescue.rewardsLeftToday,
         fireHint: !hint.hidden,
+        show: show.debug,
+        chips: [...chips.children].map((c) => c.textContent),
+        nudge: !nudge.hidden,
+        strength: !strength.hidden,
+        replay: !reportBox.hidden && reportBox.querySelector('.hollow-replay') !== null,
+        darkSpots: dark().length,
+        walking: layer.walking,
       };
     },
   };

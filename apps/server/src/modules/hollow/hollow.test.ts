@@ -908,6 +908,28 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 2 });
     });
 
+    it('keeps a fallen quiet night at the stage it was decided with', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      // Oct 5 is the kid's night 4 (Curious): nothing of theirs is out, so it's quiet.
+      await hollowService().runNightfall(mapId, '2026-10-05');
+      expect(await outcomeOf(mapId, kid)).toMatchObject({ reclaimed: [], stage: 'curious' });
+      // 20:00 MDT on Oct 5: that night has fallen, and an operator turns him off.
+      clock.setTime(Date.parse('2026-10-06T02:00:00Z'));
+      await db.execute(`update maps set hollow_strength_percent = 0 where id = '${mapId}'`);
+      // The show is about the night as it was decided, not today's percent.
+      expect((await statusOf(server, kid, mapId)).tonight).toMatchObject({
+        night: '2026-10-05',
+        stage: 'curious',
+      });
+      // The stored stage wins over the curve's, too.
+      await db.execute(
+        `update hollow_events set outcomes = jsonb_set(outcomes, '{0,stage}', '"boldest"') where map_id = '${mapId}'`,
+      );
+      expect((await statusOf(server, kid, mapId)).tonight.stage).toBe('boldest');
+    });
+
     it('keeps land claimed since the last nightfall safe on its first night (guardrail b)', async () => {
       const server = await start();
       const kid = await player();

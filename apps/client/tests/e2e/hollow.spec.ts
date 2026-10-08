@@ -3,16 +3,17 @@ import { expect, test, type Page } from '@playwright/test';
 import { claimLand } from './claim-land.js';
 import { api, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
-import { trayButton } from './trays.js';
+import { closeTrays, trayButton } from './trays.js';
 
 /**
  * The Hollow Man on an iPhone (issue #21): home is always safe (the Heart
  * Seed, #202), so a new player claims land and posts a guard out there;
  * with no fire lit on it they get a nudge to light one, and two nights of
  * grace (owner decision 2026-10-03). Then night falls (the dev route), he
- * visits the map once, takes the guard standing in the dark to the Hollow,
- * the morning report says so kindly, and a rescue sets off from anywhere.
- * Checked through the dev hook's signals, never pixels or timing.
+ * walks the border in the night show (#277), takes the guard standing in
+ * the dark to the Hollow, the morning report says so kindly and offers a
+ * replay, and a rescue sets off from anywhere. Checked through the dev
+ * hook's signals, never pixels or timing.
  */
 
 /** `HollowDebug` from src/hollow/hollow-screen.ts (this project can't see its types). */
@@ -26,6 +27,12 @@ interface HollowDebug {
   visits: number;
   rewardsLeftToday: number;
   fireHint: boolean;
+  show: { playing: boolean; mode: 'live' | 'replay' | null; line: string; beats: number };
+  chips: string[];
+  strength: boolean;
+  replay: boolean;
+  darkSpots: number;
+  walking: number;
 }
 
 /**
@@ -36,7 +43,8 @@ interface HollowDebug {
 const ABORTED_FETCH = /\/api\/v1\/\S* due to access control checks\.?$/;
 
 const hollowState = (page: Page) => hook<HollowDebug>(page, 'hollow');
-const mapState = (page: Page) => hook<{ id: string; live: string | null }>(page, 'map');
+const mapState = (page: Page) =>
+  hook<{ id: string; live: string | null; selected: string | null }>(page, 'map');
 const battleState = (page: Page) =>
   hook<{ status: string; scene: { squishies: number; shadowLook: number } | null }>(page, 'battle');
 
@@ -117,20 +125,45 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
     expect(findAvoidedWords((await hint.textContent()) ?? '')).toEqual([]);
   }
 
+  // The guard's land is dark (#277): a chip counts it, and his stage chip
+  // opens the "he gets bolder" sheet, in moons, never numbers.
+  await expect.poll(async () => (await hollowState(page))?.darkSpots).toBe(1);
+  const chips = page.getByTestId('night-chips');
+  await expect(chips).toContainText(/He's \w+ tonight|1 dark spot/);
+  const stageChip = page.getByTestId('night-stage-chip');
+  await closeTrays(page);
+  if (await stageChip.isVisible()) {
+    await stageChip.tap();
+    const strength = page.getByTestId('night-strength');
+    await expect(strength).toBeVisible();
+    await expect(strength).toContainText('The Hollow Man gets bolder');
+    await expect(strength.getByTestId('night-stages').locator('li')).toHaveCount(4);
+    await expect(strength).toContainText("Light every bit of your land and he can't get anything!");
+    expect(findAvoidedWords((await strength.textContent()) ?? '')).toEqual([]);
+    await strength.getByTestId('night-strength-ok').tap();
+    await expect(strength).toBeHidden();
+  }
+
   // First-night grace: the first two nightfalls take nothing.
   for (let night = 0; night < 2; night++) {
     const graced = await api(page, 'POST', `/maps/${mapId}/dev/nightfall`);
     expect(graced).toMatchObject({ status: 200, body: { taken: 0 } });
   }
-  // He still comes by (the live visit), then fades; wait for that before counting.
+  // He walks the border live (#277), backing away from the light, with the
+  // narrator (never him) saying so; Skip ends the show at once.
   await expect
-    .poll(async () => (await hollowState(page))?.visits ?? 0, { timeout: 30_000 })
-    .toBeGreaterThan(0);
-  await expect
-    .poll(async () => (await hollowState(page))?.visiting, { timeout: 30_000 })
-    .toBe(false);
+    .poll(async () => (await hollowState(page))?.show.playing, { timeout: 30_000 })
+    .toBe(true);
+  expect((await hollowState(page))!.show.mode).toBe('live');
+  await expect.poll(async () => (await hollowState(page))?.walking).toBeGreaterThan(0);
+  const caption = page.getByTestId('night-caption');
+  await expect(caption).toBeVisible();
+  await expect(caption).toContainText('Night has come. The Hollow Man is out walking');
+  expect(findAvoidedWords((await caption.textContent()) ?? '')).toEqual([]);
+  await page.getByTestId('night-show-skip').tap();
+  await expect(caption).toBeHidden();
+  expect(await hollowState(page)).toMatchObject({ walking: 0, show: { playing: false } });
   await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
-  const visitsBefore = (await hollowState(page))!.visits;
   // The quiet nights still teach (#134): the squishy was out in the dark and
   // he let it be, so the morning report says so and asks for a fire.
   const graceReport = page.getByTestId('hollow-report');
@@ -139,8 +172,11 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   await expect(graceReport).toContainText('A friend sleeps out in the dark. Light a fire there!');
   expect(findAvoidedWords((await graceReport.textContent()) ?? '')).toEqual([]);
   expect(await hollowState(page)).toMatchObject({ hollowed: 0 });
-  await page.getByTestId('hollow-report-ok').tap();
+  // Its land is still dark: "Light my land" goes there and opens its tile panel.
+  await page.getByTestId('hollow-report-light').tap();
   await expect(graceReport).toBeHidden();
+  await expect.poll(async () => (await mapState(page))?.selected).toBe(`${land.q},${land.r}`);
+  await page.getByTestId('tile-panel').getByRole('button', { name: 'Close' }).tap();
   expect(await hollowState(page)).toMatchObject({ hollowed: 0, report: [] });
   // The raid report (#16) is open when night falls: the Hollow's report waits its turn.
   await (await trayButton(page, 'raid-open')).tap();
@@ -155,11 +191,12 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   }
   expect(fell).toMatchObject({ status: 200, body: { taken: 1 } });
 
-  // He visits live each night, and the map stops drawing when he's gone.
-  await expect.poll(async () => (await hollowState(page))?.visits).toBeGreaterThan(visitsBefore);
+  // He walks live each night; skipped, the map stops drawing when he's gone.
   await expect
-    .poll(async () => (await hollowState(page))?.visiting, { timeout: 30_000 })
-    .toBe(false);
+    .poll(async () => (await hollowState(page))?.show.playing, { timeout: 30_000 })
+    .toBe(true);
+  await page.getByTestId('night-show-skip').tap();
+  await expect.poll(async () => (await hollowState(page))?.walking).toBe(0);
   await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
 
   // One morning report at a time: the Hollow's shows once the raid report closes.
@@ -176,7 +213,41 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
   expect(findAvoidedWords((await report.textContent()) ?? '')).toEqual([]);
   expect(await hollowState(page)).toMatchObject({ hollowed: 1 });
   expect((await hollowState(page))!.report.length).toBeGreaterThan(0);
-  await page.getByTestId('hollow-report-ok').tap();
+  // Skipped live, so no replay; a kid who missed it gets one at the top (#277).
+  expect((await hollowState(page))!.replay).toBe(false);
+  await page.evaluate((key) => {
+    localStorage.removeItem(key);
+  }, `heartpatch.hollow.show.${me}.${mapId}`);
+  reloading = true;
+  await page.reload();
+  reloading = false;
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', { timeout: 30_000 });
+  await expect(report).toBeVisible({ timeout: 30_000 });
+  // Roomy: after a reload the map builds first, and CI renders in software.
+  await expect.poll(async () => (await hollowState(page))?.replay, { timeout: 30_000 }).toBe(true);
+  await page.getByTestId('hollow-report-replay').tap();
+  // The same show, sped up: the report waits until it's over.
+  await expect(report).toBeHidden();
+  expect((await hollowState(page))!.show).toMatchObject({ playing: true, mode: 'replay' });
+  await expect(caption).toBeVisible();
+  await expect
+    .poll(async () => (await hollowState(page))?.show.line, { timeout: 30_000 })
+    .toContain('You can rescue them!');
+  expect(findAvoidedWords((await caption.textContent()) ?? '')).toEqual([]);
+  await expect
+    .poll(async () => (await hollowState(page))?.show.playing, { timeout: 60_000 })
+    .toBe(false);
+  await expect(report).toBeVisible();
+  expect((await hollowState(page))!.replay).toBe(false);
+  // Land still dark (the capture's battle cooldown kept it from going wild)
+  // gets "Light my land"; with none left the report just says okay.
+  const light = page.getByTestId('hollow-report-light');
+  if (await light.isVisible()) {
+    await light.tap();
+    await page.getByTestId('tile-panel').getByRole('button', { name: 'Close' }).tap();
+  } else {
+    await page.getByTestId('hollow-report-ok').tap();
+  }
   await expect(report).toBeHidden();
 
   // The Hollow button: who's waiting there, and a rescue from right here.
