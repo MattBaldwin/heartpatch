@@ -10,6 +10,8 @@ import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
 import { createExploreScreen } from './explore/explore-screen.js';
+import { createDarkLand, darkTiles, heartSeedOf } from './hollow/dark-land.js';
+import { jobsApi } from './squishies/jobs/jobs-api.js';
 import { createJourneyScreen } from './trading/journey-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
 import { createHomeScreen } from './home/home-screen.js';
@@ -51,7 +53,8 @@ import { createFenceScreen, withFences } from './fences/fence-screen.js';
 import { tutorialApi } from './tutorial/tutorial-api.js';
 import { createTutorialScreen, opensByItself } from './tutorial/tutorial-screen.js';
 import { el } from './ui/dom.js';
-import type { PublicUser } from '@heartpatch/shared';
+import { hexKey, hexToWorld, type Hex, type PublicUser } from '@heartpatch/shared';
+import { HEX_SIZE } from './map/map-config.js';
 import './styles.css';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game');
@@ -309,10 +312,25 @@ const land = createLandScreen({
     maps.setLandFade(fade);
   },
   view: () => maps.view,
+  // Land the Hollow Man won back is his report's and his show's to tell (#277).
+  toldElsewhere: (tile) => hollow.reclaimed(tile.night, tile),
 });
 // The Hollow Man (#21): the night on the map, his visit when night falls,
 // the morning report, and rescues (a rescue battle opens the battle screen).
 const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
+// My dark land (#277): a dashed edge and a 🌙 where no fire's light reaches.
+const darkLand = createDarkLand(
+  document.body,
+  () => signedIn?.id ?? null,
+  () => {
+    hollow.viewChanged();
+  },
+);
+/** Glides the camera to a tile (at once with reduced motion). */
+const stillPans = window.matchMedia('(prefers-reduced-motion: reduce)');
+const panToTile = (h: Hex): void => {
+  stage?.camera.panTo(hexToWorld(h, HEX_SIZE), stillPans.matches);
+};
 // Trading posts' flags and rings on the map (#269), for whoever is signed in.
 const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
 // Journeys to trading posts (#270): the preview in a post's tile panel, and
@@ -338,10 +356,66 @@ const hollow = createHollowScreen({
       if (visiting) audio.cue('nightfall');
       return visiting;
     },
+    walk: (keeper, beat, seed, still, done) => hollowLayer.walk(keeper, beat, seed, still, done),
+    endWalks: () => {
+      hollowLayer.endWalks();
+    },
     get debug() {
       return hollowLayer.debug;
     },
   },
+  // The night show (#277): his walks on the map, from the night's outcome.
+  show: {
+    hold: (held) => {
+      maps.setHeld(held);
+    },
+    seedOf: (userId) => (maps.view ? heartSeedOf(maps.view, userId) : null),
+    tileAt: (h) => maps.view?.tiles.find((t) => hexKey(t) === hexKey(h)),
+    // A hush as he comes, a soft chime as the fire turns him back, a cold wind as he takes.
+    cue: (kind) => {
+      audio.cue(
+        kind === 'enter'
+          ? 'nightfall'
+          : kind === 'recoil'
+            ? 'twinkle'
+            : kind === 'strike'
+              ? 'cold-wind'
+              : null,
+      );
+    },
+    pan: panToTile,
+  },
+  darkLand: () => (maps.view && signedIn ? darkTiles(maps.view, signedIn.id) : []),
+  showTile: (h, panel) => {
+    if (panel) maps.focus(h);
+    panToTile(h);
+  },
+  outInDark: async (mapId, tiles) => {
+    const keys = new Set(tiles.map(hexKey));
+    const view = await jobsApi.view(mapId);
+    return view.squishies
+      .filter((s) => {
+        const at = s.post ?? s.work;
+        return at !== null && keys.has(hexKey(at));
+      })
+      .map((s) => view.names[s.squishy.id] ?? '')
+      .filter((name) => name !== '');
+  },
+  pvpMode: () => maps.view?.map.pvpMode ?? null,
+  isGlade: (mapId) => mapId === glade,
+  onStatus: () => {
+    land.redraw();
+  },
+  // One card at a time (#277): the narrator and the nudge wait while
+  // something else is up over the map.
+  mapBusy: () =>
+    (maps.debug?.selected ?? null) !== null ||
+    trays.debug.open !== null ||
+    care.isOpen ||
+    closeUp.isOpen ||
+    homeOpen() ||
+    (explore.debug?.open ?? false) ||
+    (land.debug?.welcome ?? false),
   // One card at a time (#129): the morning report waits behind the raid
   // report, a found lore page, a milestone party and What's new. (`lorebook`
   // and `milestones` are made below; this is only read at render time.)
@@ -513,6 +587,15 @@ const maps = createMapScreen({
     territory.tileActions,
     jobs.tileActions,
     journeys.tileActions,
+    // A tile's panel came up or went away: the night's cards step back or return.
+    {
+      show: () => {
+        hollow.viewChanged();
+      },
+      hide: () => {
+        hollow.viewChanged();
+      },
+    },
   ),
   onHudChange: (mapId) => {
     hudMapId = mapId;
@@ -526,7 +609,7 @@ const maps = createMapScreen({
     // Sprout points at the handles once, on a patch (the Glade has Sprout already).
     if (mapId !== null && signedIn && glade === null) trays.offerHint(signedIn.id);
   },
-  layers: [hollowLayer, jobs.badges, land.layer, postFlags],
+  layers: [hollowLayer, darkLand, jobs.badges, land.layer, postFlags],
   // The tutorial's spotlight finds the home node on the map (the gather step).
   targets: { register: (target, locate) => tutorial.targets.register(target, locate) },
   // A piece of clothing found while playing (#43) shows a little note; night

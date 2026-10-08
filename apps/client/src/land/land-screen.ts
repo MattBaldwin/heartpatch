@@ -8,6 +8,7 @@ import {
   type MapView,
   type PublicTile,
   type PublicUser,
+  type WentWildTile,
   type WsEventMessage,
 } from '@heartpatch/shared';
 import { describeItems } from '../inventory/bag-view.js';
@@ -49,6 +50,12 @@ export interface LandScreenOptions {
   /** Visit's ripple runs on animation frames; tests pass their own. */
   frame?: (draw: () => void) => void;
   reducedMotion?: () => boolean;
+  /**
+   * Land the Hollow Man won back (#277): his own morning report and night
+   * show tell it, so the welcome-back card leaves it out (and never tells
+   * it before his strike lands at 7:30).
+   */
+  toldElsewhere?: (tile: WentWildTile) => boolean;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -67,6 +74,8 @@ export interface LandScreen {
   setUser: (user: PublicUser | null) => void;
   /** Every live event, in seq order: land of mine going wild refetches. */
   liveEvent: (event: WsEventMessage) => void;
+  /** Draws the card again (what `toldElsewhere` says changed). */
+  redraw: () => void;
   /** The marks over my fading and wild-again tiles. */
   readonly layer: MapLayer;
   readonly tileActions: TileActions;
@@ -195,13 +204,18 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
     const open = mapId !== null && tending !== null;
     chip.hidden = !open || (tending?.missing.length ?? 0) === 0;
     visitButton.disabled = working;
-    const unseen = open ? unseenWild(tending, seenNight()) : 0;
+    const told = options.toldElsewhere;
+    const mine =
+      tending && told
+        ? { ...tending, wentWild: tending.wentWild.filter((t) => !told(t)) }
+        : tending;
+    const unseen = open ? unseenWild(mine, seenNight()) : 0;
     welcome.hidden = unseen === 0;
     if (unseen > 0) {
       welcomeLine.textContent = LAND_TEXT.welcomeLine(unseen);
       welcomeClaim.textContent = LAND_TEXT.welcomeClaim(unseen);
     }
-    const lost = open ? unseenLostFires(tending, seenNight()) : { fires: 0, back: {} };
+    const lost = open ? unseenLostFires(mine, seenNight()) : { fires: 0, back: {} };
     welcomeFire.hidden = lost.fires === 0;
     welcomeBack.hidden = lost.fires === 0;
     if (lost.fires > 0) {
@@ -347,6 +361,10 @@ export function createLandScreen(options: LandScreenOptions): LandScreen {
       reset();
       void refresh();
     },
+    redraw: () => {
+      render();
+    },
+
     liveEvent: (event) => {
       if (event.mapId !== mapId) return;
       if (event.type === 'tile.captured') {
