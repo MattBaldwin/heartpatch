@@ -130,7 +130,12 @@ export interface DarkLand extends MapLayer {
  * The dashed edge and 🌙 on my dark land, for whoever `userId` says is
  * signed in. With no `root` (unit tests) only the edge is drawn.
  */
-export function createDarkLand(root: HTMLElement | null, userId: () => string | null): DarkLand {
+export function createDarkLand(
+  root: HTMLElement | null,
+  userId: () => string | null,
+  /** The map redrew my dark land (the chips and the nudge count it too). */
+  onDraw?: () => void,
+): DarkLand {
   let scene: Scene | null = null;
   let edge: Mesh | null = null;
   let drawn = 0;
@@ -187,6 +192,7 @@ export function createDarkLand(root: HTMLElement | null, userId: () => string | 
       place(added);
     }
     drawn = dark.length;
+    onDraw?.();
     if (!edge) return;
     const matrices: Matrix[] = dark.map((t) => {
       const p = hexToWorld(t, HEX_SIZE);

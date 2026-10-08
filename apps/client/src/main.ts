@@ -312,7 +312,13 @@ const land = createLandScreen({
 // the morning report, and rescues (a rescue battle opens the battle screen).
 const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
 // My dark land (#277): a dashed edge and a 🌙 where no fire's light reaches.
-const darkLand = createDarkLand(document.body, () => signedIn?.id ?? null);
+const darkLand = createDarkLand(
+  document.body,
+  () => signedIn?.id ?? null,
+  () => {
+    hollow.viewChanged();
+  },
+);
 /** Glides the camera to a tile (at once with reduced motion). */
 const panToTile = (h: Hex): void => {
   const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;

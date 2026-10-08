@@ -12,7 +12,8 @@ import {
   type WalkPointView,
 } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { testView, userId } from '../map/test-view.js';
+import { MapScene } from '../map/map-scene.js';
+import { testPatch, testView, userId } from '../map/test-view.js';
 import { createDarkLand, darkTiles, dashedHexRing, heartSeedOf, placeOf } from './dark-land.js';
 import { SHOW } from './hollow-config.js';
 import { HollowLayer, standOf, stepPose } from './hollow-layer.js';
@@ -279,6 +280,25 @@ describe('my dark land', () => {
     expect(scene.meshes.length).toBe(meshes);
     layer.update?.(myLand(0, 0));
     expect(edge?.isEnabled()).toBe(false);
+  });
+});
+
+describe('the map with my dark land', () => {
+  const engine = new NullEngine();
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  it('stays under the map draw-call ceiling (57) with the dashed edge on', () => {
+    for (const halloween of [false, true]) {
+      const scene = new Scene(engine);
+      const view = testPatch();
+      new MapScene(scene, view, { halloween });
+      const dark = createDarkLand(null, () => ME);
+      dark.attach(scene, view);
+      expect(dark.debug.tiles).toBeGreaterThan(0);
+      expect(scene.meshes.filter((m) => m.isEnabled()).length).toBeLessThan(57);
+    }
   });
 });
 

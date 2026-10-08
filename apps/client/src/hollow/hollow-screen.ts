@@ -122,6 +122,8 @@ export interface HollowScreen {
   liveEvent: (event: WsEventMessage) => void;
   /** Another card opened or closed (see `otherReportOpen`). */
   otherReportChanged: () => void;
+  /** The map on screen redrew (my dark land may have changed): the chips and the nudge follow. */
+  viewChanged: () => void;
   readonly debug: HollowDebug | null;
 }
 
@@ -281,7 +283,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   const showReport = (): MorningReport | undefined =>
     status?.reports.find((r) => r.night === showNight);
   setInterval(() => {
-    if (mapId && status) renderChips();
+    if (!mapId || !status) return;
+    renderChips();
+    renderNight();
   }, CHIP_TICK_MS);
 
   const speciesName = (speciesId: string): string | undefined => {
@@ -525,20 +529,22 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       first !== undefined &&
       stored(nudgeKey) !== night;
     nudge.hidden = !due || blocked;
+    if (nudge.hidden) delete nudge.dataset['drawn'];
     if (!due) return;
     askOutInDark(night, spots);
     if (nudge.hidden) return;
+    const title = NIGHT_TEXT.outInDark(outNames?.night === night ? outNames.names : []);
+    // Only a change redraws, so a tap mid-press isn't lost to a rebuild.
+    const drawn = `${title}|${String(spots.length)}|${hexKey(first)}`;
+    if (nudge.dataset['drawn'] === drawn) return;
+    nudge.dataset['drawn'] = drawn;
     const answer = (panel: boolean) => () => {
       store(nudgeKey, night);
       options.showTile?.(first, panel);
       render();
     };
     nudge.replaceChildren(
-      el(
-        'h2',
-        { class: 'hollow-title', id: 'night-nudge-title' },
-        NIGHT_TEXT.outInDark(outNames?.night === night ? outNames.names : []),
-      ),
+      el('h2', { class: 'hollow-title', id: 'night-nudge-title' }, title),
       el('p', { class: 'hollow-line' }, NIGHT_TEXT.noLight(spots.length)),
       el(
         'div',
@@ -928,6 +934,12 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       outNames = null;
       options.layer.setNight(false);
       render();
+    },
+
+    viewChanged: () => {
+      if (!mapId || !status) return;
+      renderChips();
+      renderNight();
     },
 
     otherReportChanged: () => {
