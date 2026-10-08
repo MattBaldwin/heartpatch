@@ -40,7 +40,11 @@ export function homesteadOf(
 
 /**
  * A pause to leave out of a gatherer's work there (jobs'
- * `workProgressAround`), or null: its latest pause, ended or not.
+ * `workProgressAround`), or null: its latest pause, ended or not. Only the
+ * latest is kept: if a homestead pauses twice before its gatherer is next
+ * settled, the earlier window counts as work, which the stored-cycle cap
+ * bounds (a rare edge: two captures of the land between, both before the
+ * player opens the game).
  */
 export function workPauseOf(row: {
   pausedAt: Date | null;
