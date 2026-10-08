@@ -369,12 +369,12 @@ export const GAME_EVENTS = {
     public: z.object({ offerId: z.uuid(), fromUserId: z.uuid(), toUserId: z.uuid() }),
   },
   /** A gift was picked up (#271): members hear "Sam got a gift from Lee 🎁", never what. */
-  'gift.pickedUp': {
+  'gift.collected': {
     internal: z.strictObject({ offerId: z.uuid(), fromUserId: z.uuid(), toUserId: z.uuid() }),
     public: z.object({ fromUserId: z.uuid(), toUserId: z.uuid() }),
   },
   /** A player picked up what waited in their mailbox (#271). Only they hear it (`ownerOnlyView`). */
-  'mailbox.pickedUp': {
+  'mailbox.collected': {
     internal: z.strictObject({
       userId: z.uuid(),
       mailboxIds: z.array(z.uuid()).min(1),

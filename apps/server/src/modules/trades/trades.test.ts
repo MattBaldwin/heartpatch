@@ -33,7 +33,17 @@ import { createTradesRepo } from './repo.js';
 const url = inject('testDatabaseUrl');
 const HEADERS = { 'x-requested-with': 'heartpatch' };
 const DAY_MS = 24 * 60 * 60 * 1000;
-const TEST_KEEPER = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
+const TEST_KEEPER = {
+  base: 'pip',
+  hairColor: 'honey',
+  eyeColor: 'sky',
+  outfit: 'sunflower',
+  skinTone: 'tone-1',
+  eyes: 'round' as const,
+  brows: 'arched',
+  mouth: 'smile',
+  extras: [],
+};
 const START = '2026-11-04T16:00:00Z';
 const HERO = STARTERS.speciesIds[0]!;
 // A tradable hat, an account-bound one (a milestone's), and a squishy accessory.
@@ -362,7 +372,7 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
     expect(events.map((e) => e.type)).toEqual([
       'trade.offered',
       'trade.answered',
-      'mailbox.pickedUp',
+      'mailbox.collected',
     ]);
     // Kai hears only that Lee and Sam traded, never what.
     const [offered, answered, pickup] = events;
@@ -415,7 +425,7 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
     expect(await bag(mapId, sam)).toEqual({ timber: 4 });
     const row = await db.query.tradeOffers.findFirst({ where: (t, { eq }) => eq(t.id, giftId) });
     expect(row!.status).toBe('accepted');
-    const gift = (await tradeEvents(mapId)).find((e) => e.type === 'gift.pickedUp')!;
+    const gift = (await tradeEvents(mapId)).find((e) => e.type === 'gift.collected')!;
     expect(viewFor(gift, kai)).toEqual({ fromUserId: lee.id, toUserId: sam.id });
     await reconcile(mapId);
   });

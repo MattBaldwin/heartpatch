@@ -183,7 +183,7 @@ describe('trade model (#271)', () => {
     expect(tradeEventForMe(ev('trade.answered', { fromUserId: SAM, toUserId: KAI }), ME)).toBe(
       false,
     );
-    expect(tradeEventForMe(ev('mailbox.pickedUp', { userId: ME }), ME)).toBe(true);
+    expect(tradeEventForMe(ev('mailbox.collected', { userId: ME }), ME)).toBe(true);
     expect(tradeEventForMe(ev('chat.said', { userId: ME }), ME)).toBe(false);
   });
 

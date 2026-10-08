@@ -266,8 +266,8 @@ const TRADE_EVENTS = new Set([
   'trade.answered',
   'trade.cancelled',
   'trade.expired',
-  'gift.pickedUp',
-  'mailbox.pickedUp',
+  'gift.collected',
+  'mailbox.collected',
 ]);
 
 /** A live event that changes what my post screen shows (mine, as one of the two players). */

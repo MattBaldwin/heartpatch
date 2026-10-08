@@ -836,14 +836,14 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
       for (const gift of gifts) {
         events.push({
           mapId,
-          type: 'gift.pickedUp',
+          type: 'gift.collected',
           actorUserId: user.id,
           payload: { offerId: gift.id, fromUserId: gift.fromUserId, toUserId: gift.toUserId },
         });
       }
       events.push({
         mapId,
-        type: 'mailbox.pickedUp',
+        type: 'mailbox.collected',
         actorUserId: user.id,
         payload: { userId: user.id, mailboxIds: rows.map((m) => m.id), offerIds: [...offerIds] },
       });

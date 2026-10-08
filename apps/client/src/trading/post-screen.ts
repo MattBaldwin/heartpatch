@@ -118,7 +118,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     },
     '✕',
   );
-  closeButton.addEventListener('click', () => close());
+  closeButton.addEventListener('click', () => {
+    close();
+  });
   const title = el('h2', { id: 'post-title', class: 'post-title' });
   const chip = el('span', { class: 'post-chip', 'data-testid': 'post-chip' });
   const tabs = el('div', { class: 'post-tabs', role: 'tablist' });
@@ -253,7 +255,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     );
     tap.disabled = working;
     const onTap = opts.onTap;
-    tap.addEventListener('click', () => onTap());
+    tap.addEventListener('click', () => {
+      onTap();
+    });
     return opts.extra?.length ? el('div', { class: 'post-slot-wrap' }, tap, ...opts.extra) : tap;
   }
 
@@ -586,7 +590,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
             ),
           ]
         : [];
-    all.forEach((b) => b.classList.add('wide'));
+    for (const b of all) b.classList.add('wide');
     return [
       ...(entries.length === 0
         ? [

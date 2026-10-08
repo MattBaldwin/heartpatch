@@ -57,7 +57,7 @@ function ownerOnlyView(
     | 'team.picked'
     | 'journey.started'
     | 'journey.ended'
-    | 'mailbox.pickedUp',
+    | 'mailbox.collected',
 ): PublicView {
   return definePublicView({
     schema: GAME_EVENTS[type].public,
@@ -119,7 +119,7 @@ export const PUBLIC_VIEWS: PublicViews = {
   'trade.answered': tradeAnsweredView,
   'trade.cancelled': twoPlayerView('trade.cancelled'),
   'trade.expired': twoPlayerView('trade.expired'),
-  'mailbox.pickedUp': ownerOnlyView('mailbox.pickedUp'),
+  'mailbox.collected': ownerOnlyView('mailbox.collected'),
 };
 
 /**

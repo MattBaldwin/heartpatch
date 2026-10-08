@@ -208,7 +208,7 @@ Add anything else only with a one-line justification in the PR.
   | jobs Fix PR | `squishy.assigned` (whose, and the work tiles left and reached; which squishy and job stay internal), `team.picked` (only to the player), `work.collected` (who; how much stays internal) |
   | #269 | `post.placed` (trading posts came to an older patch: the boot pass's new post tiles; land is public, so members see the same) |
   | #270 | `journey.started`, `journey.ended` (only to the player: where, how far, and a win's visit pass; everyone else sees `battle.*`) |
-  | #271 | `trade.offered`, `trade.cancelled`, `trade.expired` (only to the offer's two players, never what it holds), `trade.answered` (the two players hear yes or no; everyone else only "accepted", without the offer id), `gift.pickedUp` (members hear who gave whom, never what), `mailbox.pickedUp` (only to the player) |
+  | #271 | `trade.offered`, `trade.cancelled`, `trade.expired` (only to the offer's two players, never what it holds), `trade.answered` (the two players hear yes or no; everyone else only "accepted", without the offer id), `gift.collected` (members hear who gave whom, never what), `mailbox.collected` (only to the player) |
   | #199 | `explore.searched` (who searched which spot kind where; a `notable` find's kind, never items), `tile.explored` (a tile fully explored), `homestead.joined`, `homestead.paused`, `homestead.resumed` (whose, which tiles) |
 
   Milestones (#44) write no event: they're account-level, and the client looks for `news` (`GET /milestones`) after the player's own play arrives live. A `milestone.earned` event can replace that look later. A tile's change is sent as `tile.attacked` or `tile.captured`; there is no `tile.updated`.

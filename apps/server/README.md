@@ -389,10 +389,10 @@ Lock order: the night's row, squishies, then `maps` (events).
 
 - **Escrow:** a squishy keeps its owner and waits `in-trade` (off every job; the Hollow Man passes it by); items are consumed into the offer (`trade-escrow`); clothing is held by `held_by_offer_id` (the wardrobe's counts skip held pieces). Giving the last piece of an item takes it off the Keeper (`outfit.changed` on each of the player's maps) and off their squishies.
 - **A yes:** the sender's side lands with the receiver now (`trade`; a squishy turns active, its habitat cleared); the receiver's side moves to the sender as `in-trade`/held and waits in the sender's mailbox. **Pickup** makes squishies active, grants items (`trade`) and marks species caught.
-- **Gifts** are a mailbox row from the moment they're sent; pickup is the acceptance (status `accepted`, `gift.pickedUp`).
+- **Gifts** are a mailbox row from the moment they're sent; pickup is the acceptance (status `accepted`, `gift.collected`).
 - **Going back** (`sendBack`: no, call-off, expiry, the owner's switch, a leave): squishies rest at home again, items come back (`trade-return`), pieces are freed, a gift's waiting row goes, and a `return` note is written. Expiry is lazy, in its own transaction (actor null) before every read and command; a leave runs the call-off in its own transaction after the leave commits (the maps service's `departed` hook), with expiry as the backstop.
 - **Ledger:** `trade_ledger`, one row per offer, event and actor (`UNIQUE NULLS NOT DISTINCT`).
-- **Events:** `trade.offered`, `trade.cancelled`, `trade.expired` (the two players only), `trade.answered` (others hear only "accepted"), `gift.pickedUp` (members, never what), `mailbox.pickedUp` (the player only).
+- **Events:** `trade.offered`, `trade.cancelled`, `trade.expired` (the two players only), `trade.answered` (others hear only "accepted"), `gift.collected` (members, never what), `mailbox.collected` (the player only).
 - **Lock order:** tech spec §7 "Trades (#271)".
 
 ## Care, levels and evolution
