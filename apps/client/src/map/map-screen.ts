@@ -126,6 +126,13 @@ export interface MapScreen {
   /** My land that misses me (owner decision 2026-10-06): each fading tile's share, 0–1. */
   setLandFade: (fade: ReadonlyMap<HexKey, number>) => void;
   /**
+   * The night show (#277): land the Hollow Man won back at nightfall is drawn
+   * as its Keeper's (tile → their user id) until his strike lands in the
+   * show. Only the drawing: the tile panel and everything else see the land
+   * as it is.
+   */
+  setHeld: (held: ReadonlyMap<HexKey, string>) => void;
+  /**
    * Tiles in reach with a wild squishy this window (#209, the server's
    * `wildHints`: tiles only, no species) for map `mapId`: each gets a
    * rustling tuft. A reply for another map is ignored.
@@ -149,6 +156,20 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
   let selected: Hex | null = null;
   let night = false;
   let landFade: ReadonlyMap<HexKey, number> = new Map();
+  let held: ReadonlyMap<HexKey, string> = new Map();
+  /** The view as drawn: held land still its Keeper's (#277), only while it's wild. */
+  const drawnView = (view: MapView): MapView =>
+    held.size === 0
+      ? view
+      : {
+          ...view,
+          tiles: view.tiles.map((t) => {
+            const owner = held.get(hexKey(t));
+            return owner !== undefined && t.ownerUserId === null
+              ? { ...t, ownerUserId: owner, guardianHint: null }
+              : t;
+          }),
+        };
   /** The wild hints for the map on screen (#209). */
   let wild: { mapId: string; tiles: readonly Hex[] } | null = null;
   const drawWild = (): void => {
@@ -277,10 +298,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     fetchView: (mapId) => api.view(mapId),
     socket: liveSocket,
     onRedraw: (state) => {
-      scene3d?.update(state.view);
+      const drawn = drawnView(state.view);
+      scene3d?.update(drawn);
       showLegend(state.view.members);
       drawWild();
-      for (const layer of options.layers ?? []) layer.update?.(state.view);
+      for (const layer of options.layers ?? []) layer.update?.(drawn);
       if (selected) showTile(state, selected);
       options.invalidate();
     },
@@ -303,7 +325,8 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     const state = sync.state;
     if (!state) throw new Error('no map to build');
     const at = options.now?.() ?? new Date();
-    const built = new MapScene(scene, state.view, {
+    const drawn = drawnView(state.view);
+    const built = new MapScene(scene, drawn, {
       halloween: isHalloween(state.view.map.timeZone, at),
       seasons: seasonsOn(state.view.map.timeZone, at),
       ...ambient.state,
@@ -318,7 +341,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     scene.onDisposeObservable.addOnce(() => {
       if (scene3d === built) ambient.stop();
     });
-    for (const layer of options.layers ?? []) layer.attach(scene, state.view);
+    for (const layer of options.layers ?? []) layer.attach(scene, drawn);
     if (selected) built.select(selected);
     const unregister = options.targets?.register('resource-node', () =>
       built.homeNodeRect(user?.id ?? null),
@@ -393,6 +416,16 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
     setLandFade: (next) => {
       landFade = next;
       scene3d?.setLandFade(next);
+      options.invalidate();
+    },
+    setHeld: (next) => {
+      if (next.size === 0 && held.size === 0) return;
+      held = new Map(next);
+      const state = sync.state;
+      if (!state) return;
+      const drawn = drawnView(state.view);
+      scene3d?.update(drawn);
+      for (const layer of options.layers ?? []) layer.update?.(drawn);
       options.invalidate();
     },
     setWild: (mapId, tiles) => {
