@@ -175,6 +175,10 @@ const inventory = createInventoryScreen({
   onCollected: () => {
     void recipeBook.check();
   },
+  // The welcome-back card's "See Factory" (#294): home, where the Factory stands.
+  onSeeFactory: () => {
+    void home.open();
+  },
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
 // from home base and the catalog; it celebrates an evolution the first time

@@ -1,4 +1,21 @@
-import type { InventoryResponse, ItemCounts, PublicTile, PublicUser } from '@heartpatch/shared';
+import type {
+  InventoryResponse,
+  ItemCounts,
+  Landed,
+  PublicTile,
+  PublicUser,
+} from '@heartpatch/shared';
+import { createAwayTracker } from '../factory/away.js';
+import { factoryApi, type FactoryApi } from '../factory/factory-api.js';
+import { createFactoryPanel } from '../factory/factory-panel.js';
+import { createFactoryStrip } from '../factory/factory-strip.js';
+import {
+  batchRows,
+  FACTORY_TEXT,
+  showsWelcomeBack,
+  welcomeChips,
+} from '../factory/factory-view.js';
+import { recipeBookApi } from '../recipes/recipe-book-api.js';
 import { ApiRequestError } from '../net/api.js';
 import type { TileActions } from '../map/map-screen.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
@@ -41,6 +58,14 @@ export interface InventoryScreenOptions {
   devTools?: boolean;
   /** Something new landed in the bag (a gather or craft finished): the recipe book may open a page. */
   onCollected?: () => void;
+  /** The Crafting Factory's calls (#294). */
+  factoryApi?: FactoryApi;
+  /** The recipe book pages this account has opened (only those can be queued). */
+  openPages?: () => Promise<readonly string[]>;
+  /** Where "when did I last see this patch" is kept, for the welcome-back card (null: nowhere). */
+  storage?: Storage | null;
+  /** "See Factory" on the welcome-back card: open home (the Factory's own card). */
+  onSeeFactory?: () => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -59,6 +84,12 @@ export interface InventoryDebug {
   readonly toast: string | null;
   /** Settles so far that put something in the bag. */
   readonly landings: number;
+  /** Crafting Factory batches going (#294), null with no Factory. */
+  readonly batches: number | null;
+  /** The Factory sheet is open, and what its panel shows. */
+  readonly factorySheet: 'list' | 'pick' | 'stop' | null;
+  /** The welcome-back card is showing. */
+  readonly welcome: boolean;
 }
 
 export interface InventoryScreen {
@@ -76,6 +107,19 @@ export interface InventoryScreen {
    * once started, or to a kid-readable line saying why not.
    */
   craft: (recipeId: string) => Promise<string | null>;
+  /**
+   * Starts a Crafting Factory batch (#294) of up to `count` (the server caps
+   * it at what the bag can pay for). Null once started, or a line saying why not.
+   */
+  queue: (recipeId: string, count: number) => Promise<string | null>;
+  /** Stops a Factory batch: what's made is kept, the rest comes back. */
+  stopBatch: (batchId: string) => Promise<string | null>;
+  /** Opens the Factory sheet; with a recipe, "How many?" for it. */
+  openFactory: (recipeId?: string) => void;
+  /** The game clock now, in ms (the server's). */
+  gameNow: () => number;
+  /** Is this recipe book page open, as last read (the Factory only queues open pages)? */
+  isPageOpen: (pageKey: string) => boolean;
   /** Ms until an ISO time on the server's clock (0 once it's passed), for countdowns. */
   msUntil: (iso: string) => number;
   readonly debug: InventoryDebug | null;
@@ -109,6 +153,7 @@ const TEXT = {
   justASec: 'Just a sec…',
   noMap: 'Visit a patch first!',
   devGrant: 'Get stuff (dev)',
+  devFactory: 'Finish batches (dev)',
   findIt: 'Find it:',
 } as const;
 
@@ -118,6 +163,9 @@ const TOAST_MS = 3200; // TUNE: long enough to read "🪵 +5 Timber!", short eno
 const SETTLE_SLACK_MS = 400; // TUNE: covers the clock sync's rounding and a slow request
 /** A settle that failed (a flaky phone connection, a rate limit) tries once more after this long. */
 const SETTLE_RETRY_MS = 5000; // TUNE: long enough for a radio to come back
+
+/** Where the welcome-back card remembers when I last saw a patch (#294), per account and patch. */
+const SEEN_KEY = (userId: string, mapId: string) => `heartpatch.factory.seen.${userId}.${mapId}`;
 
 /** Things a dev build hands out to try crafting without waiting. */
 const DEV_ITEMS: ItemCounts = {
@@ -131,7 +179,19 @@ const DEV_ITEMS: ItemCounts = {
 
 export function createInventoryScreen(options: InventoryScreenOptions): InventoryScreen {
   const api = options.api ?? inventoryApi;
+  const fapi = options.factoryApi ?? factoryApi;
   const clock = new GameClock(options.now);
+  const device = options.now ?? (() => Date.now());
+  const storage = options.storage === undefined ? safeStorage() : options.storage;
+  const readPages = options.openPages ?? (() => recipeBookApi.get().then((res) => res.unlocked));
+  /** Recipe book pages this account has opened, as last read. */
+  let openPages = new Set<string>();
+  /** How long the kid was away from a patch, for the welcome-back card (#294). */
+  const presence = createAwayTracker({
+    storage,
+    now: device,
+    key: (id) => (user ? SEEN_KEY(user.id, id) : null),
+  });
 
   let user: PublicUser | null = null;
   let mapId: string | null = null;
@@ -179,6 +239,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   let picked: string | null = null;
   const gathersTitle = el('h3', { class: 'bag-section-title' }, TEXT.gatherTitle);
   const gathersBox = el('ul', { class: 'bag-rows', 'data-testid': 'bag-gathers' });
+  // The Crafting Factory's batches (#294): a strip under the items; a tap opens its sheet.
+  const factoryStrip = createFactoryStrip(
+    () => clock.now(),
+    () => {
+      openFactory();
+    },
+  );
   const craftsTitle = el('h3', { class: 'bag-section-title' }, TEXT.makingTitle);
   const craftsBox = el('ul', { class: 'bag-rows', 'data-testid': 'bag-crafts' });
   const recipesBox = el('ul', { class: 'bag-rows', 'data-testid': 'bag-recipes' });
@@ -189,6 +256,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     note,
     itemsBox,
     detailBox,
+    factoryStrip.element,
     craftsTitle,
     craftsBox,
     gathersTitle,
@@ -205,8 +273,89 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     'data-testid': 'landed-toast',
   });
   toast.hidden = true;
+
+  // The Factory sheet (#294): the queue panel over the map or the Bag.
+  const factoryPanel = createFactoryPanel({
+    now: () => clock.now(),
+    start: (recipeId, count) => startBatch(recipeId, count),
+    stop: (batchId) => stopBatch(batchId),
+    isOpen: (key) => openPages.has(key),
+  });
+  const factoryClose = el(
+    'button',
+    {
+      type: 'button',
+      class: 'tile-panel-close',
+      'aria-label': TEXT.close,
+      'data-testid': 'factory-close',
+    },
+    '×',
+  );
+  const factorySheet = el(
+    'section',
+    {
+      class: 'bag factory-sheet',
+      'data-testid': 'factory-sheet',
+      role: 'dialog',
+      'aria-labelledby': 'factory-title',
+    },
+    el(
+      'div',
+      { class: 'tile-panel-head' },
+      el('h2', { id: 'factory-title' }, `🏭 ${FACTORY_TEXT.name}`),
+      factoryClose,
+    ),
+    factoryPanel.element,
+  );
+  factorySheet.hidden = true;
+  factoryClose.addEventListener('click', () => {
+    factorySheet.hidden = true;
+    factoryPanel.pause();
+    render();
+  });
+
+  // Welcome back (#294, owner decision 2026-10-08): after a while away, what
+  // the Factory made, in one card. Everything is in the bag already.
+  const welcomeGot = el('div', {
+    class: 'factory-welcome-got',
+    'data-testid': 'factory-welcome-got',
+  });
+  const welcomeStill = el('ul', { class: 'factory-stop-lines' });
+  const welcomeOk = el(
+    'button',
+    { type: 'button', class: 'auth-button', 'data-testid': 'factory-welcome-ok' },
+    FACTORY_TEXT.ok,
+  );
+  const welcomeSee = el(
+    'button',
+    { type: 'button', class: 'auth-button auth-button-soft', 'data-testid': 'factory-welcome-see' },
+    FACTORY_TEXT.seeFactory,
+  );
+  const welcome = el(
+    'div',
+    { class: 'factory-welcome', 'data-testid': 'factory-welcome' },
+    el(
+      'section',
+      { class: 'factory-welcome-card', role: 'dialog', 'aria-labelledby': 'factory-welcome-title' },
+      el('div', { 'aria-hidden': 'true', style: 'font-size:44px;line-height:1' }, '🏭'),
+      el('h2', { id: 'factory-welcome-title' }, FACTORY_TEXT.welcomeTitle),
+      el('p', { class: 'factory-about' }, FACTORY_TEXT.welcomeLine),
+      welcomeGot,
+      welcomeStill,
+      el('div', { class: 'factory-row' }, welcomeOk, ...(options.onSeeFactory ? [welcomeSee] : [])),
+    ),
+  );
+  welcome.hidden = true;
+  welcomeOk.addEventListener('click', () => {
+    welcome.hidden = true;
+  });
+  welcomeSee.addEventListener('click', () => {
+    welcome.hidden = true;
+    options.onSeeFactory?.();
+  });
+
   (options.entryRoot ?? options.root).append(open);
-  options.root.append(chip, sheet, toast);
+  options.root.append(chip, sheet, factorySheet, toast, welcome);
 
   if (options.devTools) {
     const dev = el(
@@ -222,7 +371,23 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         options.onCollected?.();
       });
     });
-    sheet.append(dev);
+    const devFactory = el(
+      'button',
+      {
+        type: 'button',
+        class: 'auth-button auth-button-soft auth-button-small',
+        'data-testid': 'factory-dev-ready',
+      },
+      TEXT.devFactory,
+    );
+    devFactory.addEventListener('click', () => {
+      void act(async (id, at) => {
+        const res = await fapi.dev.ready(id);
+        apply(at, res);
+        await refresh();
+      });
+    });
+    sheet.append(dev, devFactory);
   }
 
   const openBag = () => {
@@ -277,11 +442,19 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         state = fresh;
         serverNextAt = nextAt;
       }
+      const away = presence.awayMs(id);
       if (landed.length > 0 || trained.length > 0) {
         landings += 1;
-        showToast([landedText(landed), trainedText(trained)].filter((t) => t !== '').join(' '));
+        // After a while away, the Factory's things get their own card (#294).
+        const card = showsWelcomeBack(landed, away);
+        if (card) showWelcome(landed);
+        const popped = card ? landed.filter((l) => l.kind !== 'factory') : landed;
+        showToast([landedText(popped), trainedText(trained)].filter((t) => t !== '').join(' '));
         if (landed.length > 0) options.onCollected?.();
       }
+      // Only while the kid can see it: a tab left open in the background
+      // keeps settling, and that isn't being here.
+      presence.settled(id, document.visibilityState === 'visible');
       if (!newest) return;
       render();
       scheduleSettle();
@@ -316,6 +489,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       ...(serverNextAt ? [serverNextAt] : []),
       ...state.crafts.map((c) => c.readyAt),
       ...state.gathers.map((g) => g.readyAt),
+      ...(state.factory?.batches.flatMap((b) => (b.nextAt ? [b.nextAt] : [])) ?? []),
     ].map((iso) => clock.msUntil(iso));
     if (due.length === 0) return;
     const wait = Math.min(...due) + SETTLE_SLACK_MS;
@@ -323,6 +497,21 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       settleTimer = undefined;
       void refresh();
     }, wait);
+  }
+
+  function showWelcome(landed: readonly Landed[]): void {
+    welcomeGot.replaceChildren(...welcomeChips(landed).map((c) => el('span', {}, c)));
+    const going = state?.factory
+      ? batchRows(state.factory, clock.now()).filter((r) => !r.finished)
+      : [];
+    welcomeStill.replaceChildren(
+      ...going.map((r) =>
+        el('li', {}, `${r.icon} ${FACTORY_TEXT.stillGoing(r.name, r.done, r.total)}`),
+      ),
+    );
+    welcomeStill.hidden = going.length === 0;
+    welcome.hidden = false;
+    welcomeOk.focus();
   }
 
   const showToast = (text: string) => {
@@ -347,8 +536,15 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   };
 
   // Back from another app or a locked screen: things may have finished meanwhile.
+  // Going away is remembered, for the welcome-back card (#294).
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && mapId) void refresh();
+    if (!mapId) return;
+    if (document.visibilityState === 'visible') {
+      presence.arrived(mapId);
+      void refresh();
+    } else {
+      presence.left(mapId);
+    }
   });
 
   const sendDeps = {
@@ -429,6 +625,55 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         options.onCollected?.();
       }
     });
+
+  /** A Crafting Factory batch (#294): the reply is the whole bag, batches included. */
+  const startBatch = (recipeId: string, count: number) =>
+    act(async (id, at, send) => {
+      const res = await send((key) => fapi.start(id, recipeId, count, key));
+      if (!res || !apply(at, res)) return;
+      say('');
+      scheduleSettle();
+    });
+
+  const stopBatch = (batchId: string) =>
+    act(async (id, at, send) => {
+      const res = await send((key) => fapi.stop(id, batchId, key));
+      if (!res || !apply(at, res)) return;
+      say('');
+      showToast(landedText([{ items: res.refunded }]));
+      scheduleSettle();
+    });
+
+  /** Reads which recipe book pages are open (for the picker); keeps what it knew on failure. */
+  async function loadPages(): Promise<void> {
+    try {
+      openPages = new Set(await readPages());
+      renderFactory();
+    } catch {
+      // The picker shows what it knew.
+    }
+  }
+
+  function openFactory(recipeId?: string): void {
+    if (!state?.factory) return;
+    factorySheet.hidden = false;
+    renderFactory();
+    if (recipeId) factoryPanel.pick(recipeId);
+    else factoryPanel.showList();
+    void loadPages().then(() => {
+      if (recipeId && factoryPanel.mode === 'pick') factoryPanel.pick(recipeId);
+    });
+  }
+
+  function renderFactory(): void {
+    const view = state?.factory ?? null;
+    factoryStrip.update(sheet.hidden ? null : view);
+    if (factorySheet.hidden || !state || !view) {
+      if (!view) factorySheet.hidden = true;
+      return;
+    }
+    factoryPanel.update({ view, items: state.items, seasons: state.seasons });
+  }
 
   // ── Drawing ───────────────────────────────────────────────────────────
 
@@ -593,10 +838,35 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     recipesBox.replaceChildren(
       ...bagRecipes(state.items, cooking, state.seasons).map(({ recipe, icon, cost, state: s }) => {
         let action: Node;
+        // The Factory (#294): "🏭 Queue" beside Make, once one is built.
+        const queue =
+          state?.factory && s.kind !== 'sleeping' && s.kind !== 'short'
+            ? [
+                button(
+                  FACTORY_TEXT.queue,
+                  () => {
+                    openFactory(recipe.id);
+                  },
+                  { 'data-queue': recipe.id, class: 'auth-button bag-action auth-button-soft' },
+                ),
+              ]
+            : [];
         if (s.kind === 'ready') {
-          action = button(TEXT.make, () => void startCraft(recipe.id), {
-            'data-recipe': recipe.id,
-          });
+          action = el(
+            'span',
+            { class: 'bag-row-actions' },
+            button(TEXT.make, () => void startCraft(recipe.id), {
+              'data-recipe': recipe.id,
+            }),
+            ...queue,
+          );
+        } else if (s.kind === 'busy' && queue.length > 0) {
+          action = el(
+            'span',
+            { class: 'bag-row-actions' },
+            el('span', { class: 'bag-row-note' }, TEXT.craftBusy),
+            ...queue,
+          );
         } else {
           action = el(
             'span',
@@ -701,6 +971,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   function render(): void {
     open.hidden = mapId === null;
     renderBag();
+    renderFactory();
     renderTile();
     renderChip();
     syncTicker();
@@ -731,10 +1002,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   return {
     setMap: async (next) => {
       if (next === mapId) return;
+      if (mapId) presence.left(mapId);
+      if (next) presence.arrived(next);
       generation += 1;
       mapId = next;
       state = null;
       sheet.hidden = true;
+      factorySheet.hidden = true;
       stopSettling();
       say('');
       render();
@@ -755,6 +1029,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     },
     refresh,
     craft: (recipeId) => startCraft(recipeId),
+    queue: (recipeId, count) => startBatch(recipeId, count),
+    stopBatch: (batchId) => stopBatch(batchId),
+    openFactory,
+    gameNow: () => clock.now(),
+    isPageOpen: (key) => openPages.has(key),
     msUntil: (iso) => clock.msUntil(iso),
     tileActions: {
       show: (container, tile) => {
@@ -781,7 +1060,19 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         chip: shownChip,
         toast: toast.hidden ? null : toast.textContent,
         landings,
+        batches: state.factory ? state.factory.batches.length : null,
+        factorySheet: factorySheet.hidden ? null : factoryPanel.mode,
+        welcome: !welcome.hidden,
       };
     },
   };
+}
+
+/** `localStorage`, or null where it throws (private mode, blocked site data). */
+function safeStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }

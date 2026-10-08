@@ -86,6 +86,25 @@ export const BUILDINGS: Building[] = [
       { cost: { timber: 16, stone: 16 }, capacity: 3, xpPerHour: 8 }, // TUNE:
     ],
   },
+  {
+    // #294 (owner decision 2026-10-08): batches of the pot's recipes that
+    // go on while the kid is away. Home is always safe, so nothing stops them.
+    id: 'crafting-factory',
+    kind: 'factory',
+    name: 'Crafting Factory',
+    description: "Makes lots of things at once, even while you're away!",
+    maxPerHome: 1, // one per player per patch
+    placement: 'home',
+    slot: 'ring',
+    // Costs from the #294 mockup (`pnpm sim:factory`): a casual kid builds
+    // level 1 in their first week and level 2 (no Glimmer, owner decision
+    // 2026-10-08) around day 6, guarded by day 10; Glimmer paces level 3.
+    levels: [
+      { cost: { timber: 30, stone: 20 }, queues: 2 }, // TUNE:
+      { cost: { timber: 60, stone: 50 }, queues: 3 }, // TUNE:
+      { cost: { timber: 120, stone: 90, glimmer: 12 }, queues: 4 }, // TUNE:
+    ],
+  },
   // Fences (#203; owner decisions 2026-10-07, second mockup): one per
   // element, made from that element's stuff and weak to whatever beats it
   // in ELEMENT_MATRIX. Every fence has the same energy and toughness at a

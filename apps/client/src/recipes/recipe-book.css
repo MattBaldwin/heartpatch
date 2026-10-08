@@ -903,3 +903,28 @@
 .rbook button {
   touch-action: manipulation;
 }
+
+/* The Crafting Factory (#294): "Queue in Factory" beside Make it, the
+   Factory strip under the pot's, and "How many?" on a page. */
+.rbook-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.rbook-ctas > .rbook-stamp {
+  flex: 1 1 9em;
+  padding: 0 var(--hp-pad-x);
+}
+
+.rbook-factory {
+  margin: 0 4px 8px;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.rbook-factory-pick {
+  display: block;
+  text-align: left;
+}

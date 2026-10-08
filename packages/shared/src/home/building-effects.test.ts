@@ -39,6 +39,13 @@ describe('buildingEffects (#207)', () => {
     ]);
   });
 
+  it('says how many batches the Crafting Factory runs at once, per level (#294)', () => {
+    const factory = byId('crafting-factory');
+    expect(buildingEffects(factory)).toEqual([{ kind: 'batches', queues: 2 }]);
+    expect(buildingEffects(factory, 2)).toEqual([{ kind: 'batches', queues: 3 }]);
+    expect(buildingEffects(factory, 3)).toEqual([{ kind: 'batches', queues: 4 }]);
+  });
+
   it('works for a new building from its data alone', () => {
     const pond = BuildingSchema.parse({
       id: 'splash-pond',

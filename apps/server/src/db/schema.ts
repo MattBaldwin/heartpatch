@@ -993,6 +993,58 @@ export const crafts = pgTable(
   ],
 );
 
+/** Why a Crafting Factory batch ended (#294): all made, stopped, or its Factory taken down (or its owner left). */
+export const factoryQueueEnd = pgEnum('factory_queue_end', ['done', 'stopped', 'taken-down']);
+
+/**
+ * Crafting Factory batches (#294, owner decisions 2026-10-08): `total` runs
+ * of one recipe, paid up front, one finishing every `item_seconds` after
+ * `started_at` (fixed when it starts, speed-ups included). Timestamps, not a
+ * loop (CLAUDE.md rule 4): how many are made is worked out on read (shared
+ * `factoryDone`); a settle banks the new ones and moves `banked`. A batch
+ * that ends keeps its row (`ended_at`, `end_reason`). `building_id` is the
+ * Factory's `buildings` row, with no foreign key: taking a Factory down ends
+ * its batches in the same transaction, and a cascade would lock them in
+ * scan order (tech spec §7).
+ */
+export const factoryQueues = pgTable(
+  'factory_queues',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    buildingId: uuid('building_id').notNull(),
+    // Recipe id from the shared recipe data.
+    recipeId: text('recipe_id').notNull(),
+    total: integer('total').notNull(),
+    banked: integer('banked').notNull().default(0),
+    itemSeconds: integer('item_seconds').notNull(),
+    // One run's items (`{"treats": 3}`) and one run's cost, for refunds.
+    output: jsonb('output').notNull(),
+    inputs: jsonb('inputs').notNull(),
+    startedAt: timestamptz('started_at').notNull(),
+    // Null while it's going.
+    endedAt: timestamptz('ended_at'),
+    endReason: factoryQueueEnd('end_reason'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'factory_queues_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    index('factory_queues_running_idx')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.endedAt} is null`),
+    check('factory_queues_total_range', sql`${t.total} between 1 and 9999`),
+    check('factory_queues_banked_range', sql`${t.banked} between 0 and ${t.total}`),
+    check('factory_queues_item_seconds_positive', sql`${t.itemSeconds} > 0`),
+    check('factory_queues_ended', sql`(${t.endedAt} is null) = (${t.endReason} is null)`),
+  ],
+);
+
 /**
  * How a tile battle went (#15). `active` while it runs; `captured` won and
  * took the tile; `won` won but the tile couldn't change hands (it went home
