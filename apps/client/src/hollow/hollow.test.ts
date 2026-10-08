@@ -12,7 +12,7 @@ import { HollowLayer } from './hollow-layer.js';
 import { changesMyNight, HOLLOW_TEXT, reportText, unseenReports } from './hollow-report.js';
 
 const ID = (n: number) => `0190a8c4-0000-7000-8000-0000000002${String(n).padStart(2, '0')}`;
-const taken = (n: number, inHollow = true) => ({
+const takenOne = (n: number, inHollow = true) => ({
   squishyId: ID(n),
   speciesId: STARTERS.speciesIds[0]!,
   nickname: null,
@@ -20,9 +20,13 @@ const taken = (n: number, inHollow = true) => ({
 });
 const night = (date: string, extra: Partial<MorningReport> = {}): MorningReport => ({
   night: date,
-  taken: null,
+  taken: [],
   sheltered: 0,
   exposed: 0,
+  reclaimed: [],
+  stage: 'curious',
+  walk: [],
+  lostBuildings: { fires: 0, fences: 0, trainingGrounds: 0 },
   ...extra,
 });
 
@@ -42,7 +46,7 @@ describe('the fire hint', () => {
 describe('the morning report', () => {
   it('tells only nights the player has not seen, and only ones with news', () => {
     const reports = [
-      night('2026-10-31', { taken: taken(1), exposed: 1 }),
+      night('2026-10-31', { taken: [takenOne(1)], exposed: 1 }),
       night('2026-10-30', { sheltered: 2 }),
       night('2026-10-29'), // they had nobody there
       night('2026-10-28', { exposed: 1 }), // out in the dark, but spared (grace, #134)
@@ -67,20 +71,26 @@ describe('the morning report', () => {
     ]);
     // Once someone is taken, that line is the news; the spared night needs no line of its own.
     const mixed = reportText(
-      [night('2026-10-31', { taken: taken(1), exposed: 1 }), night('2026-10-30', { exposed: 1 })],
+      [
+        night('2026-10-31', { taken: [takenOne(1)], exposed: 1 }),
+        night('2026-10-30', { exposed: 1 }),
+      ],
       () => 'Moonpuff',
     );
     expect(mixed.lines).toEqual(['He took Moonpuff to the Hollow. You can rescue them!']);
   });
 
   it('always follows "taken to the Hollow" with "you can rescue them"', () => {
-    const one = reportText([night('2026-10-31', { taken: taken(1) })], () => 'Moonpuff');
+    const one = reportText([night('2026-10-31', { taken: [takenOne(1)] })], () => 'Moonpuff');
     expect(one).toEqual({
       title: HOLLOW_TEXT.visitedOne,
       lines: ['He took Moonpuff to the Hollow. You can rescue them!'],
     });
     const many = reportText(
-      [night('2026-10-31', { taken: taken(1) }), night('2026-10-30', { taken: taken(2, false) })],
+      [
+        night('2026-10-31', { taken: [takenOne(1)] }),
+        night('2026-10-30', { taken: [takenOne(2, false)] }),
+      ],
       () => 'Moonpuff',
     );
     expect(many.title).toBe(HOLLOW_TEXT.visitedMany);
@@ -89,6 +99,36 @@ describe('the morning report', () => {
       title: HOLLOW_TEXT.passedBy,
       lines: [HOLLOW_TEXT.safe],
     });
+  });
+
+  it('says when dark land went wild, and asks for fire light everywhere (#277)', () => {
+    const lost = reportText(
+      [
+        night('2026-10-31', {
+          taken: [takenOne(1), takenOne(2)],
+          reclaimed: [
+            { q: 3, r: 0 },
+            { q: 4, r: 0 },
+          ],
+        }),
+      ],
+      () => 'Moonpuff',
+    );
+    expect(lost.title).toBe(HOLLOW_TEXT.visitedOne);
+    expect(lost.lines).toEqual([
+      'He took Moonpuff to the Hollow. You can rescue them!',
+      'He took Moonpuff to the Hollow. You can rescue them!',
+      HOLLOW_TEXT.reclaimed(2),
+      HOLLOW_TEXT.lightAll,
+    ]);
+    const land = reportText([night('2026-10-31', { reclaimed: [{ q: 3, r: 0 }] })], () => '');
+    expect(land).toEqual({
+      title: HOLLOW_TEXT.visitedOne,
+      lines: [HOLLOW_TEXT.reclaimed(1), HOLLOW_TEXT.lightAll],
+    });
+    expect(
+      unseenReports([night('2026-10-31', { reclaimed: [{ q: 3, r: 0 }] })], null),
+    ).toHaveLength(1);
   });
 
   it('uses kind words only (style guide §9) and keeps lines short', () => {

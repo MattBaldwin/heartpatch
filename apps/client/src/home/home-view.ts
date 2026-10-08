@@ -396,9 +396,16 @@ export function upgradeOffer(home: HomeResponse, b: MyBuilding): UpgradeOffer | 
   const to = b.level + 1;
   let line = '';
   let radius: number | null = null;
+  const tiles = (n: number) => (n === 1 ? '1 tile' : `${String(n)} tiles`);
   if ('safeRadius' in step) {
     radius = step.safeRadius;
-    line = `Its light will reach ${String(radius)} tiles. Squishies out there stay safe at night!`;
+    const now = building.levels[b.level - 1];
+    const after = building.levels[to];
+    // Radii 1 / 1 / 2 (#277): level 2 is the step to a wider glow.
+    line =
+      now && 'safeRadius' in now && now.safeRadius === radius && after && 'safeRadius' in after
+        ? `Same glow for now. At level ${String(to + 1)} it reaches ${tiles(after.safeRadius)}!`
+        : `Its light will reach ${tiles(radius)}. Squishies out there stay safe at night!`;
   } else if ('xpPerHour' in step) {
     line = `Room for ${String(step.capacity)} squishies, and they learn a little faster.`;
   } else if ('capacity' in step) {
@@ -408,7 +415,7 @@ export function upgradeOffer(home: HomeResponse, b: MyBuilding): UpgradeOffer | 
   let next: string | null = null;
   if (after) {
     const fresh = Object.keys(after.cost).filter((id) => !(id in cost));
-    const reach = 'safeRadius' in after ? ` reaches ${String(after.safeRadius)} tiles and` : '';
+    const reach = 'safeRadius' in after ? ` reaches ${tiles(after.safeRadius)} and` : '';
     if (fresh.length > 0) {
       const what = fresh.map((id) => `${itemIcon(id)} ${itemName(id)}`).join(' and ');
       next = `Next time: Level ${String(to + 1)}${reach} needs ${what}.`;

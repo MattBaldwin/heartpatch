@@ -11,6 +11,14 @@ import type { Species } from '../schemas/data/species.js';
 import {
   firstHollowNight,
   heartSeedOf,
+  hollowWalk,
+  isFreshTile,
+  keeperNightOf,
+  pickReclaimed,
+  pickTakenMany,
+  rollStrikes,
+  stageOf,
+  strengthOf,
   isLocalBefore,
   isNightAt,
   lastNightOf,
@@ -50,8 +58,8 @@ describe('hollow rules data', () => {
 
 describe('night times', () => {
   it('names the night by the date its nightfall fell on', () => {
-    expect(lastNightOf({ date: '2026-10-31', minute: 21 * 60 }, RULES)).toBe('2026-10-31');
-    expect(lastNightOf({ date: '2026-10-31', minute: 21 * 60 - 1 }, RULES)).toBe('2026-10-30');
+    expect(lastNightOf({ date: '2026-10-31', minute: 19 * 60 }, RULES)).toBe('2026-10-31');
+    expect(lastNightOf({ date: '2026-10-31', minute: 19 * 60 - 1 }, RULES)).toBe('2026-10-30');
     expect(lastNightOf({ date: '2026-11-01', minute: 0 }, RULES)).toBe('2026-10-31');
     expect(lastNightOf({ date: '2026-01-01', minute: 60 }, RULES)).toBe('2025-12-31');
   });
@@ -67,14 +75,14 @@ describe('night times', () => {
 
   it('is night from nightfall to morning, and says when that changes', () => {
     const at = (minute: number) => ({ date: '2026-10-31', minute });
-    expect(isNightAt(at(21 * 60), RULES)).toBe(true);
+    expect(isNightAt(at(19 * 60), RULES)).toBe(true);
     expect(isNightAt(at(3 * 60), RULES)).toBe(true);
     expect(isNightAt(at(6 * 60), RULES)).toBe(false);
-    expect(isNightAt(at(20 * 60 + 59), RULES)).toBe(false);
-    expect(minutesUntilNightChange(at(20 * 60), RULES)).toBe(60);
-    expect(minutesUntilNightChange(at(21 * 60), RULES)).toBe(9 * 60);
+    expect(isNightAt(at(18 * 60 + 59), RULES)).toBe(false);
+    expect(minutesUntilNightChange(at(18 * 60), RULES)).toBe(60);
+    expect(minutesUntilNightChange(at(19 * 60), RULES)).toBe(11 * 60);
     expect(minutesUntilNightChange(at(5 * 60 + 59), RULES)).toBe(1);
-    expect(minutesUntilNightChange(at(6 * 60), RULES)).toBe(15 * 60);
+    expect(minutesUntilNightChange(at(6 * 60), RULES)).toBe(13 * 60);
   });
 
   it('finds the Heart Seed in the middle of a home base', () => {
@@ -155,8 +163,8 @@ describe('nightfall', () => {
             nights += 1;
             const active = mine.filter((s) => s.state === 'active').length;
             expect(outcome?.exposed).toBe(exposed.length);
-            if (exposed.length === 0 || !mayTakeFrom(active)) expect(outcome?.taken).toBeNull();
-            else expect(exposed.map((s) => s.id)).toContain(outcome?.taken);
+            if (exposed.length === 0 || !mayTakeFrom(active)) expect(outcome?.taken).toEqual([]);
+            else expect(exposed.map((s) => s.id)).toContain(outcome?.taken[0]);
           }
         }
       }
@@ -171,7 +179,7 @@ describe('nightfall', () => {
       () => 'seed',
       false,
     );
-    expect(outcome).toEqual({ userId: A, taken: null, exposed: 2, sheltered: 0 });
+    expect(outcome).toEqual({ userId: A, taken: [], exposed: 2, sheltered: 0 });
   });
 
   it('takes nothing from a player in their first-night grace, and still counts the dark', () => {
@@ -188,9 +196,9 @@ describe('nightfall', () => {
       (userId) => userId,
       true,
     );
-    expect(outcomes[0]).toEqual({ userId: A, taken: null, exposed: 2, sheltered: 0 });
+    expect(outcomes[0]).toEqual({ userId: A, taken: [], exposed: 2, sheltered: 0 });
     expect(outcomes[1]).toMatchObject({ userId: B, exposed: 2, sheltered: 0 });
-    expect(['b1', 'b2']).toContain(outcomes[1]?.taken);
+    expect(['b1', 'b2']).toContain(outcomes[1]?.taken[0]);
   });
 
   it('never takes a player’s last friend, wherever it sleeps (owner decision 2026-10-05)', () => {
@@ -199,15 +207,15 @@ describe('nightfall', () => {
     // One friend out in the dark: spared, and the dark still counted.
     expect(fall([squishy('s1', 'dark-bed')])).toEqual({
       userId: A,
-      taken: null,
+      taken: [],
       exposed: 1,
       sheltered: 0,
     });
     // Friends already in the Hollow don't count as company.
-    expect(fall([squishy('s1', 'homeless'), squishy('s2', 'hollowed')])?.taken).toBeNull();
+    expect(fall([squishy('s1', 'homeless'), squishy('s2', 'hollowed')])?.taken).toEqual([]);
     // A second active friend anywhere (even safe at home, or on watch) and he takes one.
-    expect(fall([squishy('s1', 'dark-bed'), squishy('s2', 'safe-bed')])?.taken).toBe('s1');
-    expect(fall([squishy('s1', 'dark-bed'), squishy('s2', 'on-watch')])?.taken).toBe('s1');
+    expect(fall([squishy('s1', 'dark-bed'), squishy('s2', 'safe-bed')])?.taken).toEqual(['s1']);
+    expect(fall([squishy('s1', 'dark-bed'), squishy('s2', 'on-watch')])?.taken).toEqual(['s1']);
     expect(mayTakeFrom(0)).toBe(false);
     expect(mayTakeFrom(1)).toBe(false);
     expect(mayTakeFrom(2)).toBe(true);
@@ -232,9 +240,9 @@ describe('nightfall', () => {
     );
     expect(outcomes).toEqual([
       // A's only friend is kept (b1 isn't theirs; the Hollow Man never takes a last friend).
-      { userId: A, taken: null, exposed: 1, sheltered: 0 },
+      { userId: A, taken: [], exposed: 1, sheltered: 0 },
       // `on-watch` posts are on A's land: B's squishy there went home to a dark bed.
-      { userId: B, taken: 'b3', exposed: 1, sheltered: 2 },
+      { userId: B, taken: ['b3'], exposed: 1, sheltered: 2 },
     ]);
   });
 
@@ -284,9 +292,9 @@ describe('first-night grace (owner decision 2026-10-03)', () => {
   const nine = HOME_BASE_RULES.nightfallMinute;
   it('skips the first graceNights nightfalls after joining', () => {
     expect(HOLLOW_RULES.graceNights).toBe(2);
-    // Joined at 8:55 PM: that evening's nightfall is the first grace night.
+    // Joined 5 minutes before nightfall: that evening's nightfall is the first grace night.
     expect(firstHollowNight({ date: '2026-10-03', minute: nine - 5 }, RULES)).toBe('2026-10-05');
-    // At or after 9 PM, tonight's has fallen: grace starts with tomorrow's.
+    // At or after nightfall, tonight's has fallen: grace starts with tomorrow's.
     expect(firstHollowNight({ date: '2026-10-03', minute: nine }, RULES)).toBe('2026-10-06');
     expect(firstHollowNight({ date: '2026-10-03', minute: 0 }, RULES)).toBe('2026-10-05');
     // Across a month end, and with no grace at all.
@@ -299,5 +307,135 @@ describe('first-night grace (owner decision 2026-10-03)', () => {
   it('refuses a grace out of range', () => {
     expect(checkHollowRules({ ...HOLLOW_RULES, graceNights: -1 })).not.toEqual([]);
     expect(checkHollowRules({ ...HOLLOW_RULES, graceNights: 1.5 })).not.toEqual([]);
+  });
+});
+
+describe('the Hollow Man grows bolder (#277, owner decisions 2026-10-08)', () => {
+  const nf = HOME_BASE_RULES.nightfallMinute;
+
+  it("counts a Keeper's nights from the first nightfall after joining", () => {
+    expect(keeperNightOf({ date: '2026-10-03', minute: nf - 5 }, '2026-10-03', RULES)).toBe(1);
+    expect(keeperNightOf({ date: '2026-10-03', minute: nf }, '2026-10-04', RULES)).toBe(1);
+    expect(keeperNightOf({ date: '2026-10-03', minute: 0 }, '2026-10-16', RULES)).toBe(14);
+    expect(keeperNightOf({ date: '2026-10-03', minute: 0 }, '2026-10-02', RULES)).toBe(0);
+  });
+
+  it("follows the owner's curve: grace, curious, bold, boldest", () => {
+    const chances = (n: number) => strengthOf(n, HOLLOW_RULES).chances;
+    expect(chances(0)).toEqual([]);
+    expect(chances(1)).toEqual([]);
+    expect(chances(2)).toEqual([]);
+    expect(chances(3)).toEqual([25]);
+    expect(chances(6)).toEqual([100]);
+    expect(chances(7)[0]).toBe(100);
+    expect(chances(13)).toEqual([100, 90]);
+    expect(chances(14)).toEqual([100, 100, 50]);
+    expect(chances(400)).toEqual([100, 100, 50]);
+    expect([1, 3, 7, 14].map((n) => stageOf(n, HOLLOW_RULES))).toEqual([
+      'watching',
+      'curious',
+      'bold',
+      'boldest',
+    ]);
+    // The grace nights never strike.
+    for (let n = 1; n <= HOLLOW_RULES.graceNights; n++) expect(chances(n)).toEqual([]);
+    expect(HOLLOW_RULES.strength.cap).toBe(3);
+    expect(HOLLOW_RULES.strength.gentleCap).toBe(1);
+  });
+
+  it('refuses a curve that does not start on night 1 or goes backwards', () => {
+    const strength = HOLLOW_RULES.strength;
+    expect(
+      checkHollowRules({
+        ...HOLLOW_RULES,
+        strength: { ...strength, nights: strength.nights.slice(1) },
+      }),
+    ).not.toEqual([]);
+    expect(
+      checkHollowRules({
+        ...HOLLOW_RULES,
+        strength: { ...strength, nights: [...strength.nights].reverse() },
+      }),
+    ).not.toEqual([]);
+    expect(
+      checkHollowRules({
+        ...HOLLOW_RULES,
+        strength: { ...strength, nights: [{ from: 1, stage: 'bold', chances: [50] }] },
+      }),
+    ).not.toEqual([]);
+  });
+
+  it('rolls strikes in order, stops at the first miss, and keeps to the cap', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(rollStrikes([100, 100, 100], 100, 3, `s${i}`)).toBe(3);
+      expect(rollStrikes([100, 100, 100], 100, 1, `s${i}`)).toBe(1);
+      expect(rollStrikes([100, 100, 50], 100, 3, `s${i}`)).toBeGreaterThanOrEqual(2);
+      expect(rollStrikes([], 300, 3, `s${i}`)).toBe(0);
+      // 0 % switches him off for a patch (Q4).
+      expect(rollStrikes([100, 100, 100], 0, 3, `s${i}`)).toBe(0);
+      // 200 % turns 50 into 100, but never past the cap.
+      expect(rollStrikes([100, 100, 50], 200, 3, `s${i}`)).toBe(3);
+      expect(rollStrikes([100, 100, 50, 50], 300, 3, `s${i}`)).toBe(3);
+    }
+    // The same seed always rolls the same.
+    expect(rollStrikes([25], 100, 3, 'x')).toBe(rollStrikes([25], 100, 3, 'x'));
+    // About a quarter of nights at 25 %.
+    let hits = 0;
+    for (let i = 0; i < 1000; i++) hits += rollStrikes([25], 100, 3, `n${i}`);
+    expect(hits).toBeGreaterThan(180);
+    expect(hits).toBeLessThan(320);
+  });
+
+  it('takes up to the strikes, never the same one twice, and always leaves a friend', () => {
+    const many = pickTakenMany([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 'seed', 3);
+    expect([...many].sort()).toEqual(['a', 'b', 'c']);
+    expect(pickTakenMany([{ id: 'a' }, { id: 'b' }], 'seed', 1)).toEqual([
+      pickTaken([{ id: 'a' }, { id: 'b' }], 'seed'),
+    ]);
+    const dark = [squishy('s1', 'dark-bed'), squishy('s2', 'dark-bed'), squishy('s3', 'dark-bed')];
+    const take = (strikes: number, squishies = dark) =>
+      nightfall([{ userId: A, squishies, strikes }], SAFE, () => 'seed', true)[0]?.taken;
+    expect(take(0)).toEqual([]);
+    expect(take(1)).toHaveLength(1);
+    // Three in the dark, three strikes: two go, the last friend stays.
+    expect(take(3)).toHaveLength(2);
+    expect(take(3, [...dark, squishy('s4', 'safe-bed')])).toHaveLength(3);
+  });
+
+  it('wins back the dark tiles farthest from home first, ties by id', () => {
+    const tiles = [
+      { id: 'b', q: 3, r: 0 },
+      { id: 'a', q: 0, r: 3 },
+      { id: 'c', q: 1, r: 0 },
+      { id: 'd', q: 4, r: -1 },
+    ];
+    expect(pickReclaimed(tiles, { q: 0, r: 0 }, 2).map((t) => t.id)).toEqual(['d', 'a']);
+    expect(pickReclaimed(tiles, { q: 0, r: 0 }, 0)).toEqual([]);
+    expect(pickReclaimed([], { q: 0, r: 0 }, 3)).toEqual([]);
+  });
+
+  it('keeps a freshly claimed tile safe on its first night (guardrail b)', () => {
+    expect(isFreshTile({ date: '2026-10-03', minute: nf - 1 }, '2026-10-03', RULES)).toBe(true);
+    expect(isFreshTile({ date: '2026-10-02', minute: nf }, '2026-10-03', RULES)).toBe(true);
+    expect(isFreshTile({ date: '2026-10-02', minute: nf - 1 }, '2026-10-03', RULES)).toBe(false);
+    expect(isFreshTile(null, '2026-10-03', RULES)).toBe(false);
+  });
+
+  it('walks the border: backs away from lit tiles, reaches the struck ones', () => {
+    const land = hexSpiral({ q: 0, r: 0 }, 2);
+    const safe = new Set<HexKey>(hexSpiral({ q: 0, r: 0 }, 1).map(hexKey));
+    for (const h of land) if (h.q > 0) safe.add(hexKey(h));
+    const strikes: Hex[] = [{ q: -2, r: 1 }];
+    const walk = hollowWalk({ land, safe, strikes, heartSeed: { q: 0, r: 0 }, seed: 'w' });
+    expect(walk[0]?.kind).toBe('enter');
+    expect(walk.at(-1)?.kind).toBe('leave');
+    expect(walk.filter((p) => p.kind === 'strike')).toEqual([{ q: -2, r: 1, kind: 'strike' }]);
+    const recoils = walk.filter((p) => p.kind === 'recoil');
+    expect(recoils).toHaveLength(3);
+    for (const p of recoils) expect(safe.has(hexKey(p))).toBe(true);
+    expect(walk.length).toBeLessThanOrEqual(10);
+    // Same night, same walk.
+    expect(hollowWalk({ land, safe, strikes, heartSeed: { q: 0, r: 0 }, seed: 'w' })).toEqual(walk);
+    expect(hollowWalk({ land: [], safe, strikes: [], heartSeed: null, seed: 'w' })).toEqual([]);
   });
 });
