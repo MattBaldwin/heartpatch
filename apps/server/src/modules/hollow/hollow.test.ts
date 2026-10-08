@@ -732,6 +732,30 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       ).toHaveLength(1 - fires);
     });
 
+    it('wins back a dark homestead too, which keeps its explore progress (#199)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await pvpOn(mapId);
+      const { tiles } = await darkLand(mapId, kid, 1);
+      const tile = (await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, tiles[0]!) }))!;
+      // Fully explored and joined: a homestead (untended land never fades it).
+      await db.execute(
+        `insert into tile_explore (user_id, tile_id, map_id, layout, terrain, searched, spot_count, completed_at, joined_at)
+         values ('${kid.id}', '${tile.id}', '${mapId}', 1, '${tile.terrain}', 7, 3, '${clock.toISOString()}', '${clock.toISOString()}')`,
+      );
+      const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
+      await hollow.runNightfall(mapId, TONIGHT);
+      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([{ q: tile.q, r: tile.r }]);
+      expect(await hollow.reclaim(mapId, TONIGHT)).toEqual({ wild: 1 });
+      expect(await ownerOf(tile.id)).toBeNull();
+      // Winning it back later makes it a homestead again at once: the row stays.
+      const [row] = (await db.execute(
+        `select completed_at from tile_explore where tile_id = '${tile.id}' and user_id = '${kid.id}'`,
+      )) as unknown as { completed_at: unknown }[];
+      expect(row?.completed_at).not.toBeNull();
+    });
+
     it('strikes at most once a night on a gentle patch, whatever the curve', async () => {
       const server = await start();
       const kid = await player();

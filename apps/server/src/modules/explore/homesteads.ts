@@ -72,8 +72,9 @@ const tilesEvent = (
  * and returns the events to append after the caller's own writes. Locks the
  * players' fully explored rows in `(user_id, tile_id)` order: call it after
  * the tile locks (tech spec §7 step 6) and before squishies, buildings and
- * the bag. Land going wild and leaving a patch need no call: a joined
- * homestead never fades, and a leaver keeps no land.
+ * the bag. Land going wild calls it too (`territory/rewild.ts`): the
+ * Hollow Man can win a homestead back or cut land off (#277). Leaving a
+ * patch needs no call: a leaver keeps no land.
  *
  * Two searches by one player that finish two neighbouring tiles at the same
  * moment (two devices) can each miss the other's finish; the far one then

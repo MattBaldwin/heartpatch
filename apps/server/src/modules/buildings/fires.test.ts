@@ -321,8 +321,8 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
     // Enough for everything: every fire full, and then there's nothing to do.
     await give(mapId, kid, { emberwood: 20 });
     const full = FuelAllResponseSchema.parse((await fuelAll(server, kid, mapId)).json());
-    expect(full).toMatchObject({ fires: 3, nights: 1 + 4 + 4, short: false });
-    expect(full.home.items['emberwood']).toBe(11);
+    expect(full).toMatchObject({ fires: 3, nights: 3 + 6 + 6, short: false });
+    expect(full.home.items['emberwood']).toBe(5);
     const done = await fuelAll(server, kid, mapId);
     expect(errorOf(done).message).toBe('All your fires are full! Come back after a night or two.');
   });

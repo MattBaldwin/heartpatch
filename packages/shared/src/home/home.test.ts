@@ -70,7 +70,7 @@ describe('Hearthfire fuel (tech spec §7)', () => {
       nightsLeft: 0,
       lit: false,
     });
-    expect(fuelSpace(fire, null, at('2026-10-02', 12), RULES)).toBe(5);
+    expect(fuelSpace(fire, null, at('2026-10-02', 12), RULES)).toBe(7);
   });
 
   it('counts down one night per nightfall without anything being decremented', () => {
@@ -92,13 +92,13 @@ describe('Hearthfire fuel (tech spec §7)', () => {
 
   it('caps at the most nights it can hold, counted from tonight', () => {
     const local = at('2026-10-02', 12);
-    expect(addFuel(fire, null, local, 9, RULES)).toBe('2026-10-06'); // 5 nights: Oct 2–6
-    const full = addFuel(fire, null, local, 5, RULES);
+    expect(addFuel(fire, null, local, 9, RULES)).toBe('2026-10-08'); // 7 nights: Oct 2–8
+    const full = addFuel(fire, null, local, 7, RULES);
     expect(fuelSpace(fire, full, local, RULES)).toBe(0);
     expect(addFuel(fire, full, local, 1, RULES)).toBe(full);
     // A night later one more fits.
     expect(fuelSpace(fire, full, at('2026-10-03', 12), RULES)).toBe(1);
-    expect(addFuel(fire, full, at('2026-10-03', 12), 1, RULES)).toBe('2026-10-07');
+    expect(addFuel(fire, full, at('2026-10-03', 12), 1, RULES)).toBe('2026-10-09');
   });
 
   it('tops up from tonight when the fire went out long ago', () => {
@@ -242,12 +242,12 @@ describe('building costs and refunds', () => {
 
   it('costs the next level to upgrade, and nothing past the top', () => {
     expect(upgradeCost(fire, 1)).toEqual({ timber: 10, stone: 10 });
-    expect(upgradeCost(fire, 2)).toEqual({ timber: 20, stone: 15, glimmer: 2 });
+    expect(upgradeCost(fire, 2)).toEqual({ timber: 20, stone: 15, glimmer: 1 });
     expect(upgradeCost(fire, 3)).toBeNull();
     expect(upgradeCost(lantern, 1)).toBeNull();
     expect(upgradeCost(building('cozy-meadow'), 1)).toEqual({ timber: 8, stone: 4 });
     // What an upgraded building cost in all is what a take-down refunds from.
-    expect(spentOn(fire, 3)).toEqual({ timber: 35, stone: 30, glimmer: 2 });
+    expect(spentOn(fire, 3)).toEqual({ timber: 35, stone: 30, glimmer: 1 });
   });
 
   it('always gives the carved pumpkin back whole', () => {

@@ -448,8 +448,12 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     await tending.fillMissing(mapId, now());
     const result = await tending.transaction(async (repo, tx) => {
       const at = now();
-      const picked = (await repo.outerTiles(mapId)).filter((t) =>
-        wanted.has(`${t.ownerUserId}/${hexKey(t)}`),
+      // Every owned tile, homesteads included (untended land's `outerTiles`
+      // leaves them out: they never fade, but he can win them back).
+      const picked = (await createHollowRepo(tx).nightTiles(mapId)).flatMap((t) =>
+        t.ownerUserId !== null && t.homeSlot === null && wanted.has(`${t.ownerUserId}/${hexKey(t)}`)
+          ? [{ ...t, ownerUserId: t.ownerUserId, tendedAt: null }]
+          : [],
       );
       if (picked.length === 0) return { wild: 0 };
       // Lock order (tech spec §7): the tiles (id order), their tending rows,

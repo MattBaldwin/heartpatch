@@ -18,13 +18,13 @@ export const BUILDINGS: Building[] = [
     slot: 'centre',
     fuelResource: 'emberwood',
     fuelPerNight: 1, // TUNE:
-    maxFuelNights: 5, // TUNE: docs/DECISIONS.md, design doc §14
+    maxFuelNights: 7, // TUNE: owner decision 2026-10-08 (#277): a week away keeps every fire lit
     levels: [
       // Radii 1 / 1 / 2 (owner decision 2026-10-08, #277): every bit of land
       // needs a fire's light, so one fire covers less.
       { cost: { timber: 5, stone: 5 }, safeRadius: 1 }, // TUNE:
       { cost: { timber: 10, stone: 10 }, safeRadius: 1 }, // TUNE:
-      { cost: { timber: 20, stone: 15, glimmer: 2 }, safeRadius: 2 }, // TUNE:
+      { cost: { timber: 20, stone: 15, glimmer: 1 }, safeRadius: 2 }, // TUNE: Glimmer 2 → 1 (#277 sim gate margin)
     ],
   },
   {
@@ -41,7 +41,7 @@ export const BUILDINGS: Building[] = [
     refundPercent: 100, // TUNE:
     fuelResource: 'emberwood',
     fuelPerNight: 1, // TUNE:
-    maxFuelNights: 5, // TUNE: same as a plain Hearthfire
+    maxFuelNights: 7, // TUNE: same as a plain Hearthfire
     // TUNE: owner decision 2026-10-08 (#277): lights its ring, like a new Hearthfire.
     levels: [{ cost: { 'jack-o-lantern-hearthfire': 1 }, safeRadius: 1 }],
   },

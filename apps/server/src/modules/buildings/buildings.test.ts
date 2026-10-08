@@ -299,7 +299,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         lit: false,
         safeRadius: 1,
         nightsLeft: 0,
-        fuelSpace: 5,
+        fuelSpace: 7,
         capacity: null,
         residents: null,
       });
@@ -454,7 +454,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
   });
 
   describe('Hearthfire fuel', () => {
-    it('stores up to 5 nights, burns one per nightfall lazily and goes out', async () => {
+    it('stores up to 7 nights, burns one per nightfall lazily and goes out', async () => {
       const server = await start();
       const [kid, friend] = [await player(), await player()];
       const mapId = await newMap(server, kid);
@@ -470,7 +470,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const res = await fuel(server, kid, mapId, fire.id, 3);
       expect(res.statusCode).toBe(200);
       const lit = HomeResponseSchema.parse(res.json());
-      expect(lit.buildings[0]).toMatchObject({ lit: true, nightsLeft: 3, fuelSpace: 2 });
+      expect(lit.buildings[0]).toMatchObject({ lit: true, nightsLeft: 3, fuelSpace: 4 });
       expect(lit.items['emberwood']).toBe(17);
       expect(lit.tonight).toBe('2026-10-02');
       const row = await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, fire.id) });
@@ -488,8 +488,8 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
 
       // More than fits: it fills up and only charges for what went in.
       const topped = HomeResponseSchema.parse((await fuel(server, kid, mapId, fire.id, 9)).json());
-      expect(topped.buildings[0]).toMatchObject({ nightsLeft: 5, fuelSpace: 0 });
-      expect(topped.items['emberwood']).toBe(15);
+      expect(topped.buildings[0]).toMatchObject({ nightsLeft: 7, fuelSpace: 0 });
+      expect(topped.items['emberwood']).toBe(13);
       const full = await fuel(server, kid, mapId, fire.id, 1);
       expect(full.statusCode).toBe(409);
       expect(errorOf(full).message).toBe("It's full! Come back after a night or two.");
@@ -499,10 +499,10 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         clock.setTime(Date.parse(iso));
         return (await home(server, kid, mapId)).buildings[0]!.nightsLeft;
       };
-      expect(await nightsAt('2026-10-03T00:59:00Z')).toBe(5); // 6:59 PM Oct 2
-      expect(await nightsAt('2026-10-03T01:00:00Z')).toBe(4); // 7:00 PM Oct 2
-      expect(await nightsAt('2026-10-06T12:00:00Z')).toBe(1); // Oct 6, before nightfall
-      expect(await nightsAt('2026-10-07T01:00:00Z')).toBe(0);
+      expect(await nightsAt('2026-10-03T00:59:00Z')).toBe(7); // 6:59 PM Oct 2
+      expect(await nightsAt('2026-10-03T01:00:00Z')).toBe(6); // 7:00 PM Oct 2
+      expect(await nightsAt('2026-10-08T12:00:00Z')).toBe(1); // Oct 8, before nightfall
+      expect(await nightsAt('2026-10-09T01:00:00Z')).toBe(0);
       const out = (await view(server, friend, mapId)).tiles.find(
         (t) => t.q === land!.q && t.r === land!.r,
       )!;
@@ -864,7 +864,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(still.buildings[0]).toMatchObject({ level: 2, safeRadius: 1 });
       expect(still.items).toMatchObject({ timber: 20, stone: 15 });
 
-      await give(mapId, kid, { glimmer: 2 });
+      await give(mapId, kid, { glimmer: 1 });
       const top = await upgrade(server, kid, mapId, fire.id);
       expect(top.statusCode).toBe(200);
       expect(HomeResponseSchema.parse(top.json()).buildings[0]).toMatchObject({
@@ -877,10 +877,10 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
 
       // Taking it down gives back half of everything spent on it, upgrades included.
       const removed = await call(server, 'POST', `/maps/${mapId}/buildings/${fire.id}/remove`, kid);
+      // Half of one Glimmer rounds down to none (#277: level 3 needs 1).
       expect(RemoveBuildingResponseSchema.parse(removed.json()).refund).toEqual({
         timber: 17,
         stone: 15,
-        glimmer: 1,
       });
       await reconciled(mapId, kid.id);
     });

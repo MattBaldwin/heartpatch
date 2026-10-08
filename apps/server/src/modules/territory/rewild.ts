@@ -2,6 +2,7 @@ import type { GameEventPayload, LocalDate } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { takeDownOnLostLand } from '../buildings/service.js';
+import { refreshHomesteads } from '../explore/homesteads.js';
 import { takeDownFencesOnLostLand } from '../fences/service.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
@@ -50,6 +51,16 @@ export async function rewildTiles(
     const guards = await territory.clearDefenders(tile.id);
     returned.set(tile.ownerUserId, [...(returned.get(tile.ownerUserId) ?? []), ...guards]);
   }
+  // Homesteads (#199) beyond land that went wild may be cut off from home,
+  // and a homestead the Hollow Man won back (#277) is no longer one; it keeps
+  // its explore progress. After the tiles and defenders, before buildings
+  // (tech spec §7 step 6: `tile_explore` rows follow the tile locks).
+  const homesteads = await refreshHomesteads(
+    tx,
+    mapId,
+    owned.map(([userId]) => userId),
+    at,
+  );
   // Fires on that land come down too (#202, step 8). What they give
   // back goes in their owners' bags with the gatherers' banking below,
   // the inventory rows locked together (step 11).
@@ -87,7 +98,7 @@ export async function rewildTiles(
   for (const { userId, items, refId } of refunds) {
     await grantItems(tx, { mapId, userId }, items, 'build-refund', refId);
   }
-  events.push(...lostFires.map((l) => l.event), ...lostFences.map((l) => l.event));
+  events.push(...homesteads, ...lostFires.map((l) => l.event), ...lostFences.map((l) => l.event));
   for (const [userId, list] of owned) {
     const payload: GameEventPayload<'tile.rewilded'> = {
       userId,

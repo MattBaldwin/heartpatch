@@ -15,9 +15,9 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
     expect(CARE_ACTIONS.map((c) => c.id)).toEqual(['feed', 'pet', 'play', 'heart-snack']);
   });
 
-  it('lets a Hearthfire store up to 5 nights of Emberwood', () => {
+  it('lets a Hearthfire store up to 7 nights of Emberwood (#277: a week away)', () => {
     const fire = BUILDINGS.find((b) => b.kind === 'hearthfire');
-    expect(fire).toMatchObject({ fuelResource: 'emberwood', maxFuelNights: 5 });
+    expect(fire).toMatchObject({ fuelResource: 'emberwood', maxFuelNights: 7 });
   });
 
   it('has the four holiday seasons, with Halloween 2026 running to Nov 9', () => {

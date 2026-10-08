@@ -40,14 +40,17 @@ describe('runMapFill', () => {
     }
   });
 
-  it('keeps everything while the fires burn, then gives land back a little at a time', () => {
+  it('keeps everything for a week away, then gives land back a little at a time', () => {
     expect(TERRITORY_RULES.tending.keepRadius).toBe(2);
+    // A week of fuel (owner decision 2026-10-08, #277): fires topped up on
+    // the last day burn that night and six more, so a kid back by day 7's
+    // nightfall has lost nothing. `awayTiles` counts at the end of a day,
+    // after its nightfall: 6 days away is the last day still whole.
+    expect(
+      GAME_DATA.buildings.flatMap((b) => (b.kind === 'hearthfire' ? [b.maxFuelNights] : [])),
+    ).toEqual([7, 7]);
     const run = runMapFill(scenario('engaged-stops'), FADING_GENTLE, SHORT);
-    // A Hearthfire stores this many nights; after that the land is dark (#277).
-    const fuelNights = Math.min(
-      ...GAME_DATA.buildings.flatMap((b) => (b.kind === 'hearthfire' ? [b.maxFuelNights] : [])),
-    );
-    const away = awayTiles(run, [3, fuelNights - 1, 14, 30])!;
+    const away = awayTiles(run, [3, 6, 14, 30])!;
     expect(away.away[0]!.tiles).toBe(away.atStop);
     expect(away.away[1]!.tiles).toBe(away.atStop);
     expect(away.away[2]!.tiles!).toBeLessThan(away.atStop!);
