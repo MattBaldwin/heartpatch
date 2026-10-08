@@ -118,5 +118,5 @@ describe('lighting all the land (#277)', () => {
         });
       }
     }
-  });
+  }, 30_000); // the full progression model, two map sizes (about 5 s under coverage)
 });
