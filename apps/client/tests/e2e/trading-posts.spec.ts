@@ -226,6 +226,21 @@ function namesClipped(page: Page): Promise<string[]> {
   );
 }
 
+/** Shelf tiles whose contents stick out of their own cell (e.g. a picked item's stepper). */
+function tilesSpill(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('[data-testid="post"] .post-grid > *')].flatMap(
+      (cell) => {
+        const edge = cell.getBoundingClientRect().right + 1;
+        const out = [...cell.querySelectorAll<HTMLElement>('*')].some(
+          (n) => n.getBoundingClientRect().right > edge,
+        );
+        return out ? [cell.textContent] : [];
+      },
+    ),
+  );
+}
+
 /** Shuts an open side tray, which covers part of the map and the tile panel. */
 async function shutTrays(page: Page): Promise<void> {
   const open = (await traysState(page))?.open ?? null;
@@ -332,6 +347,8 @@ test('trades and gifts at a post: offer, say yes, and pick up from the mailbox (
     .getByRole('button', { name: /Emberbun/ })
     .tap();
   await leePost.getByTestId('post-want').getByRole('button', { name: /Stone/ }).tap();
+  // Picked with a − / + stepper, the tile still sits inside its shelf.
+  expect(await tilesSpill(lee)).toEqual([]);
   await leePost.getByTestId('post-note-want-to-trade').tap();
   await expect(leePost.getByTestId('post-send-hint')).toHaveText(
     `Your things wait safely at the post until ${samName} answers.`,

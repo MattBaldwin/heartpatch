@@ -323,6 +323,8 @@ button.post-slot {
 .post-slot-wrap {
   display: grid;
   gap: 4px;
+  /* A picked item with its − / + (two 44pt buttons) takes the whole row. */
+  grid-column: 1 / -1;
 }
 
 .post-stepper {
