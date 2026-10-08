@@ -10,9 +10,11 @@ import { workableByMe } from './index.js';
 import {
   canTrain,
   groundsLabel,
+  trainHintText,
   hintLines,
   countsDown,
   jobLine,
+  JOBS_TEXT,
   nameOf,
   rarityOf,
   readyTotal,
@@ -244,5 +246,15 @@ describe('Training Grounds on homesteads (#277)', () => {
     expect(canTrain({ trainingGrounds: [g(1, 2)] })).toBe(false);
     expect(canTrain({ trainingGrounds: [g(1, 0, true)] })).toBe(false);
     expect(canTrain({ trainingGrounds: [g(1, 2), g(2, 1)] })).toBe(true);
+  });
+
+  it('says why Train is off: none yet, all napping, or all full', () => {
+    expect(trainHintText({ trainingGrounds: [] })).toBe(JOBS_TEXT.noGrounds);
+    expect(trainHintText({ trainingGrounds: [g(1, 0, true)] })).toBe(JOBS_TEXT.allNapping);
+    expect(trainHintText({ trainingGrounds: [g(1, 2)] })).toBe(JOBS_TEXT.groundsFull);
+    expect(trainHintText({ trainingGrounds: [g(1, 2), g(2, 0, true)] })).toBe(
+      JOBS_TEXT.groundsFull,
+    );
+    expect(trainHintText({ trainingGrounds: [g(1, 1)] })).toBe('');
   });
 });

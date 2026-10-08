@@ -16,6 +16,7 @@ import {
   nameOf,
   readyTotal,
   spotLabel,
+  trainHintText,
 } from './jobs-view.js';
 import './jobs.css';
 
@@ -295,9 +296,8 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       return;
     }
     lines = new Map();
-    const tg = current.trainingGrounds;
     const trainable = canTrain(current);
-    trainHint.textContent = tg.length === 0 ? JOBS_TEXT.noGrounds : JOBS_TEXT.groundsFull;
+    trainHint.textContent = trainHintText(current);
     trainHint.hidden = trainable || current.squishies.length === 0;
     list.replaceChildren(
       ...current.squishies.map((s) => {

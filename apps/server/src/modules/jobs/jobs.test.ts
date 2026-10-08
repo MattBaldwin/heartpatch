@@ -1023,6 +1023,10 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
         state: 'hollowed',
         trainingBuildingId: null,
       });
+      const trained = (await eventsOf(mapId)).filter((e) => e.type === 'squishy.trained');
+      expect(trained.map((e) => e.payload)).toEqual([
+        { userId: kid.id, trained: [{ squishyId: trainee, xp: expect.any(Number) as number }] },
+      ]);
     });
 
     it('is safe overnight when a lit fire reaches its homestead (#277)', async () => {

@@ -794,7 +794,9 @@ export async function takeDownOnLostLand(
   const down: LostBuilding[] = [];
   for (const row of await repo.lockOnTiles(tileIds)) {
     const refund = takeDownRefund(row, local);
-    // Under the tile lock nobody starts training here, so this list holds.
+    // Under the tile lock nobody starts training here. One may stop (moving
+    // into a habitat locks only the squishy): `landTraining` reads them again
+    // after the squishy locks, so nothing lands twice.
     const trainees = row.kind === 'training-grounds' ? await repo.traineesOf(row.id) : [];
     if (row.kind !== 'training-grounds') await repo.deleteBuilding(row.id);
     down.push({

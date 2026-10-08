@@ -1010,6 +1010,55 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
     });
   });
 
+  describe('moving a trainee into a habitat (#277: it sleeps on its homestead)', () => {
+    it('lands what it earned and stops training; moving out leaves training alone', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      const grounds = await placed(server, kid, mapId, {
+        buildingId: 'training-grounds',
+        q: plot.q,
+        r: plot.r,
+        spot: 1,
+      });
+      const { plain } = await homeTiles(server, kid, mapId);
+      const den = await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 1 });
+      const [pal, other] = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      const house = (squishyId: string, habitatId: string | null) =>
+        call(server, 'POST', `/maps/${mapId}/squishies/${squishyId}/habitat`, kid, { habitatId });
+      for (const id of [pal, other]) {
+        const res = await call(server, 'POST', `/maps/${mapId}/squishies/${id}/job`, kid, {
+          job: 'training',
+          buildingId: grounds.id,
+        });
+        expect(res.statusCode, res.body).toBe(200);
+      }
+
+      // Two hours at 5 XP an hour, then it moves into the Ember Den.
+      clock.setTime(clock.getTime() + 2 * 60 * 60 * 1000);
+      const moved = await house(pal, den.id);
+      expect(moved.statusCode, moved.body).toBe(200);
+      const row = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pal) });
+      expect(row).toMatchObject({
+        xp: 10,
+        habitatBuildingId: den.id,
+        trainingBuildingId: null,
+        trainingSince: null,
+      });
+      const types = (await eventsOf(mapId)).slice(-2).map((e) => e.type);
+      expect(types).toEqual(['squishy.trained', 'squishy.housed']);
+
+      // Moving out of a habitat stops nothing: the other one keeps training.
+      const out = await house(other, null);
+      expect(out.statusCode, out.body).toBe(200);
+      expect(
+        await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, other) }),
+      ).toMatchObject({ xp: 0, trainingBuildingId: grounds.id });
+    });
+  });
+
   describe('upgrading Training Grounds with trainees (review round 1)', () => {
     it('pays the old rate up to the upgrade and the new rate after it', async () => {
       const server = await start();

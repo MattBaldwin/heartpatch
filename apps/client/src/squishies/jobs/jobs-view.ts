@@ -36,6 +36,7 @@ export const JOBS_TEXT = {
   groundsLit: '🔥 Safe by the fire tonight',
   groundsDark: "🌙 It's dark here at night. Build a fire nearby to keep trainees safe! 🔥",
   groundsNapping: 'zZ Napping. Join this homestead back up to home!',
+  allNapping: 'zZ Your Training Grounds are napping. Join their homesteads back up to home!',
   trainingNapping: 'zZ Its homestead is napping, so no practice for now.',
   pickSpot: 'Where should they gather?',
   noSpots: 'No spots to gather yet. Win some land!',
@@ -152,6 +153,17 @@ export function groundsLabel(view: Pick<JobsView, 'trainingGrounds'>, id: string
   const name = all.length > 1 ? `Training Grounds ${String(at + 1)}` : 'Training Grounds';
   const room = Math.max(0, g.capacity - g.used);
   return `🎯 ${name} · ${room === 0 ? 'full' : `room for ${String(room)}`}`;
+}
+
+/**
+ * Why Train is switched off, said by cause: no Training Grounds yet, all of
+ * them napping, or all full. '' while a squishy can start training somewhere.
+ */
+export function trainHintText(view: Pick<JobsView, 'trainingGrounds'>): string {
+  if (canTrain(view)) return '';
+  const all = view.trainingGrounds;
+  if (all.length === 0) return JOBS_TEXT.noGrounds;
+  return all.every((g) => g.napping) ? JOBS_TEXT.allNapping : JOBS_TEXT.groundsFull;
 }
 
 /** Can a squishy start training somewhere (Training Grounds with room, not napping)? */

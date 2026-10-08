@@ -675,7 +675,9 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
               )
             : null;
         if (request.job === 'training' && !groundsBefore) {
-          throw new AppError('CONFLICT', MESSAGES.noGrounds);
+          // Asked for Training Grounds that are gone (a stale picker): try again.
+          const stale = request.buildingId !== undefined;
+          throw new AppError('CONFLICT', stale ? MESSAGES.changed : MESSAGES.noGrounds);
         }
         const extraTiles = [target?.id, groundsBefore?.tileId].filter(
           (id): id is string => id !== undefined,
