@@ -146,7 +146,8 @@ test('builds a Factory, runs batches from home, the book and the bag, and welcom
     { key: `heartpatch.factory.seen.${userId!}.${mapId}` },
   );
   expect((await api(page, 'POST', `/maps/${mapId}/dev/factory/ready`)).status).toBe(200);
-  await (await trayButton(page, 'bag-open')).tap();
+  // The app comes back to the front: the patch settles, measuring time away.
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   const welcome = page.getByTestId('factory-welcome');
   await slowExpect(welcome).toBeVisible();
   await expect(welcome.getByTestId('factory-welcome-got')).toContainText('🍪 +6 Treats');

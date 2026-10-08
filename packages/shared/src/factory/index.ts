@@ -54,7 +54,9 @@ export function timesItems(items: ItemCounts, runs: number): ItemCounts {
 
 /**
  * Stopping a batch (owner decision 2026-10-08): what's made is kept, and
- * everything not finished comes back, the one being made included.
+ * everything not finished comes back, the one being made included. The
+ * server also never counts below what it has banked already (`madeBy`); this
+ * is the plain maths, for previews.
  */
 export function stopRuns(batch: FactoryTiming, atMs: number): { kept: number; refunded: number } {
   const kept = factoryDone(batch, atMs);

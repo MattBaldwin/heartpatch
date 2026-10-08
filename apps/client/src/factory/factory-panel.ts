@@ -266,6 +266,7 @@ export function createFactoryPanel(deps: FactoryPanelDeps): FactoryPanel {
           FACTORY_TEXT.back,
           () => {
             line = '';
+            only = false;
             setMode('list');
           },
           { 'data-testid': 'factory-back' },

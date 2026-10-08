@@ -5,6 +5,7 @@ import type {
   PublicTile,
   PublicUser,
 } from '@heartpatch/shared';
+import { createAwayTracker } from '../factory/away.js';
 import { factoryApi, type FactoryApi } from '../factory/factory-api.js';
 import { createFactoryPanel } from '../factory/factory-panel.js';
 import { createFactoryStrip } from '../factory/factory-strip.js';
@@ -185,6 +186,12 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   const readPages = options.openPages ?? (() => recipeBookApi.get().then((res) => res.unlocked));
   /** Recipe book pages this account has opened, as last read. */
   let openPages = new Set<string>();
+  /** How long the kid was away from a patch, for the welcome-back card (#294). */
+  const presence = createAwayTracker({
+    storage,
+    now: device,
+    key: (id) => (user ? SEEN_KEY(user.id, id) : null),
+  });
 
   let user: PublicUser | null = null;
   let mapId: string | null = null;
@@ -435,7 +442,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
         state = fresh;
         serverNextAt = nextAt;
       }
-      const away = awayMs(id);
+      const away = presence.awayMs(id);
       if (landed.length > 0 || trained.length > 0) {
         landings += 1;
         // After a while away, the Factory's things get their own card (#294).
@@ -447,7 +454,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       }
       // Only while the kid can see it: a tab left open in the background
       // keeps settling, and that isn't being here.
-      if (document.visibilityState === 'visible') markSeen(id);
+      presence.settled(id, document.visibilityState === 'visible');
       if (!newest) return;
       render();
       scheduleSettle();
@@ -492,26 +499,6 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     }, wait);
   }
 
-  /** How long since this patch was last on screen (device clock; Infinity when never seen here). */
-  function awayMs(id: string): number {
-    if (!user || !storage) return 0;
-    try {
-      const raw = storage.getItem(SEEN_KEY(user.id, id));
-      const at = raw === null ? NaN : Number(raw);
-      return Number.isFinite(at) ? device() - at : 0;
-    } catch {
-      return 0;
-    }
-  }
-  function markSeen(id: string): void {
-    if (!user || !storage) return;
-    try {
-      storage.setItem(SEEN_KEY(user.id, id), String(device()));
-    } catch {
-      // Private mode: no welcome-back card, the pop-up still says what landed.
-    }
-  }
-
   function showWelcome(landed: readonly Landed[]): void {
     welcomeGot.replaceChildren(...welcomeChips(landed).map((c) => el('span', {}, c)));
     const going = state?.factory
@@ -551,8 +538,13 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   // Back from another app or a locked screen: things may have finished meanwhile.
   // Going away is remembered, for the welcome-back card (#294).
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && mapId) void refresh();
-    else if (document.visibilityState === 'hidden' && mapId) markSeen(mapId);
+    if (!mapId) return;
+    if (document.visibilityState === 'visible') {
+      presence.arrived(mapId);
+      void refresh();
+    } else {
+      presence.left(mapId);
+    }
   });
 
   const sendDeps = {
@@ -997,6 +989,8 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
   return {
     setMap: async (next) => {
       if (next === mapId) return;
+      if (mapId) presence.left(mapId);
+      if (next) presence.arrived(next);
       generation += 1;
       mapId = next;
       state = null;
