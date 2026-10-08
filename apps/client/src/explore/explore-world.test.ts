@@ -148,6 +148,21 @@ describe('what is in front of the Keeper', () => {
     expect(blocked(at, collidersOf([rock], []))).toBe(false);
     expect(spotInFront(at, yawToward(at, rock), [rock], null)?.index).toBe(0);
   });
+  it('stands round the other side when a neighbour is in the way', () => {
+    const rock = spot(0, 0, 0);
+    const keep = spotRadius('rock') + EXPLORE_VIEW.keeperRadius + EXPLORE_VIEW.reach * 0.4;
+    // A neighbour sits right where the Keeper would stand (coming from the left).
+    const neighbour = spot(1, -keep - 0.02, 0);
+    const colliders = collidersOf([rock, neighbour], []);
+    const at = besideSpot({ x: -0.6, z: 0 }, rock, colliders);
+    expect(blocked(at, colliders)).toBe(false);
+    expect(gapTo(at, rock)).toBeLessThanOrEqual(EXPLORE_VIEW.reach);
+    // Near the tile's edge: still inside it and in reach.
+    const edge = spot(2, 0.8, 0);
+    const there = besideSpot({ x: 0.95, z: 0 }, edge, collidersOf([edge], []));
+    expect(insideTile(there)).toBe(true);
+    expect(gapTo(there, edge)).toBeLessThanOrEqual(EXPLORE_VIEW.reach);
+  });
 });
 
 describe('the follow camera', () => {

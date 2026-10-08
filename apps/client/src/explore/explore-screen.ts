@@ -445,7 +445,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const point = scene3d?.groundAt(x, y);
     if (!point || !tile) return;
     const spot = spotAtTap(point, tile.spots);
-    const goal = spot ? besideSpot(keeperAt, spot) : clampToTile(point);
+    const goal = spot ? besideSpot(keeperAt, spot, scene3d?.colliders ?? []) : clampToTile(point);
     // Never aim inside a rock: the Keeper would bump it forever.
     walkTo = scene3d ? slideMove(goal, goal, scene3d.colliders) : goal;
     walkBest = Infinity;

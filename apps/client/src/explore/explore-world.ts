@@ -145,21 +145,30 @@ export function spotAtTap<T extends Pick<PublicSearchSpot, 'x' | 'z' | 'done'>>(
 }
 
 /**
- * Where a walk to a spot stops: just outside its collider on the Keeper's
- * side, well inside reach, so the Keeper stands beside the rock, not on it.
+ * Where a walk to a spot stops: just outside its collider, well inside
+ * reach, so the Keeper stands beside the rock, not on it. On the Keeper's
+ * side if that's clear, else the nearest clear place round it (a neighbour
+ * or the tile's edge can be in the way).
  */
 export function besideSpot(
   from: WorldPoint,
   spot: Pick<PublicSearchSpot, 'kind' | 'x' | 'z'>,
+  colliders: readonly Collider[] = [],
 ): WorldPoint {
   const dx = from.x - spot.x;
   const dz = from.z - spot.z;
   const d = Math.sqrt(dx * dx + dz * dz);
   const keep = spotRadius(spot.kind) + EXPLORE_VIEW.keeperRadius + EXPLORE_VIEW.reach * 0.4;
-  // Standing on it already: step out towards the camera.
-  const nx = d > 1e-9 ? dx / d : 0;
-  const nz = d > 1e-9 ? dz / d : -1;
-  return clampToTile({ x: spot.x + nx * keep, z: spot.z + nz * keep });
+  // Standing on it already: start from the camera's side.
+  const base = d > 1e-9 ? Math.atan2(dz, dx) : -Math.PI / 2;
+  let first: WorldPoint | null = null;
+  for (const turn of [0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2, 2.6, -2.6, Math.PI]) {
+    const a = base + turn;
+    const p = clampToTile({ x: spot.x + Math.cos(a) * keep, z: spot.z + Math.sin(a) * keep });
+    first ??= p;
+    if (!blocked(p, colliders) && gapTo(p, spot) <= EXPLORE_VIEW.reach) return p;
+  }
+  return first ?? clampToTile(from);
 }
 
 // ── The follow camera ─────────────────────────────────────────────────────
