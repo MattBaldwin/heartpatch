@@ -112,19 +112,22 @@ async function keeperStill(page: Page): Promise<void> {
 
 /**
  * Walks up to a spot by tapping: the spot itself once a tap there reaches
- * the ground, else the ground on the way to it (the camera follows).
+ * the ground, else the ground on the way to it (the camera follows). Stops
+ * early once any spot in `orAny` is in front.
  */
-async function walkTo(page: Page, index: number): Promise<void> {
+async function walkTo(page: Page, index: number, orAny: readonly number[] = []): Promise<void> {
+  const done = (near: number | null | undefined) =>
+    near === index || (near != null && orAny.includes(near));
   for (let tries = 0; tries < 12; tries++) {
     const state = (await exploreState(page))!;
-    if (state.near === index) return;
+    if (done(state.near)) return;
     const spot = state.spots.find((s) => s.index === index)!;
     const tap = await waypoint(page, spot);
     if (!tap) throw new Error(`no ground to tap towards spot ${String(index)}`);
     await realTapAt(page, tap.x, tap.y);
     await keeperStill(page);
   }
-  await expect.poll(async () => (await exploreState(page))?.near, slow).toBe(index);
+  await expect.poll(async () => done((await exploreState(page))?.near), slow).toBe(true);
 }
 
 test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
@@ -203,7 +206,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     await expect(sheet).toBeHidden();
     await page.getByTestId('explore-easy').tap();
     // The toast is short-lived: read it and the hook in the same breath.
-    let seen: { toast: string | null; card: string | null; shown: boolean } | null = null;
+    type Seen = { toast: string | null; card: string | null; shown: boolean };
+    let seen: Seen = { toast: null, card: null, shown: false };
     await expect
       .poll(async () => {
         seen = await page.evaluate(() => {
@@ -216,7 +220,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
           return {
             toast: e?.toast ?? null,
             card: e?.card ?? null,
-            shown: box !== null && !box.hidden && (box.textContent ?? '') !== '',
+            shown: box !== null && !box.hidden && box.textContent !== '',
           };
         });
         return seen.toast !== null || seen.card !== null;
@@ -233,9 +237,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     }
     expect(after.card).toBeNull();
     await expect(sheet).toBeHidden();
-    const shown = seen as unknown as { toast: string; shown: boolean };
-    expect(shown.shown).toBe(true);
-    expect(findAvoidedWords(shown.toast)).toEqual([]);
+    expect(seen.shown).toBe(true);
+    expect(findAvoidedWords(seen.toast ?? '')).toEqual([]);
     toasted = true;
     break;
   }
@@ -250,9 +253,11 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   );
 
   // A mound needs a Shovel: a hint above a disabled button says how to make one.
-  const mound = first.spots.find((s) => s.tool === 'shovel');
-  if (mound) {
-    await walkTo(page, mound.index);
+  const mounds = first.spots.filter((s) => s.tool === 'shovel').map((s) => s.index);
+  const mound = mounds[0];
+  if (mound !== undefined) {
+    // Any mound will do: a neighbour's hint can cover the one aimed at.
+    await walkTo(page, mound, mounds);
     await expect.poll(async () => (await exploreState(page))?.hint, slow).toBe('shovel');
     const hint = page.getByTestId('explore-need');
     await slowExpect(hint).toContainText('This mound needs a Shovel!');
