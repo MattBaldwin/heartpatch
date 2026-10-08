@@ -46,6 +46,8 @@ export function itemChip(effect: ItemEffect): ItemChip {
       return chip('🎒 Use it in a battle');
     case 'befriend':
       return chip('💗 Helps befriend a wild squishy');
+    case 'explore':
+      return chip('🔍 For exploring your land');
     case 'builds':
       return chip(`${buildingIcon(effect.building)} Builds ${article(building(effect.building))}`);
     case 'building':

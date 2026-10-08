@@ -1,3 +1,4 @@
+import type { MapView } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { hook } from './dev-hook.js';
@@ -197,5 +198,74 @@ test('the map’s controls fit short and tall screens', async ({ browser }) => {
       await panel.getByRole('button', { name: 'Close' }).tap();
       await expect(panel).toBeHidden();
     });
+  }
+});
+
+test('a busy tile’s four buttons fit a phone on its side (#264)', async ({ browser }) => {
+  test.setTimeout(240_000); // a map build at two sizes; CI renders in software
+  const page = await newPlayer(browser, uniqueName('busy'));
+  // A wild squishy on my home tile that has a node, every time (spawns are
+  // rolled per window): its panel has all four buttons, Send a gatherer,
+  // Meet it, Gather and Go home.
+  let busy: { q: number; r: number } | null = null;
+  await page.route('**/api/v1/maps/*/wild', async (route) => {
+    const mapId = /\/maps\/([^/]+)\/wild/.exec(route.request().url())![1]!;
+    const view = (await (await page.request.get(`/api/v1/maps/${mapId}/view`)).json()) as MapView;
+    const me = view.members[0]!;
+    const tile = view.tiles.find(
+      (t) => t.homeSlot === me.homeSlot && t.ownerUserId === me.user.id && t.nodeResource !== null,
+    )!;
+    busy = { q: tile.q, r: tile.r };
+    const response = await route.fetch();
+    const body = (await response.json()) as { wild: { tiles: { q: number; r: number }[] } };
+    if (!body.wild.tiles.some((t) => t.q === tile.q && t.r === tile.r)) body.wild.tiles.push(busy);
+    await route.fulfill({ response, json: body });
+  });
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Busy Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await page.getByTestId('tray-hint-ok').tap();
+  await expect.poll(() => busy).not.toBeNull();
+  const key = `${String(busy!.q)},${String(busy!.r)}`;
+
+  const wildState = () =>
+    hook<{ selected: string | null; wild: { key: string; x: number; y: number }[] }>(page, 'map');
+  const panel = page.getByTestId('tile-panel');
+  for (const size of [
+    { width: 667, height: 375 },
+    { width: 844, height: 390 },
+  ]) {
+    await page.setViewportSize(size);
+    // Right after a resize the map can miss a tap: tap again only while the
+    // tile isn't picked.
+    await expect(async () => {
+      const state = await wildState();
+      if (state?.selected !== key) {
+        const tuft = state?.wild.find((w) => w.key === key);
+        if (!tuft) throw new Error(`no tuft on ${key} yet`);
+        await tapCanvas(page, tuft.x, tuft.y);
+      }
+      await expect(panel.getByTestId('tile-meet-wild')).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 30_000 });
+    // Gather and Go home render once the bag and home data arrive, which can
+    // be after Meet it: wait for all four before measuring.
+    for (const id of ['tile-send-gatherer', 'tile-gather', 'tile-home']) {
+      await expect(panel.getByTestId(id)).toBeVisible();
+    }
+    const panelBox = (await boxes(page, '[data-testid="tile-panel"]'))[0]!;
+    const buttons = await boxes(page, '[data-testid="tile-panel"] .tile-panel-actions button');
+    expect(buttons.length, 'Send a gatherer, Meet it, Gather and Go home').toBe(4);
+    const cut = buttons.filter((b) => !inside(b, panelBox)).map(show);
+    expect(cut, `cut off by the tile panel ${show(panelBox)}`).toEqual([]);
+    await expect(panel).toHaveJSProperty('scrollTop', 0);
+    expect(
+      await panel.evaluate((p) => p.scrollHeight <= p.clientHeight + 1),
+      'the panel scrolls',
+    ).toBe(true);
+    await panel.getByRole('button', { name: 'Close' }).tap();
+    await expect(panel).toBeHidden();
   }
 });

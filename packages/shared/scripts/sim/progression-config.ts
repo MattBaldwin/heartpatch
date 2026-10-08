@@ -1,5 +1,6 @@
 import { BUILDINGS } from '../../src/data/buildings.js';
 import { GROWTH_RULES } from '../../src/data/care.js';
+import { EXPLORE_RULES } from '../../src/data/explore.js';
 import { JOB_RULES } from '../../src/data/jobs.js';
 import { SPAWN_RULES } from '../../src/data/server/spawn-rules.js';
 import { TERRITORY_RULES } from '../../src/data/territory.js';
@@ -37,6 +38,17 @@ export interface ProgressionRules {
    * night and back every morning.
    */
   readonly training?: { readonly slots: number; readonly xpPerDay: number };
+  /**
+   * Exploring your land (#199), or none: each day, before the day's battles,
+   * the kid searches up to `searchesPerDay[kid]` spots on the land they own
+   * (the real search-spot generator; each spot once, ever), and every team
+   * member gets `xpPerSquishy` plain XP per search: no care multiplier and
+   * no battle falloff, like the Training Grounds.
+   */
+  readonly explore?: {
+    readonly xpPerSquishy: number;
+    readonly searchesPerDay: Readonly<Record<string, number>>;
+  };
 }
 
 /**
@@ -105,6 +117,21 @@ export const CURRENT_RULES: ProgressionRules = {
   spawn: SPAWN_RULES,
   attemptsPerDay: TERRITORY_RULES.attemptsPerDay,
   training: topTraining(),
+};
+
+/**
+ * The shipped data plus exploring your land (#199) as designed. Not shipped
+ * yet, so it isn't `CURRENT_RULES`; the gate test holds it to a day of the
+ * shipped pace. Fold it into `CURRENT_RULES` when exploring ships.
+ */
+export const WITH_EXPLORE_RULES: ProgressionRules = {
+  ...CURRENT_RULES,
+  label: 'now + exploring',
+  explore: {
+    xpPerSquishy: EXPLORE_RULES.xpPerSquishy,
+    // TUNE: the economy report's kids: about one tile a day, or two or three.
+    searchesPerDay: { casual: 10, engaged: 30 },
+  },
 };
 
 /**

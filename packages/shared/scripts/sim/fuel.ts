@@ -73,7 +73,7 @@ export function emberwoodLand(
 }
 
 /** Gaps between one session and the next, wrapping round to tomorrow's first. */
-function sessionGapsMs(sessions: readonly number[]): number[] {
+export function sessionGapsMs(sessions: readonly number[]): number[] {
   return sessions.map((hour, i) => {
     const next = sessions[i + 1] ?? (sessions[0] ?? 0) + 24;
     return (next - hour) * HOUR_MS;

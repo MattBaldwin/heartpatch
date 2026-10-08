@@ -163,4 +163,33 @@ export const RESOURCES: Resource[] = [
     kind: 'crafted',
     battleEffect: { healPercent: 40, shieldPercent: 75 }, // TUNE:
   },
+  // Explore tools (#199): the bag counts each in uses (`EXPLORE_RULES.tools`).
+  {
+    id: 'shovel',
+    name: 'Shovel',
+    description: 'Dig up soft mounds while you explore your land.',
+    kind: 'crafted',
+    tool: 'shovel',
+  },
+  {
+    id: 'net',
+    name: 'Net',
+    description: 'Scoop ponds and reeds while you explore your land.',
+    kind: 'crafted',
+    tool: 'net',
+  },
+  {
+    id: 'rope',
+    name: 'Rope',
+    description: 'Climb up to high ledges on hills and mountains.',
+    kind: 'crafted',
+    tool: 'rope',
+  },
+  {
+    id: 'lantern',
+    name: 'Lantern',
+    description: 'Light up dark caves to see what hides inside.',
+    kind: 'crafted',
+    tool: 'lantern',
+  },
 ];

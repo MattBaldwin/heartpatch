@@ -15,6 +15,7 @@ import {
   NO_TRAINING_RULES,
   PROGRESSION_CONFIG,
   UNCAPPED_BEFRIEND_RULES,
+  WITH_EXPLORE_RULES,
 } from './progression-config.js';
 import { renderProgression, summarise } from './progression-report.js';
 import { modelData, runProgression, wildOdds, type ProgressionRun } from './progression.js';
@@ -32,6 +33,7 @@ for (const rules of [
   BASELINE_RULES,
   NO_TRAINING_RULES,
   CURRENT_RULES,
+  WITH_EXPLORE_RULES,
   NO_FALLOFF_RULES,
   UNCAPPED_BEFRIEND_RULES,
 ]) {
