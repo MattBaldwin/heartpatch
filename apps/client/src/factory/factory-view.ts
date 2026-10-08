@@ -19,6 +19,7 @@ import {
 import { itemName } from '../inventory/bag-view.js';
 import { formatTimeLeft, formatWait } from '../inventory/game-clock.js';
 import { itemIcon } from '../inventory/item-icons.js';
+import { TOOL_WORDS, toolLanded, toolOf } from '../inventory/tool-uses.js';
 
 // What the Crafting Factory says and offers (#294, owner-approved mockup of
 // 2026-10-08; copy follows docs/STYLE_GUIDE.md). Pure, so every case is
@@ -85,6 +86,19 @@ export function recipeIcon(recipeId: string): string {
   return recipe ? itemIcon(recipe.output.resource) : '✨';
 }
 
+/**
+ * What one run makes, after "→" or before "each": "3 🍪", or for an explore
+ * tool (#199: the bag counts tools in uses) "🪏 (20 digs)", never "20 🪏"
+ * (owner decision 2026-10-06).
+ */
+export function runOutput(resource: string, quantity: number): string {
+  const tool = toolOf(resource);
+  if (!tool) return `${String(quantity)} ${itemIcon(resource)}`;
+  const words = TOOL_WORDS[tool.tool];
+  const tools = Math.round(quantity / tool.uses);
+  return `${tools > 1 ? `${String(tools)} ` : ''}${words.icon} (${String(quantity)} ${words.many})`;
+}
+
 /** "2 🪵 · 1 🍪" for one run's cost. */
 export function costIcons(cost: ItemCounts): string {
   return Object.entries(cost)
@@ -133,8 +147,8 @@ export function batchRows(view: FactoryView, nowMs: number): BatchRow[] {
       finished: done >= batch.total,
       nextAt: next === null ? null : new Date(next).toISOString(),
       each:
-        output && output.quantity > 1
-          ? FACTORY_TEXT.each(`+${String(output.quantity)} ${itemIcon(output.resource)}`)
+        output && (output.quantity > 1 || toolOf(output.resource))
+          ? FACTORY_TEXT.each(`+${runOutput(output.resource, output.quantity)}`)
           : '',
     };
   });
@@ -205,8 +219,8 @@ export function pickRows(
     .filter((recipe) => isOpen(recipePageKey(recipe.id)))
     .map((recipe) => {
       const output =
-        recipe.output.quantity > 1
-          ? ` → ${String(recipe.output.quantity)} ${itemIcon(recipe.output.resource)}`
+        recipe.output.quantity > 1 || toolOf(recipe.output.resource)
+          ? ` → ${runOutput(recipe.output.resource, recipe.output.quantity)}`
           : '';
       const line = `${costIcons(recipe.inputs)}${output} · ${lengthText(recipe.craftSeconds)} each`;
       const canMake = affordableRuns(items, recipe.inputs, FACTORY_RULES.maxBatch);
@@ -272,5 +286,8 @@ export function welcomeChips(landed: readonly Landed[]): string[] {
   for (const { items } of factoryLanded(landed)) {
     for (const [id, n] of Object.entries(items)) total[id] = (total[id] ?? 0) + n;
   }
-  return Object.entries(total).map(([id, n]) => `${itemIcon(id)} +${String(n)} ${itemName(id)}`);
+  // A tool lands as tools, not uses (#199): "🪏 2 new Shovels", as the pop-up says.
+  return Object.entries(total).map(
+    ([id, n]) => toolLanded(id, n, itemName(id)) ?? `${itemIcon(id)} +${String(n)} ${itemName(id)}`,
+  );
 }

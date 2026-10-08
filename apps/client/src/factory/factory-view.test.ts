@@ -122,6 +122,22 @@ describe('the Factory panel words (#294)', () => {
     expect(welcomeChips(landed)).toEqual(['💗 +10 Heart Charm', '🍪 +15 Treats']);
   });
 
+  it('talks about explore tools as tools, never as their uses (#199)', () => {
+    const shovel = GAME_DATA.recipes.find((r) => r.output.resource === 'shovel');
+    expect(shovel).toBeDefined();
+    const uses = shovel!.output.quantity;
+    expect(
+      welcomeChips([{ kind: 'factory', items: { shovel: 2 * uses }, recipeId: shovel!.id }]),
+    ).toEqual(['🪏 2 new Shovels']);
+    const [row] = batchRows(view([batch({ recipeId: shovel!.id, total: 5 })]), T0);
+    expect(row?.each).toBe(`+🪏 (${String(uses)} digs) each`);
+    const pick = pickRows({ timber: 99, stone: 99 }, [], () => true).find(
+      (r) => r.recipe.id === shovel!.id,
+    );
+    expect(pick?.line).toContain(`→ 🪏 (${String(uses)} digs)`);
+    expect(pick?.line).not.toContain(`${String(uses)} 🪏`);
+  });
+
   it('uses only kid-friendly words', () => {
     const words = Object.values(FACTORY_TEXT)
       .map((t) => (typeof t === 'function' ? (t as (...a: unknown[]) => string)(2, 'x', 3) : t))
