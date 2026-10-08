@@ -62,7 +62,7 @@
 /* Mythic's dot is a little opal, like the shimmer finish it brings (#261). */
 .rarity-mythic.rarity-chip::before,
 .rarity-mythic.rarity-dot,
-.rarity-mythic.wardrobe-rarity::before {
+.rarity-mythic.wardrobe-rarity:not(.rarity-all)::before {
   background: conic-gradient(from 200deg, #ffd27a, #ff9ec7, #b39ddb, var(--rarity), #ffd27a);
   box-shadow: 0 0 0 1px var(--rarity);
 }
