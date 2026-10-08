@@ -91,20 +91,75 @@ export const KeeperBodySchema = z.strictObject({
 });
 export type KeeperBody = z.infer<typeof KeeperBodySchema>;
 
+/** A face line's shape (#289): a curve (∪, or ∩ when rolled 180°) or a straight stroke. */
+export const FaceLineShapeSchema = z.enum(['arc', 'capsule']);
+
 /**
- * A preset's face (#289). Every Keeper has the same line face: ink brows, a
- * flat ink nose and a smile line. Only the eyes differ.
+ * A brow or mouth line (#289), drawn in the face-line ink. `size` is width and
+ * height in head diameters; `depth` multiplies the shared line depth; `roll`
+ * is degrees; `lift` moves it up (head heights) from where brows or the mouth
+ * sit. Where it sits is the renderer's (both brows mirror), so a new line is
+ * a data entry, not engine code (CLAUDE.md rule 5).
  */
+export const KeeperFaceLineSchema = z.strictObject({
+  id: ContentIdSchema,
+  name: DisplayNameSchema,
+  shape: FaceLineShapeSchema,
+  size: z.tuple([z.number().positive().max(0.3), z.number().positive().max(0.3)]),
+  depth: z.number().positive().max(3),
+  roll: z.number().min(-180).max(180),
+  lift: z.number().min(-0.1).max(0.1).optional(),
+});
+export type KeeperFaceLine = z.infer<typeof KeeperFaceLineSchema>;
+
+/**
+ * One piece of a face extra (#289), on the head's front: `at` is from the
+ * face's middle (head widths across, head heights up), `size` is width,
+ * height and depth in head diameters, `color` is a hex colour or `line` (the
+ * face-line ink). `mirror` draws it on both cheeks.
+ */
+export const FacePieceSchema = z.strictObject({
+  shape: PartShapeSchema,
+  at: z.tuple([z.number().min(-0.5).max(0.5), z.number().min(-0.5).max(0.5)]),
+  size: HeadVecSchema,
+  color: z.union([HexColorSchema, z.literal('line')]),
+  roll: z.number().min(-180).max(180).optional(),
+  mirror: z.boolean().optional(),
+});
+export type FacePiece = z.infer<typeof FacePieceSchema>;
+
+/** An optional face extra (#289): blush, freckles and so on. Off unless picked; anyone can pick any. */
+export const KeeperFaceExtraSchema = z.strictObject({
+  id: ContentIdSchema,
+  name: DisplayNameSchema,
+  pieces: z.array(FacePieceSchema).min(1).max(8),
+});
+export type KeeperFaceExtra = z.infer<typeof KeeperFaceExtraSchema>;
+
+/** A skin tone (#289). Shown as a swatch with no name ("Skin tone 1–10", light to deep). */
+export const KeeperSkinToneSchema = z.strictObject({
+  id: ContentIdSchema,
+  color: HexColorSchema,
+});
+export type KeeperSkinTone = z.infer<typeof KeeperSkinToneSchema>;
+
+/** A starting look's face (#289): the eyes, brows and mouth it starts with (ids for brows and mouth). */
 export const KeeperFaceSchema = z.strictObject({
   eyes: KeeperEyesSchema,
+  brows: ContentIdSchema,
+  mouth: ContentIdSchema,
 });
 export type KeeperFace = z.infer<typeof KeeperFaceSchema>;
 
-/** A preset Keeper (design doc §23 [DEFAULT: 8]) and its starting colours. */
+/**
+ * A starting look (design doc §23; #289): one tap sets every choice, then the
+ * player changes any of them. Its body shape isn't a choice yet.
+ */
 export const KeeperBaseSchema = z.strictObject({
   id: ContentIdSchema,
   name: DisplayNameSchema,
-  skin: HexColorSchema,
+  /** The skin tone it starts with (an id in the skin tones below). */
+  skinTone: ContentIdSchema,
   body: KeeperBodySchema,
   face: KeeperFaceSchema,
   /** The hairstyle it starts with (an id in the hairstyles below). */
@@ -138,6 +193,10 @@ export type OutfitPalette = z.infer<typeof OutfitPaletteSchema>;
 
 const KeeperDataObjectSchema = z.strictObject({
   bases: z.array(KeeperBaseSchema).min(1),
+  skinTones: z.array(KeeperSkinToneSchema).min(1),
+  brows: z.array(KeeperFaceLineSchema).min(1),
+  mouths: z.array(KeeperFaceLineSchema).min(1),
+  faceExtras: z.array(KeeperFaceExtraSchema),
   hairstyles: z.array(KeeperHairstyleSchema).min(1),
   hairColors: z.array(KeeperSwatchSchema).min(1),
   eyeColors: z.array(KeeperSwatchSchema).min(1),
@@ -146,9 +205,9 @@ const KeeperDataObjectSchema = z.strictObject({
 export type KeeperData = z.infer<typeof KeeperDataObjectSchema>;
 
 /**
- * A player's Keeper (design doc §23): a base plus their colour picks, and
- * optionally a hairstyle; without one the base's own style shows, so Keepers
- * saved before styles could be picked look exactly as they did.
+ * A player's Keeper (design doc §23): a starting look (`base`) plus their
+ * picks, and optionally a hairstyle; without one the base's own style shows,
+ * so Keepers saved before styles could be picked look exactly as they did.
  * Account-level (tech spec §4) and stored server-side (`keepers`); the server
  * also checks every id against `KEEPER_DATA` (`keeperConfigProblem`).
  * Clothing is the wardrobe's (#43): see `PublicKeeperSchema`.
@@ -159,8 +218,25 @@ export const KeeperConfigSchema = z.strictObject({
   eyeColor: ContentIdSchema,
   outfit: ContentIdSchema,
   hairstyle: ContentIdSchema.optional(),
+  // The Keeper builder (#289). Optional, so an older app that doesn't send
+  // them still saves: the server fills each from the starting look (`base`),
+  // and always sends them back.
+  skinTone: ContentIdSchema.optional(),
+  eyes: KeeperEyesSchema.optional(),
+  brows: ContentIdSchema.optional(),
+  mouth: ContentIdSchema.optional(),
+  /** Face extras the player picked (ids), in data order. */
+  extras: z
+    .array(ContentIdSchema)
+    .max(8)
+    .refine((list) => new Set(list).size === list.length, 'Pick each extra once.')
+    .optional(),
 });
 export type KeeperConfig = z.infer<typeof KeeperConfigSchema>;
+
+/** A config with every Keeper builder choice filled in (#289): what's stored and sent back. */
+export type CompleteKeeperConfig = KeeperConfig &
+  Required<Pick<KeeperConfig, 'skinTone' | 'eyes' | 'brows' | 'mouth' | 'extras'>>;
 
 /**
  * A Keeper as other players see it (`MapMember.keeper`): the config plus the
@@ -189,12 +265,22 @@ export function checkKeeperData(input: unknown): string[] {
     checkUniqueIds('hairColors', data.hairColors, report);
     checkUniqueIds('eyeColors', data.eyeColors, report);
     checkUniqueIds('outfits', data.outfits, report);
+    checkUniqueIds('skinTones', data.skinTones, report);
+    checkUniqueIds('brows', data.brows, report);
+    checkUniqueIds('mouths', data.mouths, report);
+    checkUniqueIds('faceExtras', data.faceExtras, report);
+    const tones = ids(data.skinTones);
+    const brows = ids(data.brows);
+    const mouths = ids(data.mouths);
     const hair = ids(data.hairColors);
     const eyes = ids(data.eyeColors);
     const outfits = ids(data.outfits);
     const styles = ids(data.hairstyles);
     data.bases.forEach((base, i) => {
       checkRef(styles, 'hairstyle', base.hairstyle, ['bases', i, 'hairstyle'], report);
+      checkRef(tones, 'skin tone', base.skinTone, ['bases', i, 'skinTone'], report);
+      checkRef(brows, 'brows', base.face.brows, ['bases', i, 'face', 'brows'], report);
+      checkRef(mouths, 'mouth', base.face.mouth, ['bases', i, 'face', 'mouth'], report);
       checkRef(hair, 'hair colour', base.hairColor, ['bases', i, 'hairColor'], report);
       checkRef(eyes, 'eye colour', base.eyeColor, ['bases', i, 'eyeColor'], report);
       checkRef(outfits, 'outfit', base.outfit, ['bases', i, 'outfit'], report);
@@ -219,15 +305,66 @@ export function keeperConfigProblem(
   if (config.hairstyle !== undefined && !data.hairstyles.some((h) => h.id === config.hairstyle)) {
     return 'hairstyle';
   }
+  const known = (rows: readonly { id: string }[], id: string | undefined) =>
+    id === undefined || rows.some((r) => r.id === id);
+  if (!known(data.skinTones, config.skinTone)) return 'skinTone';
+  if (!known(data.brows, config.brows)) return 'brows';
+  if (!known(data.mouths, config.mouth)) return 'mouth';
+  if (!(config.extras ?? []).every((id) => known(data.faceExtras, id))) return 'extras';
   return null;
 }
 
-/** A base with the colours it starts with (and its own hairstyle: none is set). */
-export function defaultKeeperConfig(base: KeeperBase): KeeperConfig {
+/** A starting look's own choices (and its own hairstyle: none is set), with no extras. */
+export function defaultKeeperConfig(base: KeeperBase): CompleteKeeperConfig {
   return {
     base: base.id,
     hairColor: base.hairColor,
     eyeColor: base.eyeColor,
     outfit: base.outfit,
+    skinTone: base.skinTone,
+    eyes: base.face.eyes,
+    brows: base.face.brows,
+    mouth: base.face.mouth,
+    extras: [],
+  };
+}
+
+/**
+ * `config` with every builder choice filled in from its starting look (#289),
+ * extras in data order, so what's stored and drawn is always complete.
+ */
+export function completeKeeperConfig(config: KeeperConfig, data: KeeperData): CompleteKeeperConfig {
+  // An unknown base (the server refuses it) fills from the first.
+  const base = data.bases.find((b) => b.id === config.base) ?? data.bases[0];
+  if (!base) throw new Error('completeKeeperConfig: no Keeper bases');
+  const picked = new Set(config.extras ?? []);
+  return {
+    ...config,
+    skinTone: config.skinTone ?? base.skinTone,
+    eyes: config.eyes ?? base.face.eyes,
+    brows: config.brows ?? base.face.brows,
+    mouth: config.mouth ?? base.face.mouth,
+    extras: data.faceExtras.filter((e) => picked.has(e.id)).map((e) => e.id),
+  };
+}
+
+/**
+ * `config` as the server sends it (#289): a builder choice that is its
+ * starting look's own is left out, and no extras is left out, as a hairstyle
+ * is. A Keeper nobody has customised gets exactly the reply an app from
+ * before the builder can read (its schema is strict); `completeKeeperConfig`
+ * puts the choices back.
+ */
+export function compactKeeperConfig(config: KeeperConfig, data: KeeperData): KeeperConfig {
+  const base = data.bases.find((b) => b.id === config.base);
+  if (!base) return config;
+  const { skinTone, eyes, brows, mouth, extras, ...rest } = config;
+  return {
+    ...rest,
+    ...(skinTone === undefined || skinTone === base.skinTone ? {} : { skinTone }),
+    ...(eyes === undefined || eyes === base.face.eyes ? {} : { eyes }),
+    ...(brows === undefined || brows === base.face.brows ? {} : { brows }),
+    ...(mouth === undefined || mouth === base.face.mouth ? {} : { mouth }),
+    ...(extras === undefined || extras.length === 0 ? {} : { extras }),
   };
 }

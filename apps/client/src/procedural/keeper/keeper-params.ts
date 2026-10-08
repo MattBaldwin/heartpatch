@@ -9,6 +9,7 @@ import {
   type KeeperBase,
   type KeeperConfig,
   type KeeperData,
+  type KeeperFaceLine,
   type KeeperHairstyle,
   type PartShape,
   type WardrobeSlot,
@@ -176,6 +177,18 @@ function colorFor(
   return hexToRgb(row?.color ?? KEEPER.colors.ink);
 }
 
+/** The row `id` names, else the starting look's own (`fallback`); an unknown id is reported. */
+function pick<T extends { id: string }>(
+  rows: readonly T[],
+  id: string | undefined,
+  fallback: string,
+  missing: string[],
+): T | undefined {
+  const found = id === undefined ? undefined : rows.find((r) => r.id === id);
+  if (id !== undefined && !found) missing.push(id);
+  return found ?? rows.find((r) => r.id === fallback);
+}
+
 /** Everything that draws `config`, wearing `items` (at most one per slot; later ones win). */
 export function keeperParams(
   config: KeeperConfig,
@@ -196,7 +209,17 @@ export function keeperParams(
   const bottom = hexToRgb(outfit.bottom);
   const shoes = hexToRgb(outfit.shoes);
   const trim = hexToRgb(outfit.trim);
-  const skin = hexToRgb(base.skin);
+  // The Keeper builder's choices (#289), each falling back to the starting look's.
+  const tone = pick(data.skinTones, config.skinTone, base.skinTone, missing);
+  const skin = hexToRgb(tone?.color ?? KEEPER.colors.white);
+  const eyes = config.eyes ?? base.face.eyes;
+  const brows = pick(data.brows, config.brows, base.face.brows, missing);
+  const mouth = pick(data.mouths, config.mouth, base.face.mouth, missing);
+  const extras = (config.extras ?? []).flatMap((id) => {
+    const found = data.faceExtras.find((e) => e.id === id);
+    if (!found) missing.push(id);
+    return found ? [found] : [];
+  });
   const line = hexToRgb(KEEPER.colors.faceLine);
   const white = hexToRgb(KEEPER.colors.white);
 
@@ -312,16 +335,22 @@ export function keeperParams(
     return p.at;
   };
   const flat = f.lineDepth * d;
+  /** A brow or mouth line at (`fx`, `fy`); a straight stroke lies across the face. */
+  const faceLine = (l: KeeperFaceLine, fx: number, fy: number) => {
+    const across = l.shape === 'capsule';
+    const size: Vec3 = across
+      ? [l.size[1] * d, l.size[0] * d, flat * l.depth]
+      : [l.size[0] * d, l.size[1] * d, flat * l.depth];
+    feature(l.shape, fx, fy + (l.lift ?? 0), size, line, l.roll + (across ? 90 : 0));
+  };
   for (const side of [-1, 1]) {
     const ex = side * f.eyeSpread;
-    switch (base.face.eyes) {
+    switch (eyes) {
       case 'round':
       case 'oval': {
         // Soft eyes (#289): small and shallow, so they sit on the face.
         const size: Vec3 =
-          base.face.eyes === 'round'
-            ? [0.11 * d, 0.125 * d, 0.035 * d]
-            : [0.085 * d, 0.145 * d, 0.035 * d];
+          eyes === 'round' ? [0.11 * d, 0.125 * d, 0.035 * d] : [0.085 * d, 0.145 * d, 0.035 * d];
         const at = feature('ellipsoid', ex, f.eyeHeight, size, eye);
         // A small glint, up and to the right on both eyes.
         piece(
@@ -341,13 +370,28 @@ export function keeperParams(
         feature('arc', ex, f.eyeHeight - 0.01, [0.17 * d, 0.06 * d, 0.05 * d], eye);
         break;
     }
-    // Brows: a gentle arch (∩) over each eye, never sloping towards the nose.
-    feature('arc', ex, f.browHeight, [0.13 * d, 0.03 * d, flat], line, 180);
+    // Brows: never sloping towards the nose.
+    if (brows) faceLine(brows, ex, f.browHeight);
   }
   // Nose: a short flat stroke.
   feature('capsule', f.noseShift, f.noseHeight, [0.018 * d, 0.06 * d, flat], line, f.noseRollDeg);
-  // Mouth: one curved line, a smile.
-  feature('arc', 0, f.mouthHeight, [0.15 * d, 0.06 * d, flat * 1.6], line);
+  // Mouth: always a line, a smile.
+  if (mouth) faceLine(mouth, 0, f.mouthHeight);
+  // Extras the player picked, in data order: blush, freckles and so on.
+  for (const extra of extras) {
+    for (const p of extra.pieces) {
+      for (const side of p.mirror ? [-1, 1] : [1]) {
+        feature(
+          p.shape,
+          side * p.at[0],
+          p.at[1],
+          [p.size[0] * d, p.size[1] * d, p.size[2] * d],
+          p.color === 'line' ? line : hexToRgb(p.color),
+          side * (p.roll ?? 0),
+        );
+      }
+    }
+  }
 
   // ── Hair ──────────────────────────────────────────────────────────────
   const j = KEEPER.jitter;
