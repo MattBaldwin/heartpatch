@@ -32,8 +32,7 @@ const FACTORY = GAME_DATA.buildings.find((b) => b.kind === 'factory');
 // Player-facing text (style guide §6, §9).
 export const FACTORY_TEXT = {
   name: 'Crafting Factory',
-  about: (slots: number) =>
-    `Makes lots of things at once, even while you're away! Room for ${String(slots)} batches.`,
+  about: (slots: number) => `Room for ${String(slots)} batches at once.`,
   startBatch: '＋ Start a batch',
   stop: 'Stop',
   locked: (level: number, slots: number) =>

@@ -47,7 +47,7 @@ test('builds a Factory, runs batches from home, the book and the bag, and welcom
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   const mapId = (await mapState(page))!.id;
   const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
-    items: { timber: 70, stone: 40, treats: 12, greens: 4 },
+    items: { timber: 130, stone: 90, treats: 12, greens: 4 },
   });
   expect(granted.status).toBe(201);
 
@@ -69,7 +69,7 @@ test('builds a Factory, runs batches from home, the book and the bag, and welcom
   // Start a batch: pick Heart Charms, Max, then one fewer.
   await panel.getByTestId('factory-start-batch').tap();
   await panel.locator('[data-testid="factory-pick"][data-recipe="heart-charm"]').tap();
-  // 70 − 30 Timber and 12 Treats pay for 12 Heart Charms.
+  // 12 Treats pay for 12 Heart Charms (Timber is plenty).
   await panel.getByTestId('factory-max').tap();
   await expect(panel.getByTestId('factory-n')).toHaveText('12');
   await panel.getByTestId('factory-minus').tap();
@@ -82,6 +82,13 @@ test('builds a Factory, runs batches from home, the book and the bag, and welcom
   await slowExpect(charms).toBeVisible();
   await expect(charms.getByTestId('factory-count')).toHaveText('0/11');
   await expect.poll(async () => (await homeState(page))?.factoryBatches).toBe(1);
+
+  // Upgrading (60 Timber, 50 Stone) keeps the batch going and makes room for a third.
+  await sheet.getByTestId('home-upgrade').tap();
+  await sheet.getByTestId('home-upgrade-confirm').tap();
+  await slowExpect(panel.locator('.factory-about')).toHaveText('Room for 3 batches at once.');
+  await expect(charms).toBeVisible();
+  await expect(panel.getByTestId('factory-start-batch')).toBeVisible();
 
   // Back to the map: the Recipe Book queues Cooked Treats from its page.
   await sheet.getByTestId('home-done').tap();
@@ -100,7 +107,7 @@ test('builds a Factory, runs batches from home, the book and the bag, and welcom
   await treatsPage.getByTestId('factory-start').tap();
   await expect.poll(async () => (await bagState(page))?.batches).toBe(2);
   await expect(page.getByTestId('recipe-book-say')).toContainText('Off it goes!');
-  await expect(book.getByTestId('factory-strip')).toContainText('2 of 2 going');
+  await expect(book.getByTestId('factory-strip')).toContainText('2 of 3 going');
   await page.getByTestId('recipe-book-close').tap();
 
   // The Bag: the strip, and Stop on the charms (made ones stay, the rest come back).

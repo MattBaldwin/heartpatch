@@ -588,6 +588,12 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
 
   function show(next: HomeResponse): void {
     home = next;
+    // An upgrade (or a take-down) changes the Factory's spots: read its batches again.
+    const factory = next.buildings.find((b) => b.kind === 'factory');
+    const known = factoryBag?.factory ?? null;
+    if (known && (factory?.id !== known.buildingId || factory.level !== known.level)) {
+      void loadFactory();
+    }
     // A building that's gone can't stay selected.
     const m = mode;
     if ('id' in m && !next.buildings.some((b) => b.id === m.id)) mode = { kind: 'idle' };
