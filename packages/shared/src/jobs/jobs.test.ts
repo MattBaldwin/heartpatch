@@ -12,6 +12,7 @@ import {
   trainingProgress,
   workCycleSeconds,
   workProgress,
+  workProgressAround,
   workSource,
   workSpeedModifiers,
   workSpeedPercent,
@@ -331,5 +332,43 @@ describe('Training Grounds XP (owner decision 2026-10-06)', () => {
     expect(full).toEqual({ xp: 120, full: true, nextSinceMs: 30 * HOUR });
     expect(trainingProgress(0, 24 * HOUR, 5, rules)).toMatchObject({ xp: 120, full: true });
     expect(JOB_RULES.training.maxHours).toBe(24);
+  });
+});
+
+describe('workProgressAround (#199: a paused homestead pays nothing)', () => {
+  const HOUR = 60 * MINUTE;
+  const hour = 60 * 60; // one cycle a hour
+
+  it('is workProgress with no pause', () => {
+    expect(workProgressAround(0, 3.5 * HOUR, hour, JOB_RULES, null)).toEqual(
+      workProgress(0, 3.5 * HOUR, hour, JOB_RULES),
+    );
+  });
+
+  it('keeps cycles finished before a pause and counts nothing during it', () => {
+    const p = workProgressAround(0, 10 * HOUR, hour, JOB_RULES, { fromMs: 2 * HOUR, toMs: null });
+    expect(p.cycles).toBe(2);
+    expect(p.finishedMs).toEqual([HOUR, 2 * HOUR]);
+    expect(p.nextReadyMs).toBeNull();
+    expect(p.nextSinceMs).toBe(2 * HOUR);
+  });
+
+  it('carries on from where it stopped once the pause ends', () => {
+    const pause = { fromMs: 2 * HOUR, toMs: 5 * HOUR };
+    const p = workProgressAround(0, 6.5 * HOUR, hour, JOB_RULES, pause);
+    expect(p.cycles).toBe(3);
+    expect(p.finishedMs).toEqual([HOUR, 2 * HOUR, 6 * HOUR]);
+    expect(p.nextSinceMs).toBe(6 * HOUR);
+    expect(p.nextReadyMs).toBe(7 * HOUR);
+    // A count that started during the pause starts when it ended.
+    const late = workProgressAround(3 * HOUR, 6 * HOUR, hour, JOB_RULES, pause);
+    expect(late.finishedMs).toEqual([6 * HOUR]);
+  });
+
+  it('still caps a gatherer at its stored cycles', () => {
+    const p = workProgressAround(0, 20 * HOUR, hour, JOB_RULES, { fromMs: 5 * HOUR, toMs: null });
+    expect(p.cycles).toBe(JOB_RULES.work.maxStoredCycles);
+    expect(p.full).toBe(true);
+    expect(p.nextSinceMs).toBe(20 * HOUR);
   });
 });

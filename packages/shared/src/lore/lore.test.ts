@@ -7,10 +7,11 @@ import { loreFinds } from './index.js';
 const KID = '11111111-1111-4111-8111-111111111111';
 
 describe('lore pages', () => {
-  it('ships one Glade page and two for patches, all valid', () => {
+  it('ships one Glade page and four for patches (two found exploring, #199), all valid', () => {
     expect(checkLoreData(LORE_PAGES)).toEqual([]);
     expect(LORE_PAGES.filter((p) => p.trigger.mapKinds.includes('tutorial'))).toHaveLength(1);
-    expect(LORE_PAGES.filter((p) => p.trigger.mapKinds.includes('multiplayer'))).toHaveLength(2);
+    expect(LORE_PAGES.filter((p) => p.trigger.mapKinds.includes('multiplayer'))).toHaveLength(4);
+    expect(LORE_PAGES.filter((p) => p.trigger.eventType === 'explore.searched')).toHaveLength(2);
   });
 
   it('keeps the words kind (style guide §8, §9)', () => {

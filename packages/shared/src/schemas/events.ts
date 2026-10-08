@@ -7,6 +7,7 @@ import { BattleEndReasonSchema, BattleKindSchema, BattleSideIdSchema } from './b
 import { BuildingSpotSchema, PlacedBuildingSchema } from './buildings.js';
 import { HexEdgeSchema, PlacedFenceSchema } from './fences.js';
 import { MoodIdSchema } from './data/care.js';
+import { ToolIdSchema } from './data/explore.js';
 import { RaidOutcomeSchema } from './raids.js';
 import { LocalDateSchema } from './time.js';
 
@@ -84,6 +85,10 @@ const walkSchema = (object: typeof z.object | typeof z.strictObject) =>
     reclaimed: z.array(object(coords)),
     walk: z.array(object({ ...coords, kind: z.enum(['enter', 'recoil', 'strike', 'leave']) })),
   });
+
+/** A find worth telling the patch about (#199): never which items or how many. */
+export const ExploreNotableSchema = z.enum(['lore', 'cosmetic', 'heartdust']);
+export type ExploreNotable = z.infer<typeof ExploreNotableSchema>;
 
 export const GAME_EVENTS = {
   /** A player made a map and is its owner. Always seq 1. */
@@ -282,6 +287,56 @@ export const GAME_EVENTS = {
       tiles: z.array(z.object(coords)),
       cause: z.enum(['untended', 'hollow']).optional(),
     }),
+  },
+  /**
+   * A player searched one spot on their own land (#199). One per search, so
+   * the Seeker track can count them. What it found stays internal except a
+   * `notable` find's kind (patch feed: "Lee found a lore page!"); `lorePage`
+   * is the server-only page the lore consumer grants.
+   */
+  'explore.searched': {
+    internal: z.strictObject({
+      userId: z.uuid(),
+      ...coords,
+      terrain: z.string(),
+      /** The search: the ledger and found-clothing `refId`. */
+      searchId: z.uuid(),
+      spot: z.number().int().min(0),
+      kind: ContentIdSchema,
+      tool: ToolIdSchema.nullable(),
+      items: z.record(z.string(), z.number().int().min(1)),
+      lorePage: ContentIdSchema.nullable(),
+      notable: ExploreNotableSchema.nullable(),
+    }),
+    public: z.object({
+      userId: z.uuid(),
+      ...coords,
+      kind: ContentIdSchema,
+      notable: ExploreNotableSchema.nullable(),
+    }),
+  },
+  /** A player searched every spot on one of their tiles (#199): it's fully explored ✨. */
+  'tile.explored': {
+    internal: z.strictObject({ userId: z.uuid(), ...coords, terrain: z.string() }),
+    public: z.object({ userId: z.uuid(), ...coords, terrain: z.string() }),
+  },
+  /**
+   * Fully explored land joined a player's home as homesteads (#199): it
+   * borders their home ring or another of their homesteads.
+   */
+  'homestead.joined': {
+    internal: z.strictObject({ userId: z.uuid(), tiles: z.array(z.strictObject(coords)).min(1) }),
+    public: z.object({ userId: z.uuid(), tiles: z.array(z.object(coords)) }),
+  },
+  /** Homesteads cut off from home by a capture (#199): their gathering naps. */
+  'homestead.paused': {
+    internal: z.strictObject({ userId: z.uuid(), tiles: z.array(z.strictObject(coords)).min(1) }),
+    public: z.object({ userId: z.uuid(), tiles: z.array(z.object(coords)) }),
+  },
+  /** Paused homesteads joined back up to home (#199). */
+  'homestead.resumed': {
+    internal: z.strictObject({ userId: z.uuid(), tiles: z.array(z.strictObject(coords)).min(1) }),
+    public: z.object({ userId: z.uuid(), tiles: z.array(z.object(coords)) }),
   },
   /**
    * A player changed who stands watch on one of their tiles (#15). Members

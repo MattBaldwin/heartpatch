@@ -40,4 +40,28 @@ export const LORE_PAGES: LoreEntry[] = [
       finder: 'actor',
     },
   },
+  {
+    // Exploring your land (#199): a rock's find (`EXPLORE_FINDS`).
+    id: 'under-a-mossy-rock',
+    title: 'Under a Mossy Rock',
+    text: 'Under the rock, wrapped in a leaf: one tiny silver bell, polished bright. Someone very small has been keeping it safe. You tuck it back, just in case they come looking.',
+    trigger: {
+      mapKinds: ['multiplayer'],
+      eventType: 'explore.searched',
+      where: [{ op: 'equals', field: 'lorePage', value: 'under-a-mossy-rock' }],
+      finder: 'actor',
+    },
+  },
+  {
+    // Exploring your land (#199): a cave's find (`EXPLORE_FINDS`).
+    id: 'chalk-on-the-cave-wall',
+    title: 'Chalk on the Cave Wall',
+    text: 'Soft chalk drawings cover the cave wall: a fire, a ring of squishies, and two little dogs sitting very straight. A long, thin shadow stops right where the firelight begins.',
+    trigger: {
+      mapKinds: ['multiplayer'],
+      eventType: 'explore.searched',
+      where: [{ op: 'equals', field: 'lorePage', value: 'chalk-on-the-cave-wall' }],
+      finder: 'actor',
+    },
+  },
 ];

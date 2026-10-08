@@ -1137,6 +1137,57 @@ export const tileTending = pgTable(
 );
 
 /**
+ * Exploring your land (#199): one row per player per tile they've searched
+ * on, kept when the tile changes hands (owner decision 2026-10-06), so a
+ * player never re-explores land they lose and win back, and a homestead won
+ * back is one again at once. The spots themselves are a pure function of the
+ * map seed, the tile, its terrain and the layout version
+ * (`searchSpots`), so only which ones are done is stored: one bit per spot.
+ * Homesteads are worked out from these rows and who owns what
+ * (`homesteadStates`); `joined_at` and `paused_at` remember the last answer
+ * so the server knows what changed.
+ */
+export const tileExplore = pgTable(
+  'tile_explore',
+  {
+    userId: uuid('user_id').notNull(),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    // No foreign keys to `maps` or `map_members`: a search and a capture
+    // write these rows after the tile's lock, and a key-share lock on a
+    // member row there would break the lock order (tech spec §7), as for
+    // `tile_tending`. `tile_id` already cascades from the map.
+    mapId: uuid('map_id').notNull(),
+    // The generator version and terrain the spots were made under.
+    layout: smallint('layout').notNull(),
+    terrain: text('terrain').notNull(),
+    searched: integer('searched').notNull().default(0),
+    spotCount: smallint('spot_count').notNull(),
+    completedAt: timestamptz('completed_at'),
+    joinedAt: timestamptz('joined_at'),
+    // Its latest pause (cut off from home by a capture): from `paused_at`
+    // until `resumed_at`, null while it's still paused. A gatherer there
+    // earns nothing in between (jobs' `workProgress` pause).
+    pausedAt: timestamptz('paused_at'),
+    resumedAt: timestamptz('resumed_at'),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.tileId] }),
+    index('tile_explore_map_id_user_id_explored_idx')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.completedAt} is not null`),
+    check('tile_explore_spot_count_range', sql`${t.spotCount} between 1 and 30`),
+    check('tile_explore_searched_range', sql`${t.searched} >= 0`),
+    check(
+      'tile_explore_homestead_after_explored',
+      sql`(${t.joinedAt} is null or ${t.completedAt} is not null) and (${t.pausedAt} is null or ${t.joinedAt} is not null) and (${t.resumedAt} is null or ${t.pausedAt} is not null)`,
+    ),
+  ],
+);
+
+/**
  * One row per map per night the Hollow Man came by (#21, design doc §14):
  * the guard that makes nightfall idempotent (a retry, a second job or a
  * restart finds the row and takes nothing more), and the record the morning

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ContentIdSchema, DescriptionSchema, DisplayNameSchema } from './common.js';
+import { ToolIdSchema } from './explore.js';
 
 /**
  * Inventory things (design doc §12): gathered from nodes, seasonal (only
@@ -57,5 +58,11 @@ export const ResourceSchema = z.strictObject({
   gather: GatherSettingsSchema.optional(),
   /** Usable in battle (potions, #214). Only crafted items have one; `checkGameData` checks it. */
   battleEffect: BattleItemEffectSchema.optional(),
+  /**
+   * An explore tool (#199): the bag counts it in uses, so one Shovel is
+   * `EXPLORE_RULES` tool uses of `shovel`, and each search that needs it
+   * spends one. Only crafted items, and the id must be the tool's.
+   */
+  tool: ToolIdSchema.optional(),
 });
 export type Resource = z.infer<typeof ResourceSchema>;
