@@ -167,7 +167,7 @@
   justify-content: center;
   gap: 6px;
   width: max-content;
-  max-width: calc(100vw - 112px);
+  max-width: calc(100vw - 32px);
   pointer-events: none;
 }
 
