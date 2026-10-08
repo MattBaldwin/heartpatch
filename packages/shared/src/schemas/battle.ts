@@ -193,6 +193,8 @@ export const BattleSquishyViewSchema = z.object({
     .object({ attack: z.number().int().min(0), defense: z.number().int().min(0) })
     .default({ attack: 0, defense: 0 }),
   shield: z.number().int().min(0).max(100).default(0),
+  /** Said yes to a Heart Charm and left the fight (#279). */
+  befriended: z.literal(true).optional(),
 });
 export type BattleSquishyView = z.infer<typeof BattleSquishyViewSchema>;
 
@@ -309,9 +311,11 @@ export const TILE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['tile', 'riva
 
 /**
  * Kinds whose squishy can be befriended with a Heart Charm (#14): wild ones,
- * never tile guardians (#15) or another player's.
+ * and the guardians of neutral land (#279), where a befriend counts as a
+ * knockout. Never a rival's guard or land guardians (`rival-tile`), so a
+ * Keeper's squishy is never taken, and never a fence (the engine refuses).
  */
-export const CAPTURABLE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['wild']);
+export const CAPTURABLE_BATTLE_KINDS: ReadonlySet<BattleKind> = new Set(['wild', 'tile']);
 
 /**
  * A battle as its player sees it (`GET /battles/:battleId`). `speciesDefs` and

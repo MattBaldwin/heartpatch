@@ -4,6 +4,7 @@ import {
   itemRefusal,
   battleXpPercent,
   befriendedLevel,
+  joiningSpecies,
   CAPTURABLE_BATTLE_KINDS,
   CARE_RULES,
   ClientBattleViewSchema,
@@ -14,7 +15,9 @@ import {
   gameplayOverrides,
   GROWTH_RULES,
   MAP_GEN,
+  befriendedBetween,
   otherSide,
+  type BattleSquishy,
   startBattle,
   TILE_BATTLE_KINDS,
   type BattleAction,
@@ -524,6 +527,66 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
   };
 
+  /** Who a step befriended from the other side (#279). */
+  const befriendedIn = (before: BattleState, after: BattleState) =>
+    befriendedBetween(before, after, otherSide(PLAYER_SIDE));
+
+  /**
+   * Befriended squishies join the player (design doc §6, #279), and the
+   * catalog marks each species caught. A wild one joins as it was in the
+   * battle; a land guardian one evolution back from the form it fought as
+   * (owner decision 2026-10-08, `joiningSpecies`), in that species' element
+   * and with the guardian's feeling. Either way, below its next evolution
+   * (owner decision 2026-10-06, `GROWTH_RULES.befriendBelowEvolution`).
+   * Before any event (they take `maps`).
+   */
+  const welcome = async (
+    repo: BattlesTxRepo,
+    tx: Executor,
+    row: BattleRow,
+    befriended: readonly BattleSquishy[],
+    at: Date,
+  ): Promise<OwnedSquishy[]> => {
+    const friends: OwnedSquishy[] = [];
+    for (const friend of befriended) {
+      const speciesId = TILE_BATTLE_KINDS.has(row.kind)
+        ? joiningSpecies(friend.speciesId, EVOLUTION_STEPS)
+        : friend.speciesId;
+      friends.push(
+        await repo.insertSquishy({
+          mapId: row.mapId,
+          ownerUserId: row.playerUserId,
+          speciesId,
+          element:
+            speciesId === friend.speciesId
+              ? friend.element
+              : (content.species.get(speciesId)?.element ?? friend.element),
+          feeling: friend.feeling,
+          level: befriendedLevel(speciesId, friend.level, EVOLUTION_STEPS, GROWTH_RULES),
+          contentment: CARE_RULES.startContentment,
+          at,
+        }),
+      );
+      await createSpawnsRepo(tx).markCaught(row.mapId, row.playerUserId, speciesId, at);
+    }
+    return friends;
+  };
+
+  /** `squishy.captured` for a new friend: the catalog, milestones and members hear of it. */
+  const appendCaptured = (repo: BattlesTxRepo, row: BattleRow, friend: OwnedSquishy) =>
+    repo.appendEvent({
+      mapId: row.mapId,
+      type: 'squishy.captured',
+      actorUserId: row.playerUserId,
+      payload: {
+        battleId: row.id,
+        userId: row.playerUserId,
+        squishyId: friend.id,
+        speciesId: friend.speciesId,
+        level: friend.level,
+      },
+    });
+
   /** The battle is over: XP for the player's squishies, then the events. */
   const finish = async (
     repo: BattlesTxRepo,
@@ -583,27 +646,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       const growth = await applyXp(tx, award.squishyId, award.xp, at);
       if (growth) grown.push(growth);
     }
-    // Befriended (design doc §6): the wild squishy joins the player as it was
-    // in the battle, but below its first evolution (owner decision
-    // 2026-10-06, `GROWTH_RULES.befriendBelowEvolution`), and the catalog
-    // marks the species caught.
-    let captured: OwnedSquishy | null = null;
-    if (result.reason === 'captured' && result.winner === PLAYER_SIDE) {
-      const wild = state.sides[otherSide(PLAYER_SIDE)];
-      const friend = wild.squishies[wild.active];
-      if (!friend) throw new Error('finish: no wild squishy to befriend');
-      captured = await repo.insertSquishy({
-        mapId: row.mapId,
-        ownerUserId: row.playerUserId,
-        speciesId: friend.speciesId,
-        element: friend.element,
-        feeling: friend.feeling,
-        level: befriendedLevel(friend.speciesId, friend.level, EVOLUTION_STEPS, GROWTH_RULES),
-        contentment: CARE_RULES.startContentment,
-        at,
-      });
-      await createSpawnsRepo(tx).markCaught(row.mapId, row.playerUserId, friend.speciesId, at);
-    }
+    // Befriended in this last step (design doc §6, #279): each one joins
+    // the player. Ones befriended earlier in a guardian battle joined then.
+    const friends = await welcome(repo, tx, row, befriendedIn(row.state, state), at);
+    const captured = row.kind === 'wild' ? (friends[0] ?? null) : null;
     // Patch Coins (#45): a win, and a befriended squishy or a claimed tile,
     // each once per battle. Gentle's share scales them like the XP and the
     // find. After the squishy and `species_seen` locks, before the events.
@@ -616,6 +662,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
             : 0,
       },
       {
+        // A befriended wild squishy, or a claimed tile (befriending its
+        // guardians on the way pays nothing more, #279).
         source: 'capture',
         amount: captured
           ? COIN_RULES.capture.wild
@@ -684,20 +732,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       },
     });
     await appendGrowthEvents(repo.appendEvent, grown);
-    if (captured) {
-      await repo.appendEvent({
-        mapId: row.mapId,
-        type: 'squishy.captured',
-        actorUserId: row.playerUserId,
-        payload: {
-          battleId: row.id,
-          userId: row.playerUserId,
-          squishyId: captured.id,
-          speciesId: captured.speciesId,
-          level: captured.level,
-        },
-      });
-    }
+    for (const friend of friends) await appendCaptured(repo, row, friend);
     for (const event of tile.events) await repo.appendEvent(event);
   };
 
@@ -872,13 +907,17 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       ),
 
     act: async (user, battleId, request) => {
-      const { row: next, mapId } = await store.transaction(async (repo, tx) => {
+      const {
+        row: next,
+        mapId,
+        befriended,
+      } = await store.transaction(async (repo, tx) => {
         const { row, map } = await requireOwn(tx, await repo.lockBattle(battleId), user);
         if (row.status !== 'active') throw new AppError('CONFLICT', MESSAGES.over);
         const at = now();
         // Re-tuned content or a tile battle left: it ends instead (see `settle`).
         if (await settle(repo, tx, row, at)) {
-          return { row: await repo.findBattle(row.id), mapId: row.mapId };
+          return { row: await repo.findBattle(row.id), mapId: row.mapId, befriended: false };
         }
         // A stale or repeated submit (the client acted on an older turn) is
         // refused rather than applied to the turn after. Retries of the same
@@ -886,10 +925,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         if (request.turn !== row.state.turn) throw new AppError('CONFLICT', MESSAGES.movedOn);
 
         if (request.action.type === 'capture') {
-          // Only wild squishies can be befriended. Each try uses a Heart Charm
+          // Only wild squishies and neutral land's guardians (#279) can be
+          // befriended: never a rival's squishies or fences. Each try uses a Heart Charm
           // (#17's inventory, ledgered against this battle), in this
           // transaction: a refused step gives it back. Lock order: battle,
-          // inventory, squishies, then `maps` via appendEvent.
+          // inventory, a tile battle's tile, squishies, `species_seen`, then
+          // `maps` via appendEvent.
           if (!CAPTURABLE_BATTLE_KINDS.has(row.kind))
             throw new AppError('CONFLICT', MESSAGES.noCapture);
           await consumeItems(
@@ -926,16 +967,23 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           throw err;
         }
         const actions = [...row.actions, action];
+        let befriended = false;
         if (state.phase.type === 'over') {
           await finish(repo, tx, row, actions, state, at);
         } else {
           await repo.saveProgress(row.id, { actions, state });
           if (TILE_BATTLE_KINDS.has(row.kind)) await options.tileBattles?.acted(tx, row.id, at);
+          // A guardian befriended mid-battle joins now (#279), so it's the
+          // player's whatever happens next. Its event is the last write.
+          const friends = await welcome(repo, tx, row, befriendedIn(row.state, state), at);
+          for (const friend of friends) await appendCaptured(repo, row, friend);
+          befriended = friends.length > 0;
         }
-        return { row: await repo.findBattle(row.id), mapId: row.mapId };
+        return { row: await repo.findBattle(row.id), mapId: row.mapId, befriended };
       });
       if (!next) throw new AppError('NOT_FOUND', MESSAGES.notFound);
-      if (next.status !== 'active') published(mapId);
+      // An ended battle wrote events, and so did a guardian befriended mid-battle.
+      if (next.status !== 'active' || befriended) published(mapId);
       return toPlayerBattle(next);
     },
 

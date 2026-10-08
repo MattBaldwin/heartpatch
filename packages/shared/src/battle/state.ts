@@ -36,6 +36,13 @@ export interface BattleSquishy {
   readonly boosts: Readonly<Record<BattleBoostStat, number>>;
   /** Percent taken off the next hit it takes (a potion's shield, #214); 0 is none. */
   readonly shield: number;
+  /**
+   * Said yes to a Heart Charm and left mid-battle (#279): it has joined the
+   * other side's Keeper and is out of the fight, as if tuckered out, but keeps
+   * its energy (battle XP counts only tuckered-out squishies). The last one
+   * befriended isn't marked: the battle ends `captured` with it still out.
+   */
+  readonly befriended?: true;
 }
 
 /** The stats a potion can boost (#214). */
@@ -125,7 +132,8 @@ export type BattleEvent =
   | (At & { readonly type: 'item'; readonly item: string })
   /**
    * A Heart Charm was offered to the squishy at `side`/`slot` (the other side
-   * offered it). `caught`: it said yes, and the battle ends.
+   * offered it). `caught`: it said yes and left the fight, like a knockout
+   * (#279); the battle ends if nobody is left on its side.
    */
   | (At & { readonly type: 'capture'; readonly caught: boolean })
   | { readonly turn: number; readonly type: 'forfeit'; readonly side: BattleSideId }
@@ -172,13 +180,62 @@ export function activeSquishy<S extends BattleState | Draft<BattleState>>(
   return squishy;
 }
 
-/** Squishies that could come out for `side`: not the active one, not tuckered out. */
+/** Still in the fight: not tuckered out and not befriended (#279). */
+export function inPlay(squishy: Pick<BattleSquishy, 'energy' | 'befriended'>): boolean {
+  return squishy.energy > 0 && squishy.befriended !== true;
+}
+
+/** Squishies that could come out for `side`: not the active one, still in the fight. */
 export function benchOf(
   state: BattleState,
   side: BattleSideId,
 ): { slot: number; squishy: BattleSquishy }[] {
   const { squishies, active } = state.sides[side];
   return squishies.flatMap((squishy, slot) =>
-    slot !== active && squishy.energy > 0 ? [{ slot, squishy }] : [],
+    slot !== active && inPlay(squishy) ? [{ slot, squishy }] : [],
   );
+}
+
+/**
+ * Who on `side` said yes to a Heart Charm in `battle`, in team order (#279):
+ * ones that left mid-battle (flagged), and the last one when the battle ended
+ * `captured` for the other side (it is still out, unflagged). Works on the
+ * stored state and on the client's view alike.
+ */
+export function befriendedOf<S extends { readonly befriended?: true }>(
+  battle: {
+    readonly sides: Readonly<
+      Record<BattleSideId, { readonly squishies: readonly S[]; readonly active: number }>
+    >;
+    readonly phase:
+      | { readonly type: 'turn' | 'replace' }
+      | {
+          readonly type: 'over';
+          readonly result: { readonly winner: BattleSideId | 'draw'; readonly reason: string };
+        };
+  },
+  side: BattleSideId,
+): S[] {
+  const { squishies, active } = battle.sides[side];
+  const { phase } = battle;
+  const last =
+    phase.type === 'over' &&
+    phase.result.reason === 'captured' &&
+    phase.result.winner === otherSide(side);
+  return squishies.filter(
+    (squishy, slot) => squishy.befriended === true || (last && slot === active),
+  );
+}
+
+/**
+ * The squishies on `side` that said yes to a Heart Charm between `before`
+ * and `after` (one step), in team order. Who gets a new friend from that step.
+ */
+export function befriendedBetween(
+  before: BattleState,
+  after: BattleState,
+  side: BattleSideId,
+): BattleSquishy[] {
+  const was = new Set(befriendedOf(before, side).map((squishy) => squishy.id));
+  return befriendedOf(after, side).filter((squishy) => !was.has(squishy.id));
 }
