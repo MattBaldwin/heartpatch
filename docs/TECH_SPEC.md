@@ -24,9 +24,9 @@ heartpatch/
 │  │  │  ├─ ui/               DOM helpers and the auth, lobby, keeper and wardrobe screens (see §6)
 │  │  │  ├─ net/              REST client, WebSocket client, reconnect
 │  │  │  ├─ pwa/              install prompt, offline shell, update flow
-│  │  │  ├─ map/ territory/ home/ inventory/ catalog/ care/ close-up/ battle/ raids/ hollow/ tutorial/
+│  │  │  ├─ map/ territory/ home/ explore/ inventory/ catalog/ care/ close-up/ battle/ raids/ hollow/ tutorial/
 │  │  │  │                    feature folders: one per screen or system, each with its API
-│  │  │  │                    client, scene (map, home base, battle, close-up), DOM view,
+│  │  │  │                    client, scene (map, home base, explore, battle, close-up), DOM view,
 │  │  │  │                    CSS and tests; client state sits beside its feature (map-state.ts)
 │  │  │  └─ audio/            sound (#25): gesture unlock, settings, cues; lazy engine,
 │  │  │                       procedural SFX and music loops; dev gallery /sounds.html
@@ -216,7 +216,7 @@ Add anything else only with a one-line justification in the PR.
 
 ## 6. Client architecture
 
-- **Rendering:** one Babylon `Engine`; scenes swapped (map, home base, battle, close-up, wardrobe). **WebGL2 is the default renderer for Phase 1** (owner decision, docs/DECISIONS.md). WebGPU is opt-in behind a setting until it's proven on real devices; when enabled, it falls back to WebGL2 automatically, including on device loss. Scene code must work on both.
+- **Rendering:** one Babylon `Engine`; scenes swapped (map, home base, explore, battle, close-up, wardrobe). **WebGL2 is the default renderer for Phase 1** (owner decision, docs/DECISIONS.md). WebGPU is opt-in behind a setting until it's proven on real devices; when enabled, it falls back to WebGL2 automatically, including on device loss. Scene code must work on both.
   - **Testing caveat:** Playwright WebKit in CI runs without WebGPU, so CI exercises the WebGL2 path; the WebGPU path is verified on real devices.
   - **Shaders:** write Phase 1 custom shaders for WebGL2 (GLSL ES 3.0, or Babylon node materials). Add WGSL versions only when the WebGPU path is enabled, so Babylon never has to load its glslang/twgsl WASM converters, which would count against the 15 MB first-load budget.
   - **Memory and heat:** no MSAA on any tier (FXAA only), and no half-float HDR pipeline unless a feature needs it. A 4× MSAA RGBA16F pipeline at DPR 2 costs about 250 MB of GPU memory on a 10th-gen iPad before any content. Render only when something changes, or cap at 30 fps while idle, so a static map doesn't drain battery or throttle. Babylon has no built-in render-on-demand: keep a dirty flag inside `runRenderLoop`, set by camera matrix changes, running animations and store updates.

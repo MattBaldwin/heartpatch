@@ -1618,7 +1618,11 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
       nodes.push(
         el(
           'button',
-          { type: 'button', class: 'auth-button bag-action', 'data-testid': 'tile-home' },
+          {
+            type: 'button',
+            class: 'auth-button bag-action tile-action-pair',
+            'data-testid': 'tile-home',
+          },
           `🏡 ${HOME_TEXT.goHome}`,
         ),
       );

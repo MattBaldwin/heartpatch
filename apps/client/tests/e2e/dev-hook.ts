@@ -22,6 +22,7 @@ export type HookName =
   | 'hollow'
   | 'raids'
   | 'home'
+  | 'explore'
   | 'care'
   | 'closeUp'
   | 'catalog'

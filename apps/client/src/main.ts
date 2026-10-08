@@ -9,6 +9,7 @@ import { createWildPicker } from './battle/wild-picker.js';
 import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
+import { createExploreScreen } from './explore/explore-screen.js';
 import { createDarkLand, darkTiles, heartSeedOf } from './hollow/dark-land.js';
 import { jobsApi } from './squishies/jobs/jobs-api.js';
 import { createJourneyScreen } from './trading/journey-screen.js';
@@ -234,11 +235,13 @@ const closeUp = createCloseUpScreen({
     void chat.setMap(null);
     void battles.setMap(null);
     home.setMap(null);
+    explore.setMap(null);
     lobby.stepOut();
   },
   onClosed: (mapId: string, from: CloseUpFrom) => {
     if (from === 'home') {
       home.setMap(mapId);
+      explore.setMap(mapId);
       // Home base celebrates an evolution as it opens (#19).
       void home.open();
       return;
@@ -253,6 +256,7 @@ const closeUp = createCloseUpScreen({
         void chat.setMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
+        explore.setMap(mapId);
         void care.celebrateNews(mapId);
       })
       .catch((err: unknown) => {
@@ -414,6 +418,7 @@ const hollow = createHollowScreen({
     care.isOpen ||
     closeUp.isOpen ||
     homeOpen() ||
+    (explore.debug?.open ?? false) ||
     (land.debug?.welcome ?? false),
   // One card at a time (#129): the morning report waits behind the raid
   // report, a found lore page, a milestone party and What's new. (`lorebook`
@@ -486,11 +491,70 @@ const home = createHomeScreen({
         void chat.setMap(chatFor(mapId));
         void battles.setMap(mapId);
         home.setMap(mapId);
+        explore.setMap(mapId);
       })
       .catch((err: unknown) => {
         lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
       });
     lobby.hide();
+  },
+});
+// Exploring your land (#199): "Explore" on a tile of mine opens it up
+// close, where my Keeper walks and searches its spots. Like home base, it
+// owns the screen while open; Back returns to the map.
+const explore = createExploreScreen({
+  root: document.body,
+  showScene,
+  invalidate: () => stage?.invalidate(),
+  tier: () => stage?.quality.snapshot.tier ?? tier,
+  keeper: () => keeper.current,
+  keeperWearing: () => wardrobe.wearing,
+  mapTile: (at) => maps.view?.tiles.find((t) => t.q === at.q && t.r === at.r) ?? null,
+  isGlade: (mapId) => mapId === glade,
+  onOpen: () => {
+    maps.close();
+    catalog.close();
+    care.close();
+    jobs.close();
+    void inventory.setMap(null);
+    void territory.setMap(null);
+    void hollow.setMap(null);
+    void land.setMap(null);
+    void chat.setMap(null);
+    void battles.setMap(null);
+    home.setMap(null);
+    lobby.stepOut();
+  },
+  onClosed: (mapId) => {
+    maps
+      .open(mapId)
+      .then(() => {
+        void inventory.setMap(mapId);
+        void territory.setMap(mapId);
+        void hollow.setMap(mapId);
+        void land.setMap(mapId);
+        void chat.setMap(chatFor(mapId));
+        void battles.setMap(mapId);
+        home.setMap(mapId);
+        explore.setMap(mapId);
+        // A page or a milestone found while exploring shows now (#129).
+        lorebook.check();
+        milestones.check();
+      })
+      .catch((err: unknown) => {
+        lobby.showMessage(err instanceof Error ? err.message : 'Oops, something went wobbly.');
+      });
+    lobby.hide();
+  },
+  onProblem: (message) => {
+    lobby.showMessage(message);
+  },
+  // Finds land in the bag: the recipe book may open a page for them.
+  onFound: () => {
+    void recipeBook.check();
+  },
+  onRecipeBook: () => {
+    recipeBook.open();
   },
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
@@ -513,6 +577,7 @@ const maps = createMapScreen({
     void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
+    explore.setMap(null);
     lobby.showMessage(message);
   },
   // Meet it first (#209): the tuft the player tapped is what they came for.
@@ -520,6 +585,7 @@ const maps = createMapScreen({
     wildPicker.tileActions,
     inventory.tileActions,
     home.tileActions,
+    explore.tileActions,
     land.tileActions,
     fences.tileActions,
     territory.tileActions,
@@ -608,6 +674,7 @@ const tutorial = createTutorialScreen({
       if (!stillWanted()) return;
       lobby.hide();
       home.setMap(mapId);
+      explore.setMap(mapId);
       void inventory.setMap(mapId);
       void territory.setMap(mapId);
       void hollow.setMap(mapId);
@@ -623,6 +690,7 @@ const tutorial = createTutorialScreen({
       void land.setMap(null);
       void chat.setMap(null);
       home.setMap(null);
+      explore.setMap(null);
       // A care sheet left open on the Glade (an evolution's "Whoa!") would
       // sit over the lobby's forms (#129).
       care.close();
@@ -715,6 +783,7 @@ const battles = createBattleScreen({
     void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
+    explore.setMap(null);
     lobby.stepOut();
   },
   onClosed: (mapId) => {
@@ -722,6 +791,7 @@ const battles = createBattleScreen({
     maps.open(mapId).then(
       () => {
         home.setMap(mapId);
+        explore.setMap(mapId);
         // A battle can make a squishy evolve: celebrate it now (#19).
         void care.celebrateNews(mapId);
         // And earn a milestone that waited for the battle to close (#44).
@@ -797,6 +867,7 @@ const keeper = createKeeperScreen({
     void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
+    explore.setMap(null);
     maps.close();
     catalog.close();
     care.close();
@@ -826,6 +897,7 @@ const cinematic = createCinematicScreen({
     void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
+    explore.setMap(null);
     maps.close();
     catalog.close();
     care.close();
@@ -867,6 +939,7 @@ const wardrobe = createWardrobeScreen({
     void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
+    explore.setMap(null);
     maps.close();
     catalog.close();
     care.close();
@@ -883,6 +956,7 @@ const wardrobe = createWardrobeScreen({
     maps.open(mapId).then(
       () => {
         home.setMap(mapId);
+        explore.setMap(mapId);
         void inventory.setMap(mapId);
         void territory.setMap(mapId);
         void hollow.setMap(mapId);
@@ -914,6 +988,7 @@ const starters = createStarterScreen({
     void land.setMap(null);
     void chat.setMap(null);
     home.setMap(null);
+    explore.setMap(null);
     maps.close();
     lobby.stepOut();
   },
@@ -956,6 +1031,7 @@ const lobby = mountLobby(document.body, {
     void land.setMap(mapId);
     void chat.setMap(chatFor(mapId));
     home.setMap(mapId);
+    explore.setMap(mapId);
     // Not awaited: the lobby shows its button once this resolves, and a
     // battle resumed here (after a refresh) must step it out again after that.
     void battles.setMap(mapId);
@@ -1062,6 +1138,7 @@ mountAuth(document.body, {
     land.setUser(user);
     chat.setUser(user);
     home.setUser(user);
+    explore.setUser(user);
     wardrobe.setUser(user);
     starters.setUser(user);
     lorebook.setUser(user);
@@ -1108,6 +1185,7 @@ if (import.meta.env.DEV) {
     chat: () => chat.debug,
     raids: () => raidReport.debug,
     home: () => home.debug,
+    explore: () => explore.debug,
     care: () => care.debug,
     closeUp: () => closeUp.debug,
     wardrobe: () => wardrobe.debug,

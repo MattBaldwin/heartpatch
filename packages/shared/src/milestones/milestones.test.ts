@@ -38,6 +38,7 @@ describe('milestone data', () => {
       'caretaker',
       'defender',
       'rescuer',
+      'seeker',
       'halloween',
     ]);
     expect(track('halloween').season).toBe('halloween');

@@ -92,6 +92,23 @@
   color: #8a5f86;
 }
 
+.bag-item-uses {
+  /* A tool's durability bar (#199): what's left of the one in hand. */
+  width: 70%;
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: #f1e9f3;
+  overflow: hidden;
+}
+
+.bag-item-uses-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #7fc8a9;
+}
+
 .bag-item[aria-pressed='true'] {
   background: #ffe0ee;
   box-shadow: 0 0 0 3px #ff9ab8;

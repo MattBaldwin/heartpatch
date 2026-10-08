@@ -25,8 +25,14 @@ const stateOf = (rows: ReturnType<typeof bagRecipes>, id: string) =>
 describe('bag', () => {
   it('lists what you have, in the resource order, with pictures', () => {
     expect(bagItems({ 'heart-charm': 2, timber: 5, stone: 0 })).toEqual([
-      { id: 'timber', name: 'Timber', icon: itemIcon('timber'), count: 5 },
-      { id: 'heart-charm', name: 'Heart Charm', icon: itemIcon('heart-charm'), count: 2 },
+      { id: 'timber', name: 'Timber', icon: itemIcon('timber'), count: 5, tool: null },
+      {
+        id: 'heart-charm',
+        name: 'Heart Charm',
+        icon: itemIcon('heart-charm'),
+        count: 2,
+        tool: null,
+      },
     ]);
   });
 

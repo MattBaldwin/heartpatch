@@ -9,6 +9,7 @@ import {
   type Recipe,
 } from '@heartpatch/shared';
 import { itemIcon } from './item-icons.js';
+import { toolLanded, toolStock } from './tool-uses.js';
 
 // What the bag shows (design doc §12): items with big numbers and a picture,
 // and the recipes you can make. Pure, so it's unit-tested without the DOM.
@@ -18,6 +19,11 @@ export interface BagItem {
   readonly name: string;
   readonly icon: string;
   readonly count: number;
+  /**
+   * An explore tool (#199) is counted in uses: how many tools that makes,
+   * and how much of the one in hand is left (0–1, its durability bar).
+   */
+  readonly tool: { readonly tools: number; readonly share: number } | null;
 }
 
 const ITEMS = new Map(GAME_DATA.resources.map((r) => [r.id, r]));
@@ -34,7 +40,16 @@ export function bagItems(items: ItemCounts): BagItem[] {
   return Object.entries(items)
     .filter(([, count]) => count > 0)
     .sort(([a], [b]) => (ORDER.get(a) ?? Infinity) - (ORDER.get(b) ?? Infinity))
-    .map(([id, count]) => ({ id, name: itemName(id), icon: itemIcon(id), count }));
+    .map(([id, count]) => {
+      const stock = toolStock(id, count);
+      return {
+        id,
+        name: itemName(id),
+        icon: itemIcon(id),
+        count,
+        tool: stock ? { tools: stock.tools, share: stock.share } : null,
+      };
+    });
 }
 
 /** "+5 🪵 Timber, +1 🔮 Witch Dust" for what a gather or craft gives. */
@@ -57,7 +72,10 @@ export function landedText(landed: readonly { items: ItemCounts }[]): string {
   const parts = Object.entries(total)
     .filter(([, n]) => n > 0)
     .sort(([a], [b]) => (ORDER.get(a) ?? Infinity) - (ORDER.get(b) ?? Infinity))
-    .map(([id, n]) => `${itemIcon(id)} +${String(n)} ${itemName(id)}`);
+    .map(
+      ([id, n]) =>
+        toolLanded(id, n, itemName(id)) ?? `${itemIcon(id)} +${String(n)} ${itemName(id)}`,
+    );
   return parts.length === 0 ? '' : `${parts.join(', ')}!`;
 }
 

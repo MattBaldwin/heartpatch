@@ -15,6 +15,7 @@ import {
   hexNeighbors,
   JoinMapResponseSchema,
   MapResponseSchema,
+  MilestonesResponseSchema,
   MapViewSchema,
   SearchSpotResponseSchema,
   SquishyResponseSchema,
@@ -38,6 +39,8 @@ import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
 import { createTendingRepo } from '../territory/repo.js';
 import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
+import { runConsumer } from '../../jobs/consumers.js';
+import { createMilestonesConsumer } from '../milestones/consumer.js';
 import { refreshHomesteads } from './homesteads.js';
 
 /*
@@ -669,5 +672,33 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       await lockRowOf(tx, high!);
     });
     expect((await searched!).statusCode).toBe(200);
+  });
+
+  it('counts each search towards the Seeker track (#199)', async () => {
+    // Milestones judge membership at the event's game time (its database
+    // time, shifted by the clock). Play on today's clock and have both
+    // members join an hour back, as the milestones tests do, so clock skew
+    // between the app and the database can't decide it.
+    clock.setTime(Date.now());
+    const server = await start();
+    const me = await player();
+    const friend = await player();
+    const mapId = await patch(server, me, [friend]);
+    await db.execute(
+      `update map_members set joined_at = now() - interval '1 hour' where map_id = '${mapId}'`,
+    );
+    const { first } = await lineFromHome(mapId, me);
+    await ownMeadow(first, me);
+    const hands = (await view(server, me, mapId, first)).spots.filter((s) => s.tool === null);
+    for (const s of hands.slice(0, 2)) {
+      expect((await search(server, me, mapId, first, s.index)).statusCode).toBe(200);
+    }
+    clock.setTime(Date.now());
+    await runConsumer(db, createMilestonesConsumer({ clock: () => clock }), mapId);
+    const res = await call(server, 'GET', '/milestones', me);
+    const seeker = MilestonesResponseSchema.parse(res.json()).tracks.find(
+      (t) => !t.hidden && t.id === 'seeker',
+    );
+    expect(seeker).toMatchObject({ name: 'Seeker', progress: 2 });
   });
 });
