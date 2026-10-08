@@ -66,6 +66,7 @@ import {
 import { takeDownOnLostLand } from '../buildings/service.js';
 import { createFencesRepo } from '../fences/repo.js';
 import { FENCE_DATA, takeDownFencesOnCapture, toPlacedFence } from '../fences/service.js';
+import { refreshHomesteads } from '../explore/homesteads.js';
 import { createLandTending, type LandTendingService } from './tending.js';
 
 /*
@@ -699,6 +700,16 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       // Claiming land tends it (land that misses you, owner decision 2026-10-06).
       await createTendingRepo(tx).tend(attack.mapId, [tile.id], at);
       await repo.endAttack(battle.id, 'captured', at);
+      // Homesteads (#199): the capturer's may grow or wake up, and the
+      // defender's beyond this tile may be cut off from home. With the
+      // tiles, before fires and fences (tech spec §7: `tile_explore` rows
+      // follow the tile locks).
+      const homesteads = await refreshHomesteads(
+        tx,
+        attack.mapId,
+        [attack.attackerUserId, ...(tile.ownerUserId ? [tile.ownerUserId] : [])],
+        at,
+      );
       // The defender's fire comes down with the land (#202, step 8); the
       // rival never gets it. Battles grants the refund after its squishy locks.
       const map = await createMapsRepo(tx).findMap(attack.mapId);
@@ -741,6 +752,7 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       return {
         events: [
           event,
+          ...homesteads,
           ...lostFires.map((l) => l.event),
           ...fences.broken,
           ...fences.inner.map((l) => l.event),

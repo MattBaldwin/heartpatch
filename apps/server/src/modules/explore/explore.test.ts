@@ -1,6 +1,13 @@
 import {
   ApiErrorSchema,
   BATTLE_RULES,
+  BattleResponseSchema,
+  GAME_DATA,
+  GatherResponseSchema,
+  JobsViewSchema,
+  TERRITORY_RULES,
+  type PlayerBattle,
+  type PlayerBattleAction,
   EXPLORE_RULES,
   ExploreTileResponseSchema,
   hexKey,
@@ -22,6 +29,7 @@ import { gameEvents, keepers, sessions, tileExplore, users } from '../../db/sche
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
+import { createTendingRepo } from '../territory/repo.js';
 import { refreshHomesteads } from './homesteads.js';
 
 /*
@@ -412,5 +420,156 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     });
     expect(BATTLE_RULES.teamSize).toBeGreaterThan(0);
     void gameEvents;
+  });
+
+  /** Cuts `second` off from `me`'s home: `first`, between them, becomes the rival's. */
+  async function cutOff(mapId: string, me: Player, rival: Player, first: Tile) {
+    await db.execute(`update tiles set owner_user_id = '${rival.id}' where id = '${first.id}'`);
+    return withTransaction(db, (tx) => refreshHomesteads(tx, mapId, [rival.id, me.id], clock));
+  }
+  async function reconnect(mapId: string, me: Player, first: Tile) {
+    await db.execute(`update tiles set owner_user_id = '${me.id}' where id = '${first.id}'`);
+    return withTransaction(db, (tx) => refreshHomesteads(tx, mapId, [me.id], clock));
+  }
+
+  it('gives the Keeper +1 a gather on a homestead, and nothing while it naps', async () => {
+    const server = await start();
+    const me = await player();
+    const rival = await player();
+    const mapId = await patch(server, me, [rival]);
+    const { first, second } = await lineFromHome(mapId, me);
+    await ownMeadow(first, me);
+    await ownMeadow(second, me);
+    await exploreAll(server, me, mapId, first);
+    await exploreAll(server, me, mapId, second);
+    await db.execute(
+      `update tiles set node_resource = 'timber' where id in ('${first.id}', '${second.id}')`,
+    );
+    const timber = GAME_DATA.resources.find((r) => r.id === 'timber')!.gather!.quantity;
+
+    const res = await call(server, 'POST', `/maps/${mapId}/gathers`, me, {
+      q: first.q,
+      r: first.r,
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    expect(GatherResponseSchema.parse(res.json()).gather.items['timber']).toBe(timber + 1);
+
+    await cutOff(mapId, me, rival, first);
+    const napping = await call(server, 'POST', `/maps/${mapId}/gathers`, me, {
+      q: second.q,
+      r: second.r,
+    });
+    expect(napping.statusCode).toBe(409);
+    expect(errorOf(napping).message).toBe(
+      'This homestead is napping. Join it back up to home first!',
+    );
+  });
+
+  it('pays a gatherer on a homestead +1 a cycle and nothing while it is cut off', async () => {
+    const server = await start();
+    const me = await player();
+    const rival = await player();
+    const mapId = await patch(server, me, [rival]);
+    const { first, second } = await lineFromHome(mapId, me);
+    await ownMeadow(first, me);
+    await ownMeadow(second, me);
+    await exploreAll(server, me, mapId, first);
+    await exploreAll(server, me, mapId, second);
+    const worker = await squishy(server, me, mapId);
+    const assigned = await call(server, 'POST', `/maps/${mapId}/squishies/${worker.id}/job`, me, {
+      job: 'gatherer',
+      q: second.q,
+      r: second.r,
+    });
+    expect(assigned.statusCode, assigned.body).toBe(200);
+    const workOf = async () => {
+      const jobs = JobsViewSchema.parse(
+        (await call(server, 'GET', `/maps/${mapId}/jobs`, me)).json(),
+      );
+      return jobs.squishies.find((s) => s.squishy.id === worker.id)!.work!;
+    };
+    const land = (await workOf()).cycleSeconds * 1000;
+    const greens = (await workOf()).resource;
+
+    // One cycle done, then cut off: hours later, still one.
+    clock.setTime(clock.getTime() + 1.5 * land);
+    await cutOff(mapId, me, rival, first);
+    clock.setTime(clock.getTime() + 6 * land);
+    expect((await workOf()).readyCycles).toBe(1);
+    expect((await workOf()).nextReadyAt).toBeNull();
+
+    // Joined again: counting carries on from where it stopped, +1 a cycle.
+    await reconnect(mapId, me, first);
+    clock.setTime(clock.getTime() + 0.6 * land);
+    const work = await workOf();
+    expect(work.readyCycles).toBe(2);
+    const base = JobsViewSchema.parse(
+      (await call(server, 'GET', `/maps/${mapId}/jobs`, me)).json(),
+    ).spots.find((s) => s.q === second.q && s.r === second.r)!;
+    expect(work.ready[greens]).toBe(2 * base.quantity);
+  });
+
+  it('never lets a homestead fade (#194)', async () => {
+    const server = await start();
+    const me = await player();
+    const mapId = await patch(server, me);
+    const { first, second } = await lineFromHome(mapId, me);
+    await ownMeadow(first, me);
+    await ownMeadow(second, me);
+    await exploreAll(server, me, mapId, first);
+    const fading = await createTendingRepo(db).outerTiles(mapId, me.id);
+    expect(fading.map((t) => t.id)).toContain(second.id);
+    expect(fading.map((t) => t.id)).not.toContain(first.id);
+  });
+
+  it('pauses the homesteads a challenge cuts off (#203’s capture path)', async () => {
+    const server = await start();
+    const kid = await player();
+    const rival = await player();
+    const mapId = await patch(server, kid, [rival]);
+    const { first, second } = await lineFromHome(mapId, rival);
+    await ownMeadow(first, rival);
+    await ownMeadow(second, rival);
+    await exploreAll(server, rival, mapId, first);
+    await exploreAll(server, rival, mapId, second);
+    // The kid holds land next to `first` (not the rival's home, not `second`).
+    const all = await tilesOf(mapId);
+    const byKey = new Map(all.map((t) => [hexKey(t), t]));
+    const foothold = hexNeighbors(first)
+      .map((n) => byKey.get(hexKey(n)))
+      .find((t) => t && t.homeSlot === null && t.id !== second.id && t.ownerUserId === null)!;
+    await db.execute(`update tiles set owner_user_id = '${kid.id}' where id = '${foothold.id}'`);
+    const hero = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, kid, {
+      level: 40,
+      speciesId: 'emberbun',
+    });
+    expect(hero.statusCode, hero.body).toBe(201);
+    clock.setTime(clock.getTime() + (TERRITORY_RULES.newPlayerShieldHours + 1) * 60 * 60 * 1000);
+
+    const started = await call(server, 'POST', `/maps/${mapId}/attacks`, kid, {
+      q: first.q,
+      r: first.r,
+    });
+    expect(started.statusCode, started.body).toBe(201);
+    let battle: PlayerBattle = BattleResponseSchema.parse(started.json()).battle;
+    for (let i = 0; i < BATTLE_RULES.maxTurns + 5 && battle.status === 'active'; i++) {
+      const side = battle.view.sides[battle.mySide];
+      const action: PlayerBattleAction =
+        battle.view.phase.type === 'replace'
+          ? { type: 'replace', slot: side.squishies.findIndex((s) => s.energy > 0) }
+          : { type: 'move', move: side.squishies[side.active]!.moves[0]! };
+      const res = await call(server, 'POST', `/battles/${battle.id}/actions`, kid, {
+        action,
+        turn: battle.view.turn,
+      });
+      expect(res.statusCode, res.body).toBe(200);
+      battle = BattleResponseSchema.parse(res.json()).battle;
+    }
+    expect(battle.view.phase).toMatchObject({ type: 'over', result: { winner: 'a' } });
+    expect((await tilesOf(mapId)).find((t) => t.id === first.id)!.ownerUserId).toBe(kid.id);
+    expect(await eventsOf(mapId, 'homestead.paused')).toEqual([
+      { userId: rival.id, tiles: [{ q: second.q, r: second.r }] },
+    ]);
+    expect((await view(server, rival, mapId, second)).homestead).toBe('paused');
   });
 });

@@ -19,6 +19,7 @@ import {
   isNotNull,
   isNull,
   ne,
+  notExists,
   or,
   sql,
 } from 'drizzle-orm';
@@ -31,6 +32,7 @@ import {
   squishies,
   tileAttacks,
   tileDefenders,
+  tileExplore,
   tiles,
   tileTending,
 } from '../../db/schema.js';
@@ -594,7 +596,11 @@ export interface TendingTileRow {
 export interface TendingRepo {
   /** Runs `fn` in one transaction, with this repo on it. */
   transaction: <T>(fn: (repo: TendingTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
-  /** Owned tiles outside every home base, with when they were tended; one owner's, or everyone's. */
+  /**
+   * Owned tiles outside every home base that can fade, with when they were
+   * tended; one owner's, or everyone's. A homestead (#199) never fades, so
+   * its owner's joined homesteads are left out.
+   */
   outerTiles: (mapId: string, userId?: string) => Promise<TendingTileRow[]>;
   /** Marks these tiles tended at `at` (never moves a later time back), in tile id order. */
   tend: (mapId: string, tileIds: readonly string[], at: Date) => Promise<void>;
@@ -673,6 +679,18 @@ function tendingQueries(db: Executor): TendingRepo {
             eq(tiles.mapId, mapId),
             isNull(tiles.homeSlot),
             userId === undefined ? isNotNull(tiles.ownerUserId) : eq(tiles.ownerUserId, userId),
+            notExists(
+              db
+                .select({ one: sql`1` })
+                .from(tileExplore)
+                .where(
+                  and(
+                    eq(tileExplore.tileId, tiles.id),
+                    eq(tileExplore.userId, tiles.ownerUserId),
+                    isNotNull(tileExplore.joinedAt),
+                  ),
+                ),
+            ),
           ),
         )
         .orderBy(asc(tiles.q), asc(tiles.r));

@@ -8,6 +8,7 @@ import {
   squishies,
   tileAttacks,
   tileDefenders,
+  tileExplore,
   tiles,
   tileTending,
 } from '../../db/schema.js';
@@ -22,6 +23,11 @@ export interface JobTileRow {
   nodeResource: string | null;
   homeSlot: number | null;
   ownerUserId: string | null;
+  /**
+   * The working squishy's owner's explore row for this tile, when they've
+   * fully explored it (#199): its homestead columns. Work tiles only.
+   */
+  homestead?: { joinedAt: Date | null; pausedAt: Date | null; resumedAt: Date | null } | null;
 }
 
 /** One of a player's squishies with everything its job depends on. */
@@ -209,6 +215,10 @@ function queries(db: Executor): SquishyJobsRepo {
         workNode: workTile.nodeResource,
         workHomeSlot: workTile.homeSlot,
         workOwner: workTile.ownerUserId,
+        workExplored: tileExplore.completedAt,
+        workJoinedAt: tileExplore.joinedAt,
+        workPausedAt: tileExplore.pausedAt,
+        workResumedAt: tileExplore.resumedAt,
         postTileId: postTile.id,
         postQ: postTile.q,
         postR: postTile.r,
@@ -219,6 +229,15 @@ function queries(db: Executor): SquishyJobsRepo {
       })
       .from(squishies)
       .leftJoin(workTile, eq(workTile.id, squishies.workTileId))
+      // The owner's own row for the work tile: a homestead's bonus and pauses (#199).
+      .leftJoin(
+        tileExplore,
+        and(
+          eq(tileExplore.tileId, squishies.workTileId),
+          eq(tileExplore.userId, squishies.ownerUserId),
+          isNotNull(tileExplore.completedAt),
+        ),
+      )
       .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))
       .leftJoin(postTile, eq(postTile.id, tileDefenders.tileId))
       .leftJoin(trainingBuilding, eq(trainingBuilding.id, squishies.trainingBuildingId));
@@ -251,6 +270,14 @@ function queries(db: Executor): SquishyJobsRepo {
             nodeResource: r.workNode,
             homeSlot: r.workHomeSlot,
             ownerUserId: r.workOwner,
+            homestead:
+              r.workExplored === null
+                ? null
+                : {
+                    joinedAt: r.workJoinedAt,
+                    pausedAt: r.workPausedAt,
+                    resumedAt: r.workResumedAt,
+                  },
           },
     workSince: r.workSince,
     atWork: r.atWork,

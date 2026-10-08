@@ -1,5 +1,8 @@
 import {
   canGather,
+  EXPLORE_RULES,
+  homesteadQuantity,
+  type ItemCounts,
   GAME_DATA,
   gameplayOverrides,
   gatherSeconds,
@@ -14,6 +17,8 @@ import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import type { Clock } from '../../lib/time.js';
+import { homesteadOf } from '../explore/homesteads.js';
+import { createExploreRepo } from '../explore/repo.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import { createInventoryService, grantItems, seasonsOn, toGather } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
@@ -44,7 +49,18 @@ const MESSAGES = {
   notYoursNow: "That spot isn't yours anymore.",
   notReady: 'Not ready yet. Check back soon!',
   outOfSeason: (name: string, season: string) => `${name} only turn up around ${season}!`,
+  napping: 'This homestead is napping. Join it back up to home first!',
 } as const;
+
+/** A gather's yield on a joined homestead (#199): its resource's share gets the homestead bonus. */
+function homesteadYield(
+  items: ItemCounts,
+  resource: string,
+  homestead: 'joined' | 'paused' | null,
+): ItemCounts {
+  if (homestead !== 'joined') return items;
+  return { ...items, [resource]: homesteadQuantity(items[resource] ?? 0, EXPLORE_RULES) };
+}
 
 /**
  * What happens to a gather when it's settled (owner decision 2026-10-06:
@@ -153,6 +169,9 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
             const season = SEASON_NAMES.get(resource.season ?? '') ?? 'their season';
             throw new AppError('CONFLICT', MESSAGES.outOfSeason(resource.name, season));
           }
+          // A homestead (#199) gives +1 a gather, and naps while it's cut off from home.
+          const homestead = homesteadOf(await createExploreRepo(tx).findRow(user.id, tile.id));
+          if (homestead === 'paused') throw new AppError('CONFLICT', MESSAGES.napping);
 
           // The node's gather still going: a finished one goes in its
           // gatherer's bag first (no Collect, owner decision 2026-10-06), even
@@ -175,7 +194,11 @@ export function createGatheringService(options: GatheringServiceOptions): Gather
             userId: user.id,
             tileId: tile.id,
             resource: resource.id,
-            items: gatherYield(resource, GAME_DATA.resources, seasons),
+            items: homesteadYield(
+              gatherYield(resource, GAME_DATA.resources, seasons),
+              resource.id,
+              homestead,
+            ),
             startedAt: at,
             readyAt: new Date(at.getTime() + seconds * 1000),
           });
