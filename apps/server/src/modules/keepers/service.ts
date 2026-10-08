@@ -1,5 +1,6 @@
 import {
   KEEPER_DATA,
+  compactKeeperConfig,
   completeKeeperConfig,
   type CompleteKeeperConfig,
   keeperConfigProblem,
@@ -48,15 +49,33 @@ export function createKeepersService(options: KeepersServiceOptions): KeepersSer
     data.bases.find((b) => b.id === config.base)?.hairstyle;
 
   return {
-    get: (user) => store.find(user.id),
+    get: async (user) => {
+      const keeper = await store.find(user.id);
+      return keeper && compactKeeperConfig(keeper, data);
+    },
 
     save: async (user, config) => {
       // The schema checked the shape; the ids must name real data too.
       const problem = keeperConfigProblem(config, data);
       if (problem) throw new AppError('VALIDATION_FAILED', MESSAGES[problem]);
-      // Every builder choice is stored; one an older app didn't send comes
-      // from the starting look (#289).
-      const full = completeKeeperConfig(config, data);
+      // Every builder choice is stored (#289). One an older app didn't send
+      // keeps what's stored while the starting look stays the same (it only
+      // knows today's fields), else comes from the new starting look.
+      const earlier = await store.find(user.id);
+      const kept =
+        earlier?.base === config.base
+          ? {
+              skinTone: earlier.skinTone,
+              eyes: earlier.eyes,
+              brows: earlier.brows,
+              mouth: earlier.mouth,
+              extras: earlier.extras,
+            }
+          : {};
+      const defined = Object.fromEntries(
+        Object.entries(kept).filter(([, value]) => value !== undefined),
+      );
+      const full = completeKeeperConfig({ ...defined, ...config }, data);
       const keeper: CompleteKeeperConfig = {
         base: full.base,
         hairColor: full.hairColor,
@@ -73,7 +92,7 @@ export function createKeepersService(options: KeepersServiceOptions): KeepersSer
           : { hairstyle: config.hairstyle }),
       };
       await store.save(user.id, keeper, now());
-      return keeper;
+      return compactKeeperConfig(keeper, data);
     },
   };
 }

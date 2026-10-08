@@ -347,3 +347,24 @@ export function completeKeeperConfig(config: KeeperConfig, data: KeeperData): Co
     extras: data.faceExtras.filter((e) => picked.has(e.id)).map((e) => e.id),
   };
 }
+
+/**
+ * `config` as the server sends it (#289): a builder choice that is its
+ * starting look's own is left out, and no extras is left out, as a hairstyle
+ * is. A Keeper nobody has customised gets exactly the reply an app from
+ * before the builder can read (its schema is strict); `completeKeeperConfig`
+ * puts the choices back.
+ */
+export function compactKeeperConfig(config: KeeperConfig, data: KeeperData): KeeperConfig {
+  const base = data.bases.find((b) => b.id === config.base);
+  if (!base) return config;
+  const { skinTone, eyes, brows, mouth, extras, ...rest } = config;
+  return {
+    ...rest,
+    ...(skinTone === undefined || skinTone === base.skinTone ? {} : { skinTone }),
+    ...(eyes === undefined || eyes === base.face.eyes ? {} : { eyes }),
+    ...(brows === undefined || brows === base.face.brows ? {} : { brows }),
+    ...(mouth === undefined || mouth === base.face.mouth ? {} : { mouth }),
+    ...(extras === undefined || extras.length === 0 ? {} : { extras }),
+  };
+}

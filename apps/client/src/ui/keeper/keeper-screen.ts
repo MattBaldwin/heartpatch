@@ -459,7 +459,8 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     save.textContent = KEEPER_TEXT.saving;
     error.textContent = '';
     try {
-      saved = await api.save(picked);
+      // The server leaves out choices that are the starting look's own (#289).
+      saved = completeKeeperConfig(await api.save(picked), KEEPER_DATA);
       if (mine !== session) return;
       const first = mode === 'first';
       close(true);
@@ -488,7 +489,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     try {
       const keeper = await api.get();
       if (mine !== session) return;
-      saved = keeper;
+      saved = keeper && completeKeeperConfig(keeper, KEEPER_DATA);
       if (keeper) {
         close(false);
         options.onReady(who);

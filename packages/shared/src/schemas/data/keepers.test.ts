@@ -4,6 +4,7 @@ import { KEEPER_DATA } from '../../data/keepers.js';
 import { MapMemberSchema } from '../maps.js';
 import {
   checkKeeperData,
+  compactKeeperConfig,
   completeKeeperConfig,
   defaultKeeperConfig,
   KeeperConfigSchema,
@@ -189,6 +190,23 @@ describe('Keeper configs', () => {
     );
     expect(picked.brows).toBe('soft');
     expect(picked.extras).toEqual(['blush', 'heart-sticker']);
+  });
+
+  it('sends a starting look’s own choices as before the builder, and completes them back (#289)', () => {
+    for (const base of KEEPER_DATA.bases) {
+      const own = defaultKeeperConfig(base);
+      // Exactly the reply an app from before the builder reads.
+      expect(compactKeeperConfig(own, KEEPER_DATA)).toEqual({
+        base: base.id,
+        hairColor: base.hairColor,
+        eyeColor: base.eyeColor,
+        outfit: base.outfit,
+      });
+      const built = { ...own, skinTone: 'tone-10', brows: 'straight', extras: ['lashes'] };
+      const sent = compactKeeperConfig(built, KEEPER_DATA);
+      expect(sent).not.toHaveProperty('mouth');
+      expect(completeKeeperConfig(sent, KEEPER_DATA)).toEqual(built);
+    }
   });
 
   it('refuses an extra picked twice', () => {

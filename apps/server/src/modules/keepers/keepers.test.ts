@@ -1,5 +1,6 @@
 import {
   ApiErrorSchema,
+  completeKeeperConfig,
   defaultKeeperConfig,
   KEEPER_DATA,
   JoinMapResponseSchema,
@@ -12,6 +13,7 @@ import {
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { z } from 'zod';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
@@ -93,13 +95,15 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
   async function getKeeper(server: FastifyInstance, who: Player) {
     const res = await call(server, 'GET', '/keeper', who);
     expect(res.statusCode).toBe(200);
-    return KeeperResponseSchema.parse(res.json()).keeper;
+    const { keeper } = KeeperResponseSchema.parse(res.json());
+    // Choices that are the starting look's own are left out (#289): put them back.
+    return keeper && completeKeeperConfig(keeper, KEEPER_DATA);
   }
 
   async function saveKeeper(server: FastifyInstance, who: Player, keeper: KeeperConfig) {
     const res = await call(server, 'POST', '/keeper', who, keeper);
     expect(res.statusCode).toBe(200);
-    return SetKeeperResponseSchema.parse(res.json()).keeper;
+    return completeKeeperConfig(SetKeeperResponseSchema.parse(res.json()).keeper, KEEPER_DATA);
   }
 
   const newMap = (server: FastifyInstance, who: Player) =>
@@ -171,6 +175,55 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
     expect(await getKeeper(server, kid)).toEqual(expected);
     // Picking a new starting look starts over: its own choices, no extras.
     expect(await saveKeeper(server, kid, CLOVER_KEEPER)).toEqual(CLOVER_KEEPER);
+  });
+
+  it('sends an untouched Keeper exactly as before the builder, so older apps still load it (#289)', async () => {
+    const server = await start();
+    const kid = await player();
+    // The reply schema of an app from before the builder: strict, today's fields only.
+    const OldKeeperSchema = z.strictObject({
+      base: z.string(),
+      hairColor: z.string(),
+      eyeColor: z.string(),
+      outfit: z.string(),
+      hairstyle: z.string().optional(),
+    });
+    const saved = await call(server, 'POST', '/keeper', kid, CLOVER_KEEPER);
+    const old = {
+      base: 'clover',
+      hairColor: 'mint',
+      eyeColor: CLOVER!.eyeColor,
+      outfit: CLOVER!.outfit,
+    };
+    expect(OldKeeperSchema.parse(saved.json<{ keeper: unknown }>().keeper)).toEqual(old);
+    const got = await call(server, 'GET', '/keeper', kid);
+    expect(OldKeeperSchema.parse(got.json<{ keeper: unknown }>().keeper)).toEqual(old);
+    // A builder pick is sent; only what differs from the starting look.
+    await saveKeeper(server, kid, { ...CLOVER_KEEPER, brows: 'soft', extras: ['blush'] });
+    const built = await call(server, 'GET', '/keeper', kid);
+    expect(built.json<{ keeper: unknown }>().keeper).toEqual({
+      ...old,
+      brows: 'soft',
+      extras: ['blush'],
+    });
+  });
+
+  it('keeps the builder picks when an older app saves the same starting look (#289)', async () => {
+    const server = await start();
+    const kid = await player();
+    const built = {
+      ...CLOVER_KEEPER,
+      skinTone: 'tone-8',
+      mouth: 'small-smile',
+      extras: ['freckles'],
+    };
+    await saveKeeper(server, kid, built);
+    // An older app only knows today's fields: a new hair colour keeps the rest.
+    const old = { base: 'clover', hairColor: 'honey', eyeColor: 'leaf', outfit: 'meadow' };
+    expect(await saveKeeper(server, kid, old)).toEqual({ ...built, ...old });
+    // A new starting look starts over from its own choices.
+    const pip = { base: 'pip', hairColor: 'honey', eyeColor: 'sky', outfit: 'sunflower' };
+    expect(await saveKeeper(server, kid, pip)).toEqual({ ...PIP_KEEPER, ...pip });
   });
 
   it('fills the builder choices an older app leaves out from the starting look (#289)', async () => {

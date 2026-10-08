@@ -127,6 +127,7 @@ Add anything else only with a one-line justification in the PR.
 | `lore_found` (migration 0017) | lore pages each player has found, one row per page (design doc §16) | #24 |
 | `keepers` | each account's Keeper | #42 |
 | `keepers.hairstyle` (text, nullable, migration 0023) | the hairstyle the player picked; null for the base's own style (every Keeper saved before styles could be picked) | Keeper hair styles PR |
+| `keepers.skin_tone`, `eyes`, `brows`, `mouth` (text, not null) and `extras` (text[], not null, default empty), migration 0035 | the Keeper builder's choices (ids from `KEEPER_DATA`); rows saved before it were filled from their base, the starting look. Replies leave out a choice that is the starting look's own (and no extras), so an older app reads an untouched Keeper as before | #289 |
 | `inventories`, `resource_ledger`, `gather_jobs`, `crafts` | bag, every change to it, gathers and crafts | #17 |
 | `species_seen` | the catalog, per map | #14 |
 | `buildings` | home-base buildings, and Hearthfires on owned land (#202: one a tile, in its middle, so `buildings_tile_id_spot_key` holds it), Hearthfire `fuelled_through` | #18 |

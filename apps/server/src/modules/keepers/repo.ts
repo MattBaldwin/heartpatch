@@ -1,11 +1,11 @@
-import { KeeperEyesSchema, type CompleteKeeperConfig } from '@heartpatch/shared';
+import { KeeperEyesSchema, type CompleteKeeperConfig, type KeeperConfig } from '@heartpatch/shared';
 import { eq } from 'drizzle-orm';
 import type { Executor } from '../../db/client.js';
 import { keepers } from '../../db/schema.js';
 
 /** Keeper storage (`keepers`, one row per player). Plain queries; the service checks the ids. */
 export interface KeepersRepo {
-  find: (userId: string) => Promise<CompleteKeeperConfig | null>;
+  find: (userId: string) => Promise<KeeperConfig | null>;
   /** Writes the player's Keeper (every builder choice filled in), replacing any earlier one. */
   save: (userId: string, config: CompleteKeeperConfig, at: Date) => Promise<void>;
 }
@@ -31,8 +31,10 @@ export function keeperFromRow({
 }: Omit<CompleteKeeperConfig, 'hairstyle' | 'eyes'> & {
   hairstyle: string | null;
   eyes: string;
-}): CompleteKeeperConfig {
-  const keeper = { ...rest, eyes: KeeperEyesSchema.parse(eyes) };
+}): KeeperConfig {
+  // Eyes this server doesn't know (a bad row) fall back to the starting look's.
+  const known = KeeperEyesSchema.safeParse(eyes);
+  const keeper: KeeperConfig = known.success ? { ...rest, eyes: known.data } : rest;
   return hairstyle === null ? keeper : { ...keeper, hairstyle };
 }
 
