@@ -1,5 +1,8 @@
 import {
   KEEPER_DATA,
+  compactKeeperConfig,
+  completeKeeperConfig,
+  type CompleteKeeperConfig,
   keeperConfigProblem,
   type KeeperConfig,
   type KeeperData,
@@ -31,6 +34,11 @@ const MESSAGES: Readonly<Record<keyof KeeperConfig, string>> = {
   eyeColor: "We don't know that eye color. Pick another one!",
   outfit: "We don't know that outfit. Pick another one!",
   hairstyle: "We don't know that hair style. Pick another one!",
+  skinTone: "We don't know that skin tone. Pick another one!",
+  eyes: "We don't know those eyes. Pick another one!",
+  brows: "We don't know those brows. Pick another one!",
+  mouth: "We don't know that smile. Pick another one!",
+  extras: "We don't know that extra. Pick another one!",
 };
 
 export function createKeepersService(options: KeepersServiceOptions): KeepersService {
@@ -41,24 +49,50 @@ export function createKeepersService(options: KeepersServiceOptions): KeepersSer
     data.bases.find((b) => b.id === config.base)?.hairstyle;
 
   return {
-    get: (user) => store.find(user.id),
+    get: async (user) => {
+      const keeper = await store.find(user.id);
+      return keeper && compactKeeperConfig(keeper, data);
+    },
 
     save: async (user, config) => {
       // The schema checked the shape; the ids must name real data too.
       const problem = keeperConfigProblem(config, data);
       if (problem) throw new AppError('VALIDATION_FAILED', MESSAGES[problem]);
-      const keeper: KeeperConfig = {
-        base: config.base,
-        hairColor: config.hairColor,
-        eyeColor: config.eyeColor,
-        outfit: config.outfit,
+      // Every builder choice is stored (#289). One an older app didn't send
+      // keeps what's stored while the starting look stays the same (it only
+      // knows today's fields), else comes from the new starting look.
+      const earlier = await store.find(user.id);
+      const kept =
+        earlier?.base === config.base
+          ? {
+              skinTone: earlier.skinTone,
+              eyes: earlier.eyes,
+              brows: earlier.brows,
+              mouth: earlier.mouth,
+              extras: earlier.extras,
+            }
+          : {};
+      const defined = Object.fromEntries(
+        Object.entries(kept).filter(([, value]) => value !== undefined),
+      );
+      const full = completeKeeperConfig({ ...defined, ...config }, data);
+      const keeper: CompleteKeeperConfig = {
+        base: full.base,
+        hairColor: full.hairColor,
+        eyeColor: full.eyeColor,
+        outfit: full.outfit,
+        skinTone: full.skinTone,
+        eyes: full.eyes,
+        brows: full.brows,
+        mouth: full.mouth,
+        extras: full.extras,
         // None, or the base's own, is stored as none: the base's style shows.
         ...(config.hairstyle === undefined || config.hairstyle === baseStyle(config)
           ? {}
           : { hairstyle: config.hairstyle }),
       };
       await store.save(user.id, keeper, now());
-      return keeper;
+      return compactKeeperConfig(keeper, data);
     },
   };
 }

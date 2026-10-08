@@ -111,7 +111,7 @@ describe('keeperParams', () => {
     }
   });
 
-  it('never hides the brows under the hair, for any base, style or hair colour (#289)', () => {
+  it('never hides the brows under the hair, for any base, style, hair colour or brows (#289)', () => {
     // The hair is seeded by the colours, so check every hair colour. Each
     // brow is sampled along its length; a sample shows when a ray from it
     // towards the camera (−z) misses every hair ellipsoid.
@@ -131,11 +131,14 @@ describe('keeperParams', () => {
     const hidden: string[] = [];
     for (const base of BASES) {
       for (const style of KEEPER_DATA.hairstyles) {
-        for (const hairColor of KEEPER_DATA.hairColors) {
+        for (const [hairColor, browStyle] of KEEPER_DATA.hairColors.flatMap((c) =>
+          KEEPER_DATA.brows.map((b) => [c, b] as const),
+        )) {
           const config = {
             ...defaultKeeperConfig(base),
             hairstyle: style.id,
             hairColor: hairColor.id,
+            brows: browStyle.id,
           };
           const p = keeperParams(config, KEEPER_DATA);
           const hair = piecesOf(p, 'hair')
@@ -146,8 +149,10 @@ describe('keeperParams', () => {
           for (const brow of brows.slice(0, 2)) {
             const m = matrixOf(brow);
             let shown = 0;
-            for (const x of [-0.35, -0.175, 0, 0.175, 0.35]) {
-              const from = Vector3.TransformCoordinates(new Vector3(x, 0, 0), m);
+            for (const t of [-0.35, -0.175, 0, 0.175, 0.35]) {
+              // Along the line: a straight brow is a capsule turned across the face.
+              const along = brow.shape === 'capsule' ? new Vector3(0, t, 0) : new Vector3(t, 0, 0);
+              const from = Vector3.TransformCoordinates(along, m);
               const blocked = hair.some((inverse) => {
                 // Ray against the unit-diameter sphere in the ellipsoid's own space.
                 const o = Vector3.TransformCoordinates(from, inverse);
@@ -160,12 +165,82 @@ describe('keeperParams', () => {
               });
               if (!blocked) shown++;
             }
-            if (shown < 3) hidden.push(`${base.id}/${style.id}/${hairColor.id}`);
+            if (shown < 3) hidden.push(`${base.id}/${style.id}/${hairColor.id}/${browStyle.id}`);
           }
         }
       }
     }
     expect(hidden).toEqual([]);
+  });
+
+  it('draws the picked skin tone, eyes, brows, mouth and extras on any starting look (#289)', () => {
+    const line = hexToRgb(KEEPER.colors.faceLine).join();
+    const pip = BASES[0]!;
+    const plain = keeperParams(defaultKeeperConfig(pip), KEEPER_DATA);
+    const deepest = KEEPER_DATA.skinTones.at(-1)!;
+    const p = keeperParams(
+      { ...defaultKeeperConfig(pip), skinTone: deepest.id, eyes: 'happy' },
+      KEEPER_DATA,
+    );
+    expect(head(p).color).toEqual(hexToRgb(deepest.color));
+    // Happy eyes are arcs, where Pip's own are round.
+    expect(piecesOf(p, 'face').filter((piece) => piece.shape === 'arc').length).toBeGreaterThan(
+      piecesOf(plain, 'face').filter((piece) => piece.shape === 'arc').length,
+    );
+    for (const brows of KEEPER_DATA.brows) {
+      for (const mouth of KEEPER_DATA.mouths) {
+        const q = keeperParams(
+          { ...defaultKeeperConfig(pip), brows: brows.id, mouth: mouth.id },
+          KEEPER_DATA,
+        );
+        const lines = piecesOf(q, 'face').filter((piece) => piece.color.join() === line);
+        // Two brows, the nose (a capsule) and the mouth, in that order.
+        expect(lines.map((piece) => piece.shape)).toEqual([
+          brows.shape,
+          brows.shape,
+          'capsule',
+          mouth.shape,
+        ]);
+        expect(q.missing).toEqual([]);
+      }
+    }
+    // Each extra adds its pieces (mirrored ones on both cheeks); none are drawn unpicked.
+    for (const extra of KEEPER_DATA.faceExtras) {
+      const q = keeperParams({ ...defaultKeeperConfig(pip), extras: [extra.id] }, KEEPER_DATA);
+      const added = extra.pieces.reduce((n, piece) => n + (piece.mirror ? 2 : 1), 0);
+      expect(piecesOf(q, 'face').length - piecesOf(plain, 'face').length, extra.id).toBe(added);
+    }
+  });
+
+  it('draws unknown builder ids as the starting look’s own, and reports them', () => {
+    const pip = BASES[0]!;
+    const own = keeperParams(defaultKeeperConfig(pip), KEEPER_DATA);
+    const p = keeperParams(
+      {
+        ...defaultKeeperConfig(pip),
+        skinTone: 'tone-99',
+        brows: 'unibrow',
+        mouth: 'grin',
+        extras: ['tattoo'],
+      },
+      KEEPER_DATA,
+    );
+    expect(p.missing).toEqual(['tone-99', 'unibrow', 'grin', 'tattoo']);
+    expect(p.pieces).toEqual(own.pieces);
+  });
+
+  it('draws a config saved before the builder exactly as its starting look', () => {
+    for (const base of BASES) {
+      const old = {
+        base: base.id,
+        hairColor: base.hairColor,
+        eyeColor: base.eyeColor,
+        outfit: base.outfit,
+      };
+      expect(keeperParams(old, KEEPER_DATA).pieces).toEqual(
+        keeperParams(defaultKeeperConfig(base), KEEPER_DATA).pieces,
+      );
+    }
   });
 
   it('uses the picked colours for hair, eyes and outfit', () => {

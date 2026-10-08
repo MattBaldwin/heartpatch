@@ -93,15 +93,31 @@ test('a new Keeper is picked before any patch, remembered, and changed for free'
   // Every pick shows on the 3D Keeper, which hops, then stops drawing.
   await picker.getByRole('button', { name: 'Wren', exact: true }).tap();
   await picker.getByRole('button', { name: 'Hair: Mint' }).tap();
-  await picker.getByRole('button', { name: 'Eyes: Violet' }).tap();
+  await picker.getByRole('button', { name: 'Eye color: Violet' }).tap();
   await picker.getByRole('button', { name: 'Outfit: Pumpkin' }).tap();
+  // The Keeper builder (#289): any skin tone, eyes, brows, mouth and extras.
+  await picker.getByRole('button', { name: 'Skin tone 2' }).tap();
+  await picker.getByRole('button', { name: 'Eyes: Happy' }).tap();
+  await picker.getByRole('button', { name: 'Brows: Soft' }).tap();
+  await picker.getByRole('button', { name: 'Mouth: Big smile' }).tap();
+  await picker.getByRole('button', { name: 'Extras: Freckles' }).tap();
+  await picker.getByRole('button', { name: 'Extras: Blush' }).tap();
   const picked = (await keeperState(page))!;
   expect(picked.picked).toEqual({
     base: 'wren',
     hairColor: 'mint',
     eyeColor: 'violet',
     outfit: 'pumpkin',
+    skinTone: 'tone-2',
+    eyes: 'happy',
+    brows: 'soft',
+    mouth: 'big-smile',
+    extras: ['blush', 'freckles'],
   });
+  await expect(picker.getByRole('button', { name: 'Extras: Freckles' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   expect(picked.preview).not.toBe(start.preview);
   await expect(picker.getByRole('button', { name: 'Hair: Mint' })).toHaveAttribute(
     'aria-pressed',
@@ -161,6 +177,11 @@ test('any Keeper wears any hair style, kept after a reload', async ({ page }) =>
     hairColor: 'midnight',
     eyeColor: 'hazel',
     outfit: 'sunflower',
+    skinTone: 'tone-10',
+    eyes: 'oval',
+    brows: 'arched',
+    mouth: 'smile',
+    extras: [],
   });
 
   // …and can wear any other; the Keeper and colours stay.
@@ -237,7 +258,7 @@ test('the Keeper stands at home on the map and cheers in battles', async ({ page
     .toBeGreaterThan(0);
 });
 
-test('every row of the picker is reachable on phones, iPads and laptops (#130)', async ({
+test('every row of the picker is reachable on phones, iPads and laptops (#130, #289)', async ({
   page,
 }) => {
   test.setTimeout(120_000);
@@ -257,24 +278,33 @@ test('every row of the picker is reachable on phones, iPads and laptops (#130)',
     await settled(page);
     const layout = await page.evaluate(() => {
       const rows = document.querySelector<HTMLElement>('.keeper-rows')!;
+      const save = document.querySelector<HTMLElement>('.keeper-actions')!;
+      const onScreen = (node: HTMLElement) => {
+        const box = node.getBoundingClientRect();
+        return box.top >= 0 && box.bottom <= window.innerHeight;
+      };
       return {
-        // All five rows fit: nothing hides below "That's me!".
-        fits: rows.scrollHeight <= rows.clientHeight + 1,
-        // The first choice of each row is what a finger on it touches.
-        reachable: [...rows.querySelectorAll('.keeper-row')].map((row) => {
+        // One list (owner, #289): the rows scroll; "That's me!" always shows.
+        saveShows: onScreen(save),
+        // Scrolled to, the first choice of each row is what a finger on it touches.
+        reachable: [...rows.querySelectorAll<HTMLElement>('.keeper-row')].map((row) => {
+          row.scrollIntoView({ block: 'nearest' });
           const button = row.querySelector('button')!;
           const box = button.getBoundingClientRect();
           const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-          return hit?.closest('button') === button;
+          return hit?.closest('button') === button && onScreen(save);
         }),
         // A swipe up or down that starts on a choice can still scroll the rows.
         swipe: getComputedStyle(rows.querySelector('.keeper-choices')!).touchAction,
       };
     });
     expect(layout, `${String(size.width)}×${String(size.height)}`).toEqual({
-      fits: true,
-      reachable: [true, true, true, true, true],
+      saveShows: true,
+      reachable: Array.from({ length: 10 }, () => true),
       swipe: 'pan-x pan-y',
+    });
+    await page.evaluate(() => {
+      document.querySelector('.keeper-rows')!.scrollTop = 0;
     });
     // More Keepers than fit: the row says so (it fades out at the end).
     await expect(picker.locator('.keeper-choices').first()).toHaveAttribute('data-more', 'end');
