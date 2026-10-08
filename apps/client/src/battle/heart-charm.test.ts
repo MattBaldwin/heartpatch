@@ -51,8 +51,13 @@ describe('who joined the patch (#279)', () => {
       mySide: 'a',
       view: { phase, sides: { b: { squishies, active } } },
     }) as unknown as PlayerBattle;
-  const over = (reason: 'captured' | 'tuckered-out', winner: 'a' | 'b' = 'a') =>
-    ({ type: 'over', result: { winner, reason, contentHash: 'x', turns: 2, xp: [] } }) as const;
+  const over = (
+    reason: 'captured' | 'tuckered-out',
+    winner: 'a' | 'b' = 'a',
+  ): PlayerBattle['view']['phase'] => ({
+    type: 'over',
+    result: { winner, reason, contentHash: 'x', turns: 2, xp: [] },
+  });
 
   it('is the wild squishy that said yes', () => {
     const b = ended([{ id: 'wild' }], 0, over('captured'));

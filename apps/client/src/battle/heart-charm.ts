@@ -61,11 +61,7 @@ export function newFriends(battle: PlayerBattle): BattleSquishyView[] {
 
 /** "Moonpuff joined your patch!", "Moonpuff and Snoozlet joined your patch!" */
 export function joinedLine(names: readonly string[]): string {
-  const who =
-    names.length === 0
-      ? 'Your new squishy'
-      : names.length === 1
-        ? names[0]!
-        : `${names.slice(0, -1).join(', ')} and ${names.at(-1)!}`;
+  const last = names.at(-1) ?? 'Your new squishy';
+  const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${last}` : last;
   return `${who} joined your patch!`;
 }

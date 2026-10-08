@@ -40,11 +40,7 @@ import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import {
-  createBattlesService,
-  HEART_CHARM,
-  type TileBattleEnd,
-} from '../battles/service.js';
+import { createBattlesService, HEART_CHARM, type TileBattleEnd } from '../battles/service.js';
 import { EVOLUTION_STEPS } from '../care/service.js';
 import { createRaidsConsumer } from '../raids/consumer.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
