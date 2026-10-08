@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
-import { expectRoomyLabels } from './layout.js';
+import { expectRoomyLabels, freshResize, holdResizes, still, turnLikeIos } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap, realTapAt } from './touch.js';
 import { trayButton } from './trays.js';
@@ -25,6 +25,8 @@ interface BattleDebug {
   waiting: boolean;
   charms: number | null;
   scene: { squishies: number; camera: Point3 | null } | null;
+  /** The band (fractions of the height) the camera fits the fight into. */
+  safe: { top: number; bottom: number };
 }
 
 interface Point3 {
@@ -233,4 +235,35 @@ test('a double tap on the tile chip’s × never starts a battle', async ({ brow
   await page.waitForTimeout(1500);
   expect(await battleState(page)).toBeNull();
   await expect(page.getByTestId('battle-hud')).toBeHidden();
+});
+
+test('the fight keeps its safe band when the phone turns (#263)', async ({ browser }) => {
+  test.setTimeout(240_000); // a map build and a battle; CI renders in software
+  const page = await newPlayer(browser, uniqueName('turnfight'));
+  await holdResizes(page);
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Turn Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await realTap(await trayButton(page, 'battle-dev-fight'));
+  await expect(page.getByTestId('battle-hud')).toBeVisible();
+  await settled(page);
+  // The camera has measured the band for this shape of screen.
+  const before = (await battleState(page))!.safe;
+
+  // The band under the pills and above the sheet, once the turned layout
+  // has settled: what a resize heard now would measure afresh.
+  const band = async () => {
+    await still(page, '.battle-plate, [data-testid="battle-sheet"]');
+    return (await battleState(page))!.safe;
+  };
+  await turnLikeIos(page);
+  const turned = await band();
+  await freshResize(page);
+  const fresh = await band();
+  expect(turned.top).toBeCloseTo(fresh.top, 3);
+  expect(turned.bottom).toBeCloseTo(fresh.bottom, 3);
+  // The pills take a bigger share of a short screen: the band did move.
+  expect(fresh.top).not.toBeCloseTo(before.top, 2);
 });

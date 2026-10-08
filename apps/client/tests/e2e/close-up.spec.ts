@@ -1,6 +1,7 @@
 import { CARE_RULES, findAvoidedWords, GAME_DATA } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
+import { freshResize, holdResizes, still, turnLikeIos } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
 
@@ -333,4 +334,27 @@ test('celebrates an evolution in the close-up, and Back returns to the map', asy
   expect(errors).toEqual([]);
   // Don't leave this player's page drawing while later specs run.
   await page.context().close();
+});
+
+test('keeps the squishy framed when the phone turns (#263)', async ({ browser }) => {
+  test.setTimeout(240_000); // a map build and the close-up; CI renders in software
+  const page = await newPlayer(browser, uniqueName('turnclose'));
+  await holdResizes(page);
+  await playerWithFriend(page);
+  await openFromHome(page);
+
+  // Where the squishy sits once the turned layout has settled.
+  const framed = async () => {
+    await still(page, '[data-testid="close-up-touch"], [data-testid="close-up"] .close-up-card');
+    return (await state(page))!.target!;
+  };
+  await turnLikeIos(page);
+  const turned = await framed();
+  // A resize the screen hears now measures afresh: the framing it gives is
+  // what the turn should already have.
+  await freshResize(page);
+  const fresh = await framed();
+  for (const key of ['x', 'y', 'rx', 'ry'] as const) {
+    expect(Math.abs(turned[key] - fresh[key]), key).toBeLessThan(4);
+  }
 });

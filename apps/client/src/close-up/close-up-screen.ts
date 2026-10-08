@@ -804,9 +804,13 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
       options.invalidate();
     }
   }
-  window.addEventListener('resize', () => {
+  // On a resize, and when the screen's own box changes: iOS sends `resize`
+  // before a turned layout settles and none after (#251, #263).
+  const resized = (): void => {
     if (isOpen()) reframe();
-  });
+  };
+  window.addEventListener('resize', resized);
+  new ResizeObserver(resized).observe(layer);
   about.addEventListener('toggle', () => {
     card.classList.toggle('close-up-reading', about.open);
   });

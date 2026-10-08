@@ -192,3 +192,47 @@ export async function expectClear(page: Page, bubble: string, targets: string): 
   expect(result.targets, `nothing on screen matched ${targets}`).toBeGreaterThan(0);
   expect(result.hits).toEqual([]);
 }
+
+/**
+ * Lets a test turn the phone the way iOS does (#251, #263): iOS sends
+ * `resize` before a turned layout settles, and none after it. Registered
+ * before the game's own listeners (listeners on the window run in the order
+ * added), so it can swallow the real `resize` once `turnLikeIos` asks it to;
+ * the page reloads to install it. Synthetic resizes still get through.
+ */
+export async function holdResizes(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    window.addEventListener('resize', (e) => {
+      if (e.isTrusted && document.documentElement.dataset['swallowResize']) {
+        e.stopImmediatePropagation();
+      }
+    });
+  });
+  await page.reload();
+}
+
+/**
+ * Turns the screen between portrait and landscape in iOS's order (after
+ * `holdResizes`): a resize while everything still has its old size, then
+ * nothing when the layout turns. `beforeTurn` runs in between (a test that
+ * must let the early resize settle first).
+ */
+export async function turnLikeIos(
+  page: Page,
+  beforeTurn: () => Promise<void> = () => Promise.resolve(),
+): Promise<void> {
+  const vp = page.viewportSize()!;
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('resize'));
+    document.documentElement.dataset['swallowResize'] = 'true';
+  });
+  await beforeTurn();
+  await page.setViewportSize({ width: vp.height, height: vp.width });
+}
+
+/** A resize the game hears even while `holdResizes` swallows the real ones: a fresh measure. */
+export async function freshResize(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('resize'));
+  });
+}
