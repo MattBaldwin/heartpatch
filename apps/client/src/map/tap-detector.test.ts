@@ -41,6 +41,16 @@ describe('TapDetector', () => {
     expect(taps).toEqual([]);
   });
 
+  it('ignores a still finger whose pinch partner started on a map button', () => {
+    const { taps, detector } = setup();
+    detector.pointerDown({ id: 1, x: 10, y: 10, t: 0 });
+    // Finger 2 pressed a tray handle; the camera handed it to the canvas.
+    detector.pointerMove({ id: 2, x: 120, y: 80, t: 30 });
+    detector.pointerUp({ id: 2, x: 140, y: 80, t: 60 });
+    detector.pointerUp({ id: 1, x: 10, y: 10, t: 90 });
+    expect(taps).toEqual([]);
+  });
+
   it('forgets a cancelled press', () => {
     const { taps, detector } = setup();
     detector.pointerDown({ id: 1, x: 10, y: 10, t: 0 });
