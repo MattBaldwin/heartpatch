@@ -336,7 +336,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         await api.register(
           journeysRoutes(createJourneysService({ battles }), { hooks: authHooks, idempotency }),
         );
-        await api.register(tradesRoutes(trades, { hooks: authHooks, idempotency }));
+        await api.register(
+          tradesRoutes(trades, {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
         // The Hollow Man (#21): nightfall runs as a job (`src/index.ts`), and
         // rescues are battles the `hollow` event consumer settles.
         const hollow = createHollowService({ db, clock, battles, ...publish });

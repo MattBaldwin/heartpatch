@@ -5,6 +5,8 @@ import {
   hexDistance,
   JoinMapResponseSchema,
   MapResponseSchema,
+  PostAtRequestSchema,
+  postReach,
   STARTERS,
   TRADE_RULES,
   TradeShelfResponseSchema,
@@ -537,6 +539,29 @@ describe.skipIf(!url)('trades, gifts and the mailbox (#271, needs DATABASE_URL)'
     // Not a member: neither the caller nor the shelf's owner.
     expect((await shelfOf(stranger, sam)).statusCode).toBe(404);
     expect((await shelfOf(lee, stranger)).statusCode).toBe(404);
+  });
+
+  it('joins my land to the nearest post with the dev route (e2e, phone testing)', async () => {
+    const server = await start();
+    const lee = await player();
+    const res = await call(server, 'POST', '/maps', lee, { name: 'Dev Patch', timeZone: 'UTC' });
+    const mapId = MapResponseSchema.parse(res.json()).map.id;
+    const connected = await call(server, 'POST', `/maps/${mapId}/dev/posts/connect`, lee);
+    expect(connected.statusCode, connected.body).toBe(200);
+    const at = PostAtRequestSchema.parse(connected.json());
+    const tiles = await tilesOf(mapId);
+    const post = tiles.find((t) => t.q === at.q && t.r === at.r)!;
+    expect(postReach(post, tiles, lee.id)?.kind).toBe('connected');
+    // Off without the dev flag, like every dev route.
+    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url! });
+    const plain = await buildApp({ config, db, clock: () => clock, logger: false });
+    try {
+      expect((await call(plain, 'POST', `/maps/${mapId}/dev/posts/connect`, lee)).statusCode).toBe(
+        404,
+      );
+    } finally {
+      await plain.close();
+    }
   });
 
   it('needs the post (connected or a pass), except to say no or cancel', async () => {

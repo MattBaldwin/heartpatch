@@ -47,5 +47,5 @@ export function postReachLine(reach: PostReach | null): string | null {
   return `🧭 ${tiles(reach.distance)} from your land. Claim land toward it to get closer!`;
 }
 
-/** Until trading arrives (#271), the panel says what's coming. */
-export const POST_SOON = 'Trading and gifts open here soon! 🎁';
+/** The tile panel's button into the post's screen (#271), when my land reaches it or I hold a pass. */
+export const VISIT_POST = 'Visit post';

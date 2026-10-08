@@ -85,8 +85,8 @@ test('shows the trading posts near home, and a post’s panel says what it is', 
   await expect(panel.locator('#tile-panel-title')).toHaveText(post!.name);
   await expect(panel).toContainText('A trading post for every Keeper. Nobody can claim it!');
   await expect(page.getByTestId('tile-panel-post')).toHaveText(/tiles? from your land/);
-  // A post a journey away shows its journey (#270) rather than "soon".
-  await expect(page.getByTestId('tile-panel-post-soon')).toBeHidden();
+  // A post a journey away shows its journey (#270), not "Visit post" (#271).
+  await expect(page.getByTestId('post-visit')).toHaveCount(0);
   await expect(page.getByTestId('journey-preview')).toBeVisible();
   await expect(page.getByTestId('tile-panel-guardians')).toBeHidden();
   expect((await territoryState(page))?.tileAction ?? 'none').toBe('none');
@@ -170,7 +170,7 @@ test('sets off on a journey to a post, wins, and the post opens for a visit (#27
   await expect(page.getByTestId('journey-open')).toHaveText(
     '⏳ The post is open for you for 20 more minutes!',
   );
-  await expect(page.getByTestId('journey-soon')).toBeVisible();
+  await expect(page.getByTestId('post-visit')).toBeVisible();
   await expect(page.getByTestId('journey-preview')).toHaveCount(0);
   expect((await journeyState(page))!.passes).toEqual([`${String(trip.q)},${String(trip.r)}`]);
 

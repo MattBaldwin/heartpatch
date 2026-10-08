@@ -18,6 +18,7 @@ import {
   speciesSeen,
   squishies,
   squishyAccessories,
+  tiles,
   tradeLedger,
   tradeLines,
   tradeOffers,
@@ -151,6 +152,15 @@ function lineOf(row: {
  */
 export function createTradesRepo(db: Executor) {
   return {
+    /** Dev only (`HP_DEV_SQUISHY_GRANTS`): hands these neutral tiles to the player. */
+    devClaimTiles: async (mapId: string, ids: readonly string[], userId: string): Promise<void> => {
+      if (ids.length === 0) return;
+      await db
+        .update(tiles)
+        .set({ ownerUserId: userId })
+        .where(and(eq(tiles.mapId, mapId), inArray(tiles.id, [...ids]), isNull(tiles.ownerUserId)));
+    },
+
     /** Runs `fn` in one transaction (the service keeps tech spec §7's lock order). */
     transaction: <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> => withTransaction(db, fn),
     tradingEnabled: async (mapId: string): Promise<boolean> => {

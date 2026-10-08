@@ -1,6 +1,9 @@
 import {
   CLOTHING_BY_ID,
   GAME_DATA,
+  heartSeedOf,
+  hexDistance,
+  isTradingPost,
   isTradableResource,
   jobOf,
   offerProblem,
@@ -71,6 +74,7 @@ const MESSAGES = {
   giftPickup: 'Gifts are picked up from your mailbox! 📬',
   notOwner: 'Only the patch owner can change that.',
   gone: "That patch-mate isn't on this patch any more.",
+  noPost: "We couldn't find a trading post near your home.",
   problem: {
     empty: 'Pick something to give, and something to ask for!',
     'gift-wants': 'A gift is just for giving. Nothing to ask for back!',
@@ -99,6 +103,13 @@ export interface TradesService {
    * secret species I haven't met hidden. NOT_FOUND unless we're both members.
    */
   shelf: (user: PublicUser, mapId: string, targetUserId: string) => Promise<TradeShelf>;
+  /**
+   * Dev only (`HP_DEV_SQUISHY_GRANTS`; e2e and phone testing): claims the
+   * neutral tiles on the straight way from my Heart Seed to the nearest
+   * trading post, so my land reaches it. Returns the post. No events: the
+   * map shows it when it next loads.
+   */
+  devConnect: (user: PublicUser, mapId: string) => Promise<{ q: number; r: number }>;
   /** Sends a trade offer or a gift at the post at (q, r); the give side goes into escrow. */
   send: (user: PublicUser, mapId: string, request: SendOfferRequest) => Promise<TradesView>;
   /** Says yes to a trade at the post at (q, r): both sides move now. */
@@ -506,6 +517,31 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
     };
   };
 
+  const devConnect = async (user: PublicUser, mapId: string) => {
+    await requireMember(db, user, mapId);
+    const tiles = await createTerritoryRepo(db).listTiles(mapId);
+    const seed = heartSeedOf(tiles.filter((t) => t.ownerUserId === user.id && t.homeSlot !== null));
+    const [post] = tiles
+      .filter(isTradingPost)
+      .sort((a, b) => (seed ? hexDistance(seed, a) - hexDistance(seed, b) : 0));
+    if (!seed || !post) throw new AppError('NOT_FOUND', MESSAGES.noPost);
+    const reach = hexDistance(seed, post);
+    const path = tiles.filter(
+      (t) =>
+        t.ownerUserId === null &&
+        t.homeSlot === null &&
+        !isTradingPost(t) &&
+        hexDistance(seed, t) < reach &&
+        hexDistance(t, post) + hexDistance(seed, t) === reach,
+    );
+    await createTradesRepo(db).devClaimTiles(
+      mapId,
+      path.map((t) => t.id),
+      user.id,
+    );
+    return { q: post.q, r: post.r };
+  };
+
   // ---- commands -------------------------------------------------------------
 
   const send = async (user: PublicUser, mapId: string, request: SendOfferRequest) => {
@@ -841,6 +877,7 @@ export function createTradesService(options: TradesServiceOptions): TradesServic
   return {
     view,
     shelf,
+    devConnect,
     send,
     accept,
     decline: (user, mapId, offerId) => answerNo(user, mapId, offerId, 'to'),

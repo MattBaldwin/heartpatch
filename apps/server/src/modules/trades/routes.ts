@@ -22,6 +22,11 @@ export interface TradesRoutesOptions {
   hooks: AuthHooks;
   /** `Idempotency-Key` support (`registerIdempotency`). */
   idempotency: (fastify: Parameters<FastifyPluginCallback>[0]) => Idempotency;
+  /**
+   * `HP_DEV_SQUISHY_GRANTS`: also register the dev route that joins my land
+   * to the nearest trading post (e2e and phone testing). Never in production.
+   */
+  devTools?: boolean;
 }
 
 /** Trades, gifts and the mailbox at the trading posts (#271). */
@@ -141,6 +146,17 @@ export const tradesRoutes =
         ),
       }),
     );
+
+    if (options.devTools) {
+      app.post(
+        '/maps/:mapId/dev/posts/connect',
+        {
+          schema: { params: MapIdParamsSchema, response: { 200: PostAtRequestSchema } },
+          preHandler: [requireAuth, rateLimit('owner')],
+        },
+        async (request) => service.devConnect(requireUser(request), request.params.mapId),
+      );
+    }
 
     done();
   };

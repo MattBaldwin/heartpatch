@@ -10,6 +10,7 @@ import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
 import { HollowLayer } from './hollow/hollow-layer.js';
 import { createJourneyScreen } from './trading/journey-screen.js';
+import { createPostScreen } from './trading/post-screen.js';
 import { createPostFlags } from './trading/post-flags.js';
 import { createHomeScreen } from './home/home-screen.js';
 import { createInventoryScreen } from './inventory/inventory-screen.js';
@@ -313,9 +314,14 @@ const hollowLayer = new HollowLayer({ invalidate: () => stage?.invalidate() });
 const postFlags = createPostFlags(document.body, () => signedIn?.id ?? null);
 // Journeys to trading posts (#270): the preview in a post's tile panel, and
 // a journey opens the battle screen like a tile battle.
+// The post's screen (#271): Trade, Gift and Mailbox, from "Visit post".
+const postScreen = createPostScreen({ root: document.body });
 const journeys = createJourneyScreen({
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
+  },
+  openPost: (post, view) => {
+    postScreen.open(post, view);
   },
 });
 const hollow = createHollowScreen({
@@ -427,6 +433,7 @@ const maps = createMapScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   onClosed: (message) => {
     jobs.close();
+    postScreen.close();
     void battles.setMap(null);
     catalog.close();
     care.close();
@@ -475,6 +482,7 @@ const maps = createMapScreen({
     // The player's own play may have earned a milestone (#44).
     milestones.liveEvent(event);
     journeys.liveEvent(event);
+    postScreen.liveEvent(event);
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
@@ -924,6 +932,7 @@ const whatsNew = createWhatsNew({
     closeUp.isOpen ||
     (wardrobe.debug?.open ?? false) ||
     recipeBook.isOpen ||
+    postScreen.isOpen ||
     raidReportOpen ||
     (land.debug?.welcome ?? false) ||
     lorebook.debug.showing !== null ||
@@ -972,6 +981,7 @@ mountAuth(document.body, {
     recipeBook.setUser(user);
     territory.setUser(user);
     journeys.setUser(user);
+    postScreen.setUser(user);
     hollow.setUser(user);
     land.setUser(user);
     chat.setUser(user);
@@ -1027,6 +1037,7 @@ if (import.meta.env.DEV) {
     wardrobe: () => wardrobe.debug,
     jobs: () => jobs.debug,
     journey: () => journeys.debug,
+    post: () => postScreen.debug,
     posts: () => ({
       shown: postFlags.shown,
       rings: postFlags.rings,
