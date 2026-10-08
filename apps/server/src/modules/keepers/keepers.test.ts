@@ -7,6 +7,7 @@ import {
   MapResponseSchema,
   MapViewSchema,
   SetKeeperResponseSchema,
+  type CompleteKeeperConfig,
   type KeeperConfig,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
@@ -25,7 +26,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const [PIP, CLOVER] = KEEPER_DATA.bases;
 const PIP_KEEPER = defaultKeeperConfig(PIP!);
-const CLOVER_KEEPER: KeeperConfig = { ...defaultKeeperConfig(CLOVER!), hairColor: 'mint' };
+const CLOVER_KEEPER: CompleteKeeperConfig = { ...defaultKeeperConfig(CLOVER!), hairColor: 'mint' };
 
 interface Player {
   id: string;
@@ -154,6 +155,40 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
     expect(await getKeeper(server, kid)).toEqual(PIP_KEEPER);
   });
 
+  it('keeps every Keeper builder choice, extras in data order (#289)', async () => {
+    const server = await start();
+    const kid = await player();
+    const built = {
+      ...PIP_KEEPER,
+      skinTone: 'tone-7',
+      eyes: 'sleepy' as const,
+      brows: 'soft',
+      mouth: 'big-smile',
+      extras: ['heart-sticker', 'blush'],
+    };
+    const expected = { ...built, extras: ['blush', 'heart-sticker'] };
+    expect(await saveKeeper(server, kid, built)).toEqual(expected);
+    expect(await getKeeper(server, kid)).toEqual(expected);
+    // Picking a new starting look starts over: its own choices, no extras.
+    expect(await saveKeeper(server, kid, CLOVER_KEEPER)).toEqual(CLOVER_KEEPER);
+  });
+
+  it('fills the builder choices an older app leaves out from the starting look (#289)', async () => {
+    const server = await start();
+    const kid = await player();
+    const old = { base: 'clover', hairColor: 'mint', eyeColor: 'leaf', outfit: 'meadow' };
+    const keeper = await saveKeeper(server, kid, old);
+    expect(keeper).toEqual({
+      ...old,
+      skinTone: CLOVER!.skinTone,
+      eyes: CLOVER!.face.eyes,
+      brows: CLOVER!.face.brows,
+      mouth: CLOVER!.face.mouth,
+      extras: [],
+    });
+    expect(await getKeeper(server, kid)).toEqual(keeper);
+  });
+
   it('loads a Keeper saved before hairstyles (no column value) unchanged', async () => {
     const server = await start();
     const kid = await player();
@@ -172,12 +207,16 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
       { ...PIP_KEEPER, eyeColor: 'laser' },
       { ...PIP_KEEPER, outfit: 'armor' },
       { ...PIP_KEEPER, hairstyle: 'mohawk' },
+      { ...PIP_KEEPER, skinTone: 'tone-99' },
+      { ...PIP_KEEPER, brows: 'unibrow' },
+      { ...PIP_KEEPER, mouth: 'grin' },
+      { ...PIP_KEEPER, extras: ['blush', 'tattoo'] },
     ]) {
       const res = await call(server, 'POST', '/keeper', kid, bad);
       expect(res.statusCode).toBe(400);
       const error = errorOf(res);
       expect(error.code).toBe('VALIDATION_FAILED');
-      expect(error.message).toMatch(/^We don't know that/);
+      expect(error.message).toMatch(/^We don't know th(at|ose)/);
     }
     expect(await getKeeper(server, kid)).toBeNull();
   });
@@ -192,6 +231,8 @@ describe.skipIf(!url)('keepers (needs DATABASE_URL)', () => {
       { ...PIP_KEEPER, base: '<b>' },
       { ...PIP_KEEPER, hairstyle: null },
       { ...PIP_KEEPER, hairstyle: 'Big Hair' },
+      { ...PIP_KEEPER, eyes: 'laser' },
+      { ...PIP_KEEPER, extras: ['blush', 'blush'] },
     ]) {
       const res = await call(server, 'POST', '/keeper', kid, bad);
       expect(errorOf(res).code).toBe('VALIDATION_FAILED');

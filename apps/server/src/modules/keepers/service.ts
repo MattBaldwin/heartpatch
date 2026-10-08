@@ -1,5 +1,7 @@
 import {
   KEEPER_DATA,
+  completeKeeperConfig,
+  type CompleteKeeperConfig,
   keeperConfigProblem,
   type KeeperConfig,
   type KeeperData,
@@ -31,6 +33,11 @@ const MESSAGES: Readonly<Record<keyof KeeperConfig, string>> = {
   eyeColor: "We don't know that eye color. Pick another one!",
   outfit: "We don't know that outfit. Pick another one!",
   hairstyle: "We don't know that hair style. Pick another one!",
+  skinTone: "We don't know that skin tone. Pick another one!",
+  eyes: "We don't know those eyes. Pick another one!",
+  brows: "We don't know those brows. Pick another one!",
+  mouth: "We don't know that smile. Pick another one!",
+  extras: "We don't know that extra. Pick another one!",
 };
 
 export function createKeepersService(options: KeepersServiceOptions): KeepersService {
@@ -47,11 +54,19 @@ export function createKeepersService(options: KeepersServiceOptions): KeepersSer
       // The schema checked the shape; the ids must name real data too.
       const problem = keeperConfigProblem(config, data);
       if (problem) throw new AppError('VALIDATION_FAILED', MESSAGES[problem]);
-      const keeper: KeeperConfig = {
-        base: config.base,
-        hairColor: config.hairColor,
-        eyeColor: config.eyeColor,
-        outfit: config.outfit,
+      // Every builder choice is stored; one an older app didn't send comes
+      // from the starting look (#289).
+      const full = completeKeeperConfig(config, data);
+      const keeper: CompleteKeeperConfig = {
+        base: full.base,
+        hairColor: full.hairColor,
+        eyeColor: full.eyeColor,
+        outfit: full.outfit,
+        skinTone: full.skinTone,
+        eyes: full.eyes,
+        brows: full.brows,
+        mouth: full.mouth,
+        extras: full.extras,
         // None, or the base's own, is stored as none: the base's style shows.
         ...(config.hairstyle === undefined || config.hairstyle === baseStyle(config)
           ? {}
