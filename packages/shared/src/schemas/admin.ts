@@ -90,7 +90,11 @@ export const AdminCodeParamsSchema = z.object({ codeId: z.uuid() });
 
 /** `GET /api/v1/admin/patches/:mapId` */
 export const AdminPatchDetailSchema = z.object({
-  patch: AdminPatchSummarySchema.extend({ timeZone: z.string() }),
+  patch: AdminPatchSummarySchema.extend({
+    timeZone: z.string(),
+    /** "Hollow Man strength" (#277): scales his strike chances, 100 by default, 0 turns him off. */
+    hollowStrengthPercent: z.number().int().min(0).max(300),
+  }),
   members: z.array(
     z.object({
       userId: z.uuid(),
@@ -120,6 +124,8 @@ export const AdminPatchDetailSchema = z.object({
           username: z.string(),
           /** A squishy was taken that night. */
           taken: z.boolean(),
+          /** Dark tiles the Hollow Man won back that night (#277). */
+          reclaimed: z.number().int().nonnegative(),
           sheltered: z.number().int().nonnegative(),
           exposed: z.number().int().nonnegative(),
         }),
@@ -128,6 +134,19 @@ export const AdminPatchDetailSchema = z.object({
   ),
 });
 export type AdminPatchDetail = z.infer<typeof AdminPatchDetailSchema>;
+
+/** The admin console's "Hollow Man strength" range (#277, owner decision 2026-10-08 Q4). */
+export const HOLLOW_STRENGTH_PERCENT_MAX = 300;
+
+/**
+ * `PUT /api/v1/admin/patches/:mapId/hollow-strength` (#277): scales the
+ * Hollow Man's strike chances on one patch from the next nightfall. The
+ * strike caps never change.
+ */
+export const AdminHollowStrengthRequestSchema = z.strictObject({
+  percent: z.number().int().min(0).max(HOLLOW_STRENGTH_PERCENT_MAX),
+});
+export type AdminHollowStrengthRequest = z.infer<typeof AdminHollowStrengthRequestSchema>;
 
 /** `POST /api/v1/admin/patches/:mapId/invite/reveal` and `/invite` (a new one). */
 export const AdminInviteResponseSchema = z.object({

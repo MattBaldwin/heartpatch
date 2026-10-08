@@ -26,6 +26,6 @@ export const DEV_WILD_LEVEL = 3; // TUNE: a fair fight for a fresh squishy
 
 /**
  * How long before nightfall a battle's arena is drawn at dusk (owner decision
- * 2026-10-04, presentation only): 7:00 PM with nightfall at 9:00 PM.
+ * 2026-10-04, presentation only): 5:00 PM with nightfall at 7:00 PM (#277).
  */
 export const DUSK_MINUTES = 120; // TUNE: judge on the playtest

@@ -225,6 +225,13 @@
       "when": 1791414187200,
       "tag": "0031_strong_brother_voodoo",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791462890030,
+      "tag": "0032_perfect_komodo",
+      "breakpoints": true
     }
   ]
 }

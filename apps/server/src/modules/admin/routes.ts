@@ -3,6 +3,7 @@ import {
   AdminCodeParamsSchema,
   AdminCreateSignupCodeRequestSchema,
   AdminExtendSignupCodeRequestSchema,
+  AdminHollowStrengthRequestSchema,
   AdminInviteResponseSchema,
   AdminListQuerySchema,
   AdminLoginRequestSchema,
@@ -225,6 +226,22 @@ export const adminRoutes =
         preValidation: gate('act'),
       },
       (request) => service.newInvite(ctx(request), request.params.mapId),
+    );
+
+    app.put(
+      '/admin/patches/:mapId/hollow-strength',
+      {
+        schema: {
+          params: AdminPatchParamsSchema,
+          body: AdminHollowStrengthRequestSchema,
+          response: { 204: z.null() },
+        },
+        preValidation: gate('act'),
+      },
+      async (request, reply) => {
+        await service.setHollowStrength(ctx(request), request.params.mapId, request.body.percent);
+        return reply.code(204).send(null);
+      },
     );
 
     for (const answer of ['approve', 'decline'] as const) {

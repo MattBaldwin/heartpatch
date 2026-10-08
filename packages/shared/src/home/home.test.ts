@@ -58,8 +58,8 @@ describe('local dates', () => {
 
 describe('Hearthfire fuel (tech spec §7)', () => {
   it('belongs to tonight before nightfall and to tomorrow after it', () => {
-    expect(tonightOf(at('2026-10-31', 20, 59), RULES)).toBe('2026-10-31');
-    expect(tonightOf(at('2026-10-31', 21, 0), RULES)).toBe('2026-11-01');
+    expect(tonightOf(at('2026-10-31', 18, 59), RULES)).toBe('2026-10-31');
+    expect(tonightOf(at('2026-10-31', 19, 0), RULES)).toBe('2026-11-01');
     expect(tonightOf(at('2026-12-31', 23, 30), RULES)).toBe('2027-01-01');
     expect(tonightOf(at('2026-10-31', 0, 5), RULES)).toBe('2026-10-31');
   });
@@ -78,11 +78,11 @@ describe('Hearthfire fuel (tech spec §7)', () => {
     const through = addFuel(fire, null, at('2026-10-02', 12), 3, RULES);
     expect(through).toBe('2026-10-04');
     const left = (local: MapLocalTime) => hearthfireState(through, local, RULES).nightsLeft;
-    expect(left(at('2026-10-02', 20))).toBe(3);
-    expect(left(at('2026-10-02', 21))).toBe(2); // tonight's nightfall has happened
+    expect(left(at('2026-10-02', 18))).toBe(3);
+    expect(left(at('2026-10-02', 19))).toBe(2); // tonight's nightfall has happened
     expect(left(at('2026-10-03', 9))).toBe(2);
-    expect(left(at('2026-10-04', 20, 59))).toBe(1);
-    expect(left(at('2026-10-04', 21))).toBe(0);
+    expect(left(at('2026-10-04', 18, 59))).toBe(1);
+    expect(left(at('2026-10-04', 19))).toBe(0);
     expect(hearthfireState(through, at('2026-10-05', 9), RULES).lit).toBe(false);
     // What nightfall (#21) asks: is the night being resolved covered?
     expect(protectsNight(through, '2026-10-04')).toBe(true);
@@ -142,7 +142,7 @@ describe('safe tiles (design doc §14)', () => {
     expect(safe.size).toBe(7 + 7);
   });
 
-  it('reaches further from a Jack-o-Lantern fire', () => {
+  it('lights its ring from a Jack-o-Lantern fire (#277: radius 1, like a new Hearthfire)', () => {
     const radius = lantern.levels[0]!.safeRadius;
     const safe = safeTiles([{ at: hex(5, -2), radius }]);
     expect(safe.size).toBe(1 + 3 * radius * (radius + 1));
@@ -150,7 +150,7 @@ describe('safe tiles (design doc §14)', () => {
       const [q, r] = key.split(',').map(Number);
       expect(hexDistance(hex(q!, r!), hex(5, -2))).toBeLessThanOrEqual(radius);
     }
-    expect(radius).toBeGreaterThan(fire.levels[0]!.safeRadius);
+    expect(radius).toBe(fire.levels[0]!.safeRadius);
   });
 
   it('is empty with no homes and no lit fires, and joins several', () => {

@@ -76,6 +76,15 @@ const BattleEndedSchema = z.strictObject({
 const TileBattleKindSchema = z.enum(['tile', 'rival-tile']);
 const coords = { q: z.number().int(), r: z.number().int() };
 
+/** One Keeper's walk in `hollow.nightfall` (#277). */
+const walkSchema = (object: typeof z.object | typeof z.strictObject) =>
+  object({
+    userId: z.uuid(),
+    stage: z.enum(['watching', 'curious', 'bold', 'boldest']),
+    reclaimed: z.array(object(coords)),
+    walk: z.array(object({ ...coords, kind: z.enum(['enter', 'recoil', 'strike', 'leave']) })),
+  });
+
 export const GAME_EVENTS = {
   /** A player made a map and is its owner. Always seq 1. */
   'map.created': {
@@ -264,11 +273,14 @@ export const GAME_EVENTS = {
       night: LocalDateSchema,
       tiles: z.array(z.strictObject({ ...coords, terrain: z.string() })).min(1),
       returnedSquishyIds: z.array(z.uuid()),
+      /** Why (#277): nobody tended it (#194, the default), or the Hollow Man won it back in the dark. */
+      cause: z.enum(['untended', 'hollow']).optional(),
     }),
     public: z.object({
       userId: z.uuid(),
       night: LocalDateSchema,
       tiles: z.array(z.object(coords)),
+      cause: z.enum(['untended', 'hollow']).optional(),
     }),
   },
   /**
@@ -575,11 +587,18 @@ export const GAME_EVENTS = {
       /** The night, as the map-local date its nightfall falls on. */
       night: LocalDateSchema,
       taken: z.array(z.strictObject({ userId: z.uuid(), squishyId: z.uuid() })),
+      /**
+       * His walk along each Keeper's border (#277), played as a show from
+       * nightfall: public, like land and fires (owner decision 2026-10-08
+       * Q7). Optional: nights before #277 have none.
+       */
+      walks: z.array(walkSchema(z.strictObject)).optional(),
     }),
     public: z.object({
       night: LocalDateSchema,
       /** Players who lost a squishy to the Hollow tonight (`z.object` strips which one). */
       taken: z.array(z.object({ userId: z.uuid() })),
+      walks: z.array(walkSchema(z.object)).optional(),
     }),
   },
   /**

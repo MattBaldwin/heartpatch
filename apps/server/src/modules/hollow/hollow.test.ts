@@ -32,6 +32,7 @@ import { newSessionToken } from '../auth/secrets.js';
 import { createBattlesService } from '../battles/service.js';
 import { setDevDropChance } from '../wardrobe/drops.js';
 import { createHollowConsumer } from './consumer.js';
+import { createLandTending } from '../territory/tending.js';
 import { createHollowService, type HollowService } from './service.js';
 
 const url = inject('testDatabaseUrl');
@@ -43,7 +44,26 @@ const SECRET = SERVER_GAME_DATA.secretSpecies[0]!;
 // Noon in Denver on Oct 2 (MDT, UTC−6): tonight's nightfall is 03:00Z on Oct 3.
 const START = '2026-10-02T18:00:00Z';
 const TONIGHT = '2026-10-02';
-const NO_GRACE: HollowRules = { ...HOLLOW_RULES, graceNights: 0 };
+/**
+ * No first-night grace, and one strike every night (#277's curve has its own
+ * tests below): a patch made this afternoon can lose a squishy tonight.
+ */
+/** The shipped grace, then one strike every night (the shipped curve rolls for it). */
+const GRACE_THEN_ONE: HollowRules = {
+  ...HOLLOW_RULES,
+  strength: {
+    ...HOLLOW_RULES.strength,
+    nights: [
+      { from: 1, stage: 'watching', chances: [] },
+      { from: 3, stage: 'curious', chances: [100] },
+    ],
+  },
+};
+const NO_GRACE: HollowRules = {
+  ...HOLLOW_RULES,
+  graceNights: 0,
+  strength: { ...HOLLOW_RULES.strength, nights: [{ from: 1, stage: 'curious', chances: [100] }] },
+};
 /** Weak shadows, so a strong squishy wins its rescue on first moves. */
 const WEAK_SHADOWS: RescueGuardianRules = {
   ...RESCUE_GUARDIANS,
@@ -343,8 +363,8 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(night).toMatchObject({ night: TONIGHT, ranAt: clock });
       expect(night!.outcomes).toEqual(
         expect.arrayContaining([
-          { userId: kid.id, taken: null, exposed: 0, sheltered: 2 },
-          { userId: friend.id, taken, exposed: 2, sheltered: 1 },
+          expect.objectContaining({ userId: kid.id, taken: [], exposed: 0, sheltered: 2 }),
+          expect.objectContaining({ userId: friend.id, taken: [taken], exposed: 2, sheltered: 1 }),
         ]),
       );
       const events = (await eventsOf(mapId)).slice(-2);
@@ -356,10 +376,18 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         night: TONIGHT,
       });
       // Everyone hears that night fell and who lost someone; only the owner hears which.
-      expect(publicViewFor(PUBLIC_VIEWS, fell!, { userId: kid.id })).toEqual({
+      // …and everyone sees his walk on each Keeper's border (#277, Q7).
+      expect(publicViewFor(PUBLIC_VIEWS, fell!, { userId: kid.id })).toMatchObject({
         night: TONIGHT,
         taken: [{ userId: friend.id }],
+        walks: expect.arrayContaining([
+          expect.objectContaining({ userId: kid.id }),
+          expect.objectContaining({ userId: friend.id }),
+        ]) as unknown,
       });
+      expect(JSON.stringify(publicViewFor(PUBLIC_VIEWS, fell!, { userId: kid.id }))).not.toContain(
+        taken,
+      );
       expect(publicViewFor(PUBLIC_VIEWS, hollowed!, { userId: kid.id })).toBeNull();
       expect(publicViewFor(PUBLIC_VIEWS, hollowed!, { userId: friend.id })).toMatchObject({
         squishyId: taken,
@@ -392,7 +420,9 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       for (const id of [byTheFire, atHome]) expect(await stateOf(id)).toBe('active');
       const [night] = await nightsOf(mapId);
       expect(night!.outcomes).toEqual(
-        expect.arrayContaining([{ userId: kid.id, taken: inTheDark, exposed: 1, sheltered: 2 }]),
+        expect.arrayContaining([
+          expect.objectContaining({ userId: kid.id, taken: [inTheDark], exposed: 1, sheltered: 2 }),
+        ]),
       );
       // Taken, it left the watch in the same nightfall: its tile falls back to
       // its land's guardians. The others stay on watch.
@@ -512,7 +542,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(await hollowService().runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
       for (const id of ids) expect(await stateOf(id)).toBe('active');
       expect((await nightsOf(mapId))[0]!.outcomes).toEqual([
-        { userId: kid.id, taken: null, exposed: 0, sheltered: 2 },
+        expect.objectContaining({ userId: kid.id, taken: [], exposed: 0, sheltered: 2 }),
       ]);
     });
 
@@ -529,7 +559,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(await stateOf(id)).toBe('active');
       // Both at home (the Glade friend too), safe by the Heart Seed.
       expect((await nightsOf(mapId))[0]!.outcomes).toEqual([
-        { userId: kid.id, taken: null, exposed: 0, sheltered: 2 },
+        expect.objectContaining({ userId: kid.id, taken: [], exposed: 0, sheltered: 2 }),
       ]);
     });
 
@@ -537,8 +567,8 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const server = await start();
       const kid = await player();
       const mapId = await patch(server, kid);
-      // A friend joins at 8:55 PM, with a squishy and no fire.
-      clock.setTime(Date.parse('2026-10-03T02:55:00Z'));
+      // A friend joins at 6:55 PM, with a squishy and no fire.
+      clock.setTime(Date.parse('2026-10-03T00:55:00Z'));
       const friend = await player();
       const res = await call(server, 'GET', `/maps/${mapId}`, kid);
       const code = MapResponseSchema.parse(res.json()).map.admin!.invite!.code;
@@ -549,15 +579,17 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       const theirs = [await dark(mapId, friend), await dark(mapId, friend)];
       // The kid joined at noon: tonight is their first grace night too.
       const mine = [await dark(mapId, kid), await dark(mapId, kid)];
-      const hollow = hollowService(WEAK_SHADOWS, HOLLOW_RULES);
+      const hollow = hollowService(WEAK_SHADOWS, GRACE_THEN_ONE);
 
       // Tonight (5 minutes later) and tomorrow: nothing taken from either, the dark still counted.
-      clock.setTime(Date.parse('2026-10-03T03:00:30Z'));
+      clock.setTime(Date.parse('2026-10-03T01:00:30Z'));
       expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
       expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 0 });
       const [night] = await nightsOf(mapId);
       expect(night!.outcomes).toEqual(
-        expect.arrayContaining([{ userId: friend.id, taken: null, exposed: 2, sheltered: 0 }]),
+        expect.arrayContaining([
+          expect.objectContaining({ userId: friend.id, taken: [], exposed: 2, sheltered: 0 }),
+        ]),
       );
       const hollowedOf = async (ids: string[]) =>
         (await Promise.all(ids.map(stateOf))).filter((s) => s === 'hollowed').length;
@@ -583,7 +615,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       await call(server, 'POST', `/maps/${mapId}/requests/${request.id}/approve`, kid);
       const theirs = await dark(mapId, friend);
       expect(
-        await hollowService(WEAK_SHADOWS, HOLLOW_RULES).runNightfall(mapId, '2026-10-04'),
+        await hollowService(WEAK_SHADOWS, GRACE_THEN_ONE).runNightfall(mapId, '2026-10-04'),
       ).toEqual({ taken: 1 });
       expect((await Promise.all(mine.map(stateOf))).filter((s) => s === 'hollowed')).toHaveLength(
         1,
@@ -591,7 +623,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       expect(await stateOf(theirs)).toBe('active');
     });
 
-    it('falls at 21:00 map time, daylight saving included, once each night', async () => {
+    it('falls at 19:00 map time, daylight saving included, once each night (#277)', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await patch(server, kid);
@@ -600,22 +632,197 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
 
       // The patch is new this afternoon: last night's nightfall isn't its own.
       expect(await dueHere()).toEqual([]);
-      // 20:59 MDT: not yet. 21:00 MDT is 03:00Z.
-      clock.setTime(Date.parse('2026-10-03T02:59:00Z'));
+      // 18:59 MDT: not yet. 19:00 MDT is 01:00Z.
+      clock.setTime(Date.parse('2026-10-03T00:59:00Z'));
       expect(await dueHere()).toEqual([]);
-      clock.setTime(Date.parse('2026-10-03T03:00:30Z'));
+      clock.setTime(Date.parse('2026-10-03T01:00:30Z'));
       expect(await dueHere()).toEqual([{ mapId, night: TONIGHT }]);
       await hollow.runNightfall(mapId, TONIGHT);
       expect(await dueHere()).toEqual([]);
 
-      // Clocks go back on Nov 1: 21:00 MDT on Oct 31 is 03:00Z, 21:00 MST on Nov 1 is 04:00Z.
-      clock.setTime(Date.parse('2026-11-01T03:00:30Z'));
+      // Clocks go back on Nov 1: 19:00 MDT on Oct 31 is 01:00Z, 19:00 MST on Nov 1 is 02:00Z.
+      clock.setTime(Date.parse('2026-11-01T01:00:30Z'));
       expect(await dueHere()).toEqual([{ mapId, night: '2026-10-31' }]);
       await hollow.runNightfall(mapId, '2026-10-31');
-      clock.setTime(Date.parse('2026-11-02T03:30:00Z')); // 20:30 MST
+      clock.setTime(Date.parse('2026-11-02T01:30:00Z')); // 18:30 MST
       expect(await dueHere()).toEqual([]);
-      clock.setTime(Date.parse('2026-11-02T04:00:30Z')); // 21:00 MST
+      clock.setTime(Date.parse('2026-11-02T02:00:30Z')); // 19:00 MST
       expect(await dueHere()).toEqual([{ mapId, night: '2026-11-01' }]);
+    });
+  });
+
+  describe('the Hollow Man grows bolder (#277, owner decisions 2026-10-08)', () => {
+    /** Three strikes every night (the shipped curve's night 14 with a raised multiplier). */
+    const BOLDEST: HollowRules = {
+      ...NO_GRACE,
+      strength: {
+        ...HOLLOW_RULES.strength,
+        nights: [{ from: 1, stage: 'boldest', chances: [100, 100, 100] }],
+      },
+    };
+    const ownerOf = async (tileId: string) =>
+      (await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, tileId) }))!.ownerUserId;
+    const outcomeOf = async (mapId: string, who: PublicUser) =>
+      ((await nightsOf(mapId))[0]!.outcomes as { userId: string; reclaimed: unknown[] }[]).find(
+        (o) => o.userId === who.id,
+      )!;
+    /** Patches start gentle (one strike at most): these tests turn challenges on. */
+    const pvpOn = (mapId: string) =>
+      db.execute(`update maps set pvp_mode = 'on' where id = '${mapId}'`);
+    /** `count` gatherers, each out on its own dark land. */
+    async function darkLand(mapId: string, who: PublicUser, count: number) {
+      const tiles: string[] = [];
+      const ids: string[] = [];
+      for (let i = 0; i < count; i++) {
+        const tile = await farLand(mapId, who);
+        tiles.push(tile);
+        ids.push(await dark(mapId, who, { tileId: tile }));
+      }
+      return { tiles, ids };
+    }
+
+    it('strikes up to three times: takes all but the last friend, wins back the farthest dark land, which goes wild', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await pvpOn(mapId);
+      const { tiles, ids } = await darkLand(mapId, kid, 4);
+      // A fire that's gone out stands on one of them: it comes down with the land.
+      await fireOn(mapId, kid, tiles[0]!, '2026-10-01');
+      const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
+
+      expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 3 });
+      const states = await Promise.all(ids.map(stateOf));
+      expect(states.filter((s) => s === 'hollowed')).toHaveLength(3);
+      const outcome = await outcomeOf(mapId, kid);
+      // The cap: three tiles, the farthest from home, recorded and announced.
+      expect(outcome).toMatchObject({ strikes: 3, stage: 'boldest' });
+      expect(outcome.reclaimed).toHaveLength(3);
+      const fell = (await eventsOf(mapId)).at(-1)!;
+      expect(fell.type).toBe('hollow.nightfall');
+      expect(parseGameEventPayload('hollow.nightfall', fell.payload).walks).toEqual([
+        expect.objectContaining({ userId: kid.id, stage: 'boldest', reclaimed: outcome.reclaimed }),
+      ]);
+      // Still theirs until the reclaim step runs.
+      for (const tile of tiles) expect(await ownerOf(tile)).toBe(kid.id);
+
+      expect(await hollow.reclaim(mapId, TONIGHT)).toEqual({ wild: 3 });
+      const owners = await Promise.all(tiles.map(ownerOf));
+      expect(owners.filter((o) => o === null)).toHaveLength(3);
+      const events = await eventsOf(mapId);
+      const rewilded = events.filter((e) => e.type === 'tile.rewilded');
+      expect(rewilded.map((e) => parseGameEventPayload('tile.rewilded', e.payload))).toEqual([
+        expect.objectContaining({ userId: kid.id, cause: 'hollow' }),
+      ]);
+      // A retry finds the land gone and does nothing more.
+      expect(await hollow.reclaim(mapId, TONIGHT)).toEqual({ wild: 0 });
+
+      // The morning report says what came back.
+      clock.setTime(Date.parse('2026-10-03T14:00:00Z'));
+      const [report] = (await statusOf(server, kid, mapId)).reports;
+      expect(report).toMatchObject({ stage: 'boldest' });
+      expect(report!.taken).toHaveLength(3);
+      expect(report!.reclaimed).toHaveLength(3);
+      expect(report!.walk.filter((p) => p.kind === 'strike').length).toBeGreaterThanOrEqual(3);
+      // The fire came down if its land was won back.
+      const fires = (await ownerOf(tiles[0]!)) === null ? 1 : 0;
+      expect(report!.lostBuildings).toEqual({ fires, fences: 0, trainingGrounds: 0 });
+      expect(
+        await db.query.buildings.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) }),
+      ).toHaveLength(1 - fires);
+    });
+
+    it('strikes at most once a night on a gentle patch, whatever the curve', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await db.execute(`update maps set pvp_mode = 'gentle' where id = '${mapId}'`);
+      await darkLand(mapId, kid, 3);
+      const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
+      expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 1 });
+      expect((await outcomeOf(mapId, kid)).reclaimed).toHaveLength(1);
+    });
+
+    it('does nothing at 0 % "Hollow Man strength", and the percent never passes the cap', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await pvpOn(mapId);
+      await darkLand(mapId, kid, 3);
+      await db.execute(`update maps set hollow_strength_percent = 0 where id = '${mapId}'`);
+      const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
+      expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
+      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
+      await db.execute(`update maps set hollow_strength_percent = 300 where id = '${mapId}'`);
+      expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 2 });
+    });
+
+    it('keeps land claimed since the last nightfall safe on its first night (guardrail b)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      const { tiles, ids } = await darkLand(mapId, kid, 2);
+      // Both claimed this afternoon, as a capture records it.
+      for (const tile of tiles) {
+        await db.execute(
+          `insert into tile_tending (tile_id, map_id, tended_at, claimed_at) values ('${tile}', '${mapId}', '${clock.toISOString()}', '${clock.toISOString()}')`,
+        );
+      }
+      const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
+      expect(await hollow.runNightfall(mapId, TONIGHT)).toEqual({ taken: 0 });
+      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
+      for (const id of ids) expect(await stateOf(id)).toBe('active');
+      // The next night they're ordinary dark land.
+      expect(await hollow.runNightfall(mapId, '2026-10-03')).toEqual({ taken: 1 });
+    });
+
+    it('skips dark land no fire could ever light while nodes block fires (Q5, until #242)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      const { tiles } = await darkLand(mapId, kid, 1);
+      const tile = (await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, tiles[0]!) }))!;
+      // Every tile within the farthest fire's reach has a node in its middle.
+      const near = (
+        await db.query.tiles.findMany({ where: (t, { eq }) => eq(t.mapId, mapId) })
+      ).filter((t) => t.homeSlot === null && hexDistance(t, tile) <= 2);
+      for (const t of near) {
+        await db.execute(`update tiles set node_resource = 'timber' where id = '${t.id}'`);
+      }
+      expect(await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT)).toBeTruthy();
+      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
+      // Once nodes can be cleared (#242), it's ordinary dark land.
+      const cleared: HollowRules = {
+        ...BOLDEST,
+        strength: { ...BOLDEST.strength, nodesBlockFires: false },
+      };
+      await hollowService(WEAK_SHADOWS, cleared).runNightfall(mapId, '2026-10-03');
+      const [latest] = (await nightsOf(mapId)).sort((a, b) => (a.night < b.night ? 1 : -1));
+      expect(
+        (latest!.outcomes as { userId: string; reclaimed: unknown[] }[]).find(
+          (o) => o.userId === kid.id,
+        )!.reclaimed,
+      ).toEqual([{ q: tile.q, r: tile.r }]);
+    });
+
+    it('shares one cap a night with untended land going wild (Q6)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await pvpOn(mapId);
+      const { tiles } = await darkLand(mapId, kid, 5);
+      const hollow = hollowService(WEAK_SHADOWS, BOLDEST);
+      await hollow.runNightfall(mapId, TONIGHT);
+      expect(await hollow.reclaim(mapId, TONIGHT)).toEqual({ wild: 3 });
+      // The two left are long untended, but the night's cap is spent.
+      for (const tile of tiles) {
+        await db.execute(
+          `insert into tile_tending (tile_id, map_id, tended_at) values ('${tile}', '${mapId}', '2026-01-01T00:00:00Z') on conflict (tile_id) do update set tended_at = excluded.tended_at`,
+        );
+      }
+      const land = createLandTending({ db, clock: () => clock });
+      expect(await land.nightfall(mapId, TONIGHT)).toEqual({ wild: 0 });
+      expect((await Promise.all(tiles.map(ownerOf))).filter((o) => o === kid.id)).toHaveLength(2);
     });
   });
 
@@ -636,13 +843,25 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       // Next morning, 8:00 MDT.
       clock.setTime(Date.parse('2026-10-03T14:00:00Z'));
       const mine = await statusOf(server, friend, mapId);
-      expect(mine.night).toEqual({ isNight: false, changesInMinutes: 13 * 60 });
+      expect(mine.night).toEqual({ isNight: false, changesInMinutes: 11 * 60 });
+      // Tonight's show: nightfall at 19:00 MDT, the strike half an hour on (#277).
+      expect(mine.tonight).toEqual({
+        night: '2026-10-03',
+        stage: 'watching',
+        nightfallAt: '2026-10-04T01:00:00.000Z',
+        strikeAt: '2026-10-04T01:30:00.000Z',
+      });
       expect(mine.reports).toEqual([
         {
           night: TONIGHT,
-          taken: { squishyId: taken, speciesId: SECRET.id, nickname: null, inHollow: true },
+          taken: [{ squishyId: taken, speciesId: SECRET.id, nickname: null, inHollow: true }],
           sheltered: 0,
           exposed: 2,
+          // The dark land his gatherers worked: farthest from home, won back (#277).
+          reclaimed: [{ q: expect.any(Number) as unknown, r: expect.any(Number) as unknown }],
+          stage: 'curious',
+          walk: expect.arrayContaining([expect.objectContaining({ kind: 'strike' })]) as unknown,
+          lostBuildings: { fires: 0, fences: 0, trainingGrounds: 0 },
         },
       ]);
       expect(mine.hollowed.map((s) => s.id)).toEqual([taken]);
@@ -654,13 +873,21 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       });
 
       const theirs = await statusOf(server, kid, mapId);
-      expect(theirs.reports).toEqual([{ night: TONIGHT, taken: null, sheltered: 1, exposed: 0 }]);
+      expect(theirs.reports).toEqual([
+        expect.objectContaining({
+          night: TONIGHT,
+          taken: [],
+          sheltered: 1,
+          exposed: 0,
+          reclaimed: [],
+        }),
+      ]);
       expect(theirs.hollowed).toEqual([]);
       expect(theirs.speciesDefs).toEqual([]);
       // Nothing about the other player's squishies, seeds or shadows.
       expect(JSON.stringify(theirs)).not.toContain(taken);
 
-      // It's night again from 21:00.
+      // It's night again from 19:00 (21:30 MDT here), and the show is about tonight.
       clock.setTime(Date.parse('2026-10-04T03:30:00Z'));
       expect((await statusOf(server, kid, mapId)).night.isNight).toBe(true);
     });
@@ -710,7 +937,7 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       }
       clock.setTime(Date.parse('2026-10-05T18:00:00Z')); // noon Oct 5: the grace is over
       const status = await statusOf(server, kid, mapId);
-      expect(status.reports[0]).toMatchObject({ night: '2026-10-04', taken: null, exposed: 1 });
+      expect(status.reports[0]).toMatchObject({ night: '2026-10-04', taken: [], exposed: 1 });
       expect(status.fireHint).toBe(true);
       // A fire lit for tonight on its land ends it.
       await fireOn(mapId, kid, land, '2026-10-05');
@@ -868,13 +1095,19 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         expect(res.statusCode, res.body).toBe(200);
         return DevNightfallResponseSchema.parse(res.json());
       };
-      // The real rules: two nights of first-night grace, then he only needs
-      // one, but never the last friend (owner decision 2026-10-05).
+      // The real rules: two nights of first-night grace, then he grows bolder
+      // (25 %, 50 %, 75 %, then sure on night 6, #277), but never takes the
+      // last friend (owner decision 2026-10-05): exactly one of the two goes.
       expect(await fall()).toEqual({ night: TONIGHT, taken: 0 });
       expect(await fall()).toEqual({ night: '2026-10-03', taken: 0 });
-      expect(await fall()).toEqual({ night: '2026-10-04', taken: 1 });
-      expect(await fall()).toEqual({ night: '2026-10-05', taken: 0 });
-      expect(await fall()).toEqual({ night: '2026-10-06', taken: 0 });
+      let taken = 0;
+      for (const night of ['2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07']) {
+        const fell = await fall();
+        expect(fell.night).toBe(night);
+        taken += fell.taken;
+      }
+      expect(taken).toBe(1);
+      expect(await fall()).toEqual({ night: '2026-10-08', taken: 0 });
     });
 
     it("isn't there without the dev flag", async () => {

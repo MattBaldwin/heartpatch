@@ -431,7 +431,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
 
       clock.setTime(Date.parse('2026-10-31T18:00:00Z'));
       const lantern = await placed(server, kid, mapId, body);
-      expect(lantern).toMatchObject({ kind: 'hearthfire', safeRadius: 2 });
+      expect(lantern).toMatchObject({ kind: 'hearthfire', safeRadius: 1 });
       expect(building('jack-o-lantern-hearthfire').season).toBe('halloween');
       expect((await home(server, kid, mapId)).items).toEqual({});
     });
@@ -494,15 +494,15 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(full.statusCode).toBe(409);
       expect(errorOf(full).message).toBe("It's full! Come back after a night or two.");
 
-      // Nothing ticks: each nightfall (9 PM in Denver) shows one night fewer.
+      // Nothing ticks: each nightfall (7 PM in Denver, #277) shows one night fewer.
       const nightsAt = async (iso: string) => {
         clock.setTime(Date.parse(iso));
         return (await home(server, kid, mapId)).buildings[0]!.nightsLeft;
       };
-      expect(await nightsAt('2026-10-03T02:59:00Z')).toBe(5); // 8:59 PM Oct 2
-      expect(await nightsAt('2026-10-03T03:00:00Z')).toBe(4); // 9:00 PM Oct 2
+      expect(await nightsAt('2026-10-03T00:59:00Z')).toBe(5); // 6:59 PM Oct 2
+      expect(await nightsAt('2026-10-03T01:00:00Z')).toBe(4); // 7:00 PM Oct 2
       expect(await nightsAt('2026-10-06T12:00:00Z')).toBe(1); // Oct 6, before nightfall
-      expect(await nightsAt('2026-10-07T03:00:00Z')).toBe(0);
+      expect(await nightsAt('2026-10-07T01:00:00Z')).toBe(0);
       const out = (await view(server, friend, mapId)).tiles.find(
         (t) => t.q === land!.q && t.r === land!.r,
       )!;
@@ -528,10 +528,10 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
         clock.setTime(Date.parse(iso));
         return (await home(server, kid, mapId)).buildings[0]!.nightsLeft;
       };
-      // Nov 1 is 25 hours long; its nightfall is 04:00Z (MST), not 03:00Z.
-      expect(await nightsAt('2026-11-01T03:30:00Z')).toBe(1); // 9:30 PM Oct 31
-      expect(await nightsAt('2026-11-02T03:30:00Z')).toBe(1); // 8:30 PM Nov 1 (MST)
-      expect(await nightsAt('2026-11-02T04:00:00Z')).toBe(0); // 9:00 PM Nov 1
+      // Nov 1 is 25 hours long; its nightfall is 02:00Z (MST), not 01:00Z.
+      expect(await nightsAt('2026-11-01T01:30:00Z')).toBe(1); // 7:30 PM Oct 31
+      expect(await nightsAt('2026-11-02T01:30:00Z')).toBe(1); // 6:30 PM Nov 1 (MST)
+      expect(await nightsAt('2026-11-02T02:00:00Z')).toBe(0); // 7:00 PM Nov 1
     });
 
     it('only fuels your own fires', async () => {
@@ -803,7 +803,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const after = HomeResponseSchema.parse(res.json());
       expect(after.buildings.find((b) => b.id === fire.id)).toMatchObject({
         level: 2,
-        safeRadius: 2,
+        safeRadius: 1,
         lit: true,
         nightsLeft: 1,
       });
@@ -827,20 +827,20 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       });
       expect(publicViewFor(PUBLIC_VIEWS, event, { userId: friend.id })).toMatchObject({
         userId: kid.id,
-        building: { id: fire.id, level: 2, safeRadius: 2 },
+        building: { id: fire.id, level: 2, safeRadius: 1 },
       });
       const shown = (await view(server, friend, mapId)).tiles.find(
         (t) => t.q === land!.q && t.r === land!.r,
       )!;
-      expect(shown.buildings[0]).toMatchObject({ level: 2, safeRadius: 2 });
+      expect(shown.buildings[0]).toMatchObject({ level: 2, safeRadius: 1 });
 
-      // Nightfall's safe tiles follow the level: every tile within 2 of the fire.
+      // Nightfall's safe tiles follow the level: every tile within 1 of the fire (radii 1 / 1 / 2, #277).
       const fires = (await createBuildingsRepo(db).listOnMap(mapId)).filter(
         (b) => b.kind === 'hearthfire',
       );
       const safe = litSafeTiles(fires, tiles, mapLocalTime(clock, ZONE));
       expect([...safe].sort()).toEqual(
-        [...new Set([...tiles.map(hexKey), ...hexSpiral(land!, 2).map(hexKey)])].sort(),
+        [...new Set([...tiles.map(hexKey), ...hexSpiral(land!, 1).map(hexKey)])].sort(),
       );
     });
 
@@ -861,7 +861,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(short.statusCode).toBe(409);
       expect(errorOf(short).message).toMatch(/Glimmer/);
       const still = await home(server, kid, mapId);
-      expect(still.buildings[0]).toMatchObject({ level: 2, safeRadius: 2 });
+      expect(still.buildings[0]).toMatchObject({ level: 2, safeRadius: 1 });
       expect(still.items).toMatchObject({ timber: 20, stone: 15 });
 
       await give(mapId, kid, { glimmer: 2 });
@@ -869,7 +869,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect(top.statusCode).toBe(200);
       expect(HomeResponseSchema.parse(top.json()).buildings[0]).toMatchObject({
         level: 3,
-        safeRadius: 3,
+        safeRadius: 2,
       });
       const past = await upgrade(server, kid, mapId, fire.id);
       expect(past.statusCode).toBe(409);

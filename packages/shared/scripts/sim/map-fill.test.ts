@@ -1,3 +1,4 @@
+import { GAME_DATA } from '../../src/data/index.js';
 import { describe, expect, it } from 'vitest';
 import { TERRITORY_RULES } from '../../src/data/territory.js';
 import {
@@ -39,10 +40,14 @@ describe('runMapFill', () => {
     }
   });
 
-  it('keeps everything for a week away, then gives land back a little at a time', () => {
+  it('keeps everything while the fires burn, then gives land back a little at a time', () => {
     expect(TERRITORY_RULES.tending.keepRadius).toBe(2);
     const run = runMapFill(scenario('engaged-stops'), FADING_GENTLE, SHORT);
-    const away = awayTiles(run, [3, 7, 14, 30])!;
+    // A Hearthfire stores this many nights; after that the land is dark (#277).
+    const fuelNights = Math.min(
+      ...GAME_DATA.buildings.flatMap((b) => (b.kind === 'hearthfire' ? [b.maxFuelNights] : [])),
+    );
+    const away = awayTiles(run, [3, fuelNights - 1, 14, 30])!;
     expect(away.away[0]!.tiles).toBe(away.atStop);
     expect(away.away[1]!.tiles).toBe(away.atStop);
     expect(away.away[2]!.tiles!).toBeLessThan(away.atStop!);

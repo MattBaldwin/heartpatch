@@ -12,26 +12,73 @@ import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/gam
 import {
   battles,
   buildings,
+  fenceSegments,
   hollowEvents,
   hollowRescues,
   mapMembers,
   maps,
   squishies,
+  tileAttacks,
   tileDefenders,
   tiles,
+  tileTending,
 } from '../../db/schema.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { activeMember } from '../maps/repo.js';
 
-/** One player's result for a night, as stored in `hollow_events.outcomes` (checked on read). */
+const coords = z.strictObject({ q: z.number().int(), r: z.number().int() });
+
+/**
+ * One player's result for a night, as stored in `hollow_events.outcomes`
+ * (checked on read). Nights before #277 stored one `taken` id or null and
+ * none of the walk; they read back as a list and an empty walk.
+ */
 const StoredOutcomeSchema = z.strictObject({
   userId: z.uuid(),
-  taken: z.uuid().nullable(),
+  taken: z
+    .union([z.array(z.uuid()), z.uuid().nullable()])
+    .transform((t) => (Array.isArray(t) ? t : t === null ? [] : [t])),
   exposed: z.number().int().min(0),
   sheltered: z.number().int().min(0),
+  /** The Keeper's night on the patch (#277), and how many strikes it rolled. */
+  keeperNight: z.number().int().optional(),
+  strikes: z.number().int().min(0).optional(),
+  stage: z.enum(['watching', 'curious', 'bold', 'boldest']).optional(),
+  /** Dark tiles he won back (applied by the night's reclaim step). */
+  reclaimed: z.array(coords).optional(),
+  walk: z
+    .array(
+      z.strictObject({
+        q: z.number().int(),
+        r: z.number().int(),
+        kind: z.enum(['enter', 'recoil', 'strike', 'leave']),
+      }),
+    )
+    .optional(),
+  /** What stood on the land he won back. */
+  lostBuildings: z
+    .strictObject({
+      fires: z.number().int().min(0),
+      fences: z.number().int().min(0),
+      trainingGrounds: z.number().int().min(0),
+    })
+    .optional(),
 });
-export type StoredOutcome = z.infer<typeof StoredOutcomeSchema>;
+export type StoredOutcome = z.output<typeof StoredOutcomeSchema>;
 const StoredOutcomesSchema = z.array(StoredOutcomeSchema);
+
+/** A tile as the Hollow Man's night needs it (#277). */
+export interface NightTileRow {
+  id: string;
+  q: number;
+  r: number;
+  terrain: string;
+  ownerUserId: string | null;
+  homeSlot: number | null;
+  nodeResource: string | null;
+  /** When its owner claimed it (null: before #277, or never claimed). */
+  claimedAt: Date | null;
+}
 
 export interface NightRow {
   id: string;
@@ -102,6 +149,16 @@ export interface HollowRepo {
 
   /** Who plays here now, and when they joined (first-night grace), in user id order. */
   activeMembers: (mapId: string) => Promise<{ userId: string; joinedAt: Date }[]>;
+  /** One night's row, or null if it hasn't run. */
+  nightOf: (mapId: string, night: LocalDate) => Promise<NightRow | null>;
+  /** Every tile on the map, with when its owner claimed it (#277). */
+  nightTiles: (mapId: string) => Promise<NightTileRow[]>;
+  /** Tiles still cooling down after a battle at `at` (a tile in a fight isn't won back). */
+  coolingTiles: (mapId: string, at: Date) => Promise<Set<string>>;
+  /** Fence segments standing on each of these tiles, by tile id. */
+  fencesOn: (tileIds: readonly string[]) => Promise<Map<string, number>>;
+  /** The patch's "Hollow Man strength" percent (#277, admin console). */
+  strengthPercent: (mapId: string) => Promise<number>;
   /** Every home tile with an owner (the Heart Seeds and their rings). */
   homeTiles: (mapId: string) => Promise<{ ownerUserId: string; q: number; r: number }[]>;
   /**
@@ -263,6 +320,62 @@ function queries(db: Executor): HollowRepo {
         .limit(limit);
       // jsonb is checked on the way out, so a hand-edited row fails loudly.
       return rows.map((r) => ({ ...r, outcomes: StoredOutcomesSchema.parse(r.outcomes) }));
+    },
+
+    nightOf: async (mapId, night) => {
+      const [row] = await db
+        .select({
+          id: hollowEvents.id,
+          night: hollowEvents.night,
+          ranAt: hollowEvents.ranAt,
+          outcomes: hollowEvents.outcomes,
+        })
+        .from(hollowEvents)
+        .where(and(eq(hollowEvents.mapId, mapId), eq(hollowEvents.night, night)));
+      return row ? { ...row, outcomes: StoredOutcomesSchema.parse(row.outcomes) } : null;
+    },
+
+    nightTiles: (mapId) =>
+      db
+        .select({
+          id: tiles.id,
+          q: tiles.q,
+          r: tiles.r,
+          terrain: tiles.terrain,
+          ownerUserId: tiles.ownerUserId,
+          homeSlot: tiles.homeSlot,
+          nodeResource: tiles.nodeResource,
+          claimedAt: tileTending.claimedAt,
+        })
+        .from(tiles)
+        .leftJoin(tileTending, eq(tileTending.tileId, tiles.id))
+        .where(eq(tiles.mapId, mapId))
+        .orderBy(asc(tiles.id)),
+
+    coolingTiles: async (mapId, at) => {
+      const rows = await db
+        .selectDistinct({ tileId: tileAttacks.tileId })
+        .from(tileAttacks)
+        .where(and(eq(tileAttacks.mapId, mapId), gt(tileAttacks.cooldownUntil, at)));
+      return new Set(rows.map((r) => r.tileId));
+    },
+
+    fencesOn: async (tileIds) => {
+      if (tileIds.length === 0) return new Map();
+      const rows = await db
+        .select({ tileId: fenceSegments.tileId, n: count() })
+        .from(fenceSegments)
+        .where(inArray(fenceSegments.tileId, [...tileIds]))
+        .groupBy(fenceSegments.tileId);
+      return new Map(rows.map((r) => [r.tileId, r.n]));
+    },
+
+    strengthPercent: async (mapId) => {
+      const [row] = await db
+        .select({ percent: maps.hollowStrengthPercent })
+        .from(maps)
+        .where(eq(maps.id, mapId));
+      return row?.percent ?? 100;
     },
 
     activeMembers: (mapId) =>

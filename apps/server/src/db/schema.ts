@@ -309,11 +309,15 @@ export const maps = pgTable(
     // guardian and spawn, so it is never sent to clients (tech spec §8). Null
     // for hand-authored maps (tutorial, local seed data).
     seed: text('seed'),
+    // "Hollow Man strength" (#277, admin console): scales his strike chances
+    // on this patch, in percent. 0 turns him off. Server-only.
+    hollowStrengthPercent: smallint('hollow_strength_percent').notNull().default(100),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
     check('maps_event_seq_nonnegative', sql`${t.eventSeq} >= 0`),
     check('maps_max_players_range', sql`${t.maxPlayers} between 1 and 4`),
+    check('maps_hollow_strength_range', sql`${t.hollowStrengthPercent} between 0 and 300`),
   ],
 );
 
@@ -1119,6 +1123,9 @@ export const tileTending = pgTable(
     // Its owner's fire came down when it went wild (#202): what came back,
     // for the welcome-back card. Null: no fire there.
     lostFireRefund: jsonb('lost_fire_refund').$type<Record<string, number>>(),
+    // When its owner claimed it (#277): a tile claimed since the last
+    // nightfall is safe on its first night. Null: held before this column.
+    claimedAt: timestamptz('claimed_at'),
   },
   (t) => [
     index('tile_tending_map_id_idx').on(t.mapId),
@@ -1159,6 +1166,25 @@ export const hollowEvents = pgTable(
  */
 export const packedHomeFires = pgTable(
   'packed_home_fires',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    refund: jsonb('refund').$type<Record<string, number>>().notNull(),
+    packedAt: timestamptz('packed_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.mapId, t.userId] })],
+);
+
+/**
+ * Training Grounds packed up when they moved to homesteads (#277, owner
+ * decision 2026-10-08): everything spent on them came back, for a one-time
+ * note in the morning report. One row per player per map, written by the
+ * boot pass (#277's Training Grounds PR); like `packed_home_fires`.
+ */
+export const packedTrainingGrounds = pgTable(
+  'packed_training_grounds',
   {
     mapId: uuid('map_id')
       .notNull()

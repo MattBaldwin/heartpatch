@@ -696,8 +696,9 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
       // Squishies on watch go home, never lost (issue #15).
       const returned = await repo.clearDefenders(tile.id);
       await repo.setOwner(tile.id, attack.attackerUserId);
-      // Claiming land tends it (land that misses you, owner decision 2026-10-06).
-      await createTendingRepo(tx).tend(attack.mapId, [tile.id], at);
+      // Claiming land tends it (land that misses you, owner decision 2026-10-06),
+      // and it's safe from the Hollow Man on its first night (#277).
+      await createTendingRepo(tx).claim(attack.mapId, tile.id, at);
       await repo.endAttack(battle.id, 'captured', at);
       // The defender's fire comes down with the land (#202, step 8); the
       // rival never gets it. Battles grants the refund after its squishy locks.

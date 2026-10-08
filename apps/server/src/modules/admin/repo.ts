@@ -76,6 +76,8 @@ export interface PatchRow {
   lastActivityAt: Date | null;
   pvpMode: 'on' | 'gentle' | 'off';
   pendingRequests: number;
+  /** "Hollow Man strength" (#277), percent. */
+  hollowStrengthPercent: number;
 }
 
 export interface PlayerRow {
@@ -169,6 +171,8 @@ export interface AdminRepo {
     offset: number,
   ) => Promise<Page<PatchRow>>;
   findPatch: (mapId: string) => Promise<PatchRow | null>;
+  /** Sets a patch's "Hollow Man strength" (#277); false if there's no such patch. */
+  setHollowStrength: (mapId: string, percent: number) => Promise<boolean>;
   patchMembers: (mapId: string) => Promise<PatchMemberRow[]>;
   pendingRequests: (mapId: string) => Promise<PendingRequestRow[]>;
   recentNights: (mapId: string, limit: number) => Promise<{ night: string; outcomes: unknown }[]>;
@@ -233,6 +237,7 @@ export function createAdminRepo(db: Executor): AdminRepo {
     lastActivityAt: lastActivity,
     pvpMode: maps.pvpMode,
     pendingRequests: pendingCount,
+    hollowStrengthPercent: maps.hollowStrengthPercent,
   };
   const ownerJoin = and(eq(mapMembers.mapId, maps.id), eq(mapMembers.role, 'owner'));
 
@@ -551,6 +556,15 @@ export function createAdminRepo(db: Executor): AdminRepo {
         .where(eq(maps.id, mapId))
         .limit(1);
       return row ?? null;
+    },
+
+    setHollowStrength: async (mapId: string, percent: number): Promise<boolean> => {
+      const rows = await db
+        .update(maps)
+        .set({ hollowStrengthPercent: percent })
+        .where(and(eq(maps.id, mapId), eq(maps.kind, 'multiplayer')))
+        .returning({ id: maps.id });
+      return rows.length > 0;
     },
 
     /** Active members, owner first, with their latest game event on this map. */

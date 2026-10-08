@@ -7,16 +7,27 @@ import {
   gameplayOverrides,
   heartSeedOf,
   hexKey,
+  hollowWalk,
   HOLLOW_RULES,
   HOME_BASE_RULES,
+  isFreshTile,
   isLocalBefore,
   isNightAt,
+  keeperNightOf,
   lastNightOf,
   minutesUntilNightChange,
   nightfall,
+  pickReclaimed,
   rescueReward,
+  rollStrikes,
+  safeTiles,
+  stageOf,
+  strengthOf,
   tonightOf,
   parseGameEventPayload,
+  type Hex,
+  type HexKey,
+  type MapLocalTime,
   type GameEventPayload,
   type HollowRules,
   type HollowStatus,
@@ -36,7 +47,7 @@ import {
 import type { Executor, Transaction } from '../../db/client.js';
 import type { GameEvent, NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
-import { localDate, mapLocalTime, type Clock } from '../../lib/time.js';
+import { instantOfLocal, localDate, mapLocalTime, MINUTE_MS, type Clock } from '../../lib/time.js';
 import type { BattlesService, StartResult } from '../battles/service.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
@@ -45,20 +56,26 @@ import { createCareRepo } from '../care/repo.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
+import { createTendingRepo } from '../territory/repo.js';
+import { rewildTiles } from '../territory/rewild.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import {
   createHollowRepo,
   createHollowTxRepo,
   type HollowRepo,
   type HollowTxRepo,
+  type NightTileRow,
   type StoredOutcome,
 } from './repo.js';
 
 /*
  * The Hollow Man (#21; design doc §2, §14; decision C). At nightfall
- * (21:00 map time) he visits each map once: for every player with squishies
- * left outside a lit Hearthfire's light, and not standing watch, he takes one
- * to the Hollow. The night's `hollow_events` row makes it exactly once (a
+ * (19:00 map time, #277) he visits each map once. On each Keeper's dark land
+ * (outside every lit Hearthfire's light, not home, not claimed today) he
+ * grows bolder night by night (#277): each strike takes one squishy left in
+ * the dark to the Hollow and wins back one dark tile, which goes wild in the
+ * night's reclaim step (`reclaim`, #194's path). He walks each Keeper's
+ * border on the way, a show the client plays from 7:00 to 7:30 PM. The night's `hollow_events` row makes it exactly once (a
  * retry, a second job or a restart finds it and does nothing). Taken
  * squishies are never lost: a rescue expedition (a `rescue` battle against
  * shadow guardians, startable from anywhere) brings them home, with a little
@@ -72,6 +89,12 @@ export interface HollowService {
   rescue: (user: PublicUser, mapId: string, request: StartRescueRequest) => Promise<StartResult>;
   /** Night falls on a map (the scheduled job). Null if this night already ran. */
   runNightfall: (mapId: string, night: LocalDate) => Promise<{ taken: number } | null>;
+  /**
+   * The night's dark land he won back goes wild (#277), in its own
+   * transaction after `runNightfall`. Safe to run again: land already gone
+   * is skipped. Null for a missing map.
+   */
+  reclaim: (mapId: string, night: LocalDate) => Promise<{ wild: number } | null>;
   /** `(mapId, night)` pairs whose latest nightfall hasn't run yet (the sweep). */
   dueNightfalls: () => Promise<{ mapId: string; night: LocalDate }[]>;
   /** Dev/test only: the next night that hasn't come yet falls now. */
@@ -103,6 +126,13 @@ const ALL_SPECIES: readonly Species[] = [...GAME_DATA.species, ...SERVER_GAME_DA
 const SPECIES_BY_ID: ReadonlyMap<string, Species> = new Map(ALL_SPECIES.map((s) => [s.id, s]));
 const PUBLIC_SPECIES = new Set(GAME_DATA.species.map((s) => s.id));
 
+/** The farthest any Hearthfire's light reaches: how far a fire site can light land (#277, Q5). */
+const MAX_FIRE_RADIUS = Math.max(
+  ...GAME_DATA.buildings.flatMap((b) =>
+    b.kind === 'hearthfire' ? b.levels.map((l) => l.safeRadius) : [],
+  ),
+);
+
 /** Safety: dev nightfall looks this many nights ahead for one that hasn't come. */
 const DEV_NIGHTS_AHEAD = 366;
 
@@ -123,9 +153,46 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     (await repo.mapSeed(mapId)) ?? deriveSeed('hand-authored-map', mapId);
 
   /**
-   * Night falls: claims the night's row, works out who is exposed, takes at
-   * most one squishy per player, records it all and appends the events, in
-   * one transaction.
+   * Tiles safe tonight: every home base, the land lit fires reach, and land
+   * claimed since the last nightfall (#277 guardrail b).
+   */
+  const safeOn = (
+    map: MapRow,
+    night: LocalDate,
+    fires: Parameters<typeof litSafeTiles>[0],
+    homeTiles: readonly Hex[],
+    mapTiles: readonly NightTileRow[],
+  ): Set<HexKey> => {
+    const safe = litSafeTiles(fires, homeTiles, { date: night, minute: 0 });
+    for (const t of mapTiles) {
+      if (t.ownerUserId === null || t.homeSlot !== null || t.claimedAt === null) continue;
+      if (isFreshTile(mapLocalTime(t.claimedAt, map.timeZone), night, nightRules)) {
+        safe.add(hexKey(t));
+      }
+    }
+    return safe;
+  };
+
+  /**
+   * Land a fire could ever light (#277, owner decision 2026-10-08 Q5): within
+   * the farthest fire's reach of a tile a fire can stand on (not home, and
+   * no resource node in its middle while `nodesBlockFires`). Null: all of it.
+   */
+  const lightableOn = (mapTiles: readonly NightTileRow[]): Set<HexKey> | null => {
+    if (!rules.strength.nodesBlockFires) return null;
+    const sites = mapTiles.filter((t) => t.homeSlot === null && t.nodeResource === null);
+    return safeTiles(sites.map((t) => ({ at: t, radius: MAX_FIRE_RADIUS })));
+  };
+
+  /** A Keeper's night on the patch, from when they joined (game clock). */
+  const keeperNight = (map: MapRow, joinedAt: Date, night: LocalDate) =>
+    keeperNightOf(mapLocalTime(joinedAt, map.timeZone), night, nightRules);
+
+  /**
+   * Night falls: claims the night's row, works out who is exposed, how many
+   * times the Hollow Man strikes each Keeper, which squishies he takes and
+   * which dark tiles he wins back, records it all (and his walk) and appends
+   * the events, in one transaction. The tiles go wild in `reclaim`.
    */
   const fall = async (
     repo: HollowTxRepo,
@@ -140,23 +207,34 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     const nightRowId = await repo.claimNight(map.id, night, at);
     if (nightRowId === null) return null;
 
-    const [members, homeTiles, squishyRows, fires, seed] = await Promise.all([
-      repo.activeMembers(map.id),
-      repo.homeTiles(map.id),
-      repo.nightSquishies(map.id),
-      createBuildingsRepo(tx).listOnMap(map.id),
-      mapSeedOf(repo, map.id),
-    ]);
+    const [members, homeTiles, squishyRows, buildings, seed, mapTiles, cooling, percent, lost] =
+      await Promise.all([
+        repo.activeMembers(map.id),
+        repo.homeTiles(map.id),
+        repo.nightSquishies(map.id),
+        createBuildingsRepo(tx).listOnMap(map.id),
+        mapSeedOf(repo, map.id),
+        repo.nightTiles(map.id),
+        repo.coolingTiles(map.id, at),
+        repo.strengthPercent(map.id),
+        createTendingRepo(tx).wildCounts(map.id, night),
+      ]);
     const homes = new Map<string, { q: number; r: number }[]>();
     for (const { ownerUserId, q, r } of homeTiles) {
       homes.set(ownerUserId, [...(homes.get(ownerUserId) ?? []), { q, r }]);
     }
-    // Every home base, and the land the fires lit for this night keep safe.
-    const safe = litSafeTiles(
-      fires.filter((b) => b.kind === 'hearthfire'),
+    // Every home base, fresh land, and the land the fires lit for this night keep safe.
+    const safe = safeOn(
+      map,
+      night,
+      buildings.filter((b) => b.kind === 'hearthfire'),
       homeTiles,
-      { date: night, minute: 0 },
+      mapTiles,
     );
+    const lightable = lightableOn(mapTiles);
+    const canTake = gameplayOverrides(map.kind)?.hollowManCanTake ?? true;
+    // Kid-safety caps (owner decision 2026-10-08): the admin percent never raises them.
+    const cap = map.pvpMode === 'gentle' ? rules.strength.gentleCap : rules.strength.cap;
     const asNight = (s: (typeof squishyRows)[number]): NightSquishy => ({
       id: s.id,
       ownerUserId: s.ownerUserId,
@@ -170,27 +248,99 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
           ? null
           : { tileOwnerUserId: s.postOwnerUserId, at: s.post },
     });
+    const keepers = members.map(({ userId, joinedAt }) => {
+      const nightNo = keeperNight(map, joinedAt, night);
+      const strength = strengthOf(nightNo, rules);
+      // First-night grace (owner decision 2026-10-03), on the game clock.
+      const grace = night < firstHollowNight(mapLocalTime(joinedAt, map.timeZone), nightRules);
+      const strikes =
+        canTake && !grace
+          ? rollStrikes(
+              strength.chances,
+              percent,
+              cap,
+              // Secret, never revealed: derived from the map seed (tech spec §8).
+              deriveSeed(seed, 'hollow-strength', night, userId),
+            )
+          : 0;
+      return { userId, keeperNight: nightNo, stage: strength.stage, grace, strikes };
+    });
     const outcomes = nightfall(
-      members.map(({ userId, joinedAt }) => ({
+      keepers.map(({ userId, grace, strikes }) => ({
         userId,
         squishies: squishyRows.filter((s) => s.ownerUserId === userId).map(asNight),
-        // First-night grace (owner decision 2026-10-03), on the game clock.
-        grace: night < firstHollowNight(mapLocalTime(joinedAt, map.timeZone), nightRules),
+        grace,
+        strikes,
       })),
       safe,
       // Secret, never revealed: derived from the map seed (tech spec §8).
       (userId) => deriveSeed(seed, 'hollow', night, userId),
-      gameplayOverrides(map.kind)?.hollowManCanTake ?? true,
+      canTake,
     );
 
     const stored: StoredOutcome[] = [];
     const taken: GameEventPayload<'hollow.nightfall'>['taken'] = [];
-    for (const outcome of outcomes) {
+    const walks: NonNullable<GameEventPayload<'hollow.nightfall'>['walks']> = [];
+    for (const [i, outcome] of outcomes.entries()) {
+      const keeper = keepers[i];
+      if (!keeper) continue;
+      const { userId } = outcome;
       // Under its row lock; a squishy that left the map meanwhile is skipped.
-      const squishyId = outcome.taken;
-      const took = squishyId !== null && (await repo.hollow(squishyId));
-      stored.push({ ...outcome, taken: took ? squishyId : null });
-      if (took) taken.push({ userId: outcome.userId, squishyId });
+      const took: string[] = [];
+      for (const squishyId of outcome.taken) {
+        if (await repo.hollow(squishyId)) took.push(squishyId);
+      }
+      for (const squishyId of took) taken.push({ userId, squishyId });
+      // The dark tiles he wins back: farthest from home first, never home,
+      // lit, fresh, unlightable or mid-fight land, and within the night's
+      // one cap on land lost (shared with untended land, Q6).
+      const heartSeed = heartSeedOf(homes.get(userId) ?? []);
+      const room = Math.max(0, rules.strength.landLostPerNight - (lost.get(userId) ?? 0));
+      const dark = mapTiles.filter(
+        (t) =>
+          t.ownerUserId === userId &&
+          t.homeSlot === null &&
+          !safe.has(hexKey(t)) &&
+          !cooling.has(t.id) &&
+          (lightable === null || lightable.has(hexKey(t))),
+      );
+      const reclaimed = pickReclaimed(dark, heartSeed, Math.min(keeper.strikes, room));
+      const reclaimedIds = new Set(reclaimed.map((t) => t.id));
+      const fences = await repo.fencesOn([...reclaimedIds]);
+      const on = (kind: string) =>
+        buildings.filter((b) => b.kind === kind && reclaimedIds.has(b.tileId)).length;
+      // Where the taken ones slept, for the walk.
+      const takenAt = took.flatMap((id) => {
+        const row = squishyRows.find((s) => s.id === id);
+        if (!row) return [];
+        const sq = asNight(row);
+        const where = sq.post?.at ?? sq.sleepsAt;
+        return where ? [where] : [];
+      });
+      const land = mapTiles.filter((t) => t.ownerUserId === userId);
+      const walk = hollowWalk({
+        land,
+        safe,
+        strikes: [...reclaimed, ...takenAt],
+        heartSeed,
+        seed: deriveSeed(seed, 'hollow-walk', night, userId),
+      });
+      const reclaimedAt = reclaimed.map(({ q, r }) => ({ q, r }));
+      stored.push({
+        ...outcome,
+        taken: took,
+        keeperNight: keeper.keeperNight,
+        strikes: keeper.strikes,
+        stage: keeper.stage,
+        reclaimed: reclaimedAt,
+        walk,
+        lostBuildings: {
+          fires: on('hearthfire'),
+          fences: [...fences.values()].reduce((a, b) => a + b, 0),
+          trainingGrounds: on('training-grounds'),
+        },
+      });
+      walks.push({ userId, stage: keeper.stage, reclaimed: reclaimedAt, walk });
     }
     // A guard taken to the Hollow leaves the watch; its tile falls back to its
     // land's guardians, as with any guard that can't stand watch.
@@ -266,7 +416,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         mapId: map.id,
         type: 'hollow.nightfall',
         actorUserId: null,
-        payload: { night, taken },
+        payload: { night, taken, walks },
       });
     }
     return { taken: taken.length };
@@ -282,11 +432,63 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
     return result;
   };
 
-  /** What one night did to me, or null if I had nothing there (or wasn't there). */
+  const reclaim: HollowService['reclaim'] = async (mapId, night) => {
+    const map = await createMapsRepo(db).findMap(mapId);
+    if (!map) return null;
+    const row = await store.nightOf(mapId, night);
+    const wanted = new Set(
+      (row?.outcomes ?? []).flatMap((o) =>
+        (o.reclaimed ?? []).map((h) => `${o.userId}/${hexKey(h)}`),
+      ),
+    );
+    if (wanted.size === 0) return { wild: 0 };
+    const tending = createTendingRepo(db);
+    // Land held before tending existed gets a row first, on its own, as
+    // untended land's nightfall does (tech spec §7).
+    await tending.fillMissing(mapId, now());
+    const result = await tending.transaction(async (repo, tx) => {
+      const at = now();
+      const picked = (await repo.outerTiles(mapId)).filter((t) =>
+        wanted.has(`${t.ownerUserId}/${hexKey(t)}`),
+      );
+      if (picked.length === 0) return { wild: 0 };
+      // Lock order (tech spec §7): the tiles (id order), their tending rows,
+      // then `rewildTiles` (defenders, buildings, fences, squishies, bags, `maps`).
+      const ids = picked.map((t) => t.id);
+      const owners = new Map((await repo.lockTiles(ids)).map((t) => [t.id, t.ownerUserId]));
+      await repo.lockTending(ids);
+      // Still theirs (a retry finds the land already wild and skips it).
+      const going = picked.filter((t) => owners.get(t.id) === t.ownerUserId);
+      if (going.length === 0) return { wild: 0 };
+      const events = await rewildTiles(tx, map, going, night, at, 'hollow');
+      for (const event of events) await repo.appendEvent(event);
+      return { wild: going.length };
+    });
+    if (result.wild > 0) published(mapId);
+    return result;
+  };
+
+  /** What one night did to me, or null if I wasn't there or had nothing to see. */
   const reportOf = (outcomes: readonly StoredOutcome[], userId: string): StoredOutcome | null => {
     const mine = outcomes.find((o) => o.userId === userId);
-    if (!mine || (mine.taken === null && mine.exposed === 0 && mine.sheltered === 0)) return null;
-    return mine;
+    if (!mine) return null;
+    const quiet =
+      mine.taken.length === 0 &&
+      mine.exposed === 0 &&
+      mine.sheltered === 0 &&
+      (mine.reclaimed ?? []).length === 0 &&
+      (mine.walk ?? []).length === 0;
+    return quiet ? null : mine;
+  };
+
+  /** When a night falls, and when the show's strike lands (#277). */
+  const showTimes = (map: MapRow, night: LocalDate, near: Date) => {
+    const local: MapLocalTime = { date: night, minute: nightRules.nightfallMinute };
+    const nightfallAt = instantOfLocal(local, map.timeZone, near);
+    return {
+      nightfallAt: nightfallAt.toISOString(),
+      strikeAt: new Date(nightfallAt.getTime() + rules.show.prowlMinutes * MINUTE_MS).toISOString(),
+    };
   };
 
   return {
@@ -336,31 +538,43 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       // the report says he took nobody and a fire is still the next step.
       const sparedLastNight =
         mine[0]?.night === lastNight &&
-        mine[0].outcome.taken === null &&
+        mine[0].outcome.taken.length === 0 &&
         mine[0].outcome.exposed > 0;
       const fireHint =
         (gameplayOverrides(map.kind)?.hollowManCanTake ?? true) &&
         firstVisit !== null &&
         (tonight <= firstVisit || sparedLastNight) &&
         inTheDark;
-      const takenIds = mine.flatMap((n) => (n.outcome.taken ? [n.outcome.taken] : []));
+      const takenIds = mine.flatMap((n) => n.outcome.taken);
       const takenRows = new Map((await store.squishiesById(takenIds)).map((s) => [s.id, s]));
-      const reports: MorningReport[] = mine.map(({ night, outcome }) => {
-        const squishy = outcome.taken ? takenRows.get(outcome.taken) : undefined;
-        return {
-          night,
-          taken: squishy
-            ? {
-                squishyId: squishy.id,
-                speciesId: squishy.speciesId,
-                nickname: squishy.nickname,
-                inHollow: squishy.state === 'hollowed',
-              }
-            : null,
-          sheltered: outcome.sheltered,
-          exposed: outcome.exposed,
-        };
-      });
+      const stageOn = (night: LocalDate) =>
+        joinedAt ? stageOf(keeperNight(map, joinedAt, night), rules) : 'watching';
+      const reports: MorningReport[] = mine.map(({ night, outcome }) => ({
+        night,
+        taken: outcome.taken.flatMap((id) => {
+          const squishy = takenRows.get(id);
+          return squishy
+            ? [
+                {
+                  squishyId: squishy.id,
+                  speciesId: squishy.speciesId,
+                  nickname: squishy.nickname,
+                  inHollow: squishy.state === 'hollowed',
+                },
+              ]
+            : [];
+        }),
+        sheltered: outcome.sheltered,
+        exposed: outcome.exposed,
+        reclaimed: outcome.reclaimed ?? [],
+        // Nights before #277 kept no stage: worked out from when I joined.
+        stage: outcome.stage ?? stageOn(night),
+        walk: outcome.walk ?? [],
+        lostBuildings: outcome.lostBuildings ?? { fires: 0, fences: 0, trainingGrounds: 0 },
+      }));
+      // The night the show is about: the one that has fallen until morning,
+      // else the coming one.
+      const showNight = isNightAt(local, nightRules) ? lastNight : tonight;
       const speciesIds = new Set([
         ...hollowed.map((s) => s.speciesId),
         ...[...takenRows.values()].map((s) => s.speciesId),
@@ -369,6 +583,11 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         night: {
           isNight: isNightAt(local, nightRules),
           changesInMinutes: minutesUntilNightChange(local, nightRules),
+        },
+        tonight: {
+          night: showNight,
+          stage: stageOn(showNight),
+          ...showTimes(map, showNight, at),
         },
         reports,
         hollowed,
@@ -443,6 +662,8 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
 
     runNightfall,
 
+    reclaim,
+
     dueNightfalls: async () => {
       const at = now();
       return (await store.playedMaps()).flatMap((map) => {
@@ -464,7 +685,11 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       let night = tonightOf(local, HOME_BASE_RULES);
       for (let i = 0; i < DEV_NIGHTS_AHEAD; i++, night = addDays(night, 1)) {
         const result = await runNightfall(mapId, night);
-        if (result) return { night, taken: result.taken };
+        if (result) {
+          // The dark land he won back goes wild too, as in the nightly job.
+          await reclaim(mapId, night);
+          return { night, taken: result.taken };
+        }
       }
       throw new AppError('CONFLICT', MESSAGES.quiet);
     },

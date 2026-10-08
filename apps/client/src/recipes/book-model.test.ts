@@ -93,7 +93,7 @@ describe('recipe book pages', () => {
     expect(brew.flavour).toBe(GAME_DATA.recipes.find((r) => r.id === 'brave-brew')?.description);
     expect(view('recipe:jack-o-lantern-hearthfire').effect?.chips.map((c) => c.text)).toEqual([
       "🎃 Builds a Jack-o'-Lantern Hearthfire",
-      '🛡️ Safe 2 tiles around',
+      '🛡️ Safe 1 tile around',
       '🪵 Needs fuel each night',
     ]);
   });
