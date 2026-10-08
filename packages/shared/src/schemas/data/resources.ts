@@ -64,5 +64,16 @@ export const ResourceSchema = z.strictObject({
    * spends one. Only crafted items, and the id must be the tool's.
    */
   tool: ToolIdSchema.optional(),
+  /**
+   * Can it be traded or gifted at a trading post (#271)? Missing means yes.
+   * Explore tools are worn in uses, so they stay with their Keeper
+   * (`checkGameData` refuses a tradable tool).
+   */
+  tradable: z.boolean().optional(),
 });
 export type Resource = z.infer<typeof ResourceSchema>;
+
+/** Can this item be traded or gifted (#271)? Everything is, unless its data says not. */
+export function isTradableResource(resource: Pick<Resource, 'tradable'>): boolean {
+  return resource.tradable !== false;
+}

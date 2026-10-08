@@ -170,6 +170,7 @@ export const RESOURCES: Resource[] = [
     description: 'Dig up soft mounds while you explore your land.',
     kind: 'crafted',
     tool: 'shovel',
+    tradable: false, // #271: worn in uses, it stays with its Keeper
   },
   {
     id: 'net',
@@ -177,6 +178,7 @@ export const RESOURCES: Resource[] = [
     description: 'Scoop ponds and reeds while you explore your land.',
     kind: 'crafted',
     tool: 'net',
+    tradable: false, // #271: worn in uses, it stays with its Keeper
   },
   {
     id: 'rope',
@@ -184,6 +186,7 @@ export const RESOURCES: Resource[] = [
     description: 'Climb up to high ledges on hills and mountains.',
     kind: 'crafted',
     tool: 'rope',
+    tradable: false, // #271: worn in uses, it stays with its Keeper
   },
   {
     id: 'lantern',
@@ -191,5 +194,6 @@ export const RESOURCES: Resource[] = [
     description: 'Light up dark caves to see what hides inside.',
     kind: 'crafted',
     tool: 'lantern',
+    tradable: false, // #271: worn in uses, it stays with its Keeper
   },
 ];
