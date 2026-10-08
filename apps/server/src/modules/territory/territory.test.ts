@@ -2,8 +2,11 @@ import {
   ApiErrorSchema,
   BATTLE_RULES,
   BattleResponseSchema,
+  befriendedLevel,
+  COIN_RULES,
   createBattleContent,
   GAME_DATA,
+  GROWTH_RULES,
   hexKey,
   hexNeighbors,
   JoinMapResponseSchema,
@@ -37,7 +40,12 @@ import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
-import { createBattlesService, type TileBattleEnd } from '../battles/service.js';
+import {
+  createBattlesService,
+  HEART_CHARM,
+  type TileBattleEnd,
+} from '../battles/service.js';
+import { EVOLUTION_STEPS } from '../care/service.js';
 import { createRaidsConsumer } from '../raids/consumer.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { createTerritoryService, createTileBattlePort, defaultGuardianData } from './service.js';
@@ -629,6 +637,149 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         code: 'CONFLICT',
       });
       expect((await territory.status(kid, mapId)).attemptsLeft).toBe(0);
+    });
+  });
+
+  describe('befriending land guardians (#279)', () => {
+    const charmsOf = async (who: Player, mapId: string) =>
+      (
+        await db.query.inventories.findFirst({
+          where: (t, { and, eq }) =>
+            and(eq(t.mapId, mapId), eq(t.userId, who.id), eq(t.itemId, HEART_CHARM)),
+        })
+      )?.quantity ?? 0;
+    const giveCharms = async (server: FastifyInstance, who: Player, mapId: string, n: number) => {
+      const res = await call(server, 'POST', `/maps/${mapId}/dev/items`, who, {
+        items: { [HEART_CHARM]: n },
+      });
+      expect(res.statusCode).toBe(201);
+    };
+    const squishiesOf = (who: Player, mapId: string) =>
+      db.query.squishies.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.ownerUserId, who.id)),
+      });
+
+    it('takes a befriended guardian off the field, sends the next one in, and claims the tile with the last', async () => {
+      const server = await start({ HP_DEV_DROP_CHANCE: '100' });
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await grant(server, kid, mapId, 40);
+      await giveCharms(server, kid, mapId, 3);
+      // Every Heart Charm works, and two guardians stand on the land.
+      const battles = createBattlesService({
+        db,
+        clock: () => clock,
+        content: createBattleContent(serverBattleData(GAME_DATA, SERVER_GAME_DATA), {
+          ...BATTLE_RULES,
+          capture: {
+            atFull: 100,
+            nearlyOut: 100,
+            rarity: Object.fromEntries(
+              Object.keys(BATTLE_RULES.capture.rarity).map((rarity) => [rarity, 100]),
+            ) as typeof BATTLE_RULES.capture.rarity,
+          },
+        }),
+        tileBattles: createTileBattlePort(),
+      });
+      const territory = createTerritoryService({
+        db,
+        clock: () => clock,
+        battles,
+        guardians: {
+          ...defaultGuardianData(),
+          rules: {
+            ...GUARDIAN_RULES,
+            strengths: [{ strength: 1, count: 2, levels: { min: 30, max: 30 } }],
+          },
+        },
+      });
+      const [target] = await edgeOf(mapId, kid);
+      const { battle } = await territory.attack(kid, mapId, target!);
+      const guardians = battle.view.sides.b.squishies;
+      expect(guardians).toHaveLength(2);
+
+      // The first says yes: it leaves like a knockout and joins the kid now.
+      const first = await battles.act(kid, battle.id, {
+        action: { type: 'capture' },
+        turn: battle.view.turn,
+      });
+      expect(first.status).toBe('active');
+      expect(first.view.sides.b.squishies[0]).toMatchObject({ befriended: true });
+      expect(first.view.sides.b.active).toBe(1);
+      expect(first.view.log).toContainEqual(
+        expect.objectContaining({ type: 'capture', side: 'b', slot: 0, caught: true }),
+      );
+      expect(first.view.log).toContainEqual(
+        expect.objectContaining({ type: 'replace', side: 'b', slot: 1 }),
+      );
+      expect((await tileAt(mapId, target!)).ownerUserId).toBeNull();
+      const joined = (await squishiesOf(kid, mapId)).filter((s) => s.level !== 40);
+      expect(joined).toHaveLength(1);
+      // As it was in the battle, but below its first evolution.
+      expect(joined[0]).toMatchObject({
+        speciesId: guardians[0]!.speciesId,
+        level: befriendedLevel(guardians[0]!.speciesId, 30, EVOLUTION_STEPS, GROWTH_RULES),
+      });
+      const midway = (await eventsOf(mapId)).filter((e) => e.type === 'squishy.captured');
+      expect(midway.map((e) => parseGameEventPayload('squishy.captured', e.payload))).toEqual([
+        {
+          battleId: battle.id,
+          userId: kid.id,
+          squishyId: joined[0]!.id,
+          speciesId: guardians[0]!.speciesId,
+          level: joined[0]!.level,
+        },
+      ]);
+      // The catalog has it (the Heart Charm milestones count these events).
+      expect(
+        await db.query.speciesSeen.findFirst({
+          where: (t, { and, eq }) =>
+            and(eq(t.userId, kid.id), eq(t.speciesId, guardians[0]!.speciesId)),
+        }),
+      ).toMatchObject({ firstCaughtAt: clock });
+
+      // The last says yes: the battle is won and the land claimed.
+      const done = await battles.act(kid, battle.id, {
+        action: { type: 'capture' },
+        turn: first.view.turn,
+      });
+      expect(done.status).toBe('finished');
+      expect(done.view.phase).toMatchObject({
+        type: 'over',
+        result: { winner: 'a', reason: 'captured' },
+      });
+      expect((await tileAt(mapId, target!)).ownerUserId).toBe(kid.id);
+      expect((await attacksOf(mapId))[0]).toMatchObject({ outcome: 'captured' });
+      // One new friend per guardian, one charm per try.
+      const friends = (await squishiesOf(kid, mapId)).filter((s) => s.level !== 40);
+      expect(friends.map((s) => s.speciesId).sort()).toEqual(
+        guardians.map((g) => g.speciesId).sort(),
+      );
+      expect(await charmsOf(kid, mapId)).toBe(1);
+      const events = await eventsOf(mapId);
+      expect(events.filter((e) => e.type === 'squishy.captured')).toHaveLength(2);
+      expect(events.filter((e) => e.type === 'tile.captured')).toHaveLength(1);
+      // The claim pays the tile's coins, not a wild befriend's; and the win
+      // rolls the tile's one capture drop, with nothing more for the friends.
+      const coins = await db.query.coinLedger.findMany({
+        where: (t, { eq }) => eq(t.refId, battle.id),
+      });
+      expect(coins.filter((c) => c.source === 'capture').map((c) => c.amount)).toEqual([
+        COIN_RULES.capture.tile,
+      ]);
+      expect(await piecesOf(kid.id)).toMatchObject([{ source: 'capture', refId: battle.id }]);
+    });
+
+    it('never offers a Heart Charm on a rival’s land', async () => {
+      const server = await start();
+      const { kid, mapId, near } = await rivals(server);
+      await giveCharms(server, kid, mapId, 1);
+      const battle = battleOf(await attack(server, kid, mapId, near));
+      expect(battle.kind).toBe('rival-tile');
+      const res = await act(server, kid, battle, { type: 'capture' });
+      expect(res.statusCode).toBe(409);
+      expect(errorOf(res).message).toBe("You can't use a Heart Charm here.");
+      expect(await charmsOf(kid, mapId)).toBe(1);
     });
   });
 

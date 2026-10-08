@@ -25,7 +25,7 @@ import {
   replayBattleRecord,
   startBattle,
 } from './engine.js';
-import type { BattleEvent, BattleState } from './state.js';
+import { befriendedBetween, type BattleEvent, type BattleState } from './state.js';
 
 const move = (id: string): BattleChoice => ({ type: 'move', move: `fixture-${id}` });
 const swap = (slot: number): BattleChoice => ({ type: 'swap', slot });
@@ -717,6 +717,111 @@ describe('capture (Heart Charms, #14)', () => {
       side: 'a',
       squishyId: 'a:emberbun',
       xp: content.rules.xp.minimum,
+    });
+  });
+});
+
+describe('befriending a guardian counts as a knockout (#279)', () => {
+  const sure: BattleChoice = { type: 'capture', sure: true };
+  /** The player against an AI team of land guardians. */
+  const guardians = (seed: string, ...ids: string[]) =>
+    startBattle(
+      content,
+      battleSetup(
+        seed,
+        { squishies: [squishy('fixture-emberbun', { level: 30 })] },
+        { controller: ai('guardian'), squishies: ids.map((id) => squishy(`fixture-${id}`)) },
+      ),
+    );
+
+  it('a befriended guardian leaves the fight and the next one steps in', () => {
+    const state = guardians('two', 'snoozlet', 'twirlysprout');
+    const next = turn(state, sure);
+    const events = newEvents(state, next);
+    expect(events[0]).toEqual({ turn: 1, side: 'b', slot: 0, type: 'capture', caught: true });
+    // Its move was skipped: it had already left. Then the next one comes out.
+    expect(ofType(events, 'move').map((e) => e.side)).toEqual([]);
+    expect(ofType(events, 'replace')).toEqual([{ turn: 1, side: 'b', slot: 1, type: 'replace' }]);
+    expect(next.phase.type).toBe('turn');
+    expect(next.sides.b.active).toBe(1);
+    expect(next.sides.b.squishies[0]).toMatchObject({ befriended: true });
+    // It keeps its energy; it's out because it said yes, not tuckered out.
+    expect(next.sides.b.squishies[0]!.energy).toBe(state.sides.b.squishies[0]!.energy);
+    expect(clientBattleView(next).sides.b.squishies[0]).toMatchObject({ befriended: true });
+  });
+
+  it('befriending the last one claims the win, captured', () => {
+    const state = turn(guardians('last', 'snoozlet', 'twirlysprout'), sure);
+    const next = turn(state, sure);
+    expect(newEvents(state, next)).toEqual([
+      { turn: 2, side: 'b', slot: 1, type: 'capture', caught: true },
+      { turn: 2, type: 'battle-end', winner: 'a', reason: 'captured' },
+    ]);
+    // The last one is still out when the battle ends, as in a wild battle.
+    expect(next.sides.b.active).toBe(1);
+    expect(next.sides.b.squishies[1]).not.toHaveProperty('befriended');
+    // Nobody was tuckered out, so the XP is the winner's floor.
+    const xp = next.phase.type === 'over' ? next.phase.result.xp : [];
+    expect(xp.filter((award) => award.side === 'a')).toEqual([
+      { side: 'a', squishyId: 'a:emberbun', xp: content.rules.xp.minimum },
+    ]);
+  });
+
+  it('befriendedBetween names who joined in each step: mid-battle, then the last one', () => {
+    const state = guardians('between', 'snoozlet', 'twirlysprout');
+    const first = turn(state, sure);
+    expect(befriendedBetween(state, first, 'b').map((s) => s.id)).toEqual(['b:snoozlet']);
+    // Already counted: the next step names only the new one.
+    const last = turn(first, sure);
+    expect(befriendedBetween(first, last, 'b').map((s) => s.id)).toEqual(['b:twirlysprout']);
+    // Nobody on the winner's side, and nobody when a step befriends no one.
+    expect(befriendedBetween(first, last, 'a')).toEqual([]);
+    const missed = turn(state, { type: 'move', move: 'fixture-tickle-tackle' });
+    expect(befriendedBetween(state, missed, 'b')).toEqual([]);
+  });
+
+  it('never sends a befriended guardian back in, and a knockout of the rest wins tuckered-out', () => {
+    let state = turn(guardians('mixed', 'snoozlet', 'twirlysprout', 'pebblesnooze'), sure);
+    const second = state.sides.b.active;
+    expect([1, 2]).toContain(second);
+    // Knock out the one that came out: the last one follows, never the befriended first.
+    state = patchActive(state, 'b', { energy: 1 });
+    for (let i = 0; i < 10 && state.sides.b.active === second && state.phase.type === 'turn'; i++) {
+      state = turn(state, move('tickle-tackle'));
+    }
+    expect(state.sides.b.active).toBe(3 - second);
+    expect(legalChoices(state, 'b').some((c) => c.type === 'swap' && c.slot === 0)).toBe(false);
+    state = patchActive(state, 'b', { energy: 1 });
+    for (let i = 0; i < 10 && state.phase.type === 'turn'; i++) {
+      state = turn(state, move('tickle-tackle'));
+    }
+    expect(state.phase.type === 'over' && state.phase.result).toMatchObject({
+      winner: 'a',
+      reason: 'tuckered-out',
+    });
+  });
+
+  it('a befriended guardian’s energy doesn’t count at the turn limit', () => {
+    const short = createBattleContent(FIXTURE_BATTLE_DATA, {
+      ...FIXTURE_BATTLE_RULES,
+      maxTurns: 1,
+    });
+    const state = startBattle(
+      short,
+      battleSetup(
+        'limit',
+        { squishies: [squishy('fixture-emberbun', { level: 30 })] },
+        {
+          controller: ai('guardian'),
+          squishies: [squishy('fixture-snoozlet', { level: 60 }), squishy('fixture-twirlysprout')],
+        },
+      ),
+    );
+    // Without the befriended one's big energy bar, the player leads.
+    const next = turn(patchActive(state, 'a', {}), sure, undefined, short);
+    expect(next.phase.type === 'over' && next.phase.result).toMatchObject({
+      winner: 'a',
+      reason: 'turn-limit',
     });
   });
 });
