@@ -527,9 +527,10 @@ describe.skipIf(!url)('Keeper milestones (needs DATABASE_URL)', () => {
     const early = await player({ finishedTutorial: new Date('2026-10-01T09:00:00Z') });
     const later = await player();
     const service = createMilestonesService({ db, clock: () => clock });
-    // Other test files' finishers may be backfilled too; ours must be among them, once.
+    // Other test files share the database and may finish the tutorial between
+    // the two runs, so the counts are global: ours must be granted, once.
     expect(await service.backfillTutorial()).toBeGreaterThanOrEqual(1);
-    expect(await service.backfillTutorial()).toBe(0);
+    await service.backfillTutorial();
     expect(earned(await milestones(server, early), 'first-patch')).toEqual([1]);
     expect(await coinRows(early.id)).toHaveLength(1);
 

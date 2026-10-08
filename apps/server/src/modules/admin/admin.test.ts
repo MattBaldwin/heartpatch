@@ -21,6 +21,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
+import { checkText } from '../../lib/filter.js';
 import { serializerCompiler, validatorCompiler } from '../../lib/zod.js';
 import { adminAudit, adminTotp, keepers, sessions, signupCodes, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -100,14 +101,24 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
   }
 
   const newName = () => `adm_${String(process.pid % 1000)}_${String((counter += 1))}`;
-  /** Patch names take letters, numbers and spaces. */
   /**
    * Patch names unique to this run, in letters only: the name filter turns
    * away runs of digits (they could be a phone number).
    */
   const letters = (n: number) =>
     n.toString(26).replace(/./g, (d) => String.fromCharCode(97 + parseInt(d, 26)));
-  const patchName = (word: string) => `${word} ${letters(process.pid)} ${letters((counter += 1))}`;
+  /**
+   * Letters can spell a word the name filter refuses (pid 140 gives "fk"),
+   * even across a space ("Lantern gga"), and the patch would be turned away:
+   * step the pid part and the counter until the whole name passes.
+   */
+  const patchName = (word: string): string => {
+    for (let n = process.pid, tries = 0; tries < 100; n += 1_000_000, tries += 1) {
+      const name = `${word} ${letters(n)} ${letters((counter += 1))}`;
+      if (checkText(name, 'name').ok) return name;
+    }
+    throw new Error(`patchName: no "${word}" name passed the filter`);
+  };
 
   /** A logged-in player with a Keeper, written straight to the database. */
   async function player(): Promise<Player> {
