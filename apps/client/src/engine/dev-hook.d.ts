@@ -26,6 +26,7 @@ import type { RecipeBookDebug } from '../recipes/recipe-book.js';
 import type { JobsDebug } from '../squishies/jobs/index.js';
 import type { JourneyDebug } from '../trading/journey-screen.js';
 import type { PostFlags } from '../trading/post-flags.js';
+import type { PostDebug } from '../trading/post-screen.js';
 import type { MapCameraState } from './camera/map-camera.js';
 import type { QualitySnapshot } from './quality/render-quality.js';
 
@@ -93,6 +94,8 @@ declare global {
       posts?(): Pick<PostFlags, 'shown' | 'rings' | 'onScreen'>;
       /** Journeys to trading posts (#270): the tile panel's preview and open visit passes. */
       journey?(): JourneyDebug;
+      /** A trading post's screen (#271): tab, picks, offers and mailbox counts. */
+      post?(): PostDebug;
       starter?(): StarterDebug | null;
       lore?(): LorebookDebug;
       /** The milestone celebration (#44): the card showing and how many wait. */

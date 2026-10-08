@@ -260,6 +260,13 @@
       "when": 1791491653499,
       "tag": "0036_big_iron_monger",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791500896963,
+      "tag": "0037_dry_dracula",
+      "breakpoints": true
     }
   ]
 }

@@ -36,6 +36,8 @@ import { settleRoutes } from './modules/settle/routes.js';
 import { createSquishyJobsService } from './modules/jobs/service.js';
 import { hollowRoutes } from './modules/hollow/routes.js';
 import { journeysRoutes } from './modules/journeys/routes.js';
+import { tradesRoutes } from './modules/trades/routes.js';
+import { createTradesService } from './modules/trades/service.js';
 import { createJourneyBattlePort, createJourneysService } from './modules/journeys/service.js';
 import { createHollowService, type HollowService } from './modules/hollow/service.js';
 import { createGatheringService } from './modules/gathering/service.js';
@@ -203,8 +205,15 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         const cinematic = createCinematicService({ db, clock });
         await api.register(cinematicRoutes(cinematic, { hooks: authHooks }));
 
+        // Trades, gifts and the mailbox (#271); leaving a patch calls off the leaver's offers.
+        const trades = createTradesService({
+          db,
+          clock,
+          ...(wsHub ? { publish: wsHub.publish } : {}),
+        });
         const maps = createMapsService({
           db,
+          departed: trades.memberLeft,
           tutorialRequired: config.HP_TUTORIAL_REQUIRED,
           keeperRequired: config.HP_KEEPER_REQUIRED,
           clock,
@@ -336,6 +345,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         // Journeys to trading posts (#270).
         await api.register(
           journeysRoutes(createJourneysService({ battles }), { hooks: authHooks, idempotency }),
+        );
+        await api.register(
+          tradesRoutes(trades, {
+            hooks: authHooks,
+            idempotency,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
         );
         // The Hollow Man (#21): nightfall runs as a job (`src/index.ts`), and
         // rescues are battles the `hollow` event consumer settles.

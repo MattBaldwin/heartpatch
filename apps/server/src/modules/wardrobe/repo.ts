@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, count, eq, isNotNull, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -52,7 +52,7 @@ const WearingJsonSchema = z.array(z.string());
 export interface WardrobeRepo {
   transaction: <T>(fn: (repo: WardrobeTxRepo, tx: Executor) => Promise<T>) => Promise<T>;
 
-  /** Item id → how many stored pieces the player has (starter items aren't stored). */
+  /** Item id → how many stored pieces the player has, not held for a trade (starter items aren't stored). */
   countOwned: (userId: string) => Promise<Map<string, number>>;
   /** Every outfit row: the worn set and the saved presets, by preset. */
   listOutfits: (userId: string) => Promise<OutfitRow[]>;
@@ -135,7 +135,8 @@ function queries(db: Executor): WardrobeRepo {
       const rows = await db
         .select({ itemId: clothingOwned.itemId, count: count() })
         .from(clothingOwned)
-        .where(eq(clothingOwned.userId, userId))
+        // A piece held for a trade or gift (#271) waits at the post: not wearable.
+        .where(and(eq(clothingOwned.userId, userId), isNull(clothingOwned.heldByOfferId)))
         .groupBy(clothingOwned.itemId);
       return new Map(rows.map((r) => [r.itemId, r.count]));
     },

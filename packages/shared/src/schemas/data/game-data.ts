@@ -159,6 +159,9 @@ export const GameDataSchema = z
       if (r.tool !== undefined && (r.kind !== 'crafted' || r.id !== r.tool)) {
         report(['resources', i, 'tool'], 'a tool is a crafted item whose id is the tool id');
       }
+      if (r.tool !== undefined && r.tradable !== false) {
+        report(['resources', i, 'tradable'], 'a tool is worn in uses, so it is never tradable');
+      }
       r.gather?.extras?.forEach((extra, j) => {
         checkRef(
           resources,

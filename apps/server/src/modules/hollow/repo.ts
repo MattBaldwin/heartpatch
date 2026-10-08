@@ -5,6 +5,7 @@ import {
   WalkKindSchema,
   type LocalDate,
   type OwnedSquishy,
+  type SquishyState,
 } from '@heartpatch/shared';
 import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, max, min, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -103,7 +104,7 @@ export interface PlayedMapRow {
 export interface NightSquishyRow {
   id: string;
   ownerUserId: string;
-  state: 'active' | 'hollowed';
+  state: SquishyState;
   /** Its habitat's tile, or null without one. */
   habitat: { q: number; r: number } | null;
   /** Who owns the tile it stands watch on, if it's posted; `undefined` if it isn't. */

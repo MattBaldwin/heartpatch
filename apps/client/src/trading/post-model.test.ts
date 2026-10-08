@@ -1,7 +1,7 @@
 import { hexKey, hexNeighbors, isTradingPost, type MapView } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { testView, userId } from '../map/test-view.js';
-import { POST_SOON, postFlagLabel, postFlags, postReachLine } from './post-model.js';
+import { VISIT_POST, postFlagLabel, postFlags, postReachLine } from './post-model.js';
 
 /** A view where player 1 owns the tile next to the first post, joined to home by a strip. */
 function connectedView(): MapView {
@@ -76,10 +76,10 @@ describe('post words', () => {
     expect(postFlagLabel(flag(null))).toBe('🏮 Lantern Post');
   });
 
-  it('tells the tile panel how far it is, and what opens there', () => {
+  it('tells the tile panel how far it is, and how to go in', () => {
     expect(postReachLine({ kind: 'connected' })).toMatch(/Your land reaches it/);
     expect(postReachLine({ kind: 'journey', distance: 3 })).toMatch(/^🧭 3 tiles from your land/);
     expect(postReachLine(null)).toBeNull();
-    expect(POST_SOON).toMatch(/soon/);
+    expect(VISIT_POST).toBe('Visit post');
   });
 });

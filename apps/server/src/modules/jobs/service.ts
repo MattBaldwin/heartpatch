@@ -75,6 +75,7 @@ const MESSAGES = {
   noMap: "We couldn't find that patch.",
   noSquishy: "We couldn't find that squishy.",
   inHollow: (name: string) => `${name} is in the Hollow. Rescue them first!`,
+  inTrade: (name: string) => `${name} is waiting at a trading post right now. 📬`,
   noTile: "We couldn't find that spot.",
   notYours: 'Squishies can only gather on your own land.',
   napping: 'This homestead is napping. Join it back up to home first!',
@@ -416,13 +417,16 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     userId: string,
     at: Date,
   ): Promise<JobsView> => {
-    const [rows, owned, safe, buildings, explored] = await Promise.all([
+    const [mine, owned, safe, buildings, explored] = await Promise.all([
       repo.listMine(map.id, userId),
       repo.listOwnedTiles(map.id, userId),
       firelitTiles(tx, repo, map, at),
       createBuildingsRepo(tx).listOwned(map.id, userId),
       createExploreRepo(tx).listOwnersExplored(map.id),
     ]);
+    // A squishy in a trade (#271) waits at the post, not on my board: it has
+    // no job, and one heading my way stays a surprise until I pick it up.
+    const rows = mine.filter((r) => r.squishy.state !== 'in-trade');
     // My homesteads (#199): +1 a cycle while joined to home.
     const joined = new Set(
       explored
@@ -686,6 +690,8 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         const [row] = rows;
         if (!row) throw new AppError('NOT_FOUND', MESSAGES.noSquishy);
         const name = squishyName(row.squishy);
+        if (row.squishy.state === 'in-trade')
+          throw new AppError('CONFLICT', MESSAGES.inTrade(name));
         if (row.squishy.state !== 'active') throw new AppError('CONFLICT', MESSAGES.inHollow(name));
         const current = jobOf({
           teamSlot: row.teamSlot,
@@ -853,7 +859,12 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         });
         // Someone already on the team may stay while in the Hollow; nobody new joins from there.
         const away = joining.find((r) => r.squishy.state !== 'active');
-        if (away) throw new AppError('CONFLICT', MESSAGES.inHollow(squishyName(away.squishy)));
+        if (away) {
+          const name = squishyName(away.squishy);
+          const message =
+            away.squishy.state === 'in-trade' ? MESSAGES.inTrade(name) : MESSAGES.inHollow(name);
+          throw new AppError('CONFLICT', message);
+        }
         const same =
           oldTeam.length === request.squishyIds.length &&
           request.squishyIds.every((id, i) => byId.get(id)?.teamSlot === i);

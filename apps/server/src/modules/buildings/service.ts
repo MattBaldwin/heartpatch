@@ -114,6 +114,7 @@ const MESSAGES = {
   notAHabitat: 'Squishies can only move into a habitat.',
   noSquishy: "We couldn't find that squishy.",
   inHollow: 'That squishy is in the Hollow right now. Rescue them first!',
+  inTrade: 'That squishy is waiting at a trading post right now. 📬',
   habitatFull: (name: string) => `The ${name} is full! Try another home.`,
   onWatch: (name: string) => `Bring ${name} home from watch first!`,
   topLevel: (name: string) => `Your ${name} is as big as it gets!`,
@@ -704,6 +705,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
         if (!squishy || squishy.mapId !== mapId || squishy.ownerUserId !== user.id) {
           throw new AppError('NOT_FOUND', MESSAGES.noSquishy);
         }
+        if (squishy.state === 'in-trade') throw new AppError('CONFLICT', MESSAGES.inTrade);
         if (squishy.state !== 'active') throw new AppError('CONFLICT', MESSAGES.inHollow);
         // Housed or on watch, not both (owner decision 2026-10-03). Moving out
         // is always fine. Posting it locks the squishy too, so the two can't race.
