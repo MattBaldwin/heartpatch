@@ -321,6 +321,8 @@ const journeys = createJourneyScreen({
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
   },
   openPost: (post, view) => {
+    // The tile panel steps aside: on iPad the post is a side panel beside the map.
+    maps.deselect();
     postScreen.open(post, view);
   },
 });

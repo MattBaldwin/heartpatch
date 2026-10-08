@@ -118,6 +118,8 @@ export interface MapScreen {
    * glide to, or null when it isn't on the map on screen.
    */
   focus: (h: Hex) => GroundPoint | null;
+  /** Clears the selected tile and shuts its panel (a screen opened from it, like a trading post's, #271). */
+  deselect: () => void;
   /** The map on screen as this player sees it, or null (the recipe book finds their tiles in it). */
   readonly view: MapView | null;
   setUser: (user: PublicUser | null) => void;
@@ -378,6 +380,7 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
       setStatus(liveSocket().status);
     },
     close,
+    deselect,
     focus: (h) => {
       const state = sync.state;
       if (!state || !scene3d || !state.tileAt(hexKey(h))) return null;

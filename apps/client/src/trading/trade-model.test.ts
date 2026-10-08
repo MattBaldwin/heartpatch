@@ -35,7 +35,8 @@ const KAI = '00000000-0000-4000-8000-000000000003';
 const ID = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const HERO = GAME_DATA.species[0]!;
 
-const squishy = (n: number, speciesId: string | null = HERO.id): TradeLineView => ({
+type SquishyView = Extract<TradeLineView, { kind: 'squishy' }>;
+const squishy = (n: number, speciesId: string | null = HERO.id): SquishyView => ({
   kind: 'squishy',
   squishyId: ID(n),
   speciesId,
