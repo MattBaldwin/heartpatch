@@ -129,7 +129,8 @@ export function changelogReader(dir: string, repo: string, git: Git = runGit): (
       let found = builds.get(file);
       if (!found) {
         found = buildOf(file, repo, git);
-        builds.set(file, found);
+        // No build yet (not committed, or git didn't answer): ask again next time.
+        if (found.build !== null) builds.set(file, found);
       }
       return found;
     });
