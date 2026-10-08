@@ -1,3 +1,4 @@
+import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import {
   CLOTHING,
   defaultKeeperConfig,
@@ -10,6 +11,7 @@ import {
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { hexToRgb } from '../params.js';
+import { KEEPER } from './keeper-config.js';
 import { keeperItems } from './keeper-items.js';
 import { keeperHash, keeperParams, type KeeperParams, type KeeperPiece } from './keeper-params.js';
 
@@ -84,6 +86,88 @@ describe('keeperParams', () => {
     }
   });
 
+  it('draws the same line face on every Keeper: no coloured mouth or blush (#289)', () => {
+    const line = hexToRgb(KEEPER.colors.faceLine).join();
+    const white = hexToRgb(KEEPER.colors.white).join();
+    for (const base of BASES) {
+      for (const eyeColor of KEEPER_DATA.eyeColors) {
+        const p = keeperParams(
+          { ...defaultKeeperConfig(base), eyeColor: eyeColor.id },
+          KEEPER_DATA,
+        );
+        const eye = hexToRgb(eyeColor.color).join();
+        const face = piecesOf(p, 'face');
+        // Every face piece is a drawn line, an eye or a glint; nothing else.
+        for (const piece of face) expect([line, eye, white]).toContain(piece.color.join());
+        // Exactly two brows, a nose and a smile.
+        const lines = face.filter((piece) => piece.color.join() === line);
+        expect(lines.length, base.id).toBe(4);
+        // The picked eye colour always shows, whatever the eye shape.
+        expect(
+          face.some((piece) => piece.color.join() === eye),
+          base.id,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('never hides the brows under the hair, for any base, style or hair colour (#289)', () => {
+    // The hair is seeded by the colours, so check every hair colour. Each
+    // brow is sampled along its length; a sample shows when a ray from it
+    // towards the camera (−z) misses every hair ellipsoid.
+    const DEG = Math.PI / 180;
+    const matrixOf = (piece: KeeperPiece) =>
+      Matrix.Compose(
+        new Vector3(...piece.size),
+        Quaternion.RotationYawPitchRoll(
+          piece.turn[1] * DEG,
+          piece.turn[0] * DEG,
+          piece.turn[2] * DEG,
+        ),
+        new Vector3(...piece.at),
+      );
+    const line = hexToRgb(KEEPER.colors.faceLine).join();
+    const towardsCamera = new Vector3(0, 0, -1);
+    const hidden: string[] = [];
+    for (const base of BASES) {
+      for (const style of KEEPER_DATA.hairstyles) {
+        for (const hairColor of KEEPER_DATA.hairColors) {
+          const config = {
+            ...defaultKeeperConfig(base),
+            hairstyle: style.id,
+            hairColor: hairColor.id,
+          };
+          const p = keeperParams(config, KEEPER_DATA);
+          const hair = piecesOf(p, 'hair')
+            .filter((piece) => piece.shape === 'ellipsoid')
+            .map((piece) => matrixOf(piece).invert());
+          // The first two lines are the brows (then the nose and the smile).
+          const brows = piecesOf(p, 'face').filter((piece) => piece.color.join() === line);
+          for (const brow of brows.slice(0, 2)) {
+            const m = matrixOf(brow);
+            let shown = 0;
+            for (const x of [-0.35, -0.175, 0, 0.175, 0.35]) {
+              const from = Vector3.TransformCoordinates(new Vector3(x, 0, 0), m);
+              const blocked = hair.some((inverse) => {
+                // Ray against the unit-diameter sphere in the ellipsoid's own space.
+                const o = Vector3.TransformCoordinates(from, inverse);
+                const d = Vector3.TransformNormal(towardsCamera, inverse);
+                const a = Vector3.Dot(d, d);
+                const b = 2 * Vector3.Dot(o, d);
+                const c = Vector3.Dot(o, o) - 0.25;
+                const disc = b * b - 4 * a * c;
+                return c < 0 || (disc >= 0 && (-b + Math.sqrt(disc)) / (2 * a) > 0 && -b > 0);
+              });
+              if (!blocked) shown++;
+            }
+            if (shown < 3) hidden.push(`${base.id}/${style.id}/${hairColor.id}`);
+          }
+        }
+      }
+    }
+    expect(hidden).toEqual([]);
+  });
+
   it('uses the picked colours for hair, eyes and outfit', () => {
     const config: KeeperConfig = {
       base: 'pip',
@@ -149,7 +233,7 @@ describe('keeperParams', () => {
   // Keeper) is a deliberate one. The e2e test checks the same hash in WebKit.
   it('keeps its build stable', () => {
     expect(keeperHash(keeperParams(GOLDEN_CONFIG, KEEPER_DATA))).toMatchInlineSnapshot(
-      `"9efc3ab44341fc2c668962479b508477"`,
+      `"4c9ed66e81af00f0cc5379ce835aa96d"`,
     );
   });
 });
