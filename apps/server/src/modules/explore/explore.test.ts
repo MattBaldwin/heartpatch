@@ -25,12 +25,19 @@ import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
-import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
+import {
+  createDbClient,
+  withTransaction,
+  type Database,
+  type DbClient,
+  type Executor,
+} from '../../db/client.js';
 import { keepers, sessions, tileExplore, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { grantItems } from '../inventory/service.js';
 import { createTendingRepo } from '../territory/repo.js';
+import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 import { refreshHomesteads } from './homesteads.js';
 
 /*
@@ -583,5 +590,74 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
       { userId: rival.id, tiles: [{ q: second.q, r: second.r }] },
     ]);
     expect((await view(server, rival, mapId, second)).homestead).toBe('paused');
+  });
+
+  it('restarts a tile explored under an older layout, and pauses the land beyond it', async () => {
+    const server = await start();
+    const me = await player();
+    const mapId = await patch(server, me);
+    const { first, second } = await lineFromHome(mapId, me);
+    await ownMeadow(first, me);
+    await ownMeadow(second, me);
+    await exploreAll(server, me, mapId, first);
+    await exploreAll(server, me, mapId, second);
+    // A layout bump: the row under `first` was made with an older one.
+    await db.execute(
+      `update tile_explore set layout = ${String(EXPLORE_RULES.layout + 1)} where tile_id = '${first.id}'`,
+    );
+    const fresh = await view(server, me, mapId, first);
+    expect(fresh.progress.searched).toBe(0);
+    await give(mapId, me, { shovel: 20 });
+    const res = await search(server, me, mapId, first, fresh.spots[0]!.index);
+    expect(res.statusCode, res.body).toBe(200);
+    const found = SearchSpotResponseSchema.parse(res.json());
+    expect(found.explored).toBe(false);
+    expect(found.homestead).toBeNull();
+    const rowOf = (tile: Tile) =>
+      db.query.tileExplore.findFirst({
+        where: (t, { and, eq }) => and(eq(t.userId, me.id), eq(t.tileId, tile.id)),
+      });
+    expect(await rowOf(first)).toMatchObject({
+      layout: EXPLORE_RULES.layout,
+      completedAt: null,
+      joinedAt: null,
+    });
+    expect((await rowOf(second))?.pausedAt).not.toBeNull();
+    expect(await eventsOf(mapId, 'homestead.paused')).toEqual([
+      { userId: me.id, tiles: [{ q: second.q, r: second.r }] },
+    ]);
+  });
+
+  it('locks the explored set before a stale row of it, in (user, tile) order (tech spec §7)', async () => {
+    const server = await start();
+    const me = await player();
+    const mapId = await patch(server, me);
+    const { first, second } = await lineFromHome(mapId, me);
+    await ownMeadow(first, me);
+    await ownMeadow(second, me);
+    await exploreAll(server, me, mapId, first);
+    await exploreAll(server, me, mapId, second);
+    // The stale row sorts after the other explored one.
+    const [low, high] = [first, second].sort((a, b) => (a.id < b.id ? -1 : 1));
+    await db.execute(
+      `update tile_explore set layout = ${String(EXPLORE_RULES.layout + 1)} where tile_id = '${high!.id}'`,
+    );
+    await give(mapId, me, { shovel: 20 });
+    const spot = (await view(server, me, mapId, high!)).spots[0]!.index;
+    const lockRowOf = (tx: Executor, tile: Tile) =>
+      tx.execute(
+        `select 1 from tile_explore where user_id = '${me.id}' and tile_id = '${tile.id}' for update`,
+      );
+    let searched: Promise<LightMyRequestResponse> | undefined;
+    await db.transaction(async (tx) => {
+      await tx.execute(`set local lock_timeout = '10s'`);
+      await lockRowOf(tx, low!);
+      const pid = await backendPid(tx);
+      searched = search(server, me, mapId, high!, spot);
+      await waitUntilBlockedBy(db, pid);
+      // The search waits on the lower row before it takes the stale one.
+      await lockRowOf(tx, high!);
+    });
+    expect((await searched!).statusCode).toBe(200);
   });
 });

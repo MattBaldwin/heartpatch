@@ -182,6 +182,17 @@ export function createExploreService(options: ExploreServiceOptions) {
         const spot = spots.find((s) => s.index === request.spot);
         if (!spot) throw new AppError('NOT_FOUND', MESSAGES.noSpot);
 
+        // A stale row still marked explored (a layout bump, a converted
+        // tile) is one of the player's explored rows, which a capture or a
+        // finished tile may be locking in order: take that whole set first,
+        // in `(user_id, tile_id)` order, so the refresh below can't invert it.
+        const seen = await repo.findRow(user.id, tile.id);
+        if (
+          seen?.completedAt &&
+          (seen.layout !== EXPLORE_RULES.layout || seen.terrain !== tile.terrain)
+        ) {
+          await repo.lockExplored(mapId, [user.id]);
+        }
         // Then the player's row for it.
         const row =
           (await repo.lockRow(user.id, tile.id)) ??
