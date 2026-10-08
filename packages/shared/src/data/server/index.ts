@@ -20,6 +20,9 @@ export * from '../../schemas/data/clothing-drops.js';
 // Rolls the drop tables; its signature takes their type, so both live here.
 export * from '../../wardrobe/index.js';
 export { CLOTHING_DROPS } from './clothing-drops.js';
+export * from '../../schemas/data/explore-finds.js';
+export * from '../../explore/finds.js';
+export { EXPLORE_FINDS } from './explore-finds.js';
 export * from '../../schemas/data/lore-pages.js';
 export * from '../../lore/index.js';
 export { LORE_PAGES } from './lore-pages.js';

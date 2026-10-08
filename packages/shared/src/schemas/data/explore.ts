@@ -106,7 +106,10 @@ export type ExploreRules = z.infer<typeof ExploreRulesSchema>;
  * known spot kinds, a tool row for every tool a spot needs) and returns
  * readable problems, or `[]`.
  */
-export function checkExploreRules(input: unknown, data: Pick<GameData, 'terrains'>): string[] {
+export function checkExploreRules(
+  input: unknown,
+  data: Pick<GameData, 'terrains' | 'resources'>,
+): string[] {
   const result = ExploreRulesSchema.safeParse(input);
   if (!result.success) return formatDataIssues(input, result.error);
   const rules = result.data;
@@ -122,6 +125,10 @@ export function checkExploreRules(input: unknown, data: Pick<GameData, 'terrains
   rules.tools.forEach((t, i) => {
     if (tools.has(t.id)) problems.push(`tools[${String(i)}]: duplicate tool "${t.id}"`);
     tools.add(t.id);
+    // The bag holds a tool as an item counted in uses (`Resource.tool`).
+    if (!data.resources.some((r) => r.tool === t.id)) {
+      problems.push(`tools[${String(i)}]: no item with tool "${t.id}"`);
+    }
   });
 
   const used = new Set<string>();

@@ -288,6 +288,15 @@ export const PublicTileSchema = z.object({
    * parse; the server always sends it.
    */
   fences: z.array(PublicFenceSchema).optional(),
+  /**
+   * The owner's exploring (#199): `explored` once they've searched every
+   * spot (the map's ✨), and the tile's homestead state, `joined` (part of
+   * their home) or `paused` (cut off from home; its gathering naps). Null on
+   * ordinary land. Optional only so older fixtures parse; the server always
+   * sends both.
+   */
+  explored: z.boolean().optional(),
+  homestead: z.enum(['joined', 'paused']).nullable().optional(),
 });
 export type PublicTile = z.infer<typeof PublicTileSchema>;
 

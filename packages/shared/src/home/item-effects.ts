@@ -1,5 +1,6 @@
 import { GAME_DATA } from '../data/index.js';
 import type { BuildingPlacement } from '../schemas/data/buildings.js';
+import type { ToolId } from '../schemas/data/explore.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import { buildingEffects, type BuildingEffect } from './building-effects.js';
 
@@ -25,6 +26,8 @@ export type ItemEffect =
   | { readonly kind: 'battle' }
   /** It helps befriend a wild squishy. */
   | { readonly kind: 'befriend' }
+  /** A tool for exploring your land (#199), counted in uses. */
+  | { readonly kind: 'explore'; readonly tool: ToolId }
   /** It's built into this building, where the building goes. */
   | { readonly kind: 'builds'; readonly building: string; readonly placement: BuildingPlacement }
   /** What the building it's built into does. */
@@ -68,6 +71,7 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
     effects.push({ kind: 'battle' });
   }
   if (item.id === BEFRIEND_ITEM) effects.push({ kind: 'befriend' });
+  if (item.tool) effects.push({ kind: 'explore', tool: item.tool });
 
   // A gathered or seasonal thing a recipe also makes (Treats from Pumpkins).
   // A made thing's own page already says how it's made.
