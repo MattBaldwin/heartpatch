@@ -74,6 +74,10 @@ const tilesEvent = (
  * the tile locks (tech spec §7 step 6) and before squishies, buildings and
  * the bag. Land going wild and leaving a patch need no call: a joined
  * homestead never fades, and a leaver keeps no land.
+ *
+ * Two searches by one player that finish two neighbouring tiles at the same
+ * moment (two devices) can each miss the other's finish; the far one then
+ * joins at the player's next finished tile or capture. Rare, and it heals.
  */
 export async function refreshHomesteads(
   tx: Executor,

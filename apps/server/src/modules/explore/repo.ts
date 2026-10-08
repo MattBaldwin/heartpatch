@@ -228,21 +228,3 @@ export function exploreTransaction<T>(
     fn({ ...createExploreRepo(tx), appendEvent: (event) => appendGameEvent(tx, event) }, tx),
   );
 }
-
-/**
- * The homestead columns a SQL query can read for a work or gather tile: its
- * owner's row, if they've fully explored it. Joined by jobs and gathering
- * on `tile_explore.user_id = tiles.owner_user_id`.
- */
-export const homesteadColumns = {
-  homesteadJoinedAt: tileExplore.joinedAt,
-  homesteadPausedAt: tileExplore.pausedAt,
-  homesteadResumedAt: tileExplore.resumedAt,
-};
-
-/** The join condition for `homesteadColumns`: the tile owner's completed row. */
-export const ownersExploreRow = and(
-  eq(tileExplore.tileId, tiles.id),
-  eq(tileExplore.userId, tiles.ownerUserId),
-  isNotNull(tileExplore.completedAt),
-);

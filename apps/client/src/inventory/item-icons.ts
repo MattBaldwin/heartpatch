@@ -25,7 +25,7 @@ const ICONS: Readonly<Record<string, string>> = {
   greens: '🌿',
   ice: '🧊',
   // Explore tools (#199).
-  shovel: '⛏️',
+  shovel: '🪏',
   net: '🥅',
   rope: '🪢',
   lantern: '🪔',

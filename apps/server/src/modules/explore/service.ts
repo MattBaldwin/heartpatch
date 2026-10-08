@@ -228,7 +228,10 @@ export function createExploreService(options: ExploreServiceOptions) {
         );
         // Still with the explore rows (before squishies and the bag): a
         // finished tile may join home, and may join land beyond it too.
-        const homesteadEvents = explored ? await refreshHomesteads(tx, mapId, [user.id], at) : [];
+        // A row restarted under a new layout may have been a homestead: the
+        // land joined through it is worked out again too.
+        const homesteadEvents =
+          explored || fresh ? await refreshHomesteads(tx, mapId, [user.id], at) : [];
 
         // What it found: the server rolls it (rule 1); a page already found isn't rolled again.
         const foundLore = new Set(

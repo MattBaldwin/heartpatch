@@ -4,6 +4,7 @@ import {
   BattleResponseSchema,
   GAME_DATA,
   GatherResponseSchema,
+  JOB_RULES,
   JobsViewSchema,
   TERRITORY_RULES,
   type PlayerBattle,
@@ -498,16 +499,26 @@ describe.skipIf(!url)('exploring (needs DATABASE_URL)', () => {
     clock.setTime(clock.getTime() + 6 * land);
     expect((await workOf()).readyCycles).toBe(1);
     expect((await workOf()).nextReadyAt).toBeNull();
+    // A new gatherer can't start there while it naps.
+    const helper = await squishy(server, me, mapId);
+    const refused = await call(server, 'POST', `/maps/${mapId}/squishies/${helper.id}/job`, me, {
+      job: 'gatherer',
+      q: second.q,
+      r: second.r,
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(errorOf(refused).message).toBe(
+      'This homestead is napping. Join it back up to home first!',
+    );
 
     // Joined again: counting carries on from where it stopped, +1 a cycle.
     await reconnect(mapId, me, first);
     clock.setTime(clock.getTime() + 0.6 * land);
     const work = await workOf();
     expect(work.readyCycles).toBe(2);
-    const base = JobsViewSchema.parse(
-      (await call(server, 'GET', `/maps/${mapId}/jobs`, me)).json(),
-    ).spots.find((s) => s.q === second.q && s.r === second.r)!;
-    expect(work.ready[greens]).toBe(2 * base.quantity);
+    // Meadow land's own yield, +1 a cycle on a joined homestead.
+    const yieldPerCycle = JOB_RULES.terrainYields.find((y) => y.terrain === 'meadow')!.quantity;
+    expect(work.ready[greens]).toBe(2 * (yieldPerCycle + 1));
   });
 
   it('never lets a homestead fade (#194)', async () => {

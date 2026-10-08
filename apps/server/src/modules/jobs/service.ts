@@ -77,6 +77,7 @@ const MESSAGES = {
   inHollow: (name: string) => `${name} is in the Hollow. Rescue them first!`,
   noTile: "We couldn't find that spot.",
   notYours: 'Squishies can only gather on your own land.',
+  napping: 'This homestead is napping. Join it back up to home first!',
   nothingHere: "There's nothing to gather here.",
   outOfSeason: (resource: string, season: string) => `${resource} only turn up around ${season}!`,
   spotTaken: (name: string) => `${name} is already gathering here!`,
@@ -648,6 +649,10 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
           if (workTile.ownerUserId !== user.id) throw new AppError('FORBIDDEN', MESSAGES.notYours);
           source = workSource(workTile, GAME_DATA.resources, JOB_RULES);
           if (!source) throw new AppError('CONFLICT', MESSAGES.nothingHere);
+          // A homestead cut off from home naps (#199), as for the Keeper.
+          if (homesteadOf(await createExploreRepo(tx).findRow(user.id, workTile.id)) === 'paused') {
+            throw new AppError('CONFLICT', MESSAGES.napping);
+          }
           const resource = GAME_DATA.resources.find((r) => r.id === source?.resource);
           if (resource && !inSeason(resource, new Set(seasonsOn(at, map.timeZone)))) {
             const season = SEASON_NAMES.get(resource.season ?? '') ?? 'their season';
