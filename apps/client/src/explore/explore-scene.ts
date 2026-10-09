@@ -186,7 +186,7 @@ export class ExploreScene {
   readonly #solidScratch: Matrix[] = [];
   readonly #fadedScratch: Matrix[] = [];
   readonly #heightOf = (kind: string): number => this.#heights.get(kind) ?? 0;
-  /** The canvas's box on the page, read once per size (the lantern asks every frame). */
+  /** The canvas's box on the page, read once a frame. */
   #box: DOMRect | null = null;
   /** Prop heights by spot kind, tile-local (for the fade). */
   readonly #heights = new Map<string, number>();
@@ -352,12 +352,7 @@ export class ExploreScene {
     this.#afterRender = scene.onAfterRenderObservable.add(() => {
       this.#drawCalls = this.#instrumentation.drawCallsCounter.current;
     });
-    // A new size moves the canvas's box: read it again when next needed.
-    const resized = scene.getEngine().onResizeObservable.add(() => {
-      this.#box = null;
-    });
     scene.onDisposeObservable.addOnce(() => {
-      scene.getEngine().onResizeObservable.remove(resized);
       scene.onBeforeRenderObservable.remove(this.#beforeRender);
       scene.onAfterRenderObservable.remove(this.#afterRender);
       this.#instrumentation.dispose();
@@ -571,8 +566,13 @@ export class ExploreScene {
     const camera = this.#scene.activeCamera;
     const canvas = this.#scene.getEngine().getRenderingCanvas();
     if (!camera || !canvas) return null;
-    // The box is read once per size (the lantern asks every frame).
-    this.#box ??= canvas.getBoundingClientRect();
+    // The box is read once a frame (the lantern asks about a dozen points a frame).
+    if (!this.#box) {
+      this.#box = canvas.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        this.#box = null;
+      });
+    }
     const box = this.#box;
     if (box.width <= 0 || box.height <= 0) {
       this.#box = null;
