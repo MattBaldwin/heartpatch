@@ -191,11 +191,12 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       .evaluate((e) => e.scrollWidth <= e.clientWidth && e.clientWidth > 0);
     expect(fits, `${sel} fits`).toBe(true);
   }
-  // The camera frames the Keeper about a fifth to a quarter of the screen tall (board a).
+  // The camera frames the Keeper about a sixth to a fifth of the screen tall
+  // (board a): close and cozy, but never so big it hides the spots beside it.
   await expect
     .poll(async () => (await exploreState(page))?.scene?.keeperHeight ?? 0, slow)
-    .toBeGreaterThan(0.17);
-  expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.3);
+    .toBeGreaterThan(0.14);
+  expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.22);
   // Every unsearched spot glints, the tile grows decor, and the joystick is always there.
   expect(first.scene?.glints).toBe(first.spots.length);
   expect(first.scene?.decor.tufts).toBeGreaterThan(0);
