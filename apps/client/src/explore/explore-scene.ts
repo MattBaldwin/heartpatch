@@ -386,10 +386,6 @@ export class ExploreScene {
         keeperItems(options.keeperWearing ?? []),
       );
     }
-    // The team waits in a little line behind the Keeper: the start of its
-    // trail, so they follow on from it.
-    const line = options.team.map((_, i) => this.#trailPoint(i + 1));
-    this.#trail = [...line, this.#trailPoint(line.length + 1)];
     options.team.forEach((member, i) => {
       const at = { x: 0, z: 0 };
       const handle = this.#squishies.add(member.species, member.id, this.#squishyPlacement(at, 0));
@@ -398,6 +394,8 @@ export class ExploreScene {
       const tall = (handle.params.height * EXPLORE_VIEW.squishyScale) / this.#size;
       this.#teamTall = Math.max(this.#teamTall, tall);
     });
+    // The team waits in a line behind the Keeper: the start of its trail.
+    this.#trail = Array.from({ length: this.#trailPoints() }, (_, i) => this.#trailPoint(i + 1));
     this.#follow(this.#at);
     for (const f of this.#followers) {
       this.#squishies.move(f.handle, this.#squishyPlacement(f.at, f.yaw));
@@ -545,7 +543,7 @@ export class ExploreScene {
     const head = this.#trail[0];
     const gap = EXPLORE_VIEW.followGap;
     if (!head || (head.x - at.x) ** 2 + (head.z - at.z) ** 2 >= gap * gap) {
-      this.#trail = [at, ...this.#trail].slice(0, this.#followers.length + 2);
+      this.#trail = [at, ...this.#trail].slice(0, this.#trailPoints());
     }
     this.#follow(at);
     // While hopping, `step` places everyone this frame with the new pose.
@@ -632,7 +630,7 @@ export class ExploreScene {
    * and never close enough to cover the Keeper (#323).
    */
   #follow(at: WorldPoint): void {
-    const lead = followLead(this.#teamTall, this.#shot.pitch);
+    const lead = this.#lead();
     for (let i = 0; i < this.#followers.length; i++) {
       const f = this.#followers[i];
       if (!f) continue;
@@ -646,6 +644,18 @@ export class ExploreScene {
       const ahead = i === 0 ? at : (this.#followers[i - 1]?.at ?? at);
       f.yaw = faceYaw(ahead.x - f.at.x, ahead.z - f.at.z);
     }
+  }
+
+  /** How close the team may come (#323), for the tallest follower at the top of its hop. */
+  #lead(): number {
+    const hop = EXPLORE_HOP.followerLift * EXPLORE_HOP.height.max * (1 + EXPLORE_HOP.stretch);
+    return followLead(this.#teamTall * (1 + hop), this.#shot.pitch);
+  }
+
+  /** Trail points to keep: enough for the last follower's distance back, plus one. */
+  #trailPoints(): number {
+    const back = followBack(this.#followers.length, this.#lead());
+    return Math.ceil(back / EXPLORE_VIEW.followGap) + 2;
   }
 
   /** Places the Keeper, its tool and the team with this frame's hop pose. */

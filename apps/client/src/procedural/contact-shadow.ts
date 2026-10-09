@@ -33,5 +33,8 @@ export function createContactShadowMesh(scene: Scene): Mesh {
   const mesh = CreateGround('squishy-shadows', { width: 1, height: 1 }, scene);
   mesh.material = material;
   mesh.isPickable = false;
+  // Shadows move in place (#323), which doesn't refresh the thin-instance
+  // bounds; a single small mesh isn't worth culling, like the fields' parts.
+  mesh.alwaysSelectAsActiveMesh = true;
   return mesh;
 }
