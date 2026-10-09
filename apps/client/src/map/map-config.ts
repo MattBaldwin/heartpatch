@@ -90,13 +90,24 @@ export const FALLBACK_LOOK: TerrainLook = TERRAIN_LOOKS['meadow'] ?? look('#c2ea
 /** Home base tiles: a cosy cream patch, a little raised, never a terrain look. */
 export const HOME_LOOK: TerrainLook = look('#fff0d4', 0.27, { roughness: 0.5 }); // TUNE
 
-/** One colour per home slot, for territory borders and the Heart Seed. Bright enough to read on pastels. */
-export const PLAYER_COLORS: readonly string[] = ['#ff6f9f', '#4fa3ff', '#a77bff', '#ff9d3d']; // TUNE
+/**
+ * One colour per home slot, for territory borders and the Heart Seed. Bright
+ * enough to read on pastels. Homes 5 and 6 (#318, owner pick "Candy Jar"):
+ * Cherry next to Tangerine, Mint next to Strawberry, so neighbours differ.
+ */
+export const PLAYER_COLORS: readonly string[] = [
+  '#ff6f9f', // Strawberry
+  '#4fa3ff', // Blueberry
+  '#a77bff', // Grape
+  '#ff9d3d', // Tangerine
+  '#e5484d', // Cherry
+  '#19b38f', // Mint
+]; // TUNE
 
 /** How a Keeper's border line is drawn (#278), so colour is never the only signal. */
-export type BorderLine = 'solid' | 'dash' | 'dot' | 'double';
+export type BorderLine = 'solid' | 'dash' | 'dot' | 'double' | 'dash-dot' | 'long-dash';
 /** A Keeper's icon on their land and in the map legend (#278). */
-export type KeeperIcon = 'heart' | 'star' | 'flower' | 'diamond';
+export type KeeperIcon = 'heart' | 'star' | 'flower' | 'diamond' | 'moon' | 'leaf';
 
 /**
  * Land borders (#278, owner decision 2026-10-08: direction D). A light, even
@@ -116,8 +127,13 @@ export const BORDER = {
    */
   lift: { wash: 0.016, ribbon: 0.017, icon: 0.018 }, // TUNE
   /** One per home slot, in `PLAYER_COLORS` order. */
-  lines: ['solid', 'dash', 'dot', 'double'] as readonly BorderLine[], // TUNE
-  icons: ['heart', 'star', 'flower', 'diamond'] as readonly KeeperIcon[], // TUNE
+  lines: ['solid', 'dash', 'dot', 'double', 'dash-dot', 'long-dash'] as readonly BorderLine[], // TUNE
+  icons: ['heart', 'star', 'flower', 'diamond', 'moon', 'leaf'] as readonly KeeperIcon[], // TUNE
+  /**
+   * A home nobody has joined yet (#318): a soft lavender dashed outline and
+   * no wash, never a Keeper's colour. All of them draw as one mesh.
+   */
+  openHome: { color: '#ddd2e4', line: 'dash' as BorderLine }, // TUNE
   /** An icon badge on every this-many-th border tile (home tiles never), and its size (world units). */
   iconEvery: 4, // TUNE
   iconSize: 0.15, // TUNE

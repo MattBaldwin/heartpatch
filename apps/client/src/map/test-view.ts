@@ -38,8 +38,8 @@ export function member(n: number, homeSlot: number): MapMember {
 }
 
 /** A view with `players` members; each owns their home ring, as the server sets it. */
-export function testView(players = 1, seed = 'map-render-test'): MapView {
-  const generated = generateMap(GAME_DATA, { seed, playerCount: SEATS });
+export function testView(players = 1, seed = 'map-render-test', seats = SEATS): MapView {
+  const generated = generateMap(GAME_DATA, { seed, playerCount: seats });
   const members = Array.from({ length: players }, (_, i) => member(i + 1, i));
   // Trading posts (#269) named as the server names them.
   const posts = tradingPostLabels(generated.tiles, GAME_DATA.mapGen.tradingPosts);
@@ -65,7 +65,7 @@ export function testView(players = 1, seed = 'map-render-test'): MapView {
       name: 'Pumpkin Hollow',
       timeZone: 'America/New_York',
       pvpMode: 'gentle',
-      maxPlayers: SEATS,
+      maxPlayers: seats,
     },
     members,
     tiles,

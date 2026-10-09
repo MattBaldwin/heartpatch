@@ -53,6 +53,9 @@ const ICON_PATHS: Readonly<Record<KeeperIcon, string>> = {
   flower:
     'M12 2.5a3.5 3.5 0 013.3 4.6 3.5 3.5 0 014.3 5.2 3.5 3.5 0 01-2.6 6 3.5 3.5 0 01-5 2.2 3.5 3.5 0 01-5-2.2 3.5 3.5 0 01-2.6-6A3.5 3.5 0 018.7 7.1 3.5 3.5 0 0112 2.5z',
   diamond: 'M12 2l8 10-8 10-8-10z',
+  // #318: homes 5 and 6.
+  moon: 'M15 2.5a9.5 9.5 0 1 0 6.5 16A7.5 7.5 0 0 1 15 2.5z',
+  leaf: 'M4 20C4 9 11 3 21 3c0 10-6 17-17 17z',
 };
 
 /** Each line's look as a short stroke: dashes, dots, or two thin lines. */
@@ -66,6 +69,8 @@ const LINE_STROKES: Readonly<
     { y: 2.5, width: 2.5 },
     { y: 7.5, width: 2.5 },
   ],
+  'dash-dot': [{ y: 5, width: 5, dash: '9 6 0.1 6' }],
+  'long-dash': [{ y: 5, width: 5, dash: '16 6' }],
 };
 
 function icon(entry: LegendEntry, size: number): SVGSVGElement {
@@ -79,6 +84,27 @@ function icon(entry: LegendEntry, size: number): SVGSVGElement {
   path.setAttribute('fill', entry.color);
   svg.append(path);
   return svg;
+}
+
+/**
+ * A home slot's icon in its colour (#318), as on the map and in the legend:
+ * for lists of Keepers (the lobby, a trading post's "Trade with"). Decorative;
+ * the name next to it says who.
+ */
+export function slotIcon(slot: number, size = 18): SVGSVGElement {
+  const mark = icon(
+    {
+      slot,
+      name: '',
+      mine: false,
+      color: PLAYER_COLORS[slot % PLAYER_COLORS.length] ?? '#ffffff',
+      icon: BORDER.icons[slot % BORDER.icons.length] ?? 'heart',
+      line: BORDER.lines[slot % BORDER.lines.length] ?? 'solid',
+    },
+    size,
+  );
+  mark.classList.add('slot-icon');
+  return mark;
 }
 
 function lineSample(entry: LegendEntry): SVGSVGElement {

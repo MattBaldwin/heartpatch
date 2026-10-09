@@ -46,6 +46,10 @@ test('owner makes a patch, a friend joins with the code, owner approves and rese
   await requests.getByRole('button', { name: 'Yes!' }).tap();
   await expect(ownerLobby.getByTestId('lobby-notice')).toContainText(`${friendName} joined`);
   await expect(ownerLobby.getByTestId('lobby-members')).toContainText(friendName);
+  // A new patch seats 6 (#318): two Keepers with their map icons, four open homes.
+  await expect(ownerLobby.getByRole('heading', { name: 'Keepers (2/6)' })).toBeVisible();
+  await expect(ownerLobby.getByTestId('lobby-open-seat')).toHaveCount(4);
+  await expect(ownerLobby.getByTestId('lobby-members').locator('.slot-icon')).toHaveCount(2);
 
   // Both see the patch: the friend's waiting row turns into it by itself (#145).
   await expect(friendLobby.getByTestId('lobby-waiting')).toHaveCount(0, { timeout: 15_000 });

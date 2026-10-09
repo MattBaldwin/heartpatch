@@ -72,7 +72,8 @@ export function describeTile(
   } else if (home) {
     if (mine) owner = 'Your home base. Nobody can ever take it!';
     else if (ownerName !== null) owner = `${ownerName}'s home base. Nobody can ever take it!`;
-    else owner = 'A cozy home spot, waiting for a new Keeper.';
+    // An open seat (#318): only a Keeper who joins can have it.
+    else owner = 'A cozy home, saved for the next Keeper who joins! ✨';
   } else if (mine) {
     owner = 'Your land.';
   } else if (ownerName !== null) {

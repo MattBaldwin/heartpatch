@@ -790,6 +790,10 @@ button.post-col-head {
 .post-menu.mates {
   top: 56px;
   margin-left: 0;
+  /* Up to five patch-mates on a 6-seat patch (#318): scroll on a short phone. */
+  max-height: min(260px, 45dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .post-menu-head {
@@ -818,6 +822,19 @@ button.post-col-head {
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.post-menu.mates .post-menu-item {
+  /* Icon, name, then the tick at the far end (#318). */
+  justify-content: flex-start;
+}
+
+.post-menu.mates .post-menu-item .slot-icon {
+  flex: none;
+}
+
+.post-menu.mates .post-menu-item > span {
+  margin-left: auto;
 }
 
 .post-menu-item.on {

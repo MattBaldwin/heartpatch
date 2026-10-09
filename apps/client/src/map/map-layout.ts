@@ -9,7 +9,7 @@ import {
   type WorldPoint,
 } from '@heartpatch/shared';
 import type { Bounds } from '../engine/camera/camera-math.js';
-import type { PropKind, TerrainLook } from './map-config.js';
+import { HEX_SIZE, type PropKind, type TerrainLook } from './map-config.js';
 
 // Pure map layout (no Babylon), so it's unit-tested: where tiles, home bases
 // and props go. Everything is derived from what the server sent; the client
@@ -68,6 +68,19 @@ export function mapBounds(tiles: readonly PublicTile[], size: number): Bounds {
   }
   return { minX, maxX, minZ, maxZ };
 }
+
+/**
+ * How far out the camera may zoom on a map (#318): `CAMERA.maxDistance` frames
+ * a radius-12 patch (tile centres 13.5 units either side of the middle), so a
+ * wider map gets the same framing, scaled. Never closer than that.
+ */
+export function maxZoomFor(bounds: Bounds, maxDistance: number): number {
+  const half = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 2;
+  return Math.max(maxDistance, (maxDistance * half) / RADIUS_12_HALF_SPAN);
+}
+
+/** Half the width of a radius-12 patch's tile centres (√3 × 12 tiles of `HEX_SIZE`). */
+const RADIUS_12_HALF_SPAN = HEX_SIZE * Math.sqrt(3) * 12;
 
 /** Distance from the map centre to its farthest tile corner, for sizing the island. */
 export function mapRadius(tiles: readonly PublicTile[], size: number): number {

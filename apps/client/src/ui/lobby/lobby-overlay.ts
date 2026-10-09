@@ -1,5 +1,6 @@
 import {
   CreateMapRequestSchema,
+  MAP_MAX_PLAYERS,
   CreateSignupCodeRequestSchema,
   InviteCodeSchema,
   SIGNUP_CODE_LABEL_MAX,
@@ -12,6 +13,7 @@ import {
   type PublicUser,
   type PvpMode,
 } from '@heartpatch/shared';
+import { slotIcon } from '../../map/map-legend.js';
 import { updateHold } from '../../pwa/update-hold.js';
 import { deviceTimeZone, el, messageOf } from '../dom.js';
 import {
@@ -468,7 +470,7 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     oneFieldForm({
       id: 'lobby-create',
       title: 'Make a patch',
-      subtitle: 'Your own corner of the world, for up to 4 Keepers.',
+      subtitle: `Your own corner of the world, for up to ${String(MAP_MAX_PLAYERS)} Keepers.`,
       label: 'Patch name',
       hint: 'Something cozy, like "Pumpkin Meadow".',
       input: { type: 'text', maxlength: '24', autocomplete: 'off' },
@@ -632,7 +634,18 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
     }
 
     const members = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-members' });
-    for (const member of map.members) members.append(memberRow(map, member));
+    // Home order, as on the map (#318), then each open seat, so a 6-seat patch reads at a glance.
+    const seated = [...map.members].sort((a, b) => (a.homeSlot ?? 99) - (b.homeSlot ?? 99));
+    for (const member of seated) members.append(memberRow(map, member));
+    for (let i = map.members.length; i < map.maxPlayers; i++) {
+      members.append(
+        el(
+          'li',
+          { class: 'lobby-member lobby-member-open', 'data-testid': 'lobby-open-seat' },
+          el('span', { class: 'lobby-member-name' }, 'A home is waiting for a friend'),
+        ),
+      );
+    }
     sections.push(
       el(
         'div',
@@ -739,6 +752,8 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
       el(
         'span',
         { class: 'lobby-member-name' },
+        // Their colour and icon on the map (#318).
+        ...(member.homeSlot !== null ? [slotIcon(member.homeSlot)] : []),
         name,
         ...(member.role === 'owner' ? [el('span', { class: 'lobby-badge' }, 'Owner')] : []),
       ),

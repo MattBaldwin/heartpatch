@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   borderArrays,
   iconOutline,
+  MOON_BITE,
   linePieces,
   outerEdges,
   profileAt,
@@ -12,7 +13,7 @@ import {
   type BorderTile,
 } from './border-layout.js';
 import { roundedHexOutline } from './hex-mesh.js';
-import { AMBIENT, BORDER, type KeeperIcon } from './map-config.js';
+import { AMBIENT, BORDER } from './map-config.js';
 
 const shape: BorderShape = {
   size: 1,
@@ -80,21 +81,49 @@ describe('linePieces', () => {
 
 describe('iconOutline', () => {
   it('outlines each icon about one across, each its own shape', () => {
-    const outlines = (['heart', 'star', 'flower', 'diamond'] as KeeperIcon[]).map((icon) =>
-      iconOutline(icon, 32),
-    );
+    const outlines = BORDER.icons.map((icon) => iconOutline(icon, 32));
     for (const points of outlines) {
       expect(points).toHaveLength(32);
       for (const p of points) expect(Math.hypot(p.x, p.z)).toBeLessThanOrEqual(1.1);
       expect(Math.max(...points.map((p) => Math.hypot(p.x, p.z)))).toBeGreaterThan(0.7);
     }
-    expect(new Set(outlines.map((o) => JSON.stringify(o))).size).toBe(4);
+    expect(new Set(outlines.map((o) => JSON.stringify(o))).size).toBe(BORDER.icons.length);
+  });
+
+  it('keeps every outline one radius per angle, so its badge fans from the middle (#318)', () => {
+    // (The heart is the classic parametric heart curve, not one radius per angle.)
+    for (const icon of BORDER.icons.filter((i) => i !== 'heart')) {
+      const points = iconOutline(icon, 64);
+      points.forEach((p, i) => {
+        const r = Math.hypot(p.x, p.z);
+        expect(r, `${icon} ${String(i)}`).toBeGreaterThan(0.1);
+        // Each point sits on its own angle, going round in order.
+        const t = (i / 64) * Math.PI * 2;
+        expect(p.x / r, icon).toBeCloseTo(Math.sin(t), 6);
+        expect(p.z / r, icon).toBeCloseTo(Math.cos(t), 6);
+      });
+    }
+    // The moon's bite stays clear of the middle and really bites.
+    expect(Math.hypot(MOON_BITE.c.x, MOON_BITE.c.z)).toBeGreaterThan(MOON_BITE.r);
+    const moon = iconOutline('moon', 64).map((p) => Math.hypot(p.x, p.z));
+    expect(Math.min(...moon)).toBeLessThan(0.4);
+    expect(Math.max(...moon)).toBeGreaterThan(0.8);
   });
 });
 
 describe('borderArrays', () => {
   it('draws nothing for no land', () => {
     expect(borderArrays([], shape, look)).toEqual({ positions: [], indices: [], colors: [] });
+  });
+
+  it('draws only the ribbon for an open home: no wash, no badges (#318)', () => {
+    const tiles = [hex(0, 0), hex(3, 0), hex(6, 0)].map((h) => ({ ...h, top: 0.2, home: false }));
+    const full = borderArrays(tiles, shape, look).indices.length / 3;
+    const ribbon = borderArrays(tiles, shape, { ...look, wash: false, badges: false });
+    const washOnly = borderArrays(tiles, shape, { ...look, badges: false }).indices.length / 3;
+    expect(ribbon.indices.length / 3).toBeGreaterThan(0);
+    expect(ribbon.indices.length / 3).toBeLessThan(washOnly);
+    expect(washOnly).toBeLessThan(full);
   });
 
   it('runs the ribbon only along the outside of a Keeper’s land', () => {

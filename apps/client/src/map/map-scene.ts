@@ -118,6 +118,8 @@ export interface MapSceneStats {
   /** Land borders (#278): one mesh (draw call) per Keeper with land, and their triangles. */
   readonly borderMeshes: number;
   readonly borderTriangles: number;
+  /** Home tiles saved for a Keeper who hasn't joined yet, drawn as a dashed outline (#318). */
+  readonly openHomeTiles: number;
   readonly homes: number;
   readonly claimedHomes: number;
   /** Meshes drawing tiles: one per terrain look in use, plus home tiles. */
@@ -506,6 +508,7 @@ export class MapScene {
       tinted: this.borders.tinted,
       borderMeshes: this.borders.stats.meshes,
       borderTriangles: this.borders.stats.triangles,
+      openHomeTiles: this.borders.stats.openHomeTiles,
       keepers: this.keepers.handles.length,
       buildings: this.buildings.stats.buildings,
       litFires: this.buildings.stats.lit,

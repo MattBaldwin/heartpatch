@@ -12,7 +12,7 @@ import {
   type WsEventMessage,
 } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
-import type { QualityTier } from '../engine/config.js';
+import { CAMERA, type QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import {
   createWsClient,
@@ -30,6 +30,7 @@ import { mountMapLegend } from './map-legend.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
+import { maxZoomFor } from './map-layout.js';
 import { listenForTaps } from './tap-detector.js';
 import { describeTile } from './tile-info.js';
 import { mountTilePanel } from './tile-panel.js';
@@ -366,7 +367,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         stop.signal,
       );
     }
-    return { bounds: built.bounds, start: built.homeOf(state.view, user?.id ?? null) };
+    return {
+      bounds: built.bounds,
+      start: built.homeOf(state.view, user?.id ?? null),
+      maxDistance: maxZoomFor(built.bounds, CAMERA.maxDistance),
+    };
   };
 
   /** Takes the map off screen (the sync is already closed or about to be). */

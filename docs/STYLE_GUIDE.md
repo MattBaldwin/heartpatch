@@ -118,7 +118,7 @@ Player-facing words for game actions. The code can use technical names; the UI u
 | hollowed | **Taken to the Hollow** (always followed by "you can rescue them!") |
 | defense stance | **Defense style** (Bold, Careful, Balanced) |
 | the lore's glowing field; the game | **Heartpatch**: only for the story ("The Heartpatch shattered") and the game's name. Never a place the player owns |
-| a map (one shared world, up to 4 players) | **patch** ("Make a patch", "Join a patch", "Your patches") |
+| a map (one shared world, up to 6 players; older patches 4) | **patch** ("Make a patch", "Join a patch", "Your patches") |
 | tiles a player owns | **land** ("Claim some land", "Someone challenged your land!") |
 | a player's home base, and its tray | **home** (the right-hand tray is **My Home**: "Your home is on the right!") |
 

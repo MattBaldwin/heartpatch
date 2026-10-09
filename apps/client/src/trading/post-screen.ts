@@ -12,6 +12,7 @@ import type {
 } from '@heartpatch/shared';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
+import { slotIcon } from '../map/map-legend.js';
 import { el, messageOf } from '../ui/dom.js';
 import { tradeApi, type TradeApi } from './trade-api.js';
 import {
@@ -177,6 +178,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
 
   const me = () => user?.id ?? null;
   const mates = () => (mapView?.members ?? []).filter((m) => m.user.id !== me()).map((m) => m.user);
+  const slotOf = (id: string) => mapView?.members.find((m) => m.user.id === id)?.homeSlot ?? null;
   const nameOf = (id: string) =>
     mapView?.members.find((m) => m.user.id === id)?.user.username ?? TRADE_TEXT.someone;
   const passOver = () => post !== null && postChip(post.passUntil, now()) === null;
@@ -582,6 +584,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       el('span', { class: 'post-menu-head' }, TRADE_TEXT.tradeWith),
       ...mates().map((u) => {
         const on = u.id === mate;
+        const slot = slotOf(u.id);
         const b = el(
           'button',
           {
@@ -592,6 +595,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
             'data-testid': 'post-mate',
             'data-user': u.id,
           },
+          // Their colour and icon on the map (#318).
+          ...(slot !== null ? [slotIcon(slot)] : []),
           u.username,
           ...(on ? [el('span', { 'aria-hidden': 'true' }, '✓')] : []),
         );

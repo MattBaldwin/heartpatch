@@ -143,6 +143,23 @@
   overflow-wrap: anywhere;
 }
 
+.lobby-member-name .slot-icon {
+  flex: none;
+}
+
+/* An open seat on the patch (#318): a soft dashed row, like the open home on the map. */
+.lobby-member-open {
+  padding: 0 var(--hp-pad-x);
+  border: 2px dashed #e3c7d6;
+  border-radius: 14px;
+  color: #9b7f97;
+}
+
+.lobby-member-open .lobby-member-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .lobby-member-title {
   /* Its own line under the name, after the row's buttons. */
   flex: 1 1 100%;

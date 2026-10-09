@@ -87,7 +87,7 @@ describe('describeTile', () => {
     const theirs = describeTile(tile({ homeSlot: 1, ownerUserId: userId(2) }), lookup, userId(1));
     expect(theirs.owner).toBe("keeper2's home base. Nobody can ever take it!");
     const free = describeTile(tile({ homeSlot: 3 }), lookup, userId(1));
-    expect(free.owner).toBe('A cozy home spot, waiting for a new Keeper.');
+    expect(free.owner).toBe('A cozy home, saved for the next Keeper who joins! ✨');
     for (const info of [mine, theirs, free]) expect(allText(info)).not.toMatch(/claim|challenge/i);
   });
 
