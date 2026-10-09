@@ -144,7 +144,13 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   await bubble.getByRole('button', { name: 'Got it!' }).tap();
   // The server's step engine moves on and says so over live sync.
   await expect.poll(async () => (await debug(page))?.stepId).toBe('plant');
-  // Over the gameplay steps (the full run below covers the rest).
+  // Over the gameplay steps (the full run below covers the rest). Leaving
+  // the plant step finds a lore page (#307), whose card would come before
+  // The First Patch's party: this run isn't about lore, so mark it shown.
+  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
+  await page.evaluate((key) => {
+    localStorage.setItem(key, JSON.stringify(['where-the-squishies-bloomed']));
+  }, `heartpatch.lore.shown.${me}`);
   await jumpTo(page, 'graduation');
 
   await bubble.getByRole('button', { name: 'Next' }).tap();

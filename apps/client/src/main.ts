@@ -743,7 +743,8 @@ const tutorial = createTutorialScreen({
 // Found lore pages (design doc §16). Mounted after the tutorial, so its card
 // sits over Sprout's layer. One card at a time (#129): a page waits behind a
 // battle, a milestone party, the morning report and What's new, and tells the
-// report when it's gone.
+// report when it's gone. Nor over a form the player just asked for (the
+// lobby's "Make a patch"), like the party.
 const lorebook = createLorebook({
   root: document.body,
   bagEntry: loreBag,
@@ -751,7 +752,8 @@ const lorebook = createLorebook({
     battles.debug !== null ||
     milestones.debug.showing !== null ||
     hollowReportOpen() ||
-    whatsNewOpen,
+    whatsNewOpen ||
+    lobby.formOpen,
   onChange: () => {
     hollow.otherReportChanged();
   },
