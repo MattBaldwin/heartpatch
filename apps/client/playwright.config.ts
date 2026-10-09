@@ -13,10 +13,11 @@ const testDir = './tests/e2e';
  * file runs on one worker, so a slow file sets its group's floor: taps (about
  * 9 min) and tutorial (about 8) each sit in a group of light specs that the
  * other worker drains. Files start in name order, so what sorts before the big
- * file must be short: admin and auth before taps (under 1.5 min together);
- * tutorial-flow before tutorial, whose second (desktop-only) test skips at
- * once in CI and frees a worker. Rebalance from the CI list reporter's
- * durations when a group gets slow (#246).
+ * file must be short: admin and auth before taps (under 1.5 min together).
+ * tutorial-flow sorts before tutorial: on iPad its second (desktop) test skips
+ * at once and frees a worker, but on iPhone both its runs go side by side, so
+ * tutorial waits and iPhone group 2 is the slowest leg (~10 min). Rebalance
+ * from the CI list reporter's durations when a group gets slow (#246).
  *
  * Every spec is listed in exactly one group; there is no catch-all, so a new
  * spec can't quietly pile onto one job (group 5 grew to 28 min that way, #296).
