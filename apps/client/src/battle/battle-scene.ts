@@ -28,6 +28,7 @@ import {
   type SquishyLook,
 } from '../procedural/config.js';
 import { createContactShadowMesh } from '../procedural/contact-shadow.js';
+import { faceYaw } from '../procedural/face-yaw.js';
 import { KEEPER_PLACES } from '../procedural/keeper/keeper-config.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
@@ -353,7 +354,7 @@ export class BattleScene {
     const k = side === this.#options.mySide ? FIGHTER.facing.mine : FIGHTER.facing.theirs;
     const wx = fx * k;
     const wz = fz * k - (1 - k);
-    const yaw = Math.atan2(-wx, -wz) - facing;
+    const yaw = faceYaw(wx, wz) - facing;
     const field = new SquishyField(scene, {
       registry: this.#options.registry,
       lod: this.#options.lod,

@@ -358,6 +358,92 @@ export function buildBuildingModel(
       }
       break;
     }
+    case 'crafting-factory': {
+      // A toy workshop (#294 mockup): soft peach walls, a rosy roof, a round
+      // window with a gear, a chimney puffing. Level 2: a second window and
+      // a little belt carrying heart crates. Level 3: a second chimney, a
+      // glowing star on the roof and a string of lanterns.
+      part(
+        body,
+        CreateBox(`${name}-walls`, { width: 0.78, height: 0.42, depth: 0.56 }, scene),
+        C.workshop,
+        [0, 0.21, 0],
+      );
+      // Rounded corners: soft posts at each corner.
+      for (const x of [-0.39, 0.39]) {
+        for (const z of [-0.28, 0.28]) {
+          part(body, cylinder(0.42, 0.1, 0.1, 10), C.workshop, [x, 0.21, z]);
+        }
+      }
+      // The roof: a triangular prism along the width, a little wider than the walls.
+      part(
+        body,
+        cylinder(0.92, 0.5, 0.5, 3),
+        C.workshopRoof,
+        [0, 0.52, 0],
+        [1, 1, 1.35],
+        [0, 0, Math.PI / 2],
+      );
+      const chimney = (x: number, z: number) => {
+        part(body, cylinder(0.3, 0.12, 0.13, 10), C.chimney, [x, 0.72, z]);
+        part(body, sphere(0.1, 8), C.puff, [x, 0.92, z]);
+        part(body, sphere(0.07, 8), C.puff, [x + 0.05, 1.02, z]);
+      };
+      chimney(0.24, 0.08);
+      if (l >= 3) chimney(-0.24, 0.08);
+      // The front faces the camera (−z): a round window with a gear, a door.
+      const porthole = (x: number, d: number) => {
+        part(
+          body,
+          cylinder(0.04, d, d, 18),
+          C.porthole,
+          [x, 0.25, -0.29],
+          [1, 1, 1],
+          [Math.PI / 2, 0, 0],
+        );
+      };
+      porthole(-0.2, 0.2);
+      part(
+        body,
+        CreateTorus(`${name}-gear`, { diameter: 0.1, thickness: 0.03, tessellation: 12 }, scene),
+        C.gear,
+        [-0.2, 0.25, -0.31],
+        [1, 1, 1],
+        [Math.PI / 2, 0, 0],
+      );
+      if (l >= 2) porthole(0.22, 0.16);
+      part(
+        body,
+        CreateBox(`${name}-door`, { width: 0.16, height: 0.24, depth: 0.04 }, scene),
+        C.door,
+        [0.02, 0.12, -0.29],
+      );
+      part(
+        body,
+        cylinder(0.04, 0.16, 0.16, 14),
+        C.door,
+        [0.02, 0.24, -0.29],
+        [1, 1, 1],
+        [Math.PI / 2, 0, 0],
+      );
+      if (l >= 2) {
+        // The belt out of the side, with a crate on it.
+        part(
+          body,
+          CreateBox(`${name}-belt`, { width: 0.32, height: 0.05, depth: 0.16 }, scene),
+          C.gear,
+          [0.56, 0.06, -0.08],
+        );
+        part(body, CreateBox(`${name}-crate`, { size: 0.1 }, scene), C.crate, [0.6, 0.14, -0.08]);
+      }
+      if (l >= 3) {
+        part(glow, sphere(0.12, 10), C.lantern, [0, 0.82, -0.04]);
+        for (const x of [-0.3, -0.1, 0.1, 0.3]) {
+          part(glow, sphere(0.05, 8), C.lantern, [x, 0.4, -0.31]);
+        }
+      }
+      break;
+    }
     default:
       part(body, CreateBox(`${name}-box`, { size: 0.5 }, scene), C.plain, [0, 0.25, 0]);
   }

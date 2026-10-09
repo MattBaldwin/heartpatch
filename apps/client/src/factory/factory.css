@@ -1,0 +1,304 @@
+/* The Crafting Factory panel (#294): batches with a bar and a countdown,
+   the recipe picker with − / + / Max, and the stop card. 44pt+ targets,
+   the shared padding tokens, nothing wider than the sheet it's in. */
+
+.factory {
+  display: grid;
+  gap: 10px;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.factory-about,
+.factory-full,
+.factory-locked,
+.factory-plan,
+.factory-say {
+  margin: 0;
+  font-size: 15px;
+  color: #6b4b6e;
+}
+
+.factory-say:empty {
+  display: none;
+}
+
+.factory-title {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.factory-batches,
+.factory-picks,
+.factory-stop-lines {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.factory-batch {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: center;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 18px;
+  background: #fff1f7;
+}
+
+.factory-batch-done {
+  background: #eaf8dc;
+}
+
+.factory-batch-icon {
+  grid-row: span 3;
+  align-self: start;
+  font-size: 26px;
+}
+
+.factory-batch-name {
+  font-weight: 700;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.factory-count {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  color: #7a2d55;
+}
+
+.factory-batch-stop {
+  grid-row: 1 / span 3;
+  grid-column: 3;
+}
+
+.factory-bar {
+  grid-column: 2;
+  display: block;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f3d3e3;
+}
+
+.factory-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff9ab8, #e2659a);
+}
+
+.factory-batch-done .factory-bar i {
+  background: #7cc489;
+}
+
+.factory-time {
+  grid-column: 2;
+  font-size: 13px;
+  color: #8a5f86;
+  font-variant-numeric: tabular-nums;
+}
+
+.factory-button {
+  min-height: 44px;
+}
+
+.factory-empty {
+  width: 100%;
+  border: 2px dashed #e7b7cf;
+  background: transparent;
+}
+
+.factory-locked {
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 14px;
+  background: #f6eef2;
+  text-align: center;
+  font-size: 14px;
+}
+
+.factory-pick {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 0 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 2px solid transparent;
+  border-radius: 16px;
+  background: #fff3d6;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.factory-pick:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.factory-pick-on {
+  border-color: #b8487a;
+  background: #fff;
+}
+
+.factory-pick-icon {
+  font-size: 26px;
+}
+
+.factory-pick-name {
+  display: grid;
+  min-width: 0;
+}
+
+.factory-pick-name span {
+  font-size: 13px;
+  color: #6b4b6e;
+}
+
+.factory-pick-can {
+  max-width: 9em;
+  font-size: 13px;
+  font-weight: 700;
+  color: #7a2d55;
+  text-align: right;
+}
+
+.factory-counter {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 18px;
+  background: #fff1f7;
+}
+
+.factory-round {
+  width: 52px;
+  min-height: 52px;
+  padding: 0;
+  font-size: 24px;
+}
+
+.factory-n {
+  text-align: center;
+  font-size: 32px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.factory-max {
+  min-height: 52px;
+  background: #ffc94d;
+  color: #5a3a00;
+}
+
+.factory-plan {
+  text-align: center;
+}
+
+.factory-stop-lines li {
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 14px;
+  background: #fff1f7;
+  font-size: 15px;
+}
+
+.factory-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.factory-row > * {
+  flex: 1 1 8em;
+}
+
+/* The Factory strip in the Bag and the Recipe Book. */
+.factory-strip {
+  display: grid;
+  gap: 6px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 18px;
+  background: #fff3d6;
+}
+
+.factory-strip-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.factory-strip-head span {
+  font-weight: 700;
+  font-size: 13px;
+  color: #7a2d55;
+}
+
+.factory-mini {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The welcome-back card. */
+.factory-welcome[hidden] {
+  display: none;
+}
+
+.factory-welcome {
+  position: fixed;
+  z-index: 9;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(74 49 80 / 28%);
+}
+
+.factory-welcome-card {
+  display: grid;
+  gap: 12px;
+  box-sizing: border-box;
+  width: min(440px, 100%);
+  padding: 20px;
+  border-radius: 26px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgb(74 49 80 / 28%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+  text-align: center;
+}
+
+.factory-welcome-card h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.factory-welcome-got {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.factory-welcome-got span {
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: #eaf8dc;
+  color: #2f6b3d;
+  font-weight: 800;
+  font-size: 17px;
+}

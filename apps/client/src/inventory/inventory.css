@@ -383,3 +383,15 @@
     animation: none;
   }
 }
+
+/* Make and "🏭 Queue" side by side (#294), wrapping on a narrow phone. */
+.bag-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.factory-sheet {
+  z-index: 7;
+}

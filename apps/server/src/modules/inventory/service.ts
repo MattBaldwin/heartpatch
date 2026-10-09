@@ -29,6 +29,7 @@ import { AppError } from '../../lib/errors.js';
 import { localDate, type Clock } from '../../lib/time.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import { createGatheringRepo, type GatherRow } from '../gathering/repo.js';
+import { factoryView } from '../factory/view.js';
 import { requireMember } from '../maps/members.js';
 import { createInventoryRepo, type CraftRow, type ItemOwner } from './repo.js';
 
@@ -243,15 +244,17 @@ export function createInventoryService(options: InventoryServiceOptions): Invent
       const { map } = await requireMember(db, user, mapId);
       const owner = { mapId, userId: user.id };
       const at = now();
-      const [items, gathers, crafts] = await Promise.all([
+      const [items, gathers, crafts, factory] = await Promise.all([
         store.list(owner),
         createGatheringRepo(db).listActive(mapId, user.id),
         store.listActiveCrafts(owner),
+        factoryView(db, owner, at),
       ]);
       return {
         items,
         gathers: gathers.map(toGather),
         crafts: crafts.map(toCraft),
+        factory,
         seasons: seasonsOn(at, map.timeZone),
         now: at.toISOString(),
       };

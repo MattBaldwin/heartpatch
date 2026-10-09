@@ -135,6 +135,7 @@ const MESSAGES = {
   tooMany: (max: number) => `Up to ${String(max)} squishies can stand watch on one spot.`,
   notYourSquishy: "That's not one of your squishies.",
   inHollow: 'That squishy is in the Hollow. Rescue them first!',
+  inTrade: 'That squishy is waiting at a trading post right now. 📬',
   housed: (name: string) => `Move ${name} out of their habitat first!`,
   // Fences (#203): the guard battle after a broken fence needs someone fresh.
   nobodyLeft:
@@ -459,13 +460,16 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
     const repo = createTerritoryRepo(tx);
     const at = now();
     const window = fenceRules.keepGoingMinutes * MINUTE_MS;
-    const [used, joinedAt, defenders, squishies, broken] = await Promise.all([
+    const [used, joinedAt, defenders, owned, broken] = await Promise.all([
       repo.attemptsOn(map.id, user.id, localDate(at, map.timeZone), map.timeZone),
       repo.joinedAt(map.id, user.id),
       repo.myDefenders(map.id, user.id),
       repo.mySquishies(map.id, user.id),
       repo.myBrokenFences(map.id, user.id, new Date(at.getTime() - window)),
     ]);
+    // A squishy in a trade (#271) waits at the post: no guard to pick, and one
+    // heading my way stays a surprise (its species too) until I pick it up.
+    const squishies = owned.filter((s) => s.state !== 'in-trade');
     const shieldEnds =
       joinedAt === null
         ? null
@@ -539,6 +543,7 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         for (const id of request.squishyIds) {
           const squishy = mine.get(id);
           if (!squishy) throw new AppError('FORBIDDEN', MESSAGES.notYourSquishy);
+          if (squishy.state === 'in-trade') throw new AppError('CONFLICT', MESSAGES.inTrade);
           if (squishy.state !== 'active') throw new AppError('CONFLICT', MESSAGES.inHollow);
           // Housed or on watch, not both (owner decision 2026-10-03). One
           // already here from before that rule may stay; it counts as on

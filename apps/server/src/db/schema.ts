@@ -37,7 +37,8 @@ export const mapKind = pgEnum('map_kind', ['multiplayer', 'tutorial']);
 export const mapMemberRole = pgEnum('map_member_role', ['owner', 'member']);
 /** Removed players are archived by status, never deleted (tech spec §4). */
 export const mapMemberStatus = pgEnum('map_member_status', ['active', 'removed']);
-export const squishyState = pgEnum('squishy_state', ['active', 'hollowed']);
+// `in-trade` (#271): held in escrow for a trade or gift; every `active` filter drops it.
+export const squishyState = pgEnum('squishy_state', ['active', 'hollowed', 'in-trade']);
 /** Map owner's PvP setting (design doc §11, decision B). */
 export const pvpMode = pgEnum('pvp_mode', ['on', 'gentle', 'off']);
 /** How a player's squishies on watch play (design doc §6, #16). Mirrors `DefenseStanceSchema`. */
@@ -318,6 +319,8 @@ export const maps = pgTable(
     // "Hollow Man strength" (#277, admin console): scales his strike chances
     // on this patch, in percent. 0 turns him off. Server-only.
     hollowStrengthPercent: smallint('hollow_strength_percent').notNull().default(100),
+    // The patch owner's trading switch (#271, owner Q5 on #30): off cancels open offers.
+    tradingEnabled: boolean('trading_enabled').notNull().default(true),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -993,6 +996,58 @@ export const crafts = pgTable(
   ],
 );
 
+/** Why a Crafting Factory batch ended (#294): all made, stopped, or its Factory taken down (or its owner left). */
+export const factoryQueueEnd = pgEnum('factory_queue_end', ['done', 'stopped', 'taken-down']);
+
+/**
+ * Crafting Factory batches (#294, owner decisions 2026-10-08): `total` runs
+ * of one recipe, paid up front, one finishing every `item_seconds` after
+ * `started_at` (fixed when it starts, speed-ups included). Timestamps, not a
+ * loop (CLAUDE.md rule 4): how many are made is worked out on read (shared
+ * `factoryDone`); a settle banks the new ones and moves `banked`. A batch
+ * that ends keeps its row (`ended_at`, `end_reason`). `building_id` is the
+ * Factory's `buildings` row, with no foreign key: taking a Factory down ends
+ * its batches in the same transaction, and a cascade would lock them in
+ * scan order (tech spec §7).
+ */
+export const factoryQueues = pgTable(
+  'factory_queues',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    buildingId: uuid('building_id').notNull(),
+    // Recipe id from the shared recipe data.
+    recipeId: text('recipe_id').notNull(),
+    total: integer('total').notNull(),
+    banked: integer('banked').notNull().default(0),
+    itemSeconds: integer('item_seconds').notNull(),
+    // One run's items (`{"treats": 3}`) and one run's cost, for refunds.
+    output: jsonb('output').notNull(),
+    inputs: jsonb('inputs').notNull(),
+    startedAt: timestamptz('started_at').notNull(),
+    // Null while it's going.
+    endedAt: timestamptz('ended_at'),
+    endReason: factoryQueueEnd('end_reason'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'factory_queues_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    index('factory_queues_running_idx')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.endedAt} is null`),
+    check('factory_queues_total_range', sql`${t.total} between 1 and 9999`),
+    check('factory_queues_banked_range', sql`${t.banked} between 0 and ${t.total}`),
+    check('factory_queues_item_seconds_positive', sql`${t.itemSeconds} > 0`),
+    check('factory_queues_ended', sql`(${t.endedAt} is null) = (${t.endReason} is null)`),
+  ],
+);
+
 /**
  * How a tile battle went (#15). `active` while it runs; `captured` won and
  * took the tile; `won` won but the tile couldn't change hands (it went home
@@ -1362,6 +1417,150 @@ export const journeys = pgTable(
   ],
 );
 
+export const tradeKind = pgEnum('trade_kind', ['trade', 'gift']);
+export const tradeStatus = pgEnum('trade_status', [
+  'open',
+  'accepted',
+  'declined',
+  'cancelled',
+  'expired',
+  'taken_back',
+]);
+export const tradeSide = pgEnum('trade_side', ['give', 'want']);
+export const tradeLineKind = pgEnum('trade_line_kind', ['squishy', 'item', 'clothing']);
+export const mailboxKind = pgEnum('mailbox_kind', ['trade', 'gift', 'return']);
+
+/**
+ * Trade offers and gifts between patch-mates (#271; owner decisions on #30).
+ * The sender's side is held in escrow from the send until it lands. `value_*`
+ * and `fair` (#272) and `take_back_until` and `bonus_paid_at` (#273) are
+ * written by later issues.
+ */
+export const tradeOffers = pgTable(
+  'trade_offers',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    kind: tradeKind('kind').notNull(),
+    fromUserId: uuid('from_user_id').notNull(),
+    toUserId: uuid('to_user_id').notNull(),
+    status: tradeStatus('status').notNull().default('open'),
+    // A quick-message preset or sticker id (#23), never typed text.
+    noteId: text('note_id'),
+    createdAt: timestamptz('created_at').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    answeredAt: timestamptz('answered_at'),
+    valueGive: integer('value_give'),
+    valueWant: integer('value_want'),
+    fair: boolean('fair'),
+    takeBackUntil: timestamptz('take_back_until'),
+    bonusPaidAt: timestamptz('bonus_paid_at'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'trade_offers_from_member_fk',
+      columns: [t.mapId, t.fromUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    foreignKey({
+      name: 'trade_offers_to_member_fk',
+      columns: [t.mapId, t.toUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    check('trade_offers_two_players', sql`${t.fromUserId} <> ${t.toUserId}`),
+    index('trade_offers_map_id_to_user_id_status_idx').on(t.mapId, t.toUserId, t.status),
+    index('trade_offers_map_id_from_user_id_status_idx').on(t.mapId, t.fromUserId, t.status),
+  ],
+);
+
+/** What each side of an offer holds (#271): a squishy, a stack of an item, or a clothing piece. */
+export const tradeLines = pgTable(
+  'trade_lines',
+  {
+    id: id(),
+    offerId: uuid('offer_id')
+      .notNull()
+      .references(() => tradeOffers.id, { onDelete: 'cascade' }),
+    side: tradeSide('side').notNull(),
+    kind: tradeLineKind('kind').notNull(),
+    squishyId: uuid('squishy_id').references(() => squishies.id, { onDelete: 'set null' }),
+    itemId: text('item_id'),
+    quantity: integer('quantity'),
+    clothingId: uuid('clothing_id').references(() => clothingOwned.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    index('trade_lines_offer_id_idx').on(t.offerId),
+    check(
+      'trade_lines_one_target',
+      sql`(${t.kind} = 'item' and ${t.itemId} is not null and ${t.quantity} > 0 and ${t.squishyId} is null and ${t.clothingId} is null)
+        or (${t.kind} = 'squishy' and ${t.itemId} is null and ${t.quantity} is null and ${t.clothingId} is null)
+        or (${t.kind} = 'clothing' and ${t.itemId} is null and ${t.quantity} is null and ${t.squishyId} is null)`,
+    ),
+  ],
+);
+
+/**
+ * One thing waiting for a player (#271): a finished trade's side, a gift, or
+ * a note that something came back (a return lands in the bag at once, so its
+ * row is picked up when written). `lines` is a frozen copy for the screen;
+ * the things themselves stay held until the pickup.
+ */
+export const mailbox = pgTable(
+  'mailbox',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    offerId: uuid('offer_id')
+      .notNull()
+      .references(() => tradeOffers.id, { onDelete: 'cascade' }),
+    kind: mailboxKind('kind').notNull(),
+    lines: jsonb('lines').notNull(),
+    readyAt: timestamptz('ready_at').notNull(),
+    pickedUpAt: timestamptz('picked_up_at'),
+    pickedUpPostTileId: uuid('picked_up_post_tile_id').references(() => tiles.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => [
+    index('mailbox_waiting_idx')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.pickedUpAt} is null`),
+    index('mailbox_offer_id_idx').on(t.offerId),
+  ],
+);
+
+/**
+ * Every step of every offer (#271), append-only and never updated. One row
+ * per (offer, event, actor); a system step (an expiry) has no actor, and
+ * `NULLS NOT DISTINCT` keeps a retried one to one row.
+ */
+export const tradeLedger = pgTable(
+  'trade_ledger',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    offerId: uuid('offer_id')
+      .notNull()
+      .references(() => tradeOffers.id, { onDelete: 'cascade' }),
+    event: text('event').notNull(),
+    actorUserId: uuid('actor_user_id'),
+    at: timestamptz('at').notNull(),
+    detail: jsonb('detail').notNull().default({}),
+  },
+  (t) => [
+    unique('trade_ledger_offer_event_actor_key')
+      .on(t.offerId, t.event, t.actorUserId)
+      .nullsNotDistinct(),
+  ],
+);
+
 /**
  * Clothing a player owns (#43, design doc §23): account-level (tech spec §4),
  * one row per piece, so a trade can later move a single piece. Starter items
@@ -1384,6 +1583,10 @@ export const clothingOwned = pgTable(
     // Where it was found, if anywhere; the piece stays when the map goes.
     mapId: uuid('map_id').references(() => maps.id, { onDelete: 'set null' }),
     acquiredAt: timestamptz('acquired_at').notNull().defaultNow(),
+    // Held in escrow for a trade or gift (#271): not wearable, not offerable.
+    heldByOfferId: uuid('held_by_offer_id').references((): AnyPgColumn => tradeOffers.id, {
+      onDelete: 'set null',
+    }),
   },
   (t) => [
     index('clothing_owned_user_id_item_id_idx').on(t.userId, t.itemId),

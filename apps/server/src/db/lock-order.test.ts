@@ -17,6 +17,7 @@ import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
 import { createExploreRepo } from '../modules/explore/repo.js';
+import { createFactoryRepo } from '../modules/factory/repo.js';
 import { createFencesRepo } from '../modules/fences/repo.js';
 import { createBoutiqueService, stockFor } from '../modules/boutique/service.js';
 import { createBuildingsService, removeMemberBuildings } from '../modules/buildings/service.js';
@@ -29,6 +30,7 @@ import { createHollowConsumer } from '../modules/hollow/consumer.js';
 import { createHollowRepo } from '../modules/hollow/repo.js';
 import { createHollowService } from '../modules/hollow/service.js';
 import { grantItems } from '../modules/inventory/service.js';
+import { createInventoryRepo } from '../modules/inventory/repo.js';
 import { createJourneyBattlePort, createJourneysService } from '../modules/journeys/service.js';
 import { createLoreConsumer } from '../modules/lore/consumer.js';
 import { createMapsRepo } from '../modules/maps/repo.js';
@@ -37,6 +39,7 @@ import { createMilestonesService, milestoneRewardId } from '../modules/milestone
 import { createMapsService } from '../modules/maps/service.js';
 import { createStartersService } from '../modules/starters/service.js';
 import { createTerritoryService, createTileBattlePort } from '../modules/territory/service.js';
+import { createTradesService } from '../modules/trades/service.js';
 import { createTutorialConsumer } from '../modules/tutorial/consumer.js';
 import { createTutorialRepo } from '../modules/tutorial/repo.js';
 import { createTutorialService } from '../modules/tutorial/service.js';
@@ -58,6 +61,7 @@ import {
   buildings,
   clothingOwned,
   coinLedger,
+  factoryQueues,
   fenceSegments,
   gameEvents,
   tileExplore,
@@ -1478,6 +1482,46 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     expect(locked).toEqual(fireIds);
   });
 
+  it("locks a player's Factory batches in id order (factory `lockRunning`, `lockRunningIn`, #294)", async () => {
+    const { mapId, userId, fireIds } = await fires();
+    const factoryId = fireIds[0]!;
+    // Stored highest id first, so a scan meets them out of id order.
+    const batchIds = [randomUUID(), randomUUID(), randomUUID()].sort();
+    await db.insert(factoryQueues).values(
+      [...batchIds].reverse().map((id) => ({
+        id,
+        mapId,
+        userId,
+        buildingId: factoryId,
+        recipeId: 'heart-charm',
+        total: 3,
+        itemSeconds: 60,
+        output: { 'heart-charm': 1 },
+        inputs: { timber: 2, treats: 1 },
+        startedAt: new Date(),
+      })),
+    );
+    const lockBatchRow = (tx: Transaction, id: string) =>
+      tx
+        .select({ id: factoryQueues.id })
+        .from(factoryQueues)
+        .where(eq(factoryQueues.id, id))
+        .for('update');
+    let locked: string[] = [];
+    await rowsAgainst(lockBatchRow, batchIds, async () => {
+      locked = (await unplanned((tx) => createFactoryRepo(tx).lockRunning({ mapId, userId }))).map(
+        (b) => b.id,
+      );
+    });
+    expect(locked).toEqual(batchIds);
+    await rowsAgainst(lockBatchRow, batchIds, async () => {
+      locked = (await unplanned((tx) => createFactoryRepo(tx).lockRunningIn(factoryId))).map(
+        (b) => b.id,
+      );
+    });
+    expect(locked).toEqual(batchIds);
+  });
+
   it('locks home tiles and the target tile together in id order (buildings `lockHomeTilesAnd`, #202)', async () => {
     const { mapId, userId, tileIds } = await fires();
     // The target (an outer tile, q 12) has the lowest id; the home tiles the two above.
@@ -1524,5 +1568,124 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     await rowsAgainst(lockUserRow, ids, () =>
       unplanned((tx) => createAccountHelpersRepo(tx).lockUsers([...ids].reverse())),
     );
+  });
+
+  /**
+   * Lee and Sam on one patch, each home next to the same trading post, with
+   * four squishies in id order (Lee: 1 and 3, Sam: 0 and 2) plus one each
+   * that stays home, and Lee's offer to Sam: squishy 3 and a Timber for
+   * squishy 0 and a Stone (#271).
+   */
+  async function tradeSetup(prefix: string) {
+    const lee = await player(`${prefix}_lee`);
+    const sam = await player(`${prefix}_sam`);
+    const [map] = await db
+      .insert(maps)
+      .values({ kind: 'multiplayer', name: 'Swap Locks', timeZone: 'UTC', maxPlayers: 4 })
+      .returning({ id: maps.id });
+    const mapId = map!.id;
+    await db.insert(mapMembers).values([
+      { mapId, userId: lee.id, role: 'owner' },
+      { mapId, userId: sam.id, role: 'member' },
+    ]);
+    await db.insert(tiles).values([
+      { mapId, q: 0, r: 0, terrain: 'trading-post' },
+      { mapId, q: 1, r: 0, terrain: 'meadow', ownerUserId: lee.id, homeSlot: 0 },
+      { mapId, q: -1, r: 0, terrain: 'meadow', ownerUserId: sam.id, homeSlot: 1 },
+    ]);
+    const ids = Array.from({ length: 4 }, () => randomUUID()).sort();
+    const owners = [sam, lee, sam, lee];
+    await db.insert(squishies).values(
+      [
+        ...ids.map((id, i) => ({ id, owner: owners[i]! })),
+        { id: randomUUID(), owner: lee },
+        { id: randomUUID(), owner: sam },
+      ]
+        .reverse()
+        .map(({ id, owner }) => ({
+          id,
+          mapId,
+          ownerUserId: owner.id,
+          speciesId: 'test-squishy',
+          element: 'fire',
+          feeling: 'cozy',
+        })),
+    );
+    await withTransaction(db, async (tx) => {
+      await grantItems(tx, { mapId, userId: lee.id }, { timber: 2 }, 'dev-grant');
+      await grantItems(tx, { mapId, userId: sam.id }, { stone: 2 }, 'dev-grant');
+    });
+    const trades = createTradesService({ db, clock: () => new Date('2026-11-04T16:00:00Z') });
+    const post = { q: 0, r: 0 };
+    const sent = await trades.send(lee, mapId, {
+      ...post,
+      kind: 'trade',
+      toUserId: sam.id,
+      give: [
+        { kind: 'squishy', squishyId: ids[3]! },
+        { kind: 'item', itemId: 'timber', quantity: 1 },
+      ],
+      want: [
+        { kind: 'squishy', squishyId: ids[0]! },
+        { kind: 'item', itemId: 'stone', quantity: 1 },
+      ],
+    });
+    return { mapId, lee, sam, ids, trades, post, offerId: sent.offers[0]!.id };
+  }
+
+  it("locks both players' squishies in one id-ordered lock (trades `accept`, accept vs nightfall, #271)", async () => {
+    const { mapId, sam, ids, trades, post, offerId } = await tradeSetup('swap_night');
+    await nightfallAgainst([ids[0]!, ids[3]!], () => trades.accept(sam, mapId, offerId, post));
+    const [moved] = await db.select().from(squishies).where(eq(squishies.id, ids[3]!));
+    expect(moved!.ownerUserId).toBe(sam.id);
+  });
+
+  it('takes the squishies before the inventory rows, as settling does (trades `accept`, #271)', async () => {
+    const { mapId, sam, ids, trades, post, offerId } = await tradeSetup('swap_settle');
+    await holdThen(
+      (tx) => lockSquishy(tx, ids[0]!),
+      () => trades.accept(sam, mapId, offerId, post),
+      (tx) => createInventoryRepo(tx).lockItems({ mapId, userId: sam.id }, ['stone', 'timber']),
+    );
+    const bag = await db
+      .select({ itemId: inventories.itemId, quantity: inventories.quantity })
+      .from(inventories)
+      .where(and(eq(inventories.mapId, mapId), eq(inventories.userId, sam.id)))
+      .orderBy(asc(inventories.itemId));
+    expect(bag).toEqual([
+      { itemId: 'stone', quantity: 1 },
+      { itemId: 'timber', quantity: 1 },
+    ]);
+  });
+
+  it('lets crossed accepts both go through (trades `accept`, both ways at once, #271)', async () => {
+    const { mapId, lee, sam, ids, trades, post, offerId } = await tradeSetup('swap_cross');
+    // Sam's offer back the other way: squishy 2 and a Stone for squishy 1 and a Timber.
+    const back = await trades.send(sam, mapId, {
+      ...post,
+      kind: 'trade',
+      toUserId: lee.id,
+      give: [
+        { kind: 'squishy', squishyId: ids[2]! },
+        { kind: 'item', itemId: 'stone', quantity: 1 },
+      ],
+      want: [
+        { kind: 'squishy', squishyId: ids[1]! },
+        { kind: 'item', itemId: 'timber', quantity: 1 },
+      ],
+    });
+    const results = await Promise.all([
+      outcome(trades.accept(sam, mapId, offerId, post)),
+      outcome(
+        trades.accept(lee, mapId, back.offers.find((o) => o.fromUserId === sam.id)!.id, post),
+      ),
+    ]);
+    expect(results).toEqual(['ok', 'ok']);
+    const owners = await db
+      .select({ id: squishies.id, owner: squishies.ownerUserId })
+      .from(squishies)
+      .where(inArray(squishies.id, ids))
+      .orderBy(asc(squishies.id));
+    expect(owners.map((r) => r.owner)).toEqual([lee.id, sam.id, lee.id, sam.id]);
   });
 });

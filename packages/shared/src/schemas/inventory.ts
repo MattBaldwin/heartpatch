@@ -40,6 +40,15 @@ export const ItemChangeReasonSchema = z.enum([
   'repair',
   /** Exploring your land (#199): finds, and the wear on the tool a search used. */
   'explore',
+  /** Trades and gifts (#271): held for an offer, landed by it, or given back. */
+  'trade-escrow',
+  'trade',
+  'trade-return',
+  /**
+   * Crafting Factory batches (#294): paid when one starts, things made as
+   * they land, and what comes back when one stops. Ledgered against the batch.
+   */
+  'factory',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
@@ -71,29 +80,63 @@ export const CraftSchema = z.object({
 export type Craft = z.infer<typeof CraftSchema>;
 
 /**
+ * One Crafting Factory batch still going (#294). `done` is how many were made
+ * by the reply's `now` (all of them are in the bag already); `nextAt` is when
+ * the next one finishes, `doneAt` the last.
+ */
+export const FactoryBatchSchema = z.object({
+  id: z.uuid(),
+  recipeId: ContentIdSchema,
+  total: z.number().int().min(1),
+  done: z.number().int().min(0),
+  /** Seconds each one takes (fixed when the batch started, speed-ups included). */
+  itemSeconds: z.number().int().min(1),
+  startedAt: z.iso.datetime(),
+  nextAt: z.iso.datetime().nullable(),
+  doneAt: z.iso.datetime(),
+});
+export type FactoryBatch = z.infer<typeof FactoryBatchSchema>;
+
+/** My Crafting Factory on this map: its building row, level, batch spots and batches going. */
+export const FactoryViewSchema = z.object({
+  buildingId: z.uuid(),
+  level: z.number().int().min(1),
+  slots: z.number().int().min(1),
+  batches: z.array(FactoryBatchSchema),
+});
+export type FactoryView = z.infer<typeof FactoryViewSchema>;
+
+/**
  * `GET /maps/:mapId/inventory`: everything the bag and the tile panel need.
  * `seasons` are the season ids on today on this map (map-local date).
+ * `factory`: my Crafting Factory (#294), or null before I build one.
  */
 export const InventoryResponseSchema = z.object({
   items: ItemCountsSchema,
   gathers: z.array(GatherSchema),
   crafts: z.array(CraftSchema),
+  factory: FactoryViewSchema.nullable(),
   seasons: z.array(ContentIdSchema),
   now: z.iso.datetime(),
 });
 export type InventoryResponse = z.infer<typeof InventoryResponseSchema>;
 
-/** What a settle put in the bag: one finished craft, keeper gather, or a gatherer's cycles. */
+/**
+ * What a settle put in the bag: one finished craft, keeper gather, a
+ * gatherer's cycles, or a Factory batch's newly made things (#294, with its
+ * `recipeId`).
+ */
 export const LandedSchema = z.object({
-  kind: z.enum(['craft', 'gather', 'work']),
+  kind: z.enum(['craft', 'gather', 'work', 'factory']),
   items: ItemCountsSchema,
+  recipeId: ContentIdSchema.optional(),
 });
 export type Landed = z.infer<typeof LandedSchema>;
 
 /**
  * `POST /maps/:mapId/settle` (owner decision 2026-10-06): everything that
  * finished goes straight into the bag, no Collect tap. The bag after, what
- * landed (crafts, then gathers, then gatherers' work), and when the next thing finishes (null: nothing's
+ * landed (crafts, then gathers, then gatherers' work, then Factory batches), and when the next thing finishes (null: nothing's
  * going), so the client asks again then and not before.
  */
 export const SettleResponseSchema = InventoryResponseSchema.extend({
