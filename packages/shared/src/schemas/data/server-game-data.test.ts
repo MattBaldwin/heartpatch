@@ -169,6 +169,20 @@ describe('checkServerGameData', () => {
     expect(problems).toEqual([]);
   });
 
+  it('reports a secret evolution that comes before a public one (#236)', () => {
+    const problems = problemsAfter((d) => {
+      d.secretEvolutions.push(
+        // Puddlepuff evolves into Splashmallow at 16 (public).
+        { from: 'fixture-puddlepuff', into: 'fixture-moonpuff', level: 15 },
+        // At the same level the public one wins (it's listed first): fine.
+        { from: 'fixture-puddlepuff', into: 'fixture-moonmallow', level: 16 },
+      );
+    });
+    expect(problems).toEqual([
+      'secretEvolutions[1].level: "fixture-puddlepuff" evolves into secret "fixture-moonpuff" at level 15, before its public evolution at level 16',
+    ]);
+  });
+
   it('checks secret evolution sources and targets', () => {
     const problems = problemsAfter((d) => {
       d.secretEvolutions = [
