@@ -153,8 +153,32 @@ export async function twoTraders(browser: Browser, patchName: string): Promise<T
   for (const page of [lee, sam]) {
     await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
     await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+    await answerNightNudge(page, mapId);
   }
   return { lee, sam, leeName, samName, mapId, errors };
+}
+
+/**
+ * Answers tonight's dark-land nudge on this device ahead of time (#277): the
+ * dev route gives each trader land outside home with no fire, so in the hour
+ * before nightfall the nudge would cover the post and its buttons. The nudge
+ * only comes at that dusk, so answering tonight covers a whole test. Uses
+ * the game's own key (`hollow-screen.ts` `nudgeKey`).
+ */
+async function answerNightNudge(page: Page, mapId: string): Promise<void> {
+  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
+  const hollow = await api<{ hollow: { tonight: { night: string } } }>(
+    page,
+    'GET',
+    `/maps/${mapId}/hollow`,
+  );
+  expect(hollow.status).toBe(200);
+  await page.evaluate(
+    ({ key, night }) => {
+      window.localStorage.setItem(key, night);
+    },
+    { key: `heartpatch.hollow.nudge.${me}.${mapId}`, night: hollow.body.hollow.tonight.night },
+  );
 }
 
 /** Gives a player a squishy (dev route). */
