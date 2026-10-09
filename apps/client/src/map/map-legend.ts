@@ -69,8 +69,8 @@ const LINE_STROKES: Readonly<
     { y: 2.5, width: 2.5 },
     { y: 7.5, width: 2.5 },
   ],
-  'dash-dot': [{ y: 5, width: 5, dash: '9 6 0.1 6' }],
-  'long-dash': [{ y: 5, width: 5, dash: '16 6' }],
+  'dash-dot': [{ y: 5, width: 5, dash: '8 8 0.1 8' }],
+  'long-dash': [{ y: 5, width: 5, dash: '14 9' }],
 };
 
 function icon(entry: LegendEntry, size: number): SVGSVGElement {

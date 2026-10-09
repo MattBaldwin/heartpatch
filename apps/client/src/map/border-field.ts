@@ -23,7 +23,7 @@ export interface BorderFieldOptions {
 
 /** Read-only numbers for the dev hook and tests. */
 export interface BorderStats {
-  /** Meshes drawn: one per Keeper with land (one draw call each). */
+  /** Meshes drawn: one per Keeper with land (one draw call each). The open-home outline's mesh isn't counted. */
   readonly meshes: number;
   readonly triangles: number;
   /** Home tiles saved for a Keeper who hasn't joined yet, outlined (#318; one mesh for all). */

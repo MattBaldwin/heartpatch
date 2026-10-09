@@ -102,14 +102,14 @@ export function linePieces(
   }
 }
 
+/** The moon's bite: a circle clear of the middle (`border-layout.test.ts` checks). */
+export const MOON_BITE = { c: { x: 0.7, z: 0.16 }, r: 0.52 } as const;
+
 /**
  * The moon (#318): a disc with a bite out of its right side. Each ray from
  * the middle stops at whichever comes first, the disc's edge or the bite's,
  * so the outline is one radius per angle and its badge fans from the middle.
  */
-/** The moon's bite: a circle clear of the middle (`border-layout.test.ts` checks). */
-export const MOON_BITE = { c: { x: 0.7, z: 0.16 }, r: 0.52 } as const;
-
 function moonRadius(t: number): number {
   const ray = { x: Math.sin(t), z: Math.cos(t) };
   const exit = (c: { x: number; z: number }, r: number): number | null => {
