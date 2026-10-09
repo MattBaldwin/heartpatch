@@ -18,7 +18,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, sessions, users } from '../../db/schema.js';
+import { buildings, keepers, sessions, squishies, users } from '../../db/schema.js';
 import { mapLocalTime } from '../../lib/time.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
@@ -448,6 +448,82 @@ describe.skipIf(!url)('fires on captured land (needs DATABASE_URL)', () => {
       'packed',
     ]);
     expect(events.filter((e) => e.type === 'building.moved')).toHaveLength(1);
+    // Run again: nothing left to do here.
+    await relayoutHomes(
+      db,
+      () => clock,
+      () => undefined,
+    );
+    expect(await eventsOf(mapId)).toHaveLength(events.length);
+  });
+
+  it('packs up home Training Grounds with everything back, landing trainees first, once (#277)', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    const { tiles } = await home(server, kid, mapId);
+    const [ring] = tiles.filter((t) => !t.heartSeed);
+    const tile = (await db.query.tiles.findFirst({
+      where: (x, { and, eq }) => and(eq(x.mapId, mapId), eq(x.q, ring!.q), eq(x.r, ring!.r)),
+    }))!;
+    // Built at home before #277, at level 2, with a trainee two hours in.
+    const [grounds] = await db
+      .insert(buildings)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: tile.id,
+        buildingId: 'training-grounds',
+        kind: 'training-grounds',
+        spot: 2,
+        level: 2,
+      })
+      .returning({ id: buildings.id });
+    const [pal] = await db
+      .insert(squishies)
+      .values({
+        mapId,
+        ownerUserId: kid.id,
+        speciesId: 'test-squishy',
+        element: 'fire',
+        feeling: 'cozy',
+        trainingBuildingId: grounds!.id,
+        trainingSince: new Date(clock.getTime() - 2 * 60 * 60 * 1000),
+      })
+      .returning({ id: squishies.id });
+
+    const errors: unknown[] = [];
+    await relayoutHomes(
+      db,
+      () => clock,
+      (_owner, err) => errors.push(err),
+    );
+    expect(errors).toEqual([]);
+    expect(
+      await db.query.buildings.findFirst({ where: (t, { eq }) => eq(t.id, grounds!.id) }),
+    ).toBeUndefined();
+    // Its two hours at 8 XP an hour landed, and it stopped training.
+    expect(
+      await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pal!.id) }),
+    ).toMatchObject({ xp: 16, trainingBuildingId: null, trainingSince: null });
+    // Everything back, whole: both levels' cost.
+    const refund = { timber: 24, stone: 24 };
+    const bag = await db.query.inventories.findMany({
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.userId, kid.id)),
+    });
+    expect(Object.fromEntries(bag.map((b) => [b.itemId, b.quantity]))).toEqual(refund);
+    // The morning report's one-time note, apart from the fires'.
+    const status = HollowResponseSchema.parse(
+      (await call(server, 'GET', `/maps/${mapId}/hollow`, kid)).json(),
+    ).hollow;
+    expect(status.trainingGroundsPacked).toEqual({ refund, at: clock.toISOString() });
+    expect(status.homeFirePacked).toBeNull();
+    const events = await eventsOf(mapId);
+    const removed = events.filter((e) => e.type === 'building.removed');
+    expect(removed.map((e) => parseGameEventPayload('building.removed', e.payload))).toEqual([
+      expect.objectContaining({ lost: 'packed', refund, movedOut: [pal!.id] }),
+    ]);
+    expect(events.map((e) => e.type)).toContain('squishy.trained');
     // Run again: nothing left to do here.
     await relayoutHomes(
       db,

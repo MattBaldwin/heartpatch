@@ -460,8 +460,8 @@ const home = createHomeScreen({
   tier: () => stage?.quality.snapshot.tier ?? tier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
-  onJobs: (mapId) => {
-    void jobs.openJobBoard(mapId);
+  onJobs: (mapId, at) => {
+    void jobs.openJobBoard(mapId, at);
   },
   showJobs: (mapId) => mapId !== glade,
   onRecipeBook: () => {

@@ -12,7 +12,13 @@ import { withTransaction, type Executor, type Transaction } from '../../db/clien
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
-import { buildings, packedHomeFires, squishies, tiles } from '../../db/schema.js';
+import {
+  buildings,
+  packedHomeFires,
+  packedTrainingGrounds,
+  squishies,
+  tiles,
+} from '../../db/schema.js';
 
 /** One of the player's home tiles (read only: tiles belong to the maps module). */
 export interface HomeTileRow {
@@ -124,6 +130,22 @@ export interface BuildingsRepo {
     refund: Record<string, number>,
     at: Date,
   ) => Promise<void>;
+  /**
+   * Notes that a player's home Training Grounds packed up and moved out
+   * (#277): adds `refund` to what the note says came back. After the bag's
+   * rows, before `maps`.
+   */
+  notePackedTraining: (
+    mapId: string,
+    userId: string,
+    refund: Record<string, number>,
+    at: Date,
+  ) => Promise<void>;
+  /** The player's packed-Training-Grounds note, or null. */
+  packedTraining: (
+    mapId: string,
+    userId: string,
+  ) => Promise<{ refund: Record<string, number>; packedAt: Date } | null>;
   /** The player's packed-home-fire note, or null. */
   packedFires: (
     mapId: string,
@@ -165,6 +187,8 @@ export interface BuildingsRepo {
   moveOutAll: (buildingRowId: string) => Promise<string[]>;
   /** Locks the squishies practicing at a Training Grounds, in id order; returns their ids. */
   lockTrainees: (buildingRowId: string) => Promise<string[]>;
+  /** The squishies practicing at a Training Grounds, in id order, unlocked (the caller locks them later). */
+  traineesOf: (buildingRowId: string) => Promise<string[]>;
 }
 
 /** The repo inside `transaction`: the only place it can write game events. */
@@ -324,6 +348,37 @@ function queries(db: Executor): BuildingsRepo {
         .select({ refund: packedHomeFires.refund, packedAt: packedHomeFires.packedAt })
         .from(packedHomeFires)
         .where(and(eq(packedHomeFires.mapId, mapId), eq(packedHomeFires.userId, userId)));
+      return row ?? null;
+    },
+
+    notePackedTraining: async (mapId, userId, refund, at) => {
+      const [existing] = await db
+        .select({ refund: packedTrainingGrounds.refund })
+        .from(packedTrainingGrounds)
+        .where(
+          and(eq(packedTrainingGrounds.mapId, mapId), eq(packedTrainingGrounds.userId, userId)),
+        );
+      const sum: Record<string, number> = { ...(existing?.refund ?? {}) };
+      for (const [id, n] of Object.entries(refund)) sum[id] = (sum[id] ?? 0) + n;
+      await db
+        .insert(packedTrainingGrounds)
+        .values({ mapId, userId, refund: sum, packedAt: at })
+        .onConflictDoUpdate({
+          target: [packedTrainingGrounds.mapId, packedTrainingGrounds.userId],
+          set: { refund: sum, packedAt: at },
+        });
+    },
+
+    packedTraining: async (mapId, userId) => {
+      const [row] = await db
+        .select({
+          refund: packedTrainingGrounds.refund,
+          packedAt: packedTrainingGrounds.packedAt,
+        })
+        .from(packedTrainingGrounds)
+        .where(
+          and(eq(packedTrainingGrounds.mapId, mapId), eq(packedTrainingGrounds.userId, userId)),
+        );
       return row ?? null;
     },
 
@@ -496,6 +551,15 @@ function queries(db: Executor): BuildingsRepo {
           .where(eq(squishies.trainingBuildingId, buildingRowId))
           .orderBy(asc(squishies.id))
           .for('no key update')
+      ).map((r) => r.id),
+
+    traineesOf: async (buildingRowId) =>
+      (
+        await db
+          .select({ id: squishies.id })
+          .from(squishies)
+          .where(eq(squishies.trainingBuildingId, buildingRowId))
+          .orderBy(asc(squishies.id))
       ).map((r) => r.id),
   };
 }

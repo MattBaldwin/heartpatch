@@ -143,6 +143,9 @@ const MAX_NIGHT_CHECK_MS = 30 * 60_000;
 const seenKey = (userId: string, mapId: string) => `heartpatch.hollow.seen.${userId}.${mapId}`;
 /** The packed-home-fire note seen on this device (#202): its `at`. */
 const packedKey = (userId: string, mapId: string) => `heartpatch.hollow.packed.${userId}.${mapId}`;
+/** The packed-Training-Grounds note seen on this device (#277): its `at`. */
+const groundsKey = (userId: string, mapId: string) =>
+  `heartpatch.hollow.packed-grounds.${userId}.${mapId}`;
 /** The last night whose show this device played to the end or skipped (#277). */
 const watchedKey = (userId: string, mapId: string) => `heartpatch.hollow.show.${userId}.${mapId}`;
 /** The last night whose dark-land nudge was answered on this device (#277). */
@@ -355,25 +358,36 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       return null;
     }
   };
-  /** The packed-home-fire note, while this device hasn't shown it (#202). */
-  const packedNote = (): { refund: Record<string, number>; at: string } | null => {
-    const packed = status?.homeFirePacked ?? null;
-    if (!packed || !user || !mapId) return null;
-    try {
-      return storage?.getItem(packedKey(user.id, mapId)) === packed.at ? null : packed;
-    } catch {
-      return packed;
-    }
-  };
-  const markPackedSeen = (): void => {
-    const packed = status?.homeFirePacked ?? null;
-    if (!packed || !user || !mapId) return;
-    try {
-      storage?.setItem(packedKey(user.id, mapId), packed.at);
-    } catch {
-      // Private mode or full storage: the note may show again next time.
-    }
-  };
+  type PackedNote = { refund: Record<string, number>; at: string };
+  /**
+   * A one-time packed-up note (home fires #202, home Training Grounds #277),
+   * while this device hasn't shown it, and the mark that it has.
+   */
+  const oneTimeNote = (
+    pick: (s: HollowStatus) => PackedNote | null,
+    key: (userId: string, mapId: string) => string,
+  ) => ({
+    note: (): PackedNote | null => {
+      const packed = status ? pick(status) : null;
+      if (!packed || !user || !mapId) return null;
+      try {
+        return storage?.getItem(key(user.id, mapId)) === packed.at ? null : packed;
+      } catch {
+        return packed;
+      }
+    },
+    markSeen: (): void => {
+      const packed = status ? pick(status) : null;
+      if (!packed || !user || !mapId) return;
+      try {
+        storage?.setItem(key(user.id, mapId), packed.at);
+      } catch {
+        // Private mode or full storage: the note may show again next time.
+      }
+    },
+  });
+  const firesNote = oneTimeNote((s) => s.homeFirePacked, packedKey);
+  const groundsNote = oneTimeNote((s) => s.trainingGroundsPacked, groundsKey);
   const markSeen = (night: string): void => {
     if (!user || !mapId) return;
     try {
@@ -681,11 +695,12 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
 
     const heldBack = options.otherReportOpen?.() ?? false;
     heldBackBefore = heldBack;
-    const packed = packedNote();
+    const packed = firesNote.note();
+    const packedGrounds = groundsNote.note();
     renderChips();
     reportBox.hidden =
       !on ||
-      (report.length === 0 && !packed) ||
+      (report.length === 0 && !packed && !packedGrounds) ||
       visitPlaying ||
       show.playing ||
       strengthOpen ||
@@ -699,6 +714,9 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
       const lines = [
         ...told.lines,
         ...(packed ? [...HOLLOW_TEXT.packed, describeItems(packed.refund)] : []),
+        ...(packedGrounds
+          ? [...HOLLOW_TEXT.packedGrounds, describeItems(packedGrounds.refund)]
+          : []),
       ];
       const waiting = report.flatMap((r) => r.taken.filter((t) => t.inHollow));
       const rescueFirst = waiting[0];
@@ -859,7 +877,8 @@ export function createHollowScreen(options: HollowScreenOptions): HollowScreen {
   function dismissReport(): void {
     const newest = report[0];
     if (newest) markSeen(newest.night);
-    markPackedSeen();
+    firesNote.markSeen();
+    groundsNote.markSeen();
     report = [];
     render();
   }

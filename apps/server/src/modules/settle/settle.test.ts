@@ -34,6 +34,7 @@ import {
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
 import { setDevDropChance } from '../wardrobe/drops.js';
+import { makeHomestead } from '../../../tests/homestead.js';
 import { backendPid, waitUntilBlockedBy } from '../../../tests/lock-waits.js';
 import { createGatheringService } from '../gathering/service.js';
 import { createInventoryService } from '../inventory/service.js';
@@ -469,11 +470,12 @@ describe.skipIf(!url)(
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
-      const node = await homeNode(server, kid, mapId, 'timber');
+      // On a homestead (owner decision 4 on #277).
+      const plot = await makeHomestead(db, mapId, kid.id, clock);
       await db.insert(buildings).values({
         mapId,
         ownerUserId: kid.id,
-        tileId: await tileIdAt(mapId, node),
+        tileId: plot.id,
         buildingId: 'training-grounds',
         kind: 'training-grounds',
         spot: 2,

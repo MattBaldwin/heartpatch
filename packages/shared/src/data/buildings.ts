@@ -78,8 +78,10 @@ export const BUILDINGS: Building[] = [
     kind: 'training-grounds',
     name: 'Training Grounds',
     description: 'Squishies practice here and earn XP all by themselves.',
-    maxPerHome: 1, // TUNE:
-    placement: 'home',
+    // On a homestead only (owner decision 4 on #277): trainees sleep out
+    // there, so they need a fire's light like a gatherer.
+    placement: 'homestead',
+    maxPerTile: 1, // TUNE:
     slot: 'ring',
     levels: [
       { cost: { timber: 8, stone: 8 }, capacity: 2, xpPerHour: 5 }, // TUNE:

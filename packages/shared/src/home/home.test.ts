@@ -6,7 +6,7 @@ import { hex, hexDistance, hexKey, hexSpiral } from '../hex/index.js';
 import { activeSeasons } from '../data/season-windows.js';
 import { HomeBaseRulesSchema, isBuildable } from '../schemas/data/home-base.js';
 import { checkGameData } from '../schemas/data/game-data.js';
-import type { HearthfireBuilding } from '../schemas/data/buildings.js';
+import { buildsAtHome, type HearthfireBuilding } from '../schemas/data/buildings.js';
 import {
   addDays,
   addFuel,
@@ -294,7 +294,7 @@ describe('home-base data', () => {
     // Only on captured land: the Heart Seed keeps home safe (owner decision 2026-10-07).
     expect(fire).toMatchObject({ placement: 'land', maxPerTile: 1, slot: 'centre' });
     expect(lantern).toMatchObject({ placement: 'land', maxPerTile: 1, slot: 'centre' });
-    for (const id of ['ember-den', 'cozy-meadow', 'training-grounds']) {
+    for (const id of ['ember-den', 'cozy-meadow']) {
       expect(building(id)).toMatchObject({ placement: 'home', slot: 'ring' });
     }
     const loose = { ...GAME_DATA, buildings: [{ ...fire, maxPerTile: undefined }] };
@@ -303,8 +303,14 @@ describe('home-base data', () => {
     expect(checkGameData(homeless).join(' ')).toContain('maxPerHome');
   });
 
-  it('allows one Training Grounds per home (the Train job picks "my" Training Grounds)', () => {
-    expect(building('training-grounds').maxPerHome).toBe(1);
+  it('puts Training Grounds on homesteads only, one a tile, around the middle (#277)', () => {
+    const grounds = building('training-grounds');
+    expect(grounds).toMatchObject({ placement: 'homestead', maxPerTile: 1, slot: 'ring' });
+    expect(buildsAtHome(grounds)).toBe(false);
+    // A homestead building needs no home count, but does need a tile cap.
+    expect(checkGameData({ ...GAME_DATA, buildings: [grounds] })).toEqual([]);
+    const loose = { ...GAME_DATA, buildings: [{ ...grounds, maxPerTile: undefined }] };
+    expect(checkGameData(loose).join(' ')).toContain('maxPerTile');
   });
 
   it('names the carved pumpkin apart from the fire built from it', () => {

@@ -246,9 +246,10 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       ownerUserId: s.ownerUserId,
       state: s.state,
       // A gatherer spends the night out on its work tile (owner decisions
-      // 2026-10-04), and a guard on its post (owner decision 2026-10-07):
-      // out on land beyond a lit fire's light, either is exposed.
-      sleepsAt: s.work ?? s.habitat ?? heartSeedOf(homes.get(s.ownerUserId) ?? []),
+      // 2026-10-04), a trainee on its Training Grounds' homestead (#277),
+      // and a guard on its post (owner decision 2026-10-07): out on land
+      // beyond a lit fire's light, any of them is exposed.
+      sleepsAt: s.work ?? s.training ?? s.habitat ?? heartSeedOf(homes.get(s.ownerUserId) ?? []),
       post:
         s.postOwnerUserId === undefined || s.post === null
           ? null
@@ -536,17 +537,27 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       const lastNight = lastNightOf(local, nightRules);
       const since = addDays(lastNight, 1 - rules.reportNights);
       const tonight = tonightOf(local, nightRules);
-      const [nights, hollowed, rewarded, members, buildings, homeTiles, squishyRows, packed] =
-        await Promise.all([
-          store.nightsSince(mapId, since, rules.reportNights),
-          store.hollowedOf(mapId, user.id),
-          store.rewardedOn(mapId, user.id, local.date, map.timeZone),
-          store.activeMembers(mapId),
-          createBuildingsRepo(db).listOnMap(mapId),
-          store.homeTiles(mapId),
-          store.nightSquishies(mapId, { lock: false }),
-          createBuildingsRepo(db).packedFires(mapId, user.id),
-        ]);
+      const [
+        nights,
+        hollowed,
+        rewarded,
+        members,
+        buildings,
+        homeTiles,
+        squishyRows,
+        packed,
+        packedTraining,
+      ] = await Promise.all([
+        store.nightsSince(mapId, since, rules.reportNights),
+        store.hollowedOf(mapId, user.id),
+        store.rewardedOn(mapId, user.id, local.date, map.timeZone),
+        store.activeMembers(mapId),
+        createBuildingsRepo(db).listOnMap(mapId),
+        store.homeTiles(mapId),
+        store.nightSquishies(mapId, { lock: false }),
+        createBuildingsRepo(db).packedFires(mapId, user.id),
+        createBuildingsRepo(db).packedTraining(mapId, user.id),
+      ]);
       // Until the Hollow Man's first visit to me (first-night grace), a
       // nudge to light a fire while one of mine would sleep in the dark
       // tonight: a gatherer or a guard out on land no lit fire reaches. Home
@@ -564,7 +575,9 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         if (s.ownerUserId !== user.id || s.state !== 'active') return false;
         // On watch on my own land: it spends the night on its post.
         if (s.postOwnerUserId === user.id && s.post) return !safeTonight.has(hexKey(s.post));
-        return s.work !== null && !safeTonight.has(hexKey(s.work));
+        // A gatherer on its tile, a trainee on its homestead (#277).
+        const out = s.work ?? s.training;
+        return out !== null && !safeTonight.has(hexKey(out));
       });
       const mine = nights.flatMap((n) => {
         const outcome = reportOf(n.outcomes, user.id);
@@ -650,6 +663,9 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
         fireHint,
         homeFirePacked: packed
           ? { refund: packed.refund, at: packed.packedAt.toISOString() }
+          : null,
+        trainingGroundsPacked: packedTraining
+          ? { refund: packedTraining.refund, at: packedTraining.packedAt.toISOString() }
           : null,
         now: at.toISOString(),
       };

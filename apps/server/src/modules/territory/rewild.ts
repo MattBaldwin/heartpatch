@@ -1,7 +1,7 @@
 import type { GameEventPayload, LocalDate } from '@heartpatch/shared';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
-import { takeDownOnLostLand } from '../buildings/service.js';
+import { finishLostTraining, takeDownOnLostLand } from '../buildings/service.js';
 import { refreshHomesteads } from '../explore/homesteads.js';
 import { takeDownFencesOnLostLand } from '../fences/service.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
@@ -13,7 +13,8 @@ import { createTendingRepo, createTerritoryRepo, type TendingTileRow } from './r
 /**
  * Land goes wild (#194's path, shared with the Hollow Man's reclaims, #277):
  * the tiles go back to neutral and their rows remember the night, guards go
- * home, fires and fences come down for their take-down share, gatherers
+ * home, fires, fences and Training Grounds come down for their take-down
+ * share (trainees landing what they earned), gatherers
  * bank what they had ready and rest. The caller has locked the tiles (step
  * 6, id order) and their `tile_tending` rows and checked each is still its
  * owner's; this keeps the rest of tech spec §7's order (defenders, buildings,
@@ -61,9 +62,9 @@ export async function rewildTiles(
     owned.map(([userId]) => userId),
     at,
   );
-  // Fires on that land come down too (#202, step 8). What they give
-  // back goes in their owners' bags with the gatherers' banking below,
-  // the inventory rows locked together (step 11).
+  // Fires and Training Grounds (#277) on that land come down too (#202,
+  // step 8). What they give back goes in their owners' bags with the
+  // gatherers' banking below, the inventory rows locked together (step 11).
   const lostFires = await takeDownOnLostLand(
     tx,
     mapId,
@@ -72,7 +73,15 @@ export async function rewildTiles(
     map.timeZone,
     'wild',
   );
-  for (const lost of lostFires) await repo.setLostFire(lost.tileId, lost.refund);
+  // The welcome-back line's refund, per tile: a fire and Training Grounds
+  // on one tile come back together.
+  const byTile = new Map<string, Record<string, number>>();
+  for (const lost of lostFires) {
+    const sum = { ...(byTile.get(lost.tileId) ?? {}) };
+    for (const [id, n] of Object.entries(lost.refund)) sum[id] = (sum[id] ?? 0) + n;
+    byTile.set(lost.tileId, sum);
+  }
+  for (const [tileId, refund] of byTile) await repo.setLostFire(tileId, refund);
   // And their fence segments (#203, step 8 after the fires), for the
   // same take-down share back.
   const lostFences = await takeDownFencesOnLostLand(
@@ -89,16 +98,25 @@ export async function rewildTiles(
     })),
     ...lostFences.map((l) => ({ userId: l.ownerUserId, items: l.refund, refId: l.fenceId })),
   ].filter((r) => Object.keys(r.items).length > 0);
-  // Gatherers bank what they had ready and rest (as when land changes hands).
+  // Gatherers bank what they had ready and rest (as when land changes
+  // hands); trainees there are locked with them (step 10, one id order).
   const workers = await repo.workersOn(going.map((t) => t.id));
-  await createSquishyJobsRepo(tx).lockSquishies(workers);
+  const trainees = lostFires.flatMap((l) => l.trainees);
+  await createSquishyJobsRepo(tx).lockSquishies([...new Set([...workers, ...trainees])]);
   const events: NewGameEvent[] =
     workers.length > 0 ? await leaveWork(tx, map, workers, 'resting', at, refunds) : [];
   if (workers.length === 0) await lockGrantRows(tx, mapId, refunds);
   for (const { userId, items, refId } of refunds) {
     await grantItems(tx, { mapId, userId }, items, 'build-refund', refId);
   }
-  events.push(...homesteads, ...lostFires.map((l) => l.event), ...lostFences.map((l) => l.event));
+  // Trainees land what they earned and stop, then their Training Grounds go (#277).
+  const training = await finishLostTraining(tx, mapId, lostFires, at);
+  events.push(
+    ...homesteads,
+    ...lostFires.map((l) => l.event),
+    ...lostFences.map((l) => l.event),
+    ...training,
+  );
   for (const [userId, list] of owned) {
     const payload: GameEventPayload<'tile.rewilded'> = {
       userId,

@@ -28,9 +28,11 @@ const buildingBase = {
   /**
    * Where it can stand (#202): `home` on the home base only; `land` only on
    * captured land outside it (Hearthfires: the Heart Seed keeps home safe,
-   * owner decision 2026-10-07); `owned` on any tile its owner holds.
+   * owner decision 2026-10-07); `owned` on any tile its owner holds;
+   * `homestead` only on a homestead joined to its owner's home (#199;
+   * Training Grounds, owner decision 4 on #277).
    */
-  placement: z.enum(['home', 'land', 'owned']),
+  placement: z.enum(['home', 'land', 'owned', 'homestead']),
   /**
    * How many can stand on one tile outside the home base. Required unless
    * it's `placement: 'home'` (`checkGameData`).
@@ -126,9 +128,9 @@ export type BuildingKind = Building['kind'];
 export type BuildingSlot = Building['slot'];
 export type BuildingPlacement = Building['placement'];
 
-/** Can this building stand on a home tile? (Not one for captured land only.) */
+/** Can this building stand on a home tile? (Not one for captured land or homesteads only.) */
 export function buildsAtHome(building: Pick<Building, 'placement'>): boolean {
-  return building.placement !== 'land';
+  return building.placement === 'home' || building.placement === 'owned';
 }
 export type HearthfireBuilding = z.infer<typeof HearthfireBuildingSchema>;
 export type HabitatBuilding = z.infer<typeof HabitatBuildingSchema>;

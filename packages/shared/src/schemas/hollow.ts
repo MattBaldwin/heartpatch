@@ -94,7 +94,8 @@ export const HollowStatusSchema = z.object({
    * A cozy nudge to light a fire: the Hollow Man's first visit to me (after
    * my first-night grace) is tonight or still to come, and one of my
    * squishies would spend tonight in the dark (a gatherer or a guard out on
-   * land no lit fire reaches; home is always safe, owner decisions 2026-10-07).
+   * land no lit fire reaches, or a trainee on a dark homestead, #277; home is
+   * always safe, owner decisions 2026-10-07).
    */
   fireHint: z.boolean(),
   /**
@@ -103,6 +104,12 @@ export const HollowStatusSchema = z.object({
    * morning report says so once per device; null when I never had one.
    */
   homeFirePacked: z.object({ refund: ItemCountsSchema, at: z.iso.datetime() }).nullable(),
+  /**
+   * My home Training Grounds packed up when they moved to homesteads (#277,
+   * owner decision 4): what came back (all of it), and when. Said once per
+   * device, like `homeFirePacked`; null when I never had one at home.
+   */
+  trainingGroundsPacked: z.object({ refund: ItemCountsSchema, at: z.iso.datetime() }).nullable(),
   /** The server's clock. */
   now: z.iso.datetime(),
 });

@@ -246,6 +246,23 @@ export interface WorkPause {
 }
 
 /**
+ * Real time and working time around a pause: `worked` cuts the pause's span
+ * out of a real instant, and `real` puts it back (still paused, nothing
+ * happens past its start).
+ */
+function pauseClock(pause: WorkPause) {
+  const { fromMs } = pause;
+  const toMs = pause.toMs ?? Number.POSITIVE_INFINITY;
+  const paused = pause.toMs === null;
+  return {
+    fromMs,
+    paused,
+    worked: (t: number) => (t <= fromMs ? t : t - (Math.min(t, toMs) - fromMs)),
+    real: (w: number) => (w <= fromMs ? w : paused ? fromMs : w + (toMs - fromMs)),
+  };
+}
+
+/**
  * `workProgress` with a pause left out (#199: a homestead cut off from home
  * pauses its gathering, and paused time never pays). Time inside the pause
  * doesn't count: cycles finished before it are kept, and counting carries
@@ -260,13 +277,7 @@ export function workProgressAround(
   pause: WorkPause | null,
 ): WorkProgress {
   if (!pause) return workProgress(sinceMs, nowMs, cycleSeconds, rules);
-  const { fromMs } = pause;
-  const toMs = pause.toMs ?? Number.POSITIVE_INFINITY;
-  const paused = pause.toMs === null;
-  // Real time → working time: the pause's span is cut out.
-  const worked = (t: number) => (t <= fromMs ? t : t - (Math.min(t, toMs) - fromMs));
-  // Working time → real time. Still paused, nothing happens past its start.
-  const real = (w: number) => (w <= fromMs ? w : paused ? fromMs : w + (toMs - fromMs));
+  const { fromMs, paused, worked, real } = pauseClock(pause);
   const p = workProgress(worked(sinceMs), worked(nowMs), cycleSeconds, rules);
   // Still paused, the next cycle can't finish until the pause ends.
   const nextReady =
@@ -398,4 +409,24 @@ export function trainingProgress(
   if (elapsed >= capMs) return { xp, full: true, nextSinceMs: nowMs };
   // Rounded up, so an XP point is never paid twice.
   return { xp, full: false, nextSinceMs: sinceMs + Math.ceil((xp * HOUR_MS) / xpPerHour) };
+}
+
+/**
+ * `trainingProgress` with a pause left out (owner decision 4 on #277: a
+ * trainee on a homestead cut off from home naps). Time inside the pause
+ * earns nothing, as for a gatherer there (`workProgressAround`); with no
+ * pause it's `trainingProgress`.
+ */
+export function trainingProgressAround(
+  sinceMs: number,
+  nowMs: number,
+  xpPerHour: number,
+  rules: Pick<JobRules, 'training'>,
+  pause: WorkPause | null,
+): TrainingProgress {
+  if (!pause) return trainingProgress(sinceMs, nowMs, xpPerHour, rules);
+  const { worked, real } = pauseClock(pause);
+  const p = trainingProgress(worked(sinceMs), worked(nowMs), xpPerHour, rules);
+  // Full stops the count, as `trainingProgress` does: it starts again from now.
+  return { xp: p.xp, full: p.full, nextSinceMs: p.full ? nowMs : real(p.nextSinceMs) };
 }

@@ -8,9 +8,13 @@ import {
 import { describe, expect, it } from 'vitest';
 import { workableByMe } from './index.js';
 import {
+  canTrain,
+  groundsLabel,
+  trainHintText,
   hintLines,
   countsDown,
   jobLine,
+  JOBS_TEXT,
   nameOf,
   rarityOf,
   readyTotal,
@@ -214,5 +218,43 @@ describe('rarityOf (#240)', () => {
   it('shows no dot for a species this client has no row for', () => {
     const s = squishy(3);
     expect(rarityOf({ ...s, squishy: { ...s.squishy, speciesId: 'secret-thing' } })).toBeNull();
+  });
+});
+
+describe('Training Grounds on homesteads (#277)', () => {
+  const g = (n: number, used: number, napping = false) => ({
+    id: id(n),
+    q: n,
+    r: 0,
+    capacity: 2,
+    used,
+    firelit: false,
+    napping,
+  });
+
+  it('labels each one with its room, numbered when there are more', () => {
+    expect(groundsLabel({ trainingGrounds: [g(1, 1)] }, id(1))).toBe(
+      '🎯 Training Grounds · room for 1',
+    );
+    const two = { trainingGrounds: [g(1, 2), g(2, 0)] };
+    expect(groundsLabel(two, id(1))).toBe('🎯 Training Grounds 1 · full');
+    expect(groundsLabel(two, id(2))).toBe('🎯 Training Grounds 2 · room for 2');
+  });
+
+  it('can train only where there is room and the homestead is awake', () => {
+    expect(canTrain({ trainingGrounds: [] })).toBe(false);
+    expect(canTrain({ trainingGrounds: [g(1, 2)] })).toBe(false);
+    expect(canTrain({ trainingGrounds: [g(1, 0, true)] })).toBe(false);
+    expect(canTrain({ trainingGrounds: [g(1, 2), g(2, 1)] })).toBe(true);
+  });
+
+  it('says why Train is off: none yet, all napping, or all full', () => {
+    expect(trainHintText({ trainingGrounds: [] })).toBe(JOBS_TEXT.noGrounds);
+    expect(trainHintText({ trainingGrounds: [g(1, 0, true)] })).toBe(JOBS_TEXT.allNapping);
+    expect(trainHintText({ trainingGrounds: [g(1, 2)] })).toBe(JOBS_TEXT.groundsFull);
+    expect(trainHintText({ trainingGrounds: [g(1, 2), g(2, 0, true)] })).toBe(
+      JOBS_TEXT.groundsFull,
+    );
+    expect(trainHintText({ trainingGrounds: [g(1, 1)] })).toBe('');
   });
 });

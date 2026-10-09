@@ -14,6 +14,8 @@ import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
 import { grantItems, lockGrantRows } from '../inventory/service.js';
+import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { landTraining } from '../jobs/service.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import { createBuildingsRepo, type BuildingRow, type HomeTileRow } from './repo.js';
@@ -27,13 +29,19 @@ import { createBuildingsRepo, type BuildingRow, type HomeTileRow } from './repo.
  *   a home tile comes down with everything spent on it given back whole
  *   (build, upgrades and unburned fuel), and the player gets a one-time note
  *   in the morning report (`packed_home_fires`).
+ * - **Home Training Grounds move out** (#277, owner decision 4: they stand
+ *   only on homesteads). Each comes down the same way, everything spent on
+ *   it given back whole; its trainees land what they earned first, and the
+ *   player gets a one-time note in the morning report
+ *   (`packed_training_grounds`).
  * - **Typed spots** (#204): a ring building (a habitat, the Training
  *   Grounds) in a tile's middle moves to the first free ring spot on the same
  *   tile, keeping its level and residents. One with nowhere to go stays.
  *
  * One transaction per player, in the building commands' lock order: their
- * home tiles (step 6), the buildings (step 8, id order), the bag's rows
- * (step 11), the note, then `maps` for the events.
+ * home tiles (step 6), the buildings (step 8, id order), the trainees (step
+ * 10, id order), the bag's rows (step 11), the trainees' XP (`species_seen`
+ * after the bag), the notes, then `maps` for the events.
  */
 
 /** The Heart Seed's tile: the middle of the home (shared `heartSeedOf`). */
@@ -42,7 +50,7 @@ function isHeartSeed(tile: HomeTileRow, home: readonly HomeTileRow[]): boolean {
   return seed !== null && tile.q === seed.q && tile.r === seed.r;
 }
 
-/** Everything a packed-up home fire gives back: all it cost, and its unburned fuel. */
+/** Everything a packed-up home building gives back: all it cost, and a fire's unburned fuel. */
 export function packUpRefund(row: BuildingRow, local: MapLocalTime): ItemCounts {
   const building = BUILDING_DATA.get(row.buildingId);
   if (!building) return {};
@@ -125,16 +133,34 @@ async function relayoutOne(
       if (fresh && fresh.tileId === row.tileId) locked.push(fresh);
     }
 
+    // Step 10: the packing Training Grounds' trainees, one id-ordered lock.
+    const packing = locked.filter((row) => {
+      const building = BUILDING_DATA.get(row.buildingId);
+      return building !== undefined && !buildsAtHome(building);
+    });
+    const traineesBy = new Map<string, string[]>();
+    for (const row of packing) {
+      if (row.kind === 'training-grounds') traineesBy.set(row.id, await repo.traineesOf(row.id));
+    }
+    const trainees = [...traineesBy.values()].flat();
+    await createSquishyJobsRepo(tx).lockSquishies(trainees);
+
     const removed: NewGameEvent<'building.removed'>[] = [];
     const movedEvents: NewGameEvent<'building.moved'>[] = [];
     const refund: ItemCounts = {};
+    const trainingRefund: ItemCounts = {};
+    const groundsRows: string[] = [];
     for (const row of locked) {
       const building = BUILDING_DATA.get(row.buildingId);
       if (!building) continue;
       if (!buildsAtHome(building)) {
         const back = packUpRefund(row, local);
-        for (const [id, n] of Object.entries(back)) refund[id] = (refund[id] ?? 0) + n;
-        await repo.deleteBuilding(row.id);
+        const into = building.kind === 'training-grounds' ? trainingRefund : refund;
+        for (const [id, n] of Object.entries(back)) into[id] = (into[id] ?? 0) + n;
+        // Training Grounds go once their trainees have landed (below): the
+        // foreign key would clear their rows first.
+        if (building.kind === 'training-grounds') groundsRows.push(row.id);
+        else await repo.deleteBuilding(row.id);
         removed.push({
           mapId: owner.mapId,
           type: 'building.removed',
@@ -146,7 +172,7 @@ async function relayoutOne(
             q: row.q,
             r: row.r,
             refund: back,
-            movedOut: [],
+            movedOut: traineesBy.get(row.id) ?? [],
             lost: 'packed',
           },
         });
@@ -175,7 +201,9 @@ async function relayoutOne(
       });
     }
     // Step 11: everything back into the bag, the rows locked once in item-id order.
-    const grants = Object.entries(refund).filter(([, n]) => n > 0);
+    const all: ItemCounts = { ...refund };
+    for (const [id, n] of Object.entries(trainingRefund)) all[id] = (all[id] ?? 0) + n;
+    const grants = Object.entries(all).filter(([, n]) => n > 0);
     if (grants.length > 0) {
       const items = Object.fromEntries(grants);
       await lockGrantRows(tx, owner.mapId, [{ userId: owner.userId, items }]);
@@ -187,11 +215,21 @@ async function relayoutOne(
         removed[0]?.payload.buildingRowId,
       );
     }
-    if (removed.length > 0) await repo.notePackedFires(owner.mapId, owner.userId, refund, at);
+    // Trainees land what they earned and stop, then their Training Grounds go.
+    const training =
+      trainees.length > 0
+        ? (await landTraining(tx, { id: owner.mapId }, trainees, at, true)).events
+        : [];
+    for (const id of groundsRows) await repo.deleteBuilding(id);
+    const fires = removed.length - groundsRows.length;
+    if (fires > 0) await repo.notePackedFires(owner.mapId, owner.userId, refund, at);
+    if (groundsRows.length > 0) {
+      await repo.notePackedTraining(owner.mapId, owner.userId, trainingRefund, at);
+    }
     // Not published live: it runs once at boot, alongside the server coming
     // up. A client that connects mid-pass sees the change on its next read
     // (home tiles are safe either way).
-    for (const event of [...removed, ...movedEvents]) await repo.appendEvent(event);
+    for (const event of [...removed, ...movedEvents, ...training]) await repo.appendEvent(event);
     return { packed: removed.length, moved: movedEvents.length };
   });
 }

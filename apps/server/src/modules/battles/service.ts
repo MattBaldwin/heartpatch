@@ -180,6 +180,18 @@ export interface TileBattleEnd {
    * squishies). Empty or missing: nothing to give back.
    */
   refunds?: readonly { userId: string; items: ItemCounts; refId: string }[];
+  /**
+   * The defender's squishies the capture moves (trainees at Training Grounds
+   * that came down with the land, #277), locked with the team's (step 10,
+   * one id order) before the refunds.
+   */
+  squishies?: readonly string[];
+  /**
+   * Runs after the squishy locks and the refunds, before any XP of the
+   * team's: the trainees land what they earned. Returns events to append
+   * with `events`.
+   */
+  afterRefunds?: (tx: Executor, at: Date) => Promise<NewGameEvent[]>;
 }
 
 /** The other side of a rescue (#21), built by the hollow module in the start transaction. */
@@ -669,7 +681,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       .filter((award) => award.xp > 0);
     // Base battle XP × care and habitat, levels and evolution (#19's
     // `applyXp`), under the squishy locks (the order above).
-    await repo.lockSquishies(awards.map((a) => a.squishyId));
+    // A capture's moved squishies (#277's trainees) join the same id-ordered lock.
+    await repo.lockSquishies([
+      ...new Set([...awards.map((a) => a.squishyId), ...(tile.squishies ?? [])]),
+    ]);
     // The daily falloff (owner decision 2026-10-06): a squishy that has
     // already won `fullWinsPerDay` battles today gets a share of the XP.
     const wins = await repo.winsToday(
@@ -694,6 +709,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         await grantItems(tx, { mapId: row.mapId, userId }, items, 'build-refund', refId);
       }
     }
+    const landEvents = tile.afterRefunds ? await tile.afterRefunds(tx, at) : [];
     // When full XP comes back (#201): wins count from the patch's midnight.
     const map = fellOff ? await createMapsRepo(tx).findMap(row.mapId) : null;
     const fullXpResetAt = map ? nextLocalMidnight(at, map.timeZone).toISOString() : null;
@@ -791,6 +807,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     await appendGrowthEvents(repo.appendEvent, grown);
     for (const friend of friends) await appendCaptured(repo, row, friend);
     for (const event of tile.events) await repo.appendEvent(event);
+    for (const event of landEvents) await repo.appendEvent(event);
     for (const event of journeyEvents) await repo.appendEvent(event);
   };
 

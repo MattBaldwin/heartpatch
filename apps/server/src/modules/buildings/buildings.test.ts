@@ -24,6 +24,7 @@ import { mapLocalTime } from '../../lib/time.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
 import { newSessionToken } from '../auth/secrets.js';
+import { makeHomestead } from '../../../tests/homestead.js';
 import { grantItems } from '../inventory/service.js';
 import { fireStateAt, litSafeTiles } from './hearthfire.js';
 import { createBuildingsRepo } from './repo.js';
@@ -595,7 +596,7 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       );
       // A fire out on my land stays put; it never comes home (owner decision 2026-10-07).
       expect(errorOf(await move(fire.id, { q: seed.q, r: seed.r, spot: 6 })).message).toBe(
-        'A fire on your land stays where it is. Take it down to build it somewhere else.',
+        'Your Hearthfire stays where it is. Take it down to build it somewhere else.',
       );
       const moved = await move(den.id, { q: seed.q, r: seed.r, spot: 6 });
       expect(moved.statusCode).toBe(200);
@@ -922,10 +923,12 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const { plain } = await homeTiles(server, kid, mapId);
+      // On a homestead (owner decision 4 on #277).
+      const plot = await makeHomestead(db, mapId, kid.id, clock);
       const grounds = await placed(server, kid, mapId, {
         buildingId: 'training-grounds',
-        ...plain,
+        q: plot.q,
+        r: plot.r,
         spot: 1,
       });
       expect(grounds).toMatchObject({ kind: 'training-grounds', capacity: 2, residents: 0 });
@@ -964,16 +967,109 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
     });
   });
 
+  describe('Training Grounds on homesteads (owner decision 4 on #277)', () => {
+    it('stand only on a joined homestead, one a tile, around the middle', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const { plain } = await homeTiles(server, kid, mapId);
+      const body = (at: { q: number; r: number }, spot = 1) => ({
+        buildingId: 'training-grounds',
+        q: at.q,
+        r: at.r,
+        spot,
+      });
+      // Not at home any more.
+      const atHome = await place(server, kid, mapId, body(plain));
+      expect(atHome.statusCode).toBe(403);
+      expect(errorOf(atHome).message).toContain('homestead');
+      // Not on plain captured land that isn't a homestead.
+      const [land] = await landFor(mapId, kid, 1);
+      const onLand = await place(server, kid, mapId, body(land!));
+      expect(onLand.statusCode).toBe(403);
+      // On a homestead, around the middle, one a tile.
+      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      const middle = await place(server, kid, mapId, body(plot, 0));
+      expect(middle.statusCode).toBe(409);
+      await placed(server, kid, mapId, body(plot, 1));
+      const second = await place(server, kid, mapId, body(plot, 2));
+      expect(second.statusCode).toBe(409);
+      expect(errorOf(second).message).toBe('This tile already has a Training Grounds!');
+      // A second homestead takes its own.
+      const other = await makeHomestead(db, mapId, kid.id, clock, 1);
+      await placed(server, kid, mapId, body(other, 3));
+      // A napping homestead (cut off from home) takes none.
+      const third = await makeHomestead(db, mapId, kid.id, clock, 2);
+      await db.execute(
+        `update tile_explore set paused_at = '${clock.toISOString()}' where tile_id = '${third.id}'`,
+      );
+      const napping = await place(server, kid, mapId, body(third));
+      expect(napping.statusCode).toBe(409);
+      expect(errorOf(napping).message).toContain('napping');
+    });
+  });
+
+  describe('moving a trainee into a habitat (#277: it sleeps on its homestead)', () => {
+    it('lands what it earned and stops training; moving out leaves training alone', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      await give(mapId, kid, PLENTY);
+      const plot = await makeHomestead(db, mapId, kid.id, clock);
+      const grounds = await placed(server, kid, mapId, {
+        buildingId: 'training-grounds',
+        q: plot.q,
+        r: plot.r,
+        spot: 1,
+      });
+      const { plain } = await homeTiles(server, kid, mapId);
+      const den = await placed(server, kid, mapId, { buildingId: 'ember-den', ...plain, spot: 1 });
+      const [pal, other] = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      const house = (squishyId: string, habitatId: string | null) =>
+        call(server, 'POST', `/maps/${mapId}/squishies/${squishyId}/habitat`, kid, { habitatId });
+      for (const id of [pal, other]) {
+        const res = await call(server, 'POST', `/maps/${mapId}/squishies/${id}/job`, kid, {
+          job: 'training',
+          buildingId: grounds.id,
+        });
+        expect(res.statusCode, res.body).toBe(200);
+      }
+
+      // Two hours at 5 XP an hour, then it moves into the Ember Den.
+      clock.setTime(clock.getTime() + 2 * 60 * 60 * 1000);
+      const moved = await house(pal, den.id);
+      expect(moved.statusCode, moved.body).toBe(200);
+      const row = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, pal) });
+      expect(row).toMatchObject({
+        xp: 10,
+        habitatBuildingId: den.id,
+        trainingBuildingId: null,
+        trainingSince: null,
+      });
+      const types = (await eventsOf(mapId)).slice(-2).map((e) => e.type);
+      expect(types).toEqual(['squishy.trained', 'squishy.housed']);
+
+      // Moving out of a habitat stops nothing: the other one keeps training.
+      const out = await house(other, null);
+      expect(out.statusCode, out.body).toBe(200);
+      expect(
+        await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, other) }),
+      ).toMatchObject({ xp: 0, trainingBuildingId: grounds.id });
+    });
+  });
+
   describe('upgrading Training Grounds with trainees (review round 1)', () => {
     it('pays the old rate up to the upgrade and the new rate after it', async () => {
       const server = await start();
       const kid = await player();
       const mapId = await newMap(server, kid);
       await give(mapId, kid, PLENTY);
-      const { plain } = await homeTiles(server, kid, mapId);
+      const plot = await makeHomestead(db, mapId, kid.id, clock);
       const grounds = await placed(server, kid, mapId, {
         buildingId: 'training-grounds',
-        ...plain,
+        q: plot.q,
+        r: plot.r,
         spot: 1,
       });
       const pal = await squishy(mapId, kid);

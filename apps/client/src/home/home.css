@@ -210,6 +210,17 @@
   font-weight: 800;
 }
 
+/* Training Grounds on a homestead (#277): is the tile in fire light tonight? */
+.home-effect.home-grounds-lit {
+  background: #ffe9a8;
+  color: #6b4210;
+}
+
+.home-effect.home-grounds-dark {
+  background: #e6e0f5;
+  color: #3f3466;
+}
+
 /* Levels and upgrades (owner decision 2026-10-06). */
 .home-card-head {
   display: flex;

@@ -113,6 +113,8 @@ export interface NightSquishyRow {
   post: { q: number; r: number } | null;
   /** The tile it works as a gatherer (it spends the night there), or null. */
   work: { q: number; r: number } | null;
+  /** Its Training Grounds' homestead (it spends the night there, #277), or null. */
+  training: { q: number; r: number } | null;
 }
 
 export interface RescueRow {
@@ -422,6 +424,8 @@ function queries(db: Executor): HollowRepo {
       const habitatTile = alias(tiles, 'habitat_tile');
       const postTile = alias(tiles, 'post_tile');
       const workTile = alias(tiles, 'night_work_tile');
+      const trainingGrounds = alias(buildings, 'night_training_grounds');
+      const trainingTile = alias(tiles, 'night_training_tile');
       const query = db
         .select({
           id: squishies.id,
@@ -437,6 +441,8 @@ function queries(db: Executor): HollowRepo {
           atWork: squishyAtWork(),
           workQ: workTile.q,
           workR: workTile.r,
+          trainingQ: trainingTile.q,
+          trainingR: trainingTile.r,
         })
         .from(squishies)
         .innerJoin(mapMembers, activeMember(squishies.mapId, squishies.ownerUserId))
@@ -448,6 +454,8 @@ function queries(db: Executor): HollowRepo {
         .leftJoin(tileDefenders, eq(tileDefenders.squishyId, squishies.id))
         .leftJoin(postTile, eq(postTile.id, tileDefenders.tileId))
         .leftJoin(workTile, eq(workTile.id, squishies.workTileId))
+        .leftJoin(trainingGrounds, eq(trainingGrounds.id, squishies.trainingBuildingId))
+        .leftJoin(trainingTile, eq(trainingTile.id, trainingGrounds.tileId))
         .where(eq(squishies.mapId, mapId))
         .orderBy(asc(squishies.id))
         // Locked until commit, so a squishy can't be moved into or out of a
@@ -466,6 +474,8 @@ function queries(db: Executor): HollowRepo {
         postOwnerUserId: r.posted === null ? undefined : r.postOwnerUserId,
         post: r.postQ !== null && r.postR !== null ? { q: r.postQ, r: r.postR } : null,
         work: r.atWork && r.workQ !== null && r.workR !== null ? { q: r.workQ, r: r.workR } : null,
+        training:
+          r.trainingQ !== null && r.trainingR !== null ? { q: r.trainingQ, r: r.trainingR } : null,
       }));
     },
 

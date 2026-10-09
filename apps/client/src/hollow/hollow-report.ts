@@ -49,6 +49,8 @@ export const HOLLOW_TEXT = {
     'Your home fire packed up, and everything came back.',
     'Build fires on your land! 🔥',
   ],
+  /** My home Training Grounds packed up and moved out to homesteads (#277, owner decision 4). */
+  packedGrounds: ['Your Training Grounds packed up and moved out!', 'Build one on a homestead 🏡.'],
   /** Peeks out beside the Adventure handle while a friend is in the Hollow. */
   news: 'A friend is in the Hollow!',
   mystery: 'a squishy friend',

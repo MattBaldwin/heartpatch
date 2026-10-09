@@ -19,6 +19,7 @@ import {
   atHome,
   buildingNote,
   buildRows,
+  GROUNDS_ON_HOMESTEAD,
   effectChip,
   effectChips,
   FIRES_ON_LAND,
@@ -26,13 +27,13 @@ import {
   freeHomeSpots,
   fuelAllOffer,
   landFires,
+  groundsTileOffer,
   landTileOffer,
   LAND_FIRE,
   likesHabitat,
   refundPreview,
   speciesMap,
   squishyRarity,
-  trainCost,
   upgradeOffer,
   upgradeReach,
 } from './home-view.js';
@@ -278,13 +279,6 @@ describe('build menu', () => {
     });
   });
 
-  it('says what Train would stop on the Training Grounds card', () => {
-    expect(trainCost({ job: 'guard' })).toBe('On watch · Train ends it');
-    expect(trainCost({ job: 'gatherer' })).toBe('Gathering · Train stops it');
-    expect(trainCost({ job: 'team' })).toBe('On the team · Train takes them off');
-    expect(trainCost({ job: 'resting' })).toBe('');
-  });
-
   it("maps where the fire's light reaches now and after the upgrade", () => {
     const home = homeWith();
     const reach = upgradeReach(home, fire({ q: 0, r: 0 }), 2);
@@ -404,6 +398,15 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
     expect(rows.get('cozy-meadow')).toBe('Goes around the middle 🏡');
   });
 
+  it('sends Training Grounds to a homestead, with their cost to show (#277)', () => {
+    const row = buildRows(homeWith({ items: { timber: 20, stone: 2 } })).find(
+      (r) => r.building.id === 'training-grounds',
+    )!;
+    expect(row.option).toEqual({ kind: 'homestead', note: GROUNDS_ON_HOMESTEAD });
+    expect(row.where).toBe('');
+    expect(row.needs.map((n) => n.label)).toEqual(['🪵 20/8', '🪨 2/8']);
+  });
+
   it('offers Fuel all fires with what filling every fire costs, once a fire is out on my land', () => {
     expect(fuelAllOffer(homeWith({ buildings: [homeFire] }))).toBeNull();
     expect(fuelAllOffer(homeWith({ buildings: [homeFire, outer] }))).toEqual({
@@ -440,6 +443,48 @@ describe('fires on my land (#202) and typed spots (#204)', () => {
       building: { id: 'jack-o-lantern-hearthfire' },
       needs: [{ ok: true }],
     });
+  });
+});
+
+describe('Training Grounds on a homestead (#277, mockup screen 6)', () => {
+  const grounds = {
+    ...fire({ id: ID(11), q: 3, r: 1, spot: 1 }),
+    buildingId: 'training-grounds',
+    kind: 'training-grounds' as const,
+    nightsLeft: null,
+    fuelSpace: null,
+    lit: null,
+    safeRadius: null,
+    capacity: 2,
+    residents: 1,
+  };
+  const tile = (extra: Partial<{ homestead: 'joined' | 'paused' | null; q: number }> = {}) => ({
+    q: 3,
+    r: 1,
+    nodeResource: 'timber',
+    homestead: 'joined' as const,
+    buildings: [{ spot: 0 }],
+    ...extra,
+  });
+
+  it('shows the Training Grounds standing there, napping or not', () => {
+    const home = homeWith({ buildings: [grounds] });
+    expect(groundsTileOffer(tile(), home)).toEqual({ kind: 'grounds', grounds, napping: false });
+    expect(groundsTileOffer(tile({ homestead: 'paused' }), home)).toEqual({
+      kind: 'grounds',
+      grounds,
+      napping: true,
+    });
+  });
+
+  it('offers to build them on a homestead, on its first free ring spot', () => {
+    const home = homeWith({ items: { timber: 8, stone: 1 } });
+    const offer = groundsTileOffer({ ...tile(), buildings: [{ spot: 0 }, { spot: 1 }] }, home);
+    expect(offer).toMatchObject({ kind: 'build', building: { id: 'training-grounds' }, spot: 2 });
+    expect(offer?.kind === 'build' && offer.needs.map((n) => n.ok)).toEqual([true, false]);
+    // Not on land that isn't a homestead; nothing new on a napping one.
+    expect(groundsTileOffer(tile({ homestead: null }), home)).toBeNull();
+    expect(groundsTileOffer(tile({ homestead: 'paused' }), home)).toEqual({ kind: 'napping' });
   });
 });
 

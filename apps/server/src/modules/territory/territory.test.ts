@@ -37,7 +37,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { buildings, keepers, sessions, users } from '../../db/schema.js';
+import { buildings, keepers, sessions, squishies, users } from '../../db/schema.js';
 import { runConsumer } from '../../jobs/consumers.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -1105,6 +1105,59 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
         outcome: 'taken',
         lostFire: refund,
       });
+    });
+
+    it("takes the defender's Training Grounds down for half back, landing its trainees first (#277)", async () => {
+      const server = await start();
+      const { kid, rival, mapId, near } = await rivals(server);
+      const [grounds] = await db
+        .insert(buildings)
+        .values({
+          mapId,
+          ownerUserId: rival.id,
+          tileId: near.id,
+          buildingId: 'training-grounds',
+          kind: 'training-grounds',
+          spot: 1,
+        })
+        .returning({ id: buildings.id });
+      const [trainee] = await db
+        .insert(squishies)
+        .values({
+          mapId,
+          ownerUserId: rival.id,
+          speciesId: 'test-squishy',
+          element: 'fire',
+          feeling: 'cozy',
+          trainingBuildingId: grounds!.id,
+          trainingSince: new Date(Date.parse('2026-10-04T12:00:00Z') - 4 * 60 * 60 * 1000),
+        })
+        .returning({ id: squishies.id });
+
+      const res = await attack(server, kid, mapId, near);
+      expect(res.statusCode, res.body).toBe(201);
+      await playOut(server, kid, battleOf(res));
+      expect((await tileAt(mapId, near)).ownerUserId).toBe(kid.id);
+      expect(
+        await db.query.buildings.findMany({ where: (t, { eq }) => eq(t.tileId, near.id) }),
+      ).toEqual([]);
+      const row = await db.query.squishies.findFirst({
+        where: (t, { eq }) => eq(t.id, trainee!.id),
+      });
+      expect(row).toMatchObject({ trainingBuildingId: null, trainingSince: null });
+      expect(row!.xp).toBeGreaterThan(0);
+      const refund = { timber: 4, stone: 4 };
+      const events = await eventsOf(mapId);
+      const removed = events.find((e) => e.type === 'building.removed')!;
+      expect(parseGameEventPayload('building.removed', removed.payload)).toMatchObject({
+        userId: rival.id,
+        buildingRowId: grounds!.id,
+        refund,
+        movedOut: [trainee!.id],
+        lost: 'captured',
+      });
+      expect(events.map((e) => e.type)).toContain('squishy.trained');
+      expect((await attacksOf(mapId)).at(-1)).toMatchObject({ lostFireRefund: refund });
     });
 
     it('counts a challenge still going toward the daily loss cap', async () => {
