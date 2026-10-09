@@ -43,6 +43,14 @@ export interface LorebookScreen {
 
 type Motion = 'none' | 'next' | 'prev';
 
+/** Which pages are found, as one string (to tell a new find from a read mark). */
+function foundIds(book: LorebookResponse | null): string {
+  return (book?.slots ?? [])
+    .filter((s) => s.found)
+    .map((s) => s.id)
+    .join(' ');
+}
+
 /** An iPad held sideways (tall enough: a big phone on its side keeps one page). */
 const TWO_UP_QUERY = '(min-width: 900px) and (min-height: 600px) and (orientation: landscape)';
 
@@ -475,9 +483,14 @@ export function createLorebookScreen(options: LorebookScreenOptions): LorebookSc
       closeButton.focus();
     },
     update: (next) => {
+      const before = foundIds(book);
       book = next;
       chapters = bookChapters(next);
-      if (!screen.hidden) render('none');
+      // On a page, a reply that only marks pages read changes nothing on
+      // screen (its ribbon stays while the book is open): don't redraw, so
+      // the page turn that's playing isn't cut short.
+      if (screen.hidden || (at !== null && before === foundIds(next))) return;
+      render('none');
     },
     close,
     get isOpen() {

@@ -191,6 +191,8 @@ body:has(.lbook:not([hidden])) .auth-chip {
   gap: 2px;
   min-height: 0;
   padding: 8px 12px 4px;
+  /* Pages scroll up and down; a sideways drag is ours (a swipe turns the page). */
+  touch-action: pan-y;
 }
 
 .lbook-page {

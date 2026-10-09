@@ -245,7 +245,9 @@ export function createLorebook(options: LorebookOptions): Lorebook {
       const next = await api.book();
       if (user?.id !== who.id) return;
       setBook(next);
-      const found = newPages(next.pages, readShown(who.id));
+      // A page already read in the book (on any device) needs no card.
+      const read = new Set(next.slots.filter((s) => s.found && s.readAt !== null).map((s) => s.id));
+      const found = newPages(next.pages, readShown(who.id)).filter((p) => !read.has(p.id));
       if (found.length === 0) return;
       show(found, LORE_TEXT.found);
     } catch {
