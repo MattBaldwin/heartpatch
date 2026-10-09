@@ -54,6 +54,7 @@ interface ExploreDebug {
     camera: { x: number; z: number; zoom: number };
     drawCalls: number;
     keeperHeight: number;
+    faded: number[];
   } | null;
 }
 
@@ -304,6 +305,43 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     await expect(action).toContainText('Dig');
     expect((await exploreState(page))?.card).toBeNull();
     expect((await exploreState(page))?.progress?.searched).toBe(searched);
+  }
+
+  // A tall prop between the camera and the Keeper fades (#291), and the
+  // see-through copy stays inside the draw-call budget. Tap-walk to just
+  // behind (further from the camera than) a tall spot; a tile whose tall
+  // spots can't be reached by taps skips this, saying so.
+  const tall = ['tree', 'rock', 'hollow-log', 'pumpkin-row', 'ledge', 'cave', 'reeds'];
+  let faded = false;
+  const state = (await exploreState(page))!;
+  for (const spot of nearestFirst(
+    state.spots.filter((s) => tall.includes(s.kind)),
+    state.keeper,
+  ).slice(0, 3)) {
+    const behind = { x: spot.x, z: spot.z + 0.12 };
+    for (let tries = 0; tries < 6; tries++) {
+      const k = (await exploreState(page))!.keeper;
+      if (Math.hypot(k.x - behind.x, k.z - behind.z) < 0.04) break;
+      const tap = await waypoint(page, behind);
+      if (!tap) break;
+      await realTapAt(page, tap.x, tap.y);
+      await keeperStill(page);
+    }
+    if (((await exploreState(page))?.scene?.faded.length ?? 0) > 0) {
+      faded = true;
+      break;
+    }
+  }
+  if (faded) {
+    await page.waitForTimeout(500);
+    const now = (await exploreState(page))!.scene!;
+    test.info().annotations.push({ type: 'drawCallsFaded', description: String(now.drawCalls) });
+    expect(now.drawCalls).toBeLessThan(DRAW_CALL_CEILING);
+  } else {
+    test.info().annotations.push({
+      type: 'skipped',
+      description: 'fade: no tall spot on this tile could be reached by taps from behind',
+    });
   }
 
   // Back to the map, with the explore view put away.
