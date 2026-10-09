@@ -12,14 +12,15 @@ import type { IconName } from '../ui/line-icons.js';
  * older (#308). The shovel emoji (U+1FA8F) is Emoji 16.0: iOS draws it only
  * from 18.4, so on the iOS 17 floor it was an empty box. The knot (U+1FAA2)
  * is Emoji 13.0, fine on iOS 17 but a box on older systems, and a climber
- * reads as "climb" better anyway. Elements show `TOOL_ICONS` instead.
+ * reads as "climb" better anyway. #335: the Net is a Snorkel (the diving
+ * mask is Emoji 12.0) and the Rope a Walking Stick (hiking boot, Emoji 11.0). Elements show `TOOL_ICONS` instead.
  */
 export const TOOL_WORDS: Readonly<
   Record<ToolId, { icon: string; verb: string; one: string; many: string; needs: string }>
 > = {
   shovel: { icon: '⛏️', verb: 'Dig', one: 'dig', many: 'digs', needs: 'to dig there' },
-  net: { icon: '🥅', verb: 'Scoop', one: 'scoop', many: 'scoops', needs: 'to scoop there' },
-  rope: { icon: '🧗', verb: 'Climb', one: 'climb', many: 'climbs', needs: 'to climb up there' },
+  net: { icon: '🤿', verb: 'Dive', one: 'dive', many: 'dives', needs: 'to dive there' },
+  rope: { icon: '🥾', verb: 'Hike', one: 'hike', many: 'hikes', needs: 'to hike up there' },
   lantern: { icon: '🪔', verb: 'Light', one: 'cave', many: 'caves', needs: 'to peek in there' },
 };
 

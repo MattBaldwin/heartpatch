@@ -27,14 +27,16 @@ describe('explore tools in the bag (#199)', () => {
     expect(toolMakes('shovel', 20, 'Shovel')).toBe('Makes a Shovel (20 digs)');
     expect(toolMakes('timber', 2, 'Timber')).toBeNull();
     expect(landedText([{ items: { shovel: 20 } }])).toBe('⛏️ A new Shovel!');
-    expect(landedText([{ items: { net: 40, timber: 2 } }])).toBe('🪵 +2 Timber, 🥅 2 new Nets!');
+    expect(landedText([{ items: { net: 40, timber: 2 } }])).toBe(
+      '🪵 +2 Timber, 🤿 2 new Snorkels!',
+    );
     expect(usesLine('lantern', 15)).toBe('15 caves left');
   });
 
   it('draws every tool, and writes it with an emoji every iPhone has (#308)', () => {
     for (const icon of Object.values(TOOL_ICONS)) expect(isIconName(icon)).toBe(true);
     expect(itemIcon('shovel')).toBe('⛏️');
-    expect(itemIcon('rope')).toBe('🧗');
+    expect(itemIcon('rope')).toBe('🥾');
     for (const [tool, words] of Object.entries(TOOL_WORDS)) expect(itemIcon(tool)).toBe(words.icon);
   });
 });

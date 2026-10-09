@@ -40,6 +40,12 @@ export type ExploreTool = z.infer<typeof ExploreToolSchema>;
 export const ExploreTerrainSchema = z
   .strictObject({
     terrain: ContentIdSchema,
+    /**
+     * This terrain's own layout version (#335), when it differs from the
+     * rules' `layout`. Bump it when this terrain's kit or spot count changes,
+     * so only this terrain's saved progress is read as stale.
+     */
+    layout: z.number().int().min(1).optional(),
     kinds: z
       .array(z.strictObject({ kind: ContentIdSchema, weight: z.number().int().positive() }))
       .min(1),
@@ -53,6 +59,42 @@ export const ExploreTerrainSchema = z
     path: ['spots', 'min'],
   });
 export type ExploreTerrain = z.infer<typeof ExploreTerrainSchema>;
+
+/** The explore sky's time of day (#335): dawn and dusk are the warm ones. */
+export const SkyPhaseSchema = z.enum(['dawn', 'day', 'dusk', 'night']);
+export type SkyPhase = z.infer<typeof SkyPhaseSchema>;
+
+/**
+ * When each sky starts, in minutes after the patch's local midnight, in
+ * order. The first starts at 0; the day's last one runs on past midnight
+ * until the first change of the next day.
+ */
+export const ExploreSkySchema = z
+  .strictObject({
+    phases: z
+      .array(
+        z.strictObject({
+          from: z
+            .number()
+            .int()
+            .min(0)
+            .max(24 * 60 - 1),
+          phase: SkyPhaseSchema,
+        }),
+      )
+      .min(1),
+    /** Each change fades in over this many minutes, ending at the next phase's `from`. */
+    blendMinutes: z.number().int().min(0).max(120),
+  })
+  .refine((s) => s.phases[0]?.from === 0, {
+    message: 'the first phase starts at 0',
+    path: ['phases', 0, 'from'],
+  })
+  .refine((s) => s.phases.every((p, i) => i === 0 || p.from > (s.phases[i - 1]?.from ?? 0)), {
+    message: 'phases must be in time order',
+    path: ['phases'],
+  });
+export type ExploreSky = z.infer<typeof ExploreSkySchema>;
 
 /**
  * Exploring your land (#199). Public: the explore view, the tile panel's
@@ -86,6 +128,8 @@ export const ExploreRulesSchema = z.strictObject({
     /** And this far inside the tile's edge. */
     edgeMargin: z.number().min(0).max(0.5),
   }),
+  /** The sky over the explore view, by the patch's local time (#335). */
+  sky: ExploreSkySchema,
   /** XP each squishy on the team gets per search: plain XP, like Training Grounds. */
   xpPerSquishy: z.number().int().min(0).max(1000),
   /**
