@@ -172,7 +172,7 @@ Family signup codes (migration 0026, #195).
 | `name` | text | |
 | `time_zone` | text | IANA zone, for nightfall and daily jobs |
 | `event_seq` | bigint, default 0 | Last allocated `game_events.seq`; see below |
-| `max_players` | smallint, default 4 | Seats; the map is generated with this many home slots. Checked 1–4 |
+| `max_players` | smallint, default 6 | Seats; the map is generated with this many home slots. Checked 1–6 (#318; older patches keep 4) |
 | `pvp_mode` | enum `pvp_mode`, default `gentle` | `on` \| `gentle` \| `off` (design doc §11, decision B); the owner changes it |
 | `seed` | text, null | Map generator seed (`crypto.randomBytes`). **Server-only**: never in a response schema (tech spec §8). Null for hand-authored maps |
 | `created_at` | timestamptz | |
@@ -188,7 +188,7 @@ Family signup codes (migration 0026, #195).
 | `joined_at` | timestamptz | |
 | `defense_stance` | enum `defense_stance`, default `'balanced'` | How their squishies on watch play when challenged (#16): `aggressive` \| `defensive` \| `balanced` (UI: Bold, Careful, Balanced). Read under the member lock in a challenge's start transaction |
 
-The 2–4 players-per-map limit is a game rule, enforced by the maps service under a row lock (apps/server/README.md, "Maps").
+The players-per-map limit (up to 6; older patches keep 4, #318) is a game rule, enforced by the maps service under a row lock (apps/server/README.md, "Maps").
 
 ### `tiles`
 | Column | Type | Notes |

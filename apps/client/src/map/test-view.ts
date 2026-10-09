@@ -5,7 +5,6 @@ import {
   hexNeighbors,
   GAME_DATA,
   KEEPER_BASES,
-  MAP_MAX_PLAYERS,
   generateMap,
   tradingPostLabels,
   type MapMember,
@@ -14,7 +13,11 @@ import {
 } from '@heartpatch/shared';
 
 // A realistic map view for unit tests: a real generated 4-player map, as the
-// server would send it, with members taking home slots in order.
+// server would send it, with members taking home slots in order. Pinned to
+// 4 seats (older patches keep 4, #318); 6-seat views are made on purpose.
+
+/** Seats on the test map. */
+const SEATS = 4;
 
 export const MAP_ID = '0190a8c4-0000-7000-8000-00000000000a';
 
@@ -36,7 +39,7 @@ export function member(n: number, homeSlot: number): MapMember {
 
 /** A view with `players` members; each owns their home ring, as the server sets it. */
 export function testView(players = 1, seed = 'map-render-test'): MapView {
-  const generated = generateMap(GAME_DATA, { seed, playerCount: MAP_MAX_PLAYERS });
+  const generated = generateMap(GAME_DATA, { seed, playerCount: SEATS });
   const members = Array.from({ length: players }, (_, i) => member(i + 1, i));
   // Trading posts (#269) named as the server names them.
   const posts = tradingPostLabels(generated.tiles, GAME_DATA.mapGen.tradingPosts);
@@ -62,7 +65,7 @@ export function testView(players = 1, seed = 'map-render-test'): MapView {
       name: 'Pumpkin Hollow',
       timeZone: 'America/New_York',
       pvpMode: 'gentle',
-      maxPlayers: MAP_MAX_PLAYERS,
+      maxPlayers: SEATS,
     },
     members,
     tiles,

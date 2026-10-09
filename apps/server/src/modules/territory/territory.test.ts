@@ -24,6 +24,7 @@ import {
   type PlayerBattleAction,
   type PublicUser,
   type TerritoryRules,
+  MAP_MAX_PLAYERS,
 } from '@heartpatch/shared';
 import {
   CLOTHING_DROPS,
@@ -430,6 +431,19 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       const theirs = await attack(server, kid, mapId, friendHome);
       expect(theirs.statusCode).toBe(403);
       expect(errorOf(theirs).message).toMatch(/Home bases are safe/);
+      // A home nobody has joined yet stays saved for the next Keeper (#318),
+      // even with the kid's land right beside it.
+      const openHome = all.find((t) => t.homeSlot !== null && t.ownerUserId === null)!;
+      const besideOpen = all.find(
+        (t) =>
+          t.ownerUserId === null &&
+          t.homeSlot === null &&
+          hexNeighbors(t).some((n) => n.q === openHome.q && n.r === openHome.r),
+      )!;
+      await setOwner(besideOpen.id, kid.id);
+      const saved = await attack(server, kid, mapId, openHome);
+      expect(saved.statusCode).toBe(403);
+      expect((await tileAt(mapId, openHome)).ownerUserId).toBeNull();
       expect((await attack(server, kid, mapId, besideFriend)).statusCode).toBe(409);
       const tooFar = await attack(server, kid, mapId, far);
       expect(tooFar.statusCode).toBe(403);
@@ -463,23 +477,25 @@ describe.skipIf(!url)('territory (needs DATABASE_URL)', () => {
       expect((await tileAt(mapId, post)).ownerUserId).toBeNull();
     });
 
-    it('shows every member the patch’s 4 trading posts, named, with no guardians (#269)', async () => {
+    it('shows every member the patch’s trading posts, one per seat, named, with no guardians (#269, #318)', async () => {
       const server = await start();
       const kid = await player();
       const friend = await player();
       const mapId = await patch(server, kid, [friend]);
       const mine = await view(server, kid, mapId);
       const posts = mine.tiles.filter((t) => t.terrain === 'trading-post');
-      expect(posts).toHaveLength(GAME_DATA.mapGen.tradingPosts.perMap);
-      expect(posts.map((t) => t.post?.index)).toEqual([0, 1, 2, 3]);
+      // A new patch has a seat for MAP_MAX_PLAYERS Keepers and a post for each.
+      const count = Math.max(GAME_DATA.mapGen.tradingPosts.perMap, MAP_MAX_PLAYERS);
+      expect(posts).toHaveLength(count);
+      expect(posts.map((t) => t.post?.index)).toEqual(Array.from({ length: count }, (_, i) => i));
       expect(posts.map((t) => t.post?.name)).toEqual(
-        GAME_DATA.mapGen.tradingPosts.names.slice(0, 4),
+        GAME_DATA.mapGen.tradingPosts.names.slice(0, count),
       );
       for (const t of posts) {
         expect(t).toMatchObject({ ownerUserId: null, homeSlot: null, nodeResource: null });
         expect(t.guardianHint).toBeNull();
       }
-      expect(mine.tiles.filter((t) => t.post).length).toBe(4);
+      expect(mine.tiles.filter((t) => t.post).length).toBe(count);
       expect((await view(server, friend, mapId)).tiles.filter((t) => t.post)).toEqual(
         mine.tiles.filter((t) => t.post),
       );

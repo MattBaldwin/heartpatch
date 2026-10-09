@@ -108,7 +108,8 @@ const MESSAGES = {
   timeZone: "Hmm, we couldn't read your clock. Please try again!",
   badCode: "That code doesn't work. It may be too old. Ask for a new one!",
   alreadyMember: "You're already in this patch!",
-  full: `This patch is full! It fits ${MAP_MAX_PLAYERS} Keepers.`,
+  // Each patch keeps the seats it was made with (#318: 4 on older patches, 6 on new ones).
+  full: (seats: number) => `This patch is full! It fits ${String(seats)} Keepers.`,
   requestNotFound: "We couldn't find that request.",
   requestAnswered: 'That request was already answered.',
   notAMember: "That Keeper isn't in this patch.",
@@ -505,7 +506,7 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
           if (pending) return { request: asRequest(pending), created: false };
           // A courtesy check so nobody waits on a full patch; approval re-checks under lock.
           if ((await repo.activeHomeSlots(invite.mapId)).count >= map.maxPlayers) {
-            throw new AppError('CONFLICT', MESSAGES.full);
+            throw new AppError('CONFLICT', MESSAGES.full(map.maxPlayers));
           }
           const created = await repo.insertJoinRequest({
             mapId: invite.mapId,
@@ -552,11 +553,13 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         if (!map) throw new AppError('NOT_FOUND', MESSAGES.notFound);
         // Read after taking the seats lock, so it sees every committed join.
         const seats = await repo.activeHomeSlots(mapId);
-        if (seats.count >= map.maxPlayers) throw new AppError('CONFLICT', MESSAGES.full);
+        if (seats.count >= map.maxPlayers) {
+          throw new AppError('CONFLICT', MESSAGES.full(map.maxPlayers));
+        }
         const homeSlot = Array.from({ length: map.maxPlayers }, (_, i) => i).find(
           (slot) => !seats.slots.has(slot),
         );
-        if (homeSlot === undefined) throw new AppError('CONFLICT', MESSAGES.full);
+        if (homeSlot === undefined) throw new AppError('CONFLICT', MESSAGES.full(map.maxPlayers));
 
         await repo.upsertMember({
           mapId,

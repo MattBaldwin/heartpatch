@@ -80,7 +80,7 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
         timeout: 30_000,
       },
     )
-    .toBe(469);
+    .toBe(817); // a new 6-seat patch (#318)
 
   // The bag starts with just Sprout's Heart Charms from the first starter pick
   // (owner decision 2026-10-04), on the server's season (the dev server runs

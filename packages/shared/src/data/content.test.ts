@@ -52,11 +52,12 @@ describe('decisions encoded in data (docs/DECISIONS.md)', () => {
     );
   });
 
-  it('sizes maps 9 / 11 / 12 for 2 / 3 / 4 players (design doc §3)', () => {
+  it('sizes maps 9 / 11 / 12 / 16 for 2 / 3 / 4 / 6 players (design doc §3, #318)', () => {
     expect(MAP_GEN.layouts.map((l) => [l.players, l.radius])).toEqual([
       [2, 9],
       [3, 11],
       [4, 12],
+      [6, 16],
     ]);
   });
 

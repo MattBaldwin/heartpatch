@@ -10,4 +10,12 @@ describe('generateMap performance', () => {
     for (let i = 1; i <= runs; i++) generateMap(GAME_DATA, { seed: `perf-${i}`, playerCount: 4 });
     expect((performance.now() - start) / runs).toBeLessThan(50);
   });
+
+  it('generates a 6-player map (radius 16, 817 tiles) in well under 50 ms (#318)', () => {
+    generateMap(GAME_DATA, { seed: 'warm-up', playerCount: 6 }); // warm up
+    const runs = 10;
+    const start = performance.now();
+    for (let i = 1; i <= runs; i++) generateMap(GAME_DATA, { seed: `perf-${i}`, playerCount: 6 });
+    expect((performance.now() - start) / runs).toBeLessThan(50);
+  });
 });

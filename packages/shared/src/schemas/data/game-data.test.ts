@@ -279,6 +279,13 @@ describe('checkGameData', () => {
     ]);
   });
 
+  it('needs a trading-post name for every home on the biggest layout (#318)', () => {
+    const problems = problemsAfter((d) => {
+      d.mapGen.tradingPosts.names = d.mapGen.tradingPosts.names.slice(0, 5);
+    });
+    expect(problems).toEqual(['mapGen: every post on the biggest layout needs a name']);
+  });
+
   it("rejects guardians that aren't toughest in the Gap", () => {
     const problems = problemsAfter((d) => {
       d.mapGen.guardianStrength.gap = d.mapGen.guardianStrength.max;

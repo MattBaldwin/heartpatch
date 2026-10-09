@@ -8,8 +8,9 @@ import {
   placeTradingPosts,
   STARTERS,
 } from '@heartpatch/shared';
+import type * as Shared from '@heartpatch/shared';
 import type { FastifyInstance } from 'fastify';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
@@ -38,6 +39,13 @@ const uuid = (value: string) => {
   return value;
 };
 const RULES = GAME_DATA.mapGen.tradingPosts;
+
+// Patches made before trading posts were all 4-seat (#318 made new ones 6),
+// so this file's patches are made with 4 seats, as theirs were.
+vi.mock('@heartpatch/shared', async (importOriginal) => ({
+  ...(await importOriginal<typeof Shared>()),
+  MAP_MAX_PLAYERS: 4,
+}));
 
 describe.skipIf(!url)('trading posts on older patches (#269, needs DATABASE_URL)', () => {
   let client: DbClient;

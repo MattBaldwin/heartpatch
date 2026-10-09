@@ -76,7 +76,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
-  await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(469);
+  await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(817); // a new 6-seat patch (#318)
 
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
 
