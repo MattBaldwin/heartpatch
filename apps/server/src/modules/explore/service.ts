@@ -2,6 +2,7 @@ import {
   BATTLE_RULES,
   deriveSeed,
   EXPLORE_RULES,
+  exploreLayout,
   exploreNeeds,
   isExplorable,
   isFullyExplored,
@@ -96,12 +97,20 @@ function tileSpots(
 }
 
 /**
- * A row's progress, counted against today's layout. A row made under another
- * layout or terrain (a tuning bump, a converted tile) starts fresh.
+ * A row's progress, counted against its terrain's layout today
+ * (`exploreLayout`). A row made on another terrain (a converted tile) starts
+ * fresh. One made under an older layout of the same terrain (a new kit,
+ * #335) starts fresh while half-searched, but a finished one stays finished,
+ * so a new kit never takes a homestead away (owner decision 2026-10-09).
  */
-function searchedMask(row: ExploreRow | null, tile: ExploreTileRow): number {
-  if (!row || row.layout !== EXPLORE_RULES.layout || row.terrain !== tile.terrain) return 0;
-  return row.searched;
+function searchedMask(
+  row: ExploreRow | null,
+  tile: ExploreTileRow,
+  spots: readonly SearchSpot[],
+): number {
+  if (!row || row.terrain !== tile.terrain) return 0;
+  if (row.layout === exploreLayout(tile.terrain, EXPLORE_RULES)) return row.searched;
+  return row.completedAt ? spots.reduce((mask, s) => withSearched(mask, s.index), 0) : 0;
 }
 
 /** Uses left of each tool in a bag (a tool is counted in uses). */
@@ -149,7 +158,7 @@ export function createExploreService(options: ExploreServiceOptions) {
         user.id,
       );
       const row = await repo.findRow(user.id, tile.id);
-      const mask = searchedMask(row, tile);
+      const mask = searchedMask(row, tile, spots);
       const items = await createInventoryRepo(db).list({ mapId, userId: user.id });
       return {
         q: tile.q,
@@ -182,15 +191,13 @@ export function createExploreService(options: ExploreServiceOptions) {
         const spot = spots.find((s) => s.index === request.spot);
         if (!spot) throw new AppError('NOT_FOUND', MESSAGES.noSpot);
 
-        // A stale row still marked explored (a layout bump, a converted
-        // tile) is one of the player's explored rows, which a capture or a
-        // finished tile may be locking in order: take that whole set first,
-        // in `(user_id, tile_id)` order, so the refresh below can't invert it.
+        // A stale row still marked explored (a converted tile) is one of the
+        // player's explored rows, which a capture or a finished tile may be
+        // locking in order: take that whole set first, in `(user_id,
+        // tile_id)` order, so the refresh below can't invert it. (A finished
+        // row under an older layout of the same terrain stays finished.)
         const seen = await repo.findRow(user.id, tile.id);
-        if (
-          seen?.completedAt &&
-          (seen.layout !== EXPLORE_RULES.layout || seen.terrain !== tile.terrain)
-        ) {
+        if (seen?.completedAt && searchedMask(seen, tile, spots) === 0) {
           await repo.lockExplored(mapId, [user.id]);
         }
         // Then the player's row for it.
@@ -200,12 +207,12 @@ export function createExploreService(options: ExploreServiceOptions) {
             userId: user.id,
             tileId: tile.id,
             mapId,
-            layout: EXPLORE_RULES.layout,
+            layout: exploreLayout(tile.terrain, EXPLORE_RULES),
             terrain: tile.terrain,
             spotCount: spots.length,
             at,
           }));
-        const before = searchedMask(row, tile);
+        const before = searchedMask(row, tile, spots);
         if (isSearched(before, spot.index)) throw new AppError('CONFLICT', MESSAGES.searched);
 
         // A friendly word before `consumeItems` would refuse it.
@@ -227,12 +234,12 @@ export function createExploreService(options: ExploreServiceOptions) {
           user.id,
           tile.id,
           {
-            layout: EXPLORE_RULES.layout,
+            layout: exploreLayout(tile.terrain, EXPLORE_RULES),
             terrain: tile.terrain,
             searched,
             spotCount: spots.length,
             completedAt: explored ? at : null,
-            // A row restarted under a new layout isn't explored, so it isn't a homestead.
+            // A row restarted on a new terrain or layout isn't explored, so it isn't a homestead.
             ...(fresh ? { joinedAt: null, pausedAt: null, resumedAt: null } : {}),
           },
           at,
