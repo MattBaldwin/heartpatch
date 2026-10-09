@@ -251,7 +251,8 @@ export function cameraShot(aspect: number): { readonly pitch: number; readonly d
  * The spots whose props stand between the camera and the Keeper (#291): in
  * front of it (towards the camera, which looks along +z), near its line,
  * and tall enough at that distance to cover its middle. `height` is a
- * prop's height and `middle` the Keeper's, both tile-local.
+ * prop's height and `middle` the Keeper's, both tile-local. Fills and
+ * returns `out` (cleared first), so a caller can reuse one set.
  */
 export function hidingSpots(
   keeper: WorldPoint,
@@ -259,8 +260,9 @@ export function hidingSpots(
   pitch: number,
   height: (kind: string) => number,
   middle: number,
+  out: Set<number> = new Set<number>(),
 ): Set<number> {
-  const out = new Set<number>();
+  out.clear();
   const slope = Math.tan(pitch);
   for (const s of spots) {
     const r = spotRadius(s.kind);

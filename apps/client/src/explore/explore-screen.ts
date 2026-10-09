@@ -526,7 +526,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         walking = true;
       }
     }
-    const moved = next !== keeperAt;
+    // By value: a slide that pushes back to where it was isn't a move.
+    const moved = next.x !== keeperAt.x || next.z !== keeperAt.z;
     const turned = heading !== undefined && heading !== yaw;
     if (moved || turned) {
       keeperAt = next;
@@ -544,8 +545,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (playing) feed({ type: 'tick', t: now });
     const animating = s.step(now);
     renderDark();
-    // A finger resting on the stick (or pressed against a rock) changes nothing: no redraw.
-    if (moved || turned || animating || playing !== null) options.invalidate();
+    // Only a change redraws: a finger resting on the stick, or pushing
+    // against a rock or the tile's edge, moves nothing (the gestures and the
+    // lantern's dark are DOM; a tool's swing animates through `step`).
+    if (moved || turned || animating) options.invalidate();
     const holding = playing !== null && playing.state.holdSince !== null;
     if (walking || animating || holding) frame = requestAnimationFrame(tick);
   }

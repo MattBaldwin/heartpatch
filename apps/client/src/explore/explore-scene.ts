@@ -5,6 +5,7 @@ import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Viewport } from '@babylonjs/core/Maths/math.viewport';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
 import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
@@ -62,6 +63,7 @@ import {
   collidersOf,
   decorPlaces,
   followStep,
+  freePoint,
   hidingSpots,
   tileSurface,
   spotRadius,
@@ -159,6 +161,10 @@ const TOOL_TURN = new Quaternion();
 const TOOL_SCALE = new Vector3();
 const TOOL_AT = new Vector3();
 const TOOL_ANCHOR = new Vector3();
+// Scratch for screenOf (the lantern's light asks every frame).
+const SCREEN_FROM = new Vector3();
+const SCREEN_AT = new Vector3();
+const SCREEN_VIEWPORT = new Viewport(0, 0, 1, 1);
 
 /** The Keeper's trail: followers stand on its points, one gap apart. */
 interface Follower {
@@ -176,6 +182,12 @@ export class ExploreScene {
   readonly #props = new Map<string, PropBatch>();
   /** The spots now faded (between the camera and the Keeper). */
   #hiding = new Set<number>();
+  #hidingNext = new Set<number>();
+  readonly #solidScratch: Matrix[] = [];
+  readonly #fadedScratch: Matrix[] = [];
+  readonly #heightOf = (kind: string): number => this.#heights.get(kind) ?? 0;
+  /** The canvas's box on the page, read once per size (the lantern asks every frame). */
+  #box: DOMRect | null = null;
   /** Prop heights by spot kind, tile-local (for the fade). */
   readonly #heights = new Map<string, number>();
   #aspect = 0;
@@ -258,6 +270,9 @@ export class ExploreScene {
       tile.spots,
       buildingsAt.map(({ at }) => ({ x: at.x / this.#size, z: at.z / this.#size })),
     );
+    // The start clear of the spots, as the screen moves it, so the camera
+    // opens on it instead of easing across.
+    this.#at = freePoint(EXPLORE_VIEW.start, this.#colliders);
 
     // Grass tufts, pebbles and flowers (#291): thin instances, one draw call a kind.
     const places = decorPlaces(tile, this.#colliders);
@@ -337,7 +352,12 @@ export class ExploreScene {
     this.#afterRender = scene.onAfterRenderObservable.add(() => {
       this.#drawCalls = this.#instrumentation.drawCallsCounter.current;
     });
+    // A new size moves the canvas's box: read it again when next needed.
+    const resized = scene.getEngine().onResizeObservable.add(() => {
+      this.#box = null;
+    });
     scene.onDisposeObservable.addOnce(() => {
+      scene.getEngine().onResizeObservable.remove(resized);
       scene.onBeforeRenderObservable.remove(this.#beforeRender);
       scene.onAfterRenderObservable.remove(this.#afterRender);
       this.#instrumentation.dispose();
@@ -546,15 +566,21 @@ export class ExploreScene {
     const camera = this.#scene.activeCamera;
     const canvas = this.#scene.getEngine().getRenderingCanvas();
     if (!camera || !canvas) return null;
-    const box = canvas.getBoundingClientRect();
-    if (box.width <= 0 || box.height <= 0) return null;
+    // The box is read once per size (the lantern asks every frame).
+    this.#box ??= canvas.getBoundingClientRect();
+    const box = this.#box;
+    if (box.width <= 0 || box.height <= 0) {
+      this.#box = null;
+      return null;
+    }
     this.#applyCamera();
     const at = this.#world(p);
-    const s = Vector3.Project(
-      new Vector3(at.x, this.#groundAt(p) + lift, at.z),
+    const s = Vector3.ProjectToRef(
+      SCREEN_FROM.set(at.x, this.#groundAt(p) + lift, at.z),
       Matrix.IdentityReadOnly,
       camera.getTransformationMatrix(),
-      camera.viewport.toGlobal(box.width, box.height),
+      camera.viewport.toGlobalToRef(box.width, box.height, SCREEN_VIEWPORT),
+      SCREEN_AT,
     );
     if (s.z < 0 || s.z > 1) return null;
     return { x: box.left + s.x, y: box.top + s.y };
@@ -619,26 +645,28 @@ export class ExploreScene {
   #fade(): void {
     if (this.#props.size === 0) return;
     const middle = AIM_HEIGHT / this.#size;
+    // Into the spare set (no allocation while walking); swapped in only on a change.
     const hiding = hidingSpots(
       this.#at,
       this.#tile.spots,
       this.#shot.pitch,
-      (kind) => this.#heights.get(kind) ?? 0,
+      this.#heightOf,
       middle,
+      this.#hidingNext,
     );
-    if (hiding.size === this.#hiding.size && [...hiding].every((i) => this.#hiding.has(i))) return;
+    let same = hiding.size === this.#hiding.size;
+    for (const i of hiding) same &&= this.#hiding.has(i);
+    if (same) return;
+    this.#hidingNext = this.#hiding;
     this.#hiding = hiding;
+    const solid = this.#solidScratch;
+    const faded = this.#fadedScratch;
     for (const batch of this.#props.values()) {
-      setInstances(
-        batch.mesh,
-        batch.spots.filter((s) => !hiding.has(s.index)).map((s) => s.matrix),
-        true,
-      );
-      setInstances(
-        batch.faded,
-        batch.spots.filter((s) => hiding.has(s.index)).map((s) => s.matrix),
-        true,
-      );
+      solid.length = 0;
+      faded.length = 0;
+      for (const s of batch.spots) (hiding.has(s.index) ? faded : solid).push(s.matrix);
+      setInstances(batch.mesh, solid, true);
+      setInstances(batch.faded, faded, true);
     }
   }
 
