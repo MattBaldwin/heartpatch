@@ -17,6 +17,11 @@ body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* No double-tap zoom anywhere. iOS ignores maximum-scale=1, and a quick
+     second tap on a button or card zoomed the page with no easy way back.
+     touch-action narrows down the tree, so this covers every overlay;
+     pinch is already blocked by the gesture* listeners in main.ts. */
+  touch-action: manipulation;
 }
 
 /* Full-bleed under the notch and home indicator (viewport-fit=cover): the
