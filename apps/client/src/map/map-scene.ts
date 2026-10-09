@@ -26,6 +26,7 @@ import {
   type PublicTile,
 } from '@heartpatch/shared';
 import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
+import { activeTriangles } from '../engine/render-stats.js';
 import { MAP_BUILDING_SCALE, MAP_OUTER_FIRE_SCALE, SAFE_GLOW } from '../home/home-config.js';
 import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
@@ -270,18 +271,6 @@ export function setInstances(mesh: Mesh, matrices: readonly Matrix[], dynamic = 
   });
   mesh.thinInstanceSetBuffer('matrix', data, 16, !dynamic);
   mesh.setEnabled(true);
-}
-
-/** Triangles the meshes picked for the last frame drew, instances counted (#318). */
-export function activeTriangles(scene: Scene): number {
-  const active = scene.getActiveMeshes();
-  let triangles = 0;
-  for (let i = 0; i < active.length; i++) {
-    const mesh = active.data[i] as Mesh;
-    const copies = mesh.hasThinInstances ? mesh.thinInstanceCount : 1;
-    triangles += (mesh.getTotalIndices() / 3) * copies;
-  }
-  return Math.round(triangles);
 }
 
 const NO_TURN = Quaternion.Identity();

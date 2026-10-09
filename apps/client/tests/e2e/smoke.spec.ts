@@ -139,7 +139,7 @@ test('renders the Babylon scene and reaches the server', async ({ page }) => {
   // compile), and the governor then drops straight to low (governor.ts `crawl`)
   // and may climb back through medium.
   await expect(page.locator('[data-testid="dev-stats"]')).toHaveText(
-    /^(\d+ fps|idle) · WebGL2 · (high|medium|low) · \d\.\d\dx$/,
+    /^(\d+ fps|idle) · WebGL2 · (high|medium|low) · \d\.\d\dx · \d+ draws · \d+k tris$/,
     { timeout: 15_000 },
   );
   expect(errors).toEqual([]);
