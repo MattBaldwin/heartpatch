@@ -17,10 +17,16 @@ body {
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  /* No double-tap zoom anywhere. iOS ignores maximum-scale=1, and a quick
-     second tap on a button or card zoomed the page with no easy way back.
-     touch-action narrows down the tree, so this covers every overlay;
-     pinch is already blocked by the gesture* listeners in main.ts. */
+}
+
+/* No double-tap zoom anywhere. iOS ignores maximum-scale=1, and a quick
+   second tap on a button or card zoomed the page; pinch is blocked by the
+   gesture* listeners in main.ts, so there was no way back out. Setting it on
+   html/body isn't enough: iOS WebKit resets touch-action to auto at every
+   overflow: auto/scroll container, so each element needs its own value.
+   :where() has zero specificity, so any rule that sets touch-action (none on
+   canvases, pan-y on lists) still wins. */
+:where(*) {
   touch-action: manipulation;
 }
 
