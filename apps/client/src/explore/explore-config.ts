@@ -19,8 +19,12 @@ export const EXPLORE_VIEW = {
   propScale: 0.34, // TUNE
   /** Where the Keeper starts: just below the tile's middle (tile-local units). */
   start: { x: 0, z: -0.42 },
-  /** It starts facing into the tile, three-quarters from behind (board a), so its face still shows. */
-  startYaw: Math.PI * 0.75, // TUNE
+  /**
+   * It starts turned to its left and a little towards the camera (yaw π/2
+   * faces −x), so its face shows in profile under the camera behind it
+   * (board a), not just the back of its hair.
+   */
+  startYaw: Math.PI * 0.4, // TUNE
   /** Walking speed, tile-local units a second. */
   walkSpeed: 0.3, // TUNE
   /** A tap-walk that gets no closer for this long stops (it's stuck behind something), seconds. */
@@ -103,13 +107,13 @@ export const EXPLORE_VIEW = {
  */
 export const EXPLORE_CAMERA = {
   /** A phone held upright (width ÷ height at or under `aspect`): looking down from the horizontal, radians, and camera to target, world units. */
-  phone: { aspect: 0.5, pitch: (30 * Math.PI) / 180, distance: 5.6 }, // TUNE
+  phone: { aspect: 0.5, pitch: (28 * Math.PI) / 180, distance: 6 }, // TUNE
   /** A tablet or wider (at or over `aspect`). */
-  tablet: { aspect: 0.75, pitch: (34 * Math.PI) / 180, distance: 6.2 }, // TUNE
+  tablet: { aspect: 0.75, pitch: (32 * Math.PI) / 180, distance: 6.6 }, // TUNE
   /** The target sits this far ahead of the Keeper (tile-local +z), so it walks low on the screen. */
   lookAhead: 0.13, // TUNE
   /** With the lantern lit the Keeper and its light sit higher, clear of the overlay (board g). */
-  lightLookAhead: 0.02, // TUNE
+  lightLookAhead: -0.14, // TUNE
   /** The target stays this far inside the tile's edge, tile-local units. */
   edgeMargin: 0.12, // TUNE: more pushes the Keeper off a phone held upright near the edge
   /** Using a tool nudges the camera in to this share of `distance`. */

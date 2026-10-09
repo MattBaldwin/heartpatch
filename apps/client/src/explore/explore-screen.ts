@@ -1014,7 +1014,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       const y = Math.round(at.y);
       dark.style.setProperty(
         '--light',
-        `radial-gradient(circle ${String(r)}px at ${String(x)}px ${String(y)}px, rgb(255 227 163 / 62%) 0%, rgb(205 176 138 / 58%) 55%, rgb(36 28 46 / 95%) 100%)`,
+        `radial-gradient(circle ${String(r)}px at ${String(x)}px ${String(y)}px, rgb(255 227 163 / 70%) 0%, rgb(205 176 138 / 66%) 55%, rgb(36 28 46 / 95%) 100%)`,
       );
     }
     if (g) {
