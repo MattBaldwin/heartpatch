@@ -148,6 +148,29 @@ test('trades in the split view: whose is whose, sort and filter per side, and th
   await expect(post.getByTestId('post-meter-label')).toHaveText(label);
   expect((await postState(lee))!.meter).toEqual(now);
 
+  // Scrolled, each owner's header stays pinned flush with the sheet's top: nothing peeks above it.
+  await post.evaluate((sheet) => {
+    sheet.scrollTop = sheet.scrollHeight;
+  });
+  const pinned = await post.evaluate((sheet) => {
+    const top = sheet.getBoundingClientRect().top;
+    const heads = [...sheet.querySelectorAll<HTMLElement>('.post-col-head')];
+    return {
+      scrolled: sheet.scrollTop > 0,
+      gaps: heads.map((h) => Math.round(h.getBoundingClientRect().top - top)),
+    };
+  });
+  if (pinned.scrolled) expect(pinned.gaps.every((g) => g >= 0 && g <= 1)).toBe(true);
+  // The filter's word fits whole beside the sort, even on a phone's half-width column.
+  const tools = await post.evaluate((sheet) =>
+    [...sheet.querySelectorAll<HTMLElement>('.post-tool')].map((b) => {
+      const text = b.querySelector<HTMLElement>('.post-tool-text');
+      const shown = text !== null && getComputedStyle(text).display !== 'none';
+      return { clipped: shown && text.scrollWidth > text.clientWidth + 1, width: b.offsetWidth };
+    }),
+  );
+  expect(tools.filter((t) => t.clipped || t.width < 44)).toEqual([]);
+
   // Kid-sized and tidy: 44pt buttons, whole names, nothing spilling out.
   expect(await smallButtons(lee)).toEqual([]);
   expect(await wordsSplit(lee)).toEqual([]);

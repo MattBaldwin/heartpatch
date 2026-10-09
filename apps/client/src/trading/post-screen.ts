@@ -890,6 +890,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
       return [...offers, el('p', { class: 'post-tiny' }, TRADE_TEXT.noMates)];
     }
     // An offer to me comes first: the compose area waits behind a button, so it never covers it.
+    if (offers.length === 0) composing = false;
     if (offers.length > 0 && !composing) {
       const make = button(TRADE_TEXT.makeOffer, 'post-compose', 'secondary', () => {
         composing = true;
