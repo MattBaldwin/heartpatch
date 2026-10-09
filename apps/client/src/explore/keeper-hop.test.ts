@@ -168,4 +168,35 @@ describe('the hop follows the ground covered (#317)', () => {
     expect(TELEPORT).toBeGreaterThan(EXPLORE_VIEW.walkSpeed * EXPLORE_VIEW.maxFrameStep);
     expect(TELEPORT).toBeLessThan(EXPLORE_VIEW.keeperRadius * 3);
   });
+
+  it('starts every hopper on the ground, followers gliding a little before their first hop', () => {
+    const dt = 1 / FPS;
+    const step = EXPLORE_VIEW.walkSpeed * dt;
+    for (const offset of [0, ...EXPLORE_HOP.followerOffset]) {
+      const hop = createHop(offset);
+      stepHop(hop, step, dt, 1, false);
+      const first = hopPose(hop, false, 1, { lift: 0, squash: 1 });
+      // Never in the air on the first step: the Keeper crouches to take off,
+      // a follower glides at rest.
+      expect(first.lift).toBe(0);
+      expect(first.squash).toBeLessThanOrEqual(1);
+      if (offset > 0) expect(first.squash).toBe(1);
+      // Off the ground only once it has glided its offset.
+      let glided = step;
+      while (hopPose(hop, false, 1, first).lift === 0 && glided < 1) {
+        stepHop(hop, step, dt, 1, false);
+        glided += step;
+      }
+      expect(glided).toBeGreaterThanOrEqual(offset * EXPLORE_HOP.stride.min);
+    }
+  });
+
+  it("doesn't settle a follower that stopped before its first hop", () => {
+    const [offset] = EXPLORE_HOP.followerOffset;
+    const hop = createHop(offset);
+    stepHop(hop, 0.001, 1 / FPS, 1, false);
+    stepHop(hop, 0, 1 / FPS, 0, false);
+    expect(hopActive(hop)).toBe(false);
+    expect(hopPose(hop, false, 1, { lift: 1, squash: 2 })).toEqual({ lift: 0, squash: 1 });
+  });
 });

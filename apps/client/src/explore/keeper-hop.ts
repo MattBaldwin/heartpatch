@@ -22,7 +22,13 @@ export interface Hop {
   settle: number;
   moving: boolean;
   landing: boolean;
-  /** Extra phase each walk starts with (followers), in hops. */
+  /**
+   * Where this walk's first hop begins. A follower starts its walk `offset`
+   * hops before it, gliding on the ground, so it takes off from the ground
+   * out of step with the others.
+   */
+  from: number;
+  /** How many hops a follower glides before its first one, out of step with the rest. */
   readonly offset: number;
 }
 
@@ -35,7 +41,7 @@ export interface HopPose {
 
 export function createHop(offset = 0): Hop {
   return {
-    phase: offset,
+    phase: 0,
     effort: 0,
     walked: 0,
     rate: 0,
@@ -43,6 +49,7 @@ export function createHop(offset = 0): Hop {
     settle: -1,
     moving: false,
     landing: false,
+    from: 0,
     offset,
   };
 }
@@ -76,9 +83,13 @@ const smooth = (a: number, b: number, x: number) => {
 export function stepHop(hop: Hop, ds: number, dt: number, push: number, reduce: boolean): void {
   if (ds > 0) {
     if (!hop.moving) {
-      // A new walk starts on the ground, plus this hopper's own offset; one
-      // that picks up again while still coming down carries on from the air.
-      if (!hop.landing) hop.phase = Math.floor(hop.phase) + hop.offset;
+      // A new walk starts on the ground, gliding `offset` hops before the
+      // first one; a walk that picks up again while still coming down
+      // carries on from the air.
+      if (!hop.landing) {
+        hop.from = Math.ceil(hop.phase);
+        hop.phase = hop.from - hop.offset;
+      }
       hop.walked = 0;
       hop.settle = -1;
       hop.landing = false;
@@ -98,6 +109,12 @@ export function stepHop(hop: Hop, ds: number, dt: number, push: number, reduce: 
   if (hop.moving) {
     // Let go (or stuck against a rock): come down, then settle.
     hop.moving = false;
+    if (hop.phase < hop.from) {
+      // Stopped before the first hop: nothing to land or settle.
+      hop.phase = hop.from;
+      hop.rate = 0;
+      return;
+    }
     const frac = hop.phase - Math.floor(hop.phase);
     if (frac > (reduce ? 0 : EXPLORE_HOP.contact)) {
       hop.landing = true;
@@ -136,6 +153,7 @@ function touchDown(hop: Hop, reduce: boolean, phase: number): void {
 export function hopPose(hop: Hop, reduce: boolean, lift: number, out: HopPose): HopPose {
   out.lift = 0;
   out.squash = 1;
+  if (hop.phase < hop.from) return out; // still gliding before the first hop
   const frac = hop.phase - Math.floor(hop.phase);
   if (hop.moving || hop.landing) {
     if (reduce) {

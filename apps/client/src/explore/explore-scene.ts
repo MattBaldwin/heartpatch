@@ -73,6 +73,7 @@ import {
   type HopPose,
 } from './keeper-hop.js';
 import {
+  alongTrail,
   cameraGoal,
   cameraSettled,
   cameraShot,
@@ -373,7 +374,7 @@ export class ExploreScene {
     this.#trail = [...line, this.#trailPoint(line.length + 1)];
     options.team.forEach((member, i) => {
       const at = { x: 0, z: 0 };
-      this.#alongTrail(followBack(i), at);
+      alongTrail(this.#at, this.#trail, followBack(i), at);
       const handle = this.#squishies.add(member.species, member.id, this.#squishyPlacement(at, 0));
       const hop = createHop(EXPLORE_HOP.followerOffset[i % EXPLORE_HOP.followerOffset.length]);
       this.#followers.push({ handle, at, yaw: 0, hop, walked: 0 });
@@ -529,7 +530,7 @@ export class ExploreScene {
       if (!f) continue;
       const x = f.at.x;
       const z = f.at.z;
-      this.#alongTrail(followBack(i), f.at);
+      alongTrail(this.#at, this.#trail, followBack(i), f.at);
       const moved = Math.hypot(f.at.x - x, f.at.z - z);
       if (moved === 0) continue;
       if (moved <= TELEPORT) f.walked += moved;
@@ -608,10 +609,11 @@ export class ExploreScene {
       f.walked = 0;
       hopping ||= hopActive(f.hop);
     }
-    // One more placement after the last hop lands, at rest.
-    if (hopping || this.#hopping) this.#place();
+    // One more placement (and frame) after the last hop lands, at rest.
+    const drawing = hopping || this.#hopping;
+    if (drawing) this.#place();
     this.#hopping = hopping;
-    return hopping;
+    return drawing;
   }
 
   /** Places the Keeper, its tool and the team with this frame's hop pose. */
@@ -624,29 +626,6 @@ export class ExploreScene {
       hopPose(f.hop, reduced, EXPLORE_HOP.followerLift, POSE);
       this.#squishies.move(f.handle, this.#squishyPlacement(f.at, f.yaw, f.handle, POSE));
     }
-  }
-
-  /** The point `back` tile-local units behind the Keeper along its trail, into `out`. */
-  #alongTrail(back: number, out: { x: number; z: number }): void {
-    let x = this.#at.x;
-    let z = this.#at.z;
-    let left = back;
-    for (let i = 0; i < this.#trail.length; i++) {
-      const p = this.#trail[i];
-      if (!p) break;
-      const length = Math.hypot(p.x - x, p.z - z);
-      if (length >= left && length > 0) {
-        const u = left / length;
-        out.x = x + (p.x - x) * u;
-        out.z = z + (p.z - z) * u;
-        return;
-      }
-      left -= length;
-      x = p.x;
-      z = p.z;
-    }
-    out.x = x;
-    out.z = z;
   }
 
   setLod(lod: SquishyLod): void {
