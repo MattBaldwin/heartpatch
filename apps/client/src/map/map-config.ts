@@ -126,6 +126,22 @@ export const BORDER = {
 } as const;
 
 /** The soft island everything sits on. */
+/**
+ * Map detail by zoom (#318). Zoomed out, tiles and props draw from
+ * low-detail meshes (one per terrain look and prop kind, as up close, so the
+ * draw calls don't change) and the props' contact shadows hide. Heights are
+ * the camera's above the ground: the start zoom is about 17, the farthest 32.
+ * (Splitting the map into culled chunks was measured and dropped: at the
+ * map's tilt the camera sees most of the map, so it doubled the draw calls
+ * for a fifth fewer triangles.)
+ */
+export const MAP_DETAIL = {
+  /** Zooming out past this camera height switches to low detail… */
+  farHeight: 25, // TUNE
+  /** …and zooming back in below `farHeight - hysteresis` switches back, so it never flickers. */
+  hysteresis: 1.5, // TUNE
+} as const;
+
 export const ISLAND = { color: '#a9d897', margin: 1.2, thickness: 0.6 } as const; // TUNE
 
 // ---------------------------------------------------------------------------
