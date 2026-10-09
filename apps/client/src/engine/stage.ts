@@ -12,6 +12,8 @@ export interface SceneContent {
   readonly bounds: Bounds;
   /** Where the camera starts looking (clamped to `bounds`); the origin by default. */
   readonly start?: GroundPoint;
+  /** How far out the camera may zoom, if not `CAMERA.maxDistance` (a bigger map, #318). */
+  readonly maxDistance?: number;
 }
 
 /** Fills a fresh scene with content; lighting and camera are set up for it. */
@@ -63,8 +65,14 @@ export function mountStage(
     scene.dispose(); // don't leave a half-built scene on the engine
     throw err;
   }
-  const { bounds, start } = content;
-  const mapCamera = new MapCamera(scene, canvas, { ...CAMERA, ...camera }, bounds, start);
+  const { bounds, start, maxDistance } = content;
+  const mapCamera = new MapCamera(
+    scene,
+    canvas,
+    { ...CAMERA, ...(maxDistance !== undefined && { maxDistance }), ...camera },
+    bounds,
+    start,
+  );
   scene.activeCamera = mapCamera.camera;
   const quality = new RenderQuality(scene, mapCamera.camera, tier);
 

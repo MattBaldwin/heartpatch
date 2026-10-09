@@ -23,14 +23,16 @@ export interface BorderFieldOptions {
 
 /** Read-only numbers for the dev hook and tests. */
 export interface BorderStats {
-  /** Meshes drawn: one per Keeper with land (one draw call each). */
+  /** Meshes drawn: one per Keeper with land (one draw call each). The open-home outline's mesh isn't counted. */
   readonly meshes: number;
   readonly triangles: number;
+  /** Home tiles saved for a Keeper who hasn't joined yet, outlined (#318; one mesh for all). */
+  readonly openHomeTiles: number;
 }
 
 /**
  * Land borders on the map (#278): one merged mesh per home slot
- * (border-layout.ts), so four Keepers are four draw calls however much land
+ * (border-layout.ts), so six Keepers are six draw calls however much land
  * they hold. A Keeper's mesh is rebuilt only when the tiles they hold
  * change; it's drawn before the map's other overlays (`alphaIndex`), so the
  * safe glow and the selection ring sit on top of it.
@@ -39,6 +41,9 @@ export class BorderField {
   private readonly meshes = new Map<number, Mesh>();
   /** Each slot's land as last drawn, to skip rebuilding what hasn't changed. */
   private readonly drawn = new Map<number, string>();
+  /** Every open home's outline (#318), and its tiles as last drawn. */
+  private open: Mesh | null = null;
+  private openDrawn = '';
   private readonly scene: Scene;
   private readonly options: BorderFieldOptions;
 
@@ -55,7 +60,8 @@ export class BorderField {
       meshes++;
       triangles += mesh.getTotalIndices() / 3;
     }
-    return { meshes, triangles };
+    const openHomeTiles = this.openDrawn === '' ? 0 : this.openDrawn.split(';').length;
+    return { meshes, triangles, openHomeTiles };
   }
 
   /** Tiles drawn in a Keeper's colour. */
@@ -67,9 +73,10 @@ export class BorderField {
 
   /** Redraws each Keeper's border from the tiles and members on the map now. */
   set(tiles: Iterable<PublicTile>, members: readonly MapMember[]): void {
+    const all = [...tiles];
     const slots = slotsByUser(members);
     const bySlot = new Map<number, PublicTile[]>();
-    for (const tile of tiles) {
+    for (const tile of all) {
       const slot = tintSlot(tile, slots);
       if (slot === null) continue;
       let list = bySlot.get(slot);
@@ -85,6 +92,60 @@ export class BorderField {
       this.drawn.set(slot, key);
       this.draw(slot, land);
     }
+    this.drawOpenHomes(all.filter((t) => t.homeSlot !== null && t.ownerUserId === null));
+  }
+
+  /**
+   * Homes nobody has joined yet (#318): a soft dashed outline round each,
+   * no wash and no badges, all in one mesh. Only a joiner can take one.
+   */
+  private drawOpenHomes(tiles: readonly PublicTile[]): void {
+    const key = tiles.map(hexKey).sort().join(';');
+    if (key === this.openDrawn) return;
+    this.openDrawn = key;
+    const color = linear(BORDER.openHome.color);
+    const arrays = borderArrays(this.borderTiles(tiles), this.options.shape, {
+      rgb: [color.r, color.g, color.b],
+      line: BORDER.openHome.line,
+      icon: 'heart',
+      wash: false,
+      badges: false,
+    });
+    this.open = this.upsert(this.open, 'border-open', arrays);
+  }
+
+  private borderTiles(land: readonly PublicTile[]): BorderTile[] {
+    return land.map((t) => ({
+      q: t.q,
+      r: t.r,
+      top: this.options.topOf(t),
+      home: t.homeSlot !== null,
+    }));
+  }
+
+  /** Writes `arrays` into `mesh`, or makes it; switched off when there's nothing to draw. */
+  private upsert(mesh: Mesh | null, name: string, arrays: MeshArrays): Mesh | null {
+    if (arrays.positions.length === 0) {
+      mesh?.setEnabled(false);
+      return mesh;
+    }
+    if (mesh) {
+      const data = new VertexData();
+      data.positions = arrays.positions;
+      data.indices = arrays.indices;
+      data.colors = arrays.colors;
+      const normals: number[] = [];
+      VertexData.ComputeNormals(arrays.positions, arrays.indices, normals);
+      data.normals = normals;
+      data.applyToMesh(mesh);
+      mesh.setEnabled(true);
+      return mesh;
+    }
+    const made = this.options.meshFrom(this.scene, name, arrays);
+    made.material = this.options.material;
+    // Before the safe glow, selection and blob shadows (all alpha-blended).
+    made.alphaIndex = 0;
+    return made;
   }
 
   /** Dims the borders at night (0 = as by day, 1 = gone), so the fire light reads (#277). */
@@ -95,42 +156,18 @@ export class BorderField {
   }
 
   private draw(slot: number, land: readonly PublicTile[]): void {
-    const old = this.meshes.get(slot);
+    const old = this.meshes.get(slot) ?? null;
     if (land.length === 0) {
       old?.setEnabled(false);
       return;
     }
     const color = linear(PLAYER_COLORS[slot % PLAYER_COLORS.length] ?? '#ffffff');
-    const arrays = borderArrays(
-      land.map((t): BorderTile => ({
-        q: t.q,
-        r: t.r,
-        top: this.options.topOf(t),
-        home: t.homeSlot !== null,
-      })),
-      this.options.shape,
-      {
-        rgb: [color.r, color.g, color.b],
-        line: BORDER.lines[slot % BORDER.lines.length] ?? 'solid',
-        icon: BORDER.icons[slot % BORDER.icons.length] ?? 'heart',
-      },
-    );
-    if (old) {
-      const data = new VertexData();
-      data.positions = arrays.positions;
-      data.indices = arrays.indices;
-      data.colors = arrays.colors;
-      const normals: number[] = [];
-      VertexData.ComputeNormals(arrays.positions, arrays.indices, normals);
-      data.normals = normals;
-      data.applyToMesh(old);
-      old.setEnabled(true);
-      return;
-    }
-    const mesh = this.options.meshFrom(this.scene, `border-${String(slot)}`, arrays);
-    mesh.material = this.options.material;
-    // Before the safe glow, selection and blob shadows (all alpha-blended).
-    mesh.alphaIndex = 0;
-    this.meshes.set(slot, mesh);
+    const arrays = borderArrays(this.borderTiles(land), this.options.shape, {
+      rgb: [color.r, color.g, color.b],
+      line: BORDER.lines[slot % BORDER.lines.length] ?? 'solid',
+      icon: BORDER.icons[slot % BORDER.icons.length] ?? 'heart',
+    });
+    const mesh = this.upsert(old, `border-${String(slot)}`, arrays);
+    if (mesh) this.meshes.set(slot, mesh);
   }
 }

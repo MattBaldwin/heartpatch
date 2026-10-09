@@ -118,6 +118,8 @@ export interface MapSceneStats {
   /** Land borders (#278): one mesh (draw call) per Keeper with land, and their triangles. */
   readonly borderMeshes: number;
   readonly borderTriangles: number;
+  /** Home tiles saved for a Keeper who hasn't joined yet, drawn as a dashed outline (#318). */
+  readonly openHomeTiles: number;
   readonly homes: number;
   readonly claimedHomes: number;
   /** Meshes drawing tiles: one per terrain look in use, plus home tiles. */
@@ -506,6 +508,7 @@ export class MapScene {
       tinted: this.borders.tinted,
       borderMeshes: this.borders.stats.meshes,
       borderTriangles: this.borders.stats.triangles,
+      openHomeTiles: this.borders.stats.openHomeTiles,
       keepers: this.keepers.handles.length,
       buildings: this.buildings.stats.buildings,
       litFires: this.buildings.stats.lit,
@@ -563,6 +566,23 @@ export class MapScene {
       ambient.set([k, marker.phase, 0, 0], i * 4);
     });
     this.wildMesh.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, ambient, 4, false);
+  }
+
+  /**
+   * Where each open home's Heart Seed spot is on screen (#318): a home slot
+   * nobody has joined, its middle tile. For the dev hook (e2e taps it).
+   */
+  openHomeRects(): { key: HexKey; rect: ScreenRect }[] {
+    const tiles = [...this.tiles.values()];
+    const open = new Set(
+      tiles.filter((t) => t.homeSlot !== null && t.ownerUserId === null).map((t) => t.homeSlot),
+    );
+    return findHomeBases(tiles)
+      .filter((home) => open.has(home.slot))
+      .flatMap(({ seed }) => {
+        const rect = tileScreenRectOf(this.scene, seed);
+        return rect ? [{ key: hexKey(seed), rect }] : [];
+      });
   }
 
   /** Where each tuft's tile is on screen (CSS pixels), for the dev hook; unseen ones are left out. */

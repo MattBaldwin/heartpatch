@@ -6,7 +6,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { hexToWorld, type MapView } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BORDER, HEX_SIZE, MAP_DETAIL, type PropKind } from './map-config.js';
+import { BORDER, HEX_SIZE, MAP_DETAIL, PLAYER_COLORS, type PropKind } from './map-config.js';
 import { findHomeBases } from './map-layout.js';
 import {
   buildProp,
@@ -104,6 +104,25 @@ describe('MapScene', () => {
       }
       expect(triangles).toBeLessThan(720_000);
     }
+  });
+
+  it('draws six Keepers apart, and every open home as one dashed outline (#318)', () => {
+    const { scene, map } = build(testView(5, 'six-seats', 6));
+    expect(map.stats.tiles).toBe(817);
+    expect(map.stats).toMatchObject({ homes: 6, claimedHomes: 5, borderMeshes: 5 });
+    // Each Keeper's own colour, line and icon: none repeats on a 6-seat patch.
+    const looks = [0, 1, 2, 3, 4, 5].map(
+      (slot) => `${PLAYER_COLORS[slot]!}/${BORDER.lines[slot]!}/${BORDER.icons[slot]!}`,
+    );
+    expect(new Set(looks).size).toBe(6);
+    // The open home: one mesh for its 7 tiles, never a Keeper's.
+    expect(map.stats.openHomeTiles).toBe(7);
+    expect(scene.getMeshByName('border-open')?.isEnabled()).toBe(true);
+    // A sixth Keeper joins: the outline goes, their own border comes.
+    const view = testView(6, 'six-seats', 6);
+    map.update(view);
+    expect(map.stats).toMatchObject({ claimedHomes: 6, borderMeshes: 6, openHomeTiles: 0 });
+    expect(scene.getMeshByName('border-open')?.isEnabled()).toBe(false);
   });
 
   it('swaps to low-detail tiles and props when zoomed out, with the same draw calls (#318)', () => {

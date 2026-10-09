@@ -44,6 +44,10 @@ export interface BorderLook {
   readonly rgb: readonly [number, number, number];
   readonly line: BorderLine;
   readonly icon: KeeperIcon;
+  /** Draw the wash over the tiles (default) or only the ribbon (an open home, #318). */
+  readonly wash?: boolean;
+  /** Draw icon badges (default). */
+  readonly badges?: boolean;
 }
 
 /** The wash's corners: it's faint, so fewer points than the tile's do. */
@@ -87,7 +91,40 @@ export function linePieces(
         { from: 0, to: 1, fade: inner - 0.02, inner, outer: mid - 0.03 },
       ];
     }
+    // #318: a dash then a dot on every edge, and one long dash per edge.
+    case 'dash-dot':
+      return [
+        { from: 0.04, to: 0.46, fade, inner, outer },
+        { from: 0.62, to: 0.72, fade: inner - 0.02, inner, outer },
+      ];
+    case 'long-dash':
+      return [{ from: 0.08, to: 0.86, fade, inner, outer }];
   }
+}
+
+/** The moon's bite: a circle clear of the middle (`border-layout.test.ts` checks). */
+export const MOON_BITE = { c: { x: 0.7, z: 0.16 }, r: 0.52 } as const;
+
+/**
+ * The moon (#318): a disc with a bite out of its right side. Each ray from
+ * the middle stops at whichever comes first, the disc's edge or the bite's,
+ * so the outline is one radius per angle and its badge fans from the middle.
+ */
+function moonRadius(t: number): number {
+  const ray = { x: Math.sin(t), z: Math.cos(t) };
+  const exit = (c: { x: number; z: number }, r: number): number | null => {
+    // Where the ray from the origin meets the circle (c, r): the nearer
+    // crossing ahead, or null if it misses.
+    const b = ray.x * c.x + ray.z * c.z;
+    const d = b * b - (c.x * c.x + c.z * c.z - r * r);
+    if (d < 0) return null;
+    const near = b - Math.sqrt(d);
+    return near > 0 ? near : b + Math.sqrt(d);
+  };
+  const disc = exit({ x: -0.12, z: 0 }, 0.86) ?? 0.86; // the middle is inside: always meets it
+  // The bite never covers the middle, so the ray meets it only on its near side.
+  const bite = exit(MOON_BITE.c, MOON_BITE.r);
+  return bite !== null && bite > 0 ? Math.min(disc, bite) : disc;
 }
 
 /** An icon's outline round its middle, about 1 across (+z is up the screen). */
@@ -107,7 +144,11 @@ export function iconOutline(icon: KeeperIcon, points = ICON_POINTS): { x: number
         ? 0.42 + 0.55 * (0.5 + 0.5 * Math.cos(5 * t)) ** 2.2
         : icon === 'flower'
           ? 0.62 + 0.36 * Math.abs(Math.cos(2.5 * t))
-          : 1 / (Math.abs(Math.sin(t)) / 0.75 + Math.abs(Math.cos(t)));
+          : icon === 'moon'
+            ? moonRadius(t)
+            : icon === 'leaf'
+              ? 0.22 + 0.6 * Math.abs(Math.cos(t - Math.PI / 4)) ** 1.6
+              : 1 / (Math.abs(Math.sin(t)) / 0.75 + Math.abs(Math.cos(t)));
     out.push({ x: Math.sin(t) * r, z: Math.cos(t) * r });
   }
   return out;
@@ -179,7 +220,7 @@ export function borderArrays(
   // The tile's own outline, so the ribbon lies on its top all the way round.
   const outline = roundedHexOutline(shape.radius, shape.radius * shape.corner, shape.segments);
 
-  for (const tile of sorted) {
+  for (const tile of look.wash === false ? [] : sorted) {
     const c = hexToWorld(tile, shape.size);
     const y = tile.top + BORDER.lift.wash;
     const centre = out.vertex(c.x, y + shape.dome, c.z, look.rgb, BORDER.wash);
@@ -216,7 +257,7 @@ export function borderArrays(
   }
 
   let border = 0;
-  for (const tile of sorted) {
+  for (const tile of look.badges === false ? [] : sorted) {
     const edges = outerEdges(tile, owned);
     if (edges.length === 0 || tile.home) continue;
     if (border++ % BORDER.iconEvery !== 0) continue;

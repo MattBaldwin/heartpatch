@@ -1,4 +1,11 @@
-import { HEX_DIRECTIONS, hexDistance, hexToWorld, type PublicTile } from '@heartpatch/shared';
+import {
+  GAME_DATA,
+  HEX_DIRECTIONS,
+  generateMap,
+  hexDistance,
+  hexToWorld,
+  type PublicTile,
+} from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { HEX_SIZE, TERRAIN_LOOKS } from './map-config.js';
 import {
@@ -9,6 +16,7 @@ import {
   propPlacements,
   slotsByUser,
   tintSlot,
+  maxZoomFor,
 } from './map-layout.js';
 import { member, testView, userId } from './test-view.js';
 
@@ -144,5 +152,21 @@ describe('hash01', () => {
     const mean = values.reduce((a, b) => a + b, 0) / values.length;
     expect(mean).toBeGreaterThan(0.4);
     expect(mean).toBeLessThan(0.6);
+  });
+});
+
+describe('maxZoomFor (#318)', () => {
+  it('frames a radius-12 patch at the camera’s own limit, and a radius-16 one further out', () => {
+    const { tiles } = testView(1);
+    expect(maxZoomFor(mapBounds(tiles, HEX_SIZE), 38)).toBeCloseTo(38, 5);
+    const r16 = mapBounds(
+      generateMap(GAME_DATA, { seed: 'zoom', playerCount: 6 }).tiles.map(
+        ({ q, r }): PublicTile => ({ ...tiles[0]!, q, r }),
+      ),
+      HEX_SIZE,
+    );
+    expect(maxZoomFor(r16, 38)).toBeCloseTo((38 * 16) / 12, 5);
+    // A small map never zooms in tighter than the camera allows anyway.
+    expect(maxZoomFor({ minX: -1, maxX: 1, minZ: -1, maxZ: 1 }, 38)).toBe(38);
   });
 });

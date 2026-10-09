@@ -12,7 +12,7 @@ import {
   type WsEventMessage,
 } from '@heartpatch/shared';
 import type { Scene } from '@babylonjs/core/scene';
-import type { QualityTier } from '../engine/config.js';
+import { CAMERA, type QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import {
   createWsClient,
@@ -30,6 +30,7 @@ import { mountMapLegend } from './map-legend.js';
 import { MapScene, type MapSceneStats, type ScreenRect } from './map-scene.js';
 import type { MapState } from './map-state.js';
 import { MapSync } from './map-sync.js';
+import { maxZoomFor } from './map-layout.js';
 import { listenForTaps } from './tap-detector.js';
 import { describeTile } from './tile-info.js';
 import { mountTilePanel } from './tile-panel.js';
@@ -105,6 +106,8 @@ export interface MapDebug extends MapSceneStats {
   readonly live: WsStatus | null;
   /** Each wild-squishy tuft's tile and its middle on screen (CSS pixels), for e2e taps (#209). */
   readonly wild: readonly { key: HexKey; x: number; y: number }[];
+  /** Each open home's Heart Seed spot on screen (CSS pixels), for e2e taps (#318). */
+  readonly openHomes: readonly { key: HexKey; x: number; y: number }[];
 }
 
 export interface MapScreen {
@@ -366,7 +369,11 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         stop.signal,
       );
     }
-    return { bounds: built.bounds, start: built.homeOf(state.view, user?.id ?? null) };
+    return {
+      bounds: built.bounds,
+      start: built.homeOf(state.view, user?.id ?? null),
+      maxDistance: maxZoomFor(built.bounds, CAMERA.maxDistance),
+    };
   };
 
   /** Takes the map off screen (the sync is already closed or about to be). */
@@ -457,6 +464,12 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         selected: selected ? hexKey(selected) : null,
         live: ws?.status ?? null,
         wild: scene3d.wildRects().map(({ key, rect }) => ({
+          key,
+          x: rect.x + rect.width / 2,
+          y: rect.y + rect.height / 2,
+        })),
+        // Open homes on screen (#318), to tap in e2e.
+        openHomes: scene3d.openHomeRects().map(({ key, rect }) => ({
           key,
           x: rect.x + rect.width / 2,
           y: rect.y + rect.height / 2,
