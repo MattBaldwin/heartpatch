@@ -8,6 +8,7 @@ import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
+import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import '@babylonjs/core/Meshes/thinInstanceMesh';
@@ -25,6 +26,7 @@ import {
   type PublicTile,
 } from '@heartpatch/shared';
 import type { Bounds, GroundPoint } from '../engine/camera/camera-math.js';
+import { activeTriangles } from '../engine/render-stats.js';
 import { MAP_BUILDING_SCALE, MAP_OUTER_FIRE_SCALE, SAFE_GLOW } from '../home/home-config.js';
 import { mapBuildings, mapSafeTiles } from '../home/home-layout.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
@@ -48,6 +50,7 @@ import {
   BORDER,
   ISLAND,
   LAND_FADE,
+  MAP_DETAIL,
   MUTED,
   PROP_SWAY,
   TERRAIN_LOOKS,
@@ -58,7 +61,7 @@ import {
 } from './map-config.js';
 import { dressTile, hexRgb, isMuted, muteRgb, tileColor, tileJitter } from './map-dressing.js';
 import { findHomeBases, hash01, mapBounds, mapRadius } from './map-layout.js';
-import { buildProp, buildWildTuft, linear, merged, painted } from './map-props.js';
+import { buildProp, buildWildTuft, linear, merged, painted, type PropDetail } from './map-props.js';
 import type { WildMarker } from './wild-markers.js';
 import { AMBIENT_ATTRIBUTE, attachTerrainPlugin, TerrainClock } from './terrain-plugin.js';
 import type { QualityTier } from '../engine/config.js';
@@ -88,6 +91,16 @@ export const TOP_RINGS: readonly ProfileRing[] = [
 ];
 export const CORNER = 0.2; // TUNE: corner rounding, fraction of the radius
 export const SEGMENTS = 3;
+/**
+ * A tile's shape zoomed out (#318), where it's a few dozen pixels across:
+ * the dome and the rim, corners barely rounded. The top lands where the full shape's
+ * does. About a fifth of the full shape's triangles.
+ */
+const FAR_TOP_RINGS: readonly ProfileRing[] = [
+  { scale: 0.8, y: DOME * 0.25 },
+  { scale: 1, y: -BEVEL },
+];
+const FAR_SEGMENTS = 2;
 /** Overlays (selection, safe glow, homesteads) float this far above the tile so they never z-fight. */
 const TINT_LIFT = 0.012;
 /** Fences stand near a tile's rim, where its rounded top has dropped a little. TUNE */
@@ -123,6 +136,14 @@ export interface MapSceneStats {
   /** Dressing props on the map, and how many kinds (one draw call each). */
   readonly props: number;
   readonly propKinds: number;
+  /**
+   * How tiles and props draw (#318): `near` at high detail, or `far`
+   * (zoomed out) from low-detail meshes, the same number of draw calls.
+   */
+  readonly detail: 'near' | 'far';
+  /** Draw calls in the last frame drawn, and the triangles its meshes in view drew (#318). */
+  readonly drawCalls: number;
+  readonly activeTriangles: number;
   /** Tiles drawn muted (wild land nobody owns), and the props on them. */
   readonly mutedTiles: number;
   readonly mutedProps: number;
@@ -169,6 +190,8 @@ export function topOf(tile: PublicTile): number {
 /** One instanced tile mesh and the tiles it draws, for recolouring when ownership changes. */
 interface TileGroup {
   readonly mesh: Mesh;
+  /** The same tiles at low detail, for the zoomed-out map (#318). */
+  readonly far: Mesh;
   readonly look: TerrainLook;
   readonly tiles: PublicTile[];
   readonly colors: Float32Array;
@@ -183,6 +206,8 @@ interface PropGroup {
   readonly tiles: HexKey[];
   /** `terrainAmbient` per instance: sway, phase, muted, bob. */
   readonly ambient: Float32Array;
+  /** The same instances at low detail, for the zoomed-out map (#318). */
+  readonly far: Mesh;
 }
 
 export function vinyl(
@@ -322,6 +347,13 @@ export class MapScene {
   private readonly tileGroups: TileGroup[] = [];
   private readonly propGroups: PropGroup[] = [];
   private propCount = 0;
+  /** Contact shadows under the props; up close only (#318). */
+  private propShadows: Mesh | null = null;
+  /** Zoomed out: tiles and props draw from their low-detail meshes (`followZoom`). */
+  private far = false;
+  private readonly instrumentation: SceneInstrumentation;
+  /** Draw calls in the last frame drawn (`SceneInstrumentation`, as the battle measures). */
+  private drawCalls = 0;
   /** Glowing props whose glow changes at night (jack-o'-lanterns). */
   private lanternMat: PBRMaterial | null = null;
   private readonly ambient: MapAmbient;
@@ -344,9 +376,28 @@ export class MapScene {
     for (const t of view.tiles) this.tiles.set(hexKey(t), t);
     this.bounds = mapBounds(view.tiles, HEX_SIZE);
 
+    this.instrumentation = new SceneInstrumentation(scene);
+    // After the camera has moved for this frame (the map camera moves in
+    // its own before-render step, and Babylon refreshes the camera's
+    // position in `updateTransformMatrix`) and before the meshes to draw are
+    // picked, so the frame that crosses the switch draws the new detail. On
+    // demand, that's often the last frame drawn.
+    const zoom = scene.onBeforeCameraRenderObservable.add(() => {
+      this.followZoom();
+    });
+    const counted = scene.onAfterRenderObservable.add(() => {
+      this.drawCalls = this.instrumentation.drawCallsCounter.current;
+    });
+    scene.onDisposeObservable.addOnce(() => {
+      scene.onBeforeCameraRenderObservable.remove(zoom);
+      scene.onAfterRenderObservable.remove(counted);
+      this.instrumentation.dispose();
+    });
+
     this.buildIsland(view.tiles);
     this.animated = this.buildTiles(view.tiles);
     this.buildProps(view.tiles);
+    this.applyDetail();
     this.homeNodes = buildHomeNodes(scene, view.tiles, new Set(options.seasons ?? []));
     this.buildGap();
     this.ambient = new MapAmbient(scene, view.tiles, this.clock, {
@@ -462,11 +513,14 @@ export class MapScene {
       keepersWearing: this.keepers.handles.map((h) => h.params.worn),
       props: this.propCount,
       propKinds: this.propGroups.length,
+      detail: this.far ? 'far' : 'near',
       mutedTiles: this.tileGroups.reduce((n, g) => n + g.muted.filter((m) => m === 1).length, 0),
       mutedProps: this.propGroups.reduce(
         (n, g) => n + g.ambient.filter((v, i) => i % 4 === 2 && v === 1).length,
         0,
       ),
+      drawCalls: this.drawCalls,
+      activeTriangles: activeTriangles(this.scene),
       halloween: this.halloween,
       night: this.night,
       ambient: this.mode,
@@ -786,25 +840,36 @@ export class MapScene {
           { corner: CORNER, segments: SEGMENTS, centre: { y: h + DOME } },
         ),
       );
+      const far = meshFrom(
+        this.scene,
+        `tiles-${group.key}-far`,
+        loftRoundedHex(
+          TILE_RADIUS,
+          [...FAR_TOP_RINGS.map((r) => ({ scale: r.scale, y: r.y + h })), { scale: 1, y: 0 }],
+          { corner: CORNER, segments: FAR_SEGMENTS, centre: { y: h + DOME } },
+        ),
+      );
       // White albedo: each tile's colour comes from its instance colour.
       const mat = vinyl(this.scene, `tiles-${group.key}-mat`, { ...look, color: '#ffffff' });
       if (look.glow > 0) mat.emissiveColor = linear(look.color).scale(look.glow);
       const plugin = attachTerrainPlugin(mat, this.clock, { water: group.key === 'lake' });
       if (!plugin) animated = false;
-      mesh.material = mat;
       // Height wobble scales the tile, so its top lands at `topOf(tile)`.
-      setInstances(
-        mesh,
-        group.tiles.map((tile) => {
-          const p = hexToWorld(tile, HEX_SIZE);
-          return placeAt(p.x, 0, p.z, new Vector3(1, (topOf(tile) + DOME) / (h + DOME), 1));
-        }),
-      );
+      const matrices = group.tiles.map((tile) => {
+        const p = hexToWorld(tile, HEX_SIZE);
+        return placeAt(p.x, 0, p.z, new Vector3(1, (topOf(tile) + DOME) / (h + DOME), 1));
+      });
+      // Both detail levels share the colours: recolouring one recolours both.
       const colors = new Float32Array(group.tiles.length * 4);
-      mesh.thinInstanceSetBuffer('color', colors, 4, false);
-      mesh.freezeWorldMatrix();
+      for (const m of [mesh, far]) {
+        m.material = mat;
+        setInstances(m, matrices);
+        m.thinInstanceSetBuffer('color', colors, 4, false);
+        m.freezeWorldMatrix();
+      }
       this.tileGroups.push({
         mesh,
+        far,
         look,
         tiles: group.tiles,
         colors,
@@ -846,7 +911,10 @@ export class MapScene {
             : tileColor(group.look.color, tileJitter(tile, tile.terrain), muted);
         group.colors.set([...c.map(toLinear), 1], i * 4);
       }
-      if (changed) group.mesh.thinInstanceBufferUpdated('color');
+      if (changed) {
+        group.mesh.thinInstanceBufferUpdated('color');
+        group.far.thinInstanceBufferUpdated('color');
+      }
     }
     for (const group of this.propGroups) {
       let changed = false;
@@ -856,14 +924,19 @@ export class MapScene {
         group.ambient[i * 4 + 2] = muted;
         changed = true;
       }
-      if (changed) group.mesh.thinInstanceBufferUpdated(AMBIENT_ATTRIBUTE);
+      if (changed) {
+        group.mesh.thinInstanceBufferUpdated(AMBIENT_ATTRIBUTE);
+        group.far.thinInstanceBufferUpdated(AMBIENT_ATTRIBUTE);
+      }
     }
   }
 
   /**
    * Dressing for every terrain tile (map-dressing.ts): one thin-instanced
    * mesh per prop kind, each instance with its colour multiplier and its
-   * sway, phase, muted and bob values (terrain-plugin.ts).
+   * sway, phase, muted and bob values (terrain-plugin.ts). Each kind is built
+   * twice (#318), at high detail for the near camera and at low detail for
+   * the zoomed-out map; `applyDetail` shows one, so draw calls stay the same.
    */
   private buildProps(tiles: readonly PublicTile[]): void {
     type Kind = { matrices: Matrix[]; tints: number[]; ambient: number[]; tiles: HexKey[] };
@@ -931,25 +1004,33 @@ export class MapScene {
     for (const [kindName, { mesh }] of meshes) {
       const kind = byKind.get(kindName);
       if (!kind) continue;
+      let mat: Material = propMat;
       if (kindName === 'jack-o-lantern') {
         this.lanternMat = glowing('lantern-mat', HALLOWEEN.glowColor, HALLOWEEN.glow.day);
-        mesh.material = this.lanternMat;
+        mat = this.lanternMat;
       } else if (kindName === 'crystal') {
-        mesh.material = glowing('crystal-mat', CRYSTAL_GLOW.color, CRYSTAL_GLOW.strength);
-      } else {
-        mesh.material = propMat;
+        mat = glowing('crystal-mat', CRYSTAL_GLOW.color, CRYSTAL_GLOW.strength);
       }
-      setInstances(mesh, kind.matrices);
-      mesh.thinInstanceSetBuffer('color', new Float32Array(kind.tints), 4, true);
+      // Both detail levels share the instance data: muting one mutes both.
+      const tints = new Float32Array(kind.tints);
       const ambient = new Float32Array(kind.ambient);
-      mesh.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, ambient, 4, false);
-      mesh.freezeWorldMatrix();
-      this.propGroups.push({ mesh, tiles: kind.tiles, ambient });
+      const far = buildProp(this.scene, kindName, 'low').mesh;
+      far.name = `${kindName}-far`;
+      const detail: Record<PropDetail, Mesh> = { high: mesh, low: far };
+      for (const m of Object.values(detail)) {
+        m.material = mat;
+        setInstances(m, kind.matrices);
+        m.thinInstanceSetBuffer('color', tints, 4, true);
+        m.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, ambient, 4, false);
+        m.freezeWorldMatrix();
+      }
+      this.propGroups.push({ mesh, far, tiles: kind.tiles, ambient });
       this.propCount += kind.matrices.length;
     }
 
-    // Baked soft contact shadows: one round, vertex-alpha disc per prop.
-    const shadow = meshFrom(
+    // Baked soft contact shadows: one round, vertex-alpha disc per prop. Only
+    // up close: zoomed out they're specks, and there are as many as props.
+    this.propShadows = meshFrom(
       this.scene,
       'prop-shadows',
       loftRoundedHex(1, [{ scale: 1, y: 0, alpha: 0 }], {
@@ -959,9 +1040,35 @@ export class MapScene {
         rgb: [0.42, 0.29, 0.43],
       }),
     );
-    shadow.material = overlayMaterial(this.scene, 'prop-shadow-mat');
-    setInstances(shadow, shadows);
-    shadow.freezeWorldMatrix();
+    this.propShadows.material = overlayMaterial(this.scene, 'prop-shadow-mat');
+    setInstances(this.propShadows, shadows);
+    this.propShadows.freezeWorldMatrix();
+  }
+
+  /**
+   * Shows the near (high-detail) or far (low-detail) tiles and props for the
+   * camera's height (#318), with some give either side of
+   * `MAP_DETAIL.farHeight` so a pinch near it never flickers.
+   */
+  private followZoom(): void {
+    const camera = this.scene.activeCamera;
+    if (!camera) return;
+    const height = camera.globalPosition.y;
+    const { farHeight, hysteresis } = MAP_DETAIL;
+    const far = this.far ? height > farHeight - hysteresis : height > farHeight + hysteresis;
+    if (far === this.far) return;
+    this.far = far;
+    this.applyDetail();
+  }
+
+  private applyDetail(): void {
+    const near = !this.far;
+    for (const g of [...this.tileGroups, ...this.propGroups]) {
+      g.mesh.setEnabled(near);
+      g.far.setEnabled(!near);
+    }
+    // A mesh with no instances stays off (`setInstances`).
+    this.propShadows?.setEnabled(near && this.propShadows.thinInstanceCount > 0);
   }
 
   /** Pushes night, mode and the tier's share into the motes, backdrop and lanterns. */

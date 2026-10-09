@@ -498,3 +498,33 @@ export function tileSurface(top: TileTop): (p: WorldPoint) => number {
     return inner.y;
   };
 }
+
+/**
+ * The point `back` tile-local units behind `from` along `trail` (newest point
+ * first), into `out` (no allocation: followers ask every frame, #317). Past
+ * the trail's end it stops at its last point.
+ */
+export function alongTrail(
+  from: WorldPoint,
+  trail: readonly WorldPoint[],
+  back: number,
+  out: { x: number; z: number },
+): void {
+  let x = from.x;
+  let z = from.z;
+  let left = back;
+  for (const p of trail) {
+    const length = Math.hypot(p.x - x, p.z - z);
+    if (length >= left && length > 0) {
+      const u = left / length;
+      out.x = x + (p.x - x) * u;
+      out.z = z + (p.z - z) * u;
+      return;
+    }
+    left -= length;
+    x = p.x;
+    z = p.z;
+  }
+  out.x = x;
+  out.z = z;
+}

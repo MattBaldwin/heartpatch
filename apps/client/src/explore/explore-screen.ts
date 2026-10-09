@@ -1139,6 +1139,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         return kind ? [{ id: m.id, species: kind }] : [];
       }),
       mapTile: options.mapTile(tile),
+      reducedMotion,
     });
     // The start can land on a rock: step out before the Keeper is drawn.
     keeperAt = freePoint(keeperAt, built.colliders);

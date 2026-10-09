@@ -35,13 +35,20 @@ export function merged(name: string, parts: Mesh[]): Mesh {
   return mesh;
 }
 
+/**
+ * How finely a prop is built (#318): `high` near the camera, `low` for the
+ * zoomed-out map, where a prop is a few pixels across.
+ */
+export type PropDetail = 'high' | 'low';
+
 /** Sphere segments by diameter (world units). TUNE */
-export function sphereSegments(diameter: number): number {
-  if (diameter >= 0.25) return 10;
-  if (diameter >= 0.18) return 7;
-  if (diameter >= 0.08) return 5;
-  return 3;
+export function sphereSegments(diameter: number, detail: PropDetail = 'high'): number {
+  const segments = diameter >= 0.25 ? 10 : diameter >= 0.18 ? 7 : diameter >= 0.08 ? 5 : 3;
+  return detail === 'high' ? segments : Math.max(2, Math.ceil(segments / 2)); // TUNE
 }
+
+/** Round parts' sides at low detail (#318), as a share of the high-detail count. TUNE */
+const LOW_TESSELLATION = 0.6;
 
 /** A built prop: its mesh, and its contact shadow's diameter (0: none, e.g. on water). */
 export interface BuiltProp {
@@ -50,7 +57,7 @@ export interface BuiltProp {
 }
 
 /** Procedural vinyl-toy props (design doc §19), one mesh per kind. */
-export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
+export function buildProp(scene: Scene, kind: PropKind, detail: PropDetail = 'high'): BuiltProp {
   const at = (
     m: Mesh,
     x: number,
@@ -69,11 +76,19 @@ export function buildProp(scene: Scene, kind: PropKind): BuiltProp {
   // Fewer segments for smaller parts: a tiny bloom drawn on hundreds of
   // tiles needn't be as round as a canopy (triangles cost on mobile GPUs).
   const sphere = (d: number) =>
-    CreateSphere(`${kind}-part`, { diameter: d, segments: sphereSegments(d) }, scene);
+    CreateSphere(`${kind}-part`, { diameter: d, segments: sphereSegments(d, detail) }, scene);
   const cylinder = (h: number, top: number, bottom: number, tessellation = 10) =>
     CreateCylinder(
       `${kind}-part`,
-      { height: h, diameterTop: top, diameterBottom: bottom, tessellation },
+      {
+        height: h,
+        diameterTop: top,
+        diameterBottom: bottom,
+        tessellation:
+          detail === 'high'
+            ? tessellation
+            : Math.max(4, Math.round(tessellation * LOW_TESSELLATION)),
+      },
       scene,
     );
   const box = (w: number, h: number, d: number) =>

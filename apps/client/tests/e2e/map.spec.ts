@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { draws, hook, idle } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { touch } from './touch.js';
 
 /** The open map as drawn, from the dev hook (src/map/map-screen.ts `MapDebug`). */
 interface MapDebug {
@@ -18,7 +19,21 @@ interface MapDebug {
   propKinds: number;
   mutedTiles: number;
   ambient: 'live' | 'still' | 'off';
+  detail: 'near' | 'far';
+  drawCalls: number;
+  activeTriangles: number;
 }
+
+/**
+ * The map's render budget (#318), a little over what a fresh 4-seat patch
+ * measured (61 draw calls; 729k triangles up close, 376k zoomed out, where
+ * tiles and props draw at low detail). Zooming out mustn't cost draw calls.
+ */
+const MAP_BUDGET = {
+  drawCalls: 75,
+  nearTriangles: 800_000,
+  farTriangles: 420_000,
+} as const;
 
 function mapState(page: Page): Promise<MapDebug | null> {
   return hook<MapDebug>(page, 'map');
@@ -208,4 +223,54 @@ test('dresses the land, mutes wild land, and keeps ambient life calm', async ({ 
 
   expect(errors).toEqual([]);
   await page.context().close();
+});
+
+test('keeps the map in its draw-call and triangle budget, up close and zoomed out (#318)', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000); // shader compiles; CI renders in software
+  const page = await newPlayer(browser, uniqueName('bud'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Budget Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+
+  // Up close, once every mesh's shaders are ready and drawing.
+  await expect
+    .poll(async () => (await mapState(page))?.drawCalls ?? 0, { timeout: 60_000 })
+    .toBeGreaterThan(40);
+  await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
+  const near = (await mapState(page))!;
+  expect(near.detail).toBe('near');
+  expect(near.drawCalls).toBeLessThanOrEqual(MAP_BUDGET.drawCalls);
+  expect(near.activeTriangles).toBeLessThanOrEqual(MAP_BUDGET.nearTriangles);
+
+  // Pinch in, again and again, to the farthest zoom: low detail, no more draw calls.
+  const box = (await page.locator('#game').boundingBox())!;
+  const mid = { x: box.width / 2, y: box.height / 2 };
+  const reach = Math.min(box.width, box.height) / 3;
+  for (let i = 0; i < 4; i++) {
+    await touch(
+      page,
+      Array.from({ length: 9 }, (_, k) => {
+        const d = reach * (1 - k / 9);
+        return { 1: { x: mid.x - d, y: mid.y }, 2: { x: mid.x + d, y: mid.y } };
+      }),
+    );
+  }
+  await expect.poll(async () => (await mapState(page))?.detail, { timeout: 15_000 }).toBe('far');
+  await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
+  const far = (await mapState(page))!;
+  // The measured numbers, in the report, for tuning the budget.
+  test.info().annotations.push({
+    type: 'map budget',
+    description: JSON.stringify({
+      near: { drawCalls: near.drawCalls, triangles: near.activeTriangles },
+      far: { drawCalls: far.drawCalls, triangles: far.activeTriangles },
+    }),
+  });
+  expect(far.drawCalls).toBeLessThanOrEqual(near.drawCalls);
+  expect(far.activeTriangles).toBeLessThanOrEqual(MAP_BUDGET.farTriangles);
 });

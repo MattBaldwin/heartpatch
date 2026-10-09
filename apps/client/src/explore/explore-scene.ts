@@ -55,8 +55,25 @@ import { faceYaw } from '../procedural/face-yaw.js';
 import { KeeperField, type KeeperHandle } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
-import { EXPLORE_CAMERA, EXPLORE_FADE, EXPLORE_TOOL, EXPLORE_VIEW } from './explore-config.js';
 import {
+  EXPLORE_CAMERA,
+  EXPLORE_FADE,
+  EXPLORE_HOP,
+  EXPLORE_TOOL,
+  EXPLORE_VIEW,
+} from './explore-config.js';
+import {
+  createHop,
+  hopActive,
+  hopPose,
+  shadowScale,
+  stepHop,
+  TELEPORT,
+  type Hop,
+  type HopPose,
+} from './keeper-hop.js';
+import {
+  alongTrail,
   cameraGoal,
   cameraSettled,
   cameraShot,
@@ -117,6 +134,8 @@ export interface ExploreSceneOptions {
   readonly team: readonly { readonly id: string; readonly species: Species }[];
   /** The tile as the map knows it: its buildings. */
   readonly mapTile: PublicTile | null;
+  /** Reduce Motion: the Keeper and the team bob instead of hopping (#317). Default off. */
+  readonly reducedMotion?: () => boolean;
 }
 
 /**
@@ -166,11 +185,28 @@ const SCREEN_FROM = new Vector3();
 const SCREEN_AT = new Vector3();
 const SCREEN_VIEWPORT = new Viewport(0, 0, 1, 1);
 
-/** The Keeper's trail: followers stand on its points, one gap apart. */
+/** A squishy following the Keeper along its trail, one gap behind the one before. */
 interface Follower {
   readonly handle: SquishyHandle;
-  at: WorldPoint;
+  /** Tile-local, updated in place as it follows. */
+  readonly at: { x: number; z: number };
+  yaw: number;
+  readonly hop: Hop;
+  /** Ground covered since the last step, tile-local. */
+  walked: number;
 }
+
+/**
+ * How far behind the Keeper the `i`th follower walks, tile-local: half a gap
+ * more than one per place, the spacing the trail's points gave on average
+ * before the team glided along it (#317).
+ */
+function followBack(i: number): number {
+  return (i + 1.5) * EXPLORE_VIEW.followGap;
+}
+
+// Scratch for the hop pose being placed (no allocations while walking).
+const POSE: HopPose = { lift: 0, squash: 1 };
 
 export class ExploreScene {
   readonly content: SceneContent;
@@ -206,8 +242,15 @@ export class ExploreScene {
   readonly #lookAt = new Vector3();
   #keeper: KeeperHandle | null = null;
   readonly #followers: Follower[] = [];
-  /** Tile-local points the Keeper walked through, newest first. */
+  /** Tile-local points the Keeper walked through, newest first (to start with, where the team waits). */
   #trail: WorldPoint[] = [];
+  /** The Keeper's hop (#317), its pose this frame, and the ground covered since the last step. */
+  readonly #hop = createHop();
+  readonly #pose: HopPose = { lift: 0, squash: 1 };
+  #walked = 0;
+  /** Someone was hopping, landing or settling at the last step. */
+  #hopping = false;
+  readonly #reduced: () => boolean;
   #tile: ExploreTileResponse;
   #at: WorldPoint = EXPLORE_VIEW.start;
   #yaw: number = EXPLORE_VIEW.startYaw;
@@ -227,6 +270,7 @@ export class ExploreScene {
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
     this.#tile = tile;
+    this.#reduced = options.reducedMotion ?? (() => false);
     scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
     this.#instrumentation = new SceneInstrumentation(scene);
     const look = TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
@@ -324,10 +368,16 @@ export class ExploreScene {
         keeperItems(options.keeperWearing ?? []),
       );
     }
+    // The team waits in a little line behind the Keeper: the start of its
+    // trail, so they follow on from it.
+    const line = options.team.map((_, i) => this.#trailPoint(i + 1));
+    this.#trail = [...line, this.#trailPoint(line.length + 1)];
     options.team.forEach((member, i) => {
-      const at = this.#trailPoint(i + 1);
+      const at = { x: 0, z: 0 };
+      alongTrail(this.#at, this.#trail, followBack(i), at);
       const handle = this.#squishies.add(member.species, member.id, this.#squishyPlacement(at, 0));
-      this.#followers.push({ handle, at });
+      const hop = createHop(EXPLORE_HOP.followerOffset[i % EXPLORE_HOP.followerOffset.length]);
+      this.#followers.push({ handle, at, yaw: 0, hop, walked: 0 });
     });
 
     // The tools the Keeper can hold (#291): one small mesh each, one shown.
@@ -463,24 +513,32 @@ export class ExploreScene {
    * the way it walks; left out, it keeps its heading.
    */
   moveKeeper(at: WorldPoint, yaw?: number): void {
+    // The ground covered drives the hop (#317); a jump to a new place doesn't.
+    const step = Math.hypot(at.x - this.#at.x, at.z - this.#at.z);
+    if (step <= TELEPORT) this.#walked += step;
     this.#at = at;
     if (yaw !== undefined) this.#yaw = yaw;
-    if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
-    this.#placeTool();
     this.#fade();
     const head = this.#trail[0];
     const gap = EXPLORE_VIEW.followGap;
     if (!head || (head.x - at.x) ** 2 + (head.z - at.z) ** 2 >= gap * gap) {
       this.#trail = [at, ...this.#trail].slice(0, this.#followers.length + 2);
     }
-    this.#followers.forEach((f, i) => {
-      const to = this.#trailPoint(i + 1);
-      if (to.x === f.at.x && to.z === f.at.z) return;
+    // The team glides along the trail, each one gap behind the one before.
+    for (let i = 0; i < this.#followers.length; i++) {
+      const f = this.#followers[i];
+      if (!f) continue;
+      const x = f.at.x;
+      const z = f.at.z;
+      alongTrail(this.#at, this.#trail, followBack(i), f.at);
+      const moved = Math.hypot(f.at.x - x, f.at.z - z);
+      if (moved === 0) continue;
+      if (moved <= TELEPORT) f.walked += moved;
       const ahead = i === 0 ? at : (this.#followers[i - 1]?.at ?? at);
-      const yawTo = faceYaw(ahead.x - to.x, ahead.z - to.z);
-      f.at = to;
-      this.#squishies.move(f.handle, this.#squishyPlacement(to, yawTo));
-    });
+      f.yaw = faceYaw(ahead.x - f.at.x, ahead.z - f.at.z);
+    }
+    // While hopping, `step` places everyone this frame with the new pose.
+    if (!this.#hopping) this.#place();
   }
 
   /**
@@ -526,10 +584,48 @@ export class ExploreScene {
       }
       this.#placeTool();
     }
+    const hopping = this.#stepHops(dt);
     const keeper = this.#keepers.update(now);
     const squishies = this.#squishies.update(now);
-    if (!following && !swinging) this.#lastStep = null;
-    return keeper || squishies || following || swinging;
+    if (!following && !swinging && !hopping) this.#lastStep = null;
+    return keeper || squishies || following || swinging || hopping;
+  }
+
+  /**
+   * Hops along by the ground covered since the last step (#317) and places
+   * everyone; true while anyone still hops, lands or settles. The stick's
+   * push is the share of full walking speed this frame covered.
+   */
+  #stepHops(dt: number): boolean {
+    const reduced = this.#reduced();
+    // The first step after a rest has no time to measure a push against.
+    const walked = dt > 0 ? this.#walked : 0;
+    const push = dt > 0 ? walked / (EXPLORE_VIEW.walkSpeed * dt) : 0;
+    this.#walked = 0;
+    stepHop(this.#hop, walked, dt, push, reduced);
+    let hopping = hopActive(this.#hop);
+    for (const f of this.#followers) {
+      stepHop(f.hop, dt > 0 ? f.walked : 0, dt, push, reduced);
+      f.walked = 0;
+      hopping ||= hopActive(f.hop);
+    }
+    // One more placement (and frame) after the last hop lands, at rest.
+    const drawing = hopping || this.#hopping;
+    if (drawing) this.#place();
+    this.#hopping = hopping;
+    return drawing;
+  }
+
+  /** Places the Keeper, its tool and the team with this frame's hop pose. */
+  #place(): void {
+    const reduced = this.#reduced();
+    hopPose(this.#hop, reduced, 1, this.#pose);
+    if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
+    this.#placeTool();
+    for (const f of this.#followers) {
+      hopPose(f.hop, reduced, EXPLORE_HOP.followerLift, POSE);
+      this.#squishies.move(f.handle, this.#squishyPlacement(f.at, f.yaw, f.handle, POSE));
+    }
   }
 
   setLod(lod: SquishyLod): void {
@@ -631,9 +727,14 @@ export class ExploreScene {
     const k = EXPLORE_VIEW.keeperScale;
     Quaternion.RotationYawPitchRollToRef(this.#yaw, KEEPER_LEAN, 0, TOOL_TURN);
     Matrix.ComposeToRef(
-      TOOL_SCALE.set(k, k, k),
+      // The hand rides the hop (#317): lifted and squashed with the Keeper.
+      TOOL_SCALE.set(
+        k / Math.sqrt(this.#pose.squash),
+        k * this.#pose.squash,
+        k / Math.sqrt(this.#pose.squash),
+      ),
       TOOL_TURN,
-      TOOL_AT.set(at.x, this.#groundAt(this.#at), at.z),
+      TOOL_AT.set(at.x, this.#groundAt(this.#at) + this.#pose.lift * this.keeperTall, at.z),
       TOOL_WORLD,
     );
     Vector3.TransformCoordinatesToRef(
@@ -694,8 +795,10 @@ export class ExploreScene {
     return { x: this.#at.x + (n % 2 === 0 ? 0.02 : -0.02), z: this.#at.z - behind };
   }
 
+  /** On the ground at its tile-local point; the hop (#317) only lifts and squashes what's drawn. */
   #keeperPlacement() {
     const at = this.#world(this.#at);
+    const pose = this.#pose;
     return {
       x: at.x,
       z: at.z,
@@ -703,12 +806,25 @@ export class ExploreScene {
       yaw: this.#yaw,
       scale: EXPLORE_VIEW.keeperScale,
       lean: KEEPER_LEAN,
+      lift: pose.lift * this.keeperTall,
+      squash: pose.squash,
+      shadow: shadowScale(pose.lift),
     };
   }
 
-  #squishyPlacement(p: WorldPoint, yaw: number) {
+  #squishyPlacement(p: WorldPoint, yaw: number, handle?: SquishyHandle, pose?: HopPose) {
     const at = this.#world(p);
-    return { x: at.x, z: at.z, y: this.#groundAt(p), yaw, scale: EXPLORE_VIEW.squishyScale };
+    const scale = EXPLORE_VIEW.squishyScale;
+    return {
+      x: at.x,
+      z: at.z,
+      y: this.#groundAt(p),
+      yaw,
+      scale,
+      lift: handle && pose ? pose.lift * handle.params.height * scale : 0,
+      squash: pose?.squash ?? 1,
+      shadow: pose ? shadowScale(pose.lift) : 1,
+    };
   }
 
   #buildGround(terrain: string): void {
