@@ -276,6 +276,20 @@ test('a busy tile’s five buttons fit a phone on its side (#264)', async ({ bro
       await panel.evaluate((p) => p.scrollHeight <= p.clientHeight + 1),
       'the panel scrolls',
     ).toBe(true);
+    // Go home and Explore share a row, one line each (#291).
+    const home = buttons.find((b) => b.id === 'tile-home')!;
+    const explore = buttons.find((b) => b.id === 'tile-explore')!;
+    expect(Math.abs(home.t - explore.t), `${show(home)} and ${show(explore)}`).toBeLessThan(2);
+    for (const id of ['tile-home', 'tile-explore']) {
+      const oneLine = await panel.getByTestId(id).evaluate((b) => {
+        const lineHeight = parseFloat(getComputedStyle(b).lineHeight) || 24;
+        const pad =
+          parseFloat(getComputedStyle(b).paddingTop) +
+          parseFloat(getComputedStyle(b).paddingBottom);
+        return b.scrollWidth <= b.clientWidth && b.clientHeight - pad < lineHeight * 1.6;
+      });
+      expect(oneLine, `${id} on one line`).toBe(true);
+    }
     await panel.getByRole('button', { name: 'Close' }).tap();
     await expect(panel).toBeHidden();
   }

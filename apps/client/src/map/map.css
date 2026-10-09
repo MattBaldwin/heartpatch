@@ -357,5 +357,15 @@
 
   .tile-panel .tile-panel-actions:has(.tile-action-pair) .tile-actions-slot > button {
     flex: 1 1 28%;
+    padding: var(--hp-pad-y) var(--hp-pad-x);
+    font-size: 16px;
+  }
+
+  /* Go home and Explore lead, side by side on the first row, one line each
+     (#291): with three to a row they could otherwise land on two rows. The
+     other buttons may wrap a long label rather than clip it. */
+  .tile-panel .tile-panel-actions:has(.tile-action-pair) .tile-actions-slot > .tile-action-pair {
+    order: 0;
+    white-space: nowrap;
   }
 }

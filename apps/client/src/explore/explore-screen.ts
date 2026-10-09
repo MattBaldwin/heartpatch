@@ -19,14 +19,17 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import { inventoryApi } from '../inventory/inventory-api.js';
+import { itemIcon } from '../inventory/item-icons.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import type { TileActions } from '../map/map-screen.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
+import { faceYaw } from '../procedural/face-yaw.js';
 import { el, messageOf } from '../ui/dom.js';
-import { EXPLORE_VIEW, INTERACTION } from './explore-config.js';
+import { strokeIcon } from '../ui/trays/trays.js';
+import { EXPLORE_FIND, EXPLORE_VIEW } from './explore-config.js';
 import { exploreApi, type ExploreApi } from './explore-api.js';
 import { ExploreScene, type ExploreSceneStats } from './explore-scene.js';
 import {
@@ -35,26 +38,45 @@ import {
   clampToTile,
   EXPLORE_TEXT,
   findLines,
-  foundHeadline,
+  findShowsCard,
+  findToast,
+  foundCount,
   joystickVector,
+  makeOneLine,
   missingTool,
-  nearestSpot,
-  needLine,
-  spotInReach,
+  needsHere,
   progressLine,
-  restLine,
-  standBeside,
+  rareTitle,
   stepToward,
   terrainName,
-  toolName,
+  toolChip,
+  toolChipShort,
+  TOOL_ICONS,
   toolRecipeRows,
-  TOOL_WORDS,
-  usesLine,
+  HANDS_ICON,
+  ICON_PATHS,
+  isIconName,
+  PLAY_TEXT,
   xpLines,
+  restLine,
 } from './explore-view.js';
 import {
+  besideSpot,
+  CAVE_STAGE,
+  freePoint,
+  fromCaveStage,
+  lanternGlint,
+  LIGHT_REACH,
+  LIGHT_RING_SHARE,
+  lightCircle,
+  slideMove,
+  spotAtTap,
+  spotInFront,
+  toCaveStage,
+  yawToward,
+} from './explore-world.js';
+import {
   interactionProgress,
-  lit,
   startInteraction,
   stepInteraction,
   type InteractionInput,
@@ -62,12 +84,15 @@ import {
 } from './interactions.js';
 import './explore.css';
 
-// Exploring your land (#199, owner design 2026-10-07): "Explore" on one of
-// my tiles opens it up close. My Keeper walks it (drag for a floating
-// joystick, or tap the ground) with my team trailing behind, and searches
-// its sparkling spots: a short touch mini-interaction per tool, each with an
-// easy way. The server rolls every find (CLAUDE.md rule 1); this screen only
-// asks, then shows the find card it answers with.
+// Exploring your land (#199; cozy-sim feel #291, owner mockup 2026-10-08):
+// "Explore" on one of my tiles opens it up close. A camera follows my
+// Keeper as it walks (the joystick, a drag anywhere, or a tap on the
+// ground), sliding round the rocks, trees and mounds that are the search
+// spots. The big button offers what's in front of the Keeper, which uses
+// the tool right there: a light gesture overlay (each with an easy way)
+// while the world stays in view. The server rolls every find (CLAUDE.md
+// rule 1); a common find is a toast and a hop into the bag, a rare one the
+// full card.
 
 export interface ExploreScreenOptions {
   root: HTMLElement;
@@ -89,11 +114,13 @@ export interface ExploreScreenOptions {
   onProblem: (message: string) => void;
   /** A search landed things in the bag (the bag, recipe book, lore and milestones look again). */
   onFound?: (mapId: string) => void;
-  /** "Open recipe book" on the missing-tool card: leaves exploring and opens it. */
+  /** "Open recipe book" on the missing-tool hint: leaves exploring and opens it. */
   onRecipeBook?: () => void;
   api?: ExploreApi;
   jobs?: Pick<JobsApi, 'view'>;
   bag?: (mapId: string) => Promise<ItemCounts>;
+  /** Reduced motion: finds skip their flight into the bag. */
+  reducedMotion?: () => boolean;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -102,15 +129,24 @@ export interface ExploreDebug {
   readonly open: boolean;
   readonly tile: { readonly q: number; readonly r: number; readonly terrain: string } | null;
   readonly progress: { readonly searched: number; readonly total: number } | null;
-  readonly spots: readonly Pick<PublicSearchSpot, 'index' | 'kind' | 'tool' | 'done'>[];
+  readonly spots: readonly Pick<PublicSearchSpot, 'index' | 'kind' | 'tool' | 'done' | 'x' | 'z'>[];
   readonly keeper: WorldPoint;
-  /** The spot in reach (the action button's), or null. */
+  /** The Keeper's heading, radians (0 faces the camera). */
+  readonly yaw: number;
+  /** The spot in front of the Keeper (the action button's), or null. */
   readonly near: number | null;
   readonly playing: SpotInteraction | null;
-  readonly card: 'find' | 'missing' | null;
+  /** The full card: only for rare finds and a finished tile (#291). */
+  readonly card: 'rare' | null;
+  /** The find toast on screen, or null. */
+  readonly toast: string | null;
+  /** The tool the spot in front needs and the bag has none of (the hint shows), or null. */
+  readonly hint: ToolId | null;
   readonly scene: ExploreSceneStats | null;
   /** Screen point (CSS pixels) of each spot, to tap in tests. */
   spotOnScreen: (index: number) => { x: number; y: number } | null;
+  /** Screen point (CSS pixels) of a tile-local point on the ground, to tap in tests. */
+  pointOnScreen: (p: WorldPoint) => { x: number; y: number } | null;
 }
 
 export interface ExploreScreen {
@@ -124,84 +160,17 @@ export interface ExploreScreen {
   readonly debug: ExploreDebug | null;
 }
 
-type Card =
-  | {
-      readonly kind: 'find';
-      readonly found: SearchSpotResponse;
-      readonly interaction: SpotInteraction;
-      /** A net swiped while the water glowed: just for fun, the find is the same. */
-      readonly bigSplash: boolean;
-    }
-  | { readonly kind: 'missing'; readonly tool: ToolId; readonly bag: ItemCounts | null };
-
-/** What each mini-interaction says (style guide §6). */
-const PLAY_TEXT: Readonly<
-  Record<
-    SpotInteraction,
-    { title: string; hint: string; easy: string; easyNote: string; art: string }
-  >
-> = {
-  dig: {
-    title: 'Dig the mound!',
-    hint: 'Swipe down to dig!',
-    easy: 'Tap to dig',
-    easyNote: 'Each tap is one scoop. Both ways find the same thing!',
-    art: '🟤',
-  },
-  climb: {
-    title: 'Climb to the ledge!',
-    hint: 'Left, right, left, right!',
-    easy: 'Hold to climb',
-    easyNote: "Any tap works too. You can't fall!",
-    art: '🧗',
-  },
-  light: {
-    title: 'Cozy cave',
-    hint: 'Walk around with your light. Look for a glint! ✨',
-    easy: 'Light up the whole cave',
-    easyNote: 'Every secret glows so you can tap it.',
-    art: '',
-  },
-  scoop: {
-    title: 'Scoop the pond!',
-    hint: 'Swipe through the water when it glows!',
-    easy: 'Scoop!',
-    easyNote: 'Scoop any time. Good timing just makes a bigger splash!',
-    art: '💧',
-  },
-  lift: {
-    title: 'Lift it up!',
-    hint: 'Hold to lift!',
-    easy: 'Tap to lift',
-    easyNote: 'Both ways find the same thing!',
-    art: '🪨',
-  },
-  shake: {
-    title: 'Give it a shake!',
-    hint: 'Swipe left and right to shake!',
-    easy: 'Tap to shake',
-    easyNote: 'Both ways find the same thing!',
-    art: '🌳',
-  },
-};
-
-/** What the mini-interaction shows for each kind of spot (the cave stays dark). */
-const SPOT_ART: Readonly<Record<string, string>> = {
-  rock: '🪨',
-  tree: '🌳',
-  'hollow-log': '🪵',
-  'flower-bed': '🌷',
-  'pumpkin-row': '🎃',
-  mound: '🟤',
-  pond: '💧',
-  reeds: '🌾',
-  ledge: '🧗',
-};
+interface RareCard {
+  readonly found: SearchSpotResponse;
+  readonly interaction: SpotInteraction;
+}
 
 export function createExploreScreen(options: ExploreScreenOptions): ExploreScreen {
   const api = options.api ?? exploreApi;
   const jobs = options.jobs ?? jobsApi;
   const bagOf = options.bag ?? (async (mapId: string) => (await inventoryApi.get(mapId)).items);
+  const reducedMotion =
+    options.reducedMotion ?? (() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const registry = visualRegistry(GAME_DATA);
 
   let user: PublicUser | null = null;
@@ -211,25 +180,34 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let generation = 0;
   let tile: ExploreTileResponse | null = null;
   let teamNames: Record<string, string> = {};
-  let team: string[] = [];
   /** My team's squishies that follow the Keeper, in team order. */
   let teamMembers: { id: string; speciesId: string }[] = [];
   let scene3d: ExploreScene | null = null;
   let lastTier: QualityTier | null = null;
   let keeperAt: WorldPoint = EXPLORE_VIEW.start;
-  let yaw = 0;
+  let yaw: number = EXPLORE_VIEW.startYaw;
   /** Where a tap sent the Keeper (beside a spot, if it tapped one). */
   let walkTo: WorldPoint | null = null;
+  /** The closest a tap-walk has got so far, and how long since it got closer (s). */
+  let walkBest = Infinity;
+  let walkStall = 0;
   /** The spot the player last tapped: the action button offers it once in reach. */
   let aimed: number | null = null;
+  /** The drag steering the Keeper: from where (CSS pixels in the ground layer) to where. */
   let stick: { id: number; x0: number; y0: number; x: number; y: number } | null = null;
-  let near: PublicSearchSpot | null = null;
+  let front: PublicSearchSpot | null = null;
   let playing: { spot: PublicSearchSpot; state: InteractionState } | null = null;
-  let card: Card | null = null;
+  let card: RareCard | null = null;
+  let toast: { main: string; extra: string } | null = null;
+  let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The bag, read for the missing-tool hint's recipe counts (null: not yet). */
+  let bag: ItemCounts | null = null;
+  let bagAsked = false;
+  /** The tool last in hand: the Keeper keeps holding it while it walks. */
+  let lastHeld: ToolId | null = null;
   let working = false;
   let opening = false;
   let frame = 0;
-  let lastFrame = 0;
   let panel: { container: HTMLElement; tile: PublicTile } | null = null;
 
   // ── DOM ───────────────────────────────────────────────────────────────
@@ -247,25 +225,60 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     close();
   });
   const title = el('h2', { class: 'explore-title', id: 'explore-title' });
-  const withLine = el('p', { class: 'explore-with', 'data-testid': 'explore-with' });
   const progress = el('p', { class: 'explore-progress', 'data-testid': 'explore-progress' });
-  const tools = el('div', { class: 'explore-tools', 'data-testid': 'explore-tools' });
+  // The tool in hand, short ("🪔 20"); its full name and uses are its label.
+  const toolIcon = el('span', { class: 'explore-tool-icon', 'aria-hidden': 'true' });
+  const toolUses = el('span', { class: 'explore-tool-uses', 'aria-hidden': 'true' });
+  const toolLine = el(
+    'span',
+    { class: 'explore-tool', role: 'img', 'data-testid': 'explore-tool' },
+    toolIcon,
+    toolUses,
+  );
+  const bagCount = el('span', { class: 'explore-bag-count', 'data-testid': 'explore-bag-count' });
+  const bagChip = el(
+    'span',
+    { class: 'explore-bag', role: 'img', 'aria-label': EXPLORE_TEXT.bag },
+    el('span', { 'aria-hidden': 'true' }, '🎒'),
+    bagCount,
+  );
   const top = el(
     'header',
     { class: 'explore-top' },
     back,
-    el('div', { class: 'explore-names' }, title, withLine),
-    progress,
-    tools,
+    el('div', { class: 'explore-names' }, title, progress),
+    toolLine,
+    bagChip,
   );
 
-  // The whole screen under the HUD takes the touches (the camera stays put).
+  // The whole screen under the HUD takes the touches: walking, and the
+  // gestures while a tool is in use.
   const ground = el('div', { class: 'explore-ground', 'data-testid': 'explore-ground' });
-  const stickBase = el('div', { class: 'explore-stick', 'aria-hidden': 'true' });
+  // The lantern's dark (board g): a circle of light round the Keeper.
+  const dark = el('div', { class: 'explore-dark', 'aria-hidden': 'true' });
+  dark.hidden = true;
+  const glint = el(
+    'button',
+    {
+      type: 'button',
+      class: 'explore-glint',
+      'data-testid': 'explore-glint',
+      'aria-label': EXPLORE_TEXT.glint,
+    },
+    '✨',
+  );
+  glint.hidden = true;
+  glint.addEventListener('click', grab);
+
+  // The joystick, always there bottom left (board a); a drag anywhere works too.
+  const stickBase = el('div', {
+    class: 'explore-stick',
+    'aria-hidden': 'true',
+    'data-testid': 'explore-stick',
+  });
   const stickKnob = el('div', { class: 'explore-stick-knob' });
   stickBase.append(stickKnob);
-  stickBase.hidden = true;
-  ground.append(stickBase);
+  const walkHint = el('p', { class: 'explore-walk-hint' }, EXPLORE_TEXT.walkHint);
 
   const note = el('p', { class: 'explore-note', role: 'status', 'data-testid': 'explore-note' });
   const actionIcon = el('span', { class: 'explore-action-icon', 'aria-hidden': 'true' });
@@ -277,9 +290,26 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     actionLabel,
   );
   action.addEventListener('click', () => {
-    if (near) begin(near);
+    if (playing?.state.kind === 'light') {
+      grab();
+      return;
+    }
+    if (front) begin(front);
   });
 
+  // No tool yet (board h): a hint above the button, not a card.
+  const need = el('section', { class: 'explore-need', 'data-testid': 'explore-need' });
+  need.hidden = true;
+  // A tool gesture (boards b, d, e, f, g): a light overlay over the world.
+  const play = el('section', { class: 'explore-play', 'data-testid': 'explore-play' });
+  play.hidden = true;
+  const toastBox = el('div', {
+    class: 'explore-toast',
+    role: 'status',
+    'data-testid': 'explore-toast',
+  });
+  toastBox.hidden = true;
+  // The full card, only for the big moments (board i).
   const sheet = el('section', {
     class: 'explore-sheet',
     role: 'dialog',
@@ -289,7 +319,22 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   });
   sheet.hidden = true;
 
-  const overlay = el('div', { class: 'explore' }, ground, top, note, action, sheet);
+  const overlay = el(
+    'div',
+    { class: 'explore' },
+    ground,
+    dark,
+    glint,
+    stickBase,
+    walkHint,
+    top,
+    toastBox,
+    note,
+    need,
+    action,
+    play,
+    sheet,
+  );
   overlay.hidden = true;
   options.root.append(overlay);
 
@@ -297,34 +342,65 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     note.textContent = text;
   };
 
-  // ── Walking ───────────────────────────────────────────────────────────
+  // ── Walking and gestures ───────────────────────────────────────────────
 
   const local = (e: PointerEvent) => {
     const rect = ground.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
-  let press: { id: number; x: number; y: number; moved: boolean } | null = null;
+  /** The tool gesture takes the touches (every one but the lantern's, which walks). */
+  const gesturing = () => playing !== null && playing.state.kind !== 'light';
+  let press: { id: number; x: number; y: number; moved: boolean; gesture: boolean } | null = null;
+
+  /** Where a drag steers from: the joystick's middle if it started on it, else where it landed. */
+  function stickOrigin(p: { x: number; y: number }): { x: number; y: number } {
+    const base = stickBase.getBoundingClientRect();
+    const rect = ground.getBoundingClientRect();
+    const cx = base.left + base.width / 2 - rect.left;
+    const cy = base.top + base.height / 2 - rect.top;
+    const r = base.width / 2;
+    return (p.x - cx) ** 2 + (p.y - cy) ** 2 <= r * r ? { x: cx, y: cy } : p;
+  }
 
   ground.addEventListener('pointerdown', (e) => {
-    if (!isOpen || playing || card || press) return;
+    if (!isOpen || card || press || working) return;
     const p = local(e);
-    press = { id: e.pointerId, x: p.x, y: p.y, moved: false };
+    const gesture = gesturing();
+    press = { id: e.pointerId, x: p.x, y: p.y, moved: false, gesture };
     try {
       ground.setPointerCapture(e.pointerId);
     } catch {
       // Synthetic pointers can't be captured; their moves still arrive.
     }
+    if (gesture) {
+      feed({ type: 'down', x: p.x, y: p.y, t: performance.now() });
+      return;
+    }
+    // A press on the joystick steers at once.
+    const origin = stickOrigin(p);
+    if (origin.x !== p.x || origin.y !== p.y) {
+      press.moved = true;
+      stick = { id: e.pointerId, x0: origin.x, y0: origin.y, x: p.x, y: p.y };
+      walkTo = null;
+      aimed = null;
+      showStick();
+      wake();
+    }
   });
   ground.addEventListener('pointermove', (e) => {
     if (press?.id !== e.pointerId) return;
     const p = local(e);
+    if (press.gesture) {
+      feed({ type: 'move', x: p.x, y: p.y, t: performance.now() });
+      return;
+    }
     const dx = p.x - press.x;
     const dy = p.y - press.y;
     if (!press.moved && dx * dx + dy * dy < EXPLORE_VIEW.tapSlop ** 2) return;
     press.moved = true;
-    // A drag is the floating joystick, wherever it started (left half on a
-    // phone held in one hand; anywhere is easier for small thumbs).
-    stick = { id: e.pointerId, x0: press.x, y0: press.y, x: p.x, y: p.y };
+    stick = stick
+      ? { ...stick, x: p.x, y: p.y }
+      : { id: e.pointerId, x0: press.x, y0: press.y, x: p.x, y: p.y };
     walkTo = null;
     aimed = null;
     showStick();
@@ -332,31 +408,32 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   });
   const release = (e: PointerEvent) => {
     if (press?.id !== e.pointerId) return;
-    const tapped = !press.moved;
-    const at = { x: press.x, y: press.y };
+    const was = press;
     press = null;
+    if (was.gesture) {
+      const p = local(e);
+      feed({ type: 'up', x: p.x, y: p.y, t: performance.now() });
+      return;
+    }
     stick = null;
     showStick();
-    if (tapped) tapGround(at.x, at.y);
+    if (!was.moved && e.type === 'pointerup') tapGround(was.x, was.y);
   };
   ground.addEventListener('pointerup', release);
-  ground.addEventListener('pointercancel', (e) => {
-    if (press?.id !== e.pointerId) return;
-    press = null;
-    stick = null;
-    showStick();
-  });
+  ground.addEventListener('pointercancel', release);
 
+  /** The knob follows the drag inside the joystick's ring. */
   function showStick(): void {
-    stickBase.hidden = stick === null;
-    if (!stick) return;
+    stickBase.classList.toggle('explore-stick-on', stick !== null);
+    if (!stick) {
+      stickKnob.style.transform = '';
+      return;
+    }
     const r = EXPLORE_VIEW.joystick.radius;
     const dx = stick.x - stick.x0;
     const dy = stick.y - stick.y0;
     const d = Math.sqrt(dx * dx + dy * dy);
     const k = d > r ? r / d : 1;
-    stickBase.style.left = `${String(stick.x0)}px`;
-    stickBase.style.top = `${String(stick.y0)}px`;
     stickKnob.style.transform = `translate(${String(dx * k)}px, ${String(dy * k)}px)`;
   }
 
@@ -364,13 +441,18 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   function tapGround(x: number, y: number): void {
     const point = scene3d?.groundAt(x, y);
     if (!point || !tile) return;
-    const spot = nearestSpot(point, tile.spots, EXPLORE_VIEW.reach * 1.4);
-    walkTo = spot ? standBeside(keeperAt, spot) : clampToTile(point);
+    const spot = spotAtTap(point, tile.spots);
+    const goal = spot ? besideSpot(keeperAt, spot, scene3d?.colliders ?? []) : clampToTile(point);
+    // Never aim inside a rock: the Keeper would bump it forever.
+    walkTo = scene3d ? slideMove(goal, goal, scene3d.colliders) : goal;
+    walkBest = Infinity;
+    walkStall = 0;
     aimed = spot?.index ?? null;
     wake();
   }
 
   /** Draws every frame while the Keeper walks or something plays, then stops. */
+  let lastFrame = 0;
   function wake(): void {
     if (frame === 0 && isOpen) {
       lastFrame = performance.now();
@@ -387,83 +469,130 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       lastTier = tier;
       s.setLod(lodFor('closeUp', tier));
     }
-    const dt = Math.min(0.05, Math.max(0, (now - lastFrame) / 1000));
+    const dt = Math.min(EXPLORE_VIEW.maxFrameStep, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
     let walking = false;
     const step = EXPLORE_VIEW.walkSpeed * dt;
     let next = keeperAt;
-    if (stick) {
+    let heading: number | undefined;
+    if (stick && !gesturing()) {
       const v = joystickVector(stick.x - stick.x0, stick.y - stick.y0);
       if (v.x !== 0 || v.z !== 0) {
-        next = clampToTile({ x: keeperAt.x + v.x * step, z: keeperAt.z + v.z * step });
-        yaw = Math.atan2(v.x, -v.z);
+        next = slideMove(
+          keeperAt,
+          { x: keeperAt.x + v.x * step, z: keeperAt.z + v.z * step },
+          s.colliders,
+        );
+        // Faces the way the stick points, even pressed against a rock.
+        heading = faceYaw(v.x, v.z);
       }
       walking = true; // keep reading the stick while it's held
-    } else if (walkTo) {
-      next = stepToward(keeperAt, walkTo, step);
-      if (next.x !== keeperAt.x || next.z !== keeperAt.z) {
-        yaw = Math.atan2(next.x - keeperAt.x, -(next.z - keeperAt.z));
+    } else if (walkTo && !gesturing()) {
+      next = slideMove(keeperAt, stepToward(keeperAt, walkTo, step), s.colliders);
+      const moved = next.x !== keeperAt.x || next.z !== keeperAt.z;
+      if (moved) heading = yawToward(keeperAt, next);
+      const left = Math.hypot(next.x - walkTo.x, next.z - walkTo.z);
+      const arrived = left < 1e-4;
+      // Sliding round a rock is progress; going nowhere for a moment is not.
+      if (left < walkBest - 1e-3) {
+        walkBest = left;
+        walkStall = 0;
+      } else {
+        walkStall += dt;
       }
-      if (next.x === walkTo.x && next.z === walkTo.z) walkTo = null;
-      else walking = true;
+      if (arrived || !moved || walkStall > EXPLORE_VIEW.walkGiveUp) {
+        walkTo = null;
+        // Walked up to a tapped spot: turn to it.
+        const spot = tile?.spots.find((x) => x.index === aimed);
+        if (spot) heading = yawToward(next, spot);
+      } else {
+        walking = true;
+      }
     }
-    if (next !== keeperAt) {
+    // By value: a slide that pushes back to where it was isn't a move.
+    const moved = next.x !== keeperAt.x || next.z !== keeperAt.z;
+    const turned = heading !== undefined && heading !== yaw;
+    if (moved || turned) {
       keeperAt = next;
+      if (heading !== undefined) yaw = heading;
       s.moveKeeper(keeperAt, yaw);
     }
-    findNear();
+    if (playing?.state.kind === 'light') {
+      // The light goes where the Keeper walks.
+      if (moved) {
+        feed({ type: 'move', ...toCaveStage(playing.spot, keeperAt), t: now });
+      }
+    } else {
+      findFront();
+    }
     if (playing) feed({ type: 'tick', t: now });
     const animating = s.step(now);
-    options.invalidate();
+    renderDark();
+    // Only a change redraws: a finger resting on the stick, or pushing
+    // against a rock or the tile's edge, moves nothing (the gestures and the
+    // lantern's dark are DOM; a tool's swing animates through `step`).
+    if (moved || turned || animating) options.invalidate();
     const holding = playing !== null && playing.state.holdSince !== null;
     if (walking || animating || holding) frame = requestAnimationFrame(tick);
   }
 
-  /** The spot in reach drives the action button and the ring. */
-  function findNear(): void {
-    const next = tile ? spotInReach(keeperAt, tile.spots, aimed) : null;
-    if (next?.index === near?.index) return;
-    near = next;
-    scene3d?.highlight(near?.index ?? null);
-    renderAction();
+  /** The spot in front drives the action button, the halo and the tool in hand. */
+  function findFront(): void {
+    const next = tile ? spotInFront(keeperAt, yaw, tile.spots, aimed) : null;
+    if (next?.index === front?.index) return;
+    front = next;
+    scene3d?.highlight(front?.index ?? null);
+    render();
   }
 
-  // ── Searching ─────────────────────────────────────────────────────────
+  // ── Using a tool ──────────────────────────────────────────────────────
 
-  /** The action button: the spot in reach, or a hint to walk up to one. */
-  function renderAction(): void {
+  /** The tool in the Keeper's hand: the one in use, else the one the spot in front takes. */
+  function heldTool(): ToolId | null {
     const t = tile;
-    if (!t) return;
-    const done = t.progress.total > 0 && t.progress.searched >= t.progress.total;
-    if (!near) {
-      action.disabled = true;
-      action.classList.remove('explore-action-ready');
-      actionIcon.textContent = done ? '✨' : '👣';
-      actionLabel.textContent = done ? EXPLORE_TEXT.allDone : EXPLORE_TEXT.nothingNear;
-      return;
-    }
-    const what = actionFor(near);
-    action.disabled = working;
-    action.classList.add('explore-action-ready');
-    actionIcon.textContent = what.icon;
-    actionLabel.textContent = what.label;
+    if (!t) return null;
+    const usable = (tool: ToolId | null) => tool !== null && t.tools[tool] > 0;
+    if (playing) return playing.spot.tool;
+    if (front && usable(front.tool)) return front.tool;
+    return usable(lastHeld) ? lastHeld : null;
   }
 
-  /** The action button: the right mini-interaction, or the missing-tool card. */
+  /** The action button: turn to the spot, take the tool out, and start its gesture. */
   function begin(spot: PublicSearchSpot): void {
-    if (!tile || working || playing || card) return;
-    const tool = missingTool(spot, tile.tools);
-    if (tool) {
-      void showMissing(tool);
-      return;
-    }
+    const t = tile;
+    const s = scene3d;
+    if (!t || !s || working || playing || card) return;
+    if (missingTool(spot, t.tools)) return; // the hint says how to make one
+    const now = performance.now();
+    yaw = yawToward(keeperAt, spot);
+    walkTo = null;
+    stick = null;
+    showStick();
+    s.moveKeeper(keeperAt, yaw);
     const kind = actionFor(spot).interaction;
-    const rect = { width: 300, height: 220 };
-    playing = {
-      spot,
-      state: startInteraction(kind, rect, performance.now(), seedOf(spot)),
-    };
-    renderSheet();
+    let state: InteractionState;
+    if (kind === 'light') {
+      // The reducer's stage is a square round the cave; its glint stays on the tile.
+      const fresh = startInteraction(kind, CAVE_STAGE, now, seedOf(spot));
+      state = { ...fresh, glint: lanternGlint(spot, fresh.glint, s.colliders) };
+      state = stepInteraction(state, { type: 'move', ...toCaveStage(spot, keeperAt), t: now });
+    } else {
+      const rect = ground.getBoundingClientRect();
+      state = startInteraction(
+        kind,
+        { width: rect.width || 390, height: rect.height || 844 },
+        now,
+        seedOf(spot),
+      );
+    }
+    playing = { spot, state };
+    lastHeld = spot.tool ?? lastHeld;
+    s.hold(spot.tool);
+    // The lantern walks: the camera follows the Keeper and its light, not the cave.
+    s.nudge(spot, kind === 'light');
+    s.useTool(now);
+    buildPlay(kind);
+    render();
     wake();
   }
 
@@ -471,8 +600,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!playing) return;
     const before = playing.state;
     const state = stepInteraction(before, input);
-    if (state === before && input.type === 'tick') return;
+    if (state === before) return;
     playing = { ...playing, state };
+    // Every scoop, shake or step up the rope swings the tool.
+    if (state.count > before.count) scene3d?.useTool(performance.now());
     if (state.done) {
       const { spot } = playing;
       playing = null;
@@ -480,7 +611,25 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       return;
     }
     renderPlay();
-    if (state.holdSince !== null) wake();
+    if (state.kind === 'light') {
+      renderAction();
+      renderDark();
+    }
+    if (state.count > before.count || state.holdSince !== null) wake();
+  }
+
+  /** The lantern's "Grab it": takes the glint once the light has found it. */
+  function grab(): void {
+    const p = playing;
+    if (p?.state.kind !== 'light' || !p.state.revealed) return;
+    feed({ type: 'down', x: p.state.glint.x, y: p.state.glint.y, t: performance.now() });
+  }
+
+  function stopPlaying(): void {
+    playing = null;
+    scene3d?.nudge(null);
+    render();
+    wake();
   }
 
   async function search(
@@ -494,9 +643,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const at = generation;
     working = true;
     say(EXPLORE_TEXT.searching);
-    renderSheet();
-    renderAction();
-    scene3d?.cheer(performance.now());
+    render();
     wake();
     try {
       const found = await sendCommand(
@@ -510,9 +657,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       );
       if (at !== generation || !found || tile?.q !== t.q || tile.r !== t.r) return;
       tile = afterSearch(tile, found);
+      bag = found.items;
       scene3d?.update(tile);
-      card = { kind: 'find', found, interaction, bigSplash };
+      scene3d?.cheer(performance.now());
       say('');
+      if (findShowsCard(found)) {
+        card = { found, interaction };
+      } else {
+        showToast(found, bigSplash);
+        fly(spot, found);
+      }
       options.onFound?.(id);
     } catch (err) {
       if (at !== generation) return;
@@ -522,8 +676,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     } finally {
       if (at === generation) {
         working = false;
-        near = null;
-        findNear();
+        scene3d?.nudge(null);
+        front = null;
+        findFront();
         render();
         wake();
       }
@@ -545,27 +700,97 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
   }
 
-  async function showMissing(tool: ToolId): Promise<void> {
+  /** Reads the bag once for the missing-tool hint's counts. */
+  async function askBag(): Promise<void> {
     const id = mapId;
-    if (!id) return;
+    if (!id || bagAsked) return;
+    bagAsked = true;
     const at = generation;
-    const asked: Card = { kind: 'missing', tool, bag: null };
-    card = asked;
-    renderSheet();
     try {
-      const bag = await bagOf(id);
-      // Still this card on this map (not closed or swapped meanwhile).
-      if (at !== generation || !sameCard(asked)) return;
-      card = { kind: 'missing', tool, bag };
-      renderSheet();
+      const items = await bagOf(id);
+      if (at !== generation) return;
+      bag = items;
+      render();
     } catch {
       // The recipe still shows, without counts.
     }
   }
 
-  /** The card on screen is still `asked` (read through a call, so it isn't narrowed). */
-  function sameCard(asked: Card): boolean {
-    return card === asked;
+  // ── Finds ─────────────────────────────────────────────────────────────
+
+  /** The small toast (board c): what landed in the bag and who learned something. */
+  function showToast(found: SearchSpotResponse, bigSplash: boolean): void {
+    toast = findToast(found, teamNames, bigSplash);
+    const n = foundCount(found);
+    bagCount.textContent = n > 0 ? `+${String(n)}` : '';
+    bagChip.classList.toggle('explore-bag-pop', n > 0);
+    // The bag bounces as the finds land in it.
+    if (n > 0 && !reducedMotion()) {
+      bagChip.animate(
+        [
+          { transform: 'scale(1)' },
+          { transform: `scale(${String(EXPLORE_FIND.bagBounce)})`, offset: 0.4 },
+          { transform: 'scale(1)' },
+        ],
+        {
+          duration: EXPLORE_FIND.bagBounceMs,
+          delay: EXPLORE_FIND.flyMs - 100,
+          easing: 'ease-out',
+        },
+      );
+    }
+    if (toastTimer !== null) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toastTimer = null;
+      toast = null;
+      bagCount.textContent = '';
+      bagChip.classList.remove('explore-bag-pop');
+      renderToast();
+    }, EXPLORE_FIND.toastMs);
+    renderToast();
+  }
+
+  /** Each thing found pops out of the spot and bounces into the bag (DOM; no 3D frames). */
+  function fly(spot: PublicSearchSpot, found: SearchSpotResponse): void {
+    const from = scene3d?.screenOf(spot, 0.4);
+    if (!from || reducedMotion()) return;
+    const to = bagChip.getBoundingClientRect();
+    const ids = Object.entries(found.found)
+      .filter(([, n]) => n > 0)
+      .flatMap(([id, n]) => Array.from({ length: n }, () => id))
+      .slice(0, EXPLORE_FIND.flyMax);
+    ids.forEach((id, i) => {
+      const item = el('span', { class: 'explore-fly', 'aria-hidden': 'true' }, itemIcon(id));
+      item.style.left = `${String(from.x)}px`;
+      item.style.top = `${String(from.y)}px`;
+      overlay.append(item);
+      const dx = to.left + to.width / 2 - from.x;
+      const dy = to.top + to.height / 2 - from.y;
+      const spread = (i - (ids.length - 1) / 2) * EXPLORE_FIND.flySpread;
+      const anim = item.animate(
+        [
+          { transform: 'translate(-50%, -50%) scale(0.4)', opacity: 0 },
+          {
+            transform: `translate(calc(-50% + ${String(spread)}px), calc(-50% - ${String(EXPLORE_FIND.flyLift)}px)) scale(1.2)`,
+            opacity: 1,
+            offset: 0.3,
+          },
+          {
+            transform: `translate(calc(-50% + ${String(dx)}px), calc(-50% + ${String(dy)}px)) scale(0.6)`,
+            opacity: 0.9,
+          },
+        ],
+        {
+          duration: EXPLORE_FIND.flyMs,
+          delay: i * EXPLORE_FIND.flyStagger,
+          easing: 'cubic-bezier(0.3, 0.6, 0.4, 1)',
+          fill: 'both',
+        },
+      );
+      anim.onfinish = () => {
+        item.remove();
+      };
+    });
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────
@@ -573,150 +798,116 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   function render(): void {
     overlay.hidden = !isOpen;
     if (!isOpen || !tile) return;
-    title.textContent = terrainName(tile.terrain);
-    const names = team.map((sid) => teamNames[sid] ?? '').filter((n) => n.length > 0);
-    withLine.textContent = EXPLORE_TEXT.withTeam(names);
-    progress.textContent = progressLine(tile.progress);
-    tools.replaceChildren(
-      ...tile.needs.map((tool) => {
-        const uses = tile?.tools[tool] ?? 0;
-        return el(
-          'span',
-          {
-            class: `explore-tool${uses > 0 ? '' : ' explore-tool-out'}`,
-            'data-testid': `explore-tool-${tool}`,
-          },
-          `${TOOL_WORDS[tool].icon} ${toolName(tool)} · ${usesLine(tool, uses)}`,
-        );
-      }),
-    );
+    const t = tile;
+    title.textContent = terrainName(t.terrain);
+    progress.textContent = progressLine(t.progress);
+    const held = heldTool();
+    if (held) lastHeld = held;
+    scene3d?.hold(held);
+    const uses = held ? t.tools[held] : 0;
+    toolIcon.replaceChildren(iconNode(held ? TOOL_ICONS[held] : HANDS_ICON));
+    toolUses.textContent = toolChipShort(held, uses);
+    toolLine.setAttribute('aria-label', toolChip(held, uses));
+    toolLine.classList.toggle('explore-tool-hands', held === null);
+    overlay.classList.toggle('explore-gesture', gesturing());
+    overlay.classList.toggle('explore-carded', card !== null);
     renderAction();
+    renderNeed();
+    renderPlay();
     renderSheet();
+    renderToast();
+    renderDark();
   }
 
-  /** The sheet: a mini-interaction, the find card, or the missing-tool card. */
-  function renderSheet(): void {
-    if (playing) {
-      renderPlay();
+  /** The big button (board a): what's in front of the Keeper, or a nudge to find a glint. */
+  function renderAction(): void {
+    const t = tile;
+    if (!t) return;
+    action.classList.remove('explore-action-ready', 'explore-action-missing');
+    if (playing?.state.kind === 'light') {
+      // In step with the glint: both there once the light has found it.
+      const found = playing.state.revealed;
+      action.disabled = !found || working;
+      action.classList.toggle('explore-action-ready', found);
+      actionIcon.textContent = '✨';
+      actionLabel.textContent = EXPLORE_TEXT.grab;
       return;
     }
-    if (!card) {
-      sheet.hidden = true;
-      sheet.replaceChildren();
+    if (!front) {
+      const done = t.progress.total > 0 && t.progress.searched >= t.progress.total;
+      action.disabled = true;
+      actionIcon.textContent = '✨';
+      actionLabel.textContent = done ? EXPLORE_TEXT.allDone : EXPLORE_TEXT.nothingNear;
       return;
     }
-    sheet.hidden = false;
-    sheet.dataset['card'] = card.kind;
-    sheet.replaceChildren(...(card.kind === 'find' ? findCard(card) : missingCard(card)));
+    const what = actionFor(front);
+    const missing = missingTool(front, t.tools) !== null;
+    action.disabled = working || missing;
+    action.classList.add(missing ? 'explore-action-missing' : 'explore-action-ready');
+    actionIcon.replaceChildren(iconNode(what.icon));
+    actionLabel.textContent = what.label;
   }
 
-  let playStage: HTMLElement | null = null;
-  let playBar: HTMLElement | null = null;
-  let playGlint: HTMLElement | null = null;
-
-  /** Builds the mini-interaction once, then only updates its fill and light. */
-  function renderPlay(): void {
-    const p = playing;
-    if (!p) return;
-    if (sheet.dataset['card'] !== `play-${p.state.kind}`) buildPlay(p.state.kind);
-    const s = p.state;
-    if (playBar) playBar.style.width = `${String(Math.round(interactionProgress(s) * 100))}%`;
-    if (playStage) {
-      if (s.kind === 'light') {
-        const lightAt = s.light;
-        // The light's radius on screen matches the rule `lit` uses.
-        const r = INTERACTION.lightRadius * playStage.clientWidth;
-        playStage.style.setProperty(
-          '--light',
-          s.revealed && lightAt === null
-            ? 'none'
-            : lightAt
-              ? `radial-gradient(circle ${String(Math.round(r))}px at ${pct(lightAt.x, s.stage.width)} ${pct(lightAt.y, s.stage.height)}, transparent 60%, rgb(28 20 40 / 92%) 100%)`
-              : 'linear-gradient(rgb(28 20 40 / 92%), rgb(28 20 40 / 92%))',
-        );
-        if (playGlint) {
-          playGlint.hidden = !s.revealed && !lit(s, s.glint.x, s.glint.y);
-          playGlint.style.left = pct(s.glint.x, s.stage.width);
-          playGlint.style.top = pct(s.glint.y, s.stage.height);
-        }
-      }
-      if (s.kind === 'dig' || s.kind === 'shake') {
-        playStage.style.setProperty('--wiggle', String(s.count));
-      }
+  /** No tool yet (board h): the hint above the button, with the recipe from the bag. */
+  function renderNeed(): void {
+    const t = tile;
+    const tool = !playing && !card && front && t ? missingTool(front, t.tools) : null;
+    if (!tool || !front) {
+      need.hidden = true;
+      need.replaceChildren();
+      return;
     }
+    if (bag === null) void askBag();
+    const rows = toolRecipeRows(tool, bag ?? {});
+    const nodes: Node[] = [
+      el('p', { class: 'explore-need-title' }, needsHere(front.kind, tool)),
+      el(
+        'p',
+        { class: 'explore-need-recipe', 'data-testid': 'explore-recipe' },
+        makeOneLine(rows, bag !== null),
+      ),
+    ];
+    if (options.onRecipeBook) {
+      const b = el(
+        'button',
+        { type: 'button', class: 'explore-need-book', 'data-testid': 'explore-recipe-book' },
+        `📖 ${EXPLORE_TEXT.recipeBook}`,
+      );
+      b.addEventListener('click', () => {
+        close();
+        options.onRecipeBook?.();
+      });
+      nodes.push(b);
+    }
+    need.hidden = false;
+    need.dataset['tool'] = tool;
+    need.replaceChildren(...nodes);
   }
 
+  let playDots: HTMLElement | null = null;
+
+  /** Builds a gesture's overlay once (boards b, d, e, f, g). */
   function buildPlay(kind: SpotInteraction): void {
     const text = PLAY_TEXT[kind];
-    sheet.hidden = false;
-    sheet.dataset['card'] = `play-${kind}`;
-    playStage = el('div', {
-      class: `explore-stage explore-stage-${kind}`,
-      'data-testid': 'explore-stage',
-    });
-    const art = SPOT_ART[playing?.spot.kind ?? ''] ?? text.art;
-    if (art) {
-      playStage.append(el('span', { class: 'explore-stage-art', 'aria-hidden': 'true' }, art));
-    }
-    playGlint = null;
-    if (kind === 'light') {
-      playGlint = el(
-        'button',
-        {
-          type: 'button',
-          class: 'explore-glint',
-          'data-testid': 'explore-glint',
-          'aria-label': 'A glint!',
-        },
-        '✨',
-      );
-      playGlint.hidden = true;
-      // A keyboard or switch control clicks it without a pointer.
-      playGlint.addEventListener('click', () => {
-        const g = playing?.state.glint;
-        if (g) feed({ type: 'down', x: g.x, y: g.y, t: performance.now() });
-      });
-      playStage.append(playGlint);
-    }
-    const stagePoint = (e: PointerEvent) => {
-      const rect = playStage?.getBoundingClientRect();
-      const s = playing?.state.stage;
-      if (!rect || !s || rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
-      // The reducer works in its own stage units; the drawn stage may differ.
-      return {
-        x: ((e.clientX - rect.left) / rect.width) * s.width,
-        y: ((e.clientY - rect.top) / rect.height) * s.height,
-      };
-    };
-    const send = (type: 'down' | 'move' | 'up') => (e: PointerEvent) => {
-      if (type === 'move' && e.buttons === 0 && e.pointerType === 'mouse') return;
-      const p = stagePoint(e);
-      feed({ type, x: p.x, y: p.y, t: performance.now() });
-    };
-    playStage.addEventListener('pointerdown', (e) => {
-      try {
-        playStage?.setPointerCapture(e.pointerId);
-      } catch {
-        // Synthetic pointers can't be captured.
-      }
-      send('down')(e);
-    });
-    playStage.addEventListener('pointermove', send('move'));
-    playStage.addEventListener('pointerup', send('up'));
-    playStage.addEventListener('pointercancel', send('up'));
-
-    playBar = el('div', { class: 'explore-bar-fill' });
-    const nodes: Node[] = [
-      el('h3', { class: 'explore-sheet-title', id: 'explore-sheet-title' }, text.title),
-      el('p', { class: 'explore-hint' }, text.hint),
-      playStage,
-      el('div', { class: 'explore-bar', 'aria-hidden': 'true' }, playBar),
-    ];
+    play.dataset['kind'] = kind;
+    playDots = el('span', { class: 'explore-dots' });
+    const playChip = el(
+      'div',
+      { class: `explore-chip explore-chip-${kind}`, 'data-testid': 'explore-chip' },
+      el('span', { class: 'explore-chip-icon', 'aria-hidden': 'true' }, iconNode(text.icon)),
+      el('span', { class: 'explore-chip-text' }, text.hint),
+      playDots,
+    );
+    const nodes: Node[] = [playChip];
     if (kind === 'climb') {
       const hand = (side: 'left' | 'right', label: string) => {
         const b = el(
           'button',
-          { type: 'button', class: 'auth-button explore-hand', 'data-testid': `explore-${side}` },
+          {
+            type: 'button',
+            class: `explore-hand explore-hand-${side}`,
+            'data-testid': `explore-${side}`,
+          },
           label,
         );
         b.addEventListener('click', () => {
@@ -725,16 +916,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         return b;
       };
       nodes.push(
-        el('div', { class: 'explore-hands' }, hand('left', '✋ Left'), hand('right', 'Right 🤚')),
+        el('div', { class: 'explore-hands' }, hand('left', 'Left'), hand('right', 'Right')),
       );
     }
     const easy = el(
       'button',
-      {
-        type: 'button',
-        class: 'auth-button auth-button-soft explore-easy',
-        'data-testid': 'explore-easy',
-      },
+      { type: 'button', class: 'explore-easy', 'data-testid': 'explore-easy' },
       `${EXPLORE_TEXT.easy}: ${text.easy}`,
     );
     easy.addEventListener('click', () => {
@@ -753,129 +940,155 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const notNow = el(
       'button',
       { type: 'button', class: 'explore-not-now', 'data-testid': 'explore-not-now' },
-      'Not now',
+      EXPLORE_TEXT.notNow,
     );
-    notNow.addEventListener('click', () => {
-      playing = null;
-      renderSheet();
-    });
-    nodes.push(easy, el('p', { class: 'explore-easy-note' }, text.easyNote), notNow);
-    sheet.replaceChildren(...nodes);
+    notNow.addEventListener('click', stopPlaying);
+    nodes.push(el('div', { class: 'explore-play-row' }, easy, notNow));
+    if (text.note) nodes.push(el('p', { class: 'explore-play-note' }, text.note));
+    play.replaceChildren(...nodes);
   }
 
-  function findCard(c: Extract<Card, { kind: 'find' }>): Node[] {
+  /** Updates the overlay's count and the net's glow. */
+  function renderPlay(): void {
+    const p = playing;
+    play.hidden = p === null || card !== null;
+    if (!p) return;
+    const s = p.state;
+    if (playDots) {
+      if (s.need > 1) {
+        playDots.setAttribute('aria-label', `${String(s.count)} of ${String(s.need)}`);
+        playDots.replaceChildren(
+          ...Array.from({ length: s.need }, (_, i) =>
+            el('span', { class: `explore-dot${i < s.count ? ' explore-dot-on' : ''}` }),
+          ),
+        );
+      } else if (s.kind === 'lift') {
+        const fill = el('span', { class: 'explore-hold-fill' });
+        fill.style.width = `${String(Math.round(interactionProgress(s) * 100))}%`;
+        playDots.replaceChildren(el('span', { class: 'explore-hold' }, fill));
+      } else {
+        playDots.replaceChildren();
+      }
+    }
+  }
+
+  /** What the lantern's dark last drew, so a still frame redoes nothing. */
+  let darkDrawn = '';
+
+  /** The lantern's dark and its warm circle of light round the Keeper (board g). */
+  function renderDark(): void {
+    const p = playing;
+    const s = p?.state;
+    const on = s?.kind === 'light' && !(s.revealed && s.light === null) && card === null;
+    dark.hidden = !on;
+    // The glint shows once the light has found it, as "Grab it" wakes up.
+    const showGlint = s?.kind === 'light' && s.revealed && card === null;
+    glint.hidden = !showGlint;
+    if (!p || !s || s.kind !== 'light' || !scene3d) {
+      darkDrawn = '';
+      return;
+    }
+    // The reveal ring on the ground round the Keeper's feet, and the Keeper
+    // itself: the drawn light holds both (lightCircle).
+    const feet = scene3d.screenOf(keeperAt, 0);
+    const head = scene3d.screenOf(keeperAt, scene3d.keeperTall);
+    const ring: { x: number; y: number }[] = [];
+    for (const [dx, dz] of RING_STEPS) {
+      const q = scene3d.screenOf(
+        { x: keeperAt.x + dx * LIGHT_REACH, z: keeperAt.z + dz * LIGHT_REACH },
+        0,
+      );
+      if (q) ring.push(q);
+    }
+    const g = showGlint ? scene3d.screenOf(fromCaveStage(p.spot, s.glint), 0.1) : null;
+    const light = feet && head ? lightCircle(ring, feet, head) : null;
+    const key = [on, showGlint, light?.x, light?.y, light?.r, g?.x, g?.y]
+      .map((v) => (typeof v === 'number' ? String(Math.round(v)) : String(v)))
+      .join();
+    if (key === darkDrawn) return;
+    darkDrawn = key;
+    if (on && light) {
+      const r = Math.round(Math.max(40, light.r));
+      const x = Math.round(light.x);
+      const y = Math.round(light.y);
+      // Warm to the reveal ring (LIGHT_RING_SHARE), then the falloff into the dark.
+      const warm = Math.round(LIGHT_RING_SHARE * 100);
+      dark.style.setProperty(
+        '--light',
+        `radial-gradient(circle ${String(r)}px at ${String(x)}px ${String(y)}px, rgb(255 227 163 / 70%) 0%, rgb(205 176 138 / 66%) ${String(warm)}%, rgb(36 28 46 / 95%) 100%)`,
+      );
+    }
+    if (g) {
+      glint.style.left = `${String(g.x)}px`;
+      glint.style.top = `${String(g.y)}px`;
+    }
+  }
+
+  function clearToast(): void {
+    if (toastTimer !== null) clearTimeout(toastTimer);
+    toastTimer = null;
+    toast = null;
+    bagCount.textContent = '';
+    bagChip.classList.remove('explore-bag-pop');
+  }
+
+  function renderToast(): void {
+    toastBox.hidden = toast === null || card !== null;
+    if (!toast) {
+      toastBox.replaceChildren();
+      return;
+    }
+    toastBox.replaceChildren(
+      el('span', { class: 'explore-toast-main' }, toast.main),
+      ...(toast.extra ? [el('span', { class: 'explore-toast-extra' }, toast.extra)] : []),
+    );
+  }
+
+  /** The full card (board i): a rare find, or the tile done and joining home. */
+  function renderSheet(): void {
+    const c = card;
+    const t = tile;
+    if (!c || !t) {
+      sheet.hidden = true;
+      sheet.replaceChildren();
+      return;
+    }
     const { found } = c;
     const nodes: Node[] = [
       el('p', { class: 'explore-card-progress' }, progressLine(found.progress)),
-      el('h3', { class: 'explore-sheet-title', id: 'explore-sheet-title' }, EXPLORE_TEXT.ta),
       el(
-        'p',
-        { class: 'explore-headline' },
-        c.bigSplash
-          ? `${EXPLORE_TEXT.bigSplash} ${foundHeadline(c.interaction)}`
-          : foundHeadline(c.interaction),
+        'h3',
+        { class: 'explore-sheet-title', id: 'explore-sheet-title' },
+        rareTitle(found, t.terrain),
       ),
+    ];
+    if (found.explored && found.homestead === 'joined') {
+      nodes.push(el('p', { class: 'explore-card-line' }, EXPLORE_TEXT.joinedHome));
+    }
+    const lines = [
+      ...findLines(found).map((line) => line.text),
+      ...xpLines(found.xp, teamNames),
+      ...(found.tool && found.tool.usesLeft === 0 ? [restLine(found.tool.id)] : []),
+    ];
+    nodes.push(
       el(
         'ul',
         { class: 'explore-finds', 'data-testid': 'explore-finds' },
-        ...findLines(found).map((line) =>
-          el('li', { class: `explore-find explore-find-${line.kind}` }, line.text),
-        ),
+        ...lines.map((line) => el('li', { class: 'explore-find' }, line)),
       ),
-    ];
-    const xp = xpLines(found.xp, teamNames);
-    if (xp.length > 0) {
-      nodes.push(
-        el('p', { class: 'explore-team' }, EXPLORE_TEXT.teamLearned),
-        el('ul', { class: 'explore-xp' }, ...xp.map((line) => el('li', {}, line))),
-      );
-    }
-    if (found.explored && tile) {
-      nodes.push(
-        el(
-          'p',
-          { class: 'explore-big-news' },
-          EXPLORE_TEXT.tileExplored(terrainName(tile.terrain)),
-        ),
-      );
-    }
-    if (found.explored && found.homestead === 'joined') {
-      nodes.push(el('p', { class: 'explore-big-news' }, EXPLORE_TEXT.joinedHome));
-    }
-    if (found.tool && found.tool.usesLeft === 0) {
-      nodes.push(
-        el('p', { class: 'explore-rest', 'data-testid': 'explore-rest' }, restLine(found.tool.id)),
-      );
-      if (options.onRecipeBook) nodes.push(recipeButton());
-    }
-    const keepGoing = el(
-      'button',
-      {
-        type: 'button',
-        class: 'auth-button explore-keep-going',
-        'data-testid': 'explore-keep-going',
-      },
-      EXPLORE_TEXT.keepGoing,
     );
-    keepGoing.addEventListener('click', () => {
+    const yay = el(
+      'button',
+      { type: 'button', class: 'auth-button explore-yay', 'data-testid': 'explore-yay' },
+      EXPLORE_TEXT.yay,
+    );
+    yay.addEventListener('click', () => {
       card = null;
-      renderSheet();
+      render();
     });
-    nodes.push(keepGoing);
-    return nodes;
-  }
-
-  function missingCard(c: Extract<Card, { kind: 'missing' }>): Node[] {
-    const rows = toolRecipeRows(c.tool, c.bag ?? {});
-    const nodes: Node[] = [
-      el('h3', { class: 'explore-sheet-title', id: 'explore-sheet-title' }, needLine(c.tool)),
-      el('p', { class: 'explore-hint' }, EXPLORE_TEXT.makeOne),
-      el(
-        'div',
-        { class: 'explore-recipe', 'data-testid': 'explore-recipe' },
-        el('p', { class: 'explore-recipe-name' }, `${TOOL_WORDS[c.tool].icon} ${toolName(c.tool)}`),
-        el(
-          'ul',
-          { class: 'explore-recipe-rows' },
-          ...rows.map((row) =>
-            el(
-              'li',
-              { class: c.bag === null ? '' : row.enough ? 'explore-have' : 'explore-short' },
-              c.bag === null ? row.text.replace(/ \d+\/(\d+)$/, ' ×$1') : row.text,
-            ),
-          ),
-        ),
-      ),
-    ];
-    if (options.onRecipeBook) nodes.push(recipeButton());
-    const other = el(
-      'button',
-      {
-        type: 'button',
-        class: 'auth-button auth-button-soft',
-        'data-testid': 'explore-something-else',
-      },
-      EXPLORE_TEXT.somethingElse,
-    );
-    other.addEventListener('click', () => {
-      card = null;
-      renderSheet();
-    });
-    nodes.push(other);
-    return nodes;
-  }
-
-  function recipeButton(): HTMLElement {
-    const b = el(
-      'button',
-      { type: 'button', class: 'auth-button', 'data-testid': 'explore-recipe-book' },
-      `📖 ${EXPLORE_TEXT.recipeBook}`,
-    );
-    b.addEventListener('click', () => {
-      close();
-      options.onRecipeBook?.();
-    });
-    return b;
+    nodes.push(yay);
+    sheet.hidden = false;
+    sheet.replaceChildren(...nodes);
   }
 
   // ── Scene ─────────────────────────────────────────────────────────────
@@ -895,13 +1108,16 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       }),
       mapTile: options.mapTile(tile),
     });
+    // The start can land on a rock: step out before the Keeper is drawn.
+    keeperAt = freePoint(keeperAt, built.colliders);
     built.moveKeeper(keeperAt, yaw);
     scene3d = built;
     scene.onDisposeObservable.addOnce(() => {
       if (scene3d === built) scene3d = null;
     });
-    near = null;
-    findNear();
+    built.hold(heldTool());
+    front = null;
+    findFront();
     return built.content;
   };
 
@@ -929,7 +1145,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       if (ask !== generation) return;
       fresh = view;
       teamNames = board?.names ?? {};
-      team = board?.team ?? [];
+      const team = board?.team ?? [];
       teamMembers = (board?.squishies ?? [])
         .filter((s) => team.includes(s.squishy.id))
         .sort((a, b) => (a.teamSlot ?? 0) - (b.teamSlot ?? 0))
@@ -940,15 +1156,19 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     }
     tile = fresh;
     keeperAt = EXPLORE_VIEW.start;
-    yaw = 0;
+    yaw = EXPLORE_VIEW.startYaw;
     walkTo = null;
     aimed = null;
     stick = null;
     playing = null;
     card = null;
-    near = null;
+    front = null;
+    bag = null;
+    bagAsked = false;
+    lastHeld = null;
+    clearToast();
     isOpen = true;
-    say(EXPLORE_TEXT.walkHint);
+    say('');
     options.onOpen(id);
     options.showScene(build);
     render();
@@ -966,6 +1186,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     walkTo = null;
     playing = null;
     card = null;
+    clearToast();
     // A search left behind (another map, logout) never blocks the next visit.
     working = false;
     scene3d = null;
@@ -1051,31 +1272,53 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         open: isOpen,
         tile: tile ? { q: tile.q, r: tile.r, terrain: tile.terrain } : null,
         progress: tile ? { ...tile.progress } : null,
-        spots: (tile?.spots ?? []).map(({ index, kind, tool, done }) => ({
+        spots: (tile?.spots ?? []).map(({ index, kind, tool, done, x, z }) => ({
           index,
           kind,
           tool,
           done,
+          x,
+          z,
         })),
         keeper: { ...keeperAt },
-        near: near?.index ?? null,
+        yaw,
+        near: front?.index ?? null,
         playing: playing?.state.kind ?? null,
-        card: card?.kind ?? null,
+        card: card ? ('rare' as const) : null,
+        toast: toast ? [toast.main, toast.extra].filter((x) => x).join(' · ') : null,
+        hint: need.hidden ? null : ((need.dataset['tool'] as ToolId | undefined) ?? null),
         scene: s?.stats ?? null,
         spotOnScreen: (index: number) => {
           const spot = tile?.spots.find((x) => x.index === index);
           return spot && s ? s.screenOf(spot) : null;
         },
+        pointOnScreen: (p: WorldPoint) => (s ? s.screenOf(p) : null),
       };
     },
   };
 }
 
+/** Directions round the reveal ring that the drawn light must hold. */
+const RING_STEPS: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [0.71, 0.71],
+  [-0.71, 0.71],
+  [0.71, -0.71],
+  [-0.71, -0.71],
+];
+
+/** An icon: a drawn line icon (`ICON_PATHS`), else the emoji or text itself. */
+function iconNode(icon: string): Node {
+  if (!isIconName(icon)) return document.createTextNode(icon);
+  const svg = strokeIcon(ICON_PATHS[icon]);
+  svg.classList.add('explore-icon');
+  return svg;
+}
+
 /** Stable 0–1 per spot, so the lantern's glint hides in the same place each time. */
 function seedOf(spot: PublicSearchSpot): number {
   return (((spot.index * 2654435761) >>> 0) % 1000) / 1000;
-}
-
-function pct(v: number, of: number): string {
-  return `${String(of === 0 ? 50 : Math.round((v / of) * 1000) / 10)}%`;
 }

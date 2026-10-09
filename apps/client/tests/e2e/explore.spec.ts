@@ -9,50 +9,144 @@ const slowExpect = expect.configure({ timeout: 30_000 });
 const slow = { timeout: 30_000 };
 
 /**
- * Exploring your land (#199): Explore on a home tile opens it up close, the
- * Keeper walks to a sparkle when the ground is tapped, the easy way searches
- * it and the find card shows, a Shovel mound without a Shovel says how to
- * make one, and Back returns to the map. Checked through the dev hook.
+ * The performance budget (CLAUDE.md rule 8): a settled explore frame draws
+ * under this many calls. Measured at 15 on the iPhone and iPad viewports
+ * (#291, a new player's meadow: tile, island, spot props, three decor kinds,
+ * glints, the Keeper's batches, post-processing); the headroom is for a busier
+ * tile (more prop kinds, buildings, a full team, the tool in hand).
+ */
+const DRAW_CALL_CEILING = 26;
+
+/**
+ * Exploring your land (#199, cozy-sim feel #291): Explore on a home tile
+ * opens it up close with a follow camera and an always-on joystick; the
+ * Keeper walks up to a spot searched by hand when the ground is tapped, the
+ * easy way searches it, and a common find is a toast (no card); a mound
+ * without a Shovel shows a hint above a disabled button; Back returns to
+ * the map. Checked through the dev hook.
  */
 
 interface ExploreDebug {
   open: boolean;
   tile: { q: number; r: number; terrain: string } | null;
   progress: { searched: number; total: number } | null;
-  spots: { index: number; kind: string; tool: string | null; done: boolean }[];
+  spots: {
+    index: number;
+    kind: string;
+    tool: string | null;
+    done: boolean;
+    x: number;
+    z: number;
+  }[];
   keeper: { x: number; z: number };
   near: number | null;
   playing: string | null;
-  card: 'find' | 'missing' | null;
-  scene: { spots: number; done: number; keeper: boolean; highlighted: number | null } | null;
+  card: 'rare' | null;
+  toast: string | null;
+  hint: string | null;
+  scene: {
+    spots: number;
+    done: number;
+    glints: number;
+    keeper: boolean;
+    held: string | null;
+    decor: { tufts: number; pebbles: number; flowers: number };
+    camera: { x: number; z: number; zoom: number };
+    drawCalls: number;
+    keeperHeight: number;
+    faded: number[];
+  } | null;
 }
+
+type Point = { x: number; y: number };
+type ExploreHook = {
+  explore?: () => {
+    keeper: { x: number; z: number };
+    pointOnScreen: (p: { x: number; z: number }) => Point | null;
+  };
+};
 
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
 const mapState = (page: Page) => hook<{ tiles: number; selected: string | null }>(page, 'map');
 
-/** Where a spot is on screen now (the dev hook projects it). */
-async function spotOnScreen(page: Page, index: number): Promise<{ x: number; y: number }> {
-  const at = await page.evaluate((i) => {
-    type Hook = {
-      explore?: () => { spotOnScreen: (i: number) => { x: number; y: number } | null };
-    };
-    return (window as unknown as { __heartpatch?: Hook }).__heartpatch?.explore?.().spotOnScreen(i);
-  }, index);
-  if (!at) throw new Error(`spot ${String(index)} is not on screen`);
-  return at;
+/**
+ * A point on the ground to tap on the way from the Keeper to a tile-local
+ * spot: the spot itself if a tap there reaches the ground, else part way
+ * there, else a little to one side (the controls and the hint cover parts
+ * of the screen). Null when nothing on the way can be tapped.
+ */
+function waypoint(page: Page, to: { x: number; z: number }): Promise<Point | null> {
+  return page.evaluate((spot) => {
+    const e = (window as unknown as { __heartpatch?: ExploreHook }).__heartpatch?.explore?.();
+    if (!e) return null;
+    const ground = document.querySelector('[data-testid="explore-ground"]');
+    const k = e.keeper;
+    const dx = spot.x - k.x;
+    const dz = spot.z - k.z;
+    for (const turn of [0, 0.6, -0.6, 1.2, -1.2]) {
+      const c = Math.cos(turn);
+      const s = Math.sin(turn);
+      for (const f of [1, 0.75, 0.5, 0.35, 0.2]) {
+        const p = { x: k.x + (dx * c - dz * s) * f, z: k.z + (dx * s + dz * c) * f };
+        const at = e.pointOnScreen(p);
+        if (at && document.elementFromPoint(at.x, at.y) === ground) return at;
+      }
+    }
+    return null;
+  }, to);
 }
 
-/** Taps the ground by a spot and waits for the Keeper to walk up to it. */
-async function walkTo(page: Page, index: number): Promise<void> {
-  const at = await spotOnScreen(page, index);
-  await realTapAt(page, at.x, at.y);
-  await expect.poll(async () => (await exploreState(page))?.near, slow).toBe(index);
+/** Waits until the Keeper stops walking. */
+async function keeperStill(page: Page): Promise<void> {
+  let last = '';
+  await expect
+    .poll(
+      async () => {
+        const now = JSON.stringify((await exploreState(page))?.keeper);
+        const still = now === last;
+        last = now;
+        return still;
+      },
+      { timeout: 60_000, intervals: [500] },
+    )
+    .toBe(true);
 }
 
-test('explores a home tile: walk, search the easy way, a find card, a missing Shovel', async ({
+/**
+ * Walks up to a spot by tapping: the spot itself once a tap there reaches
+ * the ground, else the ground on the way to it (the camera follows). True
+ * once it (or any spot in `orAny`) is in front; false if taps can't get
+ * there (tap-to-walk slides round one rock at a time, it doesn't path round
+ * a cluster: a player steers round with the joystick).
+ */
+async function walkTo(page: Page, index: number, orAny: readonly number[] = []): Promise<boolean> {
+  const done = (near: number | null | undefined) =>
+    near === index || (near != null && orAny.includes(near));
+  for (let tries = 0; tries < 10; tries++) {
+    const state = (await exploreState(page))!;
+    if (done(state.near)) return true;
+    const spot = state.spots.find((s) => s.index === index)!;
+    const tap = await waypoint(page, spot);
+    if (!tap) return false;
+    await realTapAt(page, tap.x, tap.y);
+    await keeperStill(page);
+  }
+  return done((await exploreState(page))?.near);
+}
+
+/** Spots by how far they are from the Keeper, nearest first. */
+function nearestFirst<T extends { x: number; z: number }>(
+  spots: T[],
+  from: { x: number; z: number },
+): T[] {
+  const d = (s: T) => (s.x - from.x) ** 2 + (s.z - from.z) ** 2;
+  return [...spots].sort((a, b) => d(a) - d(b));
+}
+
+test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
   browser,
 }) => {
-  test.setTimeout(150_000); // two scene builds; CI renders in software
+  test.setTimeout(240_000); // two scene builds and a few walks; CI renders in software
   const page = await newPlayer(browser, uniqueName('explore'));
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
@@ -88,45 +182,166 @@ test('explores a home tile: walk, search the easy way, a find card, a missing Sh
   await expect(page.getByTestId('explore-progress')).toHaveText(
     `0 of ${String(first.spots.length)} found 🔍`,
   );
-  // Nothing in reach: the big button says to walk up to a sparkle.
-  if (first.near === null) await expect(page.getByTestId('explore-action')).toBeDisabled();
-  else await expect(page.getByTestId('explore-action')).toBeEnabled();
-
-  // Walk to a spot searched by hand, then search it the easy way.
-  const hands = first.spots.find((s) => s.tool === null)!;
-  await walkTo(page, hands.index);
-  const action = page.getByTestId('explore-action');
-  await slowExpect(action).toBeEnabled();
-  await action.tap();
-  await slowExpect(page.getByTestId('explore-stage')).toBeVisible();
-  await page.getByTestId('explore-easy').tap();
-  await expect.poll(async () => (await exploreState(page))?.card, slow).toBe('find');
-  const sheet = page.getByTestId('explore-sheet');
-  await slowExpect(sheet).toContainText('Ta-da!');
-  for (const text of await page.getByTestId('explore-finds').locator('li').allTextContents()) {
-    expect(findAvoidedWords(text)).toEqual([]);
+  // Exploring owns the screen: the "Hi, name! Log out" chip steps aside, and
+  // the header fits one row, the tile's name and progress never cut off.
+  await expect(page.locator('.auth-chip')).toBeHidden();
+  for (const sel of ['.explore-title', '.explore-progress']) {
+    const fits = await page
+      .locator(sel)
+      .evaluate((e) => e.scrollWidth <= e.clientWidth && e.clientWidth > 0);
+    expect(fits, `${sel} fits`).toBe(true);
   }
-  await sheet.getByTestId('explore-keep-going').tap();
-  await slowExpect(sheet).toBeHidden();
+  // The camera frames the Keeper about a fifth to a quarter of the screen tall (board a).
+  await expect
+    .poll(async () => (await exploreState(page))?.scene?.keeperHeight ?? 0, slow)
+    .toBeGreaterThan(0.17);
+  expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.3);
+  // Every unsearched spot glints, the tile grows decor, and the joystick is always there.
+  expect(first.scene?.glints).toBe(first.spots.length);
+  expect(first.scene?.decor.tufts).toBeGreaterThan(0);
+  await expect(page.getByTestId('explore-stick')).toBeVisible();
+  // Nothing in front yet: the big button says to find a glint.
+  if (first.near === null) await expect(page.getByTestId('explore-action')).toBeDisabled();
+
+  // The performance budget: a settled frame stays under the ceiling.
+  await expect
+    .poll(() => exploreState(page).then((s) => s?.scene?.drawCalls ?? 0), slow)
+    .toBeGreaterThan(0);
+  const drawCalls = (await exploreState(page))?.scene?.drawCalls ?? 0;
+  test.info().annotations.push({ type: 'drawCalls', description: String(drawCalls) });
+  expect(drawCalls).toBeLessThan(DRAW_CALL_CEILING);
+
+  // Walk to a spot searched by hand and search it the easy way. A common find
+  // is a toast and the world keeps going; a rare one (a lore page, something
+  // to wear) gets the card, so try the next hand spot until a toast shows.
+  const action = page.getByTestId('explore-action');
+  const sheet = page.getByTestId('explore-sheet');
+  const handSpots = nearestFirst(
+    first.spots.filter((s) => s.tool === null),
+    first.keeper,
+  );
+  let searched = 0;
+  let toasted = false;
+  for (const hands of handSpots.slice(0, 5)) {
+    if (!(await walkTo(page, hands.index))) continue;
+    // The camera follows the Keeper: it settles looking just ahead of it.
+    await expect
+      .poll(async () => {
+        const s = (await exploreState(page))!;
+        const cam = s.scene!.camera;
+        return Math.hypot(cam.x - s.keeper.x, cam.z - s.keeper.z);
+      }, slow)
+      .toBeLessThan(0.25);
+    await slowExpect(action).toBeEnabled();
+    await action.tap();
+    // A light overlay, not a card: the chip, the easy way and "Not now".
+    await slowExpect(page.getByTestId('explore-play')).toBeVisible();
+    await expect(page.getByTestId('explore-chip')).toBeVisible();
+    await expect(page.getByTestId('explore-not-now')).toBeVisible();
+    await expect(sheet).toBeHidden();
+    await page.getByTestId('explore-easy').tap();
+    // The toast is short-lived: read it and the hook in the same breath.
+    type Seen = { toast: string | null; card: string | null; shown: boolean };
+    let seen: Seen = { toast: null, card: null, shown: false };
+    await expect
+      .poll(async () => {
+        seen = await page.evaluate(() => {
+          const e = (
+            window as unknown as {
+              __heartpatch?: { explore?: () => { toast: string | null; card: string | null } };
+            }
+          ).__heartpatch?.explore?.();
+          const box = document.querySelector<HTMLElement>('[data-testid="explore-toast"]');
+          return {
+            toast: e?.toast ?? null,
+            card: e?.card ?? null,
+            shown: box !== null && !box.hidden && box.textContent !== '',
+          };
+        });
+        return seen.toast !== null || seen.card !== null;
+      }, slow)
+      .toBe(true);
+    searched += 1;
+    const after = (await exploreState(page))!;
+    expect(after.spots.find((s) => s.index === hands.index)?.done).toBe(true);
+    if (after.card === 'rare') {
+      await slowExpect(sheet).toBeVisible();
+      await sheet.getByTestId('explore-yay').tap();
+      await slowExpect(sheet).toBeHidden();
+      continue;
+    }
+    expect(after.card).toBeNull();
+    await expect(sheet).toBeHidden();
+    expect(seen.shown).toBe(true);
+    expect(findAvoidedWords(seen.toast ?? '')).toEqual([]);
+    toasted = true;
+    break;
+  }
+  expect(toasted).toBe(true);
   const after = (await exploreState(page))!;
-  expect(after.progress?.searched).toBe(1);
-  expect(after.spots.find((s) => s.index === hands.index)?.done).toBe(true);
-  expect(after.scene?.done).toBe(1);
+  expect(after.progress?.searched).toBe(searched);
+  expect(after.scene?.done).toBe(searched);
+  // A searched spot just loses its glint.
+  expect(after.scene?.glints).toBe(first.spots.length - searched);
   await expect(page.getByTestId('explore-progress')).toHaveText(
-    `1 of ${String(first.spots.length)} found 🔍`,
+    `${String(searched)} of ${String(first.spots.length)} found 🔍`,
   );
 
-  // A mound needs a Shovel: the card says how to make one, and nothing is spent.
-  const mound = first.spots.find((s) => s.tool === 'shovel');
-  if (mound) {
-    await walkTo(page, mound.index);
-    await action.tap();
-    await expect.poll(async () => (await exploreState(page))?.card, slow).toBe('missing');
-    await slowExpect(sheet).toContainText('You need a Shovel to dig there!');
+  // A mound needs a Shovel: a hint above a disabled button says how to make one.
+  const mounds = first.spots.filter((s) => s.tool === 'shovel');
+  if (mounds.length > 0) {
+    const ids = mounds.map((s) => s.index);
+    // Any mound will do: a neighbour's hint can cover the one aimed at.
+    let reached = false;
+    for (const mound of nearestFirst(mounds, (await exploreState(page))!.keeper).slice(0, 4)) {
+      if ((reached = await walkTo(page, mound.index, ids))) break;
+    }
+    expect(reached, 'walked up to a mound').toBe(true);
+    await expect.poll(async () => (await exploreState(page))?.hint, slow).toBe('shovel');
+    const hint = page.getByTestId('explore-need');
+    await slowExpect(hint).toContainText('This mound needs a Shovel!');
     await slowExpect(page.getByTestId('explore-recipe')).toContainText('Timber');
-    await sheet.getByTestId('explore-something-else').tap();
-    await slowExpect(sheet).toBeHidden();
-    expect((await exploreState(page))?.progress?.searched).toBe(1);
+    await expect(action).toBeDisabled();
+    await expect(action).toContainText('Dig');
+    expect((await exploreState(page))?.card).toBeNull();
+    expect((await exploreState(page))?.progress?.searched).toBe(searched);
+  }
+
+  // A tall prop between the camera and the Keeper fades (#291), and the
+  // see-through copy stays inside the draw-call budget. Tap-walk to just
+  // behind (further from the camera than) a tall spot; a tile whose tall
+  // spots can't be reached by taps skips this, saying so.
+  const tall = ['tree', 'rock', 'hollow-log', 'pumpkin-row', 'ledge', 'cave', 'reeds'];
+  let faded = false;
+  const state = (await exploreState(page))!;
+  for (const spot of nearestFirst(
+    state.spots.filter((s) => tall.includes(s.kind)),
+    state.keeper,
+  ).slice(0, 3)) {
+    const behind = { x: spot.x, z: spot.z + 0.12 };
+    for (let tries = 0; tries < 6; tries++) {
+      const k = (await exploreState(page))!.keeper;
+      if (Math.hypot(k.x - behind.x, k.z - behind.z) < 0.04) break;
+      const tap = await waypoint(page, behind);
+      if (!tap) break;
+      await realTapAt(page, tap.x, tap.y);
+      await keeperStill(page);
+    }
+    if (((await exploreState(page))?.scene?.faded.length ?? 0) > 0) {
+      faded = true;
+      break;
+    }
+  }
+  if (faded) {
+    await page.waitForTimeout(500);
+    const now = (await exploreState(page))!.scene!;
+    test.info().annotations.push({ type: 'drawCallsFaded', description: String(now.drawCalls) });
+    expect(now.drawCalls).toBeLessThan(DRAW_CALL_CEILING);
+  } else {
+    test.info().annotations.push({
+      type: 'skipped',
+      description: 'fade: no tall spot on this tile could be reached by taps from behind',
+    });
   }
 
   // Back to the map, with the explore view put away.
