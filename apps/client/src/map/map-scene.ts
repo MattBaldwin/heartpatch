@@ -93,7 +93,7 @@ export const CORNER = 0.2; // TUNE: corner rounding, fraction of the radius
 export const SEGMENTS = 3;
 /**
  * A tile's shape zoomed out (#318), where it's a few dozen pixels across:
- * the dome and the rim, square corners. The top lands where the full shape's
+ * the dome and the rim, corners barely rounded. The top lands where the full shape's
  * does. About a fifth of the full shape's triangles.
  */
 const FAR_TOP_RINGS: readonly ProfileRing[] = [
@@ -351,8 +351,9 @@ export class MapScene {
   private propShadows: Mesh | null = null;
   /** Zoomed out: tiles and props draw from their low-detail meshes (`followZoom`). */
   private far = false;
-  /** Draw calls in the last frame drawn (`SceneInstrumentation`, as the battle measures). */
   private readonly instrumentation: SceneInstrumentation;
+  /** Draw calls in the last frame drawn (`SceneInstrumentation`, as the battle measures). */
+  private drawCalls = 0;
   /** Glowing props whose glow changes at night (jack-o'-lanterns). */
   private lanternMat: PBRMaterial | null = null;
   private readonly ambient: MapAmbient;
@@ -376,12 +377,20 @@ export class MapScene {
     this.bounds = mapBounds(view.tiles, HEX_SIZE);
 
     this.instrumentation = new SceneInstrumentation(scene);
-    // Before the active meshes are picked, so a zoom change shows this frame.
-    const zoom = scene.onBeforeRenderObservable.add(() => {
+    // After the camera has moved for this frame (the map camera moves in
+    // its own before-render step, and Babylon refreshes the camera's
+    // position in `updateTransformMatrix`) and before the meshes to draw are
+    // picked, so the frame that crosses the switch draws the new detail. On
+    // demand, that's often the last frame drawn.
+    const zoom = scene.onBeforeCameraRenderObservable.add(() => {
       this.followZoom();
     });
+    const counted = scene.onAfterRenderObservable.add(() => {
+      this.drawCalls = this.instrumentation.drawCallsCounter.current;
+    });
     scene.onDisposeObservable.addOnce(() => {
-      scene.onBeforeRenderObservable.remove(zoom);
+      scene.onBeforeCameraRenderObservable.remove(zoom);
+      scene.onAfterRenderObservable.remove(counted);
       this.instrumentation.dispose();
     });
 
@@ -510,7 +519,7 @@ export class MapScene {
         (n, g) => n + g.ambient.filter((v, i) => i % 4 === 2 && v === 1).length,
         0,
       ),
-      drawCalls: this.instrumentation.drawCallsCounter.current,
+      drawCalls: this.drawCalls,
       activeTriangles: activeTriangles(this.scene),
       halloween: this.halloween,
       night: this.night,

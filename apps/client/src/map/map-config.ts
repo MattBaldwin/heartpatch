@@ -125,7 +125,6 @@ export const BORDER = {
   night: 0.25, // TUNE
 } as const;
 
-/** The soft island everything sits on. */
 /**
  * Map detail by zoom (#318). Zoomed out, tiles and props draw from
  * low-detail meshes (one per terrain look and prop kind, as up close, so the
@@ -136,12 +135,16 @@ export const BORDER = {
  * for a fifth fewer triangles.)
  */
 export const MAP_DETAIL = {
-  /** Zooming out past this camera height switches to low detail… */
+  /**
+   * The switch sits in a band `hysteresis` either side of this camera
+   * height: zooming out past the top of the band goes to low detail, and
+   * zooming back in below the bottom returns, so a pinch near it never flickers.
+   */
   farHeight: 25, // TUNE
-  /** …and zooming back in below `farHeight - hysteresis` switches back, so it never flickers. */
   hysteresis: 1.5, // TUNE
 } as const;
 
+/** The soft island everything sits on. */
 export const ISLAND = { color: '#a9d897', margin: 1.2, thickness: 0.6 } as const; // TUNE
 
 // ---------------------------------------------------------------------------

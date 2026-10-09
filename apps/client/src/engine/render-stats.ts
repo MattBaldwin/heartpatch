@@ -1,4 +1,4 @@
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 
 /** Triangles the meshes picked for the last frame drew, instances counted (#318). */
@@ -6,8 +6,10 @@ export function activeTriangles(scene: Scene): number {
   const active = scene.getActiveMeshes();
   let triangles = 0;
   for (let i = 0; i < active.length; i++) {
-    const mesh = active.data[i] as Mesh;
-    const copies = mesh.hasThinInstances ? mesh.thinInstanceCount : 1;
+    const mesh = active.data[i];
+    if (!mesh) continue;
+    // Instanced meshes (not thin instances) are each picked on their own.
+    const copies = mesh instanceof Mesh && mesh.hasThinInstances ? mesh.thinInstanceCount : 1;
     triangles += (mesh.getTotalIndices() / 3) * copies;
   }
   return Math.round(triangles);

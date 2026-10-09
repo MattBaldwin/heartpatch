@@ -111,51 +111,86 @@ describe('MapScene', () => {
     const camera = new TargetCamera('cam', new Vector3(0, 17, -10), scene);
     camera.setTarget(Vector3.Zero());
     scene.activeCamera = camera;
-    const enabled = () => scene.meshes.filter((m) => m.isEnabled()) as Mesh[];
+    // The map camera is made after the map and moves in its own
+    // before-render step, so the map sees each frame's height only then.
+    let height = 17;
+    scene.onBeforeRenderObservable.add(() => {
+      camera.position.y = height;
+    });
+    const drawn = () => {
+      const active = scene.getActiveMeshes();
+      return Array.from({ length: active.length }, (_, i) => active.data[i]!) as Mesh[];
+    };
+    const names = () => new Set(drawn().map((m) => m.name));
     const triangles = () =>
-      enabled().reduce(
+      drawn().reduce(
         (n, m) => n + (m.getTotalIndices() / 3) * (m.hasThinInstances ? m.thinInstanceCount : 1),
         0,
       );
-    const at = (height: number) => {
-      camera.position.y = height;
+    /** One drawn frame at `to`: a single pinch or wheel step that then stops. */
+    const frameAt = (to: number) => {
+      height = to;
       scene.render();
       return map.stats.detail;
     };
     expect(map.stats.detail).toBe('near');
-    expect(at(17)).toBe('near');
-    const near = { meshes: enabled().length, triangles: triangles() };
-    expect(scene.getMeshByName('prop-shadows')?.isEnabled()).toBe(true);
+    expect(frameAt(17)).toBe('near');
+    const near = { meshes: drawn().length, triangles: triangles() };
+    expect(names()).toContain('prop-shadows');
+    expect(map.stats.activeTriangles).toBe(Math.round(near.triangles));
 
-    // Zoomed out: every tile look and prop kind swaps mesh for mesh, the
-    // speck-sized contact shadows go, and about half the triangles are left.
-    expect(at(32)).toBe('far');
-    expect(enabled()).toHaveLength(near.meshes - 1);
-    expect(scene.getMeshByName('prop-shadows')?.isEnabled()).toBe(false);
-    expect(scene.getMeshByName('tiles-meadow-far')?.isEnabled()).toBe(true);
-    expect(scene.getMeshByName('tiles-meadow')?.isEnabled()).toBe(false);
+    // One frame straight out: that very frame draws low detail, mesh for
+    // mesh, without the speck-sized contact shadows, at about half the triangles.
+    expect(frameAt(32)).toBe('far');
+    expect(names()).toContain('tiles-meadow-far');
+    expect(names()).not.toContain('tiles-meadow');
+    expect(names()).not.toContain('prop-shadows');
+    expect(drawn()).toHaveLength(near.meshes - 1);
     expect(triangles()).toBeLessThan(near.triangles * 0.6);
     expect(map.stats.props).toBeGreaterThan(1000); // the same props, drawn simpler
 
+    // One frame straight back in draws full detail again.
+    expect(frameAt(17)).toBe('near');
+    expect(names()).toContain('tiles-meadow');
+    expect(names()).not.toContain('tiles-meadow-far');
+    expect(names()).toContain('prop-shadows');
+
     // A pinch hovering near the switch doesn't flicker it.
-    expect(at(MAP_DETAIL.farHeight - 1)).toBe('far');
-    expect(at(MAP_DETAIL.farHeight - MAP_DETAIL.hysteresis - 0.5)).toBe('near');
-    expect(at(MAP_DETAIL.farHeight + 1)).toBe('near');
-    expect(at(MAP_DETAIL.farHeight + MAP_DETAIL.hysteresis + 0.5)).toBe('far');
-    expect(map.stats.drawCalls).toBeGreaterThanOrEqual(0);
-    expect(map.stats.activeTriangles).toBeGreaterThan(0);
+    const { farHeight, hysteresis } = MAP_DETAIL;
+    expect(frameAt(farHeight + hysteresis + 0.5)).toBe('far');
+    expect(frameAt(farHeight - 1)).toBe('far');
+    expect(frameAt(farHeight - hysteresis - 0.5)).toBe('near');
+    expect(frameAt(farHeight + 1)).toBe('near');
   });
 
   it('mutes both detail levels together when land changes hands (#318)', () => {
     const view = testView(1);
-    const { mesh, map } = build(view);
-    const colors = (name: string) => mesh(name)?.getVerticesData('color');
-    const tile = view.tiles.find((t) => t.ownerUserId === null && t.terrain === 'meadow')!;
+    const { scene, map } = build(view);
+    // A wild meadow tile with props on it: claiming it un-mutes its tile and props.
+    const tile = view.tiles.find(
+      (t) => t.ownerUserId === null && t.homeSlot === null && t.terrain === 'meadow',
+    )!;
+    const uploads = new Map<string, string[]>();
+    for (const m of scene.meshes as Mesh[]) {
+      vi.spyOn(m, 'thinInstanceBufferUpdated').mockImplementation((kind: string) => {
+        uploads.set(m.name, [...(uploads.get(m.name) ?? []), kind]);
+      });
+    }
+    const before = map.stats.mutedProps;
     map.update({
       ...view,
       tiles: view.tiles.map((t) => (t === tile ? { ...t, ownerUserId: userId(1) } : t)),
     });
-    expect(colors('tiles-meadow-far')).toEqual(colors('tiles-meadow'));
+    expect(map.stats.mutedProps).toBeLessThan(before);
+    expect(uploads.get('tiles-meadow')).toContain('color');
+    expect(uploads.get('tiles-meadow-far')).toContain('color');
+    // Every prop kind re-muted up close is re-muted zoomed out too, and back.
+    const props = [...uploads].filter(([, kinds]) => kinds.includes('terrainAmbient'));
+    expect(props.length).toBeGreaterThan(0);
+    for (const [name] of props) {
+      const twin = name.endsWith('-far') ? name.slice(0, -'-far'.length) : `${name}-far`;
+      expect(uploads.get(twin), twin).toContain('terrainAmbient');
+    }
   });
 
   it('draws fence segments with one instanced mesh per look and level, in budget', () => {
