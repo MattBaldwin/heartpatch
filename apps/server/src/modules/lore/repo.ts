@@ -18,7 +18,13 @@ export interface LoreRepo {
     mapId: string,
   ) => Promise<{ kind: 'multiplayer' | 'tutorial'; tutorialPlayer: string | null } | null>;
   /** Records a find; a page already found stays as first found. */
-  found: (find: { userId: string; pageId: string; mapId: string; at: Date }) => Promise<void>;
+  found: (find: {
+    userId: string;
+    pageId: string;
+    /** Where it was found; null for a dev find (`lore_found.map_id` is nullable). */
+    mapId: string | null;
+    at: Date;
+  }) => Promise<void>;
   /** The player's found pages, oldest first. */
   listFound: (userId: string) => Promise<FoundRow[]>;
   /** Marks found pages read (#307); one already read keeps its first time, one not found is skipped. */

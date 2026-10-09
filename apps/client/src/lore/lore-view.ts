@@ -7,7 +7,6 @@ import type { LoreBookChapter, LorebookResponse, LorePage, LoreSlot } from '@hea
 export const LORE_TEXT = {
   found: 'You found a lore page!',
   title: 'Lorebook',
-  empty: 'No pages yet. Keep exploring, and listen for tiny paws…',
   open: 'Lorebook',
   openBook: 'Open Lorebook 📖',
   close: 'Close',

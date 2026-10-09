@@ -31,6 +31,11 @@ export interface LoreServiceOptions {
   chapters?: readonly LoreChapter[];
 }
 
+/** An unfound page's slot id: its chapter and place ("wild-lands-3"), never the page's own id. */
+export function blankSlotId(page: Pick<LoreEntry, 'chapter' | 'order'>): string {
+  return `${page.chapter}-${String(page.order)}`;
+}
+
 export function createLoreService(options: LoreServiceOptions): LoreService {
   const store = createLoreRepo(options.db);
   const now = options.clock ?? (() => new Date());
@@ -48,10 +53,13 @@ export function createLoreService(options: LoreServiceOptions): LoreService {
     const found = await store.listFound(user.id);
     const byId = new Map(found.map((f) => [f.pageId, f]));
     const slots = bookOrder.map((page): LoreSlot => {
-      const place = { id: page.id, chapter: page.chapter, order: page.order, hint: page.hint };
+      const place = { chapter: page.chapter, order: page.order, hint: page.hint };
       const row = byId.get(page.id);
-      if (!row) return { ...place, found: false };
+      // A page's id is its title as a slug: until it's found, its slot goes by
+      // its place instead, so not even the id gives it away (rule 6).
+      if (!row) return { id: blankSlotId(page), ...place, found: false };
       return {
+        id: page.id,
         ...place,
         found: true,
         title: page.title,

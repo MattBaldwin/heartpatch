@@ -100,7 +100,8 @@ test('a found page sparkles in the Bag, opens in the Lorebook and is read', asyn
 
   // The next page is still to find: a hint, never its words.
   await book.getByTestId('lorebook-next').tap();
-  await expect.poll(async () => (await loreState(page))?.bookAt).toBe('the-humming-reeds');
+  // A page still to find goes by its place, never its own id (#307).
+  await expect.poll(async () => (await loreState(page))?.bookAt).toBe('wild-lands-3');
   const blank = book.locator('[data-testid="lorebook-page"][data-found="false"]');
   await expect(blank).toContainText('A page still to find');
   const hint = (await blank.getByTestId('lorebook-hint').textContent()) ?? '';

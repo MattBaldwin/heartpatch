@@ -242,9 +242,15 @@ describe.skipIf(!url)('the Lorebook (needs DATABASE_URL)', () => {
     for (const slot of raw.slots.filter((s) => s['found'] === false)) {
       expect(Object.keys(slot).sort()).toEqual(['chapter', 'found', 'hint', 'id', 'order']);
     }
-    // No unfound page's title, words or trigger reaches the client.
+    // No unfound page's title, words, id (its title as a slug) or trigger
+    // reaches the client: its slot goes by its place.
+    expect(body.slots.find((s) => s.chapter === 'wild-lands' && s.order === 3)).toMatchObject({
+      id: 'wild-lands-3',
+      found: false,
+    });
     for (const page of LORE_PAGES.filter((p) => p.id !== mossy.id)) {
       expect(res.body).not.toContain(page.title);
+      expect(res.body).not.toContain(page.id);
       expect(res.body).not.toContain(page.text.slice(0, 40));
       expect(res.body).not.toContain(page.trigger.eventType);
     }
@@ -276,7 +282,7 @@ describe.skipIf(!url)('the Lorebook (needs DATABASE_URL)', () => {
     expect(res.statusCode).toBe(200);
     const after = LorebookResponseSchema.parse(res.json());
     expect(unread(after)).toEqual([]);
-    expect(after.slots.find((s) => s.id === 'grey-footprints')).toMatchObject({ found: false });
+    expect(after.slots.find((s) => s.id === 'hollow-man-3')).toMatchObject({ found: false });
     expect(after.slots.find((s) => s.id === 'two-watchful-dogs')).toMatchObject({
       readAt: clock.toISOString(),
     });

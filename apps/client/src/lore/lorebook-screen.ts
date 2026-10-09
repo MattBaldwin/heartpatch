@@ -43,7 +43,8 @@ export interface LorebookScreen {
 
 type Motion = 'none' | 'next' | 'prev';
 
-const TWO_UP_QUERY = '(min-width: 900px) and (orientation: landscape)';
+/** An iPad held sideways (tall enough: a big phone on its side keeps one page). */
+const TWO_UP_QUERY = '(min-width: 900px) and (min-height: 600px) and (orientation: landscape)';
 
 export function createLorebookScreen(options: LorebookScreenOptions): LorebookScreen {
   const media = typeof window.matchMedia === 'function' ? window.matchMedia(TWO_UP_QUERY) : null;
@@ -324,7 +325,7 @@ export function createLorebookScreen(options: LorebookScreenOptions): LorebookSc
     // keyboards), or to ✕ if it's gone (the last page's Next turns off).
     if (refocus) {
       const twin = screen.querySelector<HTMLElement>(refocus);
-      (twin && !(twin as HTMLButtonElement).disabled ? twin : closeButton).focus();
+      (twin && !(twin instanceof HTMLButtonElement && twin.disabled) ? twin : closeButton).focus();
     }
   }
 
@@ -332,7 +333,6 @@ export function createLorebookScreen(options: LorebookScreenOptions): LorebookSc
     const current = book;
     if (!current) return;
     const two = twoUp();
-    screen.classList.toggle('lbook-two-up', two);
     const slot = slotOf(at);
     if (at !== null && !slot) at = null;
     const chapter = slot ? chapterOf(slot) : null;

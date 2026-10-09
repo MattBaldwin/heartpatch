@@ -1,4 +1,4 @@
-import { LorebookResponseSchema, type LorebookResponse, type LorePage } from '@heartpatch/shared';
+import { LorebookResponseSchema, type LorebookResponse } from '@heartpatch/shared';
 import { apiCallFor } from '../net/api.js';
 
 /**
@@ -6,8 +6,6 @@ import { apiCallFor } from '../net/api.js';
  * every other page is only its place and hint (#307).
  */
 export const loreApi = {
-  pages: async (): Promise<LorePage[]> =>
-    (await apiCallFor('/lore', { method: 'GET', schema: LorebookResponseSchema })).pages,
   book: (): Promise<LorebookResponse> =>
     apiCallFor('/lore', { method: 'GET', schema: LorebookResponseSchema }),
   /** These pages have been read in the book; replies with the book. */

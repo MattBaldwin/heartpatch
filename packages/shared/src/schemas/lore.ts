@@ -22,7 +22,11 @@ export const LoreBookChapterSchema = z.object({
 });
 export type LoreBookChapter = z.infer<typeof LoreBookChapterSchema>;
 
-/** Every page has a place in its chapter, found or not. */
+/**
+ * Every page has a place in its chapter, found or not. `id` is the page's id
+ * once found; before that it only names the place (`<chapter>-<order>`), so
+ * it never gives the page away.
+ */
 const SlotPlaceSchema = z.object({
   id: ContentIdSchema,
   chapter: ContentIdSchema,

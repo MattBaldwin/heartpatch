@@ -272,9 +272,10 @@ export function createLorebook(options: LorebookOptions): Lorebook {
       (next) => {
         if (user?.id !== who.id) return;
         setBook(next);
-        const slot = pageId === null ? null : next.slots.find((s) => s.id === pageId);
-        // Found a moment ago: the finder may not have written it yet.
-        if (slot && !slot.found && tries < OPEN_RETRIES) {
+        // A page still to find has no id of its own in the book, so a page
+        // found a moment ago that isn't there yet waits for the finder.
+        const slot = pageId === null ? null : (next.slots.find((s) => s.id === pageId) ?? null);
+        if (pageId !== null && !slot && tries < OPEN_RETRIES) {
           setTimer(() => {
             open(pageId, tries + 1);
           }, OPEN_RETRY_MS);
