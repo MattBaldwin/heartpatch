@@ -635,7 +635,9 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
 
     const members = el('ul', { class: 'lobby-list', 'data-testid': 'lobby-members' });
     // Home order, as on the map (#318), then each open seat, so a 6-seat patch reads at a glance.
-    const seated = [...map.members].sort((a, b) => (a.homeSlot ?? Infinity) - (b.homeSlot ?? Infinity));
+    const seated = [...map.members].sort(
+      (a, b) => (a.homeSlot ?? Infinity) - (b.homeSlot ?? Infinity),
+    );
     for (const member of seated) members.append(memberRow(map, member));
     for (let i = map.members.length; i < map.maxPlayers; i++) {
       members.append(
