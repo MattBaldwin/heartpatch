@@ -290,9 +290,9 @@ A second collection alongside the squishy catalog.
 
 - **Hidden lore pages** unlock when players capture certain tiles or meet conditions: journal scraps from old Juniper's Gap, tiny paw prints leading to a mysteriously tidied clearing, a sketch of two watchful dogs by a fire.
 - **The forest chihuahuas** — benevolent spirits said to guard the old Gap — are never NPCs. They appear only as lore, ambient glimpses (a tiny silhouette at the edge of firelight, distant barking just before the Hollow Man would have arrived) and **ultra-rare secret squishies** with the game's tightest spawn conditions (e.g. near a fully lit Hearthfire at night; when two players defend adjacent tiles together).
-- **Implementation:** data-driven triggers `{ id, conditions: [...], reward }` evaluated server-side on game events. Conditions never ship to the client, so they can't be datamined.
+- **Implementation:** data-driven triggers `{ id, conditions: [...], reward }` evaluated server-side on game events. Conditions never ship to the client, so they can't be datamined. Neither does an unfound page's title or text.
 
-Phase 1 may seed 2–3 lore pages; the full Lorebook arrives in Phase 3.
+**Phase 1 (#307):** the Lorebook has 12 pages in four chapters (Juniper's Gap, The Wild Lands, The Hollow Man, Little Guardians). Pages are found by playing: the tutorial, exploring your land, claiming land, befriending, fuelling a fire, rescues and the Hollow Man's nights. Pages still to find show as faded blanks with a short hint, under "Pages found: N of 12". The book opens from a 📖 tile at the top of the Bag (the Bag button sparkles while a page is unread), from **Open Lorebook** on every found-page card and on explore's find card, and from Settings. From the Bag and Settings the book opens at its contents; from a found-page card or an explore find it opens at that page. An iPad held sideways shows a two-page spread. A page counts as read once it's on screen in the book. The full Lorebook and the chihuahua Easter eggs arrive in Phase 3 (§22).
 
 ## 17. Communication
 
