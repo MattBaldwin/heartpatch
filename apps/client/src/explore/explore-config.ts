@@ -110,18 +110,19 @@ export const EXPLORE_VIEW = {
 
 /**
  * The follow camera (#291, board a): behind and above the Keeper, tilted
- * about 3/4, so its face or profile reads and it stands about a fifth to a
- * quarter of the screen's height (the stage camera's field of view is 0.75
- * rad, vertical). A tall, narrow phone looks flatter and closer than a
- * tablet; screens in between blend the two.
+ * about 3/4, so its face or profile reads and it stands about a sixth to a
+ * fifth of the screen's height (the stage camera's field of view is 0.75
+ * rad, vertical). Far and high enough to look down over its hair, so a spot
+ * right beside it stays in view. A tall, narrow phone looks flatter and
+ * closer than a tablet; screens in between blend the two.
  */
 export const EXPLORE_CAMERA = {
   /** A phone held upright (width ÷ height at or under `aspect`): looking down from the horizontal, radians, and camera to target, world units. */
-  phone: { aspect: 0.5, pitch: (28 * Math.PI) / 180, distance: 6 }, // TUNE
+  phone: { aspect: 0.5, pitch: (35 * Math.PI) / 180, distance: 7.2 }, // TUNE
   /** A tablet or wider (at or over `aspect`). */
-  tablet: { aspect: 0.75, pitch: (32 * Math.PI) / 180, distance: 6.6 }, // TUNE
-  /** The target sits this far ahead of the Keeper (tile-local +z), so it walks low on the screen. */
-  lookAhead: 0.13, // TUNE
+  tablet: { aspect: 0.75, pitch: (38 * Math.PI) / 180, distance: 7.4 }, // TUNE
+  /** The target sits this far ahead of the Keeper (tile-local +z), so it walks low on the screen and the ground ahead shows. */
+  lookAhead: 0.18, // TUNE
   /** With the lantern lit the Keeper and its light sit higher, clear of the overlay (board g). */
   lightLookAhead: -0.14, // TUNE
   /** The target stays this far inside the tile's edge, tile-local units. */
@@ -133,7 +134,7 @@ export const EXPLORE_CAMERA = {
   /** Closer than this (tile-local, and share of distance) counts as there: drawing stops. */
   settle: 0.0015, // TUNE
   /** The glint is baked tipped back by this much to face the camera, radians. */
-  glintTilt: (32 * Math.PI) / 180, // TUNE
+  glintTilt: (36 * Math.PI) / 180, // TUNE: about the phone and tablet pitches
 } as const;
 
 /**

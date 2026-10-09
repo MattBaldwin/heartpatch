@@ -2,6 +2,7 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
 import { realTapAt } from './touch.js';
 
 /** Server replies and scene builds can be slow on a busy CI runner (software rendering). */
@@ -58,90 +59,8 @@ interface ExploreDebug {
   } | null;
 }
 
-type Point = { x: number; y: number };
-type ExploreHook = {
-  explore?: () => {
-    keeper: { x: number; z: number };
-    pointOnScreen: (p: { x: number; z: number }) => Point | null;
-  };
-};
-
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
 const mapState = (page: Page) => hook<{ tiles: number; selected: string | null }>(page, 'map');
-
-/**
- * A point on the ground to tap on the way from the Keeper to a tile-local
- * spot: the spot itself if a tap there reaches the ground, else part way
- * there, else a little to one side (the controls and the hint cover parts
- * of the screen). Null when nothing on the way can be tapped.
- */
-function waypoint(page: Page, to: { x: number; z: number }): Promise<Point | null> {
-  return page.evaluate((spot) => {
-    const e = (window as unknown as { __heartpatch?: ExploreHook }).__heartpatch?.explore?.();
-    if (!e) return null;
-    const ground = document.querySelector('[data-testid="explore-ground"]');
-    const k = e.keeper;
-    const dx = spot.x - k.x;
-    const dz = spot.z - k.z;
-    for (const turn of [0, 0.6, -0.6, 1.2, -1.2]) {
-      const c = Math.cos(turn);
-      const s = Math.sin(turn);
-      for (const f of [1, 0.75, 0.5, 0.35, 0.2]) {
-        const p = { x: k.x + (dx * c - dz * s) * f, z: k.z + (dx * s + dz * c) * f };
-        const at = e.pointOnScreen(p);
-        if (at && document.elementFromPoint(at.x, at.y) === ground) return at;
-      }
-    }
-    return null;
-  }, to);
-}
-
-/** Waits until the Keeper stops walking. */
-async function keeperStill(page: Page): Promise<void> {
-  let last = '';
-  await expect
-    .poll(
-      async () => {
-        const now = JSON.stringify((await exploreState(page))?.keeper);
-        const still = now === last;
-        last = now;
-        return still;
-      },
-      { timeout: 60_000, intervals: [500] },
-    )
-    .toBe(true);
-}
-
-/**
- * Walks up to a spot by tapping: the spot itself once a tap there reaches
- * the ground, else the ground on the way to it (the camera follows). True
- * once it (or any spot in `orAny`) is in front; false if taps can't get
- * there (tap-to-walk slides round one rock at a time, it doesn't path round
- * a cluster: a player steers round with the joystick).
- */
-async function walkTo(page: Page, index: number, orAny: readonly number[] = []): Promise<boolean> {
-  const done = (near: number | null | undefined) =>
-    near === index || (near != null && orAny.includes(near));
-  for (let tries = 0; tries < 10; tries++) {
-    const state = (await exploreState(page))!;
-    if (done(state.near)) return true;
-    const spot = state.spots.find((s) => s.index === index)!;
-    const tap = await waypoint(page, spot);
-    if (!tap) return false;
-    await realTapAt(page, tap.x, tap.y);
-    await keeperStill(page);
-  }
-  return done((await exploreState(page))?.near);
-}
-
-/** Spots by how far they are from the Keeper, nearest first. */
-function nearestFirst<T extends { x: number; z: number }>(
-  spots: T[],
-  from: { x: number; z: number },
-): T[] {
-  const d = (s: T) => (s.x - from.x) ** 2 + (s.z - from.z) ** 2;
-  return [...spots].sort((a, b) => d(a) - d(b));
-}
 
 test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
   browser,
@@ -191,11 +110,12 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
       .evaluate((e) => e.scrollWidth <= e.clientWidth && e.clientWidth > 0);
     expect(fits, `${sel} fits`).toBe(true);
   }
-  // The camera frames the Keeper about a fifth to a quarter of the screen tall (board a).
+  // The camera frames the Keeper about a sixth of the screen tall
+  // (board a): close and cozy, but never so big it hides the spots beside it.
   await expect
     .poll(async () => (await exploreState(page))?.scene?.keeperHeight ?? 0, slow)
-    .toBeGreaterThan(0.17);
-  expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.3);
+    .toBeGreaterThan(0.14);
+  expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.195);
   // Every unsearched spot glints, the tile grows decor, and the joystick is always there.
   expect(first.scene?.glints).toBe(first.spots.length);
   expect(first.scene?.decor.tufts).toBeGreaterThan(0);

@@ -649,10 +649,24 @@ body:has(.explore:not([hidden])) .auth-chip {
   padding: 3px 0;
 }
 
+/* Where a lore page went (#307), under its line. */
+.explore-find-note {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: #2f6b3d;
+}
+
 .explore-sheet .explore-yay {
   width: 100%;
   min-height: 52px;
   font-size: 18px;
+}
+
+/* "Open Lorebook" (#307): full width over Yay!, the soft one. */
+.explore-sheet .explore-lorebook {
+  width: 100%;
+  margin-bottom: 8px;
 }
 
 /* ── Short screens (a phone held sideways) ────────────────────────────── */

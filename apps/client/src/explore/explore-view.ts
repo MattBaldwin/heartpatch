@@ -34,6 +34,8 @@ export const EXPLORE_TEXT = {
   ta: 'Ta-da!',
   worm: 'Just a wiggly worm! 🪱',
   lorePage: 'A lore page!',
+  addedToLorebook: 'Added to your Lorebook 📖',
+  openLorebook: 'Open Lorebook 📖',
   clothing: 'Something to wear!',
   recipeBook: 'Open recipe book',
   tileExplored: (name: string) => `You explored every spot in this ${name}! ✨`,
@@ -213,6 +215,8 @@ export function foundHeadline(interaction: SpotInteraction): string {
 export interface FindLine {
   readonly kind: 'item' | 'lore' | 'clothing' | 'none';
   readonly text: string;
+  /** A small line under it: where a lore page went (#307). */
+  readonly note?: string;
 }
 
 /** What a search found, as card lines (items, a lore page, something to wear, or a worm). */
@@ -221,7 +225,11 @@ export function findLines(found: SearchSpotResponse): FindLine[] {
     .filter(([, n]) => n > 0)
     .map(([id, n]) => ({ kind: 'item', text: `${itemIcon(id)} ${itemName(id)} ×${String(n)}` }));
   if (found.lore) {
-    lines.push({ kind: 'lore', text: `📜 ${EXPLORE_TEXT.lorePage} “${found.lore.title}”` });
+    lines.push({
+      kind: 'lore',
+      text: `📜 ${EXPLORE_TEXT.lorePage} “${found.lore.title}”`,
+      note: EXPLORE_TEXT.addedToLorebook,
+    });
   }
   if (found.clothing) {
     const piece = CLOTHING_BY_ID.get(found.clothing);

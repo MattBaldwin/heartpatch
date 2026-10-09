@@ -230,6 +230,11 @@
   background: #fff3d6;
 }
 
+/* No Factory or nothing going: no strip (the grid above would keep an empty bar). */
+.factory-strip[hidden] {
+  display: none;
+}
+
 .factory-strip-head {
   display: flex;
   justify-content: space-between;

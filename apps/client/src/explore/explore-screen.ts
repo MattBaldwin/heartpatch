@@ -114,6 +114,8 @@ export interface ExploreScreenOptions {
   onFound?: (mapId: string) => void;
   /** "Open recipe book" on the missing-tool hint: leaves exploring and opens it. */
   onRecipeBook?: () => void;
+  /** "Open Lorebook" on a find card with a lore page (#307): the book opens at it, over exploring. */
+  onLorebook?: (pageId: string) => void;
   api?: ExploreApi;
   jobs?: Pick<JobsApi, 'view'>;
   bag?: (mapId: string) => Promise<ItemCounts>;
@@ -1068,17 +1070,45 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       nodes.push(el('p', { class: 'explore-card-line' }, EXPLORE_TEXT.joinedHome));
     }
     const lines = [
-      ...findLines(found).map((line) => line.text),
-      ...xpLines(found.xp, teamNames),
-      ...(found.tool && found.tool.usesLeft === 0 ? [restLine(found.tool.id)] : []),
+      ...findLines(found),
+      ...xpLines(found.xp, teamNames).map((text) => ({ text, note: undefined })),
+      ...(found.tool && found.tool.usesLeft === 0
+        ? [{ text: restLine(found.tool.id), note: undefined }]
+        : []),
     ];
     nodes.push(
       el(
         'ul',
         { class: 'explore-finds', 'data-testid': 'explore-finds' },
-        ...lines.map((line) => el('li', { class: 'explore-find' }, line)),
+        ...lines.map((line) =>
+          el(
+            'li',
+            { class: 'explore-find' },
+            line.text,
+            ...(line.note ? [el('span', { class: 'explore-find-note' }, line.note)] : []),
+          ),
+        ),
       ),
     );
+    // Where the page went: straight into the Lorebook, at that page (#307).
+    const lore = found.lore;
+    if (lore && options.onLorebook) {
+      const openBook = el(
+        'button',
+        {
+          type: 'button',
+          class: 'auth-button auth-button-soft explore-lorebook',
+          'data-testid': 'explore-lorebook',
+        },
+        EXPLORE_TEXT.openLorebook,
+      );
+      openBook.addEventListener('click', () => {
+        card = null;
+        render();
+        options.onLorebook?.(lore.id);
+      });
+      nodes.push(openBook);
+    }
     const yay = el(
       'button',
       { type: 'button', class: 'auth-button explore-yay', 'data-testid': 'explore-yay' },
