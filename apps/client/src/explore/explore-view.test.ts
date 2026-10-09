@@ -71,7 +71,7 @@ describe('explore text', () => {
     expect(usesLine('shovel', 1)).toBe('1 dig left');
     expect(usesLine('rope', 0)).toBe('Resting zZ');
     expect(needsHere('mound', 'shovel')).toBe('This mound needs a Shovel!');
-    expect(needsHere('hollow-log', 'net')).toBe('This hollow log needs a Snorkel!');
+    expect(needsHere('pond', 'net')).toBe('This pond needs a Snorkel!');
     expect(restLine('shovel')).toBe('Your Shovel needs a rest! Craft a new one 🛠️');
   });
 

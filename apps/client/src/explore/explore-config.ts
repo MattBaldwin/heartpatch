@@ -247,13 +247,13 @@ export const INTERACTION = {
   digScoops: 3, // TUNE
   /** A swipe counts once it travels this far, CSS pixels. */
   swipePx: 40, // TUNE
-  /** Rope: alternating left and right taps to reach the ledge. */
+  /** Walking Stick: alternating left and right taps to reach the ledge. */
   climbSteps: 6, // TUNE
-  /** Rope's easy way and lifting a rock: hold this long, ms. */
+  /** The Walking Stick's easy way and lifting a rock: hold this long, ms. */
   holdMs: 900, // TUNE
   /** Hands on a tree or flower bed: changes of direction to shake it. */
   shakes: 4, // TUNE
-  /** Net: the glow comes and goes on this cycle, ms; the first `glowMs` of it glows. */
+  /** Snorkel: the glow comes and goes on this cycle, ms; the first `glowMs` of it glows. */
   netCycleMs: 1600, // TUNE
   netGlowMs: 650, // TUNE
   /** Lantern: the light's radius as a share of the cave's width, and the glint's reach. */
