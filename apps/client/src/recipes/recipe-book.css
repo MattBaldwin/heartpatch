@@ -924,6 +924,27 @@
   color: #4a3150;
 }
 
+/* On a phone the strip is just its head ("3 of 4 going"), so the page keeps
+   its height; the Bag's strip and the Home card show each batch. */
+@media (max-width: 599px) {
+  .rbook-factory .factory-mini {
+    display: none;
+  }
+
+  /* A phone page scrolls: a soft fade at its foot says there's more below,
+     so the text never looks cut off. It takes its own room at the end. */
+  .rbook-page::after {
+    content: '';
+    position: sticky;
+    bottom: -12px; /* past the page's bottom padding, to its very edge */
+    flex: none;
+    height: 28px;
+    margin: 0 -18px -12px -24px;
+    background: linear-gradient(rgb(255 248 236 / 0%), #fff8ec 85%);
+    pointer-events: none;
+  }
+}
+
 .rbook-factory-pick {
   display: block;
   text-align: left;

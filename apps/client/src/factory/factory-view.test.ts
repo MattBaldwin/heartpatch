@@ -13,6 +13,7 @@ import {
   goingCount,
   hasRoom,
   lengthText,
+  manyOf,
   nextLevelRoom,
   pickRows,
   showsWelcomeBack,
@@ -100,12 +101,20 @@ describe('the Factory panel words (#294)', () => {
     expect(lengthText(90 * 60)).toBe('1h 30m');
   });
 
+  it('says lots of a thing the way a kid would', () => {
+    expect(manyOf('Shovel', 3)).toBe('Shovels');
+    expect(manyOf('Shovel', 1)).toBe('Shovel');
+    expect(manyOf('Cooked Treats', 3)).toBe('Cooked Treats');
+    expect(manyOf('Frozen Water', 3)).toBe('Frozen Water');
+    expect(FACTORY_TEXT.stopKeep(3, 'Shovel')).toBe('You keep the 3 Shovels already made.');
+  });
+
   it('previews a stop: what is kept and everything else back, the one in progress too', () => {
     const preview = stopPreview(batch(), T0 + 4.5 * 60_000);
     expect(preview.kept).toBe(4);
     expect(preview.refund).toEqual({ timber: 12, treats: 6 });
     expect(preview.lines).toEqual([
-      '💗 You keep the 4 Heart Charm already made.',
+      '💗 You keep the 4 Heart Charms already made.',
       "↩️ 6 aren't finished yet (the one being made too). You get back 12 🪵 Timber, 6 🍪 Treats.",
     ]);
   });
