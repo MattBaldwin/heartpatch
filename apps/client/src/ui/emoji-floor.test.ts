@@ -157,7 +157,10 @@ function newerEmoji(text: string): TooNew[] {
 }
 
 function hex(emoji: string): string {
-  return [...emoji].map((c) => `U+${(c.codePointAt(0) ?? 0).toString(16).toUpperCase()}`).join(' ');
+  // Code points on purpose: a sequence reads as its parts.
+  return Array.from(emoji, (c) => `U+${(c.codePointAt(0) ?? 0).toString(16).toUpperCase()}`).join(
+    ' ',
+  );
 }
 
 /** Each offender as "file:line: 🪏 U+1FA8F is Emoji 16 (…the line…)". */
