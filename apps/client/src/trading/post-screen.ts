@@ -901,13 +901,14 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     const picked = myMeter();
     return [
       ...offers,
+      // The note first, in one row, so it shows whole before any scroll (owner, #305).
+      notes(),
       el(
         'div',
         { class: 'post-split' },
         column('mine', 'post-give', TRADE_TEXT.nothingToGive),
         column('theirs', 'post-want', TRADE_TEXT.nothingTheyHave),
       ),
-      notes(),
       // Always on screen with "Send offer", both directions (#305), even before a pick.
       ...sendButton('trade', [
         offerStrip(picked.give, picked.get, picked.look, mate === null ? '' : nameOf(mate), 'mini'),
@@ -919,13 +920,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   function giftTab(view: TradesView, my: string): Node[] {
     return [
       mateRow(TRADE_TEXT.giftTo),
+      notes(),
       el(
         'div',
         { class: 'post-section' },
         el('b', { class: 'post-small' }, TRADE_TEXT.pickGift),
         column('mine', 'post-gift-pick', TRADE_TEXT.nothingToGive),
       ),
-      notes(),
       ...sendButton('gift'),
       ...offersFromMe(view, my, 'gift').map(outgoing),
     ];

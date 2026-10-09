@@ -408,9 +408,19 @@ button.post-slot {
 
 .post-notes {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
+  /* One row that slides sideways, so it never takes two rows of a phone (#305). */
+  margin: 0 -16px;
+  padding: 2px 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.post-notes > * {
+  flex: none;
 }
 
 .post-note-chip {
@@ -552,12 +562,13 @@ button.post-slot {
 
 .post-send-bar {
   position: sticky;
-  bottom: 0;
+  /* Down over the sheet's bottom padding, so nothing peeks out under it. */
+  bottom: -18px;
   z-index: 1;
   display: grid;
   gap: 6px;
   margin: 0 -16px;
-  padding: 10px 16px 8px;
+  padding: 10px 16px 26px;
   background: #fffafc;
   box-shadow: 0 -6px 12px rgb(255 250 252 / 90%);
 }
