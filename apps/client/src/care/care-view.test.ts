@@ -186,7 +186,7 @@ describe('careSheet', () => {
       value: '',
       fill: 1,
       ready: true,
-      sub: 'One more battle ✨',
+      sub: 'Evolves with its next XP ✨',
     });
     expect(careSheet(squishy({ evolving: null }), reply()).evolving).toBeNull();
     expect(evolvingBar(null)).toBeNull();
