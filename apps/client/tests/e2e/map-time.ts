@@ -31,7 +31,8 @@ const ZONES = [
 
 /**
  * The game clock now, in ms. The server's clock starts at `HP_DEV_NOW` when
- * that's set, so the config records its lead once for every worker.
+ * that's set, so the config records its lead once for every worker. (A
+ * reused local server reads `HP_DEV_NOW` from `.env` itself: export it too.)
  */
 function gameNow(): number {
   return Date.now() + Number(process.env['HP_E2E_CLOCK_LEAD_MS'] ?? '0');
@@ -50,8 +51,8 @@ function localMinute(at: number, timeZone: string): number {
   return part('hour') * 60 + part('minute');
 }
 
-/** The zone whose map time is in `[from, to)` now, with the most of it left. */
-function zoneWithin(from: number, to: number): string {
+/** The zone whose map time is in `[from, to)` now, with the most of it left (null: none). */
+function zoneWithin(from: number, to: number): string | null {
   const at = gameNow();
   let best: { zone: string; left: number } | null = null;
   for (const zone of ZONES) {
@@ -60,8 +61,7 @@ function zoneWithin(from: number, to: number): string {
       best = { zone, left: to - minute };
     }
   }
-  if (!best) throw new Error(`No time zone has map time in [${String(from)}, ${String(to)})`);
-  return best.zone;
+  return best?.zone ?? null;
 }
 
 /**
@@ -73,8 +73,10 @@ export function pinMapTime(): string {
     const devNow = process.env['HP_DEV_NOW'];
     process.env['HP_E2E_CLOCK_LEAD_MS'] = String(devNow ? Date.parse(devNow) - Date.now() : 0);
   }
-  process.env['HP_E2E_TIME_ZONE'] ??= zoneWithin(DAY.from, DAY.to);
-  return process.env['HP_E2E_TIME_ZONE'];
+  const zone = process.env['HP_E2E_TIME_ZONE'] ?? zoneWithin(DAY.from, DAY.to);
+  if (zone === null) throw new Error('No time zone has daytime map time now');
+  process.env['HP_E2E_TIME_ZONE'] = zone;
+  return zone;
 }
 
 /** How much dusk a spec needs: a patch, a claim's showdown, two reloads. */
@@ -88,10 +90,8 @@ const DUSK_NEEDED = 10; // minutes
 export async function duskTimeZone(): Promise<string> {
   const nightfall = HOME_BASE_RULES.nightfallMinute;
   for (;;) {
-    try {
-      return zoneWithin(nightfall - DUSK_MINUTES, nightfall - DUSK_NEEDED);
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 30_000));
-    }
+    const zone = zoneWithin(nightfall - DUSK_MINUTES, nightfall - DUSK_NEEDED);
+    if (zone) return zone;
+    await new Promise((resolve) => setTimeout(resolve, 30_000));
   }
 }

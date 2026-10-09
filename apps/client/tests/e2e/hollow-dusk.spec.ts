@@ -40,6 +40,7 @@ test('at dusk, dark land gets a nudge to light a fire', async ({ browser }) => {
   const nudge = page.getByTestId('night-nudge');
   // Home alone is always safe: no nudge, even at dusk.
   await expect.poll(async () => (await hollowState(page))?.mapId).toBe(mapId);
+  await expect.poll(async () => (await hollowState(page))?.chips[0]).toMatch(/Night in \d+ min/);
   await expect(nudge).toBeHidden();
 
   // Land outside home with no fire. Claiming old forest finds a lore page,
