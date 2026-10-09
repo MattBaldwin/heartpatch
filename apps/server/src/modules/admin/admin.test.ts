@@ -13,6 +13,7 @@ import {
   CreateSignupCodeResponseSchema,
   MapResponseSchema,
   RecoveryCodeResponseSchema,
+  MAP_MAX_PLAYERS,
 } from '@heartpatch/shared';
 import cookie from '@fastify/cookie';
 import rateLimitPlugin from '@fastify/rate-limit';
@@ -477,7 +478,7 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
       id: mapId,
       owner: owner.username,
       members: 1,
-      maxPlayers: 4,
+      maxPlayers: MAP_MAX_PLAYERS,
       pendingRequests: 1,
       kind: 'multiplayer',
     });
@@ -489,7 +490,7 @@ describe.skipIf(!url)('admin console (needs DATABASE_URL)', () => {
     expect(detail.requests.map((r) => r.username)).toEqual([waiting.username]);
     expect(detail.invite).not.toBeNull();
     // A new patch is made with its trading posts (#269).
-    expect(detail.patch.tradingPosts).toBe(4);
+    expect(detail.patch.tradingPosts).toBe(MAP_MAX_PLAYERS); // one per seat on a new patch (#318)
     // The invite code itself isn't on the page.
     expect(JSON.stringify(detail)).not.toMatch(/"code"/);
 

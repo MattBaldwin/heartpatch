@@ -69,7 +69,9 @@ export function placeTradingPosts(input: PostPlacementInput): Hex[] | null {
       return nearest >= rules.minFromSeed && nearest <= rules.maxFromSeed;
     })
     .sort((a, b) => a.q - b.q || a.r - b.r);
-  if (homes.length === 0 || homes.length > rules.perMap || candidates.length < rules.perMap) {
+  // One post for each home at least (#318): six on a 6-seat map, `perMap` on smaller ones.
+  const count = Math.max(rules.perMap, homes.length);
+  if (homes.length === 0 || candidates.length < count) {
     return null;
   }
   const rng = Rng.fromSeed(deriveSeed(input.seed, 'trading-posts'));
@@ -77,7 +79,7 @@ export function placeTradingPosts(input: PostPlacementInput): Hex[] | null {
   if (seats === null) return null;
   const chosen = [...seats.posts];
   const nearest = homes.map((h) => Math.min(...chosen.map((p) => hexDistance(h, p))));
-  while (chosen.length < rules.perMap) {
+  while (chosen.length < count) {
     let pick: Hex | null = null;
     let pickApart = -1;
     for (const c of candidates) {
@@ -93,6 +95,62 @@ export function placeTradingPosts(input: PostPlacementInput): Hex[] | null {
     chosen.push(pick);
   }
   return chosen.map((h) => ({ q: h.q, r: h.r })).sort((a, b) => a.q - b.q || a.r - b.r);
+}
+
+/** Turns a tile a sixth of the way round the map's centre (axial coordinates). */
+function turnSixth(h: Hex): Hex {
+  return { q: -h.r, r: h.q + h.r };
+}
+
+/**
+ * True when turning the map a sixth of the way round puts every home on
+ * another home: six homes evenly spaced on one ring, as on a 6-seat map (#318).
+ */
+function sixFold(homes: readonly Hex[]): boolean {
+  if (homes.length !== 6) return false;
+  const keys = new Set(homes.map(hexKey));
+  return homes.every((h) => keys.has(hexKey(turnSixth(h))));
+}
+
+/**
+ * Step 1 for six homes that are turns of each other (#318): only layouts
+ * that are turns of one post too. Every home gets the same post, turned, so
+ * it's fair by construction, and the search is one candidate wide instead of
+ * one per home (a six-way search over every combination takes about 15 times
+ * as long as the rest of the map). Null when no such layout fits at `d`.
+ */
+function sixFoldPosts(
+  candidates: readonly Hex[],
+  homes: readonly Hex[],
+  options: readonly Hex[],
+  d: number,
+  slack: number,
+  rules: TradingPostRules,
+): Hex[][] {
+  const free = new Set(candidates.map(hexKey));
+  let bestApart = -1;
+  let best: Hex[][] = [];
+  for (const first of options) {
+    const posts = [first];
+    while (posts.length < 6) posts.push(turnSixth(posts[posts.length - 1] as Hex));
+    if (!posts.every((p) => free.has(hexKey(p)))) continue;
+    let apart = Infinity;
+    for (const [i, a] of posts.entries()) {
+      for (const b of posts.slice(i + 1)) apart = Math.min(apart, hexDistance(a, b));
+    }
+    if (apart < rules.minApart || apart < bestApart) continue;
+    const fair = homes.every((h) => {
+      const near = Math.min(...posts.map((p) => hexDistance(h, p)));
+      return near >= d && near <= d + slack;
+    });
+    if (!fair) continue;
+    if (apart > bestApart) {
+      bestApart = apart;
+      best = [];
+    }
+    best.push(posts);
+  }
+  return best;
 }
 
 /** Step 1 of `placeTradingPosts`: one post per home, all equally near. */
@@ -112,6 +170,11 @@ function firstPosts(
         }),
       );
       if (options.some((o) => o.length === 0)) continue;
+      if (sixFold(homes)) {
+        // Turning home 0's options covers every home's.
+        const turned = sixFoldPosts(candidates, homes, options[0] as Hex[], d, slack, rules);
+        if (turned.length > 0) return { posts: rng.pick(turned) };
+      }
       let bestApart = -1;
       let best: Hex[][] = [];
       const picked: Hex[] = [];

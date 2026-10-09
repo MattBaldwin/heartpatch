@@ -7,7 +7,7 @@ import { ContentIdSchema } from './common.js';
  */
 export const MapLayoutSchema = z
   .strictObject({
-    players: z.number().int().min(2).max(4),
+    players: z.number().int().min(2).max(6),
     /** Hex radius: the map holds 1 + 3 × radius × (radius + 1) tiles. */
     radius: z.number().int().min(1).max(50),
     /** Steps from the centre to every Heart Seed tile. */
@@ -47,7 +47,7 @@ export type GuardianStrength = z.infer<typeof GuardianStrengthSchema>;
  */
 export const TradingPostRulesSchema = z
   .strictObject({
-    /** Posts on every patch map. */
+    /** Posts on every patch map; a map with more homes gets one per home (#318). */
     perMap: z.number().int().min(1).max(8),
     /** Every home slot has a post at most this many steps from its Heart Seed. */
     maxFromSeed: z.number().int().min(2),

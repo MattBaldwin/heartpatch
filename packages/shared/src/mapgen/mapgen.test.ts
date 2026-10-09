@@ -14,9 +14,15 @@ import {
 } from './index.js';
 
 const { mapGen } = GAME_DATA;
-const PLAYER_COUNTS = [2, 3, 4] as const;
+const PLAYER_COUNTS = [2, 3, 4, 6] as const;
 const SEEDS = Array.from({ length: 60 }, (_, i) => `test-map-${i}`);
 const center = hex(0, 0);
+/**
+ * How many more nodes within 4 steps (of about 60 tiles) the luckiest
+ * 6-seat home may have over the unluckiest than on a 4-seat map. Six homes
+ * are more chances for one to be lucky, so a little more.
+ */
+const SIX_SEAT_SPREAD_SLACK = 5;
 
 const generate = (seed: string, playerCount: number, data: MapGenData = GAME_DATA) =>
   generateMap(data, { seed, playerCount });
@@ -138,7 +144,8 @@ describe('generateMap: size and shape', () => {
     expect(generate('size', 2).tiles).toHaveLength(271);
     expect(generate('size', 3).tiles).toHaveLength(397);
     expect(generate('size', 4).tiles).toHaveLength(469);
-    expect(PLAYER_COUNTS.map((n) => mapLayout(GAME_DATA, n).radius)).toEqual([9, 11, 12]);
+    expect(generate('size', 6).tiles).toHaveLength(817); // #318
+    expect(PLAYER_COUNTS.map((n) => mapLayout(GAME_DATA, n).radius)).toEqual([9, 11, 12, 16]);
   });
 
   it('covers every hex in the radius exactly once, in spiral order', () => {
@@ -220,6 +227,49 @@ describe('generateMap: home bases', () => {
       const shares = homeShares(map.homes, map.tiles);
       expect(new Set(shares).size).toBe(1);
     }
+  });
+
+  it('spaces six homes a sixth of the way round, 10 apart, each with a fair start (#318)', () => {
+    for (const seed of SEEDS.slice(0, 20)) {
+      const map = generate(seed, 6);
+      // Neighbours are as far apart as on a 4-seat map, and the layout turns onto itself.
+      const keys = new Set(map.homes.map(hexKey));
+      for (const home of map.homes) {
+        expect(hexDistance(home, center)).toBe(10);
+        const near = map.homes.filter((h) => h !== home).map((h) => hexDistance(home, h));
+        expect(Math.min(...near)).toBe(10);
+        expect(keys.has(hexKey({ q: -home.r, r: home.q + home.r }))).toBe(true);
+      }
+      // The same guardian strengths around every home: strength only counts steps.
+      const strengths = map.homes.map((home) =>
+        map.tiles
+          .filter((t) => t.guardianStrength !== null && hexDistance(t, home) <= 5)
+          .map((t) => t.guardianStrength!)
+          .sort()
+          .join(),
+      );
+      expect(new Set(strengths).size).toBe(1);
+    }
+  });
+
+  it('shares resource nodes between six homes as fairly as between four (#318)', () => {
+    // Patchy terrain gives some homes more nodes nearby than others (the home
+    // ring's guaranteed nodes cover the basics); six seats mustn't make it worse.
+    const spreads = (n: number) =>
+      SEEDS.map((seed) => {
+        const map = generate(seed, n);
+        const nodes = map.homes.map(
+          (home) =>
+            map.tiles.filter(
+              (t) => t.homeSlot === null && t.nodeResource !== null && hexDistance(t, home) <= 4,
+            ).length,
+        );
+        return Math.max(...nodes) - Math.min(...nodes);
+      }).sort((x, y) => x - y);
+    const [four, six] = [spreads(4), spreads(6)];
+    const median = (xs: number[]) => xs[xs.length >> 1]!;
+    expect(median(six)).toBeLessThanOrEqual(median(four) + SIX_SEAT_SPREAD_SLACK);
+    expect(six.at(-1)!).toBeLessThanOrEqual(four.at(-1)! + SIX_SEAT_SPREAD_SLACK);
   });
 
   it('turns the home layout between maps', () => {

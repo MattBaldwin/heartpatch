@@ -90,7 +90,7 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
-  await expect.poll(async () => (await mapState(page))?.tiles, { timeout: 30_000 }).toBe(469);
+  await expect.poll(async () => (await mapState(page))?.tiles, { timeout: 30_000 }).toBe(817); // a new 6-seat patch (#318)
 
   // Stuff to build with, and a squishy friend (dev tools; spawns are #14).
   await (await trayButton(page, 'bag-open')).tap();

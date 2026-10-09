@@ -17,7 +17,7 @@ import {
 
 /**
  * Trading posts on an iPhone (issue #269, mockup screen a): a new patch has
- * its 4 posts, a flag shows over each one in view saying how far it is, and
+ * its posts (one per seat), a flag shows over each one in view saying how far it is, and
  * tapping one opens its tile panel: its name, that it's everyone's, how far it
  * is from my land, with nothing to claim. A post my land reaches has "Visit
  * post", which opens its Trade, Gift and Mailbox tabs (#271). Checked through

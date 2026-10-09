@@ -12,9 +12,12 @@ import { WsSeqSchema } from './ws.js';
 // Map (patch) API schemas (design doc §3, §11; tech spec §5). Players call a
 // map a "patch" in the UI (style guide). Messages are kid-readable.
 
-/** Players per map (design doc §3). The map is generated for this many. */
+/**
+ * Players per map (design doc §3). A new map is generated for this many
+ * (#318: 6). Older maps keep the seats they were made with (`maxPlayers`).
+ */
 export const MAP_MIN_PLAYERS = 2;
-export const MAP_MAX_PLAYERS = 4;
+export const MAP_MAX_PLAYERS = 6;
 
 export const MAP_NAME_MIN_LENGTH = 2; // TUNE: guess
 export const MAP_NAME_MAX_LENGTH = 24; // TUNE: fits a lobby card on a phone

@@ -16,6 +16,7 @@ import {
   type PlayerBattle,
   type PlayerBattleAction,
   type PublicUser,
+  MAP_MAX_PLAYERS,
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -199,7 +200,8 @@ describe.skipIf(!url)('journeys to trading posts (#270, needs DATABASE_URL)', ()
 
     // The map view says how the kid reaches each post (#270's `MapView.posts`).
     const view = await viewOf(server, kid, mapId);
-    expect(view.posts).toHaveLength(4);
+    // One per home on a new 6-seat patch (#318).
+    expect(view.posts).toHaveLength(MAP_MAX_PLAYERS);
     expect(view.posts!.find((p) => p.q === post.q && p.r === post.r)).toMatchObject({
       reach: 'journey',
       distance,

@@ -74,15 +74,15 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
   await visitPatch(ownerLobby);
   await expect(ownerLobby).toBeHidden();
 
-  // The full 4-player map: 469 tiles in a handful of instanced meshes, the
-  // owner's home ring tinted, one claimed home base of four.
+  // The full 6-seat map (#318): 817 tiles in a handful of instanced meshes,
+  // the owner's home ring tinted, one claimed home base of six.
   await expect
     .poll(() => mapState(owner), { timeout: 30_000 })
     .toMatchObject({
-      tiles: 469,
+      tiles: 817,
       tinted: 7,
       borderMeshes: 1,
-      homes: 4,
+      homes: 6,
       claimedHomes: 1,
       selected: null,
     });
@@ -127,7 +127,7 @@ test('draws a patch, shows tile info on tap, and follows land changes live', asy
   await openPatch(friend, 'Moonlit Patch');
   await expect
     .poll(() => mapState(friend), { timeout: 30_000 })
-    .toMatchObject({ tiles: 469, tinted: 14, borderMeshes: 2, claimedHomes: 2 });
+    .toMatchObject({ tiles: 817, tinted: 14, borderMeshes: 2, claimedHomes: 2 });
 
   // The legend (#278): the name pill opens a card saying whose land is
   // whose, by colour, icon and line; a tap on the map closes it.
@@ -189,8 +189,8 @@ test('dresses the land, mutes wild land, and keeps ambient life calm', async ({ 
   const drawn = (await mapState(page))!;
   expect(drawn.props).toBeGreaterThan(1000);
   expect(drawn.propKinds).toBeGreaterThanOrEqual(18);
-  expect(drawn.mutedTiles).toBeGreaterThan(400);
-  expect(drawn.mutedTiles).toBeLessThan(469 - 7);
+  expect(drawn.mutedTiles).toBeGreaterThan(700);
+  expect(drawn.mutedTiles).toBeLessThan(817 - 7);
 
   // Ambient life runs (or switched itself off on a renderer too slow for it,
   // as CI's software one can be)...

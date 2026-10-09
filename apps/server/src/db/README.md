@@ -172,7 +172,7 @@ Family signup codes (migration 0026, #195).
 | `name` | text | |
 | `time_zone` | text | IANA zone, for nightfall and daily jobs |
 | `event_seq` | bigint, default 0 | Last allocated `game_events.seq`; see below |
-| `max_players` | smallint, default 4 | Seats; the map is generated with this many home slots. Checked 1–4 |
+| `max_players` | smallint, default 6 | Seats; the map is generated with this many home slots. Checked 1–6 (#318; older patches keep 4) |
 | `pvp_mode` | enum `pvp_mode`, default `gentle` | `on` \| `gentle` \| `off` (design doc §11, decision B); the owner changes it |
 | `seed` | text, null | Map generator seed (`crypto.randomBytes`). **Server-only**: never in a response schema (tech spec §8). Null for hand-authored maps |
 | `created_at` | timestamptz | |

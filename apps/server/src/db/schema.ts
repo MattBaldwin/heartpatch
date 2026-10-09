@@ -309,7 +309,7 @@ export const maps = pgTable(
     // Last allocated game_events.seq for this map; see game-events.ts.
     eventSeq: bigint('event_seq', { mode: 'number' }).notNull().default(0),
     // Seats (design doc §3). The map is generated with this many home slots.
-    maxPlayers: smallint('max_players').notNull().default(4),
+    maxPlayers: smallint('max_players').notNull().default(6),
     // Who may challenge whom (design doc §11); the owner changes it.
     pvpMode: pvpMode('pvp_mode').notNull().default('gentle'),
     // Map generator seed (crypto.randomBytes). Server-only: it predicts every
@@ -325,7 +325,7 @@ export const maps = pgTable(
   },
   (t) => [
     check('maps_event_seq_nonnegative', sql`${t.eventSeq} >= 0`),
-    check('maps_max_players_range', sql`${t.maxPlayers} between 1 and 4`),
+    check('maps_max_players_range', sql`${t.maxPlayers} between 1 and 6`),
     check('maps_hollow_strength_range', sql`${t.hollowStrengthPercent} between 0 and 300`),
   ],
 );

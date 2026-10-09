@@ -11,7 +11,7 @@ import {
 } from './index.js';
 
 const rules = GAME_DATA.mapGen.tradingPosts;
-const PLAYER_COUNTS = [2, 3, 4] as const;
+const PLAYER_COUNTS = [2, 3, 4, 6] as const;
 const SEEDS = Array.from({ length: 200 }, (_, i) => `posts-${i}`);
 
 const postsOf = (tiles: readonly { q: number; r: number; terrain: string }[]) =>
@@ -29,6 +29,7 @@ describe('trading posts at mapgen (#269)', () => {
       '-1,-2 -6,8 9,-4 -9,4',
       '-7,0 8,2 2,-10 -10,8',
       '4,7 11,-9 -4,-7 -11,8',
+      '-3,13 10,3 13,-10 3,-13 -10,-3 -13,10',
     ]);
   });
 
@@ -39,7 +40,8 @@ describe('trading posts at mapgen (#269)', () => {
       for (const seed of SEEDS) {
         const map = generateMap(GAME_DATA, { seed, playerCount: n });
         const posts = postsOf(map.tiles);
-        expect(posts).toHaveLength(rules.perMap);
+        // One per home on a 6-seat map (#318).
+        expect(posts).toHaveLength(Math.max(rules.perMap, n));
         for (const p of posts) {
           const fromSeeds = map.homes.map((h) => hexDistance(h, p));
           // Near some home, never touching one, never in the Gap or off the map.

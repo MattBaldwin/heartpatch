@@ -629,7 +629,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
   });
 
   describe('seats', () => {
-    it('never lets a 5th player in (acceptance)', async () => {
+    it('never lets in more Keepers than the patch has seats (acceptance)', async () => {
       const server = await start();
       const { owner, map } = await mapWith(server, MAP_MAX_PLAYERS - 1);
       const fifth = await player();
@@ -647,6 +647,43 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(errorOf(late).message).toMatch(/full/);
       expect((await getMap(server, map2.id, owner2)).members).toHaveLength(MAP_MAX_PLAYERS);
       expect((await getMap(server, map.id, owner)).members).toHaveLength(MAP_MAX_PLAYERS);
+    });
+
+    it('gives the 5th and 6th Keepers homes 5 and 6 on a new patch (#318)', async () => {
+      const server = await start();
+      expect(MAP_MAX_PLAYERS).toBe(6);
+      const { owner, map, members } = await mapWith(server, 5);
+      const seats = (await getMap(server, map.id, owner)).members;
+      expect(seats.map((m) => m.homeSlot).sort()).toEqual([0, 1, 2, 3, 4, 5]);
+      const tiles = await tilesOf(map.id);
+      for (const [i, p] of members.entries()) {
+        const slot = i + 1;
+        expect(seats.find((m) => m.user.id === p.id)?.homeSlot).toBe(slot);
+        const owned = tiles.filter((t) => t.ownerUserId === p.id);
+        expect(owned).toHaveLength(7);
+        expect(owned.every((t) => t.homeSlot === slot)).toBe(true);
+      }
+    });
+
+    it('keeps an older 4-seat patch at 4, saying so to a 5th (#318)', async () => {
+      const server = await start();
+      const owner = await player();
+      const map = await createMap(server, owner);
+      // As a patch made before #318: 4 seats, so only 4 home slots.
+      await db.execute(`update maps set max_players = 4 where id = '${map.id}'`);
+      await db.execute(
+        `update tiles set home_slot = null where map_id = '${map.id}' and home_slot >= 4`,
+      );
+      for (let i = 0; i < 3; i++) {
+        const request = await requestJoin(server, await player(), inviteOf(map));
+        expect((await approve(server, owner, map.id, request.id)).statusCode).toBe(204);
+      }
+      const fifth = await call(server, 'POST', '/maps/join', await player(), {
+        code: inviteOf(map),
+      });
+      expect(fifth.statusCode).toBe(409);
+      expect(errorOf(fifth).message).toBe('This patch is full! It fits 4 Keepers.');
+      expect((await getMap(server, map.id, owner)).members).toHaveLength(4);
     });
 
     it('lets only one of two racing approvals take the last seat', async () => {
