@@ -1,14 +1,20 @@
 import {
   CLOTHING_BY_ID,
   GAME_DATA,
+  heartsOf,
   quickMessageById,
   TRADE_RULES,
+  TRADE_VALUES,
+  tradeBalance,
+  tradeValuer,
+  type TradeTip,
   type MailboxEntry,
   type SendOfferRequest,
   type TradeKind,
   type TradeLine,
   type TradeLineView,
   type TradeOfferView,
+  type TradeShelf,
   type TradesView,
   type WsEventMessage,
 } from '@heartpatch/shared';
@@ -53,8 +59,6 @@ export const TRADE_TEXT = {
   tradeWith: 'Trade with',
   giftTo: 'Gift to',
   noMates: 'No patch-mates yet. Invite a friend to trade with!',
-  youGive: 'You give',
-  youWant: 'You’d like',
   pickGift: 'Pick a gift',
   nothingToGive: 'Nothing ready to trade right now.',
   nothingTheyHave: 'They have nothing ready to trade right now.',
@@ -64,8 +68,6 @@ export const TRADE_TEXT = {
   waitsSafely: (name: string) => `Your things wait safely at the post until ${name} answers.`,
   giftWaits: (name: string) => `${name} picks it up at any trading post.`,
   wantsToTrade: (name: string) => `${name} wants to trade!`,
-  youGet: 'you get',
-  theyGet: (name: string) => `${name} gets`,
   sayYes: 'Say yes! 🤝',
   noThanks: 'No thanks',
   waitingFor: (name: string) => `Waiting for ${name} to answer`,
@@ -91,6 +93,39 @@ export const TRADE_TEXT = {
   pickOne: 'Pick something to give!',
   tooMany: `That’s a lot! Up to ${String(TRADE_RULES.linesPerSide)} things on each side.`,
   tooManySquishies: `Up to ${String(TRADE_RULES.squishiesPerSide)} squishies on each side.`,
+  // The split view (#305): whose things are whose, per-side filter and sort.
+  yourThings: 'Your things',
+  theirThings: 'Their things',
+  otherMate: 'Trade with someone else',
+  makeOffer: 'Make an offer ✏️',
+  filters: {
+    all: 'All',
+    squishies: 'Squishies',
+    items: 'Items',
+    clothing: 'Clothing',
+  } satisfies Record<ShelfFilter, string>,
+  sorts: { name: 'A–Z', rarity: 'Rarest', newest: 'Newest' } satisfies Record<ShelfSort, string>,
+  show: 'Show',
+  sortBy: 'Sort by',
+  nothingHere: 'Nothing like that here.',
+  // The offer strip and the fairness meter (#305).
+  stripGive: 'You give',
+  stripGet: 'You get',
+  tapYours: 'Tap your things',
+  tapTheirs: (name: string) => `Tap ${name}’s things`,
+  hearts: (n: number) => `${String(n)} of 5 hearts`,
+  pickSides: 'Pick something on each side!',
+  fair: 'Fair trade! 💛',
+  tipsMe: 'Tips toward you',
+  tipsThem: (name: string) => `Tips toward ${name}`,
+  wayMoreMe: 'Way more for you',
+  wayMoreThem: (name: string) => `Way more for ${name}`,
+  askMore: 'Want to ask for more?',
+  addMore: (name: string) => `Add something for ${name}?`,
+  askMoreButton: 'Ask for more',
+  addMoreButton: 'Add from mine',
+  kindGive: 'That’s kind! Just check you’re happy.',
+  kindGet: 'What a kind offer!',
 } as const;
 
 /** How a line looks: a little picture, its name, and a small line under it. */
@@ -295,4 +330,147 @@ export function tradeEventForMe(event: WsEventMessage, me: string): boolean {
   if (!TRADE_EVENTS.has(event.type)) return false;
   const data = event.data as Partial<Record<'fromUserId' | 'toUserId' | 'userId', unknown>>;
   return data.fromUserId === me || data.toUserId === me || data.userId === me;
+}
+
+// ---- the split view (#305) ------------------------------------------------
+
+export type ShelfFilter = 'all' | 'squishies' | 'items' | 'clothing';
+export const SHELF_FILTERS: readonly ShelfFilter[] = ['all', 'squishies', 'items', 'clothing'];
+export type ShelfSort = 'name' | 'rarity' | 'newest';
+export const SHELF_SORTS: readonly ShelfSort[] = ['name', 'rarity', 'newest'];
+
+/** One of a thing, so "Rarest" ranks a stack by what each one is worth. */
+const oneOf = (line: TradeLineView): TradeLineView =>
+  line.kind === 'item' ? { ...line, quantity: 1 } : line;
+
+/** Squishies and clothing pieces have time-ordered ids (UUIDv7): the biggest is the newest found. */
+const foundAt = (line: TradeLineView): string | null =>
+  line.kind === 'squishy' ? line.squishyId : line.kind === 'clothing' ? line.clothingId : null;
+
+/**
+ * What one side's shelf shows, filtered and sorted (#305; kept per side while
+ * the screen is open). Client-only: the shelf already holds everything that
+ * can trade. "Rarest" ranks by what one of each is worth, "Newest" puts the
+ * latest squishies and pieces first (items have no date, so they come last,
+ * A–Z), and ties go A–Z.
+ */
+export function shelfLines(
+  shelf: TradeShelf,
+  filter: ShelfFilter,
+  sort: ShelfSort,
+): TradeLineView[] {
+  const lines: TradeLineView[] =
+    filter === 'squishies'
+      ? [...shelf.squishies]
+      : filter === 'items'
+        ? [...shelf.items]
+        : filter === 'clothing'
+          ? [...shelf.clothing]
+          : [...shelf.squishies, ...shelf.items, ...shelf.clothing];
+  const byName = (a: TradeLineView, b: TradeLineView) =>
+    lineLook(a).name.localeCompare(lineLook(b).name);
+  const order = (a: TradeLineView, b: TradeLineView): number => {
+    if (sort === 'rarity') {
+      const worth = tradeValuer.lineValue(oneOf(b)) - tradeValuer.lineValue(oneOf(a));
+      if (worth !== 0) return worth;
+    } else if (sort === 'newest') {
+      const at = foundAt(a);
+      const bt = foundAt(b);
+      if (at !== bt) {
+        if (at === null) return 1;
+        if (bt === null) return -1;
+        return at < bt ? 1 : -1;
+      }
+    }
+    return byName(a, b);
+  };
+  return lines.sort(order);
+}
+
+/** My picks as the shelf shows them (with the picked count for an item), to value and draw. */
+export function pickedViews(
+  picks: readonly TradeLine[],
+  shelf: TradeShelf | undefined,
+): TradeLineView[] {
+  if (!shelf) return [];
+  const all: TradeLineView[] = [...shelf.squishies, ...shelf.items, ...shelf.clothing];
+  return picks.flatMap((pick) => {
+    const line = all.find((l) => lineKey(l) === lineKey(pick));
+    if (!line) return [];
+    return [
+      line.kind === 'item' && pick.kind === 'item' ? { ...line, quantity: pick.quantity } : line,
+    ];
+  });
+}
+
+/** The nudge's shortcut on a lopsided offer: toward their shelf, or mine. */
+export type NudgeAction = 'ask' | 'add';
+
+/** How the fairness meter looks (#305). Hearts only, never numbers. */
+export interface MeterLook {
+  readonly giveHearts: number;
+  readonly getHearts: number;
+  readonly tip: TradeTip;
+  readonly lopsided: boolean;
+  /** "Fair trade! 💛", "Tips toward you", … */
+  readonly label: string;
+  /** The friendly second line on a lopsided offer, or null. */
+  readonly sub: string | null;
+  /** The sender's shortcut on a lopsided offer, or null. Never blocks sending. */
+  readonly nudge: NudgeAction | null;
+  /** Where the heart sits, 0 (my end) to 100 (theirs); null until both sides have something. */
+  readonly marker: number | null;
+  /** The even band's half-width around the middle, in the same units. */
+  readonly fairHalf: number;
+}
+
+/**
+ * The meter for what I give against what I get. `sender` while I build an
+ * offer (a lopsided one gets a shortcut), `receiver` on an offer to me (a
+ * calm note, no button). The heart slides toward whoever gets more.
+ */
+export function meterLook(
+  give: readonly TradeLineView[],
+  get: readonly TradeLineView[],
+  mateName: string,
+  role: 'sender' | 'receiver',
+): MeterLook {
+  const giveValue = tradeValuer.sideValue(give);
+  const getValue = tradeValuer.sideValue(get);
+  const { tip, lopsided } = tradeBalance(giveValue, getValue);
+  // Toward my end (0) as I get more; the even band maps onto the middle.
+  const lean = tip === 'none' ? 0 : (getValue - giveValue) / (getValue + giveValue);
+  const band = TRADE_VALUES.evenBand / (2 - TRADE_VALUES.evenBand);
+  const label =
+    tip === 'none'
+      ? TRADE_TEXT.pickSides
+      : tip === 'even'
+        ? TRADE_TEXT.fair
+        : tip === 'me'
+          ? lopsided
+            ? TRADE_TEXT.wayMoreMe
+            : TRADE_TEXT.tipsMe
+          : lopsided
+            ? TRADE_TEXT.wayMoreThem(mateName)
+            : TRADE_TEXT.tipsThem(mateName);
+  const sub = !lopsided
+    ? null
+    : role === 'receiver'
+      ? tip === 'them'
+        ? TRADE_TEXT.kindGive
+        : TRADE_TEXT.kindGet
+      : tip === 'them'
+        ? TRADE_TEXT.askMore
+        : TRADE_TEXT.addMore(mateName);
+  return {
+    giveHearts: heartsOf(giveValue),
+    getHearts: heartsOf(getValue),
+    tip,
+    lopsided,
+    label,
+    sub,
+    nudge: role === 'sender' && lopsided ? (tip === 'them' ? 'ask' : 'add') : null,
+    marker: tip === 'none' ? null : Math.min(96, Math.max(4, 50 - 50 * lean)),
+    fairHalf: 50 * band,
+  };
 }
