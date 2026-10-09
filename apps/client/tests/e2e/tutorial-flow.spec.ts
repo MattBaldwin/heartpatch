@@ -428,6 +428,13 @@ async function playTutorial(page: Page): Promise<void> {
   // tap, after a reload too.
   const lore = page.getByTestId('lore-card');
   const okay = page.getByTestId('hollow-report-ok');
+  /** Taps through the card's pages (the Glade finds two by now, #307) until it's gone. */
+  const closeLore = async () => {
+    for (let i = 0; i < 3 && (await lore.isVisible()); i += 1) {
+      await tapOn(lore.getByTestId('lore-close'));
+    }
+    await expect(lore).toBeHidden();
+  };
   await expect
     .poll(async () => (await lore.isVisible()) || (await okay.isVisible()), { timeout: 20_000 })
     .toBe(true);
@@ -437,8 +444,7 @@ async function playTutorial(page: Page): Promise<void> {
     loreSeen = true;
     expect((await hook<HollowDebug>(page, 'hollow'))?.report).toEqual([]);
     await expectNoTrap(page);
-    await tapOn(lore.getByTestId('lore-close'));
-    await expect(lore).toBeHidden();
+    await closeLore();
   }
   await expect(okay).toBeVisible({ timeout: 20_000 });
   await expect(lore).toBeHidden();
@@ -454,8 +460,7 @@ async function playTutorial(page: Page): Promise<void> {
   if (await lore.isVisible()) {
     loreSeen = true;
     await expectNoTrap(page);
-    await tapOn(lore.getByTestId('lore-close'));
-    await expect(lore).toBeHidden();
+    await closeLore();
   }
   await expect(okay).toBeVisible({ timeout: 20_000 });
   await expect.poll(async () => (await overlay(page))?.held, slow).toBe(true);
@@ -478,8 +483,7 @@ async function playTutorial(page: Page): Promise<void> {
     // The page waited its turn behind the report; now it comes.
     await expect(lore).toBeVisible({ timeout: 20_000 });
     await expect.poll(async () => (await overlay(page))?.held, slow).toBe(true);
-    await tapOn(lore.getByTestId('lore-close'));
-    await expect(lore).toBeHidden();
+    await closeLore();
   }
   // With the report gone, Sprout points at the Adventure handle again.
   await expect.poll(async () => (await overlay(page))?.gate).toBe('spotlight');

@@ -29,6 +29,7 @@ import { buildTestScene } from './scenes/test-scene.js';
 import { createCinematicScreen } from './cinematics/cinematic-screen.js';
 import { mountAccount } from './ui/account/account-screen.js';
 import { mountAuth } from './ui/auth/auth-overlay.js';
+import { createLoreBagEntry } from './lore/bag-entry.js';
 import { createLorebook } from './lore/lorebook.js';
 import { createMilestoneCelebration } from './milestones/milestone-celebration.js';
 import { createKeeperScreen, KEEPER_TEXT } from './ui/keeper/keeper-screen.js';
@@ -166,6 +167,11 @@ let battleMapId: string | null = null;
 
 // The bag and gathering (#17): a Bag entry in the My Home tray, and the
 // gather buttons in the tile chip.
+// The Lorebook's tile at the top of the Bag and the Bag's sparkle (#307);
+// the book itself (`lorebook`) is made below.
+const loreBag = createLoreBagEntry(() => {
+  lorebook.open();
+});
 const inventory = createInventoryScreen({
   root: document.body,
   entryRoot: trays.slot('heartpatch'),
@@ -179,6 +185,10 @@ const inventory = createInventoryScreen({
   // The welcome-back card's "See Factory" (#294): home, where the Factory stands.
   onSeeFactory: () => {
     void home.open();
+  },
+  lore: loreBag,
+  onBagOpen: () => {
+    lorebook.refresh();
   },
 });
 // Care (#19): one squishy's sheet (feed, pet, play, level and mood), opened
@@ -435,6 +445,7 @@ const hollow = createHollowScreen({
     raidReportOpen ||
     whatsNewOpen ||
     lorebook.debug.showing !== null ||
+    lorebook.isOpen ||
     milestones.debug.showing !== null,
   openBattle: (battle) => {
     if (!lobby.isOpen && !catalog.isOpen && !care.isOpen && !closeUp.isOpen) battles.open(battle);
@@ -563,6 +574,10 @@ const explore = createExploreScreen({
   },
   onRecipeBook: () => {
     recipeBook.open();
+  },
+  // "Open Lorebook" on a find card (#307): the book opens over exploring, at that page.
+  onLorebook: (pageId) => {
+    lorebook.open(pageId);
   },
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
@@ -735,6 +750,7 @@ const tutorial = createTutorialScreen({
 // report when it's gone.
 const lorebook = createLorebook({
   root: document.body,
+  bagEntry: loreBag,
   busy: () =>
     battles.debug !== null ||
     milestones.debug.showing !== null ||
@@ -753,6 +769,7 @@ const milestones = createMilestoneCelebration({
   busy: () =>
     battles.debug !== null ||
     lorebook.debug.showing !== null ||
+    lorebook.isOpen ||
     hollowReportOpen() ||
     whatsNewOpen ||
     (care.debug?.celebrating ?? false) ||
@@ -1100,6 +1117,7 @@ const whatsNew = createWhatsNew({
     raidReportOpen ||
     (land.debug?.welcome ?? false) ||
     lorebook.debug.showing !== null ||
+    lorebook.isOpen ||
     milestones.debug.showing !== null ||
     hollowReportOpen(),
   onChange: () => {

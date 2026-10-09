@@ -1612,6 +1612,9 @@ export const loreFound = pgTable(
     // Where it was found; the page stays when the map goes.
     mapId: uuid('map_id').references(() => maps.id, { onDelete: 'set null' }),
     foundAt: timestamptz('found_at').notNull(),
+    // When it was read in the Lorebook (#307): null while it's new, so the
+    // Bag's sparkle is the same on every device.
+    readAt: timestamptz('read_at'),
   },
   (t) => [primaryKey({ columns: [t.userId, t.pageId] })],
 );

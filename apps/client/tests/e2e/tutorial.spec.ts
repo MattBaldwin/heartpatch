@@ -299,7 +299,11 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
     .toBe(true);
   const reportFirst = await okay.isVisible();
   if (reportFirst) await dismissReport();
+  // Two pages, oldest first: planting the Heart Seed found one (#307).
   await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByTestId('lore-title')).toHaveText('Where the Squishies Bloomed');
+  await expect(card.getByTestId('lore-close')).toHaveText('Next page');
+  await card.getByTestId('lore-close').tap();
   await expect(card.getByTestId('lore-title')).toHaveText('Paw Prints by the Fire');
   await card.getByTestId('lore-close').tap();
   await expect(card).toBeHidden();

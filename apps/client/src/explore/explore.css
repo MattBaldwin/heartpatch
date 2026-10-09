@@ -357,6 +357,14 @@
   color: #6b4bb4;
 }
 
+/* Where a lore page went (#307). */
+.explore-find-note {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: #2f6b3d;
+}
+
 .explore-team {
   margin: 4px 0;
   font-weight: 700;

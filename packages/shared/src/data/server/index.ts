@@ -25,7 +25,7 @@ export * from '../../explore/finds.js';
 export { EXPLORE_FINDS } from './explore-finds.js';
 export * from '../../schemas/data/lore-pages.js';
 export * from '../../lore/index.js';
-export { LORE_PAGES } from './lore-pages.js';
+export { LORE_CHAPTERS, LORE_PAGES } from './lore-pages.js';
 export * from '../../milestones/index.js';
 export { SECRET_MILESTONES } from './secret-milestones.js';
 export { serverBattleData } from './battle-data.js';

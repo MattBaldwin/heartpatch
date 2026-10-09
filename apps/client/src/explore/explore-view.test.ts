@@ -93,6 +93,9 @@ describe('explore text', () => {
     );
     expect(lines.map((l) => l.kind)).toEqual(['item', 'lore']);
     expect(lines[0]?.text).toContain('Timber ×2');
+    // A page says where it went (#307).
+    expect(lines[1]).toMatchObject({ note: 'Added to your Lorebook 📖' });
+    expect(lines[0]?.note).toBeUndefined();
     expect(xpLines([{ squishyId: 'a', xp: 6 }], { a: 'Puddlepuff' })).toEqual(['Puddlepuff +6 XP']);
   });
 

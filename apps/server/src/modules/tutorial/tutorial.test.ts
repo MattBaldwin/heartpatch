@@ -864,11 +864,15 @@ describe.skipIf(!url)('tutorial (needs DATABASE_URL)', () => {
       await ok('POST', `/maps/${m}/defenders`, { ...claimed!, squishyIds: [helper.id] });
       expect(await step()).toBe('nightfall');
 
-      // 10. Nightfall: the Hollow Man visits and takes nothing; a lore page is found.
+      // 10. Nightfall: the Hollow Man visits and takes nothing; a lore page is
+      // found (after the one planting the Heart Seed found, #307).
       await ok('POST', '/tutorial/nightfall');
       expect(await step()).toBe('evolve');
       const book = LorebookResponseSchema.parse((await ok('GET', '/lore')).json());
-      expect(book.pages.map((p) => p.id)).toEqual(['paw-prints-by-the-fire']);
+      expect(book.pages.map((p) => p.id)).toEqual([
+        'where-the-squishies-bloomed',
+        'paw-prints-by-the-fire',
+      ]);
 
       // 11. One more battle, and the Partner evolves.
       const last = battleOf(await ok('POST', `/maps/${m}/battles`, { tile: { q: -1, r: 1 } }));

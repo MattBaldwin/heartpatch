@@ -1183,8 +1183,11 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     await db.insert(mapMembers).values({ mapId, userId: kid.id, role: 'owner' });
     const page = (id: string): LoreEntry => ({
       id,
+      chapter: 'lock-chapter',
+      order: 1,
       title: 'A Lock Page',
       text: 'Found while testing lock order.',
+      hint: 'Somewhere in a test.',
       trigger: {
         mapKinds: ['multiplayer'],
         eventType: 'squishy.rescued',

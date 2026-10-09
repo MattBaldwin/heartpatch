@@ -42,3 +42,654 @@
   font-size: 18px;
   line-height: 1.45;
 }
+
+.lore-buttons {
+  display: grid;
+  gap: 8px;
+}
+
+/* ── The Lorebook (#307): a leather book over everything, cream pages. ── */
+
+.lbook {
+  position: fixed;
+  /* Over the lore card and Sprout's layer (both 9: mounted after them). */
+  z-index: 9;
+  inset: calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 8px)
+    calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border-radius: 28px;
+  background: radial-gradient(120% 80% at 50% 0%, #5a3a5f 0, #3d2643 100%);
+  box-shadow: 0 18px 44px rgb(74 49 80 / 42%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #fff8ec;
+}
+
+.lbook[hidden],
+.lbook [hidden] {
+  display: none !important;
+}
+
+/* The book has its own ✕ where the account chip sits: the chip steps aside
+   while it's open (as for the opening story). */
+body:has(.lbook:not([hidden])) .auth-chip {
+  display: none;
+}
+
+/* A tablet: a big book in the middle, with room around it. */
+@media (min-width: 700px) {
+  .lbook {
+    inset: calc(env(safe-area-inset-top) + 24px)
+      max(calc(env(safe-area-inset-right) + 24px), calc(50vw - 540px))
+      calc(env(safe-area-inset-bottom) + 24px)
+      max(calc(env(safe-area-inset-left) + 24px), calc(50vw - 540px));
+  }
+}
+
+.lbook button {
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.lbook-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  padding: 8px 10px 4px;
+}
+
+.lbook-btn {
+  flex: none;
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 248 236 / 14%);
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff8ec;
+  white-space: nowrap;
+}
+
+.lbook-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 248 236 / 14%);
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff8ec;
+}
+
+.lbook-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 900;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Chapter ribbons: on a tablet only (a phone has the contents page). */
+.lbook-tabs {
+  display: none;
+  gap: 6px;
+  padding: 4px 14px 0;
+  overflow-x: auto;
+}
+
+@media (min-width: 600px) {
+  .lbook-tabs {
+    display: flex;
+  }
+}
+
+.lbook-tab {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 0;
+  border-radius: 12px 12px 4px 4px;
+  background: rgb(255 248 236 / 16%);
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff8ec;
+}
+
+.lbook-tab[aria-pressed='true'] {
+  background: #fff8ec;
+  color: #4a3150;
+}
+
+.lbook-tab-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ffc94d;
+}
+
+.lbook-stage {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-height: 0;
+  padding: 8px 12px 4px;
+}
+
+.lbook-page {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  padding: 18px 18px 16px 22px;
+  border-radius: 6px 16px 16px 6px;
+  background: #fff8ec;
+  box-shadow:
+    inset 14px 0 18px -14px rgb(122 80 40 / 40%),
+    0 0 0 2px #f2d9a6,
+    4px 6px 0 -1px #efdcbc;
+  color: #4a3150;
+}
+
+.lbook-page-left {
+  padding: 18px 22px 16px 18px;
+  border-radius: 16px 6px 6px 16px;
+  box-shadow:
+    inset -14px 0 18px -14px rgb(122 80 40 / 40%),
+    0 0 0 2px #f2d9a6,
+    -4px 6px 0 -1px #efdcbc;
+}
+
+.lbook-kicker {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #b07f2a;
+}
+
+.lbook-page-title,
+.lbook-index-title,
+.lbook-toc-title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.lbook-stamp {
+  display: grid;
+  flex: none;
+  place-items: center;
+  align-self: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff3d6 0 58%, transparent 59%), #f2d9a6;
+  box-shadow:
+    inset 0 0 0 4px #fff8ec,
+    inset 0 0 0 6px #b07f2a;
+  font-size: 42px;
+}
+
+.lbook-text {
+  max-width: 60ch;
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.lbook-foot {
+  margin: auto 0 0;
+  padding-top: 8px;
+  border-top: 2px dotted #f2d9a6;
+  font-size: 14px;
+  font-weight: 700;
+  color: #8a5f86;
+}
+
+.lbook-ribbon {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  padding: 3px var(--hp-pad-x) 3px 14px;
+  border-radius: 999px 0 0 999px;
+  background: #ffc94d;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 20px;
+  color: #7a2d55;
+}
+
+.lbook-blank {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.lbook-blank .lbook-kicker {
+  align-self: flex-start;
+}
+
+.lbook-ghost {
+  display: grid;
+  flex: 0 1 auto;
+  place-items: center;
+  width: min(55%, 180px);
+  aspect-ratio: 3 / 4;
+  max-width: 100%;
+  min-height: 0;
+  border: 3px dashed #e3c99a;
+  border-radius: 14px;
+  font-size: 52px;
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+
+.lbook-blank-label {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+  color: #8a5f86;
+}
+
+.lbook-hint {
+  max-width: 28ch;
+  margin: 0;
+  font-size: 18px;
+  font-style: italic;
+  font-weight: 700;
+  color: #96681c;
+}
+
+.lbook-hint-label {
+  display: block;
+  font-size: 12px;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8a5f86;
+}
+
+/* The contents page. */
+.lbook-toc-head {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.lbook-count {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.lbook-pips,
+.lbook-minis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.lbook-pips {
+  justify-content: center;
+}
+
+.lbook-pips i,
+.lbook-minis i {
+  width: 14px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 2px dashed #d9bd8c;
+  border-radius: 3px;
+}
+
+.lbook-pips i.on,
+.lbook-minis i.on {
+  border: 0;
+  background: #b8487a;
+}
+
+.lbook-pips i.new,
+.lbook-minis i.new {
+  background: #ffc94d;
+}
+
+.lbook-chapters {
+  display: grid;
+  gap: 10px;
+}
+
+.lbook-chapter {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 64px;
+  padding: 8px var(--hp-pad-x);
+  border: 0;
+  border-radius: 16px;
+  background: #fff3d6;
+  box-shadow: inset 0 0 0 2px #f2d9a6;
+  color: #4a3150;
+  text-align: left;
+}
+
+.lbook-emblem {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fff8ec;
+  box-shadow: inset 0 0 0 2px #b07f2a;
+  font-size: 24px;
+}
+
+.lbook-chapter-words {
+  display: grid;
+  min-width: 0;
+}
+
+.lbook-chapter-title {
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.lbook-chapter-count {
+  font-size: 14px;
+  font-weight: 700;
+  color: #8a5f86;
+}
+
+.lbook-chapter-new {
+  font-weight: 900;
+  color: #7a2d55;
+}
+
+.lbook-blurb {
+  margin: 8px 0 0;
+  font-size: 17px;
+  text-align: center;
+}
+
+/* A tablet's left page: the chapter's own contents. */
+.lbook-index {
+  align-items: stretch;
+}
+
+.lbook-index-title,
+.lbook-index .lbook-count {
+  text-align: center;
+}
+
+.lbook-slots {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lbook-slot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px var(--hp-pad-x);
+  border: 0;
+  border-radius: 12px;
+  background: #fff3d6;
+  font-size: 16px;
+  font-weight: 700;
+  color: #4a3150;
+  text-align: left;
+}
+
+.lbook-slot[aria-current='true'] {
+  box-shadow: inset 0 0 0 3px #b8487a;
+}
+
+.lbook-slot-n {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff8ec;
+  box-shadow: inset 0 0 0 2px #f2d9a6;
+  font-size: 13px;
+  font-weight: 900;
+  color: #96681c;
+}
+
+.lbook-slot-blank {
+  font-style: italic;
+  font-weight: 600;
+  color: #8a5f86;
+}
+
+.lbook-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px 12px;
+}
+
+.lbook-turn {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fff8ec;
+  box-shadow: 0 4px 0 #c9a96f;
+  font-size: 26px;
+  font-weight: 900;
+  color: #7a2d55;
+}
+
+.lbook-turn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lbook-nav-mid {
+  display: grid;
+  flex: 1;
+  justify-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+  color: #f6dceb;
+}
+
+.lbook-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.lbook-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgb(255 248 236 / 30%);
+}
+
+.lbook-dots i.on {
+  background: #fff8ec;
+}
+
+.lbook button:focus-visible {
+  outline: 3px solid #ffc94d;
+  outline-offset: 2px;
+}
+
+/* Page turns: the page swings in from the spine (transform and opacity only). */
+.lbook-turn-next {
+  transform-origin: left center;
+  animation: lbook-turn-next 320ms ease-out;
+}
+
+.lbook-turn-prev {
+  transform-origin: right center;
+  animation: lbook-turn-prev 320ms ease-out;
+}
+
+@keyframes lbook-turn-next {
+  from {
+    opacity: 0.2;
+    transform: perspective(1400px) rotateY(60deg);
+  }
+}
+
+@keyframes lbook-turn-prev {
+  from {
+    opacity: 0.2;
+    transform: perspective(1400px) rotateY(-60deg);
+  }
+}
+
+/* Reduced motion: pages crossfade instead of turning. */
+@media (prefers-reduced-motion: reduce) {
+  .lbook-turn-next,
+  .lbook-turn-prev {
+    animation: lbook-fade 200ms ease;
+  }
+}
+
+@keyframes lbook-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── The Bag's way in (#307) ─────────────────────────────────────────── */
+
+.lore-bag-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  margin: 12px 0 0;
+  padding: 10px var(--hp-pad-x) 10px 10px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #5a3a5f, #3d2643);
+  box-shadow: inset 0 0 0 2px rgb(242 217 166 / 35%);
+  font: inherit;
+  color: #fff8ec;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.lore-bag-tile[hidden],
+.lore-bag-new[hidden] {
+  display: none;
+}
+
+.lore-bag-cover {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: #fff8ec;
+  box-shadow: inset -5px 0 0 #f2d9a6;
+  font-size: 30px;
+}
+
+.lore-bag-words {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.lore-bag-title {
+  font-size: 19px;
+  font-weight: 900;
+}
+
+.lore-bag-count {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f6dceb;
+}
+
+.lore-bag-chevron {
+  font-size: 24px;
+  opacity: 0.8;
+}
+
+.lore-bag-new {
+  position: absolute;
+  top: -8px;
+  left: 40px;
+  padding: 2px var(--hp-pad-x);
+  border-radius: 999px;
+  background: #ffc94d;
+  box-shadow: 0 0 0 2px #fffafc;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 20px;
+  color: #7a2d55;
+}
+
+.lore-bag-new::before,
+.lore-bag-badge:not(:empty)::before {
+  content: '✨ ';
+}
+
+.lore-bag-badge:empty {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lore-bag-new,
+  .lore-bag-badge:not(:empty) {
+    animation: lore-twinkle 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes lore-twinkle {
+  50% {
+    transform: scale(1.08);
+  }
+}
