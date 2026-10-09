@@ -25,14 +25,15 @@ interface MapDebug {
 }
 
 /**
- * The map's render budget (#318), a little over what a fresh 4-seat patch
- * measured (61 draw calls; 729k triangles up close, 376k zoomed out, where
- * tiles and props draw at low detail). Zooming out mustn't cost draw calls.
+ * The map's render budget (#318), a little over what a fresh 6-seat patch
+ * (radius 16) measured: 54 draw calls; 1.13-1.22M triangles up close
+ * (it varies with the map's seed), about 550k zoomed out, where tiles and
+ * props draw at low detail. Zooming out mustn't cost draw calls.
  */
 const MAP_BUDGET = {
   drawCalls: 75,
-  nearTriangles: 800_000,
-  farTriangles: 420_000,
+  nearTriangles: 1_300_000,
+  farTriangles: 620_000,
 } as const;
 
 function mapState(page: Page): Promise<MapDebug | null> {
