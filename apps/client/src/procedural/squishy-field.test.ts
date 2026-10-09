@@ -3,7 +3,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { GAME_DATA, visualRegistry } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SQUISH_LOOK_CODE } from './config.js';
+import { SQUISH_LOOK_CODE, type SquishyLod } from './config.js';
 import type { SquishySpecies } from './params.js';
 import { SquishyField } from './squishy-field.js';
 
@@ -28,7 +28,10 @@ describe('SquishyField shadow look (owner decision 7)', () => {
   function field() {
     const scene = new Scene(engine);
     // The contact shadow paints a 2D canvas, which NullEngine hasn't got.
-    return { scene, field: new SquishyField(scene, { registry, lod: 'low', shadows: false }) };
+    return {
+      scene,
+      field: new SquishyField<SquishyLod>(scene, { registry, lod: 'low', shadows: false }),
+    };
   }
 
   /** Each instance's look code (`squishMotion.w`) on the mesh whose name starts with `prefix`. */
@@ -89,5 +92,26 @@ describe('SquishyField shadow look (owner decision 7)', () => {
     expect(hop.m[0]! / rest.m[0]!).toBeCloseTo(1 / Math.sqrt(0.8));
     // The middle the camera and close-ups aim at rides along.
     expect(f.centre(h)!.y).toBeCloseTo(0.2 + 0.5 + h.params.height / 2);
+  });
+
+  it('moves in place: picking and a rebuilt detail level both see the new spot (#323)', () => {
+    const { scene, field: f } = field();
+    const h = f.add(species, 'mover', { x: 0, z: 0 });
+    f.flush();
+    const body = () =>
+      scene.meshes.find((m) => m.name.startsWith('squishy-body:') && m.isEnabled()) as Mesh;
+    f.move(h, { x: 2, z: -1 });
+    f.flush();
+    // The world matrices picking reads follow the move.
+    expect(body().thinInstanceGetWorldMatrices()[0]!.m[12]).toBeCloseTo(2);
+    expect(f.centre(h)!.x).toBeCloseTo(2);
+    // A new detail level rebuilds the meshes at the moved spot, and moves after it still land.
+    f.setLod('high');
+    f.flush();
+    expect(body().thinInstanceGetWorldMatrices()[0]!.m[12]).toBeCloseTo(2);
+    f.move(h, { x: -1, z: 3 });
+    f.flush();
+    const m = body().thinInstanceGetWorldMatrices()[0]!;
+    expect([m.m[12], m.m[14]]).toEqual([expect.closeTo(-1), expect.closeTo(3)]);
   });
 });
