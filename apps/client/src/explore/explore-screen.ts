@@ -26,6 +26,7 @@ import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
+import { faceYaw } from '../procedural/face-yaw.js';
 import { el, messageOf } from '../ui/dom.js';
 import { strokeIcon } from '../ui/trays/trays.js';
 import { EXPLORE_FIND, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
@@ -67,7 +68,6 @@ import {
   spotAtTap,
   spotInFront,
   toCaveStage,
-  yawOf,
   yawToward,
 } from './explore-world.js';
 import {
@@ -501,7 +501,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
           s.colliders,
         );
         // Faces the way the stick points, even pressed against a rock.
-        heading = yawOf(v.x, v.z);
+        heading = faceYaw(v.x, v.z);
       }
       walking = true; // keep reading the stick while it's held
     } else if (walkTo && !gesturing()) {

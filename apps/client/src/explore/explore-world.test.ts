@@ -1,6 +1,7 @@
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { EXPLORE_RULES, searchSpots } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { faceYaw } from '../procedural/face-yaw.js';
 import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
@@ -27,7 +28,6 @@ import {
   spotInFront,
   spotRadius,
   toCaveStage,
-  yawOf,
   yawToward,
 } from './explore-world.js';
 
@@ -194,6 +194,7 @@ describe('what is in front of the Keeper', () => {
   it('faces the way it walks', () => {
     expect(turnBetween(yawToward({ x: 0, z: 0 }, { x: 0, z: 1 }), AWAY)).toBeCloseTo(0);
     expect(yawToward({ x: 0, z: 0 }, { x: 1, z: 0 })).toBeCloseTo(RIGHT);
+    expect(faceYaw(1, 0)).toBeCloseTo(-Math.PI / 2);
     expect(yawToward({ x: 0, z: 0 }, { x: -1, z: 0 })).toBeCloseTo(-RIGHT);
     expect(yawToward({ x: 0, z: 0 }, { x: 0, z: -1 })).toBeCloseTo(0);
     expect(offFacing({ x: 0, z: 0 }, AWAY, { x: 0, z: 1 })).toBeCloseTo(0);
@@ -210,7 +211,7 @@ describe('what is in front of the Keeper', () => {
       [-0.3, 0.95],
     ] as const) {
       const m = new Matrix();
-      Matrix.FromQuaternionToRef(Quaternion.RotationYawPitchRoll(yawOf(dx, dz), 0, 0), m);
+      Matrix.FromQuaternionToRef(Quaternion.RotationYawPitchRoll(faceYaw(dx, dz), 0, 0), m);
       const face = Vector3.TransformNormal(new Vector3(0, 0, -1), m);
       const len = Math.hypot(dx, dz);
       expect(face.x, `${String(dx)},${String(dz)}`).toBeCloseTo(dx / len);

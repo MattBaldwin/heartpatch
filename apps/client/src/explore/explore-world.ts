@@ -6,6 +6,7 @@ import {
   EXPLORE_VIEW,
   INTERACTION,
 } from './explore-config.js';
+import { faceYaw } from '../procedural/face-yaw.js';
 import { clampToTile, insideTile } from './explore-view.js';
 
 // The explore view's world (#291, owner mockup 2026-10-08): colliders the
@@ -81,16 +82,6 @@ export function blocked(
 }
 
 /**
- * The heading (`RotationYawPitchRoll`'s yaw) that turns the Keeper's face,
- * which looks along its local −z, to the ground direction (dx, dz): 0 faces
- * −z (the camera), π/2 faces −x, −π/2 faces +x. The battle's formula
- * (battle-scene.ts), so what the logic thinks is in front is what shows.
- */
-export function yawOf(dx: number, dz: number): number {
-  return Math.atan2(-dx, -dz);
-}
-
-/**
  * The nearest place to `p` where the Keeper stands clear of every collider
  * and inside the tile: `p` itself when it's free, else the first free point
  * on rings round it (the camera's side first). The Keeper's start can land
@@ -116,9 +107,13 @@ export function freePoint(
   return at;
 }
 
-/** The heading that faces from `from` to `to` (0 faces −z, towards the camera). */
+/**
+ * The heading that turns the Keeper's face (local −z) from `from` to `to`:
+ * 0 faces −z (the camera), −π/2 faces +x. The shared `faceYaw`, so what the
+ * logic thinks is in front is what shows.
+ */
 export function yawToward(from: WorldPoint, to: WorldPoint): number {
-  return yawOf(to.x - from.x, to.z - from.z);
+  return faceYaw(to.x - from.x, to.z - from.z);
 }
 
 /** The gap between the Keeper's edge and a spot's edge (negative: overlapping). */
