@@ -110,6 +110,8 @@ function searchedMask(
 ): number {
   if (!row || row.terrain !== tile.terrain) return 0;
   if (row.layout === exploreLayout(tile.terrain, EXPLORE_RULES)) return row.searched;
+  // Finished: every spot of today's kit is done. The row's stored `searched`
+  // and `spot_count` stay the old kit's on purpose; it's never written again.
   return row.completedAt ? spots.reduce((mask, s) => withSearched(mask, s.index), 0) : 0;
 }
 
