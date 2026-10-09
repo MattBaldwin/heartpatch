@@ -55,6 +55,7 @@ const squishy = (extra: Partial<CareSquishy> = {}): CareSquishy => ({
   fullCareLeft: 2,
   nextCareAt: {},
   newEvolution: null,
+  accessory: null,
   ...extra,
 });
 
