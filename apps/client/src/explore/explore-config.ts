@@ -50,6 +50,12 @@ export const EXPLORE_VIEW = {
   tapPick: 0.1, // TUNE
   /** The Keeper stays this far inside the tile's edge, tile-local units. */
   edgeMargin: 0.06, // TUNE
+  /**
+   * The tile's corners are rounded (`CORNER`): nothing reaches further from
+   * the middle than this, less the margin, tile-local units (the rounded
+   * rim's corner is about 0.92 out on a 0.95 tile).
+   */
+  cornerReach: 0.92, // TUNE
   /** Followers trail the Keeper by this much, one behind another. */
   followGap: 0.06, // TUNE
   /** The joystick: how far the knob travels, CSS pixels, and its dead zone. */
@@ -148,6 +154,12 @@ export const EXPLORE_DECOR = {
   clearance: 0.04, // TUNE
   /** Size range, as a multiple of the base mesh. */
   scale: { min: 0.7, max: 1.3 }, // TUNE
+  /**
+   * Decor stays this far inside the tile's hex, tile-local: the tile's top
+   * (TILE_FILL 0.95) ends about 0.82 out on a flat side, and the bevel
+   * before it.
+   */
+  edgeMargin: 0.07, // TUNE
   /** How far across the tile decor scatters before the edge check, tile-local (x is narrower). */
   spread: { x: 0.9, z: 1 }, // TUNE
 } as const;

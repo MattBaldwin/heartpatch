@@ -6,6 +6,7 @@ import {
   EXPLORE_VIEW,
   INTERACTION,
 } from './explore-config.js';
+import { roundedHexOutline } from '../map/hex-mesh.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { clampToTile, insideTile } from './explore-view.js';
 
@@ -363,7 +364,7 @@ export function decorPlaces(
       const p = { x: (rand() * 2 - 1) * spread.x, z: (rand() * 2 - 1) * spread.z };
       const yaw = rand() * Math.PI * 2;
       const size = scale.min + rand() * (scale.max - scale.min);
-      const inside = clampToTile(p, EXPLORE_VIEW.edgeMargin * 0.5);
+      const inside = clampToTile(p, EXPLORE_DECOR.edgeMargin);
       if (inside.x !== p.x || inside.z !== p.z) continue;
       if (keepClear.some((c) => (p.x - c.x) ** 2 + (p.z - c.z) ** 2 < (c.r + clearance) ** 2)) {
         continue;
@@ -414,4 +415,62 @@ export function lanternGlint(
   const stand = freePoint(at, colliders);
   const far = Math.hypot(stand.x - at.x, stand.z - at.z) > LIGHT_REACH * 0.8;
   return toCaveStage(cave, far ? stand : at);
+}
+
+// ── The tile's top ────────────────────────────────────────────────────────
+
+/** The explore tile's lofted top (`loftRoundedHex`), tile-local across, map units up. */
+export interface TileTop {
+  /** The outline's corner-to-middle radius, tile-local (`TILE_FILL`). */
+  readonly radius: number;
+  /** Corner rounding, as a share of the radius, and segments per corner. */
+  readonly corner: number;
+  readonly segments: number;
+  /** Height at the middle, and each ring's scale and height out to the rim (outermost last). */
+  readonly centre: number;
+  readonly rings: readonly { readonly scale: number; readonly y: number }[];
+}
+
+/**
+ * The height of the tile's top under a tile-local point (#291), in the
+ * profile's units: the same rounded outline and rings `loftRoundedHex`
+ * lofts. Each band between two rings is a flat strip (two parallel edges),
+ * so along a ray from the middle the height is linear in the ring scale and
+ * this matches the mesh exactly. Things stand on it, so nothing floats over
+ * the rim's bevel or sinks into the dome.
+ */
+export function tileSurface(top: TileTop): (p: WorldPoint) => number {
+  const outline = roundedHexOutline(top.radius, top.radius * top.corner, top.segments);
+  const n = outline.length;
+  /** How far the outline is from the middle along a direction. */
+  const reachAlong = (dx: number, dz: number): number => {
+    let best = Infinity;
+    for (let i = 0; i < n; i++) {
+      const a = outline[i] ?? { x: 0, z: 0 };
+      const b = outline[(i + 1) % n] ?? a;
+      const ex = b.x - a.x;
+      const ez = b.z - a.z;
+      const den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-12) continue;
+      const along = (a.x * ez - a.z * ex) / den;
+      const on = (a.x * dz - a.z * dx) / den;
+      if (along > 0 && on >= -1e-9 && on <= 1 + 1e-9) best = Math.min(best, along);
+    }
+    return best;
+  };
+  const rings = [{ scale: 0, y: top.centre }, ...top.rings];
+  return (p) => {
+    const d = Math.hypot(p.x, p.z);
+    if (d < 1e-9) return top.centre;
+    const s = d / reachAlong(p.x / d, p.z / d);
+    for (let j = 1; j < rings.length; j++) {
+      const inner = rings[j - 1] ?? rings[0];
+      const outer = rings[j] ?? inner;
+      if (s <= outer.scale) {
+        const t = (s - inner.scale) / (outer.scale - inner.scale || 1);
+        return inner.y + (outer.y - inner.y) * t;
+      }
+    }
+    return rings[rings.length - 1]?.y ?? top.centre;
+  };
 }

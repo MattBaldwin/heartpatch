@@ -1,6 +1,9 @@
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { EXPLORE_RULES, searchSpots } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { loftRoundedHex } from '../map/hex-mesh.js';
+import { TERRAIN_LOOKS, TILE_FILL } from '../map/map-config.js';
+import { CORNER, DOME, SEGMENTS, TOP_RINGS } from '../map/map-scene.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { startInteraction } from './interactions.js';
@@ -27,6 +30,7 @@ import {
   spotAtTap,
   spotInFront,
   spotRadius,
+  tileSurface,
   toCaveStage,
   yawToward,
 } from './explore-world.js';
@@ -441,3 +445,93 @@ function* generatedTiles(
     }
   }
 }
+
+describe("the tile's top", () => {
+  const h = TERRAIN_LOOKS['meadow']?.height ?? 0.2;
+  const rings = TOP_RINGS.map((r) => ({ scale: r.scale, y: r.y + h }));
+  // The explore tile exactly as the scene lofts it, at tile-local size.
+  const mesh = loftRoundedHex(TILE_FILL, [...rings, { scale: 1, y: 0 }], {
+    corner: CORNER,
+    segments: SEGMENTS,
+    centre: { y: h + DOME },
+  });
+  const surface = tileSurface({
+    radius: TILE_FILL,
+    corner: CORNER,
+    segments: SEGMENTS,
+    centre: h + DOME,
+    rings,
+  });
+  /** The highest triangle of the mesh over a point (barycentric). */
+  const meshHeight = (x: number, z: number): number => {
+    const p = mesh.positions;
+    const ix = mesh.indices;
+    let best = -Infinity;
+    for (let t = 0; t < ix.length; t += 3) {
+      const [a, b, c] = [ix[t] ?? 0, ix[t + 1] ?? 0, ix[t + 2] ?? 0].map((i) => i * 3) as [
+        number,
+        number,
+        number,
+      ];
+      const [ax, az, bx, bz, cx, cz] = [a, a + 2, b, b + 2, c, c + 2].map((i) => p[i] ?? 0) as [
+        number,
+        number,
+        number,
+        number,
+        number,
+        number,
+      ];
+      const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+      if (Math.abs(d) < 1e-12) continue;
+      const l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
+      const l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
+      const l3 = 1 - l1 - l2;
+      if (l1 < -1e-9 || l2 < -1e-9 || l3 < -1e-9) continue;
+      best = Math.max(best, l1 * (p[a + 1] ?? 0) + l2 * (p[b + 1] ?? 0) + l3 * (p[c + 1] ?? 0));
+    }
+    return best;
+  };
+  // World units over map units, as the scene scales the tile.
+  const k = EXPLORE_VIEW.hexSize / 0.65;
+
+  it('puts feet on the lofted top: the start, x = 0.5, the walk limit and a corner', () => {
+    const places = {
+      start: EXPLORE_VIEW.start,
+      middle: { x: 0, z: 0 },
+      'x 0.5': { x: 0.5, z: 0 },
+      'flat side, walk limit': clampToTile({ x: 2, z: 0 }),
+      'corner, walk limit': clampToTile({ x: 0, z: 2 }),
+      'between, walk limit': clampToTile({ x: 1.4, z: 1.4 }),
+    };
+    for (const [name, p] of Object.entries(places)) {
+      const under = meshHeight(p.x, p.z);
+      expect(under, `${name} is on the tile`).toBeGreaterThan(-Infinity);
+      // Within 0.03 world units of the surface (the Keeper is about 1.2 tall).
+      expect(Math.abs(surface(p) - under) * k, name).toBeLessThan(0.03);
+    }
+  });
+
+  it('never walks off the rounded rim', () => {
+    for (let i = 0; i < 720; i++) {
+      const a = (i / 720) * Math.PI * 2;
+      const p = clampToTile({ x: Math.cos(a) * 2, z: Math.sin(a) * 2 });
+      expect(meshHeight(p.x, p.z), `angle ${String(a)}`).toBeGreaterThan(-Infinity);
+    }
+  });
+
+  it('stands props and decor on it, out to the rim', () => {
+    let checked = 0;
+    for (const tile of generatedTiles(10)) {
+      const colliders = collidersOf(tile.spots, []);
+      const decor = decorPlaces({ q: 3, r: -2 }, colliders);
+      for (const p of [...tile.spots, ...decor.tufts, ...decor.pebbles, ...decor.flowers]) {
+        checked++;
+        expect(
+          Math.abs(surface(p) - meshHeight(p.x, p.z)) * k,
+          `${tile.name} ${JSON.stringify(p)}`,
+        ).toBeLessThan(0.03);
+      }
+    }
+    expect(checked).toBeGreaterThan(500);
+  });
+});

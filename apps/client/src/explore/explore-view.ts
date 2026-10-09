@@ -321,7 +321,8 @@ const SQRT3_2 = Math.sqrt(3) / 2;
 /**
  * The nearest point to `p` inside the tile, `margin` in from its edge. The
  * hex is three pairs of parallel sides; pulling the point in along each
- * side's normal in turn lands it inside.
+ * side's normal in turn lands it inside. The tile's corners are rounded, so
+ * a corner is pulled in to `cornerReach` (less the margin) from the middle.
  */
 export function clampToTile(p: WorldPoint, margin: number = EXPLORE_VIEW.edgeMargin): WorldPoint {
   const limit = SQRT3_2 - margin;
@@ -338,6 +339,13 @@ export function clampToTile(p: WorldPoint, margin: number = EXPLORE_VIEW.edgeMar
       x -= (d + limit) * nx;
       z -= (d + limit) * nz;
     }
+  }
+  // The tile's corners are rounded (#291): stay inside them too.
+  const round = EXPLORE_VIEW.cornerReach - margin;
+  const r = Math.hypot(x, z);
+  if (r > round) {
+    x *= round / r;
+    z *= round / r;
   }
   return { x, z };
 }

@@ -63,6 +63,7 @@ import {
   decorPlaces,
   followStep,
   hidingSpots,
+  tileSurface,
   spotRadius,
   type Collider,
   type DecorKind,
@@ -170,7 +171,8 @@ export class ExploreScene {
   readonly #scene: Scene;
   readonly #size = EXPLORE_VIEW.hexSize;
   readonly #k = EXPLORE_VIEW.hexSize / HEX_SIZE;
-  readonly #ground: number;
+  /** The tile's top under a tile-local point, world units up (#291: nothing floats at the rim). */
+  readonly #surface: (p: WorldPoint) => number;
   readonly #props = new Map<string, PropBatch>();
   /** The spots now faded (between the camera and the Keeper). */
   #hiding = new Set<number>();
@@ -216,7 +218,16 @@ export class ExploreScene {
     scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
     this.#instrumentation = new SceneInstrumentation(scene);
     const look = TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
-    this.#ground = (look.height + DOME * 0.5) * this.#k;
+    const h = look.height;
+    // The same profile #buildGround lofts, so feet, props and decor sit on it.
+    const top = tileSurface({
+      radius: TILE_FILL,
+      corner: CORNER,
+      segments: SEGMENTS,
+      centre: h + DOME,
+      rings: TOP_RINGS.map((r) => ({ scale: r.scale, y: r.y + h })),
+    });
+    this.#surface = (p) => top(p) * this.#k;
 
     this.#buildGround(tile.terrain);
     const propMaterial = vinyl(scene, 'explore-prop-mat', { color: '#ffffff' });
@@ -239,7 +250,7 @@ export class ExploreScene {
         lit: b.lit,
         x: at.x,
         z: at.z,
-        y: this.#ground,
+        y: this.#groundAt({ x: at.x / this.#size, z: at.z / this.#size }),
         scale: EXPLORE_VIEW.buildingScale,
       })),
     );
@@ -261,7 +272,7 @@ export class ExploreScene {
           const s = p.scale;
           return placeAt(
             at.x,
-            this.#ground,
+            this.#groundAt(p),
             at.z,
             new Vector3(s, s, s),
             Quaternion.RotationYawPitchRoll(p.yaw, 0, 0),
@@ -389,7 +400,12 @@ export class ExploreScene {
           const lift = (EXPLORE_VIEW.glintLift[s.kind] ?? 0.25) * scale;
           // Off to one side of the prop, as on the boards.
           const side = spotRadius(s.kind) * this.#size * 0.6;
-          return placeAt(at.x + side, this.#ground + lift, at.z, new Vector3(size, size, size));
+          return placeAt(
+            at.x + side,
+            this.#groundAt(s) + lift,
+            at.z,
+            new Vector3(size, size, size),
+          );
         }),
       true,
     );
@@ -409,7 +425,7 @@ export class ExploreScene {
     }
     const at = this.#world(spot);
     const r = spotRadius(spot.kind) * this.#size * 1.5;
-    this.#halo.position.set(at.x, this.#ground + 0.02, at.z);
+    this.#halo.position.set(at.x, this.#groundAt(spot) + 0.02, at.z);
     this.#halo.scaling.set(r, 1, r);
     this.#halo.setEnabled(true);
   }
@@ -508,11 +524,17 @@ export class ExploreScene {
     this.#applyCamera();
     const ray = CreatePickingRay(this.#scene, x, y, null, camera);
     if (ray.direction.y >= 0) return null;
-    const t = (this.#ground - ray.origin.y) / ray.direction.y;
-    return {
-      x: (ray.origin.x + ray.direction.x * t) / this.#size,
-      z: (ray.origin.z + ray.direction.z * t) / this.#size,
-    };
+    // Onto the plane at the height under the last guess, a few times: the
+    // top is nearly flat, so it settles at once.
+    let p: WorldPoint = { x: 0, z: 0 };
+    for (let i = 0; i < 3; i++) {
+      const t = (this.#groundAt(p) - ray.origin.y) / ray.direction.y;
+      p = {
+        x: (ray.origin.x + ray.direction.x * t) / this.#size,
+        z: (ray.origin.z + ray.direction.z * t) / this.#size,
+      };
+    }
+    return p;
   }
 
   /**
@@ -529,7 +551,7 @@ export class ExploreScene {
     this.#applyCamera();
     const at = this.#world(p);
     const s = Vector3.Project(
-      new Vector3(at.x, this.#ground + lift, at.z),
+      new Vector3(at.x, this.#groundAt(p) + lift, at.z),
       Matrix.IdentityReadOnly,
       camera.getTransformationMatrix(),
       camera.viewport.toGlobal(box.width, box.height),
@@ -561,7 +583,7 @@ export class ExploreScene {
     const d = distance * this.#camera.zoom;
     const tx = this.#camera.target.x * this.#size;
     const tz = this.#camera.target.z * this.#size;
-    const ty = this.#ground + AIM_HEIGHT;
+    const ty = this.#groundAt(this.#camera.target) + AIM_HEIGHT;
     // Yaw 0: looking towards +z, down by `pitch`.
     camera.position.set(tx, ty + Math.sin(pitch) * d, tz - Math.cos(pitch) * d);
     camera.setTarget(this.#lookAt.set(tx, ty, tz));
@@ -578,7 +600,7 @@ export class ExploreScene {
     Matrix.ComposeToRef(
       TOOL_SCALE.set(k, k, k),
       TOOL_TURN,
-      TOOL_AT.set(at.x, this.#ground, at.z),
+      TOOL_AT.set(at.x, this.#groundAt(this.#at), at.z),
       TOOL_WORLD,
     );
     Vector3.TransformCoordinatesToRef(
@@ -620,6 +642,11 @@ export class ExploreScene {
     }
   }
 
+  /** The ground's height under a tile-local point, world units. */
+  #groundAt(p: WorldPoint): number {
+    return this.#surface(p);
+  }
+
   #world(p: WorldPoint): WorldPoint {
     return { x: p.x * this.#size, z: p.z * this.#size };
   }
@@ -637,7 +664,7 @@ export class ExploreScene {
     return {
       x: at.x,
       z: at.z,
-      y: this.#ground,
+      y: this.#groundAt(this.#at),
       yaw: this.#yaw,
       scale: EXPLORE_VIEW.keeperScale,
       lean: KEEPER_LEAN,
@@ -646,7 +673,7 @@ export class ExploreScene {
 
   #squishyPlacement(p: WorldPoint, yaw: number) {
     const at = this.#world(p);
-    return { x: at.x, z: at.z, y: this.#ground, yaw, scale: EXPLORE_VIEW.squishyScale };
+    return { x: at.x, z: at.z, y: this.#groundAt(p), yaw, scale: EXPLORE_VIEW.squishyScale };
   }
 
   #buildGround(terrain: string): void {
@@ -694,7 +721,7 @@ export class ExploreScene {
       const list = byKind.get(kind) ?? [];
       list.push({
         index: spot.index,
-        matrix: placeAt(at.x, this.#ground, at.z, new Vector3(scale, scale, scale), turn),
+        matrix: placeAt(at.x, this.#groundAt(spot), at.z, new Vector3(scale, scale, scale), turn),
       });
       byKind.set(kind, list);
       // How tall the prop stands, tile-local (its glint floats about at its top).
