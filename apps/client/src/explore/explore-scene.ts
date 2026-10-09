@@ -580,11 +580,13 @@ export class ExploreScene {
     }
     this.#applyCamera();
     const at = this.#world(p);
+    // (toGlobalToRef returns the camera's own viewport, not the one it fills.)
+    camera.viewport.toGlobalToRef(box.width, box.height, SCREEN_VIEWPORT);
     const s = Vector3.ProjectToRef(
       SCREEN_FROM.set(at.x, this.#groundAt(p) + lift, at.z),
       Matrix.IdentityReadOnly,
       camera.getTransformationMatrix(),
-      camera.viewport.toGlobalToRef(box.width, box.height, SCREEN_VIEWPORT),
+      SCREEN_VIEWPORT,
       SCREEN_AT,
     );
     if (s.z < 0 || s.z > 1) return null;
