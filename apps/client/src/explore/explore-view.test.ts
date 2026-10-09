@@ -27,6 +27,8 @@ import {
   toolChip,
   toolChipShort,
   isIconName,
+  HANDS_ICON,
+  PLAY_TEXT,
   toolRecipeRows,
   usesLine,
   xpLines,
@@ -88,11 +90,25 @@ describe('explore text', () => {
     expect(actionFor({ kind: 'flower-bed', tool: null }).icon).toBe('🌷');
     expect(actionFor({ kind: 'tree', tool: null }).icon).toBe('🌳');
     expect(actionFor({ kind: 'rock', tool: null }).icon).toBe('rock');
-    for (const kind of EXPLORE_RULES.spotKinds) {
-      const { icon } = actionFor({ kind: kind.id, tool: kind.tool });
-      if (isIconName(icon)) continue;
-      // Emoji 12 and newer (U+1FA70 on) can be an empty box before iOS 14.2.
-      for (const ch of icon) expect(ch.codePointAt(0) ?? 0, kind.id).toBeLessThan(0x1fa70);
+  });
+
+  it('uses only emoji the iOS 17 floor has, or drawn icons (the explore view itself)', () => {
+    // Scope: the big button, the gesture chips, the header's hands, and every
+    // line in EXPLORE_TEXT. Each emoji here was checked by hand against the
+    // floor (iOS 17 has up to Emoji 15.0; 🪏 is Emoji 16). A new one is added
+    // here on purpose, after the same check. Item icons come from the bag's
+    // own table (inventory/item-icons.ts), outside this view.
+    const known = new Set(['🌳', '🌷', '🎃', '✊', '↔', '✋', '✨', '🪱', '🏡', '💦', '🔍']);
+    const icons = [
+      ...EXPLORE_RULES.spotKinds.map((k) => actionFor({ kind: k.id, tool: k.tool }).icon),
+      ...Object.values(PLAY_TEXT).map((p) => p.icon),
+      HANDS_ICON,
+    ];
+    const lines = Object.values(EXPLORE_TEXT).map((t) => (typeof t === 'string' ? t : t('Meadow')));
+    for (const text of [...icons.filter((i) => !isIconName(i)), ...lines]) {
+      for (const ch of text.match(/\p{Extended_Pictographic}/gu) ?? []) {
+        expect(known.has(ch), `${ch} in “${text}”`).toBe(true);
+      }
     }
   });
 

@@ -306,7 +306,7 @@ export class ExploreScene {
     this.#halo.bakeCurrentTransformIntoVertices();
     const haloMat = overlayMaterial(scene, 'explore-halo-mat');
     haloMat.emissiveColor = linear('#fffbe0');
-    haloMat.alpha = 0.6;
+    haloMat.alpha = EXPLORE_VIEW.halo.alpha;
     this.#halo.material = haloMat;
     this.#halo.isPickable = false;
     this.#halo.setEnabled(false);
@@ -419,7 +419,7 @@ export class ExploreScene {
           const at = this.#world(s);
           const lift = (EXPLORE_VIEW.glintLift[s.kind] ?? 0.25) * scale;
           // Off to one side of the prop, as on the boards.
-          const side = spotRadius(s.kind) * this.#size * 0.6;
+          const side = spotRadius(s.kind) * this.#size * EXPLORE_VIEW.glintSide;
           return placeAt(
             at.x + side,
             this.#groundAt(s) + lift,
@@ -444,7 +444,7 @@ export class ExploreScene {
       return;
     }
     const at = this.#world(spot);
-    const r = spotRadius(spot.kind) * this.#size * 1.5;
+    const r = spotRadius(spot.kind) * this.#size * EXPLORE_VIEW.halo.size;
     this.#halo.position.set(at.x, this.#groundAt(spot) + 0.02, at.z);
     this.#halo.scaling.set(r, 1, r);
     this.#halo.setEnabled(true);
@@ -495,7 +495,7 @@ export class ExploreScene {
   /** One swing of the tool (a scoop, a shake, a step up the rope) and a little jiggle. */
   useTool(now: number): void {
     this.#swingAt = now;
-    if (this.#keeper) this.#keepers.play(this.#keeper, 'jiggle', now, 0.6);
+    if (this.#keeper) this.#keepers.play(this.#keeper, 'jiggle', now, EXPLORE_TOOL.jiggle);
   }
 
   /** A little hop for the Keeper and the team when a search finds something. */

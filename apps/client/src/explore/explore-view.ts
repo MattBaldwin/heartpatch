@@ -59,9 +59,9 @@ export const EXPLORE_TEXT = {
 
 /**
  * Line icons drawn as SVG (#291, like the boards' button icons): the tools
- * and the things a Keeper lifts. Newer emoji (🪏 is Emoji 16, 🪢 and 🪨 are
- * Emoji 13) show as an empty box on older iPhones, so these never use them.
- * 24 × 24 stroke paths for `strokeIcon`.
+ * and the things a Keeper lifts. The floor is iOS 17 (tech spec), which has
+ * emoji up to Emoji 15.0, so 🪏 (Emoji 16) shows as an empty box there; a
+ * drawn icon also matches the boards. 24 × 24 stroke paths for `strokeIcon`.
  */
 export const ICON_PATHS = {
   shovel: 'M4 20l9-9 M13 11l3-3 4 4-3 3z M3 21l2-2',
@@ -95,6 +95,31 @@ const HAND_ICONS: Readonly<Record<string, string>> = {
   'hollow-log': 'log',
   rock: 'rock',
 };
+
+/** What each tool gesture says and shows (boards b, d, e, f, g; style guide §6). */
+export const PLAY_TEXT: Readonly<
+  Record<SpotInteraction, { icon: string; hint: string; easy: string; note?: string }>
+> = {
+  dig: { icon: 'shovel', hint: 'Swipe down to dig!', easy: 'tap to dig' },
+  climb: { icon: 'rope', hint: 'Left, right, left, right!', easy: 'hold to climb' },
+  light: { icon: 'lantern', hint: EXPLORE_TEXT.lanternHint, easy: 'light it all up' },
+  scoop: { icon: 'net', hint: 'Swipe through when it glows!', easy: 'Scoop!' },
+  lift: {
+    icon: '✊',
+    hint: 'Hold to lift!',
+    easy: 'tap to lift',
+    note: 'Hold anywhere until it pops up.',
+  },
+  shake: {
+    icon: '↔️',
+    hint: 'Wiggle to shake!',
+    easy: 'tap to shake',
+    note: 'Swipe left and right anywhere.',
+  },
+};
+
+/** The header chip's icon with nothing in hand. */
+export const HANDS_ICON = '✋';
 
 /** The action button for a spot: its icon (an `ICON_PATHS` name or an emoji) and verb. */
 export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {

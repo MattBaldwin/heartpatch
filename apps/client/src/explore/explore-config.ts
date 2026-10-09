@@ -102,6 +102,10 @@ export const EXPLORE_VIEW = {
   } as Readonly<Record<string, number>>, // TUNE
   /** The glint's size, world units. */
   glintSize: 0.42, // TUNE
+  /** The glint sits off to one side of its prop, this share of the spot's collider. */
+  glintSide: 0.6, // TUNE
+  /** The soft halo under the spot in front: its radius (times the spot's collider) and opacity. */
+  halo: { size: 1.5, alpha: 0.6 }, // TUNE
 } as const;
 
 /**
@@ -172,6 +176,8 @@ export const EXPLORE_TOOL = {
   swingMs: 420, // TUNE
   /** How far it swings, radians. */
   swingAngle: 0.9, // TUNE
+  /** How hard the Keeper jiggles with each swing (0–1). */
+  jiggle: 0.6, // TUNE
 } as const;
 
 /** Finds (#291): the toast and the flight into the bag. */
@@ -182,6 +188,14 @@ export const EXPLORE_FIND = {
   flyMs: 900, // TUNE
   /** At most this many items fly (the rest just count). */
   flyMax: 3, // TUNE
+  /** The items fan out this far apart and pop up this high before they fly, CSS pixels. */
+  flySpread: 26, // TUNE
+  flyLift: 70, // TUNE
+  /** Each item leaves this long after the one before, ms. */
+  flyStagger: 120, // TUNE
+  /** The bag's bounce as they land: how long, ms, and how big. */
+  bagBounceMs: 420, // TUNE
+  bagBounce: 1.18, // TUNE
 } as const;
 
 /** The mini-interactions (owner design 2026-10-07): how much of each makes a search. */

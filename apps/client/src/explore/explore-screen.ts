@@ -53,8 +53,10 @@ import {
   toolChipShort,
   TOOL_ICONS,
   toolRecipeRows,
+  HANDS_ICON,
   ICON_PATHS,
   isIconName,
+  PLAY_TEXT,
   xpLines,
   restLine,
 } from './explore-view.js';
@@ -159,28 +161,6 @@ interface RareCard {
   readonly found: SearchSpotResponse;
   readonly interaction: SpotInteraction;
 }
-
-/** What each tool gesture says (boards b, d, e, f, g; style guide §6). */
-const PLAY_TEXT: Readonly<
-  Record<SpotInteraction, { icon: string; hint: string; easy: string; note?: string }>
-> = {
-  dig: { icon: 'shovel', hint: 'Swipe down to dig!', easy: 'tap to dig' },
-  climb: { icon: 'rope', hint: 'Left, right, left, right!', easy: 'hold to climb' },
-  light: { icon: 'lantern', hint: EXPLORE_TEXT.lanternHint, easy: 'light it all up' },
-  scoop: { icon: 'net', hint: 'Swipe through when it glows!', easy: 'Scoop!' },
-  lift: {
-    icon: '✊',
-    hint: 'Hold to lift!',
-    easy: 'tap to lift',
-    note: 'Hold anywhere until it pops up.',
-  },
-  shake: {
-    icon: '↔️',
-    hint: 'Wiggle to shake!',
-    easy: 'tap to shake',
-    note: 'Swipe left and right anywhere.',
-  },
-};
 
 export function createExploreScreen(options: ExploreScreenOptions): ExploreScreen {
   const api = options.api ?? exploreApi;
@@ -746,10 +726,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       bagChip.animate(
         [
           { transform: 'scale(1)' },
-          { transform: 'scale(1.18)', offset: 0.4 },
+          { transform: `scale(${String(EXPLORE_FIND.bagBounce)})`, offset: 0.4 },
           { transform: 'scale(1)' },
         ],
-        { duration: 420, delay: EXPLORE_FIND.flyMs - 100, easing: 'ease-out' },
+        {
+          duration: EXPLORE_FIND.bagBounceMs,
+          delay: EXPLORE_FIND.flyMs - 100,
+          easing: 'ease-out',
+        },
       );
     }
     if (toastTimer !== null) clearTimeout(toastTimer);
@@ -779,12 +763,12 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       overlay.append(item);
       const dx = to.left + to.width / 2 - from.x;
       const dy = to.top + to.height / 2 - from.y;
-      const spread = (i - (ids.length - 1) / 2) * 26;
+      const spread = (i - (ids.length - 1) / 2) * EXPLORE_FIND.flySpread;
       const anim = item.animate(
         [
           { transform: 'translate(-50%, -50%) scale(0.4)', opacity: 0 },
           {
-            transform: `translate(calc(-50% + ${String(spread)}px), calc(-50% - 70px)) scale(1.2)`,
+            transform: `translate(calc(-50% + ${String(spread)}px), calc(-50% - ${String(EXPLORE_FIND.flyLift)}px)) scale(1.2)`,
             opacity: 1,
             offset: 0.3,
           },
@@ -795,7 +779,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         ],
         {
           duration: EXPLORE_FIND.flyMs,
-          delay: i * 120,
+          delay: i * EXPLORE_FIND.flyStagger,
           easing: 'cubic-bezier(0.3, 0.6, 0.4, 1)',
           fill: 'both',
         },
@@ -818,7 +802,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (held) lastHeld = held;
     scene3d?.hold(held);
     const uses = held ? t.tools[held] : 0;
-    toolIcon.replaceChildren(iconNode(held ? TOOL_ICONS[held] : '✋'));
+    toolIcon.replaceChildren(iconNode(held ? TOOL_ICONS[held] : HANDS_ICON));
     toolUses.textContent = toolChipShort(held, uses);
     toolLine.setAttribute('aria-label', toolChip(held, uses));
     toolLine.classList.toggle('explore-tool-hands', held === null);

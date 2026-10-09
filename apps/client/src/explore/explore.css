@@ -50,7 +50,7 @@
 
 /* Exploring owns the screen (#291, board a): the "Hi, name! Log out" chip
    steps aside while it's open, as it does for the story (cinematic.css);
-   Back is how out. `:has()` needs Safari 15.4+ (the PWA's floor). */
+   Back is how out. `:has()` is in every Safari on the iOS 17 floor. */
 body:has(.explore:not([hidden])) .auth-chip {
   display: none;
 }
