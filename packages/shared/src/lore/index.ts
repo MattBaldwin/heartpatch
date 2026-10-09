@@ -11,6 +11,12 @@ export interface LoreFind {
   userId: string;
 }
 
+/** The payload's `userId`, if it has one (`payload-user` finds). */
+function payloadUser(payload: unknown): string | null {
+  if (typeof payload !== 'object' || payload === null || !('userId' in payload)) return null;
+  return typeof payload.userId === 'string' ? payload.userId : null;
+}
+
 /**
  * The pages `event` finds on a map of `mapKind`. `tutorialPlayer` is the
  * Glade's player on a tutorial map (null elsewhere), for system events there.
@@ -25,7 +31,12 @@ export function loreFinds(
     const { trigger } = page;
     if (!trigger.mapKinds.includes(mapKind) || trigger.eventType !== event.type) return [];
     if (!trigger.where.every((p) => predicateHolds(p, event.payload))) return [];
-    const userId = trigger.finder === 'actor' ? event.actorUserId : tutorialPlayer;
+    const userId =
+      trigger.finder === 'actor'
+        ? event.actorUserId
+        : trigger.finder === 'payload-user'
+          ? payloadUser(event.payload)
+          : tutorialPlayer;
     return userId ? [{ pageId: page.id, userId }] : [];
   });
 }

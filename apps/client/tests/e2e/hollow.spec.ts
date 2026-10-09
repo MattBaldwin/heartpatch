@@ -88,14 +88,15 @@ test('night falls, the Hollow Man visits, and a rescue sets off', async ({ brows
 
   // Land of their own, and a guard out there with no fire lit: exposed.
   const land = await claimLand(page, mapId);
-  // Capturing old forest finds a lore page (the-tidied-clearing), and the next
-  // map open (the reload below) would pop it over the trays and hold the
-  // morning report back (one card at a time, #129). This test isn't about
-  // lore: mark it read, the way the lorebook does once a page has been shown.
+  // Capturing old forest finds a lore page (the-tidied-clearing), and so does
+  // a squishy taken to the Hollow (grey-footprints, #307): the next map open
+  // (the reloads below) would pop them over the trays and hold the morning
+  // report back (one card at a time, #129). This test isn't about lore: mark
+  // them shown, the way the lorebook does once a page's card has been seen.
   const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
   await page.evaluate((key) => {
     const shown = JSON.parse(localStorage.getItem(key) ?? '[]') as string[];
-    localStorage.setItem(key, JSON.stringify([...shown, 'the-tidied-clearing']));
+    localStorage.setItem(key, JSON.stringify([...shown, 'the-tidied-clearing', 'grey-footprints']));
   }, `heartpatch.lore.shown.${me}`);
   const squishy = { speciesId: STARTERS.speciesIds[0], level: 5 };
   const granted = await api<{ squishy: { id: string } }>(

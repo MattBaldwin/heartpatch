@@ -377,7 +377,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           tutorialRoutes(tutorial, { hooks: authHooks, devTools: config.HP_DEV_SQUISHY_GRANTS }),
         );
         // The Lorebook (design doc §16): the `lore` consumer records finds.
-        await api.register(loreRoutes(createLoreService({ db }), { hooks: authHooks }));
+        await api.register(
+          loreRoutes(createLoreService({ db, clock }), {
+            hooks: authHooks,
+            devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
         // Found clothing rolls inside gathers, rescues and tile captures.
         setDevDropChance(config.HP_DEV_DROP_CHANCE ?? null);
         await api.register(

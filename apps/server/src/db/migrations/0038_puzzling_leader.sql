@@ -1,0 +1,1 @@
+ALTER TABLE "lore_found" ADD COLUMN "read_at" timestamp with time zone;

@@ -30,6 +30,7 @@ const E2E_GROUPS = [
     'raids',
     'trading-posts',
     'whats-new',
+    'lorebook',
   ],
   [
     'chat',
