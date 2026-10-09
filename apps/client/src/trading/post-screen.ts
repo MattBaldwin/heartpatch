@@ -121,6 +121,8 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let sorts: Record<Side, ShelfSort> = { mine: 'name', theirs: 'name' };
   /** The open little menu: a side's filter or sort, or the patch-mate list. */
   let menu: string | null = null;
+  /** Making my own offer while offers to me wait (they come first, #305). */
+  let composing = false;
   let working = false;
   let note = '';
   /** Bumped by every open, close and user change, so a late reply is dropped. */
@@ -532,13 +534,12 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         'aria-expanded': open ? 'true' : 'false',
         'aria-label': `${label}: ${words[current]}`,
       },
-      el(
-        'span',
-        { class: 'post-tool-text' },
-        id.endsWith('sort') ? `↕ ${words[current]}` : words[current],
-      ),
-      el('span', { 'aria-hidden': 'true' }, '▾'),
+      // A sort is "↕ A–Z ▾"; a phone's narrow column shows just "↕" (the menu names it).
+      ...(id.endsWith('sort') ? [el('span', { 'aria-hidden': 'true' }, '↕')] : []),
+      el('span', { class: 'post-tool-text' }, words[current]),
+      el('span', { class: 'post-tool-chev', 'aria-hidden': 'true' }, '▾'),
     );
+    if (id.endsWith('sort')) toggle.classList.add('sort');
     toggle.addEventListener('click', () => {
       menu = open ? null : id;
       render();
@@ -888,6 +889,15 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     if (mates().length === 0) {
       return [...offers, el('p', { class: 'post-tiny' }, TRADE_TEXT.noMates)];
     }
+    // An offer to me comes first: the compose area waits behind a button, so it never covers it.
+    if (offers.length > 0 && !composing) {
+      const make = button(TRADE_TEXT.makeOffer, 'post-compose', 'secondary', () => {
+        composing = true;
+        render();
+      });
+      make.classList.add('wide');
+      return [...offers, make, ...offersFromMe(view, my, 'trade').map(outgoing)];
+    }
     const picked = myMeter();
     return [
       ...offers,
@@ -1135,6 +1145,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     filters = { mine: 'all', theirs: 'all' };
     sorts = { mine: 'name', theirs: 'name' };
     menu = null;
+    composing = false;
   }
 
   function close(): void {

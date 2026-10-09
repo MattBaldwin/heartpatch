@@ -502,11 +502,13 @@ button.post-slot {
 }
 
 .post-row > .post-button {
-  flex: 1;
+  flex: 1 1 auto;
+  /* "No thanks" on one line. */
+  white-space: nowrap;
 }
 
 .post-row > .post-button-primary {
-  flex: 2;
+  flex-grow: 2;
 }
 
 .post-card.post-row {
@@ -645,6 +647,10 @@ button.post-slot {
 }
 
 .post-col-head {
+  /* Whose is whose stays in view while the sheet scrolls (#305). */
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -729,11 +735,17 @@ button.post-col-head {
   touch-action: manipulation;
 }
 
-/* A phone's half-width column: filter and sort each get a whole row, so
-   "Squishies" fits whole with the shared padding. */
-@container (max-width: 199px) {
-  .post-tools {
-    grid-template-columns: minmax(0, 1fr);
+/* A phone's half-width column: sort shrinks to its "↕" (the menu says
+   which), so "Squishies ▾" fits whole beside it with the shared padding. */
+@container (max-width: 239px) {
+  .post-tool.sort {
+    width: 44px;
+    padding: 0;
+  }
+
+  .post-tool.sort .post-tool-text,
+  .post-tool.sort .post-tool-chev {
+    display: none;
   }
 }
 

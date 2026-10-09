@@ -175,6 +175,12 @@ test('trades in the split view: whose is whose, sort and filter per side, and th
   await expect(samMeter).toHaveAttribute('data-tip', mirror);
   await expect(samMeter).toHaveAttribute('data-lopsided', String(now.lopsided));
   await expect(offer.getByTestId('post-nudge')).toHaveCount(0);
+  // While an offer waits, my own compose area folds behind a button so nothing covers it.
+  const samPost = sam.getByTestId('post');
+  await expect(samPost.getByTestId('post-give')).toHaveCount(0);
+  await samPost.getByTestId('post-compose').tap();
+  await expect(samPost.getByTestId('post-give')).toBeVisible();
+  await expect(offer).toBeVisible();
   await expect(offer.getByTestId('post-hearts-get')).toHaveAttribute(
     'data-hearts',
     String(now.give),

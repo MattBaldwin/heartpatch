@@ -97,6 +97,7 @@ export const TRADE_TEXT = {
   yourThings: 'Your things',
   theirThings: 'Their things',
   otherMate: 'Trade with someone else',
+  makeOffer: 'Make an offer ✏️',
   filters: {
     all: 'All',
     squishies: 'Squishies',
