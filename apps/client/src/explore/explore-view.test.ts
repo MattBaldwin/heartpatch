@@ -97,7 +97,8 @@ describe('explore text', () => {
     // line in EXPLORE_TEXT. Each emoji here was checked by hand against the
     // floor (iOS 17 has up to Emoji 15.0; 🪏 is Emoji 16). A new one is added
     // here on purpose, after the same check. Item icons come from the bag's
-    // own table (inventory/item-icons.ts), outside this view.
+    // own table (inventory/item-icons.ts), outside this view. The app-wide
+    // check on emoji age is ui/emoji-floor.test.ts (#308).
     const known = new Set(['🌳', '🌷', '🎃', '✊', '↔', '✋', '✨', '🪱', '🏡', '💦', '🔍']);
     const icons = [
       ...EXPLORE_RULES.spotKinds.map((k) => actionFor({ kind: k.id, tool: k.tool }).icon),

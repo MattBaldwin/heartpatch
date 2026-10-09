@@ -1,18 +1,34 @@
 import { EXPLORE_RULES, GAME_DATA, type ToolId } from '@heartpatch/shared';
+import type { IconName } from '../ui/line-icons.js';
 
 // Explore tools in the bag (#199): the bag counts a tool in uses (one Shovel
 // is 20 `shovel`), so everything a player reads says tools and uses, never
 // "20 Shovels" (owner decision 2026-10-06: tools wear out, with a small
 // durability bar). Pure, so it's unit-tested.
 
-/** Each tool in words: its icon, its action, and what one use of it is called. */
+/**
+ * Each tool in words: its icon in text, its action, and what one use of it is
+ * called. Text can't hold a drawn icon, so these are emoji from Emoji 12 or
+ * older (#308). The shovel emoji (U+1FA8F) is Emoji 16.0: iOS draws it only
+ * from 18.4, so on the iOS 17 floor it was an empty box. The knot (U+1FAA2)
+ * is Emoji 13.0, fine on iOS 17 but a box on older systems, and a climber
+ * reads as "climb" better anyway. Elements show `TOOL_ICONS` instead.
+ */
 export const TOOL_WORDS: Readonly<
   Record<ToolId, { icon: string; verb: string; one: string; many: string; needs: string }>
 > = {
-  shovel: { icon: '🪏', verb: 'Dig', one: 'dig', many: 'digs', needs: 'to dig there' },
+  shovel: { icon: '⛏️', verb: 'Dig', one: 'dig', many: 'digs', needs: 'to dig there' },
   net: { icon: '🥅', verb: 'Scoop', one: 'scoop', many: 'scoops', needs: 'to scoop there' },
-  rope: { icon: '🪢', verb: 'Climb', one: 'climb', many: 'climbs', needs: 'to climb up there' },
+  rope: { icon: '🧗', verb: 'Climb', one: 'climb', many: 'climbs', needs: 'to climb up there' },
   lantern: { icon: '🪔', verb: 'Light', one: 'cave', many: 'caves', needs: 'to peek in there' },
+};
+
+/** Each tool's drawn icon (#291), for the explore buttons and the Bag's tiles (#308). */
+export const TOOL_ICONS: Readonly<Record<ToolId, IconName>> = {
+  shovel: 'shovel',
+  net: 'net',
+  rope: 'rope',
+  lantern: 'lantern',
 };
 
 const TOOL_OF = new Map(
@@ -57,7 +73,7 @@ export function toolMakes(itemId: string, uses: number, name: string): string | 
   return `Makes ${what} (${String(uses)} ${TOOL_WORDS[t.tool].many})`;
 }
 
-/** The pop-up's words when a tool lands: "🪏 A new Shovel!" (null for anything else). */
+/** The pop-up's words when a tool lands: "⛏️ A new Shovel!" (null for anything else). */
 export function toolLanded(itemId: string, uses: number, name: string): string | null {
   const t = toolOf(itemId);
   if (!t) return null;

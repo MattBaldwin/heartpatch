@@ -13,10 +13,12 @@ import {
 } from '@heartpatch/shared';
 import { itemName } from '../inventory/bag-view.js';
 import { itemIcon } from '../inventory/item-icons.js';
-import { TOOL_WORDS } from '../inventory/tool-uses.js';
+import { TOOL_ICONS, TOOL_WORDS } from '../inventory/tool-uses.js';
 import { EXPLORE_VIEW } from './explore-config.js';
 
-export { TOOL_WORDS, usesLine } from '../inventory/tool-uses.js';
+export { TOOL_ICONS, TOOL_WORDS, usesLine } from '../inventory/tool-uses.js';
+// The drawn icons moved to ui/ for the Bag too (#308); explore still names them here.
+export { ICON_PATHS, isIconName, type IconName } from '../ui/line-icons.js';
 
 // What the explore view says and where the Keeper may walk (#199). Pure, so
 // every case is unit-tested; copy follows docs/STYLE_GUIDE.md. The server
@@ -57,36 +59,6 @@ export const EXPLORE_TEXT = {
   glint: 'A glint!',
 } as const;
 
-/**
- * Line icons drawn as SVG (#291, like the boards' button icons): the tools
- * and the things a Keeper lifts. The floor is iOS 17 (tech spec), which has
- * emoji up to Emoji 15.0, so 🪏 (Emoji 16) shows as an empty box there; a
- * drawn icon also matches the boards. 24 × 24 stroke paths for `strokeIcon`.
- */
-export const ICON_PATHS = {
-  shovel: 'M4 20l9-9 M13 11l3-3 4 4-3 3z M3 21l2-2',
-  net: 'M4 20l7.2-7.2 M9.5 9a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0-11 0 M12 6.5l6 5 M12 11.5l6-5',
-  rope: 'M12 5a7 7 0 1 0 7 7 M12 9a3 3 0 1 0 3 3 M19 12v8',
-  lantern: 'M12 2.5v2 M9.5 4.5h5 M8 7h8 M9 7v11h6V7 M12 10.5v4 M7 20h10',
-  rock: 'M4 18l2.5-6 4-4 5 1.5 3.5 4 1 4.5Z',
-  log: 'M6 8h12a4 4 0 0 1 0 8H6 M6 8a4 4 0 0 0 0 8a4 4 0 0 0 0-8 M6 11v2',
-} as const;
-
-export type IconName = keyof typeof ICON_PATHS;
-
-/** True when `icon` names an SVG icon (else it's an emoji or text). */
-export function isIconName(icon: string): icon is IconName {
-  return Object.hasOwn(ICON_PATHS, icon);
-}
-
-/** Each tool's icon (SVG). */
-export const TOOL_ICONS: Readonly<Record<ToolId, IconName>> = {
-  shovel: 'shovel',
-  net: 'net',
-  rope: 'rope',
-  lantern: 'lantern',
-};
-
 /** Each hand-searched spot's icon on the big button: the flower bed is flowers, not a tree. */
 const HAND_ICONS: Readonly<Record<string, string>> = {
   tree: '🌳',
@@ -121,7 +93,7 @@ export const PLAY_TEXT: Readonly<
 /** The header chip's icon with nothing in hand. */
 export const HANDS_ICON = '✋';
 
-/** The action button for a spot: its icon (an `ICON_PATHS` name or an emoji) and verb. */
+/** The action button for a spot: its icon (an `ICON_PATHS` name, drawn, or an emoji) and verb. */
 export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
   readonly icon: string;
   readonly label: string;

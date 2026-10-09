@@ -96,7 +96,7 @@ export function recipeIcon(recipeId: string): string {
 
 /**
  * What one run makes, after "→" or before "each": "3 🍪", or for an explore
- * tool (#199: the bag counts tools in uses) "🪏 (20 digs)", never "20 🪏"
+ * tool (#199: the bag counts tools in uses) "⛏️ (20 digs)", never "20 ⛏️"
  * (owner decision 2026-10-06).
  */
 export function runOutput(resource: string, quantity: number): string {
@@ -294,7 +294,7 @@ export function welcomeChips(landed: readonly Landed[]): string[] {
   for (const { items } of factoryLanded(landed)) {
     for (const [id, n] of Object.entries(items)) total[id] = (total[id] ?? 0) + n;
   }
-  // A tool lands as tools, not uses (#199): "🪏 2 new Shovels", as the pop-up says.
+  // A tool lands as tools, not uses (#199): "⛏️ 2 new Shovels", as the pop-up says.
   return Object.entries(total).map(
     ([id, n]) => toolLanded(id, n, itemName(id)) ?? `${itemIcon(id)} +${String(n)} ${itemName(id)}`,
   );

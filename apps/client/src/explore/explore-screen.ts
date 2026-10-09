@@ -19,7 +19,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import { inventoryApi } from '../inventory/inventory-api.js';
-import { itemIcon } from '../inventory/item-icons.js';
+import { itemIconNode } from '../inventory/item-icons.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import type { TileActions } from '../map/map-screen.js';
 import { ApiRequestError } from '../net/api.js';
@@ -28,7 +28,7 @@ import { lodFor } from '../procedural/motion.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { el, messageOf } from '../ui/dom.js';
-import { strokeIcon } from '../ui/trays/trays.js';
+import { iconNode } from '../ui/line-icons.js';
 import { EXPLORE_FIND, EXPLORE_VIEW } from './explore-config.js';
 import { exploreApi, type ExploreApi } from './explore-api.js';
 import { ExploreScene, type ExploreSceneStats } from './explore-scene.js';
@@ -54,8 +54,6 @@ import {
   TOOL_ICONS,
   toolRecipeRows,
   HANDS_ICON,
-  ICON_PATHS,
-  isIconName,
   PLAY_TEXT,
   xpLines,
   restLine,
@@ -760,7 +758,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       .flatMap(([id, n]) => Array.from({ length: n }, () => id))
       .slice(0, EXPLORE_FIND.flyMax);
     ids.forEach((id, i) => {
-      const item = el('span', { class: 'explore-fly', 'aria-hidden': 'true' }, itemIcon(id));
+      const item = el(
+        'span',
+        { class: 'explore-fly', 'aria-hidden': 'true' },
+        itemIconNode(id, 'explore-icon'),
+      );
       item.style.left = `${String(from.x)}px`;
       item.style.top = `${String(from.y)}px`;
       overlay.append(item);
@@ -805,7 +807,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (held) lastHeld = held;
     scene3d?.hold(held);
     const uses = held ? t.tools[held] : 0;
-    toolIcon.replaceChildren(iconNode(held ? TOOL_ICONS[held] : HANDS_ICON));
+    toolIcon.replaceChildren(exploreIcon(held ? TOOL_ICONS[held] : HANDS_ICON));
     toolUses.textContent = toolChipShort(held, uses);
     toolLine.setAttribute('aria-label', toolChip(held, uses));
     toolLine.classList.toggle('explore-tool-hands', held === null);
@@ -844,7 +846,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const missing = missingTool(front, t.tools) !== null;
     action.disabled = working || missing;
     action.classList.add(missing ? 'explore-action-missing' : 'explore-action-ready');
-    actionIcon.replaceChildren(iconNode(what.icon));
+    actionIcon.replaceChildren(exploreIcon(what.icon));
     actionLabel.textContent = what.label;
   }
 
@@ -894,7 +896,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     const playChip = el(
       'div',
       { class: `explore-chip explore-chip-${kind}`, 'data-testid': 'explore-chip' },
-      el('span', { class: 'explore-chip-icon', 'aria-hidden': 'true' }, iconNode(text.icon)),
+      el('span', { class: 'explore-chip-icon', 'aria-hidden': 'true' }, exploreIcon(text.icon)),
       el('span', { class: 'explore-chip-text' }, text.hint),
       playDots,
     );
@@ -1311,11 +1313,8 @@ const RING_STEPS: readonly (readonly [number, number])[] = [
 ];
 
 /** An icon: a drawn line icon (`ICON_PATHS`), else the emoji or text itself. */
-function iconNode(icon: string): Node {
-  if (!isIconName(icon)) return document.createTextNode(icon);
-  const svg = strokeIcon(ICON_PATHS[icon]);
-  svg.classList.add('explore-icon');
-  return svg;
+function exploreIcon(icon: string): Node {
+  return iconNode(icon, 'explore-icon');
 }
 
 /** Stable 0–1 per spot, so the lantern's glint hides in the same place each time. */
