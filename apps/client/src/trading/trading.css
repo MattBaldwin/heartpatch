@@ -105,9 +105,14 @@
   top: calc(env(safe-area-inset-top) + 68px);
   bottom: calc(env(safe-area-inset-bottom) + 8px);
   box-sizing: border-box;
-  max-width: 520px;
+  /* Two shelves side by side need the room on an iPad (#305). */
+  max-width: 820px;
   margin: 0 auto;
-  padding: 14px 16px 18px;
+  /* The sticky owner headers and send bar sit out over this padding, so nothing peeks past them. */
+  --post-pad-top: 14px;
+  --post-pad-bottom: 18px;
+
+  padding: var(--post-pad-top) 16px var(--post-pad-bottom);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -130,7 +135,8 @@
     right: calc(env(safe-area-inset-right) + 16px);
     top: calc(env(safe-area-inset-top) + 72px);
     bottom: calc(env(safe-area-inset-bottom) + 16px);
-    width: 430px;
+    /* Wide enough for two columns, with the map still live beside it (owner, #305). */
+    width: 640px;
     margin: 0;
   }
 }
@@ -247,20 +253,10 @@
   align-content: start;
 }
 
-.post-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
 .post-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 8px;
-}
-
-.post-columns .post-grid {
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
 }
 
 .post-slot,
@@ -416,12 +412,24 @@ button.post-slot {
 
 .post-notes {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
+  /* One row that slides sideways, so it never takes two rows of a phone (#305). */
+  margin: 0 -16px;
+  padding: 2px 16px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.post-notes > * {
+  flex: none;
 }
 
 .post-note-chip {
+  justify-content: center;
+  min-width: 44px;
   min-height: 44px;
   border: none;
   font: inherit;
@@ -508,11 +516,13 @@ button.post-slot {
 }
 
 .post-row > .post-button {
-  flex: 1;
+  flex: 1 1 auto;
+  /* "No thanks" on one line. */
+  white-space: nowrap;
 }
 
 .post-row > .post-button-primary {
-  flex: 2;
+  flex-grow: 2;
 }
 
 .post-card.post-row {
@@ -533,19 +543,6 @@ button.post-slot {
   min-height: 44px;
   padding: 6px 14px;
   font-size: 14px;
-}
-
-.post-swap {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 8px;
-}
-
-.post-side {
-  display: grid;
-  gap: 6px;
-  justify-items: center;
 }
 
 .post-swap-arrow {
@@ -569,12 +566,578 @@ button.post-slot {
 
 .post-send-bar {
   position: sticky;
-  bottom: 0;
+  /* Down over the sheet's bottom padding, so nothing peeks out under it. */
+  bottom: calc(-1 * var(--post-pad-bottom));
   z-index: 1;
   display: grid;
   gap: 6px;
   margin: 0 -16px;
-  padding: 10px 16px 4px;
+  padding: 10px 16px calc(8px + var(--post-pad-bottom));
   background: #fffafc;
   box-shadow: 0 -6px 12px rgb(255 250 252 / 90%);
+}
+
+/* The split view (#305, the owner-approved mockup, option A). Colours go by
+   role, never by player: mint is always me, lilac always the patch-mate. */
+.post-sheet {
+  --hp-mine: #2f8f7d;
+  --hp-mine-soft: #dcf3ec;
+  --hp-mine-tint: #f1faf7;
+  --hp-mine-line: #a9dccf;
+  --hp-mine-ink: #1f5e52;
+  --hp-theirs: #6a5fd0;
+  --hp-theirs-soft: #e6e3fb;
+  --hp-theirs-tint: #f5f4fe;
+  --hp-theirs-line: #c3bdf2;
+  --hp-theirs-ink: #43399a;
+}
+
+.post-col.mine,
+.post-half.mine,
+.post-face.mine,
+.post-nudge.mine {
+  --own: var(--hp-mine);
+  --own-soft: var(--hp-mine-soft);
+  --own-tint: var(--hp-mine-tint);
+  --own-line: var(--hp-mine-line);
+  --own-ink: var(--hp-mine-ink);
+}
+
+.post-col.theirs,
+.post-half.theirs,
+.post-face.theirs,
+.post-nudge.theirs {
+  --own: var(--hp-theirs);
+  --own-soft: var(--hp-theirs-soft);
+  --own-tint: var(--hp-theirs-tint);
+  --own-line: var(--hp-theirs-line);
+  --own-ink: var(--hp-theirs-ink);
+}
+
+.post-face.mine,
+.post-face.theirs {
+  background: var(--own);
+  color: #fff;
+}
+
+.post-face.small {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+
+.post-split {
+  display: grid;
+  /* Never wider than half each, whatever a name's length (#271's fit rule). */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.post-col {
+  position: relative;
+  container-type: inline-size;
+  display: grid;
+  min-width: 0;
+  border: 2px solid var(--own);
+  border-radius: 18px;
+  background: var(--own-tint);
+}
+
+.post-col.post-flash {
+  animation: post-flash 0.8s ease;
+}
+
+@keyframes post-flash {
+  40% {
+    box-shadow: 0 0 0 6px var(--own-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-col.post-flash {
+    animation: none;
+    box-shadow: 0 0 0 4px var(--own-soft);
+  }
+}
+
+.post-col-head {
+  /* Whose is whose stays in view while the sheet scrolls (#305), up over
+     the sheet's top padding so nothing peeks above it. */
+  position: sticky;
+  top: calc(-1 * var(--post-pad-top));
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  box-sizing: border-box;
+  border: none;
+  /* The column's own corners, less its border (the menus mustn't be clipped). */
+  border-radius: 16px 16px 0 0;
+  background: var(--own);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+}
+
+button.post-col-head {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.post-col-head .post-face {
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  background: #fff;
+  color: var(--own-ink);
+}
+
+.post-who {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.post-col-name {
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.post-col-sub {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.92;
+}
+
+.post-col-chev {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 22%);
+  font-weight: 900;
+}
+
+.post-tools {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+  padding: 6px;
+}
+
+.post-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 var(--hp-pad-x);
+  border: 1.5px solid var(--own-line);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--own-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* A phone's half-width column: sort shrinks to its "↕" (the menu says
+   which), so "Squishies ▾" fits whole beside it with the shared padding. */
+@container (max-width: 239px) {
+  .post-tool.sort {
+    width: 44px;
+    padding: 0;
+  }
+
+  .post-tool.sort .post-tool-text,
+  .post-tool.sort .post-tool-chev {
+    display: none;
+  }
+}
+
+.post-tool-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.post-menu {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% - 2px);
+  right: 6px;
+  left: 6px;
+  display: grid;
+  max-width: 220px;
+  margin-left: auto;
+  padding: 4px;
+  border: 1.5px solid var(--own-line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 26px rgb(60 30 70 / 28%);
+}
+
+.post-menu.mates {
+  top: 56px;
+  margin-left: 0;
+}
+
+.post-menu-head {
+  padding: 6px var(--hp-pad-x) 2px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a6f8c;
+}
+
+.post-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 var(--hp-pad-x);
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #4a3150;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.post-menu-item.on {
+  background: var(--own-soft);
+  color: var(--own-ink);
+}
+
+.post-col > .post-grid,
+.post-col > .post-tiny {
+  padding: 0 6px 6px;
+}
+
+/* Rows: a picture beside the name, as many across as the column fits. */
+.post-grid.rows {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.post-grid.rows .post-slot {
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  justify-items: start;
+  column-gap: 8px;
+  min-height: 52px;
+  /* Room on the right for a picked tick, so it never sits on the name. */
+  padding: 6px 22px 6px 8px;
+  border-radius: 12px;
+  box-shadow: none;
+  text-align: left;
+}
+
+.post-grid.rows .post-slot > :first-child {
+  grid-row: 1 / span 2;
+}
+
+.post-grid.rows .post-slot-name {
+  font-size: 14px;
+}
+
+.post-grid.rows .post-blob {
+  width: 34px;
+  height: 30px;
+}
+
+.post-grid.rows .post-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 20px;
+  border-radius: 10px;
+}
+
+.post-col .post-slot {
+  position: relative;
+}
+
+.post-col .post-slot.picked {
+  outline: 2px solid var(--own);
+  outline-offset: -2px;
+  background: var(--own-soft);
+}
+
+/* A picked thing gets a tick in its owner's colour. */
+.post-col .post-slot.picked::after {
+  content: '✓';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--own);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 18px;
+  text-align: center;
+}
+
+.post-col .post-stepper .post-button {
+  background: #fff;
+  color: var(--own-ink);
+  border: 1.5px solid var(--own-line);
+}
+
+/* The pinned offer strip and the fairness meter (#305). */
+.post-strip {
+  display: grid;
+  gap: 6px;
+}
+
+.post-strip-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 4px;
+}
+
+.post-strip-row .post-swap-arrow {
+  align-self: center;
+  font-size: 18px;
+  color: #8a6f8c;
+}
+
+.post-half {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px var(--hp-pad-y);
+  border: 1.5px solid var(--own);
+  border-radius: 12px;
+  background: var(--own-soft);
+}
+
+.post-half-head {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--own-ink);
+}
+
+.post-half-things {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+}
+
+.post-half-things.full {
+  display: block;
+}
+
+.post-half-things.full .post-grid.rows {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.post-half-things .post-tiny {
+  color: var(--own-ink);
+}
+
+.post-mini {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.post-mini .post-blob {
+  width: 30px;
+  height: 26px;
+}
+
+.post-mini .post-icon {
+  width: 30px;
+  height: 30px;
+  font-size: 17px;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.post-mini b {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 15%);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.post-hearts {
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.post-hearts .on {
+  color: var(--own);
+}
+
+.post-hearts .off {
+  color: #e6d6e1;
+}
+
+.post-meter {
+  display: grid;
+  gap: 4px;
+}
+
+.post-meter-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.post-meter-track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--hp-mine-soft),
+    #f4ebf1 38%,
+    #f4ebf1 62%,
+    var(--hp-theirs-soft)
+  );
+}
+
+.post-meter-fair {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  box-sizing: border-box;
+  border: 1.5px solid #e3a21a;
+  border-radius: 999px;
+  background: #fff1c9;
+}
+
+.post-meter-heart {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  border: 2px solid #e3a21a;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 5px rgb(60 30 70 / 30%);
+  font-size: 14px;
+  transform: translate(-50%, -50%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .post-meter-heart {
+    transition: left 0.3s ease;
+  }
+}
+
+.post-meter-heart.mine {
+  border-color: var(--hp-mine);
+  color: var(--hp-mine);
+}
+
+.post-meter-heart.theirs {
+  border-color: var(--hp-theirs);
+  color: var(--hp-theirs);
+}
+
+.post-meter-label {
+  display: block;
+  font-size: 15px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.post-meter-label.fair {
+  color: #8a5a00;
+}
+
+.post-meter-label.mine {
+  color: var(--hp-mine-ink);
+}
+
+.post-meter-label.theirs {
+  color: var(--hp-theirs-ink);
+}
+
+.post-meter-label.none {
+  font-size: 13px;
+  font-weight: 800;
+  color: #8a6f8c;
+}
+
+/* A lopsided offer: the label, a friendly line, and a shortcut. Never blocks sending. */
+.post-meter-say {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px var(--hp-pad-x);
+  border: 1.5px solid #f6e6c9;
+  border-radius: 12px;
+  background: #fff8ec;
+}
+
+.post-meter-say .post-meter-label {
+  text-align: left;
+}
+
+.post-meter-sub {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.post-nudge {
+  flex: none;
+  min-height: 44px;
+  padding: 0 var(--hp-pad-x);
+  border: 1.5px solid var(--own);
+  border-radius: 999px;
+  background: var(--own-soft);
+  color: var(--own-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.post-tool:focus-visible,
+.post-menu-item:focus-visible,
+.post-col-head:focus-visible,
+.post-nudge:focus-visible {
+  outline: 3px solid #ffc94d;
+  outline-offset: 2px;
 }

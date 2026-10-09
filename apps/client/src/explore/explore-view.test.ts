@@ -13,15 +13,22 @@ import {
   EXPLORE_TEXT,
   findLines,
   insideTile,
+  findShowsCard,
+  findToast,
+  foundCount,
   joystickVector,
+  makeOneLine,
   missingTool,
-  nearestSpot,
-  needLine,
-  spotInReach,
+  needsHere,
   progressLine,
+  rareTitle,
   restLine,
-  standBeside,
   stepToward,
+  toolChip,
+  toolChipShort,
+  isIconName,
+  HANDS_ICON,
+  PLAY_TEXT,
   toolRecipeRows,
   usesLine,
   xpLines,
@@ -63,7 +70,8 @@ describe('explore text', () => {
     expect(usesLine('net', 12)).toBe('12 scoops left');
     expect(usesLine('shovel', 1)).toBe('1 dig left');
     expect(usesLine('rope', 0)).toBe('Resting zZ');
-    expect(needLine('rope')).toBe('You need a Rope to climb up there!');
+    expect(needsHere('mound', 'shovel')).toBe('This mound needs a Shovel!');
+    expect(needsHere('hollow-log', 'net')).toBe('This hollow log needs a Net!');
     expect(restLine('shovel')).toBe('Your Shovel needs a rest! Craft a new one 🛠️');
   });
 
@@ -77,10 +85,78 @@ describe('explore text', () => {
     expect(actionFor({ kind: 'tree', tool: null }).label).toBe('Shake');
   });
 
+  it('shows each spot its own icon, drawn or an emoji every iPhone has', () => {
+    expect(actionFor({ kind: 'mound', tool: 'shovel' }).icon).toBe('shovel');
+    expect(actionFor({ kind: 'flower-bed', tool: null }).icon).toBe('🌷');
+    expect(actionFor({ kind: 'tree', tool: null }).icon).toBe('🌳');
+    expect(actionFor({ kind: 'rock', tool: null }).icon).toBe('rock');
+  });
+
+  it('uses only emoji the iOS 17 floor has, or drawn icons (the explore view itself)', () => {
+    // Scope: the big button, the gesture chips, the header's hands, and every
+    // line in EXPLORE_TEXT. Each emoji here was checked by hand against the
+    // floor (iOS 17 has up to Emoji 15.0; 🪏 is Emoji 16). A new one is added
+    // here on purpose, after the same check. Item icons come from the bag's
+    // own table (inventory/item-icons.ts), outside this view.
+    const known = new Set(['🌳', '🌷', '🎃', '✊', '↔', '✋', '✨', '🪱', '🏡', '💦', '🔍']);
+    const icons = [
+      ...EXPLORE_RULES.spotKinds.map((k) => actionFor({ kind: k.id, tool: k.tool }).icon),
+      ...Object.values(PLAY_TEXT).map((p) => p.icon),
+      HANDS_ICON,
+    ];
+    const lines = Object.values(EXPLORE_TEXT).map((t) => (typeof t === 'string' ? t : t('Meadow')));
+    for (const text of [...icons.filter((i) => !isIconName(i)), ...lines]) {
+      for (const ch of text.match(/\p{Extended_Pictographic}/gu) ?? []) {
+        expect(known.has(ch), `${ch} in “${text}”`).toBe(true);
+      }
+    }
+  });
+
   it('lists a tool recipe against the bag', () => {
     const rows = toolRecipeRows('rope', { greens: 1 });
     expect(rows).toEqual([{ id: 'greens', text: '🌿 Greens 1/4', enough: false }]);
     expect(toolRecipeRows('shovel', { timber: 9, stone: 9 }).every((r) => r.enough)).toBe(true);
+  });
+
+  it('names the tool in hand on the header chip', () => {
+    expect(toolChip('shovel', 18)).toBe('Shovel · 18 digs');
+    expect(toolChip('lantern', 1)).toBe('Lantern · 1 cave');
+    expect(toolChip('net', 0)).toBe('Net · Resting zZ');
+    expect(toolChip(null, 0)).toBe('Hands');
+    expect(toolChipShort('lantern', 20)).toBe('20');
+    expect(toolChipShort('net', 0)).toBe('zZ');
+    expect(toolChipShort(null, 0)).toBe('');
+  });
+
+  it('says what makes a missing tool, counted once the bag is read', () => {
+    const rows = toolRecipeRows('rope', { greens: 1 });
+    expect(makeOneLine(rows, true)).toBe('Make one: 🌿 Greens 1/4');
+    expect(makeOneLine(rows, false)).toBe('Make one: 🌿 Greens ×4');
+    expect(makeOneLine([], true)).toBe('');
+  });
+
+  it('toasts a common find and keeps the card for rare ones', () => {
+    const common = found({ found: { timber: 2 }, xp: [{ squishyId: 'a', xp: 6 }] });
+    expect(findShowsCard(common)).toBe(false);
+    expect(findToast(common, { a: 'Puddlepuff' })).toEqual({
+      main: '+2 Timber',
+      extra: 'Puddlepuff +6 XP',
+    });
+    expect(foundCount(common)).toBe(2);
+    expect(findToast(found(), {}).main).toBe(EXPLORE_TEXT.worm);
+    expect(findToast(common, {}, true).main).toBe('Big splash! 💦 +2 Timber');
+    expect(findToast(found({ tool: { id: 'shovel', usesLeft: 0 } }), {}).extra).toBe(
+      restLine('shovel'),
+    );
+    const lore = found({ lore: { id: 'under-a-mossy-rock', title: 'Under a Mossy Rock' } });
+    expect(findShowsCard(lore)).toBe(true);
+    expect(rareTitle(lore, 'meadow')).toBe(EXPLORE_TEXT.lorePage);
+    expect(findShowsCard(found({ clothing: 'pumpkin-hood' }))).toBe(true);
+    expect(findShowsCard(found({ notable: 'heartdust' }))).toBe(true);
+    const done = found({ explored: true, homestead: 'joined' });
+    expect(findShowsCard(done)).toBe(true);
+    expect(rareTitle(done, 'meadow')).toBe('Meadow joined your home!');
+    expect(rareTitle(found({ explored: true }), 'meadow')).toContain('every spot');
   });
 
   it('turns a find into card lines, or a wiggly worm', () => {
@@ -151,27 +227,6 @@ describe('walking on the tile', () => {
   it('walks towards a point and stops on it', () => {
     expect(stepToward({ x: 0, z: 0 }, { x: 0.5, z: 0 }, 0.1)).toEqual({ x: 0.1, z: 0 });
     expect(stepToward({ x: 0.45, z: 0 }, { x: 0.5, z: 0 }, 0.1)).toEqual({ x: 0.5, z: 0 });
-  });
-
-  it('stops beside a spot, within reach of it', () => {
-    const at = standBeside({ x: -0.6, z: 0 }, { x: 0.2, z: 0 });
-    expect(at.x).toBeLessThan(0.2);
-    expect(nearestSpot(at, [spot(0, 0.2, 0)])?.index).toBe(0);
-  });
-
-  it('finds the nearest spot not searched yet', () => {
-    const spots = [spot(0, 0.05, 0, true), spot(1, 0.1, 0), spot(2, 0.6, 0)];
-    expect(nearestSpot({ x: 0, z: 0 }, spots)?.index).toBe(1);
-    expect(nearestSpot({ x: -0.5, z: 0 }, spots)).toBeNull();
-  });
-
-  it('offers the spot the player tapped over a nearer one beside it', () => {
-    const spots = [spot(0, 0.05, 0), spot(1, 0.12, 0), spot(2, 0.12, 0, true)];
-    expect(spotInReach({ x: 0, z: 0 }, spots, null)?.index).toBe(0);
-    expect(spotInReach({ x: 0, z: 0 }, spots, 1)?.index).toBe(1);
-    // Searched already, or out of reach: the nearest again.
-    expect(spotInReach({ x: 0, z: 0 }, spots, 2)?.index).toBe(0);
-    expect(spotInReach({ x: -0.5, z: 0 }, [spot(1, 0.3, 0)], 1)).toBeNull();
   });
 
   it('reads the joystick as a direction on the ground', () => {

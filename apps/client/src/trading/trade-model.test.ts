@@ -5,6 +5,7 @@ import {
   type MailboxEntry,
   type TradeLineView,
   type TradeOfferView,
+  type TradeShelf,
   type TradesView,
   type WsEventMessage,
 } from '@heartpatch/shared';
@@ -15,13 +16,18 @@ import {
   lineLook,
   linesInWords,
   mailboxTitle,
+  meterLook,
   noteText,
   NOTE_IDS,
   offerRequest,
   offersFromMe,
   offersToMe,
+  pickedViews,
   postChip,
   sendProblem,
+  shelfLines,
+  SHELF_FILTERS,
+  SHELF_SORTS,
   stepItem,
   tabBadges,
   togglePick,
@@ -207,5 +213,170 @@ describe('trade model (#271)', () => {
       .map((v) => (typeof v === 'string' ? v : Object.values(v).join(' ')))
       .join(' ');
     expect(findAvoidedWords(words)).toEqual([]);
+  });
+});
+
+describe('shelfLines (#305)', () => {
+  const emberbun = (n: number, level = 6): SquishyView => ({ ...squishy(n, 'emberbun'), level });
+  const shelf: TradeShelf = {
+    userId: SAM,
+    squishies: [emberbun(2, 3), { ...emberbun(5, 30), nickname: 'Zippy' }, squishy(3, null)],
+    items: [
+      { kind: 'item', itemId: 'timber', quantity: 9 },
+      { kind: 'item', itemId: 'heart-charm', quantity: 1 },
+    ],
+    clothing: [hat],
+  };
+  const names = (lines: TradeLineView[]) => lines.map((l) => lineLook(l).name);
+
+  it('filters to one kind, or shows everything', () => {
+    expect(shelfLines(shelf, 'squishies', 'name').map((l) => l.kind)).toEqual([
+      'squishy',
+      'squishy',
+      'squishy',
+    ]);
+    expect(names(shelfLines(shelf, 'items', 'name'))).toEqual(['Heart Charm ×1', 'Timber ×9']);
+    expect(shelfLines(shelf, 'clothing', 'name')).toEqual([hat]);
+    expect(shelfLines(shelf, 'all', 'name')).toHaveLength(6);
+  });
+
+  it('sorts A–Z by the name shown', () => {
+    expect(names(shelfLines(shelf, 'squishies', 'name'))).toEqual([
+      'Emberbun',
+      'Mystery squishy',
+      'Zippy',
+    ]);
+  });
+
+  it('sorts rarest first by what one of each is worth, so a big stack doesn’t win', () => {
+    expect(names(shelfLines(shelf, 'squishies', 'rarity'))[0]).toBe('Zippy');
+    // One Heart Charm is worth more than one Timber, however many Timber there are.
+    expect(names(shelfLines(shelf, 'items', 'rarity'))).toEqual(['Heart Charm ×1', 'Timber ×9']);
+  });
+
+  it('sorts newest first by the time-ordered id, with items (no date) last', () => {
+    const sorted = shelfLines(shelf, 'all', 'newest');
+    expect(sorted.slice(0, 4)).toEqual([
+      hat,
+      shelf.squishies[1],
+      shelf.squishies[2],
+      shelf.squishies[0],
+    ]);
+    expect(sorted.slice(4).map((l) => l.kind)).toEqual(['item', 'item']);
+  });
+
+  it('never changes the shelf itself', () => {
+    const before = JSON.stringify(shelf);
+    for (const f of SHELF_FILTERS) for (const s of SHELF_SORTS) shelfLines(shelf, f, s);
+    expect(JSON.stringify(shelf)).toBe(before);
+  });
+});
+
+describe('pickedViews (#305)', () => {
+  it('draws picks as the shelf has them, with the picked count for items', () => {
+    const shelf: TradeShelf = {
+      userId: ME,
+      squishies: [squishy(1)],
+      items: [{ kind: 'item', itemId: 'timber', quantity: 9 }],
+      clothing: [],
+    };
+    expect(
+      pickedViews(
+        [
+          { kind: 'item', itemId: 'timber', quantity: 2 },
+          { kind: 'squishy', squishyId: ID(1) },
+          { kind: 'squishy', squishyId: ID(7) },
+        ],
+        shelf,
+      ),
+    ).toEqual([timber(2), squishy(1)]);
+    expect(pickedViews([{ kind: 'squishy', squishyId: ID(1) }], undefined)).toEqual([]);
+  });
+});
+
+describe('meterLook (#305)', () => {
+  const charm = (quantity: number): TradeLineView => ({
+    kind: 'item',
+    itemId: 'heart-charm',
+    quantity,
+  });
+
+  it('waits for both sides, with no heart on the track', () => {
+    const look = meterLook([charm(1)], [], 'Sam', 'sender');
+    expect(look).toMatchObject({
+      tip: 'none',
+      marker: null,
+      label: 'Pick something on each side!',
+    });
+    expect(look.giveHearts).toBeGreaterThan(0);
+    expect(look.getHearts).toBe(0);
+  });
+
+  it('calls an even trade fair, with the heart in the middle band', () => {
+    const look = meterLook([charm(2)], [charm(2)], 'Sam', 'sender');
+    expect(look).toMatchObject({
+      tip: 'even',
+      lopsided: false,
+      label: 'Fair trade! 💛',
+      sub: null,
+    });
+    expect(look.marker).toBe(50);
+    expect(look.giveHearts).toBe(look.getHearts);
+  });
+
+  it('tips toward whoever gets more, and the heart slides to their end', () => {
+    const mine = meterLook([charm(4)], [charm(5)], 'Sam', 'sender');
+    expect(mine).toMatchObject({ tip: 'me', label: 'Tips toward you', nudge: null });
+    expect(mine.marker!).toBeLessThan(50 - mine.fairHalf);
+    const theirs = meterLook([charm(5)], [charm(4)], 'Sam', 'sender');
+    expect(theirs).toMatchObject({ tip: 'them', label: 'Tips toward Sam' });
+    expect(theirs.marker!).toBeGreaterThan(50 + theirs.fairHalf);
+  });
+
+  it('nudges the sender kindly on a lopsided offer, never blocking', () => {
+    expect(meterLook([charm(4)], [charm(1)], 'Sam', 'sender')).toMatchObject({
+      tip: 'them',
+      lopsided: true,
+      label: 'Way more for Sam',
+      sub: 'Want to ask for more?',
+      nudge: 'ask',
+    });
+    expect(meterLook([charm(1)], [charm(4)], 'Sam', 'sender')).toMatchObject({
+      tip: 'me',
+      label: 'Way more for you',
+      sub: 'Add something for Sam?',
+      nudge: 'add',
+    });
+  });
+
+  it('gives the receiver a calm note and no button', () => {
+    expect(meterLook([charm(4)], [charm(1)], 'Lee', 'receiver')).toMatchObject({
+      sub: 'That’s kind! Just check you’re happy.',
+      nudge: null,
+    });
+    expect(meterLook([charm(1)], [charm(4)], 'Lee', 'receiver')).toMatchObject({
+      sub: 'What a kind offer!',
+      nudge: null,
+    });
+  });
+
+  it('values a squishy the viewer hasn’t met at the plain middle value', () => {
+    const mystery = meterLook([squishy(1, null)], [squishy(2, null)], 'Sam', 'sender');
+    expect(mystery.tip).toBe('even');
+    expect(mystery.giveHearts).toBeGreaterThan(0);
+  });
+
+  it('never shows a number, and uses kind words', () => {
+    const looks = [
+      meterLook([charm(4)], [charm(1)], 'Sam', 'sender'),
+      meterLook([charm(1)], [charm(4)], 'Sam', 'sender'),
+      meterLook([charm(4)], [charm(1)], 'Sam', 'receiver'),
+      meterLook([charm(2)], [charm(2)], 'Sam', 'sender'),
+    ];
+    for (const look of looks) {
+      const words = `${look.label} ${look.sub ?? ''}`;
+      expect(words).not.toMatch(/\d/);
+      expect(findAvoidedWords(words)).toEqual([]);
+    }
   });
 });
