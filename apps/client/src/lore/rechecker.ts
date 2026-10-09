@@ -16,10 +16,12 @@ export function createRechecker(
   ms: number,
 ): Rechecker {
   let pending = 0;
+  // Done either way: a look that fails (offline) has finished too.
+  const done = () => {
+    pending--;
+  };
   const run = () => {
-    void look().finally(() => {
-      pending--;
-    });
+    void look().then(done, done);
   };
   return {
     check: () => {
