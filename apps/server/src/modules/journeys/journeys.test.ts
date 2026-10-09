@@ -309,7 +309,9 @@ describe.skipIf(!url)('journeys to trading posts (#270, needs DATABASE_URL)', ()
     // The pass: the post is open, and the map view shows it.
     await expect(access(mapId, kid, post)).resolves.toBeUndefined();
     const view = await viewOf(server, kid, mapId);
-    expect(view.posts!.find((p) => p.q === post.q)?.visitUntil).toBe(until.toISOString());
+    expect(view.posts!.find((p) => p.q === post.q && p.r === post.r)?.visitUntil).toBe(
+      until.toISOString(),
+    );
     // No second journey while the pass is good.
     const twice = await call(server, 'POST', `/maps/${mapId}/posts/journey`, kid, {
       q: post.q,
@@ -322,7 +324,8 @@ describe.skipIf(!url)('journeys to trading posts (#270, needs DATABASE_URL)', ()
     clock.setTime(until.getTime());
     await expect(access(mapId, kid, post)).rejects.toMatchObject({ code: 'FORBIDDEN' });
     expect(
-      (await viewOf(server, kid, mapId)).posts!.find((p) => p.q === post.q)?.visitUntil,
+      (await viewOf(server, kid, mapId)).posts!.find((p) => p.q === post.q && p.r === post.r)
+        ?.visitUntil,
     ).toBeNull();
   });
 
