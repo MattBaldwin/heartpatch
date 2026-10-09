@@ -188,7 +188,7 @@ Family signup codes (migration 0026, #195).
 | `joined_at` | timestamptz | |
 | `defense_stance` | enum `defense_stance`, default `'balanced'` | How their squishies on watch play when challenged (#16): `aggressive` \| `defensive` \| `balanced` (UI: Bold, Careful, Balanced). Read under the member lock in a challenge's start transaction |
 
-The 2–4 players-per-map limit is a game rule, enforced by the maps service under a row lock (apps/server/README.md, "Maps").
+The players-per-map limit (up to 6; older patches keep 4, #318) is a game rule, enforced by the maps service under a row lock (apps/server/README.md, "Maps").
 
 ### `tiles`
 | Column | Type | Notes |

@@ -3,8 +3,8 @@ import { deriveSeed, Rng, type Seed } from '../rng/index.js';
 import type { TradingPostRules } from '../schemas/data/map-gen.js';
 import { isTradingPost } from '../territory/reach.js';
 
-// Trading posts (#30, #269; owner decision 4): 4 shared posts a map, spread
-// fairly. The same rule places them on a new map (`generateMap`) and on an
+// Trading posts (#30, #269; owner decision 4): 4 shared posts a map (one
+// per home on a 6-seat map, #318), spread fairly. The same rule places them on a new map (`generateMap`) and on an
 // older map (the server's boot pass, over its stored tiles), so a map gets
 // the same kind of layout either way. Pure and deterministic: integer maths,
 // fixed iteration order, and ties broken by a seed.
@@ -53,7 +53,8 @@ function isCandidate(tile: PostPlacementTile, gapTerrain: string): boolean {
  *    that fits: every combination of one tile at `d` per home is tried, and
  *    the ones whose closest two posts are furthest apart win (the map seed
  *    picks between ties). Only when no tile set fits at exactly `d` for any
- *    `d` may a home's nearest be `d + 1`.
+ *    `d` may a home's nearest be `d + 1`. Six homes that are turns of each
+ *    other (#318) try only layouts that turn the same way first.
  * 2. **Any posts left over** (2- and 3-seat maps) go one at a time where
  *    they're furthest from the others without bringing any home a closer
  *    post than the others have, so neighbours end up sharing them.

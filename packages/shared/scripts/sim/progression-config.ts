@@ -107,7 +107,9 @@ export const PROGRESSION_CONFIG: ProgressionConfig = {
   readyAt: 50,
   estimateGames: 16,
   kidPolicy: 'aggressive', // as in the design review's win-rate table
-  seats: [4, 2], // 4 is what new maps use (MAP_MAX_PLAYERS); 2 is the review's layout
+  // 4 was new maps' size when the journey gate was set (#318 made new maps 6;
+  // older patches keep 4); 2 is the review's layout.
+  seats: [4, 2],
 };
 
 /** The shipped data. */

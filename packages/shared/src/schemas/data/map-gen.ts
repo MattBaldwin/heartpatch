@@ -41,7 +41,7 @@ export type GuardianStrength = z.infer<typeof GuardianStrengthSchema>;
 
 /**
  * Trading posts (#30, #269; owner decisions 2026-10-07): 4 shared posts a
- * map, never owned, spread fairly so every home slot has one nearby. Placed
+ * map (one per home on a bigger map, #318), never owned, spread fairly so every home slot has one nearby. Placed
  * by `placeTradingPosts`, on new maps when they're made and on older maps by
  * the server's boot pass, by the same rule.
  */
@@ -63,23 +63,31 @@ export const TradingPostRulesSchema = z
 export type TradingPostRules = z.infer<typeof TradingPostRulesSchema>;
 
 /** Settings for the seeded map generator (`generateMap`). */
-export const MapGenSettingsSchema = z.strictObject({
-  /** One layout per supported player count. */
-  layouts: z.array(MapLayoutSchema).min(1),
-  /** Juniper's Gap covers every tile within this many steps of the centre. */
-  gapRadius: z.number().int().min(0),
-  /** Terrain for Juniper's Gap tiles. */
-  gapTerrain: ContentIdSchema,
-  /** Terrain under every Heart Seed tile, so there's always room to build. */
-  homeTerrain: ContentIdSchema,
-  /**
-   * Nodes every home ring gets, regardless of terrain (design doc §11). Each
-   * one goes on a different ring tile, so at most 6.
-   */
-  homeRingNodes: z.array(ContentIdSchema).min(1).max(6),
-  /** Average tiles per terrain patch: bigger means fewer, larger patches. */
-  patchSize: z.number().int().positive(),
-  guardianStrength: GuardianStrengthSchema,
-  tradingPosts: TradingPostRulesSchema,
-});
+export const MapGenSettingsSchema = z
+  .strictObject({
+    /** One layout per supported player count. */
+    layouts: z.array(MapLayoutSchema).min(1),
+    /** Juniper's Gap covers every tile within this many steps of the centre. */
+    gapRadius: z.number().int().min(0),
+    /** Terrain for Juniper's Gap tiles. */
+    gapTerrain: ContentIdSchema,
+    /** Terrain under every Heart Seed tile, so there's always room to build. */
+    homeTerrain: ContentIdSchema,
+    /**
+     * Nodes every home ring gets, regardless of terrain (design doc §11). Each
+     * one goes on a different ring tile, so at most 6.
+     */
+    homeRingNodes: z.array(ContentIdSchema).min(1).max(6),
+    /** Average tiles per terrain patch: bigger means fewer, larger patches. */
+    patchSize: z.number().int().positive(),
+    guardianStrength: GuardianStrengthSchema,
+    tradingPosts: TradingPostRulesSchema,
+  })
+  .refine(
+    (m) =>
+      m.tradingPosts.names.length >=
+      Math.max(m.tradingPosts.perMap, ...m.layouts.map((l) => l.players)),
+    // A map has one post per home at least (#318), each with its own name.
+    'every post on the biggest layout needs a name',
+  );
 export type MapGenSettings = z.infer<typeof MapGenSettingsSchema>;
