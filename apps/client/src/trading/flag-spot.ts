@@ -15,7 +15,12 @@ export interface FlagRoom {
   height: number;
   /** The bottom of the corner buttons (the top bar): no flag goes above it. */
   top: number;
+  /** What's drawn over the map (the top bar, the patch name, open sheets): a flag never peeks out from under one. */
+  covers: readonly Box[];
 }
+
+const overlaps = (a: Box, b: Box) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 /**
  * The flag's anchor (its bottom middle) over its tile, or null to hide it.
@@ -23,7 +28,8 @@ export interface FlagRoom {
  * Upward it keeps below the top bar, and once its tile is mostly under the
  * bar it hides: pinned to the very top it would show between the corner
  * buttons, and on a phone with a sheet open that thin strip is all the map
- * that's left (#310).
+ * that's left (#310). A flag that would touch anything drawn over the map
+ * hides too, rather than show a cut-off sliver beside it.
  */
 export function flagSpot(
   tile: Box | null,
@@ -40,8 +46,8 @@ export function flagSpot(
     return null;
   }
   const half = flag.width / 2;
-  return {
-    x: Math.round(Math.min(Math.max(tile.x + tile.width / 2, half), room.width - half)),
-    y: Math.round(Math.max(tile.y, room.top + flag.height)),
-  };
+  const x = Math.round(Math.min(Math.max(tile.x + tile.width / 2, half), room.width - half));
+  const y = Math.round(Math.max(tile.y, room.top + flag.height));
+  const box = { x: x - half, y: y - flag.height, width: flag.width, height: flag.height };
+  return room.covers.some((cover) => overlaps(box, cover)) ? null : { x, y };
 }

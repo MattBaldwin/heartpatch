@@ -9,7 +9,7 @@ import { DOME, TILE_RADIUS, tileScreenRectOf, topOf } from '../map/map-scene.js'
 import type { MapLayer } from '../map/map-screen.js';
 import { el } from '../ui/dom.js';
 import './trading.css';
-import { flagSpot } from './flag-spot.js';
+import { flagSpot, type Box, type FlagRoom } from './flag-spot.js';
 import { postFlagLabel, postFlags, type PostFlag } from './post-model.js';
 
 // Trading posts on the map (#269, mockup screen a): a flag over every post
@@ -42,20 +42,26 @@ const FLAG_MIN_WIDTH_PX = 80;
 const FLAG_MIN_HEIGHT_PX = 26;
 /** The top bar's corner buttons (trays.ts, and the auth chip without trays). */
 const TOP_BAR = '.tray-top-left, .tray-top-right, .auth-chip';
+/** Everything else drawn over the map: the patch name pill and every open sheet or panel. */
+const OVER_MAP = `${TOP_BAR}, .map-hud, [role="dialog"]`;
 
 /**
- * Where the top bar ends, in CSS pixels from the top (0 when none is shown).
- * Measured, not a constant: its height follows the safe area and, on an iPad
- * in landscape, the trays' layout. Read after the flags' own sizes, so the
- * layout is already fresh.
+ * What a flag must keep clear of, in CSS pixels: where the top bar ends (0
+ * with none shown) and the boxes of everything over the map. Measured, not
+ * constants: the bar follows the safe area and, on an iPad in landscape, the
+ * trays' layout, and sheets differ per screen. A hidden one measures empty.
+ * Read after the flags' own sizes, so the layout is already fresh.
  */
-function topBarBottom(): number {
-  let bottom = 0;
-  for (const node of document.querySelectorAll(TOP_BAR)) {
+function flagRoom(): FlagRoom {
+  let top = 0;
+  const covers: Box[] = [];
+  for (const node of document.querySelectorAll(OVER_MAP)) {
     const box = node.getBoundingClientRect();
-    if (box.height > 0) bottom = Math.max(bottom, box.bottom);
+    if (box.width <= 0 || box.height <= 0) continue;
+    covers.push({ x: box.x, y: box.y, width: box.width, height: box.height });
+    if (node.matches(TOP_BAR)) top = Math.max(top, box.bottom);
   }
-  return bottom;
+  return { width: window.innerWidth, height: window.innerHeight, top, covers };
 }
 
 /** The ring: just inside the tile's rim, lifted clear of the dome. TUNE. */
@@ -67,14 +73,14 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
   const rings = new Map<HexKey, Mesh>();
   let ringMat: StandardMaterial | null = null;
 
-  const place = (flag: Flag, top: number) => {
+  const place = (flag: Flag, room: FlagRoom) => {
     const spot = flagSpot(
       scene ? tileScreenRectOf(scene, flag.post.tile) : null,
       {
         width: Math.max(flag.node.offsetWidth, FLAG_MIN_WIDTH_PX),
         height: Math.max(flag.node.offsetHeight, FLAG_MIN_HEIGHT_PX),
       },
-      { width: window.innerWidth, height: window.innerHeight, top },
+      room,
     );
     const at = spot ? `${String(spot.x)},${String(spot.y)}` : 'hidden';
     if (at === flag.at) return;
@@ -85,8 +91,8 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
     }
   };
   const placeAll = () => {
-    const top = topBarBottom();
-    for (const flag of flags.values()) place(flag, top);
+    const room = flagRoom();
+    for (const flag of flags.values()) place(flag, room);
   };
 
   const ringFor = (target: Scene, flag: PostFlag): Mesh => {
@@ -152,7 +158,7 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       root.append(node);
       const added = { post, node, at: '', label };
       flags.set(key, added);
-      place(added, topBarBottom());
+      place(added, flagRoom());
     }
   };
 

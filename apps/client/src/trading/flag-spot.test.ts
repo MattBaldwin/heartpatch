@@ -3,7 +3,7 @@ import { flagSpot } from './flag-spot.js';
 
 const flag = { width: 120, height: 26 };
 // An iPhone in portrait; the corner buttons end 60px down.
-const room = { width: 393, height: 659, top: 60 };
+const room = { width: 393, height: 659, top: 60, covers: [] };
 const tile = (x: number, y: number) => ({ x, y, width: 40, height: 30 });
 
 describe('flagSpot', () => {
@@ -35,5 +35,23 @@ describe('flagSpot', () => {
     expect(flagSpot(tile(180, 45), flag, room)).toBeNull();
     expect(flagSpot(tile(180, 10), flag, room)).toBeNull();
     expect(flagSpot(tile(180, -20), flag, room)).toBeNull();
+  });
+
+  it('hides rather than peek out from under a sheet or the patch name (#310)', () => {
+    // A phone's sheet from y=68 down: a flag pushed under the bar would be a sliver.
+    const sheet = { x: 8, y: 68, width: 377, height: 580 };
+    expect(flagSpot(tile(180, 70), flag, { ...room, covers: [sheet] })).toBeNull();
+    // The patch name pill, top middle.
+    const name = { x: 130, y: 64, width: 133, height: 44 };
+    expect(flagSpot(tile(180, 120), flag, { ...room, covers: [name] })).toBeNull();
+    // Clear of both: shown.
+    expect(flagSpot(tile(180, 300), flag, { ...room, covers: [name] })).toEqual({ x: 200, y: 300 });
+  });
+
+  it('hides beside an iPad side panel it would run under', () => {
+    const panel = { x: 760, y: 0, width: 434, height: 834 };
+    const wide = { width: 1194, height: 834, top: 60, covers: [panel] };
+    expect(flagSpot(tile(700, 400), flag, wide)).toBeNull();
+    expect(flagSpot(tile(500, 400), flag, wide)).toEqual({ x: 520, y: 400 });
   });
 });
