@@ -9,11 +9,12 @@ const testDir = './tests/e2e';
  * CI's e2e groups, one job each per device. Playwright's own --shard splits by
  * test count in file order, which put every heavy WebGL spec on shard 1 (12 min
  * on iPad). These are balanced by measured iPad WebKit time (the slower device,
- * 2 workers): about 16 min of tests each, so about 8-9 min a job. A spec file
- * runs on one worker, so a slow file sets its group's floor: taps (about 9 min)
- * and tutorial (about 8) each get a group of light specs that sort after them,
- * so the other worker drains those while the big file runs. Rebalance from the
- * CI list reporter's durations when a group gets slow (#246).
+ * 2 workers): about 15-16 min of tests each, so about 8-9 min a job. A spec
+ * file runs on one worker, so a slow file sets its group's floor: taps (about
+ * 9 min) and tutorial (about 8) each sit in a group of light specs that the
+ * other worker drains. Files start in name order, so at most one small spec
+ * sorts before the big one. Rebalance from the CI list reporter's durations
+ * when a group gets slow (#246).
  *
  * Every spec is listed in exactly one group; there is no catch-all, so a new
  * spec can't quietly pile onto one job (group 5 grew to 28 min that way, #296).
@@ -22,11 +23,11 @@ const testDir = './tests/e2e';
  * the group with the least time. Unset (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  // ~16.4 min of tests: taps alone is ~8.7.
-  ['admin', 'taps', 'trading-posts', 'tray-layout', 'whats-new', 'wild-picker'],
-  // ~14.9: tutorial alone is ~7.6; tutorial-flow's runs go side by side.
-  ['audio', 'auth', 'tutorial', 'tutorial-flow', 'version', 'wardrobe'],
-  ['battle', 'capture', 'close-up', 'fences', 'map', 'milestones', 'potions'],
+  // ~15.8 min of tests: taps alone is ~8.7.
+  ['admin', 'auth', 'taps', 'trading-posts', 'tray-layout', 'wild-picker'],
+  // ~15.2: tutorial alone is ~7.6; tutorial-flow's runs go side by side.
+  ['tutorial', 'tutorial-flow', 'version', 'wardrobe', 'whats-new'],
+  ['audio', 'battle', 'capture', 'close-up', 'fences', 'map', 'milestones', 'potions'],
   ['care', 'cinematic', 'explore', 'hollow', 'inventory', 'keeper', 'recipe-book', 'short-screens'],
   [
     'battle-ui',
