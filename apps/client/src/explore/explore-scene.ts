@@ -704,12 +704,14 @@ export class ExploreScene {
       );
     }
     for (const [kind, spots] of byKind) {
-      const mesh = isShape(kind)
-        ? buildShape(this.#scene, kind)
-        : buildProp(this.#scene, kind).mesh;
+      const build = () =>
+        isShape(kind) ? buildShape(this.#scene, kind) : buildProp(this.#scene, kind).mesh;
+      const mesh = build();
       mesh.material = material;
-      // Shares the geometry: one more draw call only while something hides the Keeper.
-      const faded = mesh.clone(`${mesh.name}-faded`);
+      // Its own mesh (a clone would share the thin instances): one more draw
+      // call only while something hides the Keeper.
+      const faded = build();
+      faded.name = `${mesh.name}-faded`;
       faded.material = fadedMaterial;
       setInstances(
         mesh,

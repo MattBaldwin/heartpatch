@@ -345,6 +345,7 @@ describe('props in the way', () => {
       spot(2, 0.4, -0.15, false, 'tree'), // off to the side
       spot(3, 0, -0.1, false, 'mound'), // low: the Keeper shows over it
       spot(4, 0, -0.9, false, 'tree'), // far in front: the camera looks over it
+      spot(5, 0.09, 0, false, 'tree'), // level with it, beside it
     ];
     expect([...hidingSpots(keeper, spots, pitch, tall, middle)]).toEqual([0]);
   });

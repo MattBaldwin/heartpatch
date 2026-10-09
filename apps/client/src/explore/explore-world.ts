@@ -264,7 +264,7 @@ export function hidingSpots(
   for (const s of spots) {
     const r = spotRadius(s.kind);
     const ahead = keeper.z - s.z; // towards the camera
-    if (ahead < -r) continue;
+    if (ahead <= 0) continue; // level with it or behind it: never in the way
     if (Math.abs(s.x - keeper.x) > r * 2 + EXPLORE_FADE.side) continue;
     // The line of sight to the Keeper's middle climbs `slope` per unit towards the camera.
     if (height(s.kind) <= middle + Math.max(0, ahead - r) * slope) continue;
