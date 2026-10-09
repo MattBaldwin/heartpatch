@@ -77,11 +77,21 @@ export function pinMapTime(): string {
   return process.env['HP_E2E_TIME_ZONE'];
 }
 
+/** How much dusk a spec needs: a patch, a claim's showdown, two reloads. */
+const DUSK_NEEDED = 10; // minutes
+
 /**
  * A zone where it's dusk on the map now (the hour before nightfall), with
- * at least half an hour of it left. For a spec's `timezoneId`.
+ * at least `DUSK_NEEDED` minutes of it left. Late in an hour no zone may
+ * have that much (few zones are off by half an hour): it waits for the next.
  */
-export function duskTimeZone(): string {
+export async function duskTimeZone(): Promise<string> {
   const nightfall = HOME_BASE_RULES.nightfallMinute;
-  return zoneWithin(nightfall - DUSK_MINUTES, nightfall);
+  for (;;) {
+    try {
+      return zoneWithin(nightfall - DUSK_MINUTES, nightfall - DUSK_NEEDED);
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 30_000));
+    }
+  }
 }

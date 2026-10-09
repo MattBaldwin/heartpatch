@@ -36,6 +36,7 @@ export async function newPlayer(
     ...(isMobile ? { isMobile } : {}),
     ...(hasTouch ? { hasTouch } : {}),
     ...(baseURL ? { baseURL } : {}),
+    ...(options.timezoneId ? { timezoneId: options.timezoneId } : {}),
   });
   const page = await context.newPage();
   await slowCpu(page);
@@ -76,6 +77,8 @@ export async function savedCode(overlay: Locator, next = 'Next'): Promise<void> 
 }
 
 export interface SignUpOptions {
+  /** The device's time zone, so its patches keep that map time (map-time.ts); the suite's unless given. */
+  timezoneId?: string;
   /** The year picked at sign up; 2014 (a kid) unless given. */
   birthYear?: string;
   /**
