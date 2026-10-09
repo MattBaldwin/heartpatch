@@ -61,6 +61,8 @@ export interface SquishyPlacement {
   readonly squash?: number;
   /** The contact shadow's width, times its size on the ground (it shrinks as the body rises). */
   readonly shadow?: number;
+  /** The contact shadow's opacity, 0–1 (it fades as the body rises, #323). */
+  readonly shadowAlpha?: number;
 }
 
 export interface SquishyHandle {
@@ -99,6 +101,8 @@ export interface SquishyFieldStats<L extends SquishyDetail = SquishyLod> {
 
 interface Instance {
   readonly owner: Squishy;
+  /** The part on the squishy (kept, so a move only re-multiplies) and in the world. */
+  readonly local: Matrix;
   readonly matrix: Matrix;
   readonly color: readonly [number, number, number, number];
   /** `SQUISH_LOOK_CODE` for this instance (eyes differ from the body). */
@@ -111,10 +115,11 @@ interface Squishy {
   readonly handle: SquishyHandle;
   world: Matrix;
   origin: [number, number, number, number];
-  /** Placement scale, the ground under it and the shadow's width factor (the shadow stays down when it hops). */
+  /** Placement scale, the ground under it, and the shadow's width factor and opacity (the shadow stays down when it hops). */
   scale: number;
   ground: number;
   shadow: number;
+  shadowAlpha: number;
   event: SquishEvent | null;
   readonly instances: { batch: Batch; instance: Instance }[];
 }
@@ -126,8 +131,20 @@ interface Batch {
   readonly pickable: boolean;
   readonly instances: Instance[];
   mesh: Mesh | null;
+  /** Instances came or went: rebuild every buffer. */
   dirty: boolean;
+  /** Only placements changed (a walk or a hop, #323): rewrite matrices and origins in place. */
+  moved: boolean;
+  /** The last uploaded origin buffer, rewritten in place on a move. */
+  origins: Float32Array | null;
 }
+
+// Scratch for placing squishies and their shadows (no allocations while walking, #323).
+const PLACE_SCALE = new Vector3();
+const PLACE_TURN = new Quaternion();
+const PLACE_AT = new Vector3();
+const SHADOW_TURN = Quaternion.Identity();
+const SHADOW_WORLD = new Matrix();
 
 function linear(rgb: readonly [number, number, number]): [number, number, number, number] {
   const c = new Color3(rgb[0], rgb[1], rgb[2]).toLinearSpace();
@@ -163,6 +180,9 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   readonly #beforeRender: Observer<Scene> | null;
   #lod: L;
   #shadowDirty = true;
+  /** The shadows' last buffers, rewritten in place while the count holds. */
+  #shadowMatrices: Float32Array | null = null;
+  #shadowColors: Float32Array | null = null;
   #nextId = 1;
   /** Wall-clock ms at squishy-clock zero, set by the first `update` or `play`. */
   #clockStart: number | null = null;
@@ -223,6 +243,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       scale: 1,
       ground: 0,
       shadow: 1,
+      shadowAlpha: 1,
       event: null,
       instances: [],
     };
@@ -231,13 +252,19 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     return handle;
   }
 
-  /** Moves a squishy (e.g. after it walks to another tile). */
+  /**
+   * Moves a squishy (e.g. after it walks to another tile). Its parts keep
+   * their place on it, so this only re-places them (#323).
+   */
   move(handle: SquishyHandle, placement: SquishyPlacement): void {
     const squishy = this.#squishies.get(handle.id);
-    const body = this.#registry.bodies.get(handle.params.body.id);
-    if (!squishy || !body) return;
-    this.#detach(squishy);
-    this.#layout(squishy, body, placement);
+    if (!squishy) return;
+    this.#place(squishy, placement);
+    for (const { batch, instance } of squishy.instances) {
+      instance.local.multiplyToRef(squishy.world, instance.matrix);
+      batch.moved = true;
+    }
+    this.#shadowDirty = true;
   }
 
   remove(handle: SquishyHandle): void {
@@ -334,6 +361,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   flush(): void {
     for (const batch of this.#batches.values()) {
       if (batch.dirty) this.#upload(batch);
+      else if (batch.moved) this.#uploadMoves(batch);
     }
     if (this.#shadowDirty) this.#uploadShadows();
   }
@@ -362,28 +390,49 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   #batch(key: string, build: (lod: SquishyDetail) => MeshArrays, pickable: boolean): Batch {
     let batch = this.#batches.get(key);
     if (!batch) {
-      batch = { key, build, pickable, instances: [], mesh: null, dirty: true };
+      batch = {
+        key,
+        build,
+        pickable,
+        instances: [],
+        mesh: null,
+        dirty: true,
+        moved: false,
+        origins: null,
+      };
       this.#batches.set(key, batch);
     }
     return batch;
   }
 
-  #layout(squishy: Squishy, body: Body, placement: SquishyPlacement): void {
-    const { params } = squishy.handle;
+  /** The squishy's world matrix, origin, ground and shadow, in place. */
+  #place(squishy: Squishy, placement: SquishyPlacement): void {
     const scale = placement.scale ?? 1;
     const squash = placement.squash ?? 1;
     const wide = scale / Math.sqrt(squash);
     const ground = placement.y ?? 0;
-    const feet = new Vector3(placement.x, ground + (placement.lift ?? 0), placement.z);
-    squishy.world = Matrix.Compose(
-      new Vector3(wide, scale * squash, wide),
-      Quaternion.RotationAxis(Vector3.Up(), placement.yaw ?? 0),
-      feet,
+    PLACE_AT.set(placement.x, ground + (placement.lift ?? 0), placement.z);
+    Quaternion.RotationYawPitchRollToRef(placement.yaw ?? 0, 0, 0, PLACE_TURN);
+    Matrix.ComposeToRef(
+      PLACE_SCALE.set(wide, scale * squash, wide),
+      PLACE_TURN,
+      PLACE_AT,
+      squishy.world,
     );
     squishy.scale = scale;
     squishy.ground = ground;
     squishy.shadow = placement.shadow ?? 1;
-    squishy.origin = [feet.x, feet.y, feet.z, params.height * scale];
+    squishy.shadowAlpha = placement.shadowAlpha ?? 1;
+    const o = squishy.origin;
+    o[0] = PLACE_AT.x;
+    o[1] = PLACE_AT.y;
+    o[2] = PLACE_AT.z;
+    o[3] = squishy.handle.params.height * scale;
+  }
+
+  #layout(squishy: Squishy, body: Body, placement: SquishyPlacement): void {
+    const { params } = squishy.handle;
+    this.#place(squishy, placement);
 
     const shadow = squishy.handle.look === 'shadow';
     const tier = FINISH_CODE[params.finish];
@@ -401,6 +450,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
           : SQUISH_LOOK_CODE.shadow;
       const instance: Instance = {
         owner: squishy,
+        local,
         matrix: local.multiply(squishy.world),
         // Without the shader (opt-in WebGPU) the look is baked into the colour.
         color: shadow && !this.#plugin ? shadowColor(color, eyes) : color,
@@ -472,6 +522,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
 
   #upload(batch: Batch): void {
     batch.dirty = false;
+    batch.moved = false;
     const n = batch.instances.length;
     if (n === 0) {
       batch.mesh?.setEnabled(false);
@@ -515,9 +566,25 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     });
     mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
     mesh.thinInstanceSetBuffer('color', colors, 4, true);
-    mesh.thinInstanceSetBuffer('squishOrigin', origins, 4, true);
+    mesh.thinInstanceSetBuffer('squishOrigin', origins, 4, false);
     mesh.thinInstanceSetBuffer('squishMotion', motions, 4, true);
     mesh.thinInstanceSetBuffer('squishEvent', events, 4, false);
+    if (batch.pickable) mesh.thinInstanceRefreshBoundingInfo();
+    batch.origins = origins;
+  }
+
+  /** Rewrites a batch's matrices and origins in place after moves (no new buffers). */
+  #uploadMoves(batch: Batch): void {
+    batch.moved = false;
+    const { mesh, origins } = batch;
+    if (!mesh || !origins) return;
+    batch.instances.forEach((inst, i) => {
+      // Through the mesh, so its world-matrix copies (picking) see the move too.
+      mesh.thinInstanceSetMatrixAt(i, inst.matrix, false);
+      origins.set(inst.owner.origin, i * 4);
+    });
+    mesh.thinInstanceBufferUpdated('matrix');
+    mesh.thinInstanceBufferUpdated('squishOrigin');
     if (batch.pickable) mesh.thinInstanceRefreshBoundingInfo();
   }
 
@@ -528,8 +595,11 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     const n = this.#squishies.size;
     shadow.setEnabled(n > 0);
     if (n === 0) return;
-    const matrices = new Float32Array(n * 16);
-    const rot = Quaternion.Identity();
+    // Same count: rewrite the buffers in place (a walk or a hop moves them every frame).
+    const kept = this.#shadowMatrices?.length === n * 16 ? this.#shadowMatrices : null;
+    const fresh = kept === null || this.#shadowColors === null;
+    const matrices = fresh ? new Float32Array(n * 16) : kept;
+    const colors = fresh || !this.#shadowColors ? new Float32Array(n * 4) : this.#shadowColors;
     let i = 0;
     for (const s of this.#squishies.values()) {
       const body = this.#registry.bodies.get(s.handle.params.body.id);
@@ -539,13 +609,26 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         s.scale *
         CONTACT_SHADOW.scale *
         s.shadow;
-      Matrix.Compose(
-        new Vector3(d, 1, d),
-        rot,
-        new Vector3(s.origin[0], s.ground + 0.01, s.origin[2]),
+      Matrix.ComposeToRef(
+        PLACE_SCALE.set(d, 1, d),
+        SHADOW_TURN,
+        PLACE_AT.set(s.origin[0], s.ground + 0.01, s.origin[2]),
+        SHADOW_WORLD,
       ).copyToArray(matrices, i * 16);
+      colors[i * 4] = 1;
+      colors[i * 4 + 1] = 1;
+      colors[i * 4 + 2] = 1;
+      colors[i * 4 + 3] = s.shadowAlpha;
       i++;
     }
-    shadow.thinInstanceSetBuffer('matrix', matrices, 16, false);
+    if (fresh) {
+      this.#shadowMatrices = matrices;
+      this.#shadowColors = colors;
+      shadow.thinInstanceSetBuffer('matrix', matrices, 16, false);
+      shadow.thinInstanceSetBuffer('color', colors, 4, false);
+    } else {
+      shadow.thinInstanceBufferUpdated('matrix');
+      shadow.thinInstanceBufferUpdated('color');
+    }
   }
 }

@@ -4,6 +4,7 @@ import { createLoreBagEntry, type LoreBagEntry } from './bag-entry.js';
 import { loreApi, type LoreApi } from './lore-api.js';
 import { bookCounts, LORE_TEXT, newPages } from './lore-view.js';
 import { createLorebookScreen, type LorebookScreen } from './lorebook-screen.js';
+import { createRechecker } from './rechecker.js';
 import './lore.css';
 
 // The Lorebook (design doc §16, #307): a little card when a page is found
@@ -40,6 +41,8 @@ export interface LorebookDebug {
   readonly found: number;
   readonly total: number;
   readonly unread: number;
+  /** Looks for found pages scheduled or in flight (`check`), for tests to wait on. */
+  readonly checking: number;
 }
 
 export interface Lorebook {
@@ -255,6 +258,8 @@ export function createLorebook(options: LorebookOptions): Lorebook {
     }
   };
 
+  const checks = createRechecker(look, setTimer, RECHECK_MS);
+
   const refreshBook = async () => {
     const who = user;
     if (!who) return;
@@ -310,8 +315,7 @@ export function createLorebook(options: LorebookOptions): Lorebook {
       if (next) void refreshBook();
     },
     check: () => {
-      void look();
-      setTimer(() => void look(), RECHECK_MS);
+      checks.check();
     },
     openAt: (pageId) => {
       open(pageId);
@@ -340,6 +344,7 @@ export function createLorebook(options: LorebookOptions): Lorebook {
         bookOpen: screen.isOpen,
         bookAt: screen.at,
         ...counts,
+        checking: checks.pending,
       };
     },
   };

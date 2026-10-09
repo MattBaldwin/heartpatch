@@ -196,3 +196,8 @@ export function shadowScale(lift: number): number {
   const top = EXPLORE_HOP.height.max;
   return 1 - (1 - EXPLORE_HOP.shadowMin) * clamp01(lift / top);
 }
+
+/** The shadow's opacity under a hopper this high (#323): 1 on the ground, fading by `shadowFade` at the top of the highest hop. */
+export function shadowAlpha(lift: number): number {
+  return 1 - EXPLORE_HOP.shadowFade * clamp01(lift / EXPLORE_HOP.height.max);
+}
