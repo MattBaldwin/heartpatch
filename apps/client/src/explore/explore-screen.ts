@@ -91,8 +91,6 @@ export interface ExploreScreenOptions {
   onFound?: (mapId: string) => void;
   /** "Open recipe book" on the missing-tool card: leaves exploring and opens it. */
   onRecipeBook?: () => void;
-  /** "Open Lorebook" on a find card with a lore page (#307): the book opens at it. */
-  onLorebook?: (pageId: string) => void;
   api?: ExploreApi;
   jobs?: Pick<JobsApi, 'view'>;
   bag?: (mapId: string) => Promise<ItemCounts>;
@@ -781,12 +779,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         'ul',
         { class: 'explore-finds', 'data-testid': 'explore-finds' },
         ...findLines(found).map((line) =>
-          el(
-            'li',
-            { class: `explore-find explore-find-${line.kind}` },
-            line.text,
-            ...(line.note ? [el('span', { class: 'explore-find-note' }, line.note)] : []),
-          ),
+          el('li', { class: `explore-find explore-find-${line.kind}` }, line.text),
         ),
       ),
     ];
@@ -814,22 +807,6 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         el('p', { class: 'explore-rest', 'data-testid': 'explore-rest' }, restLine(found.tool.id)),
       );
       if (options.onRecipeBook) nodes.push(recipeButton());
-    }
-    const lore = found.lore;
-    if (lore && options.onLorebook) {
-      const openBook = el(
-        'button',
-        {
-          type: 'button',
-          class: 'auth-button auth-button-soft explore-lorebook',
-          'data-testid': 'explore-lorebook',
-        },
-        EXPLORE_TEXT.openLorebook,
-      );
-      openBook.addEventListener('click', () => {
-        options.onLorebook?.(lore.id);
-      });
-      nodes.push(openBook);
     }
     const keepGoing = el(
       'button',

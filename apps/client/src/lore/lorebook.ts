@@ -46,8 +46,12 @@ export interface Lorebook {
   setUser: (user: PublicUser | null) => void;
   /** Looks for newly found pages now and once more a little later (the finder runs after the play). */
   check: () => void;
-  /** Opens the book at a page (its id), or at the contents. */
-  open: (pageId?: string | null) => void;
+  /**
+   * Opens the book at a page (its id), or at the contents (null). A page found
+   * a moment ago is waited for (the finder runs just after the play), so a
+   * find card can call it at once.
+   */
+  openAt: (pageId: string | null) => void;
   /** Fetches the book again for the Bag's counts and sparkle (no card). */
   refresh: () => void;
   /** The Settings rows. */
@@ -306,7 +310,7 @@ export function createLorebook(options: LorebookOptions): Lorebook {
       void look();
       setTimer(() => void look(), RECHECK_MS);
     },
-    open: (pageId = null) => {
+    openAt: (pageId) => {
       open(pageId);
     },
     refresh: () => {

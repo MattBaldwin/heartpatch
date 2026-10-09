@@ -31,7 +31,6 @@ export const LORE_TEXT = {
   bagCount: (found: number, total: number) => `${String(found)} of ${String(total)} pages found`,
   bagNew: (n: number) => `${String(n)} new`,
   news: 'A new page in your Lorebook!',
-  added: 'Added to your Lorebook 📖',
 } as const;
 
 /** A little emblem per chapter (the server names chapters; how they look is ours). */

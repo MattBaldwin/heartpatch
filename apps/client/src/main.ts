@@ -170,7 +170,7 @@ let battleMapId: string | null = null;
 // The Lorebook's tile at the top of the Bag and the Bag's sparkle (#307);
 // the book itself (`lorebook`) is made below.
 const loreBag = createLoreBagEntry(() => {
-  lorebook.open();
+  lorebook.openAt(null);
 });
 const inventory = createInventoryScreen({
   root: document.body,
@@ -574,10 +574,6 @@ const explore = createExploreScreen({
   },
   onRecipeBook: () => {
     recipeBook.open();
-  },
-  // "Open Lorebook" on a find card (#307): the book opens over exploring, at that page.
-  onLorebook: (pageId) => {
-    lorebook.open(pageId);
   },
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
