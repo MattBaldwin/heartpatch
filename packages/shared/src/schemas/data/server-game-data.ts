@@ -131,6 +131,13 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
         report,
       );
 
+    // Each species' public evolution levels (a secret form's own evolutions are public too).
+    const publicSteps = new Map(
+      [...gameData.species, ...data.secretSpecies].map((s) => [
+        s.id,
+        s.evolutions.map((e) => e.level),
+      ]),
+    );
     data.secretEvolutions.forEach((evo, i) => {
       checkRef(species, 'species', evo.from, ['secretEvolutions', i, 'from'], report);
       if (publicSpecies.has(evo.into)) {
@@ -155,6 +162,17 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
         report(['secretEvolutions', i], `"${evo.from}" → "${evo.into}" is listed twice`);
       }
       pairs.add(pair);
+      // A secret step before a public one would hide the evolving meter
+      // (it can't show a secret form is coming) and read "Fully evolved!"
+      // on a form that still has a public evolution ahead (#236).
+      // No public evolution (Infinity): a secret one is its only next step, which is fine.
+      const firstPublic = Math.min(...(publicSteps.get(evo.from) ?? []));
+      if (Number.isFinite(firstPublic) && evo.level < firstPublic) {
+        report(
+          ['secretEvolutions', i, 'level'],
+          `"${evo.from}" evolves into secret "${evo.into}" at level ${String(evo.level)}, before its public evolution at level ${String(firstPublic)}`,
+        );
+      }
     });
 
     // Evolution chains must end. Public forms never evolve into secret ones,
