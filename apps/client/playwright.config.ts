@@ -30,6 +30,7 @@ const E2E_GROUPS = [
     'raids',
     'trading-posts',
     'whats-new',
+    'lorebook',
   ],
   [
     'chat',
@@ -45,7 +46,7 @@ const E2E_GROUPS = [
     'wild-picker',
   ],
   // tutorial-flow's two runs go side by side (its describe mode is parallel).
-  ['tutorial-flow', 'tray-layout', 'admin', 'boutique', 'fences', 'factory'],
+  ['tutorial-flow', 'tray-layout', 'admin', 'boutique', 'fences', 'factory', 'trade-split'],
 ];
 
 function e2eGroup(value: string | undefined): { testMatch?: string[]; testIgnore?: string[] } {

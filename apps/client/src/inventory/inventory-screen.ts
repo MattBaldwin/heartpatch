@@ -66,6 +66,10 @@ export interface InventoryScreenOptions {
   storage?: Storage | null;
   /** "See Factory" on the welcome-back card: open home (the Factory's own card). */
   onSeeFactory?: () => void;
+  /** The Lorebook's way in (#307): a tile at the top of the sheet and a sparkle on the Bag button. */
+  lore?: { readonly tile: HTMLElement; readonly badge: HTMLElement };
+  /** The Bag opened (the Lorebook looks for new pages). */
+  onBagOpen?: () => void;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -214,6 +218,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     { type: 'button', class: 'bag-open', 'data-testid': 'bag-open', 'aria-label': TEXT.bag },
     el('span', { class: 'bag-open-icon', 'aria-hidden': 'true' }, '🎒'),
     el('span', { class: 'bag-open-label' }, TEXT.bag),
+    ...(options.lore ? [options.lore.badge] : []),
   );
   open.hidden = true;
 
@@ -253,6 +258,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     'section',
     { class: 'bag', 'data-testid': 'bag', role: 'dialog', 'aria-labelledby': 'bag-title' },
     el('div', { class: 'tile-panel-head' }, el('h2', { id: 'bag-title' }, TEXT.title), close),
+    ...(options.lore ? [options.lore.tile] : []),
     note,
     itemsBox,
     detailBox,
@@ -394,6 +400,7 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
     sheet.hidden = false;
     render();
     void refresh();
+    options.onBagOpen?.();
   };
   open.addEventListener('click', openBag);
   chip.addEventListener('click', openBag);

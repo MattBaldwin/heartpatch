@@ -107,6 +107,8 @@ test('gathers on an owned node and crafts a Heart Charm from the bag', async ({ 
   await (await trayButton(page, 'bag-open')).tap();
   const bag = page.getByTestId('bag');
   await expect(bag).toBeVisible();
+  // No Crafting Factory yet: no Factory strip, not even an empty bar.
+  await expect(bag.getByTestId('factory-strip')).toBeHidden();
   // Nothing gathered yet: only Sprout's Heart Charms.
   await expect.poll(async () => (await bagState(page))?.items).toEqual({ 'heart-charm': 3 });
   await expect(bag.locator('[data-item="heart-charm"]')).toContainText('3');

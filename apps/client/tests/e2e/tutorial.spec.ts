@@ -144,7 +144,13 @@ test('the optional tutorial: start, resume after reload, graduate, replay and sk
   await bubble.getByRole('button', { name: 'Got it!' }).tap();
   // The server's step engine moves on and says so over live sync.
   await expect.poll(async () => (await debug(page))?.stepId).toBe('plant');
-  // Over the gameplay steps (the full run below covers the rest).
+  // Over the gameplay steps (the full run below covers the rest). Leaving
+  // the plant step finds a lore page (#307), whose card would come before
+  // The First Patch's party: this run isn't about lore, so mark it shown.
+  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
+  await page.evaluate((key) => {
+    localStorage.setItem(key, JSON.stringify(['where-the-squishies-bloomed']));
+  }, `heartpatch.lore.shown.${me}`);
   await jumpTo(page, 'graduation');
 
   await bubble.getByRole('button', { name: 'Next' }).tap();
@@ -299,7 +305,11 @@ test('The First Patch: plant, befriend and name a Partner, nightfall, scarf, gra
     .toBe(true);
   const reportFirst = await okay.isVisible();
   if (reportFirst) await dismissReport();
+  // Two pages, oldest first: planting the Heart Seed found one (#307).
   await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByTestId('lore-title')).toHaveText('Where the Squishies Bloomed');
+  await expect(card.getByTestId('lore-close')).toHaveText('Next page');
+  await card.getByTestId('lore-close').tap();
   await expect(card.getByTestId('lore-title')).toHaveText('Paw Prints by the Fire');
   await card.getByTestId('lore-close').tap();
   await expect(card).toBeHidden();

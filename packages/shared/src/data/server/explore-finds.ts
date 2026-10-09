@@ -43,6 +43,7 @@ export const EXPLORE_FINDS: ExploreFindTable[] = [
       { weight: 3, items: { treats: 1 } },
       { weight: 2 },
       { weight: 1, items: { heartdust: 1 } },
+      { weight: 1, lore: 'a-pressed-juniper-sprig' },
     ],
   },
   {
@@ -75,7 +76,12 @@ export const EXPLORE_FINDS: ExploreFindTable[] = [
   },
   {
     kind: 'reeds',
-    finds: [{ weight: 3, items: { greens: 2 } }, { weight: 3, items: { water: 1 } }, { weight: 2 }],
+    finds: [
+      { weight: 3, items: { greens: 2 } },
+      { weight: 3, items: { water: 1 } },
+      { weight: 2 },
+      { weight: 1, lore: 'the-humming-reeds' },
+    ],
   },
   {
     kind: 'ledge',
@@ -85,6 +91,7 @@ export const EXPLORE_FINDS: ExploreFindTable[] = [
       { weight: 1, items: { glimmer: 1 } },
       { weight: 2 },
       { weight: 1, items: { heartdust: 1 } },
+      { weight: 1, lore: 'the-door-in-the-gap' },
     ],
   },
   {
