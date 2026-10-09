@@ -14,7 +14,7 @@ export interface ItemDetail {
   readonly name: string;
   readonly icon: string;
   readonly count: number;
-  /** "You have 2", or a tool's uses: "12 scoops left" (#199). */
+  /** "You have 2", or a tool's uses: "12 dives left" (#199). */
   readonly have: string;
   /** The item's description: what it's for. */
   readonly purpose: string;

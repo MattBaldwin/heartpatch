@@ -107,14 +107,16 @@ export const EXPLORE_RULES: ExploreRules = {
     minGap: 0.16, // TUNE: the Keeper fits between two spots
     edgeMargin: 0.08, // TUNE: nothing hangs over the tile's edge
   },
-  // #335 (owner decision 2026-10-09). Night starts with nightfall (7 PM,
-  // `HOLLOW_RULES`). TUNE: every time.
+  // #335 (owner decision 2026-10-09), on the game's one clock (checked in
+  // sky.test.ts): night ends at the Hollow's morning (`HOLLOW_RULES`), dusk
+  // starts with the battle arena's (2 hours before nightfall) and night
+  // falls with nightfall (`HOME_BASE_RULES`). TUNE: dawn's start.
   sky: {
     phases: [
       { from: 0, phase: 'night' },
-      { from: 5 * 60, phase: 'dawn' },
+      { from: 6 * 60, phase: 'dawn' },
       { from: 7 * 60, phase: 'day' },
-      { from: 17 * 60 + 30, phase: 'dusk' },
+      { from: 17 * 60, phase: 'dusk' },
       { from: 19 * 60, phase: 'night' },
     ],
     blendMinutes: 20,

@@ -93,7 +93,15 @@ export const ExploreSkySchema = z
   .refine((s) => s.phases.every((p, i) => i === 0 || p.from > (s.phases[i - 1]?.from ?? 0)), {
     message: 'phases must be in time order',
     path: ['phases'],
-  });
+  })
+  .refine(
+    (s) =>
+      s.phases.every((p, i) => {
+        const next = s.phases[i + 1]?.from ?? 24 * 60 + (s.phases[0]?.from ?? 0);
+        return next - p.from >= s.blendMinutes;
+      }),
+    { message: 'every phase lasts at least blendMinutes', path: ['blendMinutes'] },
+  );
 export type ExploreSky = z.infer<typeof ExploreSkySchema>;
 
 /**
