@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
+import { pinMapTime } from './tests/e2e/map-time.js';
 
 const isCI = Boolean(process.env['CI']);
 const testDir = './tests/e2e';
@@ -90,6 +91,9 @@ process.env['HP_DEV_MAP_CREATE_LIMIT_PER_IP'] ??= '500';
 // Battles (#13) need a squishy and a wild opponent, which spawns (#14) and the
 // tutorial's starter don't hand out yet; the dev routes do. Dev and tests only.
 process.env['HP_DEV_SQUISHY_GRANTS'] ??= 'true';
+// Map time is the game clock in the patch's time zone, which the client takes
+// from the device: pin the browser's zone so specs never meet dusk (#326).
+const timezoneId = pinMapTime();
 
 const projects = chromiumPath
   ? [
@@ -137,6 +141,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
+    timezoneId,
   },
   projects,
   webServer: [
