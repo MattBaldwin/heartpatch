@@ -1,7 +1,9 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { api, hook } from './dev-hook.js';
+import { nearestFirst, walkTo } from './explore-walk.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
+import { realTapAt } from './touch.js';
 import { closeTrays, trayButton } from './trays.js';
 
 /**
@@ -10,8 +12,8 @@ import { closeTrays, trayButton } from './trays.js';
  * tile sparkle until it's read, the tile opens the book at the contents, a
  * chapter opens at its new page, the next page is a blank with a hint and no
  * words, and reading it clears the sparkle (kept on the server). "Open
- * Lorebook" on a card opens the book at that page. Checked through the dev
- * hook's signals, never pixels.
+ * Lorebook" on a card opens the book at that page, and so does explore's find
+ * card. Checked through the dev hook's signals, never pixels.
  */
 
 /** `LorebookDebug` from src/lore/lorebook.ts (this project can't see its types). */
@@ -28,6 +30,13 @@ interface LoreDebug {
 const ABORTED_FETCH = /\/api\/v1\/\S* due to access control checks\.?$/;
 
 const loreState = (page: Page) => hook<LoreDebug>(page, 'lore');
+const exploreState = (page: Page) =>
+  hook<{
+    open: boolean;
+    keeper: { x: number; z: number };
+    spots: { index: number; tool: string | null; x: number; z: number }[];
+    scene: { keeper: boolean } | null;
+  }>(page, 'explore');
 const mapState = (page: Page) => hook<{ live: string | null }>(page, 'map');
 const slow = { timeout: 30_000 };
 
@@ -138,5 +147,81 @@ test('a found page sparkles in the Bag, opens in the Lorebook and is read', asyn
   await expect.poll(async () => (await loreState(page))?.unread, slow).toBe(0);
   await book.getByTestId('lorebook-close').tap();
   await expect(book).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test("explore's find card says where a page went and opens it in the Lorebook", async ({
+  browser,
+}) => {
+  test.setTimeout(180_000); // map and explore builds; CI renders in software
+  const page = await newPlayer(browser, uniqueName('lorex'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Reed Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true', slow);
+
+  // A search's lore page is a rare roll: the page is found (the dev route
+  // stands in for the lore consumer) and the server's real reply to the
+  // search names it, so the card shows it. Its found-page card isn't what
+  // this checks (the first test does): mark it shown, so the card's next
+  // look on the map can't pop it over the Explore button.
+  const me = (await api<{ user: { id: string } }>(page, 'GET', '/me')).body.user.id;
+  await page.evaluate((key) => {
+    localStorage.setItem(key, JSON.stringify(['the-humming-reeds']));
+  }, `heartpatch.lore.shown.${me}`);
+  expect((await api(page, 'POST', '/lore/dev/find', { pageId: 'the-humming-reeds' })).status).toBe(
+    200,
+  );
+  await page.route('**/api/v1/maps/*/explore/search', async (route) => {
+    const res = await route.fetch();
+    const body = (await res.json()) as Record<string, unknown>;
+    body['lore'] = { id: 'the-humming-reeds', title: 'The Humming Reeds' };
+    await route.fulfill({ response: res, json: body });
+  });
+
+  // Explore the home tile (as explore.spec.ts does) and search a hand spot.
+  const box = (await page.locator('#game').boundingBox())!;
+  const explore = page.getByTestId('tile-explore');
+  await expect(async () => {
+    if ((await hook<{ selected: string | null }>(page, 'map'))?.selected == null) {
+      await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+    }
+    await expect(explore).toBeVisible({ timeout: 5_000 });
+  }).toPass(slow);
+  await explore.tap();
+  await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
+  const first = (await exploreState(page))!;
+  let reached = false;
+  for (const spot of nearestFirst(
+    first.spots.filter((s) => s.tool === null),
+    first.keeper,
+  ).slice(0, 5)) {
+    if ((reached = await walkTo(page, spot.index))) break;
+  }
+  expect(reached).toBe(true);
+  await expect(page.getByTestId('explore-action')).toBeEnabled(slow);
+  await page.getByTestId('explore-action').tap();
+  await expect(page.getByTestId('explore-play')).toBeVisible(slow);
+  await page.getByTestId('explore-easy').tap();
+
+  // The card says where the page went, and opens it.
+  const sheet = page.getByTestId('explore-sheet');
+  await expect(sheet).toBeVisible(slow);
+  await expect(sheet.getByTestId('explore-finds')).toContainText('“The Humming Reeds”');
+  await expect(sheet.getByTestId('explore-finds')).toContainText('Added to your Lorebook 📖');
+  await sheet.getByTestId('explore-lorebook').tap();
+  const book = page.getByTestId('lorebook');
+  await expect(book).toBeVisible(slow);
+  await expect.poll(async () => (await loreState(page))?.bookAt).toBe('the-humming-reeds');
+  await expect(book.getByTestId('lorebook-page-title')).toHaveText('The Humming Reeds');
+  // Close: back to exploring, the card put away.
+  await book.getByTestId('lorebook-close').tap();
+  await expect(book).toBeHidden();
+  await expect(sheet).toBeHidden();
+  expect((await exploreState(page))?.open).toBe(true);
   expect(errors).toEqual([]);
 });

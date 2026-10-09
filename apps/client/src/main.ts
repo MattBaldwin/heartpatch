@@ -575,6 +575,10 @@ const explore = createExploreScreen({
   onRecipeBook: () => {
     recipeBook.open();
   },
+  // "Open Lorebook" on a find card (#307): the book opens over exploring, at that page.
+  onLorebook: (pageId) => {
+    lorebook.openAt(pageId);
+  },
 });
 // Login and the lobby come first, so a renderer that can't start never hides them.
 // Meet it on a tile with a rustling tuft (#209): the battle screen starts it.
@@ -753,7 +757,10 @@ const lorebook = createLorebook({
     milestones.debug.showing !== null ||
     hollowReportOpen() ||
     whatsNewOpen ||
-    lobby.formOpen,
+    lobby.formOpen ||
+    // Exploring has its own find card, which says where the page went (#307):
+    // the found-page card waits for Back.
+    (explore.debug?.open ?? false),
   onChange: () => {
     hollow.otherReportChanged();
   },

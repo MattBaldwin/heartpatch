@@ -98,7 +98,7 @@ describe('explore text', () => {
     // floor (iOS 17 has up to Emoji 15.0; 🪏 is Emoji 16). A new one is added
     // here on purpose, after the same check. Item icons come from the bag's
     // own table (inventory/item-icons.ts), outside this view.
-    const known = new Set(['🌳', '🌷', '🎃', '✊', '↔', '✋', '✨', '🪱', '🏡', '💦', '🔍']);
+    const known = new Set(['🌳', '🌷', '🎃', '✊', '↔', '✋', '✨', '🪱', '🏡', '💦', '🔍', '📖']);
     const icons = [
       ...EXPLORE_RULES.spotKinds.map((k) => actionFor({ kind: k.id, tool: k.tool }).icon),
       ...Object.values(PLAY_TEXT).map((p) => p.icon),
@@ -169,6 +169,9 @@ describe('explore text', () => {
     );
     expect(lines.map((l) => l.kind)).toEqual(['item', 'lore']);
     expect(lines[0]?.text).toContain('Timber ×2');
+    // A page says where it went (#307); other lines have no note.
+    expect(lines[1]?.note).toBe('Added to your Lorebook 📖');
+    expect(lines[0]?.note).toBeUndefined();
     expect(xpLines([{ squishyId: 'a', xp: 6 }], { a: 'Puddlepuff' })).toEqual(['Puddlepuff +6 XP']);
   });
 
