@@ -9,6 +9,7 @@ import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
 import {
+  alongTrail,
   besideSpot,
   blocked,
   cameraGoal,
@@ -552,5 +553,50 @@ describe("the tile's top", () => {
       }
     }
     expect(checked).toBeGreaterThan(500);
+  });
+});
+
+describe('following along the trail (#317)', () => {
+  const trail = [
+    { x: 0, z: -0.1 },
+    { x: 0.1, z: -0.1 },
+  ];
+  const along = (back: number) => {
+    const out = { x: 9, z: 9 };
+    alongTrail({ x: 0, z: 0 }, trail, back, out);
+    return out;
+  };
+
+  it('finds the point that far back along the path the Keeper walked', () => {
+    expect(along(0.05)).toEqual({ x: 0, z: -0.05 });
+    const corner = along(0.15);
+    expect(corner.x).toBeCloseTo(0.05);
+    expect(corner.z).toBeCloseTo(-0.1);
+  });
+
+  it("stops at the trail's end, and stays put with no trail", () => {
+    expect(along(1)).toEqual({ x: 0.1, z: -0.1 });
+    const out = { x: 9, z: 9 };
+    alongTrail({ x: 0.3, z: 0.2 }, [], 0.1, out);
+    expect(out).toEqual({ x: 0.3, z: 0.2 });
+  });
+
+  it('moves a follower smoothly as the Keeper walks, never jumping', () => {
+    const out = { x: 0, z: 0 };
+    let last: { x: number; z: number } | null = null;
+    for (let i = 0; i <= 20; i++) {
+      const at = { x: 0, z: i * 0.005 };
+      alongTrail(
+        at,
+        [
+          { x: 0, z: 0 },
+          { x: 0, z: -0.2 },
+        ],
+        0.09,
+        out,
+      );
+      if (last) expect(Math.hypot(out.x - last.x, out.z - last.z)).toBeLessThan(0.0051);
+      last = { ...out };
+    }
   });
 });

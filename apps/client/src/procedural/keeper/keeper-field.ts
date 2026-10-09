@@ -48,6 +48,15 @@ export interface KeeperPlacement {
    */
   readonly lean?: number;
   readonly scale?: number;
+  /**
+   * A hop (#317): the body floats this far above `y`, world units, while
+   * its contact shadow stays on the ground.
+   */
+  readonly lift?: number;
+  /** Height scale about the feet (1 is none); the width is 1/√squash, keeping the volume. */
+  readonly squash?: number;
+  /** The contact shadow's width, times its size on the ground (it shrinks as the body rises). */
+  readonly shadow?: number;
 }
 
 export interface KeeperHandle {
@@ -82,9 +91,12 @@ interface Instance {
 interface Keeper {
   readonly handle: KeeperHandle;
   world: Matrix;
-  /** Ground point (xyz) and height (w), for the squash shader. */
+  /** The body's foot point (xyz) and height (w), for the squash shader. */
   origin: [number, number, number, number];
   scale: number;
+  /** The ground under it (the shadow stays here when it hops) and the shadow's width factor. */
+  ground: number;
+  shadow: number;
   event: SquishEvent | null;
   readonly instances: { batch: Batch; instance: Instance }[];
 }
@@ -159,6 +171,8 @@ export class KeeperField {
       world: Matrix.Identity(),
       origin: [0, 0, 0, 0],
       scale: 1,
+      ground: 0,
+      shadow: 1,
       event: null,
       instances: [],
     };
@@ -289,14 +303,19 @@ export class KeeperField {
   #layout(keeper: Keeper, placement: KeeperPlacement): void {
     const { params } = keeper.handle;
     const scale = placement.scale ?? 1;
-    const ground = new Vector3(placement.x, placement.y ?? 0, placement.z);
+    const squash = placement.squash ?? 1;
+    const wide = scale / Math.sqrt(squash);
+    const ground = placement.y ?? 0;
+    const feet = new Vector3(placement.x, ground + (placement.lift ?? 0), placement.z);
     keeper.world = Matrix.Compose(
-      new Vector3(scale, scale, scale),
+      new Vector3(wide, scale * squash, wide),
       Quaternion.RotationYawPitchRoll(placement.yaw ?? 0, placement.lean ?? 0, 0),
-      ground,
+      feet,
     );
     keeper.scale = scale;
-    keeper.origin = [ground.x, ground.y, ground.z, params.height * scale];
+    keeper.ground = ground;
+    keeper.shadow = placement.shadow ?? 1;
+    keeper.origin = [feet.x, feet.y, feet.z, params.height * scale];
     for (const p of params.pieces) {
       const local = Matrix.Compose(
         new Vector3(p.size[0], p.size[1], p.size[2]),
@@ -382,11 +401,11 @@ export class KeeperField {
     const rot = Quaternion.Identity();
     let i = 0;
     for (const k of this.#keepers.values()) {
-      const d = k.handle.params.width * k.scale * CONTACT_SHADOW.scale;
+      const d = k.handle.params.width * k.scale * CONTACT_SHADOW.scale * k.shadow;
       Matrix.Compose(
         new Vector3(d, 1, d),
         rot,
-        new Vector3(k.origin[0], k.origin[1] + 0.01, k.origin[2]),
+        new Vector3(k.origin[0], k.ground + 0.01, k.origin[2]),
       ).copyToArray(matrices, i * 16);
       i++;
     }

@@ -181,6 +181,46 @@ export const EXPLORE_TOOL = {
   jiggle: 0.6, // TUNE
 } as const;
 
+/**
+ * The Keeper and the team hop as they walk (#317, owner mockup 2026-10-09):
+ * one hop per stride, so the hop rate follows the ground covered. Distances
+ * are tile-local, like `walkSpeed`; heights are a share of the hopper's own
+ * height. "Effort" blends small hops (a gentle push) into big ones (full
+ * stick). The hop is drawn only: colliders and the ground point don't move.
+ */
+export const EXPLORE_HOP = {
+  /** Ground covered by one hop at no effort and at full effort (full stick is about 3 hops a second). */
+  stride: { min: 0.045, max: 0.095 }, // TUNE
+  /** Hop height, share of the hopper's height, at no effort and at full effort. */
+  height: { min: 0.07, max: 0.16 }, // TUNE
+  /** Every walk starts at this share of the stick's effort, growing to all of it over `warmUp`. */
+  warmFloor: 0.45, // TUNE: a tap-walk (always full speed) still starts small
+  warmUp: 0.12, // TUNE
+  /** Effort eases toward the stick with this time constant, seconds. */
+  effortEase: 0.15, // TUNE
+  /** Share of each hop spent on the ground, squashed. */
+  contact: 0.14, // TUNE
+  /** Height squash on landing and stretch on take-off (width keeps the volume). */
+  squash: 0.12, // TUNE
+  stretch: 0.08, // TUNE
+  /** Let go in mid-air: the longest it takes to come down, ms. */
+  landMs: 120, // TUNE
+  /** The settle squish when the walk stops: how long, ms, how deep, and its rebound. */
+  settleMs: 260, // TUNE
+  settleSquash: 0.1, // TUNE
+  settleRebound: 0.03, // TUNE
+  /** The shadow at the top of the highest hop, as a share of its width on the ground. */
+  shadowMin: 0.7, // TUNE
+  /** Squishies hop this share as high (of their own height) as the Keeper. */
+  followerLift: 0.8, // TUNE
+  /** Extra phase for each follower in turn (in hops), so nobody lands together. */
+  followerOffset: [0.17, 0.41, 0.63, 0.86], // TUNE
+  /** Reduce Motion: a bob this share of the height, one per stride, nothing squashes. */
+  bob: 0.025, // TUNE
+  /** A move longer than this many full-speed frames is a jump to a new place, not a step. */
+  teleportFrames: 1.5, // TUNE
+} as const;
+
 /** Finds (#291): the toast and the flight into the bag. */
 export const EXPLORE_FIND = {
   /** The toast stays this long, ms. */

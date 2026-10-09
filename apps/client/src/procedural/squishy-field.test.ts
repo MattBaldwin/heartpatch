@@ -68,4 +68,26 @@ describe('SquishyField shadow look (owner decision 7)', () => {
     expect(f.stats.shadowLook).toBe(0);
     expect(looks(scene, 'squishy-body:')).toEqual([SQUISH_LOOK_CODE.normal]);
   });
+
+  it('lifts and squashes the body for a hop (#317), about its feet', () => {
+    const { scene, field: f } = field();
+    const body = () =>
+      (scene.meshes.find((m) => m.name.startsWith('squishy-body:')) as Mesh)
+        .thinInstanceGetWorldMatrices()[0]!
+        .clone();
+    const h = f.add(species, 'hop', { x: 0, z: 0, y: 0.5 });
+    f.flush();
+    const rest = body();
+    f.move(h, { x: 0, z: 0, y: 0.5, lift: 0.2, squash: 0.8 });
+    f.flush();
+    const hop = body();
+    // Up by the lift plus the squashed body's own offset above the feet.
+    const restUp = rest.m[13]! - 0.5;
+    expect(hop.m[13]! - 0.5).toBeCloseTo(0.2 + restUp * 0.8);
+    // Shorter and wider, keeping the volume.
+    expect(hop.m[5]! / rest.m[5]!).toBeCloseTo(0.8);
+    expect(hop.m[0]! / rest.m[0]!).toBeCloseTo(1 / Math.sqrt(0.8));
+    // The middle the camera and close-ups aim at rides along.
+    expect(f.centre(h)!.y).toBeCloseTo(0.2 + 0.5 + h.params.height / 2);
+  });
 });
