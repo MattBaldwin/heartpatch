@@ -12,9 +12,11 @@ const testDir = './tests/e2e';
  * 2 workers): about 15-16 min of tests each, so about 8-9 min a job. A spec
  * file runs on one worker, so a slow file sets its group's floor: taps (about
  * 9 min) and tutorial (about 8) each sit in a group of light specs that the
- * other worker drains. Files start in name order, so at most one small spec
- * sorts before the big one. Rebalance from the CI list reporter's durations
- * when a group gets slow (#246).
+ * other worker drains. Files start in name order, so what sorts before the big
+ * file must be short: admin and auth before taps (under 1.5 min together);
+ * tutorial-flow before tutorial, whose second (desktop-only) test skips at
+ * once in CI and frees a worker. Rebalance from the CI list reporter's
+ * durations when a group gets slow (#246).
  *
  * Every spec is listed in exactly one group; there is no catch-all, so a new
  * spec can't quietly pile onto one job (group 5 grew to 28 min that way, #296).
