@@ -67,6 +67,7 @@ import {
   fromCaveStage,
   lanternGlint,
   LIGHT_REACH,
+  LIGHT_RING_SHARE,
   lightCircle,
   slideMove,
   spotAtTap,

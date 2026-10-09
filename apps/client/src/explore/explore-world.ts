@@ -487,14 +487,14 @@ export function tileSurface(top: TileTop): (p: WorldPoint) => number {
     const d = Math.hypot(p.x, p.z);
     if (d < 1e-9) return top.centre;
     const s = d / reachAlong(p.x / d, p.z / d);
-    for (let j = 1; j < rings.length; j++) {
-      const inner = rings[j - 1] ?? rings[0];
-      const outer = rings[j] ?? inner;
+    let inner = { scale: 0, y: top.centre };
+    for (const outer of rings) {
       if (s <= outer.scale) {
         const t = (s - inner.scale) / (outer.scale - inner.scale || 1);
         return inner.y + (outer.y - inner.y) * t;
       }
+      inner = outer;
     }
-    return rings[rings.length - 1]?.y ?? top.centre;
+    return inner.y;
   };
 }
