@@ -55,6 +55,12 @@ export interface SquishyPlacement {
   readonly yaw?: number;
   /** Extra scale on top of the species' size (close-ups). */
   readonly scale?: number;
+  /** A hop (#317): the body floats this far above `y`, world units; its shadow stays on the ground. */
+  readonly lift?: number;
+  /** Height scale about the feet (1 is none); the width is 1/√squash, keeping the volume. */
+  readonly squash?: number;
+  /** The contact shadow's width, times its size on the ground (it shrinks as the body rises). */
+  readonly shadow?: number;
 }
 
 export interface SquishyHandle {
@@ -105,6 +111,10 @@ interface Squishy {
   readonly handle: SquishyHandle;
   world: Matrix;
   origin: [number, number, number, number];
+  /** Placement scale, the ground under it and the shadow's width factor (the shadow stays down when it hops). */
+  scale: number;
+  ground: number;
+  shadow: number;
   event: SquishEvent | null;
   readonly instances: { batch: Batch; instance: Instance }[];
 }
@@ -210,6 +220,9 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       handle,
       world: Matrix.Identity(),
       origin: [0, 0, 0, 0],
+      scale: 1,
+      ground: 0,
+      shadow: 1,
       event: null,
       instances: [],
     };
@@ -358,13 +371,19 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
   #layout(squishy: Squishy, body: Body, placement: SquishyPlacement): void {
     const { params } = squishy.handle;
     const scale = placement.scale ?? 1;
-    const ground = new Vector3(placement.x, placement.y ?? 0, placement.z);
+    const squash = placement.squash ?? 1;
+    const wide = scale / Math.sqrt(squash);
+    const ground = placement.y ?? 0;
+    const feet = new Vector3(placement.x, ground + (placement.lift ?? 0), placement.z);
     squishy.world = Matrix.Compose(
-      new Vector3(scale, scale, scale),
+      new Vector3(wide, scale * squash, wide),
       Quaternion.RotationAxis(Vector3.Up(), placement.yaw ?? 0),
-      ground,
+      feet,
     );
-    squishy.origin = [ground.x, ground.y, ground.z, params.height * scale];
+    squishy.scale = scale;
+    squishy.ground = ground;
+    squishy.shadow = placement.shadow ?? 1;
+    squishy.origin = [feet.x, feet.y, feet.z, params.height * scale];
 
     const shadow = squishy.handle.look === 'shadow';
     const tier = FINISH_CODE[params.finish];
@@ -515,13 +534,15 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     for (const s of this.#squishies.values()) {
       const body = this.#registry.bodies.get(s.handle.params.body.id);
       const [sx, , sz] = s.handle.params.body.scale;
-      const scale = s.world.m[5] ?? 1; // uniform placement scale
       const d =
-        Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) * scale * CONTACT_SHADOW.scale;
+        Math.max((body?.width ?? 1) * sx, (body?.depth ?? 1) * sz) *
+        s.scale *
+        CONTACT_SHADOW.scale *
+        s.shadow;
       Matrix.Compose(
         new Vector3(d, 1, d),
         rot,
-        new Vector3(s.origin[0], s.origin[1] + 0.01, s.origin[2]),
+        new Vector3(s.origin[0], s.ground + 0.01, s.origin[2]),
       ).copyToArray(matrices, i * 16);
       i++;
     }
