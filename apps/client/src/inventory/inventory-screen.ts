@@ -33,7 +33,7 @@ import {
 import { formatTimeLeft, GameClock } from './game-clock.js';
 import { inventoryApi, type InventoryApi } from './inventory-api.js';
 import { itemDetail } from './item-detail.js';
-import { itemIcon } from './item-icons.js';
+import { itemIcon, itemIconNode } from './item-icons.js';
 import { COMMAND_RETRY_MS, sendCommand } from './send-command.js';
 import { tileAction, type TileAction } from './tile-action.js';
 import './inventory.css';
@@ -737,7 +737,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
       el(
         'div',
         { class: 'bag-detail-head' },
-        el('span', { class: 'bag-detail-icon', 'aria-hidden': 'true' }, d.icon),
+        el(
+          'span',
+          { class: 'bag-detail-icon', 'aria-hidden': 'true' },
+          itemIconNode(item.id, 'bag-line-icon'),
+        ),
         el(
           'span',
           { class: 'bag-detail-title' },
@@ -783,7 +787,11 @@ export function createInventoryScreen(options: InventoryScreenOptions): Inventor
                 'data-item': item.id,
                 'aria-pressed': String(item.id === picked),
               },
-              el('span', { class: 'bag-item-icon', 'aria-hidden': 'true' }, item.icon),
+              el(
+                'span',
+                { class: 'bag-item-icon', 'aria-hidden': 'true' },
+                itemIconNode(item.id, 'bag-line-icon'),
+              ),
               el(
                 'span',
                 { class: 'bag-item-count' },

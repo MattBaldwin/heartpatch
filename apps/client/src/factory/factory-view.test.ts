@@ -137,14 +137,14 @@ describe('the Factory panel words (#294)', () => {
     const uses = shovel!.output.quantity;
     expect(
       welcomeChips([{ kind: 'factory', items: { shovel: 2 * uses }, recipeId: shovel!.id }]),
-    ).toEqual(['🪏 2 new Shovels']);
+    ).toEqual(['⛏️ 2 new Shovels']);
     const [row] = batchRows(view([batch({ recipeId: shovel!.id, total: 5 })]), T0);
-    expect(row?.each).toBe(`+🪏 (${String(uses)} digs) each`);
+    expect(row?.each).toBe(`+⛏️ (${String(uses)} digs) each`);
     const pick = pickRows({ timber: 99, stone: 99 }, [], () => true).find(
       (r) => r.recipe.id === shovel!.id,
     );
-    expect(pick?.line).toContain(`→ 🪏 (${String(uses)} digs)`);
-    expect(pick?.line).not.toContain(`${String(uses)} 🪏`);
+    expect(pick?.line).toContain(`→ ⛏️ (${String(uses)} digs)`);
+    expect(pick?.line).not.toContain(`${String(uses)} ⛏️`);
   });
 
   it('uses only kid-friendly words', () => {

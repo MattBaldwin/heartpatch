@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { bagItems, landedText } from './bag-view.js';
-import { toolMakes, toolOf, toolStock, usesLine } from './tool-uses.js';
+import { isIconName } from '../ui/line-icons.js';
+import { itemIcon } from './item-icons.js';
+import { TOOL_ICONS, TOOL_WORDS, toolMakes, toolOf, toolStock, usesLine } from './tool-uses.js';
 
 describe('explore tools in the bag (#199)', () => {
   it('knows which items are tools, and how many uses a new one has', () => {
@@ -24,8 +26,15 @@ describe('explore tools in the bag (#199)', () => {
   it('says what a tool recipe makes, and what landed, in tools', () => {
     expect(toolMakes('shovel', 20, 'Shovel')).toBe('Makes a Shovel (20 digs)');
     expect(toolMakes('timber', 2, 'Timber')).toBeNull();
-    expect(landedText([{ items: { shovel: 20 } }])).toBe('🪏 A new Shovel!');
+    expect(landedText([{ items: { shovel: 20 } }])).toBe('⛏️ A new Shovel!');
     expect(landedText([{ items: { net: 40, timber: 2 } }])).toBe('🪵 +2 Timber, 🥅 2 new Nets!');
     expect(usesLine('lantern', 15)).toBe('15 caves left');
+  });
+
+  it('draws every tool, and writes it with an emoji every iPhone has (#308)', () => {
+    for (const icon of Object.values(TOOL_ICONS)) expect(isIconName(icon)).toBe(true);
+    expect(itemIcon('shovel')).toBe('⛏️');
+    expect(itemIcon('rope')).toBe('🧗');
+    for (const [tool, words] of Object.entries(TOOL_WORDS)) expect(itemIcon(tool)).toBe(words.icon);
   });
 });
