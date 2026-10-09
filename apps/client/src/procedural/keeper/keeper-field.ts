@@ -57,6 +57,8 @@ export interface KeeperPlacement {
   readonly squash?: number;
   /** The contact shadow's width, times its size on the ground (it shrinks as the body rises). */
   readonly shadow?: number;
+  /** The contact shadow's opacity, 0–1 (it fades as the body rises, #323). */
+  readonly shadowAlpha?: number;
 }
 
 export interface KeeperHandle {
@@ -82,6 +84,8 @@ export interface KeeperFieldStats {
 
 interface Instance {
   readonly owner: Keeper;
+  /** The piece on the Keeper (kept, so a move only re-multiplies) and in the world. */
+  readonly local: Matrix;
   readonly matrix: Matrix;
   readonly color: readonly [number, number, number, number];
   /** `FINISH_CODE` sum: the piece's finish, plus glow. */
@@ -94,9 +98,10 @@ interface Keeper {
   /** The body's foot point (xyz) and height (w), for the squash shader. */
   origin: [number, number, number, number];
   scale: number;
-  /** The ground under it (the shadow stays here when it hops) and the shadow's width factor. */
+  /** The ground under it (the shadow stays here when it hops), and the shadow's width factor and opacity. */
   ground: number;
   shadow: number;
+  shadowAlpha: number;
   event: SquishEvent | null;
   readonly instances: { batch: Batch; instance: Instance }[];
 }
@@ -105,10 +110,22 @@ interface Batch {
   readonly shape: PartShape;
   readonly instances: Instance[];
   mesh: Mesh | null;
+  /** Instances came or went: rebuild every buffer. */
   dirty: boolean;
+  /** Only placements changed (a walk or a hop, #323): rewrite matrices and origins in place. */
+  moved: boolean;
+  /** The last uploaded origin buffer, rewritten in place on a move. */
+  origins: Float32Array | null;
 }
 
 const DEG = Math.PI / 180;
+
+// Scratch for placing Keepers and their shadows (no allocations while walking, #323).
+const PLACE_SCALE = new Vector3();
+const PLACE_TURN = new Quaternion();
+const PLACE_AT = new Vector3();
+const SHADOW_TURN = Quaternion.Identity();
+const SHADOW_WORLD = new Matrix();
 
 function linear(rgb: readonly [number, number, number]): [number, number, number, number] {
   const c = new Color3(rgb[0], rgb[1], rgb[2]).toLinearSpace();
@@ -127,6 +144,9 @@ export class KeeperField {
   readonly #beforeRender: Observer<Scene> | null;
   #lod: SquishyLod;
   #shadowDirty = true;
+  /** The shadows' last buffers, rewritten in place while the count holds. */
+  #shadowMatrices: Float32Array | null = null;
+  #shadowColors: Float32Array | null = null;
   #nextId = 1;
   /** Wall-clock ms at Keeper-clock zero, set by the first `update` or `play`. */
   #clockStart: number | null = null;
@@ -173,6 +193,7 @@ export class KeeperField {
       scale: 1,
       ground: 0,
       shadow: 1,
+      shadowAlpha: 1,
       event: null,
       instances: [],
     };
@@ -181,11 +202,16 @@ export class KeeperField {
     return handle;
   }
 
+  /** Moves a Keeper: its pieces keep their place on it, so this only re-places them (#323). */
   move(handle: KeeperHandle, placement: KeeperPlacement): void {
     const keeper = this.#keepers.get(handle.id);
     if (!keeper) return;
-    this.#detach(keeper);
-    this.#layout(keeper, placement);
+    this.#place(keeper, placement);
+    for (const { batch, instance } of keeper.instances) {
+      instance.local.multiplyToRef(keeper.world, instance.matrix);
+      batch.moved = true;
+    }
+    this.#shadowDirty = true;
   }
 
   remove(handle: KeeperHandle): void {
@@ -266,7 +292,10 @@ export class KeeperField {
 
   /** Uploads changed instance buffers. Runs before every render; call it to force one. */
   flush(): void {
-    for (const batch of this.#batches.values()) if (batch.dirty) this.#upload(batch);
+    for (const batch of this.#batches.values()) {
+      if (batch.dirty) this.#upload(batch);
+      else if (batch.moved) this.#uploadMoves(batch);
+    }
     if (this.#shadowDirty) this.#uploadShadows();
   }
 
@@ -294,28 +323,47 @@ export class KeeperField {
   #batch(shape: PartShape): Batch {
     let batch = this.#batches.get(shape);
     if (!batch) {
-      batch = { shape, instances: [], mesh: null, dirty: true };
+      batch = {
+        shape,
+        instances: [],
+        mesh: null,
+        dirty: true,
+        moved: false,
+        origins: null,
+      };
       this.#batches.set(shape, batch);
     }
     return batch;
   }
 
-  #layout(keeper: Keeper, placement: KeeperPlacement): void {
-    const { params } = keeper.handle;
+  /** The Keeper's world matrix, origin, ground and shadow, in place. */
+  #place(keeper: Keeper, placement: KeeperPlacement): void {
     const scale = placement.scale ?? 1;
     const squash = placement.squash ?? 1;
     const wide = scale / Math.sqrt(squash);
     const ground = placement.y ?? 0;
-    const feet = new Vector3(placement.x, ground + (placement.lift ?? 0), placement.z);
-    keeper.world = Matrix.Compose(
-      new Vector3(wide, scale * squash, wide),
-      Quaternion.RotationYawPitchRoll(placement.yaw ?? 0, placement.lean ?? 0, 0),
-      feet,
+    PLACE_AT.set(placement.x, ground + (placement.lift ?? 0), placement.z);
+    Quaternion.RotationYawPitchRollToRef(placement.yaw ?? 0, placement.lean ?? 0, 0, PLACE_TURN);
+    Matrix.ComposeToRef(
+      PLACE_SCALE.set(wide, scale * squash, wide),
+      PLACE_TURN,
+      PLACE_AT,
+      keeper.world,
     );
     keeper.scale = scale;
     keeper.ground = ground;
     keeper.shadow = placement.shadow ?? 1;
-    keeper.origin = [feet.x, feet.y, feet.z, params.height * scale];
+    keeper.shadowAlpha = placement.shadowAlpha ?? 1;
+    const o = keeper.origin;
+    o[0] = PLACE_AT.x;
+    o[1] = PLACE_AT.y;
+    o[2] = PLACE_AT.z;
+    o[3] = keeper.handle.params.height * scale;
+  }
+
+  #layout(keeper: Keeper, placement: KeeperPlacement): void {
+    const { params } = keeper.handle;
+    this.#place(keeper, placement);
     for (const p of params.pieces) {
       const local = Matrix.Compose(
         new Vector3(p.size[0], p.size[1], p.size[2]),
@@ -324,6 +372,7 @@ export class KeeperField {
       );
       const instance: Instance = {
         owner: keeper,
+        local,
         matrix: local.multiply(keeper.world),
         color: linear(p.color),
         finish: (p.finish ? FINISH_CODE[p.finish] : 0) + (p.glow ? FINISH_CODE.glow : 0),
@@ -348,6 +397,7 @@ export class KeeperField {
 
   #upload(batch: Batch): void {
     batch.dirty = false;
+    batch.moved = false;
     const n = batch.instances.length;
     if (n === 0) {
       batch.mesh?.setEnabled(false);
@@ -385,9 +435,24 @@ export class KeeperField {
     });
     mesh.thinInstanceSetBuffer('matrix', matrices, 16, false);
     mesh.thinInstanceSetBuffer('color', colors, 4, true);
-    mesh.thinInstanceSetBuffer('squishOrigin', origins, 4, true);
+    mesh.thinInstanceSetBuffer('squishOrigin', origins, 4, false);
     mesh.thinInstanceSetBuffer('squishMotion', motions, 4, true);
     mesh.thinInstanceSetBuffer('squishEvent', events, 4, false);
+    batch.origins = origins;
+  }
+
+  /** Rewrites a batch's matrices and origins in place after moves (no new buffers). */
+  #uploadMoves(batch: Batch): void {
+    batch.moved = false;
+    const { mesh, origins } = batch;
+    if (!mesh || !origins) return;
+    batch.instances.forEach((inst, i) => {
+      // Through the mesh, so its world-matrix copies (picking) see the move too.
+      mesh.thinInstanceSetMatrixAt(i, inst.matrix, false);
+      origins.set(inst.owner.origin, i * 4);
+    });
+    mesh.thinInstanceBufferUpdated('matrix');
+    mesh.thinInstanceBufferUpdated('squishOrigin');
   }
 
   #uploadShadows(): void {
@@ -397,18 +462,34 @@ export class KeeperField {
     const n = this.#keepers.size;
     shadow.setEnabled(n > 0);
     if (n === 0) return;
-    const matrices = new Float32Array(n * 16);
-    const rot = Quaternion.Identity();
+    // Same count: rewrite the buffers in place (a walk or a hop moves them every frame).
+    const kept = this.#shadowMatrices?.length === n * 16 ? this.#shadowMatrices : null;
+    const fresh = kept === null || this.#shadowColors === null;
+    const matrices = fresh ? new Float32Array(n * 16) : kept;
+    const colors = fresh || !this.#shadowColors ? new Float32Array(n * 4) : this.#shadowColors;
     let i = 0;
     for (const k of this.#keepers.values()) {
       const d = k.handle.params.width * k.scale * CONTACT_SHADOW.scale * k.shadow;
-      Matrix.Compose(
-        new Vector3(d, 1, d),
-        rot,
-        new Vector3(k.origin[0], k.ground + 0.01, k.origin[2]),
+      Matrix.ComposeToRef(
+        PLACE_SCALE.set(d, 1, d),
+        SHADOW_TURN,
+        PLACE_AT.set(k.origin[0], k.ground + 0.01, k.origin[2]),
+        SHADOW_WORLD,
       ).copyToArray(matrices, i * 16);
+      colors[i * 4] = 1;
+      colors[i * 4 + 1] = 1;
+      colors[i * 4 + 2] = 1;
+      colors[i * 4 + 3] = k.shadowAlpha;
       i++;
     }
-    shadow.thinInstanceSetBuffer('matrix', matrices, 16, false);
+    if (fresh) {
+      this.#shadowMatrices = matrices;
+      this.#shadowColors = colors;
+      shadow.thinInstanceSetBuffer('matrix', matrices, 16, false);
+      shadow.thinInstanceSetBuffer('color', colors, 4, false);
+    } else {
+      shadow.thinInstanceBufferUpdated('matrix');
+      shadow.thinInstanceBufferUpdated('color');
+    }
   }
 }

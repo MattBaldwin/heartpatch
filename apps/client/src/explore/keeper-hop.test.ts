@@ -4,6 +4,7 @@ import {
   createHop,
   hopActive,
   hopPose,
+  shadowAlpha,
   shadowScale,
   stepHop,
   strideAt,
@@ -154,6 +155,13 @@ describe('the hop follows the ground covered (#317)', () => {
     expect(highest(poses)).toBeLessThanOrEqual(EXPLORE_HOP.bob + 1e-9);
     expect(highest(poses)).toBeGreaterThan(0);
     expect(hopActive(hop)).toBe(false);
+  });
+
+  it('fades the shadow as it shrinks (#323)', () => {
+    expect(shadowAlpha(0)).toBe(1);
+    expect(shadowAlpha(EXPLORE_HOP.height.max)).toBeCloseTo(1 - EXPLORE_HOP.shadowFade);
+    expect(shadowAlpha(EXPLORE_HOP.height.max / 2)).toBeLessThan(1);
+    expect(shadowAlpha(EXPLORE_HOP.height.max * 2)).toBeCloseTo(1 - EXPLORE_HOP.shadowFade);
   });
 
   it('shrinks the shadow as the hopper rises', () => {

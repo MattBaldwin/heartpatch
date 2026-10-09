@@ -66,6 +66,7 @@ import {
   createHop,
   hopActive,
   hopPose,
+  shadowAlpha,
   shadowScale,
   stepHop,
   TELEPORT,
@@ -79,9 +80,11 @@ import {
   cameraShot,
   collidersOf,
   decorPlaces,
+  followLead,
   followStep,
   freePoint,
   hidingSpots,
+  keepClear,
   tileSurface,
   spotRadius,
   type Collider,
@@ -197,16 +200,29 @@ interface Follower {
 }
 
 /**
- * How far behind the Keeper the `i`th follower walks, tile-local: half a gap
- * more than one per place, the spacing the trail's points gave on average
- * before the team glided along it (#317).
+ * How far behind the Keeper the `i`th follower walks along its trail,
+ * tile-local: the first one far enough back never to cover the Keeper
+ * (`lead`, #323), and at least the 1.5 gaps the trail's points gave on
+ * average before the team glided along it (#317); then a gap each.
  */
-function followBack(i: number): number {
-  return (i + 1.5) * EXPLORE_VIEW.followGap;
+function followBack(i: number, lead: number): number {
+  return Math.max(lead, 1.5 * EXPLORE_VIEW.followGap) + i * EXPLORE_VIEW.followGap;
 }
 
-// Scratch for the hop pose being placed (no allocations while walking).
+// Scratch for the hop pose and the placements (no allocations while walking, #323).
 const POSE: HopPose = { lift: 0, squash: 1 };
+const PLACE = {
+  x: 0,
+  z: 0,
+  y: 0,
+  yaw: 0,
+  scale: 1,
+  lean: 0,
+  lift: 0,
+  squash: 1,
+  shadow: 1,
+  shadowAlpha: 1,
+};
 
 export class ExploreScene {
   readonly content: SceneContent;
@@ -251,6 +267,8 @@ export class ExploreScene {
   /** Someone was hopping, landing or settling at the last step. */
   #hopping = false;
   readonly #reduced: () => boolean;
+  /** The tallest follower, tile-local: how far back the team keeps (#323). */
+  #teamTall = 0;
   #tile: ExploreTileResponse;
   #at: WorldPoint = EXPLORE_VIEW.start;
   #yaw: number = EXPLORE_VIEW.startYaw;
@@ -374,11 +392,16 @@ export class ExploreScene {
     this.#trail = [...line, this.#trailPoint(line.length + 1)];
     options.team.forEach((member, i) => {
       const at = { x: 0, z: 0 };
-      alongTrail(this.#at, this.#trail, followBack(i), at);
       const handle = this.#squishies.add(member.species, member.id, this.#squishyPlacement(at, 0));
       const hop = createHop(EXPLORE_HOP.followerOffset[i % EXPLORE_HOP.followerOffset.length]);
       this.#followers.push({ handle, at, yaw: 0, hop, walked: 0 });
+      const tall = (handle.params.height * EXPLORE_VIEW.squishyScale) / this.#size;
+      this.#teamTall = Math.max(this.#teamTall, tall);
     });
+    this.#follow(this.#at);
+    for (const f of this.#followers) {
+      this.#squishies.move(f.handle, this.#squishyPlacement(f.at, f.yaw));
+    }
 
     // The tools the Keeper can hold (#291): one small mesh each, one shown.
     this.#tools = {
@@ -524,19 +547,7 @@ export class ExploreScene {
     if (!head || (head.x - at.x) ** 2 + (head.z - at.z) ** 2 >= gap * gap) {
       this.#trail = [at, ...this.#trail].slice(0, this.#followers.length + 2);
     }
-    // The team glides along the trail, each one gap behind the one before.
-    for (let i = 0; i < this.#followers.length; i++) {
-      const f = this.#followers[i];
-      if (!f) continue;
-      const x = f.at.x;
-      const z = f.at.z;
-      alongTrail(this.#at, this.#trail, followBack(i), f.at);
-      const moved = Math.hypot(f.at.x - x, f.at.z - z);
-      if (moved === 0) continue;
-      if (moved <= TELEPORT) f.walked += moved;
-      const ahead = i === 0 ? at : (this.#followers[i - 1]?.at ?? at);
-      f.yaw = faceYaw(ahead.x - f.at.x, ahead.z - f.at.z);
-    }
+    this.#follow(at);
     // While hopping, `step` places everyone this frame with the new pose.
     if (!this.#hopping) this.#place();
   }
@@ -614,6 +625,27 @@ export class ExploreScene {
     if (drawing) this.#place();
     this.#hopping = hopping;
     return drawing;
+  }
+
+  /**
+   * The team glides along the trail, each one gap behind the one before,
+   * and never close enough to cover the Keeper (#323).
+   */
+  #follow(at: WorldPoint): void {
+    const lead = followLead(this.#teamTall, this.#shot.pitch);
+    for (let i = 0; i < this.#followers.length; i++) {
+      const f = this.#followers[i];
+      if (!f) continue;
+      const x = f.at.x;
+      const z = f.at.z;
+      alongTrail(at, this.#trail, followBack(i, lead), f.at);
+      keepClear(at, f.at, lead);
+      const moved = Math.hypot(f.at.x - x, f.at.z - z);
+      if (moved === 0) continue;
+      if (moved <= TELEPORT) f.walked += moved;
+      const ahead = i === 0 ? at : (this.#followers[i - 1]?.at ?? at);
+      f.yaw = faceYaw(ahead.x - f.at.x, ahead.z - f.at.z);
+    }
   }
 
   /** Places the Keeper, its tool and the team with this frame's hop pose. */
@@ -723,7 +755,7 @@ export class ExploreScene {
     const tool = this.#held ? this.#tools[this.#held] : null;
     if (!tool || !this.#keeper) return;
     const anchor = this.#keeper.params.sockets.held.anchors[0] ?? [0.2, 0.5, 0];
-    const at = this.#world(this.#at);
+    const at = this.#at;
     const k = EXPLORE_VIEW.keeperScale;
     Quaternion.RotationYawPitchRollToRef(this.#yaw, KEEPER_LEAN, 0, TOOL_TURN);
     Matrix.ComposeToRef(
@@ -734,7 +766,11 @@ export class ExploreScene {
         k / Math.sqrt(this.#pose.squash),
       ),
       TOOL_TURN,
-      TOOL_AT.set(at.x, this.#groundAt(this.#at) + this.#pose.lift * this.keeperTall, at.z),
+      TOOL_AT.set(
+        at.x * this.#size,
+        this.#groundAt(at) + this.#pose.lift * this.keeperTall,
+        at.z * this.#size,
+      ),
       TOOL_WORLD,
     );
     Vector3.TransformCoordinatesToRef(
@@ -790,41 +826,46 @@ export class ExploreScene {
   #trailPoint(n: number): WorldPoint {
     const point = this.#trail[n];
     if (point) return point;
-    // Before the Keeper has walked: the team waits in a little line behind it.
+    // Before the Keeper has walked: the team waits in a little line behind
+    // it, on the far side from the camera so the Keeper stands in front (#323).
     const behind = n * EXPLORE_VIEW.followGap;
-    return { x: this.#at.x + (n % 2 === 0 ? 0.02 : -0.02), z: this.#at.z - behind };
+    return { x: this.#at.x + (n % 2 === 0 ? 0.02 : -0.02), z: this.#at.z + behind };
   }
 
-  /** On the ground at its tile-local point; the hop (#317) only lifts and squashes what's drawn. */
+  /**
+   * On the ground at its tile-local point; the hop (#317) only lifts and
+   * squashes what's drawn. Into the shared scratch (read straight away).
+   */
   #keeperPlacement() {
-    const at = this.#world(this.#at);
     const pose = this.#pose;
-    return {
-      x: at.x,
-      z: at.z,
-      y: this.#groundAt(this.#at),
-      yaw: this.#yaw,
-      scale: EXPLORE_VIEW.keeperScale,
-      lean: KEEPER_LEAN,
-      lift: pose.lift * this.keeperTall,
-      squash: pose.squash,
-      shadow: shadowScale(pose.lift),
-    };
+    PLACE.x = this.#at.x * this.#size;
+    PLACE.z = this.#at.z * this.#size;
+    PLACE.y = this.#groundAt(this.#at);
+    PLACE.yaw = this.#yaw;
+    PLACE.scale = EXPLORE_VIEW.keeperScale;
+    PLACE.lean = KEEPER_LEAN;
+    PLACE.lift = pose.lift * this.keeperTall;
+    PLACE.squash = pose.squash;
+    PLACE.shadow = shadowScale(pose.lift);
+    PLACE.shadowAlpha = shadowAlpha(pose.lift);
+    return PLACE;
   }
 
+  /** A follower's placement, into the shared scratch (read straight away by the field). */
   #squishyPlacement(p: WorldPoint, yaw: number, handle?: SquishyHandle, pose?: HopPose) {
-    const at = this.#world(p);
     const scale = EXPLORE_VIEW.squishyScale;
-    return {
-      x: at.x,
-      z: at.z,
-      y: this.#groundAt(p),
-      yaw,
-      scale,
-      lift: handle && pose ? pose.lift * handle.params.height * scale : 0,
-      squash: pose?.squash ?? 1,
-      shadow: pose ? shadowScale(pose.lift) : 1,
-    };
+    const lift = pose?.lift ?? 0;
+    PLACE.x = p.x * this.#size;
+    PLACE.z = p.z * this.#size;
+    PLACE.y = this.#groundAt(p);
+    PLACE.yaw = yaw;
+    PLACE.scale = scale;
+    PLACE.lean = 0;
+    PLACE.lift = handle ? lift * handle.params.height * scale : 0;
+    PLACE.squash = pose?.squash ?? 1;
+    PLACE.shadow = shadowScale(lift);
+    PLACE.shadowAlpha = shadowAlpha(lift);
+    return PLACE;
   }
 
   #buildGround(terrain: string): void {

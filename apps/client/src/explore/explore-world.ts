@@ -528,3 +528,33 @@ export function alongTrail(
   out.x = x;
   out.z = z;
 }
+
+/**
+ * How close a follower may walk to the Keeper, tile-local (#323). The camera
+ * looks down at `pitch` from the Keeper's front, so a follower `tall` high
+ * (tile-local) on the camera's side this far away keeps its top below the
+ * Keeper's feet on screen and never covers it. Behind the Keeper it is hidden
+ * the right way round anyway.
+ */
+export function followLead(tall: number, pitch: number): number {
+  return tall / Math.tan(pitch) + EXPLORE_VIEW.keeperRadius;
+}
+
+/**
+ * Pushes `p` straight out to at least `lead` from the Keeper at `k`, in place
+ * (#323): when the Keeper turns back along its trail it walks into the team,
+ * and they step back out of its way. Right on top of it, they step away from
+ * the camera.
+ */
+export function keepClear(k: WorldPoint, p: { x: number; z: number }, lead: number): void {
+  const dx = p.x - k.x;
+  const dz = p.z - k.z;
+  const d = Math.hypot(dx, dz);
+  if (d >= lead) return;
+  if (d === 0) {
+    p.z = k.z + lead;
+    return;
+  }
+  p.x = k.x + (dx / d) * lead;
+  p.z = k.z + (dz / d) * lead;
+}

@@ -211,6 +211,8 @@ export const EXPLORE_HOP = {
   settleRebound: 0.03, // TUNE
   /** The shadow at the top of the highest hop, as a share of its width on the ground. */
   shadowMin: 0.7, // TUNE
+  /** …and fades by this share of its opacity (#323), so the hop reads clearly. */
+  shadowFade: 0.45, // TUNE
   /** Squishies hop this share as high (of their own height) as the Keeper. */
   followerLift: 0.8, // TUNE
   /** Extra phase for each follower in turn (in hops), so nobody lands together. */
