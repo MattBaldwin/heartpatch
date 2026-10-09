@@ -277,7 +277,7 @@ describe('pickedViews (#305)', () => {
     const shelf: TradeShelf = {
       userId: ME,
       squishies: [squishy(1)],
-      items: [timber(9)],
+      items: [{ kind: 'item', itemId: 'timber', quantity: 9 }],
       clothing: [],
     };
     expect(

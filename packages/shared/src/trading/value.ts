@@ -68,7 +68,7 @@ export function createTradeValuer(data: TradeValueData): TradeValuer {
     }
     const known = line.speciesId === null ? undefined : species.get(line.speciesId);
     if (!known) return values.squishyRarity[values.mysteryRarity] * levelFactor(line.level);
-    const synergy = data.synergy[known.element]?.[known.feeling] ?? 1;
+    const synergy = data.synergy[known.element][known.feeling];
     return (
       values.squishyRarity[known.rarity] *
       stageFactor(stages.get(known.id) ?? 1) *

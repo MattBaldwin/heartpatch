@@ -864,9 +864,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     col.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
     col.querySelector<HTMLElement>('.post-grid button')?.focus({ preventScroll: true });
+    // Off, then on next frame, so a second tap wiggles it again.
     col.classList.remove('post-flash');
-    void col.offsetWidth;
-    col.classList.add('post-flash');
+    requestAnimationFrame(() => {
+      col.classList.add('post-flash');
+    });
   }
 
   /** The meter for what I've picked so far. */

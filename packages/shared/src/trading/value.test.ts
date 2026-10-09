@@ -31,7 +31,9 @@ describe('TRADE_VALUES', () => {
   });
 
   it('refuses a missing item, a tool, an unknown item and heart steps that go down', () => {
-    const { timber: _timber, ...noTimber } = TRADE_VALUES.items;
+    const noTimber = Object.fromEntries(
+      Object.entries(TRADE_VALUES.items).filter(([id]) => id !== 'timber'),
+    );
     expect(
       checkTradeValues(
         {
@@ -81,7 +83,7 @@ describe('tradeValuer', () => {
   const valuer = createTradeValuer({
     values,
     species: [ember, hearth],
-    synergy: { fire: { cozy: 1.2 } } as never,
+    synergy: { ...GAME_DATA.synergy, fire: { ...GAME_DATA.synergy.fire, cozy: 1.2 } },
     clothing: CLOTHING,
   });
 
@@ -91,7 +93,11 @@ describe('tradeValuer', () => {
     expect(valuer.lineValue(pet('emberbun', 3))).toBeCloseTo(40 * 1 * 1.2 * 2);
     // Its evolution is stage 2.
     expect(valuer.lineValue(pet('hearthbun', 1))).toBeCloseTo(
-      values.squishyRarity[hearth.rarity] * 2 * (hearth.element === 'fire' ? 1.2 : 1),
+      values.squishyRarity[hearth.rarity] *
+        2 *
+        (hearth.element === 'fire' && hearth.feeling === 'cozy'
+          ? 1.2
+          : GAME_DATA.synergy[hearth.element][hearth.feeling]),
     );
   });
 
@@ -104,7 +110,7 @@ describe('tradeValuer', () => {
   it('values each item in a stack, and a clothing piece by its rarity', () => {
     expect(valuer.lineValue(items('timber', 3))).toBe(12);
     expect(valuer.lineValue(items('not-an-item', 3))).toBe(0);
-    const common = CLOTHING.find((c) => c.rarity === 'common' && c.tradable !== false)!;
+    const common = CLOTHING.find((c) => c.rarity === 'common' && c.tradable)!;
     expect(valuer.lineValue({ kind: 'clothing', itemId: common.id })).toBe(30);
     expect(valuer.lineValue({ kind: 'clothing', itemId: 'nope' })).toBe(0);
   });
