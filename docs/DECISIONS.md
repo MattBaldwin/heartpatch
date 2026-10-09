@@ -812,3 +812,420 @@ _Filed from the design review on 2026-10-06; each is a lane to design before it 
 - **#188:** capture odds.
 - **#189:** hollowed land.
 - **#190:** mini-bosses.
+
+## 2026-10-06 — Family signup codes (#195, PR #206)
+
+_Proposed in PR #206; recorded by the coordinator after merge._
+
+- **Family codes are 12 characters** from the invite alphabet; patch invites stay 8, so one field tells them apart by length. *Why:* there's no second field, and 12 characters (~59 bits) keep a stored hash from being a quick offline guess.
+- **Family codes are stored as SHA-256, not Argon2.** Sign-up has no username to find the row by, so it looks the code up by hash. The per-IP signup rate limit holds back online guessing, and codes last 14 days.
+- **A join request filed at sign-up waits for the Keeper and tutorial gates at approval** (409 "still getting ready"), the same gates joining has.
+- **Family codes belong to the owner, not to a patch.** The same list shows on every patch they own. Ended codes stay listed for 28 days (`// TUNE:`); at most 20 show.
+- **`HP_SIGNUP_CODE` stays required in production for this release.** The release after can make it optional in `config.ts`, then drop the bootstrap check and the env var from `.env.prod.example`, `deploy.sh` and DEPLOY.md, once the operator has made family codes with `ops/signup-code.js`.
+
+## 2026-10-06 — A pumpkin patch at every home, and a mini Thanksgiving (Fix PR #200)
+
+_Follows the owner's Q6 answer ("Owner design-review answers", 2026-10-06). Proposed in PR #200; recorded by the coordinator after merge._
+
+- **Seasonal nodes live in `homeRingNodes`, which goes from 4 to 6.** A node's season comes from its resource's own `season`, so the map-gen schema doesn't change. The ring is now full, and buildings use spots 1–6 on ring tiles (owner-approved).
+- **New maps from the same seed now differ** (the generator's draws changed); the pinned map-gen hash was updated on purpose. Stored patches keep their tiles (owner-approved).
+- **Older patches are topped up lazily on read,** once, deterministically from the map seed (owner-approved). A building in the way moves to a side spot on its own tile so every home gets its seasonal nodes (coordinator). A node waits only when every bare ring tile is full; that's logged once, with a counter.
+- **Seasonal home nodes hide out of season,** and their spot stays reserved, so kids see an empty middle they can't build on until the season returns.
+- **The Tutorial Glade's ring check skips seasonal resources** (the Glade has no seasons).
+- **The leaf pile is made of maple and oak leaf shapes,** with loose leaves around it (owner's mockup note).
+
+## 2026-10-06 — The game's version (#198, PR #210)
+
+_Proposed in PR #210; recorded by the coordinator after merge._
+
+- **Version scheme (owner):** before the full production launch everything is pre-v1, shown as `v0.<build> · <short sha> · <UTC build date>`. `<build>` is `git rev-list --count HEAD` on a full-history checkout: monotonic, no tags or manual bumps, and the same commit always gets the same number.
+- **`v1.0` comes only when the owner publishes the full production game.** It's a one-line change to `APP_MAJOR`. After v1 the scheme becomes `v1.<minor>.<build>` (not built yet).
+- **Every deploy is now a new app shell.** This partly supersedes "Installable app (#26)": "A deploy that only changes the server keeps the phones' cache". The build number is in the entry bundle, so installed apps see "Ooh, a new Heartpatch is ready!" after every deploy, a rebuild of the same commit included. Phones re-download `index.html` and the ~640 KB entry chunk, never the 1.2 MB engine chunk.
+- **"Update ready" from the server needs a later build, not just a different one,** so a rolled-back server never offers an "update".
+- **`HealthResponse.build` and `commit` default to null when missing,** so mixed versions during a deploy never break the reply.
+
+## 2026-10-06 — A wild squishy wanders off; fairer wild levels (#208, PR #211)
+
+_Owner decisions of 2026-10-07, relayed by the coordinator. Proposed in PR #211; recorded by the coordinator after merge._
+
+- **A wild squishy the player lost to or ran from wanders off for that player** for the rest of its spawn window, like a beaten or befriended one. A tie or a no contest still leaves it. The Tutorial Glade keeps its befriend-only rule. *Why:* a spawn the kid can't beat soft-locked "Find a squishy" for 4 hours, and counting a run home stops scooting from keeping one around. It supersedes the 2026-10-03 sentence "A loss, a tie, a run home or a no contest leaves it there."
+- **The result card says "It wandered off. Try another one nearby!"** after a wild loss or run home off the Glade. On the Glade the card never says a squishy left; a win there says "Everyone had a great time."
+- **Wild levels roll −2 to +0 of the Partner's level** (was −2 to +1). *Why:* the target is a lone, un-grown Partner beating an ordinary wild squishy about 75% of the time; the sim gives 75% / 71% / 82% / 94% at L5 / 10 / 16 / 20. A starter now grows up after 23–30 wins at 1× care (was 22–29).
+- **Wild levels keep following the Partner,** not the strongest teammate or the team's average, so picking a weaker team can't buy easier spawns.
+- **No rarity level discount.** The owner chose one, then dropped it the same day: with −2 to +0 it made rarer squishies easier than ordinary ones. They're meant to be a step harder. The optional `SpawnRulesSchema.rarityLevelDiscount` field stays as a tested, unshipped knob.
+- **Formulas stay as they are.** If a later target needs a gentler level step, `stats.levelDivisor` is the lever.
+
+## 2026-10-06 — When daily tries come back (#201, PR #213)
+
+_Proposed in PR #213; recorded by the coordinator after merge._
+
+- **Relative times only, never clock times.** The patch's midnight isn't every player's, so "in 3h 20m" is right everywhere.
+- **Countdowns round up to the minute,** then say "less than a minute", so they never say something is back before it is.
+- **The team view shows the full-XP note for any squishy past its full wins today,** bench included, because a bench squishy can swap in.
+- **The result card's note uses the device clock;** `PlayerBattle` carries no server time, and the note is coarse enough.
+
+## 2026-10-07 — Hearthfires on captured land (#202, PR #222)
+
+_Owner decisions of 2026-10-07. Proposed in PR #222; recorded by the coordinator after merge._
+
+- **No fires on home tiles.** Home tiles are always safe. Hearthfires stand only on captured land, in a tile's middle, one per tile. Existing home fires were packed up at boot with a full refund and a one-time morning note.
+- **Typed spots (#204):** `slot: centre | ring | edge`. Spot 0 is the centre, spots 1–6 the ring. Hearthfires are `centre`; habitats and Training Grounds are `ring`. A seasonal node counts as a centre occupant. The data leaves room for a lamp post as a second centre light.
+- **Fuel:** up to 5 nights per fire, as before, spent lowest-first one night at a time. *(Raised to 8 nights by #285.)*
+- **Refunds:** a fire on land you lose gives back what taking it down would: half the build and upgrades, plus all unburned fuel. A Jack-o'-Lantern always gives back its pumpkin. Only the home fires packed at boot gave back everything.
+- **Outer fires don't move;** take one down and build it again.
+- **Guards on watch need a lit fire's reach.** It supersedes "guards are safe on watch". A guard on a tile no lit fire reaches is exposed at nightfall; a guard on a home tile is always safe. A guard taken to the Hollow leaves the watch in the same transaction, and its tile falls back to its land's guardians. The tile panel warns about it, and the "light a fire" nudge counts guards.
+- **`fireHint`** shows only while one of the player's gatherers or guards would spend the night on dark land.
+- **Tutorial:** step `hearthfire` stays as a talk step; the new `land-fire` step comes after `territory`.
+- **Map scale** for fires on land is 0.75. The tile panel caps its height and scrolls.
+- **Migration 0027 is additive:** `lost_fire_refund` jsonb on `tile_attacks` and `tile_tending`, and the `packed_home_fires` table. There's no fire-per-tile unique index, because old homes could hold two fires and the migrate step would fail before the boot pass packed them up. The `(tile_id, spot)` key plus centre-only fires already allows one per tile.
+
+## 2026-10-07 — A clear way back (#212, PR #217)
+
+- **No back pill over an open patch.** Looking around from a patch returns to it, and the patch already has its corner button.
+
+## 2026-10-07 — Battle potions (#214, PR #219)
+
+_Owner decisions of 2026-10-07, relayed by the coordinator. Proposed in PR #219; recorded by the coordinator after merge._
+
+- **Boosts are +40%; Hearty Soup heals 40%** (all `// TUNE:`).
+- **Recipes:** Brave Brew is 2 Treats + 2 Stone (not a Pumpkin, which only grows at Halloween), Cozy Cocoa 2 Treats + 2 Timber, Hearty Soup 2 Treats + 1 Emberwood; 2 minutes each.
+- **Turn order:** swaps, potions, Heart Charms, moves.
+- **Boosts stay on the squishy that drank,** through swaps. The shield waits on that squishy until a hit lands; a miss doesn't use it. A shielded hit still costs at least 1 energy. A new shield replaces the old.
+- **One of each potion per side per battle** (`BATTLE_RULES.items.usesEach`). Hearty Soup at full energy is allowed: it heals nothing but still shields.
+- **The content hash changed,** so a battle still going at deploy ended as "No contest!".
+- **Action row (option A):** line 1 is Use Heart Charm, a compact 🧪 N button and one Swap that opens a "Who comes out?" picker; Run away is on line 2. Swapping is now two taps.
+- **Lock order:** a potion's inventory row is locked before a tile battle's tile and the team's squishies, the same exception the Heart Charm has (tech spec §7).
+- **AI sides never drink in Phase 1.** A future boss can, through data.
+
+## 2026-10-07 — What's new (#220, PR #223)
+
+_Proposed in PR #223; recorded by the coordinator after merge._
+
+- **An entry's build number comes from git:** the commit that added the file. An entry never needs editing after merge.
+- **A new device doesn't pop up.** It remembers its build quietly; only later updates pop.
+- **No pop without a new entry.** A deploy with no player-visible change moves the seen build on quietly.
+- **Backfilled entries show under #223's version,** because their files arrived with it.
+
+## 2026-10-07 — Build menu, guardian feelings and the evolving meter (#207, #216, #205; PR #232, #226, #233)
+
+_Proposed in each PR; recorded by the coordinator after merge._
+
+- **Building effect chips come from building data** through a shared helper (`buildingEffects`) and are worded on the client, so new buildings get chips with no engine or menu code (#207).
+- **The land fire card shows the description and chips** in place of its own radius line, as the build menu does (owner, #207).
+- **Guardian hints carry feelings** (owner-approved contract change): each guardian's feeling in team order, or the species' own when the guardian has none. Never species, levels or elements (#216).
+- **A squishy's joining level is stored** (`squishies.joined_level`, migration 0028), backfilled from `squishy.captured` events, else the level at migration (owner). A row without one pins it on its first XP (#205).
+- **The evolving meter starts** at the later of the joining level and the level its form evolved into. There's no meter when a secret form comes next or on a top form. A public form with no public evolution says "Fully evolved! 🌟"; a secret form shows only its level (#205).
+- **The results card reads the meter from the battle's stored rewards;** `battle.ended` is unchanged. A battle that evolves a squishy shows no meter; the celebration takes over (#205).
+
+## 2026-10-07 — Account self-service without email (#197, PR #237)
+
+_Proposed in PR #237; recorded by the coordinator after merge._
+
+- **Helpers are grown-ups:** 18 or older by `users.birth_year`, checked on the candidate list, on saying yes and on each reset (owner).
+- **Helpers are picked from a server-built list** (`invited_by` plus active patch-mates on multiplayer patches), never typed. No endpoint says whether a username exists.
+- **Caps:** 2 helpers per player and 10 players per helper, unanswered asks included. 3 helper resets per helper in a rolling 24 hours.
+- **A helper reset mirrors an owner reset** (sessions revoked, one-time password, new recovery code). Both sides agreeing replaces the "every map is this owner's" scope check. Helper resets are logged in `account_helper_resets`; `game_events` stays map-scoped.
+- **A "no" is quiet:** the ask just disappears, and the player may ask again (rate-limited, no cool-down).
+- **"Not you?" forgets every remembered name on the device,** after a confirm.
+- **A new recovery code keeps sessions.** A wrong password there is a 400 (`VALIDATION_FAILED`), not a 401, because the player is still logged in.
+- **Every recovery code rotation locks `users` before `recovery_codes`** (tech spec §7).
+
+## 2026-10-07 — Rarity on info screens (#240, PR #243)
+
+_Owner-approved mockup, 2026-10-07. Proposed in PR #243; recorded by the coordinator after merge._
+
+- **The rarity chip sits under the name** on the close-up and the care sheet. Met Catalog cards get it; unmet "???" cards don't. Team picker and home rows get only the dot, with the word for VoiceOver.
+- **Rarity colours and words live in `apps/client/src/ui/rarity/`,** shared by squishies, the wardrobe and the Boutique. Secret is `#d9468b` with a glow.
+- **The chip's word stays in ink** (`#4a3150`); the rarity colour is the dot and outline, because the paler colours are hard to read as text.
+
+## 2026-10-07 — Operator admin console (#196, PR #239)
+
+_The owner approved the `/admin` mockup as it stands. Proposed in PR #239; recorded by the coordinator after merge._
+
+- **Admin sessions and TOTP run on real time, never `HP_DEV_NOW`.** Game data in the console uses the game clock.
+- **The TOTP secret is stored readable in `admin_totp`,** because it must be read to check codes. It never leaves the server over HTTP and is never logged.
+- **Admin actions on join requests and invite codes run as the patch's owner,** so the maps module's rules, events and lock order apply unchanged. The audit row records the admin.
+- **Admin routes gate in `preValidation`, not `preHandler`,** so a non-admin always gets 403, never 400, and learns nothing about a route's shape.
+- **Admin sessions last at most 8 hours,** on top of the 30-minute idle limit (`ADMIN_MAX_HOURS`, `// TUNE:`).
+- **"Find a username" widens the parent's dates by 14 hours each side** to cover any time zone, and shows at most 10 matches.
+
+## 2026-10-07 — Side trays on a phone held sideways (#136, PR #235)
+
+- **On short, wide screens the side trays widen to 600 px with two columns** (under 520 px tall and at least 640 px wide). Upright phones and iPads keep the one-column tray.
+
+## 2026-10-07 — Recipe book and Bag say what things do (#241, PR #248)
+
+_The owner approved the mockup and screenshots. Proposed in PR #248; recorded by the coordinator after merge._
+
+- **Battle chips say "oomph", not "attack",** using the battle screen's `STAT_WORDS` ("attack" is on the style guide's avoided list). The shield chip reads "Next bump 75% softer".
+- **Gathered items say what makes them,** from recipe outputs ("🥣 Made from Pumpkins"), so new recipes show up with no code change.
+- **The Bag card has no "See its recipe" button;** the approved v2 mockup drops it.
+
+## 2026-10-07 — Water, Greens and Ice, and the nesting economy (#238, PR #249)
+
+_Owner and coordinator decisions of 2026-10-07. Proposed in PR #249; recorded by the coordinator after merge._
+
+- **`TerrainSchema.extraNodes` and an extra-node pass,** with today's mapgen output byte-identical and pinned by a golden test. No migration; nodes top up on read.
+- **`RecipeSchema.fasterWith`:** 3 Water freeze into 1 Ice in 30 minutes, 15 with a Frost squishy.
+- **The nesting economy (owner):** a terrain's base yield is its primary resource (meadow Greens, forest Timber, old forest Emberwood, hills Stone, mountains Ice instead of Glimmer, lake Water, pumpkin fields Pumpkins). Spots are the rarer secondary: no meadow spots, no extra mountain Ice spots, Greens on about 1 forest in 4, a well on every lake.
+- **Treats are cooked from Greens** (2 → 3, about a minute, `// TUNE:`) or grown on farm plots. The `treats` id is unchanged.
+- **Affinities:** Frost → Ice, Water → Water, Leaf → Greens. Feelings share resources: Water/Silly (moved from Treats), Leaf/Cozy, Frost/Sleepy (`// TUNE:`).
+- **Out on the land, squishies gather the land's main resource; spots are the Keeper's** (owner). In the home ring, gatherers still work the spot.
+- **A fire on a tile keeps its spot;** the tile's new node waits until the fire is gone, as it does for a tile a squishy gathers on.
+- **Ice gets one named exemption** from #241's "every recipe says what it's for" guard until the Ice Wall (#203) uses it. Tests fail once Ice has a use, so the exemption can't outlive it.
+
+## 2026-10-07 — Pick a wild squishy from the map (#209, PR #252)
+
+_Owner decisions on the #209 mockup, 2026-10-07. Proposed in PR #252; recorded by the coordinator after merge._
+
+- **The map marker is a rustling tuft,** not a paw print (paw prints stay the forest chihuahuas' clue).
+- **The tile panel says "Something's rustling here!" with Meet it first,** above Claim. On short landscape screens the panel's big buttons sit two to a row.
+- **The note under Find a squishy is "N nearby! Or tap a rustle to pick."** ("No wild squishies nearby right now." when there are none).
+- **No tufts on the Tutorial Glade.** Kids meet starters through Find a squishy there and discover tufts on their first real patch.
+
+## 2026-10-07 — A finger on a map button can join a pinch (#159, PR #250)
+
+- **A finger on a map button** (not one in a sheet) counts as half of a pinch once a finger is on the map and either moves; the button then gets no click. A button tapped with one hand while the other is on the map zooms instead, and a joined thumb stays in the gesture after the other finger lifts, so moving it pans.
+
+## 2026-10-07 — The Mythic rarity (#261, PR #262)
+
+_Proposed in PR #262; recorded by the coordinator after merge._
+
+- **Mythic capture odds are 30% of the base chance** (`// TUNE:`), below Legendary's 40%.
+- **Mythic's finish is the shimmer:** iridescent plus pearly bands that move with the view angle, never on a timer. Its colour is teal `#2aa6b8`, with an opal dot.
+- **The Boutique never sells Mythic:** the data check refuses it, and the stock roll leaves it out.
+- **The wardrobe's rarity filter shows only rarities that have catalog pieces.**
+
+## 2026-10-08 — Ten special Halloween costumes (#261, PR #265)
+
+_Owner decisions of 2026-10-08. Proposed in PR #265; recorded by the coordinator after merge._
+
+- **Costume pieces can sit on body sockets** (`on`), up to 24 pieces, costumes only. Arm pieces may only roll.
+- **Costumes wear their rarity's finish,** existing Legendary costumes included, and pieces can glow.
+- **Marigold Calavera goes on the rack at 320.** This overrides #45's "Legendary is found-only" for this costume only; the Hollow Man stays found-only.
+- **The Ghost Sheet goes from 60 to 210,** the Rare costume price, so costumes stay in rarity order. Boutique price order is checked within a slot; `maxPrice` is 320.
+- **New drop sources `battle` and `explore`.** Capturing land that had another owner uses `rivalChance` (20%). Every drop weight is ×10, with no change to relative odds.
+- **Lucky Star counts Mythic finds.**
+
+## 2026-10-08 — Emberwood fences (#203, PR #256)
+
+_Owner decisions of 2026-10-07 (mockup 2) and on #244. Proposed in PR #256; recorded by the coordinator after merge._
+
+- **Eight fences, one per element, three levels each,** with the same energy and toughness per level.
+- **A two-part challenge:** the first squishy breaks the weakest exposed segment in at most 6 turns (`// TUNE:`). A standing fence holds and keeps the energy it lost. Breaking uses a try and starts the rest. Keep going finishes the challenge with no new try, within `FENCE_RULES.keepGoingMinutes` (10, `// TUNE:`), while the tile is still the same Keeper's.
+- **If the owner rebuilds the gap during Keep going,** the tile counts as fenced again: the challenger faces a new fence battle after the tile's rest, and their try is spent. The client shows "resting".
+- **Repair costs 25% of the segment's cost,** scaled by the energy it lost. Take down gives the usual share. A broken fence gives nothing back.
+- **A rival's capture destroys the old owner's segments on the tile,** nothing back, and the owner's report counts them. **My own segments facing a tile I capture come down** for the take-down share (`lost: 'inner'`).
+- **Rim edges facing off the map need no fence;** the server builds fences only on border edges.
+- **Approved contract changes:** fence events (the attacker's identity internal only), `PublicTile.fences`, `Raid.fence` and `Raid.lostFences` (a count), `TerritoryStatus.fenceBroken`, `fence.removed`'s public `lost`, and the battle setup's fence participant and `turnLimit`.
+
+## 2026-10-08 — Explore your land on the server, with homesteads (#199, PR #280)
+
+_Owner decisions of 2026-10-07. Proposed in PR #280; recorded by the coordinator after merge._
+
+- **The homestead bonus is yield, not speed:** +1 per cycle on a joined homestead, squishy and Keeper. Paused homesteads give nothing. *Why:* the speed bonus gave +0% because of the 4-cycle cap.
+- **The new Keeper track is "Seeker".** The Territory "Explorer" track and the Explorer's Hat are unchanged.
+- **Homesteads** aren't safe at nightfall, never fade once joined, and take no home buildings in Phase 1. Pumpkin fields need hands and a Shovel. Juniper's Gap is not explorable in Phase 1.
+- **The homestead model is derived** from `tile_explore` rows plus ownership, with no tile column. Lock order: `tile_explore` rows after tiles and `tile_defenders`, in `(user_id, tile_id)` order.
+- **Search spots don't depend on buildings,** so building never reshuffles progress.
+- **A paused homestead is a pause window on its row** (`paused_at` to `resumed_at`) that the gatherer count leaves out, so a capture touches no squishy rows.
+- **A tool is an item counted in uses** (`Resource.tool`), with no durability table.
+
+## 2026-10-08 — Land borders and the legend (#278, PR #283)
+
+- **The legend is a card that opens from the icons beside the map's name,** not a permanent row of chips. *Why:* the space under the name already holds the gathering chip, chat, the land chip and tray hints. A small change from the mockup, for the owner's OK.
+- **Every Keeper's ribbon is the same width.** A wider "yours" didn't show on a phone.
+
+## 2026-10-08 — Trading posts on the map (#269, PR #282)
+
+_Proposed in PR #282; recorded by the coordinator after merge._
+
+- **A trading post is a terrain on the existing tile rows,** with no `buildings` row. Its name comes from its index in (q, r) order; nothing is stored.
+- **Placement:** one post per home at the same distance first (the smallest that fits), then any left over where they're furthest apart without bringing a home a nearer post. Defaults: `perMap` 4, `maxFromSeed` 5, `minFromSeed` 3, `minApart` 4 (all `// TUNE:`).
+- **The boot pass never takes owned, home or busy land.** It skips a patch with no fair spot (logged and shown in the admin console) and tries again every boot.
+- **Posts never connect land,** and an edge facing a post needs no fence. Spawn and guardian tables can't list the post terrain.
+- **Claiming a post is refused with `FORBIDDEN`** and a kid-readable message, as `home` is, not a new error code (coordinator).
+- **The map's draw-call ceiling goes from 55 to 57** for one tile look and one hut mesh, however many posts.
+
+## 2026-10-08 — Night at 7 PM; the Hollow Man grows bolder (#277, PR #285)
+
+_Owner decisions and coordinator rulings of 2026-10-08. Proposed in PR #285; recorded by the coordinator after merge._
+
+- **Hearthfires store 8 nights of fuel,** so a full week away loses nothing. It's a storage cap; a night's burn is unchanged.
+- **A level-3 Hearthfire costs 1 Glimmer,** down from 2, for the sim gate's margin.
+- **The shared night cap:** untended land tops up to `min(wildPerNight, 3)` minus that night's Hollow reclaims. Loss is never more than 3 a night, or 2 on a gentle patch.
+- **"Unlightable"** means no node-free, non-home tile (any owner's) within the widest fire's reach (2). This is the lenient reading; the sim's cover model is stricter. Owner to confirm.
+- **The walk is computed on the server.** Each Keeper gets up to 3 seeded lit recoils plus the strike tiles, ordered round their Heart Seed, starting with `enter` and ending with `leave`. Where he can't strike (the Glade), there's no walk and the stage is "watching".
+- **The night's report is decided at 7:00.** In the small window a job retry opens, a skipped reclaim still shows as gone.
+- **`MorningReport.stage` for nights before #277** is worked out from when the Keeper joined.
+- **`rewildTiles` refreshes homesteads** for untended land too. The audit action is `patch.hollow_strength`.
+
+## 2026-10-08 — Befriend land guardians (#279, PR #284)
+
+_Owner decisions of 2026-10-08. Proposed in PR #284; recorded by the coordinator after merge._
+
+- **A befriend is a knockout.** The engine flags the squishy that left as `befriended`; the last one isn't flagged, so the battle ends `captured` and wild battles stay byte-identical. No content-hash change and no migration.
+- **No battle XP, extra coins or drops for befriending on land.** The claim's tile coins and one drop roll stand.
+- **Friends are kept on a lost claim,** because they were granted when they said yes.
+- **An evolved guardian joins one stage back,** as the species one evolution before the form it fought as, with that species' element and the guardian's feeling. A wild squishy joins as it was.
+- **Once per window:** a guardian a player befriended stays out of that player's fights on that tile until the guardian window ends. The shared tile hint still shows the whole team.
+
+## 2026-10-08 — Keeper faces and the Keeper builder (#289, PR #292, #297)
+
+_Proposed in each PR; recorded by the coordinator after merge._
+
+- **Keepers share one line face** (arched ink brows, flat ink nose, smile line). Face lines are always dark ink on every skin tone.
+- **Ten skin tones, light to deep,** with Hazel `#7a4a2c` the deepest (owner). The darker tones were dropped rather than chasing line readability on them. Tones have no names: swatches on screen, "Skin tone N" for screen readers; ids `tone-1` to `tone-10`.
+- **A Keeper is one model with every part a choice.** The 12 presets are starting looks; one tap sets every row. Body shape stays with the starting look for now. Blush, freckles, lashes and the heart sticker are player choices.
+- **Builder fields are optional on input.** Rows store them complete; replies leave out the starting look's own, so older apps keep loading untouched Keepers. A save that leaves a field out keeps the stored value while the starting look stays the same.
+- **The Keeper screen is one scrolling list,** and "That's me!" always shows (owner).
+
+## 2026-10-08 — Journeys to trading posts (#270, PR #293)
+
+_Owner decisions of 2026-10-08. Proposed in PR #293; recorded by the coordinator after merge._
+
+- **Difficulty:** level `4 + 2 × distance`, uncapped; team size 1 at distance 1–2, 2 at 3–5, 3 from 6 (`// TUNE:`).
+- **Older patches keep #269's fairness rule:** every home equally far from its nearest post, even when that's 5 from the Heart Seed.
+- **The trail pool is the common and uncommon year-round base forms,** so difficulty is distance, not a rare draw.
+- **A journey to a connected post, or one with a pass still open, is refused** (`CONFLICT`).
+- **No coins and no found clothing on a journey win:** it's a gate, not a farm. XP as a wild win.
+- **The preview lives in the post's tile panel,** with "Start journey" first.
+
+## 2026-10-08 — The night show (#277, PR #299)
+
+_Proposed in PR #299; recorded by the coordinator after merge._
+
+- **One Hollow Man per walking Keeper,** made when a walk starts and gone when it leaves (3 draw calls each).
+- **Others' walks are silent,** so the card never talks about someone else's night. Joining part way plays only my own walk.
+- **Dark land on the client is the plain `safeTiles` rule.** Land claimed today and land no fire could light still show dark; lighting them is never wrong.
+- **"Light my land" and "🔥 Light fire" glide to the farthest dark tile** and open its panel. They don't pick a fire site for the kid.
+- **The dusk nudge shows from 60 minutes before nightfall** (`DUSK_MINUTES`, `// TUNE:`), once a night per device, so a kid has time to gather Emberwood. Confirmed by the owner in #302.
+- **The replay is offered** for the newest night with a walk, until this device watches or skips it.
+
+## 2026-10-08 — The explore view (#199, PR #290)
+
+_Proposed in PR #290; recorded by the coordinator after merge._
+
+- **A drag anywhere on the tile is the floating joystick;** a tap that doesn't move walks. The action button sits bottom right.
+- **Every mini-interaction has a one-tap or hold easy way** that finds exactly the same thing, so a gesture never blocks a search.
+- **Seeker rewards:** titles Rock Flipper, Trail Seeker and Seeker of Secrets; pieces Seeker's Bandana, Trail Pack and Mossy Crown; coins 25, 50 and 100.
+- **Tool recipe hints stay sealed** until their ingredients are collected.
+
+## 2026-10-08 — Crafting Factory (#294, PR #301)
+
+_Owner decisions of 2026-10-08 (the mockup and all 9 recommendations). Proposed in PR #301; recorded by the coordinator after merge._
+
+- **Queues by level:** 2, 3 and 4 batches at levels 1, 2 and 3.
+- **Costs:** level 1 is 30 Timber and 20 Stone; level 2 is 60 Timber and 50 Stone, with no Glimmer; level 3 is 120 Timber, 90 Stone and 12 Glimmer. `pnpm sim:factory` guards level 1 by day 7 and level 2 by day 10.
+- **A batch is one recipe, as many as the bag can pay for,** paid up front. The only cap is a technical 999 (`FACTORY_RULES.maxBatch`). The same recipe can run in two batches.
+- **Stopping keeps what's made and gives back every unfinished run,** the one being made included.
+- **Seasonal recipes only start in season;** a batch started in season finishes after it. Only open recipe-book pages can be queued. Speed-ups are fixed when the batch starts.
+- **Upgrades keep batches running.** Taking the Factory down, or leaving the patch, stops them with that refund, plus half the building's cost for a take-down.
+- **"Queue in Factory" stays hidden until a Factory is built,** with a one-time Sprout tip.
+- **Welcome back:** the first settle after 30+ minutes away (the patch off screen) that lands Factory things shows a card, after the land's card if both have news. Shorter trips get the usual pop-up.
+- **Name and look:** "Crafting Factory", a cozy toy workshop with 🏭.
+
+## 2026-10-08 — Trades, escrow, gifts and the mailbox (#271, PR #300)
+
+_The owner approved the #271 screens with one change. Proposed in PR #300; recorded by the coordinator after merge._
+
+- **Long names never split mid-word.** They shrink to fit (`fitName`, minimum 10px, `// TUNE:`), wrap only between words, and use "…" only as a last resort, on every shelf, offer and mailbox name.
+- **Escrow:** a squishy keeps its owner while `in-trade`; items leave the bag into the offer (`trade-escrow`); clothing is held by its offer's id.
+- **On a yes,** the sender's side lands with the receiver at once. The receiver's side waits in the sender's mailbox. Pickup makes squishies active, grants items (`trade`) and marks the species as caught.
+- **A gift is a mailbox row from the moment it's sent;** picking it up is the yes. `/accept` on a gift is a 409. The receiver may decline it, and a gift past its time can't be picked up.
+- **A resting squishy that lives in a habitat may be offered;** its habitat is cleared when it moves. This goes beyond "resting only" in the design doc and needs the owner's OK.
+- **In-trade squishies are off the job board and territory status.** One on its way to you stays hidden until pickup, so a secret species doesn't show early.
+- **Giving away your last copy of a piece** takes it off your Keeper and your squishies.
+- **Leaving a patch calls off its trades** in a separate transaction after the leave commits. Expiry is lazy, before every trade read and command, and is the backstop.
+- **One open offer per pair, gifts included** ("One at a time!").
+- **A send can race the owner switching trading off.** Left as is: an open trade can't be accepted while trading is off, and pickup works with trading off on purpose.
+- **Pickup events are `gift.collected` and `mailbox.collected`.** A dev-only connect route exists for e2e and phone testing.
+
+## 2026-10-08 — Training Grounds move to homesteads (#277, PR #302)
+
+_Owner-confirmed defaults of 2026-10-08, relayed by the coordinator. Proposed in PR #302; recorded by the coordinator after merge._
+
+- **The boot pass packs up home Training Grounds** with the note "Your Training Grounds packed up and moved out! Build one on a homestead 🏡." (two lines, under the morning report's 12-word cap).
+- **A trainee on a napping homestead keeps its job** and makes no progress while it naps.
+- **A trainee leaves its habitat bed when it starts training,** and moving into a habitat stops training, like gatherers.
+- **API:** `SetJobRequest.training.buildingId?`; `JobsView.trainingGrounds` becomes a list (it replaces the single object rather than sitting beside it); `TrainingStatus` gains `q/r/firelit/napping`; `HollowStatus.trainingGroundsPacked`. A stale app's job board fails to parse until it updates.
+- **`training-grounds` stays in `HOME_BASE_RULES.buildableKinds`,** the global "playable at all" gate. "Not at home" is enforced by `placement: 'homestead'`.
+
+## 2026-10-09 — Explore view, cozy-sim feel (#291, PR #311)
+
+_Proposed in PR #311; recorded by the coordinator after merge._
+
+- **The camera never turns.** It's a fixed 3/4 view from behind. The Keeper starts in profile so the face shows on opening.
+- **Tool icons are drawn, not emoji,** because some render as a box on older iOS.
+- **The full card is only for rare finds and a finished tile.** Everything else is a toast and the bag bounce.
+- **The lantern plays in the open,** with the screen darkened around a warm light, not in a separate cave.
+- **The header bag isn't tappable while exploring;** it only bounces "+N".
+
+## 2026-10-09 — The split-view trade screen (#305, PR #309)
+
+_Owner decisions on the #305 mockup. Proposed in PR #309; recorded by the coordinator after merge._
+
+- **iPhone layout: two narrow columns, mine | theirs.**
+- **Colours by role, not by player:** mint is always "you", lilac the patch-mate. A real Keeper colour would be a new saved setting and a later issue.
+- **The iPad landscape side panel widens from 430 to 640** so both columns fit with the map still live.
+- **Trade values (pulled forward from #272):** squishy = rarity × stage × synergy × (1 + 0.08 × (level − 1)); items per id; clothing per rarity. Even is within 15%; lopsided is one side at 2× or more. An unmet species counts as a first-stage uncommon with neutral synergy at its real level. All in `TRADE_VALUES`, `// TUNE:`.
+- **"Newest" uses the time-ordered UUIDv7 ids** (newest found, not newest received); items have no date and sort last.
+
+## 2026-10-09 — The Lorebook (#307, PR #312, #315)
+
+_The owner approved the mockup in full on 2026-10-09. Proposed in PR #312; recorded by the coordinator after merge. PR #315 added the explore card's button._
+
+- **Four chapters and 12 pages:** Juniper's Gap, The Wild Lands, The Hollow Man, Little Guardians, with all pages and hints as written.
+- **Ways in:** a 📖 Lorebook tile at the top of the Bag, a sparkle on the Bag button while a page is unread, **Open Lorebook** on every found-page card and on explore's find card, and Settings.
+- **Lore triggers may use the finder `payload-user`** (the payload's `userId`) for system events, like a squishy taken to the Hollow (coordinator: additive, inside lore's own schema, no event payload change).
+- **A page counts as read once it's on screen in the book.** Pages found before #307 start unread.
+- **An unfound page's slot id is its place** (`<chapter>-<order>`), so not even its title's slug leaves the server.
+- **Card order:** the found-page card waits while the "Make a patch" form, the book or explore is open. Other cards wait for an open book. The account chip steps aside while the book is open.
+
+## 2026-10-09 — Emoji floor and drawn tool icons (#308, PR #316)
+
+- **Emoji floor (owner):** only the seven Emoji 13–14 emoji already in use (🪵 Timber, 🪨 Stone, 🪶, 🪱, 🫐, 🛖, 🫧) are allowed, on the hand-checked `ON_THE_FLOOR` list in `ui/emoji-floor.test.ts`. Everything else must be Emoji 12 or older. That makes the effective floor iOS 15.4, well inside the iOS 17 device floor.
+
+## 2026-10-09 — A lighter map when zoomed out (#318, PR #321)
+
+_Proposed in PR #321; recorded by the coordinator after merge._
+
+- **The map changes detail by zoom, not by chunk.** Zoomed out, tiles and props draw from low-detail meshes (one per look and kind) and prop shadows hide. Draw calls stay flat.
+- **Chunked culling was built, measured and dropped,** so nobody retries it blind. At the map's 58° tilt the start-zoom camera still sees 66–79% of the map. Chunking roughly doubled draw calls for a 21–33% triangle cut, added 150–270 meshes and up to 70% build time.
+- **What the LOD saves:** a busy radius-12 patch zoomed out goes from 729k to 376k triangles (61 → 60 draw calls); a radius-16 6-seat prototype from 1.27M to 630k (64 → 63). Up close is unchanged.
+- **The steady map draw-call count is about 61 (r12) and 64 (r16).** The "16/18" in the plan came from frames where Babylon skips meshes still compiling shaders.
+- **E2E asserts the render budget:** draw calls ≤ 75; triangles ≤ 800k up close and ≤ 420k zoomed out on a 4-seat patch; zooming out never costs draw calls.
+- **No mid-detail tier yet.** Up-close triangle work waits for the iPad 9th gen check.
+
+## 2026-10-09 — The Keeper and team hop (#317, #323; PR #322, #325)
+
+_Proposed in each PR; recorded by the coordinator after merge._
+
+- **The hop is visual only.** Fields take optional `lift`, `squash` and `shadow` placement values; the shadow stays on the ground.
+- **Followers glide along the Keeper's trail,** (i + 1.5) × `followGap` back, instead of snapping between trail points.
+- **Followers keep a camera-derived lead** (`followLead`), so the team waits on the far side from the camera and never covers the Keeper.
+- **Field `move()` re-places in place** (no re-layout). Contact shadows take an optional per-instance `shadowAlpha` and are always drawn.
+
+## 2026-10-09 — Six-seat patches and six Keepers (#318, PR #324, #327)
+
+_Proposed in each PR; recorded by the coordinator after merge. See also "Owner decisions (coordinator)" below._
+
+- **New patches seat 6 on a radius-16 map,** with homes 10 steps from the centre, so neighbours are as far apart as on a 4-seat patch. Older patches keep their 4 seats.
+- **`maps_max_players_range` is 1–6** (migration 0039), defaulting to 6.
+- **Trading posts are `max(perMap, seats)`,** so 6 on a 6-seat patch.
+- **An open home draws as a soft lavender dashed outline,** with no wash or badges, all open homes in one mesh. Its panel says it's saved for the next Keeper who joins.
+- **The camera's farthest zoom scales with the map's width,** so wider patches frame like a radius-12 one.
+- **STYLE_GUIDE:** a patch is "one shared world, up to 6 players; older patches 4".
+
+## 2026-10-09 — Owner decisions (coordinator)
+
+_Owner calls made in the coordinator session on 2026-10-09._
+
+- **Patches have up to 6 players.** New maps are radius 16 (817 tiles); patches made before #324 keep 4 seats. Empty seats are wild land until someone joins. Open homes get **no claim buffer**, so late joiners claim further out (#318).
+- **The map lowers detail by zoom (LOD), not by chunks.** Chunked culling was measured and dropped: it doubled draw calls for a 21–33% triangle cut (#321).
+- **Performance floor:** iPad 9th gen (A13) at 30 fps or better on a busy 6-seat patch, and iPhone 14 at 60. The owner runs the real-device check before the playtest.
+- **In explore, the Keeper and team hop as they walk** instead of gliding, with smaller hops for short steps (#317, #322). Followers stay behind the Keeper, and the hop shadow fades (#323, #325).
+- **Emoji floor:** only the 7 Emoji 13–14 glyphs 🪵🪨🪶🪱🫐🛖🫧 are allowed, which makes the effective iOS floor 15.4. Tools are drawn as icons, not emoji (#308).
+- **Six Keeper looks, palette A:** Strawberry/heart/solid, Blueberry/star/dash, Grape/flower/dot, Tangerine/diamond/double, Cherry/moon/dash-dot, Mint/leaf/long dash (#327).
+- **Filed for Phase 2:** #319 (the Boutique moves into the trading post only, out of the top-right menu) and #320 (sell duplicates to the post, plus open offers and auctions for items and resources, without coins).
+- **E2E map time gets pinned** so specs don't depend on the time of day (#326, in progress).
