@@ -20,6 +20,7 @@ interface MapDebug {
   mutedTiles: number;
   ambient: 'live' | 'still' | 'off';
   detail: 'near' | 'far';
+  openHomes: { key: string; x: number; y: number }[];
   drawCalls: number;
   activeTriangles: number;
 }
@@ -274,4 +275,47 @@ test('keeps the map in its draw-call and triangle budget, up close and zoomed ou
   });
   expect(far.drawCalls).toBeLessThanOrEqual(near.drawCalls);
   expect(far.activeTriangles).toBeLessThanOrEqual(MAP_BUDGET.farTriangles);
+});
+
+test('an open home says it is saved for the next Keeper, and offers nothing to take (#318)', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000); // shader compiles; CI renders in software
+  const page = await newPlayer(browser, uniqueName('open'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Roomy Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await expect(lobby).toBeHidden();
+  await expect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
+
+  // Zoom out until an open home is on screen, then tap its middle.
+  const box = (await page.locator('#game').boundingBox())!;
+  const mid = { x: box.width / 2, y: box.height / 2 };
+  const reach = Math.min(box.width, box.height) / 3;
+  const onScreen = async () =>
+    ((await mapState(page))?.openHomes ?? []).filter(
+      (h) => h.x > 40 && h.x < box.width - 40 && h.y > 160 && h.y < box.height - 160,
+    );
+  for (let i = 0; i < 8 && (await onScreen()).length === 0; i++) {
+    await touch(
+      page,
+      Array.from({ length: 9 }, (_, k) => {
+        const d = reach * (1 - k / 9);
+        return { 1: { x: mid.x - d, y: mid.y }, 2: { x: mid.x + d, y: mid.y } };
+      }),
+    );
+    await expect.poll(() => idle(page), { timeout: 15_000 }).toBe(true);
+  }
+  const [open] = await onScreen();
+  expect(open, 'an open home on screen').toBeDefined();
+  await tapCanvas(page, open!.x, open!.y);
+  const panel = page.getByTestId('tile-panel');
+  await expect(panel).toBeVisible();
+  await expect(page.getByTestId('tile-panel-owner')).toHaveText(
+    'A cozy home, saved for the next Keeper who joins! ✨',
+  );
+  await expect(panel.getByRole('button', { name: /Claim|Challenge/ })).toHaveCount(0);
 });

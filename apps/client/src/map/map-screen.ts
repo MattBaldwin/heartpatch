@@ -106,6 +106,8 @@ export interface MapDebug extends MapSceneStats {
   readonly live: WsStatus | null;
   /** Each wild-squishy tuft's tile and its middle on screen (CSS pixels), for e2e taps (#209). */
   readonly wild: readonly { key: HexKey; x: number; y: number }[];
+  /** Each open home's Heart Seed spot on screen (CSS pixels), for e2e taps (#318). */
+  readonly openHomes: readonly { key: HexKey; x: number; y: number }[];
 }
 
 export interface MapScreen {
@@ -462,6 +464,12 @@ export function createMapScreen(options: MapScreenOptions): MapScreen {
         selected: selected ? hexKey(selected) : null,
         live: ws?.status ?? null,
         wild: scene3d.wildRects().map(({ key, rect }) => ({
+          key,
+          x: rect.x + rect.width / 2,
+          y: rect.y + rect.height / 2,
+        })),
+        // Open homes on screen (#318), to tap in e2e.
+        openHomes: scene3d.openHomeRects().map(({ key, rect }) => ({
           key,
           x: rect.x + rect.width / 2,
           y: rect.y + rect.height / 2,

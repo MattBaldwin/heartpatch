@@ -569,6 +569,23 @@ export class MapScene {
   }
 
   /** Where each tuft's tile is on screen (CSS pixels), for the dev hook; unseen ones are left out. */
+  /**
+   * Where each open home's Heart Seed spot is on screen (#318): a home slot
+   * nobody has joined, its middle tile. For the dev hook (e2e taps it).
+   */
+  openHomeRects(): { key: HexKey; rect: ScreenRect }[] {
+    const tiles = [...this.tiles.values()];
+    const open = new Set(
+      tiles.filter((t) => t.homeSlot !== null && t.ownerUserId === null).map((t) => t.homeSlot),
+    );
+    return findHomeBases(tiles)
+      .filter((home) => open.has(home.slot))
+      .flatMap(({ seed }) => {
+        const rect = tileScreenRectOf(this.scene, seed);
+        return rect ? [{ key: hexKey(seed), rect }] : [];
+      });
+  }
+
   wildRects(): { key: HexKey; rect: ScreenRect }[] {
     return this.wild.flatMap((m) => {
       const tile = this.tiles.get(m.key);
