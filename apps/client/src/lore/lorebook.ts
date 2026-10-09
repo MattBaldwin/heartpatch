@@ -4,6 +4,7 @@ import { createLoreBagEntry, type LoreBagEntry } from './bag-entry.js';
 import { loreApi, type LoreApi } from './lore-api.js';
 import { bookCounts, LORE_TEXT, newPages } from './lore-view.js';
 import { createLorebookScreen, type LorebookScreen } from './lorebook-screen.js';
+import { createRechecker } from './rechecker.js';
 import './lore.css';
 
 // The Lorebook (design doc §16, #307): a little card when a page is found
@@ -40,7 +41,7 @@ export interface LorebookDebug {
   readonly found: number;
   readonly total: number;
   readonly unread: number;
-  /** Looks still to come from the last `check` (its recheck), for tests to wait on. */
+  /** Looks for found pages scheduled or in flight (`check`), for tests to wait on. */
   readonly checking: number;
 }
 
@@ -94,8 +95,6 @@ function writeShown(userId: string, ids: ReadonlySet<string>): void {
 export function createLorebook(options: LorebookOptions): Lorebook {
   const api = options.api ?? loreApi;
   const setTimer = options.setTimer ?? ((task, ms) => setTimeout(task, ms));
-  /** Rechecks waiting to run (`check`). */
-  let checking = 0;
   const busy = options.busy ?? (() => false);
   let user: PublicUser | null = null;
   /** The book as last heard from the server, or null. */
@@ -259,6 +258,8 @@ export function createLorebook(options: LorebookOptions): Lorebook {
     }
   };
 
+  const checks = createRechecker(look, setTimer, RECHECK_MS);
+
   const refreshBook = async () => {
     const who = user;
     if (!who) return;
@@ -314,12 +315,7 @@ export function createLorebook(options: LorebookOptions): Lorebook {
       if (next) void refreshBook();
     },
     check: () => {
-      void look();
-      checking++;
-      setTimer(() => {
-        checking--;
-        void look();
-      }, RECHECK_MS);
+      checks.check();
     },
     openAt: (pageId) => {
       open(pageId);
@@ -348,7 +344,7 @@ export function createLorebook(options: LorebookOptions): Lorebook {
         bookOpen: screen.isOpen,
         bookAt: screen.at,
         ...counts,
-        checking,
+        checking: checks.pending,
       };
     },
   };

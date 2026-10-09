@@ -68,8 +68,10 @@ test('a found page sparkles in the Bag, opens in the Lorebook and is read', asyn
   expect((await loreState(page))?.found).toBe(0);
 
   // A page is found while exploring; the next map open shows its card. Wait
-  // for the map open's own recheck first: if it ran between the find and the
-  // reload, the card would show (and be remembered) before the reload.
+  // for the map open's own looks to finish first: one landing between the
+  // find and the reload would show the card (and remember it) before the
+  // reload. Live first: the map open starts its looks in the same task.
+  await expect.poll(async () => (await mapState(page))?.live, slow).toBe('live');
   await expect.poll(async () => (await loreState(page))?.checking, slow).toBe(0);
   const found = await api(page, 'POST', '/lore/dev/find', { pageId: 'under-a-mossy-rock' });
   expect(found.status).toBe(200);
