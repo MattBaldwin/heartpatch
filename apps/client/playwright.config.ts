@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 import { pinMapTime } from './tests/e2e/map-time.js';
 
@@ -8,68 +8,77 @@ const testDir = './tests/e2e';
 /**
  * CI's e2e groups, one job each per device. Playwright's own --shard splits by
  * test count in file order, which put every heavy WebGL spec on shard 1 (12 min
- * on iPad). These are balanced by measured WebKit time instead (iPhone and
- * iPad, 2 workers): about 5-10 min each, the floor being tutorial-flow's
- * 9-min reload run. A spec file runs on one worker, so a slow file sets its
- * group's length. Rebalance from the CI list reporter's durations when a
- * group gets slow; the catch-all last group grew to 28 min before (#296).
+ * on iPad). These are balanced by measured iPad WebKit time (the slower device,
+ * 2 workers): about 16 min of tests each, so about 8-9 min a job. A spec file
+ * runs on one worker, so a slow file sets its group's floor: taps (about 9 min)
+ * and tutorial (about 8) each get a group of light specs that sort after them,
+ * so the other worker drains those while the big file runs. Rebalance from the
+ * CI list reporter's durations when a group gets slow (#246).
  *
- * CI sets HP_E2E_GROUP=<i>/<n>. The last group is every spec not listed here,
- * so a new spec always runs; a listed spec that no longer exists, or a group
- * count that doesn't match, fails the run. Unset (local runs) runs everything.
+ * Every spec is listed in exactly one group; there is no catch-all, so a new
+ * spec can't quietly pile onto one job (group 5 grew to 28 min that way, #296).
+ * CI sets HP_E2E_GROUP=<i>/<n>: an unlisted or missing spec, a spec listed
+ * twice, or a group count that doesn't match fails the run. Put a new spec in
+ * the group with the least time. Unset (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  ['audio', 'first-session', 'smoke', 'starter', 'wardrobe', 'explore'],
-  ['auth', 'battle', 'care', 'cinematic', 'hollow', 'battle-ui', 'map', 'potions', 'recipe-book'],
+  // ~16.4 min of tests: taps alone is ~8.7.
+  ['admin', 'taps', 'trading-posts', 'tray-layout', 'whats-new', 'wild-picker'],
+  // ~14.9: tutorial alone is ~7.6; tutorial-flow's runs go side by side.
+  ['audio', 'auth', 'tutorial', 'tutorial-flow', 'version', 'wardrobe'],
+  ['battle', 'capture', 'close-up', 'fences', 'map', 'milestones', 'potions'],
+  ['care', 'cinematic', 'explore', 'hollow', 'inventory', 'keeper', 'recipe-book', 'short-screens'],
   [
-    'capture',
-    'close-up',
-    'inventory',
-    'keeper',
+    'battle-ui',
+    'boutique',
+    'factory',
+    'first-session',
+    'hollow-dusk',
     'keeper-gallery',
-    'milestones',
-    'raids',
-    'trading-posts',
-    'whats-new',
     'lorebook',
+    'smoke',
+    'starter',
   ],
   [
+    'account-help',
     'chat',
     'home',
     'jobs',
     'lobby',
     'pwa',
+    'raids',
     'renderer-error',
-    'territory',
-    'account-help',
     'squishy-gallery',
-    'version',
-    'wild-picker',
+    'territory',
+    'trade-split',
   ],
-  // tutorial-flow's two runs go side by side (its describe mode is parallel).
-  ['tutorial-flow', 'tray-layout', 'admin', 'boutique', 'fences', 'factory', 'trade-split'],
 ];
 
-function e2eGroup(value: string | undefined): { testMatch?: string[]; testIgnore?: string[] } {
+function e2eGroup(value: string | undefined): { testMatch?: string[] } {
   if (value === undefined || value === '') return {};
   const listed = E2E_GROUPS.flat();
   const match = /^(\d+)\/(\d+)$/.exec(value);
   const index = Number(match?.[1]);
   const total = Number(match?.[2]);
-  if (!match || total !== E2E_GROUPS.length + 1 || index < 1 || index > total) {
-    throw new Error(`HP_E2E_GROUP=${value}: expected <i>/${String(E2E_GROUPS.length + 1)}`);
+  if (!match || total !== E2E_GROUPS.length || index < 1 || index > total) {
+    throw new Error(`HP_E2E_GROUP=${value}: expected <i>/${String(E2E_GROUPS.length)}`);
   }
   const duplicate = listed.find((spec, i) => listed.indexOf(spec) !== i);
   if (duplicate) throw new Error(`E2E_GROUPS lists ${duplicate}.spec.ts twice`);
-  const missing = listed.filter(
-    (spec) => !existsSync(new URL(`${testDir}/${spec}.spec.ts`, import.meta.url)),
-  );
+  const onDisk = readdirSync(new URL(testDir, import.meta.url))
+    .filter((file) => file.endsWith('.spec.ts'))
+    .map((file) => file.slice(0, -'.spec.ts'.length));
+  const missing = listed.filter((spec) => !onDisk.includes(spec));
   if (missing.length > 0) {
     throw new Error(`E2E_GROUPS lists missing specs: ${missing.join(', ')}`);
   }
-  const globs = (specs: string[]) => specs.map((spec) => `**/${spec}.spec.ts`);
-  const group = E2E_GROUPS[index - 1];
-  return group ? { testMatch: globs(group) } : { testIgnore: globs(listed) };
+  const unlisted = onDisk.filter((spec) => !listed.includes(spec));
+  if (unlisted.length > 0) {
+    throw new Error(
+      `Add ${unlisted.map((spec) => `${spec}.spec.ts`).join(', ')} to a group in E2E_GROUPS (playwright.config.ts)`,
+    );
+  }
+  return { testMatch: (E2E_GROUPS[index - 1] ?? []).map((spec) => `**/${spec}.spec.ts`) };
 }
 
 /**

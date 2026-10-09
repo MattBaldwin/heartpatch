@@ -89,17 +89,17 @@ jobs:
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble # = PLAYWRIGHT_VERSION
       options: --ipc=host
-    # Room for the image pull and setup (about 5 min) and the slowest group's
-    # tests (about 10 min since #296 rebalanced them; the catch-all had grown
-    # to 28 min).
-    timeout-minutes: 45
+    # Room for the image pull and setup (about 1 min) and the slowest group's
+    # tests (about 9 min since #246 rebalanced them), with slack for a slow
+    # runner and a retry or two.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         project: [iphone-webkit, ipad-webkit]
         # Six groups of spec files balanced by measured duration (E2E_GROUPS
-        # in apps/client/playwright.config.ts); group 6 is every spec not
-        # listed there. Playwright's --shard splits by test count in file
+        # in apps/client/playwright.config.ts), which lists every spec: an
+        # unlisted one fails the run. Playwright's --shard splits by test count in file
         # order, which left ipad shard 1 of 3 at ~12 min while the others took
         # 3-4. The config fails the run if this count doesn't match its own.
         group: [1, 2, 3, 4, 5, 6]
