@@ -19,29 +19,43 @@ import {
   lineLook,
   linesInWords,
   mailboxTitle,
+  meterLook,
   NOTE_IDS,
   noteText,
   offerRequest,
   offersFromMe,
   offersToMe,
+  pickedViews,
   POST_TABS,
   postChip,
   sendProblem,
+  SHELF_FILTERS,
+  SHELF_SORTS,
+  shelfLines,
   stepItem,
   tabBadges,
   togglePick,
   TRADE_TEXT,
   tradeEventForMe,
   waiting,
+  type MeterLook,
   type PostTab,
+  type ShelfFilter,
+  type ShelfSort,
 } from './trade-model.js';
 import './trading.css';
 
 // The trading post's screen (#271; the owner-approved mockup, screens d, e
 // and f, and the iPad side panel). Trade, Gift and Mailbox tabs. Picks are
 // only a request: the server checks the post, the things and the rules, holds
-// the sender's side and swaps in one go (CLAUDE.md rules 1 and 7). The
-// fairness meter, bonuses, take-back and the Shop come later (#272, #273).
+// the sender's side and swaps in one go (CLAUDE.md rules 1 and 7). The Trade
+// tab is the #305 split view (the owner-approved mockup, option A): my things
+// (mint) beside theirs (lilac), each with its own filter and sort, and the
+// offer pinned at the bottom with the fairness meter, which is only a display.
+// Bonuses, take-back and the Shop come later (#272, #273).
+
+/** Which shelf: mine (mint) or the patch-mate's (lilac). Colours go by role (owner, #305). */
+type Side = 'mine' | 'theirs';
 
 export interface PostScreenOptions {
   root: HTMLElement;
@@ -70,6 +84,10 @@ export interface PostDebug {
   readonly offersFromMe: number;
   readonly mailbox: number;
   readonly working: boolean;
+  /** The fairness meter for my picks (#305): which way it tips and each side's hearts. */
+  readonly meter: { tip: string; lopsided: boolean; give: number; get: number };
+  readonly filters: Readonly<Record<Side, ShelfFilter>>;
+  readonly sorts: Readonly<Record<Side, ShelfSort>>;
 }
 
 export interface PostScreen {
@@ -97,6 +115,11 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   let give: TradeLine[] = [];
   let want: TradeLine[] = [];
   let noteId: string | null = null;
+  // Each side's filter and sort, kept while the screen is open (#305).
+  let filters: Record<Side, ShelfFilter> = { mine: 'all', theirs: 'all' };
+  let sorts: Record<Side, ShelfSort> = { mine: 'name', theirs: 'name' };
+  /** The open little menu: a side's filter or sort, or the patch-mate list. */
+  let menu: string | null = null;
   let working = false;
   let note = '';
   /** Bumped by every open, close and user change, so a late reply is dropped. */
@@ -140,6 +163,14 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   );
   sheet.hidden = true;
   options.root.append(sheet);
+  // A tap anywhere outside an open menu shuts it.
+  sheet.addEventListener('click', (event) => {
+    if (menu === null) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('.post-menu, [data-menu]')) return;
+    menu = null;
+    render();
+  });
 
   const me = () => user?.id ?? null;
   const mates = () => (mapView?.members ?? []).filter((m) => m.user.id !== me()).map((m) => m.user);
@@ -272,13 +303,18 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     setPicks: (next: TradeLine[]) => void,
     testId: string,
     empty: string,
+    shown?: { lines: TradeLineView[] },
   ): HTMLElement {
     if (!shelf) return el('p', { class: 'post-tiny' }, '…');
-    const lines: TradeLineView[] = [...shelf.squishies, ...shelf.items, ...shelf.clothing];
-    if (lines.length === 0) return el('p', { class: 'post-tiny', 'data-testid': testId }, empty);
+    const all: TradeLineView[] = [...shelf.squishies, ...shelf.items, ...shelf.clothing];
+    if (all.length === 0) return el('p', { class: 'post-tiny', 'data-testid': testId }, empty);
+    const lines = shown?.lines ?? all;
+    if (lines.length === 0) {
+      return el('p', { class: 'post-tiny', 'data-testid': testId }, TRADE_TEXT.nothingHere);
+    }
     return el(
       'div',
-      { class: 'post-grid', 'data-testid': testId },
+      { class: `post-grid${shown ? ' rows' : ''}`, 'data-testid': testId },
       ...lines.map((line) => {
         const pick = picks.find((p) => lineKey(p) === lineKey(line));
         const extra: Node[] = [];
@@ -383,20 +419,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
   function incoming(offer: TradeOfferView): HTMLElement {
     const from = nameOf(offer.fromUserId);
     const said = noteText(offer.noteId);
-    const side = (lines: readonly TradeLineView[], who: string) =>
-      el(
-        'div',
-        { class: 'post-side' },
-        ...lines.map((l) => slot(l)),
-        el('span', { class: 'post-tiny' }, who),
-      );
     return el(
       'div',
       { class: 'post-card', 'data-testid': 'post-offer-in', 'data-offer': offer.id },
       el(
         'div',
         { class: 'post-row' },
-        el('span', { class: 'post-face', 'aria-hidden': 'true' }, from.slice(0, 1)),
+        el('span', { class: 'post-face theirs', 'aria-hidden': 'true' }, from.slice(0, 1)),
         el(
           'div',
           {},
@@ -404,12 +433,13 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           ...(said ? [el('div', { class: 'post-small' }, `“${said}”`)] : []),
         ),
       ),
-      el(
-        'div',
-        { class: 'post-swap' },
-        side(offer.give, TRADE_TEXT.youGet),
-        el('span', { class: 'post-swap-arrow', 'aria-hidden': 'true' }, '⇄'),
-        side(offer.want, TRADE_TEXT.theyGet(from)),
+      // My side first, as on the offer strip: what I'd give, then what I'd get.
+      offerStrip(
+        offer.want,
+        offer.give,
+        meterLook(offer.want, offer.give, from, 'receiver'),
+        from,
+        'full',
       ),
       el(
         'div',
@@ -443,7 +473,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     );
   }
 
-  function sendButton(kind: TradeKind): HTMLElement {
+  function sendButton(kind: TradeKind, top: readonly Node[] = []): HTMLElement[] {
     const to = mate;
     const problem = sendProblem(kind, give, want);
     const name = to === null ? '' : nameOf(to);
@@ -470,49 +500,416 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           : kind === 'gift'
             ? TRADE_TEXT.giftWaits(name)
             : TRADE_TEXT.waitsSafely(name);
-    // Stuck to the sheet's bottom, so "Send" is on screen while picking (style guide §3).
+    // Stuck to the sheet's bottom, so "Send" (and what I picked) is on screen
+    // while picking (style guide §3); the hint scrolls, to keep the bar short.
+    return [
+      el('div', { class: 'post-send-bar' }, ...top, b),
+      el('p', { class: 'post-tiny center', 'data-testid': 'post-send-hint' }, hint),
+    ];
+  }
+
+  // ---- the split view (#305) ----------------------------------------------
+
+  /** A little menu's toggle and, while open, its choices (each 44pt). */
+  function picker<T extends string>(
+    id: string,
+    label: string,
+    choices: readonly T[],
+    current: T,
+    words: Readonly<Record<T, string>>,
+    onPick: (choice: T) => void,
+  ): { toggle: HTMLElement; list: HTMLElement | null } {
+    const open = menu === id;
+    const toggle = el(
+      'button',
+      {
+        type: 'button',
+        class: 'post-tool',
+        'data-menu': id,
+        'data-testid': `shelf-${id}`,
+        'aria-haspopup': 'true',
+        'aria-expanded': open ? 'true' : 'false',
+        'aria-label': `${label}: ${words[current]}`,
+      },
+      el(
+        'span',
+        { class: 'post-tool-text' },
+        id.endsWith('sort') ? `↕ ${words[current]}` : words[current],
+      ),
+      el('span', { 'aria-hidden': 'true' }, '▾'),
+    );
+    toggle.addEventListener('click', () => {
+      menu = open ? null : id;
+      render();
+    });
+    if (!open) return { toggle, list: null };
+    const list = el(
+      'div',
+      { class: 'post-menu', role: 'menu', 'aria-label': label },
+      el('span', { class: 'post-menu-head' }, label),
+      ...choices.map((choice) => {
+        const on = choice === current;
+        const b = el(
+          'button',
+          {
+            type: 'button',
+            role: 'menuitemradio',
+            'aria-checked': on ? 'true' : 'false',
+            class: `post-menu-item${on ? ' on' : ''}`,
+            'data-testid': `shelf-${id}-${choice}`,
+          },
+          words[choice],
+          ...(on ? [el('span', { 'aria-hidden': 'true' }, '✓')] : []),
+        );
+        b.addEventListener('click', () => {
+          menu = null;
+          onPick(choice);
+          render();
+        });
+        return b;
+      }),
+    );
+    return { toggle, list };
+  }
+
+  /** The patch-mate list under their header, to trade with someone else. */
+  function mateMenu(): HTMLElement {
     return el(
       'div',
-      { class: 'post-send-bar' },
-      b,
-      el('p', { class: 'post-tiny center', 'data-testid': 'post-send-hint' }, hint),
+      { class: 'post-menu mates', role: 'radiogroup', 'aria-label': TRADE_TEXT.tradeWith },
+      el('span', { class: 'post-menu-head' }, TRADE_TEXT.tradeWith),
+      ...mates().map((u) => {
+        const on = u.id === mate;
+        const b = el(
+          'button',
+          {
+            type: 'button',
+            role: 'radio',
+            'aria-checked': on ? 'true' : 'false',
+            class: `post-menu-item${on ? ' on' : ''}`,
+            'data-testid': 'post-mate',
+            'data-user': u.id,
+          },
+          u.username,
+          ...(on ? [el('span', { 'aria-hidden': 'true' }, '✓')] : []),
+        );
+        b.addEventListener('click', () => {
+          menu = null;
+          if (mate !== u.id) {
+            mate = u.id;
+            want = [];
+            if (!shelves.has(u.id)) void load({ shelves: [u.id] });
+          }
+          render();
+        });
+        return b;
+      }),
     );
+  }
+
+  /** One owner's column: a header in their colour, their filter and sort, and their shelf. */
+  function column(side: Side, testId: string, empty: string): HTMLElement {
+    const owner = side === 'mine' ? me() : mate;
+    const name = side === 'mine' ? (user?.username ?? '') : owner === null ? '' : nameOf(owner);
+    const shelf = owner === null ? undefined : shelves.get(owner);
+    const picks = side === 'mine' ? give : want;
+    const setPicks = (next: TradeLine[]) => {
+      if (side === 'mine') give = next;
+      else want = next;
+    };
+    const who = el(
+      'span',
+      { class: 'post-who' },
+      el('span', { class: 'post-col-name post-fit' }, name),
+      el(
+        'span',
+        { class: 'post-col-sub' },
+        side === 'mine' ? TRADE_TEXT.yourThings : TRADE_TEXT.theirThings,
+      ),
+    );
+    const face = el('span', { class: 'post-face', 'aria-hidden': 'true' }, name.slice(0, 1));
+    let header: HTMLElement;
+    if (side === 'theirs' && mates().length > 1) {
+      header = el(
+        'button',
+        {
+          type: 'button',
+          class: 'post-col-head',
+          'data-menu': 'mates',
+          'data-testid': 'post-mate-switch',
+          'aria-haspopup': 'true',
+          'aria-expanded': menu === 'mates' ? 'true' : 'false',
+          'aria-label': `${name}. ${TRADE_TEXT.otherMate}`,
+        },
+        face,
+        who,
+        el('span', { class: 'post-col-chev', 'aria-hidden': 'true' }, '▾'),
+      );
+      header.addEventListener('click', () => {
+        menu = menu === 'mates' ? null : 'mates';
+        render();
+      });
+    } else {
+      header = el('div', { class: 'post-col-head' }, face, who);
+    }
+    const filter = picker(
+      `${side}-filter`,
+      TRADE_TEXT.show,
+      SHELF_FILTERS,
+      filters[side],
+      TRADE_TEXT.filters,
+      (f) => {
+        filters = { ...filters, [side]: f };
+      },
+    );
+    const sort = picker(
+      `${side}-sort`,
+      TRADE_TEXT.sortBy,
+      SHELF_SORTS,
+      sorts[side],
+      TRADE_TEXT.sorts,
+      (o) => {
+        sorts = { ...sorts, [side]: o };
+      },
+    );
+    return el(
+      'section',
+      {
+        class: `post-col ${side}`,
+        'data-side': side,
+        'aria-label': `${name}: ${side === 'mine' ? TRADE_TEXT.yourThings : TRADE_TEXT.theirThings}`,
+      },
+      header,
+      ...(side === 'theirs' && menu === 'mates' ? [mateMenu()] : []),
+      el(
+        'div',
+        { class: 'post-tools' },
+        filter.toggle,
+        sort.toggle,
+        ...[filter.list, sort.list].filter((l): l is HTMLElement => l !== null),
+      ),
+      owner === null
+        ? el('span', {})
+        : shelfGrid(shelf, picks, setPicks, testId, empty, {
+            lines: shelf ? shelfLines(shelf, filters[side], sorts[side]) : [],
+          }),
+    );
+  }
+
+  /** A side's hearts, 1–5 (never a number on screen). */
+  function hearts(n: number, testId: string): HTMLElement {
+    return el(
+      'span',
+      {
+        class: 'post-hearts',
+        role: 'img',
+        'aria-label': TRADE_TEXT.hearts(n),
+        'data-testid': testId,
+        'data-hearts': String(n),
+      },
+      ...[1, 2, 3, 4, 5].map((i) => el('span', { class: i <= n ? 'on' : 'off' }, '♥')),
+    );
+  }
+
+  /**
+   * The offer strip (#305): what I give (mint) and what I get (lilac), each
+   * with its hearts, and the fairness meter. `mini` draws little pictures
+   * (the pinned strip); `full` draws named tiles (an offer to me).
+   */
+  function offerStrip(
+    giveLines: readonly TradeLineView[],
+    getLines: readonly TradeLineView[],
+    look: MeterLook,
+    mateName: string,
+    draw: 'mini' | 'full',
+  ): HTMLElement {
+    const half = (side: Side, lines: readonly TradeLineView[], n: number) => {
+      const things =
+        lines.length === 0
+          ? [
+              el(
+                'span',
+                { class: 'post-tiny' },
+                side === 'mine' ? TRADE_TEXT.tapYours : TRADE_TEXT.tapTheirs(mateName),
+              ),
+            ]
+          : draw === 'full'
+            ? [el('div', { class: 'post-grid rows' }, ...lines.map((l) => slot(l)))]
+            : lines.map((l) => {
+                const look = lineLook(l);
+                return el(
+                  'span',
+                  { class: 'post-mini', role: 'img', 'aria-label': look.name },
+                  picture(l),
+                  ...(l.kind === 'item' ? [el('b', {}, `×${String(l.quantity)}`)] : []),
+                );
+              });
+      return el(
+        'div',
+        { class: `post-half ${side}`, 'data-testid': `post-half-${side}` },
+        el(
+          'b',
+          { class: 'post-half-head' },
+          side === 'mine' ? TRADE_TEXT.stripGive : TRADE_TEXT.stripGet,
+        ),
+        el('div', { class: `post-half-things ${draw}` }, ...things),
+        ...(lines.length > 0 ? [hearts(n, `post-hearts-${side === 'mine' ? 'give' : 'get'}`)] : []),
+      );
+    };
+    return el(
+      'div',
+      { class: `post-strip ${draw}`, 'data-testid': 'post-strip' },
+      el(
+        'div',
+        { class: 'post-strip-row' },
+        half('mine', giveLines, look.giveHearts),
+        el('span', { class: 'post-swap-arrow', 'aria-hidden': 'true' }, '⇄'),
+        half('theirs', getLines, look.getHearts),
+      ),
+      meter(look, mateName),
+    );
+  }
+
+  /** The fairness meter: a track with a gold middle and a heart that slides toward who gets more. */
+  function meter(look: MeterLook, mateName: string): HTMLElement {
+    const tone =
+      look.tip === 'none'
+        ? 'none'
+        : look.tip === 'even'
+          ? 'fair'
+          : look.tip === 'me'
+            ? 'mine'
+            : 'theirs';
+    const zone = el('span', { class: 'post-meter-fair' });
+    zone.style.left = `${String(50 - look.fairHalf)}%`;
+    zone.style.width = `${String(2 * look.fairHalf)}%`;
+    const track = el('span', { class: 'post-meter-track' }, zone);
+    if (look.marker !== null) {
+      const heart = el(
+        'span',
+        { class: `post-meter-heart ${tone}`, 'aria-hidden': 'true' },
+        look.tip === 'even' ? '💛' : '♥',
+      );
+      heart.style.left = `${String(look.marker)}%`;
+      track.append(heart);
+    }
+    const myName = user?.username ?? '';
+    const label = el(
+      'span',
+      { class: `post-meter-label ${tone}`, 'data-testid': 'post-meter-label' },
+      look.label,
+    );
+    const nudge = look.nudge;
+    const say =
+      look.sub === null
+        ? label
+        : el(
+            'div',
+            { class: 'post-meter-say', 'data-testid': 'post-meter-say' },
+            el(
+              'span',
+              { class: 'post-grow' },
+              label,
+              el('span', { class: 'post-meter-sub' }, look.sub),
+            ),
+            ...(nudge === null
+              ? []
+              : [
+                  (() => {
+                    const b = el(
+                      'button',
+                      {
+                        type: 'button',
+                        class: `post-nudge ${nudge === 'ask' ? 'theirs' : 'mine'}`,
+                        'data-testid': 'post-nudge',
+                      },
+                      nudge === 'ask' ? TRADE_TEXT.askMoreButton : TRADE_TEXT.addMoreButton,
+                    );
+                    b.addEventListener('click', () => {
+                      showSide(nudge === 'ask' ? 'theirs' : 'mine');
+                    });
+                    return b;
+                  })(),
+                ]),
+          );
+    return el(
+      'div',
+      {
+        class: 'post-meter',
+        role: 'group',
+        'aria-label': look.label,
+        'data-testid': 'post-meter',
+        'data-tip': look.tip,
+        'data-lopsided': String(look.lopsided),
+      },
+      el(
+        'div',
+        { class: 'post-meter-row' },
+        el('span', { class: 'post-face mine small', 'aria-hidden': 'true' }, myName.slice(0, 1)),
+        track,
+        el(
+          'span',
+          { class: 'post-face theirs small', 'aria-hidden': 'true' },
+          mateName.slice(0, 1),
+        ),
+      ),
+      say,
+    );
+  }
+
+  /** The nudge's shortcut: bring a side's shelf into view and give it a little wiggle. */
+  function showSide(side: Side): void {
+    const col = body.querySelector<HTMLElement>(`[data-side="${side}"]`);
+    if (!col) return;
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    col.scrollIntoView({ block: 'nearest', behavior: still ? 'auto' : 'smooth' });
+    col.querySelector<HTMLElement>('.post-grid button')?.focus({ preventScroll: true });
+    col.classList.remove('post-flash');
+    void col.offsetWidth;
+    col.classList.add('post-flash');
+  }
+
+  /** The meter for what I've picked so far. */
+  function myMeter(): { look: MeterLook; give: TradeLineView[]; get: TradeLineView[] } {
+    const my = me();
+    const giveLines = pickedViews(give, my === null ? undefined : shelves.get(my));
+    const getLines = pickedViews(want, mate === null ? undefined : shelves.get(mate));
+    const name = mate === null ? '' : nameOf(mate);
+    return { look: meterLook(giveLines, getLines, name, 'sender'), give: giveLines, get: getLines };
   }
 
   // ---- tabs ----------------------------------------------------------------
 
   function tradeTab(view: TradesView, my: string): Node[] {
-    const mine = shelves.get(my);
-    const theirs = mate === null ? undefined : shelves.get(mate);
+    const offers = offersToMe(view, my).map(incoming);
+    if (mates().length === 0) {
+      return [...offers, el('p', { class: 'post-tiny' }, TRADE_TEXT.noMates)];
+    }
+    const picked = myMeter();
     return [
-      ...offersToMe(view, my).map(incoming),
-      mateRow(TRADE_TEXT.tradeWith),
+      ...offers,
       el(
         'div',
-        { class: 'post-columns' },
-        el(
-          'div',
-          { class: 'post-section' },
-          el('b', { class: 'post-small' }, TRADE_TEXT.youGive),
-          shelfGrid(mine, give, (next) => (give = next), 'post-give', TRADE_TEXT.nothingToGive),
-        ),
-        el(
-          'div',
-          { class: 'post-section' },
-          el('b', { class: 'post-small' }, TRADE_TEXT.youWant),
-          mate === null
-            ? el('span', {})
-            : shelfGrid(
-                theirs,
-                want,
-                (next) => (want = next),
-                'post-want',
-                TRADE_TEXT.nothingTheyHave,
-              ),
-        ),
+        { class: 'post-split' },
+        column('mine', 'post-give', TRADE_TEXT.nothingToGive),
+        column('theirs', 'post-want', TRADE_TEXT.nothingTheyHave),
       ),
       notes(),
-      sendButton('trade'),
+      // The strip shows once something is picked, so it never hides an offer to me.
+      ...sendButton(
+        'trade',
+        give.length + want.length === 0
+          ? []
+          : [
+              offerStrip(
+                picked.give,
+                picked.get,
+                picked.look,
+                mate === null ? '' : nameOf(mate),
+                'mini',
+              ),
+            ],
+      ),
       ...offersFromMe(view, my, 'trade').map(outgoing),
     ];
   }
@@ -524,16 +921,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         'div',
         { class: 'post-section' },
         el('b', { class: 'post-small' }, TRADE_TEXT.pickGift),
-        shelfGrid(
-          shelves.get(my),
-          give,
-          (next) => (give = next),
-          'post-gift-pick',
-          TRADE_TEXT.nothingToGive,
-        ),
+        column('mine', 'post-gift-pick', TRADE_TEXT.nothingToGive),
       ),
       notes(),
-      sendButton('gift'),
+      ...sendButton('gift'),
       ...offersFromMe(view, my, 'gift').map(outgoing),
     ];
   }
@@ -665,6 +1056,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
           want = [];
           noteId = null;
           note = '';
+          menu = null;
           render();
         });
         return b;
@@ -748,6 +1140,9 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     noteId = null;
     note = '';
     working = false;
+    filters = { mine: 'all', theirs: 'all' };
+    sorts = { mine: 'name', theirs: 'name' };
+    menu = null;
   }
 
   function close(): void {
@@ -801,6 +1196,17 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
             : 0,
         mailbox: trades ? waiting(trades).length : 0,
         working,
+        meter: (() => {
+          const { look } = myMeter();
+          return {
+            tip: look.tip,
+            lopsided: look.lopsided,
+            give: look.giveHearts,
+            get: look.getHearts,
+          };
+        })(),
+        filters: { ...filters },
+        sorts: { ...sorts },
       };
     },
   };
