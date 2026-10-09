@@ -19,6 +19,7 @@ import { closeTrays, trayButton } from './trays.js';
 /** `LorebookDebug` from src/lore/lorebook.ts (this project can't see its types). */
 interface LoreDebug {
   showing: string | null;
+  checking: number;
   bookOpen: boolean;
   bookAt: string | null;
   found: number;
@@ -66,7 +67,10 @@ test('a found page sparkles in the Bag, opens in the Lorebook and is read', asyn
   await expect.poll(async () => (await loreState(page))?.total, slow).toBe(12);
   expect((await loreState(page))?.found).toBe(0);
 
-  // A page is found while exploring; the next map open shows its card.
+  // A page is found while exploring; the next map open shows its card. Wait
+  // for the map open's own recheck first: if it ran between the find and the
+  // reload, the card would show (and be remembered) before the reload.
+  await expect.poll(async () => (await loreState(page))?.checking, slow).toBe(0);
   const found = await api(page, 'POST', '/lore/dev/find', { pageId: 'under-a-mossy-rock' });
   expect(found.status).toBe(200);
   await reload();

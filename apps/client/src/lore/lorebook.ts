@@ -40,6 +40,8 @@ export interface LorebookDebug {
   readonly found: number;
   readonly total: number;
   readonly unread: number;
+  /** Looks still to come from the last `check` (its recheck), for tests to wait on. */
+  readonly checking: number;
 }
 
 export interface Lorebook {
@@ -92,6 +94,8 @@ function writeShown(userId: string, ids: ReadonlySet<string>): void {
 export function createLorebook(options: LorebookOptions): Lorebook {
   const api = options.api ?? loreApi;
   const setTimer = options.setTimer ?? ((task, ms) => setTimeout(task, ms));
+  /** Rechecks waiting to run (`check`). */
+  let checking = 0;
   const busy = options.busy ?? (() => false);
   let user: PublicUser | null = null;
   /** The book as last heard from the server, or null. */
@@ -311,7 +315,11 @@ export function createLorebook(options: LorebookOptions): Lorebook {
     },
     check: () => {
       void look();
-      setTimer(() => void look(), RECHECK_MS);
+      checking++;
+      setTimer(() => {
+        checking--;
+        void look();
+      }, RECHECK_MS);
     },
     openAt: (pageId) => {
       open(pageId);
@@ -340,6 +348,7 @@ export function createLorebook(options: LorebookOptions): Lorebook {
         bookOpen: screen.isOpen,
         bookAt: screen.at,
         ...counts,
+        checking,
       };
     },
   };
