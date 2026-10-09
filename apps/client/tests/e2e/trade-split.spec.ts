@@ -77,8 +77,11 @@ test('trades in the split view: whose is whose, sort and filter per side, and th
   await expect(theirs).toContainText(samName);
   await expect(theirs).toContainText('Their things');
   await expect(want).toContainText('Pebblesnooze');
-  // Nothing picked yet: no strip, so an offer to me is never covered.
-  await expect(post.getByTestId('post-strip')).toHaveCount(0);
+  // The strip is always there, both directions, even before a pick.
+  await expect(post.getByTestId('post-strip')).toBeVisible();
+  await expect(post.getByTestId('post-half-mine')).toContainText('Tap your things');
+  await expect(post.getByTestId('post-half-theirs')).toContainText(`Tap ${samName}’s things`);
+  await expect(post.getByTestId('post-meter-label')).toHaveText('Pick something on each side!');
 
   // My side shows only items; theirs still shows everything.
   await post.getByTestId('shelf-mine-filter').tap();

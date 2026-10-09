@@ -249,20 +249,10 @@
   align-content: start;
 }
 
-.post-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
 .post-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 8px;
-}
-
-.post-columns .post-grid {
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
 }
 
 .post-slot,

@@ -1,5 +1,6 @@
 import type {
   MapView,
+  TradeTip,
   PublicUser,
   TradeKind,
   TradeLine,
@@ -85,7 +86,7 @@ export interface PostDebug {
   readonly mailbox: number;
   readonly working: boolean;
   /** The fairness meter for my picks (#305): which way it tips and each side's hearts. */
-  readonly meter: { tip: string; lopsided: boolean; give: number; get: number };
+  readonly meter: { tip: TradeTip; lopsided: boolean; give: number; get: number };
   readonly filters: Readonly<Record<Side, ShelfFilter>>;
   readonly sorts: Readonly<Record<Side, ShelfSort>>;
 }
@@ -796,7 +797,7 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
     const myName = user?.username ?? '';
     const label = el(
       'span',
-      { class: `post-meter-label ${tone}`, 'data-testid': 'post-meter-label' },
+      { class: `post-meter-label post-fit ${tone}`, 'data-testid': 'post-meter-label' },
       look.label,
     );
     const nudge = look.nudge;
@@ -897,21 +898,10 @@ export function createPostScreen(options: PostScreenOptions): PostScreen {
         column('theirs', 'post-want', TRADE_TEXT.nothingTheyHave),
       ),
       notes(),
-      // The strip shows once something is picked, so it never hides an offer to me.
-      ...sendButton(
-        'trade',
-        give.length + want.length === 0
-          ? []
-          : [
-              offerStrip(
-                picked.give,
-                picked.get,
-                picked.look,
-                mate === null ? '' : nameOf(mate),
-                'mini',
-              ),
-            ],
-      ),
+      // Always on screen with "Send offer", both directions (#305), even before a pick.
+      ...sendButton('trade', [
+        offerStrip(picked.give, picked.get, picked.look, mate === null ? '' : nameOf(mate), 'mini'),
+      ]),
       ...offersFromMe(view, my, 'trade').map(outgoing),
     ];
   }
