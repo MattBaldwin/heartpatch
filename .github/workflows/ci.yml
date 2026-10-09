@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16
+        image: mirror.gcr.io/library/postgres:16 # Google's Docker Hub mirror: same image, no anonymous pull rate limit
         env:
           POSTGRES_USER: heartpatch
           POSTGRES_PASSWORD: heartpatch
@@ -107,7 +107,7 @@ jobs:
       # Named "db" like the compose service, which the seed script's
       # refuse-a-remote-database guard allows.
       db:
-        image: postgres:16
+        image: mirror.gcr.io/library/postgres:16 # Google's Docker Hub mirror: same image, no anonymous pull rate limit
         env:
           POSTGRES_USER: heartpatch
           POSTGRES_PASSWORD: heartpatch
