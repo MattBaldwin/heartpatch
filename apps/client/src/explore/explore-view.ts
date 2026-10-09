@@ -17,8 +17,6 @@ import { TOOL_ICONS, TOOL_WORDS } from '../inventory/tool-uses.js';
 import { EXPLORE_VIEW } from './explore-config.js';
 
 export { TOOL_ICONS, TOOL_WORDS, usesLine } from '../inventory/tool-uses.js';
-// The drawn icons moved to ui/ for the Bag too (#308); explore still names them here.
-export { ICON_PATHS, isIconName, type IconName } from '../ui/line-icons.js';
 
 // What the explore view says and where the Keeper may walk (#199). Pure, so
 // every case is unit-tested; copy follows docs/STYLE_GUIDE.md. The server

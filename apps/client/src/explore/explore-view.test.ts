@@ -26,13 +26,13 @@ import {
   stepToward,
   toolChip,
   toolChipShort,
-  isIconName,
   HANDS_ICON,
   PLAY_TEXT,
   toolRecipeRows,
   usesLine,
   xpLines,
 } from './explore-view.js';
+import { isIconName } from '../ui/line-icons.js';
 
 const SQRT3_2 = Math.sqrt(3) / 2;
 
