@@ -41,10 +41,10 @@
 | Health endpoints | `/api/v1/health` (liveness) and `/api/v1/ready` (readiness); container health checks use `/health` only; deploy also checks `/ready` once and rolls back if it fails |
 | Event table | `game_events`, written in the same transaction as the change; per-map gap-free `seq` via `maps.event_seq` |
 | Initial tables | #2 designs the core spine (users, sessions, maps, map_members, tiles, squishies, game_events); feature tables arrive with their issues |
-| Care actions | Feed, pet, play. Training = Training Grounds building; grooming returns with squishy dress-up |
+| Care actions | Feed, pet, play. Training = Training Grounds building; grooming returns with squishy dress-up *(The Heart Snack joined as a rare fourth action: 3 Heartdust, outside the daily care falloff. See "Building upgrades, a use for Heartdust, and honest Glimmer (Fix PR #193)", 2026-10-06.)* |
 | Owner mute | Deferred to Phase 2 with free chat |
 | Recovery codes | One active hashed code; a fresh one after each use; plus an operator CLI reset for players with no map owner |
-| Hollow Man vs "absence is not punished" | Hearthfires store up to 5 nights of fuel (burn one per nightfall) — teaches planning ahead; squishies at home behind a lit fire are always safe |
+| Hollow Man vs "absence is not punished" | Hearthfires store up to 5 nights of fuel (burn one per nightfall) — teaches planning ahead; squishies at home behind a lit fire are always safe *(Superseded: Hearthfires store 8 nights. See "Night at 7 PM; the Hollow Man grows bolder (#277, PR #285)", 2026-10-08.)* |
 
 ## 2026-10-02 — Session reporting
 
@@ -58,7 +58,7 @@ An adversarial audit (top game-architect / game-PM persona) reviewed the docs, c
 
 - **A. The multiplayer game never waits on the tutorial.** The server setting `HP_TUTORIAL_REQUIRED` lets new accounts create or join maps before the tutorial exists. The tutorial (#24) no longer depends on the cinematic (#46), wardrobe (#43) or milestones (#44); its final steps arrive once those exist. _(Done: #43, #44 and #24 are built.)_ Issues that bundled client and server work (#5, #17, #22) shed their false dependencies on client rendering, so the server parts can start earlier. *Why:* #24 sat at the end of an 11-issue chain and gated all play.
 - **B. Family-safe PvP.** A map-owner **PvP mode**: On / **Gentle (default)** / Off, with a per-defender daily tile-loss cap and reduced rewards for challenging much smaller players. Every home ring is guaranteed Timber, Stone, Emberwood and a farm plot. *Why:* an older sibling could strip a younger one's land, then their fuel, then their squishies.
-- **C. The Hollow Man is a planning challenge, not a nightly tax.** Tile defenders stand watch and aren't exposed. Rescue can start from anywhere, and Heartdust from rescues is capped per day. *Why:* holding territory would otherwise cost a squishy every night, and exposure could be farmed.
+- **C. The Hollow Man is a planning challenge, not a nightly tax.** Tile defenders stand watch and aren't exposed. *(Superseded: a guard on watch needs a lit fire's reach, or it is exposed at nightfall. See "Hearthfires on captured land (#202, PR #222)", 2026-10-07.)* Rescue can start from anywhere, and Heartdust from rescues is capped per day. *Why:* holding territory would otherwise cost a squishy every night, and exposure could be farmed.
 - **D. Family-only signup.** Account creation requires an operator-issued signup code (`HP_SIGNUP_CODE`). A map owner can reset only members whose maps are all theirs; other resets go to the operator, and resets revoke sessions. *Why:* "invite-only" covered maps, not signups, and owner resets could take over accounts across maps.
 - **E. WebGL2 default, earlier device testing.** WebGL2 is the Phase 1 renderer and WebGPU is opt-in. This **supersedes** "WebGPU primary" in the kickoff entry. Deploy (#27) happens **right after #6 merges**, so the test scene reaches real iPhones and iPads within days. This **supersedes** "deploy after #6, #7, #9". No MSAA, and render only on change, to protect memory and battery. *Why:* CI can only exercise WebGL2, and the riskiest unknowns (Safari GPU memory, heat, home-screen app behaviour) must surface early.
 - **F. Account-level economy.** Patch Coins, wardrobe, milestones and titles belong to the account, with daily earning caps. Map-play milestone progress counts only on maps with 2+ active members. *Why:* per-map coins feeding an account wardrobe, plus unlimited maps and accounts, made a farm.
@@ -101,7 +101,7 @@ _Proposed in PR #59; the project owner confirms on merge._
 
 _Proposed in the #4 PR; confirmed by the owner on 2026-10-03 (see "2026-10-03 — Owner decisions")._
 
-- **Maps are generated once, for every seat.** A new map is generated for `max_players` (4) and stored in full (terrain, nodes, guardian strength, home slots). Joiners take the next free home slot, so the map never resizes. Design doc §3's smaller 2- and 3-player sizes aren't used yet. *Why:* players join one at a time after creation, and regenerating would move everyone's land.
+- **Maps are generated once, for every seat.** A new map is generated for `max_players` (4) and stored in full (terrain, nodes, guardian strength, home slots). Joiners take the next free home slot, so the map never resizes. Design doc §3's smaller 2- and 3-player sizes aren't used yet. *Why:* players join one at a time after creation, and regenerating would move everyone's land. *(Superseded for new patches: they seat 6 on a radius-16 map; older patches keep 4. See "Six-seat patches and six Keepers (#318; PR #324, #327)", 2026-10-09.)*
 - **Leaving frees the seat and the land.** A removed (or leaving) member is archived; their tiles go back to neutral and their home slot is free for the next player. A returning player gets a fresh home base. *Why:* otherwise a removed player would hold one of the 4 seats forever.
 - **The owner can't leave or be removed.** Ownership transfer isn't in Phase 1.
 - **Join requests and invite codes write no game events.** Only the owner sees them; game events are for map state every member sees.
@@ -145,7 +145,7 @@ _Proposed in the secret-species Chore PR; the project owner confirms on merge._
 _Proposed in the #26 PR; the project owner confirms on merge._
 
 - **`vite-plugin-pwa` in injectManifest mode** (tech spec §3): Workbox writes the build's precache list into our own worker (`apps/client/src/pwa/sw.ts`), which owns the caching and update rules below. No Workbox runtime ships to players. Icons, launch screens and the manifest are drawn by `apps/client/tooling/pwa/` at build time (signed distance fields, no third-party art), not kept in `public/`; launch screens aren't precached, because iOS reads them once, at install.
-- **The shell version is a content hash, not `APP_VERSION`.** The cache is `heartpatch-shell-<12 hex>`, hashed from every precached URL and Workbox revision. A deploy that only changes the server keeps the phones' cache, so kids don't re-download the 1 MB+ engine on cellular for nothing. Any shell change makes a new cache, and old ones are deleted on activate. index.html is cached as `/`, the URL players open, and redirected responses are never cached (browsers refuse them for page loads).
+- **The shell version is a content hash, not `APP_VERSION`.** The cache is `heartpatch-shell-<12 hex>`, hashed from every precached URL and Workbox revision. A deploy that only changes the server keeps the phones' cache, so kids don't re-download the 1 MB+ engine on cellular for nothing. Any shell change makes a new cache, and old ones are deleted on activate. index.html is cached as `/`, the URL players open, and redirected responses are never cached (browsers refuse them for page loads). *(Superseded: every deploy is now a new app shell, because the build number is in the entry bundle. See "The game's version (#198, PR #210)", 2026-10-06.)*
 - **No stale shells.** Page loads are network-first, so every launch or reload gets the newest `index.html` and bundles; the cached shell is only for offline, error or slow (4 s, `// TUNE`) loads. A new worker never swaps code under a running game. It takes over:
   - at launch, if it installed while the app was closed;
   - silently, if the page already runs its version;
@@ -233,9 +233,9 @@ _Proposed in the #14 PR; the project owner confirms on merge._
 
 _Proposed in the #18 PR; the project owner confirms on merge._
 
-- **Buildings are `buildings` rows on spots of the player's own home tiles** (coordinator-approved shared contract): map, owner, tile, building id and kind, level, spot, and for Hearthfires `fuelled_through` (+ `fuel_updated_at`). Each home tile has 7 spots (the middle and six around it, `spotOffset`); the middle of the Heart Seed's tile and of a node tile is taken by what stands there. One building per spot; `maxPerHome` per building in data (one Hearthfire, one Jack-o'-Lantern, two of each habitat, `// TUNE:`). Only Hearthfires and habitats are buildable now (`HOME_BASE_RULES.buildableKinds`); Training Grounds wait for their XP (#19). Building is instant (no build timer) and upgrades are a follow-up.
+- **Buildings are `buildings` rows on spots of the player's own home tiles** (coordinator-approved shared contract): map, owner, tile, building id and kind, level, spot, and for Hearthfires `fuelled_through` (+ `fuel_updated_at`). Each home tile has 7 spots (the middle and six around it, `spotOffset`); the middle of the Heart Seed's tile and of a node tile is taken by what stands there. One building per spot; `maxPerHome` per building in data (one Hearthfire, one Jack-o'-Lantern, two of each habitat, `// TUNE:`). Only Hearthfires and habitats are buildable now (`HOME_BASE_RULES.buildableKinds`); Training Grounds wait for their XP (#19). Building is instant (no build timer) and upgrades are a follow-up. *(Superseded in part: no fires stand on home tiles, see "Hearthfires on captured land (#202, PR #222)", 2026-10-07. Training Grounds build only on homesteads, see "Training Grounds move to homesteads (#277, PR #302)", 2026-10-08.)*
 - **Fuel is a date, as tech spec §7 says**, not a stored count plus a timestamp: `fuelled_through` is the last map-local night it covers, and "lit" and "nights left" are worked out on read from the map clock (DST included). Adding more than fits fills it and charges only for what went in. *Why:* nothing ticks or decrements, so a nightfall run twice can't burn fuel twice (CLAUDE.md rule 4). Nightfall (#21) asks `protectsNight(fuelledThrough, night)`, and `litSafeTiles` / shared `safeTiles` give the protected tiles.
-- **A lit fire protects its whole home base plus its radius, measured from the fire's own tile.** *Why:* design doc §14 says squishies at home behind a lit fire are always safe; measuring from the fire makes where you put it matter for land beyond the home.
+- **A lit fire protects its whole home base plus its radius, measured from the fire's own tile.** *Why:* design doc §14 says squishies at home behind a lit fire are always safe; measuring from the fire makes where you put it matter for land beyond the home. *(Superseded: home tiles are always safe and fires stand only on captured land. See "Hearthfires on captured land (#202, PR #222)", 2026-10-07.)*
 - **The Jack-o'-Lantern Hearthfire is its own building** built from #17's crafted item, only in the Halloween window, with a bigger radius (2) in data. One already built keeps working after Halloween (keepsakes, §15; confirmed 2026-10-03, see "2026-10-03 — Owner decisions"). Taking it down gives the carved pumpkin back whole (`refundPercent: 100`); other buildings give back half their cost, rounded down, plus any fuel they hadn't burned.
 - **Habitat housing is a nullable `squishies.habitat_building_id`** (coordinator-approved), `ON DELETE SET NULL`, so taking a habitat down moves its squishies out. Only the owner's own active squishies, up to capacity; a squishy in the Hollow keeps its bed. Squishies without a habitat wait by the Heart Seed.
 - **A member who leaves loses their buildings** (same transaction as their tiles going neutral), so a returning player gets a fresh home base (#4 decision).
@@ -292,7 +292,7 @@ _Proposed in the #19 PR; the project owner confirms on merge._
 _Proposed in the #10 PR; the project owner confirms on merge._
 
 - **18 lines, one evolution each:** 14 everyday lines and 4 Halloween lines (Gourdon, Glowboo, Upsybat, Candlekit), base form plus one level-based evolution (design doc §8 Phase 1), 36 public species. An evolution keeps its element, feeling and season, is bigger, has a larger stat total and is one rarity step up (legendary stays legendary).
-- **Only base forms spawn wild.** Wild levels are 2–6, so an evolved form there would make no sense. Evolved forms are met as **Juniper's Gap guardians** (levels 14–18), even below their own evolution level: a guardian belongs to the land, it didn't grow up there. Ordinary land is guarded by base forms. *(Superseded in part 2026-10-06: base forms still spawn wild, but at levels matched to the Partner (−2 to +1), not 2–6; a player with no Partner still meets 2–6. A befriended one joins at most one level below its first evolution. See "The level curve and wild levels (#182)", 2026-10-06.)*
+- **Only base forms spawn wild.** Wild levels are 2–6, so an evolved form there would make no sense. Evolved forms are met as **Juniper's Gap guardians** (levels 14–18), even below their own evolution level: a guardian belongs to the land, it didn't grow up there. Ordinary land is guarded by base forms. *(Superseded in part 2026-10-06: base forms still spawn wild, but at levels matched to the Partner (−2 to +1), not 2–6; a player with no Partner still meets 2–6. A befriended one joins at most one level below its first evolution. See "The level curve and wild levels (#182)", 2026-10-06.)* *(Now −2 to +0, see "A wild squishy wanders off; fairer wild levels (#208, PR #211)", 2026-10-06.)*
 - **Halloween species appear only in `season: 'halloween'` tables** (and carry `season` themselves, so the spawner double-checks). Every terrain also has an everyday table, so there's someone to find all year.
 - **"Drawn to" a seasonal activity is approximated by terrain and time of day.** Spawns can't see buildings or what players gather, so Candlekit (Jack-o'-Lantern glow) and Upsybat (Witch Dust) come out at dusk and night where those things are found. A real "near a building" or "after gathering" spawn hook is a follow-up (style guide §4).
 - **Plain counters are a tested design goal.** Fuzzbolt, Pebblesnooze, Puddlepuff and Snoozicle are commons that beat a named rarer squishy at least 70% of the time in seeded 1v1 engine battles, and a round-robin keeps every base form's win rate between 25% and 75% (`species.test.ts`). It's a sanity check until the balance simulator lands, not a replacement for it.
@@ -315,7 +315,7 @@ _Proposed in the #16 PR; the project owner confirms on merge._
 
 _Proposed in the #21 PR; the project owner confirms on merge._
 
-- **Nightfall is a sweep plus one job per map and night** (coordinator-approved: `hollow_events`, one row per map per night). Every minute (and at boot) a sweep asks which maps' latest 21:00 (map time, DST included) hasn't run, and enqueues `nightfall` keyed `mapId/night`. The night's row is claimed first in the nightfall transaction, so a retry, a duplicate job or a restart takes nothing more. *Why:* one cron per map can't follow time zones and daylight saving, and the row is a stronger guard than job de-duplication.
+- **Nightfall is a sweep plus one job per map and night** (coordinator-approved: `hollow_events`, one row per map per night). Every minute (and at boot) a sweep asks which maps' latest 21:00 (map time, DST included) hasn't run, and enqueues `nightfall` keyed `mapId/night`. The night's row is claimed first in the nightfall transaction, so a retry, a duplicate job or a restart takes nothing more. *Why:* one cron per map can't follow time zones and daylight saving, and the row is a stronger guard than job de-duplication. *(Superseded: nightfall is 19:00 map time. See "Night at 7 PM; the Hollow Man grows bolder (#277, PR #285)", 2026-10-08.)*
 - **After downtime only the latest missed night runs**, and a map's first night is the first nightfall after its first active member joined (game clock). *Why:* a server outage shouldn't cost a squishy per missed night, and `created_at` columns use the database clock, which a dev clock override doesn't move.
 - **Where a squishy spends the night:** its habitat's tile, else its owner's Heart Seed. It's safe inside the tiles lit fires protect that night (anyone's fires, `litSafeTiles` with `protectsNight`), on watch if `isOnWatch` (decision C), else exposed. In Phase 1 habitats are only on home tiles, so "exposed" means "the fire is out" until habitats or noise buildings can sit elsewhere.
 - **The pick is seeded per map, night and player** (`deriveSeed(mapSeed, 'hollow', night, userId)`), over exposed squishies in id order, and never revealed. Tutorial maps take nothing (`hollowManCanTake`).
@@ -323,7 +323,7 @@ _Proposed in the #21 PR; the project owner confirms on merge._
 - **Heartdust is capped per player per map-local day** (`HOLLOW_RULES.rescue.rewardsPerDay`, `// TUNE:` [DEFAULT: 1]); rescues past it still bring the squishy home. The day is the battle's end (game clock). A rewarded rescue also rolls #43's `rescue` clothing drop (`rollFoundDrop`); capped rescues don't, so the cap covers every rescue reward.
 - **Who hears what:** `hollow.nightfall` tells everyone who lost a squishy, never which; `squishy.hollowed` and `squishy.rescued` go only to the owner. The morning report lists the last 3 nights (`reportNights`) per player; which one a device has shown is remembered in that device's `localStorage` (a per-viewer convenience: a new phone may show it once more).
 - **Why "seen" differs from the raid log's.** A raid is one row for one defender, so `raids.seen_at` is cheap and exact, and it also feeds the unseen count that opens the report on any device. A Hollow night is one row per map (`hollow_events`, every member's result in `outcomes`) with nowhere per player to put a flag, and showing a night's card twice is harmless, so a device remembers it in `localStorage`. If the Hollow report ever needs to agree across devices, give it a per-player seen row like the raids. The raid sheet is being renamed "Raid report" (Chore PR) so the two read alike. *(Done: it is "Challenge report" as of 2026-10-06; see "Words: My Home, patch and land (#181)".)*
-- **On screen:** at night (21:00–6:00 map time, from the server) the map's sky and sun dim to a lavender dusk, so the fires' warm glow stands out. When night falls live he visits once where the player is looking (a little up-screen), flickers, hesitates and fades in about 4.5 s, the only time the map draws continuously; the report card waits until he's gone. A rescue opens the battle screen ("Shadows from the Hollow want to play!", "Welcome home!").
+- **On screen:** at night (21:00–6:00 map time, from the server) the map's sky and sun dim to a lavender dusk, so the fires' warm glow stands out. When night falls live he visits once where the player is looking (a little up-screen), flickers, hesitates and fades in about 4.5 s, the only time the map draws continuously; the report card waits until he's gone. A rescue opens the battle screen ("Shadows from the Hollow want to play!", "Welcome home!"). *(Night now starts at 19:00. See "Night at 7 PM; the Hollow Man grows bolder (#277, PR #285)", 2026-10-08.)*
 - **Dev nightfall** (`HP_DEV_SQUISHY_GRANTS`) makes the next night that hasn't come yet fall now; pressing again moves on a night, so fuel runs down as it would.
 
 **Open product questions (for the owner), answered 2026-10-03** (see "2026-10-03 — Owner decisions"): a brand-new player gets a first-night grace of 2 nightfalls (a player who joins at 8:55 PM with a squishy and no fire yet could lose it at 9:00); shadow guardians get a dark lavender, glowing tint on the Nookling shape (they were drawn as their species).
@@ -355,7 +355,7 @@ _Decided by the project owner on 2026-10-03. They answer the open questions in t
 - **First squishy: a pick of 3.** On joining a patch, a new player picks 1 of 3 starters, one per element family. The list is data (Puddlepuff is one). The tutorial (#24) later presents the same choice as meeting their Partner. Answers #14's "real acquisition rules". *Why:* without a squishy a new player can't battle or capture.
 - **Wild-battle XP farming: a beaten wild squishy wanders off.** One a player beats without capturing is gone for that player for the rest of its spawn window, like a capture (#14). Others can still find it. *Why:* otherwise it can be re-fought for full XP all window, multiplied up to 3× by care × habitat (#19).
 - **Element vs feeling balance: soften the element matrix.** Strong goes from 2× to about 1.5×, weak from 0.5× to about 0.67× (`// TUNE:`), tuned with `pnpm sim`. **Final values (#96):** elements 1.5× / 0.67×, feelings 1.35× / 0.75× (raised from 1.25× / 0.8×). Feeling counters can then blunt an element disadvantage, as design doc §5 says. *Why:* the #12 sim showed a 2× matchup wins 98–100% of equal-stat 1v1s.
-- **First-night grace.** The Hollow Man skips a player for their first 2 nightfalls after joining a patch, with a cozy hint to light a fire. Answers #21's open question. *Why:* someone who joins at 8:55 PM with no fire shouldn't lose a squishy at 9:00.
+- **First-night grace.** The Hollow Man skips a player for their first 2 nightfalls after joining a patch, with a cozy hint to light a fire. Answers #21's open question. *Why:* someone who joins at 8:55 PM with no fire shouldn't lose a squishy at 9:00. *(Nightfall is now 7 PM. See "Night at 7 PM; the Hollow Man grows bolder (#277, PR #285)", 2026-10-08.)*
 - **Habitat or watch, not both.** A squishy is either housed in a habitat or standing watch. Answers the open question from #18 and #15. *Why:* a squishy that is both gets the habitat's XP bonus and the Hollow Man's protection from one job.
 - **Gentle mode halves battle XP too.** Gentle's 50% applies to the showdown's XP as well as capture rewards, and the result card shows the reduced XP. Answers #15's open question. *Why:* the reduction is there to stop farming a much smaller player, and XP was the leftover way to do it.
 - **Rescue guardians look shadowy.** A dark lavender, soft-glowing tint on the Nookling shape. Answers #21's open question. *Why:* a rescue should feel like finding the way through the Hollow, and the tint stays cute, not scary.
@@ -383,7 +383,7 @@ _Proposed in the #25 PR; the project owner confirms on merge._
 
 - **All sound is synthesised in the browser for now, with no files** (Web Audio oscillators, filters and noise). This narrows the kickoff decision ("CC0 assets for music and SFX, plus procedural voices"): procedural audio matches the procedural art, has no licensing questions, and adds ~11 KB instead of megabytes of `.m4a`. CC0 or licensed recordings can still replace any cue or loop later; they would go in `ASSETS.md` and use the same cue names. `ASSETS.md` lists no audio files.
 - **Music loops are notes, rendered once.** `music-score.ts` holds day (C major marimba), night (slow music box) and Halloween (D minor plinks and a wobbly whistle) as note data. The engine renders the wanted loop on an `OfflineAudioContext` (mono, 22.05 kHz, 2–3 MB per loop in memory), folds the ring-out back over the start so it loops seamlessly, levels it to a steady peak, and plays it as a looping buffer: no timers and nothing on the render loop. Loops cross-fade over 2.5 s (`// TUNE`).
-- **Which loop:** night on the open map (the Hollow layer's dusk, 21:00–6:00 map time from the server) wins; otherwise Halloween while its season window is on by the **device's** date (`activeSeasons`, cosmetic only), else day. The lobby uses the same rule with night off.
+- **Which loop:** night on the open map (the Hollow layer's dusk, 21:00–6:00 map time from the server) wins; otherwise Halloween while its season window is on by the **device's** date (`activeSeasons`, cosmetic only), else day. The lobby uses the same rule with night off. *(Night now starts at 19:00. See "Night at 7 PM; the Hollow Man grows bolder (#277, PR #285)", 2026-10-08.)*
 - **iOS:** nothing is made or played before the first tap. The `AudioContext` is created, primed with a silent sample and resumed synchronously inside the first `touchend`/`click`/`keydown`; only then is the engine chunk loaded. Hidden pages suspend the context; coming back, or the next tap after a call or Siri (`interrupted`), resumes it. `navigator.audioSession.type = 'ambient'` where supported, so the silent switch mutes the game and the player's own music keeps playing.
 - **Mix:** music, SFX and UI buses into a master gain and a limiter. The Music setting drives the music bus; the Sounds setting drives SFX and UI (one setting is simpler for kids than three). Music is quiet by default and dips under his visit, a new friend, an evolution and a win. Up to 10 voices; repeats within 50 ms are dropped; each play varies pitch ±6% and volume up to 15% (`// TUNE`).
 - **Spooky stays soft** (style guide §7): his arrival is a low two-drone hush and a breath of wind while the music dips, never a sting.
@@ -394,12 +394,12 @@ _Proposed in the #25 PR; the project owner confirms on merge._
 
 _Proposed in the owner-rules Fix PR; the project owner confirms on merge. How the rules in "2026-10-03 — Owner decisions" were built._
 
-- **A beaten wild squishy is gone the same way a befriended one is:** the spawns module skips any tile whose spawn this player beat this window, read from their finished `battles` rows (`result.winner` is the player's side; befriending is a win too). No new table or marker: the battle row already keeps its tile and window (#14), so the rule is idempotent and per player for free. A loss, a tie, a run home or a no contest leaves it there. The result card says "It's tuckered out and toddles away!".
+- **A beaten wild squishy is gone the same way a befriended one is:** the spawns module skips any tile whose spawn this player beat this window, read from their finished `battles` rows (`result.winner` is the player's side; befriending is a win too). No new table or marker: the battle row already keeps its tile and window (#14), so the rule is idempotent and per player for free. A loss, a tie, a run home or a no contest leaves it there. *(Superseded: off the Glade, a loss or a run home makes it wander off too; a tie or a no contest still leaves it. See "A wild squishy wanders off; fairer wild levels (#208, PR #211)", 2026-10-06.)* The result card says "It's tuckered out and toddles away!".
 - **Gentle's share scales the battle's base XP before care × habitat,** win or lose (`floor(base × rewardPercent / 100)`, then `applyXp`), carried from `tile_attacks.reward_percent` through the tile-battle port. `battle.ended.xp` stays the XP actually granted.
 - **The result card shows granted XP.** `battles.rewards` (one new nullable column) stores what a finished battle granted and the share it paid; `PlayerBattle.rewards` carries it (null while running, after no contest, on a defender's replay, and for older battles, where the card falls back to the engine's base XP). *Why:* the card showed the engine's base XP, which already missed the care and habitat bonus, and couldn't show Gentle's half at all.
 - **Housed or on watch, not both, enforced on both commands under the squishy's row lock:** housing locks building then squishy and refuses one on watch; posting locks member, tiles, then the posted squishies in id order (`FOR NO KEY UPDATE`, like housing) and refuses a housed one that isn't already on that tile. Moving out of a habitat or off watch is always allowed.
 - **Squishies that were both before the rule count as on watch only** until the player changes one: no habitat bonus (care's XP multiplier skips the habitat while on watch), and the Hollow Man already treated them as on watch. They may keep their post when that tile's guards change. *Why not clear them in the migration:* a hand-written data statement would be lost when migrations are regenerated before merge (tech spec §4), and clearing the watch could leave a squishy newly exposed at nightfall; clearing the habitat would silently move it out. Watch-only changes nothing a player can see except the bonus.
-- **First-night grace counts calendar nightfalls from `map_members.joined_at`** (game clock, map time): `firstHollowNight` is `tonightOf(joined) + graceNights`, so joining at 8:55 PM makes that evening the first grace night and joining at 9:00 PM or later starts with the next. It's skipped where #21 skips tutorial maps (the `nightfall` call), per player; the night's outcome still counts their exposed squishies. A rejoining member's new `joined_at` gives a new grace, as they get a fresh home base.
+- **First-night grace counts calendar nightfalls from `map_members.joined_at`** (game clock, map time): `firstHollowNight` is `tonightOf(joined) + graceNights`, so joining at 8:55 PM makes that evening the first grace night and joining at 9:00 PM or later starts with the next. It's skipped where #21 skips tutorial maps (the `nightfall` call), per player; the night's outcome still counts their exposed squishies. A rejoining member's new `joined_at` gives a new grace, as they get a fresh home base. *(Nightfall is now 7 PM, so read 6:55 PM and 7:00 PM. See "Night at 7 PM; the Hollow Man grows bolder (#277, PR #285)", 2026-10-08.)*
 - **The fire hint is a status flag, shown as a small pill:** `HollowStatus.fireHint` is true until the night of the Hollow Man's first visit to me (included) while no Hearthfire of mine is lit for tonight, never on tutorial maps. The client shows "Light a fire before night falls!" beside the Hollow button by day; it takes no taps, so it never blocks the map.
 
 ## 2026-10-03 — Shadowy rescue guardians and the guardian hint (polish)
@@ -450,7 +450,7 @@ _Proposed in the #24 PR; confirmed by the owner on 2026-10-04 (see "2026-10-04 �
 - **First Patch milestone hook:** `users.tutorial_completed_at` (the first completion; replays never move it). #44 reads it; no new event type.
 - **Nightfall is scripted.** "Night falls" (`POST /tutorial/nightfall`, only on its step) runs the Hollow's own `runNightfall` on the Glade for the next night that hasn't run; the Hollow Man takes nothing there. **The nightfall sweep skips tutorial maps** (it didn't before: every finished Glade got a night forever, harmless but wasted). Since Phase 1 squishies sleep at home and one fire covers it, "move the squishy inside the light" isn't a beat yet.
 - **Defend is posting a guard.** The step completes when the player puts a squishy on watch on their new tile; Sprout says the echo was shooed away. There is no simulated echo raid (a raid needs a real attacker and the raid log), so no stance pick is required; the raid report already offers the style.
-- **Lore:** pages and their conditions are server-only (`LORE_PAGES`, `{ id, title, text, trigger: { mapKinds, eventType, where, finder } }`, the tutorial's predicates), found by a `lore` event consumer into `lore_found`, read through `GET /lore`. One page in the Glade (its night), two on patches (claiming old forest; a rescue). The bundle check fails if a page's title or words reach the client. A card shows a newly found page; Settings has the Lorebook.
+- **Lore:** pages and their conditions are server-only (`LORE_PAGES`, `{ id, title, text, trigger: { mapKinds, eventType, where, finder } }`, the tutorial's predicates), found by a `lore` event consumer into `lore_found`, read through `GET /lore`. One page in the Glade (its night), two on patches (claiming old forest; a rescue). *(Superseded: the Lorebook has 12 pages in four chapters. See "The Lorebook (#307; PR #312, #315)", 2026-10-09.)* The bundle check fails if a page's title or words reach the client. A card shows a newly found page; Settings has the Lorebook.
 - **On the client** the Glade gets the real bag, home base, battles, territory and the night (not chat). A gameplay step's bubble tucks into a small chip after "Let's go!", so it never covers battle moves or the home bar; tapping it opens it again. Spotlights only sit on buttons that finish the step from where they are (`TARGET_STAND_INS`), because a spotlight blocks every other tap.
 - **Dev step jump** (`POST /tutorial/dev/step`, `HP_DEV_SQUISHY_GRANTS`): moves a run to any step as the engine would, for e2e and phone testing.
 
@@ -464,7 +464,7 @@ _Proposed in the #45 PR; confirmed by the owner on 2026-10-04 (see "2026-10-04 �
 - **Exactly once:** `(source, ref_id)` is unique. A battle pays `battle` and `capture` against its own id. Care pays once per care action, against its `care_log` row, not one "account-day" key: care's daily cap already lives in `care_log.coins`, a per-day key would need one payout row rewritten all day (the ledger is append-only) or a late payout (the coin would arrive tomorrow). One row per paying action keeps it append-only, in the care transaction, and still once.
 - **Earning** (`COIN_RULES`, `// TUNE:`): a win pays 2 (wild) or 3 (a tile or a rival's tile), a befriended squishy or a claimed tile pays 5, capped at 20 and 15 a day per account. Gentle's `rewardPercent` scales a tile battle's win and capture coins (`floor`), like its XP and finds. A rescue pays no coins: its Heartdust and find are already its capped reward. Care pays what `care_log.coins` says (1 per full action, 10 a day). Milestones (#44) call `creditCoins` with no cap. A busy day earns about 40. Tutorial maps pay like any patch (a first taste); the caps cover replays. *(Confirmed 2026-10-04.)*
 - **The racks are worked out on read**, never stored: shared `boutiqueStock(catalog, { seed, date, seasons })` picks `dailySlots` (6) everyday pieces and `seasonalSlots` (4) of each season's that's on, each rack from its own child seed of the player's id and date. So there's no `boutique_stock` table and no `boutique-rotate` job (CLAUDE.md rule 4). The seed is the player's id, not a secret: knowing tomorrow's rack only lets a kid save up. A purchase rechecks the rack after taking the balance lock, so one that waits past midnight checks the new day.
-- **What's sold, and for how much:** found everyday and Halloween pieces get the `boutique` source and a price by rarity (common 15, uncommon 30, rare 60, epic 100; `// TUNE:`). Legendary pieces and the future milestone pieces (Cozy Apron, Squishy Net, design doc §24) stay found-only. `checkBoutiqueData` checks prices are in range, a rarer piece never costs less, and there's enough to fill a rack. Halloween pieces sell only in the Halloween window, by the account's date.
+- **What's sold, and for how much:** found everyday and Halloween pieces get the `boutique` source and a price by rarity (common 15, uncommon 30, rare 60, epic 100; `// TUNE:`). Legendary pieces and the future milestone pieces (Cozy Apron, Squishy Net, design doc §24) stay found-only. *(One exception: the Marigold Calavera costume sells at 320. See "Ten special Halloween costumes (#261, PR #265)", 2026-10-08.)* `checkBoutiqueData` checks prices are in range, a rarer piece never costs less, and there's enough to fill a rack. Halloween pieces sell only in the Halloween window, by the account's date.
 - **A purchase writes no game event.** Events are per map and the shop has none; `clothing.found` is for finds. Others see a new piece when it's worn (`outfit.changed`). The piece is a `clothing_owned` row with `source: 'boutique'` and the purchase's id as `ref_id`, matching its ledger row.
 - **On the client** the Boutique takes the Wardrobe's bottom card and the Keeper stays above it: tapping a piece tries it on (preview only, nothing sent), then asks "Get Witch Hat for 30 Patch Coins?" or says "Not enough Patch Coins yet!" with how to earn more. The patch list shows the balance. No real-money words, prompts or links anywhere.
 
@@ -513,7 +513,7 @@ The project owner's answers to the questions left open by #24, #44, #45 and #46.
 
 _From the owner's first playtest (gather "did nothing", the starter never evolved, care wasn't explained). The tuning target is the coordinator's; the rest is proposed in the `Fix:` PR._
 
-- **A starter grows up after about 12–15 wild wins at 1× care.** Battle XP goes from 4 to **20 per opponent level** (minimum 5 → 20; `data/battle.ts` `xp`, `// TUNE:`), so a wild win (levels 2–6) pays about 120 XP. The XP curve and the evolution levels stay as they are, so every later or rarer evolution keeps its ratio: from level 1 at 1×, starters at 16 take ~12 wins, Thistlepip and uncommons at 18 ~15, rares at 22 ~22, epics at 26 ~31, legendaries at 30 ~40. `growth-pace.test.ts` pins it. *Why data, not the curve:* the curve is recorded above and its numbers are in tests and docs; battle XP is one tuning row. *(Superseded 2026-10-06: the XP curve did change and wild levels now follow the Partner, so a starter grows up after about 22–29 Partner-matched wild wins at 1× care. The 20 XP per opponent level stands. See "The level curve and wild levels (#182)", 2026-10-06.)*
+- **A starter grows up after about 12–15 wild wins at 1× care.** Battle XP goes from 4 to **20 per opponent level** (minimum 5 → 20; `data/battle.ts` `xp`, `// TUNE:`), so a wild win (levels 2–6) pays about 120 XP. The XP curve and the evolution levels stay as they are, so every later or rarer evolution keeps its ratio: from level 1 at 1×, starters at 16 take ~12 wins, Thistlepip and uncommons at 18 ~15, rares at 22 ~22, epics at 26 ~31, legendaries at 30 ~40. `growth-pace.test.ts` pins it. *Why data, not the curve:* the curve is recorded above and its numbers are in tests and docs; battle XP is one tuning row. *(Superseded 2026-10-06: the XP curve did change and wild levels now follow the Partner, so a starter grows up after about 22–29 Partner-matched wild wins at 1× care. The 20 XP per opponent level stands. See "The level curve and wild levels (#182)", 2026-10-06.)* *(Now 23–30, see "A wild squishy wanders off; fairer wild levels (#208, PR #211)", 2026-10-06.)*
 - **"About 5–6 wins with full care" can't hold alongside 12–15 at 1×.** XP is linear in the care × habitat multiplier. Care alone tops out at 1.75× (design doc §7), which gives 7 wins for Emberbun and Puddlepuff and 9 for Thistlepip; a new starter's 137% gives 9 / 11. The 3× cap gives 4 / 5, but needs full care *and* a habitat matching both element and feeling, which only Emberbun has today (Ember Den); Thistlepip's best (Cozy Meadow, 2.36×) gives 7, and Puddlepuff has no matching habitat. We kept 12–15 at 1× as the primary target. Revisit with the habitats list if Puddlepuff and Thistlepip should reach the cap too.
 - **Guardian fights pay more too.** Battle XP scales with opponents' levels, so a strength-5 guardian fight (~48 levels) now pays ~1,440 base XP. `pnpm sim` (battle balance) is unaffected: 0 flagged.
 - **The map draws home nodes.** Each home base's Timber, Stone, Emberwood and farm plot stand in their tile's middle on the map (as on the Home view), so "tap the tree tile" has a tree. The map registers the tutorial's `resource-node` locator (the player's Timber node).
@@ -777,13 +777,13 @@ _Owner decisions of 2026-10-06 (design review Q1 and Q2), plus the owner's later
 
 - **Q1, power curve: keep level 100, with a steeper curve, and scale wild squishies to the Partner.** The owner chose this over the recommended "cap at level 30". Stored XP and levels are kept; **no level ever goes down** (`addXp` takes the larger of the stored and the computed level).
   - **The curve:** `xpCurve.curve` goes 5 → 20, with `knees` at 16 (`steep: 500`) and 30 (`steep: 1500`), as data. The curve below 16 steepens too, because a win pays about 30 × L base XP at Partner-matched levels and the owner's goal is evolution on day 3–5 with a long tail after it. A casual kid evolves on day 4 (day 2 for an engaged one); a casual Partner is near level 24 on day 14 and 29 on day 30.
-  - **Wild levels follow the Partner:** server-only `SPAWN_RULES.partnerOffset` −2 to +1, floored at the old minimum and capped at `maxLevel`. "Partner" means the starter picked on the patch (`map_members.starter_squishy_id`); with none, levels stay 2–6. Which species is on a tile never depends on who looks.
+  - **Wild levels follow the Partner:** server-only `SPAWN_RULES.partnerOffset` −2 to +1, floored at the old minimum and capped at `maxLevel`. "Partner" means the starter picked on the patch (`map_members.starter_squishy_id`); with none, levels stay 2–6. Which species is on a tile never depends on who looks. *(Now −2 to +0, see "A wild squishy wanders off; fairer wild levels (#208, PR #211)", 2026-10-06.)*
   - **Follow-up (a): befriended squishies join at most one level below their first evolution** (`GROWTH_RULES.befriendBelowEvolution: 1`), so a kid can't befriend a level-41 base form that evolves on its next battle. The fight stays at full level.
   - **Follow-up (b): a daily battle-XP falloff.** Each squishy earns full battle XP for its first 7 wins of the map-local day, then 10% (`battleXpFalloff`). 7 is the most that leaves the casual kid unchanged. It reads existing `battles` rows (no migration) and lives in `GROWTH_RULES`, so the battle content hash is unchanged.
   - **Known misses, owner calls:** an engaged kid still evolves on day 2 and is Gap-ready on day 4 (the Gap is about team strength, not XP). Fixing that would need guardians to follow the attacker's Partner or team, or a daily befriend limit. Neither is done.
   - **`pnpm sim:progression`** is the model behind these numbers (`reports/sim/progression-report.md`). It leaves out care above one multiplier, gathering, the Hollow Man and challenges between the two kids.
 - **Q2, map fill: both.** `attemptsPerDay` goes 10 → 5 (done in #182, design doc §11). **Land regrowth or fading tiles will be built before launch** (lane queued). With 5 attempts, two kids fill a 4-seat map (441 neutral tiles, what new patches use) on day 45 and a 2-seat map on day 26.
-- **Pace pins this replaces:** "Playtest fixes" (2026-10-04) said a starter grows up after about 12–15 wild wins. Now it takes about 22–29 Partner-matched wins at 1× care, and rarer evolutions at 16 / 18 / 22 / 26 / 30 take 22 / 29 / 62 / 114 / 178 wins (`growth-pace.test.ts`). The "Launch roster (#10)" line "Only base forms spawn wild, levels 2–6" is superseded in part (note on both entries).
+- **Pace pins this replaces:** "Playtest fixes" (2026-10-04) said a starter grows up after about 12–15 wild wins. Now it takes about 22–29 Partner-matched wins at 1× care, and rarer evolutions at 16 / 18 / 22 / 26 / 30 take 22 / 29 / 62 / 114 / 178 wins (`growth-pace.test.ts`). The "Launch roster (#10)" line "Only base forms spawn wild, levels 2–6" is superseded in part (note on both entries). *(Now 23–30 wins, see "A wild squishy wanders off; fairer wild levels (#208, PR #211)", 2026-10-06.)*
 - **`partnerLevel` is not `users.partner_species_id`.** The tutorial's Partner is unchanged, and the Tutorial Glade keeps its own wild squishies.
 - **Possible follow-ups (not done):** an `(map_id, player_user_id, ended_at)` index for the falloff's wins-today count; storing the falloff share in `rewards`; a result-card note for the falloff, like Gentle's.
 
@@ -812,6 +812,38 @@ _Filed from the design review on 2026-10-06; each is a lane to design before it 
 - **#188:** capture odds.
 - **#189:** hollowed land.
 - **#190:** mini-bosses.
+
+## 2026-10-06 — Building upgrades, a use for Heartdust, and honest Glimmer (Fix PR #193)
+
+_Proposed in PR #193; recorded by the coordinator after merge._
+
+- **Training Grounds are built now (owner).** Level 1 has room for 2 and gives 5 XP an hour; level 2 has room for 3 and gives 8. At most 24 hours of XP waits (`JOB_RULES.training.maxHours`, `// TUNE:`). It's plain XP: no care multiplier, not a battle win, so `battleXpFalloff` doesn't apply. It lands at each settle and whenever training stops. A trainee never battles. A trainee keeps its habitat bed and sleeps at home. *(Reversed: a trainee leaves its bed, and Training Grounds build only on homesteads. See "Training Grounds move to homesteads (#277, PR #302)", 2026-10-08.)*
+- **Mountain land yields slow Glimmer instead of Stone** (owner): 1 per 90 minutes (`// TUNE:`). One yield per terrain still holds. *(Superseded: mountains yield Ice. See "Water, Greens and Ice, and the nesting economy (#238, PR #249)", 2026-10-07.)*
+- **The Heart Snack is a rare fourth care action.** It costs 3 Heartdust and gives +25 contentment (`// TUNE:`). It sits outside the daily care falloff and earns no coins (new optional `CareAction.outsideDailyCare`). It shows on the care sheet once there's any Heartdust.
+- **Shared-contract additions** (coordinator-scoped): events `building.upgraded` and `squishy.trained`; `squishy.assigned.job` gains `training`; ledger reason `upgrade`; `SettleResponse.trained`, `JobsView.trainingGrounds`, `SetJobRequest { job: 'training' }` and the `HomeSquishy` and `JobSquishy` training fields; `BuildableKind` gains `training-grounds`; migration 0024 on `squishies`.
+- **The crafted Jack-o'-Lantern is named apart from the fire built from it** ("Jack-o'-Lantern" and "Jack-o'-Lantern Hearthfire"; the id is unchanged). Its build row opens the recipe book, not the Bag, because the home screen can't open the Bag. This differs from the approved mockup.
+- **Every building level has its own model** (footprint ×1 / 1.08 / 1.15, height ×1 / 1.3 / 1.6), and home buildings draw at scale 1.5. The home camera stays at 58° (owner). Fewer, bigger spots per tile stays a #184 question.
+
+## 2026-10-06 — Art bible and the squishy roster redesign (Chore PR #192)
+
+_Follows the owner's Q5 answer ("Owner design-review answers", 2026-10-06). Proposed in PR #192; recorded by the coordinator after merge._
+
+- **Squishy art follows `docs/ART_BIBLE.md`** (owner-approved mockups 1–3). Babies are cute and evolutions grow up. Body plans come from shared building blocks, and `checkGameData` enforces the `artRules` table.
+- **Squishies ignore scene fog.** Mood comes from the sky, land and props, never from washing out a squishy's colours.
+- **Rarity tiers are shader codes, not materials:** sparkle for epic; sparkle plus an iridescent rim for legendary and secret; glow for Light (whole body) and Fire (flames). They cost no extra draw calls.
+- **The draw-call guard counts body kinds.** The gallery's ceiling comes from the registry, so draw calls never grow with the number of squishies.
+- **Each line declares a `pose` and an `attackPart`** for the battle-feel lane (#187).
+
+## 2026-10-06 — Land fades or regrows when nobody tends it (Fix PR #194)
+
+_Follows the owner's Q2 answer in "The level curve and wild levels (#182)". Proposed in PR #194; recorded by the coordinator after merge._
+
+- **New event `tile.rewilded`** (additive): `{ userId, night, tiles[{q,r,terrain}], returnedSquishyIds }`. Its public view drops `returnedSquishyIds`. It isn't `tile.went-wild` because `WsEventTypeSchema` doesn't allow hyphens.
+- **Additive shared schemas:** `TerritoryRules.tending`, `LandTending*` and `DevAgeLandRequestSchema`.
+- **One Visit tap tends all of a player's land.** Tending tile by tile made casual kids lose 150+ tiles in the sim.
+- **Only the owner sees their land fading.** Rivals see a tile only once it has gone wild.
+- **`firstCaptureSince` also counts land going wild** as land changing hands.
+- **No data backfill:** rows are filled lazily at the first nightfall, with the same effect.
 
 ## 2026-10-06 — Family signup codes (#195, PR #206)
 
@@ -846,7 +878,7 @@ _Proposed in PR #210; recorded by the coordinator after merge._
 
 ## 2026-10-06 — A wild squishy wanders off; fairer wild levels (#208, PR #211)
 
-_Owner decisions of 2026-10-07, relayed by the coordinator. Proposed in PR #211; recorded by the coordinator after merge._
+_Owner decisions of 2026-10-06, relayed by the coordinator. Proposed in PR #211; recorded by the coordinator after merge._
 
 - **A wild squishy the player lost to or ran from wanders off for that player** for the rest of its spawn window, like a beaten or befriended one. A tie or a no contest still leaves it. The Tutorial Glade keeps its befriend-only rule. *Why:* a spawn the kid can't beat soft-locked "Find a squishy" for 4 hours, and counting a run home stops scooting from keeping one around. It supersedes the 2026-10-03 sentence "A loss, a tie, a run home or a no contest leaves it there."
 - **The result card says "It wandered off. Try another one nearby!"** after a wild loss or run home off the Glade. On the Glade the card never says a squishy left; a win there says "Everyone had a great time."
@@ -880,6 +912,8 @@ _Owner decisions of 2026-10-07. Proposed in PR #222; recorded by the coordinator
 - **Migration 0027 is additive:** `lost_fire_refund` jsonb on `tile_attacks` and `tile_tending`, and the `packed_home_fires` table. There's no fire-per-tile unique index, because old homes could hold two fires and the migrate step would fail before the boot pass packed them up. The `(tile_id, spot)` key plus centre-only fires already allows one per tile.
 
 ## 2026-10-07 — A clear way back (#212, PR #217)
+
+_Proposed in PR #217; recorded by the coordinator after merge._
 
 - **No back pill over an open patch.** Looking around from a patch returns to it, and the patch already has its corner button.
 
@@ -951,6 +985,8 @@ _The owner approved the `/admin` mockup as it stands. Proposed in PR #239; recor
 
 ## 2026-10-07 — Side trays on a phone held sideways (#136, PR #235)
 
+_Proposed in PR #235; recorded by the coordinator after merge._
+
 - **On short, wide screens the side trays widen to 600 px with two columns** (under 520 px tall and at least 640 px wide). Upright phones and iPads keep the one-column tray.
 
 ## 2026-10-07 — Recipe book and Bag say what things do (#241, PR #248)
@@ -985,6 +1021,8 @@ _Owner decisions on the #209 mockup, 2026-10-07. Proposed in PR #252; recorded b
 
 ## 2026-10-07 — A finger on a map button can join a pinch (#159, PR #250)
 
+_Proposed in PR #250; recorded by the coordinator after merge._
+
 - **A finger on a map button** (not one in a sheet) counts as half of a pinch once a finger is on the map and either moves; the button then gets no click. A button tapped with one hand while the other is on the map zooms instead, and a joined thumb stays in the gesture after the other finger lifts, so moving it pans.
 
 ## 2026-10-07 — The Mythic rarity (#261, PR #262)
@@ -1003,8 +1041,9 @@ _Owner decisions of 2026-10-08. Proposed in PR #265; recorded by the coordinator
 - **Costume pieces can sit on body sockets** (`on`), up to 24 pieces, costumes only. Arm pieces may only roll.
 - **Costumes wear their rarity's finish,** existing Legendary costumes included, and pieces can glow.
 - **Marigold Calavera goes on the rack at 320.** This overrides #45's "Legendary is found-only" for this costume only; the Hollow Man stays found-only.
-- **The Ghost Sheet goes from 60 to 210,** the Rare costume price, so costumes stay in rarity order. Boutique price order is checked within a slot; `maxPrice` is 320.
+- **The Ghost Sheet goes from 60 to 210,** the Rare costume price, so costumes stay in rarity order. Boutique price order is checked within a slot, which also relaxes it for everyday pieces; `maxPrice` is 320.
 - **New drop sources `battle` and `explore`.** Capturing land that had another owner uses `rivalChance` (20%). Every drop weight is ×10, with no change to relative odds.
+- **Star Striker keeps its polka ball.**
 - **Lucky Star counts Mythic finds.**
 
 ## 2026-10-08 — Emberwood fences (#203, PR #256)
@@ -1033,6 +1072,8 @@ _Owner decisions of 2026-10-07. Proposed in PR #280; recorded by the coordinator
 
 ## 2026-10-08 — Land borders and the legend (#278, PR #283)
 
+_Proposed in PR #283; recorded by the coordinator after merge._
+
 - **The legend is a card that opens from the icons beside the map's name,** not a permanent row of chips. *Why:* the space under the name already holds the gathering chip, chat, the land chip and tray hints. A small change from the mockup, for the owner's OK.
 - **Every Keeper's ribbon is the same width.** A wider "yours" didn't show on a phone.
 
@@ -1051,6 +1092,7 @@ _Proposed in PR #282; recorded by the coordinator after merge._
 
 _Owner decisions and coordinator rulings of 2026-10-08. Proposed in PR #285; recorded by the coordinator after merge._
 
+- **Night falls at 7 PM map time** (was 9 PM), so the Hollow Man arrives earlier (`19 * 60`, daylight saving included).
 - **Hearthfires store 8 nights of fuel,** so a full week away loses nothing. It's a storage cap; a night's burn is unchanged.
 - **A level-3 Hearthfire costs 1 Glimmer,** down from 2, for the sim gate's margin.
 - **The shared night cap:** untended land tops up to `min(wildPerNight, 3)` minus that night's Hollow reclaims. Loss is never more than 3 a night, or 2 on a gentle patch.
@@ -1070,7 +1112,7 @@ _Owner decisions of 2026-10-08. Proposed in PR #284; recorded by the coordinator
 - **An evolved guardian joins one stage back,** as the species one evolution before the form it fought as, with that species' element and the guardian's feeling. A wild squishy joins as it was.
 - **Once per window:** a guardian a player befriended stays out of that player's fights on that tile until the guardian window ends. The shared tile hint still shows the whole team.
 
-## 2026-10-08 — Keeper faces and the Keeper builder (#289, PR #292, #297)
+## 2026-10-08 — Keeper faces and the Keeper builder (#289; PR #292, #297)
 
 _Proposed in each PR; recorded by the coordinator after merge._
 
@@ -1147,7 +1189,7 @@ _Owner-confirmed defaults of 2026-10-08, relayed by the coordinator. Proposed in
 
 - **The boot pass packs up home Training Grounds** with the note "Your Training Grounds packed up and moved out! Build one on a homestead 🏡." (two lines, under the morning report's 12-word cap).
 - **A trainee on a napping homestead keeps its job** and makes no progress while it naps.
-- **A trainee leaves its habitat bed when it starts training,** and moving into a habitat stops training, like gatherers.
+- **A trainee leaves its habitat bed when it starts training,** and moving into a habitat stops training, like gatherers. It reverses #193's "a trainee keeps its habitat bed".
 - **API:** `SetJobRequest.training.buildingId?`; `JobsView.trainingGrounds` becomes a list (it replaces the single object rather than sitting beside it); `TrainingStatus` gains `q/r/firelit/napping`; `HollowStatus.trainingGroundsPacked`. A stale app's job board fails to parse until it updates.
 - **`training-grounds` stays in `HOME_BASE_RULES.buildableKinds`,** the global "playable at all" gate. "Not at home" is enforced by `placement: 'homestead'`.
 
@@ -1168,10 +1210,10 @@ _Owner decisions on the #305 mockup. Proposed in PR #309; recorded by the coordi
 - **iPhone layout: two narrow columns, mine | theirs.**
 - **Colours by role, not by player:** mint is always "you", lilac the patch-mate. A real Keeper colour would be a new saved setting and a later issue.
 - **The iPad landscape side panel widens from 430 to 640** so both columns fit with the map still live.
-- **Trade values (pulled forward from #272):** squishy = rarity × stage × synergy × (1 + 0.08 × (level − 1)); items per id; clothing per rarity. Even is within 15%; lopsided is one side at 2× or more. An unmet species counts as a first-stage uncommon with neutral synergy at its real level. All in `TRADE_VALUES`, `// TUNE:`.
+- **Trade values (pulled forward from #272):** squishy = rarity × stage × synergy × (1 + 0.08 × (level − 1)); items per id; clothing per rarity. Even is within 15% of the bigger side; lopsided is one side at 2× or more. An unmet species counts as a first-stage uncommon with neutral synergy at its real level. All in `TRADE_VALUES`, `// TUNE:`.
 - **"Newest" uses the time-ordered UUIDv7 ids** (newest found, not newest received); items have no date and sort last.
 
-## 2026-10-09 — The Lorebook (#307, PR #312, #315)
+## 2026-10-09 — The Lorebook (#307; PR #312, #315)
 
 _The owner approved the mockup in full on 2026-10-09. Proposed in PR #312; recorded by the coordinator after merge. PR #315 added the explore card's button._
 
@@ -1183,6 +1225,8 @@ _The owner approved the mockup in full on 2026-10-09. Proposed in PR #312; recor
 - **Card order:** the found-page card waits while the "Make a patch" form, the book or explore is open. Other cards wait for an open book. The account chip steps aside while the book is open.
 
 ## 2026-10-09 — Emoji floor and drawn tool icons (#308, PR #316)
+
+_Proposed in PR #316; recorded by the coordinator after merge._
 
 - **Emoji floor (owner):** only the seven Emoji 13–14 emoji already in use (🪵 Timber, 🪨 Stone, 🪶, 🪱, 🫐, 🛖, 🫧) are allowed, on the hand-checked `ON_THE_FLOOR` list in `ui/emoji-floor.test.ts`. Everything else must be Emoji 12 or older. That makes the effective floor iOS 15.4, well inside the iOS 17 device floor.
 
@@ -1206,7 +1250,7 @@ _Proposed in each PR; recorded by the coordinator after merge._
 - **Followers keep a camera-derived lead** (`followLead`), so the team waits on the far side from the camera and never covers the Keeper.
 - **Field `move()` re-places in place** (no re-layout). Contact shadows take an optional per-instance `shadowAlpha` and are always drawn.
 
-## 2026-10-09 — Six-seat patches and six Keepers (#318, PR #324, #327)
+## 2026-10-09 — Six-seat patches and six Keepers (#318; PR #324, #327)
 
 _Proposed in each PR; recorded by the coordinator after merge. See also "Owner decisions (coordinator)" below._
 
@@ -1222,10 +1266,9 @@ _Proposed in each PR; recorded by the coordinator after merge. See also "Owner d
 _Owner calls made in the coordinator session on 2026-10-09._
 
 - **Patches have up to 6 players.** New maps are radius 16 (817 tiles); patches made before #324 keep 4 seats. Empty seats are wild land until someone joins. Open homes get **no claim buffer**, so late joiners claim further out (#318).
-- **The map lowers detail by zoom (LOD), not by chunks.** Chunked culling was measured and dropped: it doubled draw calls for a 21–33% triangle cut (#321).
+- **The map lowers detail by zoom (LOD), not by chunks;** see "A lighter map when zoomed out (#318, PR #321)".
 - **Performance floor:** iPad 9th gen (A13) at 30 fps or better on a busy 6-seat patch, and iPhone 14 at 60. The owner runs the real-device check before the playtest.
 - **In explore, the Keeper and team hop as they walk** instead of gliding, with smaller hops for short steps (#317, #322). Followers stay behind the Keeper, and the hop shadow fades (#323, #325).
-- **Emoji floor:** only the 7 Emoji 13–14 glyphs 🪵🪨🪶🪱🫐🛖🫧 are allowed, which makes the effective iOS floor 15.4. Tools are drawn as icons, not emoji (#308).
+- **Emoji floor iOS 15.4, and tools drawn as icons;** see "Emoji floor and drawn tool icons (#308, PR #316)".
 - **Six Keeper looks, palette A:** Strawberry/heart/solid, Blueberry/star/dash, Grape/flower/dot, Tangerine/diamond/double, Cherry/moon/dash-dot, Mint/leaf/long dash (#327).
 - **Filed for Phase 2:** #319 (the Boutique moves into the trading post only, out of the top-right menu) and #320 (sell duplicates to the post, plus open offers and auctions for items and resources, without coins).
-- **E2E map time gets pinned** so specs don't depend on the time of day (#326, in progress).
