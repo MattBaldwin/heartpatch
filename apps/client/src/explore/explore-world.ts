@@ -403,6 +403,28 @@ export function fromCaveStage(cave: WorldPoint, s: { x: number; y: number }): Wo
 /** The lantern's light on the ground, tile-local radius. */
 export const LIGHT_REACH = INTERACTION.lightRadius * INTERACTION.caveArea;
 
+/** Where the reveal ring sits in the drawn light: inside its warm part, before the falloff. */
+export const LIGHT_RING_SHARE = 0.8; // TUNE:
+
+/**
+ * The lantern's light on screen (#291, board g): one circle round the
+ * Keeper, from its feet to the top of its hair, that holds the whole reveal
+ * ring (`ring`: the ground circle of `LIGHT_REACH` round its feet, on
+ * screen) inside its warm part. So everything the light can reveal is lit
+ * on screen, and the Keeper is lit head to toe.
+ */
+export function lightCircle(
+  ring: readonly { readonly x: number; readonly y: number }[],
+  feet: { readonly x: number; readonly y: number },
+  head: { readonly x: number; readonly y: number },
+): { x: number; y: number; r: number } {
+  const x = (feet.x + head.x) / 2;
+  const y = (feet.y + head.y) / 2;
+  let far = Math.hypot(head.x - x, head.y - y);
+  for (const p of ring) far = Math.max(far, Math.hypot(p.x - x, p.y - y));
+  return { x, y, r: far / LIGHT_RING_SHARE };
+}
+
 /**
  * Where the lantern's glint hides (#291), on the cave's stage: the
  * reducer's pick, kept on the tile, and moved onto open ground if it fell

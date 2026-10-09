@@ -392,13 +392,18 @@ export class ExploreScene {
     const h = canvas?.getBoundingClientRect().height ?? 0;
     if (!this.#keeper || h <= 0) return 0;
     const feet = this.screenOf(this.#at, 0);
-    const top = this.screenOf(this.#at, this.#keeper.params.height * EXPLORE_VIEW.keeperScale);
+    const top = this.screenOf(this.#at, this.keeperTall);
     return feet && top ? Math.abs(feet.y - top.y) / h : 0;
   }
 
   /** Where the Keeper stands now, tile-local. */
   get keeperAt(): WorldPoint {
     return this.#at;
+  }
+
+  /** The Keeper's height, world units (feet to the top of its hair). */
+  get keeperTall(): number {
+    return this.#keeper ? this.#keeper.params.height * EXPLORE_VIEW.keeperScale : 0;
   }
 
   /** The spots' and buildings' colliders, tile-local. */

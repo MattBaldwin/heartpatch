@@ -29,7 +29,7 @@ import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { el, messageOf } from '../ui/dom.js';
 import { strokeIcon } from '../ui/trays/trays.js';
-import { EXPLORE_FIND, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
+import { EXPLORE_FIND, EXPLORE_VIEW } from './explore-config.js';
 import { exploreApi, type ExploreApi } from './explore-api.js';
 import { ExploreScene, type ExploreSceneStats } from './explore-scene.js';
 import {
@@ -66,6 +66,8 @@ import {
   freePoint,
   fromCaveStage,
   lanternGlint,
+  LIGHT_REACH,
+  lightCircle,
   slideMove,
   spotAtTap,
   spotInFront,
@@ -985,23 +987,34 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       darkDrawn = '';
       return;
     }
-    // On the ground (lift 0), so the circle on screen is the light on the ground.
-    const at = scene3d.screenOf(keeperAt, 0);
-    const edge = scene3d.screenOf(
-      { x: keeperAt.x + INTERACTION.lightRadius * INTERACTION.caveArea, z: keeperAt.z },
-      0,
-    );
+    // The reveal ring on the ground round the Keeper's feet, and the Keeper
+    // itself: the drawn light holds both (lightCircle).
+    const feet = scene3d.screenOf(keeperAt, 0);
+    const head = scene3d.screenOf(keeperAt, scene3d.keeperTall);
+    const ring: { x: number; y: number }[] = [];
+    for (const [dx, dz] of RING_STEPS) {
+      const q = scene3d.screenOf(
+        { x: keeperAt.x + dx * LIGHT_REACH, z: keeperAt.z + dz * LIGHT_REACH },
+        0,
+      );
+      if (q) ring.push(q);
+    }
     const g = showGlint ? scene3d.screenOf(fromCaveStage(p.spot, s.glint), 0.1) : null;
-    const key = [on, showGlint, at?.x, at?.y, edge?.x, g?.x, g?.y].map(String).join();
+    const light = feet && head ? lightCircle(ring, feet, head) : null;
+    const key = [on, showGlint, light?.x, light?.y, light?.r, g?.x, g?.y]
+      .map((v) => (typeof v === 'number' ? String(Math.round(v)) : String(v)))
+      .join();
     if (key === darkDrawn) return;
     darkDrawn = key;
-    if (on && at && edge) {
-      const r = Math.round(Math.max(40, Math.abs(edge.x - at.x)));
-      const x = Math.round(at.x);
-      const y = Math.round(at.y);
+    if (on && light) {
+      const r = Math.round(Math.max(40, light.r));
+      const x = Math.round(light.x);
+      const y = Math.round(light.y);
+      // Warm to the reveal ring (LIGHT_RING_SHARE), then the falloff into the dark.
+      const warm = Math.round(LIGHT_RING_SHARE * 100);
       dark.style.setProperty(
         '--light',
-        `radial-gradient(circle ${String(r)}px at ${String(x)}px ${String(y)}px, rgb(255 227 163 / 70%) 0%, rgb(205 176 138 / 66%) 55%, rgb(36 28 46 / 95%) 100%)`,
+        `radial-gradient(circle ${String(r)}px at ${String(x)}px ${String(y)}px, rgb(255 227 163 / 70%) 0%, rgb(205 176 138 / 66%) ${String(warm)}%, rgb(36 28 46 / 95%) 100%)`,
       );
     }
     if (g) {
@@ -1283,6 +1296,18 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     },
   };
 }
+
+/** Directions round the reveal ring that the drawn light must hold. */
+const RING_STEPS: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [0.71, 0.71],
+  [-0.71, 0.71],
+  [0.71, -0.71],
+  [-0.71, -0.71],
+];
 
 /** An icon: a drawn line icon (`ICON_PATHS`), else the emoji or text itself. */
 function iconNode(icon: string): Node {

@@ -24,6 +24,8 @@ import {
   hidingSpots,
   lanternGlint,
   LIGHT_REACH,
+  LIGHT_RING_SHARE,
+  lightCircle,
   offFacing,
   seededRandom,
   slideMove,
@@ -387,6 +389,23 @@ describe('decor', () => {
 });
 
 describe('the lantern', () => {
+  it('draws its light round the whole Keeper, holding the reveal ring in its warm part', () => {
+    // A ground ring squashed by the camera's tilt, the Keeper standing in it.
+    const ring = Array.from({ length: 16 }, (_, i) => {
+      const a = (i / 16) * Math.PI * 2;
+      return { x: 200 + Math.cos(a) * 90, y: 500 + Math.sin(a) * 45 };
+    });
+    const feet = { x: 200, y: 500 };
+    const head = { x: 200, y: 330 };
+    const c = lightCircle(ring, feet, head);
+    for (const p of [...ring, feet, head]) {
+      expect(Math.hypot(p.x - c.x, p.y - c.y)).toBeLessThanOrEqual(c.r * LIGHT_RING_SHARE + 1e-9);
+    }
+    // Centred on the Keeper, between its feet and its hair.
+    expect(c.y).toBeLessThan(feet.y);
+    expect(c.y).toBeGreaterThan(head.y);
+  });
+
   it('hides its glint on the tile, where the Keeper can stand within the light', () => {
     let caves = 0;
     for (const tile of generatedTiles(40)) {
