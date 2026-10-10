@@ -16,6 +16,8 @@ export const NewEvolutionSchema = z.object({
   intoSpeciesId: ContentIdSchema,
   level: z.number().int().min(1),
   at: z.iso.datetime(),
+  /** It grew into a branch form, not its step's default (#32): the celebration says so. */
+  branch: z.boolean().optional(),
 });
 export type NewEvolution = z.infer<typeof NewEvolutionSchema>;
 

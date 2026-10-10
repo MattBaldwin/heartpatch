@@ -437,6 +437,7 @@ export function createCareService(options: CareServiceOptions): CareService {
               intoSpeciesId: evolution.intoSpeciesId,
               level: evolution.level,
               at: evolution.evolvedAt.toISOString(),
+              ...(evolution.branch ? { branch: true } : {}),
             }
           : null,
         accessory: worn.get(row.id) ?? null,
