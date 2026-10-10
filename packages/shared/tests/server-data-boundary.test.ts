@@ -8,6 +8,7 @@ import * as root from '../src/index.js';
 const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = resolve(here, '../src');
 const serverDir = resolve(srcDir, 'data/server');
+const evolutionDir = resolve(srcDir, 'evolution');
 const clientDir = resolve(here, '../../../apps/client');
 
 /** The workspace package entries, as the client resolves them (`@heartpatch/source`). */
@@ -132,6 +133,33 @@ describe('server-only data split (tech spec §2)', () => {
       s.evolutions.filter((e) => !publicSpecies.has(e.into)).map((e) => `${s.id} → ${e.into}`),
     );
     expect(reachableSecret).toEqual([]);
+  });
+
+  // #32 (coordinator condition 2): branch odds, rare conditions and the
+  // whispers that hint at them stay on the server.
+  it('keeps evolution odds, conditions and whispers out of the root entry and the client', () => {
+    const fromRoot = [...importGraph(resolve(srcDir, 'index.ts'))];
+    const fromClient = [...importGraph(...clientEntries())];
+    for (const reachable of [fromRoot, fromClient]) {
+      expect(reachable.filter((file) => file.startsWith(evolutionDir))).toEqual([]);
+    }
+    for (const name of ['EVOLUTION_ODDS', 'EVOLUTION_RULES', 'rollEvolution', 'whisperFor']) {
+      expect(Object.keys(root)).not.toContain(name);
+      expect(Object.keys(server)).toContain(name);
+    }
+    const exported = JSON.stringify(root);
+    const whispers = [
+      ...Object.values(server.EVOLUTION_RULES.whisper.feelings),
+      ...server.SERVER_GAME_DATA.evolutionOdds.flatMap((o) =>
+        o.trigger.kind === 'rare' ? [o.trigger.whisper] : [],
+      ),
+      ...server.SERVER_GAME_DATA.secretEvolutions.flatMap((e) =>
+        e.trigger?.kind === 'rare' ? [e.trigger.whisper] : [],
+      ),
+    ];
+    expect(whispers.length).toBeGreaterThan(0);
+    for (const w of whispers) expect(exported).not.toContain(w.text.replace('{name}', ''));
+    expect(exported).not.toMatch(/"(trigger|evolutionOdds|weights|pity)"/);
   });
 
   it('never reaches data/server or a secret id from a client entry point', () => {

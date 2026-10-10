@@ -154,8 +154,8 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
   };
 
   /** Expires stale asks in their own transaction; publishes if any went. */
-  const expireNow = async (mapId: string) => {
-    const expired = await store.transaction((repo) => expireStale(repo, mapId, now()));
+  const expireNow = async (mapId: string, at = now()) => {
+    const expired = await store.transaction((repo) => expireStale(repo, mapId, at));
     if (expired > 0) published(mapId);
   };
 
@@ -182,7 +182,8 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
   return {
     view: async (user, mapId) => {
       await requireMember(db, user, mapId);
-      await expireNow(mapId);
+      const at = now();
+      await expireNow(mapId, at);
       const battlesRepo = createBattlesRepo(db);
       const memberIds = (await store.memberIds(mapId)).filter(
         (id) => id !== user.id && isOnline(mapId, id),
@@ -208,7 +209,7 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
         online,
         incoming: await Promise.all(friendly.filter((row) => row.toUserId === user.id).map(toView)),
         outgoing: outgoing ? await toView(outgoing) : null,
-        now: now().toISOString(),
+        now: at.toISOString(),
       };
     },
 
