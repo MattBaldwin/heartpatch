@@ -324,6 +324,8 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
     expect(mine.live?.deadlineAt).toBe(
       new Date(clock.getTime() + RULES.turnSeconds * SECOND_MS).toISOString(),
     );
+    // The game clock rides along, so a phone's timer runs on game time.
+    expect(mine.live?.now).toBe(clock.toISOString());
     // Side b's "current battle" is the live one too.
     const current = await call(server, 'GET', `/maps/${mapId}/battles/current`, sam);
     expect(CurrentBattleResponseSchema.parse(current.json()).battle?.id).toBe(battleId);
