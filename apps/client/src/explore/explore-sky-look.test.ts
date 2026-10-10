@@ -73,4 +73,24 @@ describe('the explore sky look (#335)', () => {
     expect(noon.fog).not.toBeNull();
     expect(skyLook({ phase: 'day', next: 'dusk', blend: 0 }, 'trail')).toEqual(SKY_LOOKS.day);
   });
+
+  it('tints the ground a moonlit blue-green at night, and leaves day untouched (owner)', () => {
+    const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    expect(SKY_LOOKS.day.groundTint).toBe('#ffffff');
+    const [r = 0, g = 0, b = 0] = rgb(SKY_LOOKS.night.groundTint);
+    expect(Math.max(r, g, b)).toBeLessThan(0xc0);
+    expect(g).toBeGreaterThan(r);
+    expect(b).toBeGreaterThan(r);
+  });
+
+  it('washes the whole lake a blue-green, day and night (owner, second pass)', () => {
+    for (const look of Object.values(WATER_LOOKS)) {
+      const [r = 0, g = 0, b = 0] = [1, 3, 5].map((i) =>
+        parseInt(look.groundTint.slice(i, i + 2), 16),
+      );
+      expect(g, look.groundTint).toBeGreaterThan(r);
+      expect(b, look.groundTint).toBeGreaterThan(r);
+      expect(look.fog).not.toBeNull();
+    }
+  });
 });

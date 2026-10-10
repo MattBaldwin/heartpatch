@@ -21,6 +21,11 @@ export interface SkyLook {
   readonly starColor: string;
   /** Underwater: the water's haze over the far seabed (#335), else null. */
   readonly fog: string | null;
+  /**
+   * Multiplies the ground's and its decor's colour (#335, owner: a moonlit
+   * blue-green at night). Spots, glints and the team keep their own colour.
+   */
+  readonly groundTint: string;
   /** The sun light's colour and strength (times today's), and the sky light's strength. */
   readonly light: { readonly color: string; readonly sun: number; readonly environment: number };
 }
@@ -37,6 +42,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     stars: false,
     starColor: '#fff3c4',
     fog: null,
+    groundTint: '#fff0e8', // TUNE: a touch warm
     light: { color: '#ffd9c2', sun: 0.85, environment: 0.85 }, // TUNE
   },
   day: {
@@ -50,6 +56,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     stars: false,
     starColor: '#fff3c4',
     fog: null,
+    groundTint: '#ffffff', // TUNE
     light: { color: '#fff5e6', sun: 1, environment: 1 },
   },
   dusk: {
@@ -63,6 +70,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     stars: false,
     starColor: '#fff3c4',
     fog: null,
+    groundTint: '#ffeedd', // TUNE: a touch warm
     light: { color: '#ffc49a', sun: 0.8, environment: 0.8 }, // TUNE
   },
   night: {
@@ -76,6 +84,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     stars: true,
     starColor: '#fff3c4',
     fog: null,
+    groundTint: '#6f9ea6', // TUNE: moonlit blue-green (owner)
     light: { color: '#b9c4ff', sun: 0.55, environment: 0.6 }, // TUNE: kids still see the spots
   },
 };
@@ -88,46 +97,50 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
 export const WATER_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
   dawn: {
     ...SKY_LOOKS.dawn,
-    zenith: '#a9c6ea', // TUNE: the surface, lit pink-gold from above
-    horizon: '#4f8fc0', // TUNE
+    zenith: '#9ccfd8', // TUNE: the surface, lit pink-gold through blue-green water
+    horizon: '#2f7f98', // TUNE
     sunDisc: false,
     clouds: 0,
     stars: true,
     starColor: '#eefbff',
-    fog: '#5d9cc8',
-    light: { color: '#cfe6ff', sun: 0.8, environment: 0.85 },
+    fog: '#4f97a8',
+    groundTint: '#c6e6dc', // TUNE: the water's blue-green over everything
+    light: { color: '#c8ece4', sun: 0.8, environment: 0.85 },
   },
   day: {
     ...SKY_LOOKS.day,
-    zenith: '#8fd8f5', // TUNE: sunlight through the water
-    horizon: '#3f8fc4', // TUNE: deep water
+    zenith: '#7fd6d8', // TUNE: sunlight through blue-green water
+    horizon: '#2a8aa0', // TUNE: deep water
     sunDisc: false,
     clouds: 0,
     stars: true,
     starColor: '#eefbff',
-    fog: '#5aa6d6',
-    light: { color: '#c9ecff', sun: 0.9, environment: 0.95 },
+    fog: '#4fa6b4',
+    groundTint: '#c4ece0', // TUNE: the water's blue-green over everything
+    light: { color: '#bdf0e6', sun: 0.9, environment: 0.95 },
   },
   dusk: {
     ...SKY_LOOKS.dusk,
-    zenith: '#b7a9d8', // TUNE
-    horizon: '#3f6fa8', // TUNE
+    zenith: '#a5b8d6', // TUNE
+    horizon: '#2f6a94', // TUNE
     sunDisc: false,
     clouds: 0,
     stars: true,
     starColor: '#eefbff',
-    fog: '#4f7fb4',
-    light: { color: '#d6d2ff', sun: 0.75, environment: 0.8 },
+    fog: '#457e9e',
+    groundTint: '#bcd6dc', // TUNE
+    light: { color: '#cdd8f0', sun: 0.75, environment: 0.8 },
   },
   night: {
     ...SKY_LOOKS.night,
-    zenith: '#4d6bb0', // TUNE: moonlight on the surface
-    horizon: '#24407e', // TUNE: still blue, never black
+    zenith: '#3f7aa8', // TUNE: moonlight through the water
+    horizon: '#1f4f7e', // TUNE: still blue, never black
     sunDisc: false,
     clouds: 0,
     stars: true,
     starColor: '#9ff6ff', // glowing plankton
-    fog: '#2c4a8a',
+    fog: '#2a5a86',
+    groundTint: '#7fa6b0', // TUNE: moonlit water
     light: { color: '#a9c8ff', sun: 0.55, environment: 0.6 },
   },
 };
@@ -148,6 +161,7 @@ const CAVE: SkyLook = {
   stars: true,
   starColor: '#8ef0ff', // glow motes
   fog: '#3a2b52',
+  groundTint: '#e6dcf0', // TUNE: a touch of the cave's purple
   light: { color: '#ffd9b0', sun: 0.6, environment: 0.55 }, // TUNE: warm and dim
 };
 export const CAVE_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
@@ -200,8 +214,8 @@ export const EXPLORE_SKY = {
     [12, 17, 2],
   ],
   stars: { count: 44, right: 16, from: 6, to: 22, size: 0.22 }, // TUNE: degrees
-  /** Underwater haze, world units from the camera (the camera is about 7 from the Keeper). */
-  fog: { start: 9, end: 30 }, // TUNE
+  /** Underwater and cave haze, world units from the camera (the camera is about 7 from the Keeper). */
+  fog: { start: 5, end: 22 }, // TUNE: a soft depth haze
 } as const;
 
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
@@ -233,6 +247,7 @@ export function skyLook(at: SkyAt, world: ExploreWorld = 'ground'): SkyLook {
     stars: pick.stars,
     starColor: pick.starColor,
     fog: a.fog && b.fog ? mix(a.fog, b.fog, t) : pick.fog,
+    groundTint: mix(a.groundTint, b.groundTint, t),
     light: {
       color: mix(a.light.color, b.light.color, t),
       sun: lerp(a.light.sun, b.light.sun, t),

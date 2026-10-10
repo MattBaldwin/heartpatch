@@ -89,6 +89,7 @@ import {
   type SkyLook,
 } from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
+import { AmbientDriver } from '../map/ambient-driver.js';
 import './explore.css';
 
 // Exploring your land (#199; cozy-sim feel #291, owner mockup 2026-10-08):
@@ -201,6 +202,13 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** My team's squishies that follow the Keeper, in team order. */
   let teamMembers: { id: string; speciesId: string }[] = [];
   let scene3d: ExploreScene | null = null;
+  /** Paces the water's life under a lake (#335): the map's ambient driver. */
+  const ambient = new AmbientDriver({
+    target: () => scene3d,
+    invalidate: options.invalidate,
+    requestFrame: options.invalidate,
+    tier: options.tier,
+  });
   /** Checks the sky once a minute while exploring (#335). */
   let skyTimer: ReturnType<typeof setInterval> | null = null;
   const tipStorage = options.storage === undefined ? safeStorage() : options.storage;
@@ -1244,6 +1252,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     say('');
     options.onOpen(id);
     options.showScene(build);
+    ambient.start();
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = setInterval(() => {
       const look = skyNow();
@@ -1283,6 +1292,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     isOpen = false;
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = null;
+    ambient.stop();
     // A reply still on its way (a search, a bag read) belongs to this visit:
     // it must never land on the next tile opened.
     generation += 1;
