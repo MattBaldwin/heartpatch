@@ -73,7 +73,7 @@ New players experience this story in the opening cinematic (§25) and the tutori
 - **Multiplayer model: hybrid.**
   - The world is **persistent and asynchronous**: state lives in Postgres; timers (mining, training, care decay) resolve from timestamps.
   - Attacks on an offline defender resolve server-side using the defender's **defense stance**.
-  - **Live battles** (Phase 2) happen in real-time rooms when both players are online.
+  - **Live battles** (#29, Phase 1; owner decision 2026-10-09) happen when both players are online: a friendly battle (nothing at stake, any PvP mode) or a live tile defense. Both players pick at the same time and the turn plays when both have; a player who runs out of time gets an AI pick for that turn, never a loss.
 - Map size scales with players **[DEFAULT]**: hex radius 9 (2 players, 271 tiles), 11 (3 players, 397), 12 (4 players, 469), 16 (6 players, 817). New patches are made for 6 (#318); older ones stay at 4. Home bases are placed evenly around Juniper's Gap. A home nobody has joined yet is saved for the next Keeper: its home tiles can't be taken, faded or reclaimed, and the land around it is ordinary wild land.
 
 ## 4. Squishies
@@ -347,7 +347,7 @@ A second collection alongside the squishy catalog.
 
 **Phase 1 — Halloween first playable (by Oct 31, 2026):** accounts (family signup code); **opening cinematic and single-player tutorial (§25–26)**; create/join maps with codes and approval; hex map with home bases and adjacent-tile capture, with the map-owner PvP mode (On / Gentle / Off); 12–15 starter + 3–4 Halloween squishies (procedural vinyl style); elements, feelings and matrices; turn-based battles, capture; offline raid defense via stance AI; home base with Hearthfires and 1–2 habitats; Timber, Stone, Emberwood, Pumpkins, Witch Dust; care + close-up view; XP formula and simple evolution; the Hollow Man's nightly visit and simple rescue; quick messages and emoji; **Keeper selection and customization, Wardrobe with starter and Halloween clothing, found clothing, Keeper milestones with clothing rewards, Patch Coins and the Boutique**; installable PWA deployed to AWS Lightsail.
 
-**Phase 2 — Thanksgiving:** live real-time battles (Colyseus rooms); trading and gifting (squishies and clothing); free text chat with filtering and parent controls; branching evolution; outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
+**Phase 2 — Thanksgiving:** trading and gifting (squishies and clothing); free text chat with filtering and parent controls; branching evolution; outposts and stranded tiles; Thanksgiving content; family-love and stare mechanics; dress-up.
 
 **Phase 3 — Christmas:** breeding and hybrids; presents; Home Base Harmony; full Lorebook and chihuahua Easter eggs; web push notifications; New Year fireworks; passkeys.
 

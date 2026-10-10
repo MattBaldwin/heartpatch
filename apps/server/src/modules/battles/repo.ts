@@ -1,5 +1,11 @@
 import {
   BattleActionSchema,
+  BattleAiPolicySchema,
+  BattleChoiceSchema,
+  BattleSideIdSchema,
+  type BattleAiPolicy,
+  type BattleChoice,
+  type BattleSideId,
   BattleSideSetupSchema,
   ClientBattleViewSchema,
   RngStateSchema,
@@ -20,11 +26,11 @@ import {
   type FeelingId,
   type OwnedSquishy,
 } from '@heartpatch/shared';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, not, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
-import { battles, mapMembers, maps, squishies, tiles } from '../../db/schema.js';
+import { battles, liveBattles, mapMembers, maps, squishies, tiles } from '../../db/schema.js';
 import { squishyAtWork } from '../jobs/repo.js';
 import { squishyOnWatch } from '../territory/repo.js';
 
@@ -146,9 +152,18 @@ export interface BattlesRepo {
   /** The player's home base tiles on the map (seven, or none before they have one). */
   homeTiles: (mapId: string, userId: string) => Promise<{ q: number; r: number }[]>;
   findBattle: (battleId: string) => Promise<BattleRow | null>;
+  /**
+   * Takes each player's battle seat on the map until commit (#29): a
+   * transaction-scoped advisory lock per player, in id order, before any row
+   * lock. Every battle start takes it for the player(s) it seats, so "one
+   * battle at a time on either side" holds between a live battle's side `b`
+   * and that player starting one of their own (the two unique indexes can't
+   * see each other).
+   */
+  lockBattleSeats: (mapId: string, userIds: readonly string[]) => Promise<void>;
   /** Row-locks the battle until commit; every action runs under it. */
   lockBattle: (battleId: string) => Promise<BattleRow | null>;
-  /** The player's active battle on the map, if any. */
+  /** The player's active battle on the map, if any: as side `a`, or side `b` of a live one (#29). */
   findActive: (mapId: string, userId: string) => Promise<BattleRow | null>;
   /** After an action that didn't end the battle. */
   saveProgress: (
@@ -329,6 +344,8 @@ function queries(db: Executor): BattlesRepo {
             eq(battles.mapId, mapId),
             eq(battles.playerUserId, userId),
             eq(battles.status, 'finished'),
+            // A friendly battle (#29) earns no XP, so it never cuts a later one's.
+            not(eq(battles.kind, 'friendly')),
             // The player is always side `a` (battles service, `PLAYER_SIDE`).
             sql`${battles.result} ->> 'winner' = 'a'`,
             sql`(${battles.endedAt} at time zone ${maps.timeZone})::date = (${at.toISOString()}::timestamptz at time zone ${maps.timeZone})::date`,
@@ -416,6 +433,14 @@ function queries(db: Executor): BattlesRepo {
 
     lockBattle: (battleId) => one(eq(battles.id, battleId), true),
 
+    lockBattleSeats: async (mapId, userIds) => {
+      for (const userId of [...new Set(userIds)].sort()) {
+        await db.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`battle-seat:${mapId}:${userId}`}, 0))`,
+        );
+      }
+    },
+
     findActive: async (mapId, userId) => {
       const [row] = await db
         .select()
@@ -423,8 +448,24 @@ function queries(db: Executor): BattlesRepo {
         .where(
           and(
             eq(battles.mapId, mapId),
-            eq(battles.playerUserId, userId),
             eq(battles.status, 'active'),
+            // Side `a`, or side `b` of a live battle (#29).
+            or(
+              eq(battles.playerUserId, userId),
+              inArray(
+                battles.id,
+                db
+                  .select({ id: liveBattles.battleId })
+                  .from(liveBattles)
+                  .where(
+                    and(
+                      eq(liveBattles.mapId, mapId),
+                      eq(liveBattles.bUserId, userId),
+                      eq(liveBattles.active, true),
+                    ),
+                  ),
+              ),
+            ),
           ),
         );
       return row ? toRow(row) : null;
@@ -436,6 +477,114 @@ function queries(db: Executor): BattlesRepo {
 
     finish: async (battleId, outcome) => {
       await db.update(battles).set(outcome).where(eq(battles.id, battleId));
+    },
+  };
+}
+
+// ── Live battles (#29) ──────────────────────────────────────────────────────
+
+/**
+ * A live battle's turn state (#29, `live_battles`): side `b`'s player, the
+ * hidden picks for this turn, the deadline and what the AI covered.
+ * Server-only; the client gets `LiveBattleView`, which never holds the
+ * opponent's pick.
+ */
+export interface LiveRow {
+  battleId: string;
+  mapId: string;
+  bUserId: string;
+  active: boolean;
+  picks: Partial<Record<BattleSideId, BattleChoice>>;
+  deadlineAt: Date;
+  graceUsed: Record<BattleSideId, boolean>;
+  coverPolicy: Record<BattleSideId, BattleAiPolicy>;
+  covered: LiveCover[];
+}
+
+/** A pick the AI made for a side whose time ran out. */
+export interface LiveCover {
+  turn: number;
+  side: BattleSideId;
+}
+
+// JSON columns are checked on read, like `battles`' (repo.ts).
+const PicksSchema = z.strictObject({
+  a: BattleChoiceSchema.optional(),
+  b: BattleChoiceSchema.optional(),
+});
+const CoveredSchema = z.array(
+  z.strictObject({ turn: z.number().int().min(0), side: BattleSideIdSchema }),
+);
+
+type RawLiveRow = typeof liveBattles.$inferSelect;
+
+function toLiveRow(row: RawLiveRow): LiveRow {
+  return {
+    battleId: row.battleId,
+    mapId: row.mapId,
+    bUserId: row.bUserId,
+    active: row.active,
+    picks: PicksSchema.parse(row.picks),
+    deadlineAt: row.deadlineAt,
+    graceUsed: { a: row.graceUsedA, b: row.graceUsedB },
+    coverPolicy: {
+      a: BattleAiPolicySchema.parse(row.coverPolicyA),
+      b: BattleAiPolicySchema.parse(row.coverPolicyB),
+    },
+    covered: CoveredSchema.parse(row.covered),
+  };
+}
+
+/** What a step changes on a live battle's row. */
+export type LivePatch = Partial<Pick<LiveRow, 'picks' | 'deadlineAt' | 'graceUsed' | 'covered'>>;
+
+export interface LiveBattlesRepo {
+  insert: (row: Omit<LiveRow, 'active' | 'picks' | 'graceUsed' | 'covered'>) => Promise<void>;
+  /** Read under the battle's row lock (lock order step 5): the battle lock covers it. */
+  find: (battleId: string) => Promise<LiveRow | null>;
+  save: (battleId: string, patch: LivePatch) => Promise<void>;
+  /** The battle ended: side `b` is free to battle again, and no pick is kept. */
+  end: (battleId: string) => Promise<void>;
+}
+
+export function createLiveBattlesRepo(db: Executor): LiveBattlesRepo {
+  return {
+    insert: async (row) => {
+      await db.insert(liveBattles).values({
+        battleId: row.battleId,
+        mapId: row.mapId,
+        bUserId: row.bUserId,
+        deadlineAt: row.deadlineAt,
+        coverPolicyA: row.coverPolicy.a,
+        coverPolicyB: row.coverPolicy.b,
+      });
+    },
+
+    find: async (battleId) => {
+      const [row] = await db.select().from(liveBattles).where(eq(liveBattles.battleId, battleId));
+      return row ? toLiveRow(row) : null;
+    },
+
+    save: async (battleId, patch) => {
+      await db
+        .update(liveBattles)
+        .set({
+          ...(patch.picks !== undefined && { picks: patch.picks }),
+          ...(patch.deadlineAt !== undefined && { deadlineAt: patch.deadlineAt }),
+          ...(patch.graceUsed !== undefined && {
+            graceUsedA: patch.graceUsed.a,
+            graceUsedB: patch.graceUsed.b,
+          }),
+          ...(patch.covered !== undefined && { covered: patch.covered }),
+        })
+        .where(eq(liveBattles.battleId, battleId));
+    },
+
+    end: async (battleId) => {
+      await db
+        .update(liveBattles)
+        .set({ active: false, picks: {} })
+        .where(eq(liveBattles.battleId, battleId));
     },
   };
 }
