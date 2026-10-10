@@ -393,6 +393,50 @@ export const MOVES: Move[] = [
     accuracy: 95, // TUNE:
     effects: [{ type: 'status', status: 'dizzy', chance: 25 }], // TUNE:
   },
+  {
+    id: 'lantern-grin',
+    name: 'Lantern Grin',
+    description: 'A big, glowy, lopsided grin. The other squishy forgets what it was doing.',
+    element: 'leaf',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'stat', target: 'opponent', stat: 'attack', stages: -1, chance: 100 }],
+  },
+  {
+    id: 'night-light-hug',
+    name: 'Night-Light Hug',
+    description: 'A warm, glowy hug that chases the dark away.',
+    element: 'light',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'heal', percent: 35 }],
+  },
+  {
+    id: 'upside-snooze',
+    name: 'Upside Snooze',
+    description: 'Hangs upside down for a quick nap. Much better.',
+    element: 'shadow',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'heal', percent: 40 }],
+  },
+  {
+    id: 'sparkler-swirl',
+    name: 'Sparkler Swirl',
+    description: 'Twirls a sparkly little flame. Ooh, pretty!',
+    element: 'fire',
+    power: 55,
+    accuracy: 100,
+  },
+  {
+    id: 'rumble-boop',
+    name: 'Rumble Boop',
+    description: 'A big, rumbly boop with a sturdy horn. Wobble wobble.',
+    element: 'stone',
+    power: 70,
+    accuracy: 90,
+    effects: [{ type: 'status', status: 'dizzy', chance: 15 }],
+  },
 ];
 
 /*
@@ -494,7 +538,10 @@ export const SPECIES: Species[] = [
     rarity: 'common',
     baseStats: { hp: 60, attack: 45, defense: 65, speed: 25 }, // TUNE:
     moves: ['pebble-plop', 'rock-a-bye', 'sturdy-sit'],
-    evolutions: [{ into: 'boulderdoze', level: 16 }], // TUNE:
+    evolutions: [
+      { into: 'boulderdoze', level: 16 },
+      { into: 'rumblehorn', level: 16 },
+    ], // TUNE:
     visual: {
       body: 'pebble',
       palette: ['#b4ada2', '#e9e3d9', '#8a7cc4', '#6f665b'],
@@ -535,6 +582,37 @@ export const SPECIES: Species[] = [
       attackPart: 'back',
     },
     habitatPreferences: { elements: ['stone'], feelings: ['sleepy', 'cozy'] },
+  },
+  {
+    id: 'rumblehorn',
+    name: 'Rumblehorn',
+    description: 'Woke up from its nap feeling brave. Now it guards everyone else’s naps.',
+    element: 'stone',
+    feeling: 'brave',
+    rarity: 'uncommon',
+    baseStats: { hp: 75, attack: 95, defense: 85, speed: 45 }, // TUNE:
+    moves: ['pebble-plop', 'rumble-boop', 'sturdy-sit', 'rumble-roll'],
+    evolutions: [],
+    visual: {
+      body: 'bean',
+      palette: ['#b4ada2', '#e9e3d9', '#8a7cc4', '#6f665b'],
+      parts: [
+        'sharp-eyes',
+        'brave-brows',
+        'smirk',
+        'round-ears',
+        'uni-horn',
+        'crag-nubs',
+        'strong-arms',
+        'biped-legs',
+      ],
+      size: 1.35,
+      head: { body: 'orb', size: 0.6, forward: 0.1, up: 0.82 },
+      stance: 0.3,
+      pose: 'upright',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['brave', 'sleepy'] },
   },
 
   // Fire + Cozy (harmonious).
@@ -1310,7 +1388,10 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 60, attack: 50, defense: 55, speed: 40 }, // TUNE:
     moves: ['pumpkin-roll', 'leafy-tickle', 'boo'],
-    evolutions: [{ into: 'glowgourd', level: 16 }], // TUNE:
+    evolutions: [
+      { into: 'glowgourd', level: 16 },
+      { into: 'squashboo', level: 16 },
+    ], // TUNE:
     visual: {
       body: 'pumpkin',
       palette: ['#ff9a3c', '#ffe0b8', '#4f9a45'],
@@ -1361,6 +1442,29 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf', 'fire'], feelings: ['silly', 'spooky'] },
   },
+  {
+    id: 'squashboo',
+    name: 'Squashboo',
+    description: 'A pumpkin that learned to say boo. Then giggled about it for an hour.',
+    element: 'leaf',
+    feeling: 'spooky',
+    rarity: 'uncommon',
+    season: 'halloween',
+    baseStats: { hp: 85, attack: 85, defense: 75, speed: 80 }, // TUNE:
+    moves: ['pumpkin-roll', 'peekaboo', 'boo', 'lantern-grin'],
+    evolutions: [],
+    visual: {
+      body: 'pumpkin',
+      palette: ['#ffb871', '#fff6e0', '#4f9a45', '#ffd23f'],
+      parts: ['spooky-eyes', 'boo-mouth', 'blush-cheeks', 'stem', 'bat-wings', 'wisp-chain'],
+      size: 1.3,
+      glow: 'body',
+      stance: 0.4,
+      pose: 'hover',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['spooky', 'silly'] },
+  },
 
   // Light + Spooky (conflicted, so a bigger stat budget). A little ghost
   // who's afraid of the dark; comes out on Halloween nights in the woods.
@@ -1374,7 +1478,10 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 60, attack: 65, defense: 60, speed: 65 }, // TUNE:
     moves: ['night-light', 'boo', 'peekaboo'],
-    evolutions: [{ into: 'brightboo', level: 22 }], // TUNE:
+    evolutions: [
+      { into: 'brightboo', level: 22 },
+      { into: 'lullaboo', level: 22 },
+    ], // TUNE:
     visual: {
       body: 'ghost',
       palette: ['#f1ecff', '#fff6c7', '#c9b8ff'],
@@ -1418,6 +1525,38 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['light'], feelings: ['spooky'] },
   },
+  {
+    id: 'lullaboo',
+    name: 'Lullaboo',
+    description: 'Used to be afraid of the dark. Now it’s everybody’s night-light.',
+    element: 'light',
+    feeling: 'cozy',
+    rarity: 'epic',
+    season: 'halloween',
+    baseStats: { hp: 95, attack: 75, defense: 85, speed: 70 }, // TUNE:
+    moves: ['night-light', 'sunny-beam', 'boo', 'night-light-hug'],
+    evolutions: [],
+    visual: {
+      body: 'ghost',
+      palette: ['#f1ecff', '#fff6c7', '#c9b8ff', '#ffe066'],
+      parts: [
+        'oval-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'nightcap',
+        'stubby-arms',
+        'wisp-tail',
+        'freckles',
+      ],
+      size: 1.3,
+      finish: 'sparkle',
+      glow: 'body',
+      stance: 0.35,
+      pose: 'hover',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['cozy', 'spooky'] },
+  },
 
   // Shadow + Silly. A bat that hangs the wrong way up and loves Witch Dust.
   // Spawns key on terrain, season and time only, so it comes out at dusk
@@ -1432,7 +1571,10 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 55, attack: 60, defense: 45, speed: 70 }, // TUNE:
     moves: ['upside-flop', 'peekaboo', 'zip-zap'],
-    evolutions: [{ into: 'topsywing', level: 18 }], // TUNE:
+    evolutions: [
+      { into: 'topsywing', level: 18 },
+      { into: 'hushwing', level: 18 },
+    ], // TUNE:
     visual: {
       body: 'orb',
       palette: ['#4a3a7a', '#eadcff', '#9b7fd4'],
@@ -1468,6 +1610,37 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['silly', 'spooky'] },
   },
+  {
+    id: 'hushwing',
+    name: 'Hushwing',
+    description: 'Sleeps all day upside down, wrapped in its wings like a burrito.',
+    element: 'shadow',
+    feeling: 'sleepy',
+    rarity: 'rare',
+    season: 'halloween',
+    baseStats: { hp: 84, attack: 67, defense: 75, speed: 62 }, // TUNE:
+    moves: ['peekaboo', 'upside-flop', 'shadow-snuggle', 'upside-snooze'],
+    evolutions: [],
+    visual: {
+      body: 'mochi',
+      palette: ['#4a3a7a', '#eadcff', '#9b7fd4', '#ff9ad5'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'round-ears',
+        'nightcap',
+        'big-bat-wings',
+        'ball-tail',
+      ],
+      size: 1.25,
+      ink: '#fff4dc',
+      stance: 0.45,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['sleepy', 'silly'] },
+  },
 
   // Fire + Spooky. A candle-kitten that loves Jack-o'-Lantern glow. Spawns
   // can't see buildings yet, so it comes out at dusk and night in the
@@ -1482,7 +1655,10 @@ export const SPECIES: Species[] = [
     season: 'halloween',
     baseStats: { hp: 50, attack: 60, defense: 45, speed: 65 }, // TUNE:
     moves: ['wiggle-wick', 'ember-boop', 'boo'],
-    evolutions: [{ into: 'wickwhisker', level: 18 }], // TUNE:
+    evolutions: [
+      { into: 'wickwhisker', level: 18 },
+      { into: 'sparklewick', level: 18 },
+    ], // TUNE:
     visual: {
       body: 'tall',
       palette: ['#3d3550', '#fff1d6', '#ffb43c'],
@@ -1527,6 +1703,40 @@ export const SPECIES: Species[] = [
       attackPart: 'tail',
     },
     habitatPreferences: { elements: ['fire'], feelings: ['spooky', 'cozy'] },
+  },
+  {
+    id: 'sparklewick',
+    name: 'Sparklewick',
+    description: 'Glowed so bright it threw itself a party. Everyone’s invited!',
+    element: 'fire',
+    feeling: 'joy',
+    rarity: 'rare',
+    season: 'halloween',
+    baseStats: { hp: 72, attack: 87, defense: 61, speed: 92 }, // TUNE:
+    moves: ['ember-boop', 'wiggle-wick', 'toasty-tumble', 'sparkler-swirl'],
+    evolutions: [],
+    visual: {
+      body: 'tall',
+      palette: ['#3d3550', '#fff1d6', '#ffb43c', '#ffe066'],
+      parts: [
+        'happy-eyes',
+        'smile',
+        'blush-cheeks',
+        'pointy-ears',
+        'flame-crown',
+        'whisker-flames',
+        'stubby-arms',
+        'hop-feet',
+        'curly-tail',
+      ],
+      size: 1.3,
+      ink: '#fff4dc',
+      glow: 'accent',
+      stance: 0.15,
+      pose: 'stand',
+      attackPart: 'crown',
+    },
+    habitatPreferences: { elements: ['fire'], feelings: ['joy', 'spooky'] },
   },
 
   // Thanksgiving (season `thanksgiving`): drawn by the season's leaf piles.
