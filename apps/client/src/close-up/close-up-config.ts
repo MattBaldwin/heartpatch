@@ -141,3 +141,8 @@ export const GONE_MS = 2200; // TUNE
 
 /** Draw about 30 frames a second while the squishy only breathes (tech spec §6). */
 export const BREATHING_FRAME_MS = 33;
+
+/** Dress up (#340): a choice goes to the server this long after the last tap. */
+export const DRESS_UP = {
+  sendAfterMs: 400, // TUNE: the wardrobe's try-on waits 700
+} as const;

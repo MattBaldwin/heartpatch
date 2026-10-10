@@ -785,8 +785,10 @@ const HALLOWEEN: ClothingItem[] = [
 ];
 
 // ── Squishy accessories (one per squishy) ────────────────────────────────
-// Pieces are in the squishy's body sizes, from its crown (top of the head) or
-// neck. They're drawn on squishies when the close-up view arrives.
+// Pieces are in the squishy's body sizes (the client's `accessory.ts`, #340):
+// from its crown (on top of the head, in head sizes) or its neck (a ring
+// under the face, in the body's width there). Crown pieces are 2.5× their
+// first guesses (owner, #340), so a hat covers about half the head.
 const SQUISHY: ClothingItem[] = [
   {
     id: 'tiny-bow',
@@ -801,19 +803,19 @@ const SQUISHY: ClothingItem[] = [
       pieces: [
         {
           shape: 'teardrop',
-          at: [-0.1, 0.02, 0],
-          size: [0.16, 0.2, 0.1],
+          at: [-0.25, 0.05, 0],
+          size: [0.4, 0.5, 0.25],
           turn: [0, 0, 90],
           color: '#ff6f91',
         },
         {
           shape: 'teardrop',
-          at: [0.1, 0.02, 0],
-          size: [0.16, 0.2, 0.1],
+          at: [0.25, 0.05, 0],
+          size: [0.4, 0.5, 0.25],
           turn: [0, 0, -90],
           color: '#ff6f91',
         },
-        { shape: 'ellipsoid', at: [0, 0.02, 0], size: [0.08, 0.08, 0.08], color: '#e24f78' },
+        { shape: 'ellipsoid', at: [0, 0.05, 0], size: [0.2, 0.2, 0.2], color: '#e24f78' },
       ],
     },
   },
@@ -829,8 +831,8 @@ const SQUISHY: ClothingItem[] = [
     visual: {
       anchor: 'neck',
       pieces: [
-        { shape: 'ellipsoid', at: [0, 0, 0], size: [0.85, 0.16, 0.85], color: '#ff8fab' },
-        { shape: 'capsule', at: [0.18, -0.12, -0.38], size: [0.12, 0.26, 0.06], color: '#ff8fab' },
+        { shape: 'ellipsoid', at: [0, 0, 0], size: [1.12, 0.18, 1.12], color: '#ff8fab' },
+        { shape: 'capsule', at: [0.2, -0.13, -0.55], size: [0.14, 0.26, 0.07], color: '#ff8fab' },
       ],
     },
   },
@@ -846,9 +848,9 @@ const SQUISHY: ClothingItem[] = [
     visual: {
       anchor: 'crown',
       pieces: [
-        { shape: 'ellipsoid', at: [0, 0, 0], size: [0.36, 0.04, 0.36], color: '#3b2a3f' },
-        { shape: 'capsule', at: [0, 0.12, 0], size: [0.22, 0.24, 0.22], color: '#3b2a3f' },
-        { shape: 'capsule', at: [0, 0.05, 0], size: [0.23, 0.05, 0.23], color: '#ff6f91' },
+        { shape: 'ellipsoid', at: [0, 0, 0], size: [0.9, 0.1, 0.9], color: '#3b2a3f' },
+        { shape: 'capsule', at: [0, 0.3, 0], size: [0.55, 0.6, 0.55], color: '#3b2a3f' },
+        { shape: 'capsule', at: [0, 0.125, 0], size: [0.575, 0.125, 0.575], color: '#ff6f91' },
       ],
     },
   },
@@ -864,10 +866,10 @@ const SQUISHY: ClothingItem[] = [
     visual: {
       anchor: 'crown',
       pieces: [
-        { shape: 'capsule', at: [0, 0.04, 0], size: [0.26, 0.08, 0.26], color: '#ffd84d' },
-        { shape: 'cone', at: [0, 0.12, -0.1], size: [0.07, 0.12, 0.07], color: '#ffd84d' },
-        { shape: 'cone', at: [-0.09, 0.11, 0.05], size: [0.06, 0.1, 0.06], color: '#ffd84d' },
-        { shape: 'cone', at: [0.09, 0.11, 0.05], size: [0.06, 0.1, 0.06], color: '#ffd84d' },
+        { shape: 'capsule', at: [0, 0.1, 0], size: [0.65, 0.2, 0.65], color: '#ffd84d' },
+        { shape: 'cone', at: [0, 0.3, -0.25], size: [0.175, 0.3, 0.175], color: '#ffd84d' },
+        { shape: 'cone', at: [-0.225, 0.275, 0.125], size: [0.15, 0.25, 0.15], color: '#ffd84d' },
+        { shape: 'cone', at: [0.225, 0.275, 0.125], size: [0.15, 0.25, 0.15], color: '#ffd84d' },
       ],
     },
   },
@@ -884,11 +886,11 @@ const SQUISHY: ClothingItem[] = [
     visual: {
       anchor: 'crown',
       pieces: [
-        { shape: 'ellipsoid', at: [0, 0, 0], size: [0.42, 0.04, 0.42], color: '#6b4a7a' },
+        { shape: 'ellipsoid', at: [0, 0, 0], size: [1.05, 0.1, 1.05], color: '#6b4a7a' },
         {
           shape: 'cone',
-          at: [0, 0.14, 0],
-          size: [0.22, 0.3, 0.22],
+          at: [0, 0.35, 0],
+          size: [0.55, 0.75, 0.55],
           turn: [0, 0, 8],
           color: '#6b4a7a',
         },
@@ -908,8 +910,8 @@ const SQUISHY: ClothingItem[] = [
     visual: {
       anchor: 'crown',
       pieces: [
-        { shape: 'ellipsoid', at: [0, 0.03, 0], size: [0.34, 0.18, 0.34], color: '#ff9a3c' },
-        { shape: 'capsule', at: [0, 0.14, 0], size: [0.05, 0.1, 0.05], color: '#6a9a5a' },
+        { shape: 'ellipsoid', at: [0, 0.075, 0], size: [0.85, 0.45, 0.85], color: '#ff9a3c' },
+        { shape: 'capsule', at: [0, 0.35, 0], size: [0.125, 0.25, 0.125], color: '#6a9a5a' },
       ],
     },
   },
