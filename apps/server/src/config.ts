@@ -106,12 +106,14 @@ const ServerConfigSchema = ConfigSchema.refine(
     path: ['HP_DEV_DROP_CHANCE'],
     message: 'development and tests only',
   })
-  .refine(
-    (c) =>
-      c.NODE_ENV !== 'production' ||
-      (c.HP_DEV_LIVE_TURN_SECONDS === undefined && c.HP_DEV_LIVE_GRACE_SECONDS === undefined),
-    { path: ['HP_DEV_LIVE_TURN_SECONDS'], message: 'development and tests only' },
-  )
+  .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_LIVE_TURN_SECONDS === undefined, {
+    path: ['HP_DEV_LIVE_TURN_SECONDS'],
+    message: 'development and tests only',
+  })
+  .refine((c) => c.NODE_ENV !== 'production' || c.HP_DEV_LIVE_GRACE_SECONDS === undefined, {
+    path: ['HP_DEV_LIVE_GRACE_SECONDS'],
+    message: 'development and tests only',
+  })
   .refine((c) => c.NODE_ENV !== 'production' || !c.HP_SEED_ALLOW_REMOTE, {
     path: ['HP_SEED_ALLOW_REMOTE'],
     message: 'development and tests only',

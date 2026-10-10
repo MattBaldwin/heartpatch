@@ -1,5 +1,6 @@
 import {
   CHALLENGE_RULES,
+  GAME_EVENTS,
   levelGapNote,
   type ChallengeView,
   type WsEventMessage,
@@ -84,8 +85,6 @@ export function waitLeft(
   return Math.min(1, Math.max(0, (end - nowMs) / (end - start)));
 }
 
-const CHALLENGE_EVENTS = new Set(['challenge.sent', 'challenge.answered', 'challenge.cancelled']);
-
 /** An ask event of mine (as one of its two Keepers), with what it says. */
 export type ChallengeEvent =
   | { type: 'sent'; challengeId: string; fromUserId: string; toUserId: string }
@@ -102,38 +101,41 @@ export type ChallengeEvent =
       challengeId: string;
       fromUserId: string;
       toUserId: string;
-      reason: string;
+      reason: 'cancelled' | 'expired' | 'switched-off';
     };
+
+/** The pair part of an ask event: friendly, and mine (as one of its two Keepers). */
+function mine(
+  data: { challengeId: string; kind: string; fromUserId: string; toUserId: string },
+  me: string,
+): { challengeId: string; fromUserId: string; toUserId: string } | null {
+  if (data.kind !== 'friendly' || (data.fromUserId !== me && data.toUserId !== me)) return null;
+  return { challengeId: data.challengeId, fromUserId: data.fromUserId, toUserId: data.toUserId };
+}
 
 /** A live event about a friendly ask of mine, or null for anything else. */
 export function challengeEventFor(event: WsEventMessage, me: string): ChallengeEvent | null {
-  if (!CHALLENGE_EVENTS.has(event.type)) return null;
-  const d = event.data as Partial<Record<string, unknown>>;
-  const { challengeId, fromUserId, toUserId } = d;
-  if (
-    typeof challengeId !== 'string' ||
-    typeof fromUserId !== 'string' ||
-    typeof toUserId !== 'string'
-  ) {
-    return null;
-  }
-  if (d['kind'] !== 'friendly' || (fromUserId !== me && toUserId !== me)) return null;
-  const base = { challengeId, fromUserId, toUserId };
   switch (event.type) {
-    case 'challenge.sent':
-      return { type: 'sent', ...base };
-    case 'challenge.answered':
-      return {
-        type: 'answered',
-        ...base,
-        answer: d['answer'] === 'yes' ? 'yes' : 'not-now',
-        battleId: typeof d['battleId'] === 'string' ? d['battleId'] : null,
-      };
+    case 'challenge.sent': {
+      const parsed = GAME_EVENTS['challenge.sent'].public.safeParse(event.data);
+      const base = parsed.success ? mine(parsed.data, me) : null;
+      return base ? { type: 'sent', ...base } : null;
+    }
+    case 'challenge.answered': {
+      const parsed = GAME_EVENTS['challenge.answered'].public.safeParse(event.data);
+      if (!parsed.success) return null;
+      const base = mine(parsed.data, me);
+      return base
+        ? { type: 'answered', ...base, answer: parsed.data.answer, battleId: parsed.data.battleId }
+        : null;
+    }
+    case 'challenge.cancelled': {
+      const parsed = GAME_EVENTS['challenge.cancelled'].public.safeParse(event.data);
+      if (!parsed.success) return null;
+      const base = mine(parsed.data, me);
+      return base ? { type: 'cancelled', ...base, reason: parsed.data.reason } : null;
+    }
     default:
-      return {
-        type: 'cancelled',
-        ...base,
-        reason: typeof d['reason'] === 'string' ? d['reason'] : '',
-      };
+      return null;
   }
 }

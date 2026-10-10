@@ -884,11 +884,12 @@ const battles = createBattleScreen({
   },
 });
 // Friendly battles (#29): "Who's here now" and "Battle me?" from the
-// Adventure tray; a friend's ask shows over any screen. A yes opens the live
-// battle on the battle screen for both Keepers.
+// Adventure tray, next to Find a squishy (the battle slot keeps it in view on
+// short, wide screens); a friend's ask shows over the map. A yes opens the
+// live battle on the battle screen for both Keepers.
 const friendly = createFriendlyScreen({
   root: document.body,
-  entryRoot: trays.slot('adventure'),
+  entryRoot: trays.slot('battle'),
   members: (mapId) =>
     maps.view?.map.id === mapId
       ? maps.view.members.map((m) => ({ userId: m.user.id, username: m.user.username }))

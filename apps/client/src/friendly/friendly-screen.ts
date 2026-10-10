@@ -16,7 +16,8 @@ import './friendly.css';
 
 // Friendly battles (#29, the owner-approved mockup's frames 1–5): a Friends
 // button over a multiplayer patch opens "Who's here now"; "Battle me?" shows
-// the card, then the wait. The friend gets the ask over any screen and
+// the card, then the wait. The friend gets the ask over the map (where the
+// server counts them as here) and
 // answers "Battle!" or "Not now!". A yes opens the live battle for both.
 // DOM only; the server decides everything (rule 1), and only ids travel.
 
@@ -114,7 +115,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
   });
   sheet.hidden = true;
 
-  // ── The ask a friend sent me (over any screen) ───────────────────────
+  // ── The ask a friend sent me (over the map, where the server sees me as here) ───────────────────────
   const askCard = el('section', {
     class: 'friendly-ask',
     role: 'alertdialog',

@@ -4,6 +4,7 @@ import {
   CAPTURABLE_BATTLE_KINDS,
   TILE_BATTLE_KINDS,
   GAME_DATA,
+  GAME_EVENTS,
   LIVE_BATTLE_RULES,
   quickMessageById,
   visualRegistry,
@@ -70,7 +71,6 @@ import { mountLiveBar, type LiveBar } from './live-bar.js';
 import {
   clockText,
   coveredSince,
-  LIVE_BATTLE_EVENTS,
   LIVE_TEXT,
   liveTurnInfo,
 } from './live-turn.js';
@@ -1269,6 +1269,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       entry.hidden = true;
     },
     open: (next) => {
+      // Already on screen (a late "Battle!" event, a resume): a fresh look, not a rebuild.
+      if (battle?.id === next.id && !replaying) {
+        // Mid-move or mid-playback: a live battle looks again once that's done.
+        if (!waiting && queue.length === 0) receive(next);
+        else if (battle.live) liveStale = true;
+        return;
+      }
       open(next);
     },
     watch: (start, end) => {
@@ -1291,18 +1298,26 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     liveEvent: (event) => {
       const current = battle;
       if (!current?.live || event.mapId !== current.mapId) return;
-      const data = event.data as { battleId?: unknown; side?: unknown; messageId?: unknown };
-      if (data.battleId !== current.id) return;
       if (event.type === 'battle.cheered') {
+        const parsed = GAME_EVENTS['battle.cheered'].public.safeParse(event.data);
         // Theirs only: my own cheer showed when it went out.
-        if (data.side === current.mySide || typeof data.messageId !== 'string') return;
-        const label = cheerLabel(data.messageId);
+        if (!parsed.success || parsed.data.battleId !== current.id) return;
+        if (parsed.data.side === current.mySide) return;
+        const label = cheerLabel(parsed.data.messageId);
         if (label) hud.callout('theirs', label);
         return;
       }
-      // My own pick needs no second look; theirs, or a turn played, does.
-      if (event.type === 'battle.picked' && data.side === current.mySide) return;
-      if (LIVE_BATTLE_EVENTS.has(event.type)) refreshLive();
+      if (event.type === 'battle.picked') {
+        const parsed = GAME_EVENTS['battle.picked'].public.safeParse(event.data);
+        // My own pick needs no second look; theirs does.
+        if (!parsed.success || parsed.data.battleId !== current.id) return;
+        if (parsed.data.side !== current.mySide) refreshLive();
+        return;
+      }
+      if (event.type === 'battle.turned') {
+        const parsed = GAME_EVENTS['battle.turned'].public.safeParse(event.data);
+        if (parsed.success && parsed.data.battleId === current.id) refreshLive();
+      }
     },
     get debug() {
       if (!battle || !shown) return null;

@@ -18,7 +18,7 @@ import {
 } from '@heartpatch/shared';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import type { AddressInfo } from 'node:net';
-import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
@@ -467,6 +467,8 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
       bUserId: sam.id,
     });
     const mine = await get(server, lee, battleId);
+    // Sam's app is open on the patch: Lee sees Sam as here.
+    expect(mine.live?.opponentHere).toBe(true);
     expect((await pick(server, lee, mine, { type: 'move', move: myMove(mine) })).statusCode).toBe(
       200,
     );
@@ -510,6 +512,16 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
       expect(publicViewFor(PUBLIC_VIEWS, event, { userId: kit.id })).toBeNull();
       expect(publicViewFor(PUBLIC_VIEWS, event, { userId: lee.id })).not.toBeNull();
     }
+
+    // Sam's app goes to the background (the socket closes): Lee now sees Sam stepped away.
+    const samSocket = sockets.at(-2)!; // connected Lee, Sam, Kit
+    const closed = new Promise((resolve) => samSocket.once('close', resolve));
+    samSocket.close();
+    await closed;
+    await vi.waitFor(() => {
+      expect(server.wsHub?.isOnline(mapId, sam.id)).toBe(false);
+    });
+    expect((await get(server, lee, battleId)).live?.opponentHere).toBe(false);
   });
 
   it('cheers are preset ids only, in a live battle, and rate-limited', async () => {
@@ -698,11 +710,13 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
     });
     expect(late.statusCode, late.body).toBe(200);
     const now = await get(server, lee, battleId);
-    if (now.status === 'active' && now.view.phase.type === 'turn') {
-      expect((await pick(server, lee, now, { type: 'move', move: myMove(now) })).statusCode).toBe(
-        200,
-      );
-    }
+    // Turn 1 played (the AI's pick for Sam); turn 2 waits on Lee, with Sam's pick in.
+    expect(now.status).toBe('active');
+    expect(now.view.phase.type).toBe('turn');
+    expect(now.live?.opponentPicked).toBe(true);
+    expect((await pick(server, lee, now, { type: 'move', move: myMove(now) })).statusCode).toBe(
+      200,
+    );
     const turned = (await eventsOf(mapId))
       .filter((e) => e.type === 'battle.turned')
       .map((e) => (e.payload as { turn: number }).turn);

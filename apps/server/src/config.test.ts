@@ -157,7 +157,7 @@ describe('loadServerConfig', () => {
         HP_SIGNUP_CODE: 'family-code',
         HP_DEV_LIVE_GRACE_SECONDS: '4',
       }),
-    ).toThrow(/HP_DEV_LIVE_TURN_SECONDS/);
+    ).toThrow(/HP_DEV_LIVE_GRACE_SECONDS/);
   });
 
   it('accepts HP_DEV_DROP_CHANCE outside production only', () => {

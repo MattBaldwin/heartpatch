@@ -42,7 +42,7 @@ describe('live turns on screen (#29)', () => {
       NOW,
       TURN_MS,
     )!;
-    expect(info).toMatchObject({ myTurn: false, iPicked: true, theyPicked: true });
+    expect(info).toMatchObject({ myTurn: false, theyPicked: true });
   });
 
   it("a replace phase that isn't mine is the other Keeper's to pick", () => {

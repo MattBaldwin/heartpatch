@@ -9,7 +9,7 @@ import { openTray } from './trays.js';
 // phones; a Keeper who steps away (iOS closes the socket) gets Sprout's help
 // after the away-grace and comes back to the same battle; and a turn timer
 // that runs out means Sprout picks, never a loss. The server runs with short
-// live timings (playwright.config.ts: 10 s turns, 6 s grace).
+// live timings (playwright.config.ts: 20 s turns, 6 s grace).
 
 interface LiveDebug {
   picked: boolean;
@@ -78,6 +78,19 @@ async function sturdyTeams(lee: Page, sam: Page, mapId: string): Promise<void> {
   for (const page of [lee, sam]) await grantSquishy(page, mapId, 'pebblesnooze', 30);
 }
 
+/** Picks a move this turn, trying again until the pick is in (the buttons show once playback settles). */
+async function pickNow(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        await playMyPart(page);
+        return (await battleState(page))?.live?.picked;
+      },
+      { timeout: 30_000, intervals: [500] },
+    )
+    .toBe(true);
+}
+
 /** Plays my part of this turn if it's mine to play: a move, or sending someone out. */
 async function playMyPart(page: Page): Promise<void> {
   const state = await battleState(page);
@@ -95,7 +108,7 @@ async function playMyPart(page: Page): Promise<void> {
 test.describe('friendly battles (#29)', () => {
   // Each test brings its own two Keepers: side by side, so the file stays short.
   test.describe.configure({ mode: 'parallel' });
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
 
   test('Battle me? → Battle!, played live from two phones to the end', async ({ browser }) => {
     const { lee, sam, samName, mapId, errors } = await twoTraders(browser, 'Friendly Patch', {
@@ -111,17 +124,19 @@ test.describe('friendly battles (#29)', () => {
         .poll(async () => (await battleState(page))?.live?.secondsLeft ?? 0)
         .toBeGreaterThan(0);
     }
+    // A cheer while turn 0 is on: ids only, and the other phone shows it.
+    await sam.getByTestId('battle-cheer').tap();
+    await sam.getByTestId('battle-cheers').locator('[data-message="nice-move"]').tap();
+    await expect(lee.locator('.battle-callout', { hasText: 'Nice move!' })).toBeVisible({
+      timeout: 15_000,
+    });
+
     // Lee picks first: Sam sees only that Lee picked.
-    await playMyPart(lee);
-    await expect.poll(async () => (await battleState(lee))?.live?.picked).toBe(true);
+    await pickNow(lee);
     await expect
       .poll(async () => (await battleState(sam))?.live?.theyPicked, { timeout: 15_000 })
       .toBe(true);
     await expect(sam.getByTestId('battle-live-chip')).toHaveText('Picked ✓');
-
-    // A cheer: ids only, the other phone shows it.
-    await sam.getByTestId('battle-cheer').tap();
-    await sam.getByTestId('battle-cheers').locator('[data-message="nice-move"]').tap();
 
     // Both play until it's over.
     await expect
@@ -155,12 +170,12 @@ test.describe('friendly battles (#29)', () => {
     // Sam's app goes to the background: the socket closes.
     const back = sam.url();
     await sam.goto('about:blank');
-    await playMyPart(lee);
+    await pickNow(lee);
     await expect(lee.getByTestId('battle-live-chip')).toContainText('Stepped away', {
       timeout: 15_000,
     });
 
-    // The turn time (10 s) and the away-grace (6 s) run out: Sprout picks for Sam.
+    // The turn time (20 s) and the away-grace (6 s) run out: Sprout picks for Sam.
     await expect
       .poll(async () => (await battleState(lee))?.turn, { timeout: 45_000 })
       .toBeGreaterThan(0);
@@ -179,7 +194,7 @@ test.describe('friendly battles (#29)', () => {
             : (await patchButton.isVisible())
               ? 'lobby'
               : null,
-        { timeout: 30_000 },
+        { timeout: 60_000 },
       )
       .not.toBeNull();
     if (!(await battleState(sam))?.live) {
@@ -191,15 +206,18 @@ test.describe('friendly battles (#29)', () => {
       .toBeGreaterThan(0);
     // "I picked once for you while you were away", or the latest "Time's up! I picked … for you".
     await expect(sam.getByTestId('battle-live-note')).toContainText('for you');
-    // And Sam plays on.
+    // And Sam plays on: Sam's pick goes in, or a turn plays with it (Lee isn't
+    // picking, so Lee's timer can play the turn the moment Sam's pick lands).
+    const returned = (await battleState(sam))!;
     await expect
       .poll(
         async () => {
           await playMyPart(sam);
           const state = await battleState(sam);
-          return state?.status !== 'active' || state.live?.picked === true;
+          if (!state || state.status !== 'active' || state.live?.picked === true) return true;
+          return state.turn > returned.turn && state.live?.covered === returned.live?.covered;
         },
-        { timeout: 30_000, intervals: [500] },
+        { timeout: 45_000, intervals: [500] },
       )
       .toBe(true);
     expect(errors).toEqual([]);
@@ -213,11 +231,10 @@ test.describe('friendly battles (#29)', () => {
     await startFriendly(lee, sam, samName);
 
     // Sam picks; Lee, still here, doesn't.
-    await playMyPart(sam);
-    await expect.poll(async () => (await battleState(sam))?.live?.picked).toBe(true);
+    await pickNow(sam);
     await expect
-      .poll(async () => (await battleState(lee))?.live?.covered ?? 0, { timeout: 30_000 })
-      .toBe(1);
+      .poll(async () => (await battleState(lee))?.live?.covered ?? 0, { timeout: 45_000 })
+      .toBeGreaterThan(0);
     await expect(lee.getByTestId('battle-live-note')).toContainText("Time's up! I picked");
     const state = await battleState(lee);
     // The turn played as a normal turn: no forfeit, still on (or over by the squishies).

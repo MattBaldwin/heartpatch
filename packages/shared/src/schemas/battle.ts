@@ -391,9 +391,9 @@ export const LiveBattleViewSchema = z.object({
   /**
    * The opponent's app is open on the patch right now. False: they stepped
    * away (iOS backgrounds the app), and the AI picks for them when their
-   * time and away-grace run out. Optional so older servers' views parse.
+   * time and away-grace run out.
    */
-  opponentHere: z.boolean().optional(),
+  opponentHere: z.boolean(),
   covered: z.array(z.object({ turn: z.number().int().min(0), side: BattleSideIdSchema })),
 });
 export type LiveBattleView = z.infer<typeof LiveBattleViewSchema>;

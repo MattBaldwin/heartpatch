@@ -14,8 +14,6 @@ export const LIVE_TEXT = {
   theyPicking: 'Picking…',
   theyPicked: 'Picked ✓',
   away: (left: string) => `Stepped away · ${left}`,
-  awayBanner: (name: string) => `${name} stepped away for a moment.`,
-  awayHelp: (name: string) => `If ${name} isn't back soon, I'll help them pick. Keep going!`,
   timeUp: (move: string) => `Time's up! I picked ${move} for you. Ta-da!`,
   timeUpSendOut: (who: string) => `Time's up! I sent out ${who} for you.`,
   stillIn: "No worries, you're still in it.",
@@ -34,7 +32,7 @@ export const LIVE_TEXT = {
   secondsLeft: (n: number) => `${String(n)} seconds left`,
   resultWon: (name: string) => `You won against ${name}!`,
   resultLost: (name: string) => `${name} won this one!`,
-  friendlySub: 'Just for fun: nobody won or lost anything.',
+  friendlySub: 'Just for fun: nobody loses anything.',
   friendlyNote: 'Friendly battles give no XP.',
   gaveUp: 'You gave up. No worries!',
   theyGaveUp: (name: string) => `${name} gave up. You win!`,
@@ -48,8 +46,6 @@ export interface LiveTurnInfo {
   fraction: number;
   /** It's my turn to pick (or send someone out), and I haven't yet. */
   myTurn: boolean;
-  /** I've picked and am waiting for them. */
-  iPicked: boolean;
   /** The opponent has picked (their pick is never known). */
   theyPicked: boolean;
   /** The opponent's app isn't open right now. */
@@ -76,9 +72,8 @@ export function liveTurnInfo(
     secondsLeft: left === null ? null : Math.max(0, Math.ceil(left / 1000)),
     fraction: left === null ? 0 : Math.min(1, Math.max(0, left / turnMs)),
     myTurn: owes && live.myPick === null,
-    iPicked: live.myPick !== null,
     theyPicked: live.opponentPicked,
-    theyAway: live.opponentHere === false,
+    theyAway: !live.opponentHere,
   };
 }
 
@@ -92,9 +87,6 @@ export function coveredSince(
     .filter((c) => c.side === side && c.turn > afterTurn)
     .map((c) => c.turn);
 }
-
-/** Live events that mean "fetch this battle again" (never carry a pick). */
-export const LIVE_BATTLE_EVENTS: ReadonlySet<string> = new Set(['battle.picked', 'battle.turned']);
 
 /** "0:42" for the away chip. */
 export function clockText(seconds: number): string {
