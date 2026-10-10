@@ -34,10 +34,10 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
   day: {
     zenith: '#6fbff0', // TUNE
     horizon: '#e6f7ff', // TUNE
-    sun: '#ffe27a',
+    sun: '#ffe27a', // TUNE
     moon: false,
-    cloud: '#ffffff',
-    clouds: 4,
+    cloud: '#ffffff', // TUNE
+    clouds: 4, // TUNE
     stars: false,
     light: { color: '#fff5e6', sun: 1, environment: 1 },
   },
@@ -116,7 +116,11 @@ export function skyLook(at: SkyAt): SkyLook {
   };
 }
 
-/** Minutes after local midnight in `timeZone` (the device's own zone if that one is unknown). */
+/**
+ * Minutes after local midnight in `timeZone` (the device's own zone if that
+ * one is unknown). The device clock is the game's clock in production
+ * (`HP_DEV_NOW` only moves the server's).
+ */
 export function localMinuteIn(timeZone: string | null, now: Date): number {
   const format = (zone?: string) => {
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -138,4 +142,9 @@ export function localMinuteIn(timeZone: string | null, now: Date): number {
 /** The sky over the explore view at `now` on a patch in `timeZone`. */
 export function exploreSkyAt(timeZone: string | null, now: Date): SkyAt {
   return skyAt(localMinuteIn(timeZone, now), EXPLORE_RULES.sky);
+}
+
+/** Do two looks draw the same? (The screen skips a minute that changes nothing.) */
+export function sameLook(a: SkyLook, b: SkyLook): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }

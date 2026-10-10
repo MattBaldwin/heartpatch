@@ -80,7 +80,7 @@ import {
   type InteractionInput,
   type InteractionState,
 } from './interactions.js';
-import { exploreSkyAt, skyLook, type SkyLook } from './explore-sky-look.js';
+import { exploreSkyAt, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import './explore.css';
 
@@ -197,13 +197,14 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** Checks the sky once a minute while exploring (#335). */
   let skyTimer: ReturnType<typeof setInterval> | null = null;
   const tipStorage = options.storage === undefined ? safeStorage() : options.storage;
-  const skyNow = (): SkyLook =>
-    skyLook(
-      exploreSkyAt(
-        mapId ? (options.timeZone?.(mapId) ?? null) : null,
-        options.now?.() ?? new Date(),
-      ),
-    );
+  /**
+   * The open patch's time zone, read before `onOpen` closes the map (the
+   * map's view is gone after that), and kept for the visit.
+   */
+  let zone: string | null = null;
+  const skyNow = (): SkyLook => skyLook(exploreSkyAt(zone, options.now?.() ?? new Date()));
+  /** The look last shown, so a quiet minute changes and redraws nothing. */
+  let skyShown: SkyLook | null = null;
   let lastTier: QualityTier | null = null;
   let keeperAt: WorldPoint = EXPLORE_VIEW.start;
   let yaw: number = EXPLORE_VIEW.startYaw;
@@ -1160,7 +1161,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         return kind ? [{ id: m.id, species: kind }] : [];
       }),
       mapTile: options.mapTile(tile),
-      sky: skyNow(),
+      sky: (skyShown = skyNow()),
       reducedMotion,
     });
     // The start can land on a rock: step out before the Keeper is drawn.
@@ -1190,6 +1191,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   async function openTile(id: string, at: { q: number; r: number }): Promise<void> {
     const ask = generation;
+    zone = options.timeZone?.(id) ?? null;
     let fresh: ExploreTileResponse;
     try {
       const [view, board] = await Promise.all([
@@ -1228,7 +1230,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     options.showScene(build);
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = setInterval(() => {
-      scene3d?.setSky(skyNow());
+      const look = skyNow();
+      if (skyShown && sameLook(look, skyShown)) return;
+      skyShown = look;
+      scene3d?.setSky(look);
       options.invalidate();
     }, 60_000);
     render();
