@@ -395,6 +395,23 @@ Lock order: the night's row, squishies, then `maps` (events).
 - **Events:** `trade.offered`, `trade.cancelled`, `trade.expired` (the two players only), `trade.answered` (others hear only "accepted"), `gift.collected` (members, never what), `mailbox.collected` (the player only).
 - **Lock order:** tech spec §7 "Trades (#271)".
 
+## Friendly challenges
+
+`src/modules/challenges` (issue #29; the owner-approved mockup). "Battle me?" between two Keepers who both have the app open on a multiplayer patch (`wsHub.isOnline`). Nothing is at stake, so it works in every PvP mode; the owner can switch it off. The rules are `CHALLENGE_RULES` (`packages/shared/src/data/challenges.ts`, all `TUNE`). A yes starts a live battle through the battles service's `startFriendly` (see "Battles").
+
+| Endpoint | Does |
+|---|---|
+| `GET /api/v1/maps/:mapId/challenges` | `{ friendlyChallenges, myTeamLevel, online, incoming, outgoing, now }`: who's here now (never me) with `inBattle` and their team's top level, the asks waiting for me, the one I sent, and the server's clock, which an ask's 60 s bar counts down on. Expires stale asks first (a write); hides every ask while the switch is off. Read rate limit |
+| `POST /api/v1/maps/:mapId/challenges` | `{ toUserId }` → 201 `{ challenge }`. `CONFLICT`: the Glade, switched off, not here, either Keeper in a battle, already asking someone, or they're weighing another ask. `RATE_LIMITED`: `perPair`, `perPlayer`, or the rest after a "Not now!" (`notNowRestMinutes`). `VALIDATION_FAILED`: asking yourself. Send an `Idempotency-Key` |
+| `POST /api/v1/challenges/:challengeId/answer` | `{ answer: 'yes' \| 'not-now' }` → `{ challenge, battle }`, the receiver only. A yes starts the battle and settles the ask in one transaction (rule 7), and calls off both Keepers' other waiting asks. `CONFLICT` when it floated away or was called off. Send an `Idempotency-Key` |
+| `POST /api/v1/challenges/:challengeId/cancel` | 204, the asker only ("Never mind"). `CONFLICT` once it's answered or gone. Send an `Idempotency-Key` |
+| `POST /api/v1/maps/:mapId/friendly-challenges` | `{ friendlyChallenges }`, owner only (`FORBIDDEN` otherwise): off calls off every waiting ask. Writes `map.updated` with the switch |
+
+- **Events:** `challenge.sent`, `challenge.answered`, `challenge.cancelled` (`cancelled`, `expired`, `switched-off`), only to the ask's two Keepers (`twoPlayerView`).
+- **Expiry** is a timestamp (`expires_at`), noticed on the next read, send or answer (CLAUDE.md rule 4). Leaving the patch calls off a Keeper's asks (`callOffAsksOf`, the maps service's `departed`).
+- **Lock order:** sending locks both Keepers' member rows (step 2, id order), then asks (9c); a yes takes the battle seats, member rows and the battle, then the ask and the pair's other asks (9c, id order); expiry, the switch and leaving lock asks in id order. `maps` last.
+
+
 ## Care, levels and evolution
 
 Care (design doc §7–8; issue #19; DECISIONS G and "Care (#19)") lives in `src/modules/care`. Contentment is stored as its value at the last care action (`squishies.contentment_at_last_care`) plus `last_cared_at`, and today's value is worked out on read with shared `contentmentAt` (CLAUDE.md rule 4). Every care action is a `care_log` row, which counts a squishy's actions per day (diminishing returns; rare treats marked `outsideDailyCare`, the Heart Snack, aren't counted and always give full contentment) and an account's Patch Coins from care per day (the cap); the day is the account's (`users.time_zone`).
