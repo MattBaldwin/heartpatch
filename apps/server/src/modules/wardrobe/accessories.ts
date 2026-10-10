@@ -2,7 +2,8 @@ import { CLOTHING_BY_ID, SQUISHY_SLOT, STARTER_CLOTHING } from '@heartpatch/shar
 import type { Executor } from '../../db/client.js';
 import { listWornAccessories } from './repo.js';
 
-const STARTERS = new Set(STARTER_CLOTHING);
+/** Every account owns the starter pieces, and they're never stored (DECISIONS "Wardrobe (#43)"). */
+export const STARTERS: ReadonlySet<string> = new Set(STARTER_CLOTHING);
 
 /**
  * Squishy id → the accessory it wears (#340), for the squishy reads (care,
@@ -18,6 +19,8 @@ export async function wornAccessories(
 ): Promise<Map<string, string>> {
   const worn = new Map<string, string>();
   for (const row of await listWornAccessories(db, userId, squishyIds)) {
+    // Catalog ids are never removed, but a row naming anything that isn't a
+    // squishy accessory reads as wearing nothing rather than failing the read.
     if (CLOTHING_BY_ID.get(row.itemId)?.slot !== SQUISHY_SLOT) continue;
     if (row.stored || STARTERS.has(row.itemId)) worn.set(row.squishyId, row.itemId);
   }

@@ -22,7 +22,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vi
 import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { createDbClient, withTransaction, type Database, type DbClient } from '../../db/client.js';
-import { keepers, sessions, users } from '../../db/schema.js';
+import { keepers, sessions, tradeOffers, users } from '../../db/schema.js';
 import { createClock } from '../../lib/time.js';
 import { PUBLIC_VIEWS, publicViewFor } from '../../ws/public-views.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
@@ -494,6 +494,29 @@ describe.skipIf(!url)('wardrobe (needs DATABASE_URL)', () => {
         call(server, 'POST', `/maps/${mapId}/squishies/${id}/accessory`, kid, { itemId });
       expect((await put(pip.id, 'tiny-crown')).statusCode).toBe(200);
       expect((await put(bun.id, 'tiny-bow')).statusCode).toBe(200);
+
+      // The only crown is held for a trade (#271): it waits at the post, so
+      // Pip wears nothing until it comes back.
+      const [offer] = await db
+        .insert(tradeOffers)
+        .values({
+          mapId,
+          kind: 'gift',
+          fromUserId: kid.id,
+          toUserId: friend.id,
+          createdAt: clock,
+          expiresAt: new Date(clock.getTime() + DAY_MS),
+        })
+        .returning({ id: tradeOffers.id });
+      const hold = (offerId: string | null) =>
+        db.execute(
+          `update clothing_owned set held_by_offer_id = ${offerId ? `'${offerId}'` : 'null'}
+           where user_id = '${kid.id}' and item_id = 'tiny-crown'`,
+        );
+      await hold(offer!.id);
+      expect((await wornOn(server, kid, mapId)).care[pip.id]).toBeNull();
+      await hold(null);
+      expect((await wornOn(server, kid, mapId)).care[pip.id]).toBe('tiny-crown');
 
       // The crown leaves the wardrobe (a row trades would clear, left behind
       // here on purpose): Pip wears nothing, and the starter bow stays on.
