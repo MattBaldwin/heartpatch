@@ -7,6 +7,7 @@ import { hexKey, hexToWorld, type HexKey, type MapView } from '@heartpatch/share
 import { HEX_SIZE } from '../map/map-config.js';
 import { DOME, TILE_RADIUS, tileScreenRectOf, topOf } from '../map/map-scene.js';
 import type { MapLayer } from '../map/map-screen.js';
+import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
 import './trading.css';
 import { flagSpot, type Box, type FlagRoom } from './flag-spot.js';
@@ -42,24 +43,24 @@ const FLAG_MIN_WIDTH_PX = 80;
 const FLAG_MIN_HEIGHT_PX = 26;
 /** The top bar's corner buttons (trays.ts, and the auth chip without trays). */
 const TOP_BAR = '.tray-top-left, .tray-top-right, .auth-chip';
-/** Everything else drawn over the map: the patch name pill and every open sheet or panel. */
-const OVER_MAP = `${TOP_BAR}, .map-hud, [role="dialog"]`;
+/** Everything else over the map: the patch name pill and every open sheet or panel. */
+const OVER_MAP = `${TOP_BAR}, .map-hud, ${SHEET_SELECTOR}`;
 
 /**
  * What a flag must keep clear of, in CSS pixels: where the top bar ends (0
  * with none shown) and the boxes of everything over the map. Measured, not
  * constants: the bar follows the safe area and, on an iPad in landscape, the
- * trays' layout, and sheets differ per screen. A hidden one measures empty.
- * Read after the flags' own sizes, so the layout is already fresh.
+ * trays' layout, and sheets differ per screen. Shut ones (hidden, inert, a
+ * closed tray) don't count: the tutorial's own test for an open sheet.
  */
 function flagRoom(): FlagRoom {
   let top = 0;
   const covers: Box[] = [];
   for (const node of document.querySelectorAll(OVER_MAP)) {
-    const box = node.getBoundingClientRect();
-    if (box.width <= 0 || box.height <= 0) continue;
-    covers.push({ x: box.x, y: box.y, width: box.width, height: box.height });
-    if (node.matches(TOP_BAR)) top = Math.max(top, box.bottom);
+    const box = boxOf(node)?.box;
+    if (!box) continue;
+    covers.push(box);
+    if (node.matches(TOP_BAR)) top = Math.max(top, box.y + box.height);
   }
   return { width: window.innerWidth, height: window.innerHeight, top, covers };
 }
@@ -85,15 +86,38 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
     const at = spot ? `${String(spot.x)},${String(spot.y)}` : 'hidden';
     if (at === flag.at) return;
     flag.at = at;
+    const wasHidden = flag.node.hidden;
     flag.node.hidden = spot === null;
     if (spot) {
       flag.node.style.transform = `translate(${String(spot.x)}px, ${String(spot.y)}px) translate(-50%, -100%)`;
+      // A hidden flag has no size, so it was placed by the stand-in one: now
+      // it shows, place it again by its own (it may run off the edge or into
+      // the patch name, and an idle map draws no frame to fix it).
+      if (wasHidden) place(flag, room);
     }
   };
   const placeAll = () => {
     const room = flagRoom();
     for (const flag of flags.values()) place(flag, room);
   };
+  // A sheet opening or shutting over an idle map draws no frame, so watch
+  // for it (sheets show and shut by `hidden`, trays by `inert`) and look
+  // again once on the next frame. A flag's own `hidden` is skipped.
+  let recheck = 0;
+  const covers = new MutationObserver((changes) => {
+    if (recheck || !scene) return;
+    if (
+      changes.every(
+        (c) => c.target instanceof HTMLElement && c.target.classList.contains('post-flag'),
+      )
+    ) {
+      return;
+    }
+    recheck = requestAnimationFrame(() => {
+      recheck = 0;
+      if (scene) placeAll();
+    });
+  });
 
   const ringFor = (target: Scene, flag: PostFlag): Mesh => {
     // Six sides with a corner on +x: the same hex as the tiles.
@@ -176,9 +200,15 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       scene = next;
       draw(view);
       next.onAfterRenderObservable.add(placeAll);
+      covers.observe(document.body, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['hidden', 'inert'],
+      });
       next.onDisposeObservable.addOnce(() => {
         if (scene !== next) return;
         scene = null;
+        covers.disconnect();
         clear();
       });
     },

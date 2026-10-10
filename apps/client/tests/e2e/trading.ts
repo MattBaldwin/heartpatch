@@ -77,8 +77,16 @@ export function tilesSpill(page: Page): Promise<string[]> {
   );
 }
 
-/** Shuts an open side tray, which covers part of the map and the tile panel. */
+/**
+ * Shuts an open side tray, which covers part of the map and the tile panel,
+ * and Sprout's tray hint: post flags hide rather than show from under either (#310).
+ */
 export async function shutTrays(page: Page): Promise<void> {
+  const hintOk = page.getByTestId('tray-hint-ok');
+  if (await hintOk.isVisible()) {
+    await hintOk.tap();
+    await expect(page.getByTestId('tray-hint')).toBeHidden();
+  }
   const open = (await traysState(page))?.open ?? null;
   if (open === null) return;
   await page.getByTestId(`tray-handle-${open}`).tap();

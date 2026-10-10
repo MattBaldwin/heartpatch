@@ -2,13 +2,13 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
-import { traysState } from './trays.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import {
   grantItems,
   grantSquishy,
   namesClipped,
   postState,
+  shutTrays,
   tilesSpill,
   twoTraders,
   visitPost,
@@ -82,6 +82,7 @@ test('shows the trading posts near home, and a post’s panel says what it is', 
   await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
 
   // A post sits 3 steps from my Heart Seed, so one is in view from home.
+  await shutTrays(page);
   await expect.poll(async () => (await posts(page))?.shown ?? 0).toBeGreaterThan(0);
   // Day 1: none touches my land yet, so no gold ring.
   expect((await posts(page))!.rings).toBe(0);
@@ -125,12 +126,8 @@ test('sets off on a journey to a post, wins, and the post opens for a visit (#27
     level: 40,
   });
   expect(granted.status).toBe(201);
-  // An open side tray covers part of the map and the tile panel: shut it first.
-  const open = (await traysState(page))?.open ?? null;
-  if (open !== null) {
-    await page.getByTestId(`tray-handle-${open}`).tap();
-    await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBeNull();
-  }
+  // An open side tray or Sprout's hint covers part of the map: shut them first.
+  await shutTrays(page);
 
   // Tap a post: the panel shows the journey (mockup screen b).
   await expect.poll(async () => (await posts(page))?.shown ?? 0).toBeGreaterThan(0);
