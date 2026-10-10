@@ -86,7 +86,7 @@ See a button that says "dev"? That's a grown-up test button. Skip it!
 
 - [ ] Tap a tile you own, press Explore, and walk your Keeper with the joystick.
 - [ ] Walk up to a sparkle and press the big button. Your Keeper digs, shakes or scoops right there.
-- [ ] Look up! The sky matches the time: sunny clouds by day, warm colours at dawn and dusk, stars and a moon after 7 PM.
+- [ ] Look up! The sky matches the time: sunny clouds by day, warm colours at dawn and dusk, stars and a moon from around 7 PM.
 - [ ] Make a tool (Shovel, Snorkel, Walking Stick or Lantern) and use it on a trickier spot.
 - [ ] Find a lore page and open it in your Lorebook (Bag → 📖 Lorebook).
 
@@ -137,7 +137,7 @@ Watch the story with each tester, paying special attention to **shot 4, "The Hol
 
 ## Performance (owner)
 
-The frame-rate badge only shows in a **dev build**, so do this pass on a local playtest (DEPLOY.md, "Playtesting"), not on the real server. The badge in the corner reads like `58 fps · WebGL2 · high · 2.00x`; `idle` means nothing is moving, so nothing is being drawn. Test on a recent iPhone and the **oldest iPad** you have. The dev build isn't minified like the real one, so the real game runs at least this fast.
+The frame-rate badge only shows in a **dev build**, so do this pass on a local playtest (DEPLOY.md, "Playtesting"), not on the real server. The badge in the corner reads, part by part, frame rate · renderer · quality tier · render scale · draws · triangles, like `58 fps · WebGL2 · high · 2.00x · 42 draws · 120k tris`; `idle` means nothing is moving, so nothing is being drawn. Test on a recent iPhone and the **oldest iPad** you have. The dev build isn't minified like the real one, so the real game runs at least this fast.
 
 - [ ] **Map:** pan, fling and pinch for a minute on a busy patch. Recent iPhone holds about **60 fps**. The older iPad **never drops below 30**.
 - [ ] **Battle, home base and close-up view:** the same targets.
@@ -145,14 +145,14 @@ The frame-rate badge only shows in a **dev build**, so do this pass on a local p
 - [ ] **Story, shot 1 "The Heartpatch"** (the whole land with its Heart Seeds): at least 30 on the older iPad.
 - [ ] **Story, shot 5 "The Great Scatter"** (the Heart Seeds shatter, everyone scatters): the busiest shot. At least 30 on the older iPad, with no long freeze.
 - [ ] **Story, shot 6 "The land today"** (the wide view over today's land): at least 30 on the older iPad.
-- [ ] Nothing ever looks pixelated or blurry. The badge's last number (render scale) can drop a little on the older iPad. That's the dynamic scaler doing its job.
+- [ ] Nothing ever looks pixelated or blurry. The render scale (the `2.00x` part) can drop a little on the older iPad. That's the dynamic scaler doing its job.
 - [ ] Put the app in the background for a minute, then come back. The picture comes back (no blank screen).
 - [ ] Note any spot that stutters, the device, and what the badge said. File it like a bug.
 
 **How to measure on the older iPad** (#28's "30+ fps on an older iPad"; only a real device counts):
 
 1. Start a local playtest and open `http://<your computer's address>:5173` in Safari on the iPad (DEPLOY.md, "Playtesting"). Plug it in and turn Low Power Mode off: it caps frame rate.
-2. Play at the default quality first. The badge's third word is the tier the game picked (`high`, `medium` or `low`); the game steps down by itself if it's struggling, so note where it settles.
+2. Play at the default quality first. The badge's third part is the tier the game picked (`high`, `medium` or `low`) and the fourth is the render scale (like `1.50x`); the game steps down by itself if it's struggling, so note where it settles.
 3. To see a tier on purpose, add it to the address: `?quality=medium` or `?quality=low` (e.g. `http://192.168.1.20:5173/?quality=low`). Try `low` on the older iPad if `high` dips under 30.
 4. For each place above (map, battle, home, close-up, story shots 1, 5 and 6, and an explore walk), write down the **lowest** fps you saw while things were moving (ignore `idle`), the tier and the render scale:
 

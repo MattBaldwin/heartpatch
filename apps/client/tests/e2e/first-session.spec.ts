@@ -58,7 +58,14 @@ const territoryState = (page: Page) =>
 async function requireTutorial(page: Page): Promise<void> {
   await page.route(/\/api\/v1\/tutorial(\/(start|replay|skip|dev\/step))?$/, async (route) => {
     const response = await route.fetch();
-    const body = (await response.json()) as { tutorial?: { required: boolean } };
+    let body: { tutorial?: { required: boolean } };
+    try {
+      body = (await response.json()) as typeof body;
+    } catch {
+      // Not JSON (a proxy's error page): pass it on, so the API's own error shows.
+      await route.fulfill({ response });
+      return;
+    }
     if (body.tutorial) body.tutorial.required = true;
     await route.fulfill({ response, json: body });
   });
