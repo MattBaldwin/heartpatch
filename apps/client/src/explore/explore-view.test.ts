@@ -99,7 +99,21 @@ describe('explore text', () => {
     // here on purpose, after the same check. Item icons come from the bag's
     // own table (inventory/item-icons.ts), outside this view. The app-wide
     // check on emoji age is ui/emoji-floor.test.ts (#308).
-    const known = new Set(['🌳', '🌷', '🎃', '✊', '↔', '✋', '✨', '🪱', '🏡', '💦', '🔍', '📖']);
+    const known = new Set([
+      '🌳',
+      '🌷',
+      '🎃',
+      '✊',
+      '↔',
+      '✋',
+      '✨',
+      '🪱',
+      '🏡',
+      '💦',
+      '🔍',
+      '📖',
+      '🌱',
+    ]);
     const icons = [
       ...EXPLORE_RULES.spotKinds.map((k) => actionFor({ kind: k.id, tool: k.tool }).icon),
       ...Object.values(PLAY_TEXT).map((p) => p.icon),

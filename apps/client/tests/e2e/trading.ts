@@ -77,12 +77,52 @@ export function tilesSpill(page: Page): Promise<string[]> {
   );
 }
 
-/** Shuts an open side tray, which covers part of the map and the tile panel. */
+/**
+ * Shuts an open side tray, which covers part of the map and the tile panel,
+ * and Sprout's tray hint: post flags hide rather than show from under either (#310).
+ */
 export async function shutTrays(page: Page): Promise<void> {
+  const hintOk = page.getByTestId('tray-hint-ok');
+  if (await hintOk.isVisible()) {
+    await hintOk.tap();
+    await expect(page.getByTestId('tray-hint')).toBeHidden();
+  }
   const open = (await traysState(page))?.open ?? null;
   if (open === null) return;
   await page.getByTestId(`tray-handle-${open}`).tap();
   await expect.poll(async () => (await traysState(page))?.open, { timeout: 15_000 }).toBeNull();
+}
+
+/**
+ * Flags drawn where something over the map covers them (#310): each shown
+ * flag whose box touches a corner button, the patch name, or an open sheet
+ * or tray. Empty when every flag keeps clear.
+ */
+export function flagsUnderCovers(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const seen = (el: Element) => {
+      if (!(el instanceof HTMLElement) || el.closest('[hidden]') || el.closest('[inert]'))
+        return null;
+      const style = getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') return null;
+      const box = el.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 ? box : null;
+    };
+    const covers = [
+      ...document.querySelectorAll(
+        '.tray-top-left, .tray-top-right, .auth-chip, .map-hud, [role="dialog"]:not([aria-modal="false"])',
+      ),
+    ].flatMap((el) => seen(el) ?? []);
+    return [...document.querySelectorAll('[data-testid="post-flag"]')].flatMap((flag) => {
+      const f = seen(flag);
+      const hit =
+        f &&
+        covers.some(
+          (c) => f.left < c.right && c.left < f.right && f.top < c.bottom && c.top < f.bottom,
+        );
+      return hit ? [flag.textContent] : [];
+    });
+  });
 }
 
 /** Taps the post my land reaches (its flag says 🔗) and goes in with "Visit post". */
