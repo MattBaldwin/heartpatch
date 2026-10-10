@@ -486,6 +486,8 @@ Add it to the `consumers` list in `src/index.ts`. How it stays exactly-once:
 - **Catch-up:** `event-consumers.catch-up` runs every minute (`CATCH_UP_CRON`) and at boot, and wakes every consumer whose `last_seq` is behind `maps.event_seq`. It also covers the one gap in the wake-ups: a command whose wake-up de-duplicated against a queued job that was then taken, run and finished before the command committed (`eventsAfter` doesn't wait for in-flight commits), so that event waits for the next catch-up.
 - **Handlers may append events** (the tutorial does). Call `appendGameEvent` through `tx`, as the handler's last write; the runner publishes after each event commits. A consumer never completes anything on its own event types.
 
+- **Retention:** `game-events.retention` (`jobs/retention.ts`, hourly on `EVENT_RETENTION_CRON`) deletes old events in bounded batches: after `EVENT_RETENTION_DAYS`, or `EVENT_RETENTION_SHORT_DAYS` for short-lived types (`SHORT_LIVED_EVENT_TYPES`: a live battle's picks, turns and cheers, and `challenge.*`). It never goes at or above a map's lowest `last_seq` (a consumer of that map kind with no row yet keeps everything), nor into its latest `REPLAY_WINDOW` seqs; a client further behind gets `ws.resync` as before. So a consumer that needs history keeps its own table. Admin's "last played here" reads the newest kept event, so a member away longer than the keep shows none.
+
 Tunables are in `src/jobs/limits.ts`. Never prune `game_events` below the lowest `last_seq` for a map.
 
 ## Keepers
