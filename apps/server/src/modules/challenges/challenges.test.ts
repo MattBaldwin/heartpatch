@@ -22,6 +22,7 @@ import { loadConfig } from '../../config.js';
 import { createDbClient, type Database, type DbClient } from '../../db/client.js';
 import { keepers, sessions, users } from '../../db/schema.js';
 import { SESSION_COOKIE } from '../auth/limits.js';
+import { createBattlesService } from '../battles/service.js';
 import { newSessionToken } from '../auth/secrets.js';
 
 const url = inject('testDatabaseUrl');
@@ -375,6 +376,10 @@ describe.skipIf(!url)('friendly challenges (#29, needs DATABASE_URL)', () => {
     const refused = await ask(server, sam, mapId, lee);
     expect(refused.statusCode).toBe(409);
     expect(errorOf(refused).message).toMatch(/switched off/);
+    // The battles service checks the switch itself too, whoever calls it.
+    await expect(
+      createBattlesService({ db }).startFriendly({ mapId, aUserId: sam.id, bUserId: lee.id }),
+    ).rejects.toThrow(/switched off/);
 
     // Back on.
     await call(server, 'POST', `/maps/${mapId}/friendly-challenges`, lee, {
