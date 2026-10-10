@@ -259,6 +259,19 @@ describe('framing', () => {
     expect(box!.ry * 2).toBeLessThan(420 * FILL * 1.1);
   });
 
+  it('frames below what covers the top (the account chip), as well as above the card', () => {
+    const height = 1.6;
+    const { pose, drop } = frameFor(CAMERA_POSES.face, height, view, 420, 80);
+    const box = screenEllipse(cameraFor(pose, height, drop), view, { width: height, height });
+    expect(box!.y).toBeCloseTo(250, -1);
+    expect(box!.y - box!.ry).toBeGreaterThan(80);
+    expect(box!.y + box!.ry).toBeLessThan(420);
+    // Nothing covered: the same as before.
+    expect(frameFor(CAMERA_POSES.face, height, view, 420, 0)).toEqual(
+      frameFor(CAMERA_POSES.face, height, view, 420),
+    );
+  });
+
   it('never comes closer than face to face, and with no card it stays centred', () => {
     const { pose, drop } = frameFor(CAMERA_POSES.face, 0.5, view, view.height);
     expect(pose.distance).toBe(CAMERA_POSES.face.distance);

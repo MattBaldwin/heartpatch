@@ -11,7 +11,8 @@ import { Logger } from '@babylonjs/core/Misc/logger';
 import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
-import type { Body, VisualRegistry } from '@heartpatch/shared';
+import type { Body, ClothingItem, VisualRegistry } from '@heartpatch/shared';
+import { accessoryPieces, accessorySocket } from './accessory.js';
 import { bodyArrays, type MeshArrays } from './body-shape.js';
 import {
   CONTACT_SHADOW,
@@ -122,6 +123,15 @@ interface Squishy {
   shadowAlpha: number;
   event: SquishEvent | null;
   readonly instances: { batch: Batch; instance: Instance }[];
+  /** The accessory it wears (#340), or null; its pieces are in `instances` too. */
+  accessory: {
+    readonly id: string;
+    readonly instances: Instance[];
+    /** How high it reaches above the ground point (placement scale 1). */
+    readonly top: number;
+  } | null;
+  /** Its own `crown` parts (a stem, a nightcap): put away while a crown accessory is on. */
+  readonly crownParts: { batch: Batch; instance: Instance }[];
 }
 
 interface Batch {
@@ -145,6 +155,7 @@ const PLACE_TURN = new Quaternion();
 const PLACE_AT = new Vector3();
 const SHADOW_TURN = Quaternion.Identity();
 const SHADOW_WORLD = new Matrix();
+const DEG = Math.PI / 180;
 
 function linear(rgb: readonly [number, number, number]): [number, number, number, number] {
   const c = new Color3(rgb[0], rgb[1], rgb[2]).toLinearSpace();
@@ -246,6 +257,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       shadowAlpha: 1,
       event: null,
       instances: [],
+      accessory: null,
+      crownParts: [],
     };
     this.#squishies.set(handle.id, squishy);
     this.#layout(squishy, body, placement);
@@ -265,6 +278,83 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       batch.moved = true;
     }
     this.#shadowDirty = true;
+  }
+
+  /**
+   * Puts a wardrobe accessory on a squishy (#340), or takes it off (null).
+   * Its pieces join the shared part batches as the squishy's own instances,
+   * so they breathe, squash and hop with it and add no draw calls for
+   * shapes already in the scene. A rescue guardian never wears one.
+   */
+  setAccessory(handle: SquishyHandle, item: ClothingItem | null): void {
+    const squishy = this.#squishies.get(handle.id);
+    if (!squishy || (squishy.accessory?.id ?? null) === (item?.id ?? null)) return;
+    if (squishy.accessory) {
+      const gone = new Set(squishy.accessory.instances);
+      for (const { batch, instance } of squishy.instances) {
+        if (!gone.has(instance)) continue;
+        batch.instances.splice(batch.instances.indexOf(instance), 1);
+        batch.dirty = true;
+      }
+      const kept = squishy.instances.filter(({ instance }) => !gone.has(instance));
+      squishy.instances.splice(0, squishy.instances.length, ...kept);
+      squishy.accessory = null;
+    }
+    const anchor = handle.look === 'shadow' ? undefined : item?.visual.anchor;
+    // A hat goes where the squishy's own crown part was (like hair under a
+    // hat), so the two never poke through each other. They keep moving with
+    // it (they stay in `instances`) and come back when the hat comes off.
+    const hatOn = anchor === 'crown';
+    for (const { batch, instance } of squishy.crownParts) {
+      const i = batch.instances.indexOf(instance);
+      if (hatOn && i >= 0) batch.instances.splice(i, 1);
+      else if (!hatOn && i < 0) batch.instances.push(instance);
+      else continue;
+      batch.dirty = true;
+    }
+    if (!item || !anchor) return;
+    const socket = accessorySocket(handle.params, this.#registry.bodies, anchor);
+    if (!socket) return;
+    const instances: Instance[] = [];
+    let top = 0;
+    for (const p of accessoryPieces(item, socket)) {
+      top = Math.max(top, p.at[1] + p.size[1] / 2);
+      const batch = this.#batch(`part:${p.shape}`, (lod) => partArrays(p.shape, LOD[lod]), false);
+      const local = Matrix.Compose(
+        new Vector3(p.size[0], p.size[1], p.size[2]),
+        Quaternion.RotationYawPitchRoll(p.turn[1] * DEG, p.turn[0] * DEG, p.turn[2] * DEG),
+        new Vector3(p.at[0], p.at[1], p.at[2]),
+      );
+      // Plain vinyl, like Keeper clothing (only costumes wear a finish).
+      const instance: Instance = {
+        owner: squishy,
+        local,
+        matrix: local.multiply(squishy.world),
+        color: linear(p.color),
+        look: SQUISH_LOOK_CODE.normal,
+        finish: 0,
+      };
+      batch.instances.push(instance);
+      batch.dirty = true;
+      squishy.instances.push({ batch, instance });
+      instances.push(instance);
+    }
+    squishy.accessory = { id: item.id, instances, top };
+  }
+
+  /**
+   * How tall a squishy stands with its accessory on (a hat reaches above
+   * its head), world units at placement scale 1.
+   */
+  heightOf(handle: SquishyHandle): number {
+    const squishy = this.#squishies.get(handle.id);
+    if (!squishy) return handle.params.height;
+    return Math.max(handle.params.height, squishy.accessory?.top ?? 0);
+  }
+
+  /** The accessory a squishy wears, or null. */
+  accessoryOf(handle: SquishyHandle): string | null {
+    return this.#squishies.get(handle.id)?.accessory?.id ?? null;
   }
 
   remove(handle: SquishyHandle): void {
@@ -459,7 +549,9 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       };
       batch.instances.push(instance);
       batch.dirty = true;
-      squishy.instances.push({ batch, instance });
+      const entry = { batch, instance };
+      squishy.instances.push(entry);
+      return entry;
     };
 
     const bodyBatchOf = (shape: Body) =>
@@ -504,7 +596,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       const hostAt = onHead ? params.head.offset : torsoAt;
       for (const p of part.placements) {
         const local = Matrix.FromArray(partMatrix(hostBody, hostScale, part, p, hostAt));
-        attach(batch, local, color, finish, part.slot === 'eyes');
+        const entry = attach(batch, local, color, finish, part.slot === 'eyes');
+        if (part.slot === 'crown') squishy.crownParts.push(entry);
       }
     }
     this.#shadowDirty = true;

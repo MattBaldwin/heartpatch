@@ -4,6 +4,7 @@ import {
   visualRegistry,
   type CareListResponse,
   type CareSquishy,
+  type OwnedClothing,
   type PublicUser,
 } from '@heartpatch/shared';
 import { careApi, type CareApi } from '../care/care-api.js';
@@ -22,7 +23,8 @@ import { newIdempotencyKey } from '../net/idempotency-key.js';
 import type { SquishyDetail } from '../procedural/config.js';
 import { heroLodFor } from '../procedural/motion.js';
 import { el, messageOf } from '../ui/dom.js';
-import { rarityChip } from '../ui/rarity/rarity.js';
+import { rarityChip, rarityClass } from '../ui/rarity/rarity.js';
+import { wardrobeApi, type WardrobeApi } from '../ui/wardrobe/wardrobe-api.js';
 import { blurredBackdrop } from './backdrop.js';
 import {
   BREATHING_FRAME_MS,
@@ -55,6 +57,7 @@ import {
   type CareHold,
   type CloseUpTouch,
 } from './close-up-view.js';
+import { accessoryItem, DRESS_UP_TEXT, dressedLine, dressUpChoices } from './dress-up.js';
 import { GestureReader, onTarget, type GesturePoint, type ScreenTarget } from './gestures.js';
 import '../care/care.css';
 import './close-up.css';
@@ -93,6 +96,8 @@ export interface CloseUpScreenOptions {
   /** The squishy was touched (a gesture or its button), sent or not (sound, #25). */
   onTouch?: (kind: CloseUpTouch) => void;
   api?: CareApi;
+  /** The wardrobe calls Dress up uses (#340). */
+  wardrobe?: Pick<WardrobeApi, 'get' | 'setAccessory'>;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -124,6 +129,9 @@ export interface CloseUpDebug {
   /** The species the 3D squishy is drawn as (redrawn when it evolves). */
   readonly drawnSpecies: string | null;
   readonly note: string;
+  /** Dress up (#340): the picker is open; the accessory drawn on it now. */
+  readonly dressing: boolean;
+  readonly accessory: string | null;
 }
 
 type Phase = 'arriving' | 'here' | 'leaving';
@@ -145,6 +153,7 @@ interface Bubble {
 
 export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScreen {
   const api = options.api ?? careApi;
+  const wardrobe = options.wardrobe ?? wardrobeApi;
   const registry = visualRegistry(GAME_DATA);
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -171,6 +180,14 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   let readyTimer: number | undefined;
   const inFlight = new Set<string>();
   let renaming = false;
+  // Dress up (#340): the picker, what the server last kept on the squishy,
+  // what's drawn (a tap shows at once), and my accessories once loaded.
+  let dressing = false;
+  let keptAccessory: string | null = null;
+  let shownAccessory: string | null = null;
+  let dressSends = 0;
+  let dressSeq = 0;
+  let ownedPieces: readonly OwnedClothing[] | null = null;
   let counts = { sent: 0, held: 0, reactions: 0, idleMoves: 0 };
   let lastHold: CareHold | null = null;
   let bubble: Bubble | null = null;
@@ -252,6 +269,43 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     },
     `✏️ ${CLOSE_UP_TEXT.rename}`,
   );
+  const dressOpen = el(
+    'button',
+    {
+      type: 'button',
+      class: 'auth-button auth-button-soft close-up-dress-open',
+      'data-testid': 'close-up-dress-open',
+    },
+    `🎀 ${DRESS_UP_TEXT.open}`,
+  );
+  const dressTitle = el('h2', { class: 'close-up-dress-title', id: 'close-up-dress-title' });
+  const dressList = el('div', {
+    class: 'close-up-dress-list',
+    role: 'group',
+    'aria-labelledby': 'close-up-dress-title',
+    'data-testid': 'close-up-dress-list',
+  });
+  // What happened goes here, in the card, never over the squishy's head (owner, #340).
+  const dressStatus = el('p', {
+    class: 'close-up-dress-status',
+    role: 'status',
+    'data-testid': 'close-up-dress-status',
+  });
+  const dressDone = el(
+    'button',
+    { type: 'button', class: 'auth-button', 'data-testid': 'close-up-dress-done' },
+    DRESS_UP_TEXT.done,
+  );
+  const dress = el(
+    'section',
+    { class: 'close-up-dress', 'data-testid': 'close-up-dress' },
+    dressTitle,
+    el('p', { class: 'close-up-dress-hint' }, DRESS_UP_TEXT.hint),
+    dressList,
+    dressStatus,
+    dressDone,
+  );
+  dress.hidden = true;
   const about = el(
     'details',
     { class: 'care-details close-up-about', 'data-testid': 'close-up-about' },
@@ -295,9 +349,11 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     mood,
     hearts,
     actions,
+    dressOpen,
     note,
     hint,
     about,
+    dress,
   );
   const treat = el('div', { class: 'close-up-treat', 'aria-hidden': 'true' }, '🍪');
   treat.hidden = true;
@@ -414,6 +470,13 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     moves.replaceChildren(...model.moves.map((m) => el('li', {}, m)));
     infoList.replaceChildren(...model.info.map((line) => el('li', {}, line)));
     renameClear.hidden = model.nickname === null;
+    // A care or rename reply carries what it wears; a Dress up tap on its
+    // way wins until the server answers it.
+    if (dressSends === 0 && squishy.accessory !== keptAccessory) {
+      keptAccessory = squishy.accessory;
+      showAccessory(keptAccessory);
+    }
+    renderDress();
     // Built once and updated in place, so a reply landing mid-drag can't
     // pull the Feed button out from under a finger.
     for (const b of model.buttons) {
@@ -638,7 +701,9 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     close();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isOpen() && !renaming) close();
+    if (e.key !== 'Escape' || !isOpen() || renaming) return;
+    if (dressing) showDress(false);
+    else close();
   });
 
   // ── Rename ────────────────────────────────────────────────────────────
@@ -700,6 +765,143 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     }
   }
 
+  // ── Dress up (#340) ───────────────────────────────────────────────────
+  /** Draws an accessory on the squishy (null: none) and refits the camera for a hat. */
+  function showAccessory(id: string | null): void {
+    shownAccessory = id;
+    if (scene3d && scene3d.accessory !== (accessoryItem(id)?.id ?? null)) {
+      scene3d.setAccessory(accessoryItem(id));
+      reframe();
+      options.invalidate();
+    }
+  }
+
+  function renderDress(): void {
+    const squishy = current();
+    if (!dressing || !squishy || !reply) return;
+    dressTitle.textContent = DRESS_UP_TEXT.title(infoCard(squishy, reply).name);
+    if (!ownedPieces) {
+      dressList.replaceChildren();
+      return;
+    }
+    dressList.replaceChildren(
+      ...dressUpChoices(ownedPieces, shownAccessory).map((choice) => {
+        const swatch = el('span', { class: 'close-up-dress-swatch', 'aria-hidden': 'true' });
+        if (choice.color) swatch.style.background = choice.color;
+        else swatch.classList.add('close-up-dress-none');
+        const button = el(
+          'button',
+          {
+            type: 'button',
+            class: `close-up-dress-item${choice.rarity ? ` ${rarityClass(choice.rarity)}` : ''}`,
+            'aria-pressed': String(choice.on),
+            'data-accessory': choice.itemId ?? 'none',
+          },
+          swatch,
+          el('span', { class: 'close-up-dress-name' }, choice.name),
+          el('span', { class: 'close-up-dress-sub' }, choice.sub),
+        );
+        button.addEventListener('click', () => {
+          void putOn(choice.itemId);
+        });
+        return button;
+      }),
+    );
+  }
+
+  /** Opens or closes the picker; `focus` moves focus with it (a tap, not a fresh open). */
+  function showDress(on: boolean, focus = true): void {
+    dressing = on;
+    dress.hidden = !on;
+    card.classList.toggle('close-up-dressing', on);
+    dressStatus.textContent = '';
+    if (on) {
+      showRename(false);
+      about.open = false;
+      renderDress();
+      if (!ownedPieces) void loadOwned();
+      if (focus) dressDone.focus({ preventScroll: true });
+    } else if (focus) {
+      dressOpen.focus({ preventScroll: true });
+    }
+    // The card changed height: fit the squishy into the space above it.
+    requestAnimationFrame(reframe);
+  }
+
+  async function loadOwned(): Promise<void> {
+    const mine = ticket;
+    dressStatus.textContent = DRESS_UP_TEXT.loading;
+    try {
+      const loaded = await wardrobe.get();
+      if (mine !== ticket) return;
+      ownedPieces = loaded.owned;
+      dressStatus.textContent = '';
+      renderDress();
+      requestAnimationFrame(reframe);
+    } catch (err) {
+      if (mine === ticket) dressStatus.textContent = messageOf(err);
+    }
+  }
+
+  /**
+   * Puts a piece on (null: takes it off). Optimistic, like trying on Keeper
+   * clothes (tech spec §6): it shows at once and the server checks it; if
+   * the server says no, it goes back to what the server kept. Only the
+   * latest tap's answer counts, so quick taps can't land out of order.
+   */
+  async function putOn(itemId: string | null): Promise<void> {
+    const map = mapId;
+    const id = squishyId;
+    if (!map || !id || itemId === shownAccessory) return;
+    const mine = ticket;
+    const seq = (dressSeq += 1);
+    dressSends += 1;
+    showAccessory(itemId);
+    renderDress();
+    dressStatus.textContent = '';
+    scene3d?.play('wobble', performance.now(), 0.7);
+    kick();
+    try {
+      const kept = await sendCommand(
+        sendDeps,
+        (key) => wardrobe.setAccessory(map, id, itemId, key),
+        () => mine === ticket,
+      );
+      if (!kept || mine !== ticket) return;
+      keptAccessory = kept.accessory;
+      if (reply) {
+        reply = {
+          ...reply,
+          squishies: reply.squishies.map((s) =>
+            s.id === id ? { ...s, accessory: kept.accessory } : s,
+          ),
+        };
+      }
+      if (seq !== dressSeq) return;
+      const squishy = current();
+      if (squishy && reply) {
+        dressStatus.textContent = dressedLine(infoCard(squishy, reply).name, kept.accessory);
+      }
+      if (kept.accessory !== shownAccessory) showAccessory(kept.accessory);
+    } catch (err) {
+      if (mine !== ticket || seq !== dressSeq) return;
+      showAccessory(keptAccessory);
+      dressStatus.textContent = messageOf(err);
+    } finally {
+      if (mine === ticket) {
+        dressSends -= 1;
+        renderDress();
+      }
+    }
+  }
+
+  dressOpen.addEventListener('click', () => {
+    showDress(true);
+  });
+  dressDone.addEventListener('click', () => {
+    showDress(false);
+  });
+
   // ── Evolution celebration ─────────────────────────────────────────────
   yay.addEventListener('click', () => {
     const map = mapId;
@@ -760,6 +962,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
       instanceId: squishy.id,
       backdrop,
       breathing: !reducedMotion.matches,
+      accessory: accessoryItem(shownAccessory),
     });
     scene.onDisposeObservable.addOnce(() => {
       if (scene3d === built) scene3d = null;
@@ -795,6 +998,17 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
    * Frames the squishy in the space above the card (as it is with About
    * shut, so opening it doesn't move the squishy). On open and on resize.
    */
+  /**
+   * How far down the account chip reaches over the view (CSS pixels from its
+   * top), so the squishy and a tall hat are framed below it; 0 without one.
+   */
+  function coveredTop(layerTop: number): number {
+    const chip = document.querySelector<HTMLElement>('.auth-chip');
+    if (!chip || chip.hidden) return 0;
+    const rect = chip.getBoundingClientRect();
+    return rect.height > 0 ? Math.max(0, rect.bottom - layerTop) : 0;
+  }
+
   function reframe(): void {
     const s = scene3d;
     if (!s) return;
@@ -804,8 +1018,15 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     }
     reframeSkipped = false;
     const v = view();
-    const cardTop = card.getBoundingClientRect().top - layer.getBoundingClientRect().top;
-    framed = frameFor(CAMERA_POSES.face, s.height, v, cardTop > 0 ? cardTop : v.height);
+    const layerTop = layer.getBoundingClientRect().top;
+    const cardTop = card.getBoundingClientRect().top - layerTop;
+    framed = frameFor(
+      CAMERA_POSES.face,
+      s.height,
+      v,
+      cardTop > 0 ? cardTop : v.height,
+      coveredTop(layerTop),
+    );
     if (phase === 'here') {
       s.setCamera(framed.pose, framed.drop);
       options.invalidate();
@@ -940,6 +1161,11 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     snapshotMs = took?.snapshot ?? null;
     backdropMs = took?.blur ?? null;
     setReply(list);
+    keptAccessory = squishy.accessory;
+    shownAccessory = keptAccessory;
+    dressSends = 0;
+    ownedPieces = null;
+    showDress(false, false);
     counts = { sent: 0, held: 0, reactions: 0, idleMoves: 0 };
     lastHold = null;
     phase = 'arriving';
@@ -1055,6 +1281,8 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
         celebrating: !celebrate.hidden,
         drawnSpecies: builtSpecies,
         note: note.textContent,
+        dressing,
+        accessory: scene3d?.accessory ?? null,
       };
     },
   };

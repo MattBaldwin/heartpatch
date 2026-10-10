@@ -1,5 +1,5 @@
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { GAME_DATA, visualRegistry } from '@heartpatch/shared';
+import { CLOTHING_BY_ID, GAME_DATA, visualRegistry, type ClothingItem } from '@heartpatch/shared';
 import { boot } from '../../engine/boot.js';
 import { createRenderer, parseRendererPreference } from '../../engine/renderer.js';
 import { pickInitialTier } from '../../engine/quality/tiers.js';
@@ -20,9 +20,10 @@ import './gallery.css';
  * part of the production build). Shows every species and every registry
  * body and part; tap a squishy to jiggle it.
  *
- * Query flags: `?count=50` (stress test), `?look=showcase-3`, `?view=closeup`,
- * `?yaw=180` (turn them round), `?still` (no breathing, so the scene goes
- * idle), `?shadow` (the rescue guardians' shadow look), plus the main page's
+ * Query flags: `?count=50` (stress test), `?look=showcase-3` (or a comma list), `?view=closeup`,
+ * `?yaw=180` (turn them round), `?pitch=15`, `?distance=14` and `?drop=3` (the camera, and how far below it the floor sits), `?still` (no breathing, so the scene goes
+ * idle), `?shadow` (the rescue guardians' shadow look), `?accessory=tiny-crown,snuggle-scarf`
+ * (wardrobe accessories, one per squishy in turn, #340), plus the main page's
  * `?quality=` and `?renderer=webgpu`.
  */
 
@@ -42,7 +43,8 @@ const view: SquishyView = params.get('view') === 'closeup' ? 'closeUp' : 'map';
 const registry = visualRegistry(GAME_DATA);
 const allLooks = galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts);
 const lookParam = params.get('look');
-const looks = lookParam ? allLooks.filter((l) => l.id === lookParam) : allLooks;
+const lookIds = lookParam?.split(',') ?? [];
+const looks = lookParam ? lookIds.flatMap((id) => allLooks.filter((l) => l.id === id)) : allLooks;
 const requested = Number(params.get('count'));
 const count =
   Number.isInteger(requested) && requested > 0
@@ -55,6 +57,17 @@ const breathing = !params.has('still');
 const shadow = params.has('shadow');
 // Degrees; 180 shows the back (tails, wings).
 const yaw = (Number(params.get('yaw')) || 0) * (Math.PI / 180);
+// Degrees down from the horizon (`?pitch=15` looks the squishies in the face).
+const pitchParam = Number(params.get('pitch'));
+const distance = Number(params.get('distance'));
+const camera = {
+  ...(params.has('pitch') && { pitch: (pitchParam * Math.PI) / 180 }),
+  ...(distance > 0 && { startDistance: distance, minDistance: Math.min(distance, 7) }),
+};
+const accessories = (params.get('accessory') ?? '').split(',').flatMap((id): ClothingItem[] => {
+  const item = CLOTHING_BY_ID.get(id);
+  return item ? [item] : [];
+});
 
 let stage: Stage | null = null;
 let field: SquishyField | null = null;
@@ -92,11 +105,14 @@ await boot(canvas, {
           scale: view === 'closeUp' ? 5 : 1,
           yaw,
           shadow,
+          accessories,
+          drop: Number(params.get('drop')) || 0,
         });
         field = built.field;
         return built.content;
       },
       tier,
+      camera,
     ),
   onStart: (s) => {
     stage = s;
@@ -194,7 +210,10 @@ window.__heartpatchGallery = {
         sum +
         2 +
         (h.params.head ? 1 : 0) +
-        h.params.parts.reduce((n, part) => n + part.placements.length, 0),
+        h.params.parts.reduce((n, part) => n + part.placements.length, 0) +
+        (field?.accessoryOf(h)
+          ? (CLOTHING_BY_ID.get(field.accessoryOf(h) ?? '')?.visual.pieces.length ?? 0)
+          : 0),
       0,
     ),
   shown: () => handles().map((h) => h.params.speciesId),
