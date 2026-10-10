@@ -70,4 +70,15 @@ describe('the explore sky look (#335)', () => {
     expect(g).toBeGreaterThan(r);
     expect(b).toBeGreaterThan(r);
   });
+
+  it('washes the whole lake a blue-green, day and night (owner, second pass)', () => {
+    for (const look of Object.values(WATER_LOOKS)) {
+      const [r = 0, g = 0, b = 0] = [1, 3, 5].map((i) =>
+        parseInt(look.groundTint.slice(i, i + 2), 16),
+      );
+      expect(g, look.groundTint).toBeGreaterThan(r);
+      expect(b, look.groundTint).toBeGreaterThan(r);
+      expect(look.fog).not.toBeNull();
+    }
+  });
 });

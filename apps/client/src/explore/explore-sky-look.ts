@@ -97,46 +97,50 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
 export const WATER_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
   dawn: {
     ...SKY_LOOKS.dawn,
-    zenith: '#a9c6ea', // TUNE: the surface, lit pink-gold from above
-    horizon: '#4f8fc0', // TUNE
+    zenith: '#9ccfd8', // TUNE: the surface, lit pink-gold through blue-green water
+    horizon: '#2f7f98', // TUNE
     sunDisc: false,
     clouds: 0,
     stars: true,
     starColor: '#eefbff',
-    fog: '#5d9cc8',
-    light: { color: '#cfe6ff', sun: 0.8, environment: 0.85 },
+    fog: '#4f97a8',
+    groundTint: '#c6e6dc', // TUNE: the water's blue-green over everything
+    light: { color: '#c8ece4', sun: 0.8, environment: 0.85 },
   },
   day: {
     ...SKY_LOOKS.day,
-    zenith: '#8fd8f5', // TUNE: sunlight through the water
-    horizon: '#3f8fc4', // TUNE: deep water
+    zenith: '#7fd6d8', // TUNE: sunlight through blue-green water
+    horizon: '#2a8aa0', // TUNE: deep water
     sunDisc: false,
     clouds: 0,
     stars: true,
     starColor: '#eefbff',
-    fog: '#5aa6d6',
-    light: { color: '#c9ecff', sun: 0.9, environment: 0.95 },
+    fog: '#4fa6b4',
+    groundTint: '#c4ece0', // TUNE: the water's blue-green over everything
+    light: { color: '#bdf0e6', sun: 0.9, environment: 0.95 },
   },
   dusk: {
     ...SKY_LOOKS.dusk,
-    zenith: '#b7a9d8', // TUNE
-    horizon: '#3f6fa8', // TUNE
+    zenith: '#a5b8d6', // TUNE
+    horizon: '#2f6a94', // TUNE
     sunDisc: false,
     clouds: 0,
     stars: true,
     starColor: '#eefbff',
-    fog: '#4f7fb4',
-    light: { color: '#d6d2ff', sun: 0.75, environment: 0.8 },
+    fog: '#457e9e',
+    groundTint: '#bcd6dc', // TUNE
+    light: { color: '#cdd8f0', sun: 0.75, environment: 0.8 },
   },
   night: {
     ...SKY_LOOKS.night,
-    zenith: '#4d6bb0', // TUNE: moonlight on the surface
-    horizon: '#24407e', // TUNE: still blue, never black
+    zenith: '#3f7aa8', // TUNE: moonlight through the water
+    horizon: '#1f4f7e', // TUNE: still blue, never black
     sunDisc: false,
     clouds: 0,
     stars: true,
     starColor: '#9ff6ff', // glowing plankton
-    fog: '#2c4a8a',
+    fog: '#2a5a86',
+    groundTint: '#7fa6b0', // TUNE: moonlit water
     light: { color: '#a9c8ff', sun: 0.55, environment: 0.6 },
   },
 };
@@ -170,8 +174,8 @@ export const EXPLORE_SKY = {
     [12, 17, 2],
   ],
   stars: { count: 44, right: 16, from: 6, to: 22, size: 0.22 }, // TUNE: degrees
-  /** Underwater haze, world units from the camera (the camera is about 7 from the Keeper). */
-  fog: { start: 9, end: 30 }, // TUNE
+  /** Underwater and cave haze, world units from the camera (the camera is about 7 from the Keeper). */
+  fog: { start: 5, end: 22 }, // TUNE: a soft depth haze
 } as const;
 
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));

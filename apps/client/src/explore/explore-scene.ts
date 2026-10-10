@@ -39,7 +39,16 @@ import {
   type PropKind,
 } from '../map/map-config.js';
 import { loftRoundedHex } from '../map/hex-mesh.js';
+import type { QualityTier } from '../engine/config.js';
+import { AmbientJudge, ambientMode, DRIFT_MODE, type AmbientMode } from '../map/ambient-layout.js';
 import { linear, merged, painted } from '../map/map-props.js';
+import {
+  AMBIENT_ATTRIBUTE,
+  attachTerrainPlugin,
+  DRIFT_ATTRIBUTE,
+  TerrainClock,
+} from '../map/terrain-plugin.js';
+import { attachCaustics } from './caustics-plugin.js';
 import {
   buildProp,
   CORNER,
@@ -63,6 +72,7 @@ import {
   EXPLORE_FADE,
   EXPLORE_HOP,
   EXPLORE_SEABED,
+  EXPLORE_UNDERWATER,
   EXPLORE_TOOL,
   EXPLORE_VIEW,
 } from './explore-config.js';
@@ -295,11 +305,22 @@ export class ExploreScene {
   /** The ground and its decor, tinted by the time of day (#335: moonlit at night). */
   readonly #ground: { readonly mat: PBRMaterial; readonly base: Color3 }[] = [];
   #drawCalls = 0;
+  /** Under a lake (#335): kelp, fish and caustics move on this clock, the Keeper swims. */
+  readonly #underwater: boolean;
+  readonly #clock = new TerrainClock();
+  readonly #judge = new AmbientJudge();
+  #clockStart: number | null = null;
+  #ambient: AmbientMode = 'off';
+  /** The Snorkel's mask on the Keeper's face, underwater. */
+  #mask: Mesh | null = null;
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
     this.#tile = tile;
-    this.#reduced = options.reducedMotion ?? (() => false);
+    this.#underwater = isUnderwater(tile.terrain);
+    // Underwater the Keeper and team float and bob instead of hopping (#335).
+    const reduced = options.reducedMotion ?? (() => false);
+    this.#reduced = this.#underwater ? () => true : reduced;
     // The sky by the patch's time of day (#335); it sets the clear colour too.
     this.#sky = new ExploreSky(scene, options.sky);
     this.#instrumentation = new SceneInstrumentation(scene);
@@ -355,8 +376,8 @@ export class ExploreScene {
     const places = decorPlaces(tile, this.#colliders);
     this.#decor = { tufts: 0, pebbles: 0, flowers: 0 };
     // No flowers on a lake bed (#335): its tufts are waterweed, its pebbles stay.
-    const kinds = isUnderwater(tile.terrain)
-      ? (['tufts', 'pebbles'] as const)
+    const kinds = this.#underwater
+      ? (['pebbles'] as const)
       : (['tufts', 'pebbles', 'flowers'] as const);
     for (const kind of kinds) {
       const mesh = buildDecor(scene, kind);
@@ -377,6 +398,7 @@ export class ExploreScene {
       );
       this.#decor[kind] = places[kind].length;
     }
+    if (this.#underwater) this.#buildWaterLife(places.tufts, decorMaterial);
 
     // Unsearched spots glint (#291): a little star over each, turned to the camera.
     this.#glints = buildGlint(scene);
@@ -404,6 +426,40 @@ export class ExploreScene {
         this.#keeperPlacement(),
         keeperItems(options.keeperWearing ?? []),
       );
+      if (this.#underwater) {
+        // The Snorkel worn on the face (#335): a mask and its orange tube,
+        // in head-width units.
+        const part = (m: Mesh, x: number, y: number, z: number, hex: string) => {
+          m.position.set(x, y, z);
+          return painted(m, hex);
+        };
+        const mask = merged('explore-mask', [
+          part(
+            CreateBox('m', { width: 0.82, height: 0.42, depth: 0.16 }, scene),
+            0,
+            0,
+            0,
+            '#3aa0d8',
+          ),
+          part(
+            CreateBox('m', { width: 0.66, height: 0.3, depth: 0.2 }, scene),
+            0,
+            0,
+            -0.02,
+            '#c8f3ff',
+          ),
+          part(
+            CreateCylinder('m', { height: 0.8, diameter: 0.09, tessellation: 8 }, scene),
+            0.5,
+            0.32,
+            0.05,
+            '#ff8a4a',
+          ),
+        ]);
+        mask.material = propMaterial;
+        mask.isPickable = false;
+        this.#mask = mask;
+      }
     }
     options.team.forEach((member, i) => {
       const at = { x: 0, z: 0 };
@@ -544,6 +600,8 @@ export class ExploreScene {
 
   /** The tool in the Keeper's hand (null: hands). */
   hold(tool: ToolId | null): void {
+    // Underwater the Snorkel is worn on the face, not carried (#335).
+    if (this.#underwater && tool === 'net') tool = null;
     if (tool === this.#held) return;
     this.#held = tool;
     for (const t of TOOLS) this.#tools[t].setEnabled(t === tool);
@@ -796,6 +854,7 @@ export class ExploreScene {
 
   /** The held tool at the Keeper's hand, following its position and heading. */
   #placeTool(): void {
+    this.#placeMask();
     const tool = this.#held ? this.#tools[this.#held] : null;
     if (!tool || !this.#keeper) return;
     const anchor = this.#keeper.params.sockets.held.anchors[0] ?? [0.2, 0.5, 0];
@@ -892,6 +951,15 @@ export class ExploreScene {
     PLACE.squash = pose.squash;
     PLACE.shadow = shadowScale(pose.lift);
     PLACE.shadowAlpha = shadowAlpha(pose.lift);
+    if (this.#underwater) {
+      // Swimming (#335): afloat, leaning into a kick, bobbing on the clock.
+      const { swim } = EXPLORE_UNDERWATER;
+      PLACE.lean = swim.lean;
+      PLACE.lift +=
+        (swim.float + swim.bob * Math.sin(this.#clock.time * swim.bobSpeed)) * this.keeperTall;
+      PLACE.shadow = shadowScale(swim.float);
+      PLACE.shadowAlpha = shadowAlpha(swim.float);
+    }
     return PLACE;
   }
 
@@ -910,6 +978,163 @@ export class ExploreScene {
     PLACE.shadow = shadowScale(lift);
     PLACE.shadowAlpha = shadowAlpha(lift);
     return PLACE;
+  }
+
+  /**
+   * Under a lake (#335): kelp where the meadow would grow tufts, swaying on
+   * the GPU, and a few fish circling in the water (one draw call each).
+   */
+  #buildWaterLife(
+    places: readonly { x: number; z: number; scale: number; yaw: number }[],
+    decorMaterial: PBRMaterial,
+  ): void {
+    const scene = this.#scene;
+    attachTerrainPlugin(decorMaterial, this.#clock);
+    const { kelp, fish, fishColors } = EXPLORE_UNDERWATER;
+    const kelpMesh = merged(
+      'explore-kelp',
+      [0, 1, 2].map((i) => {
+        const m = CreateSphere('explore-kelp-blade', { diameter: 1, segments: 5 }, scene);
+        m.scaling.set(0.07, 0.55 - i * 0.1, 0.03);
+        m.position.set((i - 1) * 0.04, (0.55 - i * 0.1) / 2, 0);
+        return painted(m, kelp.colors[i] ?? '#3f9f7a');
+      }),
+    );
+    kelpMesh.material = decorMaterial;
+    kelpMesh.isPickable = false;
+    setInstances(
+      kelpMesh,
+      places.map((p) => {
+        const at = this.#world(p);
+        const s = p.scale * 1.3;
+        return placeAt(
+          at.x,
+          this.#groundAt(p),
+          at.z,
+          new Vector3(s, s, s),
+          Quaternion.RotationYawPitchRoll(p.yaw, 0, 0),
+        );
+      }),
+    );
+    const sway = new Float32Array(Math.max(1, places.length) * 4);
+    places.forEach((p, i) => {
+      sway.set([kelp.sway, p.yaw * 3, 0, 0], i * 4);
+    });
+    kelpMesh.thinInstanceSetBuffer(AMBIENT_ATTRIBUTE, sway, 4, true);
+    this.#decor.tufts = places.length;
+
+    const fishMesh = merged('explore-fish', [
+      painted(
+        (() => {
+          const b = CreateSphere('explore-fish-body', { diameter: 1, segments: 8 }, scene);
+          b.scaling.set(0.07, 0.08, 0.16);
+          return b;
+        })(),
+        '#ffffff',
+      ),
+      painted(
+        (() => {
+          const t = CreateBox(
+            'explore-fish-tail',
+            { width: 0.02, height: 0.09, depth: 0.07 },
+            scene,
+          );
+          t.position.z = -0.1;
+          return t;
+        })(),
+        '#ffffff',
+      ),
+    ]);
+    const fishMat = vinyl(scene, 'explore-fish-mat', { color: '#ffffff' });
+    attachTerrainPlugin(fishMat, this.#clock);
+    fishMesh.material = fishMat;
+    fishMesh.isPickable = false;
+    fishMesh.alwaysSelectAsActiveMesh = true;
+    const colors = new Float32Array(fish.length * 4);
+    const drift = new Float32Array(fish.length * 4);
+    setInstances(
+      fishMesh,
+      fish.map(([x, z, up], i) => {
+        const p = { x, z };
+        const at = this.#world(p);
+        const c = linear(fishColors[i % fishColors.length] ?? '#ffb36b');
+        colors.set([c.r, c.g, c.b, 1], i * 4);
+        const [, , , radius, speed] = fish[i] ?? [0, 0, 0, 0.5, 0.5];
+        drift.set([DRIFT_MODE.orbit, i * 1.7, radius, speed], i * 4);
+        const s = EXPLORE_VIEW.hexSize * 0.35;
+        return placeAt(at.x, this.#groundAt(p) + up, at.z, new Vector3(s, s, s));
+      }),
+    );
+    fishMesh.thinInstanceSetBuffer('color', colors, 4, true);
+    fishMesh.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, drift, 4, true);
+
+    // Caustic light rippling on the sand: one term on the bed's material.
+    const bed = this.#ground.find((g) => g.mat.name === 'explore-tile-mat');
+    if (bed) attachCaustics(bed.mat, this.#clock, EXPLORE_UNDERWATER.caustics);
+  }
+
+  /** How ambient life runs (#335: only underwater; the map's rules for tier, motion and speed). */
+  get ambientMode(): AmbientMode {
+    return this.#ambient;
+  }
+
+  setAmbient(tier: QualityTier, reducedMotion: boolean): boolean {
+    const next = this.#underwater
+      ? ambientMode({ tier, reducedMotion, slow: this.#judge.slow })
+      : 'off';
+    const changed = next !== this.#ambient;
+    this.#ambient = next;
+    return changed;
+  }
+
+  /** Moves the water's clock to `now` (ms): kelp sways, fish circle, the Keeper bobs. */
+  tick(now: number): boolean {
+    if (this.#ambient !== 'live') return false;
+    if (this.#judge.record(now)) {
+      this.#ambient = 'off';
+      return true;
+    }
+    this.#clockStart ??= now;
+    this.#clock.time = (now - this.#clockStart) / 1000;
+    if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
+    this.#placeMask();
+    return true;
+  }
+
+  /** The page was hidden: the time away isn't a slow frame. */
+  skipPace(): void {
+    this.#judge.skip();
+  }
+
+  /** The Snorkel's mask sits on the Keeper's face while it swims (#335). */
+  #placeMask(): void {
+    const mask = this.#mask;
+    if (!mask || !this.#keeper) return;
+    // The face, from the Keeper's own proportions (a big chibi head).
+    const { height, width } = this.#keeper.params;
+    const place = this.#keeperPlacement();
+    Quaternion.RotationYawPitchRollToRef(this.#yaw, place.lean, 0, TOOL_TURN);
+    const k = EXPLORE_VIEW.keeperScale;
+    Matrix.ComposeToRef(
+      TOOL_SCALE.set(k, k, k),
+      TOOL_TURN,
+      TOOL_AT.set(place.x, place.y + place.lift, place.z),
+      TOOL_WORLD,
+    );
+    // On the face: the front of the head (the Keeper faces -z at yaw 0).
+    Vector3.TransformCoordinatesToRef(
+      TOOL_ANCHOR.set(
+        0,
+        height * EXPLORE_UNDERWATER.mask.up,
+        -width * EXPLORE_UNDERWATER.mask.forward,
+      ),
+      TOOL_WORLD,
+      mask.position,
+    );
+    mask.rotationQuaternion ??= new Quaternion();
+    mask.rotationQuaternion.copyFrom(TOOL_TURN);
+    const s = k * width * EXPLORE_UNDERWATER.mask.size;
+    mask.scaling.set(s, s, s);
   }
 
   #buildGround(terrain: string): void {
