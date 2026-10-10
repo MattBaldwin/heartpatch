@@ -568,4 +568,110 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
     expect(gaveUp.view.phase.type === 'over' && gaveUp.view.phase.result.winner).toBe('b');
     expect((await liveRowOf(battleId))?.active).toBe(false);
   });
+
+  it('a start for side b racing a friendly battle never seats them twice', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    const battles = service(server);
+    const results = await Promise.allSettled([
+      battles.startFriendly({ mapId, aUserId: lee.id, bUserId: sam.id }),
+      call(server, 'POST', `/maps/${mapId}/dev/battles`, sam, {}),
+    ]);
+    expect(results.map((r) => r.status)).toContain('fulfilled');
+    const seated = await db.query.battles.findMany({
+      where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.status, 'active')),
+    });
+    const asB = await db.query.liveBattles.findMany({
+      where: (t, { and, eq }) => and(eq(t.bUserId, sam.id), eq(t.active, true)),
+    });
+    const samSeats = seated.filter((b) => b.playerUserId === sam.id).length + asB.length;
+    expect(samSeats).toBe(1);
+  });
+
+  it('nobody has a friendly battle with themselves', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    const battles = service(server);
+    await expect(
+      battles.startFriendly({ mapId, aUserId: lee.id, bUserId: lee.id }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    // The owner's switch is checked here too; 29-B's route test flips it.
+  });
+
+  it('teams of two: a changed pick, sending someone out, and an AI send-out on a timeout', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    // Lee brings a much stronger squishy, so Sam's first one is tuckered out fast.
+    for (const [who, level] of [
+      [lee, 30],
+      [sam, 4],
+      [sam, 3],
+    ] as const) {
+      const granted = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, who, {
+        speciesId: 'emberbun',
+        level,
+      });
+      expect(granted.statusCode, granted.body).toBe(201);
+    }
+    const battleId = await service(server).startFriendly({
+      mapId,
+      aUserId: lee.id,
+      bUserId: sam.id,
+    });
+
+    // A changed pick replaces the first and tells Sam nothing new.
+    let mine = await get(server, lee, battleId);
+    const moves = mine.view.sides.a.squishies[mine.view.sides.a.active]!.moves;
+    expect((await pick(server, lee, mine, { type: 'move', move: moves[0]! })).statusCode).toBe(200);
+    const changed = await pick(server, lee, mine, { type: 'move', move: moves[1]! });
+    expect(changed.statusCode, changed.body).toBe(200);
+    mine = battleOf(changed);
+    expect(mine.live?.myPick).toEqual({ type: 'move', move: moves[1] });
+    const picked = (await eventsOf(mapId)).filter((e) => e.type === 'battle.picked');
+    expect(picked).toHaveLength(1);
+
+    // Play until Sam has to send someone out; Sam does it once by hand.
+    let sentOut = false;
+    for (let i = 0; i < 40; i++) {
+      const theirs = await get(server, sam, battleId);
+      if (theirs.status !== 'active') break;
+      const phase = theirs.view.phase;
+      if (phase.type === 'replace') {
+        if (sentOut) break;
+        const res = await pick(server, sam, theirs, { type: 'replace', slot: 1 });
+        expect(res.statusCode, res.body).toBe(200);
+        sentOut = true;
+        continue;
+      }
+      mine = await get(server, lee, battleId);
+      if (mine.live?.myPick === null) {
+        await pick(server, lee, mine, { type: 'move', move: myMove(mine) });
+      }
+      if (theirs.live?.myPick === null) {
+        await pick(server, sam, theirs, { type: 'move', move: myMove(theirs) });
+      }
+    }
+    expect(sentOut).toBe(true);
+
+    // Sam's next one is tuckered out too, and Sam (no socket) doesn't send
+    // anyone out: after the turn time and the away-grace, the AI does.
+    let theirs = await get(server, sam, battleId);
+    for (let i = 0; i < 40 && theirs.view.phase.type !== 'replace'; i++) {
+      mine = await get(server, lee, battleId);
+      if (mine.live?.myPick === null)
+        await pick(server, lee, mine, { type: 'move', move: myMove(mine) });
+      if (theirs.live?.myPick === null) {
+        await pick(server, sam, theirs, { type: 'move', move: myMove(theirs) });
+      }
+      theirs = await get(server, sam, battleId);
+    }
+    expect(theirs.view.phase).toMatchObject({ type: 'replace', sides: ['b'] });
+    clock.setTime(clock.getTime() + (RULES.turnSeconds + RULES.awayGraceSeconds + 2) * SECOND_MS);
+    const after = await get(server, sam, battleId);
+    expect(after.view.phase.type).not.toBe('replace');
+    expect(after.live?.covered.at(-1)).toEqual({ turn: after.view.turn, side: 'b' });
+  });
 });

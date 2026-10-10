@@ -399,6 +399,9 @@ const MESSAGES = {
   notLive: 'Cheers are for battles with a friend!',
   unknownCheer: "We don't know that cheer.",
   busy: 'Someone is already in a battle. Try again in a bit!',
+  notYourself: "You can't battle yourself, silly!",
+  friendlyTutorial: 'Friendly battles happen on a patch with friends!',
+  friendlyOff: 'Friendly battles are switched off on this patch.',
   noFriendlyTeam: 'Everyone needs a squishy friend to battle!',
 } as const;
 
@@ -467,6 +470,13 @@ export function playerBattleView(
     endedAt: row.endedAt?.toISOString() ?? null,
     ...(options.live && { live: options.live }),
   };
+}
+
+/** The same move or the same swap: a pick against `legalChoices`, field by field. */
+function sameChoice(a: BattleChoice, b: BattleChoice): boolean {
+  if (a.type === 'move' && b.type === 'move') return a.move === b.move;
+  if (a.type === 'swap' && b.type === 'swap') return a.slot === b.slot;
+  return false;
 }
 
 export function createBattlesService(options: BattlesServiceOptions): BattlesService {
@@ -554,6 +564,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     row: BattleRow,
     live: LiveRow,
     at: Date,
+    options: { deferTurned?: boolean } = {},
   ): Promise<BattleRow> => {
     if (!liveDue(row, live, at)) return row;
     const step = settleTimeouts({
@@ -573,7 +584,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     } else {
       await repo.saveProgress(row.id, { actions, state: step.state });
     }
-    await appendTurned(repo, row, live, step.state.turn);
+    // `maps` comes last (lock order step 13): when an action follows in this
+    // transaction (it may finish the battle and lock squishies), the caller
+    // appends `battle.turned` after it instead.
+    if (!options.deferTurned || step.state.phase.type === 'over') {
+      await appendTurned(repo, row, live, step.state.turn);
+    }
     return (await repo.findBattle(row.id)) ?? row;
   };
 
@@ -999,12 +1015,14 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         const legal =
           row.state.phase.type === 'turn' &&
           sidesToAct(row.state).includes(side) &&
-          legalChoices(row.state, side).some((c) => JSON.stringify(c) === JSON.stringify(choice));
+          legalChoices(row.state, side).some((c) => sameChoice(c, choice));
         if (!legal) throw new AppError('CONFLICT', MESSAGES.badChoice);
         const picks = { ...live.picks, [side]: choice };
         const turn = liveTurnAction(row.state, picks);
         if (!turn) {
           await liveRepo.save(row.id, { picks, graceUsed });
+          // Changing a pick tells nobody anything new: one event per side per turn.
+          if (live.picks[side]) return;
           await repo.appendEvent({
             mapId: row.mapId,
             type: 'battle.picked',
@@ -1073,6 +1091,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     }
     const begin = () =>
       store.transaction(async (repo, tx) => {
+        // The player's battle seat first (before any row lock): a friendly
+        // battle seating them as side `b` can't slip in beside this one.
+        await repo.lockBattleSeats(mapId, [user.id]);
         const { map } = await requireMember(tx, user, mapId);
         const active = await repo.findActive(mapId, user.id);
         if (active) return { row: active, created: false };
@@ -1257,13 +1278,19 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         if (seat.live) {
           // A live battle (#29): passed deadlines first, so a late pick
           // can't land on a turn the AI already played.
-          const row = await settleLive(repo, tx, locked, seat.live, at);
+          const row = await settleLive(repo, tx, locked, seat.live, at, { deferTurned: true });
           if (row.status !== 'active') {
             return { row, mapId: row.mapId, befriended: false, live: true };
           }
+          // The AI already played the turn this pick was for: refused, which
+          // rolls the settle back too; the next read settles it the same way.
           if (request.turn !== row.state.turn) throw new AppError('CONFLICT', MESSAGES.movedOn);
           const live = (await createLiveBattlesRepo(tx).find(row.id)) ?? seat.live;
           await actLive(repo, tx, row, live, seat.side, request, at);
+          // The settle's own `battle.turned`, after the action's writes (`maps` last).
+          if (row.actions.length !== locked.actions.length) {
+            await appendTurned(repo, row, live, row.state.turn);
+          }
           return {
             row: await repo.findBattle(row.id),
             mapId: row.mapId,
@@ -1347,83 +1374,99 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     },
 
     startFriendly: async ({ mapId, aUserId, bUserId, started }) => {
-      if (aUserId === bUserId) throw new AppError('VALIDATION_FAILED', MESSAGES.busy);
-      const battleId = await store.transaction(async (repo, tx) => {
-        const maps = createMapsRepo(tx);
-        // Both member rows, in id order (lock order step 2), so two asks
-        // between the same players can't both start a battle.
-        for (const userId of [aUserId, bUserId].sort()) {
-          if (!(await maps.lockMember(mapId, userId))) {
-            throw new AppError('NOT_FOUND', MESSAGES.notFound);
+      if (aUserId === bUserId) throw new AppError('VALIDATION_FAILED', MESSAGES.notYourself);
+      const begin = () =>
+        store.transaction(async (repo, tx) => {
+          // Both players' battle seats, then their member rows (both in id order).
+          await repo.lockBattleSeats(mapId, [aUserId, bUserId]);
+          const maps = createMapsRepo(tx);
+          // Both member rows, in id order (lock order step 2), so two asks
+          // between the same players can't both start a battle.
+          for (const userId of [aUserId, bUserId].sort()) {
+            if (!(await maps.lockMember(mapId, userId))) {
+              throw new AppError('NOT_FOUND', MESSAGES.notFound);
+            }
           }
-        }
-        const map = await maps.findMap(mapId);
-        if (!map) throw new AppError('NOT_FOUND', MESSAGES.notFound);
-        const teams: TeamSquishyRow[][] = [];
-        for (const userId of [aUserId, bUserId]) {
-          // One battle at a time each, on either side (`findActive` sees both).
-          if (await repo.findActive(mapId, userId)) throw new AppError('CONFLICT', MESSAGES.busy);
-          const team = await repo.listTeam(mapId, userId, content.rules.teamSize);
-          if (team.length === 0) throw new AppError('CONFLICT', MESSAGES.noFriendlyTeam);
-          teams.push(team);
-        }
-        const [aTeam = [], bTeam = []] = teams;
-        const at = now();
-        const setup: BattleSetup = {
-          seed: newSeed(),
-          sides: {
-            a: { controller: { type: 'player' }, squishies: aTeam },
-            b: { controller: { type: 'player' }, squishies: bTeam },
-          },
-        };
-        const state = startBattle(content, setup);
-        // At the Keeper who asked's Heart Seed (their home terrain).
-        const arena = await arenaFor(repo, {
-          mapId,
-          userId: aUserId,
-          timeZone: map.timeZone,
-          at,
-          tile: null,
-        });
-        const row = await repo.insertBattle({
-          mapId,
-          kind: 'friendly',
-          playerUserId: aUserId,
-          seed: setup.seed,
-          contentHash: content.contentHash,
-          setup: setup.sides,
-          state,
-          startedAt: at,
-          spawn: null,
-          arena,
-        });
-        await createLiveBattlesRepo(tx).insert({
-          battleId: row.id,
-          mapId,
-          bUserId,
-          deadlineAt: nextDeadline(at, liveRules),
-          coverPolicy: { a: liveRules.coverPolicy, b: liveRules.coverPolicy },
-        });
-        const events = (await started?.(tx, row)) ?? [];
-        // Each Keeper meets the other's squishies (the catalog, design doc §21).
-        const spawns = createSpawnsRepo(tx);
-        await spawns.markSeen(mapId, aUserId, setupSpecies(bTeam), at);
-        await spawns.markSeen(mapId, bUserId, setupSpecies(aTeam), at);
-        await repo.appendEvent({
-          mapId,
-          type: 'battle.started',
-          actorUserId: aUserId,
-          payload: {
-            battleId: row.id,
-            kind: row.kind,
+          const map = await maps.findMap(mapId);
+          if (!map) throw new AppError('NOT_FOUND', MESSAGES.notFound);
+          // The authoritative check, whoever calls: patches with friends only,
+          // and only while the owner allows it.
+          if (map.kind !== 'multiplayer') throw new AppError('CONFLICT', MESSAGES.friendlyTutorial);
+          if (!map.friendlyChallenges) throw new AppError('CONFLICT', MESSAGES.friendlyOff);
+          const teams: TeamSquishyRow[][] = [];
+          for (const userId of [aUserId, bUserId]) {
+            // One battle at a time each, on either side (`findActive` sees both).
+            if (await repo.findActive(mapId, userId)) throw new AppError('CONFLICT', MESSAGES.busy);
+            const team = await repo.listTeam(mapId, userId, content.rules.teamSize);
+            if (team.length === 0) throw new AppError('CONFLICT', MESSAGES.noFriendlyTeam);
+            teams.push(team);
+          }
+          const [aTeam = [], bTeam = []] = teams;
+          const at = now();
+          const setup: BattleSetup = {
+            seed: newSeed(),
+            sides: {
+              a: { controller: { type: 'player' }, squishies: aTeam },
+              b: { controller: { type: 'player' }, squishies: bTeam },
+            },
+          };
+          const state = startBattle(content, setup);
+          // At the Keeper who asked's Heart Seed (their home terrain).
+          const arena = await arenaFor(repo, {
+            mapId,
             userId: aUserId,
-            teamSpecies: aTeam.map((s) => s.speciesId),
-            opponentSpecies: bTeam.map((s) => s.speciesId),
-          },
+            timeZone: map.timeZone,
+            at,
+            tile: null,
+          });
+          const row = await repo.insertBattle({
+            mapId,
+            kind: 'friendly',
+            playerUserId: aUserId,
+            seed: setup.seed,
+            contentHash: content.contentHash,
+            setup: setup.sides,
+            state,
+            startedAt: at,
+            spawn: null,
+            arena,
+          });
+          await createLiveBattlesRepo(tx).insert({
+            battleId: row.id,
+            mapId,
+            bUserId,
+            deadlineAt: nextDeadline(at, liveRules),
+            coverPolicy: { a: liveRules.coverPolicy, b: liveRules.coverPolicy },
+          });
+          const events = (await started?.(tx, row)) ?? [];
+          // Each Keeper meets the other's squishies (the catalog, design doc §21).
+          const spawns = createSpawnsRepo(tx);
+          await spawns.markSeen(mapId, aUserId, setupSpecies(bTeam), at);
+          await spawns.markSeen(mapId, bUserId, setupSpecies(aTeam), at);
+          await repo.appendEvent({
+            mapId,
+            type: 'battle.started',
+            actorUserId: aUserId,
+            payload: {
+              battleId: row.id,
+              kind: row.kind,
+              userId: aUserId,
+              teamSpecies: aTeam.map((s) => s.speciesId),
+              opponentSpecies: bTeam.map((s) => s.speciesId),
+            },
+          });
+          for (const event of events) await repo.appendEvent(event);
+          return row.id;
         });
-        for (const event of events) await repo.appendEvent(event);
-        return row.id;
-      });
+      let battleId: string;
+      try {
+        battleId = await begin();
+      } catch (err) {
+        // A start that didn't take the seat lock (an older server mid-deploy)
+        // reached the one-active-battle index first.
+        if (isUniqueViolation(err)) throw new AppError('CONFLICT', MESSAGES.busy);
+        throw err;
+      }
       published(mapId);
       return battleId;
     },
