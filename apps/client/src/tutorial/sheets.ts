@@ -1,4 +1,4 @@
-import type { Rect } from './overlay-layout.js';
+import type { Rect } from '../ui/geometry.js';
 
 // What else is on screen while the tutorial runs (#127, #128, #139). Sprout
 // waits its turn behind any open sheet: a tile chip, the care sheet, the
