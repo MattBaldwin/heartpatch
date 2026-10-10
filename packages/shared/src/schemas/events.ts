@@ -63,6 +63,9 @@ const BattleStartedSchema = z.strictObject({
   teamSpecies: z.array(z.string()),
   opponentSpecies: z.array(z.string()),
 });
+/** A live battle's two players (#29): who is on side `a` and side `b`. */
+const LivePair = { battleId: z.uuid(), aUserId: z.uuid(), bUserId: z.uuid() };
+const TurnSchema = z.number().int().min(0);
 const BattleEndedSchema = z.strictObject({
   battleId: z.uuid(),
   kind: BattleKindSchema,
@@ -162,6 +165,32 @@ export const GAME_EVENTS = {
    * server (`no-contest`, when the content was re-tuned mid-battle).
    */
   'battle.ended': { internal: BattleEndedSchema, public: z.object(BattleEndedSchema.shape) },
+  /**
+   * Live battles (#29): one player picked this turn. Never what they picked:
+   * the pick stays hidden in `live_battles` until the turn plays. Only the
+   * battle's two players hear it (`livePairView`).
+   */
+  'battle.picked': {
+    internal: z.strictObject({ ...LivePair, side: BattleSideIdSchema, turn: TurnSchema }),
+    public: z.object({ ...LivePair, side: BattleSideIdSchema, turn: TurnSchema }),
+  },
+  /**
+   * A live battle moved on (#29): `turn` is the engine's turn count after the
+   * step (a turn played, someone was sent out, or the battle ended). The two
+   * players fetch the battle for what happened; no choice is ever in here.
+   */
+  'battle.turned': {
+    internal: z.strictObject({ ...LivePair, turn: TurnSchema }),
+    public: z.object({ ...LivePair, turn: TurnSchema }),
+  },
+  /**
+   * A cheer in a live battle (#29): a quick-message or emoji id from
+   * `QUICK_MESSAGES`, never text. Only the two players hear it.
+   */
+  'battle.cheered': {
+    internal: z.strictObject({ ...LivePair, side: BattleSideIdSchema, messageId: ContentIdSchema }),
+    public: z.object({ ...LivePair, side: BattleSideIdSchema, messageId: ContentIdSchema }),
+  },
   /**
    * A player befriended a wild squishy with a Heart Charm (#14). The species
    * stays internal, like `battle.started`'s: a secret one would otherwise

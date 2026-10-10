@@ -5,7 +5,9 @@ import {
   patchActive,
   squishy,
 } from '../../tests/fixtures/battle.js';
+import { LIVE_BATTLE_RULES } from '../data/live-battles.js';
 import type { BattleAction } from '../schemas/battle.js';
+import { LiveBattleRulesSchema } from '../schemas/data/live-battles.js';
 import { BattleRuleError } from './content.js';
 import { applyBattleAction, replayBattle, startBattle } from './engine.js';
 import { coverChoice, coverReplacement, liveTurnAction, sidesToAct } from './live.js';
@@ -25,6 +27,10 @@ const live = (): BattleState =>
   );
 
 describe('live turns (#29)', () => {
+  it('ships valid live-battle rules', () => {
+    expect(LiveBattleRulesSchema.parse(LIVE_BATTLE_RULES)).toEqual(LIVE_BATTLE_RULES);
+  });
+
   it('both player sides owe a pick in the turn phase', () => {
     expect(sidesToAct(live())).toEqual(['a', 'b']);
   });

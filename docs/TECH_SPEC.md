@@ -90,7 +90,7 @@ heartpatch/
 | Logging | `pino` (Fastify built-in) |
 | Tests | `vitest`, `@playwright/test` |
 | Assets | `@gltf-transform/cli` for glTF optimization and KTX2 textures |
-| Live battles (Phase 2) | `colyseus` |
+| Live battles | none: turn-based live PvP (#29, owner decision 2026-10-09) runs on the battles module, the shared reducer and `@fastify/websocket`. `colyseus` waits until something needs real-time (non-turn) play |
 
 Add anything else only with a one-line justification in the PR.
 
@@ -148,6 +148,7 @@ Add anything else only with a one-line justification in the PR.
 | `journeys` (migration 0034), `battle_kind` + `journey` | journeys to trading posts (#270): one row per `journey` battle, with its post tile, the distance, level and team size it started at, its outcome, and a win's `visit_until` (`ended_at` + `JOURNEY_RULES.visitMinutes`), the visit pass every post command checks on read | #270 |
 | `trade_offers`, `trade_lines`, `mailbox`, `trade_ledger`, `maps.trading_enabled`, `clothing_owned.held_by_offer_id`, `squishy_state` + `in-trade` (migration 0037); shared `ItemChangeReason` + `trade-escrow`, `trade`, `trade-return` (`resource_ledger.reason` is text) | trades and gifts at trading posts (#271): one `trade_offers` row per offer or gift (`open` until answered, cancelled or `expires_at`; the nullable fairness, take-back and bonus columns are #272's and #273's), its lines per side (a squishy, an item stack or a clothing piece), each player's `mailbox` (a finished trade's side, a gift from the moment it's sent, or a `return` note; the lines as `jsonb`; `picked_up_at`), and an append-only `trade_ledger` (one row per offer, event and actor, `UNIQUE NULLS NOT DISTINCT`, so a repeat expiry writes once). Escrow: a squishy keeps its owner while `in-trade`; items leave the bag into the offer (`trade-escrow`); clothing is held by `held_by_offer_id`. The owner's switch is `maps.trading_enabled` (default on) | #271 |
 | `tile_explore` (migration 0032) | exploring your land (#199): one row per player per tile they've searched (`searched`, one bit per search spot; the spots themselves are worked out from the map seed, the tile, its terrain and `layout`), kept when the tile changes hands; `completed_at` once every spot is searched; `joined_at` once it has joined its owner's home as a homestead, and its latest pause (`paused_at` until `resumed_at`) when a capture cut it off. No foreign keys to `maps` or `map_members` (lock order, as `tile_tending`) | #199 |
+| `live_battles`, `challenges`, `maps.friendly_challenges` (boolean, default true), `battle_kind` value `friendly` (migration 0040) | live battles (#29): a battle whose side `b` is a player too, with this turn's hidden picks (`picks`, server-only, cleared every step), the turn deadline, each side's away-grace and AI cover style and the turns the AI covered (`active` while it runs: one battle at a time for side `b` too); asks between two players ("Battle me?" and "Defend now?", pending until answered, cancelled or past `expires_at`); the patch owner's friendly-battle switch | #29 |
 | `squishies.training_building_id`, `training_since` (migration 0024) | Training Grounds (owner decision 2026-10-06): the Training Grounds a squishy practices at (`ON DELETE SET NULL`) and when its current count of XP started (XP worked out on read). One job at a time is kept by the commands, as for guards | upgrades Fix PR |
 | `squishies.joined_level` (integer, nullable, migration 0028) | the level a squishy joined at, so the evolving meter counts a befriended one from there (owner decision 2026-10-07); set on every insert, backfilled from `squishy.captured` events, else the level at migration; null (the previous release's rows) reads as the level now | #205 |
 | `users.role`, `admin_totp`, `admin_sessions`, `admin_audit` (migration 0030) | the operator admin console: the admin role (set only by a host script), each admin's authenticator, console sessions apart from `sessions`, and the audit log of every admin action | #196 |
@@ -212,6 +213,7 @@ Add anything else only with a one-line justification in the PR.
   | #269 | `post.placed` (trading posts came to an older patch: the boot pass's new post tiles; land is public, so members see the same) |
   | #270 | `journey.started`, `journey.ended` (only to the player: where, how far, and a win's visit pass; everyone else sees `battle.*`) |
   | #271 | `trade.offered`, `trade.cancelled`, `trade.expired` (only to the offer's two players, never what it holds), `trade.answered` (the two players hear yes or no; everyone else only "accepted", without the offer id), `gift.collected` (members hear who gave whom, never what), `mailbox.collected` (only to the player) |
+  | #29 | `battle.picked` (a side picked this turn, never what), `battle.turned` (the turn count after a live step), `battle.cheered` (a quick-message or emoji id); all three only to the battle's two players (`livePairView`) |
   | #199 | `explore.searched` (who searched which spot kind where; a `notable` find's kind, never items), `tile.explored` (a tile fully explored), `homestead.joined`, `homestead.paused`, `homestead.resumed` (whose, which tiles) |
 
   Milestones (#44) write no event: they're account-level, and the client looks for `news` (`GET /milestones`) after the player's own play arrives live. A `milestone.earned` event can replace that look later. A tile's change is sent as `tile.attacked` or `tile.captured`; there is no `tile.updated`.
@@ -255,7 +257,7 @@ Add anything else only with a one-line justification in the PR.
     2. a member row locked to check it (`lockMember`: territory, raids)
     3. the seats lock (the owner's `map_members` row), then a join request
     4. `users`, then `outfits`
-    5. the battle, then its `journeys` row (5b, #270: a journey's finish locks it right after the battle and before squishies)
+    5. the battle, then its `journeys` row (5b, #270: a journey's finish locks it right after the battle and before squishies), then its `live_battles` row (5c, #29: read and written under the battle's lock; a live battle's finish ends it first). Starting a friendly battle locks both players' member rows first (step 2, id order)
     6. tiles, then `tile_defenders`, then `tile_explore` rows (#199, `(user_id, tile_id)` order)
     7. `gather_jobs`
     8. buildings, then fence segments (#203), then a craft

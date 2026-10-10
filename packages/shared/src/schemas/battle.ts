@@ -301,10 +301,18 @@ export type BattleStatus = z.infer<typeof BattleStatusSchema>;
  * Kinds of battle: a wild squishy (#14), a neutral tile's guardians (`tile`,
  * #15), another player's defenders (`rival-tile`, #15) and the Hollow's
  * shadow guardians (`rescue`, #21) and a trading post's trail squishies
- * (`journey`, #270). Tile battles use one of the player's daily attempts;
- * rescues (decision C) and journeys never cost one.
+ * (`journey`, #270), and a friendly battle between two Keepers who are both
+ * online (`friendly`, #29). Tile battles use one of the player's daily
+ * attempts; rescues (decision C), journeys and friendly battles never cost one.
  */
-export const BattleKindSchema = z.enum(['wild', 'tile', 'rival-tile', 'rescue', 'journey']);
+export const BattleKindSchema = z.enum([
+  'wild',
+  'tile',
+  'rival-tile',
+  'rescue',
+  'journey',
+  'friendly',
+]);
 export type BattleKind = z.infer<typeof BattleKindSchema>;
 
 /** Kinds that battle for a tile (#15): they use an attempt, and leaving counts as a loss. */
@@ -368,6 +376,22 @@ export type BattleRewards = z.infer<typeof BattleRewardsSchema>;
 export const BattleTimeOfDaySchema = z.enum(['day', 'dusk', 'night']);
 export type BattleTimeOfDay = z.infer<typeof BattleTimeOfDaySchema>;
 
+/**
+ * A live battle's turn state (#29), from the viewer's side: both players pick
+ * at once and the turn plays when both have. The opponent's pick is never
+ * here, only whether they've picked. `deadlineAt`: when the AI picks for
+ * whoever hasn't (null once the battle is over). `covered`: turns the AI
+ * picked for a side whose time ran out, so the client can say "Sprout helped".
+ */
+export const LiveBattleViewSchema = z.object({
+  opponentUserId: z.uuid(),
+  deadlineAt: z.iso.datetime().nullable(),
+  myPick: BattleChoiceSchema.nullable(),
+  opponentPicked: z.boolean(),
+  covered: z.array(z.object({ turn: z.number().int().min(0), side: BattleSideIdSchema })),
+});
+export type LiveBattleView = z.infer<typeof LiveBattleViewSchema>;
+
 export const PlayerBattleSchema = z.object({
   id: z.uuid(),
   mapId: z.uuid(),
@@ -397,8 +421,17 @@ export const PlayerBattleSchema = z.object({
   timeOfDay: BattleTimeOfDaySchema,
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
+  /** Present only for a battle between two players (#29). */
+  live: LiveBattleViewSchema.optional(),
 });
 export type PlayerBattle = z.infer<typeof PlayerBattleSchema>;
+
+/**
+ * `POST /battles/:battleId/cheer` (#29): a quick message or emoji id from
+ * `QUICK_MESSAGES`, never text (CLAUDE.md rule 9). Live battles only.
+ */
+export const BattleCheerRequestSchema = z.strictObject({ messageId: ContentIdSchema });
+export type BattleCheerRequest = z.infer<typeof BattleCheerRequestSchema>;
 
 export const BattleResponseSchema = z.object({ battle: PlayerBattleSchema });
 export type BattleResponse = z.infer<typeof BattleResponseSchema>;

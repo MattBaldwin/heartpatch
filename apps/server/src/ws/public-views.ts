@@ -80,6 +80,18 @@ function twoPlayerView(type: 'trade.offered' | 'trade.cancelled' | 'trade.expire
   });
 }
 
+/** A live battle's view (#29): only its two players (`aUserId`, `bUserId`) hear it. */
+function livePairView(type: 'battle.picked' | 'battle.turned' | 'battle.cheered'): PublicView {
+  return definePublicView({
+    schema: GAME_EVENTS[type].public,
+    build: (event, recipient) => {
+      const payload = parseGameEventPayload(type, event.payload);
+      const theirs = [payload.aUserId, payload.bUserId].includes(recipient.userId);
+      return theirs ? payload : null;
+    },
+  });
+}
+
 /**
  * A trade's answer (#271): the two players hear which, with the offer; everyone
  * else hears only that a trade happened, and nothing of a "no thanks".
@@ -120,6 +132,11 @@ export const PUBLIC_VIEWS: PublicViews = {
   'trade.cancelled': twoPlayerView('trade.cancelled'),
   'trade.expired': twoPlayerView('trade.expired'),
   'mailbox.collected': ownerOnlyView('mailbox.collected'),
+  // A live battle's turns and cheers (#29) are its two players' business;
+  // everyone else sees `battle.started` and `battle.ended`.
+  'battle.picked': livePairView('battle.picked'),
+  'battle.turned': livePairView('battle.turned'),
+  'battle.cheered': livePairView('battle.cheered'),
 };
 
 /**
