@@ -257,6 +257,21 @@ describe('branches (#32)', () => {
     ]);
   });
 
+  it('refuses two branches of one step that share a feeling', () => {
+    const problems = withBranch((d) => {
+      d.evolutionOdds.push(odds);
+      d.secretEvolutions.push({
+        from: 'fixture-puddlepuff',
+        into: 'fixture-moonmallow',
+        level: 16,
+        trigger: { kind: 'feeling', feeling: 'sleepy' },
+      });
+    });
+    expect(problems).toEqual([
+      'secretEvolutions[1]: "fixture-puddlepuff" already has a sleepy branch at level 16',
+    ]);
+  });
+
   it('refuses odds for an evolution that does not exist, or listed twice', () => {
     expect(withBranch((d) => d.evolutionOdds.push(odds, odds)).join('\n')).toMatch(/listed twice/);
     expect(

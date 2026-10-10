@@ -145,7 +145,8 @@ export interface EvolutionRoll {
 /**
  * Rolls a step's forms (#32). The same seed, forms, inputs and rules always
  * give the same pick, so a logged roll replays exactly. Forms are walked in
- * table order; the default form always has weight, so the total is positive.
+ * table order (`Rng.weighted`); the default form's weight is positive
+ * (`EvolutionRulesSchema`), so there's always something to pick.
  */
 export function rollEvolution(
   seed: Seed,
@@ -155,20 +156,9 @@ export function rollEvolution(
 ): EvolutionRoll {
   if (forms.length === 0) throw new RangeError('rollEvolution needs at least one form');
   const weights = evolutionWeights(forms, inputs, rules);
+  // `weighted` draws the generator's first `next()`, so `u` is that same draw, logged.
   const u = Rng.fromSeed(seed).next();
-  const total = weights.reduce((sum, w) => sum + w.weight, 0);
-  let left = u * total;
-  const last = weights.findLast((w) => w.weight > 0) ?? weights[0];
-  if (!last) throw new RangeError('rollEvolution needs at least one form');
-  let picked = last;
-  for (const w of weights) {
-    if (w.weight === 0) continue;
-    left -= w.weight;
-    if (left < 0) {
-      picked = w;
-      break;
-    }
-  }
+  const picked = Rng.fromSeed(seed).weighted(weights);
   return {
     seed,
     u,

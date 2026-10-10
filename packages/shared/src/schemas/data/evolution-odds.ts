@@ -68,8 +68,8 @@ const points = z.number().min(0).max(100);
 export const EvolutionRulesSchema = z
   .strictObject({
     weights: z.strictObject({
-      /** The default form. */
-      default: weight,
+      /** The default form; positive, so a roll always has something to pick. */
+      default: weight.positive(),
       /** A feeling branch whose feeling isn't the dominant one: a small surprise. */
       unaimed: weight,
       /** A branch the squishy is aimed at (its feeling won, or its rare conditions hold). */

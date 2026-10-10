@@ -109,6 +109,8 @@ function checkBranches(data: ServerGameData, gameData: GameData, report: Report)
     ];
     const defaults = new Set<number>();
     const seen = new Set<string>();
+    /** Feeling triggers per level: two branches of one step can't share one (both would be aimed). */
+    const feelings = new Map<number, Set<string>>();
     for (const step of steps) {
       // Unknown, self and repeated evolutions are reported above; they aren't forms.
       // So are public evolutions into secret forms and secret ones into public forms.
@@ -140,6 +142,17 @@ function checkBranches(data: ServerGameData, gameData: GameData, report: Report)
           path,
           `"${s.id}" → "${step.into}" is a branch at level ${String(step.level)} and needs odds`,
         );
+      }
+      const trigger = row !== undefined ? data.evolutionOdds[row]?.trigger : secret?.trigger;
+      if (!isDefault && trigger?.kind === 'feeling') {
+        const taken = feelings.get(step.level) ?? new Set<string>();
+        if (taken.has(trigger.feeling)) {
+          report(
+            path,
+            `"${s.id}" already has a ${trigger.feeling} branch at level ${String(step.level)}`,
+          );
+        }
+        feelings.set(step.level, taken.add(trigger.feeling));
       }
       if (secret && row !== undefined) {
         report(

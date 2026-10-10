@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GAME_DATA } from '../data/index.js';
 import { EVOLUTION_RULES } from '../data/server/evolution-rules.js';
 import { deriveSeed } from '../rng/index.js';
 import type { FeelingId } from '../schemas/data/elements.js';
@@ -22,6 +23,8 @@ import {
 } from './roll.js';
 import { whisperFor } from './whisper.js';
 
+/** `[pick, u]` for the golden roll below. */
+const GOLDEN = ['doze', '0.852963'];
 const FEELINGS: FeelingId[] = ['joy', 'cozy', 'brave', 'silly', 'sleepy', 'spooky'];
 const DAY: EvolutionFacts = { time: 'day', seasons: [], firesLit: [], fireFull: false };
 const NIGHT: EvolutionFacts = { ...DAY, time: 'night' };
@@ -67,6 +70,9 @@ describe('feeling lean', () => {
     expect(lean.points).toEqual({ silly: 6 });
     expect(leanAt(lean, hours(96), EVOLUTION_RULES).points.silly).toBe(3);
     expect(leanAt(lean, hours(-5), EVOLUTION_RULES).points.silly).toBe(6);
+    // Half a half-life: 6 / √2, through the fraction's series.
+    expect(leanAt(lean, hours(48), EVOLUTION_RULES).points.silly).toBe(4.243);
+    expect(leanAt(lean, hours(24), EVOLUTION_RULES).points.silly).toBe(5.045);
   });
 
   it('adds points after decaying, and the most points wins', () => {
@@ -202,6 +208,18 @@ describe('rollEvolution', () => {
     expect(roll.u).toBeLessThan(1);
   });
 
+  // Pinned, so a change to the RNG or to how forms are walked can't silently
+  // re-pick logged rolls (a replay alone changes along with them).
+  it('keeps a golden roll', () => {
+    const roll = rollEvolution(
+      deriveSeed('golden-salt', 'squishy-golden', 'puff', 16),
+      step,
+      inputs({ dominant: 'sleepy', careScore: 0.5 }),
+      EVOLUTION_RULES,
+    );
+    expect([roll.pick, roll.u.toFixed(6)]).toEqual(GOLDEN);
+  });
+
   it('lands near the table odds over many squishies', () => {
     let branches = 0;
     const n = 4000;
@@ -242,6 +260,13 @@ describe('whisperFor', () => {
   const next = stepForms('puff', 100, FORMS);
   const bubbles = { name: 'Bubbles', evolvingPercent: 78, dominant: 'sleepy' as FeelingId };
 
+  it('drops the "changing" line when the winning feeling leads to no branch', () => {
+    expect(whisperFor({ ...bubbles, dominant: 'joy' }, next, EVOLUTION_RULES)).toEqual({
+      icon: '💭',
+      text: 'Bubbles has been feeling very happy lately…',
+    });
+  });
+
   it('names the winning feeling from half the evolving meter', () => {
     expect(whisperFor(bubbles, next, EVOLUTION_RULES)).toEqual({
       icon: '💭',
@@ -257,6 +282,12 @@ describe('whisperFor', () => {
       whisperFor({ ...bubbles, name: 'Rumble' }, stepForms('hoot', 100, FORMS), EVOLUTION_RULES),
     ).toEqual({ icon: '🌙', text: 'Rumble keeps gazing up at the night sky…' });
     expect(whisperFor(bubbles, [FORMS[2]!], EVOLUTION_RULES)).toBeNull();
+  });
+
+  it('gives lean to every care action and only to them', () => {
+    expect(Object.keys(EVOLUTION_RULES.lean.care).sort()).toEqual(
+      GAME_DATA.careActions.map((a) => a.id).sort(),
+    );
   });
 
   it('never names a form or a number', () => {
