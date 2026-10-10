@@ -65,5 +65,15 @@ export const EVOLUTION_RULES: EvolutionRules = {
   },
 };
 
-/** Odds for public branches; the forms land in batches (#32). */
-export const EVOLUTION_ODDS: EvolutionOdds[] = [];
+/**
+ * Public branches (#32): how each is reached. The forms land in batches of
+ * about five, each with owner screenshot approval.
+ */
+export const EVOLUTION_ODDS: EvolutionOdds[] = [
+  // Batch 1: the starters' lines first.
+  { from: 'puddlepuff', into: 'drizzledoze', trigger: { kind: 'feeling', feeling: 'sleepy' } },
+  { from: 'emberbun', into: 'embernap', trigger: { kind: 'feeling', feeling: 'sleepy' } },
+  { from: 'thistlepip', into: 'petalprance', trigger: { kind: 'feeling', feeling: 'joy' } },
+  { from: 'fuzzbolt', into: 'glidebolt', trigger: { kind: 'feeling', feeling: 'joy' } },
+  { from: 'snoozicle', into: 'twirlicle', trigger: { kind: 'feeling', feeling: 'silly' } },
+];
