@@ -1,11 +1,5 @@
-import {
-  CLOTHING,
-  CLOTHING_BY_ID,
-  SQUISHY_SLOT,
-  type ClothingItem,
-  type OwnedClothing,
-  type Rarity,
-} from '@heartpatch/shared';
+import { CLOTHING, type OwnedClothing, type Rarity } from '@heartpatch/shared';
+import { accessoryItem } from '../procedural/accessory.js';
 import { RARITY_NAMES } from '../ui/rarity/rarity.js';
 
 // Dress up (#340): the close-up's picker for a squishy accessory. Pure: what
@@ -38,12 +32,6 @@ export interface DressUpChoice {
 }
 
 const ORDER = new Map(CLOTHING.map((item, i) => [item.id, i]));
-
-/** A squishy accessory from the catalog, or null for anything else. */
-export function accessoryItem(id: string | null | undefined): ClothingItem | null {
-  const item = id ? CLOTHING_BY_ID.get(id) : undefined;
-  return item?.slot === SQUISHY_SLOT ? item : null;
-}
 
 /**
  * "Nothing" first, then every squishy accessory the player owns, in catalog

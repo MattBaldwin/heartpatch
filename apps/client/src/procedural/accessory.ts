@@ -1,4 +1,11 @@
-import type { Body, ClothingItem, PartShape, SquishyAnchor } from '@heartpatch/shared';
+import {
+  CLOTHING_BY_ID,
+  SQUISHY_SLOT,
+  type Body,
+  type ClothingItem,
+  type PartShape,
+  type SquishyAnchor,
+} from '@heartpatch/shared';
 import { surfacePoint } from './body-shape.js';
 import { hexToRgb, type Rgb, type SquishyParams, type Vec3 } from './params.js';
 
@@ -125,6 +132,12 @@ export function accessorySocket(
     // Across the ring (x, z) and the host's height (y).
     size: [2 * Math.abs(side[0]), size[1], Math.abs(back[2] - front[2])],
   };
+}
+
+/** A squishy accessory from the catalog, or null for anything else (an id this client doesn't know). */
+export function accessoryItem(id: string | null | undefined): ClothingItem | null {
+  const item = id ? CLOTHING_BY_ID.get(id) : undefined;
+  return item?.slot === SQUISHY_SLOT ? item : null;
 }
 
 /** An accessory's pieces on `socket`, from the squishy's ground point. */

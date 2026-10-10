@@ -8,7 +8,6 @@ import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import {
-  CLOTHING_BY_ID,
   deriveSeed,
   GAME_DATA,
   hexDistance,
@@ -17,7 +16,6 @@ import {
   hexToWorld,
   KEEPER_DATA,
   Rng,
-  type ClothingItem,
   type HomeResponse,
   type KeeperConfig,
   type Species,
@@ -49,6 +47,7 @@ import type { SquishyLod } from '../procedural/config.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
+import { accessoryItem } from '../procedural/accessory.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
 import { HOME_VIEW, SPOT_SIZE, WANDER } from './home-config.js';
 import { centreOf, spotWorld } from './home-layout.js';
@@ -97,10 +96,6 @@ export interface HomeSceneOptions {
   /** What the Keeper wears (#43): clothing ids. */
   readonly keeperWearing?: readonly string[];
 }
-
-/** A worn accessory's catalog entry (an id this client doesn't know draws nothing). */
-const accessoryOf = (id: string | null): ClothingItem | null =>
-  id === null ? null : (CLOTHING_BY_ID.get(id) ?? null);
 
 interface Resident {
   readonly handle: SquishyHandle;
@@ -311,7 +306,7 @@ export class HomeScene {
         sameAnchor(existing.home, anchor) &&
         (anchor || sameAnchor(existing.at, waitAt))
       ) {
-        this.#squishies.setAccessory(existing.handle, accessoryOf(squishy.accessory));
+        this.#squishies.setAccessory(existing.handle, accessoryItem(squishy.accessory));
         continue;
       }
       if (existing) this.#squishies.remove(existing.handle);
@@ -320,7 +315,7 @@ export class HomeScene {
         : (waitAt ?? { x: 0, z: 0 });
       const handle = this.#squishies.add(kind, squishy.id, this.#placement(at, 0));
       // What it wears (#340): the same pieces as up close.
-      this.#squishies.setAccessory(handle, accessoryOf(squishy.accessory));
+      this.#squishies.setAccessory(handle, accessoryItem(squishy.accessory));
       this.#residents.set(squishy.id, { handle, home: anchor, training, at, hop: null, hops: 0 });
     }
     for (const [id, resident] of this.#residents) {

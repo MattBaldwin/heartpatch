@@ -1,6 +1,7 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { accessoryItem, DRESS_UP_TEXT, dressedLine, dressUpChoices } from './dress-up.js';
+import { accessoryItem } from '../procedural/accessory.js';
+import { DRESS_UP_TEXT, dressedLine, dressUpChoices } from './dress-up.js';
 
 const owned = (...ids: string[]) => ids.map((itemId) => ({ itemId, count: 1 }));
 

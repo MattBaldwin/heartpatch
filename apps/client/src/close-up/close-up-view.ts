@@ -258,6 +258,9 @@ export function screenEllipse(
   };
 }
 
+/** Moved down below the account chip, the squishy keeps at least this gap above the card. */
+const CARD_GAP_PX = 12; // TUNE
+
 /** How much of the free space the squishy's height fills, face to face. */
 export const FILL = 0.55; // TUNE
 
@@ -265,9 +268,11 @@ export const FILL = 0.55; // TUNE
  * Face-to-face framing for the space left above the bottom card: far enough
  * back that the squishy fits (never closer than `face`), and the camera
  * dropped so the squishy sits in the middle of the free space, not behind
- * the card. `freeBottom` is the card's top, CSS pixels from the view's top;
- * `freeTop` is what's covered at the top (the account chip, so a tall hat
- * stays clear of it, #340).
+ * the card. `freeBottom` is the card's top, CSS pixels from the view's top.
+ * `freeTop` is what's covered at the top (the account chip, #340): the
+ * squishy keeps its size and moves down into the space below it, so a tall
+ * hat stays clear of the chip without the squishy shrinking (it must stay
+ * big enough to stroke).
  */
 export function frameFor(
   face: ClosePose,
@@ -276,14 +281,16 @@ export function frameFor(
   freeBottom: number,
   freeTop = 0,
 ): { pose: ClosePose; drop: number } {
-  const bottom = Math.max(freeTop + view.height * 0.3, Math.min(view.height, freeBottom));
-  const free = bottom - freeTop;
+  const free = Math.max(view.height * 0.3, Math.min(view.height, freeBottom));
   const half = Math.tan(view.fov / 2);
   // Screen height of the squishy is height / (2 · d · tan(fov/2)) of the view.
   const fit = (height * view.height) / (FILL * free * 2 * half);
   const distance = Math.max(face.distance, fit);
-  // Move the squishy's middle from the view's middle to the free space's.
-  const shiftPx = view.height / 2 - (freeTop + bottom) / 2;
+  // Its middle goes to the middle of the free space below what's covered, as
+  // far down as it fits with a gap above the card (all the way up: as before).
+  const size = (height * view.height) / (distance * 2 * half);
+  const top = Math.min(Math.max(0, freeTop), Math.max(0, free - size - 2 * CARD_GAP_PX));
+  const shiftPx = view.height / 2 - (top + free) / 2;
   const drop = (shiftPx / (view.height / 2)) * distance * half;
   return { pose: { ...face, distance }, drop };
 }

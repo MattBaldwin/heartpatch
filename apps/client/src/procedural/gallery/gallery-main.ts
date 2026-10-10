@@ -211,9 +211,7 @@ window.__heartpatchGallery = {
         2 +
         (h.params.head ? 1 : 0) +
         h.params.parts.reduce((n, part) => n + part.placements.length, 0) +
-        (field?.accessoryOf(h)
-          ? (CLOTHING_BY_ID.get(field.accessoryOf(h) ?? '')?.visual.pieces.length ?? 0)
-          : 0),
+        (CLOTHING_BY_ID.get(field?.accessoryOf(h) ?? '')?.visual.pieces.length ?? 0),
       0,
     ),
   shown: () => handles().map((h) => h.params.speciesId),

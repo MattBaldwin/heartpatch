@@ -259,17 +259,31 @@ describe('framing', () => {
     expect(box!.ry * 2).toBeLessThan(420 * FILL * 1.1);
   });
 
-  it('frames below what covers the top (the account chip), as well as above the card', () => {
+  it('moves down below what covers the top (the account chip), keeping its size', () => {
     const height = 1.6;
+    const plain = frameFor(CAMERA_POSES.face, height, view, 420);
     const { pose, drop } = frameFor(CAMERA_POSES.face, height, view, 420, 80);
-    const box = screenEllipse(cameraFor(pose, height, drop), view, { width: height, height });
-    expect(box!.y).toBeCloseTo(250, -1);
-    expect(box!.y - box!.ry).toBeGreaterThan(80);
-    expect(box!.y + box!.ry).toBeLessThan(420);
+    expect(pose.distance).toBe(plain.pose.distance);
+    const before = screenEllipse(cameraFor(plain.pose, height, plain.drop), view, {
+      width: height,
+      height,
+    })!;
+    const box = screenEllipse(cameraFor(pose, height, drop), view, { width: height, height })!;
+    expect(Math.abs(box.ry - before.ry)).toBeLessThan(2);
+    expect(box.y).toBeCloseTo(250, -1);
+    expect(box.y - box.ry).toBeGreaterThan(80);
+    expect(box.y + box.ry).toBeLessThan(420);
     // Nothing covered: the same as before.
-    expect(frameFor(CAMERA_POSES.face, height, view, 420, 0)).toEqual(
-      frameFor(CAMERA_POSES.face, height, view, 420),
-    );
+    expect(frameFor(CAMERA_POSES.face, height, view, 420, 0)).toEqual(plain);
+  });
+
+  it('moves down only as far as fits above the card when much is covered', () => {
+    const height = 1.6;
+    const plain = frameFor(CAMERA_POSES.face, height, view, 420);
+    const { pose, drop } = frameFor(CAMERA_POSES.face, height, view, 420, 400);
+    expect(pose.distance).toBe(plain.pose.distance);
+    const box = screenEllipse(cameraFor(pose, height, drop), view, { width: height, height })!;
+    expect(box.y + box.ry).toBeLessThan(420 - 8);
   });
 
   it('never comes closer than face to face, and with no card it stays centred', () => {

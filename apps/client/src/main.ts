@@ -222,6 +222,11 @@ const homeOpen = () => home.debug?.open ?? false;
 const closeUp = createCloseUpScreen({
   root: document.body,
   showScene,
+  // The account chip sits over the top of the view (#340).
+  coveredTop: () => {
+    const chip = document.querySelector<HTMLElement>('.auth-chip');
+    return chip && !chip.hidden ? chip.getBoundingClientRect().bottom : 0;
+  },
   invalidate: () => stage?.invalidate(),
   requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
