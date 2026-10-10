@@ -34,12 +34,14 @@ describe('launch roster (issue #10)', () => {
     expect(everyday.length).toBeGreaterThanOrEqual(12);
     expect(everyday.length).toBeLessThanOrEqual(15);
     expect(halloween).toHaveLength(4);
-    expect(SPECIES).toHaveLength(bases.length * 2);
+    // Every species is a base form or a form one of them evolves into (#32: one or two).
+    expect(SPECIES).toHaveLength(bases.length + evolvedIds.size);
+    for (const base of bases) expect(base.evolutions.length, base.id).toBeLessThanOrEqual(2);
   });
 
-  it('gives every line one simple evolution that keeps its element, feeling and season', () => {
+  it('gives every line a default evolution that keeps its element, feeling and season', () => {
     for (const base of bases) {
-      expect(base.evolutions, base.id).toHaveLength(1);
+      expect(base.evolutions.length, base.id).toBeGreaterThanOrEqual(1);
       const evolved = evolvedFormOf(base);
       expect(evolved.evolutions, evolved.id).toEqual([]);
       expect([evolved.element, evolved.feeling, evolved.season], evolved.id).toEqual([
@@ -53,6 +55,30 @@ describe('launch roster (issue #10)', () => {
         RARITY_ORDER.indexOf(base.rarity),
       );
       expect(evolved.visual.size ?? 1, evolved.id).toBeGreaterThan(base.visual.size ?? 1);
+    }
+  });
+
+  // #32: a branch is a sidegrade of its line's default form, not an upgrade.
+  it('makes every branch a sibling of its default form', () => {
+    const branches = bases.flatMap((base) =>
+      base.evolutions.slice(1).map((evo) => ({ base, evo, branch: byId.get(evo.into)! })),
+    );
+    for (const { base, evo, branch } of branches) {
+      const first = base.evolutions[0]!;
+      const evolved = evolvedFormOf(base);
+      expect(evo.level, branch.id).toBe(first.level);
+      expect(branch.evolutions, branch.id).toEqual([]);
+      expect([branch.element, branch.rarity, branch.season], branch.id).toEqual([
+        base.element,
+        evolved.rarity,
+        base.season,
+      ]);
+      expect(branch.feeling, branch.id).not.toBe(evolved.feeling);
+      expect(branch.visual.size ?? 1, branch.id).toBeGreaterThan(base.visual.size ?? 1);
+      // Synergy moves the budget a little (species.ts); never more than a fifth.
+      const ratio = statTotal(branch) / statTotal(evolved);
+      expect(ratio, branch.id).toBeGreaterThan(0.8);
+      expect(ratio, branch.id).toBeLessThan(1.2);
     }
   });
 
@@ -97,8 +123,10 @@ describe('where the roster lives (server-only tables)', () => {
     for (const id of evolvedIds) expect(spawnable, id).not.toContain(id);
   });
 
-  it('meets every evolved form as a guardian', () => {
-    for (const id of evolvedIds) expect(guarding, id).toContain(id);
+  // Branch forms (#32) are only met by evolving one: in the Gap they'd move
+  // the casual kid's Gap-ready day by three (pnpm sim:progression).
+  it('meets every default evolved form as a guardian', () => {
+    for (const s of bases) expect(guarding, s.id).toContain(evolvedFormOf(s).id);
   });
 
   it('has someone to find on every terrain on any day of the year', () => {
