@@ -67,11 +67,11 @@ describe('explore text', () => {
   });
 
   it('says how many uses a tool has left, and when it needs a rest', () => {
-    expect(usesLine('net', 12)).toBe('12 scoops left');
+    expect(usesLine('net', 12)).toBe('12 dives left');
     expect(usesLine('shovel', 1)).toBe('1 dig left');
     expect(usesLine('rope', 0)).toBe('Resting zZ');
     expect(needsHere('mound', 'shovel')).toBe('This mound needs a Shovel!');
-    expect(needsHere('hollow-log', 'net')).toBe('This hollow log needs a Net!');
+    expect(needsHere('pond', 'net')).toBe('This pond needs a Snorkel!');
     expect(restLine('shovel')).toBe('Your Shovel needs a rest! Craft a new one 🛠️');
   });
 
@@ -115,14 +115,18 @@ describe('explore text', () => {
 
   it('lists a tool recipe against the bag', () => {
     const rows = toolRecipeRows('rope', { greens: 1 });
-    expect(rows).toEqual([{ id: 'greens', text: '🌿 Greens 1/4', enough: false }]);
+    expect(rows).toEqual([
+      { id: 'timber', text: '🪵 Timber 0/2', enough: false },
+      { id: 'greens', text: '🌿 Greens 1/1', enough: true },
+    ]);
     expect(toolRecipeRows('shovel', { timber: 9, stone: 9 }).every((r) => r.enough)).toBe(true);
   });
 
   it('names the tool in hand on the header chip', () => {
     expect(toolChip('shovel', 18)).toBe('Shovel · 18 digs');
     expect(toolChip('lantern', 1)).toBe('Lantern · 1 cave');
-    expect(toolChip('net', 0)).toBe('Net · Resting zZ');
+    expect(toolChip('net', 0)).toBe('Snorkel · Resting zZ');
+    expect(toolChip('rope', 10)).toBe('Walking Stick · 10 hikes');
     expect(toolChip(null, 0)).toBe('Hands');
     expect(toolChipShort('lantern', 20)).toBe('20');
     expect(toolChipShort('net', 0)).toBe('zZ');
@@ -131,8 +135,8 @@ describe('explore text', () => {
 
   it('says what makes a missing tool, counted once the bag is read', () => {
     const rows = toolRecipeRows('rope', { greens: 1 });
-    expect(makeOneLine(rows, true)).toBe('Make one: 🌿 Greens 1/4');
-    expect(makeOneLine(rows, false)).toBe('Make one: 🌿 Greens ×4');
+    expect(makeOneLine(rows, true)).toBe('Make one: 🪵 Timber 0/2 · 🌿 Greens 1/1');
+    expect(makeOneLine(rows, false)).toBe('Make one: 🪵 Timber ×2 · 🌿 Greens ×1');
     expect(makeOneLine([], true)).toBe('');
   });
 

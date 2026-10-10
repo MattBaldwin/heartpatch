@@ -44,7 +44,8 @@ export const CARE_TEXT = {
   evolving: '✨ Evolving',
   evolvingPercent: (p: number) => `${String(p)}%`,
   readyToEvolve: '✨ Ready to evolve!',
-  oneMoreBattle: 'One more battle ✨',
+  // Battles and Training Grounds XP both count (owner decision 2026-10-09, #236).
+  evolvesNextXp: 'Evolves with its next XP ✨',
   evolvingGain: (p: number) => `+${String(p)}% toward evolving!`,
   topLevel: 'Top level!',
   xp: (into: number, size: number) => `${String(into)} / ${String(size)} XP`,
@@ -182,7 +183,7 @@ export interface EvolvingBar {
   /** 0–1. */
   readonly fill: number;
   readonly ready: boolean;
-  /** "One more battle ✨" when ready, else null. */
+  /** "Evolves with its next XP ✨" when ready, else null. */
   readonly sub: string | null;
 }
 
@@ -195,7 +196,7 @@ export function evolvingBar(percent: number | null): EvolvingBar | null {
     value: ready ? '' : CARE_TEXT.evolvingPercent(percent),
     fill: Math.max(0, Math.min(1, percent / 100)),
     ready,
-    sub: ready ? CARE_TEXT.oneMoreBattle : null,
+    sub: ready ? CARE_TEXT.evolvesNextXp : null,
   };
 }
 

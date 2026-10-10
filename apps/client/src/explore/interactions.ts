@@ -50,7 +50,7 @@ export interface InteractionState {
   readonly light: { readonly x: number; readonly y: number } | null;
   readonly glint: { readonly x: number; readonly y: number };
   readonly revealed: boolean;
-  /** Net: when the glow cycle started, and whether the scoop was well timed. */
+  /** Snorkel: when the glow cycle started, and whether the scoop was well timed. */
   readonly startedAt: number;
   readonly bigSplash: boolean;
   readonly done: boolean;
@@ -177,7 +177,7 @@ function dig(s: InteractionState, input: InteractionInput): InteractionState {
 }
 
 /**
- * Rope: left, right, left, right. Any tap on the easy button counts as a
+ * Walking Stick: left, right, left, right. Any tap on the easy button counts as a
  * step too, and holding it climbs all the way ("You can't fall!").
  */
 function climb(s: InteractionState, input: InteractionInput): InteractionState {
@@ -234,7 +234,7 @@ function light(s: InteractionState, input: InteractionInput): InteractionState {
   }
 }
 
-/** Net: a swipe through the water scoops; while it glows, the splash is bigger. */
+/** Snorkel: a swipe through the water scoops; while it glows, the splash is bigger. */
 function scoop(s: InteractionState, input: InteractionInput): InteractionState {
   switch (input.type) {
     case 'easy':

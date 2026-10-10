@@ -7,7 +7,8 @@ import type { ExploreRules } from '../schemas/data/explore.js';
  * (`data/server/explore-finds.ts`).
  */
 export const EXPLORE_RULES: ExploreRules = {
-  // Bump when anything below (or `searchSpots`) would move or swap a tile's spots.
+  // Bump when anything below (or `searchSpots`) would move or swap every
+  // tile's spots. One terrain's change bumps that terrain's own `layout` (#335).
   layout: 1,
   spotKinds: [
     { id: 'rock', name: 'Rock', tool: null, interaction: 'lift' },
@@ -24,8 +25,11 @@ export const EXPLORE_RULES: ExploreRules = {
   // TUNE: owner decision 2026-10-06 ("a Shovel lasts 20 digs"); the rest are guesses.
   tools: [
     { id: 'shovel', name: 'Shovel', uses: 20 },
-    { id: 'net', name: 'Net', uses: 20 },
-    { id: 'rope', name: 'Rope', uses: 10 },
+    // #335 (owner decision 2026-10-09): the Net became the Snorkel and the
+    // Rope the Walking Stick, renamed in place: the ids stay `net` and
+    // `rope`, so every bag keeps its uses with no migration.
+    { id: 'net', name: 'Snorkel', uses: 20 },
+    { id: 'rope', name: 'Walking Stick', uses: 10 },
     { id: 'lantern', name: 'Lantern', uses: 15 },
   ],
   // Tools per terrain (owner decisions 2026-10-07): meadows, forests and
@@ -102,6 +106,20 @@ export const EXPLORE_RULES: ExploreRules = {
     buildingClearance: 0.2, // TUNE: room for a habitat's footprint
     minGap: 0.16, // TUNE: the Keeper fits between two spots
     edgeMargin: 0.08, // TUNE: nothing hangs over the tile's edge
+  },
+  // #335 (owner decision 2026-10-09), on the game's one clock (checked in
+  // sky.test.ts): night ends at the Hollow's morning (`HOLLOW_RULES`), dusk
+  // starts with the battle arena's (2 hours before nightfall) and night
+  // falls with nightfall (`HOME_BASE_RULES`). TUNE: dawn's start.
+  sky: {
+    phases: [
+      { from: 0, phase: 'night' },
+      { from: 6 * 60, phase: 'dawn' },
+      { from: 7 * 60, phase: 'day' },
+      { from: 17 * 60, phase: 'dusk' },
+      { from: 19 * 60, phase: 'night' },
+    ],
+    blendMinutes: 20,
   },
   xpPerSquishy: 6, // TUNE: held to the sim:progression gate (#193-style)
   // TUNE: owner decision 2026-10-07: yield, not speed (a speed bonus gave +0 %

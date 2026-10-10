@@ -9,10 +9,11 @@ import {
 } from '../schemas/data/explore.js';
 
 export * from './homestead.js';
+export * from './sky.js';
 
 // Exploring your land (#199). Each explorable tile has a fixed, finite set
 // of search spots, a pure function of the map seed, the tile, its terrain
-// and `rules.layout`, so nothing about the layout is stored: only which
+// and its layout version (`exploreLayout`), so nothing about the layout is stored: only which
 // spots a player has searched (a bitmask, `tile_explore.searched`). Buildings
 // aren't an input: spots keep clear of all seven building spots, used or
 // not, so putting up or taking down a building never moves one. The map
@@ -43,6 +44,14 @@ const SQRT3 = Math.sqrt(3);
 /** The terrain's explore entry, or undefined when it can't be explored (Juniper's Gap). */
 export function exploreTerrain(terrain: string, rules: ExploreRules): ExploreTerrain | undefined {
   return rules.terrains.find((t) => t.terrain === terrain);
+}
+
+/**
+ * The layout version a terrain's spots are made under (#335): its own when it
+ * has one, else the rules'. Saved progress made under another is stale.
+ */
+export function exploreLayout(terrain: string, rules: ExploreRules): number {
+  return exploreTerrain(terrain, rules)?.layout ?? rules.layout;
 }
 
 /** Can tiles of this terrain be explored at all? */
@@ -118,7 +127,9 @@ export function searchSpots(
 ): SearchSpot[] | null {
   const entry = exploreTerrain(tile.terrain, rules);
   if (!entry) return null;
-  const rng = Rng.fromSeed(deriveSeed(mapSeed, 'explore', tile.q, tile.r, rules.layout));
+  const rng = Rng.fromSeed(
+    deriveSeed(mapSeed, 'explore', tile.q, tile.r, entry.layout ?? rules.layout),
+  );
   const count = Math.min(rng.int(entry.spots.min, entry.spots.max), MAX_SEARCH_SPOTS);
   const kinds = pickKinds(entry, count, rng, rules);
 

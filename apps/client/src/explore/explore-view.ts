@@ -73,9 +73,9 @@ export const PLAY_TEXT: Readonly<
   Record<SpotInteraction, { icon: string; hint: string; easy: string; note?: string }>
 > = {
   dig: { icon: 'shovel', hint: 'Swipe down to dig!', easy: 'tap to dig' },
-  climb: { icon: 'rope', hint: 'Left, right, left, right!', easy: 'hold to climb' },
+  climb: { icon: 'stick', hint: 'Left, right, left, right!', easy: 'hold to hike up' },
   light: { icon: 'lantern', hint: EXPLORE_TEXT.lanternHint, easy: 'light it all up' },
-  scoop: { icon: 'net', hint: 'Swipe through when it glows!', easy: 'Scoop!' },
+  scoop: { icon: 'snorkel', hint: 'Swipe through when it glows!', easy: 'Dive!' },
   lift: {
     icon: '✊',
     hint: 'Hold to lift!',
@@ -199,9 +199,9 @@ export function foundHeadline(interaction: SpotInteraction): string {
     case 'dig':
       return 'You dug up…';
     case 'scoop':
-      return 'You scooped up…';
+      return 'Under the water you found…';
     case 'climb':
-      return 'Up on the ledge you found…';
+      return 'Up at the lookout you found…';
     case 'light':
       return 'Deep in the cave you found…';
     case 'shake':
