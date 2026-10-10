@@ -674,4 +674,40 @@ describe.skipIf(!url)('live battles (#29, needs DATABASE_URL)', () => {
     expect(after.view.phase.type).not.toBe('replace');
     expect(after.live?.covered.at(-1)).toEqual({ turn: after.view.turn, side: 'b' });
   });
+
+  it('one battle.turned per step, in order, when a late pick lands right after the AI played', async () => {
+    const server = await start();
+    const [lee, sam] = [await player(), await player()];
+    const mapId = await patch(server, lee, sam);
+    const battleId = await service(server).startFriendly({
+      mapId,
+      aUserId: lee.id,
+      bUserId: sam.id,
+    });
+    const mine = await get(server, lee, battleId);
+    expect((await pick(server, lee, mine, { type: 'move', move: myMove(mine) })).statusCode).toBe(
+      200,
+    );
+    // Sam is away past the turn time and the grace: nobody has looked yet.
+    clock.setTime(clock.getTime() + (RULES.turnSeconds + RULES.awayGraceSeconds + 1) * SECOND_MS);
+    // Sam's pick for turn 1 settles turn 1 (the AI's) first, then waits as a pick.
+    const theirs = { ...(await get(server, lee, battleId)), id: battleId };
+    const late = await call(server, 'POST', `/battles/${battleId}/actions`, sam, {
+      action: { type: 'move', move: myMove({ ...theirs, mySide: 'b' }) },
+      turn: 1,
+    });
+    expect(late.statusCode, late.body).toBe(200);
+    const now = await get(server, lee, battleId);
+    if (now.status === 'active' && now.view.phase.type === 'turn') {
+      expect((await pick(server, lee, now, { type: 'move', move: myMove(now) })).statusCode).toBe(
+        200,
+      );
+    }
+    const turned = (await eventsOf(mapId))
+      .filter((e) => e.type === 'battle.turned')
+      .map((e) => (e.payload as { turn: number }).turn);
+    const row = (await db.query.battles.findFirst({ where: (t, { eq }) => eq(t.id, battleId) }))!;
+    expect(turned).toHaveLength((row.actions as unknown[]).length);
+    expect([...turned].sort((x, y) => x - y)).toEqual(turned);
+  });
 });

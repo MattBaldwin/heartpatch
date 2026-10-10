@@ -126,6 +126,23 @@ describe('playbackSteps', () => {
   const b = battle(log);
   const content = new BattleContent(b);
 
+  it("a live battle names the other Keeper's squishy, never as wild (#29)", () => {
+    const live: PlayerBattle = {
+      ...b,
+      kind: 'friendly',
+      live: {
+        opponentUserId: '00000000-0000-7000-8000-00000000000b',
+        deadlineAt: null,
+        myPick: null,
+        opponentPicked: false,
+        covered: [],
+      },
+    };
+    const text = playbackSteps(live, content, 2, { opponent: 'Mira' })[0]?.text;
+    expect(text).toBe("Mira's Mallow used Moon Blink!");
+    expect(playbackSteps(live, content, 2)[0]?.text).toBe('Their Mallow used Moon Blink!');
+  });
+
   it('names secret squishies and moves from the battle', () => {
     const steps = playbackSteps(b, content, 0);
     expect(steps.map((s) => s.text)).toEqual([

@@ -1,3 +1,4 @@
+import { LIVE_BATTLE_RULES } from '@heartpatch/shared';
 import { BlockList, isIPv6 } from 'node:net';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
@@ -261,6 +262,15 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           findWildEncounter: spawns.findWildEncounter,
           // Live battles (#29) give a player whose app isn't open one away-grace.
           ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+          liveRules: {
+            ...LIVE_BATTLE_RULES,
+            ...(config.HP_DEV_LIVE_TURN_SECONDS !== undefined && {
+              turnSeconds: config.HP_DEV_LIVE_TURN_SECONDS,
+            }),
+            ...(config.HP_DEV_LIVE_GRACE_SECONDS !== undefined && {
+              awayGraceSeconds: config.HP_DEV_LIVE_GRACE_SECONDS,
+            }),
+          },
           tileBattles: createTileBattlePort(),
           // Journeys to trading posts (#270): the visit pass in the finish.
           journeys: createJourneyBattlePort(),

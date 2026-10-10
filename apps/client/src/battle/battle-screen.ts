@@ -91,8 +91,12 @@ export interface BattleScreenOptions {
   requestFrame: () => void;
   /** The quality tier now (the squishies' detail level follows it). */
   tier: () => QualityTier;
-  /** A battle is about to take the screen: the caller hides the map. */
-  onOpen: (mapId: string) => void;
+  /**
+   * A battle is about to take the screen: the caller hides the map. `live`:
+   * a live battle (#29), whose patch must stay followed (its events, and
+   * the server's "here").
+   */
+  onOpen: (mapId: string, live: boolean) => void;
   /** The battle screen closed: the caller shows the map again. */
   onClosed: (mapId: string) => void;
   api?: typeof battleApi;
@@ -132,7 +136,7 @@ export interface BattleScreenOptions {
   /** Fresh wild hints for the map on screen (#209): the map draws a tuft on each. */
   onWildHints?: (mapId: string, tiles: readonly Hex[]) => void;
   /** A map-mate's name (a live battle's opponent, #29); null if not known. */
-  memberName?: (mapId: string, userId: string) => string | null;
+  memberName?: (mapId: string, userId: string) => Promise<string | null>;
 }
 
 /** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
@@ -321,6 +325,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   /** A live update arrived while the log played: look again once it settles. */
   let liveStale = false;
   let cheering = false;
+  /** The live battle's opponent's name, once known (`memberName`). */
+  let opponentLabel: string | null = null;
 
   // ── Entry button (shown over the map) ─────────────────────────────────
   const note = el('p', { class: 'battle-entry-note', role: 'status' });
@@ -840,14 +846,39 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
 
   /** The opponent's name for a live battle's words. */
   function opponentName(b: PlayerBattle): string {
+    return (b.live && opponentLabel) ?? 'your friend';
+  }
+
+  /** Looks the opponent's name up once per battle, then says it everywhere. */
+  function learnOpponent(b: PlayerBattle): void {
     const id = b.live?.opponentUserId;
-    return (id ? options.memberName?.(b.mapId, id) : null) ?? 'your friend';
+    if (!id || !options.memberName) return;
+    void options
+      .memberName(b.mapId, id)
+      .then((name) => {
+        if (battle?.id !== b.id || !name) return;
+        opponentLabel = name;
+        drawLive();
+        // The caption and the result card that already say "your friend".
+        if (!waiting && queue.length === 0) settle();
+      })
+      .catch(() => {
+        // "your friend" will do.
+      });
   }
 
   /** Redraws the live bar from the battle on screen (the ring ticks on its own). */
   function drawLive(): void {
     const b = battle;
     if (!b || !liveBar) return;
+    // Over: the result card says the rest; the timer and cheers step aside.
+    if (b.status !== 'active') {
+      liveBar.dispose();
+      liveBar = null;
+      window.clearInterval(liveTick);
+      liveTick = 0;
+      return;
+    }
     const info = liveTurnInfo(b, Date.now(), LIVE_BATTLE_RULES.turnSeconds * 1000);
     if (!info) return;
     const names = content;
@@ -917,13 +948,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const turns =
       coveredSince(after, after.mySide, -1).length - coveredSince(before, before.mySide, -1).length;
     if (turns <= 0) return;
-    const last = after.live?.covered.filter((c) => c.side === after.mySide).at(-1);
-    const moved = after.view.log.find(
-      (e) => e.type === 'move' && e.side === after.mySide && e.turn === last?.turn,
-    );
-    const sentOut = after.view.log.find(
-      (e) => e.type === 'replace' && e.side === after.mySide && e.turn === last?.turn,
-    );
+    // My side's latest move or send-out in the new log is the one Sprout picked.
+    const fresh = after.view.log.slice(before.view.log.length);
+    const moved = fresh.findLast((e) => e.type === 'move' && e.side === after.mySide);
+    const sentOut = fresh.findLast((e) => e.type === 'replace' && e.side === after.mySide);
     liveNote =
       moved && moved.type === 'move'
         ? `${LIVE_TEXT.timeUp(content.moveName(moved.move))} ${LIVE_TEXT.stillIn}`
@@ -1006,7 +1034,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     battle = next;
     armLive();
     content = new BattleContent(next);
-    queue = playbackSteps(next, content, from);
+    queue = playbackSteps(next, content, from, { opponent: opponentLabel });
     // A capture try spends a charm: count again.
     if (next.view.log.slice(from).some((e) => e.type === 'capture')) void refreshCharms(next);
     // A potion (#214) came out of the bag: count again.
@@ -1153,7 +1181,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       void refreshPotions(next);
     }
     refreshNicknames(next);
-    if (!wasOpen) options.onOpen(next.mapId);
+    if (!wasOpen) options.onOpen(next.mapId, next.live !== undefined && !replay);
     entry.hidden = true;
     hud.hideResult();
     hud.setProblem('');
@@ -1161,7 +1189,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     liveBar = null;
     liveNote = null;
     liveStale = false;
+    opponentLabel = null;
     if (next.live && !replay) {
+      learnOpponent(next);
       liveBar = mountLiveBar(hud.liveSlot, {
         onCheer: (messageId) => {
           void sendCheer(messageId);

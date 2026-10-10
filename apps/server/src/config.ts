@@ -68,6 +68,11 @@ const ConfigSchema = z.object({
   // Dev/test only: every found-clothing drop table's chance, in percent (#43),
   // so a find can be tried without gathering a hundred times. Never in production.
   HP_DEV_DROP_CHANCE: z.coerce.number().int().min(0).max(100).optional(),
+  // Dev/test only: a live battle's turn time and away-grace in seconds (#29),
+  // so e2e can try a timeout and a disconnect without waiting 30 s and 60 s.
+  // Never in production.
+  HP_DEV_LIVE_TURN_SECONDS: z.coerce.number().int().min(1).max(600).optional(),
+  HP_DEV_LIVE_GRACE_SECONDS: z.coerce.number().int().min(0).max(600).optional(),
   // `pnpm db:seed` only: lets the seed write to a database that isn't on this
   // computer (db/seed.ts, `seedTargetRefusal`). Never in production.
   HP_SEED_ALLOW_REMOTE: z
@@ -101,6 +106,12 @@ const ServerConfigSchema = ConfigSchema.refine(
     path: ['HP_DEV_DROP_CHANCE'],
     message: 'development and tests only',
   })
+  .refine(
+    (c) =>
+      c.NODE_ENV !== 'production' ||
+      (c.HP_DEV_LIVE_TURN_SECONDS === undefined && c.HP_DEV_LIVE_GRACE_SECONDS === undefined),
+    { path: ['HP_DEV_LIVE_TURN_SECONDS'], message: 'development and tests only' },
+  )
   .refine((c) => c.NODE_ENV !== 'production' || !c.HP_SEED_ALLOW_REMOTE, {
     path: ['HP_SEED_ALLOW_REMOTE'],
     message: 'development and tests only',

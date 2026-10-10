@@ -1,3 +1,5 @@
+import { friendlyApi } from '../../friendly/friendly-api.js';
+import { FRIENDLY_TEXT } from '../../friendly/friendly-model.js';
 import {
   CreateMapRequestSchema,
   MAP_MAX_PLAYERS,
@@ -705,6 +707,58 @@ export function mountLobby(root: HTMLElement, options: LobbyOptions = {}): Lobby
         el('h2', { class: 'lobby-heading' }, 'Challenges'),
         ...(isOwner ? [] : [el('p', { class: 'auth-hint' }, 'The patch owner picks this.')]),
         pvp,
+      ),
+    );
+
+    // Friendly battles (#29): the owner's on/off switch, like Challenges.
+    const friendlyOn = map.friendlyChallenges !== false;
+    const friendly = el('div', {
+      class: 'lobby-choices',
+      role: 'radiogroup',
+      'aria-label': FRIENDLY_TEXT.ownerSwitch,
+    });
+    for (const choice of [
+      { on: true, label: FRIENDLY_TEXT.ownerOn, hint: FRIENDLY_TEXT.ownerOnHint },
+      { on: false, label: FRIENDLY_TEXT.ownerOff, hint: FRIENDLY_TEXT.ownerOffHint },
+    ]) {
+      const selected = friendlyOn === choice.on;
+      const option = el(
+        'button',
+        {
+          type: 'button',
+          class: 'lobby-choice',
+          role: 'radio',
+          'aria-checked': String(selected),
+          'data-testid': `lobby-friendly-${choice.on ? 'on' : 'off'}`,
+          ...(isOwner ? {} : { disabled: '' }),
+        },
+        el(
+          'span',
+          { class: 'lobby-choice-label' },
+          choice.label,
+          ...(selected
+            ? [el('span', { class: 'lobby-choice-picked', 'aria-hidden': 'true' }, '✓ Picked')]
+            : []),
+        ),
+        el('span', { class: 'lobby-choice-hint' }, choice.hint),
+      );
+      if (isOwner && !selected) {
+        option.addEventListener('click', () => {
+          act(status, option, async () => {
+            await friendlyApi.setFriendly(map.id, choice.on);
+            await showMap(map.id, `${FRIENDLY_TEXT.ownerSwitch}: ${choice.label}.`);
+          });
+        });
+      }
+      friendly.append(option);
+    }
+    sections.push(
+      el(
+        'div',
+        { class: 'lobby-section' },
+        el('h2', { class: 'lobby-heading' }, FRIENDLY_TEXT.ownerSwitch),
+        ...(isOwner ? [] : [el('p', { class: 'auth-hint' }, 'The patch owner picks this.')]),
+        friendly,
       ),
     );
 

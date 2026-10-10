@@ -31,6 +31,7 @@ export type HookName =
   | 'lore'
   | 'milestones'
   | 'chat'
+  | 'friendly'
   | 'audio'
   | 'jobs'
   | 'posts'

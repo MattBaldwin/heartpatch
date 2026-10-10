@@ -570,7 +570,11 @@
 }
 
 .battle-live-ring-number {
-  font: 800 15px ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font:
+    800 15px ui-rounded,
+    'SF Pro Rounded',
+    system-ui,
+    sans-serif;
   fill: #4a3150;
 }
 

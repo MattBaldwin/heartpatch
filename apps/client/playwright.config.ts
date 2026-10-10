@@ -31,7 +31,17 @@ const E2E_GROUPS = [
   // ~15.2: tutorial alone is ~7.6; tutorial-flow's runs go side by side.
   ['tutorial', 'tutorial-flow', 'version', 'wardrobe', 'whats-new'],
   ['audio', 'battle', 'capture', 'close-up', 'fences', 'map', 'milestones', 'potions'],
-  ['care', 'cinematic', 'explore', 'hollow', 'inventory', 'keeper', 'recipe-book', 'short-screens'],
+  [
+    'care',
+    'cinematic',
+    'explore',
+    'friendly',
+    'hollow',
+    'inventory',
+    'keeper',
+    'recipe-book',
+    'short-screens',
+  ],
   [
     'battle-ui',
     'boutique',
@@ -104,6 +114,11 @@ process.env['HP_DEV_MAP_CREATE_LIMIT_PER_IP'] ??= '500';
 // Battles (#13) need a squishy and a wild opponent, which spawns (#14) and the
 // tutorial's starter don't hand out yet; the dev routes do. Dev and tests only.
 process.env['HP_DEV_SQUISHY_GRANTS'] ??= 'true';
+// Live battles (#29): short turns and a short away-grace, so friendly.spec.ts
+// can try a timeout and a disconnect without waiting 30 s and 60 s. Dev and
+// tests only.
+process.env['HP_DEV_LIVE_TURN_SECONDS'] ??= '10';
+process.env['HP_DEV_LIVE_GRACE_SECONDS'] ??= '6';
 // Map time is the game clock in the patch's time zone, which the client takes
 // from the device: pin the browser's zone so specs never meet dusk (#326).
 const timezoneId = pinMapTime();
