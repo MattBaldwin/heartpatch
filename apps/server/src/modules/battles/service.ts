@@ -503,6 +503,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     return live?.bUserId === userId ? { side: 'b', live } : null;
   };
 
+  const opponentOf = (row: BattleRow, live: LiveRow, side: BattleSideId): string =>
+    side === PLAYER_SIDE ? live.bUserId : row.playerUserId;
+
   /** The battle as `seat`'s player sees it, with a live battle's turn state. */
   const toPlayerBattle = (row: BattleRow, seat?: Seat | null): PlayerBattle => {
     const side = seat?.side ?? PLAYER_SIDE;
@@ -513,8 +516,9 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         live: liveView(
           live,
           side,
-          side === PLAYER_SIDE ? live.bUserId : row.playerUserId,
+          opponentOf(row, live, side),
           row.status === 'active',
+          isOnline(row.mapId, opponentOf(row, live, side)),
         ),
       }),
     });

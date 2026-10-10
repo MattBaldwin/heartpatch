@@ -54,12 +54,22 @@ export type ControlMode =
       items: { total: number | null; tiles: PotionTile[]; who: string } | null;
       /** Breaking a fence (#203): the turn it is, and the most it lasts. Null elsewhere. */
       fence?: { turn: number; limit: number } | null;
+      /** The leave button's words, when not "Run away" (a friendly battle's "Give up", #29). */
+      runWords?: RunWords;
     }
   /** Their squishy is tuckered out: pick who comes out. */
   | { type: 'replace'; bench: { slot: number; name: string }[] }
   /** The log is playing, or the server is thinking. */
   | { type: 'waiting' }
   | { type: 'hidden' };
+
+/** The leave button and its "are you sure?" (style guide §3: forgiving). */
+export interface RunWords {
+  readonly run: string;
+  readonly ask: string;
+  readonly yes: string;
+  readonly stay: string;
+}
 
 const PLAIN_RUN = {
   run: 'Run away',
@@ -97,6 +107,8 @@ export interface ResultInfo {
 }
 
 export interface BattleHud {
+  /** Where a live battle's bar goes (#29), at the top of the sheet; hidden otherwise. */
+  readonly liveSlot: HTMLElement;
   show: () => void;
   hide: () => void;
   setPlate: (side: 'mine' | 'theirs', info: PlateInfo) => void;
@@ -252,9 +264,13 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   result.hidden = true;
 
   const top = el('div', { class: 'battle-top' }, plates.mine.node, leave, plates.theirs.node);
+  // A live battle's bar (#29): the turn timer, the opponent and cheers.
+  const liveSlot = el('div', { class: 'battle-live', 'data-testid': 'battle-live' });
+  liveSlot.hidden = true;
   const sheet = el(
     'section',
     { class: 'battle-sheet', 'data-testid': 'battle-sheet' },
+    liveSlot,
     caption,
     controls,
     problem,
@@ -472,7 +488,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         }
         // Forgiving (style guide §3): running away asks first. At a fence
         // (#203) it's "Stop for now": the fence keeps what it lost.
-        const words = mode.fence ? FENCE_RUN : PLAIN_RUN;
+        const words = mode.runWords ?? (mode.fence ? FENCE_RUN : PLAIN_RUN);
         const run = button(
           words.run,
           () => {
@@ -540,6 +556,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   };
 
   return {
+    liveSlot,
     show: () => {
       hud.hidden = false;
       forget();
