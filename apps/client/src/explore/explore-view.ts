@@ -71,6 +71,15 @@ const HAND_ICONS: Readonly<Record<string, string>> = {
   'pumpkin-row': '🎃',
   'hollow-log': 'log',
   rock: 'rock',
+  cairn: 'rock',
+  'glow-mushrooms': '🍄',
+};
+
+/** What a hand spot's big button says, by its gesture. */
+const HAND_VERBS: Readonly<Partial<Record<SpotInteraction, string>>> = {
+  shake: 'Shake',
+  stack: 'Stack',
+  pick: 'Boop',
 };
 
 /** What each tool gesture says and shows (boards b, d, e, f, g; style guide §6). */
@@ -87,6 +96,9 @@ export const PLAY_TEXT: Readonly<
     easy: 'hold to catch them',
   },
   part: { icon: 'snorkel', hint: 'Swipe the reeds apart!', easy: 'tap to part them' },
+  poke: { icon: 'stick', hint: 'Poke, poke… floomp!', easy: 'tap to poke' },
+  stack: { icon: '✊', hint: 'Hold to add your stone!', easy: 'tap to stack' },
+  pick: { icon: '🍄', hint: 'Boop the glowing caps!', easy: 'tap to boop' },
   lift: {
     icon: '✊',
     hint: 'Hold to lift!',
@@ -116,7 +128,7 @@ export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
     return { icon: TOOL_ICONS[spot.tool], label: TOOL_WORDS[spot.tool].verb, interaction };
   }
   const icon = HAND_ICONS[spot.kind] ?? (interaction === 'shake' ? '🌳' : 'rock');
-  return { icon, label: interaction === 'shake' ? 'Shake' : 'Lift', interaction };
+  return { icon, label: HAND_VERBS[interaction] ?? 'Lift', interaction };
 }
 
 /** "7 of 12 found 🔍", or "All 12 found! ✨" once the tile is done. */
@@ -217,6 +229,12 @@ export function foundHeadline(interaction: SpotInteraction): string {
       return 'In the bubbles you found…';
     case 'part':
       return 'Behind the reeds you found…';
+    case 'poke':
+      return 'In the snow you found…';
+    case 'stack':
+      return 'Out of the cairn rolled…';
+    case 'pick':
+      return 'Under the caps you found…';
     case 'light':
       return 'Deep in the cave you found…';
     case 'shake':

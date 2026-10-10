@@ -324,7 +324,7 @@ Mutating routes take an `Idempotency-Key`. Lock order: the tile (step 6), the se
 
 ## Exploring your land
 
-Exploring (#199; owner design 2026-10-07) lives in `src/modules/explore`. A player zooms into a tile they own and searches its **search spots** with their Keeper and crafted tools. The spots are a pure function of the map seed, the tile, its terrain and `EXPLORE_RULES.layout` (shared `searchSpots`), kept clear of all seven building spots, so nothing about the layout is stored: `tile_explore` keeps one row per player per tile, with a bit per searched spot. Rows outlive ownership (owner decision 2026-10-06), so a player never re-explores land they lose and win back.
+Exploring (#199; owner design 2026-10-07) lives in `src/modules/explore`. A player zooms into a tile they own and searches its **search spots** with their Keeper and crafted tools. The spots are a pure function of the map seed, the tile, its terrain and that terrain's layout version (`exploreLayout`, shared `searchSpots`; #335: a finished tile stays finished when its terrain gets a new layout), kept clear of all seven building spots, so nothing about the layout is stored: `tile_explore` keeps one row per player per tile, with a bit per searched spot. Rows outlive ownership (owner decision 2026-10-06), so a player never re-explores land they lose and win back.
 
 | Route | What it does |
 |---|---|

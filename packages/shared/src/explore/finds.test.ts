@@ -25,12 +25,12 @@ describe('explore find tables', () => {
     ];
     expect(checkExploreFinds(broken, GAME_DATA, EXPLORE_RULES, pages)).toEqual(
       expect.arrayContaining([
-        'finds[9]: unknown spot kind "puddle"',
-        'finds[10]: unknown terrain "moon"',
-        'finds[10].finds[0]: unknown item "gold"',
-        'finds[11].finds[0]: "pumpkins" can\'t be found exploring',
-        'finds[12].finds[0]: "shovel" can\'t be found exploring',
-        'finds[13].finds[0]: unknown lore page "no-such-page"',
+        'finds[12]: unknown spot kind "puddle"',
+        'finds[13]: unknown terrain "moon"',
+        'finds[13].finds[0]: unknown item "gold"',
+        'finds[14].finds[0]: "pumpkins" can\'t be found exploring',
+        'finds[15].finds[0]: "shovel" can\'t be found exploring',
+        'finds[16].finds[0]: unknown lore page "no-such-page"',
         'spot kind "cave" has no find table',
       ]),
     );

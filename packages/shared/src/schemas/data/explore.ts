@@ -25,6 +25,11 @@ export const SpotInteractionSchema = z.enum([
   // #335: underwater on a lake, catch a bubble spring's bubbles, part the reeds.
   'dive',
   'part',
+  // #335: on the mountain trail, poke a snow drift and stack a cairn; in the
+  // hills cave, boop the glow mushrooms.
+  'poke',
+  'stack',
+  'pick',
 ]);
 export type SpotInteraction = z.infer<typeof SpotInteractionSchema>;
 

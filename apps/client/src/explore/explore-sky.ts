@@ -61,7 +61,8 @@ export interface ExploreSkyStats {
   readonly clouds: number;
   readonly stars: boolean;
   readonly moon: boolean;
-  readonly underwater: boolean;
+  /** Hazy all round: underwater or in the cave (#335). */
+  readonly hazy: boolean;
 }
 
 export class ExploreSky {
@@ -162,7 +163,7 @@ export class ExploreSky {
       clouds: this.#look.clouds,
       stars: this.#look.stars,
       moon: this.#look.moon && this.#look.sunDisc,
-      underwater: this.#look.fog !== null,
+      hazy: this.#look.fog !== null,
     };
   }
 

@@ -28,7 +28,7 @@ import {
 } from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
 import { ExploreSky, type ExploreSkyStats } from './explore-sky.js';
-import { isUnderwater, type SkyLook } from './explore-sky-look.js';
+import { exploreWorld, type SkyLook } from './explore-sky-look.js';
 import { spotWorld } from '../home/home-layout.js';
 import {
   FALLBACK_LOOK,
@@ -70,8 +70,10 @@ import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js
 import {
   EXPLORE_CAMERA,
   EXPLORE_FADE,
+  EXPLORE_CAVE,
   EXPLORE_HOP,
   EXPLORE_SEABED,
+  EXPLORE_TRAIL,
   EXPLORE_UNDERWATER,
   EXPLORE_TOOL,
   EXPLORE_VIEW,
@@ -174,13 +176,25 @@ const SPOT_PROPS: Readonly<Record<string, PropKind | ExploreShape>> = {
   pond: 'pond',
   ledge: 'ledge',
   cave: 'cave',
+  // #335: the mountain trail and the hills cave.
+  'snow-drift': 'snow-drift',
+  cairn: 'cairn',
+  'glow-mushrooms': 'glow-mushrooms',
 };
 
-type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave';
+type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave' | 'snow-drift' | 'cairn' | 'glow-mushrooms';
 
 /** The island under the tile: shallow, so the tile reads as a little diorama. */
 const ISLAND_DEPTH = 0.12; // TUNE:
-const SHAPES: ReadonlySet<string> = new Set<ExploreShape>(['mound', 'pond', 'ledge', 'cave']);
+const SHAPES: ReadonlySet<string> = new Set<ExploreShape>([
+  'mound',
+  'pond',
+  'ledge',
+  'cave',
+  'snow-drift',
+  'cairn',
+  'glow-mushrooms',
+]);
 const isShape = (kind: PropKind | ExploreShape): kind is ExploreShape => SHAPES.has(kind);
 const TOOLS: readonly ToolId[] = ['shovel', 'net', 'rope', 'lantern'];
 /** The camera looks at about the Keeper's middle, not its feet (world units). */
@@ -317,7 +331,7 @@ export class ExploreScene {
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
     this.#tile = tile;
-    this.#underwater = isUnderwater(tile.terrain);
+    this.#underwater = exploreWorld(tile.terrain) === 'underwater';
     // Underwater the Keeper and team float and bob instead of hopping (#335).
     // `#reduced` only picks bob over hop; it isn't the player's Reduce Motion.
     const reduced = options.reducedMotion ?? (() => false);
@@ -376,10 +390,14 @@ export class ExploreScene {
     this.#ground.push({ mat: decorMaterial, base: decorMaterial.albedoColor.clone() });
     const places = decorPlaces(tile, this.#colliders);
     this.#decor = { tufts: 0, pebbles: 0, flowers: 0 };
-    // No flowers on a lake bed (#335): its tufts are waterweed, its pebbles stay.
-    const kinds = this.#underwater
-      ? (['pebbles'] as const)
-      : (['tufts', 'pebbles', 'flowers'] as const);
+    // No flowers on a lake bed (kelp grows there instead) and only pebbles in
+    // a cave (#335).
+    const world = exploreWorld(tile.terrain);
+    const kinds =
+      world === 'cave' || world === 'underwater'
+        ? (['pebbles'] as const)
+        : (['tufts', 'pebbles', 'flowers'] as const);
+    if (world === 'trail') this.#buildTrail(propMaterial);
     for (const kind of kinds) {
       const mesh = buildDecor(scene, kind);
       mesh.material = decorMaterial;
@@ -982,6 +1000,37 @@ export class ExploreScene {
   }
 
   /**
+   * The mountain trail (#335): a cream path zig-zagging up the tile, as flat
+   * thin-instanced stepping pads (one draw call). It's scenery: the lookouts
+   * are seeded per tile and sit beside it, not on it.
+   */
+  #buildTrail(material: Material): void {
+    const pad = CreateCylinder(
+      'explore-trail',
+      { height: 0.01, diameter: 1, tessellation: 16 },
+      this.#scene,
+    );
+    painted(pad, EXPLORE_TRAIL.color);
+    pad.material = material;
+    pad.isPickable = false;
+    const step = EXPLORE_TRAIL.width * 0.6;
+    const pads: Matrix[] = [];
+    const pts = EXPLORE_TRAIL.points;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [ax, az] = pts[i] ?? [0, 0];
+      const [bx, bz] = pts[i + 1] ?? [0, 0];
+      const n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / step));
+      for (let j = 0; j < n; j++) {
+        const p = { x: ax + ((bx - ax) * j) / n, z: az + ((bz - az) * j) / n };
+        const at = this.#world(p);
+        const w = EXPLORE_TRAIL.width * this.#size;
+        pads.push(placeAt(at.x, this.#groundAt(p) + 0.004, at.z, new Vector3(w, 1, w)));
+      }
+    }
+    setInstances(pad, pads);
+  }
+
+  /**
    * Under a lake (#335): kelp where the meadow would grow tufts, swaying on
    * the GPU, and a few fish circling in the water (one draw call each).
    */
@@ -1140,10 +1189,14 @@ export class ExploreScene {
 
   #buildGround(terrain: string): void {
     const land = TERRAIN_LOOKS[terrain] ?? FALLBACK_LOOK;
-    // Under a lake the tile is its sandy bed (#335), not the water's top.
-    const look = isUnderwater(terrain)
-      ? { ...land, color: EXPLORE_SEABED.color, roughness: EXPLORE_SEABED.roughness }
-      : land;
+    // Under a lake the tile is its sandy bed, in the hills the cave floor (#335).
+    const world = exploreWorld(terrain);
+    const look =
+      world === 'underwater'
+        ? { ...land, color: EXPLORE_SEABED.color, roughness: EXPLORE_SEABED.roughness }
+        : world === 'cave'
+          ? { ...land, color: EXPLORE_CAVE.floor, roughness: EXPLORE_CAVE.roughness }
+          : land;
     const k = this.#k;
     const s = new Vector3(k, k, k);
     const h = look.height;
@@ -1512,7 +1565,8 @@ function buildShape(scene: Scene, shape: ExploreShape): Mesh {
         ),
       ]);
     case 'ledge':
-      // A chunky cliff step with a flat top to climb to.
+      // A lookout on the trail (#335): a chunky step with a flat top and a
+      // little flag to hike up to.
       return merged(`explore-${shape}`, [
         painted(
           at(
@@ -1533,12 +1587,61 @@ function buildShape(scene: Scene, shape: ExploreShape): Mesh {
           '#d8c8ab',
         ),
         painted(at(sphere(0.08), -0.1, 0.24, -0.05, 1, 0.6, 1), '#9fd6a0'),
+        // The lookout's flag.
+        painted(at(cylinder(0.26, 0.012, 0.012), 0.1, 0.47, 0.04), '#7a5d43'),
+        painted(
+          at(
+            CreateBox(`${shape}-part`, { width: 0.12, height: 0.07, depth: 0.01 }, scene),
+            0.16,
+            0.55,
+            0.04,
+          ),
+          '#ff8fb8',
+        ),
       ]);
     case 'cave':
-      // A rounded hill with a dark doorway facing the camera.
+      // A dark nook in the cave wall (#335): a rock hump with a black doorway
+      // and a crystal peeking out, waiting for the Lantern.
       return merged(`explore-${shape}`, [
-        painted(at(sphere(0.36), 0, 0.02, 0, 1, 0.75, 0.9), '#bfb3cf'),
-        painted(at(sphere(0.16), 0, 0.03, -0.15, 1, 1.1, 0.5), '#3a2f4a'),
+        painted(at(sphere(0.36), 0, 0.02, 0, 1, 0.75, 0.9), '#8a76a6'),
+        painted(at(sphere(0.16), 0, 0.03, -0.15, 1, 1.1, 0.5), '#2e2240'), // dusk purple, never black
+        painted(at(cylinder(0.16, 0.0, 0.05), 0.12, 0.2, -0.08), '#e6cdfc'),
       ]);
+    case 'snow-drift':
+      // A soft snow heap with a twig poking out: poke it with the stick.
+      return merged(`explore-${shape}`, [
+        painted(at(sphere(0.32), 0, 0, 0, 1.15, 0.5, 1), '#fbfaff'),
+        painted(at(sphere(0.16), -0.08, 0.06, 0.04, 1, 0.7, 1), '#eef2ff'),
+        painted(at(cylinder(0.14, 0.008, 0.015), 0.07, 0.12, -0.02), '#9a6a3c'),
+      ]);
+    case 'cairn':
+      // Stones stacked by trail walkers, smallest on top.
+      return merged(
+        `explore-${shape}`,
+        (
+          [
+            [0.24, 0.05, '#9e968a'],
+            [0.18, 0.13, '#b9b2a7'],
+            [0.13, 0.2, '#cfc9bf'],
+            [0.08, 0.26, '#b9b2a7'],
+          ] as const
+        ).map(([d, y, c]) => painted(at(sphere(d), 0, y, 0, 1, 0.55, 1), c)),
+      );
+    case 'glow-mushrooms':
+      // A ring of glowing caps (their glow is the colour; bloom does the rest).
+      return merged(
+        `explore-${shape}`,
+        (
+          [
+            [0, 0, 1, '#8ef0ff'],
+            [0.1, 0.05, 0.8, '#ff9cd6'],
+            [-0.09, 0.06, 0.75, '#8ef0ff'],
+            [0.03, -0.1, 0.7, '#ff9cd6'],
+          ] as const
+        ).flatMap(([x, z, s, c]) => [
+          painted(at(cylinder(0.1 * s, 0.03 * s, 0.035 * s), x, 0.05 * s, z), '#f6e9d8'),
+          painted(at(sphere(0.12 * s), x, 0.1 * s, z, 1, 0.55, 1), c),
+        ]),
+      );
   }
 }

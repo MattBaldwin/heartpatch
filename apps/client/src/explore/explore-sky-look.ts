@@ -145,12 +145,52 @@ export const WATER_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
   },
 };
 
-/** Terrains explored underwater (#335, owner decision 2026-10-09: lakes, with a Snorkel). */
-export const UNDERWATER_TERRAINS: ReadonlySet<string> = new Set(['lake']);
+/**
+ * Inside the hills cave (#335): warm purple stone all round, little glowing
+ * motes where the stars would be, and a dim warm light (the Lantern's own
+ * glow is the lit circle it plays in). A cave is the same at any hour.
+ */
+const CAVE: SkyLook = {
+  zenith: '#4f3c6e', // TUNE: the cave roof
+  horizon: '#33264a', // TUNE: the far, dark walls (never black)
+  sun: '#ffd36e',
+  sunDisc: false,
+  moon: false,
+  cloud: '#5c4878',
+  clouds: 0,
+  stars: true,
+  starColor: '#8ef0ff', // glow motes
+  fog: '#3a2b52',
+  groundTint: '#e6dcf0', // TUNE: a touch of the cave's purple
+  light: { color: '#ffd9b0', sun: 0.6, environment: 0.55 }, // TUNE: warm and dim
+};
+export const CAVE_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
+  dawn: CAVE,
+  day: CAVE,
+  dusk: CAVE,
+  night: CAVE,
+};
+
+/**
+ * Each biome's own world (#335, owner decision 2026-10-09): lakes are
+ * explored underwater, hills inside a cave, mountains up a trail; the rest
+ * on cozy open ground.
+ */
+export type ExploreWorld = 'ground' | 'underwater' | 'cave' | 'trail';
+const WORLDS: Readonly<Record<string, ExploreWorld>> = {
+  lake: 'underwater',
+  hills: 'cave',
+  mountains: 'trail',
+};
+
+/** The world a terrain is explored in. */
+export function exploreWorld(terrain: string): ExploreWorld {
+  return WORLDS[terrain] ?? 'ground';
+}
 
 /** Is this terrain explored underwater? */
 export function isUnderwater(terrain: string): boolean {
-  return UNDERWATER_TERRAINS.has(terrain);
+  return exploreWorld(terrain) === 'underwater';
 }
 
 /**
@@ -188,10 +228,10 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /**
  * The look at a moment: colours and light fade into the next sky; stars,
- * clouds and the moon switch halfway. Underwater uses the water's looks.
+ * clouds and the moon switch halfway. Underwater and in a cave, their own looks.
  */
-export function skyLook(at: SkyAt, underwater = false): SkyLook {
-  const looks = underwater ? WATER_LOOKS : SKY_LOOKS;
+export function skyLook(at: SkyAt, world: ExploreWorld = 'ground'): SkyLook {
+  const looks = world === 'underwater' ? WATER_LOOKS : world === 'cave' ? CAVE_LOOKS : SKY_LOOKS;
   const a = looks[at.phase];
   const b = looks[at.next];
   const t = Math.min(1, Math.max(0, at.blend));
