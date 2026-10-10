@@ -9,8 +9,9 @@ import { DOME, TILE_RADIUS, tileScreenRectOf, topOf } from '../map/map-scene.js'
 import type { MapLayer } from '../map/map-screen.js';
 import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
+import type { Rect } from '../ui/geometry.js';
 import './trading.css';
-import { flagSpot, type Box, type FlagRoom } from './flag-spot.js';
+import { flagSpot, type FlagRoom } from './flag-spot.js';
 import { postFlagLabel, postFlags, type PostFlag } from './post-model.js';
 
 // Trading posts on the map (#269, mockup screen a): a flag over every post
@@ -66,7 +67,7 @@ function flagRoom(): FlagRoom {
     const box = boxOf(node)?.box;
     if (box) top = Math.max(top, box.y + box.height);
   }
-  const covers: Box[] = [];
+  const covers: Rect[] = [];
   for (const node of document.querySelectorAll(OVER_MAP)) {
     const box = boxOf(node)?.box;
     if (box) covers.push(box);
