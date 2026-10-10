@@ -519,6 +519,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           opponentOf(row, live, side),
           row.status === 'active',
           isOnline(row.mapId, opponentOf(row, live, side)),
+          now(),
         ),
       }),
     });
@@ -993,7 +994,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     side: BattleSideId,
     request: BattleActionRequest,
     at: Date,
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const liveRepo = createLiveBattlesRepo(tx);
     const intent = request.action;
     // Picking for yourself brings your away-grace back.
@@ -1026,7 +1027,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         if (!turn) {
           await liveRepo.save(row.id, { picks, graceUsed });
           // Changing a pick tells nobody anything new: one event per side per turn.
-          if (live.picks[side]) return;
+          if (live.picks[side]) return false;
           await repo.appendEvent({
             mapId: row.mapId,
             type: 'battle.picked',
@@ -1039,7 +1040,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
               turn: row.state.turn,
             },
           });
-          return;
+          return false;
         }
         action = turn;
         break;
@@ -1064,6 +1065,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       }
     }
     await appendTurned(repo, row, live, state.turn);
+    return true;
   };
 
   /**
@@ -1290,9 +1292,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           // rolls the settle back too; the next read settles it the same way.
           if (request.turn !== row.state.turn) throw new AppError('CONFLICT', MESSAGES.movedOn);
           const live = (await createLiveBattlesRepo(tx).find(row.id)) ?? seat.live;
-          await actLive(repo, tx, row, live, seat.side, request, at);
-          // The settle's own `battle.turned`, after the action's writes (`maps` last).
-          if (row.actions.length !== locked.actions.length) {
+          const stepped = await actLive(repo, tx, row, live, seat.side, request, at);
+          // The settle's own `battle.turned`, after the action's writes (`maps`
+          // last), unless the action wrote a newer one itself.
+          if (!stepped && row.actions.length !== locked.actions.length) {
             await appendTurned(repo, row, live, row.state.turn);
           }
           return {
@@ -1466,8 +1469,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       try {
         battleId = await begin();
       } catch (err) {
-        // A start that didn't take the seat lock (an older server mid-deploy)
-        // reached the one-active-battle index first.
+        // A safety net under the seat lock: the one-active-battle index.
         if (isUniqueViolation(err)) throw new AppError('CONFLICT', MESSAGES.busy);
         throw err;
       }

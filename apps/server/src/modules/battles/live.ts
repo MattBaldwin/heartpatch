@@ -107,6 +107,7 @@ export function liveView(
   opponentUserId: string,
   active: boolean,
   opponentHere: boolean,
+  at: Date,
 ): LiveBattleView {
   return {
     opponentUserId,
@@ -115,5 +116,6 @@ export function liveView(
     myPick: live.picks[mySide] ?? null,
     opponentPicked: live.picks[otherSide(mySide)] !== undefined,
     covered: live.covered.map(({ turn, side }) => ({ turn, side })),
+    now: at.toISOString(),
   };
 }

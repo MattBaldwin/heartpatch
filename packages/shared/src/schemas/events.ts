@@ -11,6 +11,7 @@ import { ToolIdSchema } from './data/explore.js';
 import { HollowStageSchema, WalkKindSchema } from './hollow-stage.js';
 import { RaidOutcomeSchema } from './raids.js';
 import { TradeKindSchema, TradeLineSchema } from './trading.js';
+import { ChallengeKindSchema } from './challenges.js';
 import { LocalDateSchema } from './time.js';
 
 /**
@@ -68,10 +69,19 @@ const BattleStartedSchema = z.strictObject({
 /** An ask's two players (#29): who asked whom, and what kind of ask. */
 const ChallengePair = {
   challengeId: z.uuid(),
-  kind: z.enum(['friendly', 'defense']),
+  kind: ChallengeKindSchema,
   fromUserId: z.uuid(),
   toUserId: z.uuid(),
 };
+const ChallengeAnsweredSchema = z.strictObject({
+  ...ChallengePair,
+  answer: z.enum(['yes', 'not-now']),
+  battleId: z.uuid().nullable(),
+});
+const ChallengeCancelledSchema = z.strictObject({
+  ...ChallengePair,
+  reason: z.enum(['cancelled', 'expired', 'switched-off']),
+});
 /** A live battle's two players (#29): who is on side `a` and side `b`. */
 const LivePair = { battleId: z.uuid(), aUserId: z.uuid(), bUserId: z.uuid() };
 const TurnSchema = z.number().int().min(0);
@@ -184,30 +194,16 @@ export const GAME_EVENTS = {
   },
   /** The ask was answered: "Battle!" (`yes`, with its battle) or "Not now!". Only the two players. */
   'challenge.answered': {
-    internal: z.strictObject({
-      ...ChallengePair,
-      answer: z.enum(['yes', 'not-now']),
-      battleId: z.uuid().nullable(),
-    }),
-    public: z.object({
-      ...ChallengePair,
-      answer: z.enum(['yes', 'not-now']),
-      battleId: z.uuid().nullable(),
-    }),
+    internal: ChallengeAnsweredSchema,
+    public: z.object(ChallengeAnsweredSchema.shape),
   },
   /**
    * The ask went away unanswered: the asker said "Never mind", it floated
    * away (`expired`), or the owner switched friendly battles off. Only the two players.
    */
   'challenge.cancelled': {
-    internal: z.strictObject({
-      ...ChallengePair,
-      reason: z.enum(['cancelled', 'expired', 'switched-off']),
-    }),
-    public: z.object({
-      ...ChallengePair,
-      reason: z.enum(['cancelled', 'expired', 'switched-off']),
-    }),
+    internal: ChallengeCancelledSchema,
+    public: z.object(ChallengeCancelledSchema.shape),
   },
   /**
    * Live battles (#29): one player picked this turn. Never what they picked:

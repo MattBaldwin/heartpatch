@@ -13,8 +13,9 @@ const slow = { timeout: 30_000 };
  * The performance budget (CLAUDE.md rule 8): a settled explore frame draws
  * under this many calls. Measured at 15 on the iPhone and iPad viewports
  * (#291, a new player's meadow: tile, island, spot props, three decor kinds,
- * glints, the Keeper's batches, post-processing); the headroom is for a busier
- * tile (more prop kinds, buildings, a full team, the tool in hand).
+ * glints, the Keeper's batches, post-processing), and 18 with the sky (#335:
+ * a dome, the sun and the clouds; at night the stars too); the headroom is
+ * for a busier tile (more prop kinds, buildings, a full team, the tool in hand).
  */
 const DRAW_CALL_CEILING = 26;
 
@@ -54,6 +55,7 @@ interface ExploreDebug {
     decor: { tufts: number; pebbles: number; flowers: number };
     camera: { x: number; z: number; zoom: number };
     drawCalls: number;
+    sky: { clouds: number; stars: boolean; moon: boolean };
     keeperHeight: number;
     faded: number[];
   } | null;
@@ -116,6 +118,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     .poll(async () => (await exploreState(page))?.scene?.keeperHeight ?? 0, slow)
     .toBeGreaterThan(0.14);
   expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.195);
+  // The sky follows the patch's clock (#335): e2e pins late morning, so it's day with clouds.
+  expect(first.scene?.sky).toEqual({ clouds: 4, stars: false, moon: false });
   // Every unsearched spot glints, the tile grows decor, and the joystick is always there.
   expect(first.scene?.glints).toBe(first.spots.length);
   expect(first.scene?.decor.tufts).toBeGreaterThan(0);

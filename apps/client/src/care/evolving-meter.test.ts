@@ -102,7 +102,7 @@ describe('evolvingMeterEl update()', () => {
     expect(m.root.classes.has('evolving-ready')).toBe(true);
     expect(m.label.textContent).toBe(CARE_TEXT.readyToEvolve);
     expect(m.value.textContent).toBe('');
-    expect(m.sub.textContent).toBe(CARE_TEXT.oneMoreBattle);
+    expect(m.sub.textContent).toBe(CARE_TEXT.evolvesNextXp);
     expect(m.sub.hidden).toBe(false);
 
     m.update(evolvingBar(100), { sub: CARE_TEXT.evolvingGain(20) });

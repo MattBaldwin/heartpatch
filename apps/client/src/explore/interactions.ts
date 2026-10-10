@@ -26,9 +26,9 @@ export type InteractionInput =
     }
   /** The easy-way button was tapped. */
   | { readonly type: 'easy'; readonly t: number }
-  /** The easy-way button was pressed or let go (holding it climbs a rope). */
+  /** The easy-way button was pressed or let go (holding it hikes up). */
   | { readonly type: 'easy-down' | 'easy-up'; readonly t: number }
-  /** The rope's left or right hand. */
+  /** The Walking Stick's left or right step. */
   | { readonly type: 'side'; readonly side: 'left' | 'right'; readonly t: number }
   /** Time passed (holds fill up). */
   | { readonly type: 'tick'; readonly t: number };
@@ -117,7 +117,7 @@ export function interactionProgress(s: InteractionState): number {
   return Math.min(1, s.count / s.need);
 }
 
-/** The net glows now (a scoop then makes a bigger splash; any scoop works). */
+/** The water glows now (a scoop then makes a bigger splash; any scoop works). */
 export function netGlowing(s: InteractionState, t: number): boolean {
   const phase =
     (((t - s.startedAt) % INTERACTION.netCycleMs) + INTERACTION.netCycleMs) %

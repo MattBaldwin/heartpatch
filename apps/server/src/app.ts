@@ -38,7 +38,7 @@ import { createSquishyJobsService } from './modules/jobs/service.js';
 import { hollowRoutes } from './modules/hollow/routes.js';
 import { journeysRoutes } from './modules/journeys/routes.js';
 import { challengesRoutes } from './modules/challenges/routes.js';
-import { createChallengesService } from './modules/challenges/service.js';
+import { callOffAsksOf, createChallengesService } from './modules/challenges/service.js';
 import { tradesRoutes } from './modules/trades/routes.js';
 import { createTradesService } from './modules/trades/service.js';
 import { createJourneyBattlePort, createJourneysService } from './modules/journeys/service.js';
@@ -216,7 +216,22 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         });
         const maps = createMapsService({
           db,
-          departed: trades.memberLeft,
+          // A Keeper leaving calls off their trade offers (#271) and their asks (#29).
+          // Each on its own: one failing never keeps the other from running.
+          departed: async (mapId, userId, actorUserId) => {
+            const results = await Promise.allSettled([
+              trades.memberLeft(mapId, userId, actorUserId),
+              callOffAsksOf(
+                { db, clock, ...(wsHub ? { publish: wsHub.publish } : {}) },
+                mapId,
+                userId,
+                actorUserId,
+              ),
+            ]);
+            for (const result of results) {
+              if (result.status === 'rejected') throw result.reason;
+            }
+          },
           tutorialRequired: config.HP_TUTORIAL_REQUIRED,
           keeperRequired: config.HP_KEEPER_REQUIRED,
           clock,

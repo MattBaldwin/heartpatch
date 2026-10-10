@@ -48,6 +48,7 @@ const home: HomeResponse = {
       habitatId: HABITAT,
       trainingId: null,
       job: 'resting',
+      accessory: null,
     },
   ],
   speciesDefs: [],

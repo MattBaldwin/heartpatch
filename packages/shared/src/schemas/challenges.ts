@@ -58,6 +58,8 @@ export const ChallengesResponseSchema = z.object({
   online: z.array(OnlineMemberSchema),
   incoming: z.array(ChallengeViewSchema),
   outgoing: ChallengeViewSchema.nullable(),
+  /** The server's game clock, so an ask's 60 s bar runs on game time (tech spec §7). */
+  now: z.iso.datetime(),
 });
 export type ChallengesResponse = z.infer<typeof ChallengesResponseSchema>;
 

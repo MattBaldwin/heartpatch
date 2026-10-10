@@ -222,6 +222,8 @@ describe.skipIf(!url)('friendly challenges (#29, needs DATABASE_URL)', () => {
     const seen = await view(server, lee, mapId);
     expect(seen.friendlyChallenges).toBe(true);
     expect(seen.myTeamLevel).toBe(5);
+    // The game clock rides along, so the ask's bar runs on game time.
+    expect(seen.now).toBe(clock.toISOString());
     // Kit's app isn't open: not here.
     expect(
       seen.online.map(({ userId, inBattle, teamLevel }) => ({ userId, inBattle, teamLevel })),
@@ -389,5 +391,124 @@ describe.skipIf(!url)('friendly challenges (#29, needs DATABASE_URL)', () => {
     const res = await answer(server, lee, askedId(await ask(server, sam, mapId, lee)), 'yes');
     expect(res.statusCode, res.body).toBe(200);
     expect(AnswerChallengeResponseSchema.parse(res.json()).battle?.mySide).toBe('b');
+  });
+
+  describe('races (#29: atomic accept, limits that hold against a double tap)', () => {
+    const pendingFrom = (mapId: string, who: Player) =>
+      db.query.challenges.findMany({
+        where: (t, { and, eq }) =>
+          and(eq(t.mapId, mapId), eq(t.fromUserId, who.id), eq(t.status, 'pending')),
+      });
+    const activeBattles = (mapId: string) =>
+      db.query.battles.findMany({
+        where: (t, { and, eq }) => and(eq(t.mapId, mapId), eq(t.status, 'active')),
+      });
+
+    it('a double tap sends one ask', async () => {
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const mapId = await patch(server, [lee, sam]);
+      await online(lee, mapId);
+      await online(sam, mapId);
+      const codes = (
+        await Promise.all([ask(server, lee, mapId, sam), ask(server, lee, mapId, sam)])
+      ).map((r) => r.statusCode);
+      expect(codes.sort()).toEqual([201, 409]);
+      expect(await pendingFrom(mapId, lee)).toHaveLength(1);
+    });
+
+    it('two Keepers asking the same friend at once: one ask waits, the other is told', async () => {
+      const server = await start();
+      const [lee, sam, kit] = [await player(), await player(), await player()];
+      const mapId = await patch(server, [lee, sam, kit]);
+      for (const who of [lee, sam, kit]) await online(who, mapId);
+      const [fromLee, fromKit] = await Promise.all([
+        ask(server, lee, mapId, sam),
+        ask(server, kit, mapId, sam),
+      ]);
+      expect([fromLee.statusCode, fromKit.statusCode].sort()).toEqual([201, 409]);
+      const refused = fromLee.statusCode === 409 ? fromLee : fromKit;
+      expect(errorOf(refused).message).toMatch(/thinking about another battle/);
+      expect((await view(server, sam, mapId)).incoming).toHaveLength(1);
+    });
+
+    it('Battle! against Never mind: a battle with an accepted ask, or neither', async () => {
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const mapId = await patch(server, [lee, sam]);
+      await online(lee, mapId);
+      await online(sam, mapId);
+      const id = askedId(await ask(server, lee, mapId, sam));
+      const codes = (
+        await Promise.all([
+          answer(server, sam, id, 'yes'),
+          call(server, 'POST', `/challenges/${id}/cancel`, lee),
+        ])
+      ).map((r) => r.statusCode);
+      // One wins; the other is told kindly (never a 5xx).
+      expect([
+        [200, 409],
+        [409, 204],
+      ]).toContainEqual(codes);
+      const row = await db.query.challenges.findFirst({ where: (t, { eq }) => eq(t.id, id) });
+      const battles = await activeBattles(mapId);
+      if (row?.status === 'accepted') {
+        expect(battles.map((b) => b.id)).toEqual([row.battleId]);
+      } else {
+        expect(row?.status).toBe('cancelled');
+        expect(battles).toEqual([]);
+      }
+    });
+
+    it("Battle! against the owner's switch-off: a battle with an accepted ask, or neither", async () => {
+      const server = await start();
+      const [lee, sam] = [await player(), await player()];
+      const mapId = await patch(server, [lee, sam]);
+      await online(lee, mapId);
+      await online(sam, mapId);
+      const id = askedId(await ask(server, sam, mapId, lee));
+      const codes = (
+        await Promise.all([
+          answer(server, lee, id, 'yes'),
+          call(server, 'POST', `/maps/${mapId}/friendly-challenges`, lee, {
+            friendlyChallenges: false,
+          }),
+        ])
+      ).map((r) => r.statusCode);
+      // The switch always goes through; the yes wins or is told kindly (never a 5xx).
+      expect([
+        [200, 200],
+        [409, 200],
+      ]).toContainEqual(codes);
+      const row = await db.query.challenges.findFirst({ where: (t, { eq }) => eq(t.id, id) });
+      const battles = await activeBattles(mapId);
+      if (row?.status === 'accepted') {
+        expect(battles.map((b) => b.id)).toEqual([row.battleId]);
+      } else {
+        expect(row?.status).toBe('cancelled');
+        expect(battles).toEqual([]);
+      }
+    });
+  });
+
+  it("a battle calls off its Keepers' other asks; leaving the patch calls off a Keeper's asks", async () => {
+    const server = await start();
+    const [lee, sam, kit, ivy] = [await player(), await player(), await player(), await player()];
+    const mapId = await patch(server, [lee, sam, kit, ivy]);
+    for (const who of [lee, sam, kit, ivy]) await online(who, mapId);
+    const leeToSam = askedId(await ask(server, lee, mapId, sam));
+    const kitToLee = askedId(await ask(server, kit, mapId, lee));
+    const ivyToKit = askedId(await ask(server, ivy, mapId, kit));
+    expect((await answer(server, sam, leeToSam, 'yes')).statusCode).toBe(200);
+    const status = async (id: string) =>
+      (await db.query.challenges.findFirst({ where: (t, { eq }) => eq(t.id, id) }))?.status;
+    // Lee is in a battle now: Kit's ask to Lee goes; Ivy's to Kit stays.
+    expect(await status(kitToLee)).toBe('cancelled');
+    expect(await status(ivyToKit)).toBe('pending');
+
+    // Ivy leaves the patch: Ivy's ask goes too.
+    const left = await call(server, 'POST', `/maps/${mapId}/leave`, ivy);
+    expect(left.statusCode, left.body).toBe(204);
+    expect(await status(ivyToKit)).toBe('cancelled');
   });
 });

@@ -33,8 +33,8 @@ export const EXPLORE_RULES: ExploreRules = {
     { id: 'lantern', name: 'Lantern', uses: 15 },
   ],
   // Tools per terrain (owner decisions 2026-10-07): meadows, forests and
-  // pumpkin fields want hands and a Shovel; lakes a Net; hills and mountains
-  // a Rope and a Lantern. Juniper's Gap can't be explored in Phase 1.
+  // pumpkin fields want hands and a Shovel; lakes a Snorkel; hills and mountains
+  // a Walking Stick and a Lantern (#335: the Net and Rope, renamed). Juniper's Gap can't be explored in Phase 1.
   // TUNE: the kits' weights and spot counts.
   terrains: [
     {

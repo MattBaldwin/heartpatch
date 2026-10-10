@@ -1,7 +1,7 @@
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
-import { GAME_DATA, visualRegistry } from '@heartpatch/shared';
+import { CLOTHING_BY_ID, GAME_DATA, visualRegistry } from '@heartpatch/shared';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SQUISH_LOOK_CODE, type SquishyLod } from './config.js';
 import type { SquishySpecies } from './params.js';
@@ -113,5 +113,76 @@ describe('SquishyField shadow look (owner decision 7)', () => {
     f.flush();
     const m = body().thinInstanceGetWorldMatrices()[0]!;
     expect([m.m[12], m.m[14]]).toEqual([expect.closeTo(-1), expect.closeTo(3)]);
+  });
+});
+
+describe('SquishyField accessories (#340)', () => {
+  const engine = new NullEngine({
+    renderWidth: 390,
+    renderHeight: 844,
+    textureSize: 1,
+    deterministicLockstep: false,
+    lockstepMaxSteps: 1,
+  });
+  afterEach(() => {
+    for (const scene of [...engine.scenes]) scene.dispose();
+  });
+
+  const item = (id: string) => CLOTHING_BY_ID.get(id)!;
+  // A squishy with its own topper (a `crown` part): Gourdon's stem.
+  const gourdon = GAME_DATA.species.find((s) => s.id === 'gourdon')!;
+  const field = () =>
+    new SquishyField<SquishyLod>(new Scene(engine), { registry, lod: 'low', shadows: false });
+
+  it('puts a piece on as more part instances, and takes it off again', () => {
+    const f = field();
+    const h = f.add(species, 'a', { x: 0, z: 0 });
+    const bare = f.stats;
+    f.setAccessory(h, item('snuggle-scarf'));
+    expect(f.accessoryOf(h)).toBe('snuggle-scarf');
+    expect(f.stats.instances).toBe(bare.instances + item('snuggle-scarf').visual.pieces.length);
+    // A scarf adds nothing above the head.
+    expect(f.heightOf(h)).toBe(h.params.height);
+    f.setAccessory(h, null);
+    expect(f.accessoryOf(h)).toBeNull();
+    expect(f.stats).toEqual(bare);
+  });
+
+  it('swaps one piece for another, and a hat stands taller', () => {
+    const f = field();
+    const h = f.add(species, 'a', { x: 0, z: 0 });
+    const bare = f.stats.instances;
+    f.setAccessory(h, item('tiny-bow'));
+    f.setAccessory(h, item('tiny-top-hat'));
+    expect(f.accessoryOf(h)).toBe('tiny-top-hat');
+    expect(f.stats.instances).toBe(bare + item('tiny-top-hat').visual.pieces.length);
+    expect(f.heightOf(h)).toBeGreaterThan(h.params.height);
+  });
+
+  it('tucks its own topper away under a hat and brings it back', () => {
+    const f = field();
+    const h = f.add(gourdon, 'g', { x: 0, z: 0 });
+    const bare = f.stats.instances;
+    const stem = h.params.parts
+      .filter((p) => p.slot === 'crown')
+      .reduce((n, p) => n + p.placements.length, 0);
+    expect(stem).toBeGreaterThan(0);
+    const hat = item('tiny-witch-hat');
+    f.setAccessory(h, hat);
+    expect(f.stats.instances).toBe(bare - stem + hat.visual.pieces.length);
+    // A scarf isn't a hat: the stem comes back.
+    f.setAccessory(h, item('snuggle-scarf'));
+    expect(f.stats.instances).toBe(bare + item('snuggle-scarf').visual.pieces.length);
+    f.setAccessory(h, null);
+    expect(f.stats.instances).toBe(bare);
+  });
+
+  it('never dresses a rescue guardian', () => {
+    const f = field();
+    const h = f.add(species, 's', { x: 0, z: 0 }, 'shadow');
+    const bare = f.stats;
+    f.setAccessory(h, item('tiny-crown'));
+    expect(f.accessoryOf(h)).toBeNull();
+    expect(f.stats).toEqual(bare);
   });
 });

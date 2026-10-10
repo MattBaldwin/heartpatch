@@ -55,6 +55,7 @@ const squishy = (extra: Partial<CareSquishy> = {}): CareSquishy => ({
   fullCareLeft: 2,
   nextCareAt: {},
   newEvolution: null,
+  accessory: null,
   ...extra,
 });
 
@@ -186,7 +187,7 @@ describe('careSheet', () => {
       value: '',
       fill: 1,
       ready: true,
-      sub: 'One more battle ✨',
+      sub: 'Evolves with its next XP ✨',
     });
     expect(careSheet(squishy({ evolving: null }), reply()).evolving).toBeNull();
     expect(evolvingBar(null)).toBeNull();

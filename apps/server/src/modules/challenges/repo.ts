@@ -1,5 +1,5 @@
 import type { ChallengeKind, ChallengeStatus } from '@heartpatch/shared';
-import { and, asc, desc, eq, gt, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, lte, ne, or, sql } from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { challenges, mapMembers, maps, users } from '../../db/schema.js';
@@ -40,6 +40,15 @@ export interface ChallengesRepo {
   pendingFor: (mapId: string, userId: string) => Promise<ChallengeRow[]>;
   /** Row-locks every waiting ask on the map, in id order (the owner's switch). */
   lockPending: (mapId: string, kind: ChallengeKind) => Promise<ChallengeRow[]>;
+  /**
+   * Waiting asks on the map to or from any of `userIds` (but `except`),
+   * row-locked in id order: a battle started, or a Keeper left.
+   */
+  lockPendingOf: (
+    mapId: string,
+    userIds: readonly string[],
+    except?: string,
+  ) => Promise<ChallengeRow[]>;
   /** Waiting asks past their time, row-locked in id order (expired lazily, on the next read). */
   lockExpired: (mapId: string, at: Date) => Promise<ChallengeRow[]>;
   settle: (
@@ -135,6 +144,27 @@ function queries(db: Executor): ChallengesRepo {
             eq(challenges.mapId, mapId),
             eq(challenges.kind, kind),
             eq(challenges.status, 'pending'),
+          ),
+        )
+        .orderBy(asc(challenges.id))
+        .for('update');
+      return rows.map(toRow);
+    },
+
+    lockPendingOf: async (mapId, userIds, except) => {
+      if (userIds.length === 0) return [];
+      const rows = await db
+        .select()
+        .from(challenges)
+        .where(
+          and(
+            eq(challenges.mapId, mapId),
+            eq(challenges.status, 'pending'),
+            or(
+              inArray(challenges.fromUserId, [...userIds]),
+              inArray(challenges.toUserId, [...userIds]),
+            ),
+            except === undefined ? undefined : ne(challenges.id, except),
           ),
         )
         .orderBy(asc(challenges.id))

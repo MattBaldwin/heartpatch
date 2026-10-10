@@ -34,6 +34,7 @@ const E2E_GROUPS = [
   [
     'care',
     'cinematic',
+    'dress-up',
     'explore',
     'friendly',
     'hollow',
