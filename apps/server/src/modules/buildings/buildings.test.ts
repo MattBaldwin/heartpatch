@@ -14,7 +14,12 @@ import {
   type MapView,
   type MyBuilding,
 } from '@heartpatch/shared';
-import { EVOLUTION_RULES, habitatLeanPoints } from '@heartpatch/shared/server';
+import {
+  EVOLUTION_RULES,
+  habitatLeanPoints,
+  leanAt,
+  startingLean,
+} from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -1152,9 +1157,15 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       const movedOut = (await db.query.squishies.findFirst({
         where: (t, { eq }) => eq(t.id, pals[0]!),
       }))!;
-      // Its own Cozy head start (6) fades for a day, plus the day's habitat points.
+      // Its own Cozy head start fades for a day, plus the day's habitat points.
+      const day = 24 * 60 * 60 * 1000;
+      const headStart = leanAt(
+        startingLean('cozy', new Date(0), EVOLUTION_RULES),
+        new Date(day),
+        EVOLUTION_RULES,
+      );
       expect(movedOut.feelingLean['cozy']).toBeCloseTo(
-        5.045 + habitatLeanPoints(24, EVOLUTION_RULES),
+        (headStart.points['cozy'] ?? 0) + habitatLeanPoints(24, EVOLUTION_RULES),
         2,
       );
       expect(movedOut.habitatSince).toBeNull();

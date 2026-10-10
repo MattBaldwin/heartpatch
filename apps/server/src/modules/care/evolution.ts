@@ -170,6 +170,9 @@ async function factsFor(
   };
 }
 
+/** The part of a logged roll pity reads; a row that doesn't parse counts no misses. */
+const LoggedMissesSchema = z.object({ aimedMisses: z.array(z.string()) });
+
 /**
  * Aimed misses per branch for this player (#32 pity): logged rolls, newest
  * first, where the branch was aimed at but missed, back to the last time
@@ -194,9 +197,6 @@ async function pityFor(
   }
   return pity;
 }
-
-/** The part of a logged roll pity reads; a row that doesn't parse counts no misses. */
-const LoggedMissesSchema = z.object({ aimedMisses: z.array(z.string()) });
 
 /** Enough logged rolls to see past any pity count (it's certain after a few). */
 const PITY_LOOKBACK = 200;

@@ -143,6 +143,7 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
         element: 'fire',
         feeling: 'cozy',
         habitatBuildingId: building!.id,
+        habitatSince: new Date(),
       })),
     );
     return { mapId, userId, buildingId: building!.id, ids };
@@ -212,11 +213,13 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
       .where(eq(buildings.id, buildingId));
     expect(gone).toEqual([]);
     const homeless = await db
-      .select({ id: squishies.id })
+      .select({ id: squishies.id, habitatSince: squishies.habitatSince })
       .from(squishies)
       .where(eq(squishies.mapId, mapId))
       .orderBy(asc(squishies.id));
     expect(homeless.map((r) => r.id)).toEqual(ids);
+    // The move-in time goes with the habitat (#32).
+    expect(homeless.map((r) => r.habitatSince)).toEqual(ids.map(() => null));
   });
   it("locks a leaving member's tiles in id order before their defenders (maps `releaseTiles`)", async () => {
     const { mapId, userId, ids: squishyIds } = await patch();
