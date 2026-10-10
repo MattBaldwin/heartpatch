@@ -123,8 +123,9 @@ describe('where the roster lives (server-only tables)', () => {
     for (const id of evolvedIds) expect(spawnable, id).not.toContain(id);
   });
 
-  // Branch forms (#32) are only met by evolving one: in the Gap they'd move
-  // the casual kid's Gap-ready day by three (pnpm sim:progression).
+  // Branch forms (#32) are only met by evolving one: in the Gap they break a
+  // progression pace pin (`pnpm sim:progression`'s tests; which one depends
+  // on where the rows sit, since guardian picks are seeded).
   it('meets every default evolved form as a guardian', () => {
     for (const s of bases) expect(guarding, s.id).toContain(evolvedFormOf(s).id);
   });

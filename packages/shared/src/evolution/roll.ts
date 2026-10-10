@@ -36,9 +36,9 @@ export interface EvolutionFacts {
   readonly time: 'day' | 'dusk' | 'night';
   /** Seasons on now. */
   readonly seasons: readonly string[];
-  /** Buildings with a fire burning at the owner's home. */
+  /** Buildings with a fire burning on the owner's land. */
   readonly firesLit: readonly string[];
-  /** A fire at the owner's home is full of fuel. */
+  /** A fire on the owner's land is full of fuel. */
   readonly fireFull: boolean;
 }
 
