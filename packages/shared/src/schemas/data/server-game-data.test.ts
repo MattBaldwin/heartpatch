@@ -10,6 +10,8 @@ import {
 import { GAME_DATA } from '../../data/index.js';
 import { SERVER_GAME_DATA } from '../../data/server/index.js';
 import { GUARDIAN_RULES } from '../../data/server/guardian-rules.js';
+import { EVOLUTION_RULES } from '../../data/server/evolution-rules.js';
+import { checkEvolutionRules } from './evolution-odds.js';
 import { checkGuardianRules } from './guardian-rules.js';
 import { checkServerGameData, type ServerGameData } from './server-game-data.js';
 
@@ -20,7 +22,7 @@ const gameData = {
   moves: [...GAME_DATA.moves, ...FIXTURE_MOVES],
 };
 
-const noSecrets = { secretSpecies: [], secretMoves: [], secretEvolutions: [] };
+const noSecrets = { secretSpecies: [], secretMoves: [], secretEvolutions: [], evolutionOdds: [] };
 
 /** Fixture server data: one secret line (Moonpuff → Moonmallow), no spawn tables. */
 const fixtureServerData: ServerGameData = {
@@ -155,6 +157,8 @@ describe('checkServerGameData', () => {
     expect(problems).toEqual([
       'secretSpecies["fixture-moonpuff"].evolutions[1].into: evolutions into secret forms go in secretEvolutions ("fixture-moonmallow")',
       'secretSpecies["fixture-moonpuff"].evolutions[2].into: unknown species "fixture-nope"',
+      // Splashmallow at 20 makes the secret Moonmallow at 20 a branch (#32).
+      'secretEvolutions[0]: "fixture-moonpuff" → "fixture-moonmallow" is a branch at level 20 and needs odds',
     ]);
   });
 
@@ -174,8 +178,13 @@ describe('checkServerGameData', () => {
       d.secretEvolutions.push(
         // Puddlepuff evolves into Splashmallow at 16 (public).
         { from: 'fixture-puddlepuff', into: 'fixture-moonpuff', level: 15 },
-        // At the same level the public one wins (it's listed first): fine.
-        { from: 'fixture-puddlepuff', into: 'fixture-moonmallow', level: 16 },
+        // At the same level it's a branch (#32): the public one is the default, fine.
+        {
+          from: 'fixture-puddlepuff',
+          into: 'fixture-moonmallow',
+          level: 16,
+          trigger: { kind: 'feeling', feeling: 'sleepy' },
+        },
       );
     });
     expect(problems).toEqual([
@@ -217,5 +226,95 @@ describe('checkServerGameData', () => {
       'secretEvolutions[0]: evolution chain loops back to this species',
       `secretEvolutions[${String(back)}]: evolution chain loops back to this species`,
     ]);
+  });
+});
+
+describe('branches (#32)', () => {
+  /** Fixture Puddlepuff gets a second public form at 16 (Moonpuff stands in for it). */
+  const withBranch = (edit: (data: ServerGameData) => void = () => {}) => {
+    const species = structuredClone(gameData.species);
+    const puddle = species.find((s) => s.id === 'fixture-puddlepuff')!;
+    puddle.evolutions = [...puddle.evolutions, { into: 'fixture-pebblesnooze', level: 16 }];
+    const data = structuredClone(fixtureServerData);
+    edit(data);
+    return checkServerGameData(data, { ...gameData, species });
+  };
+  const odds = {
+    from: 'fixture-puddlepuff',
+    into: 'fixture-pebblesnooze',
+    trigger: { kind: 'feeling' as const, feeling: 'sleepy' as const },
+  };
+
+  it('needs odds on every branch and none on the default form', () => {
+    expect(withBranch()).toEqual([
+      'evolutionOdds: "fixture-puddlepuff" → "fixture-pebblesnooze" is a branch at level 16 and needs odds',
+    ]);
+    expect(withBranch((d) => d.evolutionOdds.push(odds))).toEqual([]);
+    expect(
+      withBranch((d) => d.evolutionOdds.push(odds, { ...odds, into: 'fixture-splashmallow' })),
+    ).toEqual([
+      'evolutionOdds[1]: "fixture-splashmallow" is the default form at level 16, so it has no odds',
+    ]);
+  });
+
+  it('refuses odds for an evolution that does not exist, or listed twice', () => {
+    expect(withBranch((d) => d.evolutionOdds.push(odds, odds)).join('\n')).toMatch(/listed twice/);
+    expect(
+      withBranch((d) => d.evolutionOdds.push(odds, { ...odds, into: 'fixture-emberbun' })),
+    ).toEqual(['evolutionOdds[1]: "fixture-puddlepuff" has no evolution into "fixture-emberbun"']);
+  });
+
+  it("checks a rare branch's buildings and seasons", () => {
+    const rare = {
+      ...odds,
+      trigger: {
+        kind: 'rare' as const,
+        conditions: [
+          { kind: 'fire-lit' as const, building: 'no-such-fire' },
+          { kind: 'season' as const, season: 'no-such-season' },
+        ],
+        whisper: { icon: '🌙', text: 'It keeps gazing at the moon…' },
+      },
+    };
+    expect(withBranch((d) => d.evolutionOdds.push(rare))).toEqual([
+      'evolutionOdds[0].trigger.conditions[0].building: unknown building "no-such-fire"',
+      'evolutionOdds[0].trigger.conditions[1].season: unknown season "no-such-season"',
+    ]);
+  });
+
+  it("puts a secret branch's trigger on its secret evolution", () => {
+    const problems = problemsAfter((d) => {
+      d.secretEvolutions.push({
+        from: 'fixture-moonpuff',
+        into: 'fixture-pebblesnooze',
+        level: 20,
+      });
+    });
+    // A public target in secretEvolutions is reported as before, and isn't a form.
+    expect(problems).toEqual([
+      'secretEvolutions[1].into: "fixture-pebblesnooze" is a public species; put the evolution on the species instead',
+    ]);
+    expect(
+      problemsAfter((d) => {
+        d.secretEvolutions[0]!.trigger = { kind: 'feeling', feeling: 'joy' };
+      }),
+    ).toEqual([
+      'secretEvolutions[0]: "fixture-moonmallow" is the default form at level 20, so it has no odds',
+    ]);
+  });
+});
+
+describe('evolution rules (#32)', () => {
+  it('accepts the shipped rules', () => {
+    expect(checkEvolutionRules(EVOLUTION_RULES)).toEqual([]);
+  });
+
+  it('refuses pity that guarantees before it boosts', () => {
+    expect(
+      checkEvolutionRules({
+        ...EVOLUTION_RULES,
+        pity: { boostAfter: 3, boost: 2, guaranteeAfter: 2 },
+      }).join(),
+    ).toMatch(/guaranteeAfter must not be less than boostAfter/);
   });
 });

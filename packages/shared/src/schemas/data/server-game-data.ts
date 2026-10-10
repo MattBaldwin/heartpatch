@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { ContentIdSchema } from './common.js';
+import {
+  BranchTriggerSchema,
+  EvolutionOddsSchema,
+  type EvolutionCondition,
+} from './evolution-odds.js';
 import type { GameData } from './game-data.js';
 import { checkRef, checkUniqueIds, formatDataIssues, type Report } from './issues.js';
 import { MoveSchema } from './moves.js';
@@ -11,12 +16,14 @@ import { checkSpeciesVisual, visualRegistry } from './visuals.js';
 /**
  * An evolution into a secret form (design doc §8). `from` is a public or
  * secret species; `into` is always a secret species. Evolutions into public
- * forms stay on the species (`Species.evolutions`).
+ * forms stay on the species (`Species.evolutions`). A secret form that is a
+ * branch (not its step's default form, #32) carries its own `trigger`.
  */
 export const SecretEvolutionSchema = z.strictObject({
   from: ContentIdSchema,
   into: ContentIdSchema,
   level: z.number().int().min(2).max(100),
+  trigger: BranchTriggerSchema.optional(),
 });
 export type SecretEvolution = z.infer<typeof SecretEvolutionSchema>;
 
@@ -31,6 +38,8 @@ export const ServerGameDataSchema = z.strictObject({
   secretSpecies: z.array(SpeciesSchema),
   secretMoves: z.array(MoveSchema),
   secretEvolutions: z.array(SecretEvolutionSchema),
+  /** Odds for public branches (#32): one row per public evolution that isn't its step's default. */
+  evolutionOdds: z.array(EvolutionOddsSchema),
 });
 export type ServerGameData = z.infer<typeof ServerGameDataSchema>;
 
@@ -46,6 +55,112 @@ function checkSecretIds(
   rows.forEach((row, i) => {
     if (publicIds.has(row.id))
       report([table, i, 'id'], `id "${row.id}" is already a public ${what}`);
+  });
+}
+
+/** The ids a branch's conditions refer to exist. */
+function checkConditions(
+  conditions: readonly EvolutionCondition[],
+  gameData: GameData,
+  path: (string | number)[],
+  report: Report,
+): void {
+  const buildings = new Set(gameData.buildings.map((b) => b.id));
+  const seasons = new Set(gameData.seasons.map((s) => s.id));
+  conditions.forEach((c, k) => {
+    if (c.kind === 'fire-lit')
+      checkRef(buildings, 'building', c.building, [...path, k, 'building'], report);
+    if (c.kind === 'season') checkRef(seasons, 'season', c.season, [...path, k, 'season'], report);
+  });
+}
+
+/**
+ * Branches (#32): a species' evolutions at one level are a step, public ones
+ * first. The first is the default form and has no odds; every other one is a
+ * branch and needs them (an `evolutionOdds` row, or a secret evolution's
+ * `trigger`).
+ */
+function checkBranches(data: ServerGameData, gameData: GameData, report: Report): void {
+  const publicSpecies = new Set(gameData.species.map((s) => s.id));
+  const secretSpecies = new Set(data.secretSpecies.map((s) => s.id));
+  const species = new Set([...publicSpecies, ...secretSpecies]);
+  const odds = new Map<string, number>();
+  data.evolutionOdds.forEach((row, i) => {
+    const key = `${row.from}>${row.into}`;
+    if (odds.has(key))
+      report(['evolutionOdds', i], `"${row.from}" → "${row.into}" is listed twice`);
+    odds.set(key, i);
+    checkRef(species, 'species', row.from, ['evolutionOdds', i, 'from'], report);
+    if (row.trigger.kind === 'rare') {
+      checkConditions(
+        row.trigger.conditions,
+        gameData,
+        ['evolutionOdds', i, 'trigger', 'conditions'],
+        report,
+      );
+    }
+  });
+  const used = new Set<string>();
+  const rows = [...gameData.species, ...data.secretSpecies];
+  for (const s of rows) {
+    const steps = [
+      ...s.evolutions.map((e) => ({ ...e, secret: -1 })),
+      ...data.secretEvolutions.flatMap((e, i) => (e.from === s.id ? [{ ...e, secret: i }] : [])),
+    ];
+    const defaults = new Set<number>();
+    const seen = new Set<string>();
+    for (const step of steps) {
+      // Unknown, self and repeated evolutions are reported above; they aren't forms.
+      // So are public evolutions into secret forms and secret ones into public forms.
+      const misplaced =
+        step.secret >= 0 ? publicSpecies.has(step.into) : secretSpecies.has(step.into);
+      if (!species.has(step.into) || step.into === s.id || seen.has(step.into) || misplaced)
+        continue;
+      seen.add(step.into);
+      const key = `${s.id}>${step.into}`;
+      const isDefault = !defaults.has(step.level);
+      defaults.add(step.level);
+      const row = odds.get(key);
+      const secret = step.secret >= 0 ? data.secretEvolutions[step.secret] : undefined;
+      const hasOdds = row !== undefined || secret?.trigger !== undefined;
+      if (row !== undefined) used.add(key);
+      const path = secret
+        ? ['secretEvolutions', step.secret]
+        : row !== undefined
+          ? ['evolutionOdds', row]
+          : ['evolutionOdds'];
+      if (isDefault && hasOdds) {
+        report(
+          path,
+          `"${step.into}" is the default form at level ${String(step.level)}, so it has no odds`,
+        );
+      }
+      if (!isDefault && !hasOdds) {
+        report(
+          path,
+          `"${s.id}" → "${step.into}" is a branch at level ${String(step.level)} and needs odds`,
+        );
+      }
+      if (secret && row !== undefined) {
+        report(
+          ['evolutionOdds', row],
+          `"${step.into}" is secret: put its trigger on the secret evolution`,
+        );
+      }
+      if (secret?.trigger?.kind === 'rare') {
+        checkConditions(
+          secret.trigger.conditions,
+          gameData,
+          [...path, 'trigger', 'conditions'],
+          report,
+        );
+      }
+    }
+  }
+  data.evolutionOdds.forEach((row, i) => {
+    if (!used.has(`${row.from}>${row.into}`)) {
+      report(['evolutionOdds', i], `"${row.from}" has no evolution into "${row.into}"`);
+    }
   });
 }
 
@@ -202,6 +317,8 @@ export function checkServerGameData(input: unknown, gameData: GameData): string[
         report(['secretEvolutions', i], 'evolution chain loops back to this species');
       }
     });
+
+    checkBranches(data, gameData, report);
   });
   const result = schema.safeParse(input);
   return result.success ? [] : formatDataIssues(input, result.error);

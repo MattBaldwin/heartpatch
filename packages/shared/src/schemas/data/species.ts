@@ -14,8 +14,9 @@ export const BaseStatsSchema = z.strictObject({
 export type BaseStats = z.infer<typeof BaseStatsSchema>;
 
 /**
- * Public, level-based evolutions (design doc §8, Phase 1). Branch weights
- * and secret branches are server-only and never live here.
+ * Public, level-based evolutions (design doc §8). Several at one level are a
+ * branch (#32): the first listed is the default form. Branch odds, rare
+ * conditions and secret branches are server-only and never live here.
  */
 export const EvolutionSchema = z.strictObject({
   into: ContentIdSchema,
