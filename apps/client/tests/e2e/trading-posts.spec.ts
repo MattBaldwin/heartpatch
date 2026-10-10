@@ -95,6 +95,12 @@ test('shows the trading posts near home, and a post’s panel says what it is', 
   await expect.poll(() => flagsUnderCovers(page)).toEqual([]);
   await shutTrays(page);
   await expect.poll(async () => (await posts(page))?.shown ?? 0).toBeGreaterThan(0);
+  // The Keeper menu opens over the map: no flag shows from under it, and the
+  // flags clear of it stay (#310).
+  await page.getByTestId('keeper-menu').tap();
+  await expect.poll(() => flagsUnderCovers(page)).toEqual([]);
+  await expect.poll(async () => (await posts(page))?.shown ?? 0).toBeGreaterThan(0);
+  await page.getByTestId('keeper-menu').tap();
   // Day 1: none touches my land yet, so no gold ring.
   expect((await posts(page))!.rings).toBe(0);
   const flag = page.getByTestId('post-flag').filter({ visible: true }).first();
