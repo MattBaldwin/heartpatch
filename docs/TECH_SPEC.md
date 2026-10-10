@@ -253,11 +253,12 @@ Add anything else only with a one-line justification in the PR.
   - **Same transaction:** the event row is written in the **same DB transaction** as the state change it describes. If the change rolls back, so does the event. Broadcast to WebSocket clients only **after commit**.
   - **Per-map `seq` without gaps:** allocate `seq` with `UPDATE maps SET event_seq = event_seq + 1 WHERE id = $1 RETURNING event_seq` inside that transaction, as its **last write**. Don't use a Postgres sequence: sequences skip numbers on rollback, and a reconnecting client would think it missed an event. The row lock (held until commit) makes commit order match `seq` order. Taking it last keeps the busy `maps` row locked briefly and gives a fixed lock order (entity rows first, `maps` last), which avoids deadlocks (below).
   - **Lock order:** every transaction takes row locks in this order, skipping what it doesn't need. Several rows of one kind are always locked in id order with `ORDER BY id` (a plan's row order is no promise; a bare multi-row `UPDATE` or a foreign-key cascade locks in scan order, so lock first). A row the transaction inserts itself doesn't count.
+    0. battle seats (#29): `BattlesRepo.lockBattleSeats`, a transaction-scoped advisory lock per seated player (`pg_advisory_xact_lock(hashtextextended('battle-seat:<map>:<user>', 0))`), in user id order, as the first statement of every battle start (`startWith` takes the player's seat, `startFriendly` both). Nothing takes it after a row lock, so "one battle at a time on either side" holds between a live battle's side `b` and that player's own start
     1. `event_consumers` (consumer transactions only)
     2. a member row locked to check it (`lockMember`: territory, raids)
     3. the seats lock (the owner's `map_members` row), then a join request
     4. `users`, then `outfits`
-    5. the battle, then its `journeys` row (5b, #270: a journey's finish locks it right after the battle and before squishies), then its `live_battles` row (5c, #29: read and written under the battle's lock; a live battle's finish ends it first). Starting a friendly battle locks both players' member rows first (step 2, id order)
+    5. the battle, then its `journeys` row (5b, #270: a journey's finish locks it right after the battle and before squishies), then its `live_battles` row (5c, #29: read and written under the battle's lock; a live battle's finish ends it first). A friendly start takes both seats (step 0), then both member rows (step 2, id order)
     6. tiles, then `tile_defenders`, then `tile_explore` rows (#199, `(user_id, tile_id)` order)
     7. `gather_jobs`
     8. buildings, then fence segments (#203), then a craft
