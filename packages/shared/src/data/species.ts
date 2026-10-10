@@ -510,7 +510,7 @@ export const MOVES: Move[] = [
   {
     id: 'acorn-stash',
     name: 'Acorn Stash',
-    description: 'Tucks into a pile of leaves and snacks. Nothing can bother it now.',
+    description: 'Tucks into a pile of leaves and snacks. It feels safe and snug.',
     element: 'leaf',
     power: 0,
     accuracy: 100,

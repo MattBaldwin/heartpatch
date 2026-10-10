@@ -28,7 +28,7 @@ export const SECRET_MOVES: Move[] = [
   {
     id: 'heart-chorus',
     name: 'Heart Chorus',
-    description: 'Hums a happy little song and glows a little brighter.',
+    description: 'Hums a happy little song and glows brighter.',
     element: 'light',
     power: 60, // TUNE:
     accuracy: 100,
