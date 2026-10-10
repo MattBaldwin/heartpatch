@@ -9,7 +9,10 @@ import type { Species } from '../../schemas/data/species.js';
  * here. A secret species is sent to a player only once they meet it.
  */
 
+import { SECRET_BRANCH_MOVES, SECRET_BRANCH_SPECIES } from './secret-branches.js';
+
 export const SECRET_MOVES: Move[] = [
+  ...SECRET_BRANCH_MOVES,
   // Only Heartlet's line knows it, so naming it publicly would give it away.
   {
     id: 'heart-glow',
@@ -27,6 +30,7 @@ export const SECRET_MOVES: Move[] = [
 ];
 
 export const SECRET_SPECIES: Species[] = [
+  ...SECRET_BRANCH_SPECIES,
   // Light + Cozy. A tiny piece of the Heartpatch that never quite scattered
   // (design doc §2); it wanders Juniper's Gap on quiet nights (spawn table
   // `gap-nights`).
@@ -88,4 +92,5 @@ export const SECRET_SPECIES: Species[] = [
 
 export const SECRET_EVOLUTIONS: SecretEvolution[] = [
   { from: 'heartlet', into: 'heartbloom', level: 25 }, // TUNE:
+  { from: 'heartlet', into: 'heartsong', level: 25 },
 ];
