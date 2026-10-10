@@ -349,20 +349,20 @@ export const MOVES: Move[] = [
   {
     id: 'snore-drizzle',
     name: 'Snore Drizzle',
-    description: 'A drowsy little rain cloud. Everyone gets yawny.',
+    description: 'A drowsy little rain cloud. The other squishy gets yawny.',
     element: 'water',
     power: 0,
-    accuracy: 80,
-    effects: [{ type: 'status', status: 'sleepy', chance: 60 }],
+    accuracy: 80, // TUNE:
+    effects: [{ type: 'status', status: 'sleepy', chance: 60 }], // TUNE:
   },
   {
     id: 'toasty-snore',
     name: 'Toasty Snore',
-    description: 'A warm, crackly snore that makes everyone sleepy.',
+    description: 'A warm, crackly snore that makes the other squishy sleepy.',
     element: 'fire',
     power: 0,
-    accuracy: 80,
-    effects: [{ type: 'status', status: 'sleepy', chance: 60 }],
+    accuracy: 80, // TUNE:
+    effects: [{ type: 'status', status: 'sleepy', chance: 60 }], // TUNE:
   },
   {
     id: 'petal-party',
@@ -372,8 +372,8 @@ export const MOVES: Move[] = [
     power: 0,
     accuracy: 100,
     effects: [
-      { type: 'stat', target: 'self', stat: 'attack', stages: 1, chance: 100 },
-      { type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 100 },
+      { type: 'stat', target: 'self', stat: 'attack', stages: 1, chance: 100 }, // TUNE:
+      { type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 100 }, // TUNE:
     ],
   },
   {
@@ -381,7 +381,7 @@ export const MOVES: Move[] = [
     name: 'Static Glide',
     description: 'Glides in on a fizzy breeze. Zzzip!',
     element: 'spark',
-    power: 55,
+    power: 55, // TUNE:
     accuracy: 100,
   },
   {
@@ -389,9 +389,9 @@ export const MOVES: Move[] = [
     name: 'Twirly Whirl',
     description: 'Spins on the ice until the other squishy is dizzy too.',
     element: 'frost',
-    power: 50,
-    accuracy: 95,
-    effects: [{ type: 'status', status: 'dizzy', chance: 25 }],
+    power: 50, // TUNE:
+    accuracy: 95, // TUNE:
+    effects: [{ type: 'status', status: 'dizzy', chance: 25 }], // TUNE:
   },
 ];
 
@@ -961,7 +961,7 @@ export const SPECIES: Species[] = [
   {
     id: 'petalprance',
     name: 'Petalprance',
-    description: 'Swapped its prickles for petals and hasn’t stopped dancing since.',
+    description: "Swapped its prickles for petals and hasn't stopped dancing since.",
     element: 'leaf',
     feeling: 'joy',
     rarity: 'rare',
