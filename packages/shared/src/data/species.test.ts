@@ -124,7 +124,7 @@ describe('where the roster lives (server-only tables)', () => {
   });
 
   // Branch forms (#32) are only met by evolving one: in the Gap they break a
-  // progression pace pin (scripts/sim/progression.test.ts; which one depends
+  // progression pace pin (`pnpm sim:progression`'s tests; which one depends
   // on where the rows sit, since guardian picks are seeded).
   it('meets every default evolved form as a guardian', () => {
     for (const s of bases) expect(guarding, s.id).toContain(evolvedFormOf(s).id);
