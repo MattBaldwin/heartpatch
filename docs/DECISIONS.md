@@ -1272,3 +1272,56 @@ _Owner calls made in the coordinator session on 2026-10-09._
 - **Emoji floor iOS 15.4, and tools drawn as icons;** see "Emoji floor and drawn tool icons (#308, PR #316)".
 - **Six Keeper looks, palette A:** Strawberry/heart/solid, Blueberry/star/dash, Grape/flower/dot, Tangerine/diamond/double, Cherry/moon/dash-dot, Mint/leaf/long dash (#327).
 - **Filed for Phase 2:** #319 (the Boutique moves into the trading post only, out of the top-right menu) and #320 (sell duplicates to the post, plus open offers and auctions for items and resources, without coins).
+
+## 2026-10-10 — Owner decisions (coordinator)
+
+_Owner calls made in the supervisor 5 session on 2026-10-09 and 2026-10-10. The issues hold the full specs; this is the why and the headline._
+
+- **PvP and branching evolution are both Phase 1** (#29, #32 moved to milestone 1). The owner: PvP is "implied in phase 1", and branching is what makes collecting level up.
+- **PvP (#29) reuses the battle server and the WebSocket, not Colyseus.** Scope is **friendly challenges plus live defense** (the defender gets a "Defend now?" prompt). Both picks of a turn are collected server-side; the engine stays a pure reducer.
+  - Timers (`// TUNE:`): 30 s turns, 60 s challenge expiry, 20 s "Defend now?", 60 s disconnect grace, 5 min rest after **Not now!**
+  - A timed-out turn is covered by the AI with `deriveSeed(seed, 'cover', turn)`, and the cover is logged, so replays stay exact.
+  - Contract (approved): `challenge.sent/answered/cancelled`, `battle.turned`, `battle.picked`, `defense.prompted/answered`, `battle.cheered`; `challenges` and `live_battles` tables; battle kind `friendly`; `maps.friendly_challenges` and an optional `friendlyChallenges` on `map.updated`/`MapView`. Migration 0040.
+- **Branching evolution (#32): every line branches.** Same-level entries in `SpeciesSchema.evolutions` form a branch.
+  - A squishy's **feeling** leans it toward a branch (4-day half-life). Aimed odds start at 60% and reach about 71% with good care; an un-aimed branch is about 7%. **Pity:** the 3rd aimed try is guaranteed.
+  - The roll is seeded with the server secret `EVOLUTION_ROLL_SALT`, logged and never rerolled. `EVOLUTION_ODDS` stays server-only (CLAUDE.md rule 6).
+  - **Whispers** hint at the leaning branch once the evolving meter is half full (`CareSquishy.whisper`). A branch form takes its branch's feeling. Stat nudges are small (Dazzledrop −3%, Maplecrunch +12%).
+  - `squishy.evolved` gains `branch`; new columns on `squishies` and `squishy_evolutions`. Its migration lands after #29's.
+  - The owner approved batch 1 (Drizzledoze, Embernap, Petalprance, Glidebolt, Twirlicle) and batch 2 (Squashboo, Lullaboo, Hushwing, Sparklewick, Rumblehorn) from real battle-scene captures.
+- **Accessories go on squishies before the playtest (#340).** Crown and neck anchors; crown pieces draw 2.5× the catalog size ("much bigger"); a hat hides the squishy's own crown topper. `HomeSquishy` and `CareSquishy` carry `accessory` (nullable). The dress-up layout was approved as mocked.
+- **The Forest Chihuahua is Phase 2 (#341):** a mythic, secret end-game squishy. Earned once per account, all on one map, for every lore page, the 5 main buildings at top level, 5 squishies at top evolution and one Juniper's Gap tile. Only a lore hint points to it.
+- **Explore must feel like a cozy sim (#335).** The owner rejected the trail, cave and underwater captures ("the rendered shots look awful").
+  - Reset: an **art kit and one hero biome first** (the meadow), then lake, trail and cave on the same kit. The cave's second room and tunnel are wanted before the playtest.
+  - Each biome follows shared rules but hides secrets and resources in its own way.
+  - **Captures must say their quality tier.** Headless SwiftShader falls to the low tier (no shadows, LOD or AA), which made earlier shots look worse than devices do. A dev-only `?tier=` pin fixes that.
+  - **Fallback:** any biome the owner hasn't approved by Oct 15 ships as today's explore.
+- **The explore sky follows the game clock** (#345, merge approved): night until 6, dawn 6–7, day 7–17, dusk 17–19, night from 19, with a darker ground at night.
+- **Usage:** the owner has credits and wants every lane kept running ("Full send"). Overage is fine.
+
+## 2026-10-10 — Every e2e spec is listed (#246, PR #336, #343)
+
+_Proposed in PR #336; recorded by the coordinator after merge. PR #343 applied the CI follow-up._
+
+- **Every e2e spec must be listed in `E2E_GROUPS`, with no catch-all group.** CI fails on an unlisted spec, so a new spec can't silently pile onto one shard.
+- **The e2e job timeout is 30 min** (was 45). The slowest group runs about 10 min plus about 1 min of setup.
+
+## 2026-10-10 — Snorkel, Walking Stick and the explore sky table (#335, PR #338)
+
+_Proposed in PR #338; recorded by the coordinator after merge._
+
+- **Tools are renamed in place,** keeping the ids `net` (Snorkel) and `rope` (Walking Stick), so saved bags need no migration. The Walking Stick costs 2 Timber and 1 Greens.
+- **The sky keeps the game's one clock,** not the mockup's 5:00 / 17:30. See "Owner decisions (coordinator)" above. A test pins the bands to `HOLLOW_RULES.morningMinute` and `HOME_BASE_RULES.nightfallMinute`, so a 17:15 battle and the explore sky agree.
+- **Each biome's spot kit ships with that biome's client PR,** so every PR is safe to deploy alone (CI deploys on merge).
+
+## 2026-10-10 — The evolving meter (#236, PR #337, #342)
+
+_Proposed in each PR; recorded by the coordinator after merge._
+
+- **The ready line reads "Evolves with its next XP ✨"** (owner, 2026-10-09), replacing "One more battle ✨".
+- **A species whose only next step is secret reads "Fully evolved!"** by design, so the meter never reveals that a secret form exists.
+
+## 2026-10-10 — Accessory reads (#340, PR #344)
+
+_Proposed in PR #344; recorded by the coordinator after merge._
+
+- **Additive reply fields.** `CareSquishy` and `HomeSquishy` don't embed `OwnedSquishy`, so each gains `accessory: ContentIdSchema.nullable().default(null)`. Like `CareSquishy.evolving`, a reply from an older server parses as "nothing worn".
