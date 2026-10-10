@@ -333,6 +333,7 @@ export class ExploreScene {
     this.#tile = tile;
     this.#underwater = exploreWorld(tile.terrain) === 'underwater';
     // Underwater the Keeper and team float and bob instead of hopping (#335).
+    // `#reduced` only picks bob over hop; it isn't the player's Reduce Motion.
     const reduced = options.reducedMotion ?? (() => false);
     this.#reduced = this.#underwater ? () => true : reduced;
     // The sky by the patch's time of day (#335); it sets the clear colour too.
