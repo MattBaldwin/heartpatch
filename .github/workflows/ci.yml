@@ -19,6 +19,33 @@ env:
   PLAYWRIGHT_VERSION: 1.63.0
 
 jobs:
+  # Does this PR touch anything the game is built or tested from? A PR that
+  # only changes docs (docs/, root *.md, .claude/) skips the browser tests;
+  # `fast` still checks its formatting. Pushes to main always run everything.
+  # changes/*.md is the in-app What's new, so it counts as game content.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.diff.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: diff
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != pull_request ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}")"
+          echo "$files"
+          if [ -n "$files" ] && ! echo "$files" | grep -qvE '^(docs/|\.claude/|[^/]+\.md$)'; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # Lint, types, unit and DB tests, build: everything but the browser.
   fast:
     runs-on: ubuntu-24.04
@@ -81,6 +108,8 @@ jobs:
 
   # WebKit e2e, split by device and into groups that run side by side.
   e2e:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-24.04
     # WebKit and its OS packages come preinstalled in the official Playwright
     # image, so no shard downloads from an apt mirror (a slow one timed jobs
@@ -173,12 +202,18 @@ jobs:
   # job above is.
   check:
     if: always()
-    needs: [fast, e2e]
+    needs: [changes, fast, e2e]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: All jobs passed
         run: |
+          echo "changes: ${{ needs.changes.result }}, docs only: ${{ needs.changes.outputs.docs_only }}"
           echo "fast: ${{ needs.fast.result }}, e2e: ${{ needs.e2e.result }}"
+          test "${{ needs.changes.result }}" = success
           test "${{ needs.fast.result }}" = success
-          test "${{ needs.e2e.result }}" = success
+          if [ "${{ needs.changes.outputs.docs_only }}" = true ]; then
+            test "${{ needs.e2e.result }}" = skipped
+          else
+            test "${{ needs.e2e.result }}" = success
+          fi
