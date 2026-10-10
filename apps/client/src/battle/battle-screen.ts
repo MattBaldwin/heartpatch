@@ -884,22 +884,16 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const names = content;
     const name = opponentName(b);
     const pick = b.live?.myPick;
-    const line =
-      b.status !== 'active'
-        ? ''
-        : pick
-          ? `${LIVE_TEXT.picked(pick.type === 'move' ? (names?.moveName(pick.move) ?? 'That') : 'A swap')} ${LIVE_TEXT.waitingFor(name)}`
-          : info.myTurn && names
-            ? LIVE_TEXT.yourPick(plateName(names, activeOf(b, b.mySide), nicknames))
-            : LIVE_TEXT.waitingFor(name);
-    const chip =
-      b.status !== 'active'
-        ? null
-        : info.theyAway
-          ? LIVE_TEXT.away(clockText(info.secondsLeft ?? 0))
-          : info.theyPicked
-            ? LIVE_TEXT.theyPicked
-            : LIVE_TEXT.theyPicking;
+    const line = pick
+      ? `${LIVE_TEXT.picked(pick.type === 'move' ? (names?.moveName(pick.move) ?? 'That') : 'A swap')} ${LIVE_TEXT.waitingFor(name)}`
+      : info.myTurn && names
+        ? LIVE_TEXT.yourPick(plateName(names, activeOf(b, b.mySide), nicknames))
+        : LIVE_TEXT.waitingFor(name);
+    const chip = info.theyAway
+      ? LIVE_TEXT.away(clockText(info.secondsLeft ?? 0))
+      : info.theyPicked
+        ? LIVE_TEXT.theyPicked
+        : LIVE_TEXT.theyPicking;
     liveBar.update(info, line, chip);
   }
 
