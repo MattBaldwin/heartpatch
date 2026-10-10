@@ -2,8 +2,10 @@ import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
 import { tapCanvas } from './claim-land.js';
 import { api, hook } from './dev-hook.js';
+import { traysState } from './trays.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import {
+  flagsUnderCovers,
   grantItems,
   grantSquishy,
   namesClipped,
@@ -82,6 +84,15 @@ test('shows the trading posts near home, and a post’s panel says what it is', 
   await expect.poll(async () => (await mapState(page))?.live, { timeout: 30_000 }).toBe('live');
 
   // A post sits 3 steps from my Heart Seed, so one is in view from home.
+  await shutTrays(page);
+  await expect.poll(async () => (await posts(page))?.shown ?? 0).toBeGreaterThan(0);
+  // A side tray slides over part of the map: no flag shows from under it, the
+  // corner buttons or the patch name, even on an idle map once it settles (#310).
+  await page.getByTestId('tray-handle-adventure').tap();
+  await expect
+    .poll(async () => (await traysState(page))?.open, { timeout: 15_000 })
+    .toBe('adventure');
+  await expect.poll(() => flagsUnderCovers(page)).toEqual([]);
   await shutTrays(page);
   await expect.poll(async () => (await posts(page))?.shown ?? 0).toBeGreaterThan(0);
   // Day 1: none touches my land yet, so no gold ring.
@@ -199,6 +210,8 @@ test('trades and gifts at a post: offer, say yes, and pick up from the mailbox (
 
   // Lee: Trade tab (mockup screen e). Sam is picked; Lee gives Emberbun for Stone.
   await visitPost(lee);
+  // The post's sheet is up: no flag shows over it or in the strip above it (#310).
+  await expect.poll(() => flagsUnderCovers(lee)).toEqual([]);
   const leePost = lee.getByTestId('post');
   await expect.poll(async () => (await postState(lee))?.mate).not.toBeNull();
   // Long names stay whole: no word wraps inside itself (owner, #271), e.g. Sam's Pebblesnooze.

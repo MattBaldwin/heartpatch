@@ -36,15 +36,22 @@ interface Flag {
   /** Where and what it last showed, so an unchanged flag writes nothing. */
   at: string;
   label: string;
+  /** Its size when last shown (a hidden flag measures 0); null until then or after its words change. */
+  size: { width: number; height: number } | null;
 }
 
 /** A flag's size before it has been laid out. */
 const FLAG_MIN_WIDTH_PX = 80;
 const FLAG_MIN_HEIGHT_PX = 26;
-/** The top bar's corner buttons (trays.ts, and the auth chip without trays). */
-const TOP_BAR = '.tray-top-left, .tray-top-right, .auth-chip';
-/** Everything else over the map: the patch name pill and every open sheet or panel. */
-const OVER_MAP = `${TOP_BAR}, .map-hud, ${SHEET_SELECTOR}`;
+/**
+ * The top bar's corner buttons, by their always-small parts: with trays up
+ * the Keeper chip is a round button whose menu opens below it (the menu is
+ * a cover, not the bar); without trays it's the one-row "Hi" chip.
+ */
+const TOP_BAR =
+  '.tray-top-left, .tray-top-right, .auth-chip-toggle, body:not(.hp-trays-on) .auth-chip';
+/** Everything over the map: the corner buttons (an open Keeper menu too), the patch name pill and every open sheet or panel. */
+const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, ${SHEET_SELECTOR}`;
 
 /**
  * What a flag must keep clear of, in CSS pixels: where the top bar ends (0
@@ -55,12 +62,14 @@ const OVER_MAP = `${TOP_BAR}, .map-hud, ${SHEET_SELECTOR}`;
  */
 function flagRoom(): FlagRoom {
   let top = 0;
+  for (const node of document.querySelectorAll(TOP_BAR)) {
+    const box = boxOf(node)?.box;
+    if (box) top = Math.max(top, box.y + box.height);
+  }
   const covers: Box[] = [];
   for (const node of document.querySelectorAll(OVER_MAP)) {
     const box = boxOf(node)?.box;
-    if (!box) continue;
-    covers.push(box);
-    if (node.matches(TOP_BAR)) top = Math.max(top, box.y + box.height);
+    if (box) covers.push(box);
   }
   return { width: window.innerWidth, height: window.innerHeight, top, covers };
 }
@@ -75,12 +84,12 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
   let ringMat: StandardMaterial | null = null;
 
   const place = (flag: Flag, room: FlagRoom) => {
+    if (flag.node.offsetWidth > 0) {
+      flag.size = { width: flag.node.offsetWidth, height: flag.node.offsetHeight };
+    }
     const spot = flagSpot(
       scene ? tileScreenRectOf(scene, flag.post.tile) : null,
-      {
-        width: Math.max(flag.node.offsetWidth, FLAG_MIN_WIDTH_PX),
-        height: Math.max(flag.node.offsetHeight, FLAG_MIN_HEIGHT_PX),
-      },
+      flag.size ?? { width: FLAG_MIN_WIDTH_PX, height: FLAG_MIN_HEIGHT_PX },
       room,
     );
     const at = spot ? `${String(spot.x)},${String(spot.y)}` : 'hidden';
@@ -90,19 +99,22 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
     flag.node.hidden = spot === null;
     if (spot) {
       flag.node.style.transform = `translate(${String(spot.x)}px, ${String(spot.y)}px) translate(-50%, -100%)`;
-      // A hidden flag has no size, so it was placed by the stand-in one: now
-      // it shows, place it again by its own (it may run off the edge or into
-      // the patch name, and an idle map draws no frame to fix it).
+      // A flag never shown yet was placed by the stand-in size: now it shows,
+      // place it again by its own (it may run off the edge or into the patch
+      // name, and an idle map draws no frame to fix it).
       if (wasHidden) place(flag, room);
     }
   };
   const placeAll = () => {
+    if (flags.size === 0) return;
     const room = flagRoom();
     for (const flag of flags.values()) place(flag, room);
   };
   // A sheet opening or shutting over an idle map draws no frame, so watch
-  // for it (sheets show and shut by `hidden`, trays by `inert`) and look
-  // again once on the next frame. A flag's own `hidden` is skipped.
+  // for it and look again once on the next frame, like the tutorial's own
+  // watch: sheets show and shut by `hidden`, trays by `inert` and a class
+  // they drop once their slide ends, the Keeper menu by a class. A flag's
+  // own changes are skipped.
   let recheck = 0;
   const covers = new MutationObserver((changes) => {
     if (recheck || !scene) return;
@@ -142,6 +154,7 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
 
   /** Matches flags and rings to the view's posts and how I reach them now. */
   const draw = (view: MapView) => {
+    let room: FlagRoom | null = null;
     const wanted = new Map(postFlags(view, me()).map((p) => [hexKey(p.tile), p] as const));
     for (const [key, flag] of flags) {
       if (!wanted.has(key)) {
@@ -164,7 +177,10 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       const flag = flags.get(key);
       if (flag) {
         flag.post = post;
-        if (flag.label !== label) flag.node.textContent = label;
+        if (flag.label !== label) {
+          flag.node.textContent = label;
+          flag.size = null;
+        }
         flag.label = label;
         flag.node.classList.toggle('post-flag-connected', connected);
         continue;
@@ -180,9 +196,9 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       );
       node.hidden = true;
       root.append(node);
-      const added = { post, node, at: '', label };
+      const added: Flag = { post, node, at: '', label, size: null };
       flags.set(key, added);
-      place(added, flagRoom());
+      place(added, (room ??= flagRoom()));
     }
   };
 
@@ -203,7 +219,7 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       covers.observe(document.body, {
         subtree: true,
         attributes: true,
-        attributeFilter: ['hidden', 'inert'],
+        attributeFilter: ['hidden', 'inert', 'class'],
       });
       next.onDisposeObservable.addOnce(() => {
         if (scene !== next) return;
