@@ -61,4 +61,13 @@ describe('the explore sky look (#335)', () => {
       Math.max(...[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
     expect(max(WATER_LOOKS.night.horizon)).toBeGreaterThan(0x60);
   });
+
+  it('tints the ground a moonlit blue-green at night, and leaves day untouched (owner)', () => {
+    const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    expect(SKY_LOOKS.day.groundTint).toBe('#ffffff');
+    const [r = 0, g = 0, b = 0] = rgb(SKY_LOOKS.night.groundTint);
+    expect(Math.max(r, g, b)).toBeLessThan(0xc0);
+    expect(g).toBeGreaterThan(r);
+    expect(b).toBeGreaterThan(r);
+  });
 });

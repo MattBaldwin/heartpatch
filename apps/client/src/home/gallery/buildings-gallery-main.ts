@@ -100,6 +100,7 @@ function squishy(
     habitatId: where.habitatId ?? null,
     trainingId: where.trainingId ?? null,
     job: where.trainingId ? 'training' : 'resting',
+    accessory: null,
   };
 }
 

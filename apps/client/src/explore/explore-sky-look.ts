@@ -21,6 +21,11 @@ export interface SkyLook {
   readonly starColor: string;
   /** Underwater: the water's haze over the far seabed (#335), else null. */
   readonly fog: string | null;
+  /**
+   * Multiplies the ground's and its decor's colour (#335, owner: a moonlit
+   * blue-green at night). Spots, glints and the team keep their own colour.
+   */
+  readonly groundTint: string;
   /** The sun light's colour and strength (times today's), and the sky light's strength. */
   readonly light: { readonly color: string; readonly sun: number; readonly environment: number };
 }
@@ -37,6 +42,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     stars: false,
     starColor: '#fff3c4',
     fog: null,
+    groundTint: '#fff0e8', // TUNE: a touch warm
     light: { color: '#ffd9c2', sun: 0.85, environment: 0.85 }, // TUNE
   },
   day: {
@@ -50,6 +56,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     stars: false,
     starColor: '#fff3c4',
     fog: null,
+    groundTint: '#ffffff', // TUNE
     light: { color: '#fff5e6', sun: 1, environment: 1 },
   },
   dusk: {
@@ -63,6 +70,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     stars: false,
     starColor: '#fff3c4',
     fog: null,
+    groundTint: '#ffeedd', // TUNE: a touch warm
     light: { color: '#ffc49a', sun: 0.8, environment: 0.8 }, // TUNE
   },
   night: {
@@ -76,6 +84,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     stars: true,
     starColor: '#fff3c4',
     fog: null,
+    groundTint: '#6f9ea6', // TUNE: moonlit blue-green (owner)
     light: { color: '#b9c4ff', sun: 0.55, environment: 0.6 }, // TUNE: kids still see the spots
   },
 };
@@ -194,6 +203,7 @@ export function skyLook(at: SkyAt, underwater = false): SkyLook {
     stars: pick.stars,
     starColor: pick.starColor,
     fog: a.fog && b.fog ? mix(a.fog, b.fog, t) : pick.fog,
+    groundTint: mix(a.groundTint, b.groundTint, t),
     light: {
       color: mix(a.light.color, b.light.color, t),
       sun: lerp(a.light.sun, b.light.sun, t),

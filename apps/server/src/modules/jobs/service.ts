@@ -49,6 +49,7 @@ import { createInventoryRepo } from '../inventory/repo.js';
 import { grantItems, lockGrantRows, seasonsOn } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
+import { wornAccessories } from '../wardrobe/accessories.js';
 import {
   createSquishyJobsRepo,
   type JobRow,
@@ -435,12 +436,11 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
     );
     // Who has won its full-XP battles today (#201): wins pay less until the
     // patch's next midnight (the battles service's falloff, the same count).
-    const wins = await createBattlesRepo(tx).winsToday(
-      map.id,
-      userId,
-      rows.map((r) => r.squishy.id),
-      at,
-    );
+    const ids = rows.map((r) => r.squishy.id);
+    const [wins, worn] = await Promise.all([
+      createBattlesRepo(tx).winsToday(map.id, userId, ids, at),
+      wornAccessories(tx, userId, ids),
+    ]);
     const fullXpBack = nextLocalMidnight(at, map.timeZone).toISOString();
     const seasons = new Set(seasonsOn(at, map.timeZone));
     const workers = new Map<string, string>();
@@ -476,7 +476,7 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         full: training.progress.full,
       };
       return {
-        squishy: row.squishy,
+        squishy: { ...row.squishy, accessory: worn.get(row.squishy.id) ?? null },
         job: jobOf({
           teamSlot: row.teamSlot,
           atWork: work !== null,
