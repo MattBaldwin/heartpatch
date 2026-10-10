@@ -16,6 +16,11 @@ export interface SkyLook {
   /** How many clouds show (0–`EXPLORE_SKY.clouds.length`). */
   readonly clouds: number;
   readonly stars: boolean;
+  /**
+   * Multiplies the ground's and its decor's colour (#335, owner: a moonlit
+   * blue-green at night). Spots, glints and the team keep their own colour.
+   */
+  readonly groundTint: string;
   /** The sun light's colour and strength (times today's), and the sky light's strength. */
   readonly light: { readonly color: string; readonly sun: number; readonly environment: number };
 }
@@ -29,6 +34,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     cloud: '#ffd6e4',
     clouds: 3,
     stars: false,
+    groundTint: '#fff0e8', // TUNE: a touch warm
     light: { color: '#ffd9c2', sun: 0.85, environment: 0.85 }, // TUNE
   },
   day: {
@@ -39,6 +45,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     cloud: '#ffffff', // TUNE
     clouds: 4, // TUNE
     stars: false,
+    groundTint: '#ffffff', // TUNE
     light: { color: '#fff5e6', sun: 1, environment: 1 },
   },
   dusk: {
@@ -49,6 +56,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     cloud: '#d9b8ee',
     clouds: 3,
     stars: false,
+    groundTint: '#ffeedd', // TUNE: a touch warm
     light: { color: '#ffc49a', sun: 0.8, environment: 0.8 }, // TUNE
   },
   night: {
@@ -59,6 +67,7 @@ export const SKY_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
     cloud: '#5a6299',
     clouds: 1,
     stars: true,
+    groundTint: '#6f9ea6', // TUNE: moonlit blue-green (owner)
     light: { color: '#b9c4ff', sun: 0.55, environment: 0.6 }, // TUNE: kids still see the spots
   },
 };
@@ -108,6 +117,7 @@ export function skyLook(at: SkyAt): SkyLook {
     cloud: mix(a.cloud, b.cloud, t),
     clouds: pick.clouds,
     stars: pick.stars,
+    groundTint: mix(a.groundTint, b.groundTint, t),
     light: {
       color: mix(a.light.color, b.light.color, t),
       sun: lerp(a.light.sun, b.light.sun, t),

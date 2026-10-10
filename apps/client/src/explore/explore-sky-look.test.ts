@@ -38,4 +38,13 @@ describe('the explore sky look (#335)', () => {
     // An unknown zone falls back to the device's, never throws.
     expect(Number.isInteger(localMinuteIn('Not/AZone', at))).toBe(true);
   });
+
+  it('tints the ground a moonlit blue-green at night, and leaves day untouched (owner)', () => {
+    const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    expect(SKY_LOOKS.day.groundTint).toBe('#ffffff');
+    const [r = 0, g = 0, b = 0] = rgb(SKY_LOOKS.night.groundTint);
+    expect(Math.max(r, g, b)).toBeLessThan(0xc0);
+    expect(g).toBeGreaterThan(r);
+    expect(b).toBeGreaterThan(r);
+  });
 });
