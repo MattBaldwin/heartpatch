@@ -38,6 +38,7 @@ import { consumeItems } from '../inventory/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
+import { wornAccessories } from '../wardrobe/accessories.js';
 import { createCareRepo, type CareRepo, type CareSquishyRow } from './repo.js';
 
 /*
@@ -340,13 +341,14 @@ export function createCareService(options: CareServiceOptions): CareService {
     const day = await accountDay(tx, userId, at);
     const rows = await repo.listActive(mapId, userId);
     const ids = rows.map((r) => r.id);
-    const [habitats, counts, lastCare, coinsToday, unseen, items] = await Promise.all([
+    const [habitats, counts, lastCare, coinsToday, unseen, items, worn] = await Promise.all([
       habitatTagsFor(repo, rows),
       repo.countCareOn(ids, day),
       repo.lastCare(ids, debounceSince(at)),
       repo.coinsOn(userId, day),
       repo.unseenEvolutions(ids),
       createInventoryRepo(tx).list({ mapId, userId }),
+      wornAccessories(tx, userId, ids),
     ]);
 
     // Species rows the client can't have: secret forms the player owns, or
@@ -398,6 +400,7 @@ export function createCareService(options: CareServiceOptions): CareService {
               at: evolution.evolvedAt.toISOString(),
             }
           : null,
+        accessory: worn.get(row.id) ?? null,
       };
     });
     return { squishies, speciesDefs, items, coinsToday, now: at.toISOString() };
