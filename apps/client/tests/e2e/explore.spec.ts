@@ -61,7 +61,8 @@ interface ExploreDebug {
 }
 
 const exploreState = (page: Page) => hook<ExploreDebug>(page, 'explore');
-const mapState = (page: Page) => hook<{ tiles: number; selected: string | null }>(page, 'map');
+const mapState = (page: Page) =>
+  hook<{ tiles: number; selected: string | null; buildings: number }>(page, 'map');
 
 test('explores a home tile: walk, search the easy way, a find toast, a missing Shovel', async ({
   browser,
@@ -275,6 +276,8 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
 test('shows the buildings on the tile it explores (#347)', async ({ browser }) => {
   test.setTimeout(240_000);
   const page = await newPlayer(browser, uniqueName('builds'));
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
   const lobby = page.getByTestId('lobby');
   await lobby.getByRole('button', { name: 'Make a patch' }).tap();
   await lobby.getByLabel('Patch name').fill('Den Patch');
@@ -317,7 +320,9 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
     spot: 1,
   });
   expect(built.status).toBe(201);
-  // The map hears about the new den, then Explore opens on the tile again.
+  // The map hears about the new den (its WS event), then Explore opens on the tile again.
+  await expect.poll(async () => (await mapState(page))?.buildings, slow).toBe(1);
   await openExplore();
-  await expect.poll(async () => (await exploreState(page))?.scene?.buildings ?? 0, slow).toBe(1);
+  expect((await exploreState(page))?.scene?.buildings).toBe(1);
+  expect(errors).toEqual([]);
 });

@@ -1231,6 +1231,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // A search left behind (another map, logout) never blocks the next visit.
     working = false;
     scene3d = null;
+    mapTileAtOpen = null;
     render();
   }
 
