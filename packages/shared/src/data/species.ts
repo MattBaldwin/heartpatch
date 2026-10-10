@@ -480,6 +480,42 @@ export const MOVES: Move[] = [
     power: 55, // TUNE:
     accuracy: 100,
   },
+  {
+    id: 'sprinkle-sneeze',
+    name: 'Sprinkle Sneeze',
+    description: 'Ah… ah… achoo! Sprinkles everywhere.',
+    element: 'leaf',
+    power: 50, // TUNE:
+    accuracy: 95, // TUNE:
+    effects: [{ type: 'status', status: 'dizzy', chance: 25 }], // TUNE:
+  },
+  {
+    id: 'moonbeam-lullaby',
+    name: 'Moonbeam Lullaby',
+    description: 'Hums a soft, silvery lullaby. So… sleepy…',
+    element: 'light',
+    power: 0,
+    accuracy: 85, // TUNE:
+    effects: [{ type: 'status', status: 'sleepy', chance: 60 }], // TUNE:
+  },
+  {
+    id: 'midnight-hoot',
+    name: 'Midnight Hoot',
+    description: 'A deep hoot like faraway thunder. The other squishy gets jumpy.',
+    element: 'spark',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'stat', target: 'opponent', stat: 'defense', stages: -1, chance: 100 }], // TUNE:
+  },
+  {
+    id: 'acorn-stash',
+    name: 'Acorn Stash',
+    description: 'Tucks into a pile of leaves and snacks. Nothing can bother it now.',
+    element: 'leaf',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 100 }], // TUNE:
+  },
 ];
 
 /*
@@ -1431,7 +1467,10 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 65, attack: 55, defense: 65, speed: 40 }, // TUNE:
     moves: ['leafy-tickle', 'mossy-nap', 'prickle-roll'],
-    evolutions: [{ into: 'mossquilt', level: 22 }], // TUNE:
+    evolutions: [
+      { into: 'mossquilt', level: 22 },
+      { into: 'sprinklemuff', level: 22 },
+    ], // TUNE:
     visual: {
       body: 'bun',
       palette: ['#e0b07c', '#fff3e2', '#6fb85a', '#5a9a48'],
@@ -1473,6 +1512,37 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['cozy'] },
   },
+  {
+    id: 'sprinklemuff',
+    name: 'Sprinklemuff',
+    description: "Grew sprinkles instead of moss. Smells like giggles. Please don't lick it.",
+    element: 'leaf',
+    feeling: 'silly',
+    rarity: 'epic',
+    baseStats: { hp: 98, attack: 92, defense: 87, speed: 103 }, // TUNE:
+    moves: ['leafy-tickle', 'prickle-roll', 'pollen-puff', 'sprinkle-sneeze'],
+    evolutions: [],
+    visual: {
+      body: 'tiered',
+      palette: ['#e0b07c', '#fff3e2', '#6fb85a', '#ff8fc0'],
+      parts: [
+        'dot-eyes',
+        'open-mouth',
+        'blush-cheeks',
+        'muffin-cap',
+        'stubby-arms',
+        'biped-legs',
+        'leaf-tail',
+        'freckles',
+      ],
+      size: 1.3,
+      finish: 'sparkle',
+      stance: 0.2,
+      pose: 'stand',
+      attackPart: 'arms',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['silly', 'cozy'] },
+  },
 
   // Light + Joy (harmonious). Rare and strong; Fuzzbolt is its plain counter.
   {
@@ -1484,7 +1554,10 @@ export const SPECIES: Species[] = [
     rarity: 'epic',
     baseStats: { hp: 60, attack: 65, defense: 55, speed: 65 }, // TUNE:
     moves: ['sunny-beam', 'dazzle-dance', 'glow-up'],
-    evolutions: [{ into: 'dazzledrop', level: 26 }], // TUNE:
+    evolutions: [
+      { into: 'dazzledrop', level: 26 },
+      { into: 'moondrop', level: 26 },
+    ], // TUNE:
     visual: {
       body: 'orb',
       palette: ['#ffe9a8', '#fffdf2', '#ffb347'],
@@ -1520,6 +1593,36 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['light'], feelings: ['joy'] },
   },
+  {
+    id: 'moondrop',
+    name: 'Moondrop',
+    description: 'When the sun gets sleepy, it becomes the moon. It hums lullabies.',
+    element: 'light',
+    feeling: 'sleepy',
+    rarity: 'legendary',
+    baseStats: { hp: 98, attack: 76, defense: 93, speed: 71 }, // TUNE:
+    moves: ['sunny-beam', 'night-light', 'glow-up', 'moonbeam-lullaby'],
+    evolutions: [],
+    visual: {
+      body: 'orb',
+      palette: ['#fff0bf', '#fffdf2', '#a99cf0', '#e8dcff'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'cloud-crown',
+        'plume-wings',
+        'freckles',
+      ],
+      size: 1.3,
+      finish: 'iridescent',
+      glow: 'body',
+      stance: 0.45,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['light'], feelings: ['sleepy', 'joy'] },
+  },
 
   // Spark + Brave. The legendary of Juniper's Gap; Fuzzbolt is its plain counter.
   {
@@ -1531,7 +1634,10 @@ export const SPECIES: Species[] = [
     rarity: 'legendary',
     baseStats: { hp: 70, attack: 70, defense: 60, speed: 60 }, // TUNE:
     moves: ['zip-zap', 'thunder-hug', 'zoomies', 'snowball-toss'],
-    evolutions: [{ into: 'thunderplume', level: 30 }], // TUNE:
+    evolutions: [
+      { into: 'thunderplume', level: 30 },
+      { into: 'stormhoot', level: 30 },
+    ], // TUNE:
     visual: {
       body: 'orb',
       palette: ['#96a1ca', '#eef1ff', '#ffd23f'],
@@ -1565,6 +1671,29 @@ export const SPECIES: Species[] = [
       attackPart: 'wings',
     },
     habitatPreferences: { elements: ['spark'], feelings: ['brave'] },
+  },
+  {
+    id: 'stormhoot',
+    name: 'Stormhoot',
+    description: 'A night owl made of storm clouds. Its hoot sounds like faraway thunder.',
+    element: 'spark',
+    feeling: 'spooky',
+    rarity: 'legendary',
+    baseStats: { hp: 84, attack: 98, defense: 79, speed: 108 }, // TUNE:
+    moves: ['static-fluff', 'thunder-hug', 'peekaboo', 'midnight-hoot'],
+    evolutions: [],
+    visual: {
+      body: 'orb',
+      palette: ['#4f5888', '#eef1ff', '#ffd23f', '#c9d1ff'],
+      ink: '#fff4dc',
+      parts: ['spooky-eyes', 'beak', 'pointy-ears', 'cloud-crown', 'plume-wings', 'tail-feathers'],
+      size: 1.3,
+      finish: 'iridescent',
+      stance: 0.45,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['spooky', 'brave'] },
   },
 
   // Halloween (season `halloween`): sweet-spooky, each drawn by a Halloween activity.
@@ -1945,7 +2074,10 @@ export const SPECIES: Species[] = [
     season: 'thanksgiving',
     baseStats: { hp: 55, attack: 60, defense: 45, speed: 60 }, // TUNE:
     moves: ['leafy-tickle', 'leaf-pile-leap', 'zoomies'],
-    evolutions: [{ into: 'maplecrunch', level: 18 }], // TUNE:
+    evolutions: [
+      { into: 'maplecrunch', level: 18 },
+      { into: 'huddlenut', level: 18 },
+    ], // TUNE:
     visual: {
       body: 'bean',
       palette: ['#e8a066', '#fff1dc', '#b5693a', '#7cc96a'],
@@ -2002,5 +2134,39 @@ export const SPECIES: Species[] = [
       attackPart: 'tail',
     },
     habitatPreferences: { elements: ['leaf'], feelings: ['joy', 'cozy'] },
+  },
+  {
+    id: 'huddlenut',
+    name: 'Huddlenut',
+    description: 'Tucks into a leaf pile with a snack for later. And for later-later.',
+    element: 'leaf',
+    feeling: 'cozy',
+    rarity: 'rare',
+    season: 'thanksgiving',
+    baseStats: { hp: 89, attack: 65, defense: 80, speed: 49 }, // TUNE:
+    moves: ['leafy-tickle', 'pollen-puff', 'leaf-pile-leap', 'acorn-stash'],
+    evolutions: [],
+    visual: {
+      body: 'bun',
+      palette: ['#e8a066', '#fff1dc', '#b5693a', '#7cc96a'],
+      parts: [
+        'oval-eyes',
+        'smile',
+        'blush-cheeks',
+        'round-ears',
+        'acorn-cap',
+        'leaf-wings',
+        'stuck-leaf',
+        'stubby-arms',
+        'hop-feet',
+        'bushy-tail',
+      ],
+      size: 1.3,
+      head: { body: 'orb', size: 0.85, forward: 0.15, up: 0.6 },
+      stance: 0.12,
+      pose: 'sit',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['leaf'], feelings: ['cozy', 'joy'] },
   },
 ];
