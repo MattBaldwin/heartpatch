@@ -47,6 +47,7 @@ import type { SquishyLod } from '../procedural/config.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { KeeperField } from '../procedural/keeper/keeper-field.js';
 import { keeperItems } from '../procedural/keeper/keeper-items.js';
+import { accessoryItem } from '../procedural/accessory.js';
 import { SquishyField, type SquishyHandle } from '../procedural/squishy-field.js';
 import { HOME_VIEW, SPOT_SIZE, WANDER } from './home-config.js';
 import { centreOf, spotWorld } from './home-layout.js';
@@ -305,6 +306,7 @@ export class HomeScene {
         sameAnchor(existing.home, anchor) &&
         (anchor || sameAnchor(existing.at, waitAt))
       ) {
+        this.#squishies.setAccessory(existing.handle, accessoryItem(squishy.accessory));
         continue;
       }
       if (existing) this.#squishies.remove(existing.handle);
@@ -312,6 +314,8 @@ export class HomeScene {
         ? this.#wanderPoint(anchor, squishy.id, 0, training)
         : (waitAt ?? { x: 0, z: 0 });
       const handle = this.#squishies.add(kind, squishy.id, this.#placement(at, 0));
+      // What it wears (#340): the same pieces as up close.
+      this.#squishies.setAccessory(handle, accessoryItem(squishy.accessory));
       this.#residents.set(squishy.id, { handle, home: anchor, training, at, hop: null, hops: 0 });
     }
     for (const [id, resident] of this.#residents) {
