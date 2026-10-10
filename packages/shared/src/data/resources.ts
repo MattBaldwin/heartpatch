@@ -173,17 +173,17 @@ export const RESOURCES: Resource[] = [
     tradable: false, // #271: worn in uses, it stays with its Keeper
   },
   {
-    id: 'net',
-    name: 'Net',
-    description: 'Scoop ponds and reeds while you explore your land.',
+    id: 'net', // #335: the Snorkel, renamed in place (the id stays, so bags keep their uses)
+    name: 'Snorkel',
+    description: 'Dive under the lake to find what hides in the water.',
     kind: 'crafted',
     tool: 'net',
     tradable: false, // #271: worn in uses, it stays with its Keeper
   },
   {
-    id: 'rope',
-    name: 'Rope',
-    description: 'Climb up to high ledges on hills and mountains.',
+    id: 'rope', // #335: the Walking Stick, renamed in place (the id stays, so bags keep their uses)
+    name: 'Walking Stick',
+    description: 'Hike up the mountain trail to the lookouts.',
     kind: 'crafted',
     tool: 'rope',
     tradable: false, // #271: worn in uses, it stays with its Keeper

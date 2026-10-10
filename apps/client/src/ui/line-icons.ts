@@ -10,8 +10,9 @@ import { strokeIcon } from './trays/trays.js';
 /** 24 × 24 stroke paths for `strokeIcon`: the tools and the things a Keeper lifts. */
 export const ICON_PATHS = {
   shovel: 'M4 20l9-9 M13 11l3-3 4 4-3 3z M3 21l2-2',
-  net: 'M4 20l7.2-7.2 M9.5 9a5.5 5.5 0 1 0 11 0a5.5 5.5 0 1 0-11 0 M12 6.5l6 5 M12 11.5l6-5',
-  rope: 'M12 5a7 7 0 1 0 7 7 M12 9a3 3 0 1 0 3 3 M19 12v8',
+  // #335: the Snorkel (a mask and its tube) and the Walking Stick.
+  snorkel: 'M5 10h10a3 3 0 0 1 0 6h-2l-2-2-2 2H5a3 3 0 0 1 0-6z M19 14V4',
+  stick: 'M8 4a2 2 0 1 0 4 0a2 2 0 1 0-4 0 M11 6l6 15',
   lantern: 'M12 2.5v2 M9.5 4.5h5 M8 7h8 M9 7v11h6V7 M12 10.5v4 M7 20h10',
   rock: 'M4 18l2.5-6 4-4 5 1.5 3.5 4 1 4.5Z',
   log: 'M6 8h12a4 4 0 0 1 0 8H6 M6 8a4 4 0 0 0 0 8a4 4 0 0 0 0-8 M6 11v2',
