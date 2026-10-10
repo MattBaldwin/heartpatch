@@ -918,8 +918,9 @@ export class ExploreScene {
   }
 
   /**
-   * The mountain trail (#335): a cream path zig-zagging up the tile past the
-   * lookouts, as flat thin-instanced stepping pads (one draw call).
+   * The mountain trail (#335): a cream path zig-zagging up the tile, as flat
+   * thin-instanced stepping pads (one draw call). It's scenery: the lookouts
+   * are seeded per tile and sit beside it, not on it.
    */
   #buildTrail(material: Material): void {
     const pad = CreateCylinder(
@@ -1362,7 +1363,7 @@ function buildShape(scene: Scene, shape: ExploreShape): Mesh {
       // and a crystal peeking out, waiting for the Lantern.
       return merged(`explore-${shape}`, [
         painted(at(sphere(0.36), 0, 0.02, 0, 1, 0.75, 0.9), '#8a76a6'),
-        painted(at(sphere(0.16), 0, 0.03, -0.15, 1, 1.1, 0.5), '#1f1630'),
+        painted(at(sphere(0.16), 0, 0.03, -0.15, 1, 1.1, 0.5), '#2e2240'), // dusk purple, never black
         painted(at(cylinder(0.16, 0.0, 0.05), 0.12, 0.2, -0.08), '#e6cdfc'),
       ]);
     case 'snow-drift':

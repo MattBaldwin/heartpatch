@@ -114,12 +114,16 @@ export function startInteraction(
   };
 }
 
+/** Steps that a held easy button finishes all at once (its fill shows while held). */
+const HOLD_TO_FINISH: ReadonlySet<SpotInteraction> = new Set(['climb', 'dive', 'poke', 'pick']);
+
 /** How far along it is, 0–1 (the progress ring). */
 export function interactionProgress(s: InteractionState): number {
   if (s.done) return 1;
-  if (s.kind === 'lift' || (s.kind === 'climb' && s.holdSince !== null)) {
+  const held = s.holdSince !== null;
+  if (s.kind === 'lift' || s.kind === 'stack' || (held && HOLD_TO_FINISH.has(s.kind))) {
     const hold = Math.min(1, s.held / INTERACTION.holdMs);
-    return s.kind === 'climb' ? Math.max(s.count / s.need, hold) : hold;
+    return s.kind === 'lift' || s.kind === 'stack' ? hold : Math.max(s.count / s.need, hold);
   }
   if (s.kind === 'light') return s.revealed ? 0.5 : 0;
   return Math.min(1, s.count / s.need);

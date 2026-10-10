@@ -134,8 +134,8 @@ export const WATER_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
 
 /**
  * Inside the hills cave (#335): warm purple stone all round, little glowing
- * motes where the stars would be, and a dim warm light that the Lantern
- * brightens. A cave is the same at any hour.
+ * motes where the stars would be, and a dim warm light (the Lantern's own
+ * glow is the lit circle it plays in). A cave is the same at any hour.
  */
 const CAVE: SkyLook = {
   zenith: '#4f3c6e', // TUNE: the cave roof

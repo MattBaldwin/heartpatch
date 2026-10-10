@@ -248,5 +248,16 @@ describe('the trail and the cave: poke, stack and boop (#335)', () => {
     ]);
     expect(held.done).toBe(true);
     expect(run('stack', [{ type: 'easy', t: 0 }]).done).toBe(true);
+    // The hold's fill grows while the finger stays down.
+    const half = run('stack', [
+      { type: 'down', x: 150, y: 120, t: 0 },
+      { type: 'tick', t: INTERACTION.holdMs / 2 },
+    ]);
+    expect(interactionProgress(half)).toBeCloseTo(0.5);
+    const poking = run('poke', [
+      { type: 'easy-down', t: 0 },
+      { type: 'tick', t: INTERACTION.holdMs / 2 },
+    ]);
+    expect(interactionProgress(poking)).toBeCloseTo(0.5);
   });
 });
