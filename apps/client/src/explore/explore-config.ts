@@ -251,6 +251,10 @@ export const INTERACTION = {
   climbSteps: 6, // TUNE
   /** The Walking Stick's easy way and lifting a rock: hold this long, ms. */
   holdMs: 900, // TUNE
+  /** Snorkel at a bubble spring: bubbles to catch, a tap each (#335). */
+  diveBubbles: 4, // TUNE
+  /** Snorkel at a reed bed: swipes to part the reeds (#335). */
+  partSwipes: 2, // TUNE
   /** Hands on a tree or flower bed: changes of direction to shake it. */
   shakes: 4, // TUNE
   /** Snorkel: the glow comes and goes on this cycle, ms; the first `glowMs` of it glows. */
@@ -264,4 +268,10 @@ export const INTERACTION = {
    * `lightRadius × caveArea` (about the Keeper's own glow).
    */
   caveArea: 0.5, // TUNE
+} as const;
+
+/** A lake's bed, explored underwater with the Snorkel (#335). */
+export const EXPLORE_SEABED = {
+  color: '#f6e7bf', // TUNE: warm sand
+  roughness: 0.85, // TUNE
 } as const;

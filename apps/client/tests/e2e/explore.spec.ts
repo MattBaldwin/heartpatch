@@ -55,7 +55,7 @@ interface ExploreDebug {
     decor: { tufts: number; pebbles: number; flowers: number };
     camera: { x: number; z: number; zoom: number };
     drawCalls: number;
-    sky: { clouds: number; stars: boolean; moon: boolean };
+    sky: { clouds: number; stars: boolean; moon: boolean; underwater: boolean };
     keeperHeight: number;
     faded: number[];
   } | null;
@@ -119,7 +119,7 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     .toBeGreaterThan(0.14);
   expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.195);
   // The sky follows the patch's clock (#335): e2e pins late morning, so it's day with clouds.
-  expect(first.scene?.sky).toEqual({ clouds: 4, stars: false, moon: false });
+  expect(first.scene?.sky).toEqual({ clouds: 4, stars: false, moon: false, underwater: false });
   // Every unsearched spot glints, the tile grows decor, and the joystick is always there.
   expect(first.scene?.glints).toBe(first.spots.length);
   expect(first.scene?.decor.tufts).toBeGreaterThan(0);

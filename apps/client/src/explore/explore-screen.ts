@@ -80,7 +80,7 @@ import {
   type InteractionInput,
   type InteractionState,
 } from './interactions.js';
-import { exploreSkyAt, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
+import { exploreSkyAt, isUnderwater, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
 import './explore.css';
 
@@ -202,7 +202,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
    * map's view is gone after that), and kept for the visit.
    */
   let zone: string | null = null;
-  const skyNow = (): SkyLook => skyLook(exploreSkyAt(zone, options.now?.() ?? new Date()));
+  const skyNow = (): SkyLook =>
+    skyLook(
+      exploreSkyAt(zone, options.now?.() ?? new Date()),
+      tile ? isUnderwater(tile.terrain) : false,
+    );
   /** The look last shown, so a quiet minute changes and redraws nothing. */
   let skyShown: SkyLook | null = null;
   let lastTier: QualityTier | null = null;
@@ -826,6 +830,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!isOpen || !tile) return;
     const t = tile;
     title.textContent = terrainName(t.terrain);
+    // Under a lake, Back brings the Keeper up for air (#335).
+    back.setAttribute(
+      'aria-label',
+      isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
+    );
     progress.textContent = progressLine(t.progress);
     const held = heldTool();
     if (held) lastHeld = held;
@@ -953,7 +962,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     easy.addEventListener('click', () => {
       feed({ type: 'easy', t: performance.now() });
     });
-    if (kind === 'climb') {
+    if (kind === 'climb' || kind === 'dive') {
       easy.addEventListener('pointerdown', () => {
         feed({ type: 'easy-down', t: performance.now() });
       });

@@ -83,7 +83,11 @@ export function startInteraction(
         ? INTERACTION.climbSteps
         : kind === 'shake'
           ? INTERACTION.shakes
-          : 1;
+          : kind === 'dive'
+            ? INTERACTION.diveBubbles
+            : kind === 'part'
+              ? INTERACTION.partSwipes
+              : 1;
   const angle = seed01 * Math.PI * 2;
   return {
     kind,
@@ -148,6 +152,11 @@ export function stepInteraction(s: InteractionState, input: InteractionInput): I
       return lift(s, input);
     case 'shake':
       return shake(s, input);
+    case 'dive':
+      return dive(s, input);
+    case 'part':
+      // The reeds part like a shake: a swipe one way, then back.
+      return shake(s, input);
   }
 }
 
@@ -185,6 +194,32 @@ function climb(s: InteractionState, input: InteractionInput): InteractionState {
     case 'side':
       if (s.lastSide === input.side) return s;
       return counted({ ...s, lastSide: input.side });
+    case 'easy':
+      return counted(s);
+    case 'easy-down':
+      return { ...s, holdSince: input.t, held: 0 };
+    case 'easy-up':
+      return { ...s, holdSince: null, held: 0 };
+    case 'tick': {
+      if (s.holdSince === null) return s;
+      const held = input.t - s.holdSince;
+      return held >= INTERACTION.holdMs
+        ? { ...s, held, count: s.need, done: true }
+        : { ...s, held };
+    }
+    default:
+      return s;
+  }
+}
+
+/**
+ * Snorkel at a bubble spring (#335): each tap on the water catches a bubble.
+ * Any tap on the easy button catches one too, and holding it catches them all.
+ */
+function dive(s: InteractionState, input: InteractionInput): InteractionState {
+  switch (input.type) {
+    case 'down':
+      return counted(s);
     case 'easy':
       return counted(s);
     case 'easy-down':

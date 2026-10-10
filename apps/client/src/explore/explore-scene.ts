@@ -26,7 +26,7 @@ import {
 } from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
 import { ExploreSky, type ExploreSkyStats } from './explore-sky.js';
-import type { SkyLook } from './explore-sky-look.js';
+import { isUnderwater, type SkyLook } from './explore-sky-look.js';
 import { spotWorld } from '../home/home-layout.js';
 import {
   FALLBACK_LOOK,
@@ -60,6 +60,7 @@ import {
   EXPLORE_CAMERA,
   EXPLORE_FADE,
   EXPLORE_HOP,
+  EXPLORE_SEABED,
   EXPLORE_TOOL,
   EXPLORE_VIEW,
 } from './explore-config.js';
@@ -346,7 +347,11 @@ export class ExploreScene {
     // Grass tufts, pebbles and flowers (#291): thin instances, one draw call a kind.
     const places = decorPlaces(tile, this.#colliders);
     this.#decor = { tufts: 0, pebbles: 0, flowers: 0 };
-    for (const kind of ['tufts', 'pebbles', 'flowers'] as const) {
+    // No flowers on a lake bed (#335): its tufts are waterweed, its pebbles stay.
+    const kinds = isUnderwater(tile.terrain)
+      ? (['tufts', 'pebbles'] as const)
+      : (['tufts', 'pebbles', 'flowers'] as const);
+    for (const kind of kinds) {
       const mesh = buildDecor(scene, kind);
       mesh.material = propMaterial;
       setInstances(
@@ -893,7 +898,11 @@ export class ExploreScene {
   }
 
   #buildGround(terrain: string): void {
-    const look = TERRAIN_LOOKS[terrain] ?? FALLBACK_LOOK;
+    const land = TERRAIN_LOOKS[terrain] ?? FALLBACK_LOOK;
+    // Under a lake the tile is its sandy bed (#335), not the water's top.
+    const look = isUnderwater(terrain)
+      ? { ...land, color: EXPLORE_SEABED.color, roughness: EXPLORE_SEABED.roughness }
+      : land;
     const k = this.#k;
     const s = new Vector3(k, k, k);
     const h = look.height;
@@ -1241,10 +1250,23 @@ function buildShape(scene: Scene, shape: ExploreShape): Mesh {
         painted(at(cylinder(0.08, 0.01, 0.02), -0.03, 0.12, 0.02), '#7ac27a'),
       ]);
     case 'pond':
+      // A bubble spring on the lake bed (#335): a pebbly ring with bubbles rising.
       return merged(`explore-${shape}`, [
-        painted(at(cylinder(0.02, 0.38, 0.38), 0, 0.005, 0), '#7cc6f0'),
-        painted(at(cylinder(0.015, 0.44, 0.44), 0, 0, 0), '#cfe9c4'),
-        painted(at(cylinder(0.01, 0.09, 0.09), 0.08, 0.02, -0.05), '#6fbf73'),
+        painted(at(cylinder(0.03, 0.4, 0.4), 0, 0.01, 0), '#c9c1b2'),
+        painted(at(cylinder(0.032, 0.26, 0.26), 0, 0.012, 0), '#eaf8ff'),
+        ...(
+          [
+            [0.02, 0.12, 0.0, 0.11],
+            [-0.04, 0.24, 0.02, 0.08],
+            [0.03, 0.36, -0.02, 0.07],
+            [-0.01, 0.47, 0.01, 0.05],
+          ] as const
+        ).map(([x, y, z, d]) =>
+          painted(
+            at(CreateSphere(`${shape}-part`, { diameter: d, segments: 8 }, scene), x, y, z),
+            '#dff7ff',
+          ),
+        ),
       ]);
     case 'ledge':
       // A chunky cliff step with a flat top to climb to.
