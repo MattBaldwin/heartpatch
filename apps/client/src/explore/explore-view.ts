@@ -81,7 +81,11 @@ export const PLAY_TEXT: Readonly<
   climb: { icon: 'stick', hint: 'Left, right, left, right!', easy: 'hold to hike up' },
   light: { icon: 'lantern', hint: EXPLORE_TEXT.lanternHint, easy: 'light it all up' },
   scoop: { icon: 'snorkel', hint: 'Swipe through when it glows!', easy: 'Dive!' },
-  dive: { icon: 'snorkel', hint: 'Tap the bubbles as they wobble up!', easy: 'hold to catch them' },
+  dive: {
+    icon: 'snorkel',
+    hint: 'Tap, tap, tap to catch the bubbles!',
+    easy: 'hold to catch them',
+  },
   part: { icon: 'snorkel', hint: 'Swipe the reeds apart!', easy: 'tap to part them' },
   lift: {
     icon: '✊',

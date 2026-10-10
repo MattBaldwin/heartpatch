@@ -155,8 +155,7 @@ export function stepInteraction(s: InteractionState, input: InteractionInput): I
     case 'dive':
       return dive(s, input);
     case 'part':
-      // The reeds part like a shake: a swipe one way, then back.
-      return shake(s, input);
+      return part(s, input);
   }
 }
 
@@ -283,6 +282,29 @@ function scoop(s: InteractionState, input: InteractionInput): InteractionState {
       const dy = input.y - stroke.y0;
       if (dx * dx + dy * dy < INTERACTION.swipePx * INTERACTION.swipePx) return s;
       return { ...s, stroke: null, count: 1, done: true, bigSplash: netGlowing(s, input.t) };
+    }
+    case 'up':
+      return { ...s, stroke: null };
+    default:
+      return s;
+  }
+}
+
+/**
+ * Snorkel at a reed bed (#335): each sideways swipe, either way, parts the
+ * reeds a little. The easy way is one tap.
+ */
+function part(s: InteractionState, input: InteractionInput): InteractionState {
+  switch (input.type) {
+    case 'easy':
+      return { ...s, count: s.need, done: true };
+    case 'down':
+      return { ...s, stroke: { x0: input.x, y0: input.y, counted: false, dir: 0, turnX: input.x } };
+    case 'move': {
+      const stroke = s.stroke;
+      if (!stroke || stroke.counted || Math.abs(input.x - stroke.x0) < INTERACTION.swipePx)
+        return s;
+      return counted({ ...s, stroke: { ...stroke, counted: true } });
     }
     case 'up':
       return { ...s, stroke: null };

@@ -983,7 +983,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     play.replaceChildren(...nodes);
   }
 
-  /** Updates the overlay's count and the Snorkel's glow. */
+  /** Updates the overlay's count (dots, or a hold's fill). */
   function renderPlay(): void {
     const p = playing;
     play.hidden = p === null || card !== null;
