@@ -204,6 +204,34 @@ describe('careSheet', () => {
     expect(careSheet(squishy({ speciesId: 'who-knows' }), reply()).rarity).toBeNull();
   });
 
+  // #32: branching evolution's hints.
+  it('passes the whisper through, and says feelings matter on a line that branches', () => {
+    const whisper = { icon: '💭', text: 'Moonpuff has been feeling very sleepy lately…' };
+    expect(careSheet(squishy({ whisper }), reply()).whisper).toEqual(whisper);
+    expect(careSheet(squishy(), reply()).whisper).toBeNull();
+    const branching = GAME_DATA.species.find(
+      (s) => s.evolutions.filter((e) => e.level === s.evolutions[0]?.level).length > 1,
+    )!;
+    const single = GAME_DATA.species.find((s) => s.evolutions.length === 1)!;
+    const infoFor = (s: Species) => careSheet(squishy({ speciesId: s.id }), reply()).info;
+    expect(infoFor(branching)).toContain(CARE_TEXT.feelingsMatter);
+    expect(infoFor(single)).not.toContain(CARE_TEXT.feelingsMatter);
+  });
+
+  it('shows the "brand-new form" chip only for a branch form', () => {
+    const evolution = {
+      fromSpeciesId: 'moonpuff',
+      intoSpeciesId: 'moonmallow',
+      level: 20,
+      at: NOW,
+    };
+    expect(
+      careSheet(squishy({ newEvolution: { ...evolution, branch: true } }), reply()).newForm,
+    ).toBe(true);
+    expect(careSheet(squishy({ newEvolution: evolution }), reply()).newForm).toBe(false);
+    expect(careSheet(squishy(), reply()).newForm).toBe(false);
+  });
+
   it('uses a nickname when there is one', () => {
     expect(careSheet(squishy({ nickname: 'Pip' }), reply()).name).toBe('Pip');
   });

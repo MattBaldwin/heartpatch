@@ -21,7 +21,10 @@
 
 .care[hidden],
 .care-celebrate[hidden],
-.care-rarity[hidden] {
+.care-rarity[hidden],
+.care-whisper[hidden],
+.care-whisper-sub[hidden],
+.care-new-form[hidden] {
   display: none;
 }
 
@@ -342,4 +345,51 @@
 
 .care-treat[hidden] {
   display: none;
+}
+
+/* The whisper (#32): what's shaping the next evolution, under the evolving meter. */
+.care-whisper {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f3ecff, #fdeff7);
+  box-shadow: inset 0 0 0 2px #e6dcff;
+  color: #5b3f86;
+  text-align: left;
+}
+
+.care-whisper-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.care-whisper-text {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.care-whisper-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #7d6380;
+}
+
+/* A branch form's celebration chip (#32). */
+.care-new-form {
+  width: max-content;
+  max-width: 100%;
+  margin: 4px auto 8px;
+  padding: 4px var(--hp-pad-x);
+  border-radius: 999px;
+  background: #fff1b8;
+  color: #8a5a00;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: inset 0 0 0 2px #ffd36e;
 }

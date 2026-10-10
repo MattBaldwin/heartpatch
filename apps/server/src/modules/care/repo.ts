@@ -83,6 +83,11 @@ export interface EvolutionRow {
   evolvedAt: Date;
 }
 
+/** An unseen evolution, and whether it was into a branch form (#32). */
+export interface UnseenEvolutionRow extends EvolutionRow {
+  branch: boolean;
+}
+
 /** A new evolution row (#32): its owner, whether it's a branch form, and its logged roll. */
 export interface NewEvolution extends EvolutionRow {
   mapId: string;
@@ -159,7 +164,7 @@ export interface CareRepo {
   rollsOf: (userId: string, limit: number) => Promise<{ into: string; roll: unknown }[]>;
   insertEvolution: (evolution: NewEvolution) => Promise<void>;
   /** The newest evolution each squishy's owner hasn't seen celebrated yet. */
-  unseenEvolutions: (squishyIds: readonly string[]) => Promise<Map<string, EvolutionRow>>;
+  unseenEvolutions: (squishyIds: readonly string[]) => Promise<Map<string, UnseenEvolutionRow>>;
   markEvolutionsSeen: (squishyId: string, at: Date) => Promise<void>;
 }
 
@@ -339,6 +344,7 @@ function queries(db: Executor): CareRepo {
           intoSpeciesId: squishyEvolutions.intoSpeciesId,
           level: squishyEvolutions.level,
           evolvedAt: squishyEvolutions.evolvedAt,
+          branch: squishyEvolutions.branch,
         })
         .from(squishyEvolutions)
         .where(
@@ -348,7 +354,7 @@ function queries(db: Executor): CareRepo {
           ),
         )
         .orderBy(desc(squishyEvolutions.evolvedAt), desc(squishyEvolutions.id));
-      const newest = new Map<string, EvolutionRow>();
+      const newest = new Map<string, UnseenEvolutionRow>();
       for (const row of rows) if (!newest.has(row.squishyId)) newest.set(row.squishyId, row);
       return newest;
     },

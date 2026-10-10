@@ -4,6 +4,7 @@ import {
   moodLine,
   type CareListResponse,
   type CareResult,
+  type CareWhisper,
   type CareSquishy,
   type Rarity,
   type Species,
@@ -74,6 +75,11 @@ export const CARE_TEXT = {
     n > 0 ? `${String(n)} more extra-special ${n === 1 ? 'cuddle' : 'cuddles'} today.` : '',
   evolvedTitle: 'Whoa!',
   evolved: (from: string, into: string) => `${from} grew into ${into}!`,
+  // A branch form (#32), under the celebration line.
+  newForm: '🌟 A brand-new form!',
+  // "Levels and evolving", on a line that can grow up two ways (#32).
+  feelingsMatter:
+    'How it feels can change what it grows into. Cuddles, naps, games and its home all count!',
   yay: 'Yay!',
   care: 'Care',
   upClose: 'Up close',
@@ -172,6 +178,10 @@ export interface CareSheetModel {
   readonly info: readonly string[];
   /** The evolving meter (#205), under the level's XP bar; null with none. */
   readonly evolving: EvolvingBar | null;
+  /** Under the evolving meter (#32): what's shaping its next evolution, or null. */
+  readonly whisper: CareWhisper | null;
+  /** The celebration's "brand-new form!" chip (#32): it grew into a branch form. */
+  readonly newForm: boolean;
 }
 
 /** The evolving meter's words and fill (#205). */
@@ -243,9 +253,11 @@ export function careSheet(
   });
   const treat = actions.find((a) => a.outsideDailyCare === true);
   const toNext = squishy.xpToNext;
-  // Phase 1 forms evolve once, at a level (design doc §8).
+  // A step's forms share its level (#32): the first is the default form.
   const evolutions = species.get(squishy.speciesId)?.evolutions;
   const growsAt = evolutions?.[0]?.level;
+  // It can grow up two ways (#32): more than one form at its next level.
+  const branches = (evolutions ?? []).filter((e) => e.level === growsAt).length > 1;
   return {
     name: squishyName(squishy, species),
     rarity: species.get(squishy.speciesId)?.rarity ?? null,
@@ -264,11 +276,14 @@ export function careSheet(
     treat: treat ? CARE_TEXT.treatLine(treat.name) : null,
     info: [
       CARE_TEXT.whyCare,
+      branches ? CARE_TEXT.feelingsMatter : '',
       CARE_TEXT.fades,
       CARE_TEXT.bonus(squishy.xpBonusPercent),
       CARE_TEXT.fullLeft(squishy.fullCareLeft),
     ].filter((line) => line !== ''),
     evolving: evolvingBar(squishy.evolving?.percent ?? null),
+    whisper: squishy.whisper,
+    newForm: squishy.newEvolution?.branch === true,
   };
 }
 
