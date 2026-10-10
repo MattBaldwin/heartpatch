@@ -40,6 +40,8 @@ const MapSettingsSchema = z.strictObject({
   pvpMode: PvpModeSchema,
   /** The owner's trading switch (#271), when it's what changed (or on any newer update). */
   tradingEnabled: z.boolean().optional(),
+  /** The owner's friendly-battle switch (#29), when it's what changed (or on any newer update). */
+  friendlyChallenges: z.boolean().optional(),
 });
 const DepartedSchema = z.strictObject({
   userId: z.uuid(),
@@ -63,6 +65,13 @@ const BattleStartedSchema = z.strictObject({
   teamSpecies: z.array(z.string()),
   opponentSpecies: z.array(z.string()),
 });
+/** An ask's two players (#29): who asked whom, and what kind of ask. */
+const ChallengePair = {
+  challengeId: z.uuid(),
+  kind: z.enum(['friendly', 'defense']),
+  fromUserId: z.uuid(),
+  toUserId: z.uuid(),
+};
 /** A live battle's two players (#29): who is on side `a` and side `b`. */
 const LivePair = { battleId: z.uuid(), aUserId: z.uuid(), bUserId: z.uuid() };
 const TurnSchema = z.number().int().min(0);
@@ -165,6 +174,41 @@ export const GAME_EVENTS = {
    * server (`no-contest`, when the content was re-tuned mid-battle).
    */
   'battle.ended': { internal: BattleEndedSchema, public: z.object(BattleEndedSchema.shape) },
+  /**
+   * "Battle me?" (#29): one player asked another. Only the two players hear
+   * it (`twoPlayerView`); everyone else sees the battle start, if it does.
+   */
+  'challenge.sent': {
+    internal: z.strictObject(ChallengePair),
+    public: z.object(ChallengePair),
+  },
+  /** The ask was answered: "Battle!" (`yes`, with its battle) or "Not now!". Only the two players. */
+  'challenge.answered': {
+    internal: z.strictObject({
+      ...ChallengePair,
+      answer: z.enum(['yes', 'not-now']),
+      battleId: z.uuid().nullable(),
+    }),
+    public: z.object({
+      ...ChallengePair,
+      answer: z.enum(['yes', 'not-now']),
+      battleId: z.uuid().nullable(),
+    }),
+  },
+  /**
+   * The ask went away unanswered: the asker said "Never mind", it floated
+   * away (`expired`), or the owner switched friendly battles off. Only the two players.
+   */
+  'challenge.cancelled': {
+    internal: z.strictObject({
+      ...ChallengePair,
+      reason: z.enum(['cancelled', 'expired', 'switched-off']),
+    }),
+    public: z.object({
+      ...ChallengePair,
+      reason: z.enum(['cancelled', 'expired', 'switched-off']),
+    }),
+  },
   /**
    * Live battles (#29): one player picked this turn. Never what they picked:
    * the pick stays hidden in `live_battles` until the turn plays. Only the

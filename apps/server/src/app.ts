@@ -36,6 +36,8 @@ import { settleRoutes } from './modules/settle/routes.js';
 import { createSquishyJobsService } from './modules/jobs/service.js';
 import { hollowRoutes } from './modules/hollow/routes.js';
 import { journeysRoutes } from './modules/journeys/routes.js';
+import { challengesRoutes } from './modules/challenges/routes.js';
+import { createChallengesService } from './modules/challenges/service.js';
 import { tradesRoutes } from './modules/trades/routes.js';
 import { createTradesService } from './modules/trades/service.js';
 import { createJourneyBattlePort, createJourneysService } from './modules/journeys/service.js';
@@ -277,6 +279,19 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         const publish = wsHub ? { publish: wsHub.publish } : {};
         const idempotency = (plugin: Parameters<typeof registerIdempotency>[0]) =>
           registerIdempotency(plugin, { store: idempotencyStore, clock });
+        // Friendly battles (#29): "Battle me?" between two Keepers who are both here.
+        await api.register(
+          challengesRoutes(
+            createChallengesService({
+              db,
+              battles,
+              clock,
+              ...publish,
+              ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+            }),
+            { hooks: authHooks, idempotency },
+          ),
+        );
         await api.register(
           inventoryRoutes(createInventoryService({ db, clock, ...publish }), {
             hooks: authHooks,
