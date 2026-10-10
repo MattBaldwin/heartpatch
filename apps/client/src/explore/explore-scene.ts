@@ -1,9 +1,10 @@
 import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { Material } from '@babylonjs/core/Materials/material';
+import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
-import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Viewport } from '@babylonjs/core/Maths/math.viewport';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
@@ -26,6 +27,8 @@ import {
   type WorldPoint,
 } from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
+import { ExploreSky, type ExploreSkyStats } from './explore-sky.js';
+import type { SkyLook } from './explore-sky-look.js';
 import { spotWorld } from '../home/home-layout.js';
 import {
   FALLBACK_LOOK,
@@ -126,6 +129,8 @@ export interface ExploreSceneStats {
   readonly faded: readonly number[];
   /** The Keeper's height on screen, as a share of the canvas's height (0: not on screen). */
   readonly keeperHeight: number;
+  /** The sky's pieces (#335). */
+  readonly sky: ExploreSkyStats;
 }
 
 export interface ExploreSceneOptions {
@@ -137,6 +142,8 @@ export interface ExploreSceneOptions {
   readonly team: readonly { readonly id: string; readonly species: Species }[];
   /** The tile as the map knows it: its buildings. */
   readonly mapTile: PublicTile | null;
+  /** The sky at the patch's time of day (#335). */
+  readonly sky: SkyLook;
   /** Reduce Motion: the Keeper and the team bob instead of hopping (#317). Default off. */
   readonly reducedMotion?: () => boolean;
 }
@@ -283,13 +290,17 @@ export class ExploreScene {
   #lit = false;
   #camera: FollowCamera;
   #lastStep: number | null = null;
+  readonly #sky: ExploreSky;
+  /** The ground and its decor, tinted by the time of day (#335: moonlit at night). */
+  readonly #ground: { readonly mat: PBRMaterial; readonly base: Color3 }[] = [];
   #drawCalls = 0;
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
     this.#tile = tile;
     this.#reduced = options.reducedMotion ?? (() => false);
-    scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
+    // The sky by the patch's time of day (#335); it sets the clear colour too.
+    this.#sky = new ExploreSky(scene, options.sky);
     this.#instrumentation = new SceneInstrumentation(scene);
     const look = TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
     const h = look.height;
@@ -337,11 +348,14 @@ export class ExploreScene {
     this.#at = freePoint(EXPLORE_VIEW.start, this.#colliders);
 
     // Grass tufts, pebbles and flowers (#291): thin instances, one draw call a kind.
+    // Their own material, so night tints them with the ground, never the spots.
+    const decorMaterial = vinyl(scene, 'explore-decor-mat', { color: '#ffffff' });
+    this.#ground.push({ mat: decorMaterial, base: decorMaterial.albedoColor.clone() });
     const places = decorPlaces(tile, this.#colliders);
     this.#decor = { tufts: 0, pebbles: 0, flowers: 0 };
     for (const kind of ['tufts', 'pebbles', 'flowers'] as const) {
       const mesh = buildDecor(scene, kind);
-      mesh.material = propMaterial;
+      mesh.material = decorMaterial;
       setInstances(
         mesh,
         places[kind].map((p) => {
@@ -429,6 +443,7 @@ export class ExploreScene {
       this.#instrumentation.dispose();
     });
 
+    this.#tintGround(options.sky);
     this.content = { bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 }, start: { x: 0, z: 0 } };
     this.update(tile);
   }
@@ -449,6 +464,7 @@ export class ExploreScene {
       drawCalls: this.#drawCalls,
       faded: [...this.#hiding].sort((a, b) => a - b),
       keeperHeight: this.#keeperHeight(),
+      sky: this.#sky.stats,
     };
   }
 
@@ -559,7 +575,7 @@ export class ExploreScene {
     this.#lit = spot !== null && lit;
   }
 
-  /** One swing of the tool (a scoop, a shake, a step up the rope) and a little jiggle. */
+  /** One swing of the tool (a scoop, a shake, a step up the trail) and a little jiggle. */
   useTool(now: number): void {
     this.#swingAt = now;
     if (this.#keeper) this.#keepers.play(this.#keeper, 'jiggle', now, EXPLORE_TOOL.jiggle);
@@ -758,6 +774,19 @@ export class ExploreScene {
     // Yaw 0: looking towards +z, down by `pitch`.
     camera.position.set(tx, ty + Math.sin(pitch) * d, tz - Math.cos(pitch) * d);
     camera.setTarget(this.#lookAt.set(tx, ty, tz));
+    this.#sky.follow(camera.position, pitch);
+  }
+
+  /** A new sky (the screen checks the time once a minute, #335). */
+  setSky(look: SkyLook): void {
+    this.#sky.set(look);
+    this.#tintGround(look);
+  }
+
+  /** The ground and decor take the time of day's tint; spots, glints and the team don't. */
+  #tintGround(look: SkyLook): void {
+    const tint = Color3.FromHexString(look.groundTint);
+    for (const g of this.#ground) g.mat.albedoColor = g.base.multiply(tint);
   }
 
   /** The held tool at the Keeper's hand, following its position and heading. */
@@ -892,7 +921,9 @@ export class ExploreScene {
         { corner: CORNER, segments: SEGMENTS, centre: { y: h + DOME } },
       ),
     );
-    tile.material = vinyl(this.#scene, 'explore-tile-mat', { ...look, clearCoat: false });
+    const tileMat = vinyl(this.#scene, 'explore-tile-mat', { ...look, clearCoat: false });
+    tile.material = tileMat;
+    this.#ground.push({ mat: tileMat, base: tileMat.albedoColor.clone() });
     tile.isPickable = false;
     setInstances(tile, [placeAt(0, 0, 0, s)]);
 

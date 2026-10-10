@@ -7,8 +7,10 @@ import { hexKey, hexToWorld, type HexKey, type MapView } from '@heartpatch/share
 import { HEX_SIZE } from '../map/map-config.js';
 import { DOME, TILE_RADIUS, tileScreenRectOf, topOf } from '../map/map-scene.js';
 import type { MapLayer } from '../map/map-screen.js';
+import { boxOf, SHEET_SELECTOR } from '../tutorial/sheets.js';
 import { el } from '../ui/dom.js';
 import './trading.css';
+import { flagSpot, type Box, type FlagRoom } from './flag-spot.js';
 import { postFlagLabel, postFlags, type PostFlag } from './post-model.js';
 
 // Trading posts on the map (#269, mockup screen a): a flag over every post
@@ -34,11 +36,44 @@ interface Flag {
   /** Where and what it last showed, so an unchanged flag writes nothing. */
   at: string;
   label: string;
+  /** Its size when last shown (a hidden flag measures 0); null until then or after its words change. */
+  size: { width: number; height: number } | null;
 }
 
 /** A flag's size before it has been laid out. */
 const FLAG_MIN_WIDTH_PX = 80;
 const FLAG_MIN_HEIGHT_PX = 26;
+/**
+ * The top bar's corner buttons, by their always-small parts: with trays up
+ * the Keeper chip is a round button whose menu opens below it (the menu is
+ * a cover, not the bar); without trays it's the one-row "Hi" chip.
+ */
+const TOP_BAR =
+  '.tray-top-left, .tray-top-right, .auth-chip-toggle, body:not(.hp-trays-on) .auth-chip';
+/** Everything over the map: the corner buttons (an open Keeper menu too), the patch name pill and every open sheet or panel. */
+const OVER_MAP = `.tray-top-left, .tray-top-right, .auth-chip, .map-hud, ${SHEET_SELECTOR}`;
+
+/**
+ * What a flag must keep clear of, in CSS pixels: where the top bar ends (0
+ * with none shown) and the boxes of everything over the map. Measured, not
+ * constants: the bar follows the safe area and, on an iPad in landscape, the
+ * trays' layout, and sheets differ per screen. Shut ones (hidden, inert, a
+ * closed tray) don't count: the tutorial's own test for an open sheet.
+ */
+function flagRoom(): FlagRoom {
+  let top = 0;
+  for (const node of document.querySelectorAll(TOP_BAR)) {
+    const box = boxOf(node)?.box;
+    if (box) top = Math.max(top, box.y + box.height);
+  }
+  const covers: Box[] = [];
+  for (const node of document.querySelectorAll(OVER_MAP)) {
+    const box = boxOf(node)?.box;
+    if (box) covers.push(box);
+  }
+  return { width: window.innerWidth, height: window.innerHeight, top, covers };
+}
+
 /** The ring: just inside the tile's rim, lifted clear of the dome. TUNE. */
 const RING = { diameter: TILE_RADIUS * 1.84, thickness: 0.045, lift: 0.012, color: '#ffc94d' };
 
@@ -48,34 +83,53 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
   const rings = new Map<HexKey, Mesh>();
   let ringMat: StandardMaterial | null = null;
 
-  const place = (flag: Flag) => {
-    const seen = scene ? tileScreenRectOf(scene, flag.post.tile) : null;
-    const rect =
-      seen &&
-      seen.x + seen.width > 0 &&
-      seen.x < window.innerWidth &&
-      seen.y + seen.height > 0 &&
-      seen.y < window.innerHeight
-        ? seen
-        : null;
-    const half = Math.max(flag.node.offsetWidth, FLAG_MIN_WIDTH_PX) / 2;
-    const x = rect
-      ? Math.round(Math.min(Math.max(rect.x + rect.width / 2, half), window.innerWidth - half))
-      : 0;
-    const y = rect
-      ? Math.round(Math.max(rect.y, Math.max(flag.node.offsetHeight, FLAG_MIN_HEIGHT_PX)))
-      : 0;
-    const at = rect ? `${String(x)},${String(y)}` : 'hidden';
+  const place = (flag: Flag, room: FlagRoom) => {
+    if (flag.node.offsetWidth > 0) {
+      flag.size = { width: flag.node.offsetWidth, height: flag.node.offsetHeight };
+    }
+    const spot = flagSpot(
+      scene ? tileScreenRectOf(scene, flag.post.tile) : null,
+      flag.size ?? { width: FLAG_MIN_WIDTH_PX, height: FLAG_MIN_HEIGHT_PX },
+      room,
+    );
+    const at = spot ? `${String(spot.x)},${String(spot.y)}` : 'hidden';
     if (at === flag.at) return;
     flag.at = at;
-    flag.node.hidden = rect === null;
-    if (rect) {
-      flag.node.style.transform = `translate(${String(x)}px, ${String(y)}px) translate(-50%, -100%)`;
+    const wasHidden = flag.node.hidden;
+    flag.node.hidden = spot === null;
+    if (spot) {
+      flag.node.style.transform = `translate(${String(spot.x)}px, ${String(spot.y)}px) translate(-50%, -100%)`;
+      // A flag never shown yet was placed by the stand-in size: now it shows,
+      // place it again by its own (it may run off the edge or into the patch
+      // name, and an idle map draws no frame to fix it).
+      if (wasHidden) place(flag, room);
     }
   };
   const placeAll = () => {
-    for (const flag of flags.values()) place(flag);
+    if (flags.size === 0) return;
+    const room = flagRoom();
+    for (const flag of flags.values()) place(flag, room);
   };
+  // A sheet opening or shutting over an idle map draws no frame, so watch
+  // for it and look again once on the next frame, like the tutorial's own
+  // watch: sheets show and shut by `hidden`, trays by `inert` and a class
+  // they drop once their slide ends, the Keeper menu by a class. A flag's
+  // own changes are skipped.
+  let recheck = 0;
+  const covers = new MutationObserver((changes) => {
+    if (recheck || !scene) return;
+    if (
+      changes.every(
+        (c) => c.target instanceof HTMLElement && c.target.classList.contains('post-flag'),
+      )
+    ) {
+      return;
+    }
+    recheck = requestAnimationFrame(() => {
+      recheck = 0;
+      if (scene) placeAll();
+    });
+  });
 
   const ringFor = (target: Scene, flag: PostFlag): Mesh => {
     // Six sides with a corner on +x: the same hex as the tiles.
@@ -100,6 +154,7 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
 
   /** Matches flags and rings to the view's posts and how I reach them now. */
   const draw = (view: MapView) => {
+    let room: FlagRoom | null = null;
     const wanted = new Map(postFlags(view, me()).map((p) => [hexKey(p.tile), p] as const));
     for (const [key, flag] of flags) {
       if (!wanted.has(key)) {
@@ -122,7 +177,10 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       const flag = flags.get(key);
       if (flag) {
         flag.post = post;
-        if (flag.label !== label) flag.node.textContent = label;
+        if (flag.label !== label) {
+          flag.node.textContent = label;
+          flag.size = null;
+        }
         flag.label = label;
         flag.node.classList.toggle('post-flag-connected', connected);
         continue;
@@ -138,9 +196,9 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       );
       node.hidden = true;
       root.append(node);
-      const added = { post, node, at: '', label };
+      const added: Flag = { post, node, at: '', label, size: null };
       flags.set(key, added);
-      place(added);
+      place(added, (room ??= flagRoom()));
     }
   };
 
@@ -158,9 +216,15 @@ export function createPostFlags(root: HTMLElement, me: () => string | null): Pos
       scene = next;
       draw(view);
       next.onAfterRenderObservable.add(placeAll);
+      covers.observe(document.body, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['hidden', 'inert', 'class'],
+      });
       next.onDisposeObservable.addOnce(() => {
         if (scene !== next) return;
         scene = null;
+        covers.disconnect();
         clear();
       });
     },
