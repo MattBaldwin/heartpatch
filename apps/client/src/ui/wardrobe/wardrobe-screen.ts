@@ -143,7 +143,7 @@ export const WARDROBE_TEXT = {
   } satisfies Record<RarityFilter, string>,
   empty: 'Nothing here yet. Keep exploring to find some!',
   emptyRarity: 'None like that yet. Keep exploring!',
-  squishyNote: 'Tiny things for your squishy friends.',
+  squishyNote: 'Tiny things for your squishy friends. Open one up close and tap Dress up!',
   under: 'Under costume',
   outfits: 'My outfits',
   outfit: (n: number) => `Outfit ${String(n)}`,

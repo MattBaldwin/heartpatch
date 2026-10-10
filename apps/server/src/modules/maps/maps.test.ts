@@ -329,6 +329,8 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
       expect(errorOf(limited).code).toBe('RATE_LIMITED');
     });
 
+    // Several players (an Argon2 hash each) and a dozen patches: past the
+    // default 5 s on a busy CI runner, so it gets the long timeout.
     it('takes a raised per-IP patch-making limit from dev config (e2e)', async () => {
       const server = await start({ HP_DEV_MAP_CREATE_LIMIT_PER_IP: '50' });
       const { perIp, perUser } = MAP_RATE_LIMITS.create;
@@ -339,7 +341,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
           await createMap(server, owner);
         }
       }
-    });
+    }, 30_000);
   });
 
   describe('tutorial gate', () => {
