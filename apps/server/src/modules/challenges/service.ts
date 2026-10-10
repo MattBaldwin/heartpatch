@@ -13,7 +13,7 @@ import type { Executor } from '../../db/client.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { AppError } from '../../lib/errors.js';
-import type { Clock } from '../../lib/time.js';
+import { MINUTE_MS, type Clock } from '../../lib/time.js';
 import type { BattlesService } from '../battles/service.js';
 import { createBattlesRepo } from '../battles/repo.js';
 import { requireMember } from '../maps/members.js';
@@ -41,6 +41,39 @@ export interface ChallengesService {
   setFriendly: (user: PublicUser, mapId: string, on: boolean) => Promise<boolean>;
 }
 
+/**
+ * A Keeper left the patch (or was removed): their asks, and the asks
+ * waiting for them, go at once (`maps` service `departed`, like trades).
+ */
+export async function callOffAsksOf(
+  options: Pick<ChallengesServiceOptions, 'db' | 'clock' | 'publish'>,
+  mapId: string,
+  userId: string,
+  actorUserId: string,
+): Promise<void> {
+  const at = (options.clock ?? (() => new Date()))();
+  const gone = await createChallengesRepo(options.db).transaction(async (repo) => {
+    const asks = await repo.lockPendingOf(mapId, [userId]);
+    for (const row of asks) await repo.settle(row.id, { status: 'cancelled', at });
+    for (const row of asks) {
+      await repo.appendEvent({
+        mapId,
+        type: 'challenge.cancelled',
+        actorUserId,
+        payload: {
+          challengeId: row.id,
+          kind: row.kind,
+          fromUserId: row.fromUserId,
+          toUserId: row.toUserId,
+          reason: 'cancelled',
+        },
+      });
+    }
+    return asks.length;
+  });
+  if (gone > 0) void options.publish?.(mapId);
+}
+
 export interface ChallengesServiceOptions {
   db: Executor;
   battles: Pick<BattlesService, 'startFriendly' | 'get'>;
@@ -62,13 +95,12 @@ const MESSAGES = {
   theyHaveAsk: "They're thinking about another battle. Try again soon!",
   tooMany: "That's a lot of asks! Take a little break, then try again.",
   rest: 'They said Not now! Give them a few minutes.',
-  gone: 'That ask floated away. You can ask again!',
+  gone: 'That ask floated away.',
   busy: 'Someone is already in a battle. Try again in a bit!',
   notOwner: 'Only the patch owner can change that.',
 } as const;
 
 const SECOND_MS = 1000;
-const MINUTE_MS = 60 * SECOND_MS;
 
 export function createChallengesService(options: ChallengesServiceOptions): ChallengesService {
   const { db, battles } = options;
@@ -165,11 +197,13 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
           teamLevel: await teamLevel(db, mapId, userId),
         });
       }
-      const pending = await store.pendingFor(mapId, user.id);
+      const on = await store.friendlyEnabled(mapId);
+      // Switched off: no asks show, even one a send slipped in beside the switch.
+      const pending = on ? await store.pendingFor(mapId, user.id) : [];
       const friendly = pending.filter((row) => row.kind === 'friendly');
       const outgoing = friendly.find((row) => row.fromUserId === user.id);
       return {
-        friendlyChallenges: await store.friendlyEnabled(mapId),
+        friendlyChallenges: on,
         myTeamLevel: await teamLevel(db, mapId, user.id),
         online,
         incoming: await Promise.all(friendly.filter((row) => row.toUserId === user.id).map(toView)),
@@ -271,6 +305,7 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
         return { challenge: await toView(row ?? asked), battle: null };
       }
       let battleId: string;
+      let tooLate = false;
       try {
         battleId = await battles.startFriendly({
           mapId,
@@ -283,9 +318,13 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
             const at = battle.startedAt;
             const row = await repo.lock(challengeId);
             if (!row || row.status !== 'pending' || row.expiresAt.getTime() <= at.getTime()) {
+              tooLate = true;
               throw new AppError('CONFLICT', MESSAGES.gone);
             }
             await repo.settle(row.id, { status: 'accepted', at, battleId: battle.id });
+            // Both are in a battle now: their other waiting asks go (9c, id order).
+            const others = await repo.lockPendingOf(mapId, [row.fromUserId, row.toUserId], row.id);
+            for (const other of others) await repo.settle(other.id, { status: 'cancelled', at });
             return [
               {
                 mapId,
@@ -293,12 +332,18 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
                 actorUserId: user.id,
                 payload: { ...pair(row), answer: 'yes', battleId: battle.id },
               },
+              ...others.map((other): NewGameEvent => ({
+                mapId,
+                type: 'challenge.cancelled',
+                actorUserId: null,
+                payload: { ...pair(other), reason: 'cancelled' },
+              })),
             ];
           },
         });
       } catch (err) {
         // Too late: let it float away for both of them, then say so.
-        if (err instanceof AppError && err.message === MESSAGES.gone) await expireNow(mapId);
+        if (tooLate) await expireNow(mapId);
         throw err;
       }
       const row = await store.find(challengeId);
