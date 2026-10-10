@@ -88,17 +88,18 @@ export const RECIPES: Recipe[] = [
   },
   {
     id: 'net',
-    name: 'Net',
-    description: 'Weave Greens onto a Timber pole to scoop ponds and reeds. Lasts 20 scoops!',
+    name: 'Snorkel',
+    description: 'Weave Greens round a Timber tube for a comfy Snorkel. Lasts 20 dives!',
     inputs: { timber: 1, greens: 3 }, // TUNE:
     output: { resource: 'net', quantity: 20 },
     craftSeconds: 60, // TUNE:
   },
   {
     id: 'rope',
-    name: 'Rope',
-    description: 'Twist Greens into a strong Rope for climbing up to ledges. Lasts 10 climbs!',
-    inputs: { greens: 4 }, // TUNE:
+    name: 'Walking Stick',
+    description:
+      'Whittle Timber into a trusty Walking Stick for the mountain trail. Lasts 10 hikes!',
+    inputs: { timber: 2, greens: 1 }, // TUNE: #335, was 4 Greens as a Rope
     output: { resource: 'rope', quantity: 10 },
     craftSeconds: 60, // TUNE:
   },

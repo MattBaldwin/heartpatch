@@ -7,7 +7,7 @@ describe('the Bag item card (#241)', () => {
     const soup = itemDetail('hearty-soup', 2);
     expect(soup.have).toBe('You have 2');
     // A tool is counted in uses (#199).
-    expect(itemDetail('net', 12).have).toBe('12 scoops left');
+    expect(itemDetail('net', 12).have).toBe('12 dives left');
     expect(soup.purpose).toBe(GAME_DATA.resources.find((r) => r.id === 'hearty-soup')?.description);
     expect(soup.chips).toEqual([
       { text: '💚 Heals 40% energy', battle: true },

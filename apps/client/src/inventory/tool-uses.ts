@@ -11,23 +11,24 @@ import type { IconName } from '../ui/line-icons.js';
  * called. Text can't hold a drawn icon, so these are emoji from Emoji 12 or
  * older (#308). The shovel emoji (U+1FA8F) is Emoji 16.0: iOS draws it only
  * from 18.4, so on the iOS 17 floor it was an empty box. The knot (U+1FAA2)
- * is Emoji 13.0, fine on iOS 17 but a box on older systems, and a climber
- * reads as "climb" better anyway. Elements show `TOOL_ICONS` instead.
+ * is Emoji 13.0, fine on iOS 17 but a box on older systems. #335: the Net
+ * became the Snorkel (a diving mask, Emoji 12.0) and the Rope the Walking
+ * Stick (a hiking boot, Emoji 11.0). Elements show `TOOL_ICONS` instead.
  */
 export const TOOL_WORDS: Readonly<
   Record<ToolId, { icon: string; verb: string; one: string; many: string; needs: string }>
 > = {
   shovel: { icon: '⛏️', verb: 'Dig', one: 'dig', many: 'digs', needs: 'to dig there' },
-  net: { icon: '🥅', verb: 'Scoop', one: 'scoop', many: 'scoops', needs: 'to scoop there' },
-  rope: { icon: '🧗', verb: 'Climb', one: 'climb', many: 'climbs', needs: 'to climb up there' },
+  net: { icon: '🤿', verb: 'Dive', one: 'dive', many: 'dives', needs: 'to dive there' },
+  rope: { icon: '🥾', verb: 'Hike', one: 'hike', many: 'hikes', needs: 'to hike up there' },
   lantern: { icon: '🪔', verb: 'Light', one: 'cave', many: 'caves', needs: 'to peek in there' },
 };
 
 /** Each tool's drawn icon (#291), for the explore buttons and the Bag's tiles (#308). */
 export const TOOL_ICONS: Readonly<Record<ToolId, IconName>> = {
   shovel: 'shovel',
-  net: 'net',
-  rope: 'rope',
+  net: 'snorkel',
+  rope: 'stick',
   lantern: 'lantern',
 };
 
@@ -42,7 +43,7 @@ export function toolOf(itemId: string): { readonly tool: ToolId; readonly uses: 
   return { tool, uses: EXPLORE_RULES.tools.find((t) => t.id === tool)?.uses ?? 1 };
 }
 
-/** "12 scoops left", "1 dig left", or "Resting zZ" when it's used up. */
+/** "12 dives left", "1 dig left", or "Resting zZ" when it's used up. */
 export function usesLine(tool: ToolId, uses: number): string {
   if (uses <= 0) return 'Resting zZ';
   const words = TOOL_WORDS[tool];

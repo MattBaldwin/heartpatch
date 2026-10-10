@@ -1091,63 +1091,53 @@ function buildTool(scene: Scene, tool: ToolId): Mesh {
       ]);
       break;
     case 'net':
-      mesh = merged('explore-net', [
-        stick(0.6, '#a77a52'),
+      // The Snorkel (#335, renamed in place): a mask and an orange tube.
+      mesh = merged('explore-snorkel', [
+        painted(
+          at(
+            CreateBox(`explore-${tool}-part`, { width: 0.22, height: 0.12, depth: 0.06 }, scene),
+            0,
+            -0.1,
+            0,
+          ),
+          '#9fe3ff',
+        ),
         painted(
           at(
             CreateTorus(
               `explore-${tool}-part`,
-              { diameter: 0.28, thickness: 0.03, tessellation: 18 },
+              { diameter: 0.24, thickness: 0.03, tessellation: 18 },
               scene,
             ),
             0,
-            -0.6,
+            -0.1,
             0,
             Math.PI / 2,
           ),
-          '#ff8fab',
+          '#3aa0d8',
         ),
         painted(
           at(
-            CreateSphere(`explore-${tool}-part`, { diameter: 0.26, segments: 6 }, scene),
+            CreateCylinder(
+              `explore-${tool}-part`,
+              { height: 0.32, diameter: 0.04, tessellation: 8 },
+              scene,
+            ),
+            0.14,
+            0.02,
             0,
-            -0.6,
-            0.06,
           ),
-          '#f4ecf6',
+          '#ff8a4a',
         ),
       ]);
-      // The bag of the net is soft and shallow.
       break;
     case 'rope':
-      mesh = merged('explore-rope', [
+      // The Walking Stick (#335, renamed in place): a long stick with a knob.
+      mesh = merged('explore-walking-stick', [
+        stick(0.9, '#9a6a3c'),
         painted(
-          at(
-            CreateTorus(
-              `explore-${tool}-part`,
-              { diameter: 0.26, thickness: 0.06, tessellation: 16 },
-              scene,
-            ),
-            0,
-            -0.14,
-            0,
-            Math.PI / 2,
-          ),
-          '#d8b27a',
-        ),
-        painted(
-          at(
-            CreateTorus(
-              `explore-${tool}-part`,
-              { diameter: 0.2, thickness: 0.05, tessellation: 16 },
-              scene,
-            ),
-            0,
-            -0.14,
-            0.04,
-            Math.PI / 2,
-          ),
-          '#c99a62',
+          at(CreateSphere(`explore-${tool}-part`, { diameter: 0.09 }, scene), 0, 0.14, 0),
+          '#c88a4f',
         ),
       ]);
       break;

@@ -6,6 +6,7 @@ import { HEX_DIRECTIONS, hexToWorld, hexSpiral, hex } from '../hex/index.js';
 import { hashString } from '../rng/index.js';
 import { checkExploreRules, MAX_SEARCH_SPOTS, type ExploreRules } from '../schemas/data/explore.js';
 import {
+  exploreLayout,
   exploreNeeds,
   homesteadQuantity,
   isExplorable,
@@ -222,5 +223,46 @@ describe('search progress', () => {
     expect(isFullyExplored(mask, 12)).toBe(false);
     expect(isFullyExplored(withSearched(mask, 11), 12)).toBe(true);
     expect(isFullyExplored(0, 0)).toBe(false);
+  });
+});
+
+describe('per-terrain layout (#335)', () => {
+  const bumped = (terrain: string): ExploreRules => ({
+    ...EXPLORE_RULES,
+    terrains: EXPLORE_RULES.terrains.map((t) => (t.terrain === terrain ? { ...t, layout: 2 } : t)),
+  });
+
+  it('defaults to the rules layout', () => {
+    for (const t of EXPLORE_RULES.terrains) {
+      expect(exploreLayout(t.terrain, EXPLORE_RULES)).toBe(t.layout ?? EXPLORE_RULES.layout);
+    }
+  });
+
+  it("moves only the bumped terrain's spots", () => {
+    const rules = bumped('hills');
+    expect(exploreLayout('hills', rules)).toBe(2);
+    expect(exploreLayout('meadow', rules)).toBe(EXPLORE_RULES.layout);
+    const tiles = hexSpiral(hex(0, 0), 3);
+    const same = (terrain: string) =>
+      tiles.every(
+        (h) =>
+          JSON.stringify(searchSpots(SEED, { ...h, terrain }, rules)) ===
+          JSON.stringify(searchSpots(SEED, { ...h, terrain }, EXPLORE_RULES)),
+      );
+    expect(same('meadow')).toBe(true);
+    expect(same('lake')).toBe(true);
+    expect(same('hills')).toBe(false);
+  });
+
+  it('a terrain with its own layout equal to the rules layout lays out the same', () => {
+    const rules: ExploreRules = {
+      ...EXPLORE_RULES,
+      terrains: EXPLORE_RULES.terrains.map((t) => ({ ...t, layout: EXPLORE_RULES.layout })),
+    };
+    for (const h of hexSpiral(hex(0, 0), 2)) {
+      expect(searchSpots(SEED, { ...h, terrain: 'forest' }, rules)).toEqual(
+        searchSpots(SEED, { ...h, terrain: 'forest' }, EXPLORE_RULES),
+      );
+    }
   });
 });

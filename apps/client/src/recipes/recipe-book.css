@@ -230,6 +230,10 @@
   min-width: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  /* iOS resets touch-action at every scroll container, so the stage's
+     pan-y has to be said again here or a swipe that starts on page text
+     goes to the browser instead of turning the page. */
+  touch-action: pan-y;
   box-sizing: border-box;
   padding: 16px 18px 12px 24px;
   border-radius: 6px 18px 18px 6px;
