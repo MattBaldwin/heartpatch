@@ -125,6 +125,7 @@ Post the verdict comment summarizing each round. Don't merge.
 ## 8. Supervisor handoff
 
 1. Wait until the build sessions this supervisor started have merged, or hand them over explicitly: send each one the new supervisor's session id to report to, and subscribe the new supervisor to their PRs. Their `@parent` reports and PR subscriptions belong to the session that started them.
+   - **The new supervisor owns re-routing (hard rule).** At every check-in until each lane has confirmed the switch, it reads each lane's recent events (`list_events`, kinds `assistant`) for a `send_message` to `@parent` or to the old supervisor. Any lane that still reports there gets the correction again, and the new supervisor re-checks GitHub for whatever that report said (opened PRs, verdicts, blockers), because the old supervisor may already be archived. Lessons from the supervisor 5 → 6 handoff: two lanes kept reporting to `@parent` after being told, and one report was a deploy blocker.
 2. Make sure everything durable is in the repo: DECISIONS.md, this playbook, and the briefs' carry-over notes (§9).
 3. Start the new supervisor with a compact prompt:
    - read this playbook, CLAUDE.md and DECISIONS.md;

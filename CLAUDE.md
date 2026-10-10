@@ -57,6 +57,8 @@ Heartpatch is a cozy, lightly spooky, invite-only multiplayer squishy-collecting
 
   Subscribe to your own PR (claude-code-remote `subscribe_pr_activity`) so CI results wake you, and send `ready` only once CI is green on your final head, including after any merge of `main`.
 
+  **Supervisor handoff (hard rule).** `@parent` is only the default. When your supervisor tells you it has handed off to a new supervisor session, send every report from then on to that session ID (`send_message` with that `session_id`), never to `@parent`. That includes answers to questions the old supervisor asked. Confirm the switch to the new supervisor in one line. A retired supervisor is archived, so anything sent to `@parent` after a handoff is lost.
+
   If `send_message` fails, fire the trigger named in your brief (if it names one) with the same text; if both fail, say so in your PR body under "Coordinator notes".
 
 ## Milestones
