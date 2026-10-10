@@ -255,6 +255,10 @@ export const INTERACTION = {
   diveBubbles: 4, // TUNE
   /** Snorkel at a reed bed: swipes to part the reeds (#335). */
   partSwipes: 2, // TUNE
+  /** Walking Stick at a snow drift: pokes till it slumps (#335). */
+  pokes: 3, // TUNE
+  /** Hands on glow mushrooms: caps to boop (#335). */
+  boops: 3, // TUNE
   /** Hands on a tree or flower bed: changes of direction to shake it. */
   shakes: 4, // TUNE
   /** Snorkel: the glow comes and goes on this cycle, ms; the first `glowMs` of it glows. */
@@ -274,4 +278,24 @@ export const INTERACTION = {
 export const EXPLORE_SEABED = {
   color: '#f6e7bf', // TUNE: warm sand
   roughness: 0.85, // TUNE
+} as const;
+
+/** The hills cave's floor and the mountain trail (#335). */
+export const EXPLORE_CAVE = {
+  floor: '#7a6694', // TUNE: dusky purple stone
+  roughness: 0.9, // TUNE
+} as const;
+
+export const EXPLORE_TRAIL = {
+  /** The path's colour and width, tile-local units. */
+  color: '#f3e6c6', // TUNE
+  width: 0.13, // TUNE
+  /** Its zig-zag up the tile, from the start (near) to the far edge (tile-local x, z). */
+  points: [
+    [0, -0.62],
+    [0.32, -0.3],
+    [-0.3, 0.05],
+    [0.28, 0.38],
+    [-0.05, 0.7],
+  ],
 } as const;

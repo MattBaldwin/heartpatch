@@ -113,6 +113,7 @@ describe('explore text', () => {
       '🔍',
       '📖',
       '🌱',
+      '🍄', // Emoji 1.0 (#335)
     ]);
     const icons = [
       ...EXPLORE_RULES.spotKinds.map((k) => actionFor({ kind: k.id, tool: k.tool }).icon),

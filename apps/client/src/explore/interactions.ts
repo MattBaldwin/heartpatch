@@ -87,7 +87,11 @@ export function startInteraction(
             ? INTERACTION.diveBubbles
             : kind === 'part'
               ? INTERACTION.partSwipes
-              : 1;
+              : kind === 'poke'
+                ? INTERACTION.pokes
+                : kind === 'pick'
+                  ? INTERACTION.boops
+                  : 1;
   const angle = seed01 * Math.PI * 2;
   return {
     kind,
@@ -153,7 +157,13 @@ export function stepInteraction(s: InteractionState, input: InteractionInput): I
     case 'shake':
       return shake(s, input);
     case 'dive':
-      return dive(s, input);
+    case 'poke':
+    case 'pick':
+      // Bubbles to catch, a snow drift to poke, mushroom caps to boop: taps.
+      return taps(s, input);
+    case 'stack':
+      // A stone on the cairn: hold, like lifting a rock.
+      return lift(s, input);
     case 'part':
       return part(s, input);
   }
@@ -212,10 +222,10 @@ function climb(s: InteractionState, input: InteractionInput): InteractionState {
 }
 
 /**
- * Snorkel at a bubble spring (#335): each tap on the water catches a bubble.
- * Any tap on the easy button catches one too, and holding it catches them all.
+ * Taps (#335): each tap catches a bubble, pokes the snow or boops a cap. Any
+ * tap on the easy button counts too, and holding it does them all.
  */
-function dive(s: InteractionState, input: InteractionInput): InteractionState {
+function taps(s: InteractionState, input: InteractionInput): InteractionState {
   switch (input.type) {
     case 'down':
       return counted(s);

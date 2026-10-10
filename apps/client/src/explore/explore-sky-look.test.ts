@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   EXPLORE_SKY,
+  exploreWorld,
   isUnderwater,
   localMinuteIn,
   SKY_LOOKS,
@@ -49,7 +50,7 @@ describe('the explore sky look (#335)', () => {
   it('goes underwater on a lake: no sun or clouds, bubbles, a hazy seabed (#335)', () => {
     expect(isUnderwater('lake')).toBe(true);
     expect(isUnderwater('meadow')).toBe(false);
-    const day = skyLook({ phase: 'day', next: 'dusk', blend: 0 }, true);
+    const day = skyLook({ phase: 'day', next: 'dusk', blend: 0 }, 'underwater');
     expect(day).toEqual(WATER_LOOKS.day);
     expect(day.sunDisc).toBe(false);
     expect(day.clouds).toBe(0);
@@ -60,5 +61,16 @@ describe('the explore sky look (#335)', () => {
     const max = (hex: string) =>
       Math.max(...[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)));
     expect(max(WATER_LOOKS.night.horizon)).toBeGreaterThan(0x60);
+  });
+
+  it('puts hills in a cave and mountains on a trail, the same cave at any hour (#335)', () => {
+    expect(exploreWorld('hills')).toBe('cave');
+    expect(exploreWorld('mountains')).toBe('trail');
+    expect(exploreWorld('forest')).toBe('ground');
+    const noon = skyLook({ phase: 'day', next: 'dusk', blend: 0 }, 'cave');
+    expect(skyLook({ phase: 'night', next: 'night', blend: 0 }, 'cave')).toEqual(noon);
+    expect(noon.sunDisc).toBe(false);
+    expect(noon.fog).not.toBeNull();
+    expect(skyLook({ phase: 'day', next: 'dusk', blend: 0 }, 'trail')).toEqual(SKY_LOOKS.day);
   });
 });

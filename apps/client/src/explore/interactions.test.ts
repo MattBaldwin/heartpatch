@@ -225,3 +225,28 @@ describe('Snorkel at a reed bed: swipe the reeds apart (#335)', () => {
     expect(run('part', [{ type: 'easy', t: 0 }]).done).toBe(true);
   });
 });
+
+describe('the trail and the cave: poke, stack and boop (#335)', () => {
+  const tap = (x: number): InteractionInput[] => [
+    { type: 'down', x, y: 120, t: 0 },
+    { type: 'up', x, y: 120, t: 0 },
+  ];
+
+  it('pokes a snow drift and boops the caps a tap at a time', () => {
+    const pokes = Array.from({ length: INTERACTION.pokes }, (_, i) => tap(60 + i * 40)).flat();
+    expect(run('poke', pokes.slice(0, 2)).done).toBe(false);
+    expect(run('poke', pokes).done).toBe(true);
+    const boops = Array.from({ length: INTERACTION.boops }, (_, i) => tap(60 + i * 40)).flat();
+    expect(run('pick', boops).done).toBe(true);
+    expect(run('pick', [{ type: 'easy', t: 0 }]).count).toBe(1);
+  });
+
+  it('stacks a stone on the cairn with a hold, or one easy tap', () => {
+    const held = run('stack', [
+      { type: 'down', x: 150, y: 120, t: 0 },
+      { type: 'tick', t: INTERACTION.holdMs + 1 },
+    ]);
+    expect(held.done).toBe(true);
+    expect(run('stack', [{ type: 'easy', t: 0 }]).done).toBe(true);
+  });
+});
