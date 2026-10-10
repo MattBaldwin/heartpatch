@@ -24,8 +24,9 @@ export const OwnedSquishySchema = z.object({
   xp: z.number().int().min(0),
   state: SquishyStateSchema,
   /**
-   * The wardrobe accessory it wears (#43), or null. Left out by views that
-   * don't load it yet.
+   * The wardrobe accessory it wears (#43), or null, read back through
+   * ownership. The care, home and job board reads fill it (#340); views that
+   * don't load it leave it out.
    */
   accessory: ContentIdSchema.nullable().optional(),
 });

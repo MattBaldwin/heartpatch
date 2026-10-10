@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, asc, count, eq, exists, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
@@ -104,6 +104,59 @@ export async function insertClothing(db: Executor, piece: NewClothing): Promise<
     })
     .returning({ id: clothingOwned.id });
   return inserted.length > 0;
+}
+
+/** A stored accessory row whose squishy still belongs to the player who put it on. */
+export interface WornAccessoryRow {
+  squishyId: string;
+  itemId: string;
+  /** The player has a stored piece of it, not held for a trade (starter items aren't stored). */
+  stored: boolean;
+}
+
+/**
+ * The accessory rows of `userId`'s squishies among `squishyIds` (#340), only
+ * where the squishy is still theirs (DECISIONS "Wardrobe (#43)": a traded
+ * squishy never wears its old owner's piece). `wornAccessories` in
+ * `accessories.ts` applies the rest of the ownership rule.
+ */
+export async function listWornAccessories(
+  db: Executor,
+  userId: string,
+  squishyIds: readonly string[],
+): Promise<WornAccessoryRow[]> {
+  if (squishyIds.length === 0) return [];
+  return db
+    .select({
+      squishyId: squishyAccessories.squishyId,
+      itemId: squishyAccessories.itemId,
+      stored: exists(
+        db
+          .select({ one: sql`1` })
+          .from(clothingOwned)
+          .where(
+            and(
+              eq(clothingOwned.userId, squishyAccessories.userId),
+              eq(clothingOwned.itemId, squishyAccessories.itemId),
+              isNull(clothingOwned.heldByOfferId),
+            ),
+          ),
+      ).mapWith(Boolean),
+    })
+    .from(squishyAccessories)
+    .innerJoin(
+      squishies,
+      and(
+        eq(squishies.id, squishyAccessories.squishyId),
+        eq(squishies.ownerUserId, squishyAccessories.userId),
+      ),
+    )
+    .where(
+      and(
+        eq(squishyAccessories.userId, userId),
+        inArray(squishyAccessories.squishyId, [...squishyIds]),
+      ),
+    );
 }
 
 export function createWardrobeRepo(db: Executor): WardrobeRepo {
