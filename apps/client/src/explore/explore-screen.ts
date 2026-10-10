@@ -80,8 +80,9 @@ import {
   type InteractionInput,
   type InteractionState,
 } from './interactions.js';
-import { exploreSkyAt, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
+import { exploreSkyAt, isUnderwater, sameLook, skyLook, type SkyLook } from './explore-sky-look.js';
 import { safeStorage, type SettingsStorage } from '../audio/audio-settings.js';
+import { AmbientDriver } from '../map/ambient-driver.js';
 import './explore.css';
 
 // Exploring your land (#199; cozy-sim feel #291, owner mockup 2026-10-08):
@@ -99,6 +100,8 @@ export interface ExploreScreenOptions {
   showScene: (build: SceneBuilder | null) => void;
   /** Draws a few frames after a change (`Stage.invalidate`). */
   invalidate: () => void;
+  /** Draws one frame (`Stage.requestFrame`): the water's paced ambient life (#335). */
+  requestFrame?: () => void;
   tier: () => QualityTier;
   keeper: () => KeeperConfig | null;
   keeperWearing?: () => readonly string[];
@@ -194,6 +197,13 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** My team's squishies that follow the Keeper, in team order. */
   let teamMembers: { id: string; speciesId: string }[] = [];
   let scene3d: ExploreScene | null = null;
+  /** Paces the water's life under a lake (#335): the map's ambient driver. */
+  const ambient = new AmbientDriver({
+    target: () => scene3d,
+    invalidate: options.invalidate,
+    ...(options.requestFrame ? { requestFrame: options.requestFrame } : {}),
+    tier: options.tier,
+  });
   /** Checks the sky once a minute while exploring (#335). */
   let skyTimer: ReturnType<typeof setInterval> | null = null;
   const tipStorage = options.storage === undefined ? safeStorage() : options.storage;
@@ -202,7 +212,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
    * map's view is gone after that), and kept for the visit.
    */
   let zone: string | null = null;
-  const skyNow = (): SkyLook => skyLook(exploreSkyAt(zone, options.now?.() ?? new Date()));
+  const skyNow = (): SkyLook =>
+    skyLook(
+      exploreSkyAt(zone, options.now?.() ?? new Date()),
+      tile ? isUnderwater(tile.terrain) : false,
+    );
   /** The look last shown, so a quiet minute changes and redraws nothing. */
   let skyShown: SkyLook | null = null;
   let lastTier: QualityTier | null = null;
@@ -826,6 +840,11 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (!isOpen || !tile) return;
     const t = tile;
     title.textContent = terrainName(t.terrain);
+    // Under a lake, Back brings the Keeper up for air (#335).
+    back.setAttribute(
+      'aria-label',
+      isUnderwater(t.terrain) ? EXPLORE_TEXT.popUp : EXPLORE_TEXT.back,
+    );
     progress.textContent = progressLine(t.progress);
     const held = heldTool();
     if (held) lastHeld = held;
@@ -953,7 +972,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     easy.addEventListener('click', () => {
       feed({ type: 'easy', t: performance.now() });
     });
-    if (kind === 'climb') {
+    if (kind === 'climb' || kind === 'dive') {
       easy.addEventListener('pointerdown', () => {
         feed({ type: 'easy-down', t: performance.now() });
       });
@@ -974,7 +993,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     play.replaceChildren(...nodes);
   }
 
-  /** Updates the overlay's count and the Snorkel's glow. */
+  /** Updates the overlay's count (dots, or a hold's fill). */
   function renderPlay(): void {
     const p = playing;
     play.hidden = p === null || card !== null;
@@ -1228,6 +1247,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     say('');
     options.onOpen(id);
     options.showScene(build);
+    ambient.start();
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = setInterval(() => {
       const look = skyNow();
@@ -1267,6 +1287,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     isOpen = false;
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = null;
+    ambient.stop();
     // A reply still on its way (a search, a bag read) belongs to this visit:
     // it must never land on the next tile opened.
     generation += 1;

@@ -251,6 +251,10 @@ export const INTERACTION = {
   climbSteps: 6, // TUNE
   /** The Walking Stick's easy way and lifting a rock: hold this long, ms. */
   holdMs: 900, // TUNE
+  /** Snorkel at a bubble spring: bubbles to catch, a tap each (#335). */
+  diveBubbles: 4, // TUNE
+  /** Snorkel at a reed bed: swipes to part the reeds (#335). */
+  partSwipes: 2, // TUNE
   /** Hands on a tree or flower bed: changes of direction to shake it. */
   shakes: 4, // TUNE
   /** Snorkel: the glow comes and goes on this cycle, ms; the first `glowMs` of it glows. */
@@ -264,4 +268,36 @@ export const INTERACTION = {
    * `lightRadius × caveArea` (about the Keeper's own glow).
    */
   caveArea: 0.5, // TUNE
+} as const;
+
+/** A lake's bed, explored underwater with the Snorkel (#335). */
+export const EXPLORE_SEABED = {
+  color: '#f6e7bf', // TUNE: warm sand
+  roughness: 0.85, // TUNE
+} as const;
+
+/**
+ * Under a lake (#335, owner's second pass): kelp that sways, a few fish
+ * circling, caustic ripples on the sand and a Keeper who floats and swims.
+ * All the motion is on the GPU or the ambient clock, and off on the low
+ * tier, with reduced motion or on a slow device (the map's ambient rules).
+ */
+export const EXPLORE_UNDERWATER = {
+  /** Kelp: how far the tips sway (times height²) and its colours. */
+  kelp: { sway: 0.9, colors: ['#3f9f7a', '#5bb98a', '#2f8a6c'] }, // TUNE
+  /** Fish circling in the water: [x, z] tile-local, height above the bed, circle radius, speed. */
+  fish: [
+    [0.35, 0.2, 0.9, 0.55, 0.5],
+    [-0.4, 0.35, 1.2, 0.7, 0.42],
+    [0.1, -0.3, 0.7, 0.45, 0.62],
+    [-0.2, -0.45, 1.4, 0.6, 0.36],
+    [0.45, -0.5, 1.05, 0.5, 0.55],
+  ],
+  fishColors: ['#ffb36b', '#ffd23f', '#ff8fb8'], // TUNE
+  /** Caustics on the sand: colour, strength and pattern scale (per world unit). */
+  caustics: { color: [0.85, 1, 0.95], strength: 0.22, scale: 1.6 }, // TUNE
+  /** The Keeper swims: floats this share of its height up, leans forward, bobs. */
+  swim: { float: 0.18, lean: 0.38, bob: 0.035, bobSpeed: 1.6 }, // TUNE
+  /** The mask on the face: up the Keeper's height, forward and size by its width. */
+  mask: { up: 0.74, forward: 0.42, size: 0.8 }, // TUNE
 } as const;

@@ -7,7 +7,7 @@ import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
-import type { Scene } from '@babylonjs/core/scene';
+import { Scene } from '@babylonjs/core/scene';
 import { linear, merged } from '../map/map-props.js';
 import { setInstances } from '../map/map-scene.js';
 import { EXPLORE_SKY, type SkyLook } from './explore-sky-look.js';
@@ -61,6 +61,7 @@ export interface ExploreSkyStats {
   readonly clouds: number;
   readonly stars: boolean;
   readonly moon: boolean;
+  readonly underwater: boolean;
 }
 
 export class ExploreSky {
@@ -157,7 +158,12 @@ export class ExploreSky {
   }
 
   get stats(): ExploreSkyStats {
-    return { clouds: this.#look.clouds, stars: this.#look.stars, moon: this.#look.moon };
+    return {
+      clouds: this.#look.clouds,
+      stars: this.#look.stars,
+      moon: this.#look.moon && this.#look.sunDisc,
+      underwater: this.#look.fog !== null,
+    };
   }
 
   /** Shows a new look: the dome, sun or moon, clouds, stars and the light on the land. */
@@ -179,6 +185,8 @@ export class ExploreSky {
     this.#scene.clearColor = new Color4(horizon.r, horizon.g, horizon.b, 1);
 
     recolour(this.#sun, look.sun);
+    this.#sun.setEnabled(look.sunDisc);
+    recolour(this.#stars, look.starColor);
     recolour(this.#cloud, look.cloud);
     const d = r * 0.85;
     setInstances(
@@ -201,6 +209,15 @@ export class ExploreSky {
       light.diffuse = diffuse.multiply(linear(look.light.color));
     }
     this.#scene.environmentIntensity = this.#environment * look.light.environment;
+    // Underwater the far seabed fades into the water (#335).
+    if (look.fog) {
+      this.#scene.fogMode = Scene.FOGMODE_LINEAR;
+      this.#scene.fogColor = skyColour(look.fog);
+      this.#scene.fogStart = EXPLORE_SKY.fog.start;
+      this.#scene.fogEnd = EXPLORE_SKY.fog.end;
+    } else {
+      this.#scene.fogMode = Scene.FOGMODE_NONE;
+    }
   }
 
   /** Rides with the camera: on its position, tilted down by its pitch. */
