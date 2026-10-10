@@ -44,7 +44,7 @@ export function onGameClock(realAt: Date, now: Date): Date {
  * (tzdata-legacy), so `at time zone 'Asia/Rangoon'` fails. Each old name
  * maps to the zone it links to, which every tz database has.
  */
-const ICU_LINK_TO_ZONE: Readonly<Record<string, string>> = {
+export const ICU_LINK_TO_ZONE: Readonly<Record<string, string>> = {
   'Africa/Asmera': 'Africa/Asmara',
   'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
   'America/Catamarca': 'America/Argentina/Catamarca',
