@@ -305,7 +305,6 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
         return { challenge: await toView(row ?? asked), battle: null };
       }
       let battleId: string;
-      let tooLate = false;
       try {
         battleId = await battles.startFriendly({
           mapId,
@@ -316,14 +315,16 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
           started: async (tx, battle): Promise<NewGameEvent[]> => {
             const repo = createChallengesRepo(tx);
             const at = battle.startedAt;
-            const row = await repo.lock(challengeId);
-            if (!row || row.status !== 'pending' || row.expiresAt.getTime() <= at.getTime()) {
-              tooLate = true;
+            // This ask and both Keepers' other waiting asks, in one id-ordered
+            // lock (9c), like expiry's, so the two can never cross.
+            const waiting = await repo.lockPendingOf(mapId, [asked.fromUserId, asked.toUserId]);
+            const row = waiting.find((w) => w.id === challengeId);
+            if (!row || row.expiresAt.getTime() <= at.getTime()) {
               throw new AppError('CONFLICT', MESSAGES.gone);
             }
             await repo.settle(row.id, { status: 'accepted', at, battleId: battle.id });
-            // Both are in a battle now: their other waiting asks go (9c, id order).
-            const others = await repo.lockPendingOf(mapId, [row.fromUserId, row.toUserId], row.id);
+            // Both are in a battle now: their other waiting asks go.
+            const others = waiting.filter((w) => w.id !== challengeId);
             for (const other of others) await repo.settle(other.id, { status: 'cancelled', at });
             return [
               {
@@ -343,7 +344,7 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
         });
       } catch (err) {
         // Too late: let it float away for both of them, then say so.
-        if (tooLate) await expireNow(mapId);
+        if (err instanceof AppError && err.code === 'CONFLICT') await expireNow(mapId);
         throw err;
       }
       const row = await store.find(challengeId);

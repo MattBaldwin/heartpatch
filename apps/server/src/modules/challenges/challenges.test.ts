@@ -437,10 +437,17 @@ describe.skipIf(!url)('friendly challenges (#29, needs DATABASE_URL)', () => {
       await online(lee, mapId);
       await online(sam, mapId);
       const id = askedId(await ask(server, lee, mapId, sam));
-      await Promise.all([
-        answer(server, sam, id, 'yes'),
-        call(server, 'POST', `/challenges/${id}/cancel`, lee),
-      ]);
+      const codes = (
+        await Promise.all([
+          answer(server, sam, id, 'yes'),
+          call(server, 'POST', `/challenges/${id}/cancel`, lee),
+        ])
+      ).map((r) => r.statusCode);
+      // One wins; the other is told kindly (never a 5xx).
+      expect([
+        [200, 409],
+        [409, 204],
+      ]).toContainEqual(codes);
       const row = await db.query.challenges.findFirst({ where: (t, { eq }) => eq(t.id, id) });
       const battles = await activeBattles(mapId);
       if (row?.status === 'accepted') {
@@ -458,12 +465,19 @@ describe.skipIf(!url)('friendly challenges (#29, needs DATABASE_URL)', () => {
       await online(lee, mapId);
       await online(sam, mapId);
       const id = askedId(await ask(server, sam, mapId, lee));
-      await Promise.all([
-        answer(server, lee, id, 'yes'),
-        call(server, 'POST', `/maps/${mapId}/friendly-challenges`, lee, {
-          friendlyChallenges: false,
-        }),
-      ]);
+      const codes = (
+        await Promise.all([
+          answer(server, lee, id, 'yes'),
+          call(server, 'POST', `/maps/${mapId}/friendly-challenges`, lee, {
+            friendlyChallenges: false,
+          }),
+        ])
+      ).map((r) => r.statusCode);
+      // The switch always goes through; the yes wins or is told kindly (never a 5xx).
+      expect([
+        [200, 200],
+        [409, 200],
+      ]).toContainEqual(codes);
       const row = await db.query.challenges.findFirst({ where: (t, { eq }) => eq(t.id, id) });
       const battles = await activeBattles(mapId);
       if (row?.status === 'accepted') {
