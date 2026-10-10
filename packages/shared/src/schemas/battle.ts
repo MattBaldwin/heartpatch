@@ -382,6 +382,8 @@ export type BattleTimeOfDay = z.infer<typeof BattleTimeOfDaySchema>;
  * here, only whether they've picked. `deadlineAt`: when the AI picks for
  * whoever hasn't (null once the battle is over). `covered`: turns the AI
  * picked for a side whose time ran out, so the client can say "Sprout helped".
+ * `now`: the server's game clock when the view was made, so the turn timer
+ * runs on game time, not a phone's own clock (tech spec §7, like inventory's).
  */
 export const LiveBattleViewSchema = z.object({
   opponentUserId: z.uuid(),
@@ -389,6 +391,7 @@ export const LiveBattleViewSchema = z.object({
   myPick: BattleChoiceSchema.nullable(),
   opponentPicked: z.boolean(),
   covered: z.array(z.object({ turn: z.number().int().min(0), side: BattleSideIdSchema })),
+  now: z.iso.datetime(),
 });
 export type LiveBattleView = z.infer<typeof LiveBattleViewSchema>;
 

@@ -3,7 +3,6 @@ import {
   CLOTHING_BY_ID,
   OUTFIT_PRESETS,
   SQUISHY_SLOT,
-  STARTER_CLOTHING,
   sortWearing,
   wearingProblem,
   type OutfitPreset,
@@ -18,6 +17,7 @@ import { AppError } from '../../lib/errors.js';
 import { assertAllowedText } from '../../lib/filter.js';
 import type { Clock } from '../../lib/time.js';
 import { requireMember } from '../maps/members.js';
+import { STARTER_CLOTHING_IDS } from './accessories.js';
 import {
   createWardrobeRepo,
   insertClothing,
@@ -36,7 +36,6 @@ import {
  * is cosmetic only and never touches battles.
  */
 
-const STARTERS = new Set(STARTER_CLOTHING);
 const CATALOG_ORDER = new Map(CLOTHING.map((item, i) => [item.id, i]));
 
 // Kid-readable messages (style guide §6).
@@ -117,7 +116,7 @@ export function createWardrobeService(options: WardrobeServiceOptions): Wardrobe
     userId: string,
   ) => {
     const owned = await repo.countOwned(userId);
-    for (const id of STARTERS) owned.set(id, (owned.get(id) ?? 0) + 1);
+    for (const id of STARTER_CLOTHING_IDS) owned.set(id, (owned.get(id) ?? 0) + 1);
     return owned;
   };
 

@@ -47,6 +47,26 @@ describe('canonicalTimeZone', () => {
     expect(canonicalTimeZone('America/Chicago')).toBe('America/Chicago');
     expect(canonicalTimeZone('Not/AZone')).toBeNull();
   });
+
+  it("keeps today's names where ICU resolves an old link (Postgres has no links)", () => {
+    expect(canonicalTimeZone('Asia/Yangon')).toBe('Asia/Yangon');
+    expect(canonicalTimeZone('Asia/Rangoon')).toBe('Asia/Yangon');
+    expect(canonicalTimeZone('Asia/Kolkata')).toBe('Asia/Kolkata');
+    expect(canonicalTimeZone('Europe/Kyiv')).toBe('Europe/Kyiv');
+    expect(canonicalTimeZone('US/Central')).toBe('America/Chicago');
+  });
+
+  it('keeps the wall clock of every zone Intl knows, and is idempotent', () => {
+    const at = new Date('2026-07-01T12:00:00Z');
+    for (const zone of Intl.supportedValuesOf('timeZone')) {
+      const canonical = canonicalTimeZone(zone);
+      expect(canonical, zone).not.toBeNull();
+      // Same wall clock as the zone asked for.
+      expect(mapLocalTime(at, canonical as string), zone).toEqual(mapLocalTime(at, zone));
+      // Idempotent: a stored name canonicalizes to itself.
+      expect(canonicalTimeZone(canonical as string), zone).toBe(canonical);
+    }
+  });
 });
 
 describe('spawnWindowId (tech spec §8)', () => {

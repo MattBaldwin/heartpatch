@@ -515,6 +515,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           side,
           side === PLAYER_SIDE ? live.bUserId : row.playerUserId,
           row.status === 'active',
+          now(),
         ),
       }),
     });

@@ -86,6 +86,12 @@ export const HomeSquishySchema = z.object({
   trainingId: z.uuid().nullable(),
   /** Its one job (squishy jobs), so the Training Grounds card can say what Train stops. */
   job: SquishyJobIdSchema,
+  /**
+   * The wardrobe accessory it wears (#43, #340), or null: read back through
+   * ownership, so it's always a piece its owner has. An older server sends
+   * none: nothing worn.
+   */
+  accessory: ContentIdSchema.nullable().default(null),
 });
 export type HomeSquishy = z.infer<typeof HomeSquishySchema>;
 

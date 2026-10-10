@@ -31,7 +31,17 @@ const E2E_GROUPS = [
   // ~15.2: tutorial alone is ~7.6; tutorial-flow's runs go side by side.
   ['tutorial', 'tutorial-flow', 'version', 'wardrobe', 'whats-new'],
   ['audio', 'battle', 'capture', 'close-up', 'fences', 'map', 'milestones', 'potions'],
-  ['care', 'cinematic', 'explore', 'hollow', 'inventory', 'keeper', 'recipe-book', 'short-screens'],
+  [
+    'care',
+    'cinematic',
+    'dress-up',
+    'explore',
+    'hollow',
+    'inventory',
+    'keeper',
+    'recipe-book',
+    'short-screens',
+  ],
   [
     'battle-ui',
     'boutique',
