@@ -50,6 +50,7 @@ interface ExploreDebug {
     done: number;
     glints: number;
     keeper: boolean;
+    buildings: number;
     held: string | null;
     decor: { tufts: number; pebbles: number; flowers: number };
     camera: { x: number; z: number; zoom: number };
