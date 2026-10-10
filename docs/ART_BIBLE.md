@@ -148,6 +148,31 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
 | *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | fairy: glowing wings, leaf sprout, arms | hover · wings |
 
+**Branch forms (#32).** Every line has a second grown-up form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. All are built from the existing bodies and parts.
+
+| Line | Branch form | Feeling | Body plan | Pose · attack part |
+|---|---|---|---|---|
+| Puddlepuff | Drizzledoze | Sleepy | sleepy pond frog: round head on a wide bun, side fins, hop feet | sit · tail |
+| Pebblesnooze | Rumblehorn | Brave | upright boulder boxer: horn, crag nubs, strong arms | upright · arms |
+| Emberbun | Embernap | Sleepy | curled-up coal bunny: floppy ears, flame crown, fluffy tail | sit · crown |
+| Snoozicle | Twirlicle | Silly | skating snowman: fur scarf, flippers, hop feet | stand · wings |
+| Fuzzbolt | Glidebolt | Joy | flying-squirrel cat: big glider wings, bolt tail | hover · wings |
+| Fizzlepop | Snugglestar | Cozy | star in a nightcap with plume wings | hover · wings |
+| Bubbletub | Bubblejelly | Joy | jellyfish ghost: bubble crown, side fins, wispy tail | hover · tail |
+| Thistlepip | Petalprance | Joy | five-petal flower fairy: leaf wings, leaf arms, sprout | hover · wings |
+| Flurrypup | Mittenpup | Cozy | fluffy sled pup: fur scarf, floppy ears, long legs | stand · tail |
+| Glimmerock | Geodoze | Sleepy | sleepy geode: big mochi body, crystal spines, crystal crown | sit · back |
+| Nookling | Mothnook | Spooky | moth bunny: antennae, big wings, hop feet | hover · wings |
+| Mossmuffin | Sprinklemuff | Silly | cupcake: tiered body, moss frosting, sprinkle freckles | stand · arms |
+| Dawndrop | Moondrop | Sleepy | sleepy moon: cloud crown, plume wings, crater freckles | hover · wings |
+| Thunderpuff | Stormhoot | Spooky | storm owl: cloud crown, ear tufts, beak, plume wings | hover · wings |
+| Gourdon | Squashboo | Spooky | ghost pumpkin: pale pumpkin, bat wings, wispy tail | hover · tail |
+| Glowboo | Lullaboo | Cozy | night-light ghost in a nightcap | hover · arms |
+| Upsybat | Hushwing | Sleepy | sleeping bat burrito: mochi body, nightcap, big bat wings | hover · wings |
+| Candlekit | Sparklewick | Joy | party candle cat: flame crown, whisker flames, arms | stand · crown |
+| Crunchkin | Huddlenut | Cozy | leaf-pile squirrel: acorn cap, leaf blanket, bushy tail | sit · tail |
+| *Heartlet (secret)* | *Heartsong* | Joy | singing heart drop: sun crown, glowing wings | hover · wings |
+
 ## 2. Palette
 
 - **World:** pastel terrain; wild land muted (saturation 0.5 with a lilac wash, `map-config.ts`); owned land soft and warm. The home-tile pink (`#ff6f9f`) becomes an outline or a lighter fill: nothing on the map is louder than a squishy.

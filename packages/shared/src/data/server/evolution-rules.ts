@@ -106,4 +106,21 @@ export const EVOLUTION_ODDS: EvolutionOdds[] = [
   { from: 'flurrypup', into: 'mittenpup', trigger: { kind: 'feeling', feeling: 'cozy' } },
   { from: 'glimmerock', into: 'geodoze', trigger: { kind: 'feeling', feeling: 'sleepy' } },
   { from: 'nookling', into: 'mothnook', trigger: { kind: 'feeling', feeling: 'spooky' } },
+  // Batch 4.
+  { from: 'mossmuffin', into: 'sprinklemuff', trigger: { kind: 'feeling', feeling: 'silly' } },
+  { from: 'dawndrop', into: 'moondrop', trigger: { kind: 'feeling', feeling: 'sleepy' } },
+  {
+    from: 'thunderpuff',
+    into: 'stormhoot',
+    trigger: {
+      kind: 'rare',
+      conditions: [{ kind: 'time', times: ['dusk', 'night'] }],
+      whisper: {
+        icon: '🌙',
+        text: '{name} keeps gazing up at the night sky…',
+        sub: 'It seems to love the dark hours.',
+      },
+    },
+  },
+  { from: 'crunchkin', into: 'huddlenut', trigger: { kind: 'feeling', feeling: 'cozy' } },
 ];
