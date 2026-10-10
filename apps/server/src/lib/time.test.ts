@@ -56,7 +56,7 @@ describe('canonicalTimeZone', () => {
     expect(canonicalTimeZone('US/Central')).toBe('America/Chicago');
   });
 
-  it('never returns a name ICU only knows as a link, and keeps its clock', () => {
+  it('keeps the wall clock of every zone Intl knows, and is idempotent', () => {
     const at = new Date('2026-07-01T12:00:00Z');
     for (const zone of Intl.supportedValuesOf('timeZone')) {
       const canonical = canonicalTimeZone(zone);
