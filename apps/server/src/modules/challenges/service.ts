@@ -170,6 +170,7 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
       const outgoing = friendly.find((row) => row.fromUserId === user.id);
       return {
         friendlyChallenges: await store.friendlyEnabled(mapId),
+        myTeamLevel: await teamLevel(db, mapId, user.id),
         online,
         incoming: await Promise.all(friendly.filter((row) => row.toUserId === user.id).map(toView)),
         outgoing: outgoing ? await toView(outgoing) : null,

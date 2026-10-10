@@ -53,6 +53,8 @@ export type OnlineMember = z.infer<typeof OnlineMemberSchema>;
  */
 export const ChallengesResponseSchema = z.object({
   friendlyChallenges: z.boolean(),
+  /** My battle team's top level, for the card's level-gap note. */
+  myTeamLevel: z.number().int().min(0),
   online: z.array(OnlineMemberSchema),
   incoming: z.array(ChallengeViewSchema),
   outgoing: ChallengeViewSchema.nullable(),
