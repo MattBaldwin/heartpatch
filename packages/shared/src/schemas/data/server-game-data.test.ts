@@ -22,7 +22,12 @@ const gameData = {
   moves: [...GAME_DATA.moves, ...FIXTURE_MOVES],
 };
 
-const noSecrets = { secretSpecies: [], secretMoves: [], secretEvolutions: [], evolutionOdds: [] };
+const noSecrets = {
+  secretSpecies: [],
+  secretMoves: [],
+  secretEvolutions: [],
+  evolutionOdds: SERVER_GAME_DATA.evolutionOdds,
+};
 
 /** Fixture server data: one secret line (Moonpuff → Moonmallow), no spawn tables. */
 const fixtureServerData: ServerGameData = {
@@ -239,6 +244,8 @@ describe('branches (#32)', () => {
     edit(data);
     return checkServerGameData(data, { ...gameData, species });
   };
+  /** Rows the shipped data already has, so the fixture rows come after them. */
+  const n = SERVER_GAME_DATA.evolutionOdds.length;
   const odds = {
     from: 'fixture-puddlepuff',
     into: 'fixture-pebblesnooze',
@@ -253,7 +260,7 @@ describe('branches (#32)', () => {
     expect(
       withBranch((d) => d.evolutionOdds.push(odds, { ...odds, into: 'fixture-splashmallow' })),
     ).toEqual([
-      'evolutionOdds[1]: "fixture-splashmallow" is the default form at level 16, so it has no odds',
+      `evolutionOdds[${String(n + 1)}]: "fixture-splashmallow" is the default form at level 16, so it has no odds`,
     ]);
   });
 
@@ -276,7 +283,9 @@ describe('branches (#32)', () => {
     expect(withBranch((d) => d.evolutionOdds.push(odds, odds)).join('\n')).toMatch(/listed twice/);
     expect(
       withBranch((d) => d.evolutionOdds.push(odds, { ...odds, into: 'fixture-emberbun' })),
-    ).toEqual(['evolutionOdds[1]: "fixture-puddlepuff" has no evolution into "fixture-emberbun"']);
+    ).toEqual([
+      `evolutionOdds[${String(n + 1)}]: "fixture-puddlepuff" has no evolution into "fixture-emberbun"`,
+    ]);
   });
 
   it("checks a rare branch's buildings and seasons", () => {
@@ -292,8 +301,8 @@ describe('branches (#32)', () => {
       },
     };
     expect(withBranch((d) => d.evolutionOdds.push(rare))).toEqual([
-      'evolutionOdds[0].trigger.conditions[0].building: unknown building "no-such-fire"',
-      'evolutionOdds[0].trigger.conditions[1].season: unknown season "no-such-season"',
+      `evolutionOdds[${String(n + 0)}].trigger.conditions[0].building: unknown building "no-such-fire"`,
+      `evolutionOdds[${String(n + 0)}].trigger.conditions[1].season: unknown season "no-such-season"`,
     ]);
   });
 
