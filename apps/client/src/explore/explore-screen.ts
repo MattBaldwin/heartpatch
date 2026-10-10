@@ -100,6 +100,8 @@ export interface ExploreScreenOptions {
   showScene: (build: SceneBuilder | null) => void;
   /** Draws a few frames after a change (`Stage.invalidate`). */
   invalidate: () => void;
+  /** Draws one frame (`Stage.requestFrame`): the water's paced ambient life (#335). */
+  requestFrame?: () => void;
   tier: () => QualityTier;
   keeper: () => KeeperConfig | null;
   keeperWearing?: () => readonly string[];
@@ -199,7 +201,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   const ambient = new AmbientDriver({
     target: () => scene3d,
     invalidate: options.invalidate,
-    requestFrame: options.invalidate,
+    ...(options.requestFrame ? { requestFrame: options.requestFrame } : {}),
     tier: options.tier,
   });
   /** Checks the sky once a minute while exploring (#335). */
