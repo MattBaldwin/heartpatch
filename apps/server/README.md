@@ -411,6 +411,18 @@ Lock order: the night's row, squishies, then `maps` (events).
 - **Expiry** is a timestamp (`expires_at`), noticed on the next read, send or answer (CLAUDE.md rule 4). Leaving the patch calls off a Keeper's asks (`callOffAsksOf`, the maps service's `departed`).
 - **Lock order:** sending locks both Keepers' member rows (step 2, id order), then asks (9c); a yes takes the battle seats, member rows and the battle, then the ask and the pair's other asks (9c, id order); expiry, the switch and leaving lock asks in id order. `maps` last.
 
+## Live tile defense
+
+"Defend now?" (issue #29-C). When a rival starts a challenge (`rival-tile`) on land with squishies on watch, and the defender's app is open on the patch (`wsHub.isOnline`), isn't in a battle and isn't weighing another prompt, the territory module's start transaction also inserts a `defense` challenge for the battle (`expires_at` = start + `LIVE_BATTLE_RULES.defensePromptSeconds`, `TUNE` 20 s) and writes `defense.prompted`. The try, the cooldown and the loss-cap slot are taken as always, so waiting dodges nothing. Not for the land's guardians or a fence battle. The challenger's own waiting "Battle me?" is called off (one ask out at a time).
+
+- **Waiting:** the challenger's battle view carries `defensePrompt { expiresAt, now }`. Their actions are refused (`CONFLICT`) until the prompt ends, except giving up, which calls it off (`called-off`) and counts as leaving: the land holds.
+- **Answer** through `POST /api/v1/challenges/:challengeId/answer` (the challenges route hands a `defense` row to the battles service's `answerDefense`). `yes` seats the defender on side `b` before any move: the stored setup and starting state are rebuilt from the same seed with a player there (so the record replays), a `live_battles` row starts, and the defender's own defense style covers their timeouts (`coverPolicyB`). `not-now` leaves it to the defense style. `CONFLICT` "Too late!" once it has ended.
+- **Expiry** is lazy (rule 4): the next look at the battle by either player, or the answer, settles it (`expired`), each in its own transaction before the battle is stepped.
+- **Live:** the defender can't give up their land (their timer running out lets their style play instead). Potions follow `LIVE_BATTLE_RULES.liveDefenseItems` (off until the owner confirms): a potion is a side's first pick of the turn, out of the bag at once and final. Heart Charms never.
+- **Raid log:** a raid whose battle has a `live_battles` row is `live: true` ("defended live"); its `stance` is null.
+- **Events:** `defense.prompted` `{ challengeId, battleId, fromUserId, toUserId, expiresAt }` and `defense.answered` (adds `answer`: `yes`, `not-now`, `expired`, `called-off`), only to the two players (`twoPlayerView`).
+- **Lock order:** the start takes the challenger's waiting asks (9c) after the tile and the battle; settling or answering takes the battle (step 5), then the prompt (9c); a yes first takes the defender's seat (step 0) and member row (step 2). `maps` last.
+
 
 ## Care, levels and evolution
 

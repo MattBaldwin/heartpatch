@@ -1,0 +1,138 @@
+/* "Defend now?" (#29-C): a card over every screen, like a milestone's, with
+   a bar that runs down. Big buttons, 44pt+ targets, padded with the shared
+   tokens (style guide §3). */
+
+.defense-card {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 12;
+  box-sizing: border-box;
+  width: min(340px, calc(100% - 32px));
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
+  padding: 20px 20px 16px;
+  border-radius: 24px;
+  background: #fff8ec;
+  box-shadow:
+    0 0 0 3px #8fc4ff,
+    0 16px 48px rgb(107 75 110 / 28%);
+  transform: translate(-50%, -50%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  text-align: center;
+  color: #4a3150;
+  animation: defense-pop 320ms ease-out 1;
+}
+
+.defense-card[hidden] {
+  display: none;
+}
+
+.defense-shield {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.defense-title {
+  margin: 6px 0 4px;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.defense-who {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.defense-timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.defense-bar {
+  flex: 1 1 auto;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f2e3c8;
+}
+
+.defense-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8fc4ff, #5a9df0);
+  transform-origin: left center;
+  transition: transform 250ms linear;
+}
+
+.defense-count {
+  min-width: 3ch;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #3f6fae;
+}
+
+.defense-calm,
+.defense-note {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #6b4b6e;
+}
+
+.defense-note:empty {
+  display: none;
+}
+
+.defense-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.defense-no {
+  min-height: 48px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: none;
+  border-radius: 999px;
+  background: #f2e3c8;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  color: #6b4b6e;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.defense-yes:disabled,
+.defense-no:disabled {
+  opacity: 0.6;
+}
+
+@keyframes defense-pop {
+  from {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0;
+  }
+
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .defense-card {
+    animation: none;
+  }
+
+  .defense-bar-fill {
+    transition: none;
+  }
+}

@@ -19,5 +19,15 @@ export const LiveBattleRulesSchema = z.strictObject({
   awayGraceSeconds: z.number().int().min(0),
   /** The AI style that picks for a side whose time ran out, when it has none of its own. */
   coverPolicy: BattleAiPolicySchema,
+  /**
+   * Seconds a defender who's online has to answer "Defend now?" when a rival
+   * challenges their land (#29-C). Then their defense style plays, as offline.
+   */
+  defensePromptSeconds: positiveInt,
+  /**
+   * Potions in a live defense (#29-C), for both players. Heart Charms never:
+   * a rival's squishies can't be befriended.
+   */
+  liveDefenseItems: z.boolean(),
 });
 export type LiveBattleRules = z.infer<typeof LiveBattleRulesSchema>;

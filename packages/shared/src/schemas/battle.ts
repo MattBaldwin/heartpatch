@@ -426,6 +426,12 @@ export const PlayerBattleSchema = z.object({
   endedAt: z.iso.datetime().nullable(),
   /** Present only for a battle between two players (#29). */
   live: LiveBattleViewSchema.optional(),
+  /**
+   * A challenge whose defender is being asked "Defend now?" (#29-C), to the
+   * challenger only: nobody moves until `expiresAt`, or until the defender
+   * answers. Giving up meanwhile counts as leaving (the land holds).
+   */
+  defensePrompt: z.object({ expiresAt: z.iso.datetime(), now: z.iso.datetime() }).optional(),
 });
 export type PlayerBattle = z.infer<typeof PlayerBattleSchema>;
 
