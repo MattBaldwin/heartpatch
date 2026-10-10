@@ -222,6 +222,8 @@ describe.skipIf(!url)('friendly challenges (#29, needs DATABASE_URL)', () => {
     const seen = await view(server, lee, mapId);
     expect(seen.friendlyChallenges).toBe(true);
     expect(seen.myTeamLevel).toBe(5);
+    // The game clock rides along, so the ask's bar runs on game time.
+    expect(seen.now).toBe(clock.toISOString());
     // Kit's app isn't open: not here.
     expect(
       seen.online.map(({ userId, inBattle, teamLevel }) => ({ userId, inBattle, teamLevel })),

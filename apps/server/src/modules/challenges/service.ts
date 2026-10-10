@@ -208,6 +208,7 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
         online,
         incoming: await Promise.all(friendly.filter((row) => row.toUserId === user.id).map(toView)),
         outgoing: outgoing ? await toView(outgoing) : null,
+        now: now().toISOString(),
       };
     },
 
