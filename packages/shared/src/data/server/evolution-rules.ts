@@ -100,4 +100,10 @@ export const EVOLUTION_ODDS: EvolutionOdds[] = [
   { from: 'upsybat', into: 'hushwing', trigger: { kind: 'feeling', feeling: 'sleepy' } },
   { from: 'candlekit', into: 'sparklewick', trigger: { kind: 'feeling', feeling: 'joy' } },
   { from: 'pebblesnooze', into: 'rumblehorn', trigger: { kind: 'feeling', feeling: 'brave' } },
+  // Batch 3.
+  { from: 'fizzlepop', into: 'snugglestar', trigger: { kind: 'feeling', feeling: 'cozy' } },
+  { from: 'bubbletub', into: 'bubblejelly', trigger: { kind: 'feeling', feeling: 'joy' } },
+  { from: 'flurrypup', into: 'mittenpup', trigger: { kind: 'feeling', feeling: 'cozy' } },
+  { from: 'glimmerock', into: 'geodoze', trigger: { kind: 'feeling', feeling: 'sleepy' } },
+  { from: 'nookling', into: 'mothnook', trigger: { kind: 'feeling', feeling: 'spooky' } },
 ];

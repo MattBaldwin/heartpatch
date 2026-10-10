@@ -437,6 +437,49 @@ export const MOVES: Move[] = [
     accuracy: 90, // TUNE:
     effects: [{ type: 'status', status: 'dizzy', chance: 15 }], // TUNE:
   },
+  {
+    id: 'static-snuggle',
+    name: 'Static Snuggle',
+    description: 'Wraps up in a fuzzy, crackly blanket. So snug.',
+    element: 'spark',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'stat', target: 'self', stat: 'defense', stages: 2, chance: 100 }], // TUNE:
+  },
+  {
+    id: 'bubble-bounce',
+    name: 'Bubble Bounce',
+    description: 'Bounces in on a big wobbly bubble. Boing!',
+    element: 'water',
+    power: 65, // TUNE:
+    accuracy: 95, // TUNE:
+  },
+  {
+    id: 'snow-snuggle',
+    name: 'Snow Snuggle',
+    description: 'Fluffs up its coat and feels much better.',
+    element: 'frost',
+    power: 0,
+    accuracy: 100,
+    effects: [{ type: 'heal', percent: 35 }], // TUNE:
+  },
+  {
+    id: 'geode-glint',
+    name: 'Geode Glint',
+    description: 'Cracks a sleepy smile, and the sparkles inside go everywhere.',
+    element: 'stone',
+    power: 65, // TUNE:
+    accuracy: 95, // TUNE:
+    effects: [{ type: 'status', status: 'dizzy', chance: 15 }], // TUNE:
+  },
+  {
+    id: 'lantern-flutter',
+    name: 'Lantern Flutter',
+    description: 'Flutters round and round a lantern. Whoosh!',
+    element: 'shadow',
+    power: 55, // TUNE:
+    accuracy: 100,
+  },
 ];
 
 /*
@@ -899,7 +942,10 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 50, attack: 60, defense: 45, speed: 60 }, // TUNE:
     moves: ['zip-zap', 'fizzy-pop', 'zoomies'],
-    evolutions: [{ into: 'zingaling', level: 18 }], // TUNE:
+    evolutions: [
+      { into: 'zingaling', level: 18 },
+      { into: 'snugglestar', level: 18 },
+    ], // TUNE:
     visual: {
       body: 'star',
       palette: ['#ffc93c', '#fffbe6', '#ff8fc0'],
@@ -931,6 +977,27 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['spark', 'light'], feelings: ['joy'] },
   },
+  {
+    id: 'snugglestar',
+    name: 'Snugglestar',
+    description: 'A warm little star that tucks itself in at the top of the sky.',
+    element: 'spark',
+    feeling: 'cozy',
+    rarity: 'rare',
+    baseStats: { hp: 82, attack: 65, defense: 73, speed: 65 }, // TUNE:
+    moves: ['zip-zap', 'fizzy-pop', 'static-fluff', 'static-snuggle'],
+    evolutions: [],
+    visual: {
+      body: 'star',
+      palette: ['#ffc93c', '#fffbe6', '#8a7cc4', '#ffffff'],
+      parts: ['oval-eyes', 'tiny-smile', 'blush-cheeks', 'nightcap', 'plume-wings', 'freckles'],
+      size: 1.3,
+      stance: 0.4,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['spark'], feelings: ['cozy', 'sleepy'] },
+  },
 
   // Water + Cozy.
   {
@@ -942,7 +1009,10 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 70, attack: 50, defense: 60, speed: 40 }, // TUNE:
     moves: ['giggle-drizzle', 'bubble-bath', 'belly-flop'],
-    evolutions: [{ into: 'bubbletide', level: 18 }], // TUNE:
+    evolutions: [
+      { into: 'bubbletide', level: 18 },
+      { into: 'bubblejelly', level: 18 },
+    ], // TUNE:
     visual: {
       body: 'bun',
       palette: ['#8fded9', '#f4fffe', '#3fb5bf'],
@@ -980,6 +1050,27 @@ export const SPECIES: Species[] = [
       attackPart: 'horns',
     },
     habitatPreferences: { elements: ['water'], feelings: ['cozy'] },
+  },
+  {
+    id: 'bubblejelly',
+    name: 'Bubblejelly',
+    description: 'Floats along on its own bubbles, wiggling all its wiggly bits.',
+    element: 'water',
+    feeling: 'joy',
+    rarity: 'rare',
+    baseStats: { hp: 86, attack: 86, defense: 70, speed: 92 }, // TUNE:
+    moves: ['giggle-drizzle', 'splish-splash', 'bubble-bath', 'bubble-bounce'],
+    evolutions: [],
+    visual: {
+      body: 'ghost',
+      palette: ['#8fded9', '#f4fffe', '#3fb5bf', '#ffffff'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'bubble-crown', 'side-fins', 'wisp-chain'],
+      size: 1.3,
+      stance: 0.4,
+      pose: 'hover',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['water'], feelings: ['joy', 'cozy'] },
   },
 
   // Leaf + Brave.
@@ -1076,7 +1167,10 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 55, attack: 70, defense: 50, speed: 55 }, // TUNE:
     moves: ['snowball-toss', 'frosty-pounce', 'brrr-bluster'],
-    evolutions: [{ into: 'blusterpup', level: 22 }], // TUNE:
+    evolutions: [
+      { into: 'blusterpup', level: 22 },
+      { into: 'mittenpup', level: 22 },
+    ], // TUNE:
     visual: {
       body: 'barrel',
       palette: ['#b8dcff', '#ffffff', '#5f8fdb'],
@@ -1120,6 +1214,37 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['frost'], feelings: ['brave'] },
   },
+  {
+    id: 'mittenpup',
+    name: 'Mittenpup',
+    description: 'Grew the fluffiest coat in the Gap. Hugs keep it extra warm.',
+    element: 'frost',
+    feeling: 'cozy',
+    rarity: 'epic',
+    baseStats: { hp: 110, attack: 81, defense: 96, speed: 76 }, // TUNE:
+    moves: ['snowball-toss', 'frosty-pounce', 'chilly-yawn', 'snow-snuggle'],
+    evolutions: [],
+    visual: {
+      body: 'barrel',
+      palette: ['#b8dcff', '#ffffff', '#ff8fa8', '#e0f0ff'],
+      parts: [
+        'sharp-eyes',
+        'smile',
+        'blush-cheeks',
+        'floppy-ears',
+        'fur-ruff',
+        'long-legs',
+        'fluff-tail',
+      ],
+      size: 1.3,
+      finish: 'sparkle',
+      head: { body: 'orb', size: 0.92, forward: 0.6, up: 0.62 },
+      stance: 0.4,
+      pose: 'stand',
+      attackPart: 'tail',
+    },
+    habitatPreferences: { elements: ['frost'], feelings: ['cozy', 'brave'] },
+  },
 
   // Stone + Joy.
   {
@@ -1131,7 +1256,10 @@ export const SPECIES: Species[] = [
     rarity: 'rare',
     baseStats: { hp: 60, attack: 60, defense: 75, speed: 40 }, // TUNE:
     moves: ['pebble-plop', 'rumble-roll', 'sunny-beam'],
-    evolutions: [{ into: 'glittercrag', level: 22 }], // TUNE:
+    evolutions: [
+      { into: 'glittercrag', level: 22 },
+      { into: 'geodoze', level: 22 },
+    ], // TUNE:
     visual: {
       body: 'mochi',
       palette: ['#d2bff2', '#fbf7ff', '#6fd8ee'],
@@ -1173,6 +1301,36 @@ export const SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['stone', 'light'], feelings: ['joy'] },
   },
+  {
+    id: 'geodoze',
+    name: 'Geodoze',
+    description: 'A sleepy geode. Make it smile and it sparkles inside.',
+    element: 'stone',
+    feeling: 'sleepy',
+    rarity: 'epic',
+    baseStats: { hp: 90, attack: 70, defense: 105, speed: 35 }, // TUNE:
+    moves: ['pebble-plop', 'rock-a-bye', 'sturdy-sit', 'geode-glint'],
+    evolutions: [],
+    visual: {
+      body: 'mochi',
+      palette: ['#d2bff2', '#fbf7ff', '#6fd8ee', '#ffffff'],
+      parts: [
+        'sleepy-eyes',
+        'tiny-smile',
+        'blush-cheeks',
+        'round-ears',
+        'crystal-crown',
+        'crystal-spines',
+        'stubby-legs',
+      ],
+      size: 1.35,
+      finish: 'sparkle',
+      stance: 0.12,
+      pose: 'sit',
+      attackPart: 'back',
+    },
+    habitatPreferences: { elements: ['stone'], feelings: ['sleepy', 'joy'] },
+  },
 
   // Shadow + Cozy.
   {
@@ -1184,7 +1342,10 @@ export const SPECIES: Species[] = [
     rarity: 'uncommon',
     baseStats: { hp: 60, attack: 50, defense: 55, speed: 55 }, // TUNE:
     moves: ['peekaboo', 'shadow-snuggle', 'mossy-nap'],
-    evolutions: [{ into: 'snugglenook', level: 18 }], // TUNE:
+    evolutions: [
+      { into: 'snugglenook', level: 18 },
+      { into: 'mothnook', level: 18 },
+    ], // TUNE:
     visual: {
       body: 'blob',
       palette: ['#5f5ba6', '#d9d6ff', '#ffd27a'],
@@ -1227,6 +1388,37 @@ export const SPECIES: Species[] = [
       attackPart: 'legs',
     },
     habitatPreferences: { elements: ['shadow'], feelings: ['cozy', 'sleepy'] },
+  },
+  {
+    id: 'mothnook',
+    name: 'Mothnook',
+    description: 'Follows lantern light all night long. Only a tiny bit spooky.',
+    element: 'shadow',
+    feeling: 'spooky',
+    rarity: 'rare',
+    baseStats: { hp: 72, attack: 83, defense: 61, speed: 94 }, // TUNE:
+    moves: ['peekaboo', 'shadow-snuggle', 'boo', 'lantern-flutter'],
+    evolutions: [],
+    visual: {
+      body: 'bean',
+      palette: ['#5f5ba6', '#d9d6ff', '#ffd27a', '#ffd27a'],
+      parts: [
+        'spooky-eyes',
+        'cat-mouth',
+        'long-ears',
+        'zing-antennae',
+        'big-wings',
+        'hop-feet',
+        'fluff-tail',
+      ],
+      size: 1.25,
+      ink: '#fff4dc',
+      head: { body: 'orb', size: 0.75, forward: 0.1, up: 0.8 },
+      stance: 0.45,
+      pose: 'hover',
+      attackPart: 'wings',
+    },
+    habitatPreferences: { elements: ['shadow'], feelings: ['spooky', 'cozy'] },
   },
 
   // Leaf + Cozy (harmonious).
