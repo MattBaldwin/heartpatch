@@ -204,6 +204,10 @@ body:has(.lbook:not([hidden])) .auth-chip {
   min-width: 0;
   overflow: auto;
   overscroll-behavior: contain;
+  /* iOS resets touch-action at every scroll container, so the stage's
+     pan-y has to be said again here or a swipe that starts on page text
+     goes to the browser instead of turning the page. */
+  touch-action: pan-y;
   box-sizing: border-box;
   padding: 18px 18px 16px 22px;
   border-radius: 6px 16px 16px 6px;

@@ -51,6 +51,7 @@ import { applyBatchPlans, planGrants, stopPlan } from '../factory/service.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import type { MapRow } from '../maps/repo.js';
 import { requireMember } from '../maps/members.js';
+import { wornAccessories } from '../wardrobe/accessories.js';
 import { seedHomeRingNodes, type HomeRingLog } from './home-ring.js';
 import { BUILDING_DATA, toPublicBuilding } from './hearthfire.js';
 import {
@@ -238,6 +239,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     ]);
     const seed = heartSeedOf(tiles);
     const active = squishies.filter((s) => s.state === 'active');
+    const worn = await wornAccessories(
+      tx,
+      userId,
+      active.map((s) => s.id),
+    );
     // A secret species the player owns is one they've met (DECISIONS, secret species).
     const speciesDefs = [...new Set(active.map((s) => s.speciesId))].flatMap((id) => {
       const secret = PUBLIC_SPECIES.has(id) ? undefined : SECRET_SPECIES.get(id);
@@ -273,6 +279,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           onWatch: s.onWatch,
           training: s.trainingBuildingId !== null,
         }),
+        accessory: worn.get(s.id) ?? null,
       })),
       speciesDefs,
       items,
