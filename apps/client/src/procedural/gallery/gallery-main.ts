@@ -8,6 +8,7 @@ import { el } from '../../ui/dom.js';
 import type { QualityTier } from '../../engine/config.js';
 import type { SquishMove } from '../config.js';
 import { lodFor, type SquishyView } from '../motion.js';
+import { accessoryItem } from '../accessory.js';
 import { paramsHash, squishyParams } from '../params.js';
 import type { SquishyField, SquishyHandle } from '../squishy-field.js';
 import { buildGalleryScene } from './gallery-scene.js';
@@ -65,7 +66,7 @@ const camera = {
   ...(distance > 0 && { startDistance: distance, minDistance: Math.min(distance, 7) }),
 };
 const accessories = (params.get('accessory') ?? '').split(',').flatMap((id): ClothingItem[] => {
-  const item = CLOTHING_BY_ID.get(id);
+  const item = accessoryItem(id);
   return item ? [item] : [];
 });
 

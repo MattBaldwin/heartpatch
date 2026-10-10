@@ -293,7 +293,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       const gone = new Set(squishy.accessory.instances);
       for (const { batch, instance } of squishy.instances) {
         if (!gone.has(instance)) continue;
-        batch.instances.splice(batch.instances.indexOf(instance), 1);
+        const i = batch.instances.indexOf(instance);
+        if (i >= 0) batch.instances.splice(i, 1);
         batch.dirty = true;
       }
       const kept = squishy.instances.filter(({ instance }) => !gone.has(instance));

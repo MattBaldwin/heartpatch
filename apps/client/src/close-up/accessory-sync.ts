@@ -32,6 +32,8 @@ export class AccessorySync {
   #shown: string | null = null;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #inFlight = false;
+  /** `flush` came while a send was on its way: the next choice goes as soon as it lands. */
+  #flushed = false;
   #sends = 0;
   /** Bumped by `reset`, so a late answer can't land on another squishy. */
   #generation = 0;
@@ -72,6 +74,13 @@ export class AccessorySync {
 
   /** Sends a choice not sent yet now (the picker or the close-up is closing). */
   flush(): void {
+    if (this.#inFlight) {
+      // It goes the moment the one on its way lands (see `#send`'s finally).
+      this.#flushed = this.#shown !== this.#kept || this.#timer !== null;
+      if (this.#timer) clearTimeout(this.#timer);
+      this.#timer = null;
+      return;
+    }
     if (!this.#timer) return;
     clearTimeout(this.#timer);
     this.#timer = null;
@@ -84,6 +93,7 @@ export class AccessorySync {
     this.#timer = null;
     this.#generation += 1;
     this.#inFlight = false;
+    this.#flushed = false;
     this.#kept = itemId;
     this.#shown = itemId;
   }
@@ -121,11 +131,17 @@ export class AccessorySync {
       this.#shown = this.#kept;
       if (this.#timer) clearTimeout(this.#timer);
       this.#timer = null;
+      this.#flushed = false;
       this.#deps.onError(messageOf(err));
     } finally {
       if (mine === this.#generation) {
         this.#inFlight = false;
-        if (this.#shown !== this.#kept && !this.#timer) this.#schedule();
+        const now = this.#flushed;
+        this.#flushed = false;
+        if (this.#shown !== this.#kept) {
+          if (now) void this.#send();
+          else if (!this.#timer) this.#schedule();
+        }
         this.#deps.onChange();
       }
     }

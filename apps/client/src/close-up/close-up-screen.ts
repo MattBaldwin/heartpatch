@@ -192,6 +192,8 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   // Dress up (#340): the picker, and my accessories once loaded. What it
   // wears (kept and shown) lives in `accessories` below.
   let dressing = false;
+  /** The squishy Dress up sends for: set on open, kept after it closes. */
+  let dressingFor: { mapId: string; squishyId: string } | null = null;
   let ownedPieces: readonly OwnedClothing[] | null = null;
   let counts = { sent: 0, held: 0, reactions: 0, idleMoves: 0 };
   let lastHold: CareHold | null = null;
@@ -855,11 +857,11 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
    */
   const accessories = new AccessorySync({
     ...sendDeps,
+    // The squishy it was opened on, so a choice still waiting when the
+    // close-up shuts goes to the right squishy (`open` resets it).
     put: (itemId, key) => {
-      const map = mapId;
-      const id = squishyId;
-      if (!map || !id) return Promise.reject(new Error('closed'));
-      return wardrobe.setAccessory(map, id, itemId, key);
+      if (!dressingFor) return Promise.reject(new Error('no squishy'));
+      return wardrobe.setAccessory(dressingFor.mapId, dressingFor.squishyId, itemId, key);
     },
     sendAfterMs: DRESS_UP.sendAfterMs,
     onChange: () => {
@@ -1152,6 +1154,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     backdropMs = took?.blur ?? null;
     setReply(list);
     accessories.reset(squishy.accessory);
+    dressingFor = { mapId: map, squishyId: id };
     ownedPieces = null;
     showDress(false, false);
     counts = { sent: 0, held: 0, reactions: 0, idleMoves: 0 };
@@ -1208,7 +1211,6 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
 
   function hide(): void {
     ticket += 1;
-    accessories.reset();
     window.clearTimeout(idleTimer);
     window.clearTimeout(readyTimer);
     idleTimer = undefined;
@@ -1239,6 +1241,9 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     close,
     setUser: () => {
       if (isOpen()) hide();
+      // Another player: nothing waiting goes out for the last one.
+      accessories.reset();
+      dressingFor = null;
     },
     get isOpen() {
       return isOpen();

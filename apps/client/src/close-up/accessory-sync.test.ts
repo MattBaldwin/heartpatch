@@ -142,4 +142,18 @@ describe('AccessorySync (Dress up, #340)', () => {
     expect(keptLines).toEqual([]);
     expect(changes()).toBe(before);
   });
+
+  it('a tap flushed while another is on its way still goes, right after it lands', async () => {
+    const { sync, sent, answer } = setup();
+    sync.choose('tiny-bow');
+    await vi.advanceTimersByTimeAsync(SEND_AFTER);
+    sync.choose('tiny-crown');
+    // The close-up closes: the crown must still reach the server.
+    sync.flush();
+    await vi.advanceTimersByTimeAsync(100);
+    await answer('tiny-bow');
+    expect(sent).toEqual(['tiny-bow', 'tiny-crown']);
+    await answer('tiny-crown');
+    expect(sync).toMatchObject({ kept: 'tiny-crown', shown: 'tiny-crown', sending: false });
+  });
 });
