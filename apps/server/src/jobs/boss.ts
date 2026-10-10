@@ -14,6 +14,7 @@ import {
 import { startNightfall, type NightfallRunner } from './nightfall.js';
 import { ensureQueue } from './queues.js';
 import { createJobsRepo, pgBossOnTransaction } from './repo.js';
+import { startRetention } from './retention.js';
 
 /** pg-boss keeps its tables in their own schema, outside Drizzle's migrations. */
 export const PG_BOSS_SCHEMA = 'pgboss';
@@ -54,8 +55,9 @@ export interface Jobs {
  * consumer with the `short` policy and the map id as `singletonKey`, so a
  * burst of wake-ups for one map collapses into one queued job; a worker that
  * applies events with `runConsumer`; the wake-up `appendGameEvent` enqueues
- * inside each command's transaction; the periodic catch-up job; and, given a
- * runner, the Hollow Man's nightfall (`nightfall.ts`).
+ * inside each command's transaction; the periodic catch-up job; the
+ * `game_events` retention job (`retention.ts`); and, given a runner, the
+ * Hollow Man's nightfall (`nightfall.ts`).
  *
  * Why `short` and not `stately`: `stately` also allows only one *active* job
  * per key, enforced by a unique index on the job table. pg-boss's fetch only
@@ -162,6 +164,8 @@ export async function startJobs(options: JobsOptions): Promise<Jobs> {
   }
   // A crash may have left events behind: catch up once at boot.
   await catchUp();
+
+  await startRetention(boss, db, consumers, logger, options.schedule ?? true);
 
   const nightfall = options.nightfall
     ? await startNightfall(boss, options.nightfall, logger, options.schedule ?? true)

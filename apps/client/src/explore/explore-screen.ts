@@ -102,7 +102,10 @@ export interface ExploreScreenOptions {
   tier: () => QualityTier;
   keeper: () => KeeperConfig | null;
   keeperWearing?: () => readonly string[];
-  /** The tile as the map has it (its buildings), or null. */
+  /**
+   * The tile as the map has it (its buildings), or null. Read when a tile
+   * opens, before `onOpen` closes the map (#347).
+   */
   mapTile: (at: { q: number; r: number }) => PublicTile | null;
   /** Exploring is for patches: never on the Tutorial Glade. */
   isGlade: (mapId: string) => boolean;
@@ -194,6 +197,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** My team's squishies that follow the Keeper, in team order. */
   let teamMembers: { id: string; speciesId: string }[] = [];
   let scene3d: ExploreScene | null = null;
+  /** The map's view of the open tile, read as it opened (#347). */
+  let mapTileAtOpen: PublicTile | null = null;
   /** Checks the sky once a minute while exploring (#335). */
   let skyTimer: ReturnType<typeof setInterval> | null = null;
   const tipStorage = options.storage === undefined ? safeStorage() : options.storage;
@@ -1160,7 +1165,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         const kind = species.get(m.speciesId);
         return kind ? [{ id: m.id, species: kind }] : [];
       }),
-      mapTile: options.mapTile(tile),
+      mapTile: mapTileAtOpen,
       sky: (skyShown = skyNow()),
       reducedMotion,
     });
@@ -1226,6 +1231,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     clearToast();
     isOpen = true;
     say('');
+    // The map's view of the tile, before `onOpen` closes the map and its
+    // view goes with it (#347: the tile's buildings never reached the scene).
+    mapTileAtOpen = options.mapTile(at);
     options.onOpen(id);
     options.showScene(build);
     if (skyTimer !== null) clearInterval(skyTimer);
@@ -1281,6 +1289,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     // A search left behind (another map, logout) never blocks the next visit.
     working = false;
     scene3d = null;
+    mapTileAtOpen = null;
     render();
   }
 
