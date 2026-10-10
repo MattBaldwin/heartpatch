@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFENSE_TEXT,
   defensePromptFor,
+  defensePromptOver,
   endsDefensePrompt,
   secondsLeft,
 } from './defense-prompt-model.js';
@@ -37,6 +38,7 @@ describe('defense prompt (#29-C)', () => {
       battleId: BATTLE,
       fromUserId: LEE,
       windowMs: 20_000,
+      expiresAtMs: Date.parse('2026-10-10T18:00:20.000Z'),
     });
   });
 
@@ -48,7 +50,7 @@ describe('defense prompt (#29-C)', () => {
     ).toBeNull();
   });
 
-  it('closes on its own answer only', () => {
+  it('closes on its own answer, or when it’s called off, only', () => {
     expect(
       endsDefensePrompt(event('defense.answered', { challengeId: CHALLENGE }), CHALLENGE),
     ).toBe(true);
@@ -56,6 +58,16 @@ describe('defense prompt (#29-C)', () => {
       false,
     );
     expect(endsDefensePrompt(prompted(), CHALLENGE)).toBe(false);
+    // A Keeper leaving the patch calls their asks off (`callOffAsksOf`).
+    expect(
+      endsDefensePrompt(event('challenge.cancelled', { challengeId: CHALLENGE }), CHALLENGE),
+    ).toBe(true);
+  });
+
+  it('is over once any later server time reaches its end (a replay after reconnect)', () => {
+    const info = defensePromptFor(prompted(), ME)!;
+    expect(defensePromptOver(info, Date.parse('2026-10-10T18:00:00.000Z'))).toBe(false);
+    expect(defensePromptOver(info, Date.parse('2026-10-10T18:00:20.000Z'))).toBe(true);
   });
 
   it('counts whole seconds down to zero', () => {

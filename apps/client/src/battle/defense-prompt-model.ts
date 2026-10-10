@@ -24,6 +24,8 @@ export interface DefensePromptInfo {
   fromUserId: string;
   /** How long it had when the server sent it (its `expiresAt` minus the event's time). */
   windowMs: number;
+  /** When it ends on the server's clock (ms), to drop one replayed after it's over. */
+  expiresAtMs: number;
 }
 
 const str = (value: unknown): string | null => (typeof value === 'string' ? value : null);
@@ -40,15 +42,33 @@ export function defensePromptFor(event: WsEventMessage, me: string): DefenseProm
   // Measured on the server's clock both ends, so a phone's own clock can't skew it.
   const windowMs = Date.parse(expiresAt) - Date.parse(event.at);
   if (!Number.isFinite(windowMs) || windowMs <= 0) return null;
-  return { challengeId, battleId, fromUserId, windowMs };
+  return { challengeId, battleId, fromUserId, windowMs, expiresAtMs: Date.parse(expiresAt) };
 }
 
-/** True when `event` says the prompt is over (answered here or elsewhere, expired, called off). */
+/**
+ * True when `event` says the prompt is over: answered here or elsewhere,
+ * expired or called off (`defense.answered`), or gone with a Keeper who left
+ * the patch (`challenge.cancelled`).
+ */
 export function endsDefensePrompt(event: WsEventMessage, challengeId: string): boolean {
-  return event.type === 'defense.answered' && event.data['challengeId'] === challengeId;
+  return (
+    (event.type === 'defense.answered' || event.type === 'challenge.cancelled') &&
+    event.data['challengeId'] === challengeId
+  );
 }
 
 /** Whole seconds left on the card, never below zero. */
 export function secondsLeft(deadlineMs: number, nowMs: number): number {
   return Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000));
+}
+
+/**
+ * Already over by the newest server time an event carried: a prompt replayed
+ * on reconnect after its window, or an open card a later event has passed.
+ */
+export function defensePromptOver(
+  prompt: Pick<DefensePromptInfo, 'expiresAtMs'>,
+  serverAtMs: number,
+): boolean {
+  return serverAtMs >= prompt.expiresAtMs;
 }

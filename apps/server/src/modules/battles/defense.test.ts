@@ -620,4 +620,137 @@ describe.skipIf(!url)('live tile defense (#29-C, needs DATABASE_URL)', () => {
     const prompts = (await eventsOf(mapId)).filter((e) => e.type === 'defense.prompted');
     expect(prompts).toHaveLength(1);
   });
+
+  it('a live defense longer than the leave rule is not a leave while the challenger keeps picking', async () => {
+    const server = await start();
+    const { lee, sam, mapId, near } = await rivals(server);
+    await online(lee, mapId);
+    const samWs = await online(sam, mapId);
+    const started = battleOf(await attack(server, lee, mapId, near));
+    const prompt = await promptOf(samWs);
+    const { battle } = AnswerChallengeResponseSchema.parse(
+      (await answer(server, sam, prompt.challengeId, 'yes')).json(),
+    );
+    // Long turns, so the clock can pass the leave rule without the AI stepping in.
+    const battles = createBattlesService({
+      db,
+      clock: () => clock,
+      tileBattles: createTileBattlePort(),
+      liveRules: { ...LIVE_BATTLE_RULES, turnSeconds: 3600 },
+    });
+    // The first turn's deadline was set by the app's rules: give it the long one too.
+    await db.execute(
+      `update live_battles set deadline_at = '${new Date(clock.getTime() + DAY_MS).toISOString()}' where battle_id = '${uuid(started.id)}'`,
+    );
+    const leeUser = { id: lee.id, username: 'lee' };
+    const samUser = { id: sam.id, username: 'sam' };
+    const half = (TERRITORY_RULES.abandonMinutes / 2 + 1) * 60 * SECOND_MS;
+    expect(battle?.mySide).toBe('b');
+    for (let turn = 0; turn < 2; turn++) {
+      // Lee picks first and waits; Sam's pick plays every turn.
+      const leeView = await battles.get(leeUser, started.id);
+      await battles.act(leeUser, started.id, { action: nextAction(leeView), turn });
+      clock.setTime(clock.getTime() + half);
+      const samView = await battles.get(samUser, started.id);
+      await battles.act(samUser, started.id, { action: nextAction(samView), turn });
+    }
+    const after = await battles.get(leeUser, started.id);
+    expect(after.view.turn).toBe(2);
+    // Over the leave rule since the start, yet never a forfeit.
+    if (after.view.phase.type === 'over') {
+      expect(after.view.phase.result.reason).not.toBe('forfeit');
+    } else {
+      expect(after.status).toBe('active');
+    }
+  });
+
+  it('a defender who got busy since being asked: the challenger stops waiting at once', async () => {
+    const server = await start();
+    const { lee, sam, mapId, near } = await rivals(server);
+    const leeWs = await online(lee, mapId);
+    const samWs = await online(sam, mapId);
+    const started = battleOf(await attack(server, lee, mapId, near));
+    const prompt = await promptOf(samWs);
+    // Sam slips into a wild battle inside the window.
+    const extra = await call(server, 'POST', `/maps/${mapId}/dev/squishies`, sam, {
+      speciesId: 'puddlepuff',
+      level: 5,
+    });
+    expect(extra.statusCode, extra.body).toBe(201);
+    battleOf(
+      await call(server, 'POST', `/maps/${mapId}/dev/battles`, sam, {
+        opponent: { speciesId: 'puddlepuff', level: 2 },
+      }),
+    );
+
+    const busy = await answer(server, sam, prompt.challengeId, 'yes');
+    expect(busy.statusCode).toBe(409);
+    expect((await answeredOf(leeWs)).answer).toBe('called-off');
+    const view = await get(server, lee, started);
+    expect(view.defensePrompt).toBeUndefined();
+    battleOf(await act(server, lee, view, nextAction(view)));
+  });
+
+  it('yes and the challenger giving up at the same moment: exactly one wins, and the record agrees', async () => {
+    const server = await start();
+    const { lee, sam, mapId, near } = await rivals(server);
+    await online(lee, mapId);
+    const samWs = await online(sam, mapId);
+    const started = battleOf(await attack(server, lee, mapId, near));
+    const prompt = await promptOf(samWs);
+    const [yes, gaveUp] = await Promise.all([
+      answer(server, sam, prompt.challengeId, 'yes'),
+      act(server, lee, started, { type: 'forfeit' }),
+    ]);
+    const row = await db.query.challenges.findFirst({
+      where: (t, { eq }) => eq(t.id, prompt.challengeId),
+    });
+    const battleRow = (await createBattlesRepo(db).findBattle(started.id))!;
+    if (yes.statusCode === 200) {
+      // Sam got in first: Lee's give-up then forfeits the live battle (the land holds).
+      expect(row?.status).toBe('accepted');
+      expect(battleRow.setup.b.controller).toEqual({ type: 'player' });
+    } else {
+      expect(yes.statusCode).toBe(409);
+      expect(row?.status).toBe('cancelled');
+      expect(battleRow.setup.b.controller.type).toBe('ai');
+    }
+    expect(gaveUp.statusCode, gaveUp.body).toBe(200);
+    expect(battleRow.status).toBe('finished');
+    expect(replayBattle(defaultBattleContent(), setupOf(battleRow), battleRow.actions)).toEqual(
+      battleRow.state,
+    );
+  });
+
+  it('a second Defend! after taking over hands back the battle, not "Too late!"', async () => {
+    const server = await start();
+    const { lee, sam, mapId, near } = await rivals(server);
+    await online(lee, mapId);
+    const samWs = await online(sam, mapId);
+    const started = battleOf(await attack(server, lee, mapId, near));
+    const prompt = await promptOf(samWs);
+    expect((await answer(server, sam, prompt.challengeId, 'yes')).statusCode).toBe(200);
+    const again = await answer(server, sam, prompt.challengeId, 'yes');
+    expect(again.statusCode, again.body).toBe(200);
+    expect(AnswerChallengeResponseSchema.parse(again.json()).battle?.id).toBe(started.id);
+  });
+
+  it('a challenge called off as no contest while asking takes its prompt with it', async () => {
+    const server = await start();
+    const { lee, sam, mapId, near } = await rivals(server);
+    await online(lee, mapId);
+    const samWs = await online(sam, mapId);
+    const started = battleOf(await attack(server, lee, mapId, near));
+    const prompt = await promptOf(samWs);
+    // As if the content were re-tuned mid-battle (COORDINATOR §9).
+    await db.execute(
+      `update battles set content_hash = 'retuned' where id = '${uuid(started.id)}'`,
+    );
+    expect((await get(server, lee, started)).status).toBe('no-contest');
+    expect((await answeredOf(samWs)).answer).toBe('called-off');
+    const row = await db.query.challenges.findFirst({
+      where: (t, { eq }) => eq(t.id, prompt.challengeId),
+    });
+    expect(row?.status).toBe('cancelled');
+  });
 });

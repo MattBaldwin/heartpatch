@@ -5,6 +5,7 @@ import { defenseApi, type DefenseApi } from './defense-api.js';
 import {
   DEFENSE_TEXT,
   defensePromptFor,
+  defensePromptOver,
   endsDefensePrompt,
   secondsLeft,
   type DefensePromptInfo,
@@ -58,6 +59,12 @@ export function createDefensePrompt(options: DefensePromptOptions): DefensePromp
   let deadline = 0;
   let ticking: unknown = null;
   let working = false;
+  /**
+   * The newest server time any event carried (ms). A prompt replayed on
+   * reconnect that is already over by it is dropped, and an open card
+   * closes once a later event passes its end.
+   */
+  let serverAt = 0;
 
   const title = el('h2', { class: 'defense-title' }, DEFENSE_TEXT.title);
   const who = el('p', { class: 'defense-who', 'data-testid': 'defense-who' });
@@ -161,12 +168,16 @@ export function createDefensePrompt(options: DefensePromptOptions): DefensePromp
     },
     liveEvent: (event) => {
       if (!user) return;
+      const at = Date.parse(event.at);
+      if (Number.isFinite(at)) serverAt = Math.max(serverAt, at);
       const next = defensePromptFor(event, user.id);
       if (next) {
-        open(next);
+        if (!defensePromptOver(next, serverAt)) open(next);
         return;
       }
-      if (prompt && !working && endsDefensePrompt(event, prompt.challengeId)) close();
+      if (!prompt || working) return;
+      if (endsDefensePrompt(event, prompt.challengeId) || defensePromptOver(prompt, serverAt))
+        close();
     },
     get isOpen() {
       return prompt !== null;

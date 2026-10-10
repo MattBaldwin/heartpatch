@@ -683,6 +683,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // A journey's row (#270) right after the battle's lock (step 5b).
     const journeyEvents =
       row.kind === 'journey' ? ((await options.journeys?.noContest(tx, row, at)) ?? []) : [];
+    // A "Defend now?" still waiting goes with it (#29-C, step 9c after the tile).
+    const prompts = createChallengesRepo(tx);
+    const prompt = mayAwaitDefender(row) ? await prompts.defenseFor(row, { lock: true }) : null;
+    const asking = prompt?.status === 'pending' ? prompt : null;
+    if (asking) await prompts.settle(asking.id, { status: 'cancelled', at });
     await createLiveBattlesRepo(tx).end(row.id);
     await repo.finish(row.id, {
       status: 'no-contest',
@@ -709,6 +714,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       },
     });
     for (const event of journeyEvents) await repo.appendEvent(event);
+    if (asking) await repo.appendEvent(defenseAnswered(asking, row.id, 'called-off', null));
   };
 
   /**
@@ -787,9 +793,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    * shown, and a live battle's passed deadlines are settled (`settleLive`).
    * A "Defend now?" prompt past its time expires first (`settleDefense`).
    */
-  const resolved = async (row: BattleRow): Promise<BattleRow> => {
-    if (row.status !== 'active') return row;
-    await settleDefense(row);
+  const resolved = async (seen: BattleRow): Promise<BattleRow> => {
+    if (seen.status !== 'active') return seen;
+    await settleDefense(seen);
+    // The defender may have said yes since `seen` was read: side `b` is theirs now.
+    const row = mayAwaitDefender(seen) ? ((await store.findBattle(seen.id)) ?? seen) : seen;
     const live = await createLiveBattlesRepo(db).find(row.id);
     if (
       row.contentHash === content.contentHash &&
@@ -1108,6 +1116,12 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   ): Promise<boolean> => {
     const liveRepo = createLiveBattlesRepo(tx);
     const intent = request.action;
+    // Any hand-made step by the challenger, a pick that waits for the other
+    // side included, keeps a tile battle from counting as left (#29-C: in a
+    // live defense the defender's pick often plays the turn).
+    if (side === PLAYER_SIDE && intent.type !== 'forfeit' && TILE_BATTLE_KINDS.has(row.kind)) {
+      await options.tileBattles?.acted(tx, row.id, at);
+    }
     // Picking for yourself brings your away-grace back.
     const graceUsed = { ...live.graceUsed, [side]: false };
     let action: BattleAction;
@@ -1196,10 +1210,6 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       await finish(repo, tx, row, actions, state, at);
     } else {
       await repo.saveProgress(row.id, { actions, state });
-      // The challenger's own moves keep a tile battle from counting as left.
-      if (side === PLAYER_SIDE && TILE_BATTLE_KINDS.has(row.kind)) {
-        await options.tileBattles?.acted(tx, row.id, at);
-      }
     }
     await appendTurned(repo, row, live, state.turn);
     return true;
@@ -1644,6 +1654,11 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         if (!row) throw new AppError('NOT_FOUND', MESSAGES.noDefense);
         const challengeRepo = createChallengesRepo(tx);
         const prompt = await challengeRepo.defenseFor(row, { lock: true });
+        // A second "yes" (a double tap) after they took over: the battle again.
+        if (prompt?.status === 'accepted' && answer === 'yes') {
+          const live = await createLiveBattlesRepo(tx).find(row.id);
+          if (live?.bUserId === user.id) return 'answered' as const;
+        }
         if (prompt?.status !== 'pending') return 'gone' as const;
         const at = now();
         // Too late, or the battle can't start over with them (it ended, or
@@ -1661,7 +1676,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           await repo.appendEvent(defenseAnswered(prompt, row.id, 'not-now', user.id));
           return 'answered' as const;
         }
-        if (await repo.findActive(mapId, user.id)) throw new AppError('CONFLICT', MESSAGES.busy);
+        if (await repo.findActive(mapId, user.id)) {
+          // Busy since they were asked: the defense style keeps it, and the
+          // challenger stops waiting now rather than at the window's end.
+          await challengeRepo.settle(prompt.id, { status: 'cancelled', at });
+          await repo.appendEvent(defenseAnswered(prompt, row.id, 'called-off', null));
+          return 'busy' as const;
+        }
         // Side `b` becomes theirs before anyone moved: the starting state is
         // rebuilt from the same seed and setup with a player there, so
         // `replayBattle(setup, actions)` still gives every state (rule 3).
@@ -1700,6 +1721,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       });
       published(mapId);
       if (outcome === 'gone') throw new AppError('CONFLICT', MESSAGES.defenseGone);
+      if (outcome === 'busy') throw new AppError('CONFLICT', MESSAGES.busy);
       const challenge = (await prompts.find(challengeId)) ?? asked;
       if (answer === 'not-now') return { challenge, battle: null };
       const row = await store.findBattle(battleId);

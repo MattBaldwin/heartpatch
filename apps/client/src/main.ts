@@ -783,8 +783,10 @@ const defense = createDefensePrompt({
   root: document.body,
   nameOf: (userId) => maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
   openBattle: (battle) => {
+    // The server has seated them already: whatever is open steps aside.
     catalog.close();
     care.close();
+    closeUp.close();
     battles.open(battle);
   },
 });
