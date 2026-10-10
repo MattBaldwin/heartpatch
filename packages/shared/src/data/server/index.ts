@@ -6,8 +6,12 @@
 import type { ServerGameData } from '../../schemas/data/server-game-data.js';
 import { SECRET_EVOLUTIONS, SECRET_MOVES, SECRET_SPECIES } from './secret-species.js';
 import { SPAWN_TABLES } from './spawn-tables.js';
+import { EVOLUTION_ODDS } from './evolution-rules.js';
 
 export * from '../../schemas/data/server-game-data.js';
+export * from '../../schemas/data/evolution-odds.js';
+export * from '../../evolution/index.js';
+export { EVOLUTION_ODDS, EVOLUTION_RULES } from './evolution-rules.js';
 export * from '../../schemas/data/spawn-tables.js';
 export * from '../../schemas/data/spawn-rules.js';
 export * from '../../spawns/resolve.js';
@@ -38,4 +42,5 @@ export const SERVER_GAME_DATA: ServerGameData = {
   secretSpecies: SECRET_SPECIES,
   secretMoves: SECRET_MOVES,
   secretEvolutions: SECRET_EVOLUTIONS,
+  evolutionOdds: EVOLUTION_ODDS,
 };
