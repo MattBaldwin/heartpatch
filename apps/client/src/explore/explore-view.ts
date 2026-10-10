@@ -28,6 +28,9 @@ export const EXPLORE_TEXT = {
   back: 'Back',
   /** Under the joystick (#291). */
   walkHint: 'Or drag anywhere, or tap to walk',
+  /** Sprout's one-time tip after the tools were renamed (#335, owner decision 2026-10-09). */
+  renamedTip: '🌱 Your Net is a Snorkel now, and your Rope a Walking Stick!',
+  renamedTipExtra: 'Same uses, more adventures.',
   /** The big button with nothing in front of the Keeper. */
   nothingNear: 'Find a glint',
   allDone: 'All found!',

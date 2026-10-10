@@ -3,7 +3,6 @@ import { Material } from '@babylonjs/core/Materials/material';
 import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { CreatePickingRay } from '@babylonjs/core/Culling/ray.core';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
-import { Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Viewport } from '@babylonjs/core/Maths/math.viewport';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
@@ -26,6 +25,8 @@ import {
   type WorldPoint,
 } from '@heartpatch/shared';
 import type { SceneContent } from '../engine/stage.js';
+import { ExploreSky, type ExploreSkyStats } from './explore-sky.js';
+import type { SkyLook } from './explore-sky-look.js';
 import { spotWorld } from '../home/home-layout.js';
 import {
   FALLBACK_LOOK,
@@ -126,6 +127,8 @@ export interface ExploreSceneStats {
   readonly faded: readonly number[];
   /** The Keeper's height on screen, as a share of the canvas's height (0: not on screen). */
   readonly keeperHeight: number;
+  /** The sky's pieces (#335). */
+  readonly sky: ExploreSkyStats;
 }
 
 export interface ExploreSceneOptions {
@@ -137,6 +140,8 @@ export interface ExploreSceneOptions {
   readonly team: readonly { readonly id: string; readonly species: Species }[];
   /** The tile as the map knows it: its buildings. */
   readonly mapTile: PublicTile | null;
+  /** The sky at the patch's time of day (#335). */
+  readonly sky: SkyLook;
   /** Reduce Motion: the Keeper and the team bob instead of hopping (#317). Default off. */
   readonly reducedMotion?: () => boolean;
 }
@@ -283,13 +288,15 @@ export class ExploreScene {
   #lit = false;
   #camera: FollowCamera;
   #lastStep: number | null = null;
+  readonly #sky: ExploreSky;
   #drawCalls = 0;
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
     this.#tile = tile;
     this.#reduced = options.reducedMotion ?? (() => false);
-    scene.clearColor = new Color4(0.992, 0.91, 0.941, 1);
+    // The sky by the patch's time of day (#335); it sets the clear colour too.
+    this.#sky = new ExploreSky(scene, options.sky);
     this.#instrumentation = new SceneInstrumentation(scene);
     const look = TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
     const h = look.height;
@@ -449,6 +456,7 @@ export class ExploreScene {
       drawCalls: this.#drawCalls,
       faded: [...this.#hiding].sort((a, b) => a - b),
       keeperHeight: this.#keeperHeight(),
+      sky: this.#sky.stats,
     };
   }
 
@@ -559,7 +567,7 @@ export class ExploreScene {
     this.#lit = spot !== null && lit;
   }
 
-  /** One swing of the tool (a scoop, a shake, a step up the rope) and a little jiggle. */
+  /** One swing of the tool (a scoop, a shake, a step up the trail) and a little jiggle. */
   useTool(now: number): void {
     this.#swingAt = now;
     if (this.#keeper) this.#keepers.play(this.#keeper, 'jiggle', now, EXPLORE_TOOL.jiggle);
@@ -758,6 +766,12 @@ export class ExploreScene {
     // Yaw 0: looking towards +z, down by `pitch`.
     camera.position.set(tx, ty + Math.sin(pitch) * d, tz - Math.cos(pitch) * d);
     camera.setTarget(this.#lookAt.set(tx, ty, tz));
+    this.#sky.follow(camera.position, pitch);
+  }
+
+  /** A new sky (the screen checks the time once a minute, #335). */
+  setSky(look: SkyLook): void {
+    this.#sky.set(look);
   }
 
   /** The held tool at the Keeper's hand, following its position and heading. */
