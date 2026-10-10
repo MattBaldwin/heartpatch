@@ -135,6 +135,8 @@ export interface CareRepo {
       /** Its feeling lean brought up to now (#32). */
       feelingLean?: Record<string, number>;
       feelingLeanAt?: Date;
+      /** Habitat time is folded into the lean up to here (#32). */
+      habitatSince?: Date;
     },
   ) => Promise<void>;
   /** A full-value care action's lean and care-history sample (#32). */
@@ -143,6 +145,7 @@ export interface CareRepo {
     history: {
       feelingLean: Record<string, number>;
       feelingLeanAt: Date;
+      habitatSince?: Date;
       careSum: number;
       careSamples: number;
     },
@@ -150,7 +153,7 @@ export interface CareRepo {
   /** Writes a squishy's feeling lean, brought up to `feelingLeanAt` (#32). */
   setLean: (
     squishyId: string,
-    lean: { feelingLean: Record<string, number>; feelingLeanAt: Date },
+    lean: { feelingLean: Record<string, number>; feelingLeanAt: Date; habitatSince?: Date },
   ) => Promise<void>;
   /** A player's logged evolution rolls, newest first (#32 pity). */
   rollsOf: (userId: string, limit: number) => Promise<{ into: string; roll: unknown }[]>;

@@ -41,7 +41,6 @@ import {
   type Species,
   type StartRescueRequest,
 } from '@heartpatch/shared';
-import { addNightWatchLean } from '../care/evolution.js';
 import {
   RESCUE_GUARDIANS,
   resolveRescueGuardians,
@@ -54,6 +53,7 @@ import { instantOfLocal, localDate, mapLocalTime, MINUTE_MS, type Clock } from '
 import type { BattlesService, StartResult } from '../battles/service.js';
 import { createBuildingsRepo } from '../buildings/repo.js';
 import { litSafeTiles } from '../buildings/hearthfire.js';
+import { addNightWatchLean } from '../care/evolution.js';
 import { grantItems } from '../inventory/service.js';
 import { createCareRepo } from '../care/repo.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
@@ -363,11 +363,13 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       squishyRows.some((s) => s.id === t.squishyId && s.postOwnerUserId !== undefined),
     );
     await repo.leavePosts(guards.map((t) => t.squishyId));
-    // Everyone who stood watch tonight leans a little Spooky (#32), taken or not.
+    // Everyone really standing watch tonight (active, on its owner's land)
+    // leans a little Spooky (#32), taken or not.
     await addNightWatchLean(
       tx,
       squishyRows
-        .filter((s) => s.postOwnerUserId !== undefined && s.post !== null)
+        .map(asNight)
+        .filter((s) => s.post !== null && isOnWatch(s, s.post))
         .map((s) => s.id),
       at,
     );

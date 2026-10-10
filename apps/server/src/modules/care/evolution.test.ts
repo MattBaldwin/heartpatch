@@ -1,9 +1,11 @@
 import {
+  CARE_RULES,
   CareListResponseSchema,
   CareResponseSchema,
   GAME_DATA,
   GROWTH_RULES,
   MapResponseSchema,
+  deriveSeed,
   xpForLevel,
 } from '@heartpatch/shared';
 import { EVOLUTION_RULES, SERVER_GAME_DATA, rollEvolution } from '@heartpatch/shared/server';
@@ -146,7 +148,7 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
   const grow = (id: string, levels = 1, won = false) =>
     withTransaction(db, async (tx) => {
       const row = await createCareRepo(tx).findSquishy(id);
-      const need = xpForLevel(row!.level + levels, GROWTH_RULES) - row!.xp;
+      const need = Math.max(1, xpForLevel(row!.level + levels, GROWTH_RULES) - row!.xp);
       return applyXp(tx, id, need, clock, { plain: true, won });
     });
 
@@ -154,6 +156,27 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
     (await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, id) }))!;
   const evolutionsOf = (id: string) =>
     db.query.squishyEvolutions.findMany({ where: (t, { eq }) => eq(t.squishyId, id) });
+
+  /** A logged roll from `daysAgo` for `who`: into `into`, missing `missed`. */
+  async function logRoll(
+    mapId: string,
+    who: Player,
+    into: string,
+    missed: string[],
+    daysAgo: number,
+  ) {
+    const old = await squishy(mapId, who, { speciesId: into, element: DEFAULT.element });
+    await db.insert(squishyEvolutions).values({
+      mapId,
+      squishyId: old,
+      userId: who.id,
+      fromSpeciesId: BASE.id,
+      intoSpeciesId: into,
+      level: STEP.level,
+      evolvedAt: new Date(Date.parse(START) - daysAgo * DAY_MS),
+      roll: { aimedMisses: missed },
+    });
+  }
 
   /** Lean so strong one feeling always wins. */
   const leaning = (feeling: string) => ({
@@ -186,6 +209,20 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
     expect(old).toMatchObject({ userId: null, branch: false, roll: null });
   });
 
+  it('rolls for a squishy from before #32 that is already past its level, on its next XP', async () => {
+    const server = await start();
+    const who = await player();
+    const mapId = await newMap(server, who);
+    const level = STEP.level + 2;
+    const id = await squishy(mapId, who, { level, xp: xpForLevel(level, GROWTH_RULES) });
+    const growth = await grow(id, 0);
+    expect(growth?.evolutions).toHaveLength(1);
+    const [row] = await evolutionsOf(id);
+    expect([DEFAULT.id, BRANCH.id]).toContain(row!.intoSpeciesId);
+    expect(row).toMatchObject({ userId: who.id, level });
+    expect((row!.roll as unknown as LoggedRoll).pick).toBe(row!.intoSpeciesId);
+  });
+
   it('rolls a branching step, logs the roll and replays it to the same pick', async () => {
     const server = await start();
     const who = await player();
@@ -214,6 +251,8 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
     );
     expect(replay.pick).toBe(roll.pick);
     expect(replay.u).toBe(roll.u);
+    // One roll per squishy and step: the seed is the salt (the dev salt in tests), the squishy and its step.
+    expect(roll.seed).toBe(deriveSeed('heartpatch-dev-evolution-salt', id, BASE.id, STEP.level));
 
     // The event says whether it's a branch; the default form keeps its own feeling,
     // a branch form takes the branch's.
@@ -227,17 +266,7 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
     const who = await player();
     const mapId = await newMap(server, who);
     for (let i = 0; i < EVOLUTION_RULES.pity.guaranteeAfter; i++) {
-      const old = await squishy(mapId, who, { speciesId: DEFAULT.id, element: DEFAULT.element });
-      await db.insert(squishyEvolutions).values({
-        mapId,
-        squishyId: old,
-        userId: who.id,
-        fromSpeciesId: BASE.id,
-        intoSpeciesId: DEFAULT.id,
-        level: STEP.level,
-        evolvedAt: new Date(Date.parse(START) - (i + 1) * DAY_MS),
-        roll: { aimedMisses: [BRANCH.id] },
-      });
+      await logRoll(mapId, who, DEFAULT.id, [BRANCH.id], i + 1);
     }
     const id = await squishy(mapId, who, leaning(BRANCH_FEELING));
     const growth = await grow(id);
@@ -248,6 +277,26 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
     expect((row!.roll as unknown as LoggedRoll).inputs.pity).toEqual({
       [BRANCH.id]: EVOLUTION_RULES.pity.guaranteeAfter,
     });
+    // A branch form takes the branch's feeling (owner decision 2026-10-10).
+    expect((await rowOf(id)).feeling).toBe(BRANCH.feeling);
+  });
+
+  it("counts only this player's misses, and starts over once they get the branch", async () => {
+    const server = await start();
+    const [who, other] = [await player(), await player()];
+    const mapId = await newMap(server, who);
+    // Someone else's misses (on their own patch) never count.
+    const theirMap = await newMap(server, other);
+    await logRoll(theirMap, other, DEFAULT.id, [BRANCH.id], 3);
+    await logRoll(theirMap, other, DEFAULT.id, [BRANCH.id], 2);
+    // Two old misses of mine, then I got it: the count starts over.
+    await logRoll(mapId, who, DEFAULT.id, [BRANCH.id], 5);
+    await logRoll(mapId, who, DEFAULT.id, [BRANCH.id], 4);
+    await logRoll(mapId, who, BRANCH.id, [], 1);
+    const id = await squishy(mapId, who, leaning(BRANCH_FEELING));
+    await grow(id);
+    const [row] = await evolutionsOf(id);
+    expect((row!.roll as unknown as LoggedRoll).inputs.pity).toEqual({});
   });
 
   it('never rolls a step with one form', async () => {
@@ -294,6 +343,17 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
     );
     expect(after.careSamples).toBe(1);
     expect(after.careSum).toBeGreaterThan(0);
+
+    // Only full-value care counts: once the day's full care is used, pets change nothing.
+    for (let i = 1; i <= CARE_RULES.fullActionsPerDay; i++) {
+      clock.setTime(clock.getTime() + 11_000);
+      const more = await call(server, 'POST', `/maps/${mapId}/squishies/${id}/care`, who, {
+        action: 'pet',
+      });
+      expect(more.statusCode, more.body).toBe(200);
+    }
+    const tired = await rowOf(id);
+    expect(tired.careSamples).toBe(CARE_RULES.fullActionsPerDay);
 
     await grow(id, 1, true);
     const won = await rowOf(id);

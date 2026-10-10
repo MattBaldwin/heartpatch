@@ -524,9 +524,9 @@ export const squishies = pgTable(
     habitatBuildingId: uuid('habitat_building_id').references(() => buildings.id, {
       onDelete: 'set null',
     }),
-    // When it moved into that habitat (#32), for the habitat's share of its
-    // feeling lean; null with no habitat or for the previous release's rows
-    // (their habitat time counts from the next lean update).
+    // Its habitat's share of its feeling lean (#32) is folded in up to here:
+    // set on moving in and on every lean write while housed; null with no
+    // habitat. The migration starts it for squishies already housed.
     habitatSince: timestamptz('habitat_since'),
     // How it has been feeling lately (#32): points per feeling at
     // `feeling_lean_at`, halving over time (shared `leanAt`, worked out on
@@ -1731,7 +1731,8 @@ export const squishyEvolutions = pgTable(
     seenAt: timestamptz('seen_at'),
     // Branching evolution (#32). The owner when it evolved, for their pity;
     // null on rows from before #32, which never count toward pity.
-    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    // `set null`: a traded squishy's history stays with it when its old owner goes.
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
     // It grew into a branch form, not its step's default.
     branch: boolean('branch').notNull().default(false),
     // The logged roll (shared `EvolutionRoll` plus the content hash), so a

@@ -26,6 +26,7 @@ import {
   type FeelingLean,
   type Whisper,
 } from '@heartpatch/shared/server';
+import { z } from 'zod';
 import type { Executor } from '../../db/client.js';
 import { mapLocalTime } from '../../lib/time.js';
 import { arenaTimeOfDay } from '../battles/arena.js';
@@ -76,6 +77,7 @@ export interface LeanRow {
   readonly feelingLean: Readonly<Record<string, number>>;
   readonly feelingLeanAt: Date | null;
   readonly habitatSince: Date | null;
+  readonly habitatBuildingId: string | null;
 }
 
 /**
@@ -101,9 +103,18 @@ export function leanOf(row: LeanRow, habitat: HabitatTags | null, at: Date): Fee
   return lean;
 }
 
-/** The lean columns to write for `lean` (it has been brought up to `at`). */
-export function leanColumns(lean: FeelingLean, at: Date) {
-  return { feelingLean: { ...lean.points }, feelingLeanAt: lean.at ?? at };
+/**
+ * The lean columns to write for `lean`, brought up to `at`. A housed
+ * squishy's habitat time is folded in up to `at` too, so it counts on from
+ * there; that also starts the count for one housed before #32, whose
+ * `habitat_since` was never set.
+ */
+export function leanColumns(lean: FeelingLean, at: Date, housed: boolean) {
+  return {
+    feelingLean: { ...lean.points },
+    feelingLeanAt: lean.at ?? at,
+    ...(housed ? { habitatSince: at } : {}),
+  };
 }
 
 /** Feeling points for one care action at full value (none for a lesser one). */
@@ -127,7 +138,7 @@ export async function addLeanTo(
 ): Promise<void> {
   for (const row of rows) {
     const lean = addLean(leanOf(row, row.habitat, at), feeling, points, at, EVOLUTION_RULES);
-    await createCareRepo(tx).setLean(row.id, leanColumns(lean, at));
+    await createCareRepo(tx).setLean(row.id, leanColumns(lean, at, row.habitatBuildingId !== null));
   }
 }
 
@@ -176,13 +187,16 @@ async function pityFor(
     let misses = 0;
     for (const row of rows) {
       if (row.into === branch) break;
-      const missed = (row.roll as { aimedMisses?: unknown } | null)?.aimedMisses;
-      if (Array.isArray(missed) && missed.includes(branch)) misses += 1;
+      const missed = LoggedMissesSchema.safeParse(row.roll).data?.aimedMisses ?? [];
+      if (missed.includes(branch)) misses += 1;
     }
     if (misses > 0) pity[branch] = misses;
   }
   return pity;
 }
+
+/** The part of a logged roll pity reads; a row that doesn't parse counts no misses. */
+const LoggedMissesSchema = z.object({ aimedMisses: z.array(z.string()) });
 
 /** Enough logged rolls to see past any pity count (it's certain after a few). */
 const PITY_LOOKBACK = 200;
@@ -273,7 +287,7 @@ export async function foldHabitatLean(tx: Executor, squishyId: string, at: Date)
   const habitat = BUILDING_DATA.get(buildingId ?? '');
   if (habitat?.kind !== 'habitat') return;
   const lean = leanOf(row, habitat.tags, at);
-  await repo.setLean(squishyId, leanColumns(lean, at));
+  await repo.setLean(squishyId, leanColumns(lean, at, true));
 }
 
 /**

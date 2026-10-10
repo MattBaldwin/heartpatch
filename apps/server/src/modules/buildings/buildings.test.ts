@@ -14,6 +14,7 @@ import {
   type MapView,
   type MyBuilding,
 } from '@heartpatch/shared';
+import { EVOLUTION_RULES, habitatLeanPoints } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -1144,8 +1145,19 @@ describe.skipIf(!url)('buildings (needs DATABASE_URL)', () => {
       expect((await house(kid, theirs, den.id)).statusCode).toBe(404);
       expect((await house(friend, pals[0]!, den.id)).statusCode).toBe(404);
 
+      // A day in the Ember Den (cozy) leans it Cozy once it moves out (#32).
+      clock.setTime(clock.getTime() + 24 * 60 * 60 * 1000);
       const out = await house(kid, pals[0]!, null);
       expect(out.statusCode).toBe(200);
+      const movedOut = (await db.query.squishies.findFirst({
+        where: (t, { eq }) => eq(t.id, pals[0]!),
+      }))!;
+      // Its own Cozy head start (6) fades for a day, plus the day's habitat points.
+      expect(movedOut.feelingLean['cozy']).toBeCloseTo(
+        5.045 + habitatLeanPoints(24, EVOLUTION_RULES),
+        2,
+      );
+      expect(movedOut.habitatSince).toBeNull();
       expect(
         HomeResponseSchema.parse(out.json()).buildings.find((b) => b.id === den.id),
       ).toMatchObject({ residents: 2 });

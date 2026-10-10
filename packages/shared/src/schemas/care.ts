@@ -30,7 +30,7 @@ export const EvolvingMeterSchema = z.strictObject({
  * evolution, as a finished kid-readable line. It never names a form or a
  * chance; the rules behind it stay on the server (CLAUDE.md rule 6).
  */
-export const CareWhisperSchema = z.object({
+export const CareWhisperSchema = z.strictObject({
   icon: z.string().min(1).max(8),
   text: z.string().min(1).max(160),
   sub: z.string().min(1).max(160).optional(),
