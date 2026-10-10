@@ -2,14 +2,6 @@
    chat sheet's; the ask a friend sent sits in the middle, over any screen.
    Big targets (44pt+), safe areas, text never touches a control's edge. */
 
-/* Short and wide (the tray's two columns, trays.css #136): Friends leads its
-   column, so every row stays above the fold; same query as the tray's. */
-@media (max-height: 520px) and (min-width: 640px) {
-  .tray-section > .friendly-open {
-    order: -1;
-  }
-}
-
 .friendly-open[hidden],
 .friendly-sheet[hidden],
 .friendly-ask[hidden],

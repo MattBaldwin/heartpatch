@@ -2,7 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { visitPatch } from './players.js';
 import { grantSquishy, twoTraders } from './trading.js';
-import { openTray } from './trays.js';
 
 // Friendly battles (#29): two Keepers on one patch, each in their own
 // browser. "Battle me?" → "Battle!", then a live battle played from both
@@ -41,7 +40,7 @@ const friendlyState = (page: Page) => hook<FriendlyDebug>(page, 'friendly');
 
 /** Lee asks Sam "Battle me?" from the Friends sheet; Sam says "Battle!". Both end up in it. */
 async function startFriendly(lee: Page, sam: Page, samName: string): Promise<string> {
-  await openTray(lee, 'adventure', (h) => h.tap());
+  // The Friends button sits beside Chat, top right.
   await lee.getByTestId('friendly-open').tap();
   const row = lee.getByTestId('friendly-list').locator('li', { hasText: samName });
   // Sam's app is open on the patch: Sam shows as here.

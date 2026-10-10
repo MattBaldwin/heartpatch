@@ -24,7 +24,7 @@ import './friendly.css';
 
 export interface FriendlyScreenOptions {
   root: HTMLElement;
-  /** Where the Friends button goes (a tray over the map); defaults to `root`. */
+  /** Where the Friends button goes (the top-right corner, beside Chat); defaults to `root`. */
   entryRoot?: HTMLElement;
   api?: FriendlyApi;
   battles?: Pick<typeof battleApi, 'get'>;
@@ -92,14 +92,17 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
     'A friend';
 
   // ── Entry button ──────────────────────────────────────────────────────
+  // A round corner button beside Chat, like it: the word is for VoiceOver.
   const openButton = el(
     'button',
     {
       type: 'button',
-      class: 'auth-button auth-button-soft auth-button-small friendly-open',
+      class: 'friendly-open',
       'data-testid': 'friendly-open',
+      'aria-label': FRIENDLY_TEXT.open,
     },
-    FRIENDLY_TEXT.open,
+    el('span', { class: 'friendly-open-icon', 'aria-hidden': 'true' }, '🤝'),
+    el('span', { class: 'friendly-open-label' }, FRIENDLY_TEXT.open),
   );
   openButton.hidden = true;
   openButton.addEventListener('click', () => {
