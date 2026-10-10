@@ -22,7 +22,8 @@ export interface OpenSheet {
   readonly rect: Rect;
 }
 
-function boxOf(element: Element): { box: Rect; element: HTMLElement } | null {
+/** Where `element` shows on screen, or null when it's hidden, shut (inert), or empty. */
+export function boxOf(element: Element): { box: Rect; element: HTMLElement } | null {
   if (!(element instanceof HTMLElement) || element.hidden || !element.isConnected) return null;
   if (element.closest('[hidden]') || element.closest('[inert]')) return null;
   const style = getComputedStyle(element);

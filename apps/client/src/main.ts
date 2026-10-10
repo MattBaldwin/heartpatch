@@ -529,6 +529,7 @@ const explore = createExploreScreen({
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
   mapTile: (at) => maps.view?.tiles.find((t) => t.q === at.q && t.r === at.r) ?? null,
+  timeZone: () => maps.view?.map.timeZone ?? null,
   isGlade: (mapId) => mapId === glade,
   onOpen: () => {
     maps.close();
