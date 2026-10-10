@@ -7,6 +7,7 @@ import type {
   WsEventMessage,
 } from '@heartpatch/shared';
 import { battleApi } from '../battle/battle-api.js';
+import { GameClock } from '../inventory/game-clock.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { el, messageOf } from '../ui/dom.js';
@@ -69,7 +70,9 @@ const LIST_REFRESH_MS = 10_000; // TUNE: presence changes as phones sleep and wa
 export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlyScreen {
   const api = options.api ?? friendlyApi;
   const battles = options.battles ?? battleApi;
-  const now = options.now ?? (() => Date.now());
+  // The ask's bar runs on the server's game clock (each look syncs it), not the phone's.
+  const clock = new GameClock(options.now);
+  const now = () => clock.now();
   let user: PublicUser | null = null;
   let mapId: string | null = null;
   let view: ChallengesResponse | null = null;
@@ -444,6 +447,7 @@ export function createFriendlyScreen(options: FriendlyScreenOptions): FriendlySc
     try {
       const next = await api.view(id);
       if (at !== ticket) return;
+      clock.sync(next.now);
       view = next;
       incoming = next.incoming[0] ?? null;
       if (mode.type === 'waiting') {

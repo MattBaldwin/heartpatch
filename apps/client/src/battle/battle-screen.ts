@@ -24,7 +24,7 @@ import { inventoryApi } from '../inventory/inventory-api.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
-import { formatWait } from '../inventory/game-clock.js';
+import { formatWait, GameClock } from '../inventory/game-clock.js';
 import { el, messageOf } from '../ui/dom.js';
 import { battleApi } from './battle-api.js';
 import { nearbyNote, tilesToMark } from './wild-pick.js';
@@ -73,6 +73,8 @@ import {
   coveredSince,
   LIVE_TEXT,
   liveTurnInfo,
+  ringSpan,
+  type RingSpan,
 } from './live-turn.js';
 
 // The battle screen (#13): starts or resumes a PvE battle, draws it, plays the
@@ -320,6 +322,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let liveBar: LiveBar | null = null;
   let liveTick = 0;
   let liveDue = 0;
+  /** Game time, synced from each live view's `now`: deadlines are the server's, not the phone's. */
+  const liveClock = new GameClock();
+  /** The ring's full length for the deadline on screen. */
+  let liveSpan: RingSpan | null = null;
   /** Sprout's note on the bar, as shown (the dev hook reads it). */
   let liveNote: string | null = null;
   /** A live update arrived while the log played: look again once it settles. */
@@ -879,7 +885,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       liveTick = 0;
       return;
     }
-    const info = liveTurnInfo(b, Date.now(), LIVE_BATTLE_RULES.turnSeconds * 1000);
+    const info = liveInfo(b);
     if (!info) return;
     const names = content;
     const name = opponentName(b);
@@ -905,12 +911,24 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     liveDue = 0;
     const b = battle;
     if (!b?.live || b.status !== 'active') return;
+    liveClock.sync(b.live.now);
     liveTick = window.setInterval(drawLive, 500);
-    const deadline = b.live.deadlineAt ? Date.parse(b.live.deadlineAt) : NaN;
-    if (Number.isFinite(deadline)) {
-      // A little after the deadline, so the server has passed it too.
-      liveDue = window.setTimeout(refreshLive, Math.max(0, deadline - Date.now()) + 700);
+    if (b.live.deadlineAt !== null) {
+      // A little after the deadline (game time), so the server has passed it too.
+      liveDue = window.setTimeout(refreshLive, liveClock.msUntil(b.live.deadlineAt) + 700);
     }
+  }
+
+  /** The live bar's numbers on game time; the ring spans the deadline on screen. */
+  function liveInfo(b: PlayerBattle): ReturnType<typeof liveTurnInfo> {
+    const at = liveClock.now();
+    liveSpan = ringSpan(
+      liveSpan,
+      b.live?.deadlineAt ?? null,
+      at,
+      LIVE_BATTLE_RULES.turnSeconds * 1000,
+    );
+    return liveTurnInfo(b, at, liveSpan?.ms ?? LIVE_BATTLE_RULES.turnSeconds * 1000);
   }
 
   /** Looks at a live battle again: the other Keeper picked, a turn played, or time ran out. */
@@ -1184,6 +1202,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     liveNote = null;
     liveStale = false;
     opponentLabel = null;
+    liveSpan = null;
     if (next.live && !replay) {
       learnOpponent(next);
       liveBar = mountLiveBar(hud.liveSlot, {
@@ -1348,9 +1367,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           ? {
               picked: battle.live.myPick !== null,
               theyPicked: battle.live.opponentPicked,
-              secondsLeft:
-                liveTurnInfo(battle, Date.now(), LIVE_BATTLE_RULES.turnSeconds * 1000)
-                  ?.secondsLeft ?? null,
+              secondsLeft: liveInfo(battle)?.secondsLeft ?? null,
               covered: battle.live.covered.filter((c) => c.side === battle?.mySide).length,
               note: liveNote,
             }

@@ -53,8 +53,9 @@ export interface LiveTurnInfo {
 }
 
 /**
- * The live bar for `battle` at `nowMs` (device clock). `turnMs` is the turn
- * length, for the ring. Null for a battle that isn't live.
+ * The live bar for `battle` at `nowMs` (the game clock, synced from the
+ * view's `now`). `turnMs` is the ring's full length. Null for a battle that
+ * isn't live.
  */
 export function liveTurnInfo(
   battle: Pick<PlayerBattle, 'live' | 'view' | 'mySide' | 'status'>,
@@ -75,6 +76,28 @@ export function liveTurnInfo(
     theyPicked: live.opponentPicked,
     theyAway: !live.opponentHere,
   };
+}
+
+/** The ring's full length for one deadline: when it was first seen. */
+export interface RingSpan {
+  deadlineAt: string;
+  ms: number;
+}
+
+/**
+ * The ring's full length for the deadline on screen. A new deadline starts a
+ * new ring: the turn's length, or longer when more time is left than a turn
+ * (Sprout waiting out an away-grace). The same deadline keeps its ring.
+ */
+export function ringSpan(
+  previous: RingSpan | null,
+  deadlineAt: string | null,
+  nowMs: number,
+  turnMs: number,
+): RingSpan | null {
+  if (deadlineAt === null) return null;
+  if (previous?.deadlineAt === deadlineAt) return previous;
+  return { deadlineAt, ms: Math.max(turnMs, Date.parse(deadlineAt) - nowMs) };
 }
 
 /** Turns the AI picked for `side` that came after `afterTurn` (new since the last look). */

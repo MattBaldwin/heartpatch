@@ -1,6 +1,7 @@
 import { findAvoidedWords, type PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { clockText, coveredSince, LIVE_TEXT, liveTurnInfo } from './live-turn.js';
+import { GameClock } from '../inventory/game-clock.js';
+import { clockText, coveredSince, LIVE_TEXT, liveTurnInfo, ringSpan } from './live-turn.js';
 
 const NOW = Date.parse('2026-10-10T12:00:00.000Z');
 const TURN_MS = 30_000;
@@ -22,6 +23,7 @@ function battle(
       opponentPicked: false,
       opponentHere: true,
       covered: [],
+      now: new Date(NOW).toISOString(),
       ...patch,
     },
   };
@@ -70,6 +72,30 @@ describe('live turns on screen (#29)', () => {
     });
     expect(coveredSince(b, 'b', 2)).toEqual([4]);
     expect(coveredSince(b, 'b', -1)).toEqual([2, 4]);
+  });
+
+  it("runs on the game clock, whatever the phone's own clock says", () => {
+    const b = battle();
+    // A phone a day ahead of the server, and one three weeks behind (HP_DEV_NOW at Halloween).
+    for (const skew of [86_400_000, -21 * 86_400_000]) {
+      const clock = new GameClock(() => NOW + skew);
+      clock.sync(b.live!.now);
+      expect(liveTurnInfo(b, clock.now(), TURN_MS)?.secondsLeft).toBe(18);
+      // The look-again waits for the real deadline, not a day or three weeks.
+      expect(clock.msUntil(b.live!.deadlineAt!)).toBe(18_000);
+    }
+  });
+
+  it("the ring spans one deadline: a turn's length, or a longer away-grace", () => {
+    const deadline = new Date(NOW + 18_000).toISOString();
+    const span = ringSpan(null, deadline, NOW, TURN_MS)!;
+    expect(span.ms).toBe(TURN_MS);
+    // The same deadline keeps its ring as time goes by.
+    expect(ringSpan(span, deadline, NOW + 10_000, TURN_MS)).toBe(span);
+    // Sprout waits out an away-grace: more left than a turn, so the ring is that long.
+    const grace = new Date(NOW + 80_000).toISOString();
+    expect(ringSpan(span, grace, NOW, TURN_MS)?.ms).toBe(80_000);
+    expect(ringSpan(span, null, NOW, TURN_MS)).toBeNull();
   });
 
   it('formats the away clock', () => {

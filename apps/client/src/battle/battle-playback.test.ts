@@ -132,6 +132,7 @@ describe('playbackSteps', () => {
       kind: 'friendly',
       live: {
         opponentHere: true,
+        now: '2026-10-10T12:00:00.000Z',
         opponentUserId: '00000000-0000-7000-8000-00000000000b',
         deadlineAt: null,
         myPick: null,
