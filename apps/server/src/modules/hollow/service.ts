@@ -41,6 +41,7 @@ import {
   type Species,
   type StartRescueRequest,
 } from '@heartpatch/shared';
+import { addNightWatchLean } from '../care/evolution.js';
 import {
   RESCUE_GUARDIANS,
   resolveRescueGuardians,
@@ -362,6 +363,14 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       squishyRows.some((s) => s.id === t.squishyId && s.postOwnerUserId !== undefined),
     );
     await repo.leavePosts(guards.map((t) => t.squishyId));
+    // Everyone who stood watch tonight leans a little Spooky (#32), taken or not.
+    await addNightWatchLean(
+      tx,
+      squishyRows
+        .filter((s) => s.postOwnerUserId !== undefined && s.post !== null)
+        .map((s) => s.id),
+      at,
+    );
     // One `defenders.changed` per tile whose guards changed, as posting and
     // jobs send, so every map shows the watch as it now stands.
     const takenIds = new Set(taken.map((t) => t.squishyId));

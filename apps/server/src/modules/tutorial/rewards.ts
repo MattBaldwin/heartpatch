@@ -52,10 +52,12 @@ const speciesById = new Map(GAME_DATA.species.map((s) => [s.id, s]));
  */
 export function partnerLineOf(speciesId: string | null): string[] {
   const line: string[] = [];
-  let id = speciesId ?? undefined;
-  while (id !== undefined && !line.includes(id)) {
+  const queue = speciesId === null ? [] : [speciesId];
+  // Every form, branches included (#32): the Partner may grow into either.
+  for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+    if (line.includes(id)) continue;
     line.push(id);
-    id = speciesById.get(id)?.evolutions[0]?.into;
+    queue.push(...(speciesById.get(id)?.evolutions.map((e) => e.into) ?? []));
   }
   return line;
 }

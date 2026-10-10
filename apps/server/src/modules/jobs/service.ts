@@ -34,6 +34,7 @@ import {
   type WorkSource,
   type WorkStatus,
 } from '@heartpatch/shared';
+import { foldHabitatLean } from '../care/evolution.js';
 import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
@@ -782,7 +783,8 @@ export function createSquishyJobsService(options: SquishyJobsServiceOptions): Sq
         // #277), it leaves its habitat bed (housed or working, not both).
         const outOnLand = (request.job === 'gatherer' && workTile) || request.job === 'training';
         if (outOnLand && row.habitatBuildingId !== null) {
-          await createBuildingsRepo(tx).setHabitat(row.squishy.id, null);
+          await foldHabitatLean(tx, row.squishy.id, at);
+          await createBuildingsRepo(tx).setHabitat(row.squishy.id, null, at);
           events.push({
             mapId: map.id,
             type: 'squishy.housed',

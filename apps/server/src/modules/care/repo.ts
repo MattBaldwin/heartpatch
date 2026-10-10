@@ -6,7 +6,20 @@ import {
   type FeelingId,
   type SquishyState,
 } from '@heartpatch/shared';
-import { and, asc, desc, eq, gt, inArray, isNull, max, notInArray, sql, sum } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  max,
+  notInArray,
+  sql,
+  sum,
+} from 'drizzle-orm';
 import { withTransaction, type Executor, type Transaction } from '../../db/client.js';
 import { appendGameEvent, type GameEvent, type NewGameEvent } from '../../db/game-events.js';
 import { squishyOnWatch } from '../territory/repo.js';
@@ -40,6 +53,14 @@ export interface CareSquishyRow {
   onWatch: boolean;
   contentmentAtLastCare: number;
   lastCaredAt: Date | null;
+  /** When it moved into its habitat (#32); null with none, or from before #32. */
+  habitatSince: Date | null;
+  /** Its feeling lean (#32): points per feeling at `feelingLeanAt`, worked out on read. */
+  feelingLean: Record<string, number>;
+  feelingLeanAt: Date | null;
+  /** Care history (#32): contentment samples' sum and count. */
+  careSum: number;
+  careSamples: number;
 }
 
 export interface NewCare {
@@ -60,6 +81,14 @@ export interface EvolutionRow {
   intoSpeciesId: string;
   level: number;
   evolvedAt: Date;
+}
+
+/** A new evolution row (#32): its owner, whether it's a branch form, and its logged roll. */
+export interface NewEvolution extends EvolutionRow {
+  mapId: string;
+  userId: string;
+  branch: boolean;
+  roll: Record<string, unknown> | null;
 }
 
 /**
@@ -101,9 +130,31 @@ export interface CareRepo {
       element: ElementId;
       /** Pins the joining level of a row the previous release wrote (#205). */
       joinedLevel?: number;
+      /** A branch form's feeling (#32): it grew into it. */
+      feeling?: FeelingId;
+      /** Its feeling lean brought up to now (#32). */
+      feelingLean?: Record<string, number>;
+      feelingLeanAt?: Date;
     },
   ) => Promise<void>;
-  insertEvolution: (evolution: EvolutionRow & { mapId: string }) => Promise<void>;
+  /** A full-value care action's lean and care-history sample (#32). */
+  setCareHistory: (
+    squishyId: string,
+    history: {
+      feelingLean: Record<string, number>;
+      feelingLeanAt: Date;
+      careSum: number;
+      careSamples: number;
+    },
+  ) => Promise<void>;
+  /** Writes a squishy's feeling lean, brought up to `feelingLeanAt` (#32). */
+  setLean: (
+    squishyId: string,
+    lean: { feelingLean: Record<string, number>; feelingLeanAt: Date },
+  ) => Promise<void>;
+  /** A player's logged evolution rolls, newest first (#32 pity). */
+  rollsOf: (userId: string, limit: number) => Promise<{ into: string; roll: unknown }[]>;
+  insertEvolution: (evolution: NewEvolution) => Promise<void>;
   /** The newest evolution each squishy's owner hasn't seen celebrated yet. */
   unseenEvolutions: (squishyIds: readonly string[]) => Promise<Map<string, EvolutionRow>>;
   markEvolutionsSeen: (squishyId: string, at: Date) => Promise<void>;
@@ -131,6 +182,11 @@ const squishyColumns = {
   onWatch: squishyOnWatch(),
   contentmentAtLastCare: squishies.contentmentAtLastCare,
   lastCaredAt: squishies.lastCaredAt,
+  habitatSince: squishies.habitatSince,
+  feelingLean: squishies.feelingLean,
+  feelingLeanAt: squishies.feelingLeanAt,
+  careSum: squishies.careSum,
+  careSamples: squishies.careSamples,
 };
 
 // Text columns are checked on read, so a hand-edited row fails loudly.
@@ -250,6 +306,22 @@ function queries(db: Executor): CareRepo {
     setGrowth: async (squishyId, growth) => {
       await db.update(squishies).set(growth).where(eq(squishies.id, squishyId));
     },
+
+    setCareHistory: async (squishyId, history) => {
+      await db.update(squishies).set(history).where(eq(squishies.id, squishyId));
+    },
+
+    setLean: async (squishyId, lean) => {
+      await db.update(squishies).set(lean).where(eq(squishies.id, squishyId));
+    },
+
+    rollsOf: (userId, limit) =>
+      db
+        .select({ into: squishyEvolutions.intoSpeciesId, roll: squishyEvolutions.roll })
+        .from(squishyEvolutions)
+        .where(and(eq(squishyEvolutions.userId, userId), isNotNull(squishyEvolutions.roll)))
+        .orderBy(desc(squishyEvolutions.evolvedAt))
+        .limit(limit),
 
     insertEvolution: async (evolution) => {
       await db.insert(squishyEvolutions).values(evolution);

@@ -716,7 +716,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const grown: Growth[] = [];
     for (const award of awards) {
       if (award.xp <= 0) continue;
-      const growth = await applyXp(tx, award.squishyId, award.xp, at);
+      const growth = await applyXp(tx, award.squishyId, award.xp, at, {
+        // A win leans its squishies Brave (#32).
+        won: result.winner === PLAYER_SIDE,
+      });
       if (growth) grown.push(growth);
     }
     // Befriended in this last step (design doc §6, #279): each one joins

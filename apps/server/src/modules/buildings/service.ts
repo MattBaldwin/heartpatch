@@ -29,6 +29,7 @@ import {
   type PublicUser,
   type RemoveBuildingResponse,
 } from '@heartpatch/shared';
+import { foldHabitatLean } from '../care/evolution.js';
 import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
@@ -727,7 +728,9 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           if (habitat && (await repo.countResidents(habitat.row.id)) >= habitat.capacity) {
             throw new AppError('CONFLICT', MESSAGES.habitatFull(habitat.name));
           }
-          await repo.setHabitat(squishy.id, habitatRowId);
+          // Its old habitat's share of its feeling lean lands first (#32).
+          await foldHabitatLean(tx, squishy.id, at);
+          await repo.setHabitat(squishy.id, habitatRowId, at);
           // A gatherer moving in stops work (housed or working, not both;
           // owner decisions 2026-10-04); what it had ready goes in the bag.
           // A trainee sleeps on its homestead (#277), so it stops training

@@ -524,6 +524,19 @@ export const squishies = pgTable(
     habitatBuildingId: uuid('habitat_building_id').references(() => buildings.id, {
       onDelete: 'set null',
     }),
+    // When it moved into that habitat (#32), for the habitat's share of its
+    // feeling lean; null with no habitat or for the previous release's rows
+    // (their habitat time counts from the next lean update).
+    habitatSince: timestamptz('habitat_since'),
+    // How it has been feeling lately (#32): points per feeling at
+    // `feeling_lean_at`, halving over time (shared `leanAt`, worked out on
+    // read; CLAUDE.md rule 4). `{}` until something happens to it.
+    feelingLean: jsonb('feeling_lean').$type<Record<string, number>>().notNull().default({}),
+    feelingLeanAt: timestamptz('feeling_lean_at'),
+    // Care history (#32): the sum and count of contentment samples, one per
+    // full-value care action; their average is its care score.
+    careSum: integer('care_sum').notNull().default(0),
+    careSamples: integer('care_samples').notNull().default(0),
     // Contentment right after the last care action, and when that was (#19).
     // Today's contentment is worked out from these on read (shared
     // `contentmentAt`; CLAUDE.md rule 4), so nothing ticks.
@@ -1716,11 +1729,24 @@ export const squishyEvolutions = pgTable(
     level: integer('level').notNull(),
     evolvedAt: timestamptz('evolved_at').notNull(),
     seenAt: timestamptz('seen_at'),
+    // Branching evolution (#32). The owner when it evolved, for their pity;
+    // null on rows from before #32, which never count toward pity.
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    // It grew into a branch form, not its step's default.
+    branch: boolean('branch').notNull().default(false),
+    // The logged roll (shared `EvolutionRoll` plus the content hash), so a
+    // result can be explained and replayed; null when the step had one form
+    // or the row is from before #32.
+    roll: jsonb('roll').$type<Record<string, unknown>>(),
   },
   (t) => [
     index('squishy_evolutions_unseen_idx')
       .on(t.squishyId)
       .where(sql`${t.seenAt} is null`),
+    // Pity reads a player's logged rolls, newest first.
+    index('squishy_evolutions_user_rolls_idx')
+      .on(t.userId, t.evolvedAt)
+      .where(sql`${t.roll} is not null`),
   ],
 );
 

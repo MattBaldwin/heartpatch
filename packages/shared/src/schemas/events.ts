@@ -790,6 +790,8 @@ export const GAME_EVENTS = {
       fromSpeciesId: ContentIdSchema,
       intoSpeciesId: ContentIdSchema,
       level: z.number().int().min(1),
+      /** It grew into a branch form, not its step's default (#32); absent means it didn't. */
+      branch: z.boolean().optional(),
     }),
     public: z.object({ userId: z.uuid(), squishyId: z.uuid(), level: z.number().int().min(1) }),
   },
