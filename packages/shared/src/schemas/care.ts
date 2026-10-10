@@ -63,6 +63,12 @@ export const CareSquishySchema = z.object({
   nextCareAt: z.record(ContentIdSchema, z.iso.datetime()),
   /** An evolution waiting for its celebration, or null. */
   newEvolution: NewEvolutionSchema.nullable(),
+  /**
+   * The wardrobe accessory it wears (#43, #340), or null: read back through
+   * ownership, so it's always a piece its owner has. An older server sends
+   * none: nothing worn.
+   */
+  accessory: ContentIdSchema.nullable().default(null),
 });
 export type CareSquishy = z.infer<typeof CareSquishySchema>;
 

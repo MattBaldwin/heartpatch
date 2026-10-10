@@ -51,6 +51,7 @@ function squishy(over: Partial<CareSquishy> = {}): CareSquishy {
     fullCareLeft: 2,
     nextCareAt: {},
     newEvolution: null,
+    accessory: null,
     ...over,
   };
 }
