@@ -19,9 +19,9 @@ export const EvolutionConditionSchema = z.discriminatedUnion('kind', [
     kind: z.literal('time'),
     times: z.array(z.enum(['day', 'dusk', 'night'])).min(1),
   }),
-  /** A fire of this building is burning at the owner's home. */
+  /** A fire of this building is burning on the owner's land (fires are never at home). */
   z.strictObject({ kind: z.literal('fire-lit'), building: ContentIdSchema }),
-  /** A fire at the owner's home is full of fuel. */
+  /** A fire on the owner's land is full of fuel. */
   z.strictObject({ kind: z.literal('fire-full') }),
   z.strictObject({ kind: z.literal('season'), season: ContentIdSchema }),
 ]);
@@ -72,8 +72,11 @@ export const EvolutionRulesSchema = z
       default: weight.positive(),
       /** A feeling branch whose feeling isn't the dominant one: a small surprise. */
       unaimed: weight,
-      /** A branch the squishy is aimed at (its feeling won, or its rare conditions hold). */
-      aimed: weight,
+      /**
+       * A branch the squishy is aimed at (its feeling won, or its rare
+       * conditions hold). Positive: a pity guarantee leaves it the only weight.
+       */
+      aimed: weight.positive(),
       /** Branch weights × (1 + (careBoost − 1) × care score); care score is 0–1. */
       careBoost: z.number().min(1).max(10),
     }),
