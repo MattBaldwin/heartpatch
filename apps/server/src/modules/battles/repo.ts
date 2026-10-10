@@ -152,6 +152,15 @@ export interface BattlesRepo {
   /** The player's home base tiles on the map (seven, or none before they have one). */
   homeTiles: (mapId: string, userId: string) => Promise<{ q: number; r: number }[]>;
   findBattle: (battleId: string) => Promise<BattleRow | null>;
+  /**
+   * Takes each player's battle seat on the map until commit (#29): a
+   * transaction-scoped advisory lock per player, in id order, before any row
+   * lock. Every battle start takes it for the player(s) it seats, so "one
+   * battle at a time on either side" holds between a live battle's side `b`
+   * and that player starting one of their own (the two unique indexes can't
+   * see each other).
+   */
+  lockBattleSeats: (mapId: string, userIds: readonly string[]) => Promise<void>;
   /** Row-locks the battle until commit; every action runs under it. */
   lockBattle: (battleId: string) => Promise<BattleRow | null>;
   /** The player's active battle on the map, if any: as side `a`, or side `b` of a live one (#29). */
@@ -423,6 +432,14 @@ function queries(db: Executor): BattlesRepo {
     findBattle: (battleId) => one(eq(battles.id, battleId)),
 
     lockBattle: (battleId) => one(eq(battles.id, battleId), true),
+
+    lockBattleSeats: async (mapId, userIds) => {
+      for (const userId of [...new Set(userIds)].sort()) {
+        await db.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`battle-seat:${mapId}:${userId}`}, 0))`,
+        );
+      }
+    },
 
     findActive: async (mapId, userId) => {
       const [row] = await db

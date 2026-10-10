@@ -43,8 +43,9 @@ export function nextDeadline(from: Date, rules: LiveBattleRules): Date {
  * owing a pick gets one away-grace if it isn't connected (`isOnline`), else
  * the AI picks for it in its cover style. Several turns may play in one go
  * when nobody looked for a while; each one's deadline counts from the last,
- * so the outcome doesn't depend on when somebody next looked. Stops when the
- * battle ends or the next deadline is still ahead.
+ * so the AI's picks never depend on when somebody next looked. Whether a side
+ * gets its away-grace does: `isOnline` is asked when this runs, not at the
+ * deadline. Stops when the battle ends or the next deadline is still ahead.
  */
 export function settleTimeouts(input: {
   content: BattleContent;
