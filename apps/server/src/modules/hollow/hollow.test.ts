@@ -19,7 +19,7 @@ import {
   type HollowRules,
   type RescueGuardianRules,
 } from '@heartpatch/shared';
-import { RESCUE_GUARDIANS, SERVER_GAME_DATA } from '@heartpatch/shared/server';
+import { EVOLUTION_RULES, RESCUE_GUARDIANS, SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import { buildApp } from '../../app.js';
@@ -460,6 +460,11 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
         where: (t, { eq }) => eq(t.mapId, mapId),
       });
       expect(posted.map((d) => d.squishyId).sort()).toEqual([byTheFire, atHome].sort());
+      // Everyone who stood watch leans a little Spooky (#32), taken or not.
+      for (const id of [inTheDark, byTheFire, atHome]) {
+        const row = await db.query.squishies.findFirst({ where: (t, { eq }) => eq(t.id, id) });
+        expect(row!.feelingLean['spooky'], id).toBe(EVOLUTION_RULES.lean.nightWatch.points);
+      }
       // …and every map hears its post is empty now, as posting and jobs say.
       const changed = (await eventsOf(mapId)).filter((e) => e.type === 'defenders.changed');
       const darkTile = (await db.query.tiles.findFirst({

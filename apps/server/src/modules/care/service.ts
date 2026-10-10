@@ -236,7 +236,8 @@ export async function applyXp(
   if (options.won === true) {
     lean = addLean(lean, WIN_LEAN.feeling, WIN_LEAN.points, at, EVOLUTION_RULES);
   }
-  const leanRow = { ...row, ...leanColumns(lean, at), habitatSince: row.habitatSince };
+  const housed = row.habitatBuildingId !== null;
+  const leanRow = { ...row, ...leanColumns(lean, at, housed) };
 
   let speciesId = row.speciesId;
   let element: ElementId = row.element;
@@ -280,7 +281,7 @@ export async function applyXp(
     speciesId,
     element,
     ...(feeling !== row.feeling ? { feeling } : {}),
-    ...leanColumns(lean, at),
+    ...leanColumns(lean, at, housed),
     // A row the previous release wrote has no joining level: its first XP
     // pins it at the level it had, so its meter stops restarting (#205).
     ...(row.joinedLevel === null ? { joinedLevel: row.level } : {}),
@@ -536,6 +537,7 @@ export function createCareService(options: CareServiceOptions): CareService {
             ...leanColumns(
               lean ? addLean(current, lean.feeling, lean.points, at, EVOLUTION_RULES) : current,
               at,
+              row.habitatBuildingId !== null,
             ),
             careSum: row.careSum + contentment,
             careSamples: row.careSamples + 1,

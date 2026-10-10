@@ -29,13 +29,13 @@ import {
   type PublicUser,
   type RemoveBuildingResponse,
 } from '@heartpatch/shared';
-import { foldHabitatLean } from '../care/evolution.js';
 import { SERVER_GAME_DATA } from '@heartpatch/shared/server';
 import type { Executor } from '../../db/client.js';
 import type { NewGameEvent } from '../../db/game-events.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
+import { foldHabitatLean } from '../care/evolution.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import {
   consumeItems,
