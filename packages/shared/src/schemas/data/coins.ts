@@ -38,6 +38,7 @@ export const CoinRulesSchema = z.strictObject({
     'rival-tile': coins,
     rescue: coins,
     journey: coins,
+    friendly: coins,
   }),
   /**
    * Coins for befriending a wild squishy, and for claiming a tile (neutral or

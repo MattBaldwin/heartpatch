@@ -257,6 +257,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           db,
           clock,
           findWildEncounter: spawns.findWildEncounter,
+          // Live battles (#29) give a player whose app isn't open one away-grace.
+          ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
           tileBattles: createTileBattlePort(),
           // Journeys to trading posts (#270): the visit pass in the finish.
           journeys: createJourneyBattlePort(),
