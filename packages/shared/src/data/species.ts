@@ -400,7 +400,7 @@ export const MOVES: Move[] = [
     element: 'leaf',
     power: 0,
     accuracy: 100,
-    effects: [{ type: 'stat', target: 'opponent', stat: 'attack', stages: -1, chance: 100 }],
+    effects: [{ type: 'stat', target: 'opponent', stat: 'attack', stages: -1, chance: 100 }], // TUNE:
   },
   {
     id: 'night-light-hug',
@@ -409,7 +409,7 @@ export const MOVES: Move[] = [
     element: 'light',
     power: 0,
     accuracy: 100,
-    effects: [{ type: 'heal', percent: 35 }],
+    effects: [{ type: 'heal', percent: 35 }], // TUNE:
   },
   {
     id: 'upside-snooze',
@@ -418,14 +418,14 @@ export const MOVES: Move[] = [
     element: 'shadow',
     power: 0,
     accuracy: 100,
-    effects: [{ type: 'heal', percent: 40 }],
+    effects: [{ type: 'heal', percent: 40 }], // TUNE:
   },
   {
     id: 'sparkler-swirl',
     name: 'Sparkler Swirl',
     description: 'Twirls a sparkly little flame. Ooh, pretty!',
     element: 'fire',
-    power: 55,
+    power: 55, // TUNE:
     accuracy: 100,
   },
   {
@@ -433,9 +433,9 @@ export const MOVES: Move[] = [
     name: 'Rumble Boop',
     description: 'A big, rumbly boop with a sturdy horn. Wobble wobble.',
     element: 'stone',
-    power: 70,
-    accuracy: 90,
-    effects: [{ type: 'status', status: 'dizzy', chance: 15 }],
+    power: 70, // TUNE:
+    accuracy: 90, // TUNE:
+    effects: [{ type: 'status', status: 'dizzy', chance: 15 }], // TUNE:
   },
 ];
 
@@ -586,7 +586,7 @@ export const SPECIES: Species[] = [
   {
     id: 'rumblehorn',
     name: 'Rumblehorn',
-    description: 'Woke up from its nap feeling brave. Now it guards everyone else’s naps.',
+    description: "Woke up from its nap feeling brave. Now it guards everyone else's naps.",
     element: 'stone',
     feeling: 'brave',
     rarity: 'uncommon',
@@ -1528,7 +1528,7 @@ export const SPECIES: Species[] = [
   {
     id: 'lullaboo',
     name: 'Lullaboo',
-    description: 'Used to be afraid of the dark. Now it’s everybody’s night-light.',
+    description: "Used to be afraid of the dark. Now it's everybody's night-light.",
     element: 'light',
     feeling: 'cozy',
     rarity: 'epic',
@@ -1618,6 +1618,7 @@ export const SPECIES: Species[] = [
     feeling: 'sleepy',
     rarity: 'rare',
     season: 'halloween',
+    // A smaller budget than Topsywing: its 40% Upside Snooze heal pays for it.
     baseStats: { hp: 84, attack: 67, defense: 75, speed: 62 }, // TUNE:
     moves: ['peekaboo', 'upside-flop', 'shadow-snuggle', 'upside-snooze'],
     evolutions: [],
@@ -1707,7 +1708,7 @@ export const SPECIES: Species[] = [
   {
     id: 'sparklewick',
     name: 'Sparklewick',
-    description: 'Glowed so bright it threw itself a party. Everyone’s invited!',
+    description: "Glowed so bright it threw itself a party. Everyone's invited!",
     element: 'fire',
     feeling: 'joy',
     rarity: 'rare',

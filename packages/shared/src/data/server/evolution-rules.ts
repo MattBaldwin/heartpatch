@@ -82,13 +82,16 @@ export const EVOLUTION_ODDS: EvolutionOdds[] = [
     into: 'squashboo',
     trigger: {
       kind: 'rare',
+      // A Halloween branch: a befriended Gourdon stays all year, and a
+      // Jack-o'-Lantern fire keeps burning after the season.
       conditions: [
+        { kind: 'season', season: 'halloween' },
         { kind: 'time', times: ['dusk', 'night'] },
         { kind: 'fire-lit', building: 'jack-o-lantern-hearthfire' },
       ],
       whisper: {
         icon: '🎃',
-        text: "{name} keeps staring at the Jack-o'-Lantern's glow…",
+        text: "{name} keeps dreaming about Jack-o'-Lantern glow…",
         sub: 'It seems to love spooky nights.',
       },
     },
