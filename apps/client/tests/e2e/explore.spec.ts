@@ -1,6 +1,6 @@
 import { findAvoidedWords } from '@heartpatch/shared';
 import { expect, test, type Page } from '@playwright/test';
-import { hook } from './dev-hook.js';
+import { api, hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { keeperStill, nearestFirst, walkTo, waypoint } from './explore-walk.js';
 import { realTapAt } from './touch.js';
@@ -269,4 +269,54 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   await slowExpect(page.getByTestId('map-hud')).toBeVisible();
   expect((await exploreState(page))?.open).toBe(false);
   expect(errors).toEqual([]);
+});
+
+test('shows the buildings on the tile it explores (#347)', async ({ browser }) => {
+  test.setTimeout(240_000);
+  const page = await newPlayer(browser, uniqueName('builds'));
+  const lobby = page.getByTestId('lobby');
+  await lobby.getByRole('button', { name: 'Make a patch' }).tap();
+  await lobby.getByLabel('Patch name').fill('Den Patch');
+  await lobby.getByRole('button', { name: 'Make it!' }).tap();
+  await visitPatch(lobby);
+  await slowExpect(lobby).toBeHidden();
+  await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
+  const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
+
+  const box = (await page.locator('#game').boundingBox())!;
+  const explore = page.getByTestId('tile-explore');
+  const openExplore = async () => {
+    await expect(async () => {
+      if ((await mapState(page))?.selected == null) {
+        await realTapAt(page, box.x + box.width / 2, box.y + box.height / 2);
+      }
+      await expect(explore).toBeVisible({ timeout: 5_000 });
+    }).toPass(slow);
+    await explore.tap();
+    await expect.poll(async () => (await exploreState(page))?.scene?.keeper, slow).toBe(true);
+  };
+
+  // The Heart Seed's tile has nothing built on it yet.
+  await openExplore();
+  const first = (await exploreState(page))!;
+  expect(first.scene?.buildings).toBe(0);
+  const at = first.tile!;
+  await page.getByTestId('explore-back').tap();
+  await slowExpect(page.getByTestId('map-hud')).toBeVisible();
+
+  // An Ember Den on one of its ring spots, then explore it again.
+  const granted = await api(page, 'POST', `/maps/${mapId}/dev/items`, {
+    items: { timber: 5, stone: 3 },
+  });
+  expect(granted.status).toBe(201);
+  const built = await api(page, 'POST', `/maps/${mapId}/buildings`, {
+    buildingId: 'ember-den',
+    q: at.q,
+    r: at.r,
+    spot: 1,
+  });
+  expect(built.status).toBe(201);
+  // The map hears about the new den, then Explore opens on the tile again.
+  await openExplore();
+  await expect.poll(async () => (await exploreState(page))?.scene?.buildings ?? 0, slow).toBe(1);
 });

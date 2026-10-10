@@ -100,7 +100,10 @@ export interface ExploreScreenOptions {
   tier: () => QualityTier;
   keeper: () => KeeperConfig | null;
   keeperWearing?: () => readonly string[];
-  /** The tile as the map has it (its buildings), or null. */
+  /**
+   * The tile as the map has it (its buildings), or null. Read when a tile
+   * opens, before `onOpen` closes the map (#347).
+   */
   mapTile: (at: { q: number; r: number }) => PublicTile | null;
   /** Exploring is for patches: never on the Tutorial Glade. */
   isGlade: (mapId: string) => boolean;
@@ -183,6 +186,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   /** My team's squishies that follow the Keeper, in team order. */
   let teamMembers: { id: string; speciesId: string }[] = [];
   let scene3d: ExploreScene | null = null;
+  /** The map's view of the open tile, read as it opened (#347). */
+  let mapTileAtOpen: PublicTile | null = null;
   let lastTier: QualityTier | null = null;
   let keeperAt: WorldPoint = EXPLORE_VIEW.start;
   let yaw: number = EXPLORE_VIEW.startYaw;
@@ -1138,7 +1143,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
         const kind = species.get(m.speciesId);
         return kind ? [{ id: m.id, species: kind }] : [];
       }),
-      mapTile: options.mapTile(tile),
+      mapTile: mapTileAtOpen,
       reducedMotion,
     });
     // The start can land on a rock: step out before the Keeper is drawn.
@@ -1202,6 +1207,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     clearToast();
     isOpen = true;
     say('');
+    // The map's view of the tile, before `onOpen` closes the map and its
+    // view goes with it (#347: the tile's buildings never reached the scene).
+    mapTileAtOpen = options.mapTile(at);
     options.onOpen(id);
     options.showScene(build);
     render();
