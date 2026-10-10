@@ -3,6 +3,8 @@ name: CI
 on:
   pull_request:
     # ready_for_review: a draft skips e2e, so marking it ready runs everything.
+    # Not `edited`: a title or body edit would cancel the run in progress. A
+    # retargeted stacked PR merges main before it lands, and that push runs all.
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
@@ -22,8 +24,9 @@ env:
 
 jobs:
   # Does this PR touch anything the game is built or tested from? A draft PR,
-  # or one that only changes docs (docs/, root *.md, .claude/), skips the
-  # browser tests;
+  # a stacked PR (base isn't main: it must merge main, and so run everything,
+  # before it can land), or one that only changes docs (docs/, root *.md,
+  # .claude/) skips the browser tests;
   # `fast` still runs in full. Pushes to main always run everything.
   # changes/*.md is the in-app What's new, so it counts as game content.
   # --no-renames lists a moved file's old path too, so moving code into docs/
@@ -43,6 +46,7 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           DRAFT: ${{ github.event.pull_request.draft }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -51,6 +55,10 @@ jobs:
           fi
           if [ "$DRAFT" = true ]; then
             echo "Draft PR: e2e runs when it's marked ready"
+            echo "skip_e2e=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$BASE_REF" != main ]; then
+            echo "Stacked on $BASE_REF: e2e runs once it targets main"
             echo "skip_e2e=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           files="$(git diff --name-only --no-renames "$BASE...$HEAD")"
