@@ -262,7 +262,9 @@ export type KeeperConfig = z.infer<typeof KeeperConfigSchema>;
 
 /** A config with every Keeper builder choice filled in (#289): what's stored and sent back. */
 export type CompleteKeeperConfig = KeeperConfig &
-  Required<Pick<KeeperConfig, 'face' | 'body' | 'skinTone' | 'eyes' | 'brows' | 'mouth' | 'extras'>>;
+  Required<
+    Pick<KeeperConfig, 'face' | 'body' | 'skinTone' | 'eyes' | 'brows' | 'mouth' | 'extras'>
+  >;
 
 /**
  * A Keeper as other players see it (`MapMember.keeper`): the config plus the
