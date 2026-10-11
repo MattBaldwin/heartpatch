@@ -107,6 +107,88 @@ export const SPAWN_TABLES: SpawnTable[] = [
     ],
   },
 
+  // Wave 1 (#382): biome-tied kinds, every day of the year, on top of the
+  // launch tables above (weights add up across matching tables). Common 4,
+  // uncommon 2, rare 1. TUNE: every weight.
+  {
+    id: 'wave-1-meadow',
+    terrains: ['meadow'],
+    entries: [
+      { species: 'dandypuff', weight: 4 },
+      { species: 'bumblebop', weight: 4 },
+      { species: 'sunbaskit', weight: 4 },
+      { species: 'clovermew', weight: 4 },
+      { species: 'marigoldie', weight: 2 },
+    ],
+  },
+  {
+    id: 'wave-1-forest',
+    terrains: ['forest'],
+    entries: [
+      { species: 'spotcap', weight: 4 },
+      { species: 'hootnook', weight: 4 },
+      { species: 'conecuddle', weight: 4 },
+      { species: 'clovermew', weight: 2 },
+      { species: 'bramblebear', weight: 2 },
+    ],
+  },
+  {
+    id: 'wave-1-old-forest',
+    terrains: ['old-forest'],
+    entries: [
+      { species: 'knotkin', weight: 4 },
+      { species: 'gleamgrub', weight: 4 },
+      { species: 'hootnook', weight: 3 },
+      { species: 'burrowbrock', weight: 2 },
+      { species: 'mistmoth', weight: 1 },
+    ],
+  },
+  {
+    id: 'wave-1-hills',
+    terrains: ['hills'],
+    entries: [
+      { species: 'toastoad', weight: 4 },
+      { species: 'cobblecrab', weight: 4 },
+      { species: 'zapwren', weight: 2 },
+      { species: 'kilnback', weight: 2 },
+      { species: 'cloudlamb', weight: 2 },
+      { species: 'cinnamoose', weight: 1 },
+    ],
+  },
+  {
+    id: 'wave-1-mountains',
+    terrains: ['mountains'],
+    entries: [
+      { species: 'snowmitt', weight: 4 },
+      { species: 'hailhop', weight: 4 },
+      { species: 'gravelgiggle', weight: 4 },
+      { species: 'cairnnook', weight: 2 },
+      { species: 'cloudlamb', weight: 2 },
+      { species: 'pengpip', weight: 2 },
+    ],
+  },
+  {
+    id: 'wave-1-lake',
+    terrains: ['lake'],
+    entries: [
+      { species: 'lilypip', weight: 4 },
+      { species: 'paddlemuff', weight: 4 },
+      { species: 'shellnap', weight: 2 },
+      { species: 'pengpip', weight: 1 },
+      { species: 'lanternfin', weight: 1 },
+    ],
+  },
+  {
+    id: 'wave-1-pumpkin-fields',
+    terrains: ['pumpkin-fields'],
+    entries: [
+      { species: 'kernelpop', weight: 4 },
+      { species: 'ricklet', weight: 4 },
+      { species: 'bumblebop', weight: 3 },
+      { species: 'marigoldie', weight: 2 },
+    ],
+  },
+
   // Times of day.
   {
     // Dawndrop hums good morning on sunny open land.
