@@ -279,10 +279,16 @@ body:has(.explore:not([hidden])) .auth-chip {
   right: calc(env(safe-area-inset-right) + 170px);
   /* Room above the home bar and the bottom edge (board a), under the joystick. */
   bottom: calc(max(env(safe-area-inset-bottom), 8px) + 16px);
+  width: fit-content;
   margin: 0;
+  /* A soft pill (#335): legible on the meadow by day and on its dark ground at night. */
+  padding: calc(var(--hp-pad-y) / 2) var(--hp-pad-x);
+  border-radius: 999px;
+  background: rgb(255 250 252 / 82%);
+  box-shadow: 0 4px 12px rgb(74 49 80 / 16%);
   font-size: 12px;
   font-weight: 700;
-  color: #3d5a33;
+  color: #4a3150;
   pointer-events: none;
 }
 
