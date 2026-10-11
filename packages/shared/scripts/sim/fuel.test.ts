@@ -120,3 +120,23 @@ describe('lighting all the land (#277)', () => {
     }
   }, 30_000); // the full progression model, two map sizes (about 5 s under coverage)
 });
+
+describe('where fires may stand (#295)', () => {
+  const short = {
+    ...FUEL_CONFIG,
+    days: [7],
+    seats: [4],
+    profiles: FUEL_CONFIG.profiles.slice(0, 1),
+  };
+  const small = { ...PROGRESSION_CONFIG, estimateGames: 4 };
+
+  it('reports every placement rule, and homestead-only fires never light more than any-land fires', () => {
+    const rows = runFuel(short, small);
+    const day = rows[0]?.days[0];
+    expect(day?.placement.map((p) => p.rule)).toEqual(['today', 'homesteads', 'any-land']);
+    const lit = (rule: string) => day?.placement.find((p) => p.rule === rule)?.lit ?? -1;
+    expect(lit('homesteads')).toBeLessThanOrEqual(lit('any-land'));
+    expect(lit('any-land')).toBeGreaterThanOrEqual(lit('today'));
+    expect(renderFuel(rows, short, { seconds: 0 })).toContain('## Where fires may stand (#295)');
+  });
+});

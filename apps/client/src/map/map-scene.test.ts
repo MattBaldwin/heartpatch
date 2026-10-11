@@ -2,7 +2,7 @@ import { TargetCamera } from '@babylonjs/core/Cameras/targetCamera';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
-import type { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { Scene } from '@babylonjs/core/scene';
 import { hexToWorld, type MapView } from '@heartpatch/shared';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -54,6 +54,39 @@ describe('MapScene', () => {
     expect(scene.getMeshByName('tiles-trading-post')).toBeTruthy();
     expect(tileMeshes.reduce((n, m) => n + m.thinInstanceCount, 0)).toBe(469);
     expect(scene.getMeshByName('tiles-home')).toBeTruthy();
+  });
+
+  it("draws cleared land (#242) in the meadow's tile mesh, in its own colour, with no draw call of its own", () => {
+    const plain = build(testPatch());
+    const before = plain.map.stats.tileMeshes;
+    const view = testPatch();
+    const cleared = view.tiles
+      .filter((t) => t.homeSlot === null && t.terrain === 'forest')
+      .slice(0, 3);
+    const tiles = view.tiles.map((t) =>
+      cleared.includes(t) ? { ...t, terrain: 'clearing', nodeResource: null } : t,
+    );
+    // Tile colours live in the 'color' instance buffer, filled after it's set.
+    const setBuffer = vi.spyOn(Mesh.prototype, 'thinInstanceSetBuffer');
+    const { scene, map } = build({ ...view, tiles });
+    const buffers = new Map<string, Float32Array>();
+    setBuffer.mock.calls.forEach(([kind, data], i) => {
+      const mesh = setBuffer.mock.contexts[i] as Mesh;
+      if (kind === 'color' && data) buffers.set(mesh.name, data);
+    });
+    setBuffer.mockRestore();
+    expect(map.stats.tileMeshes).toBe(before);
+    expect(scene.getMeshByName('tiles-clearing')).toBeNull();
+    const meadow = scene.getMeshByName('tiles-meadow') as Mesh;
+    const meadows = tiles.filter((t) => t.homeSlot === null && t.terrain === 'meadow').length;
+    expect(meadow.thinInstanceCount).toBe(meadows + cleared.length);
+    // Sandy, not meadow green: the red channel outweighs the green one.
+    const colors = buffers.get('tiles-meadow');
+    expect(colors).toBeTruthy();
+    const sandy = Array.from({ length: meadow.thinInstanceCount }, (_, i) => i).filter(
+      (i) => (colors?.[i * 4] ?? 0) > (colors?.[i * 4 + 1] ?? 0),
+    );
+    expect(sandy).toHaveLength(cleared.length);
   });
 
   it('draws every wild-squishy tuft from one instanced mesh, swaying on the terrain clock (#209)', () => {

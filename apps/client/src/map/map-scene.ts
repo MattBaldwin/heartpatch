@@ -181,6 +181,12 @@ function lookOf(tile: PublicTile): TerrainLook {
   return TERRAIN_LOOKS[tile.terrain] ?? FALLBACK_LOOK;
 }
 
+/** The look whose tile mesh draws this tile: its own, or the one it borrows (`meshOf`). */
+function meshLookOf(tile: PublicTile): TerrainLook {
+  const look = lookOf(tile);
+  return look.meshOf !== undefined ? (TERRAIN_LOOKS[look.meshOf] ?? look) : look;
+}
+
 /** sRGB (0–1) to linear, as Babylon's `toLinearSpace` does. */
 const toLinear = (v: number): number => Math.pow(v, 2.2);
 
@@ -854,7 +860,8 @@ export class MapScene {
   }
 
   /**
-   * One mesh per terrain look (plus home tiles), each drawing all its tiles
+   * One mesh per terrain look (plus home tiles; a look with `meshOf` borrows
+   * another's, #242), each drawing all its tiles
    * at once. Each tile carries its own colour (a small wobble, muted on wild
    * land) and height wobble in its instance data. True if the terrain plugin
    * runs here (GLSL), so ambient life can move.
@@ -862,10 +869,11 @@ export class MapScene {
   private buildTiles(tiles: readonly PublicTile[]): boolean {
     const groups = new Map<TerrainLook, { key: string; tiles: PublicTile[] }>();
     for (const tile of tiles) {
-      const look = lookOf(tile);
+      const look = meshLookOf(tile);
       let group = groups.get(look);
       if (!group) {
-        group = { key: tile.homeSlot !== null ? 'home' : tile.terrain, tiles: [] };
+        const terrain = lookOf(tile).meshOf ?? tile.terrain;
+        group = { key: tile.homeSlot !== null ? 'home' : terrain, tiles: [] };
         groups.set(look, group);
       }
       group.tiles.push(tile);
@@ -950,7 +958,7 @@ export class MapScene {
         const c =
           tile.homeSlot !== null
             ? tileColor(group.look.color, { brightness: 1, warmth: 0, height: 0 }, muted)
-            : tileColor(group.look.color, tileJitter(tile, tile.terrain), muted);
+            : tileColor(lookOf(tile).color, tileJitter(tile, tile.terrain), muted);
         group.colors.set([...c.map(toLinear), 1], i * 4);
       }
       if (changed) {

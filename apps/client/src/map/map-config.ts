@@ -57,6 +57,12 @@ export interface TerrainLook {
   prop: PropKind | null;
   /** Fewest and most props per tile. */
   propsPerTile: readonly [number, number];
+  /**
+   * Draw with this terrain's tile mesh, in this look's own colour and height,
+   * so the terrain adds no draw call (cleared land, #242). Gloss and glow
+   * come from that mesh's look (they're its material).
+   */
+  meshOf?: string;
 }
 
 const look = (color: string, height: number, extra: Partial<TerrainLook> = {}): TerrainLook => ({
@@ -82,6 +88,8 @@ export const TERRAIN_LOOKS: Readonly<Record<string, TerrainLook>> = {
   // Trading posts (#269): cream-gold and a little lit, never washed out (nobody owns one).
   'trading-post': look('#fbe2a2', 0.25, { roughness: 0.5, glow: 0.12 }), // TUNE
   'junipers-gap': look('#e6cdfc', 0.3, { glow: 0.25 }), // TUNE
+  // Cleared land (#242): sandy ground drawn with the meadow's tiles.
+  clearing: look('#efcf95', 0.22, { meshOf: 'meadow' }), // TUNE
 };
 
 /** Used for a terrain id this client doesn't know yet. */
@@ -288,6 +296,17 @@ export const TERRAIN_DRESSING: Readonly<Record<string, TerrainDressing>> = {
     items: [item('flowers', 3, [0.9, 1.2]), item('grass', 2, [0.8, 1.1])],
     tints: ['#ffffff', '#fff6e0', '#ffeef6'],
     jitter: { color: 0.02, height: 0 },
+  },
+  // Cleared land (#242): a stump, a log and a few stones left from clearing.
+  clearing: {
+    count: [3, 4],
+    items: [
+      item('stump', 3, [1.5, 1.9]),
+      item('stones', 2, [1.4, 1.7]),
+      item('log', 1, [1.1, 1.3], { single: true }),
+    ],
+    tints: ['#ffffff', '#fff6e0'],
+    jitter: { color: 0.03, height: 0.004 },
   },
   'junipers-gap': {
     count: [2, 3],
