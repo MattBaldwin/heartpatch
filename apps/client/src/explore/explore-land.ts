@@ -52,6 +52,7 @@ import {
   type LandLayout,
   type LayoutInput,
   type MoteHome,
+  type Shade,
 } from './land-layout.js';
 import { paintGround } from './land-paint.js';
 import { landField, unwarp, type LandField } from './land-shape.js';
@@ -123,6 +124,19 @@ interface Layer {
  * same tile, or reopening it after a scene rebuild, reuses it.
  */
 let lastPaint: { readonly key: string; readonly pixels: Uint8Array } | null = null;
+
+/**
+ * Everything the painted ground depends on: the biome's look, the tile's
+ * seed, the start (the path runs past it), the tier's size and every shade.
+ * Two grounds with the same key are the same pixels.
+ */
+export const paintKey = (
+  look: Pick<LandLook, 'palette' | 'shape'>,
+  seed: number,
+  start: WorldPoint,
+  texels: number,
+  shades: readonly Shade[],
+): string => JSON.stringify([look.palette, look.shape, seed, start, texels, shades]);
 
 const matrix = (g: Growth, y: number): Matrix =>
   Matrix.Compose(
@@ -287,10 +301,6 @@ export class ExploreLand {
       const { x, y, z } = LAND_LIGHT.sunDirection;
       this.#sun.direction = new Vector3(x, y, z).normalize();
     }
-    scene.fogMode = Scene.FOGMODE_LINEAR;
-    scene.fogStart = LAND_LIGHT.haze.start;
-    scene.fogEnd = LAND_LIGHT.haze.end;
-
     // The light before the time of day, so every look sets absolute values
     // (no compounding): the sky's own bases, else worked back from what the
     // sky has just set for this look.
@@ -412,9 +422,7 @@ export class ExploreLand {
 
     const t = this.#texels;
     // UVs run along the grid, so the texture's texels sit where the grid's warp puts them.
-    // Everything the pixels depend on: the biome's look, the tile, the start
-    // (the path runs past it), the tier's size and every painted shade.
-    const key = JSON.stringify([look.palette, look.shape, seed, start, t, this.layout.shades]);
+    const key = paintKey(look, seed, start, t, this.layout.shades);
     const pixels =
       lastPaint?.key === key
         ? lastPaint.pixels

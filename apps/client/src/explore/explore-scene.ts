@@ -954,7 +954,9 @@ export class ExploreScene implements AmbientTarget {
     const d = distance * this.#camera.zoom;
     const tx = this.#camera.target.x * this.#size;
     const tz = this.#camera.target.z * this.#size;
-    const ty = this.#groundAt(this.#camera.target) + AIM_HEIGHT;
+    // Aim at the Keeper's own ground, not the ground ahead: on sculpted land a
+    // dip ahead would bring the Keeper closer and draw it bigger (#335).
+    const ty = this.#groundAt(this.#at) + AIM_HEIGHT;
     // Yaw 0: looking towards +z, down by `pitch`.
     camera.position.set(tx, ty + Math.sin(pitch) * d, tz - Math.cos(pitch) * d);
     camera.setTarget(this.#lookAt.set(tx, ty, tz));

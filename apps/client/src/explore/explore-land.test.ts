@@ -3,10 +3,10 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Scene } from '@babylonjs/core/scene';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ExploreLand } from './explore-land.js';
+import { ExploreLand, paintKey } from './explore-land.js';
 import { ExploreSky } from './explore-sky.js';
-import { skyLook } from './explore-sky-look.js';
-import { SKY_LOOKS } from './explore-sky-look.js';
+import { SKY_LOOKS, skyLook } from './explore-sky-look.js';
+import { LAKE_LOOKS } from './lake-config.js';
 import { LAND_LIGHT, LAND_LOOKS } from './land-config.js';
 
 const engine = new NullEngine();
@@ -72,5 +72,22 @@ describe('ExploreLand light (#335)', () => {
     expect(scene.fogMode).toBe(Scene.FOGMODE_LINEAR);
     expect(scene.fogStart).toBe(LAND_LIGHT.haze.start);
     expect(scene.fogEnd).toBe(LAND_LIGHT.haze.end);
+  });
+});
+
+describe('paintKey', () => {
+  const meadow = LAND_LOOKS['meadow']!;
+  const lake = Object.values(LAKE_LOOKS)[0]!;
+  const start = { x: 0, z: -2.94 };
+  const key = (o: Partial<{ look: typeof meadow; seed: number; x: number; texels: number }> = {}) =>
+    paintKey(o.look ?? meadow, o.seed ?? 7, { ...start, x: o.x ?? 0 }, o.texels ?? 1024, []);
+
+  it('is the same for the same ground, and differs by biome, tile, start and tier size', () => {
+    expect(key()).toBe(key());
+    expect(key({ look: lake })).not.toBe(key());
+    expect(key({ seed: 8 })).not.toBe(key());
+    expect(key({ x: 1 })).not.toBe(key());
+    expect(key({ texels: 512 })).not.toBe(key());
+    expect(paintKey(meadow, 7, start, 1024, [{ x: 1, z: 1, r: 1, strength: 0.5 }])).not.toBe(key());
   });
 });
