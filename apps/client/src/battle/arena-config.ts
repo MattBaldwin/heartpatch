@@ -54,6 +54,20 @@ export const ARENA_SPECS: Readonly<Record<string, ArenaSpec>> = {
     haze: '#d9f2c4',
     hills: '#7fb98a',
   },
+  // Cleared land (#242): a sandy clearing ringed by trees, stumps and logs left from clearing.
+  clearing: {
+    props: [
+      { kind: 'tree', count: 12, ring: ring(12, 18), scale: [9.3, 13.6] }, // TUNE
+      { kind: 'tall-tree', count: 5, ring: ring(14, 19), scale: [11, 15.3] }, // TUNE
+      { kind: 'stump', count: 7, ring: ring(5, 12), scale: [3.4, 4.6] }, // TUNE
+      { kind: 'log', count: 3, ring: ring(7, 12), scale: [3, 4] }, // TUNE
+      { kind: 'stones', count: 8, ring: ring(4.6, 12), scale: [2.6, 3.4], front: true }, // TUNE
+      { kind: 'grass', count: 14, ring: ring(4.2, 14), scale: [2.4, 3.4], front: true }, // TUNE
+    ],
+    water: null,
+    haze: '#f3e6c4',
+    hills: '#8fb98a',
+  },
   // A trading post (#269): its hut behind the fighters, in a flowery meadow.
   // Journeys (#270) are fought here.
   'trading-post': {
