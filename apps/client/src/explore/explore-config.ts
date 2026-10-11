@@ -294,8 +294,63 @@ export const INTERACTION = {
  * bubbles, caustics) is in lake-config.ts.
  */
 export const EXPLORE_UNDERWATER = {
-  /** The Keeper swims: floats this share of its height up, leans forward, bobs. */
-  swim: { float: 0.18, lean: 0.38, bob: 0.035, bobSpeed: 1.6 }, // TUNE
   /** The mask on the face: up the Keeper's height, forward and size by its width. */
   mask: { up: 0.74, forward: 0.42, size: 0.8 }, // TUNE
+} as const;
+
+/**
+ * Swimming under a lake (#399, owner's pick "Glide and kick"): the Keeper
+ * stretches out head first; each kick bunches it up and shoots it ahead of
+ * its pace, then it glides back. Like the hop, the stroke follows the water
+ * covered, never the clock.
+ */
+export const EXPLORE_SWIM = {
+  /** The Keeper pitches about this share of its height up (its head), not its feet: the head stays on (about) its point and the legs trail. */
+  pivot: 0.7, // TUNE
+  /** Water covered by one stroke at no effort and at full effort, tile-local (full stick is about 1.6 strokes a second). */
+  stroke: { min: 0.13, max: 0.19 }, // TUNE
+  /** Effort eases toward the stick with this time constant, seconds. */
+  effortEase: 0.2, // TUNE
+  /** Stretching out into the swim, and back up to tread water, time constants in seconds. */
+  stretchIn: 0.18, // TUNE
+  stretchOut: 0.35, // TUNE
+  /** Afloat this share of the swimmer's height above the sand: a clear gap of water under the steep camera. */
+  float: 0.45, // TUNE: the pivot lifts a swimming Keeper higher still
+  /** The camera leads a swimmer by this many times its follow lag, so the long body sits mid-screen. */
+  cameraLead: 1.6, // TUNE
+  /** Forward pitch while swimming, radians (about 66°, toward flat). */
+  pitch: 1.15, // TUNE
+  /**
+   * Each stroke: the share spent kicking, how far the kick surges ahead
+   * (share of the height), how much it bunches up then stretches out, how
+   * quickly the glide gives the surge back (per stroke), and a small nose
+   * dip and bob.
+   */
+  kick: { share: 0.22, surge: 0.38, squash: 0.14, stretch: 0.12, decay: 3.2, dip: 0.1, bob: 0.03 }, // TUNE
+  /** Treading water: bob height (share of the height) and bobs a second. */
+  tread: { bob: 0.04, rate: 0.45 }, // TUNE
+  /** The soft shadow under a swimmer's middle: width (times its contact shadow) and opacity. */
+  shadow: { scale: 1.1, alpha: 0.75 }, // TUNE
+  /** Squishies following underwater: float, and a drifting glide by the water they cover. */
+  follower: { float: 0.5, bob: 0.1, pulse: 0.08 }, // TUNE
+  /** The team trails this share as far back underwater (it floats, so it covers less of the Keeper). */
+  followBack: 0.75, // TUNE
+  /**
+   * Bubbles puffed from the mask on each kick (never on letting go): how
+   * many, the pool, how long each lives (ms), how far it rises and its size
+   * (world units), how far apart they start and the stagger between them (ms).
+   */
+  bubbles: {
+    perKick: 3,
+    pool: 9,
+    lifeMs: 900,
+    rise: 0.9,
+    size: 0.13,
+    spread: 0.2,
+    staggerMs: 140,
+    /** Each kick's bubbles in turn, as a share of the full size. */
+    sizes: [1, 0.7, 0.85],
+  }, // TUNE
+  /** Kick bubbles are one extra draw: only on the high tier, so the iPad 9th gen's low and medium tiers pay nothing (owner, 30 fps with no headroom). */
+  bubbleTiers: { high: true, medium: false, low: false }, // TUNE
 } as const;

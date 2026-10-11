@@ -85,7 +85,11 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     ...['✨', '💖', '✨', '⭐', '✨'].map((s) => el('span', {}, s)),
   );
   const stage = el('div', { class: 'care-stage' }, blob, sparkles);
-  const name = el('h1', { class: 'auth-title care-name', id: 'care-title' });
+  const name = el('h1', {
+    class: 'auth-title care-name',
+    id: 'care-title',
+    'data-testid': 'care-name',
+  });
   // The rarity chip under the name (#240).
   const rarity = el('div', { class: 'care-rarity', 'data-testid': 'care-rarity' });
   const mood = el('p', { class: 'care-mood', 'data-testid': 'care-mood' });
@@ -372,7 +376,10 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       mapId = map;
       squishyId = null;
       setReply(null);
-      panel.hidden = false;
+      if (panel.hidden) {
+        panel.hidden = false;
+        panel.scrollTop = 0;
+      }
       note.textContent = messageOf(err);
       render();
       return;
@@ -386,7 +393,11 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     setReply(list);
     // Asked for one that isn't here (it grew up, or it's in the Hollow): say so.
     note.textContent = !picked && chosen ? CARE_TEXT.notHere : '';
+    const opening = panel.hidden;
     panel.hidden = false;
+    // The sheet keeps its scroll while hidden: a sheet closed from the bottom
+    // would open with its name under the account pill (#385).
+    if (opening) panel.scrollTop = 0;
     render();
     if (chosen?.newEvolution) squish('evolve');
   }
