@@ -8,16 +8,18 @@ const testDir = './tests/e2e';
 /**
  * CI's e2e groups, one job each per device. Playwright's own --shard splits by
  * test count in file order, which put every heavy WebGL spec on shard 1 (12 min
- * on iPad). These are balanced by measured iPad WebKit time (the slower device,
- * 2 workers): about 15-16 min of tests each, so about 8-9 min a job. A spec
- * file runs on one worker, so a slow file sets its group's floor: taps (about
- * 9 min) and tutorial (about 8) each sit in a group of light specs that the
- * other worker drains. Files start in name order, so what sorts before the big
- * file must be short: admin and auth before taps (under 1.5 min together).
- * tutorial-flow sorts before tutorial: on iPad its second (desktop) test skips
- * at once and frees a worker, but on iPhone both its runs go side by side, so
- * tutorial waits and iPhone group 2 is the slowest leg (~10 min). Rebalance
- * from the CI list reporter's durations when a group gets slow (#246).
+ * on iPad). These are balanced by measured WebKit time on both devices (#408:
+ * the per-test median of four CI runs' list-reporter durations), simulating
+ * how the 2 workers pull spec files in name order (a `parallel`-mode file,
+ * friendly and tutorial-flow, hands out each test on its own). Each group
+ * comes to about 10.4 min of tests on iPad and 7-10.4 on iPhone; iPad is the
+ * floor (about 121 min of tests over 12 workers). A spec file runs on one
+ * worker, so a slow file sets its group's floor (keeper about 7-8 min).
+ *
+ * Group 4 grew to 12 specs and about 20 min (#408), and most of the heaviest
+ * two-player specs ran side by side there, which is where the timeouts
+ * landed. Keep heavy specs apart and rebalance from the CI list reporter's
+ * durations when a group gets slow (#246, #408).
  *
  * Every spec is listed in exactly one group; there is no catch-all, so a new
  * spec can't quietly pile onto one job (group 5 grew to 28 min that way, #296).
@@ -26,48 +28,58 @@ const testDir = './tests/e2e';
  * the group with the least time. Unset (local runs) runs everything.
  */
 const E2E_GROUPS = [
-  // ~15.8 min of tests: taps alone is ~8.7.
-  ['admin', 'auth', 'taps', 'trading-posts', 'tray-layout', 'wild-picker'],
-  // ~15.2: tutorial alone is ~7.6; tutorial-flow's runs go side by side.
-  ['accessory-everywhere', 'tutorial', 'tutorial-flow', 'version', 'wardrobe', 'whats-new'],
-  ['audio', 'battle', 'capture', 'close-up', 'fences', 'map', 'milestones', 'potions'],
+  // ~10.4 min on both devices: recipe-book and tray-layout are the big ones.
   [
-    'care',
-    'care-layout',
-    'cinematic',
-    'dress-up',
-    'explore',
-    'friendly',
-    'hollow',
-    'inventory',
-    'keeper',
-    'map-hole',
+    'battle',
+    'boutique',
+    'fences',
+    'hollow-dusk',
+    'potions',
     'recipe-book',
     'short-screens',
-  ],
-  [
-    'battle-ui',
-    'boutique',
-    'factory',
-    'first-session',
-    'hollow-dusk',
-    'keeper-gallery',
-    'lorebook',
-    'smoke',
-    'starter',
-  ],
-  [
-    'account-help',
-    'chat',
-    'home',
-    'jobs',
-    'lobby',
-    'pwa',
-    'raids',
-    'renderer-error',
     'squishy-gallery',
-    'territory',
     'trade-split',
+    'tray-layout',
+    'wild-picker',
+  ],
+  // ~10.4 iPad, ~9.0 iPhone: keeper alone is ~7-8.
+  ['dress-up', 'hollow', 'keeper', 'lobby', 'map-hole', 'pwa', 'starter'],
+  // ~10.4 iPad, ~7.3 iPhone: friendly's three tests take both workers for a while.
+  [
+    'audio',
+    'capture',
+    'chat',
+    'close-up',
+    'factory',
+    'friendly',
+    'jobs',
+    'lorebook',
+    'renderer-error',
+  ],
+  // ~10.4 iPad, ~8.1 iPhone: taps alone is ~4.5-6.5.
+  [
+    'auth',
+    'cinematic',
+    'first-session',
+    'inventory',
+    'keeper-gallery',
+    'smoke',
+    'taps',
+    'territory',
+    'trading-posts',
+  ],
+  // ~10.4 on both: tutorial-flow's two runs go side by side.
+  ['account-help', 'care-layout', 'explore', 'home', 'map', 'raids', 'tutorial-flow', 'whats-new'],
+  // ~10.4 iPad, ~7.2 iPhone: tutorial alone is ~4.3-7.
+  [
+    'accessory-everywhere',
+    'admin',
+    'battle-ui',
+    'care',
+    'milestones',
+    'tutorial',
+    'version',
+    'wardrobe',
   ],
 ];
 

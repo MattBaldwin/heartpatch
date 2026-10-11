@@ -179,6 +179,10 @@ test('keeps the shell for offline use, but never the API', async ({
 test('shows the Add to Home Screen guide in Safari, in the lobby, until dismissed', async ({
   page,
 }, testInfo) => {
+  // A sign-up, a Keeper pick and a reload that rebuilds the scene, like
+  // auth.spec.ts. In CI a pass takes 11-23 s, and 5 of 8 first tries ran out
+  // the 30 s default (#408); CI renders in software.
+  test.setTimeout(90_000);
   await page.goto('/');
   // Never under the sign-in card (#135): it waits for the lobby.
   const overlay = page.getByTestId('auth-overlay');

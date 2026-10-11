@@ -106,8 +106,34 @@ export async function signUp(
   await overlay.getByLabel('Pick a name').fill(name);
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption(options.birthYear ?? '2014');
+  // TEMP (#408): measure where sign-up time goes in CI; removed before merge.
+  const t0 = Date.now();
+  let tResponse = 0;
+  void page
+    .waitForResponse((r) => r.url().endsWith('/api/v1/auth/signup'), { timeout: 0 })
+    .then(() => (tResponse = Date.now()))
+    .catch(() => undefined);
   await overlay.getByRole('button', { name: 'Sign up' }).tap();
-  await savedCode(overlay);
+  const tTapped = Date.now();
+  let shown = 0;
+  void overlay
+    .getByTestId('auth-code-done')
+    .waitFor({ timeout: 60_000 })
+    .then(() => (shown = Date.now()))
+    .catch(() => undefined);
+  try {
+    await savedCode(overlay);
+  } finally {
+    const ready = await page
+      .locator('#game')
+      .getAttribute('data-ready', { timeout: 1_000 })
+      .catch(() => null);
+    console.log(
+      `[signup-timing] ${test.info().titlePath.slice(1, 2).join('')}:${String(test.info().line)} ` +
+        `tap=${String(tTapped - t0)}ms response=${tResponse ? String(tResponse - t0) : 'none'}ms ` +
+        `screen=${shown ? String(shown - t0) : 'none'}ms stageReady=${String(ready)}`,
+    );
+  }
   const { helper } = options;
   if (!helper) return;
   await expect(
