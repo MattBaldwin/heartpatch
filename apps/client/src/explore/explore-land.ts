@@ -166,6 +166,7 @@ export class ExploreLand {
   readonly #sun: DirectionalLight | null;
   #tier: QualityTier;
   readonly #sunBase: number;
+  #groundMat: PBRMaterial | null = null;
   readonly #environmentBase: number;
   #ambient: AmbientMode = 'off';
   #night = false;
@@ -302,6 +303,11 @@ export class ExploreLand {
     this.#applyTier();
   }
 
+  /** The painted ground's material (the lake adds its caustics to it). */
+  get groundMaterial(): PBRMaterial | null {
+    return this.#groundMat;
+  }
+
   /** The ground's height under a world point. */
   heightAt(x: number, z: number): number {
     return this.field.height(x, z);
@@ -339,6 +345,10 @@ export class ExploreLand {
     const horizon = Color3.FromHexString(look.horizon).toLinearSpace();
     const zenith = Color3.FromHexString(look.zenith).toLinearSpace();
     const { haze } = LAND_LIGHT;
+    // The land owns the haze, all of it, every time (the water, if any, overrides it next).
+    this.#scene.fogMode = Scene.FOGMODE_LINEAR;
+    this.#scene.fogStart = haze.start;
+    this.#scene.fogEnd = haze.end;
     this.#scene.fogColor = Color3.Lerp(horizon, linear(haze.tint), haze.mix);
     const tint = Color3.FromHexString(look.groundTint);
     for (const t of this.#tinted) t.mat.albedoColor = t.base.multiply(tint);
@@ -433,6 +443,7 @@ export class ExploreLand {
     texture.wrapV = Texture.CLAMP_ADDRESSMODE;
     texture.anisotropicFilteringLevel = 4;
     const mat = matte(this.#scene, 'land-ground-mat', 0.95);
+    this.#groundMat = mat;
     mat.albedoTexture = texture;
     mesh.material = mat;
     this.#tinted.push({ mat, base: mat.albedoColor.clone() });

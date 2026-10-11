@@ -169,14 +169,14 @@ export interface ExploreSceneOptions {
   readonly reducedMotion?: () => boolean;
 }
 
-/**
- * What each kind of spot looks like: a map prop where one fits, else one of
- * the explore-only shapes built below (a mound, a pond, a ledge, a cave).
- */
 /** A search spot drawn from the land kit: the meadow's, else the lake's (#335). */
 const kitSpot = (scene: Scene, kind: string) =>
   buildSpotProp(scene, kind) ?? buildLakeSpotProp(scene, kind);
 
+/**
+ * What each kind of spot looks like: a map prop where one fits, else one of
+ * the explore-only shapes built below (a mound, a pond, a ledge, a cave).
+ */
 const SPOT_PROPS: Readonly<Record<string, PropKind | ExploreShape>> = {
   rock: 'rock',
   tree: 'tree',

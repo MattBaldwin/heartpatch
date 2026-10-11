@@ -174,8 +174,6 @@ export const EXPLORE_SKY = {
     [12, 17, 2],
   ],
   stars: { count: 44, right: 16, from: 6, to: 22, size: 0.22 }, // TUNE: degrees
-  /** Underwater and cave haze, world units from the camera (the camera is about 7 from the Keeper). */
-  fog: { start: 5, end: 22 }, // TUNE: a soft depth haze
 } as const;
 
 const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));

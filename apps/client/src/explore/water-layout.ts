@@ -1,6 +1,6 @@
 import type { WorldPoint } from '@heartpatch/shared';
 import { seededRandom } from './explore-world.js';
-import type { ExtrasContext, Growth, MoteHome } from './land-layout.js';
+import { shuffled, type ExtrasContext, type Growth, type MoteHome } from './land-layout.js';
 import { hexReach, softNoise, type LandField } from './land-shape.js';
 import { WATER_MOTION, type WaterLook } from './lake-config.js';
 
@@ -178,15 +178,4 @@ export function waterLayout(input: WaterLayoutInput): WaterLayout {
   }
 
   return { fish, bubbles: shuffled(bubbles, rand) };
-}
-
-/** A stable shuffle, so the first n of the list (a lower tier's share) spread evenly. */
-function shuffled<T>(list: T[], rand: () => number): T[] {
-  for (let i = list.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    const a = list[i] as T;
-    list[i] = list[j] as T;
-    list[j] = a;
-  }
-  return list;
 }

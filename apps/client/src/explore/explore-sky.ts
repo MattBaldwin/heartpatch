@@ -7,7 +7,7 @@ import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
-import { Scene } from '@babylonjs/core/scene';
+import type { Scene } from '@babylonjs/core/scene';
 import { linear, merged } from '../map/map-props.js';
 import { setInstances } from '../map/map-scene.js';
 import { EXPLORE_SKY, type SkyLook } from './explore-sky-look.js';
@@ -217,15 +217,7 @@ export class ExploreSky {
       light.diffuse = diffuse.multiply(linear(look.light.color));
     }
     this.#scene.environmentIntensity = this.#environment * look.light.environment;
-    // Underwater the far seabed fades into the water (#335).
-    if (look.fog) {
-      this.#scene.fogMode = Scene.FOGMODE_LINEAR;
-      this.#scene.fogColor = skyColour(look.fog);
-      this.#scene.fogStart = EXPLORE_SKY.fog.start;
-      this.#scene.fogEnd = EXPLORE_SKY.fog.end;
-    } else {
-      this.#scene.fogMode = Scene.FOGMODE_NONE;
-    }
+    // The haze is the land's (and under a lake the water's): the sky never sets it.
   }
 
   /** Rides with the camera: on its position, tilted down by its pitch. */

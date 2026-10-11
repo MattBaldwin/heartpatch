@@ -4,6 +4,8 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Scene } from '@babylonjs/core/scene';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ExploreLand } from './explore-land.js';
+import { ExploreSky } from './explore-sky.js';
+import { skyLook } from './explore-sky-look.js';
 import { SKY_LOOKS } from './explore-sky-look.js';
 import { LAND_LIGHT, LAND_LOOKS } from './land-config.js';
 
@@ -56,5 +58,19 @@ describe('ExploreLand light (#335)', () => {
     const { scene, sun } = sceneFor(SKY_LOOKS.dusk);
     land(scene, SKY_LOOKS.dusk);
     expect(sun.intensity).toBeCloseTo(1.6 * SKY_LOOKS.dusk.light.sun * LAND_LIGHT.sun, 9);
+  });
+
+  it('keeps its haze when the sky changes, in the explore scene order (sky, then land)', () => {
+    const { scene } = sceneFor();
+    const sky = new ExploreSky(scene, SKY_LOOKS.day);
+    const meadow = land(scene, SKY_LOOKS.day, sky.lightBase);
+    expect(scene.fogMode).toBe(Scene.FOGMODE_LINEAR);
+    // A minute's blend towards dusk, as the screen's timer sees it.
+    const look = skyLook({ phase: 'day', next: 'dusk', blend: 0.2 });
+    sky.set(look);
+    meadow.setSky(look);
+    expect(scene.fogMode).toBe(Scene.FOGMODE_LINEAR);
+    expect(scene.fogStart).toBe(LAND_LIGHT.haze.start);
+    expect(scene.fogEnd).toBe(LAND_LIGHT.haze.end);
   });
 });

@@ -1264,7 +1264,6 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     mapTileAtOpen = options.mapTile(at);
     options.onOpen(id);
     options.showScene(build);
-    ambient.start();
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = setInterval(() => {
       const look = skyNow();
@@ -1305,7 +1304,6 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     ambient.stop();
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = null;
-    ambient.stop();
     // A reply still on its way (a search, a bag read) belongs to this visit:
     // it must never land on the next tile opened.
     generation += 1;

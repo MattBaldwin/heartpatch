@@ -113,7 +113,7 @@ export class ExploreWater {
     this.#bubbles(L.bubbles);
 
     // Caustic light rippling on the sand: one term on the ground's own material.
-    const bed = scene.getMaterialByName('land-ground-mat');
+    const bed = land.groundMaterial;
     if (bed) this.#caustics = attachCaustics(bed, land.clock, CAUSTICS);
 
     this.setSky(options.sky);
@@ -169,7 +169,7 @@ export class ExploreWater {
     mesh.alwaysSelectAsActiveMesh = true;
     if (list.length === 0) {
       mesh.setEnabled(false);
-      this.#layers.set('fish', { mesh, count: 0, live: false, thins: false });
+      this.#layers.set('fish', { mesh, count: 0, live: true, thins: false });
       return;
     }
     const matrices = new Float32Array(list.length * 16);
@@ -185,7 +185,7 @@ export class ExploreWater {
     mesh.thinInstanceSetBuffer('color', colors, 4, true);
     mesh.thinInstanceSetBuffer(DRIFT_ATTRIBUTE, drift, 4, true);
     mesh.freezeWorldMatrix();
-    this.#layers.set('fish', { mesh, count: list.length, live: false, thins: false });
+    this.#layers.set('fish', { mesh, count: list.length, live: true, thins: false });
   }
 
   #bubbles(list: readonly BubbleHome[]): void {
