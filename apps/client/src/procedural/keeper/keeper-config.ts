@@ -80,9 +80,11 @@ export const KEEPER_PLACES = {
     lookAtZ: -2.3, // TUNE
     /**
      * The tallest Keeper (world units at scale 1, to the top of the hair)
-     * that fits above the card; a taller face, body and hair pair (#372) is
-     * shown smaller so its head stays on screen.
+     * that fits above the card on an iPhone SE; a taller one (bases run 1.25
+     * to 1.8, a face, body and hair pair up to about 2.3, #372) is shown
+     * smaller so its head stays on screen. Preview only: the Keeper itself
+     * (and its hash) doesn't change.
      */
-    fitHeight: 1.8, // TUNE
+    fitHeight: 1.6, // TUNE
   },
 } as const;

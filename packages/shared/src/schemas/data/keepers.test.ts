@@ -47,9 +47,9 @@ describe('checkKeeperData', () => {
     expect(KEEPER_DATA.bodies.map((b) => b.id).sort()).toEqual(
       [...bases, 'lanky', 'sturdy'].sort(),
     );
-    const shape = ({ id: _id, name: _name, ...rest }: { id: string; name: string }) => rest;
+    // Every one is its own shape: its numbers differ, whatever its id or name.
     const distinct = (rows: readonly { id: string; name: string }[]) =>
-      new Set(rows.map((r) => JSON.stringify(shape(r)))).size;
+      new Set(rows.map((r) => JSON.stringify({ ...r, id: '', name: '' }))).size;
     expect(distinct(KEEPER_DATA.faces)).toBe(KEEPER_DATA.faces.length);
     expect(distinct(KEEPER_DATA.bodies)).toBe(KEEPER_DATA.bodies.length);
     expect(new Set(KEEPER_DATA.faces.map((f) => f.name)).size).toBe(KEEPER_DATA.faces.length);

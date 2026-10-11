@@ -1,18 +1,10 @@
 import type { KeeperBodyType, KeeperFaceShape } from '@heartpatch/shared';
 
-// The Keeper creator's steps (#372): one per screen, in this order, with Back
-// and Next. Every step starts on a sensible pick, so a kid can tap Next all
+// The Keeper creator's steps (#372, owner-approved order): one per screen,
+// with Back and Next. The starter outfit's colours share the hair colour step. Every step starts on a sensible pick, so a kid can tap Next all
 // the way through; the step tabs jump straight to any of them.
 
-export const KEEPER_STEPS = [
-  'face',
-  'body',
-  'skin',
-  'hairstyle',
-  'hairColor',
-  'details',
-  'outfit',
-] as const;
+export const KEEPER_STEPS = ['face', 'body', 'skin', 'hairstyle', 'hairColor', 'details'] as const;
 export type KeeperStep = (typeof KEEPER_STEPS)[number];
 
 /** The step after `step`, or null on the last one. */
@@ -59,7 +51,7 @@ export function bodyTileSvg(body: KeeperBodyType, skin: string, top: string): st
   // To one scale, so a taller body is a taller figure: legs, body and head
   // of the tallest stack to about 1.15 Keeper heights. TUNE: if a body
   // outgrows the tile.
-  const u = (body.height * (TILE - 2)) / 1.1;
+  const u = (body.height * (TILE - 2)) / 1.15;
   const legs = body.legs * u;
   const th = body.torsoHeight * u;
   const tw = body.torsoWidth * u * (1 + 0.15 * body.roundness);

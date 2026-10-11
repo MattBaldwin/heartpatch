@@ -52,7 +52,7 @@ test('a new player sees the story after their Keeper, then the tutorial', async 
   expect(await seenOnServer(page)).toBeNull();
 
   // Keeper first, then the story, with no lobby behind it.
-  await pickKeeper(page, 'Wren', 'play');
+  await pickKeeper(page, 'Button', 'play');
   const cinematic = page.getByTestId('cinematic');
   await expect(cinematic).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('lobby')).toBeHidden();

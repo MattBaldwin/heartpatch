@@ -189,6 +189,20 @@ test('every hairstyle draws on a Keeper, each one different', async ({ page }) =
   expect(errors).toEqual([]);
 });
 
+test('any face on any body draws, each pair different (#372)', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = await watchErrors(page);
+  const stats = await openGallery(page, '?faces=pip,juniper&bodies=acorn,lanky');
+  expect(stats).toMatchObject({ keepers: 4 });
+  const info = await page.evaluate(() => {
+    const h = (window as Hooks).__heartpatchKeepers!;
+    return { hashes: h.shown().map((_, i) => h.hashOf(i)), missing: h.missing() };
+  });
+  expect(new Set(info.hashes).size).toBe(4);
+  expect(info.missing).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
 test('every wardrobe slot attaches to every base (no clothing is body-type locked)', async ({
   page,
 }) => {
