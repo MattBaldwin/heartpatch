@@ -710,8 +710,10 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     error.textContent = '';
     try {
       // The server leaves out choices that are the starting look's own (#289).
-      saved = completeKeeperConfig(await api.save(picked), KEEPER_DATA);
+      const kept = completeKeeperConfig(await api.save(picked), KEEPER_DATA);
+      // Another player since: their Keeper is theirs, not this one.
       if (mine !== session) return;
+      saved = kept;
       const first = mode === 'first';
       close(true);
       if (first) options.onReady(who);
