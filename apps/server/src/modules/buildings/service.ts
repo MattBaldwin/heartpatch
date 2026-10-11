@@ -35,6 +35,7 @@ import type { NewGameEvent } from '../../db/game-events.js';
 import { isUniqueViolation } from '../../db/errors.js';
 import { AppError } from '../../lib/errors.js';
 import { mapLocalTime, type Clock } from '../../lib/time.js';
+import { foldHabitatLean } from '../care/evolution.js';
 import { createInventoryRepo } from '../inventory/repo.js';
 import {
   consumeItems,
@@ -727,7 +728,9 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           if (habitat && (await repo.countResidents(habitat.row.id)) >= habitat.capacity) {
             throw new AppError('CONFLICT', MESSAGES.habitatFull(habitat.name));
           }
-          await repo.setHabitat(squishy.id, habitatRowId);
+          // Its old habitat's share of its feeling lean lands first (#32).
+          await foldHabitatLean(tx, squishy.id, at);
+          await repo.setHabitat(squishy.id, habitatRowId, at);
           // A gatherer moving in stops work (housed or working, not both;
           // owner decisions 2026-10-04); what it had ready goes in the bag.
           // A trainee sleeps on its homestead (#277), so it stops training

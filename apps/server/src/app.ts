@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
+import { setEvolutionSalt } from './modules/care/evolution.js';
 import type { Config } from './config.js';
 import { registerErrorHandling } from './lib/errors.js';
 import { serializerCompiler, validatorCompiler } from './lib/zod.js';
@@ -120,6 +121,9 @@ export interface BuildAppOptions {
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const { config } = options;
   const clock = options.clock ?? createClock(config);
+  // Evolution rolls are seeded with a server secret (#32); config refuses a
+  // production start without it.
+  setEvolutionSalt(config.HP_EVOLUTION_SALT);
   const app = Fastify({
     logger: options.logger ?? defaultLogger(config),
     trustProxy: config.TRUST_PROXY ? trustOneProxyHop : false,
@@ -353,11 +357,21 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
           }),
         );
         await api.register(
-          territoryRoutes(createTerritoryService({ db, clock, battles, ...publish }), {
-            hooks: authHooks,
-            idempotency,
-            devTools: config.HP_DEV_SQUISHY_GRANTS,
-          }),
+          territoryRoutes(
+            createTerritoryService({
+              db,
+              clock,
+              battles,
+              ...publish,
+              // "Defend now?" (#29-C) goes to a defender whose app is open.
+              ...(wsHub ? { isOnline: wsHub.isOnline } : {}),
+            }),
+            {
+              hooks: authHooks,
+              idempotency,
+              devTools: config.HP_DEV_SQUISHY_GRANTS,
+            },
+          ),
         );
         // The raid log and defense style (#16); the raid-log consumer writes
         // the rows (`modules/raids/consumer.ts`, started in index.ts).

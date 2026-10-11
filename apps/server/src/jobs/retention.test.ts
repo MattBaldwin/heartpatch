@@ -22,6 +22,8 @@ describe('short-lived event types', () => {
     expect(['battle.picked', 'battle.turned', 'battle.cheered'].every(isShortLived)).toBe(true);
     expect(isShortLived('challenge.sent')).toBe(true);
     expect(isShortLived('challenge.answered')).toBe(true);
+    expect(isShortLived('defense.prompted')).toBe(true);
+    expect(isShortLived('defense.answered')).toBe(true);
     for (const kept of ['battle.started', 'battle.ended', 'raid.resolved', 'challenge']) {
       expect(isShortLived(kept)).toBe(false);
     }

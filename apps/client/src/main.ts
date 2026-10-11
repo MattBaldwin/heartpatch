@@ -2,9 +2,10 @@ import { createAudio } from './audio/audio.js';
 import { battleCue, careCue, touchCue } from './audio/cues.js';
 import { boot } from './engine/boot.js';
 import { createRenderer, parseRendererPreference } from './engine/renderer.js';
-import { pickInitialTier } from './engine/quality/tiers.js';
+import { isQualityTier, pickInitialTier } from './engine/quality/tiers.js';
 import { mountStage, type SceneBuilder, type Stage } from './engine/stage.js';
 import { createBattleScreen } from './battle/battle-screen.js';
+import { createDefensePrompt } from './battle/defense-prompt.js';
 import { createWildPicker } from './battle/wild-picker.js';
 import { createHollowScreen } from './hollow/hollow-screen.js';
 import { createLandScreen } from './land/land-screen.js';
@@ -76,8 +77,15 @@ installStickyTaps(document);
 
 const params = new URLSearchParams(window.location.search);
 // `?quality=` and `?renderer=webgpu` (opt-in, tech spec §6) stand in for the settings screen.
+/**
+ * Dev only: `?tier=` pins a tier for honest review captures (#335). The
+ * governor is off, so headless software rendering can't drop it to low;
+ * every capture says which tier it was taken at.
+ */
+const pinnedTier = import.meta.env.DEV ? params.get('tier') : null;
+const pinTier = isQualityTier(pinnedTier);
 /** The quality tier, carried from stage to stage so the governor's last step down isn't lost. */
-let tier = pickInitialTier(params.get('quality'));
+let tier = pickInitialTier(pinnedTier, params.get('quality'));
 let stage: Stage | null = null;
 /** What the stage draws: the open map, or the test scene. */
 let sceneBuilder: SceneBuilder = buildTestScene;
@@ -138,7 +146,7 @@ function showScene(build: SceneBuilder | null): void {
   currentStage.dispose();
   if (!target) return;
   try {
-    stage = mounted(mountStage(renderer, target, sceneBuilder, tier));
+    stage = mounted(mountStage(renderer, target, sceneBuilder, tier, {}, pinTier));
   } catch (err) {
     showRendererError(err);
   }
@@ -541,7 +549,9 @@ const explore = createExploreScreen({
   root: document.body,
   showScene,
   invalidate: () => stage?.invalidate(),
+  requestFrame: () => stage?.requestFrame(),
   tier: () => stage?.quality.snapshot.tier ?? tier,
+  pinned: () => pinTier,
   keeper: () => keeper.current,
   keeperWearing: () => wardrobe.wearing,
   mapTile: (at) => maps.view?.tiles.find((t) => t.q === at.q && t.r === at.r) ?? null,
@@ -672,6 +682,7 @@ const maps = createMapScreen({
     milestones.liveEvent(event);
     journeys.liveEvent(event);
     postScreen.liveEvent(event);
+    defense.liveEvent(event);
   },
 });
 // The Keeper's Recipe Book (owner decision 2026-10-05): from the My
@@ -789,6 +800,19 @@ const lorebook = createLorebook({
 // page, the morning report, What's new, an evolution's "Whoa!" or the wardrobe
 // (one card at a time, #129).
 // Nor over a form the player just asked for (the lobby's "Make a patch").
+// "Defend now?" (#29-C): over any screen while a rival challenges land my
+// squishies stand watch on; "Defend!" opens the battle from my side.
+const defense = createDefensePrompt({
+  root: document.body,
+  nameOf: (userId) => maps.view?.members.find((m) => m.user.id === userId)?.user.username ?? null,
+  openBattle: (battle) => {
+    // The server has seated them already: whatever is open steps aside.
+    catalog.close();
+    care.close();
+    closeUp.close();
+    battles.open(battle);
+  },
+});
 const milestones = createMilestoneCelebration({
   root: document.body,
   busy: () =>
@@ -1227,6 +1251,7 @@ mountAuth(document.body, {
     starters.setUser(user);
     lorebook.setUser(user);
     milestones.setUser(user);
+    defense.setUser(user);
     maps.setUser(user);
     signedIn = user;
     cinematic.setUser(user);
@@ -1285,6 +1310,7 @@ if (import.meta.env.DEV) {
     starter: () => starters.debug,
     lore: () => lorebook.debug,
     milestones: () => milestones.debug,
+    defense: () => defense.debug,
     whatsNew: () => whatsNew.debug,
     audio: () => audio.debug,
   };
@@ -1295,7 +1321,7 @@ await boot(canvas, {
   createRenderer,
   freshCanvas,
   mount: (renderer, target) => {
-    stage = mounted(mountStage(renderer, target, sceneBuilder, tier));
+    stage = mounted(mountStage(renderer, target, sceneBuilder, tier, {}, pinTier));
     return currentStage;
   },
   onError: showRendererError,

@@ -56,12 +56,20 @@ describe('loadConfig', () => {
   });
 });
 
+/** A production evolution salt for these tests only (#32). */
+const SALT = 'test-only-evolution-salt';
+
 describe('loadServerConfig', () => {
   it('refuses to start in production without a signup code', () => {
     expect(() => loadServerConfig({ DATABASE_URL })).toThrow(/HP_SIGNUP_CODE/);
-    expect(loadServerConfig({ DATABASE_URL, HP_SIGNUP_CODE: 'family-code' }).HP_SIGNUP_CODE).toBe(
-      'family-code',
+    // Evolution rolls need their secret salt in production too (#32).
+    expect(() => loadServerConfig({ DATABASE_URL, HP_SIGNUP_CODE: 'family-code' })).toThrow(
+      /HP_EVOLUTION_SALT/,
     );
+    expect(
+      loadServerConfig({ DATABASE_URL, HP_SIGNUP_CODE: 'family-code', HP_EVOLUTION_SALT: SALT })
+        .HP_SIGNUP_CODE,
+    ).toBe('family-code');
   });
 
   it('allows a missing signup code outside production (signups are closed)', () => {
@@ -131,6 +139,7 @@ describe('loadServerConfig', () => {
       loadServerConfig({
         DATABASE_URL,
         HP_SIGNUP_CODE: 'family-code',
+        HP_EVOLUTION_SALT: SALT,
         HP_DEV_SQUISHY_GRANTS: 'false',
       }).HP_DEV_SQUISHY_GRANTS,
     ).toBe(false);
