@@ -1164,8 +1164,8 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
    * until then. Sending someone out and giving up apply at once. No Heart
    * Charms, and nothing from the bag in a battle with a friend. A live
    * defense (#29-C) takes potions only when `liveDefenseItems` says so: a
-   * potion is a side's first pick of the turn, out of the bag at once and
-   * final. The defender can't give up their land: their time running out
+   * potion, alone or sipped with a move (#403), is a side's first pick of
+   * the turn, out of the bag at once and final (the move with it too). The defender can't give up their land: their time running out
    * lets their defense style play instead.
    */
   const actLive = async (

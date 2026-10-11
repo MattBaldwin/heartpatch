@@ -1118,7 +1118,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     const from = Math.min(shownLog, next.view.log.length);
     if (next.live) noteCovered(battle, next);
-    // The turn came back: a sip went out with it, or the battle moved on (#403).
+    // The turn came back: a sip went out with it, or the battle moved on
+    // (#403). Its "Sipped …" caption goes too; the new steps say what happened.
+    if (sipped !== null) hud.setCaption(null);
     sipped = null;
     battle = next;
     armLive();
@@ -1163,6 +1165,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       // A refused sip (none in the bag after all) goes back: pick again (#403).
       if (sipped !== null) {
         sipped = null;
+        hud.setCaption(null);
         plate(current.mySide);
         void refreshPotions(current);
       }

@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { FIXTURE_POTION_CONTENT as content } from '../../tests/fixtures/battle.js';
+import recorded from '../../tests/fixtures/pre-403-potion-battles.json' with { type: 'json' };
 import { hashString } from '../rng/index.js';
 import { BattleActionSchema, type BattleAction, type BattleSetup } from '../schemas/battle.js';
 import { battleRecord, replayBattleRecord } from './engine.js';
@@ -28,12 +28,7 @@ interface LoggedBattle {
   readonly stateHash: string;
 }
 
-const logged = JSON.parse(
-  readFileSync(
-    new URL('../../tests/fixtures/pre-403-potion-battles.json', import.meta.url),
-    'utf8',
-  ),
-) as { contentHash: string; battles: LoggedBattle[] };
+const logged = recorded as unknown as { contentHash: string; battles: LoggedBattle[] };
 
 describe('battles logged before the free sip (#403) replay byte for byte', () => {
   it('was recorded with this content, and holds bare potion turns of every kind', () => {
@@ -42,7 +37,7 @@ describe('battles logged before the free sip (#403) replay byte for byte', () =>
       logged.battles.flatMap((b) =>
         b.actions.flatMap((a) =>
           a.type === 'turn'
-            ? Object.values(a.choices).flatMap((c) => (c?.type === 'item' ? [c.item] : []))
+            ? Object.values(a.choices).flatMap((c) => (c.type === 'item' ? [c.item] : []))
             : [],
         ),
       ),
@@ -60,7 +55,8 @@ describe('battles logged before the free sip (#403) replay byte for byte', () =>
       for (const action of battle.actions) {
         expect(BattleActionSchema.parse(action)).toEqual(action);
       }
-      const state = replayBattleRecord(content, battle);
+      // The stored record keeps its log too; the replay never reads it.
+      const state = replayBattleRecord(content, { ...battle, log: [] });
       expect(hashString(JSON.stringify(state))).toBe(battle.stateHash);
       expect(state.log).toHaveLength(battle.events);
       expect(battleRecord(battle.setup, battle.actions, state).result).toEqual(battle.result);

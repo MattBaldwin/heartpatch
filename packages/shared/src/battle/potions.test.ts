@@ -405,10 +405,7 @@ describe('a free sip (#403): drink a potion and still move the same turn', () =>
     const state = faster();
     const next = turn(state, sip(BREW, 'leafy-boop'), sip(COCOA, 'tickle-tackle'));
     const events = newEvents(state, next);
-    expect(events.slice(0, 2).map((e) => [e.type, e.side])).toEqual([
-      ['item', 'a'],
-      ['item', 'b'],
-    ]);
+    expect(ofType(events.slice(0, 2), 'item').map((e) => e.side)).toEqual(['a', 'b']);
     expect(ofType(events, 'move')).toHaveLength(2);
     expect(next.sides.b.itemsUsed).toEqual([COCOA]);
   });

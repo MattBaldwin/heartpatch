@@ -125,6 +125,27 @@ test('crafts a Brave Brew, drinks it in a wild battle, and shows the chip', asyn
   await realTap(brew);
   await expect(sippedButton).toHaveText('🧪 Sipped ✓');
 
+  // A refused move (the bag ran dry on another device) takes the sip back,
+  // and nothing still says "Sipped".
+  await page.route('**/api/v1/battles/*/actions', (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 'CONFLICT', message: 'No Brave Brew left!' } }),
+    }),
+  );
+  await realTap(page.getByTestId('battle-move').first());
+  await expect(sippedButton).toHaveText(/🧪/);
+  await expect(sippedButton).not.toHaveText(/Sipped/);
+  await expect(page.getByTestId('battle-caption')).not.toContainText('Sipped');
+  await expect(page.getByTestId('battle-chip-attack-mine')).toBeHidden();
+  expect((await battleState(page))?.sipped).toBeNull();
+  await page.unroute('**/api/v1/battles/*/actions');
+  await settled(page);
+  await realTap(sippedButton);
+  await realTap(brew);
+  await expect(sippedButton).toHaveText('🧪 Sipped ✓');
+
   // Then a move: one turn plays, with the sip first and the move still made.
   await realTap(page.getByTestId('battle-move').first());
   await expect.poll(async () => (await battleState(page))?.turn, { timeout: 30_000 }).toBe(1);

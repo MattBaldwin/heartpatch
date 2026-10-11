@@ -49,7 +49,7 @@ export type PotionPlan =
 
 /** Each potion plan again under the pre-#403 rule (`--compare`), keyed `<key>-whole-turn`. */
 export function withWholeTurnPlans(plans: readonly PotionPlan[]): PotionPlan[] {
-  return plans.flatMap((plan) =>
+  return plans.flatMap((plan): PotionPlan[] =>
     'item' in plan ? [plan, { ...plan, key: `${plan.key}-whole-turn`, wholeTurn: true }] : [plan],
   );
 }
