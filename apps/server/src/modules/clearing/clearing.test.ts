@@ -228,7 +228,9 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
 
     clock.setTime(Date.parse(START) + CLEAR_MS);
     const done = await settle(server, kid, mapId);
-    expect(done.cleared).toEqual([{ q: plot.q, r: plot.r, items: { timber: 5 } }]);
+    expect(done.cleared).toEqual([
+      { q: plot.q, r: plot.r, items: { timber: 5 }, landCleared: true },
+    ]);
     expect(done.items['timber']).toBe(5);
     const tile = await tileOf(server, kid, mapId, plot);
     expect(tile).toMatchObject({ terrain: 'clearing', nodeResource: null, clearing: null });
@@ -345,18 +347,42 @@ describe.skipIf(!url)('clearing land (#242, needs DATABASE_URL)', () => {
     expect(tile).toMatchObject({ terrain: 'forest', nodeResource: 'timber' });
   });
 
-  it('still clears the land, and banks the drop for its clearer, when a capture came after it was done', async () => {
+  it("banks the drop for its clearer, and leaves the new owner's land alone, when a capture came after it was done", async () => {
     const { server, kid, mapId, plot } = await forestHomestead();
     const rival = await rivalOn(mapId);
     expect((await clear(server, kid, mapId, plot)).statusCode).toBe(201);
-    clock.setTime(Date.parse(START) + CLEAR_MS + 1000);
+    // Done, but the kid closed the app; the land changes hands an hour later.
+    clock.setTime(Date.parse(START) + CLEAR_MS + 60 * 60 * 1000);
     await capture(mapId, plot.id, kid, rival);
-    clock.setTime(Date.parse(START) + 2 * CLEAR_MS);
+    // The new owner sees their land as it is, and gathers its spot.
+    const seen = await tileOf(server, rival, mapId, plot);
+    expect(seen).toMatchObject({ terrain: 'forest', nodeResource: 'timber', clearing: null });
+    const gather = await call(server, 'POST', `/maps/${mapId}/gathers`, rival, {
+      q: plot.q,
+      r: plot.r,
+    });
+    expect(gather.statusCode).toBe(201);
+
+    // The kid comes back: the drop lands, and the rival's land stays as it is.
+    clock.setTime(Date.parse(START) + 2 * CLEAR_MS + 60 * 60 * 1000);
     const done = await settle(server, kid, mapId);
-    expect(done.cleared).toEqual([{ q: plot.q, r: plot.r, items: { timber: 5 } }]);
+    expect(done.cleared).toEqual([
+      { q: plot.q, r: plot.r, items: { timber: 5 }, landCleared: false },
+    ]);
     expect(done.items['timber']).toBe(5);
+    expect(await clearRow(plot.id)).toMatchObject({ endReason: 'cleared' });
     const tile = await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, plot.id) });
-    expect(tile).toMatchObject({ terrain: 'clearing', nodeResource: null, ownerUserId: rival.id });
+    expect(tile).toMatchObject({
+      terrain: 'forest',
+      nodeResource: 'timber',
+      ownerUserId: rival.id,
+    });
+    const types = (await eventsOf(mapId)).map((e) => e.type);
+    expect(types).not.toContain('tile.cleared');
+    const rivalGather = await db.query.gatherJobs.findFirst({
+      where: (t, { and, eq }) => and(eq(t.tileId, plot.id), eq(t.userId, rival.id)),
+    });
+    expect(rivalGather).toMatchObject({ status: 'active' });
   });
 
   it("isn't blocked by a clear or a gather the land's last owner left behind", async () => {

@@ -38,7 +38,7 @@ import {
  * (owner decision 2026-10-06: no Collect). Only the owner, on their own
  * joined homesteads, on terrain `CLEARING_RULES` lists, with nothing standing
  * on or working the tile. Cleared land stays cleared for good, whoever holds
- * it later.
+ * it later; a clear only clears land still the clearer's when it settles.
  */
 
 const RESOURCE_NAMES = new Map(GAME_DATA.resources.map((r) => [r.id, r.name]));
@@ -64,8 +64,9 @@ const MESSAGES = {
 /**
  * What happens to a clear when it's settled, like a gather (`gatherFate`):
  * `clear` when it finished while the tile was still the clearer's (even if
- * the land changed hands since: cleared land is the land itself), `lose` when
- * the land changed hands first, `wait` while it's still going.
+ * the land changed hands since: the drop is theirs, though only land still
+ * theirs becomes cleared land, `planClearSettlement`), `lose` when the land
+ * changed hands first, `wait` while it's still going.
  */
 export function clearFate(
   clear: Pick<SettleClearRow, 'userId' | 'readyAt' | 'tileOwner' | 'lostAt'>,
@@ -88,6 +89,8 @@ export interface ClearSettlement {
   readonly grants: { userId: string; items: Record<string, number> }[];
   /** When each still-going clear finishes (ms), for settle's `nextAt`. */
   readonly due: number[];
+  /** How many clears `apply` ends (finished or lost). */
+  readonly ending: number;
   /** Turns finished clears' tiles into cleared land and banks their drops; returns what landed and the events. */
   readonly apply: () => Promise<{ cleared: ClearedTile[]; events: NewGameEvent[] }>;
 }
@@ -122,6 +125,7 @@ export async function planClearSettlement(
         : [],
     ),
     due: plans.flatMap((p) => (p.fate === 'wait' ? [p.clear.readyAt.getTime()] : [])),
+    ending: plans.filter((p) => p.fate !== 'wait').length,
     apply: async () => {
       const cleared: ClearedTile[] = [];
       const events: NewGameEvent[] = [];
@@ -131,8 +135,13 @@ export async function planClearSettlement(
           await repo.endClear(clear.id, { reason: 'lost', at });
           continue;
         }
-        await finishClear(tx, repo, clear, at);
-        cleared.push({ q: clear.q, r: clear.r, items: clear.drop });
+        // Finished in time, but the land changed hands before it settled: the
+        // drop is still theirs, and the new owner's land stays as it is (they
+        // may be gathering or building there already).
+        const landCleared = clear.tileOwner === clear.userId;
+        await finishClear(tx, repo, clear, at, landCleared);
+        cleared.push({ q: clear.q, r: clear.r, items: clear.drop, landCleared });
+        if (!landCleared) continue;
         events.push({
           mapId: clear.mapId,
           type: 'tile.cleared',
@@ -153,14 +162,15 @@ export async function planClearSettlement(
   };
 }
 
-/** The tile becomes cleared land, the drop lands, and the clear ends. */
+/** The drop lands and the clear ends; with `landCleared`, the tile becomes cleared land. */
 async function finishClear(
   tx: Executor,
   repo: Pick<ClearingRepo, 'clearTile' | 'endClear'>,
   clear: ClearRow,
   at: Date,
+  landCleared: boolean,
 ): Promise<void> {
-  await repo.clearTile(clear.tileId);
+  if (landCleared) await repo.clearTile(clear.tileId);
   if (Object.keys(clear.drop).length > 0) {
     await grantItems(
       tx,
@@ -216,9 +226,7 @@ async function settleLeftovers(
       new Set(locked.map((t) => t.id)),
       at,
     );
-    if (!gather || fate === 'wait') {
-      if (clears.due.length === clearIds.length) return false;
-    }
+    if ((!gather || fate === 'wait') && clears.ending === 0) return false;
 
     await lockGrantRows(tx, mapId, [
       ...(gather && fate === 'bank' ? [gather] : []),

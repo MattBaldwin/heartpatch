@@ -145,11 +145,17 @@ export const InventoryResponseSchema = z.object({
 });
 export type InventoryResponse = z.infer<typeof InventoryResponseSchema>;
 
-/** A tile a settle finished clearing (#242), and what it dropped into the bag. */
+/**
+ * A clear a settle finished (#242), and what it dropped into the bag.
+ * `landCleared`: the tile became cleared land. False when the land had
+ * changed hands since: the drop still lands, but someone else's land stays
+ * as it is.
+ */
 export const ClearedTileSchema = z.object({
   q: HexSchema.shape.q,
   r: HexSchema.shape.r,
   items: ItemCountsSchema,
+  landCleared: z.boolean(),
 });
 export type ClearedTile = z.infer<typeof ClearedTileSchema>;
 
