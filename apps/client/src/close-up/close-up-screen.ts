@@ -18,6 +18,7 @@ import {
 import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import { COMMAND_RETRY_MS, sendCommand } from '../inventory/send-command.js';
+import { BreathPacer } from '../map/ambient-layout.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { accessoryItem } from '../procedural/accessory.js';
@@ -141,6 +142,8 @@ export interface CloseUpDebug {
   /** Dress up (#340): the picker is open; the accessory drawn on it now. */
   readonly dressing: boolean;
   readonly accessory: string | null;
+  /** Idle breathing: `stopped` once the device was judged too slow for it this visit (#397). */
+  readonly breathing: 'live' | 'stopped';
 }
 
 type Phase = 'arriving' | 'here' | 'leaving';
@@ -183,7 +186,8 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   /** Bumped on every open, close and user change, so a late reply is dropped. */
   let ticket = 0;
   let frame = 0;
-  let lastBreathDraw = 0;
+  /** Breathing's pace, judged afresh each visit (a slow device stops it, #397). */
+  let breath = new BreathPacer(BREATHING_FRAME_MS);
   let idleTimer: number | undefined;
   let idle: { move: IdleMove; start: number } | null = null;
   let readyTimer: number | undefined;
@@ -1038,7 +1042,10 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
 
   /** Starts the frame loop if it isn't running. */
   function kick(): void {
-    if (frame === 0 && isOpen()) frame = requestAnimationFrame(tick);
+    if (frame !== 0 || !isOpen()) return;
+    // The loop stood still: the next breath's gap isn't a slow frame.
+    breath.skip();
+    frame = requestAnimationFrame(tick);
   }
 
   /**
@@ -1092,14 +1099,15 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     }
     if (s?.isPlaying(now)) busy = true;
     if (busy) {
+      breath.skip();
       s?.update(now);
       options.invalidate();
-    } else if (reducedMotion.matches) {
-      // Still (no breathing): nothing to draw until something happens.
+    } else if (reducedMotion.matches || breath.slow) {
+      // Still (no breathing, or a device too slow for it): nothing to draw
+      // until something happens.
       if (!bubble) return;
-    } else if (now - lastBreathDraw >= BREATHING_FRAME_MS) {
+    } else if (breath.due(now)) {
       // Breathing only: move and draw once per ask, about 30 a second.
-      lastBreathDraw = now;
       if (s?.update(now)) options.requestFrame();
       else if (!bubble) return;
     }
@@ -1108,6 +1116,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
   document.addEventListener('visibilitychange', () => {
     if (!isOpen()) return;
     if (!document.hidden) {
+      breath.skip();
       kick();
       // Back from the background: catch up with care done elsewhere (or an evolution).
       void refresh();
@@ -1160,6 +1169,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
     counts = { sent: 0, held: 0, reactions: 0, idleMoves: 0 };
     lastHold = null;
     phase = 'arriving';
+    breath = new BreathPacer(BREATHING_FRAME_MS);
     phaseAt = performance.now();
     note.textContent = '';
     hint.hidden = false;
@@ -1278,6 +1288,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
         note: note.textContent,
         dressing,
         accessory: scene3d?.accessory ?? null,
+        breathing: breath.slow ? ('stopped' as const) : ('live' as const),
       };
     },
   };

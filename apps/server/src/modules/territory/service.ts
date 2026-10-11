@@ -73,6 +73,7 @@ import {
 import { finishLostTraining, takeDownOnLostLand } from '../buildings/service.js';
 import { createFencesRepo } from '../fences/repo.js';
 import { FENCE_DATA, takeDownFencesOnCapture, toPlacedFence } from '../fences/service.js';
+import { clearGoingOn } from '../clearing/repo.js';
 import { refreshHomesteads } from '../explore/homesteads.js';
 import { createLandTending, type LandTendingService } from './tending.js';
 
@@ -126,6 +127,7 @@ export interface TerritoryServiceOptions {
 // Kid-readable messages (style guide §3, §6, §9: "Claim" and "Challenge").
 const MESSAGES = {
   noMap: "We couldn't find that patch.",
+  clearing: "You're clearing this land. Let it finish first!",
   noTile: "We couldn't find that spot.",
   home: 'Home bases are safe. Nobody can ever take one!',
   tradingPost: 'Trading posts belong to everyone! Nobody can claim one.',
@@ -627,6 +629,13 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
         if (tile.homeSlot !== null) throw new AppError('FORBIDDEN', MESSAGES.homeWatch);
         const before = await repo.listDefenders(tile.id, user.id);
         const here = new Set(before.map((d) => d.id));
+        // No new guards on land being cleared (#242); ones already here may stay or go.
+        if (
+          request.squishyIds.some((id) => !here.has(id)) &&
+          (await clearGoingOn(tx, tile.id, user.id))
+        ) {
+          throw new AppError('CONFLICT', MESSAGES.clearing);
+        }
         // Squishy locks after the tiles (in id order): housing one locks it
         // too. Guards leaving this post are locked as well: their contentment
         // checkpoint is written below (#376).

@@ -29,6 +29,7 @@ import { chatRoutes } from './modules/chat/routes.js';
 import { createChatService } from './modules/chat/service.js';
 import { createCareService } from './modules/care/service.js';
 import { createBattlesService } from './modules/battles/service.js';
+import { clearingRoutes } from './modules/clearing/routes.js';
 import { gatheringRoutes } from './modules/gathering/routes.js';
 import { squishyJobsRoutes } from './modules/jobs/routes.js';
 import { factoryRoutes } from './modules/factory/routes.js';
@@ -44,6 +45,7 @@ import { tradesRoutes } from './modules/trades/routes.js';
 import { createTradesService } from './modules/trades/service.js';
 import { createJourneyBattlePort, createJourneysService } from './modules/journeys/service.js';
 import { createHollowService, type HollowService } from './modules/hollow/service.js';
+import { createClearingService } from './modules/clearing/service.js';
 import { houseRoutes } from './modules/house/routes.js';
 import { createHouseService } from './modules/house/service.js';
 import { houseSwitchOf } from './modules/house/switch.js';
@@ -337,6 +339,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
             hooks: authHooks,
             idempotency,
             devTools: config.HP_DEV_SQUISHY_GRANTS,
+          }),
+        );
+        // Clearing land (#242): a homestead becomes cleared land, ready to build on.
+        await api.register(
+          clearingRoutes(createClearingService({ db, clock, ...publish }), {
+            hooks: authHooks,
+            idempotency,
           }),
         );
         // Finished crafts, gathers and gatherers' cycles go straight to the bag

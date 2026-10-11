@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { savedCode, TEST_PASSWORD } from './players.js';
+import { savedCode, submitSignUp, TEST_PASSWORD } from './players.js';
 
 // Signup needs the family code the dev server was started with (playwright.config.ts).
 const signupCode = process.env['HP_SIGNUP_CODE'] ?? '';
@@ -17,7 +17,7 @@ test('signs up, logs out and logs back in', async ({ page }, testInfo) => {
   await overlay.getByLabel('Pick a name').fill(username);
   await overlay.getByLabel('Pick a password').fill(password);
   await overlay.getByLabel('Year you were born').selectOption('2014');
-  await overlay.getByRole('button', { name: 'Sign up' }).tap();
+  await submitSignUp(overlay);
 
   const code = overlay.getByTestId('auth-recovery-code');
   await expect(code).toHaveText(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
@@ -61,7 +61,7 @@ test('"Not you?" forgets the names, and "Forgot your name?" explains the ways ba
   await overlay.getByLabel('Pick a name').fill(username);
   await overlay.getByLabel('Pick a password').fill(TEST_PASSWORD);
   await overlay.getByLabel('Year you were born').selectOption('2014');
-  await overlay.getByRole('button', { name: 'Sign up' }).tap();
+  await submitSignUp(overlay);
   await savedCode(overlay);
   await expect(page.getByTestId('auth-user')).toHaveText(`Hi, ${username}!`);
   await page.getByRole('button', { name: 'Log out' }).tap();

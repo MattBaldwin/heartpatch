@@ -1,8 +1,16 @@
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
-import { BODIES, PartShapeSchema, type Body } from '@heartpatch/shared';
+import { BODIES, FloaterGlyphSchema, PartShapeSchema, type Body } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
-import { bodyArrays, dot, surfaceNormal, surfacePoint, type MeshArrays } from './body-shape.js';
-import { LOD } from './config.js';
+import {
+  bodyArrays,
+  bodyRingsFor,
+  dot,
+  surfaceNormal,
+  surfacePoint,
+  type MeshArrays,
+} from './body-shape.js';
+import { FLOATER, LOD } from './config.js';
+import { floaterArrays } from './floater-shapes.js';
 import { orientTriangles, partArrays } from './part-shapes.js';
 import type { Vec3 } from './params.js';
 import { partMatrix, surfaceFrame } from './placement.js';
@@ -48,7 +56,8 @@ describe.each(BODIES.map((b) => [b.id, b] as const))('body %s', (_id, body: Body
       expectFrontFacing(mesh);
       const { min, max } = bounds(mesh);
       expect(min[1]).toBeCloseTo(0, 6);
-      expect(max[1]).toBeGreaterThanOrEqual(body.height * 0.99);
+      // A heart's shoulders are a narrow peak, which a coarse mesh clips a little.
+      expect(max[1]).toBeGreaterThanOrEqual(body.height * (body.cleft ? 0.98 : 0.99));
       expect(max[0] - min[0]).toBeLessThanOrEqual(body.width * 1.01 + 1e-9);
       expect(max[2] - min[2]).toBeLessThanOrEqual(body.depth * 1.01 + 1e-9);
     });
@@ -149,4 +158,172 @@ describe('partMatrix', () => {
     expect(b.y.map((c) => -c)).toEqual(a.y);
     expect(b.x.map((c) => -c)).toEqual(a.x);
   });
+});
+
+describe('optional body features stay off by default', () => {
+  /** The bodies that existed before `cleft`; new bodies don't move this. */
+  const BEFORE_CLEFT = [
+    'blob',
+    'pebble',
+    'bean',
+    'pear',
+    'drop',
+    'bun',
+    'pumpkin',
+    'tall',
+    'mochi',
+    'tiered',
+    'star',
+    'comet-star',
+    'ghost',
+    'barrel',
+    'orb',
+    'frosting',
+  ];
+
+  it('draws the bodies that came before the cleft exactly as they were', () => {
+    // A hash of each one's mesh at three levels of detail, taken with the
+    // original body shaper: a body that doesn't ask for `cleft` must not move.
+    // FNV-1a over the text of every body's arrays.
+    let hash = 0x811c9dc5;
+    const add = (text: string) => {
+      for (let i = 0; i < text.length; i++) {
+        hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193) >>> 0;
+      }
+    };
+    for (const id of BEFORE_CLEFT) {
+      const body = BODIES.find((b) => b.id === id)!;
+      for (const rings of [8, 16, 24]) {
+        const mesh = bodyArrays(body, rings);
+        add(body.id + JSON.stringify([mesh.positions, mesh.normals, mesh.indices]));
+      }
+    }
+    expect(hash.toString(16)).toBe('45f1ef5c');
+  });
+});
+
+describe('a heart body (cleft)', () => {
+  const heart: Body = {
+    id: 'test-heart',
+    width: 1.6,
+    height: 1.4,
+    depth: 0.6,
+    squareness: 0.3,
+    taper: 0,
+    peak: 0,
+    bottomFlat: 0,
+    cleft: { depth: 0.2, tip: 0.8 },
+    jitter: 0,
+  };
+  const round: Body = { ...heart, cleft: undefined };
+  const near = Math.PI / 2 - 1e-3;
+
+  it('dips at the top middle with a shoulder either side', () => {
+    const shoulder = (b: Body) => surfacePoint(b, 1.2, Math.PI / 2 - 0.5)[1];
+    expect(shoulder(heart)).toBeGreaterThan(surfacePoint(heart, 0, near)[1] + 0.1);
+    // Without the cleft the top middle is the highest point.
+    expect(surfacePoint(round, 0, near)[1]).toBeGreaterThan(shoulder(round));
+  });
+
+  it('narrows to a point at the bottom', () => {
+    const lowWidth = (b: Body) => Math.abs(surfacePoint(b, Math.PI / 2, -Math.PI / 4)[0]);
+    expect(lowWidth(heart)).toBeLessThan(lowWidth(round) * 0.6);
+  });
+
+  it('is one smooth, front-facing mesh standing on the ground at every detail level', () => {
+    for (const lod of ['low', 'high', 'hero'] as const) {
+      const mesh = orientTriangles(bodyArrays(heart, LOD[lod].bodyRings));
+      expectFrontFacing(mesh);
+      expect(bounds(mesh).min[1]).toBeCloseTo(0, 6);
+    }
+  });
+});
+
+describe.each(FloaterGlyphSchema.options)('floater glyph %s', (glyph) => {
+  for (const lod of ['low', 'high', 'hero'] as const) {
+    it(`is one unit tall, centred, flat and facing −z (${lod})`, () => {
+      const mesh = floaterArrays(glyph, LOD[lod]);
+      expectFrontFacing(mesh);
+      const { min, max } = bounds(mesh);
+      expect(max[1] - min[1]).toBeCloseTo(1, 6);
+      expect(max[1] + min[1]).toBeCloseTo(0, 6);
+      expect(max[0] + min[0]).toBeCloseTo(0, 6);
+      expect(max[0] - min[0]).toBeLessThan(1);
+      // The glyph lies just in front of its outline (towards the camera),
+      // still thin: a sign, not a solid.
+      expect(min[2]).toBeLessThanOrEqual(-FLOATER.layerGap + 1e-9);
+      expect(min[2]).toBeGreaterThan(-FLOATER.layerGap * 3);
+      expect(max[2]).toBeCloseTo(0, 6);
+      // The outline shades flat; the glyph's normals lean out for a soft
+      // dome, but always towards the camera.
+      let leaning = 0;
+      for (let v = 0; v < mesh.positions.length / 3; v++) {
+        const n = mesh.normals.slice(v * 3, v * 3 + 3);
+        if (mesh.positions[v * 3 + 2] === 0) expect(n.map((c) => c + 0)).toEqual([0, 0, -1]);
+        else {
+          expect(n[2]).toBeLessThan(-0.8);
+          if (Math.hypot(n[0]!, n[1]!) > 0.3) leaning++;
+        }
+      }
+      expect(leaning).toBeGreaterThan(0);
+    });
+  }
+
+  it('darkens only its outline, through vertex colours', () => {
+    const mesh = floaterArrays(glyph, LOD.low);
+    expect(mesh.colors).toHaveLength((mesh.positions.length / 3) * 4);
+    for (let v = 0; v < mesh.positions.length / 3; v++) {
+      const rgb = mesh.colors.slice(v * 4, v * 4 + 3);
+      const front = mesh.positions[v * 3 + 2]! < 0;
+      expect(rgb).toEqual(front ? [1, 1, 1] : [...FLOATER.outlineShade]);
+    }
+  });
+});
+
+/**
+ * Most a heart's vertex normal may turn from its neighbour's, degrees: the
+ * sharpest spot is across the cleft. Below what the shallower cleft at the
+ * old ring count turned (48°, 35°, 28°), so the deeper cleft is still smoother.
+ */
+const MAX_TURN = { low: 47.5, high: 34.5, hero: 27.5 } as const;
+
+describe('the heart body in the registry', () => {
+  const heart = BODIES.find((b) => b.id === 'heart')!;
+
+  it('gets more rings than other bodies, and every other body keeps its own', () => {
+    for (const body of BODIES) {
+      for (const lod of ['low', 'high', 'hero'] as const) {
+        const rings = LOD[lod].bodyRings;
+        if (body.cleft) expect(bodyRingsFor(body, rings), body.id).toBeGreaterThan(rings);
+        else expect(bodyRingsFor(body, rings), body.id).toBe(rings);
+      }
+    }
+  });
+
+  for (const lod of ['low', 'high', 'hero'] as const) {
+    it(`stands on the ground with smooth normals at ${lod} detail`, () => {
+      const rings = bodyRingsFor(heart, LOD[lod].bodyRings);
+      const mesh = orientTriangles(bodyArrays(heart, rings));
+      expectFrontFacing(mesh);
+      const { min, max } = bounds(mesh);
+      expect(min[1]).toBeCloseTo(0, 6);
+      expect(max[1]).toBeGreaterThanOrEqual(heart.height * 0.98);
+      // Neighbouring vertices' normals turn gently, around and up the grid
+      // (no crease at the cleft or the shoulders).
+      const row = rings * 2 + 1;
+      let worst = 0;
+      for (let r = 1; r < rings - 1; r++) {
+        for (let s = 0; s < row - 1; s++) {
+          const n = at(mesh.normals, r * row + s);
+          for (const m of [
+            at(mesh.normals, r * row + s + 1),
+            at(mesh.normals, (r + 1) * row + s),
+          ]) {
+            worst = Math.max(worst, Math.acos(Math.min(1, dot(n, m))));
+          }
+        }
+      }
+      expect((worst * 180) / Math.PI).toBeLessThan(MAX_TURN[lod]);
+    });
+  }
 });

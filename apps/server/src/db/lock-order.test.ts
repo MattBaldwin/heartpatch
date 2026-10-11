@@ -17,6 +17,7 @@ import { RESCUE_GUARDIANS, type LoreEntry } from '@heartpatch/shared/server';
 import { createBattlesRepo } from '../modules/battles/repo.js';
 import { createBattlesService, defaultBattleContent } from '../modules/battles/service.js';
 import { createBuildingsRepo } from '../modules/buildings/repo.js';
+import { createClearingRepo } from '../modules/clearing/repo.js';
 import { createExploreRepo } from '../modules/explore/repo.js';
 import { createFactoryRepo } from '../modules/factory/repo.js';
 import { createFencesRepo } from '../modules/fences/repo.js';
@@ -78,6 +79,7 @@ import {
   milestoneRewards,
   squishies,
   tileDefenders,
+  tileClears,
   tiles,
   users,
 } from './schema.js';
@@ -1593,6 +1595,49 @@ describe.skipIf(!url)('squishy lock order (needs DATABASE_URL)', () => {
     await rowsAgainst(lockTileRow, tileIds, () =>
       unplanned((tx) => createBuildingsRepo(tx).lockHomeTilesAnd(mapId, userId, { q: 12, r: 0 })),
     );
+  });
+
+  it("locks a clear's tiles in id order (clearing `lockTiles`, #242)", async () => {
+    const { tileIds } = await fires();
+    let locked: string[] = [];
+    await rowsAgainst(lockTileRow, tileIds, async () => {
+      locked = (
+        await unplanned((tx) => createClearingRepo(tx).lockTiles([...tileIds].reverse()))
+      ).map((t) => t.id);
+    });
+    expect(locked).toEqual(tileIds);
+  });
+
+  it("locks a player's clears in id order (clearing `lockToSettle`, #242)", async () => {
+    const { mapId, userId, tileIds } = await fires();
+    // Stored highest id first, so a scan meets them out of id order.
+    const clearIds = [randomUUID(), randomUUID(), randomUUID()].sort();
+    const at = new Date();
+    await db.insert(tileClears).values(
+      [...clearIds].reverse().map((id, i) => ({
+        id,
+        mapId,
+        userId,
+        tileId: tileIds[i]!,
+        fromTerrain: 'meadow',
+        fromNode: null,
+        tool: 'spade',
+        drop: {},
+        startedAt: at,
+        readyAt: at,
+        // Ended ones don't count against one-at-a-time; the lock still takes them.
+        ...(i > 0 ? { endedAt: at, endReason: 'cleared' } : {}),
+      })),
+    );
+    const lockClearRow = (tx: Transaction, id: string) =>
+      tx.select({ id: tileClears.id }).from(tileClears).where(eq(tileClears.id, id)).for('update');
+    let locked: string[] = [];
+    await rowsAgainst(lockClearRow, clearIds, async () => {
+      locked = (
+        await unplanned((tx) => createClearingRepo(tx).lockToSettle([...clearIds].reverse()))
+      ).map((c) => c.id);
+    });
+    expect(locked).toEqual(clearIds);
   });
 
   it("locks guards' posts in id order at nightfall (hollow `lockPostTiles`, owner decision 2026-10-07)", async () => {

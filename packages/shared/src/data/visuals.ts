@@ -140,6 +140,20 @@ export const BODIES: Body[] = [
     jitter: 0.04,
   },
   {
+    // A one-piece heart: round shoulders, a cleft on top and a soft point
+    // at the bottom.
+    id: 'heart',
+    width: 1.9,
+    height: 1.4,
+    depth: 0.6,
+    squareness: 0.25,
+    taper: 0,
+    peak: 0,
+    bottomFlat: 0,
+    cleft: { depth: 0.26, tip: 0.6 }, // TUNE: a crisp dip that still reads at a 40° turn
+    jitter: 0.03,
+  },
+  {
     id: 'star',
     width: 1.3,
     height: 1.2,
@@ -1497,7 +1511,7 @@ export const PARTS: Part[] = [
     color: 'ink',
     layout: single,
     around: 0,
-    up: 1,
+    up: 10,
     sink: 0.3,
     jitter: 0.04,
   },
@@ -1506,12 +1520,13 @@ export const PARTS: Part[] = [
     id: 'buck-teeth',
     slot: 'fangs',
     shape: 'capsule',
-    size: [0.075, 0.16, 0.05],
+    size: [0.075, 0.13, 0.05],
     color: 'white',
     layout: pair,
-    around: 6,
-    up: -10,
-    tilt: -80,
+    around: 4,
+    up: 2,
+    tilt: -86,
+    sink: 0.4,
     jitter: 0.04,
   },
   {
@@ -1533,13 +1548,13 @@ export const PARTS: Part[] = [
     id: 'plume-tip',
     slot: 'back',
     shape: 'ellipsoid',
-    size: [0.6, 1.5, 0.52],
+    size: [0.62, 1.4, 0.54],
     color: 'secondary',
     layout: single,
     around: 172,
-    up: 6,
-    tilt: 63,
-    sink: 0.28,
+    up: 16,
+    tilt: 82,
+    sink: 0.2,
     jitter: 0.05,
   },
 
@@ -1732,6 +1747,65 @@ export const PARTS: Part[] = [
     tilt: 80,
     sink: 0.3,
     jitter: 0.03,
+  },
+  {
+    // Bolder happy-eye arcs laid exactly over the plain ones (same place, a
+    // little bigger and thicker), so the eyes still read at night.
+    id: 'bold-happy-eyes',
+    slot: 'brows',
+    shape: 'arc',
+    size: [0.22, 0.11, 0.08],
+    color: 'ink',
+    layout: pair,
+    around: 26,
+    up: 18,
+    sink: 0.3,
+    flip: true,
+    jitter: 0.04,
+  },
+
+  {
+    // A big round open mouth.
+    id: 'round-mouth',
+    slot: 'mouth',
+    shape: 'ellipsoid',
+    size: [0.18, 0.25, 0.06],
+    color: 'accent',
+    layout: single,
+    around: 0,
+    up: -4,
+    sink: 0.45,
+    jitter: 0.04,
+  },
+
+  {
+    // Two little round hands held out in front.
+    id: 'round-hands',
+    slot: 'arms',
+    shape: 'ellipsoid',
+    size: [0.18, 0.24, 0.18],
+    color: 'primary',
+    layout: pair,
+    around: 78,
+    up: -6,
+    tilt: -15,
+    sink: 0.4,
+    splay: 30,
+    jitter: 0.05,
+  },
+
+  {
+    // Big rosy cheeks under the eyes.
+    id: 'heart-blush',
+    slot: 'pattern',
+    shape: 'ellipsoid',
+    size: [0.16, 0.1, 0.04],
+    color: 'blush',
+    layout: pair,
+    around: 32,
+    up: 6,
+    sink: 0.5,
+    jitter: 0.05,
   },
 ];
 

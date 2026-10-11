@@ -1,6 +1,9 @@
 import {
   addDays,
   CARE_RULES,
+  CLEARING_RULES,
+  clearToolFor,
+  clearToolMakeable,
   deriveSeed,
   firstHollowNight,
   GAME_DATA,
@@ -37,6 +40,7 @@ import {
   type MorningReport,
   type NightSquishy,
   type PublicUser,
+  type Recipe,
   type RescueGuardianRules,
   type Species,
   type StartRescueRequest,
@@ -116,6 +120,8 @@ export interface HollowServiceOptions {
   /** Tests pass their own rules and shadows. */
   rules?: HollowRules;
   guardians?: RescueGuardianRules;
+  /** The recipes that make clearing tools (#242); tests pass them unhidden. */
+  recipes?: readonly Pick<Recipe, 'output' | 'hidden'>[];
 }
 
 // Kid-readable messages (style guide §1, §6: "taken to the Hollow", always rescuable).
@@ -145,6 +151,7 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
   const now = options.clock ?? (() => new Date());
   const rules = options.rules ?? HOLLOW_RULES;
   const guardianRules = options.guardians ?? RESCUE_GUARDIANS;
+  const recipes = options.recipes ?? GAME_DATA.recipes;
   const store = createHollowRepo(db);
   const nightRules = { ...HOME_BASE_RULES, ...rules };
   /** After commit only (apps/server/README.md, "Live sync"). */
@@ -180,13 +187,19 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
   /**
    * Land a fire could ever light (#277, owner decision 2026-10-08 Q5): within
    * the farthest fire's reach of a tile a fire can stand on (not home, and
-   * no resource node in its middle while `nodesBlockFires`). Null: all of it.
+   * no resource node in its middle while `nodesBlockFires`, unless its owner
+   * could clear that node away: a clearable homestead whose tool a kid can
+   * make, #242). Null: all of it.
    */
   const lightableOn = (mapTiles: readonly NightTileRow[]): Set<HexKey> | null => {
     if (!rules.strength.nodesBlockFires) return null;
+    const clearable = (t: NightTileRow) => {
+      const tool = t.homestead ? clearToolFor(t.terrain, CLEARING_RULES) : null;
+      return tool !== null && clearToolMakeable(tool, recipes);
+    };
     // A trading post (#269) is never owned, so no fire stands on one.
     const sites = mapTiles.filter(
-      (t) => t.homeSlot === null && t.nodeResource === null && !isTradingPost(t),
+      (t) => t.homeSlot === null && !isTradingPost(t) && (t.nodeResource === null || clearable(t)),
     );
     return safeTiles(sites.map((t) => ({ at: t, radius: MAX_FIRE_RADIUS })));
   };
