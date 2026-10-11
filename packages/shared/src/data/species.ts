@@ -1529,6 +1529,7 @@ export const SPECIES: Species[] = [
         'dot-eyes',
         'open-mouth',
         'giggle-grin',
+        'giggle-tongue',
         'googly-whites',
         'pleat-cup',
         'frosting-lip',

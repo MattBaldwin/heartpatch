@@ -116,7 +116,6 @@ export const SECRET_SPECIES: Species[] = [
         'singing-mouth',
         'singing-tongue',
         'heart-blush',
-        'heart-lobes',
         'singing-arms',
         'note-head',
         'note-stem',

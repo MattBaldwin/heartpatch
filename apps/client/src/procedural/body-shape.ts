@@ -4,8 +4,8 @@ import type { Vec3 } from './params.js';
 /**
  * The parametric vinyl-toy body (design doc §19): a superellipsoid with a
  * taper, a soft peak, a flattened bottom, and optional pumpkin lobes, a
- * snowman waist, star points and a ghost's scalloped hem (ART_BIBLE §1.2). Points
- * are addressed by `around` (radians from the face, positive towards +x) and
+ * snowman waist, star points, a ghost's scalloped hem and a heart's cleft
+ * (ART_BIBLE §1.2). Points are addressed by `around` (radians from the face, positive towards +x) and
  * `up` (−π/2 bottom to π/2 top), the same angles parts are placed with.
  *
  * The face looks along −z (towards a camera with the default heading), and
@@ -31,6 +31,11 @@ export function surfacePoint(body: Body, around: number, up: number): Vec3 {
     const [low, high] = starSpan(body);
     const feet = low + STAR_FEET * (high - low);
     y = Math.max(0, ((yc - feet) / (high - feet)) * body.height);
+  } else if (body.cleft) {
+    // The cleft lowers the top middle, so stretch the heart back up until its
+    // shoulders reach `height` (the bottom point stays on the ground).
+    const [low, high] = starSpan(body);
+    y = ((yc - low) / (high - low)) * body.height;
   } else {
     y = body.height / 2 + yc;
   }
@@ -71,6 +76,10 @@ function rawPoint(body: Body, around: number, up: number): [number, number, numb
     const groove = 0.5 - 0.5 * Math.cos(body.lobes.count * around);
     radial *= 1 - body.lobes.depth * groove * cu;
   }
+  if (body.cleft && yn < 1) {
+    // A heart: the sides draw in towards the bottom, to a soft point.
+    radial *= 1 - body.cleft.tip * (1 - yn) * 0.5;
+  }
   if (body.waist) {
     const k = (yn - body.waist.at) / body.waist.width;
     radial *= 1 - body.waist.depth * Math.exp(-k * k);
@@ -88,6 +97,12 @@ function rawPoint(body: Body, around: number, up: number): [number, number, numb
     const k = 1 - depth * (1 - bump);
     x *= k;
     yc *= k;
+  }
+  if (body.cleft && yn > 0) {
+    // The top dips into a cleft along the middle, front to back, and fades
+    // out down the shoulders. Smooth, so the normals stay smooth.
+    const across = x / (body.width / 2);
+    yc -= body.cleft.depth * body.height * yn * Math.exp(-(across * across) / 0.05);
   }
   return [x, yc, z, cu];
 }
