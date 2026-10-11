@@ -279,6 +279,10 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
     });
     // A branch form takes the branch's feeling (owner decision 2026-10-10).
     expect((await rowOf(id)).feeling).toBe(BRANCH.feeling);
+    // The care list tells the celebration it's a brand-new form.
+    const res = await call(server, 'GET', `/maps/${mapId}/care`, who);
+    const mine = CareListResponseSchema.parse(res.json()).squishies.find((s) => s.id === id);
+    expect(mine?.newEvolution).toMatchObject({ intoSpeciesId: BRANCH.id, branch: true });
   });
 
   it("counts only this player's misses, and starts over once they get the branch", async () => {
@@ -323,6 +327,11 @@ describe.skipIf(!url)('branching evolution (needs DATABASE_URL)', () => {
       branch: false,
       userId: who.id,
     });
+    // The care list's celebration leaves `branch` off for a default form.
+    const res = await call(server, 'GET', `/maps/${mapId}/care`, who);
+    const mine = CareListResponseSchema.parse(res.json()).squishies.find((s) => s.id === id);
+    expect(mine?.newEvolution).toBeDefined();
+    expect(mine?.newEvolution).not.toHaveProperty('branch');
   });
 
   it('leans with full-value care and counts care history; a win leans Brave', async () => {
