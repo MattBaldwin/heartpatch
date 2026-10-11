@@ -1410,3 +1410,13 @@ _Confirmed by the owner directly to the coordinator on 2026-10-11 (an earlier wr
 - **Trail and cave (#335, PR #395):** approved, with bare-stone cave rocks (not mossy).
 - **#382 wave 1 creative brief:** approved; build rares first.
 - **#363 evolution batch 4:** Mossquilt takes −2% stats. Stormhoot keeps its "Rare" label and gains a second condition (night plus a feeling). Huddlenut, Sprinklemuff and Heartsong are redesigned before merge, since they read too close to their default forms.
+
+## 2026-10-11 — The step-by-step Keeper creator (#372, PR #394)
+
+_Proposed in PR #394; recorded here at the coordinator's request._
+
+- **The Keeper screen is steps, not one scrolling list:** Face → Body (with outfit) → Skin → Hair → Colors (hair and eye colour) → Details. This supersedes #289's "The Keeper screen is one scrolling list" and #176's five-row picker.
+- **There is no starting-look row.** This supersedes #289's "The 12 presets are starting looks; one tap sets every row" and "Body shape stays with the starting look for now". `base` stays as the seed root and the fallback for anything not picked. New Keepers are Pip-based, and picking a face or body never changes `base`.
+- **Face and body are independent** (`keepers.face`, `keepers.body`, migration 0044). Each base's own face and body use the base's id, so existing Keepers look the same. Two new bodies: Lanky and Sturdy.
+- **Outfit sits on the Body step** (owner choice c). **Eye colour sits on Colors** with hair colour, so the face stays on screen without scrolling on phones.
+- **In edit mode, Back closes the editor without saving** on every step (plan §5).
