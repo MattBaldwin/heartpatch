@@ -148,7 +148,7 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Candlekit → Wickwhisker | Fire · Spooky | candle → lantern cat | candle cat | lantern cat: four legs, flame mane and tail, whisker flames, fangs | sit → stand · crown → tail |
 | *Heartlet → Heartbloom (secret)* | Light · Cozy | heart sprite → fairy | hovering heart with little wings | fairy: glowing wings, leaf sprout, arms | hover · wings |
 
-**Branch forms (#32).** Every line has a second grown-up form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. All are built from the existing bodies and parts.
+**Branch forms (#32).** Almost every line (not yet the secret Heartlet one) has a second grown-up form at the same level: the same element, rarity and colour family, a different feeling (its face kit follows that feeling), and a body plan of its own. All are built from the existing bodies and parts.
 
 | Line | Branch form | Feeling | Body plan | Pose · attack part |
 |---|---|---|---|---|
@@ -171,7 +171,6 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Upsybat | Hushwing | Sleepy | sleeping bat burrito: mochi body, nightcap, big bat wings | hover · wings |
 | Candlekit | Sparklewick | Joy | party candle cat: flame crown, whisker flames, arms | stand · crown |
 | Crunchkin | Huddlenut | Cozy | sandy-cream squirrel on round paws: short pointed ears, a wide smile above gap-toothed buck teeth, dark acorn cup with a bumpy band and a stem, one big smooth chestnut plume tail with a pale tip | sit · tail |
-| *Heartlet (secret)* | *Heartsong* | Joy | singing heart: one smooth violet heart body (cleft on top, soft point below), dark happy eyes, rosy blush and a round singing mouth on its front, two little round hands held in front, a beamed pair of gold eighth notes on its right shoulder | hover · arms |
 
 ## 2. Palette
 

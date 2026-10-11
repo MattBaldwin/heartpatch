@@ -140,20 +140,6 @@ export const BODIES: Body[] = [
     jitter: 0.04,
   },
   {
-    // #32: a one-piece heart: round shoulders, a cleft on top and a soft
-    // point at the bottom.
-    id: 'heart',
-    width: 1.9,
-    height: 1.4,
-    depth: 0.6,
-    squareness: 0.25,
-    taper: 0,
-    peak: 0,
-    bottomFlat: 0,
-    cleft: { depth: 0.22, tip: 0.6 },
-    jitter: 0.03,
-  },
-  {
     id: 'star',
     width: 1.3,
     height: 1.2,
@@ -1670,108 +1656,9 @@ export const PARTS: Part[] = [
     jitter: 0.05,
   },
 
-  {
-    // Bolder happy-eye arcs laid exactly over the plain ones (same place, a
-    // little bigger and thicker), so the eyes still read at night.
-    id: 'bold-happy-eyes',
-    slot: 'brows',
-    shape: 'arc',
-    size: [0.22, 0.11, 0.08],
-    color: 'ink',
-    layout: pair,
-    around: 26,
-    up: 18,
-    sink: 0.3,
-    flip: true,
-    jitter: 0.04,
-  },
 
-  {
-    // A big round singing mouth, open on a long note.
-    id: 'singing-mouth',
-    slot: 'mouth',
-    shape: 'ellipsoid',
-    size: [0.21, 0.2, 0.06],
-    color: 'accent',
-    layout: single,
-    around: 0,
-    up: -4,
-    sink: 0.45,
-    jitter: 0.04,
-  },
 
-  {
-    // Two little round hands held out in front, mid-song.
-    id: 'singing-arms',
-    slot: 'arms',
-    shape: 'ellipsoid',
-    size: [0.18, 0.24, 0.18],
-    color: 'primary',
-    layout: pair,
-    around: 58,
-    up: -2,
-    tilt: -15,
-    sink: 0.5,
-    splay: 20,
-    jitter: 0.05,
-  },
 
-  {
-    // Big rosy cheeks under the singing heart's eyes.
-    id: 'heart-blush',
-    slot: 'pattern',
-    shape: 'ellipsoid',
-    size: [0.16, 0.1, 0.04],
-    color: 'blush',
-    layout: pair,
-    around: 32,
-    up: 6,
-    sink: 0.5,
-    jitter: 0.05,
-  },
-  {
-    // A beamed pair of gold eighth notes on the heart's right shoulder: their
-    // oval heads…
-    id: 'note-head',
-    slot: 'crown',
-    shape: 'ellipsoid',
-    size: [0.2, 0.13, 0.14],
-    color: 'detail',
-    layout: { kind: 'ring', count: 2, spread: 26 },
-    around: 58,
-    up: 22,
-    sink: 0.35,
-    tilt: 20,
-    jitter: 0.04,
-  },
-  {
-    // …their straight stems…
-    id: 'note-stem',
-    slot: 'horns',
-    shape: 'capsule',
-    size: [0.085, 0.28, 0.085],
-    color: 'detail',
-    layout: { kind: 'ring', count: 2, spread: 26 },
-    around: 65,
-    up: 26,
-    sink: 0.35,
-    tilt: 88,
-    jitter: 0.04,
-  },
-  {
-    // …and the beam across their tops, lying flat on the shoulder (a surface
-    // slot, so it hugs the body instead of growing off it).
-    id: 'note-flag',
-    slot: 'cheeks',
-    shape: 'capsule',
-    size: [0.3, 0.1, 0.09],
-    color: 'detail',
-    layout: single,
-    around: 78,
-    up: 54,
-    sink: 0.2,
-    jitter: 0.04,
-  },
 ];
 
 /**

@@ -24,16 +24,6 @@ export const SECRET_MOVES: Move[] = [
       { type: 'stat', target: 'self', stat: 'defense', stages: 1, chance: 100 }, // TUNE:
     ],
   },
-  // Only Heartsong knows it (#32), so naming it publicly would give it away.
-  {
-    id: 'heart-chorus',
-    name: 'Heart Chorus',
-    description: 'Hums a happy little song and glows brighter.',
-    element: 'light',
-    power: 60, // TUNE:
-    accuracy: 100,
-    effects: [{ type: 'stat', target: 'self', stat: 'speed', stages: 1, chance: 30 }], // TUNE:
-  },
 ];
 
 export const SECRET_SPECIES: Species[] = [
@@ -94,60 +84,8 @@ export const SECRET_SPECIES: Species[] = [
     },
     habitatPreferences: { elements: ['light'], feelings: ['cozy', 'joy'] },
   },
-  // Heartlet's branch (#32): Light + Joy, for a Heartlet that sang by a
-  // bright fire all night.
-  {
-    id: 'heartsong',
-    name: 'Heartsong',
-    description: 'A Heartlet that sang by a bright fire all night. It still hums the tune.',
-    element: 'light',
-    feeling: 'joy',
-    rarity: 'secret',
-    baseStats: { hp: 70, attack: 75, defense: 60, speed: 75 }, // TUNE:
-    moves: ['sunny-beam', 'heart-glow', 'dazzle-dance', 'heart-chorus'],
-    evolutions: [],
-    visual: {
-      body: 'heart',
-      palette: ['#9a70f0', '#ffd0e6', '#1e0a2e', '#ffb627'],
-      ink: '#1e0a2e',
-      parts: [
-        'happy-eyes',
-        'bold-happy-eyes',
-        'singing-mouth',
-        'heart-blush',
-        'singing-arms',
-        'note-head',
-        'note-stem',
-        'note-flag',
-      ],
-      size: 1.3,
-      finish: 'iridescent',
-      glow: 'body',
-      stance: 0.3,
-      pose: 'hover',
-      attackPart: 'arms',
-    },
-    habitatPreferences: { elements: ['light'], feelings: ['joy', 'cozy'] },
-  },
 ];
 
 export const SECRET_EVOLUTIONS: SecretEvolution[] = [
   { from: 'heartlet', into: 'heartbloom', level: 25 }, // TUNE:
-  // Heartlet's branch (#32): Joy, at dusk or night, beside a fire full of fuel.
-  {
-    from: 'heartlet',
-    into: 'heartsong',
-    level: 25, // TUNE:
-    trigger: {
-      kind: 'rare',
-      conditions: [{ kind: 'time', times: ['dusk', 'night'] }, { kind: 'fire-full' }],
-      feeling: 'joy',
-      // The schema wants one, but it never shows: no evolving meter before a secret form.
-      whisper: {
-        icon: '🔥',
-        text: '{name} loves sitting by a bright, cozy fire…',
-        sub: 'Especially when the stars are out.',
-      },
-    },
-  },
 ];
