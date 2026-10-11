@@ -120,7 +120,7 @@ export const EVOLUTION_ODDS: EvolutionOdds[] = [
       whisper: {
         icon: '🌙',
         text: '{name} keeps gazing up at the night sky…',
-        sub: 'It seems to love the dark hours.',
+        sub: 'It seems to love keeping watch on spooky nights.',
       },
     },
   },

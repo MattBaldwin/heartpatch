@@ -163,15 +163,15 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Flurrypup | Mittenpup | Cozy | fluffy sled pup: fur scarf, floppy ears, long legs | stand · tail |
 | Glimmerock | Geodoze | Sleepy | sleepy geode: big mochi body, crystal spines, crystal crown | sit · back |
 | Nookling | Mothnook | Spooky | moth bunny: antennae, big wings, hop feet | hover · wings |
-| Mossmuffin | Sprinklemuff | Silly | cupcake: tiered body, moss frosting, sprinkle freckles | stand · arms |
+| Mossmuffin | Sprinklemuff | Silly | pink cupcake: cream liner, big frosting-dome head with a mint dollop and yellow sprinkles | stand · arms |
 | Dawndrop | Moondrop | Sleepy | sleepy moon: cloud crown, plume wings, crater freckles | hover · wings |
 | Thunderpuff | Stormhoot | Spooky | storm owl: cloud crown, ear tufts, beak, plume wings | hover · wings |
 | Gourdon | Squashboo | Spooky | ghost pumpkin: pale pumpkin, bat wings, wispy tail | hover · tail |
 | Glowboo | Lullaboo | Cozy | night-light ghost in a nightcap | hover · arms |
 | Upsybat | Hushwing | Sleepy | sleeping bat burrito: mochi body, nightcap, big bat wings | hover · wings |
 | Candlekit | Sparklewick | Joy | party candle cat: flame crown, whisker flames, arms | stand · crown |
-| Crunchkin | Huddlenut | Cozy | leaf-pile squirrel: acorn cap, leaf blanket, bushy tail | sit · tail |
-| *Heartlet (secret)* | *Heartsong* | Joy | singing heart drop: sun crown, glowing wings | hover · wings |
+| Crunchkin | Huddlenut | Cozy | hunched oat squirrel: big cocoa acorn hat, leaf ears, cream belly, giant curled brown tail | sit · tail |
+| *Heartlet (secret)* | *Heartsong* | Joy | round golden songbird: beak, feather crest, big coral wings, fan tail | hover · wings |
 
 ## 2. Palette
 
