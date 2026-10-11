@@ -17,6 +17,7 @@ import { lodFor } from '../../procedural/motion.js';
 import { el, messageOf } from '../dom.js';
 import { keeperApi, type KeeperApi } from './keeper-api.js';
 import { KeeperPreview } from './keeper-preview.js';
+import { saveForSession } from './keeper-save.js';
 import {
   bodyTileSvg,
   faceTileSvg,
@@ -709,10 +710,13 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     for (const node of lock) node.disabled = true;
     error.textContent = '';
     try {
-      // The server leaves out choices that are the starting look's own (#289).
-      const kept = completeKeeperConfig(await api.save(picked), KEEPER_DATA);
-      // Another player since: their Keeper is theirs, not this one.
-      if (mine !== session) return;
+      // Null when another player logged in meanwhile: their Keeper stays theirs.
+      const kept = await saveForSession(
+        (config) => api.save(config),
+        picked,
+        () => session,
+      );
+      if (kept === null) return;
       saved = kept;
       const first = mode === 'first';
       close(true);
