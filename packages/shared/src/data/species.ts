@@ -1524,7 +1524,7 @@ export const SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'frosting',
-      palette: ['#ff8fb3', '#f7e6c4', '#e0304f', '#5cc46a'],
+      palette: ['#ff7aa5', '#f7e6c4', '#e0304f', '#5cc46a'],
       parts: [
         'dot-eyes',
         'open-mouth',
@@ -1534,11 +1534,12 @@ export const SPECIES: Species[] = [
         'sprinkles-green',
         'sprinkles-red',
         'cherry',
+        'cherry-stem',
         'cherry-leaf',
       ],
       size: 1.3,
       finish: 'sparkle',
-      stance: 0.42,
+      stance: 0.55,
       pose: 'stand',
       attackPart: 'crown',
     },
@@ -2149,7 +2150,7 @@ export const SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'blob',
-      palette: ['#d2cd8c', '#f3dfb4', '#c27a44', '#7a4a2a'],
+      palette: ['#e6cf98', '#f6e6c4', '#c27a44', '#7a4a2a'],
       parts: [
         'oval-eyes',
         'smile',
@@ -2159,7 +2160,7 @@ export const SPECIES: Species[] = [
         'acorn-scales',
         'acorn-stem',
         'buck-teeth',
-        'stubby-legs',
+        'round-paws',
         'plume-tail',
         'plume-tip',
       ],

@@ -163,15 +163,15 @@ Every line, base (baby) → evolution (grown up). Evolutions are ×1.25–1.35 t
 | Flurrypup | Mittenpup | Cozy | fluffy sled pup: fur scarf, floppy ears, long legs | stand · tail |
 | Glimmerock | Geodoze | Sleepy | sleepy geode: big mochi body, crystal spines, crystal crown | sit · back |
 | Nookling | Mothnook | Spooky | moth bunny: antennae, big wings, hop feet | hover · wings |
-| Mossmuffin | Sprinklemuff | Silly | strawberry cupcake: one wide pink frosting dome with the face on its front, white, green and red sprinkles, a cherry with a leaf, overhanging a narrower cream pleated paper cup | stand · crown |
+| Mossmuffin | Sprinklemuff | Silly | strawberry cupcake: pink frosting dome with a scalloped rim and the face on its front, big white, green and red sprinkles, a cherry on a stem with a leaf, on a tall cream pleated paper cup | stand · crown |
 | Dawndrop | Moondrop | Sleepy | sleepy moon: cloud crown, plume wings, crater freckles | hover · wings |
 | Thunderpuff | Stormhoot | Spooky | storm owl: cloud crown, ear tufts, beak, plume wings | hover · wings |
 | Gourdon | Squashboo | Spooky | ghost pumpkin: pale pumpkin, bat wings, wispy tail | hover · tail |
 | Glowboo | Lullaboo | Cozy | night-light ghost in a nightcap | hover · arms |
 | Upsybat | Hushwing | Sleepy | sleeping bat burrito: mochi body, nightcap, big bat wings | hover · wings |
 | Candlekit | Sparklewick | Joy | party candle cat: flame crown, whisker flames, arms | stand · crown |
-| Crunchkin | Huddlenut | Cozy | khaki squirrel: short pointed ears, buck teeth, dark acorn cup with a bumpy band and a stem, one big smooth chestnut plume tail with a cream tip | sit · tail |
-| *Heartlet (secret)* | *Heartsong* | Joy | singing heart: a big violet heart with two round lobes and a soft point, an aqua music note on top, tiny wings | hover · crown |
+| Crunchkin | Huddlenut | Cozy | sandy-cream squirrel on round paws: short pointed ears, buck teeth, dark acorn cup with a bumpy band and a stem, one big smooth chestnut plume tail with a pale tip | sit · tail |
+| *Heartlet (secret)* | *Heartsong* | Joy | singing heart: a big glowing lavender heart with two round lobes and a soft point, teal song waves ))) rippling out of one side | hover · tail |
 
 ## 2. Palette
 
