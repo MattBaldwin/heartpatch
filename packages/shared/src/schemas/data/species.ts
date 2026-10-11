@@ -42,7 +42,7 @@ export type FloaterGlyph = z.infer<typeof FloaterGlyphSchema>;
 
 /**
  * A flat glyph that floats beside a squishy, always facing the camera (a
- * song note; later a sleepy Zzz or a sparkle). It moves, hops and goes away
+ * music note; later a sleepy Zzz or a sparkle). It moves, hops and goes away
  * with the squishy, never casts a shadow, and bobs gently unless motion is
  * reduced. Off unless set. Proportions are of the body's height (`size`,
  * `above`, `bob.height`) or width (`side`), at the species' size.
@@ -108,7 +108,7 @@ export const SpeciesVisualSchema = z.strictObject({
   pose: PoseSchema.optional(),
   /** The slot a move animation swings, stomps or flares (tail, arms, horns…). */
   attackPart: PartSlotSchema.optional(),
-  /** A camera-facing glyph floating beside it (a song note). Off unless set. */
+  /** A camera-facing glyph floating beside it (a music note). Off unless set. */
   floater: FloaterSchema.optional(),
   /**
    * Keeps the sparkle tier's flecks (ART_BIBLE §1.4) off the front of its

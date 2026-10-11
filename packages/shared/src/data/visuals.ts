@@ -140,8 +140,8 @@ export const BODIES: Body[] = [
     jitter: 0.04,
   },
   {
-    // #32: a one-piece heart: round shoulders, a cleft on top and a soft
-    // point at the bottom.
+    // A one-piece heart: round shoulders, a cleft on top and a soft point
+    // at the bottom.
     id: 'heart',
     width: 1.9,
     height: 1.4,
@@ -1765,7 +1765,7 @@ export const PARTS: Part[] = [
   },
 
   {
-    // A big round singing mouth, open on a long note.
+    // A big round open mouth.
     id: 'singing-mouth',
     slot: 'mouth',
     shape: 'ellipsoid',
@@ -1779,7 +1779,7 @@ export const PARTS: Part[] = [
   },
 
   {
-    // Two little round hands held out in front, mid-song.
+    // Two little round hands held out in front.
     id: 'singing-arms',
     slot: 'arms',
     shape: 'ellipsoid',
@@ -1795,7 +1795,7 @@ export const PARTS: Part[] = [
   },
 
   {
-    // Big rosy cheeks under the singing heart's eyes.
+    // Big rosy cheeks under the eyes.
     id: 'heart-blush',
     slot: 'pattern',
     shape: 'ellipsoid',

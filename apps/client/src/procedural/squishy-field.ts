@@ -49,7 +49,7 @@ import { SquishPlugin } from './squish-plugin.js';
  *   number of squishies (50 squishies of 7 body types ≈ 13 draw calls);
  * - colours, squash and placement are per-instance attributes;
  * - motion runs in the vertex shader from one uniform;
- * - a floater (a song note, say) is one more thin instance in its
+ * - a floater (a music note, say) is one more thin instance in its
  *   glyph's batch: one draw call while any squishy shows one, turned to face
  *   each camera just before it draws, and never a shadow caster.
  *
