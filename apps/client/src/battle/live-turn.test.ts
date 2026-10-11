@@ -1,7 +1,14 @@
 import { findAvoidedWords, type PlayerBattle } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
 import { GameClock } from '../inventory/game-clock.js';
-import { clockText, coveredSince, LIVE_TEXT, liveTurnInfo, ringSpan } from './live-turn.js';
+import {
+  clockText,
+  coveredSince,
+  LIVE_TEXT,
+  liveRunWords,
+  liveTurnInfo,
+  ringSpan,
+} from './live-turn.js';
 
 const NOW = Date.parse('2026-10-10T12:00:00.000Z');
 const TURN_MS = 30_000;
@@ -96,6 +103,13 @@ describe('live turns on screen (#29)', () => {
     const grace = new Date(NOW + 80_000).toISOString();
     expect(ringSpan(span, grace, NOW, TURN_MS)?.ms).toBe(80_000);
     expect(ringSpan(span, null, NOW, TURN_MS)).toBeNull();
+  });
+
+  it("only a friendly battle says Give up; a live defense's defender stays in", () => {
+    expect(liveRunWords({ kind: 'friendly', mySide: 'b' })?.run).toBe(LIVE_TEXT.giveUp);
+    // The challenger runs as in any tile battle; the defender has no leave button.
+    expect(liveRunWords({ kind: 'rival-tile', mySide: 'a' })).toBeUndefined();
+    expect(liveRunWords({ kind: 'rival-tile', mySide: 'b' })).toBeNull();
   });
 
   it('formats the away clock', () => {

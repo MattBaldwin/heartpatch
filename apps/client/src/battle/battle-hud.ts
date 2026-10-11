@@ -54,8 +54,12 @@ export type ControlMode =
       items: { total: number | null; tiles: PotionTile[]; who: string } | null;
       /** Breaking a fence (#203): the turn it is, and the most it lasts. Null elsewhere. */
       fence?: { turn: number; limit: number } | null;
-      /** The leave button's words, when not "Run away" (a friendly battle's "Give up", #29). */
-      runWords?: RunWords;
+      /**
+       * The leave button's words, when not "Run away" (a friendly battle's
+       * "Give up", #29); null for no leave button (a live defense's defender
+       * stays to the end, #29-C).
+       */
+      runWords?: RunWords | null;
     }
   /** Their squishy is tuckered out: pick who comes out. */
   | { type: 'replace'; bench: { slot: number; name: string }[] }
@@ -334,6 +338,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     mode: Extract<ControlMode, { type: 'choose' }>,
     items: NonNullable<Extract<ControlMode, { type: 'choose' }>['items']>,
   ): void => {
+    delete controls.dataset['view'];
     problem.textContent = '';
     const tiles = el('div', { class: 'battle-items' });
     for (const tile of items.tiles) {
@@ -493,36 +498,39 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         }
         // Forgiving (style guide §3): running away asks first. At a fence
         // (#203) it's "Stop for now": the fence keeps what it lost.
-        const words = mode.runWords ?? (mode.fence ? FENCE_RUN : PLAIN_RUN);
-        const run = button(
-          words.run,
-          () => {
-            delete controls.dataset['view'];
-            controls.replaceChildren(
-              el('p', { class: 'battle-ask' }, words.ask),
-              el(
-                'div',
-                { class: 'battle-row' },
-                button(
-                  words.yes,
-                  () => {
-                    act({ type: 'forfeit' });
-                  },
-                  { small: true, testId: 'battle-run-confirm' },
+        const words =
+          mode.runWords === null ? null : (mode.runWords ?? (mode.fence ? FENCE_RUN : PLAIN_RUN));
+        const run =
+          words &&
+          button(
+            words.run,
+            () => {
+              delete controls.dataset['view'];
+              controls.replaceChildren(
+                el('p', { class: 'battle-ask' }, words.ask),
+                el(
+                  'div',
+                  { class: 'battle-row' },
+                  button(
+                    words.yes,
+                    () => {
+                      act({ type: 'forfeit' });
+                    },
+                    { small: true, testId: 'battle-run-confirm' },
+                  ),
+                  button(
+                    words.stay,
+                    () => {
+                      setControls(mode);
+                    },
+                    { soft: true, small: true },
+                  ),
                 ),
-                button(
-                  words.stay,
-                  () => {
-                    setControls(mode);
-                  },
-                  { soft: true, small: true },
-                ),
-              ),
-            );
-          },
-          { soft: true, small: true, testId: 'battle-run' },
-        );
-        row.append(run);
+              );
+            },
+            { soft: true, small: true, testId: 'battle-run' },
+          );
+        if (run) row.append(run);
         controls.append(moves, row);
         if (hint) controls.append(hint);
         if (mode.fence) {

@@ -72,6 +72,7 @@ import {
   clockText,
   coveredSince,
   LIVE_TEXT,
+  liveRunWords,
   liveTurnInfo,
   ringSpan,
   type RingSpan,
@@ -551,8 +552,10 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       name: plateName(names, squishy, nicknames),
     }));
     if (b.live) {
-      // A live battle (#29): no Heart Charms or potions, "Give up" instead of
-      // running. A pick can change until the other Keeper's arrives.
+      // A live battle (#29): no Heart Charms or potions. A pick can change
+      // until the other Keeper's arrives. Leaving: "Give up" in a friendly
+      // battle; in a live defense (#29-C) the challenger can run as ever and
+      // the defender stays to the end (the server refuses their forfeit).
       if (b.view.phase.type === 'turn') {
         return {
           type: 'choose',
@@ -560,12 +563,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           bench,
           capture: null,
           items: null,
-          runWords: {
-            run: LIVE_TEXT.giveUp,
-            ask: LIVE_TEXT.giveUpAsk,
-            yes: LIVE_TEXT.giveUpYes,
-            stay: LIVE_TEXT.keepPlaying,
-          },
+          runWords: liveRunWords(b),
         };
       }
     }
@@ -893,7 +891,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const line = pick
       ? `${LIVE_TEXT.picked(pick.type === 'move' ? (names?.moveName(pick.move) ?? 'That') : 'A swap')} ${LIVE_TEXT.waitingFor(name)}`
       : info.myTurn && names
-        ? (b.view.turn === 0 ? LIVE_TEXT.firstPick : LIVE_TEXT.yourPick)(
+        ? (b.view.turn === 0 && b.kind === 'friendly' ? LIVE_TEXT.firstPick : LIVE_TEXT.yourPick)(
             plateName(names, activeOf(b, b.mySide), nicknames),
           )
         : LIVE_TEXT.waitingFor(name);

@@ -80,6 +80,26 @@ export function liveTurnInfo(
   };
 }
 
+/**
+ * How a live battle's leave button reads. A friendly battle: "Give up"
+ * (nothing at stake). A live defense (#29-C): the challenger runs as in any
+ * tile battle (undefined: the usual words), and the defender has no leave
+ * button (null), since the server keeps them in to the end.
+ */
+export function liveRunWords(
+  battle: Pick<PlayerBattle, 'kind' | 'mySide'>,
+): { run: string; ask: string; yes: string; stay: string } | null | undefined {
+  if (battle.kind === 'friendly') {
+    return {
+      run: LIVE_TEXT.giveUp,
+      ask: LIVE_TEXT.giveUpAsk,
+      yes: LIVE_TEXT.giveUpYes,
+      stay: LIVE_TEXT.keepPlaying,
+    };
+  }
+  return battle.mySide === 'a' ? undefined : null;
+}
+
 /** The ring's full length for one deadline: when it was first seen. */
 export interface RingSpan {
   deadlineAt: string;
