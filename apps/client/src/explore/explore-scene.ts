@@ -101,7 +101,7 @@ import {
   followLead,
   followStep,
   freePoint,
-  glintClear,
+  glintNudge,
   hidingSpots,
   keepClear,
   tileSeed,
@@ -314,7 +314,7 @@ export class ExploreScene implements AmbientTarget {
   readonly #glints: Mesh;
   /** Where the Keeper stood when the camera last settled (fades and glints are fresh for it). */
   #framed: WorldPoint | null = null;
-  /** How far each open spot's glint slid to clear the Keeper (world units). */
+  /** Each open spot's glint's x, as last drawn (redrawn only when one moves). */
   #glintNudge: number[] = [];
   readonly #halo: Mesh;
   readonly #tools: Record<ToolId, Mesh>;
@@ -983,7 +983,10 @@ export class ExploreScene implements AmbientTarget {
       // The screen's shape picks the tilt (a phone upright looks flatter).
       this.#aspect = aspect;
       this.#shot = cameraShot(aspect);
+      // A new framing: fade and place glints again, and once more when it settles.
+      this.#framed = null;
       this.#fade();
+      this.#placeGlints();
     }
     const { pitch, distance } = this.#shot;
     const d = distance * this.#camera.zoom;
@@ -1094,37 +1097,34 @@ export class ExploreScene implements AmbientTarget {
    */
   #placeGlints(): void {
     const size = EXPLORE_VIEW.glintSize;
-    const box = this.#keeperBox();
+    const keeper = { ...this.#world(this.#at), y: this.#groundAt(this.#at) };
+    const half = (size * EXPLORE_FADE.glintHalo) / 2;
     const open = this.#tile.spots.filter((s) => !s.done);
-    const nudge = open.map((s) => {
-      if (!box) return 0;
-      // Off to one side of the prop (tile-local), at its glint's height.
-      const at = { x: s.x + spotRadius(s.kind) * EXPLORE_VIEW.glintSide, z: s.z };
-      const lift = this.#glintLift(s.kind);
-      const centre = this.screenOf(at, lift);
-      const edge = this.screenOf({ x: at.x + size / this.#size, z: at.z }, lift);
-      if (!centre || !edge) return 0;
-      const perUnit = Math.abs(edge.x - centre.x) / size; // px per world unit there
-      if (perUnit <= 0) return 0;
-      const px = glintClear(centre, (perUnit * size) / 2, box);
-      return Math.round((px / perUnit) * 100) / 100; // world units, steady while walking
+    const places = open.map((s) => {
+      const at = this.#world(s);
+      // Off to one side of the prop, as on the boards.
+      const side = spotRadius(s.kind) * this.#size * EXPLORE_VIEW.glintSide;
+      const glint = { x: at.x + side, y: this.#groundAt(s) + this.#glintLift(s.kind), z: at.z };
+      const slide = this.#keeper
+        ? glintNudge(
+            glint,
+            keeper,
+            this.keeperTall,
+            this.#shot.pitch,
+            half,
+            EXPLORE_FADE.glintClearHalfWidth,
+          )
+        : 0;
+      return { ...glint, x: glint.x + Math.round(slide * 100) / 100 };
     });
+    const nudge = places.map((p) => p.x);
     const same =
       nudge.length === this.#glintNudge.length && nudge.every((n, i) => n === this.#glintNudge[i]);
     if (same && this.#glints.thinInstanceCount === open.length) return;
     this.#glintNudge = nudge;
     setInstances(
       this.#glints,
-      open.map((s, i) => {
-        const at = this.#world(s);
-        const side = spotRadius(s.kind) * this.#size * EXPLORE_VIEW.glintSide;
-        return placeAt(
-          at.x + side + (nudge[i] ?? 0),
-          this.#groundAt(s) + this.#glintLift(s.kind),
-          at.z,
-          new Vector3(size, size, size),
-        );
-      }),
+      places.map((p) => placeAt(p.x, p.y, p.z, new Vector3(size, size, size))),
       true,
     );
   }

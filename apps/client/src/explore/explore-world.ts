@@ -294,24 +294,26 @@ export function coverShare(by: ScreenBox, of: ScreenBox): number {
 }
 
 /**
- * Where a glint sits on screen once it is clear of the Keeper (#335): a glint
- * over the Keeper slides sideways, out past the nearer edge, so it never
- * covers the face. `half` is the glint's own half-size on screen.
+ * How far to slide a glint sideways (world x) so it clears the Keeper as the
+ * camera sees it (#335): its spiky hair, hands and feet. The camera looks
+ * along +z, tilted down by `pitch`, so up the screen is height plus distance
+ * away, foreshortened by the tilt. 0 when the glint is already clear; else
+ * out past the Keeper's nearer side. All in world units; `half` is the
+ * glint's half-size, `halfWidth` the Keeper's half-width as a share of its height.
  */
-export function glintClear(
-  glint: { x: number; y: number },
+export function glintNudge(
+  glint: { readonly x: number; readonly y: number; readonly z: number },
+  keeper: { readonly x: number; readonly y: number; readonly z: number },
+  tall: number,
+  pitch: number,
   half: number,
-  keeper: ScreenBox,
+  halfWidth: number,
 ): number {
-  const box = {
-    left: glint.x - half,
-    right: glint.x + half,
-    top: glint.y - half,
-    bottom: glint.y + half,
-  };
-  if (coverShare(box, keeper) === 0) return 0;
-  const middle = (keeper.left + keeper.right) / 2;
-  return glint.x >= middle ? keeper.right + half - glint.x : keeper.left - half - glint.x;
+  const across = glint.x - keeper.x;
+  const up = (glint.y - keeper.y) * Math.cos(pitch) + (glint.z - keeper.z) * Math.sin(pitch);
+  const wide = tall * halfWidth + half;
+  if (up < -half || up > tall * Math.cos(pitch) + half || Math.abs(across) >= wide) return 0;
+  return (across >= 0 ? wide : -wide) - across;
 }
 
 export interface FollowCamera {

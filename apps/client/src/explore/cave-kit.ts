@@ -63,7 +63,8 @@ export function buildGlowCaps(scene: Scene): Mesh {
 /** A dark nook for the Lantern: a rock hump with a black doorway and a crystal peeking out. */
 export function buildNook(scene: Scene): SpotShape {
   const mesh = merged('land-spot-nook', [
-    shaded(sphere(scene, 1.0, 8, [0, 0.25, 0], [1.1, 0.72, 0.95]), '#8c78b4', '#cdbde8', 0, 0.7),
+    // The cave's own stone, so it reads as solid against the dark floor, not a pale ghost.
+    shaded(sphere(scene, 1.0, 8, [0, 0.25, 0], [1.1, 0.72, 0.95]), '#5e4f82', '#a597c8', 0, 0.7),
     // The doorway: a dark arch with a pale rim, so it reads as a doorway, not a mouth.
     flat(cylinder(scene, 0.03, 0.62, 0.62, 14, [0, 0.27, -0.44], [Math.PI / 2, 0, 0]), '#d9cdf0'),
     flat(cylinder(scene, 0.03, 0.48, 0.48, 14, [0, 0.27, -0.455], [Math.PI / 2, 0, 0]), '#1b1230'),
@@ -75,10 +76,10 @@ export function buildNook(scene: Scene): SpotShape {
 /** Glow mushrooms to boop: the same ring of caps, at spot size. */
 export function buildGlowMushroomSpot(scene: Scene): SpotShape {
   const mesh = buildGlowCaps(scene);
-  mesh.scaling.setAll(1.5);
+  mesh.scaling.setAll(1.15); // TUNE: big enough to spot, small enough not to crowd the joystick
   mesh.bakeCurrentTransformIntoVertices();
   mesh.name = 'land-spot-glow-mushrooms';
-  return { mesh, glint: 0.7 };
+  return { mesh, glint: 0.55 };
 }
 
 /** The cave's rock to lift: rounded purple-grey stone, no moss, a crystal peeking out. */

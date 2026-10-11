@@ -154,6 +154,13 @@ export const EXPLORE_FADE = {
   cover: 0.12, // TUNE
   /** The Keeper's half-width on screen, as a share of its height there. */
   keeperHalfWidth: 0.36, // TUNE
+  /**
+   * A glint keeps clear of the whole Keeper (#335): its spiky hair, hands and
+   * feet, half its height either side; the glint's halo is this many times
+   * its star.
+   */
+  glintClearHalfWidth: 0.55, // TUNE
+  glintHalo: 1.6, // TUNE
 } as const;
 
 /** Decorative props (#291): thin instances, one draw call per kind, placed from the tile. */
