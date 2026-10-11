@@ -39,7 +39,8 @@ for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
 }
 
 const params = new URLSearchParams(window.location.search);
-const tier = pickInitialTier(params.get('quality'));
+const tier = pickInitialTier(params.get('tier') ?? params.get('quality'));
+const pinTier = params.has('tier'); // PROTOTYPE #391: honest tier captures
 const view: SquishyView = params.get('view') === 'closeup' ? 'closeUp' : 'map';
 const registry = visualRegistry(GAME_DATA);
 const allLooks = galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.parts);
@@ -116,6 +117,7 @@ await boot(canvas, {
       },
       tier,
       camera,
+      pinTier,
     ),
   onStart: (s) => {
     stage = s;

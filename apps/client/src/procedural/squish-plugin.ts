@@ -8,6 +8,8 @@ import type { Scene } from '@babylonjs/core/scene';
 import {
   FINISH,
   FINISH_CODE,
+  RARE_GLOW,
+  RARE_GLOW_STYLE,
   SHADOW_LOOK,
   SQUISH,
   SQUISH_LOOK_CODE,
@@ -100,6 +102,15 @@ const VERTEX_WORLDPOS = /* glsl */ `
     }
   }
   sqS = max(sqS, 0.3);
+  if (squishMotion.w > ${num(RARE_GLOW.moteLook)} - 0.5) {
+    // PROTOTYPE #391: motes orbit the squishy's upright axis and bob.
+    float moA = 6.2831853 * ${num(RARE_GLOW.motes.speed)} * squishTime;
+    float moC = cos(moA);
+    float moS = sin(moA);
+    sqRel.xz = vec2(moC * sqRel.x - moS * sqRel.z, moS * sqRel.x + moC * sqRel.z);
+    sqRel.y += 0.06 * sqH * sin(squishTime * 1.3 + sqRel.x * 3.0);
+    sqS = 1.0;
+  }
   float sqSide = inversesqrt(sqS);
   sqRel.y *= sqS;
   sqRel.xz *= sqSide;
@@ -136,11 +147,34 @@ const FRAGMENT_RIM = /* glsl */ `
 }
 #endif
 #ifdef SQUISH
-if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
+// PROTOTYPE #391: code = finish + glow + 16 × rarity level + 128 × glow hue (36 steps).
+float fiHueI = floor(vSquishFinish / ${num(RARE_GLOW.hueStep)} + 0.001);
+float fiRest = vSquishFinish - ${num(RARE_GLOW.hueStep)} * fiHueI;
+float fiRare = floor(fiRest / ${num(RARE_GLOW.codeStep)} + 0.001);
+float fiCode = fiRest - ${num(RARE_GLOW.codeStep)} * fiRare;
+// The squishy's own glow hue (from its palette), bright and fairly rich, in linear light.
+vec3 fiHue6 = clamp(abs(mod(fiHueI / 36.0 * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+vec3 fiOwn = pow(mix(vec3(1.0), fiHue6, ${num(RARE_GLOW.hueSaturation)}), vec3(2.2));
+if (vSquishLook > ${num(RARE_GLOW.moteLook)} - 0.5) {
+  float moTw = 0.75 + 0.25 * sin(dot(viewDirectionW, vec3(9.0, 7.0, 5.0)) + vSquishLocal.x * 20.0);
+  finalColor.rgb = mix(vec3(1.0), fiOwn, 0.85) * ${num(RARE_GLOW.motes.bright)} * moTw;
+}
+if (fiRare > 0.5 && vSquishLook < 0.5) {
+  vec4 fiK = vec4(${RARE_GLOW.halo[RARE_GLOW_STYLE === 'off' ? 'halo' : RARE_GLOW_STYLE].map(num).join(', ')});
+  float fiS = fiRare < 1.5 ? fiK.x : fiRare < 2.5 ? fiK.y : fiRare < 3.5 ? fiK.z : fiK.w;
+  float fiR = pow(1.0 - clamp(dot(normalW, viewDirectionW), 0.0, 1.0), ${num(RARE_GLOW.halo.falloff)});
+  finalColor.rgb = mix(finalColor.rgb, fiOwn * ${num(RARE_GLOW.halo.bright)}, clamp(fiS * fiR * 1.6, 0.0, 1.0));
+${RARE_GLOW_STYLE === 'inner' ? `  // Lit from inside in its own colour, capped: more where the vinyl is dim, so pale kinds never wash out.
+  vec4 fiI = vec4(${RARE_GLOW.inner.map(num).join(', ')});
+  float fiIn = fiRare < 1.5 ? fiI.x : fiRare < 2.5 ? fiI.y : fiRare < 3.5 ? fiI.z : fiI.w;
+  float fiLum = dot(finalColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  finalColor.rgb += fiOwn * fiIn * (1.0 - smoothstep(0.15, 0.85, fiLum));` : ''}
+}
+if (fiCode > 0.5 && vSquishLook < 0.5) {
   // Material tiers (ART_BIBLE §1.4). One code per instance, so a whole
   // squishy takes the same branches.
-  float fiGlow = step(${num(FINISH_CODE.glow)} - 0.5, vSquishFinish);
-  float fiTier = vSquishFinish - ${num(FINISH_CODE.glow)} * fiGlow;
+  float fiGlow = step(${num(FINISH_CODE.glow)} - 0.5, fiCode);
+  float fiTier = fiCode - ${num(FINISH_CODE.glow)} * fiGlow;
   if (fiGlow > 0.5) {
     finalColor.rgb += surfaceAlbedo * ${num(FINISH.glow)};
   }
@@ -173,7 +207,7 @@ if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
     finalColor.rgb += fiTint * fiSheen * fiPower;
   }
 }
-if (vSquishLook > ${num(SQUISH_LOOK_CODE.shadow)} - 0.5) {
+if (vSquishLook > ${num(SQUISH_LOOK_CODE.shadow)} - 0.5 && vSquishLook < ${num(RARE_GLOW.moteLook)} - 0.5) {
   // A rescue guardian from the Hollow: dark lavender that keeps the vinyl's
   // shading (so the shape still reads), soft glassy eyes in their own colour
   // washed towards the glow, and a soft glowing rim.

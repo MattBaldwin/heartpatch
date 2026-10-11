@@ -171,3 +171,44 @@ export const CONTACT_SHADOW = {
   /** Diameter as a multiple of the body's larger footprint side. */
   scale: 1.35, // TUNE
 } as const;
+
+/**
+ * PROTOTYPE (#391 mockup only, never shipped): rare-and-up glow styles,
+ * picked by the dev `?glow=halo|inner|motes` flag. Level 1 rare, 2 epic,
+ * 3 legendary and secret, 4 mythic.
+ */
+export type RareGlowStyle = 'off' | 'halo' | 'inner' | 'motes';
+export const RARE_GLOW_STYLE: RareGlowStyle = (() => {
+  const v = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('glow');
+  return v === 'halo' || v === 'inner' || v === 'motes' ? v : 'off';
+})();
+export const RARITY_LEVEL: Readonly<Record<string, number>> = {
+  rare: 1,
+  epic: 2,
+  legendary: 3,
+  secret: 3,
+  mythic: 4,
+};
+export const RARE_GLOW = {
+  /** The coloured edge glow: how far the rim moves to the squishy's own glowing colour, per level 1–4. */
+  halo: {
+    halo: [0.62, 0.74, 0.86, 1.0],
+    inner: [0.3, 0.36, 0.42, 0.48],
+    motes: [0.3, 0.36, 0.42, 0.48],
+    falloff: 1.7,
+    bright: 1.1,
+    saturate: 2.4,
+  },
+  /** Inner glow: how much of its own glowing colour is added where the vinyl is dim, per level (capped). */
+  inner: [0.16, 0.2, 0.24, 0.28],
+  /** Orbiting motes: how many, size (body heights), orbit radius (body widths), turns per second. */
+  motes: { count: [3, 4, 5, 6], size: 0.09, radius: 0.8, speed: 0.08, bright: 1.5 },
+  /** Code offset per level in `squishEvent.w`, above finish and glow. */
+  codeStep: 16,
+  /** The glow hue's code step (36 hues, 10° apart) above the level, and its saturation. */
+  hueStep: 128,
+  hueSaturation: 0.7,
+  /** A body paler than this saturation glows in its palette's most colourful hue instead. */
+  paleBody: 0.2,
+  moteLook: 3,
+} as const;

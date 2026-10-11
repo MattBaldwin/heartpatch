@@ -28,7 +28,8 @@ const canvas = document.querySelector<HTMLCanvasElement>('#game');
 if (!canvas) throw new Error('missing #game canvas');
 
 const params = new URLSearchParams(window.location.search);
-const tier = pickInitialTier(params.get('quality'));
+const tier = pickInitialTier(params.get('tier') ?? params.get('quality'));
+const pinTier = params.has('tier'); // PROTOTYPE #391: honest tier captures
 const registry = visualRegistry(GAME_DATA);
 const speciesId = params.get('species') ?? GAME_DATA.species[0]?.id ?? '';
 const terrain = params.get('terrain') ?? 'meadow';
@@ -84,6 +85,8 @@ await boot(canvas, {
         return built.content;
       },
       tier,
+      {},
+      pinTier,
     ),
   onStart: (s) => {
     stage = s;

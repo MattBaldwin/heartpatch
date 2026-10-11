@@ -11,13 +11,16 @@ import { Logger } from '@babylonjs/core/Misc/logger';
 import type { Observer } from '@babylonjs/core/Misc/observable';
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
-import type { Body, ClothingItem, VisualRegistry } from '@heartpatch/shared';
+import { GAME_DATA, type Body, type ClothingItem, type VisualRegistry } from '@heartpatch/shared';
 import { accessoryPieces, accessorySocket } from './accessory.js';
 import { bodyArrays, type MeshArrays } from './body-shape.js';
 import {
   CONTACT_SHADOW,
   FINISH_CODE,
   LOD,
+  RARE_GLOW,
+  RARE_GLOW_STYLE,
+  RARITY_LEVEL,
   SHADOW_LOOK,
   SQUISH_LOOK_CODE,
   VINYL,
@@ -112,6 +115,51 @@ interface Instance {
   readonly finish: number;
 }
 
+/** PROTOTYPE #391: rarity level by species id (0 below rare, or with the style off). */
+const RARE_LEVEL_BY_ID = new Map(
+  GAME_DATA.species.map((s) => [s.id, RARITY_LEVEL[s.rarity] ?? 0] as const),
+);
+/** PROTOTYPE #391: `?rarity=dazzledrop:mythic` draws a species at another rarity (mythic stand-in). */
+for (const pair of (typeof location === 'undefined' ? '' : (new URLSearchParams(location.search).get('rarity') ?? '')).split(',')) {
+  const [id, r] = pair.split(':');
+  if (id && r) RARE_LEVEL_BY_ID.set(id, RARITY_LEVEL[r] ?? 0);
+}
+/** PROTOTYPE #391: hue (0–1) and saturation of a `#rrggbb` colour. */
+function hueSat(hex: string): [number, number] {
+  const n = parseInt(hex.slice(1, 7), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  const s = max === 0 ? 0 : d / max;
+  let h = 0;
+  if (d > 0) {
+    if (max === r) h = ((g - b) / d + 6) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+  }
+  return [h / 6, s];
+}
+
+/** PROTOTYPE #391: the glow hue index (0–35): the body's hue, or the palette's most colourful when the body is pale. */
+export function glowHue(palette: readonly string[]): number {
+  const [h0, s0] = hueSat(palette[0] ?? '#ffffff');
+  let best = [h0, s0] as [number, number];
+  if (s0 < RARE_GLOW.paleBody) {
+    for (const c of palette.slice(1)) {
+      const hs = hueSat(c);
+      if (hs[1] > best[1]) best = hs;
+    }
+  }
+  return Math.round(best[0] * 36) % 36;
+}
+
+export function rareLevel(speciesId: string): number {
+  return RARE_GLOW_STYLE === 'off' ? 0 : (RARE_LEVEL_BY_ID.get(speciesId) ?? 0);
+}
+
 interface Squishy {
   readonly handle: SquishyHandle;
   world: Matrix;
@@ -130,6 +178,10 @@ interface Squishy {
     /** How high it reaches above the ground point (placement scale 1). */
     readonly top: number;
   } | null;
+  /** PROTOTYPE #391: the species palette (glow hue). */
+  palette: readonly string[];
+  /** PROTOTYPE #391: rarity level (0 below rare). */
+  rare?: number;
   /** Its own `crown` parts (a stem, a nightcap): put away while a crown accessory is on. */
   readonly crownParts: { batch: Batch; instance: Instance }[];
 }
@@ -259,6 +311,7 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
       instances: [],
       accessory: null,
       crownParts: [],
+      palette: species.visual.palette,
     };
     this.#squishies.set(handle.id, squishy);
     this.#layout(squishy, body, placement);
@@ -526,13 +579,15 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
     this.#place(squishy, placement);
 
     const shadow = squishy.handle.look === 'shadow';
-    const tier = FINISH_CODE[params.finish];
+    const level = shadow ? 0 : rareLevel(params.speciesId);
+    const hue = level > 0 ? glowHue(squishy.palette) : 0;
+    const tier = FINISH_CODE[params.finish] + level * RARE_GLOW.codeStep + hue * RARE_GLOW.hueStep;
     const attach = (
       batch: Batch,
       local: Matrix,
       color: Instance['color'],
       finish: number,
-      eyes = false,
+      eyes: boolean | 'mote' = false,
     ) => {
       const look = !shadow
         ? SQUISH_LOOK_CODE.normal
@@ -544,8 +599,8 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         local,
         matrix: local.multiply(squishy.world),
         // Without the shader (opt-in WebGPU) the look is baked into the colour.
-        color: shadow && !this.#plugin ? shadowColor(color, eyes) : color,
-        look,
+        color: shadow && !this.#plugin ? shadowColor(color, eyes === true) : color,
+        look: eyes === 'mote' ? RARE_GLOW.moteLook : look,
         finish,
       };
       batch.instances.push(instance);
@@ -601,6 +656,27 @@ export class SquishyField<L extends SquishyDetail = SquishyLod> {
         if (part.slot === 'crown') squishy.crownParts.push(entry);
       }
     }
+    if (RARE_GLOW_STYLE === 'motes' && level > 0) {
+      // PROTOTYPE #391: little glowing motes on the shared ellipsoid mesh.
+      const batch = this.#batch('part:ellipsoid', (lod) => partArrays('ellipsoid', LOD[lod]), false);
+      const n = RARE_GLOW.motes.count[level - 1] ?? 0;
+      const h = params.height;
+      const w = Math.max(body.width * sx, body.depth * sz);
+      const r = w * RARE_GLOW.motes.radius;
+      const m = h * RARE_GLOW.motes.size;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + 0.4;
+        const y = h * (0.3 + 0.55 * ((i * 0.618) % 1));
+        attach(
+          batch,
+          Matrix.Scaling(m, m, m).multiply(Matrix.Translation(Math.cos(a) * r, y, Math.sin(a) * r)),
+          linear(params.body.color),
+          level * RARE_GLOW.codeStep + hue * RARE_GLOW.hueStep,
+          'mote',
+        );
+      }
+    }
+    squishy.rare = level;
     this.#shadowDirty = true;
   }
 
