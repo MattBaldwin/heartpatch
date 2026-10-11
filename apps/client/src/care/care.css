@@ -7,12 +7,15 @@
   inset: 0;
   z-index: 6;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  flex-direction: column;
+  /* The one scroll area: the card sits at the bottom (margin-top auto below),
+     and a tall card scrolls from its top instead of growing past it. */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  padding: calc(env(safe-area-inset-top) + 16px) calc(env(safe-area-inset-right) + 16px)
+  /* The top stays under the account chip (z 10, 8px in, about 52px tall): the
+     title, rarity and mood never sit behind it (#385). */
+  padding: calc(env(safe-area-inset-top) + 64px) calc(env(safe-area-inset-right) + 16px)
     calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 16px);
   background: rgb(253 232 240 / 55%);
   font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
@@ -34,6 +37,7 @@
   gap: 8px;
   width: 100%;
   max-width: 420px;
+  margin: auto auto 0;
   text-align: center;
 }
 
@@ -509,5 +513,44 @@
   .care-hearts-badge,
   .care-hearts-row .care-hearts::after {
     animation: none;
+  }
+}
+
+/* A short screen (iPhone SE, a phone on its side, an iPad on its side): the same card, tighter, so
+   Feed, Pet and Play stay in view without scrolling (#385). */
+@media (max-height: 840px) {
+  .care-card {
+    gap: 4px;
+    padding-block: 12px;
+  }
+
+  .care-stage {
+    height: 60px;
+  }
+
+  .care-blob {
+    width: 58px;
+    height: 52px;
+  }
+
+  .care-name {
+    font-size: 24px;
+  }
+
+  .care-drift[data-mood='steady'],
+  .care-drift[data-mood='drifting'] {
+    padding: 4px 12px;
+  }
+
+  /* Up close and Close share a row. */
+  .care-card .auth-actions {
+    flex-direction: row;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .care-card .auth-actions > button {
+    flex: 1;
+    padding-inline: 8px;
   }
 }
