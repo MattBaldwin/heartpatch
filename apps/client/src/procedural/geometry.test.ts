@@ -178,6 +178,7 @@ describe('optional body features stay off by default', () => {
     'ghost',
     'barrel',
     'orb',
+    'frosting',
   ];
 
   it('draws the bodies that came before the cleft exactly as they were', () => {
@@ -197,7 +198,7 @@ describe('optional body features stay off by default', () => {
         add(body.id + JSON.stringify([mesh.positions, mesh.normals, mesh.indices]));
       }
     }
-    expect(hash.toString(16)).toBe('c6964a27');
+    expect(hash.toString(16)).toBe('45f1ef5c');
   });
 });
 
