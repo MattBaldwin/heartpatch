@@ -59,3 +59,9 @@
   top: calc(env(safe-area-inset-top) + 8px);
   left: calc(env(safe-area-inset-left) + 12px);
 }
+
+/* The account pill (top right at home) stops short of the button; its name
+   shortens with "…" rather than covering it (#385 owns the pill itself). */
+body:has(.squishies-open-home:not([hidden])) .auth-chip {
+  max-width: calc(100vw - 84px - env(safe-area-inset-left) - env(safe-area-inset-right));
+}

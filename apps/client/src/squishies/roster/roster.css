@@ -410,3 +410,21 @@
     align-items: start;
   }
 }
+
+/* Over explore, its floating controls step back while the roster is up, so
+   nothing of the walk view sits on the list (they come back on close). */
+body:has(.roster-sheet:not([hidden]))
+  :is(
+    .explore-glint,
+    .explore-stick,
+    .explore-walk-hint,
+    .explore-note,
+    .explore-action,
+    .explore-need,
+    .explore-play,
+    .explore-sheet,
+    .explore-toast,
+    .explore-fly
+  ) {
+  visibility: hidden;
+}
