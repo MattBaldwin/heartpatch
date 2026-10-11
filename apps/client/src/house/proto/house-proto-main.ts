@@ -33,7 +33,7 @@ const focus = {
 };
 const pitch = ((Number(params.get('pitch')) || pitchDefault) * Math.PI) / 180;
 const distance = Number(params.get('dist')) || distDefault;
-const fov = Number(params.get('fov')) || (portrait ? 0.95 : 0.8);
+const fov = Number(params.get('fov')) || (portrait ? 0.95 : 0.88);
 
 let stage: Stage | null = null;
 let house: HouseProtoScene | null = null;
