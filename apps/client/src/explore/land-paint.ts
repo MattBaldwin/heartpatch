@@ -54,14 +54,18 @@ export function paintGround(input: PaintInput): Uint8Array {
   const specks = palette.specks.map(rgb);
   const shade = rgb(palette.shade);
 
-  // The shade first, splatted into its own layer (each shade touches few texels).
+  // The shade first, splatted into its own layer (each shade touches few texels),
+  // and pools of light (shades with a tint) into a layer of their own.
   const dark = new Float32Array(n * n);
+  const lit = new Float32Array(n * n);
+  const litColour = new Float32Array(n * n * 3);
   const toTexel = (x: number) => worldToUv(x, radius, w) * n - 0.5;
   for (const s of shades) {
     // A cast shadow is an ellipse, long along the sun; its box covers the long way.
     const stretch = s.stretch ?? 1;
     const along = s.along ?? { x: 1, z: 0 };
     const reach = s.r * stretch;
+    const tint = s.tint ? rgb(s.tint) : null;
     const i0 = Math.max(0, Math.floor(toTexel(s.x - reach)));
     const i1 = Math.min(n - 1, Math.ceil(toTexel(s.x + reach)));
     const j0 = Math.max(0, Math.floor(toTexel(s.z - reach)));
@@ -76,7 +80,18 @@ export function paintGround(input: PaintInput): Uint8Array {
         if (d >= 1) continue;
         const f = s.strength * (1 - d * d) ** 2;
         const k = j * n + i;
-        dark[k] = 1 - (1 - (dark[k] ?? 0)) * (1 - f);
+        if (tint) {
+          // Overlapping pools blend their colours by weight.
+          const before = lit[k] ?? 0;
+          const total = before + f;
+          for (let ch = 0; ch < 3; ch++) {
+            const old = litColour[k * 3 + ch] ?? 0;
+            litColour[k * 3 + ch] = (old * before + (tint[ch] ?? 0) * f) / total;
+          }
+          lit[k] = total;
+        } else {
+          dark[k] = 1 - (1 - (dark[k] ?? 0)) * (1 - f);
+        }
       }
     }
   }
@@ -132,6 +147,15 @@ export function paintGround(input: PaintInput): Uint8Array {
       }
       const k = j * n + i;
       mixTo(c, shade, dark[k] ?? 0);
+      const glow = lit[k] ?? 0;
+      if (glow > 0) {
+        const t: Rgb = [
+          litColour[k * 3] ?? 0,
+          litColour[k * 3 + 1] ?? 0,
+          litColour[k * 3 + 2] ?? 0,
+        ];
+        mixTo(c, t, Math.min(1, glow));
+      }
       out[k * 4] = Math.min(255, Math.max(0, Math.round(c[0])));
       out[k * 4 + 1] = Math.min(255, Math.max(0, Math.round(c[1])));
       out[k * 4 + 2] = Math.min(255, Math.max(0, Math.round(c[2])));

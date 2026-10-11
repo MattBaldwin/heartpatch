@@ -161,10 +161,16 @@ if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
   }
   if (fiTier > 2.5) {
     // Mythic shimmer: pearly bands slide over the vinyl as the view turns
-    // (never on a timer, so an idle scene stays idle).
-    float fiBand = fract(dot(vSquishLocal, vec3(0.55, 1.0, 0.35)) * ${num(FINISH.shimmer.bands)} + dot(viewDirectionW, vec3(0.9, 0.6, 0.7)));
-    float fiSheen = smoothstep(0.0, ${num(FINISH.shimmer.width)}, fiBand) * (1.0 - smoothstep(${num(FINISH.shimmer.width)}, ${num(FINISH.shimmer.width * 2)}, fiBand));
-    finalColor.rgb += ${vec3(FINISH.shimmer.tint)} * fiSheen * ${num(FINISH.shimmer.strength)};
+    // (never on a timer, so an idle scene stays idle). The soft variant
+    // (Mythic costumes) is the same bands with its own numbers.
+    bool fiSoft = fiTier > ${num(FINISH_CODE.shimmerSoft)} - 0.5;
+    float fiBands = fiSoft ? ${num(FINISH.shimmerSoft.bands)} : ${num(FINISH.shimmer.bands)};
+    float fiWidth = fiSoft ? ${num(FINISH.shimmerSoft.width)} : ${num(FINISH.shimmer.width)};
+    float fiPower = fiSoft ? ${num(FINISH.shimmerSoft.strength)} : ${num(FINISH.shimmer.strength)};
+    vec3 fiTint = fiSoft ? ${vec3(FINISH.shimmerSoft.tint)} : ${vec3(FINISH.shimmer.tint)};
+    float fiBand = fract(dot(vSquishLocal, vec3(0.55, 1.0, 0.35)) * fiBands + dot(viewDirectionW, vec3(0.9, 0.6, 0.7)));
+    float fiSheen = smoothstep(0.0, fiWidth, fiBand) * (1.0 - smoothstep(fiWidth, fiWidth * 2.0, fiBand));
+    finalColor.rgb += fiTint * fiSheen * fiPower;
   }
 }
 if (vSquishLook > ${num(SQUISH_LOOK_CODE.shadow)} - 0.5) {

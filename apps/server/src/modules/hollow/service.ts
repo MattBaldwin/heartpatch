@@ -56,6 +56,7 @@ import { litSafeTiles } from '../buildings/hearthfire.js';
 import { addNightWatchLean } from '../care/evolution.js';
 import { grantItems } from '../inventory/service.js';
 import { createCareRepo } from '../care/repo.js';
+import { checkpointContentment } from '../jobs/contentment.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
@@ -298,6 +299,8 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
       const { userId } = outcome;
       // Under its row lock; a squishy that left the map meanwhile is skipped.
       const took: string[] = [];
+      // Its job so far held what it held (#376); in the Hollow it has none.
+      await checkpointContentment(tx, map.id, outcome.taken, at);
       for (const squishyId of outcome.taken) {
         if (await repo.hollow(squishyId)) took.push(squishyId);
       }

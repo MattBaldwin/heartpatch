@@ -56,10 +56,9 @@ test('builds a Factory, runs batches from home, the book and the bag, and welcom
   const sheet = page.getByTestId('home');
   await slowExpect(sheet).toBeVisible();
   await sheet.getByTestId('home-build').tap();
-  const row = sheet.locator('[data-build-row="crafting-factory"]');
-  await expect(row.locator('.home-effect')).toHaveText(['🏭 2 batches at once']);
-  await row.locator('[data-build="crafting-factory"]').tap();
-  await sheet.getByTestId('home-anywhere').tap();
+  await sheet.locator('[data-build="crafting-factory"]').tap();
+  await expect(sheet.getByTestId('build-detail')).toContainText('🏭 2 batches at once');
+  await sheet.getByTestId('build-go').tap();
   // Its card opens with Sprout's tip (once) and the queue panel.
   const panel = sheet.getByTestId('factory-panel');
   await slowExpect(panel).toBeVisible();

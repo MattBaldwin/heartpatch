@@ -9,6 +9,8 @@ import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
 import {
+  coverShare,
+  glintNudge,
   alongTrail,
   besideSpot,
   blocked,
@@ -657,5 +659,43 @@ describe('the team never covers the Keeper (#323)', () => {
     }
     // Walking towards the camera, the team ends up behind the Keeper.
     for (const f of followers) expect(f.z).toBeGreaterThan(at.z);
+  });
+});
+
+describe('on-screen cover (#335)', () => {
+  const keeper = { left: 100, right: 140, top: 50, bottom: 150 };
+
+  it('measures how much of the Keeper a box covers', () => {
+    expect(coverShare(keeper, keeper)).toBe(1);
+    expect(coverShare({ left: 100, right: 120, top: 50, bottom: 150 }, keeper)).toBeCloseTo(0.5);
+    // Beside it, or only touching its edge: nothing covered.
+    expect(coverShare({ left: 141, right: 200, top: 0, bottom: 200 }, keeper)).toBe(0);
+    expect(coverShare({ left: 140, right: 200, top: 0, bottom: 200 }, keeper)).toBe(0);
+    expect(coverShare(keeper, { left: 0, right: 0, top: 0, bottom: 10 })).toBe(0);
+  });
+
+  it('slides a glint on the Keeper out past its nearer side, and leaves a clear one be', () => {
+    const keeper = { x: 0, y: 0, z: 0 };
+    const pitch = 0.5;
+    // Beside the Keeper's head, a little right of its middle: out past its right side.
+    const slide = glintNudge({ x: 0.2, y: 0.9, z: 0 }, keeper, 1, pitch, 0.15, 0.55);
+    expect(0.2 + slide).toBeCloseTo(0.55 + 0.15);
+    // Left of the middle: out past the left side.
+    expect(-0.1 + glintNudge({ x: -0.1, y: 0.5, z: 0 }, keeper, 1, pitch, 0.15, 0.55)).toBeCloseTo(
+      -0.7,
+    );
+    // Well beside it, high above it, or far behind it: left be.
+    expect(glintNudge({ x: 1.2, y: 0.5, z: 0 }, keeper, 1, pitch, 0.15, 0.55)).toBe(0);
+    expect(glintNudge({ x: 0, y: 3, z: 0 }, keeper, 1, pitch, 0.15, 0.55)).toBe(0);
+    expect(glintNudge({ x: 0, y: 0.3, z: 4 }, keeper, 1, pitch, 0.15, 0.55)).toBe(0);
+    // It keeps to the side it went last time while it still needs to slide.
+    expect(
+      0.05 + glintNudge({ x: 0.05, y: 0.5, z: 0 }, keeper, 1, pitch, 0.15, 0.55, -1),
+    ).toBeCloseTo(-0.7);
+    expect(0.05 + glintNudge({ x: 0.05, y: 0.5, z: 0 }, keeper, 1, pitch, 0.15, 0.55)).toBeCloseTo(
+      0.7,
+    );
+    // In front, low down (over the feet on screen): slides too.
+    expect(glintNudge({ x: 0.1, y: 0.3, z: -0.4 }, keeper, 1, pitch, 0.15, 0.55)).not.toBe(0);
   });
 });

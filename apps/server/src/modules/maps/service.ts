@@ -45,6 +45,8 @@ import { createExploreRepo } from '../explore/repo.js';
 import { listPostViews } from '../journeys/service.js';
 import { createTerritoryRepo } from '../territory/repo.js';
 import { defaultGuardianData, tileGuardians } from '../territory/service.js';
+import { contentmentCheckpointsOf, writeContentmentCheckpoints } from '../jobs/contentment.js';
+import { createSquishyJobsRepo } from '../jobs/repo.js';
 import { createMapsRepo, type JoinRequestRow, type MemberRow, type TileViewRow } from './repo.js';
 
 export interface MapsService {
@@ -307,11 +309,31 @@ export function createMapsService(options: MapsServiceOptions): MapsService {
         );
       }
       await repo.archiveMember(mapId, memberId);
+      const at = now();
+      // Their guards and gatherers stop with the land, and trainees with
+      // their Training Grounds (#376): what each job held so far is worked
+      // out while the land is still theirs, and written once it's released.
+      const jobs = createSquishyJobsRepo(tx);
+      // Only those whose job stops here: guards on their land, gatherers at
+      // work there and trainees. Any other row (the team, the Hollow, a
+      // trade) keeps its own count, and a rescue may be writing it right now.
+      const theirs = (await jobs.listMine(mapId, memberId))
+        .filter(
+          (r) => r.squishy.state === 'active' && (r.onWatch || r.atWork || r.training !== null),
+        )
+        .map((r) => r.squishy.id);
+      const checkpoints = await contentmentCheckpointsOf(tx, mapId, theirs, at);
       const releasedTiles = await repo.releaseTiles(mapId, memberId);
+      // Written here, before the buildings (tech spec §7 exception): the
+      // member's own commands wait on the archive and the account lock above,
+      // and every other writer of a guard or gatherer takes its tile first,
+      // which `releaseTiles` holds.
+      await jobs.lockSquishies(theirs);
+      await writeContentmentCheckpoints(tx, checkpoints, at);
       // A returning player gets a fresh home base (#4), so their buildings go
       // (#18); fires on their captured land give back what a lost fire does (#202).
       const map = await repo.findMap(mapId);
-      const lostFires = map ? await removeMemberBuildings(tx, map, memberId, now()) : [];
+      const lostFires = map ? await removeMemberBuildings(tx, map, memberId, at) : [];
       // Their fences come down too, with the take-down share back (#203).
       // After the buildings' grants: safe, as every fence command takes the
       // tile lock first, and this transaction already holds their tiles.

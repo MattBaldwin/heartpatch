@@ -66,17 +66,38 @@ export type KeeperEyes = z.infer<typeof KeeperEyesSchema>;
 /** A proportion of the Keeper's standard height (about 1.6 world units). */
 const proportion = (min: number, max: number) => z.number().min(min).max(max);
 
+/** Head diameter: a proportion of the standard Keeper height. */
+const HeadSizeSchema = proportion(0.38, 0.6);
+
 /**
- * Chibi proportions (design doc §23): a big head on a small, rounded body.
- * All sizes are fractions of the standard Keeper height, except `height`.
+ * A face shape (#372): the head's size and shape. Each starting look's head
+ * is one, with the base's id, so a Keeper saved before faces were a choice
+ * looks the same. Ids are stored in `keepers` rows: never rename or remove
+ * one.
  */
-export const KeeperBodySchema = z.strictObject({
-  /** Overall size: 1 is standard; small and tall Keepers sit either side. */
-  height: proportion(0.8, 1.2),
-  /** Head diameter. */
-  head: proportion(0.38, 0.6),
+export const KeeperFaceShapeSchema = z.strictObject({
+  id: ContentIdSchema,
+  name: DisplayNameSchema,
+  /** Head diameter; drawn blended with the body's own `head` (`keeperParams`). */
+  head: HeadSizeSchema,
   /** Head width over height: rounder (above 1) or longer (below 1). */
   headShape: proportion(0.85, 1.2),
+});
+export type KeeperFaceShape = z.infer<typeof KeeperFaceShapeSchema>;
+
+/**
+ * A body type (#372): chibi proportions (design doc §23), a big head on a
+ * small, rounded body. All sizes are fractions of the standard Keeper
+ * height, except `height`. Each starting look's body is one, with the
+ * base's id. Ids are stored in `keepers` rows: never rename or remove one.
+ */
+export const KeeperBodyTypeSchema = z.strictObject({
+  id: ContentIdSchema,
+  name: DisplayNameSchema,
+  /** Overall size: 1 is standard; small and tall Keepers sit either side. */
+  height: proportion(0.8, 1.2),
+  /** The head diameter this body is drawn for, blended with the face's own. */
+  head: HeadSizeSchema,
   /** Body (torso) width and height. */
   torsoWidth: proportion(0.2, 0.42),
   torsoHeight: proportion(0.18, 0.32),
@@ -89,7 +110,7 @@ export const KeeperBodySchema = z.strictObject({
   /** Arm and leg thickness. */
   limbs: proportion(0.06, 0.12),
 });
-export type KeeperBody = z.infer<typeof KeeperBodySchema>;
+export type KeeperBodyType = z.infer<typeof KeeperBodyTypeSchema>;
 
 /** A face line's shape (#289): a curve (∪, or ∩ when rolled 180°) or a straight stroke. */
 export const FaceLineShapeSchema = z.enum(['arc', 'capsule']);
@@ -152,15 +173,14 @@ export const KeeperFaceSchema = z.strictObject({
 export type KeeperFace = z.infer<typeof KeeperFaceSchema>;
 
 /**
- * A starting look (design doc §23; #289): one tap sets every choice, then the
- * player changes any of them. Its body shape isn't a choice yet.
+ * A starting look (design doc §23; #289): the choices a Keeper starts with.
+ * Its face shape and body type are the ones with its id (#372).
  */
 export const KeeperBaseSchema = z.strictObject({
   id: ContentIdSchema,
   name: DisplayNameSchema,
   /** The skin tone it starts with (an id in the skin tones below). */
   skinTone: ContentIdSchema,
-  body: KeeperBodySchema,
   face: KeeperFaceSchema,
   /** The hairstyle it starts with (an id in the hairstyles below). */
   hairstyle: ContentIdSchema,
@@ -193,6 +213,8 @@ export type OutfitPalette = z.infer<typeof OutfitPaletteSchema>;
 
 const KeeperDataObjectSchema = z.strictObject({
   bases: z.array(KeeperBaseSchema).min(1),
+  faces: z.array(KeeperFaceShapeSchema).min(1),
+  bodies: z.array(KeeperBodyTypeSchema).min(1),
   skinTones: z.array(KeeperSkinToneSchema).min(1),
   brows: z.array(KeeperFaceLineSchema).min(1),
   mouths: z.array(KeeperFaceLineSchema).min(1),
@@ -218,6 +240,10 @@ export const KeeperConfigSchema = z.strictObject({
   eyeColor: ContentIdSchema,
   outfit: ContentIdSchema,
   hairstyle: ContentIdSchema.optional(),
+  // Face shape and body type (#372), each the base's own when absent. Older
+  // apps don't send them: the server keeps what's stored, as below.
+  face: ContentIdSchema.optional(),
+  body: ContentIdSchema.optional(),
   // The Keeper builder (#289). Optional, so an older app that doesn't send
   // them still saves: the server fills each from the starting look (`base`),
   // and always sends them back.
@@ -236,7 +262,9 @@ export type KeeperConfig = z.infer<typeof KeeperConfigSchema>;
 
 /** A config with every Keeper builder choice filled in (#289): what's stored and sent back. */
 export type CompleteKeeperConfig = KeeperConfig &
-  Required<Pick<KeeperConfig, 'skinTone' | 'eyes' | 'brows' | 'mouth' | 'extras'>>;
+  Required<
+    Pick<KeeperConfig, 'face' | 'body' | 'skinTone' | 'eyes' | 'brows' | 'mouth' | 'extras'>
+  >;
 
 /**
  * A Keeper as other players see it (`MapMember.keeper`): the config plus the
@@ -261,6 +289,8 @@ export function checkKeeperData(input: unknown): string[] {
       ctx.addIssue({ code: 'custom', path, message });
     };
     checkUniqueIds('bases', data.bases, report);
+    checkUniqueIds('faces', data.faces, report);
+    checkUniqueIds('bodies', data.bodies, report);
     checkUniqueIds('hairstyles', data.hairstyles, report);
     checkUniqueIds('hairColors', data.hairColors, report);
     checkUniqueIds('eyeColors', data.eyeColors, report);
@@ -276,7 +306,12 @@ export function checkKeeperData(input: unknown): string[] {
     const eyes = ids(data.eyeColors);
     const outfits = ids(data.outfits);
     const styles = ids(data.hairstyles);
+    const faces = ids(data.faces);
+    const bodies = ids(data.bodies);
     data.bases.forEach((base, i) => {
+      // A base's face and body share its id (#372): what it falls back to.
+      checkRef(faces, 'face', base.id, ['bases', i, 'id'], report);
+      checkRef(bodies, 'body', base.id, ['bases', i, 'id'], report);
       checkRef(styles, 'hairstyle', base.hairstyle, ['bases', i, 'hairstyle'], report);
       checkRef(tones, 'skin tone', base.skinTone, ['bases', i, 'skinTone'], report);
       checkRef(brows, 'brows', base.face.brows, ['bases', i, 'face', 'brows'], report);
@@ -307,6 +342,8 @@ export function keeperConfigProblem(
   }
   const known = (rows: readonly { id: string }[], id: string | undefined) =>
     id === undefined || rows.some((r) => r.id === id);
+  if (!known(data.faces, config.face)) return 'face';
+  if (!known(data.bodies, config.body)) return 'body';
   if (!known(data.skinTones, config.skinTone)) return 'skinTone';
   if (!known(data.brows, config.brows)) return 'brows';
   if (!known(data.mouths, config.mouth)) return 'mouth';
@@ -321,6 +358,8 @@ export function defaultKeeperConfig(base: KeeperBase): CompleteKeeperConfig {
     hairColor: base.hairColor,
     eyeColor: base.eyeColor,
     outfit: base.outfit,
+    face: base.id,
+    body: base.id,
     skinTone: base.skinTone,
     eyes: base.face.eyes,
     brows: base.face.brows,
@@ -340,6 +379,8 @@ export function completeKeeperConfig(config: KeeperConfig, data: KeeperData): Co
   const picked = new Set(config.extras ?? []);
   return {
     ...config,
+    face: config.face ?? base.id,
+    body: config.body ?? base.id,
     skinTone: config.skinTone ?? base.skinTone,
     eyes: config.eyes ?? base.face.eyes,
     brows: config.brows ?? base.face.brows,
@@ -358,9 +399,11 @@ export function completeKeeperConfig(config: KeeperConfig, data: KeeperData): Co
 export function compactKeeperConfig(config: KeeperConfig, data: KeeperData): KeeperConfig {
   const base = data.bases.find((b) => b.id === config.base);
   if (!base) return config;
-  const { skinTone, eyes, brows, mouth, extras, ...rest } = config;
+  const { face, body, skinTone, eyes, brows, mouth, extras, ...rest } = config;
   return {
     ...rest,
+    ...(face === undefined || face === base.id ? {} : { face }),
+    ...(body === undefined || body === base.id ? {} : { body }),
     ...(skinTone === undefined || skinTone === base.skinTone ? {} : { skinTone }),
     ...(eyes === undefined || eyes === base.face.eyes ? {} : { eyes }),
     ...(brows === undefined || brows === base.face.brows ? {} : { brows }),

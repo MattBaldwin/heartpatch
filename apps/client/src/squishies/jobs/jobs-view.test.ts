@@ -6,6 +6,8 @@ import {
   type WorkStatus,
 } from '@heartpatch/shared';
 import { describe, expect, it } from 'vitest';
+import { itemName } from '../../inventory/bag-view.js';
+import { itemIcon } from '../../inventory/item-icons.js';
 import { workableByMe } from './index.js';
 import {
   canTrain,
@@ -18,6 +20,8 @@ import {
   nameOf,
   rarityOf,
   readyTotal,
+  spotFit,
+  workMood,
   spotLabel,
   teamCost,
   teamSlots,
@@ -49,6 +53,7 @@ function squishy(n: number, over: Partial<JobSquishy> = {}): JobSquishy {
     work: null,
     training: null,
     fullXpResetAt: null,
+    gatherFits: [],
     ...over,
   };
 }
@@ -256,5 +261,72 @@ describe('Training Grounds on homesteads (#277)', () => {
       JOBS_TEXT.groundsFull,
     );
     expect(trainHintText({ trainingGrounds: [g(1, 1)] })).toBe('');
+  });
+});
+
+describe('spot fit (#376)', () => {
+  it('says it loves a resource it is good at, and warns about one it is not', () => {
+    const pet = squishy(1, { gatherFits: ['timber'] });
+    expect(spotFit(pet, { resource: 'timber' })).toEqual({
+      fits: true,
+      line: `Loves gathering ${itemName('timber')} here! ${itemIcon('timber')}`,
+    });
+    expect(spotFit(pet, { resource: 'stone' })).toEqual({
+      fits: false,
+      line: JOBS_TEXT.noFit,
+    });
+  });
+});
+
+describe('work mood (#376)', () => {
+  it('loves the team, a watch, training and a resource it is good at', () => {
+    for (const job of ['team', 'guard'] as const) {
+      expect(workMood(squishy(1, { job }))).toBe('loves');
+    }
+    const practicing = (over: { full?: boolean; napping?: boolean } = {}) =>
+      ({ full: false, napping: false, ...over }) as NonNullable<JobSquishy['training']>;
+    expect(workMood(squishy(1, { job: 'training', training: practicing() }))).toBe('loves');
+    expect(
+      workMood(squishy(1, { job: 'training', training: practicing({ full: true }) })),
+    ).toBeNull();
+    expect(
+      workMood(squishy(1, { job: 'training', training: practicing({ napping: true }) })),
+    ).toBeNull();
+    expect(
+      workMood(
+        squishy(1, { job: 'gatherer', gatherFits: ['timber'], work: work({ resource: 'timber' }) }),
+      ),
+    ).toBe('loves');
+  });
+
+  it('is meh about a resource it is not good at, and says nothing while resting', () => {
+    expect(
+      workMood(
+        squishy(1, { job: 'gatherer', gatherFits: ['timber'], work: work({ resource: 'stone' }) }),
+      ),
+    ).toBe('meh');
+    expect(workMood(squishy(1, { job: 'resting' }))).toBeNull();
+  });
+
+  it('says nothing while a job it loves has stopped (its happiness drifts then)', () => {
+    expect(
+      workMood(
+        squishy(1, {
+          job: 'gatherer',
+          gatherFits: ['timber'],
+          work: work({ resource: 'timber', full: true }),
+        }),
+      ),
+    ).toBeNull();
+    // A wrong resource stays meh, full or not.
+    expect(
+      workMood(
+        squishy(1, {
+          job: 'gatherer',
+          gatherFits: ['timber'],
+          work: work({ resource: 'stone', full: true }),
+        }),
+      ),
+    ).toBe('meh');
   });
 });

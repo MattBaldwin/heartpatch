@@ -27,6 +27,8 @@ const TEST_KEEPER = {
   hairColor: 'honey',
   eyeColor: 'sky',
   outfit: 'sunflower',
+  face: 'pip',
+  body: 'pip',
   skinTone: 'tone-1',
   eyes: 'round' as const,
   brows: 'arched',

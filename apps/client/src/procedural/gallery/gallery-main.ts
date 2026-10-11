@@ -46,10 +46,12 @@ const allLooks = galleryLooks(GAME_DATA.species, GAME_DATA.bodies, GAME_DATA.par
 const lookParam = params.get('look');
 const lookIds = lookParam?.split(',') ?? [];
 const looks = lookParam ? lookIds.flatMap((id) => allLooks.filter((l) => l.id === id)) : allLooks;
+// Enough for the whole roster twice over (the draw-call e2e shows every look once, then twice).
+const MAX_COUNT = 1000; // TUNE: raise as the roster grows toward 500 species.
 const requested = Number(params.get('count'));
 const count =
   Number.isInteger(requested) && requested > 0
-    ? Math.min(requested, 200)
+    ? Math.min(requested, MAX_COUNT)
     : view === 'closeUp'
       ? 1
       : looks.length;

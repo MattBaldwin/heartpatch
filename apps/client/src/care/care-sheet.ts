@@ -89,8 +89,12 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
   // The rarity chip under the name (#240).
   const rarity = el('div', { class: 'care-rarity', 'data-testid': 'care-rarity' });
   const mood = el('p', { class: 'care-mood', 'data-testid': 'care-mood' });
+  const drift = el('p', { class: 'care-drift', 'data-testid': 'care-drift' });
   const heartsFill = el('div', { class: 'care-meter-fill care-hearts' });
   const hearts = el('div', { class: 'care-meter', 'aria-hidden': 'true' }, heartsFill);
+  // Holding steady or drifting down (#376): a badge at the bar's end.
+  const heartsBadge = el('span', { class: 'care-hearts-badge', 'aria-hidden': 'true' });
+  const heartsRow = el('div', { class: 'care-hearts-row' }, hearts, heartsBadge);
   const level = el('p', { class: 'care-level', 'data-testid': 'care-level' });
   const xpFill = el('div', { class: 'care-meter-fill care-xp' });
   const xpBar = el('div', { class: 'care-meter', 'aria-hidden': 'true' }, xpFill);
@@ -161,7 +165,8 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       name,
       rarity,
       mood,
-      hearts,
+      drift,
+      heartsRow,
       level,
       xpBar,
       xpLine,
@@ -219,6 +224,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       rarity.replaceChildren();
       rarity.hidden = true;
       mood.textContent = CARE_TEXT.noneYet;
+      drift.hidden = true;
       actions.replaceChildren();
       return;
     }
@@ -230,6 +236,12 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     rarity.replaceChildren(...(model.rarity ? [rarityChip(model.rarity)] : []));
     rarity.hidden = model.rarity === null;
     mood.textContent = model.mood;
+    drift.textContent = model.drift ?? '';
+    drift.hidden = model.drift === null;
+    const driftMood = model.driftMood ?? '';
+    drift.dataset['mood'] = driftMood;
+    heartsRow.dataset['mood'] = driftMood;
+    heartsBadge.textContent = driftMood === 'steady' ? '💕' : driftMood === 'drifting' ? '↘' : '';
     heartsFill.style.width = `${String(Math.round(model.hearts * 100))}%`;
     level.textContent = model.level;
     xpFill.style.width = `${String(Math.round(model.xp * 100))}%`;

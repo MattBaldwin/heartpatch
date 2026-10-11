@@ -152,6 +152,20 @@ export const BODIES: Body[] = [
     jitter: 0.04,
   },
   {
+    // #382: a plumper, steadier five-point star than `star` (shallower points, flatter bottom),
+    // for a shooting star that has to look like finished vinyl, not melted.
+    id: 'comet-star',
+    width: 1.25,
+    height: 1.2,
+    depth: 0.9,
+    squareness: 0.1,
+    taper: 0,
+    peak: 0,
+    bottomFlat: 0.35,
+    points: { count: 5, depth: 0.2 },
+    jitter: 0.02,
+  },
+  {
     id: 'ghost',
     width: 0.95,
     height: 1.3,
@@ -1402,7 +1416,7 @@ export const PARTS: Part[] = [
     jitter: 0.08,
   },
   // #32 redesigns: a squirrel's acorn cup and plume tail, a cupcake's
-  // pleated cup and sprinkles, a singing heart's mouth, blush, hand nubs and beamed music notes.
+  // pleated cup and sprinkles.
   {
     // Short, pointed squirrel ears (not tall bunny ears).
     id: 'tuft-ears',
@@ -1656,9 +1670,68 @@ export const PARTS: Part[] = [
     jitter: 0.05,
   },
 
-
-
-
+  // #382 wave 1: four parts so frogs, turtles and moths read at a glance.
+  // All existing primitives (no client geometry code); a species' `glow` lights them
+  // like any other part.
+  {
+    // Frog and toad eyes: two domes above the face, on the head.
+    id: 'eye-bumps',
+    slot: 'horns',
+    shape: 'ellipsoid',
+    size: [0.36, 0.3, 0.36],
+    color: 'primary',
+    layout: pair,
+    around: 42,
+    up: 26,
+    tilt: 10,
+    splay: 10,
+    sink: 0.3,
+    jitter: 0.05,
+  },
+  {
+    // A turtle's or snail's domed shell, riding on the back.
+    id: 'shell-dome',
+    slot: 'back',
+    shape: 'ellipsoid',
+    size: [1.5, 1.0, 1.5],
+    color: 'accent',
+    layout: single,
+    around: 180,
+    up: 50,
+    tilt: 0,
+    sink: 0.97,
+    jitter: 0.04,
+  },
+  {
+    // Moth wings swept high and wide, so both show over the shoulders from a three-quarter view.
+    id: 'moth-wings',
+    slot: 'wings',
+    shape: 'teardrop',
+    size: [0.8, 1.2, 0.14],
+    color: 'accent',
+    layout: pair,
+    around: 68,
+    up: 60,
+    tilt: 55,
+    splay: 50,
+    sink: 0.25,
+    jitter: 0.04,
+  },
+  // #382 wave 1, second pass: a data-only handle for the turtle's shell.
+  {
+    // An upright C of a handle at the back, like a teacup's.
+    id: 'handle-arc',
+    slot: 'tail',
+    shape: 'arc',
+    size: [0.5, 0.5, 0.12],
+    color: 'accent',
+    layout: single,
+    around: 180,
+    up: 20,
+    tilt: 80,
+    sink: 0.3,
+    jitter: 0.03,
+  },
 ];
 
 /**

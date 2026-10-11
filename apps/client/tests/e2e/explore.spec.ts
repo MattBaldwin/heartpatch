@@ -61,9 +61,10 @@ interface ExploreDebug {
     decor: { tufts: number; pebbles: number; flowers: number };
     camera: { x: number; z: number; zoom: number };
     drawCalls: number;
-    sky: { clouds: number; stars: boolean; moon: boolean };
+    sky: { clouds: number; stars: boolean; moon: boolean; underwater: boolean };
     keeperHeight: number;
     faded: number[];
+    fadedCover: number[];
     triangles: number;
     land: { tier: string } | null;
   } | null;
@@ -127,8 +128,13 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
     .poll(async () => (await exploreState(page))?.scene?.keeperHeight ?? 0, slow)
     .toBeGreaterThan(0.14);
   expect((await exploreState(page))?.scene?.keeperHeight).toBeLessThan(0.195);
+  // On arrival the fade is worked out against the settled shot (#335), not the
+  // map's view: anything faded really covers the Keeper on screen.
+  for (const cover of (await exploreState(page))?.scene?.fadedCover ?? []) {
+    expect(cover).toBeGreaterThanOrEqual(0.12);
+  }
   // The sky follows the patch's clock (#335): e2e pins late morning, so it's day with clouds.
-  expect(first.scene?.sky).toEqual({ clouds: 4, stars: false, moon: false });
+  expect(first.scene?.sky).toEqual({ clouds: 4, stars: false, moon: false, underwater: false });
   // Every unsearched spot glints, the tile grows decor, and the joystick is always there.
   expect(first.scene?.glints).toBe(first.spots.length);
   expect(first.scene?.decor.tufts).toBeGreaterThan(0);
@@ -274,6 +280,9 @@ test('explores a home tile: walk, search the easy way, a find toast, a missing S
   if (faded) {
     await page.waitForTimeout(500);
     const now = (await exploreState(page))!.scene!;
+    // Only a spot that really covers the Keeper on screen fades (#335), never
+    // one standing beside it: at least EXPLORE_FADE.cover (0.12) of the Keeper.
+    for (const cover of now.fadedCover) expect(cover).toBeGreaterThanOrEqual(0.12);
     test.info().annotations.push({ type: 'drawCallsFaded', description: String(now.drawCalls) });
     expect(now.drawCalls).toBeLessThan(DRAW_CALL_CEILING);
   } else {
@@ -301,6 +310,9 @@ test('shows the buildings on the tile it explores (#347)', async ({ browser }) =
   await lobby.getByRole('button', { name: 'Make it!' }).tap();
   await visitPatch(lobby);
   await slowExpect(lobby).toBeHidden();
+  // The whole patch is on the map before the first tap, as in the test above:
+  // on a busy runner an early tap can land before the camera rests on the Heart Seed.
+  await expect.poll(async () => (await mapState(page))?.tiles, slow).toBe(817);
   await slowExpect(page.locator('#game')).toHaveAttribute('data-ready', 'true');
   const mapId = (await hook<{ id: string }>(page, 'map'))!.id;
 

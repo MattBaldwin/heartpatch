@@ -114,7 +114,7 @@ test('first session: signup, Keeper, story, tutorial, a patch with a friend, a c
 
   // Sign up and pick a Keeper; the story plays next, the first time.
   await signUp(page, name);
-  await pickKeeper(page, 'Clover', 'play');
+  await pickKeeper(page, 'Apple', 'play');
   const cinematic = page.getByTestId('cinematic');
   await expect(cinematic).toBeVisible({ timeout: 30_000 });
   await expect.poll(async () => (await story(page))?.mode, { timeout: 30_000 }).toBe('first');

@@ -22,26 +22,30 @@
   display: none;
 }
 
-.keeper-card {
+.keeper-picker .keeper-card {
+  container: keeper-card / inline-size;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  /* The top stays the Keeper's (#130): every row fits under it on a phone,
-     an iPad or a laptop; only the shortest screens scroll the rows. */
+  gap: 8px;
+  /* The top stays the Keeper's (#130): one step at a time fits under it on
+     a phone, an iPad or a laptop; a long step scrolls its choices. */
+  width: min(100%, 560px);
   max-height: 58vh;
   max-height: 58dvh;
+  overflow: hidden;
   margin: 0 auto;
-  padding: 16px;
+  padding: 14px 16px 16px;
   pointer-events: auto;
 }
 
 .keeper-card .auth-title {
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .keeper-subtitle {
   margin: 0;
   font-size: 16px;
+  font-weight: 700;
 }
 
 /* An empty error line takes no room (it only shows a problem). */
@@ -49,12 +53,153 @@
   display: none;
 }
 
-/* Only the choices scroll; the title and "That's me!" always show. */
-.keeper-rows {
+/* The steps (#372): six tabs on one line, nothing scrolling sideways. On a
+   wide card each shows its name; on a narrow one the step on screen shows its
+   name and the others are numbered circles, so every label keeps its padding
+   from 320 px up. */
+.keeper-tabs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.keeper-tab {
+  flex: 1 1 0;
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--hp-pad-y) var(--hp-pad-x);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: #9a7aa0;
+  cursor: pointer;
+}
+
+.keeper-tab-number {
+  display: none;
+}
+
+.keeper-tab[aria-selected='true'] {
+  background: #ff7aa2;
+  color: #fff;
+}
+
+@container keeper-card (max-width: 479px) {
+  .keeper-tab {
+    flex: none;
+    width: 44px;
+    padding: 0;
+    background: #fbeaf2;
+  }
+
+  .keeper-tab .keeper-tab-name {
+    display: none;
+  }
+
+  .keeper-tab .keeper-tab-number {
+    display: inline;
+  }
+
+  .keeper-tab[aria-selected='true'] {
+    flex: 1 1 auto;
+    width: auto;
+    padding: var(--hp-pad-y) var(--hp-pad-x);
+    background: #ff7aa2;
+  }
+
+  .keeper-tab[aria-selected='true'] .keeper-tab-name {
+    display: inline;
+  }
+
+  .keeper-tab[aria-selected='true'] .keeper-tab-number {
+    display: none;
+  }
+}
+
+/* The narrowest phones (320 px): a little less card padding, so the tabs fit. */
+@media (max-width: 359px) {
+  .keeper-picker {
+    padding-inline: calc(env(safe-area-inset-left) + 8px) calc(env(safe-area-inset-right) + 8px);
+  }
+
+  .keeper-picker .keeper-card {
+    padding-inline: 12px;
+  }
+
+  .keeper-tabs {
+    gap: 0;
+  }
+
+  .keeper-tab[aria-selected='true'] {
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+}
+
+/* The step's list and, over its foot, the "More" hint when it scrolls. */
+.keeper-list {
+  position: relative;
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 6px;
+  min-height: 0;
+}
+
+.keeper-more {
+  position: absolute;
+  right: 4px;
+  bottom: 2px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ff7aa2;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgb(74 49 80 / 20%);
+}
+
+.keeper-list:not(:has(.keeper-rows[data-more='end'], .keeper-rows[data-more='both'])) .keeper-more {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .keeper-more {
+    animation: keeper-more-nudge 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes keeper-more-nudge {
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+/* The picked body's name, after the prompt (body tiles are nameless on a phone). */
+.keeper-caption:not(:empty)::before {
+  content: ' · ';
+}
+
+.keeper-caption {
+  color: #b8467a;
+}
+
+/* Only the step's choices scroll (just the long ones: hair styles, and face
+   details on a short phone); the tabs and the buttons always show. */
+.keeper-rows {
+  --keeper-fade-dir: to bottom;
+
+  display: flex;
+  flex: 1 1 auto;
+  height: 100%;
+  flex-direction: column;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -62,52 +207,98 @@
   touch-action: pan-y;
 }
 
-/* The label beside its choices, so five rows fit where two used to. */
+/* A step's choices wrap onto as many lines as they need, filling the width. */
+.keeper-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 8px;
+  padding: 2px;
+}
+
+/* Faces and bodies: seven a line on a wide card, so each fits in two. */
+.keeper-grid:has(.keeper-tile) {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+/* A narrow card (a phone, or an iPad's side panel): five faces or bodies a
+   line, so every one shows without scrolling. */
+@container keeper-card (max-width: 479px) {
+  .keeper-grid:has(.keeper-tile) {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+}
+
+/* Bodies on a narrow card (owner, #372): seven nameless tiles a line, so all
+   14 and the outfit row fit an iPhone SE; the picked one is named in the
+   caption, and every tile in its label. */
+@container keeper-card (max-width: 479px) {
+  .keeper-rows .keeper-grid.keeper-grid-bodies {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .keeper-grid-bodies .keeper-tile {
+    min-width: 44px;
+    padding: 2px 0;
+  }
+
+  .keeper-grid-bodies .keeper-base-name {
+    display: none;
+  }
+
+  .keeper-grid-bodies .keeper-tile-art {
+    width: 38px;
+    height: 38px;
+  }
+}
+
+/* Swatches on a narrow card: six outfits or eye colours fit on one line. */
+@container keeper-card (max-width: 479px) {
+  .keeper-grid {
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    gap: 6px;
+  }
+
+  .keeper-swatch {
+    height: 44px;
+  }
+}
+
+/* A narrower card (320 pt phones, Zoomed): six a line (seven need 324 px). */
+@container keeper-card (max-width: 323px) {
+  .keeper-rows .keeper-grid.keeper-grid-bodies {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+.keeper-grid:has(.keeper-style) {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* The details step: each group's label sits above its choices. */
 .keeper-row {
   display: flex;
   flex: none;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
 .keeper-legend {
-  flex: none;
-  width: 4.6em;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
 }
 
-/* One line each, scrolled sideways with a thumb. A swipe up or down that
-   starts on a choice still scrolls the rows (pan-y), and a row with more to
-   see fades out on that side. */
-.keeper-choices {
-  display: flex;
-  flex: 1 1 auto;
-  gap: 8px;
-  min-width: 0;
-  padding: 4px 2px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x pan-y;
-  scrollbar-width: none;
-}
-
-.keeper-choices::-webkit-scrollbar {
-  display: none;
-}
-
-.keeper-choices[data-more='end'],
 .keeper-rows[data-more='end'] {
   --keeper-fade: linear-gradient(var(--keeper-fade-dir), #000 calc(100% - 28px), transparent);
 }
 
-.keeper-choices[data-more='start'],
 .keeper-rows[data-more='start'] {
   --keeper-fade: linear-gradient(var(--keeper-fade-dir), transparent, #000 28px);
 }
 
-.keeper-choices[data-more='both'],
 .keeper-rows[data-more='both'] {
   --keeper-fade: linear-gradient(
     var(--keeper-fade-dir),
@@ -118,21 +309,12 @@
   );
 }
 
-.keeper-choices {
-  --keeper-fade-dir: to right;
-}
-
-.keeper-rows {
-  --keeper-fade-dir: to bottom;
-}
-
-.keeper-choices:not([data-more='none']),
 .keeper-rows:not([data-more='none']) {
   -webkit-mask-image: var(--keeper-fade, none);
   mask-image: var(--keeper-fade, none);
 }
 
-.keeper-base,
+.keeper-tile,
 .keeper-style,
 .keeper-swatch {
   flex: none;
@@ -150,87 +332,133 @@
   cursor: pointer;
 }
 
-.keeper-base {
+/* Faces and bodies: a little drawing and its name. */
+.keeper-tile {
   flex-direction: column;
-  gap: 2px;
-  min-width: 64px;
-  min-height: 56px;
-  padding: 2px var(--hp-pad-x);
+  gap: 0;
+  padding: 4px 2px 6px;
   border-radius: 18px;
+}
+
+.keeper-tile-art {
+  display: block;
+  width: 52px;
+  height: 52px;
+}
+
+.keeper-tile-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* A style is its name: a pill as tall as the swatches. */
 .keeper-style {
-  padding: 0 14px;
+  padding: 0 var(--hp-pad-x);
   border-radius: 18px;
+}
+
+.keeper-swatch {
+  height: 52px;
 }
 
 .keeper-base-name {
   font-size: 13px;
   font-weight: 700;
+  /* Pinned, so a tile is as tall in Safari as in Chrome (#372). */
+  line-height: 1.15;
   white-space: nowrap;
 }
 
-.keeper-base[aria-pressed='true'],
+.keeper-tile[aria-pressed='true'],
 .keeper-style[aria-pressed='true'],
 .keeper-swatch[aria-pressed='true'] {
   border-color: #ff7aa2;
   background: #fff;
 }
 
-.keeper-base:active,
+.keeper-tile:active,
 .keeper-style:active,
 .keeper-swatch:active {
   transform: scale(0.95);
 }
 
-.keeper-faces {
-  display: flex;
-}
-
 .keeper-dot {
   display: block;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   box-shadow: inset 0 -3px 0 rgb(0 0 0 / 12%);
 }
 
-.keeper-faces .keeper-dot {
-  width: 22px;
-  height: 22px;
-}
-
-.keeper-faces .keeper-hair-dot {
-  margin-left: -8px;
-}
-
-.keeper-actions {
+/* Back and Next side by side, Next (or "That's me!") the bigger. */
+.keeper-card .keeper-actions {
+  flex-direction: row;
   margin-top: 2px;
 }
 
-/* A phone in a Safari tab: the subtitle gives its room to the rows, and the
-   rows sit closer (choices stay 44px) so all five fit under the Keeper. */
+.keeper-card .keeper-actions .auth-button {
+  flex: 2 1 0;
+}
+
+.keeper-card .keeper-actions .auth-button-soft {
+  flex: 1 1 0;
+}
+
+.keeper-card .keeper-actions .auth-button:disabled {
+  opacity: 0.45;
+}
+
+/* A phone (#372): every step's card is the same height, so the Keeper above
+   it stays put from step to step. */
+@media (max-width: 600px) {
+  .keeper-picker .keeper-card {
+    height: 58vh;
+    height: 58dvh;
+    padding-inline: 12px;
+  }
+}
+
+/* A phone in a Safari tab: a little tighter, choices stay 44px. */
 @media (max-height: 740px) {
-  .keeper-subtitle {
-    display: none;
-  }
-
-  .keeper-card {
+  .keeper-picker .keeper-card {
     gap: 6px;
-    padding-block: 12px;
+    /* TUNE (#372): room for three lines of faces or bodies on an iPhone SE. */
+    max-height: 64vh;
+    max-height: 64dvh;
+    padding-block: 10px 12px;
   }
 
-  .keeper-rows {
-    gap: 2px;
+  .keeper-card .auth-title {
+    font-size: 20px;
   }
 
-  .keeper-choices {
-    padding-block: 2px;
+  .keeper-tile {
+    padding: 2px 2px 4px;
   }
 
-  .keeper-base {
-    min-height: 48px;
+  /* Hair and eye colours both fit on one step. */
+  .keeper-grid {
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    gap: 6px;
+  }
+
+  .keeper-swatch {
+    height: 44px;
+  }
+
+  .keeper-tile-art {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* An iPhone in a Safari tab or an SE (#372): three lines of faces fit with
+   room to spare in every engine. Tiles stay at least 44 px tall. */
+@media (max-height: 700px) {
+  .keeper-tile-art {
+    width: 40px;
+    height: 40px;
   }
 }
 
@@ -240,8 +468,34 @@
     padding-top: calc(env(safe-area-inset-top) + 12px);
   }
 
-  .keeper-card {
+  .keeper-picker .keeper-card {
     max-height: 72vh;
     max-height: 72dvh;
   }
+}
+
+/* A short phone keeps one height for every step too. */
+@media (max-width: 600px) and (max-height: 740px) {
+  .keeper-picker .keeper-card {
+    height: 64vh;
+    height: 64dvh;
+  }
+}
+
+@media (max-width: 600px) and (max-height: 600px) {
+  .keeper-picker .keeper-card {
+    height: 72vh;
+    height: 72dvh;
+  }
+}
+
+/* Read by screen readers only ("Step 2 of 6: "). */
+.keeper-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

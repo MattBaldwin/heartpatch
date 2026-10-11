@@ -133,6 +133,19 @@ describe('the kit hooks (#335: the lake, trail and cave build on them)', () => {
     expect(mixed.extras['reeds']).toHaveLength(1);
   });
 
+  it("lets an extras hook paint a pool of light, kept apart from the shades' darkness", () => {
+    const lit = landLayout({
+      ...golden,
+      extras: ({ glow, size }) => {
+        glow(size * 1.2, 0, 1.5, '#8ef0ff', 0.5);
+        return {};
+      },
+    });
+    const pool = lit.shades.at(-1);
+    expect(pool).toEqual({ x: 7 * 1.2, z: 0, r: 1.5, strength: 0.5, tint: '#8ef0ff' });
+    expect(lit.shades.filter((s) => s.tint)).toHaveLength(1);
+  });
+
   it('follows a biome tree mix', () => {
     const pines = landLayout({
       ...input(),

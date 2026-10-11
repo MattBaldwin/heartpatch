@@ -174,3 +174,79 @@ it('stays done once done', () => {
   const done = run('lift', [{ type: 'easy', t: 0 }]);
   expect(stepInteraction(done, { type: 'down', x: 0, y: 0, t: 1 })).toBe(done);
 });
+
+describe('the trail and the cave: poke, stack and boop (#335)', () => {
+  const tap = (x: number): InteractionInput[] => [
+    { type: 'down', x, y: 120, t: 0 },
+    { type: 'up', x, y: 120, t: 0 },
+  ];
+
+  it('pokes a snow drift and boops the caps a tap at a time', () => {
+    const pokes = Array.from({ length: INTERACTION.pokes }, (_, i) => tap(60 + i * 40)).flat();
+    expect(run('poke', pokes.slice(0, 2)).done).toBe(false);
+    expect(run('poke', pokes).done).toBe(true);
+    const boops = Array.from({ length: INTERACTION.boops }, (_, i) => tap(60 + i * 40)).flat();
+    expect(run('pick', boops).done).toBe(true);
+    expect(run('pick', [{ type: 'easy', t: 0 }]).count).toBe(1);
+  });
+
+  it('stacks a stone on the cairn with a hold, or one easy tap', () => {
+    const held = run('stack', [
+      { type: 'down', x: 150, y: 120, t: 0 },
+      { type: 'tick', t: INTERACTION.holdMs + 1 },
+    ]);
+    expect(held.done).toBe(true);
+    expect(run('stack', [{ type: 'easy', t: 0 }]).done).toBe(true);
+  });
+});
+
+describe('Snorkel at a bubble spring: tap to catch the bubbles (#335)', () => {
+  const tap = (x: number, t = 0): InteractionInput[] => [
+    { type: 'down', x, y: 120, t },
+    { type: 'up', x, y: 120, t },
+  ];
+
+  it('catches a bubble with each tap', () => {
+    const one = run('dive', tap(100));
+    expect(one.count).toBe(1);
+    expect(one.done).toBe(false);
+    const all = run(
+      'dive',
+      Array.from({ length: INTERACTION.diveBubbles }, (_, i) => tap(60 + i * 40)).flat(),
+    );
+    expect(all.done).toBe(true);
+  });
+
+  it('counts each easy tap, and a long hold catches them all', () => {
+    expect(run('dive', [{ type: 'easy', t: 0 }]).count).toBe(1);
+    const held = run('dive', [
+      { type: 'easy-down', t: 0 },
+      { type: 'tick', t: INTERACTION.holdMs + 1 },
+    ]);
+    expect(held.done).toBe(true);
+    const letGo = run('dive', [
+      { type: 'easy-down', t: 0 },
+      { type: 'easy-up', t: 100 },
+      { type: 'tick', t: INTERACTION.holdMs + 1 },
+    ]);
+    expect(letGo.done).toBe(false);
+  });
+});
+
+describe('Snorkel at a reed bed: swipe the reeds apart (#335)', () => {
+  it('counts each sideways swipe, either way, once', () => {
+    const right = run('part', drag(60, 120, 220, 120));
+    expect(right.count).toBe(1);
+    expect(right.done).toBe(false);
+    // A swipe right, then a separate swipe left, parts them.
+    expect(run('part', [...drag(60, 120, 220, 120), ...drag(220, 120, 60, 120)]).done).toBe(true);
+    // Two swipes the same way do too.
+    expect(run('part', [...drag(60, 120, 220, 120), ...drag(60, 120, 220, 120)]).done).toBe(true);
+  });
+
+  it('ignores up-and-down swipes and tiny wiggles, and parts in one easy tap', () => {
+    expect(run('part', drag(150, 40, 150, 200)).count).toBe(0);
+    expect(run('part', drag(150, 120, 150 + INTERACTION.swipePx / 2, 120)).count).toBe(0);
+    expect(run('part', [{ type: 'easy', t: 0 }]).done).toBe(true);
+  });
+});

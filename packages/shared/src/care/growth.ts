@@ -159,21 +159,29 @@ export function joiningSpecies(speciesId: string, steps: readonly EvolutionStep[
 /**
  * The level a befriended squishy joins at: its battle level, but at most
  * `befriendBelowEvolution` below its species' first evolution (the lowest
- * level in `steps` from it). A species that never evolves keeps its level.
+ * level in `steps` from it). A standalone species (no step into or out of it)
+ * is held to `befriendNoEvolutionLevel` instead, if set, so it joins no higher
+ * than an evolving kind would. A final form keeps its level.
  */
 export function befriendedLevel(
   speciesId: string,
   battleLevel: number,
   steps: readonly EvolutionStep[],
-  rules: Pick<GrowthRules, 'befriendBelowEvolution'>,
+  rules: Pick<GrowthRules, 'befriendBelowEvolution' | 'befriendNoEvolutionLevel'>,
 ): number {
   const below = rules.befriendBelowEvolution;
   if (below === undefined) return battleLevel;
   let first: number | null = null;
+  let evolves = false;
   for (const step of steps) {
+    if (step.from === speciesId || step.into === speciesId) evolves = true;
     if (step.from === speciesId && (first === null || step.level < first)) first = step.level;
   }
-  if (first === null) return battleLevel;
+  if (first === null) {
+    const standalone = rules.befriendNoEvolutionLevel;
+    if (evolves || standalone === undefined) return battleLevel;
+    return Math.max(1, Math.min(battleLevel, standalone));
+  }
   return Math.max(1, Math.min(battleLevel, first - below));
 }
 

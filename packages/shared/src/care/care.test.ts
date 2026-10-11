@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CARE_ACTIONS } from '../data/care-actions.js';
 import { CARE_RULES, GROWTH_RULES } from '../data/care.js';
+import { SPECIES } from '../data/species.js';
 import { findAvoidedWords } from '../data/avoided-words.js';
 import { checkCareRules, checkGrowthRules, type CareRules } from '../schemas/data/care.js';
 import {
@@ -8,6 +9,7 @@ import {
   careGain,
   contentmentAfterCare,
   contentmentAt,
+  heldMs,
   moodFor,
   moodLine,
 } from './contentment.js';
@@ -84,7 +86,7 @@ describe('care and growth data', () => {
 });
 
 describe('contentmentAt', () => {
-  const full = { contentment: 100, lastCaredAt: at(0) };
+  const full = { contentment: 100, since: at(0) };
 
   it('is the stored value right after care', () => {
     expect(contentmentAt(full, at(0), CARE_RULES)).toBe(100);
@@ -101,11 +103,11 @@ describe('contentmentAt', () => {
     expect(contentmentAt(full, at(24 * 30), CARE_RULES)).toBe(0);
     const rules = { ...CARE_RULES, baselineContentment: 20 };
     expect(contentmentAt(full, at(24 * 3), rules)).toBe(20);
-    expect(contentmentAt({ contentment: 50, lastCaredAt: at(0) }, at(72), rules)).toBe(20);
+    expect(contentmentAt({ contentment: 50, since: at(0) }, at(72), rules)).toBe(20);
   });
 
   it('starts at the baseline for a squishy nobody has cared for yet', () => {
-    expect(contentmentAt({ contentment: 0, lastCaredAt: null }, at(5), CARE_RULES)).toBe(0);
+    expect(contentmentAt({ contentment: 0, since: null }, at(5), CARE_RULES)).toBe(0);
   });
 
   it('ignores a clock that went backwards', () => {
@@ -115,6 +117,59 @@ describe('contentmentAt', () => {
   it('caps care at full and builds on the decayed value', () => {
     expect(contentmentAfterCare(full, at(0), 20, CARE_RULES)).toBe(100);
     expect(contentmentAfterCare(full, at(12), 20, CARE_RULES)).toBe(70);
+  });
+});
+
+describe('contentment held by a job (#376)', () => {
+  const full = { contentment: 100, since: at(0) };
+  const ms = (hours: number) => at(hours).getTime();
+
+  it('holds steady over a span that covers the whole time', () => {
+    expect(contentmentAt(full, at(12), CARE_RULES, [{ fromMs: ms(0), toMs: null }])).toBe(100);
+  });
+
+  it('drifts only over the time no span covers', () => {
+    // Held 0–6h, drifting 6–12h: six hours of drift, a quarter of the range.
+    const held = [{ fromMs: ms(0), toMs: ms(6) }];
+    expect(contentmentAt(full, at(12), CARE_RULES, held)).toBe(75);
+    // A span from before the checkpoint only counts from the checkpoint on.
+    expect(contentmentAt(full, at(12), CARE_RULES, [{ fromMs: ms(-5), toMs: ms(6) }])).toBe(75);
+  });
+
+  it('never raises contentment', () => {
+    const low = { contentment: 30, since: at(0) };
+    expect(contentmentAt(low, at(48), CARE_RULES, [{ fromMs: ms(0), toMs: null }])).toBe(30);
+  });
+
+  it('counts each moment once, however spans overlap', () => {
+    const spans = [
+      { fromMs: ms(4), toMs: ms(8) },
+      { fromMs: ms(0), toMs: ms(5) },
+      { fromMs: ms(6), toMs: ms(7) },
+    ];
+    expect(heldMs(ms(0), ms(10), spans)).toBe(8 * HOUR);
+    expect(heldMs(ms(2), ms(3), spans)).toBe(HOUR);
+    expect(heldMs(ms(9), ms(10), spans)).toBe(0);
+  });
+
+  it('is whole numbers, the same on every engine, at odd millisecond counts', () => {
+    const odd = { contentment: 97, since: new Date(1_760_000_000_123) };
+    const now = new Date(1_760_000_000_123 + 7 * HOUR + 1_234_567);
+    const held = [{ fromMs: 1_760_000_000_123 + 999, toMs: 1_760_000_000_123 + 2 * HOUR + 7 }];
+    const value = contentmentAt(odd, now, CARE_RULES, held);
+    expect(Number.isInteger(value)).toBe(true);
+    // 26_434_567ms since, 7_199_008ms held: floor(19_235_559 * 100 / 86_400_000) = 22.
+    expect(value).toBe(97 - 22);
+  });
+
+  it('builds care on the held value', () => {
+    expect(
+      contentmentAfterCare(full, at(12), 20, CARE_RULES, [{ fromMs: ms(0), toMs: null }]),
+    ).toBe(100);
+    const half = { contentment: 50, since: at(0) };
+    expect(
+      contentmentAfterCare(half, at(12), 20, CARE_RULES, [{ fromMs: ms(0), toMs: null }]),
+    ).toBe(70);
   });
 });
 
@@ -357,6 +412,28 @@ describe('befriendedLevel (owner decision 2026-10-06)', () => {
 
   it('is on in the shipped data', () => {
     expect(GROWTH_RULES.befriendBelowEvolution).toBe(1);
+  });
+
+  it('holds a standalone species to befriendNoEvolutionLevel, not a final form', () => {
+    const rules = { befriendBelowEvolution: 1, befriendNoEvolutionLevel: 15 };
+    expect(befriendedLevel('pebble', 40, steps, rules)).toBe(15);
+    expect(befriendedLevel('pebble', 9, steps, rules)).toBe(9);
+    // A final form (`cloud`) is not standalone: it keeps its level.
+    expect(befriendedLevel('cloud', 40, steps, rules)).toBe(40);
+    // Without the field, or without the main cap, a standalone species keeps its level.
+    expect(befriendedLevel('pebble', 40, steps, cap)).toBe(40);
+    expect(befriendedLevel('pebble', 40, steps, { befriendNoEvolutionLevel: 15 })).toBe(40);
+  });
+
+  it('shipped standalone cap sits between the earliest and the middle first evolution', () => {
+    const into = new Set(SPECIES.flatMap((s) => s.evolutions.map((e) => e.into)));
+    const firsts = SPECIES.filter((s) => !into.has(s.id) && s.evolutions.length > 0)
+      .map((s) => Math.min(...s.evolutions.map((e) => e.level)))
+      .sort((a, b) => a - b);
+    const cap = GROWTH_RULES.befriendNoEvolutionLevel ?? 0;
+    // Never stricter than the strictest evolver would be, never looser than a typical one.
+    expect(cap).toBeGreaterThanOrEqual(firsts[0]! - (GROWTH_RULES.befriendBelowEvolution ?? 0));
+    expect(cap).toBeLessThanOrEqual(firsts[Math.floor(firsts.length / 2)]!);
   });
 });
 

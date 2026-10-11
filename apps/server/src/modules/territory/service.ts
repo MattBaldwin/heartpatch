@@ -59,6 +59,7 @@ import {
   type TileBattlePort,
 } from '../battles/service.js';
 import { createSquishyJobsRepo } from '../jobs/repo.js';
+import { checkpointContentment, guardWatchesOf } from '../jobs/contentment.js';
 import { landTraining, leaveWork } from '../jobs/service.js';
 import { requireMember } from '../maps/members.js';
 import { createMapsRepo, type MapRow } from '../maps/repo.js';
@@ -624,13 +625,18 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           throw new AppError('FORBIDDEN', MESSAGES.notYours);
         }
         if (tile.homeSlot !== null) throw new AppError('FORBIDDEN', MESSAGES.homeWatch);
-        // Squishy locks after the tiles (in id order): housing one locks it too.
-        const homes = new Map(
-          (await repo.lockSquishies(request.squishyIds)).map((s) => [s.id, s.habitatBuildingId]),
-        );
-        const mine = new Map((await repo.mySquishies(map.id, user.id)).map((s) => [s.id, s]));
         const before = await repo.listDefenders(tile.id, user.id);
         const here = new Set(before.map((d) => d.id));
+        // Squishy locks after the tiles (in id order): housing one locks it
+        // too. Guards leaving this post are locked as well: their contentment
+        // checkpoint is written below (#376).
+        const homes = new Map(
+          (await repo.lockSquishies([...new Set([...here, ...request.squishyIds])])).map((s) => [
+            s.id,
+            s.habitatBuildingId,
+          ]),
+        );
+        const mine = new Map((await repo.mySquishies(map.id, user.id)).map((s) => [s.id, s]));
         for (const id of request.squishyIds) {
           const squishy = mine.get(id);
           if (!squishy) throw new AppError('FORBIDDEN', MESSAGES.notYourSquishy);
@@ -648,6 +654,8 @@ export function createTerritoryService(options: TerritoryServiceOptions): Territ
           before.every((d, i) => d.id === request.squishyIds[i]);
         if (same) return false;
         const at = now();
+        // Guards coming and going: contentment so far counts at their old job's rate (#376).
+        await checkpointContentment(tx, map.id, [...new Set([...here, ...request.squishyIds])], at);
         await repo.replaceDefenders(map.id, tile.id, request.squishyIds, at);
         // One job at a time (owner decisions 2026-10-04): a new guard leaves
         // the team or its work tile (banking what it had ready).
@@ -831,7 +839,16 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         await repo.endAttack(battle.id, 'won', at);
         return { events: [], xpPercent, drop: null };
       }
-      // Squishies on watch go home, never lost (issue #15).
+      // Squishies on watch go home, never lost (issue #15). Their watch so far
+      // held (#376): when each was posted is read now, before the posts go;
+      // battles writes the checkpoints after its squishy locks (tech spec §7).
+      const guards =
+        tile.ownerUserId === null
+          ? []
+          : await guardWatchesOf(
+              tx,
+              (await repo.listDefenders(tile.id, tile.ownerUserId)).map((g) => g.id),
+            );
       const returned = await repo.clearDefenders(tile.id);
       await repo.setOwner(tile.id, attack.attackerUserId);
       // Claiming land tends it (land that misses you, owner decision 2026-10-06),
@@ -924,6 +941,7 @@ export function createTileBattlePort(rules: TerritoryRules = TERRITORY_RULES): T
         ].filter((r) => Object.keys(r.items).length > 0),
         // Trainees at Training Grounds that came down land what they earned (#277).
         squishies: lostFires.flatMap((l) => l.trainees),
+        guards,
         afterRefunds: (inner, when) => finishLostTraining(inner, attack.mapId, lostFires, when),
       };
     },

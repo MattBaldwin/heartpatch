@@ -26,6 +26,8 @@ export { TOOL_ICONS, TOOL_WORDS, usesLine } from '../inventory/tool-uses.js';
 export const EXPLORE_TEXT = {
   explore: 'Explore',
   back: 'Back',
+  /** Back, under a lake (#335). */
+  popUp: 'Pop up',
   /** Under the joystick (#291). */
   walkHint: 'Or drag anywhere, or tap to walk',
   /** Sprout's one-time tip after the tools were renamed (#335, owner decision 2026-10-09). */
@@ -69,6 +71,15 @@ const HAND_ICONS: Readonly<Record<string, string>> = {
   'pumpkin-row': '🎃',
   'hollow-log': 'log',
   rock: 'rock',
+  cairn: 'rock',
+  'glow-mushrooms': '🍄',
+};
+
+/** What a hand spot's big button says, by its gesture. */
+const HAND_VERBS: Readonly<Partial<Record<SpotInteraction, string>>> = {
+  shake: 'Shake',
+  stack: 'Stack',
+  pick: 'Boop',
 };
 
 /** What each tool gesture says and shows (boards b, d, e, f, g; style guide §6). */
@@ -79,6 +90,15 @@ export const PLAY_TEXT: Readonly<
   climb: { icon: 'stick', hint: 'Left, right, left, right!', easy: 'hold to hike up' },
   light: { icon: 'lantern', hint: EXPLORE_TEXT.lanternHint, easy: 'light it all up' },
   scoop: { icon: 'snorkel', hint: 'Swipe through when it glows!', easy: 'Dive!' },
+  dive: {
+    icon: 'snorkel',
+    hint: 'Tap, tap, tap to catch the bubbles!',
+    easy: 'hold to catch them',
+  },
+  part: { icon: 'snorkel', hint: 'Swipe the reeds apart!', easy: 'tap to part them' },
+  poke: { icon: 'stick', hint: 'Poke, poke… floomp!', easy: 'tap to poke' },
+  stack: { icon: '✊', hint: 'Hold to add your stone!', easy: 'tap to stack' },
+  pick: { icon: '🍄', hint: 'Boop the glowing caps!', easy: 'tap to boop' },
   lift: {
     icon: '✊',
     hint: 'Hold to lift!',
@@ -96,6 +116,9 @@ export const PLAY_TEXT: Readonly<
 /** The header chip's icon with nothing in hand. */
 export const HANDS_ICON = '✋';
 
+/** A tool spot whose gesture isn't the tool's own verb (#335: the stick pokes a snow drift). */
+const TOOL_SPOT_VERBS: Partial<Record<SpotInteraction, string>> = { poke: 'Poke' };
+
 /** The action button for a spot: its icon (an `ICON_PATHS` name, drawn, or an emoji) and verb. */
 export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
   readonly icon: string;
@@ -105,10 +128,11 @@ export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
   const kind = EXPLORE_RULES.spotKinds.find((k) => k.id === spot.kind);
   const interaction: SpotInteraction = kind?.interaction ?? 'lift';
   if (spot.tool) {
-    return { icon: TOOL_ICONS[spot.tool], label: TOOL_WORDS[spot.tool].verb, interaction };
+    const label = TOOL_SPOT_VERBS[interaction] ?? TOOL_WORDS[spot.tool].verb;
+    return { icon: TOOL_ICONS[spot.tool], label, interaction };
   }
   const icon = HAND_ICONS[spot.kind] ?? (interaction === 'shake' ? '🌳' : 'rock');
-  return { icon, label: interaction === 'shake' ? 'Shake' : 'Lift', interaction };
+  return { icon, label: HAND_VERBS[interaction] ?? 'Lift', interaction };
 }
 
 /** "7 of 12 found 🔍", or "All 12 found! ✨" once the tile is done. */
@@ -205,6 +229,16 @@ export function foundHeadline(interaction: SpotInteraction): string {
       return 'Under the water you found…';
     case 'climb':
       return 'Up at the lookout you found…';
+    case 'dive':
+      return 'In the bubbles you found…';
+    case 'part':
+      return 'Behind the reeds you found…';
+    case 'poke':
+      return 'In the snow you found…';
+    case 'stack':
+      return 'Out of the cairn rolled…';
+    case 'pick':
+      return 'Under the caps you found…';
     case 'light':
       return 'Deep in the cave you found…';
     case 'shake':

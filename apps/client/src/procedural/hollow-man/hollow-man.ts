@@ -145,6 +145,55 @@ function buildArm(scene: Scene, h: number): Mesh {
   return mesh;
 }
 
+/** His cloak: the lathed outline with its ragged hem. */
+function buildBody(scene: Scene, h: number, tessellation = 28): Mesh {
+  const body = CreateLathe(
+    'hollow-man-body',
+    {
+      shape: HOLLOW_MAN_PROFILE.map(([r, y]) => new Vector3(r * h, y * h, 0)),
+      tessellation,
+      cap: Mesh.NO_CAP,
+    },
+    scene,
+  );
+  const positions = body.getVerticesData(VertexBuffer.PositionKind);
+  if (positions) {
+    raggedHem(positions, h);
+    body.setVerticesData(VertexBuffer.PositionKind, positions);
+  }
+  return body;
+}
+
+/**
+ * His cloak and both arms at rest as one geometry, for the Keeper costume
+ * (the `hollow-man` model): the same lathe, ragged hem and arms he is drawn
+ * with, at his own height (`HOLLOW_MAN.height`), feet on y = 0, facing −z.
+ * `tessellation` is the cloak's segments round.
+ */
+export function hollowManArrays(
+  scene: Scene,
+  tessellation: number,
+): { positions: Float32Array; normals: Float32Array; indices: Uint32Array } {
+  const h = HOLLOW_MAN.height;
+  const arms = ([-1, 1] as const).map((side) => {
+    const arm = buildArm(scene, h);
+    arm.bakeTransformIntoVertices(armMatrix(side, 0, h).matrix);
+    return arm;
+  });
+  const merged = Mesh.MergeMeshes([buildBody(scene, h, tessellation), ...arms], true);
+  if (!merged) throw new Error('could not build the Hollow Man');
+  const positions = merged.getVerticesData(VertexBuffer.PositionKind);
+  const normals = merged.getVerticesData(VertexBuffer.NormalKind);
+  const indices = merged.getIndices();
+  merged.dispose();
+  if (!positions || !normals || !indices) throw new Error('could not build the Hollow Man');
+  return {
+    positions: Float32Array.from(positions),
+    normals: Float32Array.from(normals),
+    indices: Uint32Array.from(indices),
+  };
+}
+
 export interface HollowManOptions {
   /** Image processing for his eyes, so they keep their glow through a colour drain (#46). */
   eyeImageProcessing?: ImageProcessingConfiguration;
@@ -175,20 +224,7 @@ export class HollowMan {
     // Always turned to the camera, so his eyes are what you see.
     this.root.billboardMode = TransformNode.BILLBOARDMODE_Y;
 
-    this.body = CreateLathe(
-      'hollow-man-body',
-      {
-        shape: HOLLOW_MAN_PROFILE.map(([r, y]) => new Vector3(r * h, y * h, 0)),
-        tessellation: 28,
-        cap: Mesh.NO_CAP,
-      },
-      scene,
-    );
-    const positions = this.body.getVerticesData(VertexBuffer.PositionKind);
-    if (positions) {
-      raggedHem(positions, h);
-      this.body.setVerticesData(VertexBuffer.PositionKind, positions);
-    }
+    this.body = buildBody(scene, h);
     this.bodyMaterial = unlit(scene, 'hollow-man-body-mat', HOLLOW_MAN.bodyColor);
     this.body.material = this.bodyMaterial;
 
