@@ -169,6 +169,9 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   await expect.poll(async () => (await homeState(page))?.sheet).toBe('open');
   await swipe(80);
   await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
+  // Opened, it stays open through Build and Cancel (below) while Home is open.
+  await sheet.getByTestId('home-squishies').tap();
+  await expect.poll(async () => (await homeState(page))?.sheet).toBe('open');
 
   // The Hearthfire isn't built at home (owner decision 2026-10-07): the one
   // Build sheet (#371) has no card for it, and says where fires go.
@@ -188,6 +191,40 @@ test('keeps home safe without a fire, houses a squishy, and shows the safe glow'
   expect(go.y + go.height).toBeLessThanOrEqual(view.height);
   await sheet.getByTestId('build-cancel').tap();
   await slowExpect(sheet.getByTestId('home-build')).toBeVisible();
+  expect((await homeState(page))?.sheet).toBe('open');
+  await expect(sheet.getByTestId('home-friends')).toBeVisible();
+
+  // Home opens folded again the next time.
+  await sheet.getByTestId('home-back').tap();
+  await slowExpect(sheet).toBeHidden();
+  await (await trayButton(page, 'home-open')).tap();
+  await expect.poll(async () => (await homeState(page))?.scene?.tiles, slow).toBe(7);
+  await expect.poll(async () => (await homeState(page))?.sheet).toBe('peek');
+  await slowExpect(sheet.getByTestId('home-build')).toBeVisible();
+
+  // On a short screen held sideways, with a note up, Back to map is still in
+  // reach: the bar scrolls rather than cut it off (#412).
+  await page.setViewportSize({ width: 667, height: 375 });
+  await page.getByTestId('home-note').evaluate((note) => {
+    note.textContent = 'Your bag ran out! 3 fires got more. The lowest went first. 🔥';
+  });
+  // Either it all fits, or a finger can scroll to it (a script can scroll
+  // overflow: hidden too, so check what a finger can do, not just the box).
+  const fit = await sheet.evaluate((el) => ({
+    fits: el.scrollHeight <= el.clientHeight,
+    scrolls: ['auto', 'scroll'].includes(getComputedStyle(el).overflowY),
+  }));
+  expect(fit.fits || fit.scrolls).toBe(true);
+  const back = sheet.getByTestId('home-back');
+  await back.scrollIntoViewIfNeeded();
+  const backBox = (await back.boundingBox())!;
+  const shown = (await sheet.boundingBox())!;
+  expect(backBox.y).toBeGreaterThanOrEqual(shown.y);
+  expect(backBox.y + backBox.height).toBeLessThanOrEqual(shown.y + shown.height);
+  await page.getByTestId('home-note').evaluate((note) => {
+    note.textContent = '';
+  });
+  await page.setViewportSize(view);
 
   // A Cozy Meadow on the first lit spot, and the squishy moves in.
   await sheet.getByTestId('home-build').tap();

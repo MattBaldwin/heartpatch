@@ -340,45 +340,48 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
   const note = el('p', { class: 'home-note', role: 'status', 'data-testid': 'home-note' });
   const body = el('div', { class: 'home-body' });
   const homeSheet = createBuildSheet();
-  const sheet = el(
-    'section',
-    { class: 'home-sheet', 'data-testid': 'home', role: 'dialog', 'aria-labelledby': 'home-title' },
-    note,
-    body,
-  );
-  const overlay = el('div', { class: 'home' }, top, sheet);
-
-  // The sheet's handle (#412): a tap opens or folds the sheet, a swipe goes
-  // the finger's way. The click after a swipe is swallowed.
+  // The sheet's handle (#412), at the very top of the main view's sheet: a
+  // tap opens or folds it, a swipe goes the finger's way. A finger or mouse
+  // decides on release (held by pointer capture, so a drag that ends off the
+  // handle still counts) and the click after it is swallowed; a click with no
+  // press before it (keyboard, VoiceOver) toggles.
   const handle = el('button', {
     type: 'button',
     class: 'home-handle',
     'data-testid': 'home-handle',
   });
   let pressY: number | null = null;
-  let swiped = false;
+  let releasedAt = -Infinity;
   handle.addEventListener('pointerdown', (e) => {
     pressY = e.clientY;
-    swiped = false;
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch {
+      // A synthetic or already-released pointer can't be captured; harmless.
+    }
   });
   handle.addEventListener('pointerup', (e) => {
     if (pressY === null) return;
     const dy = e.clientY - pressY;
     pressY = null;
-    if (Math.abs(dy) < HOME_SHEET.swipePx) return; // a tap: the click does it
-    swiped = true;
+    releasedAt = performance.now();
     setSheet(afterHandle(sheetOpen, dy, HOME_SHEET.swipePx));
   });
   handle.addEventListener('pointercancel', () => {
     pressY = null;
   });
   handle.addEventListener('click', () => {
-    if (swiped) {
-      swiped = false;
-      return;
-    }
+    if (performance.now() - releasedAt < HOME_SHEET.clickAfterMs) return;
     setSheet(!sheetOpen);
   });
+  const sheet = el(
+    'section',
+    { class: 'home-sheet', 'data-testid': 'home', role: 'dialog', 'aria-labelledby': 'home-title' },
+    handle,
+    note,
+    body,
+  );
+  const overlay = el('div', { class: 'home' }, top, sheet);
   overlay.hidden = true;
   (options.entryRoot ?? options.root).append(entry);
   options.root.append(overlay);
@@ -723,7 +726,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
     }
     const current = home;
     const peek = mode.kind === 'idle' && !sheetOpen;
-    sheet.classList.toggle('home-sheet-peek', peek);
+    handle.hidden = mode.kind !== 'idle';
     status.textContent = HOME_SAFE_LINE;
     renderFuelAll(current);
     const row = (...children: Node[]) => el('div', { class: 'home-row' }, ...children);
@@ -754,6 +757,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   if (mapId) options.onJobs?.(mapId);
                 },
                 { 'data-testid': 'home-jobs' },
+                peek,
               )
             : null;
         const actions = row(
@@ -769,7 +773,7 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
         if (peek) {
           // The peek bar (#412): the squishies stay in view above it.
           const squishies =
-            current.squishies.length > 0 && options.onCare
+            current.squishies.length > 0 && (options.onSquishies || options.onCare)
               ? button(
                   HOME_TEXT.squishies,
                   () => {
@@ -780,12 +784,10 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
                   true,
                 )
               : null;
-          if (jobs) jobs.classList.add('auth-button-soft');
           const shortcuts = [squishies, jobs].filter((b) => b !== null);
           body.replaceChildren(
-            handle,
             ...(shortcuts.length > 0
-              ? [el('div', { class: 'home-row home-peek-row' }, ...shortcuts)]
+              ? [el('div', { class: 'home-row home-row-wrap home-peek-row' }, ...shortcuts)]
               : []),
             actions,
           );
@@ -802,7 +804,6 @@ export function createHomeScreen(options: HomeScreenOptions): HomeScreen {
           ),
         );
         body.replaceChildren(
-          handle,
           el('h3', { class: 'home-section-title' }, HOME_TEXT.yours),
           chips.length > 0
             ? el('div', { class: 'home-chips' }, ...chips)

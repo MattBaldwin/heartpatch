@@ -3,6 +3,7 @@
    in the bottom sheet, and the title and fire status sit at the top. */
 
 .home-open[hidden],
+.home-handle[hidden],
 .home[hidden] {
   display: none;
 }
@@ -396,10 +397,6 @@
 
 /* The peek bar (#412): on opening Home the sheet is short, so the squishies by
    the Heart Seed stay in view; its handle opens it into the full lists. */
-.home-sheet-peek {
-  overflow: hidden;
-}
-
 .home-handle {
   display: flex;
   align-items: center;
@@ -427,10 +424,6 @@
   outline: 3px solid #b8487a;
   outline-offset: -3px;
   border-radius: 12px;
-}
-
-.home-peek-row {
-  flex-wrap: wrap;
 }
 
 .home-peek-row > .home-button {

@@ -38,8 +38,11 @@ export const HOME_VIEW = {
   spot: { ring: '#f0437f', fill: '#ffd1e3', fillAlpha: 0.55 }, // TUNE
 } as const;
 
-/** The home sheet (#412): how far a finger moves on the handle before it's a swipe, not a tap (CSS px). */
-export const HOME_SHEET = { swipePx: 24 } as const; // TUNE
+/**
+ * The home sheet's handle (#412): how far a finger moves before it's a swipe,
+ * not a tap (CSS px), and how long after a release its click is swallowed.
+ */
+export const HOME_SHEET = { swipePx: 24, clickAfterMs: 600 } as const; // TUNE
 
 /** Spots inside a tile: sub-hex size as a fraction of the tile's hex size. */
 export const SPOT_SIZE = 0.3; // TUNE: ring spots sit about half-way to the tile edge
