@@ -1285,7 +1285,7 @@ export function createCloseUpScreen(options: CloseUpScreenOptions): CloseUpScree
         note: note.textContent,
         dressing,
         accessory: scene3d?.accessory ?? null,
-        breathing: breath.slow ? 'stopped' : 'live',
+        breathing: breath.slow ? ('stopped' as const) : ('live' as const),
       };
     },
   };

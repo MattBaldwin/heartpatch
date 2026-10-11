@@ -1477,7 +1477,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         sipped,
         clock: now(),
         safe: hud.safe(),
-        breathing: breath.slow ? 'stopped' : 'live',
+        breathing: breath.slow ? ('stopped' as const) : ('live' as const),
       };
     },
     get dev(): BattleDevControls | null {
