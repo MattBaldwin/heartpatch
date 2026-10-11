@@ -152,6 +152,14 @@ export function withHairstyle(config: KeeperConfig, id: string): KeeperConfig {
   return id === own ? rest : { ...rest, hairstyle: id };
 }
 
+/** The skin tone and outfit top a config's tile drawings wear. */
+function tileColors(config: KeeperConfig): { skin: string; top: string } {
+  return {
+    skin: KEEPER_DATA.skinTones.find((t) => t.id === config.skinTone)?.color ?? '#f6cfae',
+    top: KEEPER_DATA.outfits.find((o) => o.id === config.outfit)?.top ?? '#ffd85a',
+  };
+}
+
 export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   const api = options.api ?? keeperApi;
 
@@ -384,8 +392,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   function choicesFor(on: KeeperStep): HTMLElement[] {
     const T = KEEPER_TEXT.rows;
     const full = completeKeeperConfig(picked, KEEPER_DATA);
-    const skin = KEEPER_DATA.skinTones.find((t) => t.id === full.skinTone)?.color ?? '#f6cfae';
-    const top = KEEPER_DATA.outfits.find((o) => o.id === full.outfit)?.top ?? '#ffd85a';
+    const { skin, top } = tileColors(full);
     switch (on) {
       case 'face':
         return [
@@ -543,8 +550,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   /** Repaints the body tiles in the picked skin and outfit, in place (taps keep their focus). */
   function repaintBodies(): void {
     const full = completeKeeperConfig(picked, KEEPER_DATA);
-    const skin = KEEPER_DATA.skinTones.find((t) => t.id === full.skinTone)?.color ?? '#f6cfae';
-    const top = KEEPER_DATA.outfits.find((o) => o.id === full.outfit)?.top ?? '#ffd85a';
+    const { skin, top } = tileColors(full);
     for (const { node, body } of bodyArt) node.innerHTML = bodyTileSvg(body, skin, top);
   }
 
@@ -574,11 +580,13 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     return tab;
   });
   tabs.replaceChildren(...tabButtons);
-  // Arrow keys move between the tabs (the ARIA tabs pattern).
+  // Arrow keys, Home and End move between the tabs (the ARIA tabs pattern).
   tabs.addEventListener('keydown', (event) => {
-    const by = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
-    if (by === undefined) return;
-    const at = (KEEPER_STEPS.indexOf(step) + by + KEEPER_STEPS.length) % KEEPER_STEPS.length;
+    const here = KEEPER_STEPS.indexOf(step);
+    const last = KEEPER_STEPS.length - 1;
+    const goTo = { ArrowRight: here + 1, ArrowLeft: here - 1, Home: 0, End: last }[event.key];
+    if (goTo === undefined) return;
+    const at = (goTo + KEEPER_STEPS.length) % KEEPER_STEPS.length;
     const to = KEEPER_STEPS[at];
     if (!to) return;
     event.preventDefault();
@@ -701,11 +709,17 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     } catch (err) {
       if (mine === session) error.textContent = messageOf(err);
     } finally {
-      lock.forEach((node, i) => {
-        node.disabled = wasDisabled[i] ?? false;
-      });
       save.disabled = false;
       save.textContent = label;
+      if (mine === session) {
+        lock.forEach((node, i) => {
+          node.disabled = wasDisabled[i] ?? false;
+        });
+      } else {
+        // Another player since: the buttons are theirs now, so set them afresh.
+        for (const node of lock) node.disabled = false;
+        if (mode !== null) showStep(step);
+      }
     }
   }
 

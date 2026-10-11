@@ -373,6 +373,18 @@ test('every step of the creator fits phones, iPads and laptops with no scroll in
         await expect
           .poll(() => keeperState(page).then((s) => s?.fit ?? null), { message: at })
           .not.toBeNull();
+        // Fitted to this size: the band it used is the card's top right now.
+        const cardTop = () =>
+          page.evaluate(() => document.querySelector('.keeper-card')!.getBoundingClientRect().top);
+        await expect
+          .poll(
+            async () => {
+              const now = (await keeperState(page))?.fit;
+              return now ? Math.abs(now.bottom - (await cardTop())) <= 1 : false;
+            },
+            { message: at },
+          )
+          .toBe(true);
         const fit = (await keeperState(page))!.fit!;
         expect(fit.feet, at).toBeLessThanOrEqual(fit.bottom + 1);
         expect(fit.head, at).toBeGreaterThanOrEqual(fit.top - 1);

@@ -356,8 +356,9 @@ A second collection alongside the squishy catalog.
 Every player is represented by a **Keeper**, a character drawn in the same soft vinyl-toy style as the squishies (§19): rounded, chibi-proportioned, glossy and playful. Squishies are still the stars, but your Keeper is how *you* show up in the world.
 
 ### Choosing a Keeper
-- At signup, players **select a Keeper** from a roster of preset base characters **[DEFAULT: 12]** (8 at launch; 4 more with short styles, owner decision 2026-10-06) that vary in body shape, skin tone, face and hairstyle.
-- Each base can then be tweaked: hair style (any base can wear any style; picking a base starts from its own), hair color, eye color, and a **[DEFAULT: 6]**-color palette for the starter outfit.
+- At signup, players **build their Keeper step by step** (#372, owner-approved): **Face → Body → Skin → Hair → Colors → Face details**, one step per screen with Back and Next, and every step starts on a pick so Next all the way through makes a Keeper.
+- Any face goes with any body: **[DEFAULT: 12]** face shapes and **[DEFAULT: 14]** body types (the 12 starting looks' own, plus Lanky and Sturdy). The Body step also holds the **[DEFAULT: 6]**-color palette for the starter outfit; Colors holds hair and eye color; Face details holds eyes, brows, mouth and extras. Any Keeper can wear any hair style.
+- The 12 preset starting looks still exist underneath (a Keeper saved before #372 is drawn from its own), but the creator no longer shows them as a row.
 - Players can change their Keeper at any time from the Wardrobe, for free. Progress and clothing stay with the account, not the base character.
 - No clothing is locked to any body type or presentation. Everything fits every Keeper.
 
