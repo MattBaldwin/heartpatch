@@ -1,5 +1,5 @@
 {
-  "id": "222bb5f1-ebe3-4222-a58e-7c04ebdec7da",
+  "id": "ec242482-a259-4ba5-ae5a-396210831a5f",
   "prevId": "39415852-dfd2-4d40-bd58-5791dc3ae416",
   "version": "7",
   "dialect": "postgresql",
@@ -4847,6 +4847,39 @@
           "primaryKey": false,
           "notNull": false
         },
+        "habitat_since": {
+          "name": "habitat_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feeling_lean": {
+          "name": "feeling_lean",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "feeling_lean_at": {
+          "name": "feeling_lean_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "care_sum": {
+          "name": "care_sum",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "care_samples": {
+          "name": "care_samples",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "contentment_at_last_care": {
           "name": "contentment_at_last_care",
           "type": "integer",
@@ -4856,19 +4889,6 @@
         },
         "last_cared_at": {
           "name": "last_cared_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "contentment": {
-          "name": "contentment",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "contentment_since": {
-          "name": "contentment_since",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -5093,10 +5113,6 @@
         "squishies_contentment_range": {
           "name": "squishies_contentment_range",
           "value": "\"squishies\".\"contentment_at_last_care\" between 0 and 100"
-        },
-        "squishies_contentment_checkpoint_range": {
-          "name": "squishies_contentment_checkpoint_range",
-          "value": "\"squishies\".\"contentment\" between 0 and 100"
         }
       },
       "isRLSEnabled": false
@@ -5209,6 +5225,25 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "branch": {
+          "name": "branch",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "roll": {
+          "name": "roll",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -5224,6 +5259,28 @@
           ],
           "isUnique": false,
           "where": "\"squishy_evolutions\".\"seen_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "squishy_evolutions_user_rolls_idx": {
+          "name": "squishy_evolutions_user_rolls_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "evolved_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"squishy_evolutions\".\"roll\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -5246,6 +5303,15 @@
           "columnsFrom": ["squishy_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "squishy_evolutions_user_id_users_id_fk": {
+          "name": "squishy_evolutions_user_id_users_id_fk",
+          "tableFrom": "squishy_evolutions",
+          "tableTo": "users",
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

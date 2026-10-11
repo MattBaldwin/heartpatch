@@ -16,6 +16,8 @@ export const NewEvolutionSchema = z.object({
   intoSpeciesId: ContentIdSchema,
   level: z.number().int().min(1),
   at: z.iso.datetime(),
+  /** It grew into a branch form, not its step's default (#32): the celebration says so. */
+  branch: z.boolean().optional(),
 });
 export type NewEvolution = z.infer<typeof NewEvolutionSchema>;
 
@@ -35,6 +37,18 @@ export const EvolvingMeterSchema = z.strictObject({
  */
 export const MoodDriftSchema = z.enum(['steady', 'resting', 'wrong-job', 'stopped']);
 export type MoodDrift = z.infer<typeof MoodDriftSchema>;
+
+/**
+ * A whisper in the care sheet (#32): what's shaping a squishy's next
+ * evolution, as a finished kid-readable line. It never names a form or a
+ * chance; the rules behind it stay on the server (CLAUDE.md rule 6).
+ */
+export const CareWhisperSchema = z.strictObject({
+  icon: z.string().min(1).max(8),
+  text: z.string().min(1).max(160),
+  sub: z.string().min(1).max(160).optional(),
+});
+export type CareWhisper = z.infer<typeof CareWhisperSchema>;
 
 /**
  * One of my squishies, as its care sheet shows it. Only its owner gets this:
@@ -76,6 +90,11 @@ export const CareSquishySchema = z.object({
   nextCareAt: z.record(ContentIdSchema, z.iso.datetime()),
   /** An evolution waiting for its celebration, or null. */
   newEvolution: NewEvolutionSchema.nullable(),
+  /**
+   * From half the evolving meter, a hint at what's shaping its next
+   * evolution (#32), or null. An older server sends none.
+   */
+  whisper: CareWhisperSchema.nullable().default(null),
   /**
    * The wardrobe accessory it wears (#43, #340), or null: read back through
    * ownership, so it's always a piece its owner has. An older server sends
