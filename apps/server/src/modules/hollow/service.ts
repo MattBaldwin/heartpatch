@@ -1,6 +1,8 @@
 import {
   addDays,
   CARE_RULES,
+  CLEARING_RULES,
+  clearToolFor,
   deriveSeed,
   firstHollowNight,
   GAME_DATA,
@@ -180,13 +182,16 @@ export function createHollowService(options: HollowServiceOptions): HollowServic
   /**
    * Land a fire could ever light (#277, owner decision 2026-10-08 Q5): within
    * the farthest fire's reach of a tile a fire can stand on (not home, and
-   * no resource node in its middle while `nodesBlockFires`). Null: all of it.
+   * no resource node in its middle while `nodesBlockFires`, unless its owner
+   * could clear that node away: a clearable homestead, #242). Null: all of it.
    */
   const lightableOn = (mapTiles: readonly NightTileRow[]): Set<HexKey> | null => {
     if (!rules.strength.nodesBlockFires) return null;
+    const clearable = (t: NightTileRow) =>
+      t.homestead && clearToolFor(t.terrain, CLEARING_RULES) !== null;
     // A trading post (#269) is never owned, so no fire stands on one.
     const sites = mapTiles.filter(
-      (t) => t.homeSlot === null && t.nodeResource === null && !isTradingPost(t),
+      (t) => t.homeSlot === null && !isTradingPost(t) && (t.nodeResource === null || clearable(t)),
     );
     return safeTiles(sites.map((t) => ({ at: t, radius: MAX_FIRE_RADIUS })));
   };

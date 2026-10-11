@@ -773,6 +773,50 @@ describe.skipIf(!url)('the Hollow Man (needs DATABASE_URL)', () => {
       ).toHaveLength(1 - fires);
     });
 
+    /**
+     * Dark land whose whole reach (2) holds spots, so no fire could stand
+     * near it, except on the tile itself if its owner could clear it (#242).
+     * The tile is a joined homestead of `terrain`.
+     */
+    async function spotsAllAround(mapId: string, who: PublicUser, terrain: string) {
+      const { tiles } = await darkLand(mapId, who, 1);
+      const tile = (await db.query.tiles.findFirst({ where: (t, { eq }) => eq(t.id, tiles[0]!) }))!;
+      await db.execute(
+        `update tiles set terrain = 'lake', node_resource = 'water'
+         where map_id = '${mapId}' and home_slot is null
+           and (abs(q - ${String(tile.q)}) + abs(r - ${String(tile.r)}) + abs(q + r - ${String(tile.q + tile.r)})) / 2 <= 2`,
+      );
+      await db.execute(
+        `update tiles set terrain = '${terrain}', node_resource = 'stone' where id = '${tile.id}'`,
+      );
+      await db.execute(
+        `insert into tile_explore (user_id, tile_id, map_id, layout, terrain, searched, spot_count, completed_at, joined_at)
+         values ('${who.id}', '${tile.id}', '${mapId}', 1, '${terrain}', 7, 3, '${clock.toISOString()}', '${clock.toISOString()}')`,
+      );
+      return tile;
+    }
+
+    it('counts a homestead its owner could clear as land a fire could light (#242)', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await pvpOn(mapId);
+      const tile = await spotsAllAround(mapId, kid, 'mountains');
+      await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT);
+      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([{ q: tile.q, r: tile.r }]);
+    });
+
+    it("leaves land alone that no fire could ever light, a homestead that can't be cleared included", async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await patch(server, kid);
+      await pvpOn(mapId);
+      // Old Forest can't be cleared (owner Q5), so its Stone spot stays put.
+      await spotsAllAround(mapId, kid, 'old-forest');
+      await hollowService(WEAK_SHADOWS, BOLDEST).runNightfall(mapId, TONIGHT);
+      expect((await outcomeOf(mapId, kid)).reclaimed).toEqual([]);
+    });
+
     it('wins back a dark homestead too, which keeps its explore progress (#199)', async () => {
       const server = await start();
       const kid = await player();

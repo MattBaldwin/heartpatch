@@ -111,6 +111,32 @@ export const RECIPES: Recipe[] = [
     output: { resource: 'lantern', quantity: 15 },
     craftSeconds: 2 * 60, // TUNE:
   },
+  // Clearing tools (#242, owner decision 2026-10-11 Q4): each makes a tool's
+  // worth of clears (`CLEARING_RULES.tools`), and every clear spends one.
+  {
+    id: 'axe',
+    name: 'Axe',
+    description: 'A trusty Axe to clear a forest on your homestead. Lasts 3 clears!',
+    inputs: { timber: 4, stone: 2 }, // TUNE: #295 plan revision 1
+    output: { resource: 'axe', quantity: 3 },
+    craftSeconds: 60, // TUNE:
+  },
+  {
+    id: 'pickaxe',
+    name: 'Pickaxe',
+    description: 'A sturdy Pickaxe to clear a mountain on your homestead. Lasts 3 clears!',
+    inputs: { timber: 2, stone: 4 }, // TUNE: #295 plan revision 1
+    output: { resource: 'pickaxe', quantity: 3 },
+    craftSeconds: 60, // TUNE:
+  },
+  {
+    id: 'spade',
+    name: 'Spade',
+    description: 'A handy Spade to clear a meadow or hill on your homestead. Lasts 3 clears!',
+    inputs: { timber: 3, stone: 3 }, // TUNE: #295 plan revision 1
+    output: { resource: 'spade', quantity: 3 },
+    craftSeconds: 60, // TUNE:
+  },
   {
     // Thanksgiving's use for Magic Fallen Leaves (owner decision 2026-10-06):
     // cheaper Heart Charms while the season's squishy is out.

@@ -49,6 +49,11 @@ export const ItemChangeReasonSchema = z.enum([
    * they land, and what comes back when one stops. Ledgered against the batch.
    */
   'factory',
+  /**
+   * Clearing land (#242): the tool use a clear spends when it starts, and
+   * what the cleared tile drops. Ledgered against the clear.
+   */
+  'clear',
 ]);
 export type ItemChangeReason = z.infer<typeof ItemChangeReasonSchema>;
 
@@ -68,6 +73,23 @@ export const GatherSchema = z.object({
   readyAt: z.iso.datetime(),
 });
 export type Gather = z.infer<typeof GatherSchema>;
+
+/**
+ * One clear going on a tile the player owns (#242): the tile becomes cleared
+ * land at `readyAt` and `drop` lands in the bag. The tool use was spent when
+ * it started.
+ */
+export const ClearingSchema = z.object({
+  id: z.uuid(),
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  /** The clearing tool it used (`CLEARING_RULES.tools`). */
+  tool: ContentIdSchema,
+  drop: ItemCountsSchema,
+  startedAt: z.iso.datetime(),
+  readyAt: z.iso.datetime(),
+});
+export type Clearing = z.infer<typeof ClearingSchema>;
 
 /** One recipe on the go. Its inputs were used up when it started. */
 export const CraftSchema = z.object({
@@ -116,10 +138,20 @@ export const InventoryResponseSchema = z.object({
   gathers: z.array(GatherSchema),
   crafts: z.array(CraftSchema),
   factory: FactoryViewSchema.nullable(),
+  /** My clears still going (#242). Optional so a reply from an older server parses. */
+  clears: z.array(ClearingSchema).optional(),
   seasons: z.array(ContentIdSchema),
   now: z.iso.datetime(),
 });
 export type InventoryResponse = z.infer<typeof InventoryResponseSchema>;
+
+/** A tile a settle finished clearing (#242), and what it dropped into the bag. */
+export const ClearedTileSchema = z.object({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+  items: ItemCountsSchema,
+});
+export type ClearedTile = z.infer<typeof ClearedTileSchema>;
 
 /**
  * What a settle put in the bag: one finished craft, keeper gather, a
@@ -148,6 +180,11 @@ export const SettleResponseSchema = InventoryResponseSchema.extend({
   trained: z.array(
     z.object({ squishyId: z.uuid(), name: z.string(), xp: z.number().int().min(1) }),
   ),
+  /**
+   * Tiles that finished clearing (#242). Its own list, not a `landed` kind,
+   * so an older app's `landed` still parses. Optional for an older server.
+   */
+  cleared: z.array(ClearedTileSchema).optional(),
   nextAt: z.iso.datetime().nullable(),
 });
 export type SettleResponse = z.infer<typeof SettleResponseSchema>;
@@ -163,6 +200,22 @@ export const GatherResponseSchema = z.object({ gather: GatherSchema, now: z.iso.
 export type GatherResponse = z.infer<typeof GatherResponseSchema>;
 
 export const GatherParamsSchema = z.object({ mapId: z.uuid(), gatherId: z.uuid() });
+
+/** `POST /maps/:mapId/clears` (#242): clear this tile of mine. */
+export const StartClearRequestSchema = z.strictObject({
+  q: HexSchema.shape.q,
+  r: HexSchema.shape.r,
+});
+export type StartClearRequest = z.infer<typeof StartClearRequestSchema>;
+
+/** The clear just started, and the bag after its tool use. */
+export const ClearResponseSchema = z.object({
+  clearing: ClearingSchema,
+  items: ItemCountsSchema,
+  now: z.iso.datetime(),
+});
+export type ClearResponse = z.infer<typeof ClearResponseSchema>;
+
 export const CraftParamsSchema = z.object({ mapId: z.uuid(), craftId: z.uuid() });
 
 /** Collecting a gather or a craft: what was added, and the bag after. */

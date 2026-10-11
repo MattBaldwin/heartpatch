@@ -153,6 +153,7 @@ function toPublicTile(
     nodeResource: tile.nodeResource,
     homeSlot: tile.homeSlot,
     gathering: tile.gathering,
+    clearing: tile.clearing,
     cooldownUntil: tile.cooldownUntil,
     defenders: tile.defenders,
     workers: tile.workers,

@@ -1,5 +1,7 @@
 import { GAME_DATA } from '../data/index.js';
 import type { BuildingPlacement } from '../schemas/data/buildings.js';
+import { CLEARING_RULES } from '../data/clearing.js';
+import type { ClearToolId } from '../schemas/data/clearing.js';
 import type { ToolId } from '../schemas/data/explore.js';
 import type { GameData } from '../schemas/data/game-data.js';
 import { buildingEffects, type BuildingEffect } from './building-effects.js';
@@ -28,6 +30,8 @@ export type ItemEffect =
   | { readonly kind: 'befriend' }
   /** A tool for exploring your land (#199), counted in uses. */
   | { readonly kind: 'explore'; readonly tool: ToolId }
+  /** A tool for clearing land (#242), counted in uses: the terrains it clears. */
+  | { readonly kind: 'clear'; readonly tool: ClearToolId; readonly terrains: readonly string[] }
   /** It's built into this building, where the building goes. */
   | { readonly kind: 'builds'; readonly building: string; readonly placement: BuildingPlacement }
   /** What the building it's built into does. */
@@ -72,6 +76,11 @@ export function itemEffects(resourceId: string, data: ItemData = GAME_DATA): Ite
   }
   if (item.id === BEFRIEND_ITEM) effects.push({ kind: 'befriend' });
   if (item.tool) effects.push({ kind: 'explore', tool: item.tool });
+  const clears = item.clearTool;
+  if (clears) {
+    const terrains = CLEARING_RULES.terrains.filter((t) => t.tool === clears).map((t) => t.terrain);
+    effects.push({ kind: 'clear', tool: clears, terrains });
+  }
 
   // A gathered or seasonal thing a recipe also makes (Treats from Pumpkins).
   // A made thing's own page already says how it's made.

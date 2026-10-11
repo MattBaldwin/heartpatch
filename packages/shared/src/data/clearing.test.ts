@@ -4,7 +4,7 @@ import { CLEARING_RULES } from './clearing.js';
 import { GAME_DATA } from './index.js';
 
 describe('CLEARING_RULES (#242)', () => {
-  it('names real terrains and a tool row for each tool a terrain needs', () => {
+  it('names real terrains, a tool row for each tool a terrain needs, and a bag item and recipe for each tool', () => {
     expect(checkClearingRules(CLEARING_RULES, GAME_DATA)).toEqual([]);
   });
 
@@ -25,9 +25,15 @@ describe('CLEARING_RULES (#242)', () => {
     }
   });
 
-  it('wears every tool out after a few clears (owner Q4)', () => {
+  it('wears every tool out after a few clears (owner Q4) and keeps it with its Keeper', () => {
     expect(CLEARING_RULES.tools.map((t) => t.id).sort()).toEqual(['axe', 'pickaxe', 'spade']);
-    for (const tool of CLEARING_RULES.tools) expect(tool.uses).toBeGreaterThan(0);
+    for (const tool of CLEARING_RULES.tools) {
+      expect(tool.uses).toBeGreaterThan(0);
+      expect(GAME_DATA.resources.find((r) => r.clearTool === tool.id)?.tradable).toBe(false);
+      expect(GAME_DATA.recipes.find((r) => r.output.resource === tool.id)?.output.quantity).toBe(
+        tool.uses,
+      );
+    }
   });
 
   it('refuses a terrain no map places, a missing tool row and a terrain listed twice', () => {

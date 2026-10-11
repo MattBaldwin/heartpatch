@@ -85,6 +85,7 @@ export * from './data/factory.js';
 export * from './factory/index.js';
 export * from './data/app-version.js';
 export * from './jobs/index.js';
+export * from './clearing/index.js';
 export * from './explore/index.js';
 export * from './boutique/index.js';
 export * from './tutorial/index.js';

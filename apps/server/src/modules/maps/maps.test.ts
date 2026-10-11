@@ -469,6 +469,7 @@ describe.skipIf(!url)('map endpoints (needs DATABASE_URL)', () => {
           'defenders',
           'guardianHint',
           'buildings',
+          'clearing',
           'explored',
           'fences',
           'gathering',
