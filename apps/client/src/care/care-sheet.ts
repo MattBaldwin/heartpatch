@@ -108,7 +108,24 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     el('summary', {}, CARE_TEXT.infoTitle),
     infoList,
   );
+  // What's shaping its next evolution (#32), under the evolving meter.
+  const whisperIcon = el('span', { class: 'care-whisper-icon', 'aria-hidden': 'true' });
+  const whisperText = el('p', { class: 'care-whisper-text' });
+  const whisperSub = el('p', { class: 'care-whisper-sub' });
+  const whisper = el(
+    'div',
+    { class: 'care-whisper', 'data-testid': 'care-whisper' },
+    whisperIcon,
+    el('div', {}, whisperText, whisperSub),
+  );
+  whisper.hidden = true;
   const celebrateLine = el('p', { class: 'care-celebrate-line' });
+  const newForm = el(
+    'p',
+    { class: 'care-new-form', 'data-testid': 'care-new-form' },
+    CARE_TEXT.newForm,
+  );
+  newForm.hidden = true;
   const yay = el(
     'button',
     { type: 'button', class: 'auth-button', 'data-testid': 'care-yay' },
@@ -119,6 +136,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     { class: 'care-celebrate', 'data-testid': 'care-celebrate' },
     el('h2', { class: 'care-celebrate-title' }, CARE_TEXT.evolvedTitle),
     celebrateLine,
+    newForm,
     yay,
   );
   celebrate.hidden = true;
@@ -148,6 +166,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
       xpBar,
       xpLine,
       evolving.root,
+      whisper,
       celebrate,
       actions,
       treatNote,
@@ -216,6 +235,11 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     xpFill.style.width = `${String(Math.round(model.xp * 100))}%`;
     xpLine.textContent = model.xpLine;
     evolving.update(model.evolving);
+    whisper.hidden = model.whisper === null;
+    whisperIcon.textContent = model.whisper?.icon ?? '';
+    whisperText.textContent = model.whisper?.text ?? '';
+    whisperSub.textContent = model.whisper?.sub ?? '';
+    whisperSub.hidden = model.whisper?.sub === undefined;
     actions.replaceChildren(
       ...model.buttons.map((b) => {
         const button = el(
@@ -240,6 +264,7 @@ export function createCareSheet(options: CareSheetOptions): CareSheet {
     const evolved = evolutionLine(squishy, speciesById(reply));
     celebrate.hidden = evolved === null;
     if (evolved) celebrateLine.textContent = evolved;
+    newForm.hidden = !(evolved && model.newForm);
     // A debounced button comes back on by itself (one timer, the soonest).
     const wait = nextReadyIn(squishy, now);
     if (wait !== null) readyTimer = window.setTimeout(render, wait + 50);

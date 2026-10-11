@@ -68,6 +68,8 @@ test('cares for a squishy from home base: pet, play and feed', async ({ browser 
   await expect(evolving).toBeVisible();
   await expect(evolving).toContainText(/✨ Evolving\s*\d+%/);
   await expect(sheet.getByTestId('care-level')).toContainText('evolves at Level');
+  // No whisper yet: they start halfway along the evolving meter (#32).
+  await expect(sheet.getByTestId('care-whisper')).toBeHidden();
 
   // Pet: more contentment, a squish, and a cheerful line.
   await sheet.locator('[data-care="pet"]').tap();

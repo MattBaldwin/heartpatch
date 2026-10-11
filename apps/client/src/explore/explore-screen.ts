@@ -25,6 +25,7 @@ import type { TileActions } from '../map/map-screen.js';
 import { ApiRequestError } from '../net/api.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
+import { AmbientDriver } from '../map/ambient-driver.js';
 import { jobsApi, type JobsApi } from '../squishies/jobs/jobs-api.js';
 import { faceYaw } from '../procedural/face-yaw.js';
 import { el, messageOf } from '../ui/dom.js';
@@ -100,6 +101,10 @@ export interface ExploreScreenOptions {
   /** Draws a few frames after a change (`Stage.invalidate`). */
   invalidate: () => void;
   tier: () => QualityTier;
+  /** Dev captures: the tier is pinned (`?tier=`), so ambient life never judges itself too slow. */
+  pinned?: () => boolean;
+  /** Draws one frame (`Stage.requestFrame`): ambient life (#335) paces itself with this. */
+  requestFrame?: () => void;
   keeper: () => KeeperConfig | null;
   keeperWearing?: () => readonly string[];
   /**
@@ -199,6 +204,13 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
   let scene3d: ExploreScene | null = null;
   /** The map's view of the open tile, read as it opened (#347). */
   let mapTileAtOpen: PublicTile | null = null;
+  /** Paces the land's ambient life (#335), like the map's: the motion itself is on the GPU. */
+  const ambient = new AmbientDriver({
+    target: () => (isOpen ? scene3d : null),
+    invalidate: options.invalidate,
+    tier: options.tier,
+    ...(options.requestFrame ? { requestFrame: options.requestFrame } : {}),
+  });
   /** Checks the sky once a minute while exploring (#335). */
   let skyTimer: ReturnType<typeof setInterval> | null = null;
   const tipStorage = options.storage === undefined ? safeStorage() : options.storage;
@@ -495,6 +507,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     if (tier !== lastTier) {
       lastTier = tier;
       s.setLod(lodFor('closeUp', tier));
+      s.setTier(tier);
     }
     const dt = Math.min(EXPLORE_VIEW.maxFrameStep, Math.max(0, (now - lastFrame) / 1000));
     lastFrame = now;
@@ -1167,6 +1180,8 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       }),
       mapTile: mapTileAtOpen,
       sky: (skyShown = skyNow()),
+      tier: lastTier,
+      pinned: options.pinned?.() ?? false,
       reducedMotion,
     });
     // The start can land on a rock: step out before the Keeper is drawn.
@@ -1179,6 +1194,10 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
     built.hold(heldTool());
     front = null;
     findFront();
+    // Swaying grass, butterflies and fireflies (#335): about 30 frames a second, or still.
+    const { tier: startTier, reducedMotion: still } = ambient.state;
+    built.setAmbient(startTier, still);
+    ambient.start();
     return built.content;
   };
 
@@ -1273,6 +1292,7 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
 
   function hide(): void {
     isOpen = false;
+    ambient.stop();
     if (skyTimer !== null) clearInterval(skyTimer);
     skyTimer = null;
     // A reply still on its way (a search, a bag read) belongs to this visit:
