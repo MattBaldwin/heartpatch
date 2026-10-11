@@ -114,3 +114,23 @@ describe('raid words', () => {
     for (const line of all) expect(findAvoidedWords(line), line).toEqual([]);
   });
 });
+
+describe('a challenge I defended live (#29-C)', () => {
+  it('says so for every outcome, proudly and kindly', () => {
+    for (const outcome of RaidOutcomeSchema.options) {
+      const line = raidLine(raid({ outcome, live: true, stance: null }));
+      expect(line).toMatch(/defend/i);
+      expect(findAvoidedWords(line)).toEqual([]);
+    }
+    expect(raidLine(raid({ live: true, stance: null }))).toBe(
+      '🛡️ You defended live and kept Pumpkinpal out. Your land is safe!',
+    );
+    expect(raidLine(raid({ live: true, stance: null, reason: 'forfeit' }))).toMatch(/scooted home/);
+  });
+
+  it('shows "Defended live" where the style would go, and guardians still say nothing', () => {
+    expect(raidStyleLine(raid({ live: true, stance: null }))).toBe(RAID_TEXT.defendedLive);
+    expect(raidStyleLine(raid({ live: false, stance: null }))).toBeNull();
+    expect(raidStyleLine(raid({ stance: 'aggressive' }))).toBe('Style: Bold');
+  });
+});
