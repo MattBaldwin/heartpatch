@@ -385,11 +385,13 @@ export class HouseProtoScene {
     const scene = this.#scene;
     // A patch of dusk ground and a few far trees past the back wall, so the
     // windows look out on something (the real house looks out on the patch).
-    const ground = CreateDisc('outside-ground', { radius: 60, tessellation: 48 }, scene);
+    // A lawn around the house only: past it the sky's horizon glow shows through the
+    // windows (the house sits on a rise, so a low camera never looks at flat ground).
+    const ground = CreateDisc('outside-ground', { radius: 9, tessellation: 48 }, scene);
     ground.rotation.x = Math.PI / 2;
     ground.position.set(0, -0.32, 0);
     const gm = new PBRMaterial('outside-ground', scene);
-    gm.albedoColor = linear('#5f7d55'); // TUNE: dusk lawn, lit warm by the low sun
+    gm.albedoColor = linear('#4e6a4c'); // TUNE: dusk lawn
     gm.roughness = 0.9;
     gm.metallic = 0;
     ground.material = gm;
@@ -398,16 +400,12 @@ export class HouseProtoScene {
     const trees: Mesh[] = [];
     const far = buildFarTree(scene);
     const spots: [number, number, number][] = [
-      [-11, 24, 1.1],
-      [-5, 27, 1.2],
-      [2, 26, 1.0],
-      [8, 25, 1.15],
-      [14, 28, 1.3],
-      [-17, 29, 1.3],
-      [-24, 32, 1.4],
-      [21, 32, 1.4],
-      [5, 34, 1.2],
-      [-8, 36, 1.3],
+      [-6.5, 3.2, 1.0],
+      [-3, 4.2, 1.15],
+      [1.5, 4.0, 0.95],
+      [5, 3.6, 1.1],
+      [-8.5, 1.5, 0.9],
+      [7.5, 1.8, 0.95],
     ];
     duskTint(far, '#2f4a3c', '#8a6d5a'); // dusk: a dark foot, a warm-lit top
     for (const [x, dz, s] of spots) {
@@ -419,8 +417,8 @@ export class HouseProtoScene {
     }
     far.dispose();
     const oak = buildTree(scene, 'oak');
-    oak.position.set(-7.5, 0, spec.d / 2 + 14);
-    oak.scaling.setAll(0.9);
+    oak.position.set(-4.8, 0, spec.d / 2 + 3.4);
+    oak.scaling.setAll(0.85);
     oak.material = this.#vinyl;
     duskTint(oak, '#2f4a3c', '#8a6d5a');
   }
@@ -959,22 +957,15 @@ export class HouseProtoScene {
     // The heart-tree, grown through the hall floor, under a ring of lanterns.
     const tree = buildTree(scene, 'oak');
     tree.position.set(-1.2, 0, d / 2 - 2.4);
-    tree.scaling.setAll(1.45);
+    tree.scaling.setAll(1.3);
     tree.material = this.#vinyl;
     blushCanopy(tree, 1.1, '#ff9ec4', '#ffd4e4'); // the Heart Tree: a pink canopy
     if (this.#shadows) this.#shadows.addShadowCaster(tree);
     const seed = buildHeartSeed(scene);
-    seed.position.set(-1.2, 4.55, d / 2 - 2.4);
-    seed.scaling.setAll(2.2);
-    this.#lamp('tree-light', new Vector3(-1.2, 4.2, d / 2 - 2.4), '#ffb6d0', 16, 10); // TUNE
+    seed.position.set(-1.2, 4.15, d / 2 - 2.4);
+    seed.scaling.setAll(2.0);
+    this.#lamp('tree-light', new Vector3(-1.2, 3.9, d / 2 - 2.4), '#ffb6d0', 16, 10); // TUNE
     // Lantern garlands from the beams.
-    this.#string(
-      new Vector3(-w / 2 + 0.5, h - 0.6, -1.5),
-      new Vector3(w / 2 - 0.5, h - 0.6, -1.5),
-      0.6,
-      9,
-      '#ffd166',
-    );
     this.#string(
       new Vector3(-w / 2 + 0.5, h - 1.0, 3.0),
       new Vector3(w / 2 - 0.5, h - 1.0, 3.0),
@@ -983,7 +974,7 @@ export class HouseProtoScene {
       '#ff9ab8',
     );
     // A gallery along the right wall, above the door, with stairs at the back.
-    const gy = 2.9;
+    const gy = 2.6;
     const gw = 2.6;
     const gx = w / 2 - gw / 2;
     this.#solid('gallery', [
@@ -1009,7 +1000,7 @@ export class HouseProtoScene {
     // Four beds: two on the balcony, two below, with golden blankets.
     this.#bed(-4.6, d / 2 - 1.2, 0, '#ffd166', true);
     this.#bed(2.6, d / 2 - 1.2, 0, '#c9a0ff', true);
-    this.#bed(w / 2 - 1.3, 1.6, -Math.PI / 2, '#ffb3c8', true, 3.02);
+    this.#bed(w / 2 - 1.3, 1.6, -Math.PI / 2, '#ffb3c8', true, 2.72);
     this.#bed(-5.2, -2.2, Math.PI / 2, '#9fd0ff', true);
     // The Keeper's corner: an alcove on the right with a table, tea and lamps.
     const table = this.#solid('table', [
@@ -1084,7 +1075,7 @@ export class HouseProtoScene {
     r('candlekit', 7, {
       x: w / 2 - 1.3,
       z: 1.5,
-      y: 3.48,
+      y: 3.18,
       yaw: -1.4,
       scale: 0.9,
       squash: 0.85,
