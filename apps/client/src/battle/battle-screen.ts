@@ -22,6 +22,7 @@ import type { QualityTier } from '../engine/config.js';
 import type { SceneBuilder, SceneContent } from '../engine/stage.js';
 import { inventoryApi } from '../inventory/inventory-api.js';
 import { ApiRequestError } from '../net/api.js';
+import { BreathPacer } from '../map/ambient-layout.js';
 import { newIdempotencyKey } from '../net/idempotency-key.js';
 import { lodFor } from '../procedural/motion.js';
 import { formatWait, GameClock } from '../inventory/game-clock.js';
@@ -184,6 +185,8 @@ export interface BattleDebug {
   readonly clock: number;
   /** The band the camera fits the fight into (`BattleHud.safe`), as the camera reads it now. */
   readonly safe: SafeRegion;
+  /** Idle breathing: `stopped` once the device was judged too slow for it this battle (#397). */
+  readonly breathing: 'live' | 'stopped';
 }
 
 /** Dev-only controls over the battle clock (`?battle-clock=manual`), for frame-exact captures. */
@@ -316,7 +319,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   let queue: PlaybackStep[] = [];
   let waiting = false;
   let frame = 0;
-  let lastBreathDraw = 0;
+  /** Breathing's pace, judged afresh each battle (a slow device stops it, #397). */
+  let breath = new BreathPacer(BREATHING_FRAME_MS);
   let lastTier: QualityTier | null = null;
   /** A raid replay is on screen (`watch`): no controls, replay words. */
   let replaying = false;
@@ -436,6 +440,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
   // Back from the background (hours, maybe a new spawn window): fresh tufts.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
+    breath.skip();
     if (battle === null) refreshNearby();
     // A live battle went on while the app slept (#29): catch up.
     else if (battle.live) refreshLive();
@@ -1236,7 +1241,8 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
    * Drives motion (render on demand, tech spec §6): every frame while a step
    * plays or the camera moves, at most 30 fps while the squishies only
    * breathe and bob, nothing at all when everything is still (reduced
-   * motion), and follows the quality governor's tier with the detail level.
+   * motion) or the device is too slow to breathe (`BreathPacer`), and follows
+   * the quality governor's tier with the detail level.
    */
   const tick = (): void => {
     frame = 0;
@@ -1250,11 +1256,13 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     }
     const t = now();
     if (s.isPlaying(t)) {
+      breath.skip();
       s.update(t);
       options.invalidate();
-    } else if (t - lastBreathDraw >= BREATHING_FRAME_MS) {
-      // Breathing and bobbing only: move and draw once per ask, about 30 a second.
-      lastBreathDraw = t;
+    } else if (breath.due(performance.now())) {
+      // Breathing and bobbing only: move and draw once per ask, about 30 a
+      // second. Paced and judged on the wall clock, not the battle's (a dev
+      // clock can stand still or run slow).
       if (s.update(t)) options.requestFrame();
     }
     frame = requestAnimationFrame(tick);
@@ -1267,6 +1275,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     waiting = false;
     replaying = replay;
     battle = next;
+    if (!wasOpen) breath = new BreathPacer(BREATHING_FRAME_MS);
     content = new BattleContent(next);
     shown = shownFrom(next);
     shownLog = next.view.log.length;
@@ -1468,6 +1477,7 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
         sipped,
         clock: now(),
         safe: hud.safe(),
+        breathing: breath.slow ? 'stopped' : 'live',
       };
     },
     get dev(): BattleDevControls | null {
