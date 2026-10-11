@@ -380,6 +380,11 @@ export class ExploreScene implements AmbientTarget {
     // A see-through copy for props between the camera and the Keeper (#291).
     const fadedMaterial = vinyl(scene, 'explore-prop-faded-mat', { color: '#ffffff' });
     fadedMaterial.alpha = EXPLORE_FADE.alpha;
+    if (this.#land) {
+      // Matte like the solid copy, so a spot doesn't gain gloss as it fades.
+      fadedMaterial.roughness = propMaterial.roughness;
+      fadedMaterial.clearCoat.isEnabled = false;
+    }
     fadedMaterial.transparencyMode = Material.MATERIAL_ALPHABLEND;
     this.#buildProps(tile, propMaterial, fadedMaterial);
 
@@ -760,7 +765,7 @@ export class ExploreScene implements AmbientTarget {
   // ── Ambient life (#335): the map's driver paces it (`AmbientTarget`) ──────
 
   setAmbient(tier: QualityTier, reducedMotion: boolean): boolean {
-    const mode = this.#land
+    const mode = this.#land?.animated
       ? ambientMode({ tier, reducedMotion, slow: !this.#pinned && this.#judge.slow })
       : 'off';
     if (mode === this.#ambient) return false;
@@ -1052,16 +1057,23 @@ export class ExploreScene implements AmbientTarget {
   ): void {
     const byKind = new Map<string, { index: number; matrix: Matrix }[]>();
     const builders = new Map<string, () => Mesh>();
+    const built = new Map<string, ReturnType<typeof buildSpotProp>>();
+    const solids = new Map<string, Mesh>();
     const scale = this.#k * EXPLORE_VIEW.propScale;
     for (const spot of tile.spots) {
       const shape = SPOT_PROPS[spot.kind] ?? 'rock';
       // Old forests grow their own old trees.
       const prop = shape === 'tree' && tile.terrain === 'old-forest' ? 'old-tree' : shape;
-      // On the land kit (#335), its own rocks, trees, logs and flower beds, drawn at world size.
-      const kit = this.#land ? buildSpotProp(this.#scene, spot.kind) : null;
+      // On the land kit (#335), its own rocks, trees, logs and flower beds, drawn at world
+      // size: built once a kind (the first is the solid copy), never thrown away.
+      let kit = built.get(spot.kind);
+      if (kit === undefined && this.#land) {
+        kit = buildSpotProp(this.#scene, spot.kind);
+        built.set(spot.kind, kit);
+      }
       const kind = kit ? `kit:${spot.kind}` : prop;
       if (kit) {
-        kit.mesh.dispose();
+        solids.set(kind, kit.mesh);
         this.#kitGlint.set(spot.kind, kit.glint);
         builders.set(
           kind,
@@ -1087,7 +1099,7 @@ export class ExploreScene implements AmbientTarget {
     }
     for (const [kind, spots] of byKind) {
       const build = builders.get(kind) ?? (() => buildProp(this.#scene, 'rock').mesh);
-      const mesh = build();
+      const mesh = solids.get(kind) ?? build();
       mesh.material = material;
       // Its own mesh (a clone would share the thin instances): one more draw
       // call only while something hides the Keeper.

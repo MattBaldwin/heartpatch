@@ -3,5 +3,6 @@ title: A meadow to wander
 area: land
 ---
 
-Your meadow grew up! Rolling grass, a little dirt path, flowers, bushes and big trees all around, with butterflies by day and fireflies and glowing lanterns at night.
+Your meadow grew up! Rolling grass, a little dirt path, flowers, bushes and big trees all around.
+Butterflies flutter by day, and fireflies and lanterns glow at night.
 **Try it:** explore your home tile and follow the path.
