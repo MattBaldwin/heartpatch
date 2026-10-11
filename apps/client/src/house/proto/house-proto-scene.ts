@@ -1031,7 +1031,7 @@ export class HouseProtoScene {
       shadowAlpha: 0.3,
     });
     r('thistlepip', 5, { x: -1.2, z: 0.9, y: 0, yaw: 0.6, scale: 0.9 });
-    r('glowgourd', 6, { x: 2.6, z: 3.0, y: 0, yaw: 0.2, scale: 0.9 });
+    r('glowgourd', 6, { x: 2.3, z: 2.4, y: 0, yaw: 0.2, scale: 0.9 });
     r('candlekit', 7, {
       x: w / 2 - 1.25,
       z: 1.55,
