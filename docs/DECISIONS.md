@@ -1374,7 +1374,7 @@ _Owner decisions from the "Owner decisions" sections of #381 and #382, and from 
 
 ## 2026-10-11 — Build rule, happiness rule and creator order (#371, #376, #372)
 
-_Owner requests and decisions from issues #371, #376 and #372; the #376 migration order and the checkpoint column are coordinator-approved. Recorded here at the coordinator's request._
+_Owner requests and decisions from issues #371, #376 and #372; the #376 checkpoint column is coordinator-approved. Recorded here at the coordinator's request._
 
 - **One Build sheet (#371).** Home base, owned tiles and fences build the same way: tap the tile, tap Build, pick the area, pick the type. A fence takes 4 taps or fewer from the map. Client-only: no server, schema or migration change.
 - **Happiness drains only when idle or on the wrong job (#376).** No drain while working a job that fits: Team, Guard and Training always fit, and gathering fits when the squishy is Good or Great at that resource. A fitting job holds happiness steady and doesn't raise it. Care still raises it. Drain is the default whenever no work happens. The lane proposes each state in its PR. Migration after #360, and #376 goes first in the migration queue (owner, 2026-10-11). A checkpoint time separate from `lastCaredAt` is coordinator-approved, unless the lane finds a way to avoid a migration.
