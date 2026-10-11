@@ -1,0 +1,600 @@
+import type {
+  CareListResponse,
+  HomeResponse,
+  JobSquishy,
+  JobsView,
+  MyBuilding,
+  SetJobRequest,
+} from '@heartpatch/shared';
+import { careApi, type CareApi } from '../../care/care-api.js';
+import { evolvingMeterEl } from '../../care/evolving-meter.js';
+import { homeApi, type HomeApi } from '../../home/home-api.js';
+import { atHome, buildingIcon, buildingName } from '../../home/home-view.js';
+import { GameClock } from '../../inventory/game-clock.js';
+import { COMMAND_RETRY_MS, sendCommand } from '../../inventory/send-command.js';
+import { ApiRequestError } from '../../net/api.js';
+import { newIdempotencyKey } from '../../net/idempotency-key.js';
+import { el, messageOf } from '../../ui/dom.js';
+import { rarityChip } from '../../ui/rarity/rarity.js';
+import {
+  groundsPicker,
+  jobActions,
+  spotPicker,
+  type JobActionsContext,
+} from '../jobs/job-actions.js';
+import { jobsApi, type JobsApi } from '../jobs/jobs-api.js';
+import { blobFor } from '../jobs/job-board.js';
+import {
+  filterCounts,
+  MOOD_WORDS,
+  mergeRoster,
+  ROSTER_FILTERS,
+  ROSTER_SORTS,
+  ROSTER_TEXT,
+  statusLine,
+  visibleRows,
+  type RosterFilter,
+  type RosterRow,
+  type RosterSort,
+} from './roster-view.js';
+import './roster.css';
+
+// The Squishies roster (#375): one sheet at home listing every squishy with
+// its mood, rarity, level and status, a sort and a quick filter, and, one tap
+// on a row, the actions that used to be three screens away. Client-only: it
+// merges the home, care and jobs reads the client already makes. The job
+// buttons and pickers are the job board's own (`job-actions.ts`).
+
+export interface RosterOptions {
+  root: HTMLElement;
+  api?: { home?: Pick<HomeApi, 'get' | 'house'>; care?: Pick<CareApi, 'list'>; jobs?: JobsApi };
+  /** Opens the care sheet (a row's Care button: two taps from the home panel). */
+  onCare?: (mapId: string, squishyId: string) => void;
+  /** Opens the squishy in the close-up view. */
+  onCloseUp?: (mapId: string, squishyId: string) => void;
+  /** Opens the close-up with Dress up already showing. */
+  onDressUp?: (mapId: string, squishyId: string) => void;
+  /** Device wall clock in ms (tests pass a fake). */
+  now?: () => number;
+}
+
+/** Read-only state for the dev hook (Playwright asserts on it, not on pixels). */
+export interface RosterDebug {
+  readonly open: boolean;
+  readonly mapId: string | null;
+  readonly rows: number;
+  readonly shown: readonly string[];
+  readonly sort: RosterSort;
+  readonly filter: RosterFilter;
+  readonly expanded: string | null;
+  readonly note: string;
+}
+
+export interface RosterSheet {
+  /** Opens the roster for my squishies on this map. */
+  open: (mapId: string) => Promise<void>;
+  /** Reads the three views again (care or Dress up changed something). */
+  refresh: () => Promise<void>;
+  close: () => void;
+  readonly isOpen: boolean;
+  readonly debug: RosterDebug;
+}
+
+const SORT_LABELS = ROSTER_TEXT.sort;
+const FILTER_LABELS = ROSTER_TEXT.filter;
+
+export function createRosterSheet(options: RosterOptions): RosterSheet {
+  const homeCalls = options.api?.home ?? homeApi;
+  const careCalls = options.api?.care ?? careApi;
+  const jobCalls = options.api?.jobs ?? jobsApi;
+  const clock = new GameClock(options.now);
+  let mapId: string | null = null;
+  let home: HomeResponse | null = null;
+  let care: CareListResponse | null = null;
+  let jobs: JobsView | null = null;
+  let rows: RosterRow[] = [];
+  let sort: RosterSort = 'mood';
+  let filter: RosterFilter = 'all';
+  let expanded: string | null = null;
+  /** The squishy picking a spot or Training Grounds in its detail, or null. */
+  let picking: { id: string; what: 'spot' | 'grounds' } | null = null;
+  let working = false;
+  let ticker: number | undefined;
+  /** Bumped by every open and close, so a late reply is dropped. */
+  let ticket = 0;
+  /** Each working row's status chip, so the countdown updates its text and nothing else. */
+  let chips = new Map<string, { row: RosterRow; node: HTMLElement }>();
+
+  const close = el(
+    'button',
+    { type: 'button', class: 'tile-panel-close', 'aria-label': ROSTER_TEXT.close },
+    '×',
+  );
+  const count = el('p', { class: 'roster-count', 'data-testid': 'roster-count' });
+  const note = el('p', { class: 'roster-note', role: 'status', 'data-testid': 'roster-note' });
+  const sortBar = el('div', {
+    class: 'roster-chips',
+    role: 'group',
+    'aria-label': ROSTER_TEXT.sortBy,
+    'data-testid': 'roster-sorts',
+  });
+  const filterBar = el('div', {
+    class: 'roster-chips',
+    role: 'group',
+    'aria-label': ROSTER_TEXT.show,
+    'data-testid': 'roster-filters',
+  });
+  const list = el('ul', { class: 'roster-list', 'data-testid': 'roster-list' });
+  const sheet = el(
+    'section',
+    {
+      class: 'roster-sheet',
+      role: 'dialog',
+      'aria-labelledby': 'roster-title',
+      'data-testid': 'roster',
+    },
+    el(
+      'div',
+      { class: 'roster-top' },
+      el(
+        'div',
+        { class: 'tile-panel-head' },
+        el('h2', { id: 'roster-title' }, ROSTER_TEXT.title),
+        close,
+      ),
+      count,
+      el('div', { class: 'roster-controls' }, sortBar, filterBar),
+      note,
+    ),
+    list,
+  );
+  sheet.hidden = true;
+  options.root.append(sheet);
+
+  const sendDeps = {
+    newKey: newIdempotencyKey,
+    wait: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+    retryAfterMs: COMMAND_RETRY_MS,
+  };
+  const say = (text: string) => {
+    note.textContent = text;
+  };
+
+  /** The reads, merged into rows. Home's squishies are the roster; the others add tags. */
+  function remerge(): void {
+    rows = home ? mergeRoster({ home, care, jobs }) : [];
+    if (expanded && !rows.some((r) => r.id === expanded)) expanded = null;
+  }
+
+  async function load(id: string, mine: number): Promise<void> {
+    const [h, c, j] = await Promise.allSettled([
+      homeCalls.get(id),
+      careCalls.list(id),
+      jobCalls.view(id),
+    ]);
+    if (mine !== ticket) return;
+    if (h.status === 'fulfilled') home = h.value;
+    if (c.status === 'fulfilled') care = c.value;
+    if (j.status === 'fulfilled') {
+      jobs = j.value;
+      clock.sync(j.value.now);
+    }
+    if (h.status === 'rejected') say(messageOf(h.reason));
+    else if (c.status === 'rejected' || j.status === 'rejected') say(ROSTER_TEXT.partial);
+    else say('');
+    remerge();
+    render();
+  }
+
+  /** Runs one command from a row's detail, one at a time; a CONFLICT reads everything again. */
+  async function act(run: (id: string, send: Send) => Promise<void>): Promise<void> {
+    const id = mapId;
+    if (!id || working) return;
+    const mine = ticket;
+    working = true;
+    render();
+    try {
+      await run(id, (command) => sendCommand(sendDeps, command, () => mine === ticket));
+    } catch (err) {
+      if (mine !== ticket) return;
+      say(messageOf(err));
+      if (err instanceof ApiRequestError && err.code === 'CONFLICT') {
+        working = false;
+        await load(id, mine);
+        return;
+      }
+    } finally {
+      working = false;
+      if (mine === ticket) {
+        remerge();
+        render();
+      }
+    }
+  }
+
+  type Send = <T>(command: (key: string) => Promise<T>) => Promise<T | null>;
+
+  const assign = (squishy: JobSquishy, job: SetJobRequest, done: string) =>
+    act(async (id, send) => {
+      const res = await send((key) => jobCalls.setJob(id, squishy.squishy.id, job, key));
+      if (!res) return;
+      jobs = res;
+      clock.sync(res.now);
+      picking = null;
+      say(done);
+    });
+
+  const house = (squishyId: string, habitatId: string | null, done: string) =>
+    act(async (id, send) => {
+      const res = await send((key) => homeCalls.house(id, squishyId, habitatId, key));
+      if (!res) return;
+      home = res;
+      say(done);
+    });
+
+  const actionContext = (current: JobsView): JobActionsContext => ({
+    view: current,
+    working,
+    wantSpot: null,
+    assign: (squishy, job, done) => {
+      void assign(squishy, job, done);
+    },
+    pickSpot: (squishy) => {
+      picking = { id: squishy.squishy.id, what: 'spot' };
+      render();
+    },
+    pickGrounds: (squishy) => {
+      picking = { id: squishy.squishy.id, what: 'grounds' };
+      render();
+    },
+    cancel: () => {
+      picking = null;
+      render();
+    },
+  });
+
+  const tapButton = (
+    label: string,
+    onTap: () => void,
+    attrs: Record<string, string> = {},
+    soft = false,
+  ) => {
+    const b = el(
+      'button',
+      {
+        type: 'button',
+        class: `auth-button roster-action${soft ? ' auth-button-soft' : ''}`,
+        ...attrs,
+      },
+      label,
+    );
+    b.addEventListener('click', onTap);
+    return b;
+  };
+
+  /** The habitats at home, numbered when there's more than one of a kind. */
+  function habitats(current: HomeResponse): { b: MyBuilding; label: string }[] {
+    const mine = atHome(current).buildings.filter((b) => b.kind === 'habitat');
+    const seen = new Map<string, number>();
+    const totals = new Map<string, number>();
+    for (const b of mine) totals.set(b.buildingId, (totals.get(b.buildingId) ?? 0) + 1);
+    return mine.map((b) => {
+      const n = (seen.get(b.buildingId) ?? 0) + 1;
+      seen.set(b.buildingId, n);
+      const many = (totals.get(b.buildingId) ?? 0) > 1;
+      return {
+        b,
+        label: `${buildingIcon(b.buildingId)} ${buildingName(b.buildingId)}${many ? ` ${String(n)}` : ''}`,
+      };
+    });
+  }
+
+  function habitatActions(row: RosterRow, current: HomeResponse): HTMLElement {
+    const options = habitats(current);
+    const name = row.name;
+    const buttons = options.map(({ b, label }) => {
+      const here = row.habitatId === b.id;
+      const full = (b.residents ?? 0) >= (b.capacity ?? 0);
+      const text = here
+        ? `${label} · here`
+        : `${label} (${String(b.residents ?? 0)}/${String(b.capacity ?? 0)})`;
+      const button = tapButton(
+        text,
+        () => void house(row.id, b.id, `${name} moved in!`),
+        { 'data-testid': 'roster-habitat', 'data-habitat': b.id },
+        true,
+      );
+      button.disabled = working || here || full;
+      return button;
+    });
+    const out = tapButton(
+      ROSTER_TEXT.moveOut,
+      () => void house(row.id, null, `${name} moved out.`),
+      { 'data-testid': 'roster-move-out' },
+      true,
+    );
+    out.disabled = working;
+    return el(
+      'div',
+      { class: 'roster-habitats', 'data-testid': 'roster-habitats' },
+      el('p', { class: 'jobs-small' }, ROSTER_TEXT.moveIn),
+      el('div', { class: 'roster-habitat-buttons' }, ...buttons, ...(row.habitatId ? [out] : [])),
+    );
+  }
+
+  /** The detail under a tapped row: the meters in words, then every action. */
+  function detail(row: RosterRow): HTMLElement {
+    const id = mapId;
+    const parts: HTMLElement[] = [];
+    if (row.mood) parts.push(el('p', { class: 'roster-mood-line' }, row.mood.line));
+    if (row.evolving) {
+      const meter = evolvingMeterEl('roster-evolving');
+      meter.update(row.evolving);
+      parts.push(meter.root);
+    }
+    if (!row.away && id) {
+      const view = el('div', { class: 'roster-view-actions' });
+      view.append(
+        tapButton(
+          ROSTER_TEXT.upClose,
+          () => options.onCloseUp?.(id, row.id),
+          {
+            'data-testid': 'roster-up-close',
+          },
+          true,
+        ),
+        tapButton(
+          ROSTER_TEXT.dressUp,
+          () => options.onDressUp?.(id, row.id),
+          {
+            'data-testid': 'roster-dress-up',
+          },
+          true,
+        ),
+      );
+      parts.push(view);
+      if (row.job && jobs) {
+        const ctx = actionContext(jobs);
+        parts.push(
+          picking?.id === row.id
+            ? picking.what === 'spot'
+              ? spotPicker(row.job, ctx)
+              : groundsPicker(row.job, ctx)
+            : jobActions(row.job, ctx),
+        );
+      }
+      if (home && habitats(home).length > 0) parts.push(habitatActions(row, home));
+    }
+    return el('div', { class: 'roster-detail', 'data-testid': 'roster-detail' }, ...parts);
+  }
+
+  function rowEl(row: RosterRow, nowMs: number): HTMLElement {
+    const open = expanded === row.id;
+    const tags: HTMLElement[] = [];
+    if (row.rarity) tags.push(rarityChip(row.rarity));
+    if (row.mood) {
+      const word = MOOD_WORDS[row.mood.mood];
+      tags.push(
+        el(
+          'span',
+          {
+            class: `roster-tag roster-mood roster-mood-${row.mood.mood}`,
+            'data-testid': 'roster-mood',
+          },
+          `${word.icon} ${word.word}`,
+        ),
+      );
+      if (row.mood.needsCare) {
+        tags.push(
+          el(
+            'span',
+            { class: 'roster-tag roster-needs', 'data-testid': 'roster-needs-care' },
+            `💗 ${ROSTER_TEXT.needsCare}`,
+          ),
+        );
+      }
+    }
+    if (row.evolvingSoon && row.evolving) {
+      tags.push(el('span', { class: 'roster-tag roster-evolving-tag' }, row.evolving.label));
+    }
+    const status = el(
+      'span',
+      {
+        class: `roster-tag roster-status roster-status-${row.status.kind}`,
+        'data-testid': 'roster-status',
+        'data-status': row.status.kind,
+      },
+      statusLine(row.status, nowMs),
+    );
+    if (row.status.readyAt !== null) chips.set(row.id, { row, node: status });
+    tags.push(status);
+
+    const head = el(
+      'button',
+      {
+        type: 'button',
+        class: 'roster-head',
+        'aria-expanded': String(open),
+        'data-testid': 'roster-head',
+      },
+      el('span', { class: 'roster-blob-wrap' }, row.job ? blobFor(row.job) : plainBlob(row)),
+      el(
+        'span',
+        { class: 'roster-names' },
+        el('strong', { class: 'roster-name' }, row.name),
+        el('span', { class: 'roster-sub' }, `${row.speciesName} · ${ROSTER_TEXT.level(row.level)}`),
+      ),
+    );
+    head.addEventListener('click', () => {
+      expanded = open ? null : row.id;
+      picking = null;
+      render();
+    });
+    const id = mapId;
+    const topRow = el('div', { class: 'roster-top-row' }, head);
+    if (!row.away && id && options.onCare) {
+      topRow.append(
+        tapButton(ROSTER_TEXT.care, () => options.onCare?.(id, row.id), {
+          'data-testid': 'roster-care',
+          'data-care-squishy': row.id,
+        }),
+      );
+    }
+    return el(
+      'li',
+      {
+        class: `roster-row${open ? ' roster-open' : ''}${row.away ? ' roster-away' : ''}`,
+        'data-testid': 'roster-row',
+        'data-squishy': row.id,
+      },
+      topRow,
+      el('div', { class: 'roster-tags' }, ...tags),
+      ...(open ? [detail(row)] : []),
+    );
+  }
+
+  function plainBlob(row: RosterRow): HTMLElement {
+    const blob = el('span', { class: 'jobs-blob', 'aria-hidden': 'true' });
+    blob.style.background = row.color;
+    return blob;
+  }
+
+  function renderChips(): void {
+    const counts = filterCounts(rows);
+    sortBar.replaceChildren(
+      el('span', { class: 'roster-chips-label' }, `${ROSTER_TEXT.sortBy}:`),
+      ...ROSTER_SORTS.map((s) => {
+        const b = el(
+          'button',
+          {
+            type: 'button',
+            class: `roster-chip${sort === s ? ' roster-chip-on' : ''}`,
+            'aria-pressed': String(sort === s),
+            'data-sort': s,
+          },
+          SORT_LABELS[s],
+        );
+        b.addEventListener('click', () => {
+          sort = s;
+          render();
+        });
+        return b;
+      }),
+    );
+    filterBar.replaceChildren(
+      el('span', { class: 'roster-chips-label' }, `${ROSTER_TEXT.show}:`),
+      ...ROSTER_FILTERS.map((f) => {
+        const b = el(
+          'button',
+          {
+            type: 'button',
+            class: `roster-chip${filter === f ? ' roster-chip-on' : ''}`,
+            'aria-pressed': String(filter === f),
+            'data-filter': f,
+          },
+          `${FILTER_LABELS[f]} ${String(counts[f])}`,
+        );
+        b.addEventListener('click', () => {
+          filter = f;
+          render();
+        });
+        return b;
+      }),
+    );
+  }
+
+  function render(): void {
+    window.clearTimeout(ticker);
+    ticker = undefined;
+    chips = new Map();
+    if (sheet.hidden) return;
+    renderChips();
+    count.textContent = ROSTER_TEXT.count(rows.length);
+    const shown = visibleRows(rows, sort, filter);
+    const nowMs = clock.now();
+    if (shown.length === 0) {
+      list.replaceChildren(
+        el(
+          'li',
+          { class: 'roster-empty' },
+          rows.length === 0 ? ROSTER_TEXT.empty : ROSTER_TEXT.noMatch,
+        ),
+      );
+    } else {
+      list.replaceChildren(...shown.map((row) => rowEl(row, nowMs)));
+    }
+    tick();
+  }
+
+  /** Countdowns move by themselves, once a second, changing only their text. */
+  function tick(): void {
+    window.clearTimeout(ticker);
+    ticker = undefined;
+    if (chips.size === 0 || sheet.hidden) return;
+    const nowMs = clock.now();
+    let finished = false;
+    for (const { row, node } of chips.values()) {
+      if (row.status.readyAt !== null && Date.parse(row.status.readyAt) <= nowMs) finished = true;
+      const text = statusLine(row.status, nowMs);
+      if (node.textContent !== text) node.textContent = text;
+    }
+    // A cycle landed: ask for fresh views once, which redraws with the next countdown.
+    if (finished && mapId) {
+      const id = mapId;
+      const mine = ticket;
+      void load(id, mine);
+      return;
+    }
+    ticker = window.setTimeout(tick, 1000);
+  }
+
+  function closeSheet(): void {
+    ticket += 1;
+    window.clearTimeout(ticker);
+    sheet.hidden = true;
+    mapId = null;
+    home = null;
+    care = null;
+    jobs = null;
+    rows = [];
+    expanded = null;
+    picking = null;
+    say('');
+  }
+
+  close.addEventListener('click', closeSheet);
+
+  return {
+    open: async (id) => {
+      ticket += 1;
+      const mine = ticket;
+      mapId = id;
+      expanded = null;
+      picking = null;
+      sheet.hidden = false;
+      say('');
+      remerge();
+      render();
+      await load(id, mine);
+    },
+    refresh: async () => {
+      if (mapId && !sheet.hidden) await load(mapId, ticket);
+    },
+    close: closeSheet,
+    get isOpen() {
+      return !sheet.hidden;
+    },
+    get debug() {
+      return {
+        open: !sheet.hidden,
+        mapId,
+        rows: rows.length,
+        shown: visibleRows(rows, sort, filter).map((r) => r.id),
+        sort,
+        filter,
+        expanded,
+        note: note.textContent,
+      };
+    },
+  };
+}

@@ -5,17 +5,16 @@ import { ApiRequestError } from '../../net/api.js';
 import { newIdempotencyKey } from '../../net/idempotency-key.js';
 import { el, messageOf } from '../../ui/dom.js';
 import { jobsApi, type JobsApi } from './jobs-api.js';
+import { groundsPicker, jobActions, spotPicker, type JobActionsContext } from './job-actions.js';
 import {
   canTrain,
   colorOf,
-  groundsLabel,
   hintLines,
   countsDown,
   jobLine,
   JOBS_TEXT,
   nameOf,
   readyTotal,
-  spotLabel,
   trainHintText,
 } from './jobs-view.js';
 import './jobs.css';
@@ -177,109 +176,30 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       say(done);
     });
 
-  const button = (label: string, onTap: () => void, attrs: Record<string, string> = {}) => {
-    const b = el('button', { type: 'button', class: 'auth-button jobs-action', ...attrs }, label);
-    b.disabled = working;
-    b.addEventListener('click', onTap);
-    return b;
-  };
-
-  /** The spots this squishy could go and gather, with the firelight warning. */
-  function spotPicker(squishy: JobSquishy, current: JobsView): HTMLElement {
-    const name = nameOf(current, squishy);
-    const spots = [...current.spots]
-      .filter((s) => s.inSeason)
-      .sort((a, b) => {
-        const first = (s: { q: number; r: number }) =>
-          wantSpot && s.q === wantSpot.q && s.r === wantSpot.r ? 0 : 1;
-        return first(a) - first(b);
-      });
-    const rows = spots.map((spot) => {
-      const worker = current.squishies.find((s) => s.squishy.id === spot.workerId);
-      const go = button(
-        spotLabel(spot),
-        () => {
-          void assign(
-            squishy,
-            { job: 'gatherer', q: spot.q, r: spot.r },
-            `${name} is off to gather!`,
-          );
-        },
-        { 'data-testid': 'jobs-spot', 'data-q': String(spot.q), 'data-r': String(spot.r) },
-      );
-      if (worker && worker.squishy.id !== squishy.squishy.id) go.disabled = true;
-      return el(
-        'li',
-        { class: 'jobs-spot' },
-        go,
-        el(
-          'p',
-          { class: spot.firelit ? 'jobs-safe' : 'jobs-dark' },
-          spot.firelit ? JOBS_TEXT.firelit : JOBS_TEXT.dark,
-        ),
-        ...(worker
-          ? [el('p', { class: 'jobs-small' }, JOBS_TEXT.takenBy(nameOf(current, worker)))]
-          : []),
-      );
-    });
-    return el(
-      'div',
-      { class: 'jobs-picker', 'data-testid': 'jobs-picker' },
-      el('p', { class: 'jobs-small' }, JOBS_TEXT.pickSpot),
-      ...(rows.length > 0
-        ? [el('ul', { class: 'jobs-spots' }, ...rows)]
-        : [el('p', {}, JOBS_TEXT.noSpots)]),
-      button(JOBS_TEXT.cancel, () => {
-        picking = null;
-        render();
-      }),
-    );
-  }
-
-  /**
-   * The Training Grounds this squishy could practice at (#277), with the
-   * firelight warning before it goes: a trainee sleeps on its homestead.
-   */
-  function groundsPicker(squishy: JobSquishy, current: JobsView): HTMLElement {
-    const name = nameOf(current, squishy);
-    const first = (g: { q: number; r: number }) =>
-      wantSpot && g.q === wantSpot.q && g.r === wantSpot.r ? 0 : 1;
-    const rows = [...current.trainingGrounds]
-      .sort((a, b) => first(a) - first(b))
-      .map((g) => {
-        const go = button(
-          groundsLabel(current, g.id),
-          () => {
-            void assign(squishy, { job: 'training', buildingId: g.id }, JOBS_TEXT.offToTrain(name));
-          },
-          { 'data-testid': 'jobs-grounds', 'data-q': String(g.q), 'data-r': String(g.r) },
-        );
-        const here = squishy.training?.buildingId === g.id;
-        if (here || g.napping || g.used >= g.capacity) go.disabled = true;
-        return el(
-          'li',
-          { class: 'jobs-spot' },
-          go,
-          g.napping
-            ? el('p', { class: 'jobs-dark' }, JOBS_TEXT.groundsNapping)
-            : el(
-                'p',
-                { class: g.firelit ? 'jobs-safe' : 'jobs-dark' },
-                g.firelit ? JOBS_TEXT.groundsLit : JOBS_TEXT.groundsDark,
-              ),
-        );
-      });
-    return el(
-      'div',
-      { class: 'jobs-picker', 'data-testid': 'jobs-grounds-picker' },
-      el('p', { class: 'jobs-small' }, JOBS_TEXT.pickGrounds),
-      el('ul', { class: 'jobs-spots' }, ...rows),
-      button(JOBS_TEXT.cancel, () => {
-        pickingGrounds = null;
-        render();
-      }),
-    );
-  }
+  /** What the shared job actions call back into (the board owns the state and the calls). */
+  const actionContext = (current: JobsView): JobActionsContext => ({
+    view: current,
+    working,
+    wantSpot,
+    assign: (squishy, job, done) => {
+      void assign(squishy, job, done);
+    },
+    pickSpot: (squishy) => {
+      picking = squishy.squishy.id;
+      pickingGrounds = null;
+      render();
+    },
+    pickGrounds: (squishy) => {
+      pickingGrounds = squishy.squishy.id;
+      picking = null;
+      render();
+    },
+    cancel: () => {
+      picking = null;
+      pickingGrounds = null;
+      render();
+    },
+  });
 
   function render(): void {
     window.clearTimeout(ticker);
@@ -302,49 +222,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
     list.replaceChildren(
       ...current.squishies.map((s) => {
         const name = nameOf(current, s);
-        const away = s.squishy.state !== 'active';
-        const actions = el(
-          'div',
-          { class: 'jobs-actions' },
-          button(
-            `⚔️ ${JOBS_TEXT.team}`,
-            () => void assign(s, { job: 'team' }, `${name} joined the team!`),
-            { 'data-job': 'team' },
-          ),
-          button(
-            `🧺 ${JOBS_TEXT.gather}`,
-            () => {
-              picking = s.squishy.id;
-              pickingGrounds = null;
-              render();
-            },
-            { 'data-job': 'gatherer' },
-          ),
-          // Owner decision 2026-10-06: practice at the Training Grounds, one a
-          // homestead (#277): pick which, seeing whether it's lit at night.
-          button(
-            `🎯 ${JOBS_TEXT.train}`,
-            () => {
-              pickingGrounds = s.squishy.id;
-              picking = null;
-              render();
-            },
-            { 'data-job': 'training' },
-          ),
-          button(
-            `💤 ${JOBS_TEXT.rest}`,
-            () => void assign(s, { job: 'resting' }, `${name} is having a rest.`),
-            { 'data-job': 'resting' },
-          ),
-        );
-        // Train needs Training Grounds with room (the server checks again);
-        // a trainee may move to other Training Grounds.
-        for (const b of actions.querySelectorAll('button')) {
-          const job = b.getAttribute('data-job');
-          const again = job !== 'gatherer' && job !== 'training' && job === s.job;
-          if (away || again) b.disabled = true;
-          if (job === 'training' && !trainable) b.disabled = true;
-        }
+        const ctx = actionContext(current);
         return el(
           'li',
           {
@@ -367,10 +245,10 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
               ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.dark)]
               : []),
           picking === s.squishy.id
-            ? spotPicker(s, current)
+            ? spotPicker(s, ctx)
             : pickingGrounds === s.squishy.id
-              ? groundsPicker(s, current)
-              : actions,
+              ? groundsPicker(s, ctx)
+              : jobActions(s, ctx),
         );
       }),
     );

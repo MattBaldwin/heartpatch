@@ -1,0 +1,285 @@
+/* The Squishies roster (#375): a sheet like the job board's (z-index 5, under
+   the care sheet), one scroll area (the sheet itself), 44pt+ targets, safe
+   areas, one-handed. Rows are two lines of tags that wrap, so 375pt is enough. */
+
+.roster-sheet {
+  position: fixed;
+  z-index: 5;
+  left: calc(env(safe-area-inset-left) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  box-sizing: border-box;
+  max-width: 460px;
+  max-height: calc(100dvh - env(safe-area-inset-top) - 72px);
+  margin: 0 auto;
+  padding: 0 14px 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 24px;
+  background: #fffafc;
+  box-shadow: 0 8px 28px rgb(107 75 110 / 24%);
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  color: #4a3150;
+}
+
+.roster-sheet[hidden] {
+  display: none;
+}
+
+/* The title stays put while the list scrolls under it. */
+.roster-top {
+  padding-top: 14px;
+}
+
+.roster-top .tile-panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 14px 0 4px;
+  margin-top: -14px;
+  background: #fffafc;
+}
+
+.roster-sheet h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.roster-count {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: #7a5d80;
+}
+
+.roster-controls {
+  display: grid;
+  gap: 4px;
+}
+
+.roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.roster-chips-label {
+  flex: none;
+  min-width: 52px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #7a5d80;
+}
+
+.roster-chip {
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 999px;
+  background: #f6e3ee;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b4a70;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.roster-chip-on {
+  background: #8a5f86;
+  color: #fff;
+}
+
+.roster-note {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #2f6b3d;
+}
+
+.roster-note:empty {
+  display: none;
+}
+
+.roster-list {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roster-row {
+  /* Off-screen rows of a long roster aren't laid out until they scroll near. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+  padding: 8px 10px 10px;
+  border-radius: 18px;
+  background: #fff1f7;
+}
+
+.roster-open {
+  box-shadow: inset 0 0 0 2px #d9b3d0;
+}
+
+.roster-away {
+  opacity: 0.8;
+}
+
+.roster-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roster-head {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.roster-blob-wrap .jobs-blob {
+  width: 34px;
+  height: 30px;
+}
+
+.roster-names {
+  display: grid;
+  min-width: 0;
+}
+
+.roster-name {
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-sub {
+  font-size: 13px;
+  color: #7a5d80;
+}
+
+.roster-action {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 12px;
+  font-size: 15px;
+}
+
+.roster-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.roster-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.roster-mood-glowing {
+  background: #fff3c4;
+}
+.roster-mood-happy {
+  background: #dff5d8;
+}
+.roster-mood-calm {
+  background: #e3ecff;
+}
+.roster-mood-cuddly {
+  background: #ffe0ea;
+}
+
+.roster-needs {
+  background: #ff8fb1;
+  color: #4a1f33;
+}
+
+.roster-evolving-tag {
+  background: #efe3ff;
+  color: #5a3a8a;
+}
+
+.roster-status-team {
+  background: #ffe7c2;
+}
+.roster-status-gathering,
+.roster-status-training,
+.roster-status-guard {
+  background: #d9f0e6;
+}
+.roster-status-hollowed,
+.roster-status-in-trade {
+  background: #e6e0ee;
+  color: #5a4a6a;
+}
+
+.roster-detail {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px dashed #e8c9dd;
+}
+
+.roster-mood-line {
+  margin: 0;
+  font-size: 15px;
+}
+
+.roster-view-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.roster-view-actions .roster-action {
+  flex: 1 1 0;
+}
+
+.roster-habitat-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.roster-habitat-buttons .roster-action {
+  flex: 1 1 auto;
+}
+
+.roster-empty {
+  padding: 18px 8px;
+  text-align: center;
+  font-size: 16px;
+}
+
+/* iPad and wide windows: a roomier sheet, two squishies a line. */
+@media (min-width: 700px) {
+  .roster-sheet {
+    max-width: 780px;
+  }
+
+  .roster-list {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
