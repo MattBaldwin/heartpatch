@@ -263,12 +263,12 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'tall',
       palette: ['#f46a5c', '#ffd2c2', '#5fbf4a', '#3fae3a'],
-      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'stem', 'leaf-arms', 'stubby-legs'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'stem', 'stubby-legs'],
       ink: '#1a0f16',
       size: 1.1,
       glow: 'accent',
       pose: 'stand',
-      attackPart: 'arms',
+      attackPart: 'crown',
     },
     habitatPreferences: {
       elements: ['fire'],
@@ -292,7 +292,7 @@ export const WAVE_1_SPECIES: Species[] = [
     evolutions: [],
     visual: {
       body: 'orb',
-      palette: ['#f4fbff', '#ffffff', '#8ec6f0', '#bfe6fb'],
+      palette: ['#9fd0f5', '#ffffff', '#ffffff', '#bfe6fb'],
       parts: ['brave-brows', 'dot-eyes', 'tiny-smile', 'spike-coat'],
       stance: 0.5,
       pose: 'hover',
