@@ -68,4 +68,18 @@ describe('RenderQuality', () => {
     expect(quality.snapshot.renderScale).toBeLessThan(1);
     expect(quality.applyPending()).toBe(false);
   });
+
+  it('holds a pinned tier at full resolution, however slow (dev captures, #335)', () => {
+    const scene = new Scene(engine);
+    const quality = new RenderQuality(
+      scene,
+      new TargetCamera('cam', Vector3.Zero(), scene),
+      'high',
+      true,
+    );
+    // A software renderer: seconds a frame, which would crawl straight to low.
+    for (let i = 0; i < 50; i++) expect(quality.sample(2000)).toBe(false);
+    expect(quality.applyPending()).toBe(false);
+    expect(quality.snapshot).toMatchObject({ tier: 'high', renderScale: 1, pinned: true });
+  });
 });

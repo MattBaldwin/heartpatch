@@ -11,13 +11,16 @@ const slow = { timeout: 30_000 };
 
 /**
  * The performance budget (CLAUDE.md rule 8): a settled explore frame draws
- * under this many calls. Measured at 15 on the iPhone and iPad viewports
- * (#291, a new player's meadow: tile, island, spot props, three decor kinds,
- * glints, the Keeper's batches, post-processing), and 18 with the sky (#335:
- * a dome, the sun and the clouds; at night the stars too); the headroom is
- * for a busier tile (more prop kinds, buildings, a full team, the tool in hand).
+ * under this many calls. A new player's meadow is on the land kit (#335 art
+ * reset): measured at 37 on the iPhone and iPad viewports on the high tier
+ * (the sky, the ground, grass and three kinds of flower, pebbles, two kinds of
+ * bush, three of tree, far trees, rocks, logs, mushrooms, lanterns and their
+ * glass, butterflies and pollen, the spot props, glints, the Keeper's batches,
+ * post-processing) and 31 on low (no motes). Each kind is one thin-instanced
+ * draw however many grow; the headroom is for a busier tile (more prop kinds,
+ * buildings, a full team, the tool in hand).
  */
-const DRAW_CALL_CEILING = 26;
+const DRAW_CALL_CEILING = 46;
 
 /**
  * Exploring your land (#199, cozy-sim feel #291): Explore on a home tile

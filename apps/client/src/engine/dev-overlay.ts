@@ -35,9 +35,9 @@ export function mountDevOverlay(getStage: () => Stage | null): void {
     const drawCalls = counted.instrumentation.drawCallsCounter.current;
     // Idle means nothing is drawn (render on demand), so there's no frame rate.
     const rate = stage.idle ? 'idle' : `${Math.round(stage.renderer.engine.getFps())} fps`;
-    const { tier, pixelRatio } = stage.quality.snapshot;
+    const { tier, pinned, pixelRatio } = stage.quality.snapshot;
     const renderer = RENDERER_LABEL[stage.renderer.kind];
     const work = formatRenderStats(drawCalls, activeTriangles(stage.scene));
-    badge.textContent = `${rate} · ${renderer} · ${tier} · ${pixelRatio.toFixed(2)}x · ${work}`;
+    badge.textContent = `${rate} · ${renderer} · ${tier}${pinned ? ' (pinned)' : ''} · ${pixelRatio.toFixed(2)}x · ${work}`;
   }, 500);
 }
