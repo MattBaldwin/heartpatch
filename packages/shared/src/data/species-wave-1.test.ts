@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PARTS } from './visuals.js';
 import { GUARDIAN_RULES } from './server/guardian-rules.js';
 import { SPAWN_TABLES } from './server/spawn-tables.js';
 import { SPECIES } from './species.js';
@@ -73,5 +74,43 @@ describe('wave 1 (#382)', () => {
 
   it('keeps every kind out of the Gap (its own table is the launch roster)', () => {
     for (const t of tables) expect(t.terrains, t.id).not.toContain('junipers-gap');
+  });
+
+  it('adds four read-at-a-glance parts, all data on existing shapes, and every one is used', () => {
+    const wanted = {
+      'eye-bumps': 'horns',
+      'shell-dome': 'back',
+      'claw-arms': 'arms',
+      'lure-lantern': 'crown',
+    } as const;
+    const used = new Set(WAVE_1_SPECIES.flatMap((s) => s.visual.parts));
+    for (const [id, slot] of Object.entries(wanted)) {
+      const part = PARTS.find((p) => p.id === id);
+      expect(part, id).toBeDefined();
+      expect(part?.slot, id).toBe(slot);
+      expect(['ellipsoid', 'capsule', 'cone', 'teardrop', 'arc'], id).toContain(part?.shape);
+      expect(used, id).toContain(id);
+    }
+    // The lure is a glowing lantern: only an `accent` part takes the `glow: 'accent'` rule.
+    expect(PARTS.find((p) => p.id === 'lure-lantern')?.color).toBe('accent');
+  });
+
+  it('keeps every kind inside the mobile part budget (CLAUDE.md rule 8)', () => {
+    const instances = (parts: readonly string[]) =>
+      parts.reduce((sum, id) => {
+        const { layout } = PARTS.find((p) => p.id === id)!;
+        return (
+          sum +
+          (layout.kind === 'single'
+            ? 1
+            : layout.kind === 'pair'
+              ? 2
+              : layout.kind === 'quad'
+                ? 4
+                : layout.count)
+        );
+      }, 0);
+    // TUNE: the heaviest launch kind is 27 part instances; wave 1 stays within 32.
+    for (const s of WAVE_1_SPECIES) expect(instances(s.visual.parts), s.id).toBeLessThanOrEqual(32);
   });
 });

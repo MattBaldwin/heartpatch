@@ -73,7 +73,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'sunbaskit',
     name: 'Sunbaskit',
-    description: 'Naps in the warmest patch of sun, and shares the glow with anyone who sits close.',
+    description:
+      'Naps in the warmest patch of sun, and shares the glow with anyone who sits close.',
     element: 'light',
     feeling: 'sleepy',
     rarity: 'common',
@@ -94,7 +95,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'clovermew',
     name: 'Clovermew',
-    description: 'A meadow kitten with a lucky clover on its back. It will not say where it found it.',
+    description:
+      'A meadow kitten with a lucky clover on its back. It will not say where it found it.',
     element: 'leaf',
     feeling: 'silly',
     rarity: 'common',
@@ -146,7 +148,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'hootnook',
     name: 'Hootnook',
-    description: "Whoo's sleepy? Hootnook! It opens just one eye, to check that you're still there.",
+    description:
+      "Whoo's sleepy? Hootnook! It opens just one eye, to check that you're still there.",
     element: 'shadow',
     feeling: 'sleepy',
     rarity: 'common',
@@ -271,7 +274,14 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'orb',
       palette: ['#d8f27a', '#f4ffc7', '#9be34a', '#ffffff'],
-      parts: ['dot-eyes', 'open-mouth', 'blush-cheeks', 'zing-antennae', 'serpent-body', 'freckles'],
+      parts: [
+        'dot-eyes',
+        'open-mouth',
+        'blush-cheeks',
+        'zing-antennae',
+        'serpent-body',
+        'freckles',
+      ],
       size: 0.9,
       glow: 'body',
       stance: 0.35,
@@ -347,7 +357,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'toastoad',
     name: 'Toastoad',
-    description: 'A warm, toasty toad. Sit next to it on a chilly morning. It smells like breakfast.',
+    description:
+      'A warm, toasty toad. Sit next to it on a chilly morning. It smells like breakfast.',
     element: 'fire',
     feeling: 'silly',
     rarity: 'common',
@@ -357,7 +368,15 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'blob',
       palette: ['#e8a45a', '#fff0c9', '#ff7a2f', '#a8642e'],
-      parts: ['dot-eyes', 'open-mouth', 'blush-cheeks', 'flame-tuft', 'crag-nubs', 'hop-feet'],
+      parts: [
+        'dot-eyes',
+        'open-mouth',
+        'blush-cheeks',
+        'eye-bumps',
+        'flame-tuft',
+        'crag-nubs',
+        'hop-feet',
+      ],
       size: 1,
       head: { body: 'mochi', size: 0.85, forward: 0.4, up: 0.2 },
       glow: 'accent',
@@ -385,7 +404,7 @@ export const WAVE_1_SPECIES: Species[] = [
         'brave-brows',
         'smirk',
         'zing-antennae',
-        'strong-arms',
+        'claw-arms',
         'crag-nubs',
         'long-legs',
       ],
@@ -455,7 +474,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'cinnamoose',
     name: 'Cinnamoose',
-    description: 'A cinnamon-sweet moose whose antlers glow like warm embers. It smells like cocoa.',
+    description:
+      'A cinnamon-sweet moose whose antlers glow like warm embers. It smells like cocoa.',
     element: 'fire',
     feeling: 'cozy',
     rarity: 'rare',
@@ -517,7 +537,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'hailhop',
     name: 'Hailhop',
-    description: 'Hops across the peaks and rains tiny ice pearls with every landing. Plink, plink!',
+    description:
+      'Hops across the peaks and rains tiny ice pearls with every landing. Plink, plink!',
     element: 'frost',
     feeling: 'silly',
     rarity: 'common',
@@ -556,14 +577,7 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'pebble',
       palette: ['#c9bba6', '#a39684', '#8d867a', '#6f685c'],
-      parts: [
-        'dot-eyes',
-        'open-mouth',
-        'bubble-crown',
-        'crag-nubs',
-        'stubby-arms',
-        'stubby-legs',
-      ],
+      parts: ['dot-eyes', 'open-mouth', 'bubble-crown', 'crag-nubs', 'stubby-arms', 'stubby-legs'],
       size: 0.95,
       pose: 'sit',
       attackPart: 'arms',
@@ -664,7 +678,7 @@ export const WAVE_1_SPECIES: Species[] = [
     visual: {
       body: 'mochi',
       palette: ['#8ad65f', '#e6ffd0', '#ff9ec4', '#3fae3a'],
-      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'stem', 'leaf-arms'],
+      parts: ['happy-eyes', 'smile', 'blush-cheeks', 'eye-bumps', 'stem', 'leaf-arms'],
       size: 1.1,
       head: { body: 'orb', size: 0.9, forward: 0, up: 0.7 },
       pose: 'sit',
@@ -706,11 +720,11 @@ export const WAVE_1_SPECIES: Species[] = [
     moves: ['giggle-drizzle', 'bubble-bath', 'snore-drizzle'],
     evolutions: [],
     visual: {
-      body: 'orb',
-      palette: ['#8fd4a0', '#e9ffe6', '#4aa36b', '#2f7a4d'],
-      parts: ['sleepy-eyes', 'tiny-smile', 'crag-nubs', 'stubby-legs', 'wiggle-tail'],
+      body: 'pebble',
+      palette: ['#8fd4a0', '#e9ffe6', '#3f8f5f', '#2f7a4d'],
+      parts: ['sleepy-eyes', 'tiny-smile', 'shell-dome', 'stubby-legs', 'wiggle-tail'],
       size: 1.05,
-      head: { body: 'orb', size: 0.5, forward: 0.7, up: 0.08 },
+      head: { body: 'pebble', size: 0.5, forward: 0.7, up: 0.08 },
       pose: 'sit',
       attackPart: 'tail',
     },
@@ -735,8 +749,7 @@ export const WAVE_1_SPECIES: Species[] = [
         'oval-eyes',
         'smile',
         'blush-cheeks',
-        'flame-tuft',
-        'whisker-flames',
+        'lure-lantern',
         'fin-row',
         'side-fins',
         'tail-fan',
@@ -777,7 +790,8 @@ export const WAVE_1_SPECIES: Species[] = [
   {
     id: 'hayhug',
     name: 'Hayhug',
-    description: 'A cozy little haystack that glows like late-afternoon sun. Great for hugs and naps.',
+    description:
+      'A cozy little haystack that glows like late-afternoon sun. Great for hugs and naps.',
     element: 'light',
     feeling: 'cozy',
     rarity: 'common',

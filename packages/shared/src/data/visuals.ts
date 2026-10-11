@@ -1388,6 +1388,67 @@ export const PARTS: Part[] = [
     sink: 0.3,
     jitter: 0.08,
   },
+  // #382 wave 1: four parts so frogs, crabs, turtles and lantern fish read at a glance.
+  // All existing primitives (no client geometry code); a species' `glow` lights them
+  // like any other part (the lure takes `accent`, so a Light squishy's body glow reaches it).
+  {
+    // Frog and toad eyes: two domes above the face, on the head.
+    id: 'eye-bumps',
+    slot: 'horns',
+    shape: 'ellipsoid',
+    size: [0.3, 0.3, 0.3],
+    color: 'primary',
+    layout: pair,
+    around: 30,
+    up: 46,
+    tilt: 20,
+    splay: 10,
+    sink: 0.3,
+    jitter: 0.05,
+  },
+  {
+    // A turtle's or snail's domed shell, riding on the back.
+    id: 'shell-dome',
+    slot: 'back',
+    shape: 'ellipsoid',
+    size: [1.5, 1.0, 1.5],
+    color: 'accent',
+    layout: single,
+    around: 180,
+    up: 50,
+    tilt: 0,
+    sink: 0.97,
+    jitter: 0.04,
+  },
+  {
+    // Big crab pincers held up at the sides.
+    id: 'claw-arms',
+    slot: 'arms',
+    shape: 'ellipsoid',
+    size: [0.42, 0.5, 0.4],
+    color: 'accent',
+    layout: pair,
+    around: 58,
+    up: -8,
+    tilt: 10,
+    splay: 40,
+    sink: 0.2,
+    jitter: 0.05,
+  },
+  {
+    // An angler's lure: a thin stalk that swells into a lantern, arching over the face.
+    id: 'lure-lantern',
+    slot: 'crown',
+    shape: 'ellipsoid',
+    size: [0.07, 0.07, 0.07],
+    color: 'accent',
+    layout: { kind: 'chain', count: 9, step: 0.85, curl: -22, wave: 0, shrink: 1.2 },
+    around: 0,
+    up: 72,
+    tilt: -12,
+    sink: 0.35,
+    jitter: 0.03,
+  },
 ];
 
 /**
