@@ -907,7 +907,7 @@ export class HouseProtoScene {
       x: -2.5,
       z: -0.5,
       y: 0,
-      yaw: 2.1,
+      yaw: -0.8,
       scale: 0.75,
       squash: 0.92,
     });
