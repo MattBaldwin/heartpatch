@@ -76,4 +76,28 @@ export const EVOLUTION_ODDS: EvolutionOdds[] = [
   { from: 'thistlepip', into: 'petalprance', trigger: { kind: 'feeling', feeling: 'joy' } },
   { from: 'fuzzbolt', into: 'glidebolt', trigger: { kind: 'feeling', feeling: 'joy' } },
   { from: 'snoozicle', into: 'twirlicle', trigger: { kind: 'feeling', feeling: 'silly' } },
+  // Batch 2: the Halloween lines (and Pebblesnooze).
+  {
+    from: 'gourdon',
+    into: 'squashboo',
+    trigger: {
+      kind: 'rare',
+      // A Halloween branch: a befriended Gourdon stays all year, and a
+      // Jack-o'-Lantern fire keeps burning after the season.
+      conditions: [
+        { kind: 'season', season: 'halloween' },
+        { kind: 'time', times: ['dusk', 'night'] },
+        { kind: 'fire-lit', building: 'jack-o-lantern-hearthfire' },
+      ],
+      whisper: {
+        icon: '🎃',
+        text: "{name} keeps dreaming about Jack-o'-Lantern glow…",
+        sub: 'It seems to love spooky nights.',
+      },
+    },
+  },
+  { from: 'glowboo', into: 'lullaboo', trigger: { kind: 'feeling', feeling: 'cozy' } },
+  { from: 'upsybat', into: 'hushwing', trigger: { kind: 'feeling', feeling: 'sleepy' } },
+  { from: 'candlekit', into: 'sparklewick', trigger: { kind: 'feeling', feeling: 'joy' } },
+  { from: 'pebblesnooze', into: 'rumblehorn', trigger: { kind: 'feeling', feeling: 'brave' } },
 ];
