@@ -52,6 +52,7 @@ import {
   TOP_RINGS,
   vinyl,
 } from '../map/map-scene.js';
+import { accessoryItem } from '../procedural/accessory.js';
 import { BuildingField } from '../procedural/buildings/building-field.js';
 import type { SquishyLod } from '../procedural/config.js';
 import { faceYaw } from '../procedural/face-yaw.js';
@@ -113,6 +114,8 @@ export interface ExploreSceneStats {
   readonly buildings: number;
   readonly keeper: boolean;
   readonly followers: number;
+  /** Followers wearing an accessory (#373). */
+  readonly accessories: number;
   /** Prop draw calls (one per kind of spot on the tile). */
   readonly propMeshes: number;
   /** Decor thin instances by kind (one draw call each). */
@@ -139,7 +142,12 @@ export interface ExploreSceneOptions {
   readonly keeper: KeeperConfig | null;
   readonly keeperWearing?: readonly string[];
   /** The squishies on my team that follow the Keeper, in team order. */
-  readonly team: readonly { readonly id: string; readonly species: Species }[];
+  readonly team: readonly {
+    readonly id: string;
+    readonly species: Species;
+    /** The wardrobe accessory it wears (#373). */
+    readonly accessory?: string | null;
+  }[];
   /** The tile as the map knows it: its buildings. */
   readonly mapTile: PublicTile | null;
   /** The sky at the patch's time of day (#335). */
@@ -403,9 +411,10 @@ export class ExploreScene {
     options.team.forEach((member, i) => {
       const at = { x: 0, z: 0 };
       const handle = this.#squishies.add(member.species, member.id, this.#squishyPlacement(at, 0));
+      this.#squishies.setAccessory(handle, accessoryItem(member.accessory));
       const hop = createHop(EXPLORE_HOP.followerOffset[i % EXPLORE_HOP.followerOffset.length]);
       this.#followers.push({ handle, at, yaw: 0, hop, walked: 0 });
-      const tall = (handle.params.height * EXPLORE_VIEW.squishyScale) / this.#size;
+      const tall = (this.#squishies.heightOf(handle) * EXPLORE_VIEW.squishyScale) / this.#size;
       this.#teamTall = Math.max(this.#teamTall, tall);
     });
     // The team waits in a line behind the Keeper: the start of its trail.
@@ -456,6 +465,7 @@ export class ExploreScene {
       buildings: this.#buildings.stats.buildings,
       keeper: this.#keeper !== null,
       followers: this.#followers.length,
+      accessories: this.#followers.filter((f) => this.#squishies.accessoryOf(f.handle)).length,
       propMeshes: this.#props.size,
       decor: { ...this.#decor },
       highlighted: this.#highlighted,

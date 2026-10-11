@@ -225,6 +225,35 @@ describe.skipIf(!url)('battles (needs DATABASE_URL)', () => {
     expect(GAME_DATA.species.map((s) => s.id)).not.toContain(SECRET_IDS[0]);
   });
 
+  describe('accessories (#373)', () => {
+    it('carries what each squishy wears, for drawing only', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const hatted = await grant(server, kid, mapId);
+      const bare = await grant(server, kid, mapId);
+      const put = await call(
+        server,
+        'POST',
+        `/maps/${mapId}/squishies/${hatted.id}/accessory`,
+        kid,
+        { itemId: 'tiny-bow' },
+      );
+      expect(put.statusCode).toBe(200);
+
+      const battle = await pickFight(server, kid, mapId);
+      const mine = battle.view.sides.a.squishies;
+      expect(mine.find((q) => q.id === hatted.id)?.accessory).toBe('tiny-bow');
+      // A bare squishy reads null; a wild opponent wears nothing.
+      expect(mine.find((q) => q.id === bare.id)?.accessory ?? null).toBeNull();
+      expect(battle.view.sides.b.squishies.every((q) => !q.accessory)).toBe(true);
+
+      // It is never stored in the battle itself, so replay is untouched.
+      const row = await createBattlesRepo(db).findBattle(battle.id);
+      expect(JSON.stringify(row?.state)).not.toContain('tiny-bow');
+    });
+  });
+
   describe('access', () => {
     it('needs a logged-in player', async () => {
       const server = await start();

@@ -37,11 +37,14 @@ import {
  * `readonly`, which zod's inferred types don't carry).
  */
 type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+// `accessory` is display-only and added by the server (#373), never by the engine.
+type WithoutAccessory<T> = { [K in keyof T as K extends 'accessory' ? never : K]: T[K] };
+type SquishyWithoutAccessory = WithoutAccessory<BattleSquishyView>;
+const squishyMatchesEngine: Equal<Draft<BattleSquishy>, SquishyWithoutAccessory> = true;
 const viewMatchesEngine: Equal<
-  Draft<ClientBattleView>,
-  z.infer<typeof ClientBattleViewSchema>
+  Draft<ClientBattleView>['sides']['a']['squishies'][number],
+  SquishyWithoutAccessory
 > = true;
-const squishyMatchesEngine: Equal<Draft<BattleSquishy>, BattleSquishyView> = true;
 const eventMatchesEngine: Equal<Draft<BattleEvent>, BattleEventView> = true;
 const resultMatchesEngine: Equal<Draft<BattleResult>, BattleResultView> = true;
 
