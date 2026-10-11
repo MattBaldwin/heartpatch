@@ -7,6 +7,7 @@ import {
   type CareWhisper,
   type CareSquishy,
   type MoodDrift,
+  type MoodId,
   type Rarity,
   type Species,
   type SpeciesVisual,
@@ -70,12 +71,20 @@ export const CARE_TEXT = {
   // It fades only while resting or on a job that isn't their thing (#376).
   fades: 'Happiness fades over about a day while they rest. A job they love keeps it steady!',
   // Why happiness is or isn't drifting down right now (#376), under the mood.
+  // A no-break space keeps each emoji with its words when the line wraps.
   drift: {
-    steady: 'Loves their job! Happiness is holding steady. 💪',
-    resting: 'Resting, so happiness slowly drifts down. 💤',
-    'wrong-job': 'Not loving this job, so happiness drifts down. 😕',
-    stopped: "Work's on pause, so happiness drifts down. Check their job!",
+    steady: 'Loves their job, so happiness holds steady\u00a0💪',
+    resting: 'Resting, so happiness slowly drifts down\u00a0💤',
+    'wrong-job': 'Not loving this job, so happiness drifts\u00a0😕',
+    stopped: "Work's on pause, so happiness drifts. Check their\u00a0job!",
   } satisfies Record<MoodDrift, string>,
+  // The mood title while happiness drifts down (#376): the same level, a little droopy.
+  droopy: {
+    glowing: 'Glowing, but drooping a little…',
+    happy: 'Happy, but a bit droopy…',
+    calm: 'Calm, but a bit droopy…',
+    cuddly: 'Could use a cuddle!',
+  } satisfies Record<MoodId, string>,
   bonus: (percent: number) =>
     percent > 100
       ? `Battles give ×${String(percent / 100)} XP right now.`
@@ -176,6 +185,8 @@ export interface CareSheetModel {
   readonly mood: string;
   /** Why happiness is holding or drifting (#376), or null when the reply doesn't say. */
   readonly drift: string | null;
+  /** Holding steady or drifting down, for the hearts bar's look (#376); null: unknown. */
+  readonly driftMood: 'steady' | 'drifting' | null;
   /** Hearts meter, 0–1. */
   readonly hearts: number;
   readonly level: string;
@@ -273,8 +284,13 @@ export function careSheet(
     name: squishyName(squishy, species),
     rarity: species.get(squishy.speciesId)?.rarity ?? null,
     color: blobColor(squishy.speciesId, species),
-    mood: moodLine(squishy.mood, CARE_RULES),
+    mood:
+      squishy.moodDrift !== null && squishy.moodDrift !== 'steady'
+        ? CARE_TEXT.droopy[squishy.mood]
+        : moodLine(squishy.mood, CARE_RULES),
     drift: squishy.moodDrift === null ? null : CARE_TEXT.drift[squishy.moodDrift],
+    driftMood:
+      squishy.moodDrift === null ? null : squishy.moodDrift === 'steady' ? 'steady' : 'drifting',
     hearts: squishy.contentment / CARE_RULES.maxContentment,
     level:
       growsAt !== undefined && growsAt > squishy.level

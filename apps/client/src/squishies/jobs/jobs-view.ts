@@ -63,6 +63,12 @@ export const JOBS_TEXT = {
   // Whether gathering here suits it (#376): a job it's good at keeps it happy.
   fits: (resource: string, icon: string) => `Loves gathering ${resource} here! ${icon}`,
   noFit: "Not their thing, they'll get grumpy",
+  // The pop-up when a squishy goes to a job (#376): a job it loves is a little party.
+  lovesIt: (name: string) => `${name} loves it here!\u00a0💕`,
+  notKeen: (name: string) => `${name} isn't keen\u00a0🌧️`,
+  // The mood chip on a working squishy's row (#376).
+  moodLoves: 'Loves this job',
+  moodMeh: 'Not their thing',
 } as const;
 
 /** "1st", "2nd", "3rd". */
@@ -195,6 +201,21 @@ export function spotFit(
     fits,
     line: fits ? JOBS_TEXT.fits(itemName(spot.resource), itemIcon(spot.resource)) : JOBS_TEXT.noFit,
   };
+}
+
+/**
+ * How a squishy feels about its job right now, for the row's chip (#376):
+ * `loves` on the team, on watch, training or gathering what it's good at;
+ * `meh` gathering anything else; null while resting or away.
+ */
+export function workMood(
+  s: Pick<JobSquishy, 'job' | 'gatherFits' | 'work'>,
+): 'loves' | 'meh' | null {
+  if (s.job === 'team' || s.job === 'guard' || s.job === 'training') return 'loves';
+  if (s.job === 'gatherer' && s.work) {
+    return s.gatherFits.includes(s.work.resource) ? 'loves' : 'meh';
+  }
+  return null;
 }
 
 /** Everything my gatherers have ready, added up. */

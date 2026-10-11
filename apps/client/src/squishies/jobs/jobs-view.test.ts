@@ -21,6 +21,7 @@ import {
   rarityOf,
   readyTotal,
   spotFit,
+  workMood,
   spotLabel,
   teamCost,
   teamSlots,
@@ -274,5 +275,27 @@ describe('spot fit (#376)', () => {
       fits: false,
       line: JOBS_TEXT.noFit,
     });
+  });
+});
+
+describe('work mood (#376)', () => {
+  it('loves the team, a watch, training and a resource it is good at', () => {
+    for (const job of ['team', 'guard', 'training'] as const) {
+      expect(workMood(squishy(1, { job }))).toBe('loves');
+    }
+    expect(
+      workMood(
+        squishy(1, { job: 'gatherer', gatherFits: ['timber'], work: work({ resource: 'timber' }) }),
+      ),
+    ).toBe('loves');
+  });
+
+  it('is meh about a resource it is not good at, and says nothing while resting', () => {
+    expect(
+      workMood(
+        squishy(1, { job: 'gatherer', gatherFits: ['timber'], work: work({ resource: 'stone' }) }),
+      ),
+    ).toBe('meh');
+    expect(workMood(squishy(1, { job: 'resting' }))).toBeNull();
   });
 });

@@ -155,8 +155,12 @@ test('a gatherer on a spot it loves stays happy while a resting one drifts (#376
   const loved = picker.locator('.jobs-spot', { has: page.locator('.jobs-fit') }).first();
   await expect(loved.getByTestId('jobs-spot-fit')).toContainText('Loves gathering');
   expect(findAvoidedWords((await picker.textContent()) ?? '')).toEqual([]);
+  await expect(loved.locator('.jobs-heart')).toHaveText('💕');
   await loved.getByTestId('jobs-spot').tap();
   await expect.poll(async () => (await jobsState(page))?.board.jobs[helperId]).toBe('gatherer');
+  // Its row says so (the 2.6 s pop-up is left out: too short to wait on in CI).
+  await expect(helper.getByTestId('jobs-mood')).toContainText('Loves this job');
+  expect(findAvoidedWords((await helper.textContent()) ?? '')).toEqual([]);
   await board.getByRole('button', { name: 'Close' }).tap();
 
   const moods = async () => {

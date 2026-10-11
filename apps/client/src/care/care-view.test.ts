@@ -174,6 +174,21 @@ describe('careSheet', () => {
     expect(careSheet(squishy({ moodDrift: null }), reply()).drift).toBeNull();
   });
 
+  it('droops the mood title and the hearts bar while happiness drifts (#376)', () => {
+    expect(careSheet(squishy({ moodDrift: 'steady' }), reply())).toMatchObject({
+      mood: 'Happy and bouncy!',
+      driftMood: 'steady',
+    });
+    expect(careSheet(squishy({ moodDrift: 'resting' }), reply())).toMatchObject({
+      mood: CARE_TEXT.droopy.happy,
+      driftMood: 'drifting',
+    });
+    expect(careSheet(squishy({ moodDrift: null }), reply())).toMatchObject({
+      mood: 'Happy and bouncy!',
+      driftMood: null,
+    });
+  });
+
   it('fills the bar at the top level, and says so', () => {
     const model = careSheet(squishy({ level: 100, xpToNext: null }), reply());
     expect(model).toMatchObject({ xp: 1, xpLine: 'Top level!' });

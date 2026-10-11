@@ -16,6 +16,7 @@ import {
   nameOf,
   readyTotal,
   spotFit,
+  workMood,
   spotLabel,
   trainHintText,
 } from './jobs-view.js';
@@ -26,6 +27,9 @@ import './jobs.css';
 // next ready time. A self-contained DOM sheet: anything can open it with a
 // map id (the trays, a temporary button, the tile panel). The server decides
 // everything; the sheet counts down on the server's clock.
+
+/** Hearts that float out of the pop-up for a job it loves (#376). */
+const HEART_BURST = 5;
 
 export interface JobBoardOptions {
   root: HTMLElement;
@@ -99,6 +103,10 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   const trainHint = el('p', { class: 'jobs-hint', 'data-testid': 'jobs-train-hint' });
   trainHint.hidden = true;
   const list = el('ul', { class: 'jobs-list', 'data-testid': 'jobs-list' });
+  // A pop-up in the row of the squishy just given a job (#376): a job it
+  // loves gets hearts. Inside the row, so it never covers a button.
+  const toast = el('div', { class: 'jobs-toast', role: 'status', 'data-testid': 'jobs-toast' });
+  toast.hidden = true;
   const sheet = el(
     'section',
     { class: 'jobs-sheet', role: 'dialog', 'aria-labelledby': 'jobs-title', 'data-testid': 'jobs' },
@@ -122,6 +130,40 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
   };
   const say = (text: string) => {
     note.textContent = text;
+  };
+  let toastTimer: number | undefined;
+  /** Whose row the pop-up sits in, while it shows. */
+  let toastFor: string | null = null;
+  /** Puts the pop-up under its squishy's job line (rows are rebuilt on every render). */
+  const placeToast = () => {
+    if (toastFor === null) return;
+    const row = list.querySelector(`[data-testid="jobs-row"][data-squishy="${toastFor}"]`);
+    row?.querySelector('.jobs-line')?.after(toast);
+  };
+  const cheer = (squishyId: string, text: string, mood: 'loves' | 'meh') => {
+    toast.textContent = text;
+    toast.dataset['mood'] = mood;
+    toast.hidden = false;
+    toastFor = squishyId;
+    placeToast();
+    toast.classList.remove('jobs-toast-show');
+    toast.getBoundingClientRect(); // a layout between, so the pop restarts
+    toast.classList.add('jobs-toast-show');
+    // A job it loves: a few hearts float up out of the pop-up.
+    if (mood === 'loves') {
+      for (let i = 0; i < HEART_BURST; i += 1) {
+        const heart = el('span', { class: 'jobs-burst', 'aria-hidden': 'true' }, '💕');
+        heart.style.setProperty('--burst-x', `${String((i - (HEART_BURST - 1) / 2) * 22)}px`);
+        heart.style.setProperty('--burst-delay', `${String(i * 70)}ms`);
+        toast.append(heart);
+      }
+    }
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => {
+      toast.hidden = true;
+      toast.remove();
+      toastFor = null;
+    }, 2600);
   };
   /** Bumped by every view taken, so a slower refetch can't put an older one back. */
   let views = 0;
@@ -199,22 +241,32 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
       });
     const rows = spots.map((spot) => {
       const worker = current.squishies.find((s) => s.squishy.id === spot.workerId);
+      const fit = spotFit(squishy, spot);
       const go = button(
         spotLabel(spot),
         () => {
-          void assign(
-            squishy,
-            { job: 'gatherer', q: spot.q, r: spot.r },
-            `${name} is off to gather!`,
-          );
+          void assign(squishy, { job: 'gatherer', q: spot.q, r: spot.r }, '').then(() => {
+            if (picking !== null) return;
+            cheer(
+              squishy.squishy.id,
+              fit.fits ? JOBS_TEXT.lovesIt(name) : JOBS_TEXT.notKeen(name),
+              fit.fits ? 'loves' : 'meh',
+            );
+          });
         },
         { 'data-testid': 'jobs-spot', 'data-q': String(spot.q), 'data-r': String(spot.r) },
       );
       if (worker && worker.squishy.id !== squishy.squishy.id) go.disabled = true;
-      const fit = spotFit(squishy, spot);
+      go.append(
+        el(
+          'span',
+          { class: fit.fits ? 'jobs-heart' : 'jobs-heart jobs-cloud', 'aria-hidden': 'true' },
+          fit.fits ? '💕' : '🌧️',
+        ),
+      );
       return el(
         'li',
-        { class: 'jobs-spot' },
+        { class: `jobs-spot ${fit.fits ? 'jobs-spot-loved' : 'jobs-spot-meh'}` },
         go,
         el(
           'p',
@@ -364,6 +416,7 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
           },
           el('div', { class: 'jobs-head' }, blobFor(s), el('strong', { class: 'jobs-name' }, name)),
           lineFor(s, nowMs),
+          ...moodChip(s),
           el('ul', { class: 'jobs-hints' }, ...hintLines(s).map((h) => el('li', {}, h))),
           ...(s.work && !s.work.firelit ? [el('p', { class: 'jobs-dark' }, JOBS_TEXT.dark)] : []),
           ...(s.work && outOfSeason(current, s.work)
@@ -383,7 +436,26 @@ export function createJobBoard(options: JobBoardOptions): JobBoard {
         );
       }),
     );
+    placeToast();
     tick();
+  }
+
+  /** The row's mood chip (#376): hearts at a job it loves, a rain cloud at one it doesn't. */
+  function moodChip(s: JobSquishy): HTMLElement[] {
+    const mood = workMood(s);
+    if (mood === null) return [];
+    return [
+      el(
+        'p',
+        { class: `jobs-mood jobs-mood-${mood}`, 'data-testid': 'jobs-mood' },
+        el(
+          'span',
+          { class: 'jobs-mood-icon', 'aria-hidden': 'true' },
+          mood === 'loves' ? '💕' : '🌧️',
+        ),
+        mood === 'loves' ? JOBS_TEXT.moodLoves : JOBS_TEXT.moodMeh,
+      ),
+    ];
   }
 
   /** A squishy's job line, remembered so the countdown can update it alone. */
