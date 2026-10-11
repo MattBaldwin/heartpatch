@@ -76,7 +76,7 @@ export async function callOffAsksOf(
 
 export interface ChallengesServiceOptions {
   db: Executor;
-  battles: Pick<BattlesService, 'startFriendly' | 'get'>;
+  battles: Pick<BattlesService, 'startFriendly' | 'get' | 'answerDefense'>;
   /** Is this player's app open on this map (`wsHub.isOnline`)? Without one, nobody is. */
   isOnline?: (mapId: string, userId: string) => boolean;
   clock?: Clock;
@@ -288,6 +288,11 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
     },
 
     answer: async (user, challengeId, { answer }) => {
+      // "Defend now?" (#29-C) is answered here too; the battles service owns it.
+      if ((await store.find(challengeId))?.kind === 'defense') {
+        const answered = await battles.answerDefense(user, challengeId, answer);
+        return { challenge: await toView(answered.challenge), battle: answered.battle };
+      }
       const asked = await requireAsk(user, challengeId, 'to');
       const { mapId } = asked;
       if (answer === 'not-now') {
@@ -325,8 +330,9 @@ export function createChallengesService(options: ChallengesServiceOptions): Chal
               throw new AppError('CONFLICT', MESSAGES.gone);
             }
             await repo.settle(row.id, { status: 'accepted', at, battleId: battle.id });
-            // Both are in a battle now: their other waiting asks go.
-            const others = waiting.filter((w) => w.id !== challengeId);
+            // Both are in a battle now: their other waiting asks go. A
+            // "Defend now?" prompt stays: it ends with its own battle (#29-C).
+            const others = waiting.filter((w) => w.id !== challengeId && w.kind === 'friendly');
             for (const other of others) await repo.settle(other.id, { status: 'cancelled', at });
             return [
               {

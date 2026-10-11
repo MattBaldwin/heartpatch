@@ -82,6 +82,26 @@ const ChallengeCancelledSchema = z.strictObject({
   ...ChallengePair,
   reason: z.enum(['cancelled', 'expired', 'switched-off']),
 });
+/**
+ * "Defend now?" (#29-C): a challenger (`fromUserId`) started a battle for the
+ * land of a defender who's online (`toUserId`).
+ */
+const DefensePair = {
+  challengeId: z.uuid(),
+  battleId: z.uuid(),
+  fromUserId: z.uuid(),
+  toUserId: z.uuid(),
+};
+const DefensePromptedSchema = z.strictObject({ ...DefensePair, expiresAt: z.iso.datetime() });
+const DefenseAnsweredSchema = z.strictObject({
+  ...DefensePair,
+  /**
+   * `yes`: the defender plays live. Otherwise their defense style plays:
+   * `not-now`, `expired` (no answer in time), or `called-off` (the
+   * challenger gave up while waiting, which counts as leaving).
+   */
+  answer: z.enum(['yes', 'not-now', 'expired', 'called-off']),
+});
 /** A live battle's two players (#29): who is on side `a` and side `b`. */
 const LivePair = { battleId: z.uuid(), aUserId: z.uuid(), bUserId: z.uuid() };
 const TurnSchema = z.number().int().min(0);
@@ -230,6 +250,20 @@ export const GAME_EVENTS = {
   'battle.cheered': {
     internal: z.strictObject({ ...LivePair, side: BattleSideIdSchema, messageId: ContentIdSchema }),
     public: z.object({ ...LivePair, side: BattleSideIdSchema, messageId: ContentIdSchema }),
+  },
+  /**
+   * "Defend now?" (#29-C): a rival challenged the land of a defender whose
+   * app is open, and the battle waits for their answer until `expiresAt`.
+   * Only the two players hear it (`twoPlayerView`).
+   */
+  'defense.prompted': {
+    internal: DefensePromptedSchema,
+    public: z.object(DefensePromptedSchema.shape),
+  },
+  /** How "Defend now?" ended (see `answer`). Only the two players. */
+  'defense.answered': {
+    internal: DefenseAnsweredSchema,
+    public: z.object(DefenseAnsweredSchema.shape),
   },
   /**
    * A player befriended a wild squishy with a Heart Charm (#14). The species
