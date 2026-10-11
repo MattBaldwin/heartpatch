@@ -607,6 +607,7 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 
 .battle-live-note {
   color: #3d6b1f;
+  -webkit-line-clamp: 3; /* Sprout's whole note, even with a long move's name */
 }
 
 .battle-live-chip {

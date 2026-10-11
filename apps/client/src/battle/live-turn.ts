@@ -14,9 +14,9 @@ export const LIVE_TEXT = {
   theyPicking: 'Picking…',
   theyPicked: 'Picked ✓',
   away: (left: string) => `Stepped away · ${left}`,
-  timeUp: (move: string) => `Time's up! I picked ${move} for you. Ta-da!`,
+  timeUp: (move: string) => `Time's up! I picked ${move} for you.`,
   timeUpSendOut: (who: string) => `Time's up! I sent out ${who} for you.`,
-  stillIn: "No worries, you're still in it.",
+  stillIn: "You're still in it!",
   welcomeBack: (name: string) => `Welcome back! Your battle with ${name} is still going.`,
   helped: (turns: number) =>
     turns === 1
