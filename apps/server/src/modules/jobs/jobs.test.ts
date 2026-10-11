@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
   ApiErrorSchema,
+  CARE_RULES,
+  CareListResponseSchema,
   CollectWorkResponseSchema,
   hexDistance,
   GROWTH_RULES,
@@ -1190,6 +1192,174 @@ describe.skipIf(!url)('squishy jobs (needs DATABASE_URL)', () => {
       expect((await bag(mapId, kid))['timber']).toBe(2 * JOB_RULES.work.maxStoredCycles);
       const types = (await eventsOf(mapId)).map((e) => e.type);
       expect(types).toEqual(expect.arrayContaining(['work.collected', 'squishy.hollowed']));
+    });
+  });
+
+  describe('contentment by job (#376)', () => {
+    const HOUR_MS = 60 * MINUTE_MS;
+    /** What `hours` of drift takes off (the care rules' straight line, whole points). */
+    const drop = (hours: number) =>
+      Math.floor(
+        (hours * (CARE_RULES.maxContentment - CARE_RULES.baselineContentment)) /
+          CARE_RULES.hoursFullToBaseline,
+      );
+
+    /** Sets a squishy's checkpoint to `contentment` now, as a care action would. */
+    const checkpoint = (id: string, contentment: number) =>
+      run(
+        `update squishies set contentment = ${String(contentment)},
+         contentment_since = '${clock.toISOString()}' where id = '${id}'`,
+      );
+
+    /** Its contentment and drift as the care sheet reads them, plus the jobs board's drift. */
+    async function moodOf(server: FastifyInstance, who: Player, mapId: string, id: string) {
+      const res = await call(server, 'GET', `/maps/${mapId}/care`, who);
+      expect(res.statusCode).toBe(200);
+      const care = CareListResponseSchema.parse(res.json()).squishies.find((s) => s.id === id)!;
+      const board = jobOf(await jobs(server, who, mapId), id);
+      expect(board.moodDrift).toBe(care.moodDrift);
+      return { contentment: care.contentment, drift: care.moodDrift };
+    }
+
+    it('drains while resting', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const pet = await squishy(mapId, kid);
+      await checkpoint(pet, 80);
+      later(6 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 80 - drop(6),
+        drift: 'resting',
+      });
+    });
+
+    it('holds on the team and on watch', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const hills = await farLand(server, kid, mapId, 'hills');
+      const [member, guard] = [await squishy(mapId, kid), await squishy(mapId, kid)];
+      await checkpoint(member, 80);
+      await checkpoint(guard, 80);
+      expect((await setTeam(server, kid, mapId, [member])).statusCode).toBe(200);
+      const post = await call(server, 'POST', `/maps/${mapId}/defenders`, kid, {
+        q: hills.q,
+        r: hills.r,
+        squishyIds: [guard],
+      });
+      expect(post.statusCode).toBe(200);
+      later(6 * HOUR_MS);
+      for (const id of [member, guard]) {
+        expect(await moodOf(server, kid, mapId, id)).toEqual({ contentment: 80, drift: 'steady' });
+      }
+    });
+
+    it('holds while training', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const plot = await makeHomestead(db, mapId, kid.id, clock, 0);
+      await db.insert(buildings).values({
+        mapId,
+        ownerUserId: kid.id,
+        tileId: plot.id,
+        buildingId: 'training-grounds',
+        kind: 'training-grounds',
+        level: 1,
+        spot: 2,
+      });
+      const pet = await squishy(mapId, kid);
+      await checkpoint(pet, 80);
+      expect((await setJob(server, kid, mapId, pet, { job: 'training' })).statusCode).toBe(200);
+      // Daytime in Denver (6 AM to noon): no nap.
+      later(6 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({ contentment: 80, drift: 'steady' });
+    });
+
+    it('drains while gathering something it has no knack for', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const node = await homeNode(server, kid, mapId, 'timber');
+      // Water + Silly: neither side of Timber's match.
+      const pet = await squishy(mapId, kid, { element: 'water', feeling: 'silly' });
+      await checkpoint(pet, 80);
+      const res = await setJob(server, kid, mapId, pet, { job: 'gatherer', q: node.q, r: node.r });
+      expect(res.statusCode).toBe(200);
+      expect(jobOf(JobsViewSchema.parse(res.json()), pet).gatherFits).not.toContain('timber');
+      later(6 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 80 - drop(6),
+        drift: 'wrong-job',
+      });
+    });
+
+    it('holds a fitting gatherer until its basket fills, then drains with no write; collect starts it again', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const node = await homeNode(server, kid, mapId, 'timber');
+      // Leaf + Brave: Great at Timber.
+      const pet = await squishy(mapId, kid, { element: 'leaf', feeling: 'brave' });
+      await checkpoint(pet, 80);
+      const res = await setJob(server, kid, mapId, pet, { job: 'gatherer', q: node.q, r: node.r });
+      expect(jobOf(JobsViewSchema.parse(res.json()), pet).gatherFits).toContain('timber');
+      const cycle = Math.floor((900 * JOB_RULES.work.cyclePercent) / 175);
+      const fullAfterMs = JOB_RULES.work.maxStoredCycles * cycle * 1000;
+
+      later(fullAfterMs - MINUTE_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({ contentment: 80, drift: 'steady' });
+      // The basket filled a minute later; nothing was written since.
+      later(MINUTE_MS + 6 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 80 - drop(6),
+        drift: 'stopped',
+      });
+      expect((await squishyRow(pet))?.contentmentSince).toEqual(new Date(START));
+
+      // Collecting empties the basket: it's back at work and holds again.
+      expect((await collect(server, kid, mapId)).statusCode).toBe(200);
+      later(HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 80 - drop(6),
+        drift: 'steady',
+      });
+    });
+
+    it('writes a checkpoint at each job change, and reads match across them', async () => {
+      const server = await start();
+      const kid = await player();
+      const mapId = await newMap(server, kid);
+      const pet = await squishy(mapId, kid);
+      await checkpoint(pet, 90);
+
+      // Six hours resting, read lazily: nothing written.
+      later(6 * HOUR_MS);
+      expect((await moodOf(server, kid, mapId, pet)).contentment).toBe(90 - drop(6));
+      expect((await squishyRow(pet))?.contentment).toBe(90);
+
+      // Onto the team: the rest so far is written down at the old rate.
+      expect((await setTeam(server, kid, mapId, [pet])).statusCode).toBe(200);
+      const joined = new Date(clock);
+      expect(await squishyRow(pet)).toMatchObject({
+        contentment: 90 - drop(6),
+        contentmentSince: joined,
+      });
+      later(5 * HOUR_MS);
+      expect((await moodOf(server, kid, mapId, pet)).contentment).toBe(90 - drop(6));
+
+      // Back to resting: the team time held, and it drifts from here.
+      expect((await setJob(server, kid, mapId, pet, { job: 'resting' })).statusCode).toBe(200);
+      expect(await squishyRow(pet)).toMatchObject({
+        contentment: 90 - drop(6),
+        contentmentSince: new Date(clock),
+      });
+      later(3 * HOUR_MS);
+      expect(await moodOf(server, kid, mapId, pet)).toEqual({
+        contentment: 90 - drop(6) - drop(3),
+        drift: 'resting',
+      });
     });
   });
 
