@@ -121,8 +121,8 @@ export const SECRET_SPECIES: Species[] = [
       floater: {
         glyph: 'music-note',
         size: 0.38, // TUNE: of the body's height
-        above: -0.07, // TUNE: gap above its top
-        side: 0.52, // TUNE: of the body's width, to the viewer's right
+        above: -0.02, // TUNE: gap above its top
+        side: 0.57, // TUNE: of the body's width, to the viewer's right
         color: 'detail',
         bob: { height: 0.04, speed: 0.45 }, // TUNE
       },
