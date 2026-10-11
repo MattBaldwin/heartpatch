@@ -848,7 +848,7 @@ export class HouseProtoScene {
     ]);
     table.position.set(2.7, 0, -1.3);
     this.#teaAndSteam(2.5, 0.66, -1.1);
-    this.#tableLamp(3.05, -1.5, 0.66, '#ffd9a8');
+    this.#tableLamp(2.95, -1.45, 0.66, '#ffd9a8');
     const stool = this.#solid('stool', [
       tube(scene, 0.08, 0.5, 0.5, [0, 0.4, 0], '#e97a9b', 12),
       tube(scene, 0.36, 0.08, 0.12, [0, 0.18, 0], '#8a5a39', 8),
@@ -878,7 +878,7 @@ export class HouseProtoScene {
       ball(scene, 0.5, [0.25, 0.9, 0.1], '#7cc46f'),
       ball(scene, 0.45, [-0.22, 0.95, -0.1], '#6db863'),
     ]);
-    plant.position.set(-w / 2 + 0.75, 0, d / 2 - 0.7);
+    plant.position.set(-w / 2 + 0.42, 0, d / 2 - 0.7);
 
     // Residents and the Keeper.
     // Puddlepuff napping in the left bed, squashed into the pillow.
