@@ -65,15 +65,13 @@ describe('MapScene', () => {
       cleared.includes(t) ? { ...t, terrain: 'clearing', nodeResource: null } : t,
     );
     // Tile colours live in the 'color' instance buffer, filled after it's set.
-    const buffers = new Map<string, Float32Array>();
-    const original = Mesh.prototype.thinInstanceSetBuffer;
-    const setBuffer = vi
-      .spyOn(Mesh.prototype, 'thinInstanceSetBuffer')
-      .mockImplementation(function (this: Mesh, kind, data, ...rest) {
-        if (kind === 'color' && data) buffers.set(this.name, data);
-        original.call(this, kind, data, ...rest);
-      });
+    const setBuffer = vi.spyOn(Mesh.prototype, 'thinInstanceSetBuffer');
     const { scene, map } = build({ ...view, tiles });
+    const buffers = new Map<string, Float32Array>();
+    setBuffer.mock.calls.forEach(([kind, data], i) => {
+      const mesh = setBuffer.mock.contexts[i] as Mesh;
+      if (kind === 'color' && data) buffers.set(mesh.name, data);
+    });
     setBuffer.mockRestore();
     expect(map.stats.tileMeshes).toBe(before);
     expect(scene.getMeshByName('tiles-clearing')).toBeNull();
