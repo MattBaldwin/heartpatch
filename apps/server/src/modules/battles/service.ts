@@ -2,6 +2,11 @@ import {
   applyBattleAction,
   BattleRuleError,
   itemRefusal,
+  legalChoices,
+  LIVE_BATTLE_RULES,
+  liveTurnAction,
+  quickMessageById,
+  sidesToAct,
   battleXpPercent,
   befriendedLevel,
   joiningSpecies,
@@ -22,6 +27,10 @@ import {
   TILE_BATTLE_KINDS,
   type BattleAction,
   type BattleActionRequest,
+  type BattleChoice,
+  type BattleCheerRequest,
+  type LiveBattleRules,
+  type LiveBattleView,
   type BattleContent,
   type BattleKind,
   type BattleSetup,
@@ -55,9 +64,12 @@ import type { MapRow } from '../maps/repo.js';
 import { createSpawnsRepo } from '../spawns/repo.js';
 import { rollFoundDrop } from '../wardrobe/drops.js';
 import { arenaFor } from './arena.js';
+import { liveView, nextDeadline, settleTimeouts } from './live.js';
 import { DEV_WILD_LEVEL } from './limits.js';
 import {
   createBattlesRepo,
+  createLiveBattlesRepo,
+  type LiveRow,
   type BattleRow,
   type BattleSpawn,
   type BattlesTxRepo,
@@ -70,7 +82,8 @@ import {
  * seed, actions, content hash and resolved log, and hands back
  * `clientBattleView(state)`: never the RNG state, and the seed only once the
  * battle is over. The player is always side `a`; the AI side picks inside the
- * reducer with the battle's own RNG.
+ * reducer with the battle's own RNG. A live battle (#29) has a player on side
+ * `b` too (`live_battles`, `./live.ts`): both pick, then the turn plays.
  */
 
 /** The player's side in every PvE battle; the AI is always `b`. */
@@ -294,8 +307,26 @@ export interface BattlesService {
     mapId: string,
     prepare: PrepareJourneyBattle,
   ) => Promise<StartResult>;
-  /** Applies one player action; the AI side answers inside the same step. */
+  /**
+   * Applies one player action; the AI side answers inside the same step. In
+   * a live battle (#29) a move or swap is this side's hidden pick, and the
+   * turn plays once both sides have picked.
+   */
   act: (user: PublicUser, battleId: string, request: BattleActionRequest) => Promise<PlayerBattle>;
+  /**
+   * Starts a friendly battle between two players on the map (#29): nothing
+   * at stake, side `a` asked and side `b` said yes. Each brings their team.
+   * `started` runs in the same transaction (the challenge's answer, #29-B)
+   * and its events follow `battle.started`. Returns the battle's id.
+   */
+  startFriendly: (input: {
+    mapId: string;
+    aUserId: string;
+    bUserId: string;
+    started?: (tx: Executor, battle: BattleRow) => Promise<NewGameEvent[]>;
+  }) => Promise<string>;
+  /** A cheer in a live battle (#29): a quick message or emoji id, never text. */
+  cheer: (user: PublicUser, battleId: string, request: BattleCheerRequest) => Promise<void>;
   /** Dev/test only: a squishy for the player on this map. */
   grantSquishy: (
     user: PublicUser,
@@ -328,6 +359,14 @@ export interface BattlesServiceOptions {
   tileBattles?: TileBattlePort;
   /** Journeys' visit passes (#270, `modules/journeys`). */
   journeys?: JourneyBattlePort;
+  /**
+   * Is this player's app open on this map right now (`wsHub.isOnline`)? A
+   * live battle gives a side that isn't one away-grace before the AI picks
+   * for it (#29). Without one, everybody counts as here.
+   */
+  isOnline?: (mapId: string, userId: string) => boolean;
+  /** Live battles' timings (#29); tests shorten them. */
+  liveRules?: LiveBattleRules;
 }
 
 /** The other side of a new battle, as `startWith` takes it. */
@@ -356,6 +395,14 @@ const MESSAGES = {
   noCapture: "You can't use a Heart Charm here.",
   notAPotion: "That's not something you can use in a battle.",
   hadOne: 'You already had one of those this battle! Try another.',
+  noPotionsLive: 'No potions in a battle with a friend. Just you and your squishies!',
+  notLive: 'Cheers are for battles with a friend!',
+  unknownCheer: "We don't know that cheer.",
+  busy: 'Someone is already in a battle. Try again in a bit!',
+  notYourself: "You can't battle yourself, silly!",
+  friendlyTutorial: 'Friendly battles happen on a patch with friends!',
+  friendlyOff: 'Friendly battles are switched off on this patch.',
+  noFriendlyTeam: 'Everyone needs a squishy friend to battle!',
 } as const;
 
 export function defaultBattleContent(): BattleContent {
@@ -400,7 +447,7 @@ function defsFor(
 export function playerBattleView(
   content: BattleContent,
   row: BattleRow,
-  options: { mySide?: BattleSideId; state?: BattleState } = {},
+  options: { mySide?: BattleSideId; state?: BattleState; live?: LiveBattleView } = {},
 ): PlayerBattle {
   const state = options.state ?? row.state;
   return {
@@ -421,7 +468,15 @@ export function playerBattleView(
     timeOfDay: row.arena?.timeOfDay ?? 'day',
     startedAt: row.startedAt.toISOString(),
     endedAt: row.endedAt?.toISOString() ?? null,
+    ...(options.live && { live: options.live }),
   };
+}
+
+/** The same move or the same swap: a pick against `legalChoices`, field by field. */
+function sameChoice(a: BattleChoice, b: BattleChoice): boolean {
+  if (a.type === 'move' && b.type === 'move') return a.move === b.move;
+  if (a.type === 'swap' && b.type === 'swap') return a.slot === b.slot;
+  return false;
 }
 
 export function createBattlesService(options: BattlesServiceOptions): BattlesService {
@@ -434,17 +489,109 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   };
   const store = createBattlesRepo(db);
 
-  const toPlayerBattle = (row: BattleRow): PlayerBattle => playerBattleView(content, row);
+  const liveRules = options.liveRules ?? LIVE_BATTLE_RULES;
+  const isOnline = options.isOnline ?? (() => true);
 
-  /** The battle, if it's this player's and they're still on its map. */
+  /** Who `userId` is in `row`: side `a`, side `b` of a live battle (#29), or nobody. */
+  interface Seat {
+    side: BattleSideId;
+    live: LiveRow | null;
+  }
+  const seatOf = async (tx: Executor, row: BattleRow, userId: string): Promise<Seat | null> => {
+    const live = await createLiveBattlesRepo(tx).find(row.id);
+    if (row.playerUserId === userId) return { side: PLAYER_SIDE, live };
+    return live?.bUserId === userId ? { side: 'b', live } : null;
+  };
+
+  /** The battle as `seat`'s player sees it, with a live battle's turn state. */
+  const toPlayerBattle = (row: BattleRow, seat?: Seat | null): PlayerBattle => {
+    const side = seat?.side ?? PLAYER_SIDE;
+    const live = seat?.live;
+    return playerBattleView(content, row, {
+      mySide: side,
+      ...(live && {
+        live: liveView(
+          live,
+          side,
+          side === PLAYER_SIDE ? live.bUserId : row.playerUserId,
+          row.status === 'active',
+          now(),
+        ),
+      }),
+    });
+  };
+
+  /** The battle, if this player is in it and still on its map. */
   const requireOwn = async (
     tx: Executor,
     row: BattleRow | null,
     user: PublicUser,
-  ): Promise<{ row: BattleRow; map: MapRow }> => {
-    if (!row || row.playerUserId !== user.id) throw new AppError('NOT_FOUND', MESSAGES.notFound);
+  ): Promise<{ row: BattleRow; map: MapRow; seat: Seat }> => {
+    const seat = row ? await seatOf(tx, row, user.id) : null;
+    if (!row || !seat) throw new AppError('NOT_FOUND', MESSAGES.notFound);
     const { map } = await requireMember(tx, user, row.mapId);
-    return { row, map };
+    return { row, map, seat };
+  };
+
+  /** The player whose app plays `side` of a live battle. */
+  const userOnSide = (row: BattleRow, live: LiveRow, side: BattleSideId): string =>
+    side === PLAYER_SIDE ? row.playerUserId : live.bUserId;
+
+  /** `battle.turned`: the live battle moved on; only its two players hear it. */
+  const appendTurned = (repo: BattlesTxRepo, row: BattleRow, live: LiveRow, turn: number) =>
+    repo.appendEvent({
+      mapId: row.mapId,
+      type: 'battle.turned',
+      actorUserId: null,
+      payload: { battleId: row.id, aUserId: row.playerUserId, bUserId: live.bUserId, turn },
+    });
+
+  /** A live battle's deadline passed and nobody has settled it yet. */
+  const liveDue = (row: BattleRow, live: LiveRow | null, at: Date): live is LiveRow =>
+    live !== null &&
+    live.active &&
+    row.status === 'active' &&
+    at.getTime() >= live.deadlineAt.getTime();
+
+  /**
+   * Settles a locked live battle's passed deadlines (`settleTimeouts`): the
+   * AI picks for whoever ran out of time, and the turns play. Returns the
+   * battle as it is now. Lock order: the battle (held), then its
+   * `live_battles` row, which the battle lock covers.
+   */
+  const settleLive = async (
+    repo: BattlesTxRepo,
+    tx: Executor,
+    row: BattleRow,
+    live: LiveRow,
+    at: Date,
+    options: { deferTurned?: boolean } = {},
+  ): Promise<BattleRow> => {
+    if (!liveDue(row, live, at)) return row;
+    const step = settleTimeouts({
+      content,
+      seed: row.seed,
+      state: row.state,
+      live,
+      at,
+      rules: liveRules,
+      isOnline: (side) => isOnline(row.mapId, userOnSide(row, live, side)),
+    });
+    await createLiveBattlesRepo(tx).save(row.id, step.live);
+    if (step.actions.length === 0) return row;
+    const actions = [...row.actions, ...step.actions];
+    if (step.state.phase.type === 'over') {
+      await finish(repo, tx, row, actions, step.state, at);
+    } else {
+      await repo.saveProgress(row.id, { actions, state: step.state });
+    }
+    // `maps` comes last (lock order step 13): when an action follows in this
+    // transaction (it may finish the battle and lock squishies), the caller
+    // appends `battle.turned` after it instead.
+    if (!options.deferTurned || step.state.phase.type === 'over') {
+      await appendTurned(repo, row, live, step.state.turn);
+    }
+    return (await repo.findBattle(row.id)) ?? row;
   };
 
   /**
@@ -463,6 +610,7 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     // A journey's row (#270) right after the battle's lock (step 5b).
     const journeyEvents =
       row.kind === 'journey' ? ((await options.journeys?.noContest(tx, row, at)) ?? []) : [];
+    await createLiveBattlesRepo(tx).end(row.id);
     await repo.finish(row.id, {
       status: 'no-contest',
       actions: row.actions,
@@ -525,15 +673,27 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     return false;
   };
 
-  /** An active battle that can't go on (see `settle`) is ended before it's shown. */
+  /**
+   * An active battle that can't go on (see `settle`) is ended before it's
+   * shown, and a live battle's passed deadlines are settled (`settleLive`).
+   */
   const resolved = async (row: BattleRow): Promise<BattleRow> => {
     if (row.status !== 'active') return row;
-    if (row.contentHash === content.contentHash && !(await abandoned(db, row, now()))) return row;
+    const live = await createLiveBattlesRepo(db).find(row.id);
+    if (
+      row.contentHash === content.contentHash &&
+      !(await abandoned(db, row, now())) &&
+      !liveDue(row, live, now())
+    ) {
+      return row;
+    }
     const ended = await store.transaction(async (repo, tx) => {
       const locked = await repo.lockBattle(row.id);
       if (!locked || locked.status !== 'active') return locked;
-      await settle(repo, tx, locked, now());
-      return repo.findBattle(row.id);
+      const at = now();
+      if (await settle(repo, tx, locked, at)) return repo.findBattle(row.id);
+      const lockedLive = await createLiveBattlesRepo(tx).find(row.id);
+      return lockedLive ? settleLive(repo, tx, locked, lockedLive, at) : locked;
     });
     published(row.mapId);
     if (!ended) throw new AppError('NOT_FOUND', MESSAGES.notFound);
@@ -673,10 +833,13 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       row.kind === 'journey' && options.journeys
         ? await options.journeys.ended(tx, { ...row, state }, result.winner, at)
         : [];
+    // A live battle's turn state goes (#29): side `b` is free to battle again.
+    await createLiveBattlesRepo(tx).end(row.id);
     // Gentle mode's share (owner decision 2026-10-03): challenging a much
-    // smaller player pays part of the battle's XP, win or lose.
+    // smaller player pays part of the battle's XP, win or lose. A friendly
+    // battle (#29) has nothing at stake: no XP for either side.
     const awards = result.xp
-      .filter((award) => award.side === PLAYER_SIDE)
+      .filter((award) => award.side === PLAYER_SIDE && row.kind !== 'friendly')
       .map((award) => ({ ...award, xp: Math.floor((award.xp * tile.xpPercent) / 100) }))
       .filter((award) => award.xp > 0);
     // Base battle XP × care and habitat, levels and evolution (#19's
@@ -818,6 +981,96 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
   };
 
   /**
+   * One player's intent in a live battle (#29), on the locked battle with its
+   * deadlines already settled. A move or swap is this side's hidden pick: it
+   * waits (`battle.picked`, which never says what) until the other side
+   * picks, then the turn plays (`battle.turned`). A side may change its pick
+   * until then. Sending someone out and giving up apply at once. No potions
+   * and no Heart Charms: nothing from the bag in a battle with a friend.
+   */
+  const actLive = async (
+    repo: BattlesTxRepo,
+    tx: Executor,
+    row: BattleRow,
+    live: LiveRow,
+    side: BattleSideId,
+    request: BattleActionRequest,
+    at: Date,
+  ): Promise<boolean> => {
+    const liveRepo = createLiveBattlesRepo(tx);
+    const intent = request.action;
+    // Picking for yourself brings your away-grace back.
+    const graceUsed = { ...live.graceUsed, [side]: false };
+    let action: BattleAction;
+    switch (intent.type) {
+      case 'item':
+        throw new AppError('CONFLICT', MESSAGES.noPotionsLive);
+      case 'capture':
+        throw new AppError('CONFLICT', MESSAGES.noCapture);
+      case 'forfeit':
+        action = { type: 'forfeit', side };
+        break;
+      case 'replace':
+        action = { type: 'replace', side, slot: intent.slot };
+        break;
+      case 'move':
+      case 'swap': {
+        const choice: BattleChoice =
+          intent.type === 'move'
+            ? { type: 'move', move: intent.move }
+            : { type: 'swap', slot: intent.slot };
+        const legal =
+          row.state.phase.type === 'turn' &&
+          sidesToAct(row.state).includes(side) &&
+          legalChoices(row.state, side).some((c) => sameChoice(c, choice));
+        if (!legal) throw new AppError('CONFLICT', MESSAGES.badChoice);
+        const picks = { ...live.picks, [side]: choice };
+        const turn = liveTurnAction(row.state, picks);
+        if (!turn) {
+          await liveRepo.save(row.id, { picks, graceUsed });
+          // Changing a pick tells nobody anything new: one event per side per turn.
+          if (live.picks[side]) return false;
+          await repo.appendEvent({
+            mapId: row.mapId,
+            type: 'battle.picked',
+            actorUserId: userOnSide(row, live, side),
+            payload: {
+              battleId: row.id,
+              aUserId: row.playerUserId,
+              bUserId: live.bUserId,
+              side,
+              turn: row.state.turn,
+            },
+          });
+          return false;
+        }
+        action = turn;
+        break;
+      }
+    }
+    let state: BattleState;
+    try {
+      state = applyBattleAction(content, row.state, action);
+    } catch (err) {
+      if (err instanceof BattleRuleError) throw new AppError('CONFLICT', MESSAGES.badChoice);
+      throw err;
+    }
+    const actions = [...row.actions, action];
+    await liveRepo.save(row.id, { picks: {}, deadlineAt: nextDeadline(at, liveRules), graceUsed });
+    if (state.phase.type === 'over') {
+      await finish(repo, tx, row, actions, state, at);
+    } else {
+      await repo.saveProgress(row.id, { actions, state });
+      // The challenger's own moves keep a tile battle from counting as left.
+      if (side === PLAYER_SIDE && TILE_BATTLE_KINDS.has(row.kind)) {
+        await options.tileBattles?.acted(tx, row.id, at);
+      }
+    }
+    await appendTurned(repo, row, live, state.turn);
+    return true;
+  };
+
+  /**
    * Starts a battle against `opponentFor`'s side, or resumes the one going.
    * A battle going that can't go on (see `settle`) is ended first, and a new
    * one starts. The opponent is built inside the start transaction, after the
@@ -840,10 +1093,15 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     const going = await store.findActive(mapId, user.id);
     if (going) {
       const row = await resolved(going);
-      if (row.status === 'active') return { battle: toPlayerBattle(row), created: false };
+      if (row.status === 'active') {
+        return { battle: toPlayerBattle(row, await seatOf(db, row, user.id)), created: false };
+      }
     }
     const begin = () =>
       store.transaction(async (repo, tx) => {
+        // The player's battle seat first (before any row lock): a friendly
+        // battle seating them as side `b` can't slip in beside this one.
+        await repo.lockBattleSeats(mapId, [user.id]);
         const { map } = await requireMember(tx, user, mapId);
         const active = await repo.findActive(mapId, user.id);
         if (active) return { row: active, created: false };
@@ -920,7 +1178,10 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
       result = await begin();
     }
     if (result.created) published(mapId);
-    return { battle: toPlayerBattle(result.row), created: result.created };
+    return {
+      battle: toPlayerBattle(result.row, await seatOf(db, result.row, user.id)),
+      created: result.created,
+    };
   };
 
   const startAgainst: BattlesService['startAgainst'] = (user, mapId, encounter) =>
@@ -944,18 +1205,24 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
     current: async (user, mapId) => {
       await requireMember(db, user, mapId);
       const row = await store.findActive(mapId, user.id);
-      return row ? toPlayerBattle(await resolved(row)) : null;
+      if (!row) return null;
+      const latest = await resolved(row);
+      return toPlayerBattle(latest, await seatOf(db, latest, user.id));
     },
 
     get: async (user, battleId) => {
       const { row } = await requireOwn(db, await store.findBattle(battleId), user);
-      return toPlayerBattle(await resolved(row));
+      const latest = await resolved(row);
+      return toPlayerBattle(latest, await seatOf(db, latest, user.id));
     },
 
     startWild: async (user, mapId, request = {}) => {
       const { map } = await requireMember(db, user, mapId);
       const active = await store.findActive(mapId, user.id);
-      if (active) return { battle: toPlayerBattle(await resolved(active)), created: false };
+      if (active) {
+        const row = await resolved(active);
+        return { battle: toPlayerBattle(row, await seatOf(db, row, user.id)), created: false };
+      }
       const encounter = await options.findWildEncounter?.({
         mapId,
         userId: user.id,
@@ -998,14 +1265,49 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
         row: next,
         mapId,
         befriended,
+        live,
       } = await store.transaction(async (repo, tx) => {
-        const { row, map } = await requireOwn(tx, await repo.lockBattle(battleId), user);
-        if (row.status !== 'active') throw new AppError('CONFLICT', MESSAGES.over);
+        const {
+          row: locked,
+          map,
+          seat,
+        } = await requireOwn(tx, await repo.lockBattle(battleId), user);
+        if (locked.status !== 'active') throw new AppError('CONFLICT', MESSAGES.over);
         const at = now();
         // Re-tuned content or a tile battle left: it ends instead (see `settle`).
-        if (await settle(repo, tx, row, at)) {
-          return { row: await repo.findBattle(row.id), mapId: row.mapId, befriended: false };
+        if (await settle(repo, tx, locked, at)) {
+          return {
+            row: await repo.findBattle(locked.id),
+            mapId: locked.mapId,
+            befriended: false,
+            live: true,
+          };
         }
+        if (seat.live) {
+          // A live battle (#29): passed deadlines first, so a late pick
+          // can't land on a turn the AI already played.
+          const row = await settleLive(repo, tx, locked, seat.live, at, { deferTurned: true });
+          if (row.status !== 'active') {
+            return { row, mapId: row.mapId, befriended: false, live: true };
+          }
+          // The AI already played the turn this pick was for: refused, which
+          // rolls the settle back too; the next read settles it the same way.
+          if (request.turn !== row.state.turn) throw new AppError('CONFLICT', MESSAGES.movedOn);
+          const live = (await createLiveBattlesRepo(tx).find(row.id)) ?? seat.live;
+          const stepped = await actLive(repo, tx, row, live, seat.side, request, at);
+          // The settle's own `battle.turned`, after the action's writes (`maps`
+          // last), unless the action wrote a newer one itself.
+          if (!stepped && row.actions.length !== locked.actions.length) {
+            await appendTurned(repo, row, live, row.state.turn);
+          }
+          return {
+            row: await repo.findBattle(row.id),
+            mapId: row.mapId,
+            befriended: false,
+            live: true,
+          };
+        }
+        const row = locked;
         // A stale or repeated submit (the client acted on an older turn) is
         // refused rather than applied to the turn after. Retries of the same
         // submit are covered by the Idempotency-Key header.
@@ -1066,12 +1368,139 @@ export function createBattlesService(options: BattlesServiceOptions): BattlesSer
           for (const friend of friends) await appendCaptured(repo, row, friend);
           befriended = friends.length > 0;
         }
-        return { row: await repo.findBattle(row.id), mapId: row.mapId, befriended };
+        return {
+          row: await repo.findBattle(row.id),
+          mapId: row.mapId,
+          befriended,
+          live: false,
+        };
       });
       if (!next) throw new AppError('NOT_FOUND', MESSAGES.notFound);
-      // An ended battle wrote events, and so did a guardian befriended mid-battle.
-      if (next.status !== 'active' || befriended) published(mapId);
-      return toPlayerBattle(next);
+      // An ended battle wrote events, and so did a guardian befriended
+      // mid-battle; every live step writes one (`battle.picked` or `.turned`).
+      if (next.status !== 'active' || befriended || live) published(mapId);
+      return toPlayerBattle(next, await seatOf(db, next, user.id));
+    },
+
+    startFriendly: async ({ mapId, aUserId, bUserId, started }) => {
+      if (aUserId === bUserId) throw new AppError('VALIDATION_FAILED', MESSAGES.notYourself);
+      const begin = () =>
+        store.transaction(async (repo, tx) => {
+          // Both players' battle seats, then their member rows (both in id order).
+          await repo.lockBattleSeats(mapId, [aUserId, bUserId]);
+          const maps = createMapsRepo(tx);
+          // Both member rows, in id order (lock order step 2), so two asks
+          // between the same players can't both start a battle.
+          for (const userId of [aUserId, bUserId].sort()) {
+            if (!(await maps.lockMember(mapId, userId))) {
+              throw new AppError('NOT_FOUND', MESSAGES.notFound);
+            }
+          }
+          const map = await maps.findMap(mapId);
+          if (!map) throw new AppError('NOT_FOUND', MESSAGES.notFound);
+          // The authoritative check, whoever calls: patches with friends only,
+          // and only while the owner allows it.
+          if (map.kind !== 'multiplayer') throw new AppError('CONFLICT', MESSAGES.friendlyTutorial);
+          if (!map.friendlyChallenges) throw new AppError('CONFLICT', MESSAGES.friendlyOff);
+          const teams: TeamSquishyRow[][] = [];
+          for (const userId of [aUserId, bUserId]) {
+            // One battle at a time each, on either side (`findActive` sees both).
+            if (await repo.findActive(mapId, userId)) throw new AppError('CONFLICT', MESSAGES.busy);
+            const team = await repo.listTeam(mapId, userId, content.rules.teamSize);
+            if (team.length === 0) throw new AppError('CONFLICT', MESSAGES.noFriendlyTeam);
+            teams.push(team);
+          }
+          const [aTeam = [], bTeam = []] = teams;
+          const at = now();
+          const setup: BattleSetup = {
+            seed: newSeed(),
+            sides: {
+              a: { controller: { type: 'player' }, squishies: aTeam },
+              b: { controller: { type: 'player' }, squishies: bTeam },
+            },
+          };
+          const state = startBattle(content, setup);
+          // At the Keeper who asked's Heart Seed (their home terrain).
+          const arena = await arenaFor(repo, {
+            mapId,
+            userId: aUserId,
+            timeZone: map.timeZone,
+            at,
+            tile: null,
+          });
+          const row = await repo.insertBattle({
+            mapId,
+            kind: 'friendly',
+            playerUserId: aUserId,
+            seed: setup.seed,
+            contentHash: content.contentHash,
+            setup: setup.sides,
+            state,
+            startedAt: at,
+            spawn: null,
+            arena,
+          });
+          await createLiveBattlesRepo(tx).insert({
+            battleId: row.id,
+            mapId,
+            bUserId,
+            deadlineAt: nextDeadline(at, liveRules),
+            coverPolicy: { a: liveRules.coverPolicy, b: liveRules.coverPolicy },
+          });
+          const events = (await started?.(tx, row)) ?? [];
+          // Each Keeper meets the other's squishies (the catalog, design doc §21).
+          const spawns = createSpawnsRepo(tx);
+          await spawns.markSeen(mapId, aUserId, setupSpecies(bTeam), at);
+          await spawns.markSeen(mapId, bUserId, setupSpecies(aTeam), at);
+          await repo.appendEvent({
+            mapId,
+            type: 'battle.started',
+            actorUserId: aUserId,
+            payload: {
+              battleId: row.id,
+              kind: row.kind,
+              userId: aUserId,
+              teamSpecies: aTeam.map((s) => s.speciesId),
+              opponentSpecies: bTeam.map((s) => s.speciesId),
+            },
+          });
+          for (const event of events) await repo.appendEvent(event);
+          return row.id;
+        });
+      let battleId: string;
+      try {
+        battleId = await begin();
+      } catch (err) {
+        // A safety net under the seat lock: the one-active-battle index.
+        if (isUniqueViolation(err)) throw new AppError('CONFLICT', MESSAGES.busy);
+        throw err;
+      }
+      published(mapId);
+      return battleId;
+    },
+
+    cheer: async (user, battleId, request) => {
+      const message = quickMessageById(request.messageId);
+      if (!message) throw new AppError('VALIDATION_FAILED', MESSAGES.unknownCheer);
+      const mapId = await store.transaction(async (repo, tx) => {
+        const { row, seat } = await requireOwn(tx, await repo.findBattle(battleId), user);
+        if (!seat.live) throw new AppError('CONFLICT', MESSAGES.notLive);
+        if (row.status !== 'active') throw new AppError('CONFLICT', MESSAGES.over);
+        await repo.appendEvent({
+          mapId: row.mapId,
+          type: 'battle.cheered',
+          actorUserId: user.id,
+          payload: {
+            battleId: row.id,
+            aUserId: row.playerUserId,
+            bUserId: seat.live.bUserId,
+            side: seat.side,
+            messageId: message.id,
+          },
+        });
+        return row.mapId;
+      });
+      published(mapId);
     },
 
     grantSquishy: async (user, mapId, squishy) => {

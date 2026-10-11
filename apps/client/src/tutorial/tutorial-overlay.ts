@@ -1,5 +1,6 @@
 import { GAME_DATA, NICKNAME_MAX_LENGTH, type HighlightTarget } from '@heartpatch/shared';
 import { el } from '../ui/dom.js';
+import type { Rect } from '../ui/geometry.js';
 import type { HighlightTargets } from './highlight-targets.js';
 import {
   dockChip,
@@ -8,7 +9,6 @@ import {
   union,
   type Insets,
   type OverlayLayout,
-  type Rect,
   type Size,
 } from './overlay-layout.js';
 import { foreignSheets, obstacles, openSheets, sheetCards, type OpenSheet } from './sheets.js';

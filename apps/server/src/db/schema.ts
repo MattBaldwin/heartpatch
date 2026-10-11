@@ -47,7 +47,8 @@ export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'appr
 /**
  * Battle kinds (design doc §6): a wild squishy, a neutral tile's guardians
  * (`tile`, #15), another player's tile defenders (`rival-tile`, #15) and the
- * Hollow's shadow guardians (`rescue`, #21).
+ * Hollow's shadow guardians (`rescue`, #21), a trading post's trail
+ * (`journey`, #270) and a friendly battle between two players (`friendly`, #29).
  */
 export const battleKind = pgEnum('battle_kind', [
   'wild',
@@ -55,6 +56,7 @@ export const battleKind = pgEnum('battle_kind', [
   'rival-tile',
   'rescue',
   'journey',
+  'friendly',
 ]);
 /** `no-contest`: the server called it off (content re-tuned mid-battle). */
 export const battleStatus = pgEnum('battle_status', ['active', 'finished', 'no-contest']);
@@ -321,6 +323,9 @@ export const maps = pgTable(
     hollowStrengthPercent: smallint('hollow_strength_percent').notNull().default(100),
     // The patch owner's trading switch (#271, owner Q5 on #30): off cancels open offers.
     tradingEnabled: boolean('trading_enabled').notNull().default(true),
+    // The patch owner's friendly-battle switch (#29): off, nobody can ask
+    // "Battle me?" on this patch. Live land defense follows the PvP mode instead.
+    friendlyChallenges: boolean('friendly_challenges').notNull().default(true),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
@@ -1934,5 +1939,108 @@ export const milestoneRewards = pgTable(
       .on(t.userId)
       .where(sql`${t.seenAt} is null`),
     check('milestone_rewards_tier_positive', sql`${t.tier} >= 1`),
+  ],
+);
+
+/**
+ * Live battles (#29): a battle whose side `b` is a player too (a friendly
+ * battle, or a defender who said "Defend now?"). Both sides pick at once; a
+ * pick waits here, hidden, until the other side's arrives, then the turn
+ * plays as one engine action. Server-only: neither pick is ever sent before
+ * the turn plays, and `picks` is cleared every step.
+ */
+export const liveBattles = pgTable(
+  'live_battles',
+  {
+    battleId: uuid('battle_id')
+      .primaryKey()
+      .references(() => battles.id, { onDelete: 'cascade' }),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    // The player on side `b` (side `a` is `battles.player_user_id`).
+    bUserId: uuid('b_user_id').notNull(),
+    // True while the battle runs: one battle at a time for side `b` too.
+    active: boolean('active').notNull().default(true),
+    // `{ a?: BattleChoice, b?: BattleChoice }`: this turn's hidden picks.
+    picks: jsonb('picks').notNull().default({}),
+    // When the AI picks for whoever hasn't (CLAUDE.md rule 4: resolved on the next read).
+    deadlineAt: timestamptz('deadline_at').notNull(),
+    // The one away-grace each side gets (`LIVE_BATTLE_RULES.awayGraceSeconds`)
+    // is spent; it comes back when that side picks again.
+    graceUsedA: boolean('grace_used_a').notNull().default(false),
+    graceUsedB: boolean('grace_used_b').notNull().default(false),
+    // The AI style that picks for each side when its time runs out.
+    coverPolicyA: text('cover_policy_a').notNull(),
+    coverPolicyB: text('cover_policy_b').notNull(),
+    // `{ turn, side }[]`: picks the AI made for a side whose time ran out.
+    covered: jsonb('covered').notNull().default([]),
+  },
+  (t) => [
+    foreignKey({
+      name: 'live_battles_b_member_fk',
+      columns: [t.mapId, t.bUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    uniqueIndex('live_battles_one_active_b_key')
+      .on(t.mapId, t.bUserId)
+      .where(sql`${t.active}`),
+  ],
+);
+
+/** What a challenge is (#29): a friendly "Battle me?", or a "Defend now?" prompt. */
+export const challengeKind = pgEnum('challenge_kind', ['friendly', 'defense']);
+export const challengeStatus = pgEnum('challenge_status', [
+  'pending',
+  'accepted',
+  'declined',
+  'cancelled',
+  'expired',
+]);
+
+/**
+ * Asks between two players on a patch (#29): "Battle me?" (friendly) and
+ * "Defend now?" (defense, sent to a defender who's online). Pending until
+ * answered, cancelled, or past `expires_at` (noticed on the next read). Kept
+ * after, for the rate limits and so a battle can say what started it.
+ */
+export const challenges = pgTable(
+  'challenges',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    kind: challengeKind('kind').notNull(),
+    status: challengeStatus('status').notNull().default('pending'),
+    fromUserId: uuid('from_user_id').notNull(),
+    toUserId: uuid('to_user_id').notNull(),
+    // The sender's team for a friendly battle (squishy ids, in order); null for defense.
+    team: jsonb('team'),
+    // The battle it started (a defense prompt has one from the start).
+    battleId: uuid('battle_id').references(() => battles.id, { onDelete: 'set null' }),
+    createdAt: timestamptz('created_at').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    answeredAt: timestamptz('answered_at'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'challenges_from_member_fk',
+      columns: [t.mapId, t.fromUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    foreignKey({
+      name: 'challenges_to_member_fk',
+      columns: [t.mapId, t.toUserId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    check('challenges_not_self', sql`${t.fromUserId} <> ${t.toUserId}`),
+    // One ask at a time from a player on a patch.
+    uniqueIndex('challenges_one_pending_from_key')
+      .on(t.mapId, t.fromUserId)
+      .where(sql`${t.status} = 'pending'`),
+    // "Who's asking me?" and the rate limits (asks to one player lately).
+    index('challenges_map_id_to_user_id_idx').on(t.mapId, t.toUserId, t.createdAt),
+    index('challenges_map_id_from_user_id_idx').on(t.mapId, t.fromUserId, t.createdAt),
   ],
 );
