@@ -275,6 +275,24 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     return b;
   };
 
+  /** A row's Care: 💗 and the word (on the narrowest phones, just 💗; the word stays for VoiceOver). */
+  function careButton(onTap: () => void, squishyId: string): HTMLButtonElement {
+    const b = el(
+      'button',
+      {
+        type: 'button',
+        class: 'auth-button roster-action roster-care',
+        'aria-label': ROSTER_TEXT.careWord,
+        'data-testid': 'roster-care',
+        'data-care-squishy': squishyId,
+      },
+      el('span', { 'aria-hidden': 'true' }, '💗'),
+      el('span', { class: 'roster-care-word' }, ROSTER_TEXT.careWord),
+    );
+    b.addEventListener('click', onTap);
+    return b;
+  }
+
   /** The habitats at home, numbered when there's more than one of a kind. */
   function habitats(current: HomeResponse): { b: MyBuilding; label: string }[] {
     const mine = atHome(current).buildings.filter((b) => b.kind === 'habitat');
@@ -511,10 +529,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
     const topRow = el('div', { class: 'roster-top-row' }, head);
     if (!row.away && id && options.onCare) {
       topRow.append(
-        tapButton(ROSTER_TEXT.care, () => options.onCare?.(id, row.id), {
-          'data-testid': 'roster-care',
-          'data-care-squishy': row.id,
-        }),
+        careButton(() => options.onCare?.(id, row.id), row.id),
       );
     }
     return el(
@@ -569,6 +584,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
           type: 'button',
           class: `roster-picker${menu === which ? ' roster-picker-open' : ''}`,
           'aria-expanded': String(menu === which),
+          'aria-label': `${label}: ${value}`,
           'data-testid': `roster-pick-${which}`,
         },
         el('span', { class: 'roster-picker-label' }, label),

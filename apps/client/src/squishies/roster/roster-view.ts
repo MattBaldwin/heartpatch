@@ -35,7 +35,7 @@ export const ROSTER_TEXT = {
   sort: { mood: 'Mood', level: 'Level', rarity: 'Rarity', status: 'Status' },
   filter: { all: 'All', care: 'Needs care', team: 'On team', working: 'Working' },
   needsCare: 'Needs care',
-  care: '💗 Care',
+  careWord: 'Care',
   upClose: '👀 Up close',
   dressUp: '🎀 Dress up',
   moveIn: '🏡 Move to a habitat',

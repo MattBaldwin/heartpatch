@@ -224,9 +224,6 @@
 }
 
 .roster-sub {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   min-width: 0;
   overflow: hidden;
   font-size: 13px;
@@ -453,6 +450,35 @@
 
 .roster-whisper p {
   margin: 0;
+}
+
+.roster-care {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The narrowest phones: a smaller picture, Care as just 💗, and the pickers
+   without their "Sort"/"Show" words (VoiceOver still reads them), so the
+   name and both pickers keep their room. */
+@media (max-width: 359px) {
+  .roster-portrait,
+  .roster-portrait-img {
+    width: 52px;
+    height: 52px;
+  }
+
+  .roster-care-word,
+  .roster-picker-label {
+    display: none;
+  }
+
+  .roster-care {
+    min-width: 48px;
+    justify-content: center;
+    padding-inline: 0;
+  }
 }
 
 /* iPad and wide windows: a roomier sheet, two squishies a line. */
