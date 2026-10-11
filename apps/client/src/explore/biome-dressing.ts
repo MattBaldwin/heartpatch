@@ -63,9 +63,9 @@ const trailPlace: Placer = (ctx) => {
   // Far peaks across the back, where the camera looks, with a few to the sides.
   // Two layers so they read as a range: a near row and a taller one behind.
   const peaks = [
-    ...ring(ctx, 5, 3.6, 4.4, [1.6, 2.2], 0, true, [55, 125]),
-    ...ring(ctx, 5, 4.8, 5.8, [2.4, 3.2], 0, true, [40, 140]),
-    ...ring(ctx, 3, 4.0, 5.0, [1.4, 2.0], 0, true, [15, 165]),
+    ...ring(ctx, 5, 3.6, 4.4, [0.9, 1.2], 0, true, [55, 125]),
+    ...ring(ctx, 5, 4.8, 5.8, [1.3, 1.7], 0, true, [40, 140]),
+    ...ring(ctx, 3, 4.0, 5.0, [0.8, 1.1], 0, true, [15, 165]),
   ];
   for (const p of peaks) ctx.shade(p.x, p.z, 2.5 * p.scale, 6 * p.scale);
   return { peaks };

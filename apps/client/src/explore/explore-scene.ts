@@ -765,9 +765,10 @@ export class ExploreScene implements AmbientTarget {
     if (!following && this.#framed !== this.#at) {
       // The shot has settled on this spot: fade and place glints against the
       // real framing (at the start the Keeper and camera weren't set yet).
-      this.#framed = this.#at;
+      // Until the Keeper can be placed on screen, try again next frame.
       this.#fade();
       this.#placeGlints();
+      if (this.#keeperBox()) this.#framed = this.#at;
     }
     let swinging = false;
     if (this.#swingAt !== null) {
@@ -1055,6 +1056,9 @@ export class ExploreScene implements AmbientTarget {
   /** Fades the props that stand between the camera and the Keeper; the rest stay solid. */
   #fade(): void {
     if (this.#props.size === 0) return;
+    // The camera first: its tilt follows the screen's shape, which the first
+    // call learns (and that re-enters here); work from the settled shot.
+    this.#applyCamera();
     const middle = AIM_HEIGHT / this.#size;
     // Into the spare set (no allocation while walking); swapped in only on a change.
     const hiding = hidingSpots(
@@ -1096,6 +1100,7 @@ export class ExploreScene implements AmbientTarget {
    * Redrawn only when a glint moves.
    */
   #placeGlints(): void {
+    this.#applyCamera(); // the shot's tilt, as #fade
     const size = EXPLORE_VIEW.glintSize;
     const keeper = { ...this.#world(this.#at), y: this.#groundAt(this.#at) };
     const half = (size * EXPLORE_FADE.glintHalo) / 2;
@@ -1146,6 +1151,8 @@ export class ExploreScene implements AmbientTarget {
     const top = this.screenOf(this.#at, this.keeperTall);
     if (!feet || !top) return null;
     const half = (feet.y - top.y) * EXPLORE_FADE.keeperHalfWidth;
+    // Before the canvas is laid out the projection isn't real yet: can't tell.
+    if (![feet.x, feet.y, top.y, half].every(Number.isFinite) || half <= 0) return null;
     return { left: feet.x - half, right: feet.x + half, top: top.y, bottom: feet.y };
   }
 
