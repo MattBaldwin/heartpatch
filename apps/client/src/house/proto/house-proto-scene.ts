@@ -878,7 +878,7 @@ export class HouseProtoScene {
       ball(scene, 0.5, [0.25, 0.9, 0.1], '#7cc46f'),
       ball(scene, 0.45, [-0.22, 0.95, -0.1], '#6db863'),
     ]);
-    plant.position.set(-w / 2 + 0.42, 0, d / 2 - 0.7);
+    plant.position.set(-w / 2 + 0.42, 0, d / 2 - 1.6);
 
     // Residents and the Keeper.
     // Puddlepuff napping in the left bed, squashed into the pillow.
@@ -978,7 +978,7 @@ export class HouseProtoScene {
     ]);
     table.position.set(3.9, 0, -2.4);
     this.#teaAndSteam(3.6, 0.7, -2.1);
-    this.#tableLamp(4.5, -2.7, 0.7, '#ffd9a8');
+    this.#tableLamp(4.3, -2.55, 0.7, '#ffd9a8');
     this.#tableLamp(-5.9, -3.6, 0.0, '#ffb3c8');
     // The trophy shelf and the memories wall.
     this.#shelf(-4.3, 2.75, d / 2 - 0.17, 2.6, 0, ['#ffb3c8', '#bfe3ff', '#ffe29a', '#c9ffd0'], 3);
