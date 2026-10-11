@@ -144,6 +144,22 @@ test.describe('friendly battles (#29)', () => {
     expect(fit.overflow).toBeLessThanOrEqual(1);
     expect(fit.share).toBeGreaterThanOrEqual(0.6);
     expect(fit.authShown).toBe(false);
+    await expect(sam.getByTestId('battle-controls')).toHaveAttribute('data-view', 'pick');
+    // The Give up check keeps the usual sheet: its question spans the row, no scroll.
+    await sam.getByTestId('battle-run').tap();
+    const ask = await sam.evaluate(() => {
+      const sheet = document.querySelector<HTMLElement>('[data-testid="battle-sheet"]')!;
+      const controls = document.querySelector<HTMLElement>('[data-testid="battle-controls"]')!;
+      const question = controls.querySelector<HTMLElement>('.battle-ask')!;
+      return {
+        overflow: sheet.scrollHeight - sheet.clientHeight,
+        share: question.getBoundingClientRect().width / controls.getBoundingClientRect().width,
+      };
+    });
+    expect(ask.overflow).toBeLessThanOrEqual(1);
+    expect(ask.share).toBeGreaterThanOrEqual(0.9);
+    await sam.getByRole('button', { name: 'Keep playing' }).tap();
+    await expect(sam.getByTestId('battle-controls')).toHaveAttribute('data-view', 'pick');
 
     // A cheer while turn 0 is on: ids only, and the other phone shows it.
     await sam.getByTestId('battle-cheer').tap();

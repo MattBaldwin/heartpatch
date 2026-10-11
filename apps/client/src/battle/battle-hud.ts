@@ -383,6 +383,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
   /** "Who comes out?": the bench, in the sheet like the potion picker (#214). */
   const openSwap = (mode: Extract<ControlMode, { type: 'choose' }>): void => {
     problem.textContent = '';
+    delete controls.dataset['view'];
     const pick = el('div', { class: 'battle-moves' });
     for (const { slot, name } of mode.bench) {
       pick.append(
@@ -416,6 +417,10 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
     controls.replaceChildren();
     controls.hidden = mode.type === 'hidden';
     sheet.dataset['mode'] = mode.type;
+    // The base pick (moves, Swap, Run): a live battle lays it out as one grid
+    // (battle.css). "Who comes out?" and the run check clear it.
+    if (mode.type === 'choose') controls.dataset['view'] = 'pick';
+    else delete controls.dataset['view'];
     switch (mode.type) {
       case 'choose': {
         const moves = el('div', { class: 'battle-moves' });
@@ -492,6 +497,7 @@ export function mountBattleHud(root: HTMLElement, options: BattleHudOptions): Ba
         const run = button(
           words.run,
           () => {
+            delete controls.dataset['view'];
             controls.replaceChildren(
               el('p', { class: 'battle-ask' }, words.ask),
               el(

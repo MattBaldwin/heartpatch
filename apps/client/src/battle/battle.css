@@ -656,24 +656,32 @@ body:has(.battle-hud:not([hidden])) .auth-chip {
 }
 
 /* A live battle's pick fits the 35% sheet on an iPhone SE: the words above
-   say it's my pick (so the narration steps aside), and the moves, Swap and
-   Give up share one grid of three. */
+   say it's my pick (so the narration steps aside while I choose, in "Who
+   comes out?" and the Give up check too), and the base pick's moves, Swap
+   and Give up share one grid of three; those two keep the usual layout. */
 .battle-sheet:has(> .battle-live:not([hidden]))[data-mode='choose'] > .battle-caption {
   display: none;
 }
 
-.battle-sheet:has(> .battle-live:not([hidden]))[data-mode='choose'] .battle-controls {
+.battle-sheet:has(> .battle-live:not([hidden])) > .battle-controls[data-view='pick'] {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.battle-sheet:has(> .battle-live:not([hidden]))[data-mode='choose']
-  :is(.battle-moves, .battle-row) {
+.battle-sheet:has(> .battle-live:not([hidden]))
+  > .battle-controls[data-view='pick']
+  > :is(.battle-moves, .battle-row) {
   display: contents;
 }
 
-.battle-sheet:has(> .battle-live:not([hidden]))[data-mode='choose'] .battle-button {
+.battle-sheet:has(> .battle-live:not([hidden])) > .battle-controls[data-view='pick'] .battle-hint {
+  grid-column: 1 / -1;
+}
+
+.battle-sheet:has(> .battle-live:not([hidden]))
+  > .battle-controls[data-view='pick']
+  .battle-button {
   min-width: 0;
   padding: 6px 8px;
   font-size: 15px;

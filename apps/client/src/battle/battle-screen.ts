@@ -893,7 +893,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
     const line = pick
       ? `${LIVE_TEXT.picked(pick.type === 'move' ? (names?.moveName(pick.move) ?? 'That') : 'A swap')} ${LIVE_TEXT.waitingFor(name)}`
       : info.myTurn && names
-        ? LIVE_TEXT.yourPick(plateName(names, activeOf(b, b.mySide), nicknames))
+        ? (b.view.turn === 0 ? LIVE_TEXT.firstPick : LIVE_TEXT.yourPick)(
+            plateName(names, activeOf(b, b.mySide), nicknames),
+          )
         : LIVE_TEXT.waitingFor(name);
     const chip = info.theyAway
       ? LIVE_TEXT.away(clockText(info.secondsLeft ?? 0))

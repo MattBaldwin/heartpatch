@@ -9,6 +9,8 @@ import type { BattleSideId, PlayerBattle } from '@heartpatch/shared';
 
 export const LIVE_TEXT = {
   yourPick: (who: string) => `Your pick! What will ${who} do?`,
+  /** Turn 0's words: the "just for fun" framing (the narration steps aside while I pick). */
+  firstPick: (who: string) => `Just for fun! What will ${who} do?`,
   picked: (move: string) => `${move} it is!`,
   waitingFor: (name: string) => `Waiting for ${name} to pick…`,
   theyPicking: 'Picking…',
