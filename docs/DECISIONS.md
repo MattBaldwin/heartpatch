@@ -1325,3 +1325,65 @@ _Proposed in each PR; recorded by the coordinator after merge._
 _Proposed in PR #344; recorded by the coordinator after merge._
 
 - **Additive reply fields.** `CareSquishy` and `HomeSquishy` don't embed `OwnedSquishy`, so each gains `accessory: ContentIdSchema.nullable().default(null)`. Like `CareSquishy.evolving`, a reply from an older server parses as "nothing worn".
+
+## 2026-10-11 — Owner decisions (coordinator)
+
+_Proposed in PR #384 (owner decisions, 2026-10-11); recorded here at the coordinator's request._
+
+- **Full send for Phase 1.** The 4-lane cap is lifted for Phase 1 (due Oct 31).
+- **Migration freeze, Oct 15–18.** No DB-changing merge from the day before the family playtest through its end (the playtest runs Oct 16–18). Outside that window, merge when green, one migration at a time, with #376 first.
+- **Big features.** Fable writes a detailed plan (files, schema and type deltas, migration with backfill and rollback, API and WebSocket, UI flow, edge cases, named tests, risks), posted as an issue comment. Opus codes it, and the PR body lists **Plan deviations**. A Fable reviewer is the second reviewer on the first full review. The supervisor decides "big" when briefing.
+  - **Big** = a new or changed core DB table or migration; an economy, battle-engine or server-authority change; a non-additive shared-contract change; or a multi-PR, multi-layer feature.
+  - **Not big** = additive optional schema fields, client-only art and UI, data-only content.
+  - **Rulings:** #372B and #376 are big. #261, #379, #372A and the trail and cave are not.
+- **Cost.** Opus codes big features. Sonnet does client UI and content. Every PR review runs the `reviewer` subagent on Opus. Supervisors hand off at about 400k context. Every PR gets a fresh lane session. *Why:* cache reads cost the same on Opus and Sonnet and dominate lane cost.
+- **#368:** PvP shots approved. The Friends button sits top right, by Chat.
+- **#372B:** the starter outfit is a second row on the Body step.
+- **Coordinator approvals:**
+  - #379: additive `SpotInteractionSchema` fields `dive` and `part`. No lake e2e for now. Follow-up: a dev route that guarantees a lake.
+  - #261: additive optional `ClothingVisual` fields `replacesBody` and `model`. `pieces` may be 0 when a model is set.
+
+## 2026-10-11 — Coordinator rules
+
+_Recorded from the coordinator's brief for the playbook, not owner decisions; see `docs/COORDINATOR.md` §2, §3 and §8._
+
+- **Render-check helper.** Before a visual capture reaches the owner, a read-only helper subagent (Agent tool, `general-purpose`, `model: "opus"`, background) checks it and returns PASS or FIX with a list. Captures name their quality tier and show no dev HUD.
+- **Lineage limit.** Sessions nest at most 8 deep, counting the owner's first supervisor session as depth 1. The last supervisor, at depth 7, writes the handoff into the repo and asks the owner to start the next supervisor from a fresh session.
+
+## 2026-10-11 — The Keeper's home (#381), 500 squishies (#382) and computer patch-mates (#386)
+
+_Owner decisions from the "Owner decisions" sections of #381 and #382, and from #386's owner decision; recorded here at the coordinator's request._
+
+**#381, the Keeper's home**
+- **Phase 2 (Thanksgiving).** **BIG** (new tables and a migration), so a detailed plan is posted on the issue before any code. Opus codes it; a Fable reviewer is the second reviewer on the first full review.
+- **Residents are extra favourites.** Habitats stay exactly as they are. A few chosen squishies *also* move into the Keeper's house (room capacity limits how many) and get a resident perk. No existing squishy data has to move.
+- **The house has its own level**, separate from the Heart Seed levels in #221. One house level per Keeper, with its own requirements and its own progress screen.
+- **Unlock, then build.** Meeting the requirements unlocks the next house level; the Keeper then spends resources to build it. The new room appears and the house gets bigger.
+- **What "getting better" counts.** All four are requirement kinds: (1) your home base (habitat variety, buildings built, decorations, lit Hearthfires; the plan says whether this replaces, feeds or reuses Home Base Harmony, design doc §8); (2) residents' wellbeing (contentment, #376, and levels); (3) your patch-mates (trades and gifts completed, shared trading posts and visits); (4) land size (tiles owned and kept tended, §11).
+
+**#382, 500 squishies**
+- **Every kind is hand-designed**, one at a time, like today's 48. No generator and no live generation.
+- **Target mix (500 total; today's 48 count toward it):** common 250, uncommon 150, rare 45, epic 30, legendary 17, mythic 8. The top 100 (rare and up) get fewer kinds at each step up. `mythic` already exists in `RaritySchema` (finish `shimmer`; see #261's shimmer decision).
+- **Wave 1 before the family playtest (Oct 15):** about 30 new kinds, data only. Content needs no DB migration, so it's allowed during the Oct 15–18 migration freeze. More waves follow through Phases 2 and 3.
+- **Collecting takes longer, using all four levers:** (1) region and biome kinds; (2) time and season kinds; (3) rarer rares, with lower epic, legendary and mythic odds, plus a few ultra-rare kinds, and the rules staying server-only (rule 6); (4) more evolution branches, reached only by evolving under conditions (builds on #32).
+- **Process:** each wave is data-only and not big. Content lanes run on Sonnet; reviews run on Opus. Each wave gets a mockup (species sheet at iPhone and iPad size, quality tier named, no dev HUD), render-checked and owner-approved before its PR. Pacing levers 2–4 each get their own issue.
+
+**#386, computer patch-mates**
+- **Solo patches can spawn computer Keepers, as a toggle** (an option, not forced), so the patch-mate parts of the game (#381's house requirements, trades, gifts, trading posts, visits) work before friends join. The owner's design questions (who flips the toggle, what computer Keepers do, fairness, personalities) are still open; the plan decides them.
+- **BIG**: a new kind of player, server authority, and likely DB changes. A detailed plan goes up before any code.
+
+## 2026-10-11 — Build rule, happiness rule and creator order (#371, #376, #372)
+
+_Owner requests and decisions from issues #371, #376 and #372; recorded here at the coordinator's request._
+
+- **One Build sheet (#371).** Home base, owned tiles and fences build the same way: tap the tile, tap Build, pick the area, pick the type. A fence takes 4 taps or fewer from the map. Client-only: no server, schema or migration change.
+- **Happiness drains only when idle or on the wrong job (#376).** No drain while working a job that fits: Team, Guard and Training always fit, and gathering fits when the squishy is Good or Great at that resource. A fitting job holds happiness steady and doesn't raise it. Care still raises it. Drain is the default whenever no work happens. The lane proposes each state in its PR. Migration after #360 and #372 B; a checkpoint time separate from `lastCaredAt`, unless the lane finds a way to avoid it.
+- **Keeper creator, step by step (#372).** Face shape, Body type, Skin, Hair style, Hair color, Face details. Face and body become independent choices. Hairstyles are data. PR A is data-only; PR B is the face and body split and the creator UI, with a migration after #360.
+
+## 2026-10-10 — Supervisor 6 decisions (lean lanes, evolution salt, live defense items)
+
+_Proposed in PRs #358, #360 and #370; recorded here at the coordinator's request._
+
+- **Lean lanes.** CI skips the browser e2e jobs for draft PRs, for stacked PRs (base isn't `main`), and for PRs touching only `docs/`, `.claude/` or root `*.md` (owner-approved 2026-10-10). The coordinator requires e2e success on a code PR's head before merging it.
+- **`HP_EVOLUTION_SALT`** is the server secret for evolution rolls (coordinator decision). It's required in production. `deploy.sh` generates it on the first deploy (`openssl rand -hex 32`) and never changes it. It's backed up with `.env`, and the client never receives it.
+- **No potions or Heart Charms in a live defense** (`liveDefenseItems = false`, owner-confirmed 2026-10-10). A defender's live fight takes no items.
