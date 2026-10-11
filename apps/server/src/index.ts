@@ -63,6 +63,12 @@ const jobs = await startJobs({
   logger: app.log,
   ...(app.wsHub ? { publish: app.wsHub.publish } : {}),
 });
+// The Keeper's house switch (#381), so the operator can see it took: the mode
+// and how many testers, never their names.
+app.log.info(
+  { house: config.HP_HOUSE, houseTesters: config.HP_HOUSE_TESTERS.length },
+  "the Keeper's house switch",
+);
 // The First Patch for accounts that finished the tutorial before milestones
 // existed (#44). Idempotent, so every boot can run it; it never blocks start.
 createMilestonesService({ db: db.db, clock })
