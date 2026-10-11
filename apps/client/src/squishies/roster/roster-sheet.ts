@@ -83,6 +83,8 @@ export interface RosterSheet {
   /** Reads the three views again (care or Dress up changed something). */
   refresh: () => Promise<void>;
   close: () => void;
+  /** Steps out of sight under another sheet (a care sheet) and back, keeping its place. */
+  setCovered: (covered: boolean) => void;
   readonly isOpen: boolean;
   readonly debug: RosterDebug;
 }
@@ -684,6 +686,7 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
   }
 
   function closeSheet(): void {
+    sheet.classList.remove('roster-covered');
     ticket += 1;
     window.clearTimeout(ticker);
     sheet.hidden = true;
@@ -717,6 +720,9 @@ export function createRosterSheet(options: RosterOptions): RosterSheet {
       if (mapId && !sheet.hidden) await load(mapId, ticket);
     },
     close: closeSheet,
+    setCovered: (covered) => {
+      sheet.classList.toggle('roster-covered', covered && !sheet.hidden);
+    },
     get isOpen() {
       return !sheet.hidden;
     },

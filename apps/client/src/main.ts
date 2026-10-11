@@ -236,6 +236,11 @@ const roster = createRosterSheet({
   portraits,
   hasJobs: (mapId) => mapId !== glade,
   onCare: (mapId, squishyId) => {
+    // The care sheet covers the roster, which comes back when it closes. On the
+    // Tutorial Glade the roster closes instead, so the tutorial's path stays one
+    // sheet deep (All done, then Back to map).
+    if (mapId === glade) roster.close();
+    else roster.setCovered(true);
     void care.open(mapId, squishyId);
   },
   // Up close and Dress up hand the screen to the close-up, which returns
@@ -256,6 +261,7 @@ const care = createCareSheet({
   portraits,
   // The roster under it reads again, so its hearts show the care just given.
   onClosed: () => {
+    roster.setCovered(false);
     void roster.refresh();
   },
   onSquish: (kind) => {

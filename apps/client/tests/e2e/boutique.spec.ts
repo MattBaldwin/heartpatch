@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { hook } from './dev-hook.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { trayButton } from './trays.js';
-import { careFromRoster } from './roster.js';
+import { careFromRoster, closeRoster } from './roster.js';
 
 /**
  * Patch Coins and the Boutique (#45): earn a coin by caring for the starter,
@@ -48,6 +48,8 @@ test('earns Patch Coins from care, then buys a piece in the Boutique', async ({ 
   await care.locator('[data-care="pet"]').tap();
   await slowExpect(page.getByTestId('care-note')).toContainText('So soft!');
   await care.getByTestId('care-close').tap();
+  // The roster comes back over home; close it to reach Back to map.
+  await closeRoster(page);
   await page.getByTestId('home-back').tap();
   await page.getByTestId('lobby-open').tap();
   await slowExpect(lobby.getByTestId('lobby-coins')).toHaveText('1');

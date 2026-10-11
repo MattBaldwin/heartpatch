@@ -28,6 +28,11 @@
   display: none;
 }
 
+/* Under a care sheet opened from a row: out of sight, back when it closes. */
+.roster-covered {
+  visibility: hidden;
+}
+
 /* The title and × stay put while the chips and the list scroll under them. */
 .roster-head-bar {
   position: sticky;
