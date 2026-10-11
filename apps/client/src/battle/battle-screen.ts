@@ -72,6 +72,7 @@ import {
   clockText,
   coveredSince,
   LIVE_TEXT,
+  isLiveDefender,
   liveRunWords,
   liveTurnInfo,
   ringSpan,
@@ -647,6 +648,23 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
       hud.showResult({ ...outcome, xp: [MESSAGES.replayNote], done: MESSAGES.done });
       return;
     }
+    if (isLiveDefender(b)) {
+      // Defending my land live (#29-C): held or lost, never "This land is
+      // yours!", and no XP (the server only gives the challenger's side any).
+      const outcome = !result
+        ? { title: MESSAGES.resultNoContest, subtitle: MESSAGES.noContestSub }
+        : result.winner === 'draw'
+          ? { title: MESSAGES.resultDraw, subtitle: MESSAGES.replayHeldSub }
+          : result.winner === b.mySide
+            ? {
+                title: result.reason === 'forfeit' ? MESSAGES.replayScooted : MESSAGES.replayHeld,
+                subtitle: MESSAGES.replayHeldSub,
+              }
+            : { title: MESSAGES.replayLost, subtitle: MESSAGES.replayLostSub };
+      hud.setCaption(null);
+      hud.showResult({ ...outcome, xp: [MESSAGES.noXp], done: MESSAGES.done });
+      return;
+    }
     if (b.kind === 'friendly') {
       // A friendly battle (#29): just for fun, so no XP lines and no losses.
       const name = opponentName(b);
@@ -825,7 +843,9 @@ export function createBattleScreen(options: BattleScreenOptions): BattleScreen {
           battle.kind === 'tile'
             ? MESSAGES.guardiansStart
             : battle.kind === 'rival-tile'
-              ? MESSAGES.rivalStart
+              ? isLiveDefender(battle)
+                ? LIVE_TEXT.defendStart
+                : MESSAGES.rivalStart
               : battle.kind === 'rescue'
                 ? MESSAGES.shadowsStart
                 : battle.kind === 'journey'

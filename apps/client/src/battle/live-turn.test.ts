@@ -4,6 +4,7 @@ import { GameClock } from '../inventory/game-clock.js';
 import {
   clockText,
   coveredSince,
+  isLiveDefender,
   LIVE_TEXT,
   liveRunWords,
   liveTurnInfo,
@@ -110,6 +111,15 @@ describe('live turns on screen (#29)', () => {
     // The challenger runs as in any tile battle; the defender has no leave button.
     expect(liveRunWords({ kind: 'rival-tile', mySide: 'a' })).toBeUndefined();
     expect(liveRunWords({ kind: 'rival-tile', mySide: 'b' })).toBeNull();
+  });
+
+  it('knows the defender of a live defense (their own land, no XP)', () => {
+    const live = battle().live;
+    expect(isLiveDefender({ kind: 'rival-tile', mySide: 'b', live })).toBe(true);
+    expect(isLiveDefender({ kind: 'rival-tile', mySide: 'a', live })).toBe(false);
+    expect(isLiveDefender({ kind: 'friendly', mySide: 'b', live })).toBe(false);
+    // A replayed or AI-defended challenge isn't live: the replay card covers it.
+    expect(isLiveDefender({ kind: 'rival-tile', mySide: 'b', live: undefined })).toBe(false);
   });
 
   it('formats the away clock', () => {

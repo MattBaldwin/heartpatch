@@ -1,4 +1,5 @@
 import type { BattleSideId, PlayerBattle } from '@heartpatch/shared';
+import type { RunWords } from './battle-hud.js';
 
 /*
  * A live battle's turn on screen (#29, the owner-approved mockup): both
@@ -11,6 +12,8 @@ export const LIVE_TEXT = {
   yourPick: (who: string) => `Your pick! What will ${who} do?`,
   /** Turn 0's words: the "just for fun" framing (the narration steps aside while I pick). */
   firstPick: (who: string) => `Just for fun! What will ${who} do?`,
+  /** A live defense's first words for the defender (#29-C): it's their land. */
+  defendStart: 'Someone wants to play on your land!',
   picked: (move: string) => `${move} it is!`,
   waitingFor: (name: string) => `Waiting for ${name} to pick…`,
   theyPicking: 'Picking…',
@@ -81,6 +84,15 @@ export function liveTurnInfo(
 }
 
 /**
+ * The defender's seat in a live defense (#29-C): their own land, held or
+ * lost, and the server gives them no XP for it (only side `a` earns), so
+ * the end card reads like the raid report's, not the challenger's.
+ */
+export function isLiveDefender(battle: Pick<PlayerBattle, 'kind' | 'mySide' | 'live'>): boolean {
+  return battle.live !== undefined && battle.kind === 'rival-tile' && battle.mySide !== 'a';
+}
+
+/**
  * How a live battle's leave button reads. A friendly battle: "Give up"
  * (nothing at stake). A live defense (#29-C): the challenger runs as in any
  * tile battle (undefined: the usual words), and the defender has no leave
@@ -88,7 +100,7 @@ export function liveTurnInfo(
  */
 export function liveRunWords(
   battle: Pick<PlayerBattle, 'kind' | 'mySide'>,
-): { run: string; ask: string; yes: string; stay: string } | null | undefined {
+): RunWords | null | undefined {
   if (battle.kind === 'friendly') {
     return {
       run: LIVE_TEXT.giveUp,
