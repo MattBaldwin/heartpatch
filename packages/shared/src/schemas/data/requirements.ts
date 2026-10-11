@@ -65,8 +65,27 @@ export const RequirementSchema = z.discriminatedUnion('kind', [
 export type Requirement = z.infer<typeof RequirementSchema>;
 export type RequirementKind = Requirement['kind'];
 
-/** The four kinds of "getting better" (DECISIONS #381), plus the Seed cap row. */
-export const RequirementGroupSchema = z.enum(['seed', 'home', 'residents', 'patch-mates', 'land']);
+/** Every kind, for `RequirementProgress.kind` (the client switches on it). */
+export const RequirementKindSchema = z.enum(
+  RequirementSchema.options.map((o) => o.shape.kind.value) as [
+    RequirementKind,
+    ...RequirementKind[],
+  ],
+);
+
+/**
+ * Where a row shows on a progress screen: the four kinds of "getting
+ * better" (DECISIONS #381), the Seed cap row, and `adventure` for the
+ * exploring and collecting reads the Heart Seed (#221) uses.
+ */
+export const RequirementGroupSchema = z.enum([
+  'seed',
+  'home',
+  'residents',
+  'patch-mates',
+  'land',
+  'adventure',
+]);
 export type RequirementGroup = z.infer<typeof RequirementGroupSchema>;
 
 /**
@@ -76,7 +95,7 @@ export type RequirementGroup = z.infer<typeof RequirementGroupSchema>;
  */
 export const RequirementProgressSchema = z.strictObject({
   id: z.string().min(1),
-  kind: z.string().min(1),
+  kind: RequirementKindSchema,
   group: RequirementGroupSchema,
   line: z.string().min(1),
   have: z.number().int().min(0),

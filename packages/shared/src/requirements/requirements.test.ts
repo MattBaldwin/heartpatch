@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { findAvoidedWords } from '../data/avoided-words.js';
 import { CARE_RULES } from '../data/care.js';
 import { RequirementSchema, type Requirement } from '../schemas/data/requirements.js';
 import {
@@ -116,16 +117,17 @@ describe('requirements (#381 plan §8)', () => {
     for (const [req] of EVERY_KIND) {
       const line = requirementLine(req, context);
       expect(line.split(/\s+/).length, line).toBeLessThan(10);
+      expect(findAvoidedWords(line), line).toEqual([]);
     }
     expect(requirementLine({ kind: 'litFires', count: 1 }, context)).toBe('Light a fire 🔥');
     expect(requirementLine({ kind: 'residentsContent', mood: 'happy', count: 1 }, context)).toBe(
-      '1 resident feeling happy',
+      '1 happy resident',
     );
     expect(
       requirementLine({ kind: 'buildingsBuilt', buildingId: 'cozy-meadow', count: 1 }, context),
     ).toBe('Build a Cozy Meadow');
     expect(requirementLine({ kind: 'heartSeedLevel', level: 2 }, context)).toBe(
-      'Your Heart Seed is level 2 🌱',
+      'Grow your Heart Seed to level 2 🌱',
     );
   });
 
@@ -135,6 +137,7 @@ describe('requirements (#381 plan §8)', () => {
     expect(requirementGroup('residentsEvolved')).toBe('residents');
     expect(requirementGroup('postsUsed')).toBe('patch-mates');
     expect(requirementGroup('tilesTended')).toBe('land');
+    expect(requirementGroup('squishiesBefriended')).toBe('adventure');
   });
 
   it('invites a patch-mate on a solo patch, only on unmet patch-mate rows', () => {

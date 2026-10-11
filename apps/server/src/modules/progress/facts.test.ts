@@ -65,7 +65,12 @@ describe.skipIf(!url)('progress facts (needs DATABASE_URL)', () => {
   });
 
   async function start(): Promise<FastifyInstance> {
-    const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url!, HP_HOUSE: 'on' });
+    const config = loadConfig({
+      NODE_ENV: 'test',
+      DATABASE_URL: url!,
+      HP_HOUSE: 'on',
+      HP_DEV_SQUISHY_GRANTS: 'true',
+    });
     app = await buildApp({ config, db, clock: () => at, logger: false });
     return app;
   }
@@ -283,6 +288,46 @@ describe.skipIf(!url)('progress facts (needs DATABASE_URL)', () => {
     expect(got.tilesTended).toBe(8);
     expect(got.ownedTileDistances).toHaveLength(9);
     expect(got.postsUsed).toBe(1);
+  });
+
+  it('leaves a paused homestead out, and counts a post my land reaches', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    await makeHomestead(db, mapId, kid.id, at, 0);
+    const paused = await makeHomestead(db, mapId, kid.id, at, 1);
+    await db.execute(
+      `update tile_explore set paused_at = '${at.toISOString()}' where tile_id = '${paused.id}'`,
+    );
+    expect((await facts(mapId, kid)).homesteads).toBe(1);
+    // It resumes: it counts again.
+    await db.execute(
+      `update tile_explore set resumed_at = '${at.toISOString()}' where tile_id = '${paused.id}'`,
+    );
+    expect((await facts(mapId, kid)).homesteads).toBe(2);
+    // The dev route claims a path from home to the nearest post.
+    expect((await facts(mapId, kid)).postsUsed).toBe(0);
+    expect((await call(server, 'POST', `/maps/${mapId}/dev/posts/connect`, kid)).statusCode).toBe(
+      200,
+    );
+    expect((await facts(mapId, kid)).postsUsed).toBe(1);
+  });
+
+  it('counts public milestones only, never a secret one', async () => {
+    const server = await start();
+    const kid = await player();
+    const mapId = await newMap(server, kid);
+    await db.insert(milestoneRewards).values([
+      { id: crypto.randomUUID(), userId: kid.id, milestoneId: 'collector', tier: 1, earnedAt: at },
+      {
+        id: crypto.randomUUID(),
+        userId: kid.id,
+        milestoneId: 'not-a-public-track',
+        tier: 3,
+        earnedAt: at,
+      },
+    ]);
+    expect((await facts(mapId, kid)).milestoneTiers).toEqual({ collector: 1 });
   });
 
   it('invites a patch-mate on a solo patch, and not once one joins', async () => {

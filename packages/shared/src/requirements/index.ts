@@ -39,7 +39,10 @@ export interface ProgressFacts {
   heartSeedLevel: number;
   /** Hex distance from the Keeper's Heart Seed of every tile they own. */
   ownedTileDistances: readonly number[];
-  /** Milestone tiers reached, by track id. */
+  /**
+   * Milestone tiers reached, by public track id (a milestone is a tier;
+   * secret tracks never count, so a visible row never moves on a secret).
+   */
   milestoneTiers: Readonly<Record<string, number>>;
   /** Squishies the Keeper has on this patch (active, in a trade or in the Hollow). */
   befriended: number;
@@ -111,13 +114,14 @@ export function requirementGroup(kind: RequirementKind): RequirementGroup {
     case 'postsUsed':
       return 'patch-mates';
     case 'ownedTilesWithin':
+    case 'tilesTended':
+    case 'homesteads':
+      return 'land';
     case 'milestonesReached':
     case 'squishiesBefriended':
     case 'tilesFullyExplored':
     case 'speciesSeen':
-    case 'tilesTended':
-    case 'homesteads':
-      return 'land';
+      return 'adventure';
   }
 }
 
@@ -237,7 +241,7 @@ export function requirementLine(req: Requirement, context: RequirementContext): 
     case 'decorations':
       return `Place ${plural(req.count, 'decoration', 'decorations')}`;
     case 'residentsContent':
-      return `${plural(req.count, 'resident', 'residents')} feeling ${req.mood}`;
+      return plural(req.count, `${req.mood} resident`, `${req.mood} residents`);
     case 'residentsLevel':
       return `${plural(req.count, 'resident', 'residents')} at level ${String(req.level)}+`;
     case 'residentsEvolved':
@@ -245,7 +249,7 @@ export function requirementLine(req: Requirement, context: RequirementContext): 
     case 'tradesCompleted':
       if (req.tradeKinds?.length === 1)
         return req.tradeKinds[0] === 'gift'
-          ? `Give ${plural(req.count, 'gift', 'gifts')}`
+          ? `Share ${plural(req.count, 'gift', 'gifts')}`
           : `Finish ${plural(req.count, 'trade', 'trades')}`;
       return `Finish ${String(req.count)} trades or gifts`;
     case 'patchMatesTradedWith':
@@ -257,7 +261,7 @@ export function requirementLine(req: Requirement, context: RequirementContext): 
     case 'homesteads':
       return `Have ${plural(req.count, 'homestead', 'homesteads')}`;
     case 'heartSeedLevel':
-      return `Your Heart Seed is level ${String(req.level)} 🌱`;
+      return `Grow your Heart Seed to level ${String(req.level)} 🌱`;
   }
 }
 

@@ -234,9 +234,10 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
     mapId: string,
     user: PublicUser,
     at: Date,
-    timeZone: string,
+    map: Pick<MapRow, 'timeZone' | 'kind'>,
   ): Promise<HomeResponse> {
     const userId = user.id;
+    const { timeZone } = map;
     const local = mapLocalTime(at, timeZone);
     const [tiles, buildings, squishies, items] = await Promise.all([
       repo.listHomeTiles(mapId, userId),
@@ -293,8 +294,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       seasons: seasonsOn(at, timeZone),
       tonight: hearthfireState(null, local, HOME_BASE_RULES).tonight,
       now: at.toISOString(),
-      // The Keeper's house (#381): level 1 for everyone until its tables land (A2).
-      ...(houseOpenFor(house, user) ? { house: { level: HOUSE_START_LEVEL } } : {}),
+      // The Keeper's house (#381): level 1 for everyone until its tables land
+      // (A2). The Tutorial Glade has none, so Sprout's steps don't change.
+      ...(map.kind === 'multiplayer' && houseOpenFor(house, user)
+        ? { house: { level: HOUSE_START_LEVEL } }
+        : {}),
     };
   }
 
@@ -423,7 +427,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       const { map } = await requireMember(db, user, mapId);
       // An older map's home ring gets its seasonal nodes (owner decision 2026-10-06).
       if (await seedHomeRingNodes(db, mapId, now(), options.log)) published(mapId);
-      return homeView(store, db, mapId, user, now(), map.timeZone);
+      return homeView(store, db, mapId, user, now(), map);
     },
 
     place: (user, mapId, request) => {
@@ -434,7 +438,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       return command(
         user,
         mapId,
-        async ({ repo, tx, at, local, timeZone, home, outer }) => {
+        async ({ repo, tx, at, local, timeZone, mapKind, home, outer }) => {
           if (!inSeason(building, new Set(seasonsOn(at, timeZone)))) {
             const season = SEASON_NAMES.get(building.season ?? '') ?? 'its season';
             throw new AppError('CONFLICT', MESSAGES.outOfSeason(building.name, season));
@@ -481,14 +485,14 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             actorUserId: user.id,
             payload: { userId: user.id, building: placed(row, local), cost },
           });
-          return homeView(repo, tx, mapId, user, at, timeZone);
+          return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
         },
         { q: request.q, r: request.r },
       );
     },
 
     move: (user, mapId, buildingRowId, request) =>
-      command(user, mapId, async ({ repo, tx, at, local, timeZone, home }) => {
+      command(user, mapId, async ({ repo, tx, at, local, timeZone, mapKind, home }) => {
         const row = await lockMine(repo, mapId, user.id, buildingRowId);
         // A building out on my land stays put (#202, #277); home ones move within home.
         const building = requireBuildingData(row.buildingId);
@@ -512,14 +516,14 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             },
           });
         }
-        return homeView(repo, tx, mapId, user, at, timeZone);
+        return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
       }),
 
     remove: async (user, mapId, buildingRowId) =>
       command(
         user,
         mapId,
-        async ({ repo, tx, at, local, timeZone }) => {
+        async ({ repo, tx, at, local, timeZone, mapKind }) => {
           const row = await lockMine(repo, mapId, user.id, buildingRowId);
           const refund = takeDownRefund(row, local);
           // A Crafting Factory's batches stop (#294): what's made is kept, the
@@ -562,13 +566,16 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           });
           for (const event of training?.events ?? []) await repo.appendEvent(event);
           for (const event of stopped.events) await repo.appendEvent(event);
-          return { refund, home: await homeView(repo, tx, mapId, user, at, timeZone) };
+          return {
+            refund,
+            home: await homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind }),
+          };
         },
         await tileOf(mapId, user.id, buildingRowId),
       ),
 
     fuel: (user, mapId, buildingRowId, nights) =>
-      command(user, mapId, async ({ repo, tx, at, local, timeZone }) => {
+      command(user, mapId, async ({ repo, tx, at, local, timeZone, mapKind }) => {
         const row = await lockMine(repo, mapId, user.id, buildingRowId);
         const fire = BUILDING_DATA.get(row.buildingId);
         if (fire?.kind !== 'hearthfire') throw new AppError('CONFLICT', MESSAGES.notAFire);
@@ -590,11 +597,11 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             fuelledThrough,
           },
         });
-        return homeView(repo, tx, mapId, user, at, timeZone);
+        return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
       }),
 
     fuelAll: (user, mapId) =>
-      command(user, mapId, async ({ repo, tx, at, local, timeZone }) => {
+      command(user, mapId, async ({ repo, tx, at, local, timeZone, mapKind }) => {
         // My fires (step 8, id order), then the bag's rows (step 11, `consumeItems`).
         const fires = (await repo.lockFires(mapId, user.id)).flatMap((row) => {
           const fire = BUILDING_DATA.get(row.buildingId);
@@ -664,7 +671,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
           fires: plan.size,
           nights,
           short: room,
-          home: await homeView(repo, tx, mapId, user, at, timeZone),
+          home: await homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind }),
         };
       }),
 
@@ -672,7 +679,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
       command(
         user,
         mapId,
-        async ({ repo, tx, at, local, timeZone }) => {
+        async ({ repo, tx, at, local, timeZone, mapKind }) => {
           const row = await lockMine(repo, mapId, user.id, buildingRowId);
           const building = requireBuildingData(row.buildingId);
           const cost = upgradeCost(building, row.level);
@@ -702,7 +709,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             },
           });
           for (const event of training?.events ?? []) await repo.appendEvent(event);
-          return homeView(repo, tx, mapId, user, at, timeZone);
+          return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
         },
         await tileOf(mapId, user.id, buildingRowId),
       ),
@@ -769,7 +776,7 @@ export function createBuildingsService(options: BuildingsServiceOptions): Buildi
             },
           });
         }
-        return homeView(repo, tx, mapId, user, at, timeZone);
+        return homeView(repo, tx, mapId, user, at, { timeZone, kind: mapKind });
       }),
   };
 }

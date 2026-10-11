@@ -1,11 +1,14 @@
 import {
   canFade,
+  connectedLand,
   EMPTY_PROGRESS_FACTS,
   hexDistance,
   heartSeedOf,
   isTradingPost,
   landMood,
-  postReach,
+  hexKey,
+  hexNeighbors,
+  MILESTONE_TRACKS,
   TERRITORY_RULES,
   type ProgressFacts,
 } from '@heartpatch/shared';
@@ -26,6 +29,9 @@ import { createProgressRepo } from './repo.js';
  * levels land (#221); `residents` is empty until the house tables land (A2)
  * and residents move in (C); `decorations` is 0 until furniture (Phase 2).
  */
+
+/** Milestones a kid can see (secret tracks are server-only, CLAUDE.md rule 6). */
+const PUBLIC_TRACKS = new Set(MILESTONE_TRACKS.map((t) => t.id));
 
 export interface FactsInput {
   mapId: string;
@@ -74,10 +80,12 @@ export async function gatherProgressFacts(tx: Executor, input: FactsInput): Prom
       landMood(t.tendedAt ?? at, at, rules) !== 'happy',
   ).length;
 
-  // A post is used once my land reaches it, or once I won a journey to it.
+  // A post is used once my land reaches it (`postReach`'s "connected"), or
+  // once I won a journey to it. Connected land is worked out once, not per post.
   const posts = new Set(wonPosts);
+  const connected = connectedLand(mapTiles, userId);
   for (const tile of mapTiles) {
-    if (isTradingPost(tile) && postReach(tile, mapTiles, userId)?.kind === 'connected') {
+    if (isTradingPost(tile) && hexNeighbors(tile).some((n) => connected.has(hexKey(n)))) {
       posts.add(tile.id);
     }
   }
@@ -85,7 +93,12 @@ export async function gatherProgressFacts(tx: Executor, input: FactsInput): Prom
   return {
     ...EMPTY_PROGRESS_FACTS,
     ownedTileDistances: seed === null ? [] : owned.map((t) => hexDistance(t, seed)),
-    milestoneTiers: Object.fromEntries(milestoneTiers.map((m) => [m.milestoneId, m.tier])),
+    // Public tracks only: a visible row never moves on a secret milestone.
+    milestoneTiers: Object.fromEntries(
+      milestoneTiers
+        .filter((m) => PUBLIC_TRACKS.has(m.milestoneId))
+        .map((m) => [m.milestoneId, m.tier]),
+    ),
     befriended,
     buildings: buildings.map((b) => ({ buildingId: b.buildingId, kind: b.kind })),
     explored,

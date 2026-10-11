@@ -203,7 +203,7 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
       have: 1,
       need: 1,
       done: true,
-      line: 'Your Heart Seed is level 1 🌱',
+      line: 'Grow your Heart Seed to level 1 🌱',
     });
     // A new Keeper's home ring is tended land: 7 of the 8 tiles.
     expect(row(view, 'tilesTended')).toMatchObject({ have: 7, need: 8, done: false });
@@ -221,7 +221,9 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
     let view = await house(server, kid, mapId);
     expect(row(view, 'buildingsBuilt')).toMatchObject({ have: 2, need: 2, done: true });
     expect(row(view, 'litFires')).toMatchObject({ have: 0, done: false });
-    await db.update(buildings).set({ fuelledThrough: '2026-10-05' });
+    await db.execute(
+      `update buildings set fuelled_through = '2026-10-05' where map_id = '${mapId}'`,
+    );
     view = await house(server, kid, mapId);
     expect(row(view, 'litFires')).toMatchObject({ have: 1, done: true });
   });
@@ -261,6 +263,10 @@ describe.skipIf(!url)("the Keeper's house, PR A (needs DATABASE_URL)", () => {
     const started = await call(server, 'POST', '/tutorial/start', kid);
     const glade = TutorialResponseSchema.parse(started.json()).tutorial.mapId!;
     expect((await call(server, 'GET', `/maps/${glade}/house`, kid)).statusCode).toBe(404);
+    // …and the Glade's home offers none, so no cottage appears there.
+    const gladeHome = await call(server, 'GET', `/maps/${glade}/home`, kid);
+    expect(gladeHome.statusCode).toBe(200);
+    expect(HomeResponseSchema.parse(gladeHome.json()).house).toBeUndefined();
     const other = await player();
     const theirs = await newMap(server, other);
     expect((await call(server, 'GET', `/maps/${theirs}/house`, kid)).statusCode).toBe(404);
