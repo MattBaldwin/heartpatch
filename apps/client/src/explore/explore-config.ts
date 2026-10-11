@@ -146,7 +146,14 @@ export const EXPLORE_FADE = {
   /** Beside the Keeper's line: this plus the spot's own collider, doubled for its canopy. */
   side: 0.04, // TUNE
   /** A faded prop's opacity. */
-  alpha: 0.3, // TUNE
+  alpha: 0.45, // TUNE: see-through, but still reads as the prop, not a pale ghost
+  /**
+   * On screen (#335), a spot fades only if its outline covers at least this
+   * share of the Keeper's, so a stone beside the Keeper stays solid.
+   */
+  cover: 0.12, // TUNE
+  /** The Keeper's half-width on screen, as a share of its height there. */
+  keeperHalfWidth: 0.36, // TUNE
 } as const;
 
 /** Decorative props (#291): thin instances, one draw call per kind, placed from the tile. */

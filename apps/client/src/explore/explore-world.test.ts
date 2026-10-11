@@ -9,6 +9,8 @@ import { EXPLORE_CAMERA, EXPLORE_VIEW, INTERACTION } from './explore-config.js';
 import { startInteraction } from './interactions.js';
 import { clampToTile, insideTile } from './explore-view.js';
 import {
+  coverShare,
+  glintClear,
   alongTrail,
   besideSpot,
   blocked,
@@ -657,5 +659,26 @@ describe('the team never covers the Keeper (#323)', () => {
     }
     // Walking towards the camera, the team ends up behind the Keeper.
     for (const f of followers) expect(f.z).toBeGreaterThan(at.z);
+  });
+});
+
+describe('on-screen cover (#335)', () => {
+  const keeper = { left: 100, right: 140, top: 50, bottom: 150 };
+
+  it('measures how much of the Keeper a box covers', () => {
+    expect(coverShare(keeper, keeper)).toBe(1);
+    expect(coverShare({ left: 100, right: 120, top: 50, bottom: 150 }, keeper)).toBeCloseTo(0.5);
+    // Beside it, or only touching its edge: nothing covered.
+    expect(coverShare({ left: 141, right: 200, top: 0, bottom: 200 }, keeper)).toBe(0);
+    expect(coverShare({ left: 140, right: 200, top: 0, bottom: 200 }, keeper)).toBe(0);
+    expect(coverShare(keeper, { left: 0, right: 0, top: 0, bottom: 10 })).toBe(0);
+  });
+
+  it('slides a glint over the Keeper out past its nearer side, and leaves a clear one be', () => {
+    expect(glintClear({ x: 300, y: 60 }, 10, keeper)).toBe(0);
+    // Right of the Keeper's middle: out past its right edge.
+    expect(130 + glintClear({ x: 130, y: 60 }, 10, keeper)).toBe(150);
+    // Left of it: out past its left edge.
+    expect(105 + glintClear({ x: 105, y: 60 }, 10, keeper)).toBe(90);
   });
 });

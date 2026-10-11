@@ -99,7 +99,7 @@ const CAVE: SkyLook = {
   stars: false, // a roof, not a sky: the glow comes from the crystals and caps
   starColor: '#8ef0ff',
   groundTint: '#ffffff',
-  light: { color: '#ffd9b0', sun: 0.35, environment: 0.4 }, // TUNE: dim, so the glow reads
+  light: { color: '#ffd9b0', sun: 0.55, environment: 0.62 }, // TUNE: dusky but kid-readable; the glow still reads
 };
 export const CAVE_LOOKS: Readonly<Record<SkyPhase, SkyLook>> = {
   dawn: CAVE,

@@ -2,6 +2,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { merged } from '../map/map-props.js';
 import {
+  buildCaveRock,
   buildCrystals,
   buildGlowCaps,
   buildGlowMushroomSpot,
@@ -120,7 +121,17 @@ const SPOTS: Readonly<Record<string, (scene: Scene) => SpotShape>> = {
   'glow-mushrooms': buildGlowMushroomSpot,
 };
 
+/** A biome's own take on a shared spot (the cave's rock is bare stone). */
+const OVERRIDES: Readonly<Record<string, Readonly<Record<string, (scene: Scene) => SpotShape>>>> = {
+  hills: { rock: buildCaveRock },
+};
+
 /** The trail's and the cave's search spots, drawn in the kit's style; null: not one of theirs. */
-export function buildBiomeSpot(scene: Scene, kind: string): SpotShape | null {
-  return SPOTS[kind]?.(scene) ?? null;
+export function buildBiomeSpot(scene: Scene, kind: string, terrain?: string): SpotShape | null {
+  const own = terrain === undefined ? undefined : OVERRIDES[terrain]?.[kind];
+  return (own ?? SPOTS[kind])?.(scene) ?? null;
 }
+
+/** Whether a biome draws this shared spot its own way. */
+export const overridesSpot = (terrain: string, kind: string): boolean =>
+  OVERRIDES[terrain]?.[kind] !== undefined;

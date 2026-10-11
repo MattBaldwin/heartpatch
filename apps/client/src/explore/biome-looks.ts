@@ -47,8 +47,8 @@ export const BIOME_LOOKS: Readonly<Record<string, LandLook>> = {
   // specks; the walls, crystals and caps come from the cave kit.
   hills: {
     palette: {
-      grass: ['#54476f', '#615283', '#6f5f94'], // TUNE: dark stone
-      sunny: '#75669a', // TUNE
+      grass: ['#62547f', '#706192', '#7f6fa4'], // TUNE: dusky stone
+      sunny: '#8676ab', // TUNE
       path: '#9c8aa8', // TUNE: a muted trail
       pathEdge: '#7a6a8c', // TUNE
       specks: ['#8ef0ff', '#ffb8e0', '#e9dcff', '#c9a8ff'], // TUNE
@@ -68,7 +68,7 @@ export const BIOME_LOOKS: Readonly<Record<string, LandLook>> = {
       flowers: { inside: 0, outside: 0 }, // TUNE
       bushes: { edge: 0, outside: 0 }, // TUNE
       trees: { near: 0, far: 0 }, // TUNE
-      rocks: 12, // TUNE
+      rocks: 0, // TUNE: the walls and stalagmites are the cave's stone (no mossy boulders)
       logs: 0, // TUNE
       mushrooms: 0, // TUNE
       pebbles: 40, // TUNE

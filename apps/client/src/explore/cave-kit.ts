@@ -80,3 +80,26 @@ export function buildGlowMushroomSpot(scene: Scene): SpotShape {
   mesh.name = 'land-spot-glow-mushrooms';
   return { mesh, glint: 0.7 };
 }
+
+/** The cave's rock to lift: rounded purple-grey stone, no moss, a crystal peeking out. */
+export function buildCaveRock(scene: Scene): SpotShape {
+  const mesh = merged('land-spot-cave-rock', [
+    shaded(sphere(scene, 0.78, 8, [0, 0.2, 0], [1.1, 0.72, 1]), '#6f6290', '#b9aed6', 0, 0.5),
+    shaded(
+      sphere(scene, 0.36, 5, [0.36, 0.1, -0.12], [1.1, 0.7, 1]),
+      '#695c8a',
+      '#ada2cc',
+      0,
+      0.22,
+    ),
+    shaded(
+      sphere(scene, 0.42, 6, [-0.08, 0.42, 0.05], [1.1, 0.5, 0.95]),
+      '#7a6c9c',
+      '#c6bce0',
+      0.3,
+      0.6,
+    ),
+    flat(cylinder(scene, 0.26, 0.01, 0.08, 5, [-0.3, 0.3, 0.12], [0.3, 0, 0.4]), '#9af0ff'),
+  ]);
+  return { mesh, glint: 0.85 };
+}

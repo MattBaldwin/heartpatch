@@ -276,6 +276,44 @@ export function hidingSpots(
   return out;
 }
 
+/** A box on screen, CSS pixels (y grows downwards). */
+export interface ScreenBox {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+/** How much of `of` the box `by` covers, 0–1 (0 when either is empty). */
+export function coverShare(by: ScreenBox, of: ScreenBox): number {
+  const area = (of.right - of.left) * (of.bottom - of.top);
+  if (area <= 0) return 0;
+  const w = Math.min(by.right, of.right) - Math.max(by.left, of.left);
+  const h = Math.min(by.bottom, of.bottom) - Math.max(by.top, of.top);
+  return w > 0 && h > 0 ? (w * h) / area : 0;
+}
+
+/**
+ * Where a glint sits on screen once it is clear of the Keeper (#335): a glint
+ * over the Keeper slides sideways, out past the nearer edge, so it never
+ * covers the face. `half` is the glint's own half-size on screen.
+ */
+export function glintClear(
+  glint: { x: number; y: number },
+  half: number,
+  keeper: ScreenBox,
+): number {
+  const box = {
+    left: glint.x - half,
+    right: glint.x + half,
+    top: glint.y - half,
+    bottom: glint.y + half,
+  };
+  if (coverShare(box, keeper) === 0) return 0;
+  const middle = (keeper.left + keeper.right) / 2;
+  return glint.x >= middle ? keeper.right + half - glint.x : keeper.left - half - glint.x;
+}
+
 export interface FollowCamera {
   /** Tile-local target. */
   readonly target: WorldPoint;

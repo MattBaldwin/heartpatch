@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BIOME_EXTRAS } from './biome-dressing.js';
+import { BIOME_EXTRAS, overridesSpot } from './biome-dressing.js';
 import { BIOME_LOOKS } from './biome-looks.js';
 import { LAND_LIGHT } from './land-config.js';
 import { landLayout, type LayoutInput } from './land-layout.js';
@@ -77,5 +77,14 @@ describe('biome dressing', () => {
     const trail = grow('mountains').land;
     expect(cave.height(0, SIZE * 1.8)).toBeGreaterThan(cave.height(0, 0) + 2);
     expect(trail.height(0, SIZE * 2)).toBeLessThan(trail.height(0, 0) - 2);
+  });
+});
+
+describe('biome spots', () => {
+  it('gives the cave its own bare-stone rock, and leaves every other spot to the meadow kit', () => {
+    expect(overridesSpot('hills', 'rock')).toBe(true);
+    expect(overridesSpot('meadow', 'rock')).toBe(false);
+    expect(overridesSpot('mountains', 'rock')).toBe(false);
+    expect(overridesSpot('hills', 'tree')).toBe(false);
   });
 });

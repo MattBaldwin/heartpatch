@@ -20,6 +20,7 @@ import {
   KEEPER_DATA,
   type ExploreTileResponse,
   type KeeperConfig,
+  type PublicSearchSpot,
   type PublicTile,
   type Species,
   type ToolId,
@@ -45,7 +46,7 @@ import {
 } from '../map/map-config.js';
 import { loftRoundedHex } from '../map/hex-mesh.js';
 import { buildSpotProp } from './land-kit.js';
-import { BIOME_EXTRAS, buildBiomeSpot } from './biome-dressing.js';
+import { BIOME_EXTRAS, buildBiomeSpot, overridesSpot } from './biome-dressing.js';
 import { BIOME_LOOKS } from './biome-looks.js';
 import { linear, merged, painted } from '../map/map-props.js';
 import {
@@ -90,10 +91,12 @@ import {
   cameraSettled,
   cameraShot,
   collidersOf,
+  coverShare,
   decorPlaces,
   followLead,
   followStep,
   freePoint,
+  glintClear,
   hidingSpots,
   keepClear,
   tileSeed,
@@ -102,6 +105,7 @@ import {
   type Collider,
   type DecorKind,
   type FollowCamera,
+  type ScreenBox,
 } from './explore-world.js';
 
 // The explore view (#199; cozy-sim feel #291, owner mockup 2026-10-08): one
@@ -200,8 +204,10 @@ const SHAPES: ReadonlySet<string> = new Set<ExploreShape>([
   'glow-mushrooms',
 ]);
 /** A spot drawn from the land kit: the meadow's own, else the trail's or the cave's. */
-const spotKit = (scene: Scene, kind: string) =>
-  buildSpotProp(scene, kind) ?? buildBiomeSpot(scene, kind);
+const spotKit = (scene: Scene, kind: string, terrain: string) =>
+  (overridesSpot(terrain, kind) ? buildBiomeSpot(scene, kind, terrain) : null) ??
+  buildSpotProp(scene, kind) ??
+  buildBiomeSpot(scene, kind, terrain);
 const isShape = (kind: PropKind | ExploreShape): kind is ExploreShape => SHAPES.has(kind);
 const TOOLS: readonly ToolId[] = ['shovel', 'net', 'rope', 'lantern'];
 /** The camera looks at about the Keeper's middle, not its feet (world units). */
@@ -287,6 +293,10 @@ export class ExploreScene implements AmbientTarget {
   #shot = cameraShot(0.5);
   #decor: Record<DecorKind, number>;
   readonly #glints: Mesh;
+  /** Where the Keeper stood when the camera last settled (fades and glints are fresh for it). */
+  #framed: WorldPoint | null = null;
+  /** How far each open spot's glint slid to clear the Keeper (world units). */
+  #glintNudge: number[] = [];
   readonly #halo: Mesh;
   readonly #tools: Record<ToolId, Mesh>;
   readonly #colliders: Collider[];
@@ -582,25 +592,8 @@ export class ExploreScene implements AmbientTarget {
   /** Redraws which spots still glint from a fresh view of the tile. */
   update(tile: ExploreTileResponse): void {
     this.#tile = tile;
-    const size = EXPLORE_VIEW.glintSize;
-    setInstances(
-      this.#glints,
-      tile.spots
-        .filter((s) => !s.done)
-        .map((s) => {
-          const at = this.#world(s);
-          const lift = this.#glintLift(s.kind);
-          // Off to one side of the prop, as on the boards.
-          const side = spotRadius(s.kind) * this.#size * EXPLORE_VIEW.glintSide;
-          return placeAt(
-            at.x + side,
-            this.#groundAt(s) + lift,
-            at.z,
-            new Vector3(size, size, size),
-          );
-        }),
-      true,
-    );
+    this.#glintNudge = [];
+    this.#placeGlints();
     if (this.#highlighted !== null && tile.spots.find((s) => s.index === this.#highlighted)?.done) {
       this.highlight(null);
     }
@@ -641,6 +634,7 @@ export class ExploreScene implements AmbientTarget {
     this.#at = at;
     if (yaw !== undefined) this.#yaw = yaw;
     this.#fade();
+    this.#placeGlints();
     const head = this.#trail[0];
     const gap = EXPLORE_VIEW.followGap;
     if (!head || (head.x - at.x) ** 2 + (head.z - at.z) ** 2 >= gap * gap) {
@@ -682,6 +676,13 @@ export class ExploreScene implements AmbientTarget {
     const goal = this.#cameraGoal();
     this.#camera = followStep(this.#camera, goal, dt);
     const following = !cameraSettled(this.#camera, goal);
+    if (!following && this.#framed !== this.#at) {
+      // The shot has settled on this spot: fade and place glints against the
+      // real framing (at the start the Keeper and camera weren't set yet).
+      this.#framed = this.#at;
+      this.#fade();
+      this.#placeGlints();
+    }
     let swinging = false;
     if (this.#swingAt !== null) {
       const t = (now - this.#swingAt) / EXPLORE_TOOL.swingMs;
@@ -964,6 +965,14 @@ export class ExploreScene implements AmbientTarget {
       middle,
       this.#hidingNext,
     );
+    // The line-of-sight rule is generous (a canopy's width); keep only the
+    // spots that really cover the Keeper on screen, so nothing beside it fades.
+    const keeper = this.#keeperBox();
+    if (keeper) {
+      for (const s of this.#tile.spots) {
+        if (hiding.has(s.index) && !this.#covers(s, keeper)) hiding.delete(s.index);
+      }
+    }
     let same = hiding.size === this.#hiding.size;
     for (const i of hiding) same &&= this.#hiding.has(i);
     if (same) return;
@@ -978,6 +987,69 @@ export class ExploreScene implements AmbientTarget {
       setInstances(batch.mesh, solid, true);
       setInstances(batch.faded, faded, true);
     }
+  }
+
+  /**
+   * Draws a glint beside each unsearched spot, as on the boards; one that
+   * would cover the Keeper on screen slides sideways, clear of it (#335).
+   * Redrawn only when a glint moves.
+   */
+  #placeGlints(): void {
+    const size = EXPLORE_VIEW.glintSize;
+    const box = this.#keeperBox();
+    const open = this.#tile.spots.filter((s) => !s.done);
+    const nudge = open.map((s) => {
+      if (!box) return 0;
+      // Off to one side of the prop (tile-local), at its glint's height.
+      const at = { x: s.x + spotRadius(s.kind) * EXPLORE_VIEW.glintSide, z: s.z };
+      const lift = this.#glintLift(s.kind);
+      const centre = this.screenOf(at, lift);
+      const edge = this.screenOf({ x: at.x + size / this.#size, z: at.z }, lift);
+      if (!centre || !edge) return 0;
+      const perUnit = Math.abs(edge.x - centre.x) / size; // px per world unit there
+      if (perUnit <= 0) return 0;
+      const px = glintClear(centre, (perUnit * size) / 2, box);
+      return Math.round((px / perUnit) * 100) / 100; // world units, steady while walking
+    });
+    const same =
+      nudge.length === this.#glintNudge.length && nudge.every((n, i) => n === this.#glintNudge[i]);
+    if (same && this.#glints.thinInstanceCount === open.length) return;
+    this.#glintNudge = nudge;
+    setInstances(
+      this.#glints,
+      open.map((s, i) => {
+        const at = this.#world(s);
+        const side = spotRadius(s.kind) * this.#size * EXPLORE_VIEW.glintSide;
+        return placeAt(
+          at.x + side + (nudge[i] ?? 0),
+          this.#groundAt(s) + this.#glintLift(s.kind),
+          at.z,
+          new Vector3(size, size, size),
+        );
+      }),
+      true,
+    );
+  }
+
+  /** The Keeper on screen: its feet to the top of its hair, about as wide as its head. */
+  #keeperBox(): ScreenBox | null {
+    if (!this.#keeper) return null;
+    const feet = this.screenOf(this.#at, 0);
+    const top = this.screenOf(this.#at, this.keeperTall);
+    if (!feet || !top) return null;
+    const half = (feet.y - top.y) * EXPLORE_FADE.keeperHalfWidth;
+    return { left: feet.x - half, right: feet.x + half, top: top.y, bottom: feet.y };
+  }
+
+  /** Whether a spot's prop covers enough of the Keeper on screen to fade (#335). */
+  #covers(spot: Pick<PublicSearchSpot, 'kind' | 'x' | 'z'>, keeper: ScreenBox): boolean {
+    const base = this.screenOf(spot, 0);
+    const top = this.screenOf(spot, this.#heightOf(spot.kind) * this.#size);
+    const edge = this.screenOf({ x: spot.x + spotRadius(spot.kind), z: spot.z }, 0);
+    if (!base || !top || !edge) return true; // can't tell: keep the old rule's answer
+    const half = Math.abs(edge.x - base.x);
+    const prop = { left: base.x - half, right: base.x + half, top: top.y, bottom: base.y };
+    return coverShare(prop, keeper) >= EXPLORE_FADE.cover;
   }
 
   /** The ground's height under a tile-local point, world units. */
@@ -1089,7 +1161,7 @@ export class ExploreScene implements AmbientTarget {
       // and cave's spots), drawn at world size: built once a kind (the first is the solid copy).
       let kit = built.get(spot.kind);
       if (kit === undefined && this.#land) {
-        kit = spotKit(this.#scene, spot.kind);
+        kit = spotKit(this.#scene, spot.kind, tile.terrain);
         built.set(spot.kind, kit);
       }
       const kind = kit ? `kit:${spot.kind}` : prop;
@@ -1098,7 +1170,9 @@ export class ExploreScene implements AmbientTarget {
         this.#kitGlint.set(spot.kind, kit.glint);
         builders.set(
           kind,
-          () => spotKit(this.#scene, spot.kind)?.mesh ?? buildProp(this.#scene, 'rock').mesh,
+          () =>
+            spotKit(this.#scene, spot.kind, tile.terrain)?.mesh ??
+            buildProp(this.#scene, 'rock').mesh,
         );
       } else {
         builders.set(kind, () =>
