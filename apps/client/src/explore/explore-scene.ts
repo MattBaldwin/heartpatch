@@ -75,6 +75,7 @@ import {
   EXPLORE_CAMERA,
   EXPLORE_FADE,
   EXPLORE_HOP,
+  EXPLORE_SWIM,
   EXPLORE_UNDERWATER,
   EXPLORE_TOOL,
   EXPLORE_VIEW,
@@ -90,6 +91,16 @@ import {
   type Hop,
   type HopPose,
 } from './keeper-hop.js';
+import {
+  createSwim,
+  stepSwim,
+  swimActive,
+  swimPose,
+  type Swim,
+  type SwimPose,
+  type SwimStyle,
+} from './keeper-swim.js';
+import { SwimBubbles } from './swim-bubbles.js';
 import {
   alongTrail,
   cameraGoal,
@@ -159,6 +170,17 @@ export interface ExploreSceneStats {
   readonly land: LandStats | null;
   /** The lake's own layers (kelp, coral, fish, bubbles), or null off a lake. */
   readonly water: WaterStats | null;
+  /**
+   * The Keeper's swim under a lake (#399), or null on land: its forward
+   * pitch (radians; positive leans into the heading), strokes taken, and
+   * kick bubbles rising.
+   */
+  readonly swim: {
+    readonly pitch: number;
+    readonly strokes: number;
+    readonly moving: boolean;
+    readonly bubbles: number;
+  } | null;
 }
 
 export interface ExploreSceneOptions {
@@ -273,6 +295,8 @@ interface Follower {
   readonly at: { x: number; z: number };
   yaw: number;
   readonly hop: Hop;
+  /** Its swim under a lake (#399), in place of the hop. */
+  readonly swim: Swim;
   /** Ground covered since the last step, tile-local. */
   walked: number;
 }
@@ -289,6 +313,9 @@ function followBack(i: number, lead: number): number {
 
 // Scratch for the hop pose and the placements (no allocations while walking, #323).
 const POSE: HopPose = { lift: 0, squash: 1 };
+/** Dev mockups only (#399): which swim to draw. */
+const swimStyle = (): SwimStyle =>
+  (globalThis as { __hpSwimStyle?: SwimStyle }).__hpSwimStyle ?? EXPLORE_SWIM.style;
 const PLACE = {
   x: 0,
   z: 0,
@@ -389,15 +416,22 @@ export class ExploreScene implements AmbientTarget {
   readonly #underwater: boolean;
   /** The Snorkel's mask on the Keeper's face, underwater. */
   #mask: Mesh | null = null;
+  /** The Keeper's swim (#399), its pose this frame, and the bubbles each kick puffs. */
+  readonly #swim = createSwim();
+  readonly #swimPose: SwimPose = { pitch: 0, lift: 0, squash: 1, surge: 0, sway: 0 };
+  #bubbles: SwimBubbles | null = null;
+  /** The player's own Reduce Motion (underwater too). */
+  readonly #still: () => boolean;
+  #now = 0;
 
   constructor(scene: Scene, tile: ExploreTileResponse, options: ExploreSceneOptions) {
     this.#scene = scene;
     this.#tile = tile;
     this.#underwater = isUnderwater(tile.terrain);
-    // Underwater the Keeper and team float and bob instead of hopping (#335).
-    // `#reduced` only picks bob over hop; it isn't the player's Reduce Motion.
+    // Underwater the Keeper and team swim instead of hopping (#399).
     const reduced = options.reducedMotion ?? (() => false);
-    this.#reduced = this.#underwater ? () => true : reduced;
+    this.#reduced = reduced;
+    this.#still = reduced;
     this.#redraw = options.redraw ?? (() => {});
     this.#pinned = options.pinned ?? false;
     // The sky by the patch's time of day (#335); it sets the clear colour too.
@@ -590,6 +624,7 @@ export class ExploreScene implements AmbientTarget {
         mask.material = propMaterial;
         mask.isPickable = false;
         this.#mask = mask;
+        this.#bubbles = new SwimBubbles(scene, EXPLORE_VIEW.keeperScale);
       }
     }
     options.team.forEach((member, i) => {
@@ -597,7 +632,8 @@ export class ExploreScene implements AmbientTarget {
       const handle = this.#squishies.add(member.species, member.id, this.#squishyPlacement(at, 0));
       this.#squishies.setAccessory(handle, accessoryItem(member.accessory));
       const hop = createHop(EXPLORE_HOP.followerOffset[i % EXPLORE_HOP.followerOffset.length]);
-      this.#followers.push({ handle, at, yaw: 0, hop, walked: 0 });
+      const swim = createSwim(EXPLORE_HOP.followerOffset[i % EXPLORE_HOP.followerOffset.length]);
+      this.#followers.push({ handle, at, yaw: 0, hop, swim, walked: 0 });
       const tall = (this.#squishies.heightOf(handle) * EXPLORE_VIEW.squishyScale) / this.#size;
       this.#teamTall = Math.max(this.#teamTall, tall);
     });
@@ -665,6 +701,14 @@ export class ExploreScene implements AmbientTarget {
       triangles: this.#triangles,
       land: this.#land?.stats ?? null,
       water: this.#water?.stats ?? null,
+      swim: this.#underwater
+        ? {
+            pitch: this.#swimPose.pitch,
+            strokes: this.#swim.phase,
+            moving: this.#swim.moving,
+            bubbles: this.#bubbles?.alive ?? 0,
+          }
+        : null,
     };
   }
 
@@ -794,7 +838,8 @@ export class ExploreScene implements AmbientTarget {
       }
       this.#placeTool();
     }
-    const hopping = this.#stepHops(dt);
+    this.#now = now;
+    const hopping = this.#underwater ? this.#stepSwims(dt) : this.#stepHops(dt);
     const keeper = this.#keepers.update(now);
     const squishies = this.#squishies.update(now);
     if (!following && !swinging && !hopping) this.#lastStep = null;
@@ -824,6 +869,32 @@ export class ExploreScene implements AmbientTarget {
     if (drawing) this.#place();
     this.#hopping = hopping;
     return drawing;
+  }
+
+  /**
+   * Swims along by the water covered since the last step (#399), like the
+   * hop: a kick puffs bubbles from the mask. True while anyone still swims,
+   * eases back to treading water, or a bubble rises.
+   */
+  #stepSwims(dt: number): boolean {
+    const walked = dt > 0 ? this.#walked : 0;
+    const push = dt > 0 ? walked / (EXPLORE_VIEW.walkSpeed * dt) : 0;
+    this.#walked = 0;
+    const kicked = stepSwim(this.#swim, walked, dt, push);
+    let swimming = swimActive(this.#swim);
+    for (const f of this.#followers) {
+      stepSwim(f.swim, dt > 0 ? f.walked : 0, dt, push);
+      f.walked = 0;
+      swimming ||= swimActive(f.swim);
+    }
+    const drawing = swimming || this.#hopping;
+    if (drawing) this.#place();
+    if (kicked && !this.#still() && this.#mask && swimStyle() === 'glide') {
+      this.#bubbles?.puff(this.#mask.position, this.#now);
+    }
+    const rising = this.#bubbles?.step(this.#now) ?? false;
+    this.#hopping = swimming;
+    return drawing || rising;
   }
 
   /**
@@ -861,12 +932,41 @@ export class ExploreScene implements AmbientTarget {
 
   /** Places the Keeper, its tool and the team with this frame's hop pose. */
   #place(): void {
+    if (this.#underwater) {
+      this.#placeSwimmers();
+      return;
+    }
     const reduced = this.#reduced();
     hopPose(this.#hop, reduced, 1, this.#pose);
     if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
     this.#placeTool();
     for (const f of this.#followers) {
       hopPose(f.hop, reduced, EXPLORE_HOP.followerLift, POSE);
+      this.#squishies.move(f.handle, this.#squishyPlacement(f.at, f.yaw, f.handle, POSE));
+    }
+  }
+
+  /** Places the Keeper, its mask and tool, and the team, swimming (#399). */
+  #placeSwimmers(): void {
+    const still = this.#still();
+    const time = this.#land?.clock.time ?? 0;
+    swimPose(this.#swim, swimStyle(), still, time, this.#swimPose);
+    if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
+    this.#placeTool();
+    const { follower } = EXPLORE_SWIM;
+    for (const f of this.#followers) {
+      // A floaty drift: up and down and a soft jelly pulse by the water
+      // covered, a slow bob while the Keeper treads water.
+      const sw = f.swim;
+      const q = (sw.phase - Math.floor(sw.phase)) * Math.PI * 2;
+      const s = sw.stretch;
+      POSE.lift = follower.float;
+      POSE.squash = 1;
+      if (!still) {
+        const bob = Math.sin(time * Math.PI * 2 * EXPLORE_SWIM.tread.rate + sw.offset * 6.28);
+        POSE.lift += follower.bob * (s * Math.sin(q) + (1 - s) * bob);
+        POSE.squash = 1 + follower.pulse * s * Math.sin(q + 1.2);
+      }
       this.#squishies.move(f.handle, this.#squishyPlacement(f.at, f.yaw, f.handle, POSE));
     }
   }
@@ -912,9 +1012,8 @@ export class ExploreScene implements AmbientTarget {
     this.#ambientStart ??= now;
     land.clock.time = (now - this.#ambientStart) / 1000;
     if (this.#underwater) {
-      // The swimmer bobs on the same clock as the kelp.
-      if (this.#keeper) this.#keepers.move(this.#keeper, this.#keeperPlacement());
-      this.#placeMask();
+      // Treading water bobs on the same clock as the kelp.
+      this.#placeSwimmers();
     }
     return true;
   }
@@ -1031,22 +1130,16 @@ export class ExploreScene implements AmbientTarget {
     const tool = this.#held ? this.#tools[this.#held] : null;
     if (!tool || !this.#keeper) return;
     const anchor = this.#keeper.params.sockets.held.anchors[0] ?? [0.2, 0.5, 0];
-    const at = this.#at;
     const k = EXPLORE_VIEW.keeperScale;
-    Quaternion.RotationYawPitchRollToRef(this.#yaw, KEEPER_LEAN, 0, TOOL_TURN);
+    // The hand rides the hop (#317) and the swim (#399): placed, lifted,
+    // turned and squashed with the Keeper.
+    const place = this.#keeperPlacement();
+    const squash = place.squash;
+    Quaternion.RotationYawPitchRollToRef(place.yaw, place.lean, 0, TOOL_TURN);
     Matrix.ComposeToRef(
-      // The hand rides the hop (#317): lifted and squashed with the Keeper.
-      TOOL_SCALE.set(
-        k / Math.sqrt(this.#pose.squash),
-        k * this.#pose.squash,
-        k / Math.sqrt(this.#pose.squash),
-      ),
+      TOOL_SCALE.set(k / Math.sqrt(squash), k * squash, k / Math.sqrt(squash)),
       TOOL_TURN,
-      TOOL_AT.set(
-        at.x * this.#size,
-        this.#groundAt(at) + this.#pose.lift * this.keeperTall,
-        at.z * this.#size,
-      ),
+      TOOL_AT.set(place.x, place.y + place.lift, place.z),
       TOOL_WORLD,
     );
     Vector3.TransformCoordinatesToRef(
@@ -1056,9 +1149,15 @@ export class ExploreScene implements AmbientTarget {
     );
     const s = k * EXPLORE_TOOL.scale;
     tool.scaling.set(s, s, s);
-    // A swing tips the tool forward, the way the Keeper faces.
+    // A swing tips the tool forward, the way the Keeper faces (and swims).
+    const pitch = this.#underwater ? place.lean : 0;
     tool.rotationQuaternion ??= new Quaternion();
-    Quaternion.RotationYawPitchRollToRef(this.#yaw, -this.#swing, 0, tool.rotationQuaternion);
+    Quaternion.RotationYawPitchRollToRef(
+      place.yaw,
+      pitch - this.#swing,
+      0,
+      tool.rotationQuaternion,
+    );
   }
 
   /** Fades the props that stand between the camera and the Keeper; the rest stay solid. */
@@ -1249,14 +1348,22 @@ export class ExploreScene implements AmbientTarget {
     PLACE.shadow = shadowScale(pose.lift);
     PLACE.shadowAlpha = shadowAlpha(pose.lift);
     if (this.#underwater) {
-      // Swimming (#335): afloat, leaning into a kick, bobbing on the clock.
-      const { swim } = EXPLORE_UNDERWATER;
-      PLACE.lean = swim.lean;
-      PLACE.lift +=
-        (swim.float + swim.bob * Math.sin((this.#land?.clock.time ?? 0) * swim.bobSpeed)) *
-        this.keeperTall;
-      PLACE.shadow = shadowScale(swim.float);
-      PLACE.shadowAlpha = shadowAlpha(swim.float);
+      // Swimming (#399): afloat, pitched forward about its middle into the
+      // heading (a negative lean; a positive one leans back), surging ahead
+      // of its point on a kick and gliding back.
+      const sp = this.#swimPose;
+      const tall = this.keeperTall;
+      const middle = tall * EXPLORE_SWIM.pivot;
+      const ahead = sp.surge * tall - middle * Math.sin(sp.pitch);
+      // The Keeper faces −z at yaw 0, so ahead is (−sin yaw, −cos yaw).
+      PLACE.x -= Math.sin(this.#yaw) * ahead;
+      PLACE.z -= Math.cos(this.#yaw) * ahead;
+      PLACE.yaw = this.#yaw + sp.sway;
+      PLACE.lean = -sp.pitch;
+      PLACE.lift = sp.lift * tall + middle * (1 - Math.cos(sp.pitch));
+      PLACE.squash = sp.squash;
+      PLACE.shadow = shadowScale(EXPLORE_SWIM.float);
+      PLACE.shadowAlpha = shadowAlpha(EXPLORE_SWIM.float);
     }
     return PLACE;
   }
@@ -1285,10 +1392,11 @@ export class ExploreScene implements AmbientTarget {
     // The face, from the Keeper's own proportions (a big chibi head).
     const { height, width } = this.#keeper.params;
     const place = this.#keeperPlacement();
-    Quaternion.RotationYawPitchRollToRef(this.#yaw, place.lean, 0, TOOL_TURN);
+    Quaternion.RotationYawPitchRollToRef(place.yaw, place.lean, 0, TOOL_TURN);
     const k = EXPLORE_VIEW.keeperScale;
+    const squash = place.squash;
     Matrix.ComposeToRef(
-      TOOL_SCALE.set(k, k, k),
+      TOOL_SCALE.set(k / Math.sqrt(squash), k * squash, k / Math.sqrt(squash)),
       TOOL_TURN,
       TOOL_AT.set(place.x, place.y + place.lift, place.z),
       TOOL_WORLD,

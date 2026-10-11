@@ -299,3 +299,59 @@ export const EXPLORE_UNDERWATER = {
   /** The mask on the face: up the Keeper's height, forward and size by its width. */
   mask: { up: 0.74, forward: 0.42, size: 0.8 }, // TUNE
 } as const;
+
+/** Swimming under a lake (#399): the stroke follows the water covered, like the hop. */
+export const EXPLORE_SWIM = {
+  /** The swim drawn (owner's pick from the #399 mockup). */
+  style: 'glide' as 'glide' | 'paddle' | 'dolphin',
+  /** The Keeper pitches about this share of its height up (its middle), not its feet. */
+  pivot: 0.5, // TUNE
+  /** Water covered by one stroke at no effort and at full effort, tile-local (full stick is about 1.6 strokes a second). */
+  stroke: { min: 0.13, max: 0.19 }, // TUNE
+  /** Effort eases toward the stick with this time constant, seconds. */
+  effortEase: 0.2, // TUNE
+  /** Stretching out into the swim, and back up to tread water, time constants in seconds. */
+  stretchIn: 0.18, // TUNE
+  stretchOut: 0.35, // TUNE
+  /** Afloat this share of the swimmer's height above the sand. */
+  float: 0.22, // TUNE
+  /** Treading water: bob height (share of the height) and bobs a second. */
+  tread: { bob: 0.04, rate: 0.45 }, // TUNE
+  /** Per style: forward pitch (radians), and the stroke's dip, bob, surge, squash and stretch. */
+  styles: {
+    glide: {
+      pitch: 1.15,
+      dip: 0.1,
+      bob: 0.03,
+      surge: 0.38,
+      squash: 0.14,
+      stretch: 0.12,
+      sway: 0,
+      kick: 0.22,
+    }, // TUNE
+    paddle: {
+      pitch: 0.55,
+      dip: 0,
+      bob: 0.05,
+      surge: 0.06,
+      squash: 0,
+      stretch: 0.05,
+      sway: 0.2,
+      kick: 0,
+    }, // TUNE
+    dolphin: {
+      pitch: 1.0,
+      dip: 0.28,
+      bob: 0.08,
+      surge: 0.08,
+      squash: 0,
+      stretch: 0.07,
+      sway: 0,
+      kick: 0,
+    }, // TUNE
+  },
+  /** Squishies following underwater: float, and a drifting glide by the water they cover. */
+  follower: { float: 0.3, bob: 0.06, pulse: 0.08 }, // TUNE
+  /** Bubbles puffed from the mask on each kick: how many, how long they live (ms), rise (world units), size. */
+  bubbles: { perKick: 3, pool: 9, lifeMs: 1100, rise: 0.9, size: 0.1 }, // TUNE
+} as const;
