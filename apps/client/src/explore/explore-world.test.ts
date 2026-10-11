@@ -688,6 +688,13 @@ describe('on-screen cover (#335)', () => {
     expect(glintNudge({ x: 1.2, y: 0.5, z: 0 }, keeper, 1, pitch, 0.15, 0.55)).toBe(0);
     expect(glintNudge({ x: 0, y: 3, z: 0 }, keeper, 1, pitch, 0.15, 0.55)).toBe(0);
     expect(glintNudge({ x: 0, y: 0.3, z: 4 }, keeper, 1, pitch, 0.15, 0.55)).toBe(0);
+    // It keeps to the side it went last time while it still needs to slide.
+    expect(
+      0.05 + glintNudge({ x: 0.05, y: 0.5, z: 0 }, keeper, 1, pitch, 0.15, 0.55, -1),
+    ).toBeCloseTo(-0.7);
+    expect(0.05 + glintNudge({ x: 0.05, y: 0.5, z: 0 }, keeper, 1, pitch, 0.15, 0.55)).toBeCloseTo(
+      0.7,
+    );
     // In front, low down (over the feet on screen): slides too.
     expect(glintNudge({ x: 0.1, y: 0.3, z: -0.4 }, keeper, 1, pitch, 0.15, 0.55)).not.toBe(0);
   });

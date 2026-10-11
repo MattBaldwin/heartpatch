@@ -83,6 +83,9 @@ describe('explore text', () => {
     }
     expect(actionFor({ kind: 'mound', tool: 'shovel' }).label).toBe('Dig');
     expect(actionFor({ kind: 'tree', tool: null }).label).toBe('Shake');
+    // The Walking Stick hikes up to a lookout but pokes a snow drift (#335).
+    expect(actionFor({ kind: 'ledge', tool: 'rope' }).label).toBe('Hike');
+    expect(actionFor({ kind: 'snow-drift', tool: 'rope' }).label).toBe('Poke');
   });
 
   it('shows each spot its own icon, drawn or an emoji every iPhone has', () => {

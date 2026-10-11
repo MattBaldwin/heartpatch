@@ -183,6 +183,8 @@ export interface ExploreSceneOptions {
   readonly pinned?: boolean;
   /** Reduce Motion: the Keeper and the team bob instead of hopping (#317). Default off. */
   readonly reducedMotion?: () => boolean;
+  /** Draws one more frame (the fade and glints settle after a frame, #335). */
+  readonly redraw?: () => void;
 }
 
 /** A search spot drawn from the land kit (#335): a biome's own take first, then the meadow's, the lake's, the trail's and the cave's. */
@@ -207,26 +209,38 @@ const SPOT_PROPS: Readonly<Record<string, PropKind | ExploreShape>> = {
   pond: 'pond',
   ledge: 'ledge',
   cave: 'cave',
-  // #335: the mountain trail and the hills cave.
-  'snow-drift': 'snow-drift',
-  cairn: 'cairn',
-  'glow-mushrooms': 'glow-mushrooms',
+  // #335: the trail's and the cave's own spots are drawn by their land kit
+  // (kitSpot); without one they fall back to a rock.
 };
 
-type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave' | 'snow-drift' | 'cairn' | 'glow-mushrooms';
+type ExploreShape = 'mound' | 'pond' | 'ledge' | 'cave';
 
 /** The island under the tile: shallow, so the tile reads as a little diorama. */
 const ISLAND_DEPTH = 0.12; // TUNE:
-const SHAPES: ReadonlySet<string> = new Set<ExploreShape>([
-  'mound',
-  'pond',
-  'ledge',
-  'cave',
-  'snow-drift',
-  'cairn',
-  'glow-mushrooms',
-]);
-/** A spot drawn from the land kit: the meadow's own, else the trail's or the cave's. */
+const SHAPES: ReadonlySet<string> = new Set<ExploreShape>(['mound', 'pond', 'ledge', 'cave']);
+/**
+ * Writes a follow-camera shot into a camera, looking along +z and down by
+ * `pitch` at `target` from `distance` away, and refreshes its view and
+ * projection at once (#335): Babylon otherwise keeps the last frame's
+ * matrices until the next render, and anything projected in between (the
+ * fade, the glints) would see the old view.
+ */
+export function writeShot(
+  camera: TargetCamera,
+  target: Vector3,
+  pitch: number,
+  distance: number,
+): void {
+  camera.position.set(
+    target.x,
+    target.y + Math.sin(pitch) * distance,
+    target.z - Math.cos(pitch) * distance,
+  );
+  camera.setTarget(target);
+  camera.getViewMatrix(true);
+  camera.getProjectionMatrix(true);
+}
+
 const isShape = (kind: PropKind | ExploreShape): kind is ExploreShape => SHAPES.has(kind);
 const TOOLS: readonly ToolId[] = ['shovel', 'net', 'rope', 'lantern'];
 /** The camera looks at about the Keeper's middle, not its feet (world units). */
@@ -312,8 +326,8 @@ export class ExploreScene implements AmbientTarget {
   #shot = cameraShot(0.5);
   #decor: Record<DecorKind, number>;
   readonly #glints: Mesh;
-  /** Where the Keeper stood when the camera last settled (fades and glints are fresh for it). */
-  #framed: WorldPoint | null = null;
+  /** The settled shot the fade and glints were last worked out for (`#framingKey`). */
+  #framed = '';
   /** Each open spot's glint's x, as last drawn (redrawn only when one moves). */
   #glintNudge: number[] = [];
   readonly #halo: Mesh;
@@ -337,6 +351,10 @@ export class ExploreScene implements AmbientTarget {
   /** Someone was hopping, landing or settling at the last step. */
   #hopping = false;
   readonly #reduced: () => boolean;
+  /** Asks the screen for one more frame. */
+  readonly #redraw: () => void;
+  /** The side each spot's glint last slid to, so it doesn't flip while the Keeper walks past. */
+  readonly #glintSide = new Map<number, number>();
   /** The tallest follower, tile-local: how far back the team keeps (#323). */
   #teamTall = 0;
   #tile: ExploreTileResponse;
@@ -380,6 +398,7 @@ export class ExploreScene implements AmbientTarget {
     // `#reduced` only picks bob over hop; it isn't the player's Reduce Motion.
     const reduced = options.reducedMotion ?? (() => false);
     this.#reduced = this.#underwater ? () => true : reduced;
+    this.#redraw = options.redraw ?? (() => {});
     this.#pinned = options.pinned ?? false;
     // The sky by the patch's time of day (#335); it sets the clear colour too.
     this.#sky = new ExploreSky(scene, options.sky);
@@ -611,6 +630,7 @@ export class ExploreScene implements AmbientTarget {
     this.#afterRender = scene.onAfterRenderObservable.add(() => {
       this.#drawCalls = this.#instrumentation.drawCallsCounter.current;
       this.#triangles = Math.round(scene.getActiveIndices() / 3);
+      this.#refreshFraming();
     });
     scene.onDisposeObservable.addOnce(() => {
       scene.onBeforeRenderObservable.remove(this.#beforeRender);
@@ -762,14 +782,6 @@ export class ExploreScene implements AmbientTarget {
     const goal = this.#cameraGoal();
     this.#camera = followStep(this.#camera, goal, dt);
     const following = !cameraSettled(this.#camera, goal);
-    if (!following && this.#framed !== this.#at) {
-      // The shot has settled on this spot: fade and place glints against the
-      // real framing (at the start the Keeper and camera weren't set yet).
-      // Until the Keeper can be placed on screen, try again next frame.
-      this.#fade();
-      this.#placeGlints();
-      if (this.#keeperBox()) this.#framed = this.#at;
-    }
     let swinging = false;
     if (this.#swingAt !== null) {
       const t = (now - this.#swingAt) / EXPLORE_TOOL.swingMs;
@@ -981,13 +993,10 @@ export class ExploreScene implements AmbientTarget {
     const engine = this.#scene.getEngine();
     const aspect = engine.getRenderWidth() / Math.max(1, engine.getRenderHeight());
     if (aspect !== this.#aspect) {
-      // The screen's shape picks the tilt (a phone upright looks flatter).
+      // The screen's shape picks the tilt (a phone upright looks flatter);
+      // the fade and glints follow once the new shot is drawn (#refreshFraming).
       this.#aspect = aspect;
       this.#shot = cameraShot(aspect);
-      // A new framing: fade and place glints again, and once more when it settles.
-      this.#framed = null;
-      this.#fade();
-      this.#placeGlints();
     }
     const { pitch, distance } = this.#shot;
     const d = distance * this.#camera.zoom;
@@ -997,8 +1006,7 @@ export class ExploreScene implements AmbientTarget {
     // dip ahead would bring the Keeper closer and draw it bigger (#335).
     const ty = this.#groundAt(this.#at) + AIM_HEIGHT;
     // Yaw 0: looking towards +z, down by `pitch`.
-    camera.position.set(tx, ty + Math.sin(pitch) * d, tz - Math.cos(pitch) * d);
-    camera.setTarget(this.#lookAt.set(tx, ty, tz));
+    writeShot(camera, this.#lookAt.set(tx, ty, tz), pitch, d);
     this.#sky.follow(camera.position, pitch);
   }
 
@@ -1094,6 +1102,35 @@ export class ExploreScene implements AmbientTarget {
     }
   }
 
+  /** The shot as it stands: where the Keeper is, where the camera aims, how close and how tilted. */
+  #framingKey(): string {
+    const { target, zoom } = this.#camera;
+    return [this.#at.x, this.#at.z, target.x, target.z, zoom, this.#aspect].join(',');
+  }
+
+  /**
+   * After a frame is drawn (#335): once the camera has settled on a new shot
+   * (arriving, walking, turning the device, leaning in to a spot), work the
+   * fade and the glints out against it, and draw again if either changed.
+   * Until the Keeper can be placed on screen (the canvas not laid out yet),
+   * ask for another frame and try again.
+   */
+  #refreshFraming(): void {
+    if (!cameraSettled(this.#camera, this.#cameraGoal())) return;
+    const key = this.#framingKey();
+    if (key === this.#framed) return;
+    if (this.#keeper && !this.#keeperBox()) {
+      this.#redraw();
+      return;
+    }
+    this.#framed = key;
+    const hiding = this.#hiding;
+    const glints = this.#glintNudge;
+    this.#fade();
+    this.#placeGlints();
+    if (this.#hiding !== hiding || this.#glintNudge !== glints) this.#redraw();
+  }
+
   /**
    * Draws a glint beside each unsearched spot, as on the boards; one that
    * would cover the Keeper on screen slides sideways, clear of it (#335).
@@ -1118,8 +1155,11 @@ export class ExploreScene implements AmbientTarget {
             this.#shot.pitch,
             half,
             EXPLORE_FADE.glintClearHalfWidth,
+            this.#glintSide.get(s.index),
           )
         : 0;
+      if (slide === 0) this.#glintSide.delete(s.index);
+      else this.#glintSide.set(s.index, Math.sign(slide + glint.x - keeper.x));
       return { ...glint, x: glint.x + Math.round(slide * 100) / 100 };
     });
     const nudge = places.map((p) => p.x);
@@ -1649,8 +1689,7 @@ function buildShape(scene: Scene, shape: ExploreShape): Mesh {
         painted(at(cylinder(0.01, 0.09, 0.09), 0.08, 0.02, -0.05), '#6fbf73'),
       ]);
     case 'ledge':
-      // A lookout on the trail (#335): a chunky step with a flat top and a
-      // little flag to hike up to.
+      // A chunky cliff step with a flat top to climb to.
       return merged(`explore-${shape}`, [
         painted(
           at(
@@ -1671,61 +1710,12 @@ function buildShape(scene: Scene, shape: ExploreShape): Mesh {
           '#d8c8ab',
         ),
         painted(at(sphere(0.08), -0.1, 0.24, -0.05, 1, 0.6, 1), '#9fd6a0'),
-        // The lookout's flag.
-        painted(at(cylinder(0.26, 0.012, 0.012), 0.1, 0.47, 0.04), '#7a5d43'),
-        painted(
-          at(
-            CreateBox(`${shape}-part`, { width: 0.12, height: 0.07, depth: 0.01 }, scene),
-            0.16,
-            0.55,
-            0.04,
-          ),
-          '#ff8fb8',
-        ),
       ]);
     case 'cave':
-      // A dark nook in the cave wall (#335): a rock hump with a black doorway
-      // and a crystal peeking out, waiting for the Lantern.
+      // A rounded hill with a dark doorway facing the camera.
       return merged(`explore-${shape}`, [
-        painted(at(sphere(0.36), 0, 0.02, 0, 1, 0.75, 0.9), '#8a76a6'),
-        painted(at(sphere(0.16), 0, 0.03, -0.15, 1, 1.1, 0.5), '#1f1630'),
-        painted(at(cylinder(0.16, 0.0, 0.05), 0.12, 0.2, -0.08), '#e6cdfc'),
+        painted(at(sphere(0.36), 0, 0.02, 0, 1, 0.75, 0.9), '#bfb3cf'),
+        painted(at(sphere(0.16), 0, 0.03, -0.15, 1, 1.1, 0.5), '#3a2f4a'),
       ]);
-    case 'snow-drift':
-      // A soft snow heap with a twig poking out: poke it with the stick.
-      return merged(`explore-${shape}`, [
-        painted(at(sphere(0.32), 0, 0, 0, 1.15, 0.5, 1), '#fbfaff'),
-        painted(at(sphere(0.16), -0.08, 0.06, 0.04, 1, 0.7, 1), '#eef2ff'),
-        painted(at(cylinder(0.14, 0.008, 0.015), 0.07, 0.12, -0.02), '#9a6a3c'),
-      ]);
-    case 'cairn':
-      // Stones stacked by trail walkers, smallest on top.
-      return merged(
-        `explore-${shape}`,
-        (
-          [
-            [0.24, 0.05, '#9e968a'],
-            [0.18, 0.13, '#b9b2a7'],
-            [0.13, 0.2, '#cfc9bf'],
-            [0.08, 0.26, '#b9b2a7'],
-          ] as const
-        ).map(([d, y, c]) => painted(at(sphere(d), 0, y, 0, 1, 0.55, 1), c)),
-      );
-    case 'glow-mushrooms':
-      // A ring of glowing caps (their glow is the colour; bloom does the rest).
-      return merged(
-        `explore-${shape}`,
-        (
-          [
-            [0, 0, 1, '#8ef0ff'],
-            [0.1, 0.05, 0.8, '#ff9cd6'],
-            [-0.09, 0.06, 0.75, '#8ef0ff'],
-            [0.03, -0.1, 0.7, '#ff9cd6'],
-          ] as const
-        ).flatMap(([x, z, s, c]) => [
-          painted(at(cylinder(0.1 * s, 0.03 * s, 0.035 * s), x, 0.05 * s, z), '#f6e9d8'),
-          painted(at(sphere(0.12 * s), x, 0.1 * s, z, 1, 0.55, 1), c),
-        ]),
-      );
   }
 }

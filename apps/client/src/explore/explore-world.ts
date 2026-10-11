@@ -298,7 +298,8 @@ export function coverShare(by: ScreenBox, of: ScreenBox): number {
  * camera sees it (#335): its spiky hair, hands and feet. The camera looks
  * along +z, tilted down by `pitch`, so up the screen is height plus distance
  * away, foreshortened by the tilt. 0 when the glint is already clear; else
- * out past the Keeper's nearer side. All in world units; `half` is the
+ * out past the Keeper's nearer side (or the side it went last time, so it
+ * doesn't jump across as the Keeper walks by). All in world units; `half` is the
  * glint's half-size, `halfWidth` the Keeper's half-width as a share of its height.
  */
 export function glintNudge(
@@ -308,12 +309,15 @@ export function glintNudge(
   pitch: number,
   half: number,
   halfWidth: number,
+  /** The side it slid to last time (+1 right, -1 left): it stays there while it still needs to. */
+  side?: number,
 ): number {
   const across = glint.x - keeper.x;
   const up = (glint.y - keeper.y) * Math.cos(pitch) + (glint.z - keeper.z) * Math.sin(pitch);
   const wide = tall * halfWidth + half;
   if (up < -half || up > tall * Math.cos(pitch) + half || Math.abs(across) >= wide) return 0;
-  return (across >= 0 ? wide : -wide) - across;
+  const right = side === undefined ? across >= 0 : side > 0;
+  return (right ? wide : -wide) - across;
 }
 
 export interface FollowCamera {

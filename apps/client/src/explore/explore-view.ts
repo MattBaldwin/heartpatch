@@ -116,6 +116,9 @@ export const PLAY_TEXT: Readonly<
 /** The header chip's icon with nothing in hand. */
 export const HANDS_ICON = '✋';
 
+/** A tool spot whose gesture isn't the tool's own verb (#335: the stick pokes a snow drift). */
+const TOOL_SPOT_VERBS: Partial<Record<SpotInteraction, string>> = { poke: 'Poke' };
+
 /** The action button for a spot: its icon (an `ICON_PATHS` name, drawn, or an emoji) and verb. */
 export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
   readonly icon: string;
@@ -125,7 +128,8 @@ export function actionFor(spot: Pick<PublicSearchSpot, 'kind' | 'tool'>): {
   const kind = EXPLORE_RULES.spotKinds.find((k) => k.id === spot.kind);
   const interaction: SpotInteraction = kind?.interaction ?? 'lift';
   if (spot.tool) {
-    return { icon: TOOL_ICONS[spot.tool], label: TOOL_WORDS[spot.tool].verb, interaction };
+    const label = TOOL_SPOT_VERBS[interaction] ?? TOOL_WORDS[spot.tool].verb;
+    return { icon: TOOL_ICONS[spot.tool], label, interaction };
   }
   const icon = HAND_ICONS[spot.kind] ?? (interaction === 'shake' ? '🌳' : 'rock');
   return { icon, label: HAND_VERBS[interaction] ?? 'Lift', interaction };

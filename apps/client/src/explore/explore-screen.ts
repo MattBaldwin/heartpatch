@@ -1199,6 +1199,9 @@ export function createExploreScreen(options: ExploreScreenOptions): ExploreScree
       tier: lastTier,
       pinned: options.pinned?.() ?? false,
       reducedMotion,
+      redraw: () => {
+        options.invalidate();
+      },
     });
     // The start can land on a rock: step out before the Keeper is drawn.
     keeperAt = freePoint(keeperAt, built.colliders);
