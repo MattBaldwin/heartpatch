@@ -161,7 +161,7 @@ export async function pickKeeper(
   // One step a screen (#372): pick a face, then Next through the rest.
   await picker.getByRole('button', { name: `Face: ${face}`, exact: true }).tap();
   const next = picker.getByRole('button', { name: 'Next', exact: true });
-  while (await next.isVisible()) await next.tap();
+  for (let i = 0; i < 5 && (await next.isVisible()); i++) await next.tap();
   await picker.getByRole('button', { name: 'That’s me!' }).tap();
   await expect(picker).toBeHidden();
 }

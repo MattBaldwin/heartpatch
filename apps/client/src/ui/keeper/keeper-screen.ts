@@ -3,6 +3,7 @@ import {
   defaultKeeperConfig,
   KEEPER_DATA,
   KeeperEyesSchema,
+  type KeeperBodyType,
   type KeeperConfig,
   type KeeperEyes,
   type KeeperFaceLine,
@@ -65,6 +66,11 @@ export interface KeeperDebug {
   readonly saved: KeeperConfig | null;
   /** `keeperHash` of the 3D preview, while it's on screen. */
   readonly preview: string | null;
+  /**
+   * Where the preview put the Keeper (#372, CSS px from the top): its feet
+   * and the top of its hair, and the band it had to fit (top bar to card).
+   */
+  readonly fit: { feet: number; head: number; top: number; bottom: number } | null;
   readonly hopping: boolean;
 }
 
@@ -162,11 +168,13 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
 
   const title = el('h1', { class: 'auth-title', id: 'keeper-title' });
   const tabs = el('div', { class: 'keeper-tabs', role: 'tablist', 'aria-label': 'Steps' });
+  /** Screen readers: "Step 2 of 6" (the tabs show numbers on a phone). */
+  const stepOf = el('span', { class: 'keeper-sr' });
   const prompt = el('p', { class: 'auth-subtitle keeper-subtitle', id: 'keeper-prompt' });
   const rows = el('div', {
     class: 'keeper-rows',
+    id: 'keeper-step-panel',
     role: 'tabpanel',
-    'aria-labelledby': 'keeper-prompt',
     'data-testid': 'keeper-step',
   });
   /** The picked body's name (#372): body tiles have no names on a phone. */
@@ -226,9 +234,14 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     });
     options.invalidate();
   };
-  window.addEventListener('resize', () => {
+  // The card's own box is watched too: iOS sends `resize` before a turned
+  // layout settles and none after (#251), and an iPad card's height follows
+  // its step. Window `resize` still covers the top bar's room.
+  const refit = (): void => {
     requestAnimationFrame(fitPreview);
-  });
+  };
+  window.addEventListener('resize', refit);
+  new ResizeObserver(refit).observe(card);
 
   /** Draws while the Keeper hops, and follows the quality tier's detail level. */
   const tick = (): void => {
@@ -248,10 +261,13 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   };
 
   // ── Card ──────────────────────────────────────────────────────────────
+  /** The body tiles' drawings on screen, repainted when the outfit changes. */
+  let bodyArt: { node: HTMLElement; body: KeeperBodyType }[] = [];
+
   /** Every choice on the card and whether it's the one picked now. */
   let choices: { node: HTMLButtonElement; isPicked: () => boolean }[] = [];
 
-  /** Marks the picked choices (no rebuild, so a tap never loses its place). */
+  /** Marks the picked choices in place, so a tap never loses its place or focus. */
   const refresh = () => {
     for (const c of choices) c.node.setAttribute('aria-pressed', String(c.isPicked()));
     const body = completeKeeperConfig(picked, KEEPER_DATA).body;
@@ -350,15 +366,19 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     svg: string,
     isPicked: () => boolean,
     onPick: () => void,
-  ) =>
-    choice(
+    body?: KeeperBodyType,
+  ) => {
+    const art = drawing(svg);
+    if (body) bodyArt.push({ node: art, body });
+    return choice(
       label,
       isPicked,
       onPick,
       'keeper-tile',
-      drawing(svg),
+      art,
       el('span', { class: 'keeper-base-name' }, name),
     );
+  };
 
   /** The choices of `on`, built from the picks so far (tiles wear the skin tone). */
   function choicesFor(on: KeeperStep): HTMLElement[] {
@@ -395,6 +415,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
                 () => {
                   pick({ ...picked, body: b.id });
                 },
+                b,
               ),
             ),
           ),
@@ -406,7 +427,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
                 () => picked.outfit === o.id,
                 () => {
                   pick({ ...picked, outfit: o.id });
-                  redraw(); // the body tiles wear the outfit's top
+                  repaintBodies(); // the body tiles wear the outfit's top
                 },
                 'keeper-swatch',
                 dot(`linear-gradient(${o.top} 0 55%, ${o.bottom} 55% 100%)`),
@@ -519,14 +540,74 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     return node;
   };
 
-  /** Rebuilds the step's choices in place (their drawings follow the picks). */
-  function redraw(): void {
-    const top = rows.scrollTop;
-    choices = [];
-    rows.replaceChildren(...choicesFor(step));
-    rows.scrollTop = top;
-    refresh();
+  /** Repaints the body tiles in the picked skin and outfit, in place (taps keep their focus). */
+  function repaintBodies(): void {
+    const full = completeKeeperConfig(picked, KEEPER_DATA);
+    const skin = KEEPER_DATA.skinTones.find((t) => t.id === full.skinTone)?.color ?? '#f6cfae';
+    const top = KEEPER_DATA.outfits.find((o) => o.id === full.outfit)?.top ?? '#ffd85a';
+    for (const { node, body } of bodyArt) node.innerHTML = bodyTileSvg(body, skin, top);
   }
+
+  // The steps' tabs, made once (#372): a tap moves the selection, not the focus.
+  const tabButtons = KEEPER_STEPS.map((s, i) => {
+    const name = KEEPER_TEXT.steps[s].tab;
+    // On a phone only the step on screen shows its name; the rest are numbers,
+    // so the label says both (what Voice Control hears matches what shows).
+    const tab = el(
+      'button',
+      {
+        type: 'button',
+        class: 'keeper-tab',
+        id: `keeper-tab-${s}`,
+        role: 'tab',
+        'aria-selected': 'false',
+        'aria-controls': 'keeper-step-panel',
+        'aria-label': `${String(i + 1)} ${name}`,
+        'data-step': s,
+      },
+      el('span', { class: 'keeper-tab-number', 'aria-hidden': 'true' }, String(i + 1)),
+      el('span', { class: 'keeper-tab-name', 'aria-hidden': 'true' }, name),
+    );
+    tab.addEventListener('click', () => {
+      showStep(s);
+    });
+    return tab;
+  });
+  tabs.replaceChildren(...tabButtons);
+  // Arrow keys move between the tabs (the ARIA tabs pattern).
+  tabs.addEventListener('keydown', (event) => {
+    const by = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+    if (by === undefined) return;
+    const at = (KEEPER_STEPS.indexOf(step) + by + KEEPER_STEPS.length) % KEEPER_STEPS.length;
+    const to = KEEPER_STEPS[at];
+    if (!to) return;
+    event.preventDefault();
+    showStep(to);
+    tabButtons[at]?.focus();
+  });
+
+  // Back and Next (first time), Back and Save (editing): made once.
+  const backButton = button(
+    KEEPER_TEXT.back,
+    () => {
+      const before = previousStep(step);
+      if (before) showStep(before);
+    },
+    true,
+  );
+  const forwardButton = button(KEEPER_TEXT.next, () => {
+    const after = nextStep(step);
+    if (after) showStep(after);
+    else void submit(forwardButton);
+  });
+  const leaveButton = button(
+    KEEPER_TEXT.back,
+    () => {
+      close(false);
+    },
+    true,
+  );
+  const saveButton = button(KEEPER_TEXT.save.edit, () => void submit(saveButton));
 
   /** Shows step `next`: its tab, its choices, and its buttons. */
   function showStep(next: KeeperStep): void {
@@ -534,65 +615,29 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
     const on = mode;
     step = next;
     choices = [];
+    bodyArt = [];
     error.textContent = '';
     const number = KEEPER_STEPS.indexOf(next) + 1;
-    prompt.replaceChildren(KEEPER_TEXT.steps[next].prompt, caption);
-    prompt.setAttribute('aria-description', KEEPER_TEXT.stepOf(number, KEEPER_STEPS.length));
-    tabs.replaceChildren(
-      ...KEEPER_STEPS.map((s, i) => {
-        // On a phone only the step on screen shows its name; the rest are numbers.
-        const tab = el(
-          'button',
-          {
-            type: 'button',
-            class: 'keeper-tab',
-            role: 'tab',
-            'aria-selected': String(s === next),
-            'aria-label': KEEPER_TEXT.steps[s].tab,
-            'data-step': s,
-          },
-          el('span', { class: 'keeper-tab-number', 'aria-hidden': 'true' }, String(i + 1)),
-          el('span', { class: 'keeper-tab-name' }, KEEPER_TEXT.steps[s].tab),
-        );
-        tab.addEventListener('click', () => {
-          showStep(s);
-        });
-        return tab;
-      }),
-    );
+    stepOf.textContent = `${KEEPER_TEXT.stepOf(number, KEEPER_STEPS.length)}: `;
+    prompt.replaceChildren(stepOf, KEEPER_TEXT.steps[next].prompt, caption);
+    for (const tab of tabButtons) {
+      const on = tab.dataset['step'] === next;
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+      if (on) rows.setAttribute('aria-labelledby', tab.id);
+    }
     rows.replaceChildren(...choicesFor(next));
     rows.scrollTop = 0;
     refresh();
 
     // First time: Back and Next, then "That's me!" on the last step. Editing:
-    // the tabs pick the step, and Save is always there.
-    const after = nextStep(next);
-    const before = previousStep(next);
-    if (on === 'edit') {
-      const save = button(KEEPER_TEXT.save.edit, () => void submit(save));
-      const leave = button(
-        KEEPER_TEXT.back,
-        () => {
-          close(false);
-        },
-        true,
-      );
-      actions.replaceChildren(leave, save);
-    } else {
-      const forward = after
-        ? button(KEEPER_TEXT.next, () => {
-            showStep(after);
-          })
-        : button(KEEPER_TEXT.save.first, () => void submit(forward));
-      const back = button(
-        KEEPER_TEXT.back,
-        () => {
-          if (before) showStep(before);
-        },
-        true,
-      );
-      back.disabled = before === null;
-      actions.replaceChildren(back, forward);
+    // the tabs pick the step, and Save is always there. The buttons stay put
+    // (only their words change), so the one just pressed keeps the focus.
+    if (on === 'first') {
+      const before = previousStep(next);
+      if (before === null && document.activeElement === backButton) forwardButton.focus();
+      backButton.disabled = before === null;
+      forwardButton.textContent = nextStep(next) ? KEEPER_TEXT.next : KEEPER_TEXT.save.first;
     }
 
     hints.abort();
@@ -611,8 +656,12 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
 
   function open(next: KeeperPickerMode, at: KeeperStep = 'face'): void {
     mode = next;
+    tabs.hidden = false;
     title.textContent = KEEPER_TEXT[next].title;
     panel.dataset['mode'] = next;
+    actions.replaceChildren(
+      ...(next === 'first' ? [backButton, forwardButton] : [leaveButton, saveButton]),
+    );
     showStep(at);
     panel.hidden = false;
     options.showScene(build);
@@ -657,7 +706,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
   function showLoadFailed(who: PublicUser): void {
     mode = 'first';
     title.textContent = KEEPER_TEXT.first.title;
-    tabs.replaceChildren();
+    tabs.hidden = true;
     prompt.textContent = '';
     rows.replaceChildren();
     error.textContent = KEEPER_TEXT.loadFailed;
@@ -726,6 +775,7 @@ export function createKeeperScreen(options: KeeperScreenOptions): KeeperScreen {
         step: mode === null ? null : step,
         saved,
         preview: preview?.hash ?? null,
+        fit: preview?.fitted ?? null,
         hopping: preview?.isPlaying(now) ?? false,
       };
     },

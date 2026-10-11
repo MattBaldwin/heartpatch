@@ -36,6 +36,7 @@ export class KeeperPreview {
   readonly #scene: Scene;
   readonly #field: KeeperField;
   #band: PreviewBand | null = null;
+  #fitted: { feet: number; head: number; top: number; bottom: number } | null = null;
   #shown: { config: KeeperConfig; items: readonly KeeperItem[]; turned: boolean } | null = null;
   #handle: KeeperHandle | null = null;
   readonly #floor: ReturnType<typeof CreateCylinder>;
@@ -112,6 +113,7 @@ export class KeeperPreview {
     const camera = this.#scene.activeCamera;
     const canvas = this.#scene.getEngine().getRenderingCanvas();
     const band = this.#band;
+    this.#fitted = null;
     if (!band || !camera || !canvas) return { scale: largest, z: 0 };
     const box = canvas.getBoundingClientRect();
     if (box.width <= 0 || box.height <= 0) return { scale: largest, z: 0 };
@@ -130,7 +132,8 @@ export class KeeperPreview {
     // Further back stands higher on screen. Where the feet already clear the
     // card it stays put; otherwise it steps back until they do.
     let near = 0;
-    let far = 8; // TUNE
+    // No further back than the stage's edge (the floor is 9 across). TUNE
+    let far = 4;
     let z = 0;
     if (feetY(0) > floor) {
       for (let i = 0; i < 24; i++) {
@@ -143,6 +146,7 @@ export class KeeperPreview {
     // Then shrink until the top of the hair is under the ceiling.
     let scale = largest;
     for (let i = 0; i < 30 && headY(scale, z) < ceiling; i++) scale *= 0.96;
+    this.#fitted = { feet: feetY(z), head: headY(scale, z), top: band.top, bottom: band.bottom };
     return { scale, z };
   }
 
@@ -153,6 +157,11 @@ export class KeeperPreview {
 
   setLod(lod: SquishyLod): void {
     this.#field.setLod(lod);
+  }
+
+  /** Where the last fit put the feet and the top of the hair (CSS px), and the band. */
+  get fitted(): { feet: number; head: number; top: number; bottom: number } | null {
+    return this.#fitted;
   }
 
   /** The shown Keeper's fingerprint (the dev hook compares these, not pixels). */

@@ -1,8 +1,9 @@
 import type { KeeperBodyType, KeeperFaceShape } from '@heartpatch/shared';
 
 // The Keeper creator's steps (#372, owner-approved order): one per screen,
-// with Back and Next. The starter outfit's colours share the hair colour step. Every step starts on a sensible pick, so a kid can tap Next all
-// the way through; the step tabs jump straight to any of them.
+// with Back and Next. The starter outfit rides on the body step. Every step
+// starts on a sensible pick, so a kid can tap Next all the way through; the
+// step tabs jump straight to any of them.
 
 export const KEEPER_STEPS = ['face', 'body', 'skin', 'hairstyle', 'hairColor', 'details'] as const;
 export type KeeperStep = (typeof KEEPER_STEPS)[number];

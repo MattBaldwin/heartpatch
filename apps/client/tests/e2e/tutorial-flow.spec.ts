@@ -598,7 +598,7 @@ async function desktopPlayer(browser: Browser, name: string): Promise<Page> {
   await realTap(picker.getByRole('button', { name: 'Face: Apple', exact: true }));
   // One step a screen (#372): Next through to "That's me!".
   const next = picker.getByRole('button', { name: 'Next', exact: true });
-  while (await next.isVisible()) await realTap(next);
+  for (let i = 0; i < 5 && (await next.isVisible()); i++) await realTap(next);
   await realTap(picker.getByRole('button', { name: 'That’s me!' }));
   await expect(picker).toBeHidden();
   await expect(

@@ -265,8 +265,8 @@
   }
 }
 
-/* The narrowest phones: six a line. */
-@container keeper-card (max-width: 300px) {
+/* A narrower card (320 pt phones, Zoomed): six a line (seven need 324 px). */
+@container keeper-card (max-width: 323px) {
   .keeper-rows .keeper-grid.keeper-grid-bodies {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
@@ -435,7 +435,7 @@
     padding: 2px 2px 4px;
   }
 
-  /* Hair and outfit colours both fit on one step. */
+  /* Hair and eye colours both fit on one step. */
   .keeper-grid {
     grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
     gap: 6px;
@@ -476,4 +476,15 @@
     height: 72vh;
     height: 72dvh;
   }
+}
+
+/* Read by screen readers only ("Step 2 of 6: "). */
+.keeper-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

@@ -27,6 +27,7 @@ interface KeeperDebug {
   step: string | null;
   saved: KeeperConfig | null;
   preview: string | null;
+  fit: { feet: number; head: number; top: number; bottom: number } | null;
   hopping: boolean;
 }
 
@@ -99,7 +100,11 @@ test('a new Keeper is built step by step before any patch, remembered, and chang
   // and eye colours, face details. Every pick shows on the 3D Keeper.
   await expect(picker.getByRole('button', { name: 'Back', exact: true })).toBeDisabled();
   await tap('Face: Button');
-  await next.tap();
+  // Next stays put from step to step, so a keyboard or switch user keeps their place.
+  await next.focus();
+  await page.keyboard.press('Enter');
+  await expect(next).toBeFocused();
+  expect((await keeperState(page))!.step).toBe('body');
   await tap('Body: Lanky');
   // Body tiles have no names on a phone: the pick is named after the prompt.
   await expect(picker.locator('#keeper-prompt')).toContainText('Lanky');
@@ -285,6 +290,12 @@ test('every step of the creator fits phones, iPads and laptops with no scroll in
   const picker = page.getByTestId('keeper-picker');
   await expect(picker.getByRole('heading', { name: 'Pick your Keeper!' })).toBeVisible();
   const steps = ['Face', 'Body', 'Skin', 'Hair', 'Colors', 'Details'];
+  // The tallest Keeper there is: a round face, the lanky body and a puff.
+  await picker.getByRole('button', { name: 'Face: Moon', exact: true }).tap();
+  await picker.getByRole('tab', { name: 'Body' }).tap();
+  await picker.getByRole('button', { name: 'Body: Lanky', exact: true }).tap();
+  await picker.getByRole('tab', { name: 'Hair' }).tap();
+  await picker.getByRole('button', { name: 'Hair style: Puff', exact: true }).tap();
 
   // An iPhone SE, an iPhone in a Safari tab and as an app, an iPad, two laptops.
   for (const size of [
@@ -329,8 +340,10 @@ test('every step of the creator fits phones, iPads and laptops with no scroll in
             const mouth = rows.querySelector<HTMLElement>('#keeper-row-mouth');
             if (!mouth) return true;
             rows.scrollTop = 0;
-            const last = mouth.parentElement!.querySelector('button')!;
-            return last.getBoundingClientRect().bottom <= rows.getBoundingClientRect().bottom + 0.5;
+            const first = mouth.parentElement!.querySelector('button')!;
+            return (
+              first.getBoundingClientRect().bottom <= rows.getBoundingClientRect().bottom + 0.5
+            );
           })(),
           // Scrolled to, every choice is what a finger on it touches.
           reachable: [...rows.querySelectorAll<HTMLElement>('button')].every((button) => {
@@ -354,7 +367,16 @@ test('every step of the creator fits phones, iPads and laptops with no scroll in
       if (size.height >= 659 && !['Hair', 'Details'].includes(tab)) {
         expect(layout.scrolls, at).toBe(false);
       }
-      if (size.height >= 659) expect(layout.mouthShows, at).toBe(true);
+      if (size.height >= 659) {
+        expect(layout.mouthShows, at).toBe(true);
+        // The whole Keeper stands between the top bar and the card (#372).
+        await expect
+          .poll(() => keeperState(page).then((s) => s?.fit ?? null), { message: at })
+          .not.toBeNull();
+        const fit = (await keeperState(page))!.fit!;
+        expect(fit.feet, at).toBeLessThanOrEqual(fit.bottom + 1);
+        expect(fit.head, at).toBeGreaterThanOrEqual(fit.top - 1);
+      }
     }
     await expectRoomyLabels(page, '.keeper-tab, .keeper-style, .keeper-actions .auth-button');
   }
