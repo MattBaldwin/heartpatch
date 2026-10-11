@@ -53,6 +53,7 @@ attribute vec4 squishEvent;
 varying float vSquishLook;
 varying float vSquishFinish;
 varying vec3 vSquishLocal;
+varying vec3 vSquishNormal;
 #endif
 `;
 
@@ -61,6 +62,7 @@ const FRAGMENT_DEFINITIONS = /* glsl */ `
 varying float vSquishLook;
 varying float vSquishFinish;
 varying vec3 vSquishLocal;
+varying vec3 vSquishNormal;
 #endif
 `;
 
@@ -122,6 +124,12 @@ const VERTEX_WORLDPOS = /* glsl */ `
   vSquishLocal = positionUpdated * sqAxes / sqH;
   vPositionW = worldPos.xyz;
 #ifdef NORMAL
+  // The mesh's own normal (the face looks along −z), for sparkle kept off a face.
+  vSquishNormal = normalUpdated;
+#else
+  vSquishNormal = vec3(0.0, 1.0, 0.0);
+#endif
+#ifdef NORMAL
   vNormalW = normalize(vNormalW * vec3(1.0 / sqSide, 1.0 / sqS, 1.0 / sqSide));
 #endif
 }
@@ -139,8 +147,10 @@ const FRAGMENT_RIM = /* glsl */ `
 if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
   // Material tiers (ART_BIBLE §1.4). One code per instance, so a whole
   // squishy takes the same branches.
-  float fiGlow = step(${num(FINISH_CODE.glow)} - 0.5, vSquishFinish);
-  float fiTier = vSquishFinish - ${num(FINISH_CODE.glow)} * fiGlow;
+  float fiOffFace = step(${num(FINISH_CODE.offFace)} - 0.5, vSquishFinish);
+  float fiCode = vSquishFinish - ${num(FINISH_CODE.offFace)} * fiOffFace;
+  float fiGlow = step(${num(FINISH_CODE.glow)} - 0.5, fiCode);
+  float fiTier = fiCode - ${num(FINISH_CODE.glow)} * fiGlow;
   if (fiGlow > 0.5) {
     finalColor.rgb += surfaceAlbedo * ${num(FINISH.glow)};
   }
@@ -151,7 +161,14 @@ if (vSquishFinish > 0.5 && vSquishLook < 0.5) {
     float fiH = fract(sin(dot(fiCell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
     float fiDot = smoothstep(0.32, 0.08, length(fract(fiP) - 0.5));
     float fiTwinkle = 0.5 + 0.5 * sin(fiH * 40.0 + dot(viewDirectionW, vec3(9.0, 7.0, 5.0)));
-    finalColor.rgb += vec3(${num(FINISH.sparkle.strength)}) * step(1.0 - ${num(FINISH.sparkle.density)}, fiH) * fiDot * fiTwinkle;
+    // A body that asks for it keeps flecks off where it faces forward (its
+    // face) and off its underside (a heart's bottom point).
+    float fiKeep = 1.0;
+    if (fiOffFace > 0.5) {
+      vec3 fiN = normalize(vSquishNormal);
+      fiKeep = step(${num(-FINISH.sparkle.offFace.front)}, fiN.z) * step(${num(-FINISH.sparkle.offFace.under)}, fiN.y);
+    }
+    finalColor.rgb += vec3(${num(FINISH.sparkle.strength)}) * step(1.0 - ${num(FINISH.sparkle.density)}, fiH) * fiDot * fiTwinkle * fiKeep;
   }
   if (fiTier > 1.5) {
     // Iridescent: a rainbow rim that shifts with the view angle and height.

@@ -6,6 +6,7 @@ import {
   SURFACE_SLOTS,
   type Body,
   type Finish,
+  type FloaterGlyph,
   type PaletteRole,
   type Part,
   type PartShape,
@@ -79,6 +80,20 @@ export interface PartParams {
   readonly placements: readonly PartPlacement[];
 }
 
+/** A camera-facing glyph floating beside the squishy (the species' `visual.floater`). */
+export interface FloaterParams {
+  readonly glyph: FloaterGlyph;
+  /** The glyph's centre from the squishy's ground point, world units (+x the viewer's right, before its turn). */
+  readonly at: Vec3;
+  /** Its height, world units. */
+  readonly size: number;
+  readonly color: Rgb;
+  /** Lit from inside, like the parts (the species' `glow`). */
+  readonly glow: boolean;
+  /** Bob height, world units, and bobs per second. */
+  readonly bob: { readonly height: number; readonly speed: number };
+}
+
 export interface SquishyParams {
   readonly speciesId: string;
   readonly instanceId: string;
@@ -117,6 +132,10 @@ export interface SquishyParams {
   };
   /** Body or part ids the registry doesn't know (an outdated client); drawn without them. */
   readonly missing: readonly string[];
+  /** Only when the species has one, so every other squishy's params (and hash) stay as they were. */
+  readonly floater?: FloaterParams;
+  /** Sparkle flecks stay off the body's front and underside; only when the species asks. */
+  readonly sparkleOffFace?: true;
 }
 
 const DEG = Math.PI / 180;
@@ -379,6 +398,8 @@ export function squishyParams(
     if (part.highlight) parts.push(glintFor(params, colors.white, hostHeight));
   }
 
+  const height = Math.max(lift + body.height * scale[1], head ? head.offset[1] + headHeight : 0);
+  const floater = visual.floater;
   const motion = stream('motion');
   return {
     speciesId: species.id,
@@ -389,7 +410,7 @@ export function squishyParams(
     finish: visual.finish ?? 'vinyl',
     pose: visual.pose ?? 'sit',
     attackPart: visual.attackPart ?? null,
-    height: Math.max(lift + body.height * scale[1], head ? head.offset[1] + headHeight : 0),
+    height,
     parts,
     motion: {
       phase: motion.next(),
@@ -397,6 +418,22 @@ export function squishyParams(
       amplitude: between(motion, VARIATION.breathAmplitude.min, VARIATION.breathAmplitude.max),
     },
     missing,
+    ...(visual.sparkleOffFace && { sparkleOffFace: true as const }),
+    // Seeded from nothing, so adding a floater never moves anything else.
+    ...(floater && {
+      floater: {
+        glyph: floater.glyph,
+        at: [
+          floater.side * body.width * size,
+          height + floater.above * partHeight + (floater.size * partHeight) / 2,
+          0,
+        ],
+        size: floater.size * partHeight,
+        color: colors[floater.color],
+        glow: visual.glow === 'body' || (visual.glow === 'accent' && floater.color === 'accent'),
+        bob: { height: floater.bob.height * partHeight, speed: floater.bob.speed },
+      },
+    }),
   };
 }
 

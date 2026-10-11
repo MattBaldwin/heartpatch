@@ -162,6 +162,15 @@ export const GameDataSchema = z
       if (r.tool !== undefined && r.tradable !== false) {
         report(['resources', i, 'tradable'], 'a tool is worn in uses, so it is never tradable');
       }
+      if (r.clearTool !== undefined && (r.kind !== 'crafted' || r.id !== r.clearTool)) {
+        report(['resources', i, 'clearTool'], 'a tool is a crafted item whose id is the tool id');
+      }
+      if (r.clearTool !== undefined && r.tradable !== false) {
+        report(['resources', i, 'tradable'], 'a tool is worn in uses, so it is never tradable');
+      }
+      if (r.clearTool !== undefined && r.tool !== undefined) {
+        report(['resources', i, 'clearTool'], 'an explore tool or a clearing tool, not both');
+      }
       r.gather?.extras?.forEach((extra, j) => {
         checkRef(
           resources,

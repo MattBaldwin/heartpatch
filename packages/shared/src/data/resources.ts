@@ -196,4 +196,30 @@ export const RESOURCES: Resource[] = [
     tool: 'lantern',
     tradable: false, // #271: worn in uses, it stays with its Keeper
   },
+  // Clearing tools (#242, owner decision 2026-10-11 Q4): worn in uses like
+  // the explore tools (`CLEARING_RULES.tools`); each clear spends one.
+  {
+    id: 'axe',
+    name: 'Axe',
+    description: 'Clears a forest on your homestead, ready to build on.',
+    kind: 'crafted',
+    clearTool: 'axe',
+    tradable: false, // worn in uses, it stays with its Keeper
+  },
+  {
+    id: 'pickaxe',
+    name: 'Pickaxe',
+    description: 'Clears a mountain on your homestead, ready to build on.',
+    kind: 'crafted',
+    clearTool: 'pickaxe',
+    tradable: false, // worn in uses, it stays with its Keeper
+  },
+  {
+    id: 'spade',
+    name: 'Spade',
+    description: 'Clears a meadow or hill on your homestead, ready to build on.',
+    kind: 'crafted',
+    clearTool: 'spade',
+    tradable: false, // worn in uses, it stays with its Keeper
+  },
 ];

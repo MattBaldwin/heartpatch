@@ -993,6 +993,60 @@ export const gatherJobs = pgTable(
 );
 
 /**
+ * Clearing land (#242): one row per clear, the timer and the record. Starting
+ * spends a tool use and fixes `drop`; at `ready_at` the next settle turns the
+ * tile into cleared land (`tiles.terrain = 'clearing'`, its node gone) and
+ * banks `drop` (`ended_at`, `end_reason = 'cleared'`). If the tile changes
+ * hands before `ready_at`, the clear ends `lost` with nothing banked. If it
+ * finished in time but someone else holds the tile by the settle, `drop`
+ * still banks and the clear ends `cleared`, but their land stays as it is
+ * (wild land still clears). `from_terrain` and
+ * `from_node` keep what the tile was. One clear per tile and one per player
+ * at a time.
+ */
+export const tileClears = pgTable(
+  'tile_clears',
+  {
+    id: id(),
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    tileId: uuid('tile_id')
+      .notNull()
+      .references(() => tiles.id, { onDelete: 'cascade' }),
+    fromTerrain: text('from_terrain').notNull(),
+    fromNode: text('from_node'),
+    // The clearing tool's item id (`CLEARING_RULES.tools`).
+    tool: text('tool').notNull(),
+    // Item id → quantity the clear banks.
+    drop: jsonb('drop').$type<Record<string, number>>().notNull(),
+    startedAt: timestamptz('started_at').notNull(),
+    readyAt: timestamptz('ready_at').notNull(),
+    endedAt: timestamptz('ended_at'),
+    endReason: text('end_reason'),
+  },
+  (t) => [
+    foreignKey({
+      name: 'tile_clears_member_fk',
+      columns: [t.mapId, t.userId],
+      foreignColumns: [mapMembers.mapId, mapMembers.userId],
+    }),
+    uniqueIndex('tile_clears_one_active_per_tile_key')
+      .on(t.tileId)
+      .where(sql`${t.endedAt} is null`),
+    uniqueIndex('tile_clears_one_active_per_player_key')
+      .on(t.mapId, t.userId)
+      .where(sql`${t.endedAt} is null`),
+    check('tile_clears_ready_after_start', sql`${t.readyAt} >= ${t.startedAt}`),
+    check(
+      'tile_clears_end_reason',
+      sql`(${t.endedAt} is null and ${t.endReason} is null) or (${t.endedAt} is not null and ${t.endReason} in ('cleared', 'lost'))`,
+    ),
+  ],
+);
+
+/**
  * Crafts (#17, design doc §12 recipes): the inputs are used up when one
  * starts; collecting after `ready_at` puts `items` in the bag. One on the go
  * per player per map.
@@ -1347,6 +1401,33 @@ export const packedTrainingGrounds = pgTable(
     userId: uuid('user_id').notNull(),
     refund: jsonb('refund').$type<Record<string, number>>().notNull(),
     packedAt: timestamptz('packed_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.mapId, t.userId] })],
+);
+
+/**
+ * One building per tile (#295): what the one-time tidy-up pass moved or
+ * packed for a player, for a one-time note at the top of the morning report
+ * (`seen_at` once shown, on any device). One row per player per map, written
+ * by the boot pass only when something changed.
+ */
+export const tileUseNotes = pgTable(
+  'tile_use_notes',
+  {
+    mapId: uuid('map_id')
+      .notNull()
+      .references(() => maps.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    // Buildings that moved: `{ buildingId, from: {q, r}, to: {q, r} }[]`.
+    moved: jsonb('moved').notNull().default([]),
+    // Buildings taken down with nowhere to go: building ids.
+    packed: jsonb('packed').notNull().default([]),
+    // Everything that came back to the bag.
+    refund: jsonb('refund').$type<Record<string, number>>().notNull().default({}),
+    // Squishies that stopped gathering on a tile that keeps a building.
+    stoppedGatherers: jsonb('stopped_gatherers').notNull().default([]),
+    notedAt: timestamptz('noted_at').notNull(),
+    seenAt: timestamptz('seen_at'),
   },
   (t) => [primaryKey({ columns: [t.mapId, t.userId] })],
 );

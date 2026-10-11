@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { api, hook } from './dev-hook.js';
+import { api, draws, hook } from './dev-hook.js';
 import { expectRoomyLabels, freshResize, holdResizes, still, turnLikeIos } from './layout.js';
 import { newPlayer, uniqueName, visitPatch } from './players.js';
 import { realTap, realTapAt } from './touch.js';
@@ -27,6 +27,7 @@ interface BattleDebug {
   scene: { squishies: number; camera: Point3 | null } | null;
   /** The band (fractions of the height) the camera fits the fight into. */
   safe: { top: number; bottom: number };
+  breathing: 'live' | 'stopped';
 }
 
 interface Point3 {
@@ -99,6 +100,17 @@ test('one real tap works every battle action, and the HUD fits the screen', asyn
   await expect(hud).toBeVisible();
   let state = await settled(page);
   expect(state).toMatchObject({ status: 'active', turn: 0, phase: 'turn' });
+
+  // CI renders in software, a frame every second or so, each one holding the
+  // page: far too slow to breathe. Breathing stops for this battle and the
+  // arena, waiting on a pick, draws nothing on its own, so taps (and other
+  // pages on the same GPU) aren't starved (#397).
+  await expect
+    .poll(async () => (await battleState(page))?.breathing, { timeout: 30_000 })
+    .toBe('stopped');
+  const drawn = await draws(page);
+  await page.waitForTimeout(2_000); // a breathing arena would draw at least once
+  expect(await draws(page)).toBe(drawn);
 
   // The pills, the sheet and its buttons keep their words inside, on screen.
   await expectRoomyLabels(page, HUD_CONTROLS);
